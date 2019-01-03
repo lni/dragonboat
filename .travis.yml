@@ -1,0 +1,17 @@
+language: go
+sudo: required
+
+go:
+  - 1.10.7
+  - 1.11.4
+
+notifications:
+  on_success: never
+  on_failure: never
+
+before_install:
+  - make install-rocksdb-ull
+  - go get -u google.golang.org/grpc
+
+script:
+  - make ci-quick-test
