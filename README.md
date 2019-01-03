@@ -1,7 +1,7 @@
 ![dragonboat](./doc/dragonboat.jpg)
 # Dragonboat - A Multi-Group Raft library in Go / [中文版](README.CHS.md) ##
 [![license](http://img.shields.io/badge/license-Apache2-blue.svg)](https://github.com/lni/dragonboat/blob/master/LICENSE)
-![Build status travis-ci](https://travis-ci.com/lni/dragonboat.svg?token=iByePEQXyre3cVj5c6HB&branch=master)
+![Build status travis-ci](https://travis-ci.com/lni/dragonboat.svg?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/lni/dragonboat)](https://goreportcard.com/report/github.com/lni/dragonboat)
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
