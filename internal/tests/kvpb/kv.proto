@@ -1,0 +1,7 @@
+syntax = "proto2";
+package kvpb;
+
+message PBKV {
+  optional string Key = 1;
+  optional string Val = 2;
+}

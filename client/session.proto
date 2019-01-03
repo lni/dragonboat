@@ -1,0 +1,32 @@
+// Copyright 2017 Lei Ni (nilei81@gmail.com).
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless optional by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+// Package client implements the client Session struct for identifying proposal
+// clients and their progress. Together with the LRU based session store on the
+// server side, client Session helps to implement the at-most-once semantic. It
+// ensures that when retrying a prviously timed out proposal, the retried
+// proposal will not be applied twice if the previous proposal attempt actually
+// succeed. See section 6.3 of Diego Ongaro's PhD thesis for more details.
+package client;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+// Session is the struct used to keep tracking the progress of a client.
+message Session {
+  optional uint64 ClusterID   = 1 [(gogoproto.nullable) = false];
+  optional uint64 ClientID    = 2 [(gogoproto.nullable) = false];
+  optional uint64 SeriesID    = 3 [(gogoproto.nullable) = false];
+  optional uint64 RespondedTo = 4 [(gogoproto.nullable) = false];
+}

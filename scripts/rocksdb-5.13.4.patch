@@ -1,0 +1,84 @@
+diff -Naur rocksdb-5.13.4/build_tools/build_detect_platform rocksdb-5.13.4-patched/build_tools/build_detect_platform
+--- rocksdb-5.13.4/build_tools/build_detect_platform	2018-06-13 08:53:37.000000000 +0800
++++ rocksdb-5.13.4-patched/build_tools/build_detect_platform	2018-10-08 12:16:33.000000000 +0800
+@@ -498,7 +498,7 @@
+   elif test -n "`echo $TARGET_ARCHITECTURE | grep ^arm`"; then
+     # TODO: Handle this with approprite options.
+     COMMON_FLAGS="$COMMON_FLAGS"
+-  elif [ "$TARGET_OS" == IOS ]; then
++  elif [ "$TARGET_OS" = "IOS" ]; then
+     COMMON_FLAGS="$COMMON_FLAGS"
+   elif [ "$TARGET_OS" != AIX ] && [ "$TARGET_OS" != SunOS ]; then
+     COMMON_FLAGS="$COMMON_FLAGS -march=native "
+diff -Naur rocksdb-5.13.4/db/c.cc rocksdb-5.13.4-patched/db/c.cc
+--- rocksdb-5.13.4/db/c.cc	2018-06-13 08:53:37.000000000 +0800
++++ rocksdb-5.13.4-patched/db/c.cc	2018-10-08 12:18:12.000000000 +0800
+@@ -2221,6 +2221,20 @@
+   opt->rep.use_fsync = use_fsync;
+ }
+ 
++void rocksdb_options_set_enable_pipelined_write(rocksdb_options_t* opt,
++                                                unsigned char v) {
++  opt->rep.enable_pipelined_write = v;
++}
++
++void rocksdb_options_set_max_subcompactions(rocksdb_options_t* opt, uint32_t v) {
++  opt->rep.max_subcompactions = v;
++}
++
++void rocksdb_options_set_memtable_insert_with_hint_fixed_length_prefix_extractor(rocksdb_options_t* opt,
++                                                                               size_t length) {
++  opt->rep.memtable_insert_with_hint_prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(length));
++}
++
+ void rocksdb_options_set_db_log_dir(
+     rocksdb_options_t* opt, const char* db_log_dir) {
+   opt->rep.db_log_dir = db_log_dir;
+@@ -2895,6 +2909,11 @@
+   opt->rep.target_level = n;
+ }
+ 
++void rocksdb_compactoptions_set_force_bottommost_level_compaction(
++  rocksdb_compactoptions_t* opt) {
++  opt->rep.bottommost_level_compaction = rocksdb::BottommostLevelCompaction::kForce;
++}
++
+ rocksdb_flushoptions_t* rocksdb_flushoptions_create() {
+   return new rocksdb_flushoptions_t;
+ }
+diff -Naur rocksdb-5.13.4/include/rocksdb/c.h rocksdb-5.13.4-patched/include/rocksdb/c.h
+--- rocksdb-5.13.4/include/rocksdb/c.h	2018-06-13 08:53:37.000000000 +0800
++++ rocksdb-5.13.4-patched/include/rocksdb/c.h	2018-10-08 12:20:04.000000000 +0800
+@@ -859,7 +859,13 @@
+ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_use_direct_reads(
+     rocksdb_options_t*, unsigned char);
+ extern ROCKSDB_LIBRARY_API void
+-rocksdb_options_set_use_direct_io_for_flush_and_compaction(rocksdb_options_t*,
++    rocksdb_options_set_enable_pipelined_write(rocksdb_options_t*, unsigned char);
++extern ROCKSDB_LIBRARY_API void
++    rocksdb_options_set_max_subcompactions(rocksdb_options_t*, uint32_t);
++extern ROCKSDB_LIBRARY_API void
++    rocksdb_options_set_memtable_insert_with_hint_fixed_length_prefix_extractor(rocksdb_options_t* opt,size_t length);
++extern ROCKSDB_LIBRARY_API void
++    rocksdb_options_set_use_direct_io_for_flush_and_compaction(rocksdb_options_t*,
+                                                            unsigned char);
+ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_is_fd_close_on_exec(
+     rocksdb_options_t*, unsigned char);
+@@ -1084,6 +1090,8 @@
+     rocksdb_readoptions_t*, unsigned char);
+ extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_total_order_seek(
+     rocksdb_readoptions_t*, unsigned char);
++extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_ignore_range_deletions(
++    rocksdb_readoptions_t*, unsigned char);
+ extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_max_skippable_internal_keys(
+     rocksdb_readoptions_t*, uint64_t);
+ extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_background_purge_on_iterator_cleanup(
+@@ -1121,6 +1129,8 @@
+     rocksdb_compactoptions_t*, unsigned char);
+ extern ROCKSDB_LIBRARY_API void rocksdb_compactoptions_set_target_level(
+     rocksdb_compactoptions_t*, int);
++extern ROCKSDB_LIBRARY_API void rocksdb_compactoptions_set_force_bottommost_level_compaction(
++    rocksdb_compactoptions_t*);
+ 
+ /* Flush options */
+ 

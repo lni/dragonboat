@@ -1,0 +1,13 @@
+{
+  "RaftClusterAddresses": "localhost:9021",
+  "DrummerAddress": "10.0.0.47:9121",
+  "DrummerNodeID": 1,
+  "ElectionRTT": 50,
+  "HeartbeatRTT": 5,
+  "CheckQuorum": true,
+  "RDBDir": "rdb-%d-%d",
+  "RDBWALDir": "rdb-wal-%d-%d",
+  "CompactionOverhead": 1,
+  "SnapshotEntries": 1
+}
+
