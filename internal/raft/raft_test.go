@@ -887,8 +887,8 @@ func TestMakeReplicateMessage(t *testing.T) {
 	r.becomeLeader()
 	noop := pb.Entry{}
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	sz := noop.SizeUpperLimit() + ents[0].SizeUpperLimit() + ents[1].SizeUpperLimit() + 1
@@ -1031,8 +1031,8 @@ func TestAppendEntries(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	if r.log.committed != 3 {
@@ -1049,8 +1049,8 @@ func TestResetRemotes(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	r.remotes[1].next = 100
@@ -1114,8 +1114,8 @@ func TestCampaignSendExpectedMessages(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	r.becomeFollower(r.term+1, NoLeader)
@@ -1209,8 +1209,8 @@ func TestGetPendingConfigChangeCount(t *testing.T) {
 	r.becomeLeader()
 	for i := 0; i < 5; i++ {
 		ents := []pb.Entry{
-			pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, maxEntriesToApplySize)},
-			pb.Entry{Type: pb.ConfigChangeEntry},
+			{Type: pb.ApplicationEntry, Cmd: make([]byte, maxEntriesToApplySize)},
+			{Type: pb.ConfigChangeEntry},
 		}
 		r.appendEntries(ents)
 	}
@@ -1254,9 +1254,9 @@ func TestAddNodeDragonboat(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ConfigChangeEntry},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ConfigChangeEntry},
 	}
 	r.setPendingConfigChange()
 	r.appendEntries(ents)
@@ -1348,8 +1348,8 @@ func TestRestoreSnapshotIgnoreDelayedSnapshot(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	ss := pb.Snapshot{Index: 3, Term: 1}
@@ -1363,8 +1363,8 @@ func TestSnapshotCommitEntries(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	if r.log.committed != 0 {
@@ -1384,8 +1384,8 @@ func TestSnapshotCanBeRestored(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	ss := pb.Snapshot{Index: 4, Term: 1}
@@ -1405,8 +1405,8 @@ func TestRestoreRemote(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	ents := []pb.Entry{
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
-		pb.Entry{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
 	r.appendEntries(ents)
 	ss := pb.Snapshot{}
@@ -1965,10 +1965,10 @@ func TestHandleLeaderSnapshotStatus(t *testing.T) {
 
 func TestHandleLeaderLeaderTransfer(t *testing.T) {
 	tests := []struct {
-		target      uint64
-		transfering bool
-		match       bool
-		ignored     bool
+		target       uint64
+		transferring bool
+		match        bool
+		ignored      bool
 	}{
 		{1, false, false, true},
 		{1, true, false, true},
@@ -1984,7 +1984,7 @@ func TestHandleLeaderLeaderTransfer(t *testing.T) {
 			Type: pb.LeaderTransfer,
 			Hint: tt.target,
 		}
-		if tt.transfering {
+		if tt.transferring {
 			r.leaderTransferTarget = 3
 		}
 		rp, ok := r.remotes[2]

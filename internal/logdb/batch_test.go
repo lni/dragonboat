@@ -175,7 +175,7 @@ func TestCompactBatchFieldsPanicWhenBatchIsTooSmall(t *testing.T) {
 		compactBatchFields(eb)
 	}
 	f(pb.EntryBatch{})
-	f(pb.EntryBatch{Entries: []pb.Entry{pb.Entry{}}})
+	f(pb.EntryBatch{Entries: []pb.Entry{{}}})
 }
 
 func TestRestoreBatchFieldsPanicWhenBatchIsTooSmall(t *testing.T) {
@@ -188,12 +188,12 @@ func TestRestoreBatchFieldsPanicWhenBatchIsTooSmall(t *testing.T) {
 		restoreBatchFields(eb)
 	}
 	f(pb.EntryBatch{})
-	f(pb.EntryBatch{Entries: []pb.Entry{pb.Entry{}}})
+	f(pb.EntryBatch{Entries: []pb.Entry{{}}})
 }
 
 func TestMergeFirstBatchPanicWhenInputBatchIsEmpty(t *testing.T) {
 	empty := pb.EntryBatch{}
-	nonEmpty := pb.EntryBatch{Entries: []pb.Entry{pb.Entry{Index: 1, Term: 1}}}
+	nonEmpty := pb.EntryBatch{Entries: []pb.Entry{{Index: 1, Term: 1}}}
 	f := func(eb pb.EntryBatch, lb pb.EntryBatch) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -207,8 +207,8 @@ func TestMergeFirstBatchPanicWhenInputBatchIsEmpty(t *testing.T) {
 }
 
 func TestMergeFirstBatchPanicWhenIncomingBatchIsNotMoreRecent(t *testing.T) {
-	eb := pb.EntryBatch{Entries: []pb.Entry{pb.Entry{Index: batchSize, Term: 1}}}
-	lb := pb.EntryBatch{Entries: []pb.Entry{pb.Entry{Index: 2 * batchSize, Term: 1}}}
+	eb := pb.EntryBatch{Entries: []pb.Entry{{Index: batchSize, Term: 1}}}
+	lb := pb.EntryBatch{Entries: []pb.Entry{{Index: 2 * batchSize, Term: 1}}}
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("panic not triggered")
@@ -218,8 +218,8 @@ func TestMergeFirstBatchPanicWhenIncomingBatchIsNotMoreRecent(t *testing.T) {
 }
 
 func TestIncomingBatchIsTheMergedBatchWhenMoreRecentThanLastBatch(t *testing.T) {
-	eb := pb.EntryBatch{Entries: []pb.Entry{pb.Entry{Index: 2 * batchSize, Term: 1}}}
-	lb := pb.EntryBatch{Entries: []pb.Entry{pb.Entry{Index: batchSize, Term: 1}}}
+	eb := pb.EntryBatch{Entries: []pb.Entry{{Index: 2 * batchSize, Term: 1}}}
+	lb := pb.EntryBatch{Entries: []pb.Entry{{Index: batchSize, Term: 1}}}
 	result := getMergedFirstBatch(eb, lb)
 	if !reflect.DeepEqual(&result, &eb) {
 		t.Errorf("unexpected result")

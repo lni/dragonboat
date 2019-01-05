@@ -1089,7 +1089,7 @@ func getRequestAddress(ctx context.Context,
 	readNodeIdx := rand.Int() % len(ci.RPCAddresses)
 	writeNodeIdx := rand.Int() % len(ci.RPCAddresses)
 	nodeIDList := make([]uint64, 0)
-	for nodeID, _ := range ci.RPCAddresses {
+	for nodeID := range ci.RPCAddresses {
 		nodeIDList = append(nodeIDList, nodeID)
 	}
 	for nodeID, addr := range ci.RPCAddresses {

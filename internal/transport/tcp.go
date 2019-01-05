@@ -455,10 +455,7 @@ func setTCPConn(conn *net.TCPConn) error {
 	if err := conn.SetKeepAlive(true); err != nil {
 		return err
 	}
-	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-		return err
-	}
-	return nil
+	return conn.SetKeepAlivePeriod(keepAlivePeriod)
 }
 
 func (g *TCPTransport) getConnection(ctx context.Context,

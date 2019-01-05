@@ -81,7 +81,7 @@ type ISnapshotConnection interface {
 }
 
 // IRaftRPC is the interface to be implemented by a customized Raft RPC
-// module. A Raft RPC module is responisble for exchanging Raft messages
+// module. A Raft RPC module is responsible for exchanging Raft messages
 // including snapshot chunks between nodehost instances.
 type IRaftRPC interface {
 	// Name returns the type name of the IRaftRPC instance.

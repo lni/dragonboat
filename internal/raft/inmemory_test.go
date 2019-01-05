@@ -25,8 +25,8 @@ func TestInMemCheckMarkerIndex(t *testing.T) {
 	im.checkMarkerIndex()
 	im = inMemory{
 		entries: []pb.Entry{
-			pb.Entry{Index: 1, Term: 2},
-			pb.Entry{Index: 2, Term: 2},
+			{Index: 1, Term: 2},
+			{Index: 2, Term: 2},
 		},
 		markerIndex: 1,
 	}
@@ -42,8 +42,8 @@ func TestInMemCheckMarkerIndexPanicOnInvalidInMem(t *testing.T) {
 	}()
 	im := inMemory{
 		entries: []pb.Entry{
-			pb.Entry{Index: 1, Term: 2},
-			pb.Entry{Index: 2, Term: 2},
+			{Index: 1, Term: 2},
+			{Index: 2, Term: 2},
 		},
 		markerIndex: 2,
 	}
@@ -105,8 +105,8 @@ func TestInMemGetEntries(t *testing.T) {
 	im := &inMemory{
 		markerIndex: 2,
 		entries: []pb.Entry{
-			pb.Entry{Index: 2, Term: 2},
-			pb.Entry{Index: 3, Term: 2},
+			{Index: 2, Term: 2},
+			{Index: 3, Term: 2},
 		},
 	}
 	ents := im.getEntries(2, 3)
@@ -225,8 +225,8 @@ func TestInMemRestore(t *testing.T) {
 	im := inMemory{
 		markerIndex: 10,
 		entries: []pb.Entry{
-			pb.Entry{Index: 10, Term: 1},
-			pb.Entry{Index: 11, Term: 1},
+			{Index: 10, Term: 1},
+			{Index: 11, Term: 1},
 		},
 	}
 	ss := pb.Snapshot{Index: 100}
@@ -256,14 +256,14 @@ func TestInMemMergeFullAppend(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 	}
 	ents := []pb.Entry{
-		pb.Entry{Index: 8, Term: 8},
-		pb.Entry{Index: 9, Term: 9},
+		{Index: 8, Term: 8},
+		{Index: 9, Term: 9},
 	}
 	im.merge(ents)
 	if len(im.entries) != 5 || im.markerIndex != 5 {
@@ -278,14 +278,14 @@ func TestInMemMergeReplace(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 	}
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Term: 2},
-		pb.Entry{Index: 3, Term: 3},
+		{Index: 2, Term: 2},
+		{Index: 3, Term: 3},
 	}
 	im.merge(ents)
 	if len(im.entries) != 2 || im.markerIndex != 2 {
@@ -306,14 +306,14 @@ func TestInMemMergeWithHoleCausePanic(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 	}
 	ents := []pb.Entry{
-		pb.Entry{Index: 9, Term: 9},
-		pb.Entry{Index: 10, Term: 10},
+		{Index: 9, Term: 9},
+		{Index: 10, Term: 10},
 	}
 	im.merge(ents)
 }
@@ -322,14 +322,14 @@ func TestInMemMerge(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 	}
 	ents := []pb.Entry{
-		pb.Entry{Index: 6, Term: 7},
-		pb.Entry{Index: 7, Term: 10},
+		{Index: 6, Term: 7},
+		{Index: 7, Term: 10},
 	}
 	im.merge(ents)
 	if len(im.entries) != 3 || im.markerIndex != 5 {
@@ -350,9 +350,9 @@ func TestInMemEntriesToSaveReturnNotStabledEntries(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 	}
 	im.savedTo = 4
@@ -395,9 +395,9 @@ func TestInMemSaveLogToUpdatesStableTo(t *testing.T) {
 		im := inMemory{
 			markerIndex: 5,
 			entries: []pb.Entry{
-				pb.Entry{Index: 5, Term: 5},
-				pb.Entry{Index: 6, Term: 6},
-				pb.Entry{Index: 7, Term: 7},
+				{Index: 5, Term: 5},
+				{Index: 6, Term: 6},
+				{Index: 7, Term: 7},
 			},
 			savedTo: 4,
 		}
@@ -413,7 +413,7 @@ func TestInMemSetStableToWhenRestoringSnapshot(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
+			{Index: 5, Term: 5},
 		},
 		savedTo: 4,
 	}
@@ -427,8 +427,8 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im := inMemory{
 		markerIndex: 6,
 		entries: []pb.Entry{
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 		savedTo: 5,
 	}
@@ -440,12 +440,12 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im = inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
-			pb.Entry{Index: 8, Term: 8},
-			pb.Entry{Index: 9, Term: 9},
-			pb.Entry{Index: 10, Term: 10},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
+			{Index: 8, Term: 8},
+			{Index: 9, Term: 9},
+			{Index: 10, Term: 10},
 		},
 		savedTo: 4,
 	}
@@ -456,12 +456,12 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im = inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
-			pb.Entry{Index: 5, Term: 5},
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
-			pb.Entry{Index: 8, Term: 8},
-			pb.Entry{Index: 9, Term: 9},
-			pb.Entry{Index: 10, Term: 10},
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
+			{Index: 8, Term: 8},
+			{Index: 9, Term: 9},
+			{Index: 10, Term: 10},
 		},
 		savedTo: 6,
 	}
@@ -472,8 +472,8 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im = inMemory{
 		markerIndex: 6,
 		entries: []pb.Entry{
-			pb.Entry{Index: 6, Term: 6},
-			pb.Entry{Index: 7, Term: 7},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
 		},
 		savedTo: 5,
 	}

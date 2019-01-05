@@ -118,7 +118,7 @@ type ILogDB interface {
 	// IterateEntries returns the continuous Raft log entries of the specified
 	// Raft node between the index value range of [low, high) up to a max size
 	// limit of maxSize bytes. It returns the located log entries, their total
-	// size in bytes and the occured error.
+	// size in bytes and the occurred error.
 	IterateEntries(ents []pb.Entry,
 		size uint64, clusterID uint64, nodeID uint64, low uint64,
 		high uint64, maxSize uint64) ([]pb.Entry, uint64, error)

@@ -29,9 +29,9 @@ func getTestEntryLog() *entryLog {
 func TestLogEntryLogCanBeCreated(t *testing.T) {
 	logdb := NewTestLogDB()
 	logdb.Append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
 	})
 	first, last := logdb.GetRange()
 	if first != 1 || last != 3 {
@@ -135,9 +135,9 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 func TestLogReturnLastIndexInLogDBWhenNoSnapshotInMem(t *testing.T) {
 	logdb := NewTestLogDB()
 	logdb.Append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
 	})
 	el := newEntryLog(logdb)
 	if el.firstIndex() != 1 {
@@ -148,10 +148,10 @@ func TestLogReturnLastIndexInLogDBWhenNoSnapshotInMem(t *testing.T) {
 func TestLogLastIndexReturnInMemLastIndexWhenPossible(t *testing.T) {
 	el := getTestEntryLog()
 	el.inmem.merge([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 	if el.lastIndex() != 4 {
 		t.Errorf("unexpected last index %d", el.lastIndex())
@@ -161,8 +161,8 @@ func TestLogLastIndexReturnInMemLastIndexWhenPossible(t *testing.T) {
 func TestLogLastIndexReturnLogDBLastIndexWhenNothingInInMem(t *testing.T) {
 	logdb := NewTestLogDB()
 	logdb.Append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
 	})
 	el := newEntryLog(logdb)
 	if el.lastIndex() != 2 {
@@ -173,18 +173,18 @@ func TestLogLastIndexReturnLogDBLastIndexWhenNothingInInMem(t *testing.T) {
 func TestLogLastTerm(t *testing.T) {
 	el := getTestEntryLog()
 	el.inmem.merge([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 	if el.lastTerm() != 3 {
 		t.Errorf("unexpected last term %d", el.lastTerm())
 	}
 	logdb := NewTestLogDB()
 	logdb.Append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 5},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 5},
 	})
 	el = newEntryLog(logdb)
 	if el.lastTerm() != 5 {
@@ -195,10 +195,10 @@ func TestLogLastTerm(t *testing.T) {
 func TestLogTerm(t *testing.T) {
 	el := getTestEntryLog()
 	el.inmem.merge([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 	for idx, ent := range el.inmem.entries {
 		term, err := el.term(ent.Index)
@@ -210,8 +210,8 @@ func TestLogTerm(t *testing.T) {
 		}
 	}
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 5},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 5},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
@@ -230,10 +230,10 @@ func TestLogTerm(t *testing.T) {
 func TestLogAppend(t *testing.T) {
 	el := getTestEntryLog()
 	el.append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 	ets := el.entriesToSave()
 	if len(ets) != 4 {
@@ -250,20 +250,20 @@ func TestLogAppendPanicWhenAppendingCommittedEntry(t *testing.T) {
 	el := getTestEntryLog()
 	el.committed = 2
 	el.append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 }
 
 func TestLogGetEntryFromInMem(t *testing.T) {
 	el := getTestEntryLog()
 	el.append([]pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	})
 	ents, err := el.getEntries(1, 5, math.MaxUint64)
 	if err != nil {
@@ -283,10 +283,10 @@ func TestLogGetEntryFromInMem(t *testing.T) {
 
 func TestLogGetEntryFromLogDB(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
@@ -309,18 +309,18 @@ func TestLogGetEntryFromLogDB(t *testing.T) {
 
 func TestLogGetEntryFromLogDBAndInMem(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	ents, err := el.getEntries(1, 8, math.MaxUint64)
 	if err != nil {
@@ -378,18 +378,18 @@ func TestLogSnapshot(t *testing.T) {
 
 func TestLogMatchTerm(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	tests := []struct {
 		index uint64
@@ -415,18 +415,18 @@ func TestLogMatchTerm(t *testing.T) {
 
 func TestLogUpToDate(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	tests := []struct {
 		index uint64
@@ -451,30 +451,30 @@ func TestLogUpToDate(t *testing.T) {
 
 func TestLogGetConflictIndex(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	tests := []struct {
 		ents     []pb.Entry
 		conflict uint64
 	}{
 		{[]pb.Entry{}, 0},
-		{[]pb.Entry{pb.Entry{Index: 1, Term: 2}}, 1},
-		{[]pb.Entry{pb.Entry{Index: 1, Term: 1}, {Index: 2, Term: 1}}, 0},
-		{[]pb.Entry{pb.Entry{Index: 1, Term: 1}, {Index: 2, Term: 2}}, 2},
-		{[]pb.Entry{pb.Entry{Index: 6, Term: 3}, {Index: 7, Term: 4}}, 0},
-		{[]pb.Entry{pb.Entry{Index: 6, Term: 3}, {Index: 7, Term: 5}}, 7},
-		{[]pb.Entry{pb.Entry{Index: 7, Term: 4}, {Index: 8, Term: 4}}, 8},
+		{[]pb.Entry{{Index: 1, Term: 2}}, 1},
+		{[]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 1}}, 0},
+		{[]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}}, 2},
+		{[]pb.Entry{{Index: 6, Term: 3}, {Index: 7, Term: 4}}, 0},
+		{[]pb.Entry{{Index: 6, Term: 3}, {Index: 7, Term: 5}}, 7},
+		{[]pb.Entry{{Index: 7, Term: 4}, {Index: 8, Term: 4}}, 8},
 	}
 	for idx, tt := range tests {
 		conflict := el.getConflictIndex(tt.ents)
@@ -486,18 +486,18 @@ func TestLogGetConflictIndex(t *testing.T) {
 
 func TestLogCommitTo(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	el.commitTo(3)
 	if el.committed != 3 {
@@ -517,28 +517,28 @@ func TestLogCommitToPanicWhenCommitToUnavailableIndex(t *testing.T) {
 		t.Errorf("panic not triggered")
 	}()
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
 	el := newEntryLog(logdb)
 	el.append([]pb.Entry{
-		pb.Entry{Index: 5, Term: 3},
-		pb.Entry{Index: 6, Term: 3},
-		pb.Entry{Index: 7, Term: 4},
+		{Index: 5, Term: 3},
+		{Index: 6, Term: 3},
+		{Index: 7, Term: 4},
 	})
 	el.commitTo(8)
 }
 
 func TestLogRestoreSnapshot(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 1, Term: 1},
-		pb.Entry{Index: 2, Term: 1},
-		pb.Entry{Index: 3, Term: 2},
-		pb.Entry{Index: 4, Term: 3},
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
 	el := newEntryLog(logdb)

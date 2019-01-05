@@ -99,7 +99,7 @@ func ExampleNodeHost_Propose(nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// Use NO-OP client session, cluster ID is 100
-	// Check the exmaple on the GetNewSession method to see how to use a
+	// Check the example on the GetNewSession method to see how to use a
 	// real client session object to make proposals.
 	cs := nh.GetNoOPSession(100)
 	// make a proposal with the proposal content "test-data", timeout is set to
@@ -230,7 +230,7 @@ func ExampleNodeHost_GetNewSession(ctx context.Context, nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// Create a client session first, cluster ID is 100
-	// Check the exmaple on the GetNewSession method to see how to use a
+	// Check the example on the GetNewSession method to see how to use a
 	// real client session object to make proposals.
 	cs, err := nh.GetNewSession(ctx, 100)
 	if err != nil {

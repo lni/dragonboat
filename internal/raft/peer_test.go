@@ -629,12 +629,12 @@ func TestRaftAPIStepOnLocalMessageWillPanic(t *testing.T) {
 func TestRaftAPIGetUpdateCommit(t *testing.T) {
 	ud := raftpb.Update{
 		CommittedEntries: []raftpb.Entry{
-			raftpb.Entry{Index: 100, Term: 2},
-			raftpb.Entry{Index: 101, Term: 3},
+			{Index: 100, Term: 2},
+			{Index: 101, Term: 3},
 		},
 		EntriesToSave: []raftpb.Entry{
-			raftpb.Entry{Index: 102, Term: 3},
-			raftpb.Entry{Index: 103, Term: 4},
+			{Index: 102, Term: 3},
+			{Index: 103, Term: 4},
 		},
 		Snapshot: raftpb.Snapshot{Index: 105},
 	}

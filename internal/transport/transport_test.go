@@ -362,7 +362,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
 		To:        2,
 		ClusterId: 100,
 		Entries: []raftpb.Entry{
-			raftpb.Entry{
+			{
 				Cmd: payload,
 			},
 		},

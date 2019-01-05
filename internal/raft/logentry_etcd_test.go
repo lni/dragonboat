@@ -474,7 +474,7 @@ func TestIsOutOfBounds(t *testing.T) {
 	storage.ApplySnapshot(pb.Snapshot{Index: offset})
 	l := newEntryLog(storage)
 	for i := uint64(1); i <= num; i++ {
-		l.append([]pb.Entry{pb.Entry{Index: i + offset}})
+		l.append([]pb.Entry{{Index: i + offset}})
 	}
 
 	first := offset + 1
@@ -557,7 +557,7 @@ func TestTerm(t *testing.T) {
 	storage.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1})
 	l := newEntryLog(storage)
 	for i = 1; i < num; i++ {
-		l.append([]pb.Entry{pb.Entry{Index: offset + i, Term: i}})
+		l.append([]pb.Entry{{Index: offset + i, Term: i}})
 	}
 
 	tests := []struct {
@@ -624,7 +624,7 @@ func TestSlice(t *testing.T) {
 	}
 	l := newEntryLog(storage)
 	for i = num / 2; i < num; i++ {
-		l.append([]pb.Entry{pb.Entry{Index: offset + i, Term: offset + i}})
+		l.append([]pb.Entry{{Index: offset + i, Term: offset + i}})
 	}
 
 	tests := []struct {
@@ -697,7 +697,7 @@ func TestCompactionSideEffects(t *testing.T) {
 	}
 	raftLog := newEntryLog(storage)
 	for i = unstableIndex; i < lastIndex; i++ {
-		raftLog.append([]pb.Entry{pb.Entry{Term: uint64(i + 1), Index: uint64(i + 1)}})
+		raftLog.append([]pb.Entry{{Term: uint64(i + 1), Index: uint64(i + 1)}})
 	}
 
 	ok := raftLog.tryCommit(lastIndex, lastTerm)
@@ -734,7 +734,7 @@ func TestCompactionSideEffects(t *testing.T) {
 	}
 
 	prev := raftLog.lastIndex()
-	raftLog.append([]pb.Entry{pb.Entry{Index: raftLog.lastIndex() + 1, Term: raftLog.lastIndex() + 1}})
+	raftLog.append([]pb.Entry{{Index: raftLog.lastIndex() + 1, Term: raftLog.lastIndex() + 1}})
 	if raftLog.lastIndex() != prev+1 {
 		t.Errorf("lastIndex = %d, want = %d", raftLog.lastIndex(), prev+1)
 	}

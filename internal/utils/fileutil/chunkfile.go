@@ -19,7 +19,7 @@ import (
 	"os"
 )
 
-// ChunkFile is the snapshot chunk file being transfered.
+// ChunkFile is the snapshot chunk file being transferred.
 type ChunkFile struct {
 	file *os.File
 }

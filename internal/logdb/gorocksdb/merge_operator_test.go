@@ -29,8 +29,8 @@ func TestMergeOperator(t *testing.T) {
 	wo := NewDefaultWriteOptions()
 	ensure.Nil(t, db.Put(wo, givenKey, givenVal1))
 	ensure.Nil(t, db.Merge(wo, givenKey, givenVal2))
-    
-    // trigger a compaction to ensure that a merge is performed
+
+	// trigger a compaction to ensure that a merge is performed
 	db.CompactRange(Range{nil, nil})
 
 	ro := NewDefaultReadOptions()

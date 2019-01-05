@@ -523,7 +523,7 @@ func (s *StateMachine) isAddingRemovedNode(cc pb.ConfigChange) bool {
 
 func addressEqual(addr1 string, addr2 string) bool {
 	return strings.ToLower(strings.TrimSpace(addr1)) ==
-		strings.ToLower(strings.TrimSpace(string(addr2)))
+		strings.ToLower(strings.TrimSpace(addr2))
 }
 
 func (s *StateMachine) isAddingExistingMember(cc pb.ConfigChange) bool {

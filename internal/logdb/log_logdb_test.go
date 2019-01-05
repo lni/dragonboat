@@ -555,7 +555,7 @@ func TestRLLTIsOutOfBounds(t *testing.T) {
 	l := raft.NewLog(stable)
 
 	for i := uint64(1); i <= num; i++ {
-		l.Append([]pb.Entry{pb.Entry{Index: i + offset}})
+		l.Append([]pb.Entry{{Index: i + offset}})
 	}
 
 	first := offset + 1
@@ -641,7 +641,7 @@ func TestRLLTTerm(t *testing.T) {
 	stable.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1})
 	l := raft.NewLog(stable)
 	for i = 1; i < num; i++ {
-		l.Append([]pb.Entry{pb.Entry{Index: offset + i, Term: i}})
+		l.Append([]pb.Entry{{Index: offset + i, Term: i}})
 	}
 
 	tests := []struct {
@@ -693,7 +693,7 @@ func TestRLLTSlice(t *testing.T) {
 	}
 	l := raft.NewLog(stable)
 	for i = num / 2; i < num; i++ {
-		l.Append([]pb.Entry{pb.Entry{Index: offset + i, Term: offset + i}})
+		l.Append([]pb.Entry{{Index: offset + i, Term: offset + i}})
 	}
 
 	tests := []struct {

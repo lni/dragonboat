@@ -147,10 +147,7 @@ func setTCPConn(conn *net.TCPConn) error {
 	if err := conn.SetKeepAlive(true); err != nil {
 		return err
 	}
-	if err := conn.SetKeepAlivePeriod(20 * time.Second); err != nil {
-		return err
-	}
-	return nil
+	return conn.SetKeepAlivePeriod(20 * time.Second)
 }
 
 // Accept starts to accept incoming connections.

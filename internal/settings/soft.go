@@ -108,7 +108,7 @@ type soft struct {
 	// step engine
 	//
 
-	// CommitBatchSize defines the length of the commited batch slice.
+	// CommitBatchSize defines the length of the committed batch slice.
 	CommitBatchSize uint64
 	// NodeReloadMillisecond defines how often step engine should reload
 	// nodes, it is defined in number of millisecond.

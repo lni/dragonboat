@@ -39,11 +39,11 @@ func TestLimitSizeOnEmptyEntryList(t *testing.T) {
 func TestCheckEntriesToAppend(t *testing.T) {
 	checkEntriesToAppend(nil, nil)
 	checkEntriesToAppend([]pb.Entry{}, []pb.Entry{})
-	checkEntriesToAppend(nil, []pb.Entry{pb.Entry{Index: 101}})
-	checkEntriesToAppend([]pb.Entry{pb.Entry{Index: 100}},
-		[]pb.Entry{pb.Entry{Index: 101}})
-	checkEntriesToAppend([]pb.Entry{pb.Entry{Index: 100, Term: 90}},
-		[]pb.Entry{pb.Entry{Index: 101, Term: 100}})
+	checkEntriesToAppend(nil, []pb.Entry{{Index: 101}})
+	checkEntriesToAppend([]pb.Entry{{Index: 100}},
+		[]pb.Entry{{Index: 101}})
+	checkEntriesToAppend([]pb.Entry{{Index: 100, Term: 90}},
+		[]pb.Entry{{Index: 101, Term: 100}})
 }
 
 func TestCheckEntriesToAppendWillPanicWhenIndexHasHole(t *testing.T) {
@@ -53,7 +53,7 @@ func TestCheckEntriesToAppendWillPanicWhenIndexHasHole(t *testing.T) {
 		}
 		t.Errorf("not panic")
 	}()
-	checkEntriesToAppend([]pb.Entry{pb.Entry{Index: 100}}, []pb.Entry{pb.Entry{Index: 102}})
+	checkEntriesToAppend([]pb.Entry{{Index: 100}}, []pb.Entry{{Index: 102}})
 }
 
 func TestCheckEntriesToAppendWillPanicWhenTermMovesBack(t *testing.T) {
@@ -63,6 +63,6 @@ func TestCheckEntriesToAppendWillPanicWhenTermMovesBack(t *testing.T) {
 		}
 		t.Errorf("not panic")
 	}()
-	checkEntriesToAppend([]pb.Entry{pb.Entry{Index: 100, Term: 100}},
-		[]pb.Entry{pb.Entry{Index: 101, Term: 99}})
+	checkEntriesToAppend([]pb.Entry{{Index: 100, Term: 100}},
+		[]pb.Entry{{Index: 101, Term: 99}})
 }

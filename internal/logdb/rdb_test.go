@@ -139,7 +139,7 @@ func TestBootstrapInfoCanBeSavedAndChecked(t *testing.T) {
 func TestSnapshotHasMaxIndexSet(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		ud1 := pb.Update{
-			EntriesToSave: []pb.Entry{pb.Entry{Index: 2}, pb.Entry{Index: 3}, pb.Entry{Index: 4}},
+			EntriesToSave: []pb.Entry{{Index: 2}, {Index: 3}, {Index: 4}},
 			ClusterID:     3,
 			NodeID:        4,
 		}
@@ -178,7 +178,7 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 func TestSaveSnapshotTogetherWithUnexpectedEntriesWillPanic(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		ud1 := pb.Update{
-			EntriesToSave: []pb.Entry{pb.Entry{Index: 2}, pb.Entry{Index: 3}, pb.Entry{Index: 4}},
+			EntriesToSave: []pb.Entry{{Index: 2}, {Index: 3}, {Index: 4}},
 			ClusterID:     3,
 			NodeID:        4,
 			Snapshot:      pb.Snapshot{Index: 5},
