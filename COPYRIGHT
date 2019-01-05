@@ -885,6 +885,7 @@ THE SOFTWARE.
 
 
 cockroach's circuit breaker, LRU cache and goroutine leak test code
+cockroach's async message send pattern used in the internal/transport package 
 https://github.com/cockroachdb/cockroach
 
 Apache License

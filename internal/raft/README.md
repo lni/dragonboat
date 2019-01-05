@@ -19,6 +19,7 @@ This package is a new implementation of the Raft protocol with influence from [e
 
 * all relevant etcd raft tests have been ported to this project
 * a similar iterative style interface is employed as it yields high throughput
+* various other similar bits 
 
 Check source code files for copyright information.
 
