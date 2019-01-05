@@ -15,15 +15,15 @@
 OS := $(shell uname)
 # set the variables below to tell the Makefile where to find 
 # rocksdb libs and includes, e.g. /usr/local/lib and /usr/local/include
-# tested rocksdb versions are
+# tested rocksdb version -
 # rocksdb 5.13.x
-# provided without test versions are
+# very briefly tested -
 # rocksdb 5.15.10
 # rocksdb 5.16.6
 ROCKSDB_MAJOR_VER=5
 ROCKSDB_MINOR_VER=13
 ROCKSDB_PATCH_VER=4
-ROCKSDB_VER=$(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
+ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.$(ROCKSDB_MAJOR_VER).dylib
 else ifeq ($(OS),Linux)
