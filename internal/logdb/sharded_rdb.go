@@ -35,8 +35,6 @@ var (
 )
 
 // ShardedRDB is a LogDB implementation using sharded rocksdb instances.
-// This is the community version of the ShardedRDB known to be less optimal in
-// terms of both IO latency and throughput.
 type ShardedRDB struct {
 	completedCompactions uint64
 	shards               []*RDB

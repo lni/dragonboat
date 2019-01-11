@@ -73,9 +73,9 @@ type ILogDB interface {
 	Append(entries []pb.Entry) error
 }
 
-// the community version of dragonboat uses a two stage entryLog implementation
-// similar to the one used by etcd raft, it is known to be not optimal.
-// the proprietary version uses a more throughput friendly approach.
+// entryLog is the entry log used by Raft. It splits entries into two parts -
+// those will be immediately used and those unlikely to be used in normal fast
+// path.
 type entryLog struct {
 	logdb     ILogDB
 	inmem     inMemory
