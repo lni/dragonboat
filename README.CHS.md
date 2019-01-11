@@ -44,7 +44,7 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 
 当测试单组性能时，Dragonboat可以在16字节负载下持续每秒完成125万次写，此时平均写延迟是1.3毫秒，P99写延迟为2.6毫秒。上述性能是在平均单机占用三个2.8Ghz的核心的情况下实现的。
 
-即使在很高的系统负载下，Go的GC所带来的Stop-the-World停顿也显著低于1毫秒。在即将发布的Go 1.12版中，GC的Stop-the-World停顿时间将进一步减半。Golang的runtime.ReadMemStats显示即使在很高的系统负载下，GC也仅占用了少于1%的可利用CPU时间。
+即使在很高的系统负载下，Go的GC所带来的Stop-the-World停顿也显著低于1毫秒。在即将发布的Go 1.12版中，GC的Stop-the-World停顿时间将进一步大幅减低。Golang的runtime.ReadMemStats显示即使在很高的系统负载下，GC也仅占用了少于1%的可利用CPU时间。
 ![stw](./doc/stw.png)
 
 ## 系统需求 ##

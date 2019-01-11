@@ -43,7 +43,7 @@ Table below shows write latencies in millisecond, Dragonboat has <5ms P99 write 
 
 When tested on a single Raft group, Dragonboat can sustain writes at 1.25 million per second when payload is 16 bytes each, average latency is 1.3ms and the P99 latency is 2.6ms. This is achieved when using an average of 3 cores (2.8GHz) on each server.
 
-As visualized below, Stop-the-World pauses caused by Golang's GC are sub-millisecond on highly loaded systems. Such very short Stop-the-World pause time is set to be further reduced by half in the coming Go 1.12 release. Golang's runtime.ReadMemStats reports that less than 1% of the available CPU time is used by GC on highly loaded system.
+As visualized below, Stop-the-World pauses caused by Golang's GC are sub-millisecond on highly loaded systems. Such very short Stop-the-World pause time is set to be further significantly reduced in the coming Go 1.12 release. Golang's runtime.ReadMemStats reports that less than 1% of the available CPU time is used by GC on highly loaded system.
 ![stw](./doc/stw.png)
 
 ## Requirements ##
