@@ -70,6 +70,8 @@ To build your application:
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
+__Note that, steps above use code from the Master branch, please use released versions for any production purposes.__
+ 
 (Optional) To install the C++ binding:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
@@ -84,6 +86,9 @@ $ make test-cppwrapper
 ```
 
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example) and [online chat](https://gitter.im/lni/dragonboat) are available.
+
+## Examples ##
+Dragonboat examples are [here](https://github.com/lni/dragonboat-example).
 
 ## Status ##
 Dragonboat is production ready.

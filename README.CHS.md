@@ -72,6 +72,7 @@ $ make dragonboat-test
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
+__上述步骤使用的是Master branch的代码，生产环境请使用已发布版本。__
 
 （可选）安装C++ Binding:
 ```
@@ -86,7 +87,10 @@ $ make clean
 $ make test-cppwrapper
 ```
 
-欢迎阅读或使用[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example/blob/master/README.CHS.md)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)和在线[讨论组](https://gitter.im/lni/dragonboat)。
+欢迎阅读或使用[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)和在线[讨论组](https://gitter.im/lni/dragonboat)。
+
+## 中文例程 ##
+中文例程在[这里](https://github.com/lni/dragonboat-example)。
 
 ## 项目状态 ##
 Dragonboat适用于生产环境。
