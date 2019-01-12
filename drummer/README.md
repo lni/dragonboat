@@ -20,8 +20,6 @@ Use Master servers when -
 
 ## Resources ##
 
-[KVStore](../examples/kvstore) is an example on how to use the Drummer server.
-
 [dragonboat-drummer-cmd](server/drummercmd/README.md) is a simple command line tool used to interact with Drummer. 
 
 ## Deployment ##
