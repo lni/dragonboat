@@ -18,6 +18,28 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
+//
+// Rather than storing each raft entry as an individual record, dragonboat
+// batches entries first, each persisted record can thus contain many raft
+// entries. This idea is based on the observations that:
+//  * entries are usually saved together
+//  * entries are usually read and consumed together
+// This idea helped to achieve better latency and throughput performance.
+//
+// We also compact redundent index/term values whenever possible. In such
+// approach, rather than repeatedly storing the continously increamental
+// index values and the identifical term values, we represent them in the
+// way implemented in the compactBatchFields function below.
+//
+// To the maximum of our knowledge, dragonboat is the original inventor
+// of the ideas above, they were publicly disclosed on github.com when
+// dragnoboat made its first public release.
+//
+// To use/implement the above ideas in your software, please include the
+// above copyright notice in your source file, dragonboat's Apache2 license
+// also requires to include dragonboat's NOTICE file.
+//
+
 func getBatchID(index uint64) uint64 {
 	return index / batchSize
 }
