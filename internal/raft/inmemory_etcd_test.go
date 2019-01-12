@@ -17,6 +17,10 @@
 // inmemory_etcd_test.go is ported from etcd raft for testing purposes.
 // some new tests are added by dragonboat authors
 //
+// tests in inmemory_etcd_test.go have been updated to reflect that inmemory.go
+// is used to manage log entries that are likely to be used in immediate future,
+// not just those have not been persisted yet.
+//
 // etcd code comes with the following NOTICE file as a part of its source
 // distribution -
 //

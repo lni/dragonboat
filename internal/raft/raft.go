@@ -122,23 +122,17 @@ func getLocalStatus(r *raft) Status {
 }
 
 //
-// The design of the raft protocol implementation below is influenced from
-// etcd's raft in the following aspects -
-// 1. etcd raft models its protocol implementation as a state machine
-//    (not the replicated state machine itself). it is driven by input
-//    messages and the output is its Ready struct. We found this approach
-//    makes testing much easier, together with an iterative style of
-//    processing, it helps to increase system throughput as well. we
-//    adopted such design from etcd raft.
-// 2. we ported all etcd raft's tests to make sure we can cover all corner
-//    cases identified by etcd raft. over time, we've identified and
-//    collected new corner cases during monkey testing as well. all of
-//    them have been contributed back to etcd raft.
-//
-// while no code in raft.go is from etcd raft, for various ideas and designs
-// covered in the above items, we consider them to be licensed from etcd raft
-// under the Apache 2 license. etcd raft's LICENSE can be found in the
-// COPYRIGHT file in github.com/lni/dragonboat/COPYRIGHT.
+// Struct raft implements the raft protocol published in Diego Ongarno's PhD
+// thesis. Some corner cases covered by the implementation below were identified
+// by etcd raft, they were documented by etcd raft as its built-in tests. we
+// ported all relevant etcd raft tests to this project, they are named as
+// *_etcd_test.go. See those source file for copyright info.
+// When handling various corner cases in the raft implementation below, we record
+// and document their relevant etcd raft test names when we introduced such
+// handling into this implementation from etcd raft.
+// Note that most corner cases were observed from our random monkey tests, new
+// corner cases identified in our monkey testing previously not covered by etcd
+// raft have been contributed back to etcd raft.
 //
 
 type raft struct {
@@ -212,6 +206,7 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 		r.state = observer
 		r.becomeObserver(r.term, NoLeader)
 	} else {
+		// see first paragraph section 5.2 of the raft paper
 		r.becomeFollower(r.term, NoLeader)
 	}
 	r.initializeHandlerMap()
@@ -333,8 +328,9 @@ func (r *raft) restore(ss pb.Snapshot) bool {
 			}
 		}
 	}
-	// TODO (lni):  check this
+	// p52 of the raft thesis
 	if r.log.matchTerm(ss.Index, ss.Term) {
+		// a snapshot at index X implies that X has been committed
 		r.log.commitTo(ss.Index)
 		return false
 	}
@@ -386,10 +382,14 @@ func (r *raft) timeForHearbeat() bool {
 	return r.heartbeatTick >= r.heartbeatTimeout
 }
 
+// p69 of the raft thesis mentions that check quorum is performed when an
+// election timeout elapses
 func (r *raft) timeForCheckQuorum() bool {
 	return r.electionTick >= r.electionTimeout
 }
 
+// p29 of the raft thesis mentions that leadership transfer should abort
+// when an election timeout elapses
 func (r *raft) timeToAbortLeaderTransfer() bool {
 	return r.leaderTransfering() && r.electionTick >= r.electionTimeout
 }
@@ -408,9 +408,12 @@ func (r *raft) nonLeaderTick() {
 		panic("noleader tick called on leader node")
 	}
 	r.electionTick++
+	// section 4.2.1 of the raft thesis
+	// non-voting member is not to do anything related to election
 	if r.isObserver() {
 		return
 	}
+	// 6th paragraph section 5.2 of the raft paper
 	if !r.selfRemoved() && r.timeForElection() {
 		r.electionTick = 0
 		r.Handle(pb.Message{
@@ -583,6 +586,8 @@ func (r *raft) sendHeartbeatMessage(to uint64,
 	})
 }
 
+// p72 of the raft thesis describe how to use Heartbeat message in the ReadIndex
+// protocol.
 func (r *raft) broadcastHeartbeatMessage() {
 	if r.readIndex.hasPendingRequest() {
 		ctx := r.readIndex.peepCtx()
@@ -701,6 +706,7 @@ func (r *raft) becomeCandidate() {
 		panic("observer is becoming candidate")
 	}
 	r.state = candidate
+	// 2nd paragraph section 5.2 of the raft paper
 	r.reset(r.term + 1)
 	r.vote = r.nodeID
 	plog.Infof("%s became a candidate", r.describe())
@@ -750,6 +756,9 @@ func (r *raft) preLeaderPromotionHandleConfigChange() {
 	}
 }
 
+// see section 5.3 of the raft paper
+// "When a leader first comes to power, it initializes all nextIndex values to
+// the index just after the last one in its log"
 func (r *raft) resetRemotes() {
 	for id := range r.remotes {
 		r.remotes[id] = &remote{
@@ -1012,16 +1021,17 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 	if m.Type != pb.RequestVote || !r.checkQuorum || m.Term <= r.term {
 		return false
 	}
-	// we got a RequestVote with higher term, but we recently had heartbeat msg
-	// from leader within the minimum election timeout and that leader is known
-	// to have quorum. we thus drop such RequestVote to minimize interruption by
-	// network partitioned nodes with higher term.
-	// this idea is from the last paragraph of the section 6 of the raft paper
+	// see p42 of the raft thesis
 	if m.Hint == m.From {
 		plog.Infof("%s, RequestVote with leader transfer hint received from %d",
 			r.describe(), m.From)
 		return false
 	}
+	// we got a RequestVote with higher term, but we recently had heartbeat msg
+	// from leader within the minimum election timeout and that leader is known
+	// to have quorum. we thus drop such RequestVote to minimize interruption by
+	// network partitioned nodes with higher term.
+	// this idea is from the last paragraph of the section 6 of the raft paper
 	if r.leaderID != NoLeader && r.electionTick < r.electionTimeout {
 		return true
 	}
@@ -1031,6 +1041,7 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 // onMessageTermNotMatched handles the situation in which the incoming
 // message has a term value different from local node's term. it returns a
 // boolean flag indicating whether the message should be ignored.
+// see the 3rd paragraph, section 5.1 of the raft paper for details.
 func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 	if m.Term == 0 || m.Term == r.term {
 		return false
@@ -1045,6 +1056,7 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		if isLeaderMessage(m.Type) {
 			leaderID = m.From
 		}
+
 		if r.isObserver() {
 			r.becomeObserver(m.Term, leaderID)
 		} else {
@@ -1052,7 +1064,8 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		}
 	} else if m.Term < r.term {
 		if isLeaderMessage(m.Type) && r.checkQuorum {
-			// see TestFreeStuckCandidateWithCheckQuorum for details
+			// this corner case is documented in the following etcd test
+			// TestFreeStuckCandidateWithCheckQuorum
 			r.send(pb.Message{To: m.From, Type: pb.NoOP})
 		} else {
 			plog.Infof("%s ignored a %s with lower term (%d) from %s",
@@ -1081,9 +1094,7 @@ func (r *raft) hasConfigChangeToApply() bool {
 }
 
 func (r *raft) canGrantVote(m pb.Message) bool {
-	return r.vote == NoNode ||
-		r.vote == m.From ||
-		m.Term > r.term
+	return r.vote == NoNode || r.vote == m.From || m.Term > r.term
 }
 
 //
@@ -1100,8 +1111,7 @@ func (r *raft) handleNodeElection(m pb.Message) {
 		plog.Infof("%s will campaign at term %d", r.describe(), r.term)
 		r.campaign()
 	} else {
-		plog.Infof("leader node %s ignored Election",
-			r.describe())
+		plog.Infof("leader node %s ignored Election", r.describe())
 	}
 }
 
@@ -1110,7 +1120,9 @@ func (r *raft) handleNodeRequestVote(m pb.Message) {
 		To:   m.From,
 		Type: pb.RequestVoteResp,
 	}
+	// 3rd paragraph section 5.2 of the raft paper
 	canGrant := r.canGrantVote(m)
+	// 2nd paragraph section 5.4 of the raft paper
 	isUpToDate := r.log.upToDate(m.LogIndex, m.LogTerm)
 	if canGrant && isUpToDate {
 		plog.Infof("%s cast vote from %s index %d term %d, log term: %d",
@@ -1126,6 +1138,37 @@ func (r *raft) handleNodeRequestVote(m pb.Message) {
 	r.send(resp)
 }
 
+func (r *raft) handleNodeConfigChange(m pb.Message) {
+	if m.Reject {
+		r.clearPendingConfigChange()
+	} else {
+		cctype := (pb.ConfigChangeType)(m.HintHigh)
+		nodeid := m.Hint
+		switch cctype {
+		case pb.AddNode:
+			r.addNode(nodeid)
+		case pb.RemoveNode:
+			r.removeNode(nodeid)
+		case pb.AddObserver:
+			r.addObserver(nodeid)
+		default:
+			panic("unexpected config change type")
+		}
+	}
+}
+
+func (r *raft) handleLocalTick(m pb.Message) {
+	if m.Reject {
+		r.quiescedTick()
+	} else {
+		r.tick()
+	}
+}
+
+func (r *raft) handleRestoreRemote(m pb.Message) {
+	r.restoreRemotes(m.Snapshot)
+}
+
 //
 // message handler functions used by leader
 //
@@ -1134,6 +1177,7 @@ func (r *raft) handleLeaderLeaderHeartbeat(m pb.Message) {
 	r.broadcastHeartbeatMessage()
 }
 
+// p69 of the raft thesis
 func (r *raft) handleLeaderCheckQuorum(m pb.Message) {
 	if !r.leaderHasQuorum() {
 		plog.Warningf("%s stepped down, no longer has quorum",
@@ -1188,6 +1232,7 @@ func (r *raft) addReadyToRead(index uint64, ctx pb.SystemCtx) {
 		})
 }
 
+// section 6.4 of the raft thesis
 func (r *raft) handleLeaderReadIndex(m pb.Message) {
 	if r.selfRemoved() {
 		plog.Warningf("dropping a read index request, local node removed")
@@ -1233,12 +1278,18 @@ func (r *raft) handleLeaderReplicateResp(m pb.Message, rp *remote) {
 			} else if paused {
 				r.sendReplicateMessage(m.From)
 			}
+			// according to the leadership transfer protocol listed on the p29 of the
+			// raft thesis
 			if r.leaderTransfering() && m.From == r.leaderTransferTarget &&
 				r.log.lastIndex() == rp.match {
 				r.sendTimeoutNowMessage(r.leaderTransferTarget)
 			}
 		}
 	} else {
+		// the replication flow control code is derived from etcd raft, it resets
+		// nextIndex to match + 1. it is thus even more conservative than the raft
+		// thesis's approach of nextIndex = nextIndex - 1 mentioned on the p21 of
+		// the thesis.
 		if rp.decreaseTo(m.LogIndex, m.Hint) {
 			r.enterRetryState(rp)
 			r.sendReplicateMessage(m.From)
@@ -1276,6 +1327,8 @@ func (r *raft) handleLeaderLeaderTransfer(m pb.Message, rp *remote) {
 	}
 	r.leaderTransferTarget = target
 	r.electionTick = 0
+	// fast path below
+	// or wait for the target node to catch up, see p29 of the raft thesis
 	if rp.match == r.log.lastIndex() {
 		r.sendTimeoutNowMessage(target)
 	}
@@ -1425,8 +1478,8 @@ func (r *raft) handleFollowerInstallSnapshot(m pb.Message) {
 }
 
 func (r *raft) handleFollowerTimeoutNow(m pb.Message) {
-	// as mentioned by the raft paper, this is nothing different from the clock
-	// moving forward faster.
+	// the last paragraph, p29 of the raft thesis mentions that this is nothing
+	// different from the clock moving forward quickly
 	plog.Infof("TimeoutNow received on %d:%d", r.clusterID, r.nodeID)
 	r.electionTick = r.randomizedElectionTimeout
 	r.isLeaderTransferTarget = true
@@ -1450,8 +1503,13 @@ func (r *raft) handleCandidatePropose(m pb.Message) {
 	plog.Warningf("%s dropping proposal, no leader", r.describe())
 }
 
+// when any of the following three methods
+// handleCandidateReplicate
+// handleCandidateInstallSnapshot
+// handleCandidateHeartbeat
+// is called, it implies that m.Term == r.term and there is a leader
+// for that term. see 4th paragraph section 5.2 of the raft paper
 func (r *raft) handleCandidateReplicate(m pb.Message) {
-	plog.Infof("r.handleCandidateReplicate invoked")
 	r.becomeFollower(r.term, m.From)
 	r.handleReplicateMessage(m)
 }
@@ -1472,13 +1530,17 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 		plog.Warningf("dropping a RequestVoteResp from observer")
 		return
 	}
+
 	count := r.handleVoteResp(m.From, m.Reject)
 	plog.Infof("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
+	// 3rd paragraph section 5.2 of the raft paper
 	if count == r.quorum() {
 		r.becomeLeader()
+		// get the NoOP entry committed ASAP
 		r.broadcastReplicateMessage()
 	} else if len(r.votes)-count == r.quorum() {
+		// etcd raft does this, it is not stated in the raft paper
 		r.becomeFollower(r.term, NoLeader)
 	}
 }
@@ -1514,6 +1576,9 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[candidate][pb.RequestVoteResp] = r.handleCandidateRequestVoteResp
 	r.handlers[candidate][pb.Election] = r.handleNodeElection
 	r.handlers[candidate][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[candidate][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[candidate][pb.LocalTick] = r.handleLocalTick
+	r.handlers[candidate][pb.SnapshotReceived] = r.handleRestoreRemote
 	// follower
 	r.handlers[follower][pb.Propose] = r.handleFollowerPropose
 	r.handlers[follower][pb.Replicate] = r.handleFollowerReplicate
@@ -1525,6 +1590,9 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[follower][pb.Election] = r.handleNodeElection
 	r.handlers[follower][pb.RequestVote] = r.handleNodeRequestVote
 	r.handlers[follower][pb.TimeoutNow] = r.handleFollowerTimeoutNow
+	r.handlers[follower][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[follower][pb.LocalTick] = r.handleLocalTick
+	r.handlers[follower][pb.SnapshotReceived] = r.handleRestoreRemote
 	// leader
 	r.handlers[leader][pb.LeaderHeartbeat] = r.handleLeaderLeaderHeartbeat
 	r.handlers[leader][pb.CheckQuorum] = r.handleLeaderCheckQuorum
@@ -1537,6 +1605,9 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.LeaderTransfer] = lw(r, r.handleLeaderLeaderTransfer)
 	r.handlers[leader][pb.Election] = r.handleNodeElection
 	r.handlers[leader][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[leader][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[leader][pb.LocalTick] = r.handleLocalTick
+	r.handlers[leader][pb.SnapshotReceived] = r.handleRestoreRemote
 	// observer
 	r.handlers[observer][pb.Heartbeat] = r.handleObserverHeartbeat
 	r.handlers[observer][pb.Replicate] = r.handleObserverReplicate
@@ -1544,6 +1615,9 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[observer][pb.Propose] = r.handleObserverPropose
 	r.handlers[observer][pb.ReadIndex] = r.handleObserverReadIndex
 	r.handlers[observer][pb.ReadIndexResp] = r.handleObserverReadIndexResp
+	r.handlers[observer][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[observer][pb.LocalTick] = r.handleLocalTick
+	r.handlers[observer][pb.SnapshotReceived] = r.handleRestoreRemote
 }
 
 func (r *raft) checkHandlerMap() {

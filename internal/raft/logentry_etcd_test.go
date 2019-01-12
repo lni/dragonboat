@@ -14,6 +14,8 @@
 
 //
 // log_etcd_test.go is ported from etcd raft for testing purposes.
+// tests have been updated to reflect the fact that we have a 3 stage log in
+// dragonboat while etcd raft uses a 2 stage log.
 //
 
 package raft

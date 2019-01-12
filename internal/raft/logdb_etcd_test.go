@@ -13,7 +13,8 @@
 // limitations under the License.
 
 //
-// logdb_etcd_test.go is ported from etcd raft
+// logdb_etcd_test.go is ported from etcd raft, it is used to test the
+// TestLogDB struct in logdb_test.go - testing your tests is important!
 //
 // etcd code comes with the following NOTICE file as a part of its source
 // distribution -

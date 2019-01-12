@@ -11,6 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+//
+// Copyright 2015 The etcd Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+//
+// Peer.go is the interface used by the upper layer to access functionalities
+// provided by the raft protocol. It translates all incoming requests to raftpb
+// messages and pass them to the raft protocol implementation to be handled.
+// Such a state machine style design together with the iterative style interface
+// here is derived from etcd.
+// Compared to etcd raft, we strictly model all inputs to the raft protocol as
+// messages including those used to advance the raft state.
+//
 
 package raft
 
@@ -39,20 +64,7 @@ type Peer struct {
 // LaunchPeer starts or restarts a Raft node.
 func LaunchPeer(config *config.Config, logdb ILogDB,
 	addresses []PeerAddress, initial bool, newNode bool) (*Peer, error) {
-	if config.NodeID == 0 {
-		panic("config.NodeID must not be zero")
-	}
-	plog.Infof("initial node: %t, new node %t", initial, newNode)
-	if initial && newNode && len(addresses) == 0 {
-		panic("addresses must be specified")
-	}
-	uniqueAddressList := make(map[string]struct{})
-	for _, addr := range addresses {
-		uniqueAddressList[string(addr.Address)] = struct{}{}
-	}
-	if len(uniqueAddressList) != len(addresses) {
-		plog.Panicf("duplicated address found %v", addresses)
-	}
+	checkLaunchRequest(config, addresses, initial, newNode)
 	r := newRaft(config, logdb)
 	rc := &Peer{raft: r}
 	rc.raft.recordLeader = rc.recordLeader
@@ -63,35 +75,7 @@ func LaunchPeer(config *config.Config, logdb ILogDB,
 	plog.Infof("LaunchPeer %s, lastIndex %d, initial %t, newNode %t",
 		r.describe(), lastIndex, initial, newNode)
 	if initial && newNode {
-		sort.Slice(addresses, func(i, j int) bool {
-			return addresses[i].NodeID < addresses[j].NodeID
-		})
-		ents := make([]pb.Entry, len(addresses))
-		for i, peer := range addresses {
-			plog.Infof("%s inserting a bootstrap ConfigChangeAddNode, %d, %s",
-				r.describe(), peer.NodeID, string(peer.Address))
-			cc := pb.ConfigChange{
-				Type:       pb.AddNode,
-				NodeID:     peer.NodeID,
-				Initialize: true,
-				Address:    peer.Address,
-			}
-			data, err := cc.Marshal()
-			if err != nil {
-				panic("unexpected marshal error")
-			}
-			ents[i] = pb.Entry{
-				Type:  pb.ConfigChangeEntry,
-				Term:  1,
-				Index: uint64(i + 1),
-				Cmd:   data,
-			}
-		}
-		r.log.append(ents)
-		r.log.committed = uint64(len(ents))
-		for _, peer := range addresses {
-			r.addNode(peer.NodeID)
-		}
+		bootstrap(r, addresses)
 	}
 	if lastIndex == 0 {
 		rc.prevState = emptyState
@@ -103,12 +87,18 @@ func LaunchPeer(config *config.Config, logdb ILogDB,
 
 // Tick moves the logical clock forward by one tick.
 func (rc *Peer) Tick() {
-	rc.raft.tick()
+	rc.raft.Handle(pb.Message{
+		Type:   pb.LocalTick,
+		Reject: false,
+	})
 }
 
 // QuiescedTick moves the logical clock forward by one tick in quiesced mode.
 func (rc *Peer) QuiescedTick() {
-	rc.raft.quiescedTick()
+	rc.raft.Handle(pb.Message{
+		Type:   pb.LocalTick,
+		Reject: true,
+	})
 }
 
 // RequestLeaderTransfer makes a request to transfer the leadership to the
@@ -145,37 +135,34 @@ func (rc *Peer) ProposeConfigChange(configChange pb.ConfigChange, key uint64) {
 	})
 }
 
-// Campaign starts the campaign procedure.
-func (rc *Peer) Campaign() {
-	rc.raft.Handle(pb.Message{Type: pb.Election})
-}
-
 // ApplyConfigChange applies a raft membership change to the local raft node.
 func (rc *Peer) ApplyConfigChange(cc pb.ConfigChange) {
 	if cc.NodeID == NoLeader {
 		rc.raft.clearPendingConfigChange()
 		return
 	}
-	switch cc.Type {
-	case pb.AddNode:
-		rc.raft.addNode(cc.NodeID)
-	case pb.RemoveNode:
-		rc.raft.removeNode(cc.NodeID)
-	case pb.AddObserver:
-		rc.raft.addObserver(cc.NodeID)
-	default:
-		panic("unexpected config change type")
-	}
+	rc.raft.Handle(pb.Message{
+		Type:     pb.ConfigChangeEvent,
+		Reject:   false,
+		Hint:     cc.NodeID,
+		HintHigh: uint64(cc.Type),
+	})
 }
 
 // RejectConfigChange rejects the currently pending raft membership change.
 func (rc *Peer) RejectConfigChange() {
-	rc.raft.clearPendingConfigChange()
+	rc.raft.Handle(pb.Message{
+		Type:   pb.ConfigChangeEvent,
+		Reject: true,
+	})
 }
 
 // RestoreRemotes applies the remotes info obtained from the specified snapshot.
 func (rc *Peer) RestoreRemotes(ss pb.Snapshot) {
-	rc.raft.restoreRemotes(ss)
+	rc.raft.Handle(pb.Message{
+		Type:     pb.SnapshotReceived,
+		Snapshot: ss,
+	})
 }
 
 // ReportUnreachableNode marks the specified node as not reachable.
@@ -289,6 +276,56 @@ func (rc *Peer) recordLeader(leaderID uint64) {
 
 func (rc *Peer) entryLog() *entryLog {
 	return rc.raft.log
+}
+
+func checkLaunchRequest(config *config.Config,
+	addresses []PeerAddress, initial bool, newNode bool) {
+	if config.NodeID == 0 {
+		panic("config.NodeID must not be zero")
+	}
+	plog.Infof("initial node: %t, new node %t", initial, newNode)
+	if initial && newNode && len(addresses) == 0 {
+		panic("addresses must be specified")
+	}
+	uniqueAddressList := make(map[string]struct{})
+	for _, addr := range addresses {
+		uniqueAddressList[string(addr.Address)] = struct{}{}
+	}
+	if len(uniqueAddressList) != len(addresses) {
+		plog.Panicf("duplicated address found %v", addresses)
+	}
+}
+
+func bootstrap(r *raft, addresses []PeerAddress) {
+	sort.Slice(addresses, func(i, j int) bool {
+		return addresses[i].NodeID < addresses[j].NodeID
+	})
+	ents := make([]pb.Entry, len(addresses))
+	for i, peer := range addresses {
+		plog.Infof("%s inserting a bootstrap ConfigChangeAddNode, %d, %s",
+			r.describe(), peer.NodeID, string(peer.Address))
+		cc := pb.ConfigChange{
+			Type:       pb.AddNode,
+			NodeID:     peer.NodeID,
+			Initialize: true,
+			Address:    peer.Address,
+		}
+		data, err := cc.Marshal()
+		if err != nil {
+			panic("unexpected marshal error")
+		}
+		ents[i] = pb.Entry{
+			Type:  pb.ConfigChangeEntry,
+			Term:  1,
+			Index: uint64(i + 1),
+			Cmd:   data,
+		}
+	}
+	r.log.append(ents)
+	r.log.committed = uint64(len(ents))
+	for _, peer := range addresses {
+		r.addNode(peer.NodeID)
+	}
 }
 
 func getUpdateCommit(ud pb.Update) pb.UpdateCommit {

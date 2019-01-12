@@ -49,6 +49,11 @@ import (
 	"github.com/lni/dragonboat/raftpb"
 )
 
+// Campaign starts the campaign procedure.
+func (rc *Peer) Campaign() {
+	rc.raft.Handle(raftpb.Message{Type: raftpb.Election})
+}
+
 func getTestMembership(nodes []uint64) raftpb.Membership {
 	m := raftpb.Membership{
 		Addresses: make(map[uint64]string),
@@ -648,4 +653,27 @@ func TestRaftAPIGetUpdateCommit(t *testing.T) {
 	if uc.StableLogTo != 103 || uc.StableLogTerm != 4 {
 		t.Errorf("stable log to/term")
 	}
+}
+
+func TestCheckLaunchRequest(t *testing.T) {
+	expectPanicFn := func(f func()) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("panic not triggered")
+			}
+		}()
+		f()
+	}
+	expectPanicFn(func() {
+		checkLaunchRequest(&config.Config{}, nil, false, false)
+	})
+	expectPanicFn(func() {
+		checkLaunchRequest(&config.Config{NodeID: 1}, nil, true, true)
+	})
+	addr := make([]PeerAddress, 0)
+	addr = append(addr, PeerAddress{Address: "1"})
+	addr = append(addr, PeerAddress{Address: "1"})
+	expectPanicFn(func() {
+		checkLaunchRequest(&config.Config{NodeID: 1}, addr, false, false)
+	})
 }
