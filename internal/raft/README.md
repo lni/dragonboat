@@ -15,11 +15,11 @@ Almost all major features outlined in the Raft thesis have been implemented -
 * stateful requests
 
 ## Third Party Code ##
-This package is a new implementation of the Raft protocol with influence from [etcd raft](https://github.com/coreos/etcd/tree/master/raft) -
+This package is a new implementation of the Raft protocol with influences from [etcd raft](https://github.com/coreos/etcd/tree/master/raft) in the following aspects - 
 
 * all relevant etcd raft tests have been ported to this project
-* a similar iterative style interface is employed as it yields high throughput
-* various other similar bits 
+* raft protocol state is modelled as a state machine with an iterative style interface
+* the replication flow control code is derived from etcd raft 
 
 Check source code files for copyright information.
 
@@ -29,7 +29,7 @@ This package is significantly different from etcd raft -
 * brand new implementation
 * better bootstrapping procedure
 * much higher proposal throughput
-* three stage log
+* log entries are partitioned based on whether they are required in immediate future 
 * zero disk read when replicating raft log entries
 * committed entries are applied in a fully asynchronous manner
 * snapshots are applied in a fully asynchronous manner

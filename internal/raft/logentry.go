@@ -29,7 +29,7 @@ const (
 
 // ErrCompacted is the error returned to indicate that the requested entries
 // are no longer in the LogDB due to compaction.
-var ErrCompacted = errors.New("requested entry has been compacted")
+var ErrCompacted = errors.New("entry compacted")
 
 // ErrSnapshotOutOfDate is the error returned to indicate that the concerned
 // snapshot is considered as out of date.
@@ -37,7 +37,7 @@ var ErrSnapshotOutOfDate = errors.New("snapshot out of date")
 
 // ErrUnavailable is the error returned to indicate that requested entries are
 // not available in LogDB.
-var ErrUnavailable = errors.New("requested entry at index is unavailable")
+var ErrUnavailable = errors.New("entry unavailable")
 
 // ILogDB is a read-only interface to the underlying persistent storage to
 // allow the raft package to access raft state, entries, snapshots stored in
@@ -74,8 +74,8 @@ type ILogDB interface {
 }
 
 // entryLog is the entry log used by Raft. It splits entries into two parts -
-// those will be immediately used and those unlikely to be used in normal fast
-// path.
+// those likely to be access in immediate future and those unlikely to be used
+// any time soon in normal fast path.
 type entryLog struct {
 	logdb     ILogDB
 	inmem     inMemory

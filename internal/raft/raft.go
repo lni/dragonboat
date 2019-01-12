@@ -121,6 +121,26 @@ func getLocalStatus(r *raft) Status {
 	}
 }
 
+//
+// The design of the raft protocol implementation below is influenced from
+// etcd's raft in the following aspects -
+// 1. etcd raft models its protocol implementation as a state machine
+//    (not the replicated state machine itself). it is driven by input
+//    messages and the output is its Ready struct. We found this approach
+//    makes testing much easier, together with an iterative style of
+//    processing, it helps to increase system throughput as well. we
+//    adopted such design from etcd raft.
+// 2. we ported all etcd raft's tests to make sure we can cover all corner
+//    cases identified by etcd raft. over time, we've identified and
+//    collected new corner cases during monkey testing as well. all of
+//    them have been contributed back to etcd raft.
+//
+// while no code in raft.go is from etcd raft, for various ideas and designs
+// covered in the above items, we consider them to be licensed from etcd raft
+// under the Apache 2 license. etcd raft's LICENSE can be found in the
+// COPYRIGHT file in github.com/lni/dragonboat/COPYRIGHT.
+//
+
 type raft struct {
 	applied                   uint64
 	nodeID                    uint64
