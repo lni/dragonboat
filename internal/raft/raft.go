@@ -723,6 +723,7 @@ func (r *raft) becomeLeader() {
 	r.reset(r.term)
 	r.setLeaderID(r.nodeID)
 	r.preLeaderPromotionHandleConfigChange()
+	// p72 of the raft thesis
 	r.appendEntries([]pb.Entry{{Type: pb.ApplicationEntry, Cmd: nil}})
 	plog.Infof("%s became the leader", r.describe())
 }
@@ -917,6 +918,36 @@ func (r *raft) setObserver(nodeID uint64, match uint64, next uint64) {
 	}
 }
 
+//
+// helper methods required for the membership change implementation
+//
+// p33-35 of the raft thesis describes a simple membership change protocol which
+// requires only one node can be added or removed at a time. its safety is
+// guarded by the fact that when there is only one node to be added or removed
+// at a time, the old and new quorum are guaranteed to overlap.
+// the protocol described in the raft thesis requires the membership change
+// entry to be executed as soon as it is appended. this also introduces an extra
+// troublesome step to roll back to an old membership configuration when
+// necessary.
+// similar to etcd raft, we treat such membership change entry as regular
+// entries that are only executed after being committed (by the old quorum).
+// to do that, however, we need to further restrict the leader to only has at
+// most one pending not applied membership change entry in its log. this is to
+// avoid the situation that two pending membership change entries are committed
+// in one go with the same quorum while they actually require different quorums.
+// consider the following situation -
+// for a 3 nodes cluster with existing members X, Y and Z, let's say we first
+// propose a membership change to add a new node A, before A gets committed and
+// applied, say we propose another membership change to add a new node B. When
+// B gets committed, A will be committed as well, both will be using the 3 node
+// membership quorum meaning both entries concerning A and B will become
+// committed when any two of the X, Y, Z cluster have them replicated. this thus
+// violates the safety requirement as B will require 3 out of the 4 nodes (X,
+// Y, Z, A) to have it replicated before it can be committed.
+// we use the following pendingConfigChange flag to help tracking whether there
+// is already a pending membership change entry in the log waiting to be
+// executed.
+//
 func (r *raft) setPendingConfigChange() {
 	r.pendingConfigChange = true
 }
@@ -1086,10 +1117,16 @@ func (r *raft) Handle(m pb.Message) {
 }
 
 func (r *raft) hasConfigChangeToApply() bool {
+	// this is a hack to make it easier to port etcd raft tests
+	// check those *_etcd_test.go for details
 	if r.hasNotAppliedConfigChange != nil {
 		plog.Infof("using test-only hasConfigChangeToApply()")
 		return r.hasNotAppliedConfigChange()
 	}
+	// TODO:
+	// with the current entry log implementation, the simplification below is no
+	// longer required, we can now actually scan the committed but not applied
+	// portion of the log as they are now all in memory.
 	return r.log.committed > r.getApplied()
 }
 
@@ -1103,6 +1140,16 @@ func (r *raft) canGrantVote(m pb.Message) bool {
 
 func (r *raft) handleNodeElection(m pb.Message) {
 	if r.state != leader {
+		// there can be multiple pending membership change entries committed but not
+		// applied on this node. say with a cluster of X, Y and Z, there are two
+		// such entries for adding node A and B are committed but not applied
+		// available on X. If X is allowed to start a new election, it can become the
+		// leader with a vote from any one of the node Y or Z. Further proposals made
+		// by the new leader X in the next term will require a quorum of 2 which can
+		// has no overlap with the committed quorum of 3. this violates the safety
+		// requirement of raft.
+		// ignore the Election message when there is membership configure change
+		// committed but not applied
 		if r.hasConfigChangeToApply() {
 			plog.Warningf("%s campaign skipped due to pending Config Change",
 				r.describe())
@@ -1209,6 +1256,7 @@ func (r *raft) handleLeaderPropose(m pb.Message) {
 	r.broadcastReplicateMessage()
 }
 
+// p72 of the raft thesis
 func (r *raft) hasCommittedEntryAtCurrentTerm() bool {
 	if r.term == 0 {
 		panic("not suppose to reach here")
@@ -1384,8 +1432,7 @@ func (r *raft) enterRetryState(rp *remote) {
 }
 
 //
-// message handlers used by observer
-// re-route them to follower handlers for now
+// message handlers used by observer, re-route them to follower handlers
 //
 
 func (r *raft) handleObserverReplicate(m pb.Message) {
