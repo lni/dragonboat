@@ -72,7 +72,7 @@ $ make dragonboat-test
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
-__上述步骤使用的是Master branch的代码，生产环境请使用已发布版本。__
+__上述步骤使用的是Master branch的代码。Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
 
 （可选）安装C++ Binding:
 ```

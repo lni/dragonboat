@@ -70,7 +70,7 @@ To build your application:
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
-__Note that, steps above use code from the Master branch, please use released versions for any production purposes.__
+__Note that, steps above use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
  
 (Optional) To install the C++ binding:
 ```
