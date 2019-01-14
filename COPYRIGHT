@@ -166,7 +166,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-etcd Raft's test cases (Apache2)
+etcd Raft's test cases and some raft protocol implementation ideas (Apache2)
 https://github.com/etcd-io/etcd/tree/master/raft
 
 Apache License
