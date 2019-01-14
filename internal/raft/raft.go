@@ -123,16 +123,66 @@ func getLocalStatus(r *raft) Status {
 
 //
 // Struct raft implements the raft protocol published in Diego Ongarno's PhD
-// thesis. Some corner cases covered by the implementation below were identified
-// by etcd raft, they were documented by etcd raft as its built-in tests. we
-// ported all relevant etcd raft tests to this project, they are named as
-// *_etcd_test.go. See those source file for copyright info.
-// When handling various corner cases in the raft implementation below, we record
-// and document their relevant etcd raft test names when we introduced such
-// handling into this implementation from etcd raft.
-// Note that most corner cases were observed from our random monkey tests, new
-// corner cases identified in our monkey testing previously not covered by etcd
-// raft have been contributed back to etcd raft.
+// thesis. Almost all features covered in Diego Ongarno's thesis have been
+// implemented, including -
+//  * leader election
+//  * log replication
+//  * flow control
+//  * membership configuration change
+//  * snapshotting and streaming
+//  * log compaction
+//  * ReadIndex protocol for read-only queries
+//  * leadership transfer
+//  * non-voting members
+//  * idempotent updates
+//  * quorum check
+//  * batching
+//  * pipelining
+//
+// Features are currently being worked on -
+//  * pre-vote extension
+//
+
+//
+// This implementation made references to etcd raft's design in the following
+// aspects:
+//  * it models the raft protocol state as a state machine
+//  * restricting to at most one pending leadership change at a time
+//  * replication flow control
+//
+// Copyright 2015 The etcd Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+//
+// When compared with etcd raft, this implementation is quite different,
+// including in areas that we made reference to etcd raft -
+// * brand new implementation
+// * better bootstrapping procedure
+// * log entries are partitioned based on whether they are required in
+//   immediate future rather than whether they have been persisted
+// * zero disk read when replicating raft log entries
+// * committed entries are applied in a fully asynchronous manner
+// * snapshots are applied in a fully asynchronous manner
+// * replication messages can be serialized and sent in fully asynchronous manner
+// * pagination support when applying committed entries
+// * fully batched making proposal implementation
+// * fully batched ReadIndex implementation
+// * unsafe read-only queries that rely on local clock is not supported
+// * non-voting members are implemented as a special raft state
+// * non-voting members can initiate both new proposal and ReadIndex requests
+// * simplified flow control
 //
 
 type raft struct {
