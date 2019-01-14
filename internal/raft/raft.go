@@ -139,8 +139,8 @@ func getLocalStatus(r *raft) Status {
 //  * batching
 //  * pipelining
 //
-// Features are currently being worked on -
-//  * pre-vote extension
+// Features currently being worked on -
+//  * pre-vote
 //
 
 //
@@ -171,14 +171,14 @@ func getLocalStatus(r *raft) Status {
 // * brand new implementation
 // * better bootstrapping procedure
 // * log entries are partitioned based on whether they are required in
-//   immediate future rather than whether they have been persisted
+//   immediate future rather than whether they have been persisted to disk
 // * zero disk read when replicating raft log entries
 // * committed entries are applied in a fully asynchronous manner
 // * snapshots are applied in a fully asynchronous manner
 // * replication messages can be serialized and sent in fully asynchronous manner
 // * pagination support when applying committed entries
-// * fully batched making proposal implementation
-// * fully batched ReadIndex implementation
+// * making proposals are fully batched
+// * ReadIndex protocol implementation are fully batched
 // * unsafe read-only queries that rely on local clock is not supported
 // * non-voting members are implemented as a special raft state
 // * non-voting members can initiate both new proposal and ReadIndex requests
