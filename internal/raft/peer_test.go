@@ -14,15 +14,7 @@
 
 //
 // Some tests in this file were ported from etcd raft.
-//
-// etcd code comes with the following NOTICE file as a part of its source
-// distribution -
-//
-// CoreOS Project
-// Copyright 2014 CoreOS, Inc
-//
-// This product includes software developed at CoreOS, Inc.
-// (http://www.coreos.com/).
+// updates have been made to reflect interface & implementation differences
 //
 // Copyright 2015 The etcd Authors
 //

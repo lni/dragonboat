@@ -13,16 +13,9 @@
 // limitations under the License.
 
 //
-// raft_etcd_test.go is ported from etcd raft.
-//
-// etcd code comes with the following NOTICE file as a part of its source
-// distribution -
-//
-// CoreOS Project
-// Copyright 2014 CoreOS, Inc
-//
-// This product includes software developed at CoreOS, Inc.
-// (http://www.coreos.com/).
+// raft_etcd_test.go is ported from etcd rafto.
+// updates have been made to reflect interface & implementation differences
+// between dragonboat and etcd raft. some irrelevant tests were removed.
 //
 
 package raft

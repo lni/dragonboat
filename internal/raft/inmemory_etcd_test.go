@@ -21,15 +21,6 @@
 // is used to manage log entries that are likely to be used in immediate future,
 // not just those have not been persisted yet.
 //
-// etcd code comes with the following NOTICE file as a part of its source
-// distribution -
-//
-// CoreOS Project
-// Copyright 2014 CoreOS, Inc
-//
-// This product includes software developed at CoreOS, Inc.
-// (http://www.coreos.com/).
-//
 
 package raft
 

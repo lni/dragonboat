@@ -27,15 +27,7 @@ outgoing messages and state.
 
 //
 // raft_paper_test.go is ported from etcd raft for testing purposes.
-//
-// etcd code comes with the following NOTICE file as a part of its source
-// distribution -
-//
-// CoreOS Project
-// Copyright 2014 CoreOS, Inc
-//
-// This product includes software developed at CoreOS, Inc.
-// (http://www.coreos.com/).
+// updates have been made to reflect the interface & implementation differences
 //
 
 package raft
