@@ -43,7 +43,7 @@ type RDB struct {
 }
 
 func openRDB(dir string, wal string) (*RDB, error) {
-	rocksdb, err := openRocksDB(dir, wal)
+	rocksdb, err := openLMDB(dir, wal)
 	if err != nil {
 		return nil, err
 	}

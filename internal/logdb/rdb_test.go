@@ -475,6 +475,7 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 	f(db)
 }
 
+/*
 func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	f := func(fdb raftio.ILogDB) {
@@ -502,7 +503,7 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 		}
 	}
 	testDiskDataCorruptionIsHandled(t, f)
-}
+}*/
 
 func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 	hs := pb.State{

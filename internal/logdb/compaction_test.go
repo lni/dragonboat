@@ -20,9 +20,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync/atomic"
+	//"sync/atomic"
 	"testing"
-	"time"
+	//"time"
 
 	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
@@ -46,6 +46,7 @@ func getDBDirSize(dataDir string, idx uint64) (int64, error) {
 	return getDirSize(p)
 }
 
+/*
 func TestCompactRangeInLogDBWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	useRangeDelete = true
@@ -66,7 +67,7 @@ func TestCompactRangeInLogDBWorks(t *testing.T) {
 		}
 	}
 	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}
+}*/
 
 func TestCompactionTaskCanBeCreated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
@@ -238,6 +239,7 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	}
 }
 
+/*
 func TestRawCompactRangeWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	useRangeDelete = true
@@ -276,4 +278,4 @@ func TestRawCompactRangeWorks(t *testing.T) {
 		plog.Infof("cost %d nanoseconds to complete the compact range op", cost)
 	}
 	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}
+}*/
