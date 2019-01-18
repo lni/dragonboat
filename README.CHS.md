@@ -56,21 +56,30 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-如果RocksDB 5.13.4或者更新版本尚未安装：
+如果选择使用RocksDB来存储Raft Log，而RocksDB 5.13.4或者更新版本尚未安装：
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make install-rocksdb-ull
 ```
-上述命令将把RocksDB 5.13.4安装到/usr/local/lib和/usr/local/include/rocksdb。如果RocksDB已经被安装，则可跳过此步。
+上述命令将把RocksDB 5.13.4安装到/usr/local/lib和/usr/local/include/rocksdb。如果RocksDB已经被安装，或者您选择使用lmdb来存储Raft Log则可跳过此步。
 
-运行内建测试以检查安装是否完成:
+内建的Makefile默认使用RocksDB，运行内建测试以检查安装是否完成:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make dragonboat-test
 ```
+使用lmdb来运行上述同样的测试：
+```
+$ cd $GOPATH/src/github.com/lni/dragonboat
+$ DRAGONBOAT_LOGDB=lmdb make dragonboat-test
+```
 编译您的应用:
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
+```
+或者编译同样该应用，但使用lmdb来存储Raft Log
+```
+go build -v -tags="dragonboat_lmdb" pkgname
 ```
 __上述步骤使用的是Master branch的代码。Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
 

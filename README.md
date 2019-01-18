@@ -48,7 +48,7 @@ As visualized below, Stop-the-World pauses caused by Golang's GC are sub-millise
 
 ## Requirements ##
 * x86_64 Linux or MacOS, Go 1.10 and 1.11, GCC or Clang with C++11 support
-* [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above
+* [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above when using RocksDB for storing Raft logs 
 
 
 ## Getting Started ##
@@ -56,19 +56,28 @@ To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-If RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include.
+When using RocksDB based Raft log storage, if RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include. No extra installation is required if you choose to use lmdb based Raft log storage.
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make install-rocksdb-ull
 ```
-Run built-in tests to check the installation:
+By default, RocksDB is used by the built-in Makefile, run built-in tests to check the installation:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make dragonboat-test
 ```
-To build your application:
+To run the same tests using lmdb based Raft log storage.
+```
+$ cd $GOPATH/src/github.com/lni/dragonboat
+$ DRAGONBOAT_LOGDB=lmdb make dragonboat-test
+```
+To build your application
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
+```
+To build the same application using lmdb based Raft log storage
+```
+go build -v -tags="dragonboat_lmdb" pkgname
 ```
 __Note that, steps above use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
  
