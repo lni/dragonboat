@@ -25,6 +25,11 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
+const (
+	// LogDBType is the logdb type name
+	LogDBType = "sharded-rocksdb"
+)
+
 var (
 	logDBLRUCacheSize        = int(settings.Soft.RDBLRUCacheSize)
 	maxBackgroundCompactions = int(settings.Soft.RDBMaxBackgroundCompactions)
@@ -161,6 +166,10 @@ func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 		wo:        wo,
 		opts:      opts,
 	}, nil
+}
+
+func (r *rocksdbKV) Name() string {
+	return "rocksdb"
 }
 
 // Close closes the RDB object.

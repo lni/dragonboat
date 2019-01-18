@@ -27,6 +27,11 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
+const (
+	// LogDBType is the logdb type name
+	LogDBType = "sharded-lmdb"
+)
+
 func newKVStore(dir string, wal string) (IKvStore, error) {
 	return openLMDB(dir, wal)
 }
@@ -71,6 +76,10 @@ func openLMDB(dir string, wal string) (*lmdbKV, error) {
 		return err
 	})
 	return &lmdbKV{env: env, dbi: dbi}, nil
+}
+
+func (l *lmdbKV) Name() string {
+	return "lmdb"
 }
 
 func (l *lmdbKV) Close() error {

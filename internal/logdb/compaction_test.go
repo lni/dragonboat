@@ -19,9 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	//"sync/atomic"
 	"testing"
-	//"time"
 
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
@@ -42,29 +40,6 @@ func getDBDirSize(dataDir string, idx uint64) (int64, error) {
 	p := filepath.Join(RDBTestDirectory, dataDir, fmt.Sprintf("logdb-%d", idx))
 	return getDirSize(p)
 }
-
-/*
-func TestCompactRangeInLogDBWorks(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	useRangeDelete = true
-	compactFunc := func(db raftio.ILogDB, clusterID uint64, nodeID uint64, maxIndex uint64) {
-		rrdb, ok := db.(*ShardedRDB)
-		if !ok {
-			t.Errorf("failed to get *MultiDiskRDB")
-		}
-		err := rrdb.RemoveEntriesTo(clusterID, nodeID, maxIndex-10)
-		if err != nil {
-			t.Errorf("delete range failed %v", err)
-		}
-		for i := 0; i < 1000; i++ {
-			time.Sleep(100 * time.Millisecond)
-			if atomic.LoadUint64(&rrdb.completedCompactions) > 0 {
-				break
-			}
-		}
-	}
-	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}*/
 
 func TestCompactionTaskCanBeCreated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
@@ -166,113 +141,3 @@ func TestMovingCompactionIndexBackWillCausePanic(t *testing.T) {
 	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
 	p.addTask(task{clusterID: 1, nodeID: 2, index: 2})
 }
-
-/*
-func testCompactRangeWithCompactionFilterWorks(t *testing.T,
-	f func(raftio.ILogDB, uint64, uint64, uint64)) {
-	dir := "compaction-db-dir"
-	lldir := "compaction-wal-db-dir"
-	deleteTestDB()
-	db := getNewTestDB(dir, lldir)
-	defer deleteTestDB()
-	defer db.Close()
-	hs := pb.State{
-		Term:   2,
-		Vote:   3,
-		Commit: 100,
-	}
-	ud := pb.Update{
-		EntriesToSave: []pb.Entry{},
-		State:         hs,
-		ClusterID:     0,
-		NodeID:        4,
-	}
-	maxIndex := uint64(0)
-	for i := uint64(0); i < 128; i++ {
-		for j := uint64(0); j < 16; j++ {
-			e := pb.Entry{
-				Term:  2,
-				Index: i*16 + j,
-				Type:  pb.ApplicationEntry,
-				Cmd:   make([]byte, 1024*32),
-			}
-			maxIndex = e.Index
-			ud.EntriesToSave = append(ud.EntriesToSave, e)
-		}
-	}
-	err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-	if err != nil {
-		t.Fatalf("failed to save the ud rec")
-	}
-	rrdb, ok := db.(*ShardedRDB)
-	if !ok {
-		t.Fatalf("failed to get *MultiDiskRDB")
-	}
-	var cr gorocksdb.Range
-	key1 := newKey(maxKeySize, nil)
-	key2 := newKey(maxKeySize, nil)
-	key1.SetEntryBatchKey(0, 4, 0)
-	key2.SetEntryBatchKey(0, 4, math.MaxUint64)
-	opts := gorocksdb.NewCompactionOptions()
-	opts.SetExclusiveManualCompaction(false)
-	opts.SetForceBottommostLevelCompaction()
-	defer opts.Destroy()
-	cr.Start = key1.Key()
-	cr.Limit = key2.Key()
-	rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
-	initialSz, err := getDBDirSize(dir, 0)
-	if err != nil {
-		t.Errorf("failed to get db size %v", err)
-	}
-	if initialSz < 8*1024*1024 {
-		t.Errorf("sz %d < 8MBytes", initialSz)
-	}
-	f(db, ud.ClusterID, ud.NodeID, maxIndex)
-	sz, err := getDBDirSize(dir, 0)
-	if err != nil {
-		t.Fatalf("failed to get db size %v", err)
-	}
-	if sz > initialSz/10 {
-		t.Errorf("sz %d > initialSz/10", sz)
-	}
-}
-
-func TestRawCompactRangeWorks(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	useRangeDelete = true
-	compactFunc := func(db raftio.ILogDB,
-		clusterID uint64, nodeID uint64, maxIndex uint64) {
-		rrdb, ok := db.(*ShardedRDB)
-		if !ok {
-			t.Errorf("failed to get *MultiDiskRDB")
-		}
-		batchID := getBatchID(maxIndex)
-		if batchID == 0 || batchID == 1 {
-			return
-		}
-		firstKey := newKey(maxKeySize, nil)
-		lastKey := newKey(maxKeySize, nil)
-		firstKey.SetEntryBatchKey(clusterID, nodeID, 0)
-		lastKey.SetEntryBatchKey(clusterID, nodeID, batchID-1)
-		err := rrdb.shards[0].kvs.(*rocksdbKV).deleteRange(firstKey.Key(), lastKey.Key())
-		if err != nil {
-			t.Errorf("delete range failed %v", err)
-		}
-		var cr gorocksdb.Range
-		key1 := newKey(maxKeySize, nil)
-		key2 := newKey(maxKeySize, nil)
-		key1.SetEntryBatchKey(clusterID, nodeID, 0)
-		key2.SetEntryBatchKey(clusterID, nodeID, batchID)
-		opts := gorocksdb.NewCompactionOptions()
-		opts.SetExclusiveManualCompaction(false)
-		opts.SetForceBottommostLevelCompaction()
-		defer opts.Destroy()
-		st := time.Now()
-		cr.Start = key1.Key()
-		cr.Limit = key2.Key()
-		rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
-		cost := time.Now().Sub(st).Nanoseconds()
-		plog.Infof("cost %d nanoseconds to complete the compact range op", cost)
-	}
-	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}*/

@@ -21,6 +21,8 @@ import (
 // IKvStore is the interface used by the RDB struct to access the underlying
 // Key-Value store.
 type IKvStore interface {
+	// Name is the IKvStore name.
+	Name() string
 	// Close closes the underlying Key-Value store.
 	Close() error
 	// IterateValue iterates the key range specified by the first key fk and

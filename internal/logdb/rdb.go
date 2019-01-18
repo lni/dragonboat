@@ -24,13 +24,6 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
-const (
-	// RocksDBLogDBName is the type name of the rocksdb LogDB.
-	RocksDBLogDBName = "rocksdb-logdb"
-	// LogDBType is the logdb type name.
-	LogDBType = "fully-batched rocksdb"
-)
-
 var (
 	batchSize = settings.Hard.LogDBEntryBatchSize
 )

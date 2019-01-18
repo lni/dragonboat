@@ -15,7 +15,6 @@
 package logdb
 
 import (
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -389,121 +388,6 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 	}
 	runLogDBTest(t, tf)
 }
-
-func modifyLogDBContent(fp string) {
-	idx := int64(0)
-	f, err := os.OpenFile(fp, os.O_RDWR, 0755)
-	defer f.Close()
-	if err != nil {
-		panic("failed to open the file")
-	}
-	located := false
-	data := make([]byte, 4)
-	for {
-		_, err := f.Read(data)
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				panic("read failed")
-			}
-		}
-		if string(data) == "XXXX" {
-			// got it
-			located = true
-			break
-		}
-		idx += 4
-	}
-	if !located {
-		panic("failed to locate the data")
-	}
-	_, err = f.Seek(idx, 0)
-	if err != nil {
-		panic(err)
-	}
-	_, err = f.Write([]byte("YYYY"))
-	if err != nil {
-		panic(err)
-	}
-}
-
-// this is largely to check the rocksdb wrapper doesn't slightly swallow
-// detected data corruption related errors
-func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
-	dir := "db-dir"
-	lldir := "wal-db-dir"
-	db := getNewTestDB(dir, lldir)
-	defer deleteTestDB()
-	hs := pb.State{
-		Term:   2,
-		Vote:   3,
-		Commit: 100,
-	}
-	e1 := pb.Entry{
-		Term:  1,
-		Index: 10,
-		Type:  pb.ApplicationEntry,
-		Cmd:   []byte("XXXXXXXXXXXXXXXXXXXXXXXX"),
-	}
-	ud := pb.Update{
-		EntriesToSave: []pb.Entry{e1},
-		State:         hs,
-		ClusterID:     3,
-		NodeID:        4,
-	}
-	for i := 0; i < 128; i++ {
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
-	}
-	db.Close()
-	db = getNewTestDB(dir, lldir)
-	db.Close()
-	for _, fp := range sstFileToCorruptFilePath() {
-		plog.Infof(fp)
-		modifyLogDBContent(fp)
-	}
-	db = getNewTestDB(dir, lldir)
-	defer db.Close()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("didn't crash")
-		}
-	}()
-	f(db)
-}
-
-/*
-func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	f := func(fdb raftio.ILogDB) {
-		fdb.ReadRaftState(3, 4, 0)
-	}
-	testDiskDataCorruptionIsHandled(t, f)
-}
-
-func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	f := func(fdb raftio.ILogDB) {
-		rdb := fdb.(*ShardedRDB).shards[3]
-		fk := rdb.keys.get()
-		fk.SetEntryKey(3, 4, 10)
-		iter := rdb.kvs.(*rocksdbKV).db.NewIterator(rdb.kvs.(*rocksdbKV).ro)
-		iter.Seek(fk.key)
-		for ; iteratorIsValid(iter); iter.Next() {
-			plog.Infof("here")
-			val := iter.Value()
-			var e pb.Entry
-			if err := e.Unmarshal(val.Data()); err != nil {
-				panic(err)
-			}
-			plog.Infof(string(e.Cmd))
-		}
-	}
-	testDiskDataCorruptionIsHandled(t, f)
-}*/
 
 func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 	hs := pb.State{
