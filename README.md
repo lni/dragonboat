@@ -56,17 +56,17 @@ To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-When using RocksDB based Raft log storage, if RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include. No extra installation is required if you choose to use lmdb based Raft log storage.
+When using RocksDB based Raft log storage, if RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include. No extra installation step is required when you choose to use [lmdb](https://github.com/LMDB/lmdb) based Raft log storage.
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make install-rocksdb-ull
 ```
-By default, RocksDB is used by the built-in Makefile, run built-in tests to check the installation:
+By default, RocksDB is used. Run built-in tests to check the installation:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make dragonboat-test
 ```
-To run the same tests using lmdb based Raft log storage.
+Or you can run the same tests using lmdb based Raft log storage.
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ DRAGONBOAT_LOGDB=lmdb make dragonboat-test
