@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !dragonboat_lmdb
+
 package logdb
 
 import (
@@ -25,10 +27,13 @@ import (
 
 var (
 	logDBLRUCacheSize        = int(settings.Soft.RDBLRUCacheSize)
-	useRangeDelete           = settings.Hard.UseRocksDBRangeDelete
 	maxBackgroundCompactions = int(settings.Soft.RDBMaxBackgroundCompactions)
 	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
 )
+
+func newKVStore(dir string, wal string) (IKvStore, error) {
+	return openRocksDB(dir, wal)
+}
 
 type rocksdbKV struct {
 	directory string

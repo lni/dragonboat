@@ -16,7 +16,6 @@ package logdb
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,10 +23,8 @@ import (
 	"testing"
 	//"time"
 
-	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func getDirSize(path string) (int64, error) {
@@ -170,6 +167,7 @@ func TestMovingCompactionIndexBackWillCausePanic(t *testing.T) {
 	p.addTask(task{clusterID: 1, nodeID: 2, index: 2})
 }
 
+/*
 func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	f func(raftio.ILogDB, uint64, uint64, uint64)) {
 	dir := "compaction-db-dir"
@@ -239,7 +237,6 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	}
 }
 
-/*
 func TestRawCompactRangeWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	useRangeDelete = true

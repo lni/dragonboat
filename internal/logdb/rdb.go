@@ -43,14 +43,14 @@ type RDB struct {
 }
 
 func openRDB(dir string, wal string) (*RDB, error) {
-	rocksdb, err := openLMDB(dir, wal)
+	kvs, err := newKVStore(dir, wal)
 	if err != nil {
 		return nil, err
 	}
 	return &RDB{
 		cs:   newRDBCache(),
 		keys: newLogdbKeyPool(),
-		kvs:  rocksdb,
+		kvs:  kvs,
 	}, nil
 }
 

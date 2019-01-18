@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build dragonboat_lmdb
+
 package logdb
 
 import (
@@ -24,6 +26,10 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/raftio"
 )
+
+func newKVStore(dir string, wal string) (IKvStore, error) {
+	return openLMDB(dir, wal)
+}
 
 type lmdbKV struct {
 	env *lmdb.Env

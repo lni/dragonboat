@@ -13,6 +13,16 @@
 # limitations under the License.
 
 OS := $(shell uname)
+
+# set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
+# LogDB implementation. 
+ifeq ($(DRAGONBOAT_LOGDB),lmdb)
+$(info using lmdb based log storage)
+GOCMD=go
+LOGDB_TAG=dragonboat_lmdb
+else
+$(info using rocksdb based log storage, use `DRAGONBOAT_LOGDB=lmdb make` \
+	for lmdb based storage)
 # set the variables below to tell the Makefile where to find 
 # rocksdb libs and includes, e.g. /usr/local/lib and /usr/local/include
 # tested rocksdb version -
@@ -72,6 +82,7 @@ CGO_CXXFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
 endif
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
 GOCMD=$(CGO_LDFLAGS) $(CGO_CXXFLAGS) go
+endif
 
 # verbosity, use -v to see details of go build
 VERBOSE ?= -v
@@ -185,6 +196,7 @@ $(error OS type $(OS) not supported)
 endif
 
 # go build tags
+GOBUILDTAGVALS+=$(LOGDB_TAG)
 GOBUILDTAGVALS+=$(RDBPATCHED_TAG)
 GOBUILDTAGVALS+=$(ADV_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
