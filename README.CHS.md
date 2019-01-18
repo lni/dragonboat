@@ -101,4 +101,4 @@ Dragonboat适用于生产环境。
 ## 开源许可协议 ##
 本项目以Apache License Version 2.0授权开源，请参考LICENSE文件。
 
-本项目所使用的第三方代码与它们的开源许可证信息的列表[在此](doc/COPYRIGHT)
+本项目所使用的第三方代码与它们的开源许可证信息的列表[在此](COPYRIGHT)
