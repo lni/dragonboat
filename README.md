@@ -99,4 +99,4 @@ For reporting bugs, please open an [issue](https://github.com/lni/dragonboat/iss
 ## License ##
 Dragonboat is licensed under the Apache License Version 2.0. See LICENSE for details.
 
-Third party code used in Dragonboat and their licenses is summarized [here](COPYRIGHT).
+Third party code used in Dragonboat and their licenses is summarized [here](doc/COPYRIGHT).
