@@ -148,14 +148,20 @@ func (l *lmdbKV) Compaction(fk []byte, lk []byte) error {
 			return err
 		}
 		defer cur.Close()
-		_, _, err = cur.Get(fk, nil, lmdb.SetRange)
+		var k []byte
+		first := true
+		k, _, err = cur.Get(fk, nil, lmdb.SetRange)
 		if err != nil {
 			return err
 		}
 		for {
-			k, _, err := cur.Get(nil, nil, lmdb.Next)
-			if lmdb.IsNotFound(err) {
-				return nil
+			if !first {
+				k, _, err = cur.Get(nil, nil, lmdb.Next)
+				if lmdb.IsNotFound(err) {
+					return nil
+				}
+			} else {
+				first = false
 			}
 			if err != nil {
 				return err

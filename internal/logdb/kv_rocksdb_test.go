@@ -18,8 +18,11 @@ package logdb
 
 import (
 	"io"
+	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -197,6 +200,21 @@ func modifyLogDBContent(fp string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func sstFileToCorruptFilePath() []string {
+	dp := filepath.Join(RDBTestDirectory, "db-dir", "logdb-3")
+	fi, err := ioutil.ReadDir(dp)
+	if err != nil {
+		panic(err)
+	}
+	result := make([]string, 0)
+	for _, v := range fi {
+		if strings.HasSuffix(v.Name(), ".sst") {
+			result = append(result, filepath.Join(dp, v.Name()))
+		}
+	}
+	return result
 }
 
 // this is largely to check the rocksdb wrapper doesn't slightly swallow

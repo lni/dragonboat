@@ -15,11 +15,9 @@
 package logdb
 
 import (
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/internal/utils/leaktest"
@@ -30,21 +28,6 @@ import (
 const (
 	RDBTestDirectory = "rdb_test_dir_safe_to_delete"
 )
-
-func sstFileToCorruptFilePath() []string {
-	dp := filepath.Join(RDBTestDirectory, "db-dir", "logdb-3")
-	fi, err := ioutil.ReadDir(dp)
-	if err != nil {
-		panic(err)
-	}
-	result := make([]string, 0)
-	for _, v := range fi {
-		if strings.HasSuffix(v.Name(), ".sst") {
-			result = append(result, filepath.Join(dp, v.Name()))
-		}
-	}
-	return result
-}
 
 func getNewTestDB(dir string, lldir string) raftio.ILogDB {
 	d := filepath.Join(RDBTestDirectory, dir)

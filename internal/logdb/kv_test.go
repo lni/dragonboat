@@ -21,7 +21,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 )
 
-func TestKVRocksDBCanBeCreatedAndClosed(t *testing.T) {
+func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	kvs, err := newKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
@@ -33,7 +33,7 @@ func TestKVRocksDBCanBeCreatedAndClosed(t *testing.T) {
 	deleteTestDB()
 }
 
-func runKVRocksDBTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
+func runKVTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB()
 	kvs, err := newKVStore(RDBTestDirectory, RDBTestDirectory)
@@ -46,7 +46,7 @@ func runKVRocksDBTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
 	}
 }
 
-func TestKVRocksDBGetAndSet(t *testing.T) {
+func TestKVGetAndSet(t *testing.T) {
 	tf := func(t *testing.T, kvs IKvStore) {
 		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
 			t.Errorf("failed to save the value")
@@ -70,10 +70,10 @@ func TestKVRocksDBGetAndSet(t *testing.T) {
 			t.Errorf("failed to get value")
 		}
 	}
-	runKVRocksDBTest(t, tf)
+	runKVTest(t, tf)
 }
 
-func TestKVRocksDBValueCanBeDeleted(t *testing.T) {
+func TestKVValueCanBeDeleted(t *testing.T) {
 	tf := func(t *testing.T, kvs IKvStore) {
 		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
 			t.Errorf("failed to save the value")
@@ -100,10 +100,10 @@ func TestKVRocksDBValueCanBeDeleted(t *testing.T) {
 			t.Errorf("failed to delete result")
 		}
 	}
-	runKVRocksDBTest(t, tf)
+	runKVTest(t, tf)
 }
 
-func TestKVRocksDBWriteBatch(t *testing.T) {
+func TestKVWriteBatch(t *testing.T) {
 	tf := func(t *testing.T, kvs IKvStore) {
 		wb := kvs.GetWriteBatch(nil)
 		defer wb.Destroy()
@@ -133,10 +133,10 @@ func TestKVRocksDBWriteBatch(t *testing.T) {
 			t.Errorf("failed to get the result")
 		}
 	}
-	runKVRocksDBTest(t, tf)
+	runKVTest(t, tf)
 }
 
-func testKVRocksDBIterateValue(t *testing.T,
+func testKVIterateValue(t *testing.T,
 	fk []byte, lk []byte, inc bool, count uint64) {
 	tf := func(t *testing.T, kvs IKvStore) {
 		for i := 0; i < 10; i++ {
@@ -156,10 +156,10 @@ func testKVRocksDBIterateValue(t *testing.T,
 			t.Errorf("op called %d times, want %d", opcalled, count)
 		}
 	}
-	runKVRocksDBTest(t, tf)
+	runKVTest(t, tf)
 }
 
-func TestKVRocksDBIterateValue(t *testing.T) {
-	testKVRocksDBIterateValue(t, []byte("key0"), []byte("key5"), true, 6)
-	testKVRocksDBIterateValue(t, []byte("key0"), []byte("key5"), false, 5)
+func TestKVIterateValue(t *testing.T) {
+	testKVIterateValue(t, []byte("key0"), []byte("key5"), true, 6)
+	testKVIterateValue(t, []byte("key0"), []byte("key5"), false, 5)
 }
