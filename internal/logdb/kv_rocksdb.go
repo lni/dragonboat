@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_lmdb
+// +build !dragonboat_lmdb,!dragonboat_leveldb
 
 package logdb
 

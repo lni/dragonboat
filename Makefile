@@ -20,9 +20,12 @@ ifeq ($(DRAGONBOAT_LOGDB),lmdb)
 $(info using lmdb based log storage)
 GOCMD=go
 LOGDB_TAG=dragonboat_lmdb
-else
-$(info using rocksdb based log storage, use `DRAGONBOAT_LOGDB=lmdb make` \
-	for lmdb based storage)
+else ifeq ($(DRAGONBOAT_LOGDB),leveldb)
+$(info using leveldb based log storage)
+GOCMD=go
+LOGDB_TAG=dragonboat_leveldb
+else ifeq ($(DRAGONBOAT_LOGDB),)
+$(info using rocksdb based log storage)
 # set the variables below to tell the Makefile where to find 
 # rocksdb libs and includes, e.g. /usr/local/lib and /usr/local/include
 # tested rocksdb version -
