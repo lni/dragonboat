@@ -73,6 +73,7 @@ func openLevelDB(dir string, wal string) (*leveldbKV, error) {
 	ro := levigo.NewReadOptions()
 	wo := levigo.NewWriteOptions()
 	ro.SetFillCache(false)
+	ro.SetVerifyChecksums(true)
 	wo.SetSync(true)
 	return &leveldbKV{
 		db:   db,
