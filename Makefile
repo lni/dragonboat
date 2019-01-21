@@ -16,11 +16,7 @@ OS := $(shell uname)
 
 # set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
 # LogDB implementation. 
-ifeq ($(DRAGONBOAT_LOGDB),lmdb)
-$(info using lmdb based log storage)
-GOCMD=go
-LOGDB_TAG=dragonboat_lmdb
-else ifeq ($(DRAGONBOAT_LOGDB),leveldb)
+ifeq ($(DRAGONBOAT_LOGDB),leveldb)
 $(info using leveldb based log storage)
 GOCMD=go
 LOGDB_TAG=dragonboat_leveldb
@@ -37,6 +33,7 @@ ROCKSDB_MAJOR_VER=5
 ROCKSDB_MINOR_VER=13
 ROCKSDB_PATCH_VER=4
 ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
+
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.$(ROCKSDB_MAJOR_VER).dylib
 else ifeq ($(OS),Linux)
@@ -80,12 +77,17 @@ CDEPS_LDFLAGS=-lrocksdb
 else
 CDEPS_LDFLAGS=-L$(ROCKSDB_LIB_PATH) -lrocksdb
 endif
+
 ifneq ($(ROCKSDB_INC_PATH),)
 CGO_CXXFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
 endif
+
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
 GOCMD=$(CGO_LDFLAGS) $(CGO_CXXFLAGS) go
+else
+$(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
+
 
 # verbosity, use -v to see details of go build
 VERBOSE ?= -v
