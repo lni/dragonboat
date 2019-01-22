@@ -469,10 +469,8 @@ func (s *execEngine) execNodes(workerID uint64,
 	if readyToReturnTestKnob(stopC, "sending append msg") {
 		return
 	}
-	// see DragonBoatDocs/stepengine.md for details on why we don't
-	// parallelize the above/below parts.
-	// see DragonBoatDocs/stepengine.md for details on why we can send append
-	// messages in parallel with disk fsync writes
+	// see raft thesis section 10.2.1 on details why we send Relicate message
+	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
 		node.sendAppendMessages(ud)

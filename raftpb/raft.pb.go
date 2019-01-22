@@ -348,9 +348,6 @@ func (m *RaftDataStatus) GetHardHash() uint64 {
 	return 0
 }
 
-// according to the original raft protocol, commit is not included in
-// the persistent state. why it is included here is documented in
-// github.com/lni/DragonBoatDocs/raft.md
 type State struct {
 	Term   uint64 `protobuf:"varint,1,opt,name=term" json:"term"`
 	Vote   uint64 `protobuf:"varint,2,opt,name=vote" json:"vote"`

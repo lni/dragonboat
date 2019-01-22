@@ -73,9 +73,6 @@ message RaftDataStatus {
   optional uint64 hard_hash = 3 [(gogoproto.nullable) = false];
 }
 
-// according to the original raft protocol, commit is not included in
-// the persistent state. why it is included here is documented in 
-// github.com/lni/DragonBoatDocs/raft.md
 message State {
 	optional uint64 term   = 1 [(gogoproto.nullable) = false];
 	optional uint64 vote   = 2 [(gogoproto.nullable) = false];
