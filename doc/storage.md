@@ -5,14 +5,14 @@ Dragonboat uses RocksDB or LevelDB to store Raft logs.
 ## Important Notice ##
 
 * RocksDB is the only recommended storage option for production purposes.
-* We don't provide data migration tool for moving your RocksDB bsased Raft logs to LevelDB formats, or vice versa. 
+* We don't provide data migration tool for moving your RocksDB based Raft logs to LevelDB formats, or vice versa. 
 * When you are not sure which one to choose - always use RocksDB.
 
 ## RocksDB ##
 
 RocksDB is the default storage option for Dragonboat. It is recommended to use RocksDB for any production purposes. 
 
-When using RocksDB for storage, you need to install RocksDB first, see the [Getting Started](http://github.com/lni/dragonboat/README.md) section of the README.md for details. You will also need to set the CGO_CFLAGS and CGO_LDFLAGS environmental variables to point to your RocksDB installation location when building your own applications, see [README.md](http://github.com/lni/dragonboat/README.md) for details.
+When using RocksDB for storage, you need to install RocksDB first, see the [Getting Started](https://github.com/lni/dragonboat/blob/master/README.md) section of the README.md for details. You will also need to set the CGO_CFLAGS and CGO_LDFLAGS environmental variables to point to your RocksDB installation location when building your own applications, see [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details.
 
 ## LevelDB ##
 
@@ -24,4 +24,4 @@ A major benefit for choosing LevelDB is that no extra installation step is requi
 go build -tags "dragonboat_leveldb" pkgname
 ```
 
-See [README.md](http://github.com/lni/dragonboat/README.md) for details on how to run all built-in tests using LevelDB. 
+See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using LevelDB. 

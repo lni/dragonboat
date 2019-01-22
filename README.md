@@ -57,7 +57,7 @@ To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-You need to decide whether you want to use [RocksDB or LevelDB](https://github.com/lni/dragonboat/blob/master/doc/storage.md) to store Raft logs. RocksDB is recommended.
+You need to decide whether to use [RocksDB or LevelDB](https://github.com/lni/dragonboat/blob/master/doc/storage.md) to store Raft logs. RocksDB is recommended.
 
 ### RocksDB ###
 If RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include.
