@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !dragonboat_leveldb
+
 package logdb
 
 import (
@@ -23,55 +25,19 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
+const (
+	// LogDBType is the logdb type name
+	LogDBType = "sharded-rocksdb"
+)
+
 var (
 	logDBLRUCacheSize        = int(settings.Soft.RDBLRUCacheSize)
-	useRangeDelete           = settings.Hard.UseRocksDBRangeDelete
 	maxBackgroundCompactions = int(settings.Soft.RDBMaxBackgroundCompactions)
 	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
 )
 
-// IKvStore is the interface used by the RDB struct to access the underlying
-// Key-Value store.
-type IKvStore interface {
-	// Close closes the underlying Key-Value store.
-	Close() error
-	// IterateValue iterates the key range specified by the first key fk and
-	// last key lk. The inc boolean flag indicates whether it is inclusive for
-	// the last key lk. For each iterated entry, the specified op will be invoked
-	// on that key-value pair, the specified op func returns a boolean flag to
-	// indicate whether IterateValue should continue to iterate entries.
-	IterateValue(fk []byte,
-		lk []byte, inc bool, op func(key []byte, data []byte) (bool, error))
-	// GetValue queries the value specified the input key, the returned value
-	// byte slice is passed to the specified op func.
-	GetValue(key []byte, op func([]byte) error) error
-	// Save value saves the specified key value pair to the underlying key-value
-	// pair.
-	SaveValue(key []byte, value []byte) error
-	// DeleteValue deletes the key-value pair specified by the input key.
-	DeleteValue(key []byte) error
-	// GetWriteBatch returns an IWriteBatch object to be used by RDB.
-	GetWriteBatch(ctx raftio.IContext) IWriteBatch
-	// CommitWriteBatch atomically writes everything included in the write batch
-	// to the underlying key-value store.
-	CommitWriteBatch(wb IWriteBatch) error
-	// RemoveEntries removes entries specified by the range [firstKey, lastKey).
-	// RemoveEntries is called in the main execution thread of raft, it is
-	// suppose to immediately return without significant delay.
-	RemoveEntries(firstKey []byte, lastKey []byte) error
-	// Compaction is called by the compaction goroutine to compact the key-value
-	// store for the specified range [firstKey, lastKey). This method is expected
-	// to complete in the order of seconds.
-	Compaction(firstKey []byte, lastKey []byte) error
-}
-
-// IWriteBatch is the interface representing a write batch capable of
-// atomically writing many key-value pairs to the key-value store.
-type IWriteBatch interface {
-	Destroy()
-	Put([]byte, []byte)
-	Clear()
-	Count() int
+func newKVStore(dir string, wal string) (IKvStore, error) {
+	return openRocksDB(dir, wal)
 }
 
 type rocksdbKV struct {
@@ -200,6 +166,10 @@ func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 		wo:        wo,
 		opts:      opts,
 	}, nil
+}
+
+func (r *rocksdbKV) Name() string {
+	return "rocksdb"
 }
 
 // Close closes the RDB object.

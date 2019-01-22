@@ -12,154 +12,283 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !dragonboat_leveldb
+
 package logdb
 
 import (
-	"fmt"
+	"io"
+	"io/ioutil"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
+	"github.com/lni/dragonboat/raftio"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
-func TestKVRocksDBCanBeCreatedAndClosed(t *testing.T) {
+func TestCompactRangeInLogDBWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	kvs, err := openRocksDB(RDBTestDirectory, RDBTestDirectory)
-	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+	useRangeDelete = true
+	compactFunc := func(db raftio.ILogDB, clusterID uint64, nodeID uint64, maxIndex uint64) {
+		rrdb, ok := db.(*ShardedRDB)
+		if !ok {
+			t.Errorf("failed to get *MultiDiskRDB")
+		}
+		err := rrdb.RemoveEntriesTo(clusterID, nodeID, maxIndex-10)
+		if err != nil {
+			t.Errorf("delete range failed %v", err)
+		}
+		for i := 0; i < 1000; i++ {
+			time.Sleep(100 * time.Millisecond)
+			if atomic.LoadUint64(&rrdb.completedCompactions) > 0 {
+				break
+			}
+		}
 	}
-	if err := kvs.Close(); err != nil {
-		t.Errorf("failed to close kv rocksdb")
-	}
+	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
+}
+
+func testCompactRangeWithCompactionFilterWorks(t *testing.T,
+	f func(raftio.ILogDB, uint64, uint64, uint64)) {
+	dir := "compaction-db-dir"
+	lldir := "compaction-wal-db-dir"
 	deleteTestDB()
-}
-
-func runKVRocksDBTest(t *testing.T, tf func(t *testing.T, kvs *rocksdbKV)) {
-	defer leaktest.AfterTest(t)()
+	db := getNewTestDB(dir, lldir)
 	defer deleteTestDB()
-	kvs, err := openRocksDB(RDBTestDirectory, RDBTestDirectory)
+	defer db.Close()
+	hs := pb.State{
+		Term:   2,
+		Vote:   3,
+		Commit: 100,
+	}
+	ud := pb.Update{
+		EntriesToSave: []pb.Entry{},
+		State:         hs,
+		ClusterID:     0,
+		NodeID:        4,
+	}
+	maxIndex := uint64(0)
+	for i := uint64(0); i < 128; i++ {
+		for j := uint64(0); j < 16; j++ {
+			e := pb.Entry{
+				Term:  2,
+				Index: i*16 + j,
+				Type:  pb.ApplicationEntry,
+				Cmd:   make([]byte, 1024*32),
+			}
+			maxIndex = e.Index
+			ud.EntriesToSave = append(ud.EntriesToSave, e)
+		}
+	}
+	err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
 	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+		t.Fatalf("failed to save the ud rec")
 	}
-	tf(t, kvs)
-	if err := kvs.Close(); err != nil {
-		t.Errorf("failed to close kv rocksdb")
+	rrdb, ok := db.(*ShardedRDB)
+	if !ok {
+		t.Fatalf("failed to get *MultiDiskRDB")
+	}
+	var cr gorocksdb.Range
+	key1 := newKey(maxKeySize, nil)
+	key2 := newKey(maxKeySize, nil)
+	key1.SetEntryBatchKey(0, 4, 0)
+	key2.SetEntryBatchKey(0, 4, math.MaxUint64)
+	opts := gorocksdb.NewCompactionOptions()
+	opts.SetExclusiveManualCompaction(false)
+	opts.SetForceBottommostLevelCompaction()
+	defer opts.Destroy()
+	cr.Start = key1.Key()
+	cr.Limit = key2.Key()
+	rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
+	initialSz, err := getDBDirSize(dir, 0)
+	if err != nil {
+		t.Errorf("failed to get db size %v", err)
+	}
+	if initialSz < 8*1024*1024 {
+		t.Errorf("sz %d < 8MBytes", initialSz)
+	}
+	f(db, ud.ClusterID, ud.NodeID, maxIndex)
+	sz, err := getDBDirSize(dir, 0)
+	if err != nil {
+		t.Fatalf("failed to get db size %v", err)
+	}
+	if sz > initialSz/10 {
+		t.Errorf("sz %d > initialSz/10", sz)
 	}
 }
 
-func TestKVRocksDBGetAndSet(t *testing.T) {
-	tf := func(t *testing.T, kvs *rocksdbKV) {
-		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
-			t.Errorf("failed to save the value")
+func TestRawCompactRangeWorks(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	useRangeDelete = true
+	compactFunc := func(db raftio.ILogDB,
+		clusterID uint64, nodeID uint64, maxIndex uint64) {
+		rrdb, ok := db.(*ShardedRDB)
+		if !ok {
+			t.Errorf("failed to get *MultiDiskRDB")
 		}
-		found := false
-		opcalled := false
-		op := func(val []byte) error {
-			opcalled = true
-			if string(val) == "test-value" {
-				found = true
-			}
-			return nil
+		batchID := getBatchID(maxIndex)
+		if batchID == 0 || batchID == 1 {
+			return
 		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
+		firstKey := newKey(maxKeySize, nil)
+		lastKey := newKey(maxKeySize, nil)
+		firstKey.SetEntryBatchKey(clusterID, nodeID, 0)
+		lastKey.SetEntryBatchKey(clusterID, nodeID, batchID-1)
+		err := rrdb.shards[0].kvs.(*rocksdbKV).deleteRange(firstKey.Key(), lastKey.Key())
+		if err != nil {
+			t.Errorf("delete range failed %v", err)
 		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if !found {
-			t.Errorf("failed to get value")
-		}
+		var cr gorocksdb.Range
+		key1 := newKey(maxKeySize, nil)
+		key2 := newKey(maxKeySize, nil)
+		key1.SetEntryBatchKey(clusterID, nodeID, 0)
+		key2.SetEntryBatchKey(clusterID, nodeID, batchID)
+		opts := gorocksdb.NewCompactionOptions()
+		opts.SetExclusiveManualCompaction(false)
+		opts.SetForceBottommostLevelCompaction()
+		defer opts.Destroy()
+		st := time.Now()
+		cr.Start = key1.Key()
+		cr.Limit = key2.Key()
+		rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
+		cost := time.Now().Sub(st).Nanoseconds()
+		plog.Infof("cost %d nanoseconds to complete the compact range op", cost)
 	}
-	runKVRocksDBTest(t, tf)
+	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
 }
 
-func TestKVRocksDBValueCanBeDeleted(t *testing.T) {
-	tf := func(t *testing.T, kvs *rocksdbKV) {
-		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
-			t.Errorf("failed to save the value")
-		}
-		if err := kvs.DeleteValue([]byte("test-key")); err != nil {
-			t.Errorf("failed to delete")
-		}
-		found := false
-		opcalled := false
-		op := func(val []byte) error {
-			opcalled = true
-			if string(val) == "test-value" {
-				found = true
-			}
-			return nil
-		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
-		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if found {
-			t.Errorf("failed to delete result")
-		}
+func modifyLogDBContent(fp string) {
+	idx := int64(0)
+	f, err := os.OpenFile(fp, os.O_RDWR, 0755)
+	defer f.Close()
+	if err != nil {
+		panic("failed to open the file")
 	}
-	runKVRocksDBTest(t, tf)
-}
-
-func TestKVRocksDBWriteBatch(t *testing.T) {
-	tf := func(t *testing.T, kvs *rocksdbKV) {
-		wb := kvs.GetWriteBatch(nil)
-		defer wb.Destroy()
-		wb.Put([]byte("test-key"), []byte("test-value"))
-		if wb.Count() != 1 {
-			t.Errorf("incorrect count")
-		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Errorf("failed to commit the write batch")
-		}
-		found := false
-		opcalled := false
-		op := func(val []byte) error {
-			opcalled = true
-			if string(val) == "test-value" {
-				found = true
-			}
-			return nil
-		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
-		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if !found {
-			t.Errorf("failed to get the result")
-		}
-	}
-	runKVRocksDBTest(t, tf)
-}
-
-func testKVRocksDBIterateValue(t *testing.T,
-	fk []byte, lk []byte, inc bool, count uint64) {
-	tf := func(t *testing.T, kvs *rocksdbKV) {
-		for i := 0; i < 10; i++ {
-			key := fmt.Sprintf("key%d", i)
-			val := fmt.Sprintf("val%d", i)
-			if err := kvs.SaveValue([]byte(key), []byte(val)); err != nil {
-				t.Errorf("failed to save the value")
+	located := false
+	data := make([]byte, 4)
+	for {
+		_, err := f.Read(data)
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				panic("read failed")
 			}
 		}
-		opcalled := uint64(0)
-		op := func(k []byte, v []byte) (bool, error) {
-			opcalled++
-			return true, nil
+		if string(data) == "XXXX" {
+			// got it
+			located = true
+			break
 		}
-		kvs.IterateValue(fk, lk, inc, op)
-		if opcalled != count {
-			t.Errorf("op called %d times, want %d", opcalled, count)
-		}
+		idx += 4
 	}
-	runKVRocksDBTest(t, tf)
+	if !located {
+		panic("failed to locate the data")
+	}
+	_, err = f.Seek(idx, 0)
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.Write([]byte("YYYY"))
+	if err != nil {
+		panic(err)
+	}
 }
 
-func TestKVRocksDBIterateValue(t *testing.T) {
-	testKVRocksDBIterateValue(t, []byte("key0"), []byte("key5"), true, 6)
-	testKVRocksDBIterateValue(t, []byte("key0"), []byte("key5"), false, 5)
+func sstFileToCorruptFilePath() []string {
+	dp := filepath.Join(RDBTestDirectory, "db-dir", "logdb-3")
+	fi, err := ioutil.ReadDir(dp)
+	if err != nil {
+		panic(err)
+	}
+	result := make([]string, 0)
+	for _, v := range fi {
+		if strings.HasSuffix(v.Name(), ".sst") {
+			result = append(result, filepath.Join(dp, v.Name()))
+		}
+	}
+	return result
+}
+
+// this is largely to check the rocksdb wrapper doesn't slightly swallow
+// detected data corruption related errors
+func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
+	dir := "db-dir"
+	lldir := "wal-db-dir"
+	db := getNewTestDB(dir, lldir)
+	defer deleteTestDB()
+	hs := pb.State{
+		Term:   2,
+		Vote:   3,
+		Commit: 100,
+	}
+	e1 := pb.Entry{
+		Term:  1,
+		Index: 10,
+		Type:  pb.ApplicationEntry,
+		Cmd:   []byte("XXXXXXXXXXXXXXXXXXXXXXXX"),
+	}
+	ud := pb.Update{
+		EntriesToSave: []pb.Entry{e1},
+		State:         hs,
+		ClusterID:     3,
+		NodeID:        4,
+	}
+	for i := 0; i < 128; i++ {
+		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err != nil {
+			t.Errorf("failed to save single de rec")
+		}
+	}
+	db.Close()
+	db = getNewTestDB(dir, lldir)
+	db.Close()
+	for _, fp := range sstFileToCorruptFilePath() {
+		plog.Infof(fp)
+		modifyLogDBContent(fp)
+	}
+	db = getNewTestDB(dir, lldir)
+	defer db.Close()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("didn't crash")
+		}
+	}()
+	f(db)
+}
+
+func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	f := func(fdb raftio.ILogDB) {
+		fdb.ReadRaftState(3, 4, 0)
+	}
+	testDiskDataCorruptionIsHandled(t, f)
+}
+
+func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	f := func(fdb raftio.ILogDB) {
+		rdb := fdb.(*ShardedRDB).shards[3]
+		fk := rdb.keys.get()
+		fk.SetEntryKey(3, 4, 10)
+		iter := rdb.kvs.(*rocksdbKV).db.NewIterator(rdb.kvs.(*rocksdbKV).ro)
+		iter.Seek(fk.key)
+		for ; iteratorIsValid(iter); iter.Next() {
+			plog.Infof("here")
+			val := iter.Value()
+			var e pb.Entry
+			if err := e.Unmarshal(val.Data()); err != nil {
+				panic(err)
+			}
+			plog.Infof(string(e.Cmd))
+		}
+	}
+	testDiskDataCorruptionIsHandled(t, f)
 }

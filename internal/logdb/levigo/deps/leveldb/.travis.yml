@@ -1,0 +1,76 @@
+# Build matrix / environment variable are explained on:
+# http://about.travis-ci.org/docs/user/build-configuration/
+# This file can be validated on: http://lint.travis-ci.org/
+
+dist: xenial
+language: cpp
+
+compiler:
+  - gcc
+  - clang
+os:
+  - linux
+  - osx
+
+env:
+  - BUILD_TYPE=Debug
+  - BUILD_TYPE=RelWithDebInfo
+
+matrix:
+  exclude:
+    # GCC fails on recent Travis OSX images.
+    # https://github.com/travis-ci/travis-ci/issues/9640
+    - compiler: gcc
+      os: osx
+
+addons:
+  apt:
+    sources:
+    - llvm-toolchain-xenial-7
+    - ubuntu-toolchain-r-test
+    packages:
+    - clang-7
+    - cmake
+    - gcc-8
+    - g++-8
+    - libgoogle-perftools-dev
+    - libkyotocabinet-dev
+    - libsnappy-dev
+    - libsqlite3-dev
+    - ninja-build
+  homebrew:
+    packages:
+    - crc32c
+    - gperftools
+    - kyotocabinet
+    - gcc@7
+    - ninja
+    - snappy
+    - sqlite3
+
+before_install:
+# The Travis VM image for Mac already has a link at /usr/local/include/c++,
+# causing Homebrew's gcc installation to error out. This was reported to
+# Homebrew maintainers at https://github.com/Homebrew/brew/issues/1742 and
+# removing the link emerged as a workaround.
+- if [ "$TRAVIS_OS_NAME" == "osx" ]; then rm -f /usr/local/include/c++ ; fi
+
+install:
+# /usr/bin/gcc is stuck to old versions on both Linux and OSX.
+- if [ "$CXX" = "g++" ]; then export CXX="g++-8" CC="gcc-8"; fi
+- echo ${CC}
+- echo ${CXX}
+- ${CXX} --version
+- cmake --version
+
+before_script:
+- mkdir -p build && cd build
+- cmake .. -G Ninja -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+- cmake --build .
+- cd ..
+
+script:
+- cd build ; ctest --verbose ; cd ..
+- "if [ -f build/db_bench ] ; then build/db_bench ; fi"
+- "if [ -f build/db_bench_sqlite3 ] ; then build/db_bench_sqlite3 ; fi"
+- "if [ -f build/db_bench_tree_db ] ; then build/db_bench_tree_db ; fi"

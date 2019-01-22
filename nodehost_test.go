@@ -31,7 +31,6 @@ import (
 
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/logdb"
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
@@ -318,6 +317,7 @@ func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapsho
 	return nil, nil
 }
 
+/*
 func TestRocksDBIsUsedByDefault(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer os.RemoveAll(singleNodeHostTestDir)
@@ -331,7 +331,7 @@ func TestRocksDBIsUsedByDefault(t *testing.T) {
 			nh.logdb.Name(), logdb.RocksDBLogDBName)
 	}
 	plog.Infof("all good")
-}
+}*/
 
 func TestLogDBCanBeExtended(t *testing.T) {
 	defer leaktest.AfterTest(t)()

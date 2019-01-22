@@ -28,6 +28,7 @@ import (
 )
 
 var (
+	useRangeDelete        = settings.Hard.UseRocksDBRangeDelete
 	numOfStepEngineWorker = settings.Hard.StepEngineWorkerCount
 	numOfRocksDBInstance  = settings.Hard.LogDBPoolSize
 	// RDBContextValueSize defines the size of byte array managed in RDB context.
@@ -46,11 +47,6 @@ type ShardedRDB struct {
 
 // OpenShardedRDB creates a ShardedRDB instance.
 func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
-	if useRangeDelete {
-		plog.Infof("RangeDelete is enabled in ShardedRDB")
-	} else {
-		plog.Infof("RangeDelete is disabled in ShardedRDB")
-	}
 	shards := make([]*RDB, 0)
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
@@ -73,6 +69,11 @@ func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
 		compactionCh: make(chan struct{}, 1),
 		stopper:      syncutil.NewStopper(),
 	}
+	if useRangeDelete {
+		plog.Infof("RangeDelete is enabled in %s", mw.Name())
+	} else {
+		plog.Infof("RangeDelete is disabled in %s", mw.Name())
+	}
 	mw.stopper.RunWorker(func() {
 		mw.compactionWorkerMain()
 	})
@@ -81,7 +82,7 @@ func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
 
 // Name returns the type name of the instance.
 func (mw *ShardedRDB) Name() string {
-	return RocksDBLogDBName
+	return LogDBType
 }
 
 // GetLogDBThreadContext return a IContext instance.

@@ -24,13 +24,6 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
-const (
-	// RocksDBLogDBName is the type name of the rocksdb LogDB.
-	RocksDBLogDBName = "rocksdb-logdb"
-	// LogDBType is the logdb type name.
-	LogDBType = "fully-batched rocksdb"
-)
-
 var (
 	batchSize = settings.Hard.LogDBEntryBatchSize
 )
@@ -43,14 +36,14 @@ type RDB struct {
 }
 
 func openRDB(dir string, wal string) (*RDB, error) {
-	rocksdb, err := openRocksDB(dir, wal)
+	kvs, err := newKVStore(dir, wal)
 	if err != nil {
 		return nil, err
 	}
 	return &RDB{
 		cs:   newRDBCache(),
 		keys: newLogdbKeyPool(),
-		kvs:  rocksdb,
+		kvs:  kvs,
 	}, nil
 }
 

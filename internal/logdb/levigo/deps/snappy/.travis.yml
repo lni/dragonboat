@@ -1,0 +1,16 @@
+language: generic
+matrix:
+  include:
+    - os: linux
+      dist: trusty # For Docker.
+      sudo: required # For Docker.
+      script:
+        - echo "Testing branch $TRAVIS_BRANCH of $REPOSITORY_NAME"
+        - docker run --rm -i -v $CI_SOURCE_PATH:$CI_SOURCE_PATH -e "CI_SOURCE_PATH=$CI_SOURCE_PATH" -e "HOME=$HOME" -t ubuntu:xenial sh -c "cd $CI_SOURCE_PATH; apt-get -qq update && apt-get -qq install build-essential cmake libgtest-dev; mkdir build && cd build && cmake ../ && make all && make test"
+    - os: osx
+      script:
+        - echo "Testing branch $TRAVIS_BRANCH of $REPOSITORY_NAME"
+        - mkdir build && cd build && cmake ../ && make all && make test
+before_install:
+- export CI_SOURCE_PATH=$(pwd)
+- export REPOSITORY_NAME=${PWD##*/}
