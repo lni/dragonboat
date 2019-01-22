@@ -50,44 +50,49 @@ As visualized below, Stop-the-World pauses caused by Golang's GC are sub-millise
 * x86_64 Linux or MacOS, Go 1.10 and 1.11, GCC or Clang with C++11 support
 * [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above when using RocksDB for storing Raft logs 
 
-
 ## Getting Started ##
+__Note that, steps below use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
 To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-When using RocksDB based Raft log storage, if RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include. No extra installation step is required when you choose to use [lmdb](https://github.com/LMDB/lmdb) based Raft log storage.
+You need to decide whether you want to use [RocksDB or LevelDB](https://github.com/lni/dragonboat/blob/master/doc/storage.md) to store Raft logs. RocksDB is recommended.
+
+### RocksDB ###
+If RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include.
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make install-rocksdb-ull
 ```
-By default, RocksDB is used. Run built-in tests to check the installation:
+Run built-in tests to check the installation:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make dragonboat-test
-```
-Or you can run the same tests using lmdb based Raft log storage.
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ DRAGONBOAT_LOGDB=lmdb make dragonboat-test
 ```
 To build your application
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
-To build the same application using lmdb based Raft log storage
+
+### LevelDB ###
+No extra step is required to install LevelDB first. To run built-in tests using LevelDB based storage:
 ```
-go build -v -tags="dragonboat_lmdb" pkgname
+$ cd $GOPATH/src/github.com/lni/dragonboat
+$ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
 ```
-__Note that, steps above use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
- 
-(Optional) To install the C++ binding:
+To build the your application using LevelDB based Raft log storage
+```
+go build -v -tags="dragonboat_leveldb" pkgname
+```
+
+### Optional - C++ binding ###
+The C++ binding is only required when you want to use Dragonboat in your C++ project. To install the C++ binding:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make binding
 $ sudo make install-binding
 ```
-(Optional) Run C++ binding tests (gtest is required):
+Run C++ binding tests (gtest is required):
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make clean
