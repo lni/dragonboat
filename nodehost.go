@@ -106,7 +106,7 @@ const (
 	// DragonboatMinor is the minor version number
 	DragonboatMinor = 0
 	// DragonboatPatch is the patch version number
-	DragonboatPatch = 0
+	DragonboatPatch = 1
 )
 
 var (
