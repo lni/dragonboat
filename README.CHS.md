@@ -53,6 +53,7 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 
 ## 开始使用 ##
 __上列步骤使用的是Master branch的代码。Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
+
 下载Dragonboat库至您的[Go工作环境](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat

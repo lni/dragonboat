@@ -52,6 +52,7 @@ As visualized below, Stop-the-World pauses caused by Golang's GC are sub-millise
 
 ## Getting Started ##
 __Note that, steps below use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
+
 To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
@@ -75,7 +76,9 @@ CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lro
 ```
 
 ### LevelDB ###
-No extra step is required to install LevelDB first. To run built-in tests using LevelDB based storage:
+Nothing need to be installed when using LevelDB based Raft Log storage.
+
+To run built-in tests using LevelDB based storage:
 ```
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
