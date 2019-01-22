@@ -19,8 +19,8 @@ package logdb
 import (
 	"bytes"
 
+	"github.com/lni/dragonboat/internal/logdb/levigo"
 	"github.com/lni/dragonboat/raftio"
-	"github.com/lni/levigo"
 )
 
 const (
