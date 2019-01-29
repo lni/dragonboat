@@ -381,6 +381,9 @@ unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
 benchmark:
 	$(GOTEST) $(SELECTED_BENCH_OPTION)
 
+benchmark-fsync:
+	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
+
 GOTEST=$(GO) $(TEST_OPTIONS)
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/syncutil

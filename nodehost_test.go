@@ -1244,6 +1244,38 @@ func BenchmarkReadyCluster(b *testing.B) {
 	})
 }
 
+func BenchmarkFSyncLatency(b *testing.B) {
+	b.StopTimer()
+	l := logger.GetLogger("logdb")
+	l.SetLevel(logger.WARNING)
+	db := getNewTestDB("db", "lldb")
+	defer os.RemoveAll(rdbTestDirectory)
+	defer db.Close()
+	e := pb.Entry{
+		Index:       12843560,
+		Term:        123,
+		Type:        pb.ApplicationEntry,
+		Key:         13563799145,
+		ClientID:    234926831800,
+		SeriesID:    12843560,
+		RespondedTo: 12843550,
+		Cmd:         make([]byte, 8*1024),
+	}
+	u := pb.Update{
+		ClusterID:     1,
+		NodeID:        1,
+		EntriesToSave: []pb.Entry{e},
+	}
+	rdbctx := db.GetLogDBThreadContext()
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
+			b.Fatalf("%v", err)
+		}
+		rdbctx.Reset()
+	}
+}
+
 func benchmarkSaveRaftState(b *testing.B, sz int) {
 	b.ReportAllocs()
 	b.StopTimer()
