@@ -181,24 +181,26 @@ func (r *leveldbKV) CommitWriteBatch(wb IWriteBatch) error {
 }
 
 func (r *leveldbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
-	wb := levigo.NewWriteBatch()
-	it := r.db.NewIterator(r.ro)
-	defer it.Close()
-	for it.Seek(firstKey); it.Valid(); it.Next() {
-		if bytes.Compare(it.Key(), lastKey) < 0 {
-			wb.Delete(it.Key())
-		}
-	}
-	if err := it.GetError(); err != nil {
-		panic(err)
-	}
-	if err := r.db.Write(r.wo, wb); err != nil {
-		panic(err)
-	}
 	return nil
 }
 
 func (r *leveldbKV) Compaction(firstKey []byte, lastKey []byte) error {
+	func() {
+		wb := levigo.NewWriteBatch()
+		it := r.db.NewIterator(r.ro)
+		defer it.Close()
+		for it.Seek(firstKey); it.Valid(); it.Next() {
+			if bytes.Compare(it.Key(), lastKey) < 0 {
+				wb.Delete(it.Key())
+			}
+		}
+		if err := it.GetError(); err != nil {
+			panic(err)
+		}
+		if err := r.db.Write(r.wo, wb); err != nil {
+			panic(err)
+		}
+	}()
 	r.db.CompactRange(levigo.Range{Start: firstKey, Limit: lastKey})
 	return nil
 }
