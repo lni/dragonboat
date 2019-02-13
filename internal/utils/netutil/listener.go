@@ -117,7 +117,9 @@ func NewStoppableListener(addr string, tlsConfig *tls.Config,
 				}
 				tcpconn, ok := tc.(*net.TCPConn)
 				if ok {
-					setTCPConn(tcpconn)
+					if err := setTCPConn(tcpconn); err != nil {
+						continue
+					}
 				}
 				if tlsConfig != nil {
 					tc = tls.Server(tc, tlsConfig)

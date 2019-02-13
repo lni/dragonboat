@@ -240,11 +240,11 @@ func TestNilSlicesInDb(t *testing.T) {
 	}
 	wo := NewWriteOptions()
 	db.Put(wo, nil, []byte("love"))
-	val, err = db.Get(ro, nil)
+	val, _ = db.Get(ro, nil)
 	if !bytes.Equal([]byte("love"), val) {
 		t.Errorf("Get should see the nil key: %v", val)
 	}
-	val, err = db.Get(ro, []byte{})
+	val, _ = db.Get(ro, []byte{})
 	if !bytes.Equal([]byte("love"), val) {
 		t.Errorf("Get shouldn't distinguish between nil key and empty slice key: %v", val)
 	}
