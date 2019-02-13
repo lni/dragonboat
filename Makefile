@@ -20,6 +20,10 @@ ifeq ($(DRAGONBOAT_LOGDB),leveldb)
 $(info using leveldb based log storage)
 GOCMD=go
 LOGDB_TAG=dragonboat_leveldb
+else ifeq ($(DRAGONBOAT_LOGDB),custom)
+$(info using custom lodb)
+GOCMD=go
+LOGDB_TAG=dragonboat_custom_logdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
 $(info using rocksdb based log storage)
 # set the variables below to tell the Makefile where to find 
