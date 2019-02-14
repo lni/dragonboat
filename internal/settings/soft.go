@@ -208,6 +208,8 @@ type soft struct {
 	// LogDB
 	//
 
+	// UseRangeDelete determines whether to use range delete when possible.
+	UseRangeDelete bool
 	// RDBMaxBackgroundCompactions is the MaxBackgroundCompactions parameter
 	// directly passed to rocksdb.
 	RDBMaxBackgroundCompactions uint64
@@ -274,5 +276,6 @@ func getDefaultSoftSettings() soft {
 		RDBMaxBackgroundCompactions:         2,
 		RDBMaxBackgroundFlushes:             2,
 		RDBLRUCacheSize:                     0,
+		UseRangeDelete:                      true,
 	}
 }

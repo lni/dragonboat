@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	useRangeDelete        = settings.Hard.UseRocksDBRangeDelete
+	useRangeDelete        = settings.Soft.UseRangeDelete
 	numOfStepEngineWorker = settings.Hard.StepEngineWorkerCount
 	numOfRocksDBInstance  = settings.Hard.LogDBPoolSize
 	// RDBContextValueSize defines the size of byte array managed in RDB context.

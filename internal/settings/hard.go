@@ -48,11 +48,9 @@ var (
 // following content -
 //
 // {
-//   "UseRocksDBRangeDelete": true,
 //   "StepEngineWorkerCount": 32,
 // }
 //
-// hard.UseRocksDBRangeDelete will be set to true
 // hard.StepEngineWorkerCount will be set to 32
 //
 // The application need to be restarted to apply such configuration changes.
@@ -74,11 +72,6 @@ type hard struct {
 	// instance so different disks can be used together to get better combined IO
 	// performance.
 	LogDBPoolSize uint64
-	// UseRocksDBRangeDelete defines whether RangeDelete and manual compaction
-	// should be used in LogDB for bulk deletion of no longer required Raft
-	// entries. It is diabled by default as the Range Delete feature itself in
-	// rocksdb is marked as experimental.
-	UseRocksDBRangeDelete bool
 	// LRUMaxSessionCount is the max number of client sessions that can be
 	// concurrently held and managed by each raft cluster.
 	LRUMaxSessionCount uint64
@@ -121,7 +114,7 @@ func (h *hard) Hash() uint64 {
 	hashstr := fmt.Sprintf("%d-%d-%t-%d-%d",
 		h.StepEngineWorkerCount,
 		h.LogDBPoolSize,
-		h.UseRocksDBRangeDelete,
+		false, // was the UseRangeDelete option
 		h.LRUMaxSessionCount,
 		h.LogDBEntryBatchSize)
 	mh := md5.New()
@@ -142,7 +135,6 @@ func getDefaultHardSettings() hard {
 	return hard{
 		StepEngineWorkerCount: 16,
 		LogDBPoolSize:         16,
-		UseRocksDBRangeDelete: false,
 		LRUMaxSessionCount:    4096,
 		LogDBEntryBatchSize:   48,
 	}
