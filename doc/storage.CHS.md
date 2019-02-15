@@ -26,3 +26,13 @@ go build -tags "dragonboat_leveldb" pkgname
 ```
 
 请参考[中文说明](https://github.com/lni/dragonboat/blob/master/README.CHS.md)的“开始使用”一节以获知如何使用LevelDB来运行内建的测试。
+
+## 使用自定义的存储方案 ##
+
+您可以扩展Dragonboat以使用您所选择的其它存储方案来保存Raft协议的日志数据。您需要实现在github.com/lni/dragonboat/raftio中定义的ILogDB接口，并将其实现以一个factory function的方式提供给NodeHostConfig的LogDBFactory成员。
+
+在使用这样的自定义存储方案时，您可以使用dragonboat_custom_logdb这个build tag来避免对RocksDB库的依赖。
+
+```
+go build -tags "dragonboat_custom_logdb" pkgname
+```

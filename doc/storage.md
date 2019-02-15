@@ -24,4 +24,14 @@ A major benefit for choosing LevelDB is that no extra installation step is requi
 go build -tags "dragonboat_leveldb" pkgname
 ```
 
-See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using LevelDB. 
+See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using LevelDB.
+
+## Use custom storage solution ##
+
+You can extend Dragonboat to use your prefered storage solution to store Raft logs. You can implemented the ILogDB interface defined in the github.com/lni/dragonboat/raftio package and pass a factory function that will create such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig instance.
+
+When using such custom storage solution, you can set the build tag named dragonboat_custom_logdb to avoid requieing the RocksDB library to be installed.
+
+```
+go build -tags "dragonboat_custom_logdb" pkgname
+``` 
