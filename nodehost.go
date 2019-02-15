@@ -104,9 +104,11 @@ const (
 	// DragonboatMajor is the major version number
 	DragonboatMajor = 2
 	// DragonboatMinor is the minor version number
-	DragonboatMinor = 0
+	DragonboatMinor = 1
 	// DragonboatPatch is the patch version number
-	DragonboatPatch = 1
+	DragonboatPatch = 0
+	// DEVVersion is a boolean flag indicating whether this is a dev version
+	DEVVersion = true
 )
 
 var (
@@ -1727,9 +1729,13 @@ func (h *messageHandler) HandlePongMessage(msg pb.Message) {
 }
 
 func logBuildTagsAndVersion() {
+	devstr := "Rel"
+	if DEVVersion {
+		devstr = "Dev"
+	}
 	plog.Infof("go version: %s", runtime.Version())
-	plog.Infof("dragonboat version: %d.%d.%d, raftlog type: %s, logdb type: %s",
-		DragonboatMajor, DragonboatMinor, DragonboatPatch,
+	plog.Infof("dragonboat version: %d.%d.%d (%s), raftlog type: %s, logdb type: %s",
+		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr,
 		raft.RaftLogTypeName, logdb.LogDBType)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
 	if runtime.GOOS == "darwin" {
