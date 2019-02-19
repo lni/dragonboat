@@ -207,6 +207,7 @@ type RequestState struct {
 	completeHandler ICompleteHandler
 	// CompleteC is a channel for delivering request result to users.
 	CompletedC chan RequestResult
+	node       *node
 	pool       *sync.Pool
 }
 
@@ -234,6 +235,7 @@ func (r *RequestState) Release() {
 		r.clientID = 0
 		r.respondedTo = 0
 		r.completeHandler = nil
+		r.node = nil
 		r.pool.Put(r)
 	}
 }

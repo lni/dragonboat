@@ -56,7 +56,8 @@ func (nh *NodeHost) ProposeCH(s *client.Session,
 func (nh *NodeHost) ReadIndexCH(clusterID uint64,
 	handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
-	return nh.readIndex(clusterID, handler, timeout)
+	rs, _, err := nh.readIndex(clusterID, handler, timeout)
+	return rs, err
 }
 
 // ProposeSessionCH is similar to the ProposeSession method but with an extra

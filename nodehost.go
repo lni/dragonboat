@@ -455,9 +455,14 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 // from IStateMachine's Lookup method or the error encountered.
 func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	query []byte) ([]byte, error) {
-	v, err := nh.linearizableRead(ctx, clusterID, func() (interface{}, error) {
-		return nh.ReadLocal(clusterID, query)
-	})
+	v, err := nh.linearizableRead(ctx, clusterID,
+		func(node *node) (interface{}, error) {
+			data, err := node.sm.Lookup(query)
+			if err == rsm.ErrClusterClosed {
+				return nil, ErrClusterClosed
+			}
+			return data, err
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -490,10 +495,17 @@ type Membership struct {
 // only return after its confirmed completion, failure or timeout.
 func (nh *NodeHost) GetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
-	v, err := nh.linearizableRead(ctx, clusterID, func() (interface{}, error) {
-		m, err := nh.getLocalMembership(clusterID)
-		return m, err
-	})
+	v, err := nh.linearizableRead(ctx, clusterID,
+		func(node *node) (interface{}, error) {
+			members, observers, removed, confChangeID := node.sm.GetMembership()
+			membership := &Membership{
+				Nodes:          members,
+				Observers:      observers,
+				Removed:        removed,
+				ConfigChangeID: confChangeID,
+			}
+			return membership, nil
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -663,13 +675,16 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 // operation with linearizability guarantee.
 func (nh *NodeHost) ReadIndex(clusterID uint64,
 	timeout time.Duration) (*RequestState, error) {
-	return nh.readIndex(clusterID, nil, timeout)
+	rs, _, err := nh.readIndex(clusterID, nil, timeout)
+	return rs, err
 }
 
 // ReadLocal queries the IStateMachine instance associated with the specified
 // cluster. To ensure the linearizability of your application's I/O, ReadLocal
 // should only be called after receiving a RequestCompleted notification
 // from the ReadIndex method family. See ReadIndex's example for more details.
+//
+// Deprecated: Applications should use ReadLocalNode instead.
 func (nh *NodeHost) ReadLocal(clusterID uint64,
 	query []byte) ([]byte, error) {
 	v, ok := nh.getClusterNotLocked(clusterID)
@@ -681,6 +696,26 @@ func (nh *NodeHost) ReadLocal(clusterID uint64,
 	// the local read. The critical section is used to make sure we don't read
 	// from a destroyed C++ StateMachine object
 	data, err := v.sm.Lookup(query)
+	if err == rsm.ErrClusterClosed {
+		return nil, ErrClusterClosed
+	}
+	return data, err
+}
+
+// ReadLocal queries the IStateMachine instance, it is called after the
+// RequestState returned by ReadIndex() indicates that the Read Index protocol
+// has completed successfully. The IStateMachine instance used by the
+// ReadLocalNode method is the same one used in by the ReadIndex method.
+func (nh *NodeHost) ReadLocalNode(rs *RequestState,
+	query []byte) ([]byte, error) {
+	if rs.node == nil {
+		panic("invalid rs")
+	}
+	// translate the rsm.ErrClusterClosed to ErrClusterClosed
+	// internally, the IManagedStateMachine might obtain a RLock before performing
+	// the local read. The critical section is used to make sure we don't read
+	// from a destroyed C++ StateMachine object
+	data, err := rs.node.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {
 		return nil, ErrClusterClosed
 	}
@@ -852,27 +887,28 @@ func (nh *NodeHost) propose(s *client.Session,
 }
 
 func (nh *NodeHost) readIndex(clusterID uint64,
-	handler ICompleteHandler, timeout time.Duration) (*RequestState, error) {
+	handler ICompleteHandler,
+	timeout time.Duration) (*RequestState, *node, error) {
 	n, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
-		return nil, ErrClusterNotFound
+		return nil, nil, ErrClusterNotFound
 	}
 	req, err := n.read(handler, timeout)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	n.increaseReadReqCount()
 	nh.execEngine.setNodeReady(clusterID)
-	return req, err
+	return req, n, err
 }
 
 func (nh *NodeHost) linearizableRead(ctx context.Context,
-	clusterID uint64, f func() (interface{}, error)) (interface{}, error) {
+	clusterID uint64,
+	f func(n *node) (interface{}, error)) (interface{}, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rs, err := nh.ReadIndex(clusterID, timeout)
+	rs, node, err := nh.readIndex(clusterID, nil, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -882,7 +918,7 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 			return nil, ErrTimeout
 		} else if s.Completed() {
 			rs.Release()
-			return f()
+			return f(node)
 		} else if s.Terminated() {
 			return nil, ErrClusterClosed
 		}
@@ -928,21 +964,6 @@ func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
 		return nil, false
 	}
 	return v.(*node), true
-}
-
-func (nh *NodeHost) getLocalMembership(clusterID uint64) (*Membership, error) {
-	v, ok := nh.getCluster(clusterID)
-	if !ok {
-		return nil, ErrClusterNotFound
-	}
-	members, observers, removed, confChangeID := v.sm.GetMembership()
-	membership := &Membership{
-		Nodes:          members,
-		Observers:      observers,
-		Removed:        removed,
-		ConfigChangeID: confChangeID,
-	}
-	return membership, nil
 }
 
 func (nh *NodeHost) forEachClusterRun(bf func() bool,

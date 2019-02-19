@@ -141,7 +141,7 @@ func ExampleNodeHost_ReadIndex(nh *NodeHost) {
 	} else if s.Completed() {
 		// the ReadIndex operation completed. the local IStateMachine is ready to be
 		// queried
-		nh.ReadLocal(100, data)
+		nh.ReadLocalNode(rs, data)
 	} else if s.Terminated() {
 		// the ReadIndex operation terminated as the system is being shut down,
 		// time to exit
@@ -840,11 +840,14 @@ func testNodeHostReadIndex(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
+		if rs.node == nil {
+			t.Fatal("rs.node not set")
+		}
 		v := <-rs.CompletedC
 		if !v.Completed() {
 			t.Errorf("failed to complete read index")
 		}
-		_, err = nh.ReadLocal(2, make([]byte, 128))
+		_, err = nh.ReadLocalNode(rs, make([]byte, 128))
 		if err != nil {
 			t.Errorf("read local failed %v", err)
 		}

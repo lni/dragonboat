@@ -225,7 +225,12 @@ func (rc *node) propose(session *client.Session,
 
 func (rc *node) read(handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
-	return rc.pendingReadIndexes.read(handler, timeout)
+	rs, err := rc.pendingReadIndexes.read(handler, timeout)
+	if err == nil {
+		rs.node = rc
+		rc.increaseReadReqCount()
+	}
+	return rs, err
 }
 
 func (rc *node) requestLeaderTransfer(nodeID uint64) {
