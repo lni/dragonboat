@@ -89,6 +89,10 @@ type ISnapshotFileCollection interface {
 // the IStateMachine instance when invoking IStateMachine methods. Update(),
 // RecoverFromSnapshot() and Close() are invoked when the write lock is
 // acquired, other methods are invoked when the read lock is acquired.
+//
+// When created, an IStateMachine instance should always start from an empty
+// state. Dragonboat will use saved snapshots and Raft Logs to help a restarted
+// IStateMachine instance to catch up to its previous state.
 type IStateMachine interface {
 	// Update updates the IStateMachine instance. The input data slice is the
 	// proposed command from client that has been committed by the Raft cluster.
