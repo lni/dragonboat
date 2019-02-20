@@ -679,10 +679,9 @@ func (nh *NodeHost) ReadIndex(clusterID uint64,
 	return rs, err
 }
 
-// ReadLocal queries the IStateMachine instance associated with the specified
-// cluster. To ensure the linearizability of your application's I/O, ReadLocal
-// should only be called after receiving a RequestCompleted notification
-// from the ReadIndex method family. See ReadIndex's example for more details.
+// ReadLocal queries the specified Raft node. To ensure the linearizability of
+// the I/O, ReadLocal should only be called after receiving a RequestCompleted
+// notification from the ReadIndex method.
 //
 // Deprecated: Applications should use ReadLocalNode instead.
 func (nh *NodeHost) ReadLocal(clusterID uint64,
@@ -702,10 +701,10 @@ func (nh *NodeHost) ReadLocal(clusterID uint64,
 	return data, err
 }
 
-// ReadLocal queries the IStateMachine instance, it is called after the
-// RequestState returned by ReadIndex() indicates that the Read Index protocol
-// has completed successfully. The IStateMachine instance used by the
-// ReadLocalNode method is the same one used in by the ReadIndex method.
+// ReadLocalNode queries the Raft node identified by the input RequestState
+// instance. To ensure the IO linearizability, ReadLocalNode should only be
+// called after receiving a RequestCompleted notification from the ReadIndex
+// method. See ReadIndex's example for more details.
 func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	query []byte) ([]byte, error) {
 	if rs.node == nil {
