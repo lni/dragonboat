@@ -28,9 +28,11 @@ See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for det
 
 ## Use custom storage solution ##
 
-You can extend Dragonboat to use your prefered storage solution to store Raft logs. You can implemented the ILogDB interface defined in the github.com/lni/dragonboat/raftio package and pass a factory function that will create such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig instance.
+You can extend Dragonboat to use your preferred storage solution to store Raft logs -
 
-When using such custom storage solution, you can set the build tag named dragonboat_custom_logdb to avoid requieing the RocksDB library to be installed.
+* implement the ILogDB interface defined in the github.com/lni/dragonboat/raftio package
+* pass a factory function that creates such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig instance
+* when building your applications, set the build tag named dragonboat_custom_logdb so RocksDB won't be required
 
 ```
 go build -tags "dragonboat_custom_logdb" pkgname
