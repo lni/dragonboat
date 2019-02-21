@@ -1334,6 +1334,7 @@ func (r *raft) addReadyToRead(index uint64, ctx pb.SystemCtx) {
 func (r *raft) handleLeaderReadIndex(m pb.Message) {
 	if r.selfRemoved() {
 		plog.Warningf("dropping a read index request, local node removed")
+		return
 	}
 	ctx := pb.SystemCtx{
 		High: m.HintHigh,

@@ -2030,8 +2030,8 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoregReadIndexWhenSelfRemoved(t *testing.T) {
-	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+func TestLeaderIgnoreReadIndexWhenSelfRemoved(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	r.becomeLeader()
 	r.deleteRemote(r.nodeID)
