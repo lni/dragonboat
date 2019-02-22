@@ -1803,7 +1803,7 @@ func TestHandleFollowerLeaderTransfer(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoregElection(t *testing.T) {
+func TestLeaderIgnoreElection(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	r.becomeLeader()
@@ -1890,7 +1890,7 @@ func TestLeaderStepDownWithoutQuorum(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoregCheckQuorumWhenHasQuorum(t *testing.T) {
+func TestLeaderIgnoreCheckQuorumWhenHasQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	r.becomeLeader()
@@ -2080,7 +2080,7 @@ func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoregReadIndexWhenClusterCommittedIsUnknown(t *testing.T) {
+func TestLeaderIgnoreReadIndexWhenClusterCommittedIsUnknown(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	r.becomeLeader()
