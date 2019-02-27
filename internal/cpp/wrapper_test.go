@@ -18,6 +18,7 @@
 package cpp
 
 import (
+	"bytes"
 	"encoding/binary"
 	"os"
 	"testing"
@@ -118,7 +119,7 @@ func TestUpdatePanicWhenClientIDIsUnknown(t *testing.T) {
 	if !ok {
 		t.Errorf("failed to get session object")
 	}
-	ds.Update(session, 1, []byte("test-data"))
+	ds.Update(session, 1, 0, 0, []byte("test-data"))
 }
 
 func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
@@ -136,9 +137,9 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if !ok {
 		t.Errorf("failed to get session object")
 	}
-	v1 := ds.Update(session, 1, []byte("test-data-1"))
-	v2 := ds.Update(session, 2, []byte("test-data-2"))
-	v3 := ds.Update(session, 3, []byte("test-data-3"))
+	v1 := ds.Update(session, 1, 0, 0, []byte("test-data-1"))
+	v2 := ds.Update(session, 2, 0, 0, []byte("test-data-2"))
+	v3 := ds.Update(session, 3, 0, 0, []byte("test-data-3"))
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -174,7 +175,7 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	if !ok {
 		t.Errorf("failed to get session object")
 	}
-	ds.Update(session, 1, data)
+	ds.Update(session, 1, 0, 0, data)
 }
 
 func TestCppSnapshotWorks(t *testing.T) {
@@ -194,15 +195,24 @@ func TestCppSnapshotWorks(t *testing.T) {
 	if !ok {
 		t.Errorf("failed to get session object")
 	}
-	v1 := ds.Update(session, 1, []byte("test-data-1"))
-	v2 := ds.Update(session, 2, []byte("test-data-2"))
-	v3 := ds.Update(session, 3, []byte("test-data-3"))
+	v1 := ds.Update(session, 1, 0, 0, []byte("test-data-1"))
+	v2 := ds.Update(session, 2, 0, 0, []byte("test-data-2"))
+	v3 := ds.Update(session, 3, 0, 0, []byte("test-data-3"))
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
-	sz, err := ds.SaveSnapshot(fp, nil)
+	writer, err := rsm.NewSnapshotWriter(fp)
+	if err != nil {
+		t.Fatalf("failed to create snapshot writer %v", err)
+	}
+	sessions := bytes.NewBuffer(make([]byte, 0, 1024*1024))
+	ds.SaveSessions(sessions)
+	sz, err := ds.SaveSnapshot(nil, writer, sessions.Bytes(), nil)
 	if err != nil {
 		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writter %v", err)
 	}
 	f, err := os.Open(fp)
 	if err != nil {

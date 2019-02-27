@@ -13,8 +13,30 @@
 // limitations under the License.
 
 /*
-Package statemachine contains the definition of the IStateMachine interface
-required to be implemented by dragonboat based applications.
+Package statemachine contains the definitions of the IStateMachine and
+IConcurrentStateMachine interfaces required to be implemented by dragonboat
+based applications.
+
+Dragonboat users should determine whether the application state machine should
+implement the IStateMachine or IConcurrentStateMachine interface based on
+concurrent access requirements -
+
+For in memory state machines which in general have low read/write latencies,
+IStateMachine is usually employed. The major drawback is that each IStateMachine
+is internally guarded by a sync.RWMutex so read/write accesses are not allowed
+to be concurrently invoked on IStateMachine. Multiple read requests can be
+concurrently invoked on the same IStateMachine instance.
+
+For IConcurrentStateMachine based application state machine, the major
+difference is that read/write accesses can be concurrently invoked. This allows
+Lookup() to be invoked concurrent to Update(), or Update() can be executed when
+SaveSnapshot() is in progress. It is up to the user implementation of such
+IConcurrentStateMachine type to correctly and safely maintain its internal data
+structures during such concurrent accesses.
+
+When you are not sure which one to choose, the rule of thumb is to implement
+IStateMachine for your application and upgrade it to a IConcurrentStateMachine
+when necessary.
 */
 package statemachine
 
@@ -119,7 +141,7 @@ type IStateMachine interface {
 	// IStateMachine implementation.
 	//
 	// The IStateMachine implementation should not keep a reference of the input
-	// byte slice after the return of the Update() method.
+	// byte slice after the return of the Lookup() method.
 	//
 	// The Lookup method is a read only method, it should never change the state
 	// of IStateMachine.
@@ -183,5 +205,173 @@ type IStateMachine interface {
 	// related capability by returning a constant uint64 value from this method.
 	//
 	// GetHash is a read only operation on the IStateMachine instance.
+	GetHash() uint64
+}
+
+// Entry represents a Raft log entry that is going to be provided to the Update
+// method of an IConcurrentStateMachine instance.
+type Entry struct {
+	// Index is the Raft log index of the entry. The field is set by the
+	// Dragonboat library and it is read-only for user IConcurrentStateMachine
+	// instances.
+	Index uint64
+	// Result is the result value obtained from the Update method of an
+	// IConcurrentStateMachine instance. This field is set by user
+	// IConcurrentStateMachine instances.
+	Result uint64
+	// Cmd is the proposed command. This field is read-only for user
+	// IConcurrentStateMachine instances.
+	Cmd []byte
+}
+
+// IConcurrentStateMachine is the interface to be implemented by application's
+// state machine when concurrent access to the state machine is required. An
+// IConcurrentStateMachine instance allows Lookup() and Update() to be invoked
+// concurrently, it also allows Update() to be concurrently executed when
+// SaveSnapshot() is in progress. It defines how application data should be
+// internally stored, updated and queried concurrently.
+//
+// The Update() method is always invoked from the same goroutine. The Lookup(),
+// SaveSnapshot() and GetHash() methods can be invoked concurrent to the
+// Update() method. It is user's responsibility to implement the
+// IConcurrentStateMachine instance with such concurrency. Invocations to the
+// Update(), PrepareSnapshot() and RecoverFromSnapshot() methods are guarded by
+// the system to ensure mutual exclusion.
+//
+// When created, an IConcurrentStateMachine instance should always start from an
+// empty state. Dragonboat will use saved snapshots and Raft Logs to help a
+// restarted IConcurrentStateMachine instance to catch up to its previous state.
+type IConcurrentStateMachine interface {
+	// Update updates the IConcurrentStateMachine instance. The input Entry slice
+	// is list of continuous proposed and committed commands from clients, they
+	// are provided together as a batch so the IConcurrentStateMachine
+	// implementation can choose to batch them and apply together to hide latency.
+	//
+	// The Update() method must be deterministic, meaning given the same initial
+	// state of IConcurrentStateMachine and the same input sequence, it should
+	// reach to the same updated state and outputs the same returned value. The
+	// input entry slice should be the only input to this method. Reading from
+	// the system clock, random number generator or other similar external data
+	// sources will violate the deterministic requirement of the Update() method.
+	//
+	// The IConcurrentStateMachine implementation should not keep a reference to
+	// the input entry slice after the return of the Update() method.
+	//
+	// Update returns the input entry slice with the Result field of all its
+	// members set.
+	Update([]Entry) []Entry
+	// Lookup queries the state of the IConcurrentStateMachine instance and
+	// returns the query result as a byte slice. The input byte slice specifies
+	// what to query, it is up to the IConcurrentStateMachine implementation to
+	// interpret the input byte slice. The returned byte slice contains the query
+	// result provided by the IConcurrentStateMachine implementation.
+	//
+	// When an error is returned by the Lookup() method, the error will be passed
+	// to the caller of NodeHost's ReadLocalNode() or SyncRead() methods to be
+	// handled. A typical scenario for returning an error is that the state
+	// machine has already been closed or aborted from a RecoverFromSnapshot()
+	// procedure when Lookup() is being handled.
+	//
+	// The IConcurrentStateMachine implementation should not keep a reference of
+	// the input byte slice after the return of the Lookup() method.
+	//
+	// The Lookup() method is a read only method, it should never change the state
+	// of IConcurrentStateMachine.
+	Lookup([]byte) ([]byte, error)
+	// PrepareSnapshot prepares the snapshot to be concurrently captured and saved.
+	// PrepareSnapshot() is invoked before SaveSnapshot() is called and it is
+	// invoked with mutual exclusion protection from the Update() method.
+	//
+	// PrepareSnapshot in general saves a state identifier of the current state,
+	// such state identifier is usually a version number, a sequence number, a
+	// change ID or some other in memory small data structure used for describing
+	// the point in time state of the state machine. The state identifier is
+	// returned as an interface{} and it is provided to the SaveSnapshot() method
+	// so a snapshot of the state machine state in that identified point in time
+	// can be saved when SaveSnapshot() is invoked.
+	//
+	// PrepareSnapshot returns an error when there is unrecoverable error for
+	// preparing the snapshot.
+	PrepareSnapshot() (interface{}, error)
+	// SaveSnapshot saves the point in time state of the IConcurrentStateMachine
+	// identified by the input state identifier to the provided io.Writer backed
+	// by a file on disk and the provided ISnapshotFileCollection instance. This
+	// is a read only method that should never change the state of the
+	// IConcurrentStateMachine instance. It is important to understand that
+	// SaveSnapshot() should never be implemented to save the current latest state
+	// of the state machine when it is invoked. The latest state is not what
+	// suppose to be saved as the state might have already been concurrently
+	// updated by the Update() method after the completion of PrepareSnapshot().
+	//
+	// It is SaveSnapshot's responsibility to free the resources owned by the
+	// input state identifier when it is done.
+	//
+	// The ISnapshotFileCollection instance is used to record finalized external
+	// files that should also be included as a part of the snapshot. All other
+	// state data should be saved into the io.Writer backed by snapshot file on
+	// disk. It is application's responsibility to save the complete state so
+	// that the recovered IConcurrentStateMachine state is considered as
+	// identical to the original state.
+	//
+	// The provided read-only chan struct{} is provided to notify the SaveSnapshot
+	// method that the associated Raft node is being closed so the
+	// IConcurrentStateMachine can choose to abort the SaveSnapshot procedure and
+	// return ErrSnapshotStopped immediately.
+	//
+	// SaveSnapshot returns the number of bytes written to the provided io.Write
+	// and the encountered error when generating the snapshot. Other than the
+	// above mentioned ErrSnapshotStopped error, the IConcurrentStateMachine
+	// implementation should only return a non-nil error when the system need to
+	// be immediately halted for critical errors, e.g. disk error preventing you
+	// from saving the snapshot.
+	SaveSnapshot(interface{},
+		io.Writer, ISnapshotFileCollection, <-chan struct{}) (uint64, error)
+	// RecoverFromSnapshot recovers the state of the IConcurrentStateMachine
+	// instance from a previously saved snapshot captured by the SaveSnapshot()
+	// method. The saved snapshot is provided as an io.Reader backed by a file
+	// on disk together with a list of files previously recorded into the
+	// ISnapshotFileCollection in SaveSnapshot().
+	//
+	// Dragonboat ensures that Update() and Close() will not be invoked when
+	// RecoverFromSnapshot() is in progress.
+	//
+	// The provided read-only chan struct{} is provided to notify the
+	// RecoverFromSnapshot() method that the associated Raft node is being closed.
+	// On receiving such notification, RecoverFromSnapshot() can choose to
+	// abort recovering from the snapshot and return an ErrSnapshotStopped error
+	// immediately. Other than ErrSnapshotStopped, IConcurrentStateMachine should
+	// only return a non-nil error when the system need to be immediately halted
+	// for non-recoverable error, e.g. disk error preventing you from reading the
+	// complete saved snapshot.
+	//
+	// RecoverFromSnapshot is invoked when restarting from a previously saved
+	// state or when the Raft node is significantly behind its leader.
+	RecoverFromSnapshot(io.Reader, []SnapshotFile, <-chan struct{}) error
+	// Close closes the IConcurrentStateMachine instance.
+	//
+	// The Close method is not allowed to update the state of the
+	// IConcurrentStateMachine visible to the Lookup() method.
+	//
+	// Close() allows the application to finalize resources to a state easier to
+	// be re-opened and used in the future. It is important to understand that
+	// Close() is not guaranteed to be always called, e.g. node might crash at
+	// any time. IConcurrentStateMachine should be designed in a way that the
+	// safety and integrity of its managed data doesn't rely on the Close()
+	// method.
+	//
+	// Other than setting up some internal flags to indicate that the
+	// IConcurrentStateMachine instance has been closed, the Close() method is
+	// not allowed to update the state of IConcurrentStateMachine visible to the
+	// Lookup() method.
+	Close()
+	// GetHash returns a uint64 value used to represent the current state of the
+	// IConcurrentStateMachine, usually generated by hashing
+	// IConcurrentStateMachine's serialized state.
+	//
+	// The feature backed by this method is optional, application can ignore this
+	// testing related capability by always returning a constant uint64 value from
+	// this method.
+	//
+	// GetHash is a read only method on the IConcurrentStateMachine instance.
 	GetHash() uint64
 }

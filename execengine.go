@@ -23,6 +23,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 var (
@@ -233,7 +234,7 @@ func (s *execEngine) saveSnapshot(clusterID uint64,
 	if !ok {
 		return
 	}
-	if _, ok := node.getReqSnapshotReady(); !ok {
+	if _, ok := node.ss.getSaveSnapshotReq(); !ok {
 		return
 	}
 	plog.Infof("%s called saveSnapshot", node.describe())
@@ -247,7 +248,7 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	if !ok {
 		return
 	}
-	commitRec, ok := node.getSnapshotReady()
+	commitRec, ok := node.ss.getRecoverFromSnapshotReq()
 	if !ok {
 		return
 	}
@@ -261,7 +262,7 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	if !node.initialized() {
 		node.initialSnapshotDone(index)
 	} else {
-		node.snapshotDone()
+		node.recoverFromSnapshotDone()
 	}
 }
 
@@ -270,6 +271,7 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
 	batch := make([]rsm.Commit, 0, commitBatchSize)
+	entries := make([]sm.Entry, 0, commitBatchSize)
 	cci := uint64(0)
 	for {
 		select {
@@ -278,11 +280,12 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = s.loadSMs(workerID, cci, nodes)
-			s.execSMs(workerID, make(map[uint64]struct{}), nodes, batch)
+			s.execSMs(workerID, make(map[uint64]struct{}), nodes, batch, entries)
 			batch = make([]rsm.Commit, 0, commitBatchSize)
+			entries = make([]sm.Entry, 0, commitBatchSize)
 		case <-s.commitWorkReady.waitCh(workerID):
 			clusterIDMap := s.commitWorkReady.getReadyMap(workerID)
-			s.execSMs(workerID, clusterIDMap, nodes, batch)
+			s.execSMs(workerID, clusterIDMap, nodes, batch, entries)
 		}
 	}
 }
@@ -293,9 +296,69 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 		s.commitWorkReady.getPartitioner(), rsm.FromCommitWorker)
 }
 
+func processUninitializedNode(node *node) *rsm.Commit {
+	if !node.initialized() {
+		plog.Infof("check initial snapshot, %s", node.describe())
+		node.ss.setRecoveringFromSnapshot()
+		return &rsm.Commit{
+			SnapshotAvailable: true,
+			InitialSnapshot:   true,
+		}
+	}
+	return nil
+}
+
+// Returns a boolean flag indicating whether this node should be skipped for
+// further execSMs processing.
+func processRecoveringNode(node *node) bool {
+	if node.ss.recoveringFromSnapshot() {
+		completed, ok := node.ss.getRecoverCompleted()
+		if !ok {
+			return true
+		}
+		plog.Infof("%s received completed snapshot rec (1) %+v",
+			node.describe(), completed)
+		if completed.SnapshotRequested {
+			panic("got a completed.SnapshotRequested")
+		}
+		if completed.InitialSnapshot {
+			plog.Infof("%s handled initial snapshot, index %d",
+				node.describe(), completed.Index)
+			node.setInitialStatus(completed.Index)
+		}
+		node.ss.clearRecoveringFromSnapshot()
+	}
+	return false
+}
+
+func processTakingSnapshotNode(node *node) bool {
+	if node.ss.takingSnapshot() {
+		completed, ok := node.ss.getSaveSnapshotCompleted()
+		if !ok {
+			return !node.concurrentSnapshot()
+		}
+		plog.Infof("%s received completed snapshot rec (2) %+v",
+			node.describe(), completed)
+		if completed.SnapshotRequested && !node.initialized() {
+			plog.Panicf("%s taking a snapshot on uninitialized node",
+				node.describe())
+		}
+		node.ss.clearTakingSnapshot()
+	}
+	return false
+}
+
+// T: take snapshot
+// R: recover from snapshot
+// existing op, new op, action
+// T, T, ignore the new op
+// T, R, R is queued as node state, will be handled when T is done
+// R, R, won't happen, when in R state, execSMs will not process the node
+// R, T, won't happen, when in R state, execSMs will not process the node
+
 func (s *execEngine) execSMs(workerID uint64,
 	idmap map[uint64]struct{},
-	nodes map[uint64]*node, batch []rsm.Commit) bool {
+	nodes map[uint64]*node, batch []rsm.Commit, entries []sm.Entry) {
 	if len(idmap) == 0 {
 		for k := range nodes {
 			idmap[k] = struct{}{}
@@ -307,48 +370,41 @@ func (s *execEngine) execSMs(workerID uint64,
 		p.newCommitIteration()
 		p.exec.start()
 	}
-	hasEvent := false
 	for clusterID := range idmap {
 		node, ok := nodes[clusterID]
 		if !ok || node.stopped() {
 			continue
 		}
-		if node.pausedForSnapshot() {
-			completed, ok := node.getCompletedSnapshot()
-			if !ok {
-				continue
-			}
-			if completed.SnapshotRequested && !node.initialized() {
-				plog.Panicf("%s taking a snapshot on uninitialized node",
-					node.describe())
-			}
-			plog.Infof("%s received completed snapshot rec %v",
-				node.describe(), completed)
-			if completed.InitialSnapshot {
-				plog.Infof("%s handled initial snapshot, index %d",
-					node.describe(), completed.Index)
-				node.setInitialStatus(completed.Index)
-			}
-			node.clearPausedForSnapshot()
-		}
-		if !node.initialized() {
-			plog.Infof("check initial snapshot, %s", node.describe())
-			node.setPausedForSnapshot()
-			commit := rsm.Commit{
-				SnapshotAvailable: true,
-				InitialSnapshot:   true,
-			}
-			s.reportAvailableSnapshot(node, commit)
+		if processTakingSnapshotNode(node) {
 			continue
 		}
-		commit, snapshotRequired := node.handleCommit(batch)
+		if processRecoveringNode(node) {
+			continue
+		}
+		if rec := processUninitializedNode(node); rec != nil {
+			s.reportAvailableSnapshot(node, *rec)
+			continue
+		}
+		commit, snapshotRequired := node.handleCommit(batch, entries)
 		if snapshotRequired {
-			node.setPausedForSnapshot()
 			if commit.SnapshotAvailable {
 				plog.Infof("check incoming snapshot, %s", node.describe())
+				if node.ss.recoveringFromSnapshot() {
+					plog.Panicf("recovering from snapshot again")
+				}
+				node.ss.setRecoveringFromSnapshot()
 				s.reportAvailableSnapshot(node, commit)
 			} else if commit.SnapshotRequested {
 				plog.Infof("reportRequestedSnapshot, %s", node.describe())
+				if node.ss.recoveringFromSnapshot() {
+					plog.Panicf("recovering from snapshot again")
+				}
+				if !node.ss.takingSnapshot() {
+					node.ss.setTakingSnapshot()
+				} else {
+					plog.Infof("commit.SnapshotRequested ignored on %s", node.describe())
+					continue
+				}
 				s.reportRequestedSnapshot(node, commit)
 			} else {
 				panic("unknown returned commit rec type")
@@ -358,18 +414,17 @@ func (s *execEngine) execSMs(workerID uint64,
 	if p != nil {
 		p.exec.end()
 	}
-	return hasEvent
 }
 
 func (s *execEngine) reportRequestedSnapshot(node *node,
 	commitRec rsm.Commit) {
-	node.setReqSnapshotReady(commitRec)
+	node.ss.setSaveSnapshotReq(commitRec)
 	s.requestedSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
 func (s *execEngine) reportAvailableSnapshot(node *node,
 	commitRec rsm.Commit) {
-	node.setSnapshotReady(commitRec)
+	node.ss.setRecoverFromSnapshotReq(commitRec)
 	s.snapshotWorkReady.clusterReady(node.clusterID)
 }
 

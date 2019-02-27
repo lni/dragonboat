@@ -26,7 +26,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -65,16 +65,25 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
-func (s *snapshotter) Save(lastApplied uint64,
-	lastAppliedTerm uint64, savable rsm.IManagedStateMachine) (*pb.Snapshot,
-	*server.SnapshotEnv, error) {
-	env := s.getSnapshotEnv(lastApplied)
+func (s *snapshotter) Save(savable rsm.IManagedStateMachine,
+	meta *rsm.SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
+	env := s.getSnapshotEnv(meta.Index)
 	if err := env.CreateTempDir(); err != nil {
 		return nil, env, err
 	}
 	files := newFileCollection()
 	fp := env.GetTempFilepath()
-	sz, err := savable.SaveSnapshot(fp, files)
+	writer, err := rsm.NewSnapshotWriter(fp)
+	if err != nil {
+		return nil, env, err
+	}
+	defer func() {
+		if err := writer.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	session := meta.Session.Bytes()
+	sz, err := savable.SaveSnapshot(meta.Ctx, writer, session, files)
 	if err != nil {
 		return nil, env, err
 	}
@@ -83,11 +92,12 @@ func (s *snapshotter) Save(lastApplied uint64,
 		return nil, env, err
 	}
 	ss := &pb.Snapshot{
-		Filepath: env.GetFilepath(),
-		FileSize: sz,
-		Index:    lastApplied,
-		Term:     lastAppliedTerm,
-		Files:    fs,
+		Filepath:   env.GetFilepath(),
+		FileSize:   sz,
+		Membership: meta.Membership,
+		Index:      meta.Index,
+		Term:       meta.Term,
+		Files:      fs,
 	}
 	return ss, env, nil
 }
@@ -98,7 +108,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
 		return err
 	}
 	if readyToReturnTestKnob(s.stopc, "final dir check") {
-		return statemachine.ErrSnapshotStopped
+		return sm.ErrSnapshotStopped
 	}
 	if env.IsFinalDirExists() {
 		return errSnapshotOutOfDate
@@ -110,13 +120,13 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
 		return err
 	}
 	if readyToReturnTestKnob(s.stopc, "saving to logdb") {
-		return statemachine.ErrSnapshotStopped
+		return sm.ErrSnapshotStopped
 	}
 	if err := s.saveToLogDB(snapshot); err != nil {
 		return err
 	}
 	if readyToReturnTestKnob(s.stopc, "removing flag file") {
-		return statemachine.ErrSnapshotStopped
+		return sm.ErrSnapshotStopped
 	}
 	return env.RemoveFlagFile()
 }

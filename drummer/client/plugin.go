@@ -23,8 +23,17 @@ import (
 )
 
 type pluginDetails struct {
-	filepath                 string
-	createNativeStateMachine func(uint64, uint64) statemachine.IStateMachine
+	filepath                     string
+	createNativeStateMachine     func(uint64, uint64) statemachine.IStateMachine
+	createConcurrentStateMachine func(uint64, uint64) statemachine.IConcurrentStateMachine
+}
+
+func (pd *pluginDetails) isRegularStateMachine() bool {
+	return pd.createNativeStateMachine != nil
+}
+
+func (pd *pluginDetails) isConcurrentStateMachine() bool {
+	return pd.createConcurrentStateMachine != nil
 }
 
 func getPluginMap(path string) map[string]pluginDetails {
@@ -47,16 +56,27 @@ func getNativePlugins(path string,
 		}
 		appName := *nf.(*string)
 		csm, err := p.Lookup("CreateStateMachine")
-		if err != nil {
-			plog.Panicf("no CreateStateMachine func in %s", cp)
+		if err == nil {
+			cf := csm.(func(uint64, uint64) statemachine.IStateMachine)
+			if _, ok := result[appName]; ok {
+				plog.Panicf("plugins with the same appName %s already exist", appName)
+			} else {
+				result[appName] = pluginDetails{createNativeStateMachine: cf}
+				plog.Infof("added a create sm function from %s, appName: %s",
+					cp, appName)
+			}
+			continue
 		}
-		cf := csm.(func(uint64, uint64) statemachine.IStateMachine)
-		if _, ok := result[appName]; ok {
-			plog.Panicf("plugins with the same appName %s already exist", appName)
-		} else {
-			result[appName] = pluginDetails{createNativeStateMachine: cf}
-			plog.Infof("added a create sm function from %s, appName: %s",
-				cp, appName)
+		csm, err = p.Lookup("CreateConcurrentStateMachine")
+		if err == nil {
+			cf := csm.(func(uint64, uint64) statemachine.IConcurrentStateMachine)
+			if _, ok := result[appName]; ok {
+				plog.Panicf("plugins with the same appName %s already exist", appName)
+			} else {
+				result[appName] = pluginDetails{createConcurrentStateMachine: cf}
+				plog.Infof("added a create sm function from %s, appName: %s",
+					cp, appName)
+			}
 		}
 	}
 	return result

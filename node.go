@@ -31,7 +31,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -45,33 +45,8 @@ var (
 	logUnreachable          = true
 )
 
-type snapshotRecord struct {
-	mu        sync.Mutex
-	record    rsm.Commit
-	hasRecord bool
-}
-
-func (sr *snapshotRecord) setRecord(rec rsm.Commit) {
-	sr.mu.Lock()
-	defer sr.mu.Unlock()
-	if sr.hasRecord {
-		panic("setting the snapshot record again")
-	}
-	sr.hasRecord = true
-	sr.record = rec
-}
-
-func (sr *snapshotRecord) getRecord() (rsm.Commit, bool) {
-	sr.mu.Lock()
-	defer sr.mu.Unlock()
-	hasRecord := sr.hasRecord
-	sr.hasRecord = false
-	return sr.record, hasRecord
-}
-
 type node struct {
 	readReqCount        uint64
-	snapshotting        uint32
 	leaderID            uint64
 	raftAddress         string
 	config              config.Config
@@ -99,12 +74,12 @@ type node struct {
 	tickCount           uint64
 	expireNotified      uint64
 	closeOnce           sync.Once
+	ss                  *snapshotState
 	snapshotLock        *syncutil.Lock
 	initializedMu       struct {
 		sync.Mutex
 		initialized bool
 	}
-	snapshotStateManager
 	quiesceManager
 }
 
@@ -148,6 +123,7 @@ func newNode(raftAddress string,
 		mq:                  mq,
 		logdb:               ldb,
 		snapshotLock:        syncutil.NewLock(),
+		ss:                  &snapshotState{},
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -204,6 +180,10 @@ func (rc *node) requestRemoval() {
 
 func (rc *node) shouldStop() <-chan struct{} {
 	return rc.stopc
+}
+
+func (rc *node) concurrentSnapshot() bool {
+	return rc.sm.ConcurrentSnapshot()
 }
 
 func (rc *node) proposeSession(session *client.Session,
@@ -350,7 +330,7 @@ func (rc *node) publishSnapshot(snapshot pb.Snapshot,
 		return true
 	}
 	if snapshot.Index < rc.publishedIndex ||
-		snapshot.Index < rc.getSnapshotIndex() ||
+		snapshot.Index < rc.ss.getSnapshotIndex() ||
 		snapshot.Index < lastApplied {
 		panic("got a snapshot older than current applied state")
 	}
@@ -361,7 +341,7 @@ func (rc *node) publishSnapshot(snapshot pb.Snapshot,
 	if !rc.publishCommitRec(rec) {
 		return false
 	}
-	rc.setSnapshotIndex(snapshot.Index)
+	rc.ss.setSnapshotIndex(snapshot.Index)
 	rc.publishedIndex = snapshot.Index
 	return true
 }
@@ -401,14 +381,14 @@ func (rc *node) saveSnapshotRequired(lastApplied uint64) bool {
 	if rc.config.SnapshotEntries == 0 {
 		return false
 	}
-	si := rc.getSnapshotIndex()
+	si := rc.ss.getSnapshotIndex()
 	if rc.publishedIndex <= rc.config.SnapshotEntries+si ||
 		lastApplied <= rc.config.SnapshotEntries+si ||
-		lastApplied <= rc.config.SnapshotEntries+rc.getReqSnapshotIndex() {
+		lastApplied <= rc.config.SnapshotEntries+rc.ss.getReqSnapshotIndex() {
 		return false
 	}
 	plog.Infof("snapshot at index %d requested on %s", lastApplied, rc.describe())
-	rc.setReqSnapshotIndex(lastApplied)
+	rc.ss.setReqSnapshotIndex(lastApplied)
 	return true
 }
 
@@ -419,14 +399,14 @@ func isSoftSnapshotError(err error) bool {
 func (rc *node) saveSnapshot() {
 	// this is suppose to be called in snapshot worker thread.
 	// calling this rc.sm.GetLastApplied() won't block the raft sm.
-	if rc.sm.GetLastApplied() <= rc.getSnapshotIndex() {
+	if rc.sm.GetLastApplied() <= rc.ss.getSnapshotIndex() {
 		// a snapshot has been published to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
 		return
 	}
 	ss, ssenv, err := rc.sm.SaveSnapshot()
 	if err != nil {
-		if err == statemachine.ErrSnapshotStopped {
+		if err == sm.ErrSnapshotStopped {
 			ssenv.MustRemoveTempDir()
 			plog.Infof("%s aborted SaveSnapshot", rc.describe())
 			return
@@ -444,7 +424,7 @@ func (rc *node) saveSnapshot() {
 			return
 		}
 		// this can only happen in monkey test
-		if err == statemachine.ErrSnapshotStopped {
+		if err == sm.ErrSnapshotStopped {
 			return
 		}
 		panic(err)
@@ -461,16 +441,16 @@ func (rc *node) saveSnapshot() {
 		}
 	}
 	if ss.Index > rc.config.CompactionOverhead {
-		rc.setCompactLogTo(ss.Index - rc.config.CompactionOverhead)
+		rc.ss.setCompactLogTo(ss.Index - rc.config.CompactionOverhead)
 	}
-	rc.setSnapshotIndex(ss.Index)
+	rc.ss.setSnapshotIndex(ss.Index)
 }
 
 func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	rc.snapshotLock.Lock()
 	defer rc.snapshotLock.Unlock()
 	index, err := rc.sm.RecoverFromSnapshot(rec)
-	if err == statemachine.ErrSnapshotStopped {
+	if err == sm.ErrSnapshotStopped {
 		plog.Infof("%s aborted its RecoverFromSnapshot", rc.describe())
 		return 0, true
 	}
@@ -481,22 +461,23 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 }
 
 func (rc *node) saveSnapshotDone() {
-	rc.notifySnapshotStatus(true, false, 0)
+	rc.ss.notifySnapshotStatus(true, false, false, 0)
 	rc.commitReady(rc.clusterID)
 }
 
 func (rc *node) initialSnapshotDone(index uint64) {
-	rc.notifySnapshotStatus(false, true, index)
+	rc.ss.notifySnapshotStatus(false, true, true, index)
 	rc.commitReady(rc.clusterID)
 }
 
-func (rc *node) snapshotDone() {
-	rc.notifySnapshotStatus(false, false, 0)
+func (rc *node) recoverFromSnapshotDone() {
+	rc.ss.notifySnapshotStatus(false, true, false, 0)
 	rc.commitReady(rc.clusterID)
 }
 
-func (rc *node) handleCommit(batch []rsm.Commit) (rsm.Commit, bool) {
-	return rc.sm.Handle(batch)
+func (rc *node) handleCommit(batch []rsm.Commit,
+	entries []sm.Entry) (rsm.Commit, bool) {
+	return rc.sm.Handle(batch, entries)
 }
 
 func (rc *node) removeSnapshotFlagFile(index uint64) error {
@@ -504,7 +485,7 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 }
 
 func (rc *node) compactLog() error {
-	compactTo := rc.getCompactLogTo()
+	compactTo := rc.ss.getCompactLogTo()
 	if compactTo == 0 {
 		return nil
 	}
@@ -726,7 +707,8 @@ func (rc *node) handleConfigChangeMessage() bool {
 }
 
 func (rc *node) isBusySnapshotting() bool {
-	return rc.pausedForSnapshot() && rc.sm.CommitChanBusy()
+	snapshotting := rc.ss.takingSnapshot() || rc.ss.recoveringFromSnapshot()
+	return snapshotting && rc.sm.CommitChanBusy()
 }
 
 func (rc *node) handleLocalTickMessage(count uint64) {
@@ -869,7 +851,7 @@ func (rc *node) setInitialStatus(index uint64) {
 		panic("setInitialStatus called twice")
 	}
 	plog.Infof("%s initial index set to %d", rc.describe(), index)
-	rc.setSnapshotIndex(index)
+	rc.ss.setSnapshotIndex(index)
 	rc.publishedIndex = index
 	rc.setInitialized()
 }
@@ -1007,79 +989,4 @@ func (rc *node) setInitialized() {
 	rc.initializedMu.Lock()
 	defer rc.initializedMu.Unlock()
 	rc.initializedMu.initialized = true
-}
-
-func (rc *node) pausedForSnapshot() bool {
-	return atomic.LoadUint32(&rc.snapshotting) == 1
-}
-
-func (rc *node) setPausedForSnapshot() {
-	atomic.StoreUint32(&rc.snapshotting, 1)
-}
-
-func (rc *node) clearPausedForSnapshot() {
-	atomic.StoreUint32(&rc.snapshotting, 0)
-}
-
-type snapshotStateManager struct {
-	snapshotIndex         uint64
-	reqSnapshotIndex      uint64
-	compactLogTo          uint64
-	snapshotReady         snapshotRecord
-	reqSnapshotReady      snapshotRecord
-	snapshotCompleteReady snapshotRecord
-}
-
-func (rs *snapshotStateManager) setSnapshotIndex(index uint64) {
-	atomic.StoreUint64(&rs.snapshotIndex, index)
-}
-
-func (rs *snapshotStateManager) getSnapshotIndex() uint64 {
-	return atomic.LoadUint64(&rs.snapshotIndex)
-}
-
-func (rs *snapshotStateManager) getReqSnapshotIndex() uint64 {
-	return atomic.LoadUint64(&rs.reqSnapshotIndex)
-}
-
-func (rs *snapshotStateManager) setReqSnapshotIndex(idx uint64) {
-	atomic.StoreUint64(&rs.reqSnapshotIndex, idx)
-}
-
-func (rs *snapshotStateManager) getCompactLogTo() uint64 {
-	return atomic.SwapUint64(&rs.compactLogTo, 0)
-}
-
-func (rs *snapshotStateManager) setCompactLogTo(v uint64) {
-	atomic.StoreUint64(&rs.compactLogTo, v)
-}
-
-func (rs *snapshotStateManager) setSnapshotReady(rec rsm.Commit) {
-	rs.snapshotReady.setRecord(rec)
-}
-
-func (rs *snapshotStateManager) getSnapshotReady() (rsm.Commit, bool) {
-	return rs.snapshotReady.getRecord()
-}
-
-func (rs *snapshotStateManager) setReqSnapshotReady(rec rsm.Commit) {
-	rs.reqSnapshotReady.setRecord(rec)
-}
-
-func (rs *snapshotStateManager) getReqSnapshotReady() (rsm.Commit, bool) {
-	return rs.reqSnapshotReady.getRecord()
-}
-
-func (rs *snapshotStateManager) notifySnapshotStatus(saveSnapshot bool,
-	initialSnapshot bool, index uint64) {
-	rec := rsm.Commit{
-		SnapshotRequested: saveSnapshot,
-		InitialSnapshot:   initialSnapshot,
-		Index:             index,
-	}
-	rs.snapshotCompleteReady.setRecord(rec)
-}
-
-func (rs *snapshotStateManager) getCompletedSnapshot() (rsm.Commit, bool) {
-	return rs.snapshotCompleteReady.getRecord()
 }

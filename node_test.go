@@ -208,7 +208,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, nil)
 		// create the sm
 		sm := &tests.NoOP{}
-		ds := rsm.NewNativeStateMachine(sm, make(chan struct{}))
+		ds := rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(sm), make(chan struct{}))
 		// node registry
 		nr := transport.NewNodes(settings.Soft.StreamConnections)
 		config := config.Config{
@@ -298,11 +298,11 @@ func step(nodes []*node) bool {
 		node := activeNodes[idx]
 		running := node.processRaftUpdate(ud)
 		node.commitRaftUpdate(ud)
-		if ud.LastApplied-node.getReqSnapshotIndex() > node.config.SnapshotEntries {
+		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
 			node.saveSnapshot()
 		}
 		if running {
-			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Commit, 0))
+			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Commit, 0), nil)
 			if snapshotRequired {
 				if commitRec.SnapshotAvailable || commitRec.InitialSnapshot {
 					if _, err := node.sm.RecoverFromSnapshot(commitRec); err != nil {
@@ -946,6 +946,9 @@ func TestLinearizableReadCanBeMade(t *testing.T) {
 		rs, err = n.read(nil, time.Duration(2*time.Second))
 		if err != nil {
 			t.Fatalf("")
+		}
+		if rs.node == nil {
+			t.Fatalf("rs.node not set")
 		}
 		stepNodes(nodes, smList, router, 2500)
 		mustComplete(rs, t)

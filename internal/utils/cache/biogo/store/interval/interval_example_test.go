@@ -7,7 +7,7 @@ package interval_test
 import (
 	"fmt"
 
-	"github.com/biogo/store/interval"
+	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/interval"
 )
 
 // Generic intervals

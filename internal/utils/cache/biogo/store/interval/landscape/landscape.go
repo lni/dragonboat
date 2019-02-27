@@ -12,7 +12,7 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/biogo/store/interval"
+	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/interval"
 )
 
 type endHeap []interval.IntInterface

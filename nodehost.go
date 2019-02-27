@@ -29,7 +29,7 @@ underlying hosts) are available.
 
 User applications can leverage the power of the Raft protocol implemented in
 dragonboat by implementing its IStateMachine component. IStateMachine is defined in
-github.com/lni/dragonboat/statemachine. Each cluster node is associated with an
+github.com/lni/dragonboat/sm. Each cluster node is associated with an
 IStateMachine instance, it is in charge of updating, querying and snapshotting
 application data, with minimum exposure to the complexity of the Raft protocol
 implementation.
@@ -96,7 +96,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -355,13 +355,28 @@ func (nh *NodeHost) Stop() {
 //    the nodes map empty. This requires the joining node to have already been
 //    added as a member of the Raft cluster.
 func (nh *NodeHost) StartCluster(nodes map[uint64]string,
-	join bool, createStateMachine func(uint64, uint64) statemachine.IStateMachine,
+	join bool, createStateMachine func(uint64, uint64) sm.IStateMachine,
 	config config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(sm, done)
+		return rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(sm), done)
+	}
+	return nh.startCluster(nodes, join, cf, stopc, config)
+}
+
+// StartConcurrentCluster is similar to the StartCluster method but it is used
+// to add and start a Raft node backed by a concurrent state machine.
+func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
+	join bool,
+	createStateMachine func(uint64, uint64) sm.IConcurrentStateMachine,
+	config config.Config) error {
+	stopc := make(chan struct{})
+	cf := func(clusterID uint64, nodeID uint64,
+		done <-chan struct{}) rsm.IManagedStateMachine {
+		sm := createStateMachine(clusterID, nodeID)
+		return rsm.NewNativeStateMachine(rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config)
 }

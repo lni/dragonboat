@@ -226,7 +226,7 @@ func (sr *SnapshotReader) Read(data []byte) (int, error) {
 func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
 	checksum := sr.h.Sum(nil)
 	if !bytes.Equal(checksum, header.PayloadChecksum) {
-		panic("corrupted payload")
+		panic("corrupted snapshot payload")
 	}
 }
 

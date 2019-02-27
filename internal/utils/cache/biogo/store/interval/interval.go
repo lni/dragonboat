@@ -9,7 +9,7 @@ package interval
 import (
 	"errors"
 
-	"github.com/biogo/store/llrb"
+	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
 )
 
 // Operation mode of the underlying LLRB tree.

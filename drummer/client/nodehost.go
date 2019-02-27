@@ -376,8 +376,12 @@ func (dc *drummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 		panic("failed to start the node as the plugin is not ready")
 	}
 	var err error
-	if pd.createNativeStateMachine != nil {
-		err = dc.nh.StartCluster(peers, req.Join, pd.createNativeStateMachine, config)
+	if pd.isRegularStateMachine() {
+		err = dc.nh.StartCluster(peers,
+			req.Join, pd.createNativeStateMachine, config)
+	} else if pd.isConcurrentStateMachine() {
+		err = dc.nh.StartConcurrentCluster(peers,
+			req.Join, pd.createConcurrentStateMachine, config)
 	} else {
 		err = dc.nh.StartClusterUsingPlugin(peers, req.Join, pd.filepath, config)
 	}

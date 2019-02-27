@@ -32,7 +32,7 @@ import (
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	pb "github.com/lni/dragonboat/raftpb"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -57,7 +57,7 @@ type testNodeProxy struct {
 	reject             bool
 	accept             bool
 	smResult           uint64
-	lastApplied        uint64
+	index              uint64
 	rejected           bool
 	ignored            bool
 	applyUpdateInvoked bool
@@ -74,7 +74,7 @@ func newTestNodeProxy() *testNodeProxy {
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 	result uint64, rejected bool, ignored bool, notifyReadClient bool) {
 	p.smResult = result
-	p.lastApplied = entry.Index
+	p.index = entry.Index
 	p.rejected = rejected
 	p.ignored = ignored
 	p.applyUpdateInvoked = true
@@ -116,8 +116,8 @@ func (p *testNodeProxy) NodeID() uint64    { return 1 }
 func (p *testNodeProxy) ClusterID() uint64 { return 1 }
 
 type testSnapshotter struct {
-	lastApplied uint64
-	dataSize    uint64
+	index    uint64
+	dataSize uint64
 }
 
 func newTestSnapshotter() *testSnapshotter {
@@ -142,7 +142,7 @@ func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 	return snap, nil
 }
 
-func (s *testSnapshotter) GetFilePath(lastApplied uint64) string {
+func (s *testSnapshotter) GetFilePath(index uint64) string {
 	filename := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	return filepath.Join(testSnapshotterDir, filename)
 }
@@ -153,7 +153,7 @@ func (s *testSnapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
 	snap := pb.Snapshot{
 		Filepath: fp,
 		FileSize: s.dataSize,
-		Index:    s.lastApplied,
+		Index:    s.index,
 		Term:     2,
 	}
 	return snap, nil
@@ -166,25 +166,36 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 	return err.Error() == "no snapshot available"
 }
 
-func (s *testSnapshotter) Save(lastApplied uint64, lastAppliedTerm uint64,
-	savable IManagedStateMachine) (*pb.Snapshot, *server.SnapshotEnv, error) {
-	s.lastApplied = lastApplied
+func (s *testSnapshotter) Save(savable IManagedStateMachine,
+	meta *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
+	s.index = meta.Index
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
 	}
-	env := server.NewSnapshotEnv(f, 1, 1, lastApplied, 1, server.SnapshottingMode)
+	env := server.NewSnapshotEnv(f, 1, 1, s.index, 1, server.SnapshottingMode)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := filepath.Join(testSnapshotterDir, fn)
-	sz, err := savable.SaveSnapshot(fp, nil)
+	writer, err := NewSnapshotWriter(fp)
+	if err != nil {
+		return nil, env, err
+	}
+	defer func() {
+		if err := writer.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	session := meta.Session.Bytes()
+	sz, err := savable.SaveSnapshot(nil, writer, session, nil)
 	s.dataSize = sz
 	if err != nil {
 		return nil, env, err
 	}
 	ss := &pb.Snapshot{
-		Filepath: env.GetFilepath(),
-		FileSize: sz,
-		Index:    lastApplied,
-		Term:     lastAppliedTerm,
+		Filepath:   env.GetFilepath(),
+		FileSize:   sz,
+		Membership: meta.Membership,
+		Index:      meta.Index,
+		Term:       meta.Term,
 	}
 	return ss, env, nil
 }
@@ -192,7 +203,7 @@ func (s *testSnapshotter) Save(lastApplied uint64, lastAppliedTerm uint64,
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
-	ds := NewNativeStateMachine(store, make(chan struct{}))
+	ds := NewNativeStateMachine(&RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -201,16 +212,103 @@ func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 
 func runSMTest2(t *testing.T,
 	tf func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine)) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine)) {
 	defer leaktest.AfterTest(t)()
 	createTestDir()
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
-	ds := NewNativeStateMachine(store, make(chan struct{}))
+	ds := NewNativeStateMachine(&RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
+}
+
+func TestUpdatesCanBeBatched(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	createTestDir()
+	defer removeTestDir()
+	store := &tests.ConcurrentUpdate{}
+	ds := NewNativeStateMachine(&ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter()
+	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	e1 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    235,
+		Term:     1,
+	}
+	e2 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    236,
+		Term:     1,
+	}
+	e3 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    237,
+		Term:     1,
+	}
+	commit := Commit{
+		Entries: []pb.Entry{e1, e2, e3},
+	}
+	sm.index = 234
+	sm.CommitC() <- commit
+	// two commits to handle
+	batch := make([]Commit, 0, 8)
+	sm.Handle(batch, nil)
+	if sm.GetLastApplied() != 237 {
+		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
+	}
+	count := store.UpdateCount
+	if count != 3 {
+		t.Fatalf("not batched as expected, batched update count %d, want 3", count)
+	}
+}
+
+func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	createTestDir()
+	defer removeTestDir()
+	store := &tests.ConcurrentUpdate{}
+	ds := NewNativeStateMachine(&ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter()
+	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	e1 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    235,
+		Term:     1,
+	}
+	e2 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.SeriesIDForRegister,
+		Index:    236,
+		Term:     1,
+	}
+	e3 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    237,
+		Term:     1,
+	}
+	commit := Commit{
+		Entries: []pb.Entry{e1, e2, e3},
+	}
+	sm.index = 234
+	sm.CommitC() <- commit
+	// two commits to handle
+	batch := make([]Commit, 0, 8)
+	sm.Handle(batch, nil)
+	if sm.GetLastApplied() != 237 {
+		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
+	}
+	count := store.UpdateCount
+	if count != 1 {
+	}
 }
 
 func TestStateMachineCanBeCreated(t *testing.T) {
@@ -246,7 +344,7 @@ func applyConfigChangeEntry(sm *StateMachine,
 	commit := Commit{
 		Entries: []pb.Entry{e},
 	}
-	sm.lastApplied = index - 1
+	sm.index = index - 1
 	sm.CommitC() <- commit
 }
 
@@ -353,9 +451,52 @@ func TestGetMembershipHash(t *testing.T) {
 	runSMTest(t, tf)
 }
 
+func TestGetSnapshotMetaPanicWhenThereIsNoMember(t *testing.T) {
+	tf := func(t *testing.T, sm *StateMachine) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("didn't panic")
+			}
+		}()
+		sm.getSnapshotMeta(nil)
+	}
+	runSMTest(t, tf)
+}
+
+func TestGetSnapshotMeta(t *testing.T) {
+	tf := func(t *testing.T, sm *StateMachine) {
+		sm.members = &pb.Membership{
+			Addresses: map[uint64]string{
+				100: "a100",
+				234: "a234",
+			},
+			ConfigChangeId: 12345,
+		}
+		applySessionRegisterEntry(sm, 12345, 789)
+		sm.index = 100
+		sm.term = 101
+		meta := sm.getSnapshotMeta(make([]byte, 123))
+		if meta.Index != 100 || meta.Term != 101 {
+			t.Errorf("index/term not recorded")
+		}
+		v := meta.Ctx.([]byte)
+		if len(v) != 123 {
+			t.Errorf("ctx not recorded")
+		}
+		if len(meta.Membership.Addresses) != 2 {
+			t.Errorf("membership not saved %d, want 2", len(meta.Membership.Addresses))
+		}
+		v = meta.Session.Bytes()
+		if len(v) == 0 {
+			t.Errorf("sessions not saved")
+		}
+	}
+	runSMTest(t, tf)
+}
+
 func TestHandleConfChangeAddNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddNode,
@@ -363,7 +504,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -386,7 +527,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 
 func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddNode,
@@ -394,7 +535,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -404,7 +545,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			4,
 			"localhost:1010",
 			124)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("invalid cc not rejected")
 		}
@@ -414,7 +555,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 
 func TestObserverCanBeAdded(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddObserver,
@@ -423,7 +564,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 			123)
 
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -442,7 +583,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 
 func TestObserverPromoteToNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddObserver,
@@ -451,7 +592,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			123)
 
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -471,7 +612,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			"localhost:1010",
 			124)
 
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 124 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -490,7 +631,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 
 func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddObserver,
@@ -499,7 +640,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			123)
 
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -519,7 +660,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			"localhost:1011",
 			124)
 
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		v, ok := sm.members.Addresses[4]
 		if !ok {
 			t.Errorf("address not found")
@@ -533,7 +674,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.Addresses[1] = "localhost:1010"
 		applyConfigChangeEntry(sm,
 			1,
@@ -547,7 +688,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 			t.Errorf("node 1 not in members")
 		}
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
 		}
@@ -571,7 +712,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 
 func TestOrderedConfChangeIsAccepted(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.ConfigChangeId = 6
 		applyConfigChangeEntry(sm,
 			6,
@@ -580,7 +721,7 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 			"",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if nodeProxy.reject {
 			t.Errorf("rejected")
 		}
@@ -599,7 +740,7 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 
 func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.ConfigChangeId = 6
 		sm.members.Addresses[100] = "test.nodehost"
 		applyConfigChangeEntry(sm,
@@ -609,7 +750,7 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 			"test.nodehost",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
 		}
@@ -625,7 +766,7 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 
 func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.ConfigChangeId = 6
 		sm.members.Removed[2] = true
 		applyConfigChangeEntry(sm,
@@ -635,7 +776,7 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 			"a1",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
 		}
@@ -648,7 +789,7 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 
 func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.ordered = true
 		sm.members.ConfigChangeId = 6
 		applyConfigChangeEntry(sm,
@@ -658,7 +799,7 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 			"",
 			123)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
 		}
@@ -671,7 +812,7 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 
 func TestHandleEmptyEvent(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		e := pb.Entry{
 			Type:  pb.ApplicationEntry,
 			Index: 234,
@@ -680,10 +821,10 @@ func TestHandleEmptyEvent(t *testing.T) {
 		commit := Commit{
 			Entries: []pb.Entry{e},
 		}
-		sm.lastApplied = 233
+		sm.index = 233
 		sm.CommitC() <- commit
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 234 {
 			t.Errorf("last applied %d, want 234", sm.GetLastApplied())
 		}
@@ -707,7 +848,7 @@ func getTestKVData() []byte {
 
 func TestHandleUpate(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		data := getTestKVData()
 		e1 := pb.Entry{
 			ClientID: 123,
@@ -725,11 +866,11 @@ func TestHandleUpate(t *testing.T) {
 		commit := Commit{
 			Entries: []pb.Entry{e1, e2},
 		}
-		sm.lastApplied = 234
+		sm.index = 234
 		sm.CommitC() <- commit
 		// two commits to handle
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 236 {
 			t.Errorf("last applied %d, want 236", sm.GetLastApplied())
 		}
@@ -753,34 +894,34 @@ func TestHandleUpate(t *testing.T) {
 
 func TestSnapshotCanBeApplied(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
-		sm.lastApplied = 3
+		sm.index = 3
 		hash1 := sm.GetHash()
 		ss, _, err := sm.SaveSnapshot()
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
 		}
-		lastApplied := ss.Index
+		index := ss.Index
 		commit := Commit{
-			Index: lastApplied,
+			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
-		ds2 := NewNativeStateMachine(store2, make(chan struct{}))
+		ds2 := NewNativeStateMachine(&RegularStateMachine{sm: store2}, make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
 		sm2 := NewStateMachine(ds2, snapshotter2, false, nodeProxy2)
 		if len(sm2.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}
-		lastApplied2, err := sm2.RecoverFromSnapshot(commit)
+		index2, err := sm2.RecoverFromSnapshot(commit)
 		if err != nil {
 			t.Errorf("apply snapshot failed %v", err)
 		}
-		if lastApplied2 != lastApplied {
-			t.Errorf("last applied %d, want %d", lastApplied2, lastApplied)
+		if index2 != index {
+			t.Errorf("last applied %d, want %d", index2, index)
 		}
 		hash2 := sm2.GetHash()
 		if hash1 != hash2 {
@@ -808,7 +949,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 
 func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.Addresses[1] = "localhost:1"
 		sm.members.Addresses[2] = "localhost:2"
 		ss, _, err := sm.SaveSnapshot()
@@ -833,14 +974,14 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 
 func TestSnapshotTwiceIsHandled(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.Addresses[1] = "localhost:1"
 		sm.members.Addresses[2] = "localhost:2"
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 1, 0, data)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -868,7 +1009,7 @@ func applySessionRegisterEntry(sm *StateMachine,
 	commit := Commit{
 		Entries: []pb.Entry{e},
 	}
-	sm.lastApplied = index - 1
+	sm.index = index - 1
 	sm.CommitC() <- commit
 	return e
 }
@@ -908,11 +1049,11 @@ func applyTestEntry(sm *StateMachine,
 
 func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		clientID := uint64(12345)
 		applySessionRegisterEntry(sm, clientID, 789)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 789 {
 			t.Errorf("last applied %d, want 789", sm.GetLastApplied())
 		}
@@ -928,7 +1069,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		index := uint64(790)
 		applySessionUnregisterEntry(sm, 12345, index)
 
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), index)
@@ -946,10 +1087,10 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 
 func TestDuplicatedSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		e := applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -971,7 +1112,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		if nodeProxy.rejected {
 			t.Errorf("rejected flag set too early")
 		}
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -988,12 +1129,12 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 
 func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 
-		sm.lastApplied = 789
+		sm.index = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1016,12 +1157,12 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 
 func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
-		sm.lastApplied = 789
+		sm.index = 789
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1043,14 +1184,14 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 
 func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1069,7 +1210,7 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		}
 		e = applyTestEntry(sm, 12345, 1, 791, 0, data)
 		plog.Infof("going to handle the second commit rec")
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1086,14 +1227,14 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 
 func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1101,7 +1242,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		storeCount := store.(*tests.KVTest).Count
 		// update the respondedto value
 		e = applyTestEntry(sm, 12345, 1, 791, 1, data)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		nds := ds.(*NativeStateMachine)
 		sessionManager := nds.sessions
 		session, _ := sessionManager.getSession(RaftClientID(12345))
@@ -1109,9 +1250,9 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 			t.Errorf("responded to %d, want 1", session.RespondedUpTo)
 		}
 		nodeProxy.applyUpdateInvoked = false
-		// submit the same stuff again with a different lastApplied value
+		// submit the same stuff again with a different index value
 		e = applyTestEntry(sm, 12345, 1, 792, 1, data)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1128,14 +1269,14 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 
 func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store statemachine.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Commit, 0, 8)
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 790, 0, data)
 		// check normal update is accepted and handleped
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1144,7 +1285,7 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 		// different index as the same entry is proposed again
 		e = applyTestEntry(sm, 12345, client.NoOPSeriesID, 791, 0, data)
 		// check normal update is accepted and handleped
-		sm.Handle(batch)
+		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)

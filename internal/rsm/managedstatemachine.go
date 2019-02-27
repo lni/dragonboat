@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 var (
@@ -147,13 +147,18 @@ type IManagedStateMachine interface {
 	RegisterClientID(clientID uint64) uint64
 	ClientRegistered(clientID uint64) (*Session, bool)
 	UpdateRequired(*Session, uint64) (uint64, bool, bool)
-	Update(*Session, uint64, []byte) uint64
+	Update(*Session, uint64, uint64, uint64, []byte) uint64
+	BatchedUpdate([]sm.Entry) []sm.Entry
 	Lookup([]byte) ([]byte, error)
 	GetHash() uint64
-	SaveSnapshot(string, statemachine.ISnapshotFileCollection) (uint64, error)
-	RecoverFromSnapshot(string, []statemachine.SnapshotFile) error
+	PrepareSnapshot() (interface{}, error)
+	SaveSessions(w io.Writer) (uint64, error)
+	SaveSnapshot(interface{},
+		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
+	RecoverFromSnapshot(string, []sm.SnapshotFile) error
 	Offloaded(From)
 	Loaded(From)
+	ConcurrentSnapshot() bool
 }
 
 // ManagedStateMachineFactory is the factory function type for creating an
@@ -276,19 +281,18 @@ func (ds *SessionManager) LoadSessions(reader io.Reader) error {
 // NativeStateMachine is the IManagedStateMachine object used to manage native
 // data store in Golang.
 type NativeStateMachine struct {
-	dataStore statemachine.IStateMachine
-	done      <-chan struct{}
-	// see dragonboat-doc on how this RWMutex can be entirely avoided
-	mu sync.RWMutex
+	sm   IStateMachine
+	done <-chan struct{}
+	mu   sync.RWMutex
 	OffloadedStatus
 	SessionManager
 }
 
 // NewNativeStateMachine creates and returns a new NativeStateMachine object.
-func NewNativeStateMachine(ds statemachine.IStateMachine,
+func NewNativeStateMachine(sm IStateMachine,
 	done <-chan struct{}) IManagedStateMachine {
 	s := &NativeStateMachine{
-		dataStore:      ds,
+		sm:             sm,
 		done:           done,
 		SessionManager: NewSessionManager(),
 	}
@@ -296,7 +300,7 @@ func NewNativeStateMachine(ds statemachine.IStateMachine,
 }
 
 func (ds *NativeStateMachine) closeStateMachine() {
-	ds.dataStore.Close()
+	ds.sm.Close()
 }
 
 // Offloaded offloads the data store from the specified part of the system.
@@ -317,20 +321,40 @@ func (ds *NativeStateMachine) Loaded(from From) {
 	ds.SetLoaded(from)
 }
 
+// ConcurrentSnapshot returns a boolean flag to indicate whether the managed
+// state machine instance is capable of doing concurrent snapshots.
+func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
+	return ds.sm.ConcurrentSnapshot()
+}
+
 // Update updates the data store.
 func (ds *NativeStateMachine) Update(session *Session,
-	seriesID uint64, data []byte) uint64 {
+	seriesID uint64, index uint64, term uint64, data []byte) uint64 {
 	if session != nil {
 		_, ok := session.getResponse(RaftSeriesID(seriesID))
 		if ok {
 			panic("already has response in session")
 		}
 	}
-	v := ds.dataStore.Update(data)
-	if session != nil {
-		session.addResponse(RaftSeriesID(seriesID), v)
+	entries := []sm.Entry{sm.Entry{Index: index, Cmd: data}}
+	results := ds.sm.Update(entries)
+	if len(results) != 1 {
+		panic("len(results) != 1")
 	}
-	return v
+	if session != nil {
+		session.addResponse(RaftSeriesID(seriesID), results[0].Result)
+	}
+	return results[0].Result
+}
+
+// BatchedUpdate applies committed entries in a batch to hide latency.
+func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) []sm.Entry {
+	il := len(ents)
+	results := ds.sm.Update(ents)
+	if len(results) != il {
+		panic("unexpected result length")
+	}
+	return results
 }
 
 // Lookup queries the data store.
@@ -340,32 +364,47 @@ func (ds *NativeStateMachine) Lookup(data []byte) ([]byte, error) {
 		ds.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
-	v := ds.dataStore.Lookup(data)
+	v, err := ds.sm.Lookup(data)
 	ds.mu.RUnlock()
-	return v, nil
+	return v, err
 }
 
 // GetHash returns an integer value representing the state of the data store.
 func (ds *NativeStateMachine) GetHash() uint64 {
-	return ds.dataStore.GetHash()
+	return ds.sm.GetHash()
 }
 
-// SaveSnapshot saves the state of the data store to the snapshot file specified
-// by the fp input string.
-func (ds *NativeStateMachine) SaveSnapshot(fp string,
-	collection statemachine.ISnapshotFileCollection) (uint64, error) {
-	writer, err := NewSnapshotWriter(fp)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		err = writer.Close()
-	}()
+// SaveSessions saves the session info to the specified writer.
+func (ds *NativeStateMachine) SaveSessions(writer io.Writer) (uint64, error) {
 	smsz, err := ds.sessions.save(writer)
 	if err != nil {
 		return 0, err
 	}
-	sz, err := ds.dataStore.SaveSnapshot(writer, collection, ds.done)
+	return smsz, nil
+}
+
+// PrepareSnapshot makes preparation for concurrently taking snapshot.
+func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
+	if !ds.ConcurrentSnapshot() {
+		panic("state machine is not capable of concurrent snapshotting")
+	}
+	return ds.sm.PrepareSnapshot()
+}
+
+// SaveSnapshot saves the state of the data store to the snapshot file specified
+// by the fp input string.
+func (ds *NativeStateMachine) SaveSnapshot(
+	ssctx interface{}, writer *SnapshotWriter, session []byte,
+	collection sm.ISnapshotFileCollection) (uint64, error) {
+	n, err := writer.Write(session)
+	if err != nil {
+		return 0, err
+	}
+	if n != len(session) {
+		return 0, io.ErrShortWrite
+	}
+	smsz := uint64(len(session))
+	sz, err := ds.sm.SaveSnapshot(ssctx, writer, collection, ds.done)
 	if err != nil {
 		return 0, err
 	}
@@ -378,7 +417,7 @@ func (ds *NativeStateMachine) SaveSnapshot(fp string,
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
 func (ds *NativeStateMachine) RecoverFromSnapshot(fp string,
-	files []statemachine.SnapshotFile) (err error) {
+	files []sm.SnapshotFile) (err error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
 		return err
@@ -394,8 +433,8 @@ func (ds *NativeStateMachine) RecoverFromSnapshot(fp string,
 	if err = ds.sessions.load(reader); err != nil {
 		return err
 	}
-	if err = ds.dataStore.RecoverFromSnapshot(reader, files, ds.done); err != nil {
-		plog.Errorf("statemachine.RecoverFromSnapshot returned %v", err)
+	if err = ds.sm.RecoverFromSnapshot(reader, files, ds.done); err != nil {
+		plog.Errorf("sm.RecoverFromSnapshot returned %v", err)
 		return err
 	}
 	reader.ValidatePayload(header)

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenk/backoff"
-	"github.com/facebookgo/clock"
+	"github.com/lni/dragonboat/internal/utils/netutil/cenk/backoff"
+	"github.com/lni/dragonboat/internal/utils/netutil/facebookgo/clock"
 )
 
 func init() {

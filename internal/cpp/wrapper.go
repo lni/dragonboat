@@ -46,7 +46,7 @@ import (
 
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/logger"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 var (
@@ -140,7 +140,7 @@ func AddToSnapshotFileCollection(oid uint64,
 	if !ok {
 		panic("failed to get the file collection")
 	}
-	fc := fci.(statemachine.ISnapshotFileCollection)
+	fc := fci.(sm.ISnapshotFileCollection)
 	filePath := string(path)
 	data := make([]byte, len(metadata))
 	copy(data, metadata)
@@ -157,7 +157,7 @@ func getErrorFromErrNo(errno int) error {
 	} else if errno == 3 {
 		return errors.New("failed to save snapshot")
 	} else if errno == 4 {
-		return statemachine.ErrSnapshotStopped
+		return sm.ErrSnapshotStopped
 	} else if errno == 100 {
 		return errors.New("other snapshot error")
 	}
@@ -219,8 +219,15 @@ func (ds *StateMachineWrapper) Loaded(from rsm.From) {
 	ds.SetLoaded(from)
 }
 
+// BatchedUpdate applies committed entries in a batch to hide latency. This
+// method is not supported in the C++ wrapper.
+func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
+	panic("not supported")
+}
+
 // Update updates the data store.
-func (ds *StateMachineWrapper) Update(session *rsm.Session, seriesID uint64,
+func (ds *StateMachineWrapper) Update(session *rsm.Session,
+	seriesID uint64, index uint64, term uint64,
 	data []byte) uint64 {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
@@ -265,49 +272,60 @@ func (ds *StateMachineWrapper) GetHash() uint64 {
 	return uint64(v)
 }
 
+// PrepareSnapshot makes preparations for taking concurrent snapshot.
+func (ds *StateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+	panic("PrepareSnapshot not suppose to be called")
+}
+
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
-func (ds *StateMachineWrapper) SaveSnapshot(fp string,
-	collection statemachine.ISnapshotFileCollection) (uint64, error) {
+func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
+	writer *rsm.SnapshotWriter,
+	session []byte,
+	collection sm.ISnapshotFileCollection) (uint64, error) {
 	ds.ensureNotDestroyed()
-	writer, err := rsm.NewSnapshotWriter(fp)
+	n, err := writer.Write(session)
 	if err != nil {
 		return 0, err
 	}
-	smsz, err := ds.SaveSessions(writer)
-	if err != nil {
-		plog.Errorf("save session failed %v", err)
-		writer.Close()
-		return 0, err
+	if n != len(session) {
+		return 0, io.ErrShortWrite
 	}
+	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	collectionOID := AddManagedObject(collection)
 	doneChOID := AddManagedObject(ds.done)
+	defer func() {
+		RemoveManagedObject(writerOID)
+		RemoveManagedObject(collectionOID)
+		RemoveManagedObject(doneChOID)
+	}()
 	r := C.SaveSnapshotDBStateMachine(ds.dataStore,
 		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
 	errno := int(r.error)
 	err = getErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		writer.Close()
 		return 0, err
 	}
 	sz := uint64(r.size)
 	if err := writer.SaveHeader(smsz, sz); err != nil {
 		plog.Errorf("save header failed %v", err)
-		writer.Close()
-		return 0, err
-	}
-	if err := writer.Close(); err != nil {
 		return 0, err
 	}
 	return uint64(r.size) + smsz + rsm.SnapshotHeaderSize, nil
 }
 
+// ConcurrentSnapshot returns a boolean flag indicating whether the state
+// machine is capable of taking concurrent snapshots.
+func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
+	return false
+}
+
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
 func (ds *StateMachineWrapper) RecoverFromSnapshot(fp string,
-	files []statemachine.SnapshotFile) error {
+	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {

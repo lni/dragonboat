@@ -12,7 +12,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/biogo/store/llrb"
+	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
 )
 
 var (

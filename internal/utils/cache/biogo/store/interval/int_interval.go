@@ -5,7 +5,7 @@
 package interval
 
 import (
-	"github.com/biogo/store/llrb"
+	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
 )
 
 // An IntOverlapper can determine whether it overlaps an integer range.

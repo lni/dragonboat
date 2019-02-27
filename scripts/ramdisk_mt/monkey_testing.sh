@@ -25,6 +25,7 @@ PKGNAME="github.com/lni/dragonboat"
 RUNTEST="run_drummermt_test.sh"
 PIDNAME="drummertest.pid"
 PLUGINNAME="dragonboat-plugin-kvtest.so"
+CONCURRENTPLUGINNAME="dragonboat-plugin-concurrentkv.so"
 TARGETBIN=$TARGETDIR/bin
 
 if [ ! -d "$TARGETDIR" ]; then
@@ -51,6 +52,7 @@ deploy()
 {
   set -e
   go build -o $PLUGINNAME -buildmode=plugin $PKGNAME/internal/tests/kvtest
+  go build -o $CONCURRENTPLUGINNAME -buildmode=plugin $PKGNAME/internal/tests/concurrentkv
   DRAGONBOAT_RDBPATCHED=1 make -C ../.. drummer-monkey-test-bin
   make -C ../.. porcupine-checker
   rm -rf $TARGETDIR/*
@@ -58,6 +60,7 @@ deploy()
   mkdir $TARGETBIN
   cp ../../porcupine-checker-bin $TARGETBIN
   cp $PLUGINNAME $TARGETBIN
+  cp $CONCURRENTPLUGINNAME $TARGETBIN
   cp ../../$EXECNAME $TARGETBIN
   mkdir $TARGETDIR/lcmlog
   base=24000
@@ -74,6 +77,7 @@ deploy()
     fi
     ln -s $TARGETDIR/bin/porcupine-checker-bin $DIR/porcupine-checker-bin
     ln -s $TARGETDIR/bin/$PLUGINNAME $DIR/$PLUGINNAME
+    ln -s $TARGETDIR/bin/$CONCURRENTPLUGINNAME $DIR/$CONCURRENTPLUGINNAME
     ln -s $TARGETDIR/bin/$EXECNAME $DIR/$EXECNAME
     base=$((base+incv))
     sedcmd="sed -e s/BASEPORT/${base}/g"

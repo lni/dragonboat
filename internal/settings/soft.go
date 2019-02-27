@@ -102,7 +102,7 @@ type soft struct {
 	//
 	// RSM
 	//
-	BatchedEntryApply uint64
+	BatchedEntryApply bool
 
 	//
 	// step engine
@@ -232,7 +232,7 @@ func getDefaultSoftSettings() soft {
 		PanicOnSizeMismatch:                 1,
 		LazyFreeCycle:                       1,
 		LatencySampleRatio:                  0,
-		BatchedEntryApply:                   0,
+		BatchedEntryApply:                   true,
 		LocalRaftRequestTimeoutMs:           10000,
 		GetConnectedTimeoutSecond:           5,
 		MaxEntrySize:                        2 * MaxProposalPayloadSize,

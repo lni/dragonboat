@@ -21,6 +21,7 @@ import this package.
 package rsm
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
@@ -35,7 +36,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/logger"
 	pb "github.com/lni/dragonboat/raftpb"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 var (
@@ -50,8 +51,17 @@ var (
 	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
 	commitChanLength        uint64 = settings.Soft.NodeCommitChanLength
 	commitChanBusyThreshold uint64 = settings.Soft.NodeCommitChanLength / 2
-	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply > 0
+	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
 )
+
+// SnapshotMeta is the metadata of a snapshot.
+type SnapshotMeta struct {
+	Index      uint64
+	Term       uint64
+	Membership pb.Membership
+	Session    *bytes.Buffer
+	Ctx        interface{}
+}
 
 // Commit is the processing units that can be handled by StateMachines.
 type Commit struct {
@@ -81,7 +91,8 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
-	Save(uint64, uint64, IManagedStateMachine) (*pb.Snapshot, *server.SnapshotEnv, error)
+	Save(IManagedStateMachine,
+		*SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
 	IsNoSnapshotError(error) bool
 }
 
@@ -92,9 +103,9 @@ type StateMachine struct {
 	snapshotter        ISnapshotter
 	node               INodeProxy
 	sm                 IManagedStateMachine
-	lastApplied        uint64
-	lastAppliedTerm    uint64
-	lastSnapshotIndex  uint64
+	index              uint64
+	term               uint64
+	snapshotIndex      uint64
 	members            *pb.Membership
 	ordered            bool
 	commitC            chan Commit
@@ -181,11 +192,11 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	initial bool) (bool, uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.lastApplied >= ss.Index {
-		return false, s.lastApplied, nil
+	if s.index >= ss.Index {
+		return false, s.index, nil
 	}
 	if s.aborted {
-		return false, 0, statemachine.ErrSnapshotStopped
+		return false, 0, sm.ErrSnapshotStopped
 	}
 	plog.Infof("%s restarting at term %d, index %d, %s, initial snapshot %t",
 		s.describe(), ss.Term, ss.Index, snapshotInfo(ss), initial)
@@ -194,7 +205,7 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	if err := s.sm.RecoverFromSnapshot(fn, snapshotFiles); err != nil {
 		plog.Infof("%s called RecoverFromSnapshot %d, returned %v",
 			s.describe(), ss.Index, err)
-		if err == statemachine.ErrSnapshotStopped {
+		if err == sm.ErrSnapshotStopped {
 			// no more lookup allowed
 			s.aborted = true
 			return false, 0, err
@@ -202,8 +213,8 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 		return false, 0, ErrRestoreSnapshot
 	}
 	// set the confState and the last applied value
-	s.lastApplied = ss.Index
-	s.lastAppliedTerm = ss.Term
+	s.index = ss.Index
+	s.term = ss.Term
 	cm := deepCopyMembership(ss.Membership)
 	s.members = &cm
 	return true, 0, nil
@@ -212,7 +223,7 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 // GetLastApplied returns the last applied value.
 func (s *StateMachine) GetLastApplied() uint64 {
 	s.mu.RLock()
-	v := s.lastApplied
+	v := s.index
 	s.mu.RUnlock()
 	return v
 }
@@ -243,6 +254,13 @@ func (s *StateMachine) Loaded(from From) {
 
 // Lookup performances local lookup on the data store.
 func (s *StateMachine) Lookup(query []byte) ([]byte, error) {
+	if s.sm.ConcurrentSnapshot() {
+		return s.concurrentLookup(query)
+	}
+	return s.lookup(query)
+}
+
+func (s *StateMachine) lookup(query []byte) ([]byte, error) {
 	s.mu.RLock()
 	if s.aborted {
 		s.mu.RUnlock()
@@ -251,6 +269,10 @@ func (s *StateMachine) Lookup(query []byte) ([]byte, error) {
 	result, err := s.sm.Lookup(query)
 	s.mu.RUnlock()
 	return result, err
+}
+
+func (s *StateMachine) concurrentLookup(query []byte) ([]byte, error) {
+	return s.sm.Lookup(query)
 }
 
 // GetMembership returns the membership info maintained by the state machine.
@@ -273,35 +295,19 @@ func (s *StateMachine) GetMembership() (map[uint64]string,
 	return members, observers, removed, s.members.ConfigChangeId
 }
 
+// ConcurrentSnapshot returns a boolean flag indicating whether the state
+// machine is capable of taking concurrent snapshot.
+func (s *StateMachine) ConcurrentSnapshot() bool {
+	return s.sm.ConcurrentSnapshot()
+}
+
 // SaveSnapshot creates a snapshot.
 func (s *StateMachine) SaveSnapshot() (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.aborted {
-		return nil, nil, statemachine.ErrSnapshotStopped
+	if s.sm.ConcurrentSnapshot() {
+		return s.saveConcurrentSnapshot()
 	}
-	if s.lastApplied < s.lastSnapshotIndex {
-		panic("s.lastApplied < s.lastSnapshotIndex")
-	}
-	if s.lastApplied > 0 && s.lastApplied == s.lastSnapshotIndex {
-		return nil, nil, raft.ErrSnapshotOutOfDate
-	}
-	snapshot, env, err := s.snapshotter.Save(s.lastApplied,
-		s.lastAppliedTerm, s.sm)
-	if err != nil {
-		plog.Errorf("Save snapshot failed %v", err)
-		return nil, env, err
-	}
-	if len(s.members.Addresses) > 0 {
-		snapshot.Membership = deepCopyMembership(*s.members)
-		plog.Infof("%s generated a snapshot at index %d, members %v",
-			s.describe(), s.lastApplied, snapshot.Membership.Addresses)
-	} else {
-		plog.Panicf("%s has empty membership", s.describe(), s.lastApplied)
-	}
-	s.lastSnapshotIndex = s.lastApplied
-	return snapshot, env, nil
+	return s.saveSnapshot()
 }
 
 // GetHash returns the state machine hash.
@@ -325,49 +331,29 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 	if s.members == nil {
 		return 0
 	}
-	nidList := make([]uint64, 0)
-	for k := range s.members.Addresses {
-		nidList = append(nidList, k)
+	vals := make([]uint64, 0)
+	for v := range s.members.Addresses {
+		vals = append(vals, v)
 	}
-	sort.Slice(nidList, func(i, j int) bool { return nidList[i] < nidList[j] })
-	data := make([]byte, (len(s.members.Addresses)+1)*8)
-	idx := 0
-	for _, k := range nidList {
-		binary.LittleEndian.PutUint64(data[idx:], k)
-		idx += 8
-	}
-	binary.LittleEndian.PutUint64(data[idx:], s.members.ConfigChangeId)
+	sort.Slice(vals, func(i, j int) bool { return vals[i] < vals[j] })
+	vals = append(vals, s.members.ConfigChangeId)
+	data := make([]byte, 8)
 	hash := md5.New()
-	if _, err := hash.Write(data); err != nil {
-		panic(err)
+	for _, v := range vals {
+		binary.LittleEndian.PutUint64(data, v)
+		if _, err := hash.Write(data); err != nil {
+			panic(err)
+		}
 	}
 	md5sum := hash.Sum(nil)
 	return binary.LittleEndian.Uint64(md5sum[:8])
 }
 
-func (s *StateMachine) updateLastApplied(lastApplied uint64, term uint64) {
-	if s.lastApplied+1 != lastApplied {
-		plog.Panicf("%s, not sequential update, last applied %d, applying %d",
-			s.describe(), s.lastApplied, lastApplied)
-	}
-	if lastApplied == 0 {
-		plog.Panicf("lastApplied is 0")
-	}
-	if term == 0 {
-		plog.Panicf("term is 0")
-	}
-	if term < s.lastAppliedTerm {
-		plog.Panicf("term is moving backward, term %d, applying term %d",
-			s.lastAppliedTerm, term)
-	}
-	s.lastApplied = lastApplied
-	s.lastAppliedTerm = term
-}
-
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Commit) (Commit, bool) {
+func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool) {
 	processed := 0
 	batch = batch[:0]
+	entries = entries[:0]
 	select {
 	case rec := <-s.commitC:
 		if rec.SnapshotAvailable || rec.SnapshotRequested {
@@ -380,7 +366,7 @@ func (s *StateMachine) Handle(batch []Commit) (Commit, bool) {
 			select {
 			case rec := <-s.commitC:
 				if rec.SnapshotAvailable || rec.SnapshotRequested {
-					s.handle(batch)
+					s.handle(batch, entries)
 					return rec, true
 				}
 				batch = append(batch, rec)
@@ -391,27 +377,135 @@ func (s *StateMachine) Handle(batch []Commit) (Commit, bool) {
 		}
 	default:
 	}
-	s.handle(batch)
+	s.handle(batch, entries)
 	return Commit{}, false
 }
 
-func allUpdateEntries(entries []pb.Entry) bool {
-	for _, v := range entries {
-		if !v.IsUpdateEntry() {
-			return false
-		}
+func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
+	if len(s.members.Addresses) == 0 {
+		plog.Panicf("%s has empty membership", s.describe())
 	}
-	return true
+	meta := &SnapshotMeta{
+		Ctx:        ctx,
+		Index:      s.index,
+		Term:       s.term,
+		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
+		Membership: deepCopyMembership(*s.members),
+	}
+	plog.Infof("%s generating a snapshot at index %d, members %v",
+		s.describe(), meta.Index, meta.Membership.Addresses)
+	if _, err := s.sm.SaveSessions(meta.Session); err != nil {
+		plog.Panicf("failed to save sessions %v", err)
+	}
+	return meta
 }
 
-func (s *StateMachine) handle(batch []Commit) {
+func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
+	if s.index+1 != index {
+		plog.Panicf("%s, not sequential update, last applied %d, applying %d",
+			s.describe(), s.index, index)
+	}
+	if index == 0 || term == 0 {
+		plog.Panicf("invalid last index %d or term %d", index, term)
+	}
+	if term < s.term {
+		plog.Panicf("term is moving backward, term %d, applying term %d",
+			s.term, term)
+	}
+	s.index = index
+	s.term = term
+}
+
+func (s *StateMachine) checkSnapshotStatus() error {
+	if s.aborted {
+		return sm.ErrSnapshotStopped
+	}
+	if s.index < s.snapshotIndex {
+		panic("s.index < s.snapshotIndex")
+	}
+	if s.index > 0 && s.index == s.snapshotIndex {
+		return raft.ErrSnapshotOutOfDate
+	}
+	return nil
+}
+
+func (s *StateMachine) saveConcurrentSnapshot() (*pb.Snapshot,
+	*server.SnapshotEnv, error) {
+	var err error
+	var meta *SnapshotMeta
+	if err := func() error {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		meta, err = s.prepareSnapshot()
+		return err
+	}(); err != nil {
+		return nil, nil, err
+	}
+	return s.doSaveSnapshot(meta)
+}
+
+func (s *StateMachine) saveSnapshot() (*pb.Snapshot,
+	*server.SnapshotEnv, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	meta, err := s.prepareSnapshot()
+	if err != nil {
+		plog.Errorf("prepare snapshot failed %v", err)
+		return nil, nil, err
+	}
+	return s.doSaveSnapshot(meta)
+}
+
+func (s *StateMachine) prepareSnapshot() (*SnapshotMeta, error) {
+	if err := s.checkSnapshotStatus(); err != nil {
+		return nil, err
+	}
+	var err error
+	var ctx interface{}
+	if s.ConcurrentSnapshot() {
+		ctx, err = s.sm.PrepareSnapshot()
+		if err != nil {
+			panic(err)
+		}
+	}
+	return s.getSnapshotMeta(ctx), nil
+}
+
+func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,
+	*server.SnapshotEnv, error) {
+	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
+	if err != nil {
+		plog.Errorf("save snapshot failed %v", err)
+		return nil, env, err
+	}
+	s.snapshotIndex = meta.Index
+	return snapshot, env, nil
+}
+
+func getEntryTypes(entries []pb.Entry) (bool, bool) {
+	allUpdate := true
+	allNoOP := true
+	for _, v := range entries {
+		if allUpdate && !v.IsUpdateEntry() {
+			allUpdate = false
+		}
+		if allNoOP && !v.IsNoOPSession() {
+			allNoOP = false
+		}
+	}
+	return allUpdate, allNoOP
+}
+
+func (s *StateMachine) handle(batch []Commit, entries []sm.Entry) {
+	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
 		if batch[b].SnapshotAvailable || batch[b].SnapshotRequested {
 			panic("trying to handle a snapshot request")
 		}
 		ents := batch[b].Entries
-		if batchedEntryApply && allUpdateEntries(ents) {
-			s.handleAllUpdateEntries(ents)
+		allUpdate, allNoOP := getEntryTypes(ents)
+		if batchSupport && allUpdate && allNoOP {
+			s.handleBatchedNoOPEntries(ents, entries)
 		} else {
 			for i := range ents {
 				notifyRead := b == len(batch)-1 && i == len(ents)-1
@@ -422,7 +516,7 @@ func (s *StateMachine) handle(batch []Commit) {
 }
 
 func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
-	// ConfChnage also go through the SM so the lastApplied value is updated
+	// ConfChnage also go through the SM so the index value is updated
 	if ent.IsConfigChange() {
 		accepted := s.handleConfigChange(ent)
 		s.node.ConfigChangeProcessed(ent.Key, accepted)
@@ -449,9 +543,9 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 			}
 		}
 	}
-	lastApplied := s.GetLastApplied()
-	if lastApplied != ent.Index {
-		plog.Panicf("unexpected last applied value, %d, %d", lastApplied, ent.Index)
+	index := s.GetLastApplied()
+	if index != ent.Index {
+		plog.Panicf("unexpected last applied value, %d, %d", index, ent.Index)
 	}
 	if lastInBatch {
 		s.setBatchedLastApplied(ent.Index)
@@ -462,6 +556,24 @@ func (s *StateMachine) onUpdateApplied(ent pb.Entry,
 	result uint64, ignored bool, rejected bool, lastInBatch bool) {
 	if !ignored {
 		s.node.ApplyUpdate(ent, result, rejected, ignored, lastInBatch)
+	}
+}
+
+func (s *StateMachine) handleBatchedNoOPEntries(ents []pb.Entry,
+	entries []sm.Entry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ent := range ents {
+		entries = append(entries, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+		s.updateLastApplied(ent.Index, ent.Term)
+	}
+	results := s.sm.BatchedUpdate(entries)
+	for idx, ent := range results {
+		lastInBatch := idx == len(ents)-1
+		s.onUpdateApplied(ents[idx], ent.Result, false, false, lastInBatch)
+	}
+	if len(ents) > 0 {
+		s.setBatchedLastApplied(ents[len(ents)-1].Index)
 	}
 }
 
@@ -495,7 +607,8 @@ func (s *StateMachine) handleAllUpdateEntries(ents []pb.Entry) {
 		if !entry.IsNoOPSession() && session == nil {
 			panic("session is nil")
 		}
-		result := s.sm.Update(session, entry.SeriesID, entry.Cmd)
+		result := s.sm.Update(session,
+			entry.SeriesID, entry.Index, entry.Term, entry.Cmd)
 		s.onUpdateApplied(entry, result, false, false, lastInBatch)
 	}
 	if len(ents) > 0 {
@@ -707,7 +820,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
-	result = s.sm.Update(session, ent.SeriesID, ent.Cmd)
+	result = s.sm.Update(session, ent.SeriesID, ent.Index, ent.Term, ent.Cmd)
 	return result, false, false
 }
 
@@ -739,10 +852,10 @@ func snapshotInfo(ss pb.Snapshot) string {
 		ss.Membership.Addresses, ss.Membership.ConfigChangeId)
 }
 
-func getSnapshotFiles(snapshot pb.Snapshot) []statemachine.SnapshotFile {
-	sfl := make([]statemachine.SnapshotFile, 0)
+func getSnapshotFiles(snapshot pb.Snapshot) []sm.SnapshotFile {
+	sfl := make([]sm.SnapshotFile, 0)
 	for _, f := range snapshot.Files {
-		sf := statemachine.SnapshotFile{
+		sf := sm.SnapshotFile{
 			FileID:   f.FileId,
 			Filepath: f.Filepath,
 			Metadata: f.Metadata,

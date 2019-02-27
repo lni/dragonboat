@@ -188,6 +188,7 @@ WRAPPER_TESTING_BIN=cpp-wrapper-testing
 PLUGIN_CPP_EXAMPLE_BIN=dragonboat-cpp-plugin-example.so
 DUMMY_TEST_BIN=test.bin
 PLUGIN_KVSTORE_BIN=dragonboat-plugin-kvtest.so
+PLUGIN_CONCURRENTKV_BIN=dragonboat-plugin-concurrentkv.so
 PLUGIN_CPP_KVTEST_BIN=dragonboat-cpp-plugin-cppkvtest.so
 # example bin
 PLUGIN_DATASTORE_BIN=dragonboat-plugin-kvstore.so
@@ -312,6 +313,11 @@ $(PLUGIN_KVSTORE_BIN):
 	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
 		$(PKGNAME)/internal/tests/kvtest
 plugin-kvtest: $(PLUGIN_KVSTORE_BIN)
+
+$(PLUGIN_CONCURRENTKV_BIN):
+	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
+		$(PKGNAME)/internal/tests/concurrentkv
+plugin-concurrentkv: $(PLUGIN_CONCURRENTKV_BIN)
 
 $(DRUMMER_MONKEY_TESTING_BIN):
 	$(GO) test $(RACE_DETECTOR_FLAG) $(VERBOSE) \
@@ -445,7 +451,7 @@ test-monkey-multiraft:
 	$(GOTEST) $(PKGNAME)
 
 test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-test-monkey-drummer: plugin-kvtest plugin-cppkvtest
+test-monkey-drummer: plugin-kvtest plugin-cppkvtest plugin-concurrentkv
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
@@ -674,6 +680,7 @@ clean:
 		$(NODEHOST_SERVER_BIN) \
 		$(DRUMMER_CMD_BIN) \
 		$(PLUGIN_KVSTORE_BIN) \
+		$(PLUGIN_CONCURRENTKV_BIN) \
 		$(PLUGIN_CPP_KVTEST_BIN) \
 		$(CPPKVTEST_OBJS) \
 		$(WRAPPER_TESTING_BIN) \
@@ -694,7 +701,7 @@ clean:
   drummercmd drummer nodehost \
 	$(DRUMMER_SERVER_BIN) $(NODEHOST_SERVER_BIN) $(DRUMMER_CMD_BIN) \
 	$(PLUGIN_CPP_KVTEST_BIN) $(DRUMMER_MONKEY_TESTING_BIN) \
-	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) \
+	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) $(PLUGIN_CONCURRENTKV_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	plugin-cppkvtest drummer-monkey-test-bin binding test servers \
 	test-raft test-rsm test-logdb test-transport test-multiraft test-drummer \

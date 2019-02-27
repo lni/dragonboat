@@ -150,7 +150,7 @@ func (n *mtNodeHost) Start() {
 	createStateMachine := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		ds := tests.NewKVTest(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(ds, done)
+		return rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(ds), done)
 	}
 	for i := uint64(1); i <= mtNumOfClusters; i++ {
 		rc.ClusterID = i
@@ -173,7 +173,7 @@ func (n *mtNodeHost) RestartCluster(clusterID uint64) {
 	createStateMachine := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		ds := tests.NewKVTest(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(ds, done)
+		return rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(ds), done)
 	}
 	rc.ClusterID = clusterID
 	// the extra 5 is to make it different from the initial
