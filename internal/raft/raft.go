@@ -1270,7 +1270,7 @@ func (r *raft) handleRestoreRemote(m pb.Message) {
 // message handler functions used by leader
 //
 
-func (r *raft) handleLeaderLeaderHeartbeat(m pb.Message) {
+func (r *raft) handleLeaderHeartbeat(m pb.Message) {
 	r.broadcastHeartbeatMessage()
 }
 
@@ -1409,9 +1409,9 @@ func (r *raft) handleLeaderHeartbeatResp(m pb.Message, rp *remote) {
 	}
 }
 
-func (r *raft) handleLeaderLeaderTransfer(m pb.Message, rp *remote) {
+func (r *raft) handleLeaderTransfer(m pb.Message, rp *remote) {
 	target := m.Hint
-	plog.Infof("handleLeaderLeaderTransfer called on cluster %d, target %d",
+	plog.Infof("handleLeaderTransfer called on cluster %d, target %d",
 		r.clusterID, target)
 	if target == NoNode {
 		panic("leader transfer target not set")
@@ -1692,7 +1692,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[follower][pb.LocalTick] = r.handleLocalTick
 	r.handlers[follower][pb.SnapshotReceived] = r.handleRestoreRemote
 	// leader
-	r.handlers[leader][pb.LeaderHeartbeat] = r.handleLeaderLeaderHeartbeat
+	r.handlers[leader][pb.LeaderHeartbeat] = r.handleLeaderHeartbeat
 	r.handlers[leader][pb.CheckQuorum] = r.handleLeaderCheckQuorum
 	r.handlers[leader][pb.Propose] = r.handleLeaderPropose
 	r.handlers[leader][pb.ReadIndex] = r.handleLeaderReadIndex
@@ -1700,7 +1700,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.HeartbeatResp] = lw(r, r.handleLeaderHeartbeatResp)
 	r.handlers[leader][pb.SnapshotStatus] = lw(r, r.handleLeaderSnapshotStatus)
 	r.handlers[leader][pb.Unreachable] = lw(r, r.handleLeaderUnreachable)
-	r.handlers[leader][pb.LeaderTransfer] = lw(r, r.handleLeaderLeaderTransfer)
+	r.handlers[leader][pb.LeaderTransfer] = lw(r, r.handleLeaderTransfer)
 	r.handlers[leader][pb.Election] = r.handleNodeElection
 	r.handlers[leader][pb.RequestVote] = r.handleNodeRequestVote
 	r.handlers[leader][pb.ConfigChangeEvent] = r.handleNodeConfigChange

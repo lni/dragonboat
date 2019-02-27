@@ -1865,7 +1865,7 @@ func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 	msg := pb.Message{
 		Type: pb.LeaderHeartbeat,
 	}
-	r.handleLeaderLeaderHeartbeat(msg)
+	r.handleLeaderHeartbeat(msg)
 	count := 0
 	for _, msg := range r.msgs {
 		if msg.Type == pb.Heartbeat && (msg.To == 2 || msg.To == 3) {
@@ -1963,7 +1963,7 @@ func TestHandleLeaderSnapshotStatus(t *testing.T) {
 	}
 }
 
-func TestHandleLeaderLeaderTransfer(t *testing.T) {
+func TestHandleLeaderTransfer(t *testing.T) {
 	tests := []struct {
 		target       uint64
 		transferring bool
@@ -1994,7 +1994,7 @@ func TestHandleLeaderLeaderTransfer(t *testing.T) {
 		if tt.match {
 			rp.match = r.log.lastIndex()
 		}
-		r.handleLeaderLeaderTransfer(msg, rp)
+		r.handleLeaderTransfer(msg, rp)
 		if tt.ignored {
 			if len(r.msgs) != 0 {
 				t.Errorf("unexpectedly sent msg")
