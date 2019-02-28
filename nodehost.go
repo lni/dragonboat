@@ -106,7 +106,7 @@ const (
 	// DragonboatMinor is the minor version number
 	DragonboatMinor = 1
 	// DragonboatPatch is the patch version number
-	DragonboatPatch = 0
+	DragonboatPatch = 1
 	// DEVVersion is a boolean flag indicating whether this is a dev version
 	DEVVersion = false
 )
