@@ -426,6 +426,9 @@ func TestMasterClientCanBeExtended(t *testing.T) {
 		return mc
 	}
 	nh := NewNodeHostWithMasterClientFactory(*c, factory)
+	if !nh.initialized() {
+		t.Fatalf("returned nodehost is not initialized")
+	}
 	defer nh.Stop()
 	if nh.masterClient.Name() != mc.Name() {
 		t.Errorf("master client type name %s, expect %s",

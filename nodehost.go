@@ -235,15 +235,20 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 			}
 		}
 	}
-	if nh.masterMode() {
-		plog.Infof("master mode, nh.initialize() invoked in new goroutine")
-		nh.stopper.RunWorker(func() {
+	waitFn := func() func() {
+		if nh.masterMode() {
+			plog.Infof("master mode, nh.initialize() invoked in new goroutine")
+			nh.stopper.RunWorker(func() {
+				initializeFn()
+			})
+			return func() { nh.waitUntilInitialized() }
+		} else {
+			plog.Infof("standalone mode, nh.initialize() directly invoked")
 			initializeFn()
-		})
-	} else {
-		plog.Infof("standalone mode, nh.initialize() directly invoked")
-		initializeFn()
-	}
+			return func() {}
+		}
+	}()
+	defer waitFn()
 	nh.stopper.RunWorker(func() {
 		nh.masterRequestHandler(ctx)
 	})
@@ -258,9 +263,6 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
 	})
-	if nh.masterMode() {
-		nh.waitUntilInitialized()
-	}
 	nh.logNodeHostDetails()
 	return nh
 }
