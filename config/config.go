@@ -75,12 +75,24 @@ type Config struct {
 	// RTT is defined by NodeHostConfig.RTTMillisecond. The Raft paper suggest the
 	// heartbeat interval to be close to the average RTT between nodes.
 	HeartbeatRTT uint64
-	// SnapshotEntries defines how often state machine should be snapshotted
-	// defined in terms of number of applied entries. Set SnapshotEntries to 0 to
-	// disable Raft snapshotting and log compaction.
+	// SnapshotEntries defines how often state machine should be snapshotted. It
+	// is defined in terms of the number of applied Raft log entries. Set
+	// SnapshotEntries to 0 to disable snapshotting and Raft log compaction.
+	//
+	// When SnapshotEntries is set to N, it means a snapshot will be generated for
+	// roughly every N applied Raft log entries (proposals). This also implies
+	// that sending N log entries to a follower is more expensive than sending a
+	// snapshot.
+	//
+	// Once a snapshot is generated, Raft log entries covered by the new snapshot
+	// can be compacted. See the godoc on CompactionOverhead to see what log
+	// entries are actually compacted after taking a snapshot.
 	SnapshotEntries uint64
 	// CompactionOverhead defines the number of most recent entries to keep after
-	// Raft log compaction.
+	// Raft log compaction. Such overhead Raft log entries are already covered by
+	// the most recent snapshot, but they are kept after the Raft log compaction
+	// so the leader can send them to a slow follower to allow it to catch up
+	// without sending a full snapshot.
 	CompactionOverhead uint64
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.
