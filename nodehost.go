@@ -258,7 +258,7 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
 	})
-	if !nh.masterMode() {
+	if nh.masterMode() {
 		nh.waitUntilInitialized()
 	}
 	nh.logNodeHostDetails()
