@@ -715,7 +715,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	datadir1 string, datadir2 string) (*NodeHost, *NodeHost, error) {
 	rc := config.Config{
 		ClusterID:       1,
-		ElectionRTT:     5,
+		ElectionRTT:     3,
 		HeartbeatRTT:    1,
 		CheckQuorum:     true,
 		MaxInMemLogSize: 1024 * 3,
@@ -767,11 +767,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			if leaderID == 1 {
 				leaderNh = nh1
 				followerNh = nh2
-				sm2.MillisecondToSleep = 20
+				sm2.MillisecondToSleep = 10
 			} else {
 				leaderNh = nh2
 				followerNh = nh1
-				sm1.MillisecondToSleep = 20
+				sm1.MillisecondToSleep = 10
 			}
 			return leaderNh, followerNh, nil
 		}

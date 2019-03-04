@@ -1420,13 +1420,11 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 			}
 			if lt == brutalMonkeyTime {
 				plog.Infof("brutal monkey play is going to start, lt %d", lt)
-				brutalMonkeyPlay(nodehostNodes, drummerNodes, low, high)
+				brutalMonkeyPlay(nodehostNodes, []*testNode{}, low, high)
 			}
 			deleteDataTested = monkeyPlay(nodehostNodes,
 				low, high, lt, deleteDataTested, dl)
 			plog.Infof("nodehost node monkey play completed, lt %d", lt)
-			monkeyPlay(drummerNodes, low, high, lt, true, dl)
-			plog.Infof("drummer node monkey play completed, lt %d", lt)
 		}
 	}
 	plog.Infof("going to stop the test clients")
