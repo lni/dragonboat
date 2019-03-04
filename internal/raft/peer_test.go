@@ -633,7 +633,8 @@ func TestRaftAPIGetUpdateCommit(t *testing.T) {
 			{Index: 102, Term: 3},
 			{Index: 103, Term: 4},
 		},
-		Snapshot: raftpb.Snapshot{Index: 105},
+		Snapshot:    raftpb.Snapshot{Index: 105},
+		LastApplied: 99,
 	}
 	uc := getUpdateCommit(ud)
 	if uc.StableSnapshotTo != 105 {
@@ -644,6 +645,9 @@ func TestRaftAPIGetUpdateCommit(t *testing.T) {
 	}
 	if uc.StableLogTo != 103 || uc.StableLogTerm != 4 {
 		t.Errorf("stable log to/term")
+	}
+	if uc.LastApplied != 99 {
+		t.Errorf("last applied %d, want 99", uc.LastApplied)
 	}
 }
 

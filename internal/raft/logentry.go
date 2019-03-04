@@ -343,6 +343,10 @@ func (l *entryLog) commitUpdate(cu pb.UpdateCommit) {
 			plog.Panicf("invalid last applied %d, committed %d",
 				cu.LastApplied, l.committed)
 		}
+		if cu.LastApplied > l.processed {
+			plog.Panicf("invalid last applied %d, processed %d",
+				cu.LastApplied, l.processed)
+		}
 		l.inmem.appliedLogTo(cu.LastApplied)
 	}
 }
