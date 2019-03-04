@@ -8,6 +8,7 @@
   "RDBDir": "rdb-%d-%d",
   "RDBWALDir": "rdb-wal-%d-%d",
   "CompactionOverhead": 1,
-  "SnapshotEntries": 1
+  "SnapshotEntries": 1,
+  "MaxInMemLogSize": 120000000
 }
 

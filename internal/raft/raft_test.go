@@ -2139,3 +2139,107 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 		t.Errorf("readIndex not updated")
 	}
 }
+
+func testNodeUpdatesItsRateLimiterHeartbeat(isLeader bool, t *testing.T) {
+	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	if isLeader {
+		r.becomeCandidate()
+		r.becomeLeader()
+	} else {
+		r.becomeFollower(0, 2)
+	}
+	hbt := r.rl.GetHeartbeatTick()
+	for i := uint64(0); i < r.electionTimeout; i++ {
+		r.tick()
+	}
+	if r.rl.GetHeartbeatTick() != hbt+1 {
+		t.Errorf("rl heartbeat not updated, %d want %d",
+			r.rl.GetHeartbeatTick(), hbt+1)
+	}
+}
+
+func TestLeaderNodeUpdatesItsRateLimiterHeartbeat(t *testing.T) {
+	testNodeUpdatesItsRateLimiterHeartbeat(true, t)
+}
+
+func TestFollowerNodeUpdatesItsRateLimiterHeartbeat(t *testing.T) {
+	testNodeUpdatesItsRateLimiterHeartbeat(false, t)
+}
+
+func TestResetClearsFollowerRateLimitState(t *testing.T) {
+	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	rl := r.rl
+	r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1})
+	if !rl.RateLimited() {
+		t.Errorf("not rate limited")
+	}
+	r.reset(2)
+	if rl.RateLimited() {
+		t.Errorf("still rate limited")
+	}
+}
+
+func TestLeaderRateLimitMessageIsHandledByLeader(t *testing.T) {
+	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	rl := r.rl
+	if rl.RateLimited() {
+		t.Errorf("unexpectedly already rate limited")
+	}
+	r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1})
+	if !rl.RateLimited() {
+		t.Errorf("not rate limited")
+	}
+}
+
+func TestRateLimitMessageIsNeverSentByLeader(t *testing.T) {
+	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r.becomeCandidate()
+	r.becomeLeader()
+	ents := []pb.Entry{
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
+	}
+	r.appendEntries(ents)
+	rl := r.rl
+	if !rl.RateLimited() {
+		t.Errorf("not rate limited")
+	}
+	for i := uint64(0); i < r.electionTimeout; i++ {
+		r.tick()
+	}
+	for _, msg := range r.msgs {
+		if msg.Type == pb.RateLimit {
+			t.Fatalf("rate limit message unexpected sent")
+		}
+	}
+}
+
+func testRateLimitMessageIsSentByNonLeader(leaderID uint64,
+	rateLimitSent bool, t *testing.T) {
+	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r.becomeFollower(2, leaderID)
+	ents := []pb.Entry{
+		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
+	}
+	r.appendEntries(ents)
+	rl := r.rl
+	if !rl.RateLimited() {
+		t.Errorf("not rate limited")
+	}
+	for i := uint64(0); i < r.electionTimeout; i++ {
+		r.tick()
+	}
+	sent := false
+	for _, msg := range r.msgs {
+		if msg.Type == pb.RateLimit {
+			sent = true
+		}
+	}
+	if sent != rateLimitSent {
+		t.Fatalf("sent %t, want %t", sent, rateLimitSent)
+	}
+}
+
+func TestRateLimitMessageIsSentByNonLeader(t *testing.T) {
+	testRateLimitMessageIsSentByNonLeader(2, true, t)
+	testRateLimitMessageIsSentByNonLeader(NoLeader, false, t)
+}

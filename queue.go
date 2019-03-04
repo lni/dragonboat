@@ -26,6 +26,7 @@ type entryQueue struct {
 	right         []pb.Entry
 	leftInWrite   bool
 	stopped       bool
+	paused        bool
 	idx           uint64
 	oldIdx        uint64
 	cycle         uint64
@@ -61,7 +62,7 @@ func (q *entryQueue) targetQueue() []pb.Entry {
 
 func (q *entryQueue) add(ent pb.Entry) (bool, bool) {
 	q.mu.Lock()
-	if q.idx >= q.size {
+	if q.paused || q.idx >= q.size {
 		q.mu.Unlock()
 		return false, q.stopped
 	}
@@ -91,9 +92,10 @@ func (q *entryQueue) gc() {
 	}
 }
 
-func (q *entryQueue) get() []pb.Entry {
+func (q *entryQueue) get(paused bool) []pb.Entry {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.paused = paused
 	q.cycle++
 	sz := q.idx
 	q.idx = 0

@@ -156,7 +156,7 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	s.Append(ud.EntriesToSave)
 	rawNode.Commit(ud)
 
@@ -167,7 +167,7 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 		ccdata    []byte
 	)
 	for {
-		ud = rawNode.GetUpdate(true)
+		ud = rawNode.GetUpdate(true, 0)
 		s.Append(ud.EntriesToSave)
 		// Once we are the leader, propose a command and a ConfigChange.
 		if !proposed && rawNode.raft.leaderID == rawNode.raft.nodeID {
@@ -226,13 +226,13 @@ func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	s.Append(ud.EntriesToSave)
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
 	for {
-		ud = rawNode.GetUpdate(true)
+		ud = rawNode.GetUpdate(true, 0)
 		s.Append(ud.EntriesToSave)
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.Commit(ud)
@@ -245,11 +245,11 @@ func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 	if !rawNode.HasUpdate(true) {
 		t.Errorf("HasUpdate returned false")
 	}
-	ud = rawNode.GetUpdate(false)
+	ud = rawNode.GetUpdate(false, 0)
 	if len(ud.CommittedEntries) > 0 {
 		t.Errorf("unexpected returned %d committed entries", len(ud.CommittedEntries))
 	}
-	ud = rawNode.GetUpdate(true)
+	ud = rawNode.GetUpdate(true, 0)
 	if len(ud.CommittedEntries) == 0 {
 		t.Errorf("failed to returned committed entries")
 	}
@@ -262,13 +262,13 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	s.Append(ud.EntriesToSave)
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
 	for {
-		ud = rawNode.GetUpdate(true)
+		ud = rawNode.GetUpdate(true, 0)
 		s.Append(ud.EntriesToSave)
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.Commit(ud)
@@ -279,7 +279,7 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 
 	proposeConfigChangeAndApply := func(cc raftpb.ConfigChange, key uint64) {
 		rawNode.ProposeConfigChange(cc, key)
-		ud = rawNode.GetUpdate(true)
+		ud = rawNode.GetUpdate(true, 0)
 		s.Append(ud.EntriesToSave)
 		for _, entry := range ud.CommittedEntries {
 			if entry.Type == raftpb.ConfigChangeEntry {
@@ -384,7 +384,7 @@ func TestRaftAPIReadIndex(t *testing.T) {
 	if !hasReady {
 		t.Errorf("HasReady() returns %t, want %t", hasReady, true)
 	}
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	if !reflect.DeepEqual(ud.ReadyToReads, wrs) {
 		t.Errorf("ReadyToReads = %d, want %d", ud.ReadyToReads, wrs)
 	}
@@ -398,7 +398,7 @@ func TestRaftAPIReadIndex(t *testing.T) {
 	wrequestCtx := getTestSystemCtx(23456)
 	rawNode.Campaign()
 	for {
-		ud = rawNode.GetUpdate(true)
+		ud = rawNode.GetUpdate(true, 0)
 		s.Append(ud.EntriesToSave)
 
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
@@ -489,14 +489,14 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 			CommittedEntries: []raftpb.Entry{
 				{Type: raftpb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
 			},
-			UpdateCommit: raftpb.UpdateCommit{AppliedTo: 1, StableLogTo: 1, StableLogTerm: 1},
+			UpdateCommit: raftpb.UpdateCommit{Processed: 1, StableLogTo: 1, StableLogTerm: 1},
 		},
 		{
 			NodeID:           1,
 			State:            raftpb.State{Term: 2, Commit: 3, Vote: 1},
 			EntriesToSave:    []raftpb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
 			CommittedEntries: []raftpb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
-			UpdateCommit:     raftpb.UpdateCommit{AppliedTo: 3, StableLogTo: 3, StableLogTerm: 2},
+			UpdateCommit:     raftpb.UpdateCommit{Processed: 3, StableLogTo: 3, StableLogTerm: 2},
 		},
 	}
 
@@ -506,7 +506,7 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
 	if !reflect.DeepEqual(ud, wants[0]) {
 		t.Fatalf("#%d: g = %+v,\n             w   %+v", 1, ud, wants[0])
@@ -518,12 +518,12 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
-	ud = rawNode.GetUpdate(true)
+	ud = rawNode.GetUpdate(true, 0)
 	storage.Append(ud.EntriesToSave)
 	rawNode.Commit(ud)
 
 	rawNode.ProposeEntries([]raftpb.Entry{{Cmd: []byte("foo")}})
-	ud = rawNode.GetUpdate(true)
+	ud = rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
 	if !reflect.DeepEqual(ud, wants[1]) {
 		t.Errorf("#%d: g = %+v,\n             w   %+v", 2, ud, wants[1])
@@ -533,7 +533,7 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 	}
 
 	if rawNode.HasUpdate(true) {
-		t.Errorf("unexpected Ready: %+v", rawNode.GetUpdate(true))
+		t.Errorf("unexpected Ready: %+v", rawNode.GetUpdate(true, 0))
 	}
 }
 
@@ -549,7 +549,7 @@ func TestRaftAPIRestart(t *testing.T) {
 		State:  emptyState,
 		// commit up to commit index in st
 		CommittedEntries: entries[:st.Commit],
-		UpdateCommit:     raftpb.UpdateCommit{AppliedTo: 1},
+		UpdateCommit:     raftpb.UpdateCommit{Processed: 1},
 	}
 
 	storage := NewTestLogDB()
@@ -560,14 +560,14 @@ func TestRaftAPIRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
 	if !reflect.DeepEqual(ud, want) {
 		t.Errorf("g = %+v,\n             w   %+v", ud, want)
 	}
 	rawNode.Commit(ud)
 	if rawNode.HasUpdate(true) {
-		t.Errorf("unexpected Ready: %+v", rawNode.GetUpdate(true))
+		t.Errorf("unexpected Ready: %+v", rawNode.GetUpdate(true, 0))
 	}
 }
 
@@ -587,7 +587,7 @@ func TestRaftAPIRestartFromSnapshot(t *testing.T) {
 		State:  emptyState,
 		// commit up to commit index in st
 		CommittedEntries: entries,
-		UpdateCommit:     raftpb.UpdateCommit{AppliedTo: 3},
+		UpdateCommit:     raftpb.UpdateCommit{Processed: 3},
 	}
 
 	s := NewTestLogDB()
@@ -599,7 +599,7 @@ func TestRaftAPIRestartFromSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	ud := rawNode.GetUpdate(true)
+	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
 	if !reflect.DeepEqual(ud, want) {
 		t.Errorf("g = %+v,\n             w   %+v", ud, want)
@@ -639,7 +639,7 @@ func TestRaftAPIGetUpdateCommit(t *testing.T) {
 	if uc.StableSnapshotTo != 105 {
 		t.Errorf("stable snapshot to incorrect")
 	}
-	if uc.AppliedTo != 105 {
+	if uc.Processed != 105 {
 		t.Errorf("applied to")
 	}
 	if uc.StableLogTo != 103 || uc.StableLogTerm != 4 {

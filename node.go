@@ -46,37 +46,39 @@ var (
 )
 
 type node struct {
-	readReqCount        uint64
-	leaderID            uint64
-	raftAddress         string
-	config              config.Config
-	confChangeC         <-chan *RequestState
-	commitC             chan<- rsm.Commit
-	mq                  *server.MessageQueue
-	lastApplied         uint64
-	publishedIndex      uint64
-	commitReady         func(uint64)
-	sendRaftMessage     func(pb.Message)
-	sm                  *rsm.StateMachine
-	incomingProposals   *entryQueue
-	incomingReadIndexes *readIndexQueue
-	pendingProposals    *pendingProposal
-	pendingReadIndexes  *pendingReadIndex
-	pendingConfigChange *pendingConfigChange
-	raftMu              sync.Mutex
-	node                *raft.Peer
-	logreader           *logdb.LogReader
-	logdb               raftio.ILogDB
-	snapshotter         *snapshotter
-	nodeRegistry        transport.INodeRegistry
-	stopc               chan struct{}
-	clusterInfo         atomic.Value
-	tickCount           uint64
-	expireNotified      uint64
-	closeOnce           sync.Once
-	ss                  *snapshotState
-	snapshotLock        *syncutil.Lock
-	initializedMu       struct {
+	readReqCount         uint64
+	leaderID             uint64
+	raftAddress          string
+	config               config.Config
+	confChangeC          <-chan *RequestState
+	commitC              chan<- rsm.Commit
+	mq                   *server.MessageQueue
+	lastApplied          uint64
+	confirmedLastApplied uint64
+	publishedIndex       uint64
+	commitReady          func(uint64)
+	sendRaftMessage      func(pb.Message)
+	sm                   *rsm.StateMachine
+	incomingProposals    *entryQueue
+	incomingReadIndexes  *readIndexQueue
+	pendingProposals     *pendingProposal
+	pendingReadIndexes   *pendingReadIndex
+	pendingConfigChange  *pendingConfigChange
+	raftMu               sync.Mutex
+	node                 *raft.Peer
+	logreader            *logdb.LogReader
+	logdb                raftio.ILogDB
+	snapshotter          *snapshotter
+	nodeRegistry         transport.INodeRegistry
+	stopc                chan struct{}
+	clusterInfo          atomic.Value
+	tickCount            uint64
+	expireNotified       uint64
+	rateLimited          bool
+	closeOnce            sync.Once
+	ss                   *snapshotState
+	snapshotLock         *syncutil.Lock
+	initializedMu        struct {
 		sync.Mutex
 		initialized bool
 	}
@@ -549,12 +551,13 @@ func (rc *node) sendAppendMessages(ud pb.Update) {
 
 func (rc *node) getUpdate() (pb.Update, bool) {
 	moreEntriesToApply := rc.canHaveMoreEntriesToApply()
-	if rc.node.HasUpdate(moreEntriesToApply) {
-		ud := rc.node.GetUpdate(moreEntriesToApply)
+	if rc.node.HasUpdate(moreEntriesToApply) ||
+		rc.confirmedLastApplied != rc.lastApplied {
+		ud := rc.node.GetUpdate(moreEntriesToApply, rc.lastApplied)
 		for idx := range ud.Messages {
 			ud.Messages[idx].ClusterId = rc.clusterID
 		}
-		ud.LastApplied = rc.lastApplied
+		rc.confirmedLastApplied = rc.lastApplied
 		return ud, true
 	}
 	return pb.Update{}, false
@@ -638,6 +641,9 @@ func (rc *node) stepNode() (pb.Update, bool) {
 func (rc *node) handleEvents() bool {
 	hasEvent := false
 	lastApplied := rc.updateBatchedLastApplied()
+	if lastApplied != rc.confirmedLastApplied {
+		hasEvent = true
+	}
 	if rc.handleReadIndexRequests() {
 		hasEvent = true
 	}
@@ -662,7 +668,12 @@ func (rc *node) handleEvents() bool {
 }
 
 func (rc *node) handleProposals() bool {
-	entries := rc.incomingProposals.get()
+	rateLimited := rc.node.RateLimited()
+	if rc.rateLimited != rateLimited {
+		rc.rateLimited = rateLimited
+		plog.Infof("%s new rate limit state is %t", rc.describe(), rateLimited)
+	}
+	entries := rc.incomingProposals.get(rc.rateLimited)
 	if len(entries) > 0 {
 		rc.node.ProposeEntries(entries)
 		return true

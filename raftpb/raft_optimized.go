@@ -10,6 +10,8 @@ import (
 	"io"
 	"time"
 	"unsafe"
+
+	"github.com/lni/dragonboat/internal/settings"
 )
 
 const (
@@ -68,8 +70,7 @@ func (m *EntryBatch) SizeUpperLimit() (n int) {
 
 // SizeUpperLimit returns the upper limit size of an entry.
 func (o *Entry) SizeUpperLimit() int {
-	l := 16 * 7
-	l += 16
+	l := settings.EntryNonCmdFieldsSize
 	l += len(o.Cmd)
 	return l
 }

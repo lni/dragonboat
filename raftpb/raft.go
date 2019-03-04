@@ -51,7 +51,10 @@ type ReadyToRead struct {
 // UpdateCommit is used to describe how to commit the Update instance to
 // progress the state of raft.
 type UpdateCommit struct {
-	AppliedTo        uint64
+	// the last index known to be pushed to rsm for execution.
+	Processed uint64
+	// the last index confirmed to be executed.
+	LastApplied      uint64
 	StableLogTo      uint64
 	StableLogTerm    uint64
 	StableSnapshotTo uint64

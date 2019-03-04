@@ -196,8 +196,15 @@ func (rc *Peer) Handle(m pb.Message) {
 }
 
 // GetUpdate returns the current state of the Peer.
-func (rc *Peer) GetUpdate(moreEntriesToApply bool) pb.Update {
-	return getUpdate(rc.raft, rc.prevState, moreEntriesToApply)
+func (rc *Peer) GetUpdate(moreEntriesToApply bool,
+	lastApplied uint64) pb.Update {
+	return getUpdate(rc.raft, rc.prevState, moreEntriesToApply, lastApplied)
+}
+
+// RateLimited returns a boolean flag indicating whether the Raft node is rate
+// limited.
+func (rc *Peer) RateLimited() bool {
+	return rc.raft.rl.RateLimited()
 }
 
 // HasUpdate returns a boolean value indicating whether there is any Update
@@ -329,10 +336,12 @@ func bootstrap(r *raft, addresses []PeerAddress) {
 }
 
 func getUpdateCommit(ud pb.Update) pb.UpdateCommit {
-	var uc pb.UpdateCommit
-	uc.ReadyToRead = uint64(len(ud.ReadyToReads))
+	uc := pb.UpdateCommit{
+		ReadyToRead: uint64(len(ud.ReadyToReads)),
+		LastApplied: ud.LastApplied,
+	}
 	if len(ud.CommittedEntries) > 0 {
-		uc.AppliedTo = ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
+		uc.Processed = ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
 	}
 	if len(ud.EntriesToSave) > 0 {
 		lastEntry := ud.EntriesToSave[len(ud.EntriesToSave)-1]
@@ -340,18 +349,19 @@ func getUpdateCommit(ud pb.Update) pb.UpdateCommit {
 	}
 	if !pb.IsEmptySnapshot(ud.Snapshot) {
 		uc.StableSnapshotTo = ud.Snapshot.Index
-		uc.AppliedTo = max(uc.AppliedTo, uc.StableSnapshotTo)
+		uc.Processed = max(uc.Processed, uc.StableSnapshotTo)
 	}
 	return uc
 }
 
 func getUpdate(r *raft,
-	ppst pb.State, moreEntriesToApply bool) pb.Update {
+	ppst pb.State, moreEntriesToApply bool, lastApplied uint64) pb.Update {
 	ud := pb.Update{
 		ClusterID:     r.clusterID,
 		NodeID:        r.nodeID,
 		EntriesToSave: r.log.entriesToSave(),
 		Messages:      r.msgs,
+		LastApplied:   lastApplied,
 	}
 	if moreEntriesToApply {
 		ud.CommittedEntries = r.log.entriesToApply()

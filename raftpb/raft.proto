@@ -49,6 +49,7 @@ enum MessageType {
   SnapshotReceived = 22;
   LeaderTransfer   = 23;
   TimeoutNow       = 24;
+  RateLimit        = 25;
 }
 
 enum EntryType {

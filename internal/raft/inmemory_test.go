@@ -15,8 +15,10 @@
 package raft
 
 import (
+	"math"
 	"testing"
 
+	"github.com/lni/dragonboat/internal/server"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
@@ -481,5 +483,107 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im.merge(ents)
 	if im.savedTo != 5 {
 		t.Errorf("savedTo %d, want 5", im.savedTo)
+	}
+}
+
+func TestRateLimited(t *testing.T) {
+	tests := []struct {
+		rl      *server.RateLimiter
+		limited bool
+	}{
+		{nil, false},
+		{server.NewRateLimiter(0), false},
+		{server.NewRateLimiter(math.MaxUint64), false},
+		{server.NewRateLimiter(1), true},
+		{server.NewRateLimiter(math.MaxUint64 - 1), true},
+	}
+	for idx, tt := range tests {
+		im := newInMemory(0, tt.rl)
+		if im.rateLimited() != tt.limited {
+			t.Errorf("%d, rate limited %t, want %t", idx, im.rateLimited(), tt.limited)
+		}
+	}
+}
+
+func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
+	im := newInMemory(0, server.NewRateLimiter(10000))
+	im.merge([]pb.Entry{pb.Entry{Cmd: make([]byte, 1024)}})
+	if im.rl.GetInMemLogSize() == 0 {
+		t.Errorf("log size not updated")
+	}
+	im.restore(pb.Snapshot{})
+	if im.rl.GetInMemLogSize() != 0 {
+		t.Errorf("log size not cleared")
+	}
+}
+
+func TestRateLimitIsUpdatedAfterMergingEntries(t *testing.T) {
+	im := newInMemory(0, server.NewRateLimiter(10000))
+	im.merge([]pb.Entry{pb.Entry{Index: 1, Cmd: make([]byte, 1024)}})
+	logsz := im.rl.GetInMemLogSize()
+	ents := []pb.Entry{
+		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
+		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
+	}
+	addSz := getEntrySliceSize(ents)
+	im.merge(ents)
+	if logsz+addSz != im.rl.GetInMemLogSize() {
+		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), logsz+addSz)
+	}
+}
+
+func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
+	ents := []pb.Entry{
+		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
+		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
+		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+	}
+	im := newInMemory(2, server.NewRateLimiter(10000))
+	im.merge(ents)
+	if im.rl.GetInMemLogSize() != getEntrySliceSize(ents) {
+		t.Errorf("unexpected log size")
+	}
+	for idx := uint64(2); idx < uint64(5); idx++ {
+		im.appliedLogTo(idx)
+		if im.rl.GetInMemLogSize() != getEntrySliceSize(im.entries) {
+			t.Errorf("log size not updated")
+		}
+	}
+}
+
+func TestRateLimitCanBeResetWhenMergingEntries(t *testing.T) {
+	ents := []pb.Entry{
+		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
+		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
+		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+	}
+	im := newInMemory(2, server.NewRateLimiter(10000))
+	im.merge(ents)
+	ents = []pb.Entry{
+		pb.Entry{Index: 1, Cmd: make([]byte, 16)},
+	}
+	im.merge(ents)
+	expSz := getEntrySliceSize(ents)
+	if im.rl.GetInMemLogSize() != expSz {
+		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), expSz)
+	}
+}
+
+func TestRateLimitCanBeUpdatedAfterCutAndMergingEntries(t *testing.T) {
+	ents := []pb.Entry{
+		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
+		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
+		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+	}
+	im := newInMemory(2, server.NewRateLimiter(10000))
+	im.merge(ents)
+	ents = []pb.Entry{
+		pb.Entry{Index: 3, Cmd: make([]byte, 1024)},
+		pb.Entry{Index: 4, Cmd: make([]byte, 1024)},
+	}
+	im.merge(ents)
+	expSz := getEntrySliceSize(im.entries)
+	if im.rl.GetInMemLogSize() != expSz {
+		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), expSz)
 	}
 }

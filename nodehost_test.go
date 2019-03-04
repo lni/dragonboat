@@ -20,9 +20,11 @@ package dragonboat
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -30,6 +32,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
@@ -492,6 +495,8 @@ func TestDeploymentIDCanBeSetUsingNodeHostConfig(t *testing.T) {
 
 var (
 	singleNodeHostTestAddr = "localhost:26000"
+	nodeHostTestAddr1      = "localhost:26000"
+	nodeHostTestAddr2      = "localhost:26001"
 	singleNodeHostTestDir  = "single_nodehost_test_dir_safe_to_delete"
 )
 
@@ -667,12 +672,148 @@ func singleConcurrentNodeHostTest(t *testing.T,
 	waitForLeaderToBeElected(t, nh, 1+commitWorkerCount)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer func() {
-		plog.Infof("going to call nh.stop()")
 		nh.Stop()
-		plog.Infof("nh.stop returned")
 	}()
 	tf(t, nh)
-	plog.Infof("tf returned")
+}
+
+func createRateLimitedTestNodeHost(addr string,
+	datadir string) (*NodeHost, error) {
+	// config for raft
+	rc := config.Config{
+		NodeID:          uint64(1),
+		ClusterID:       1,
+		ElectionRTT:     5,
+		HeartbeatRTT:    1,
+		CheckQuorum:     true,
+		MaxInMemLogSize: 1024 * 3,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = addr
+	nhc := config.NodeHostConfig{
+		WALDir:         datadir,
+		NodeHostDir:    datadir,
+		RTTMillisecond: 10,
+		RaftAddress:    peers[1],
+	}
+	nh := NewNodeHost(nhc)
+	newRSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		return &tests.NoOP{MillisecondToSleep: 10}
+	}
+	oldv := settings.Soft.ExpectedMaxInMemLogSize
+	settings.Soft.ExpectedMaxInMemLogSize = 3 * 1024
+	defer func() {
+		settings.Soft.ExpectedMaxInMemLogSize = oldv
+	}()
+	if err := nh.StartCluster(peers, false, newRSM, rc); err != nil {
+		return nil, err
+	}
+	return nh, nil
+}
+
+func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
+	datadir1 string, datadir2 string) (*NodeHost, *NodeHost, error) {
+	rc := config.Config{
+		ClusterID:       1,
+		ElectionRTT:     5,
+		HeartbeatRTT:    1,
+		CheckQuorum:     true,
+		MaxInMemLogSize: 1024 * 3,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = addr1
+	peers[2] = addr2
+	nhc1 := config.NodeHostConfig{
+		WALDir:         datadir1,
+		NodeHostDir:    datadir1,
+		RTTMillisecond: 10,
+		RaftAddress:    peers[1],
+	}
+	nhc2 := config.NodeHostConfig{
+		WALDir:         datadir2,
+		NodeHostDir:    datadir2,
+		RTTMillisecond: 10,
+		RaftAddress:    peers[2],
+	}
+	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
+	nh1 := NewNodeHost(nhc1)
+	nh2 := NewNodeHost(nhc2)
+	sm1 := &tests.NoOP{}
+	sm2 := &tests.NoOP{}
+	newRSM1 := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		return sm1
+	}
+	newRSM2 := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		return sm2
+	}
+	oldv := settings.Soft.ExpectedMaxInMemLogSize
+	settings.Soft.ExpectedMaxInMemLogSize = 3 * 1024
+	defer func() {
+		settings.Soft.ExpectedMaxInMemLogSize = oldv
+	}()
+	rc.NodeID = 1
+	if err := nh1.StartCluster(peers, false, newRSM1, rc); err != nil {
+		return nil, nil, err
+	}
+	rc.NodeID = 2
+	if err := nh2.StartCluster(peers, false, newRSM2, rc); err != nil {
+		return nil, nil, err
+	}
+	var leaderNh *NodeHost
+	var followerNh *NodeHost
+	for i := 0; i < 200; i++ {
+		leaderID, ready, err := nh1.GetLeaderID(1)
+		if err == nil && ready {
+			if leaderID == 1 {
+				leaderNh = nh1
+				followerNh = nh2
+				sm2.MillisecondToSleep = 20
+			} else {
+				leaderNh = nh2
+				followerNh = nh1
+				sm1.MillisecondToSleep = 20
+			}
+			return leaderNh, followerNh, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, nil, errors.New("failed to get usable nodehosts")
+}
+
+func rateLimitedTwoNodeHostTest(t *testing.T,
+	tf func(t *testing.T, leaderNh *NodeHost, followerNh *NodeHost)) {
+	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
+	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
+	defer leaktest.AfterTest(t)()
+	defer os.RemoveAll(singleNodeHostTestDir)
+	os.RemoveAll(singleNodeHostTestDir)
+	nh1, nh2, err := createRateLimitedTwoTestNodeHosts(nodeHostTestAddr1,
+		nodeHostTestAddr2, nh1dir, nh2dir)
+	if err != nil {
+		t.Fatalf("failed to create nodehost2 %v", err)
+	}
+	defer func() {
+		nh1.Stop()
+		nh2.Stop()
+	}()
+	tf(t, nh1, nh2)
+}
+
+func rateLimitedNodeHostTest(t *testing.T,
+	tf func(t *testing.T, nh *NodeHost)) {
+	defer leaktest.AfterTest(t)()
+	defer os.RemoveAll(singleNodeHostTestDir)
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, err := createRateLimitedTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	waitForLeaderToBeElected(t, nh, 1)
+	defer func() {
+		nh.Stop()
+	}()
+	tf(t, nh)
 }
 
 func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, clusterID uint64) {
@@ -700,6 +841,11 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 		}
 		time.Sleep(100 * time.Millisecond)
 		if err := nh.CloseSession(ctx, cs); err != nil {
+			if err == ErrTimeout {
+				cancel()
+				return
+			}
+
 			t.Fatalf("failed to close client session %v", err)
 		}
 		cancel()
@@ -1248,4 +1394,75 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 		}
 	}
 	singleConcurrentNodeHostTest(t, tf, 10, false)
+}
+
+func TestRateLimitCanBeTriggered(t *testing.T) {
+	limited := uint64(0)
+	stopper := syncutil.NewStopper()
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(1)
+		for i := 0; i < 10; i++ {
+			stopper.RunWorker(func() {
+				for j := 0; j < 16; j++ {
+					if atomic.LoadUint64(&limited) == 1 {
+						return
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+					_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
+					cancel()
+					if err == ErrSystemBusy {
+						atomic.StoreUint64(&limited, 1)
+						return
+					}
+				}
+			})
+		}
+		stopper.Stop()
+		if atomic.LoadUint64(&limited) != 1 {
+			t.Fatalf("failed to observe ErrSystemBusy")
+		}
+
+		for i := 0; i < 10000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
+			cancel()
+			if err == nil {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+
+		t.Fatalf("failed to make proposal again")
+	}
+	rateLimitedNodeHostTest(t, tf)
+}
+
+func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		session := nh1.GetNoOPSession(1)
+		limited := false
+		for i := 0; i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
+			cancel()
+			if err == ErrSystemBusy {
+				limited = true
+				break
+			}
+		}
+		if !limited {
+			t.Fatalf("failed to observe rate limited")
+		}
+		for i := 0; i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
+			cancel()
+			if err == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Fatalf("failed to make proposal again")
+	}
+	rateLimitedTwoNodeHostTest(t, tf)
 }

@@ -18,12 +18,13 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lni/dragonboat/internal/server"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func getTestEntryLog() *entryLog {
 	logdb := NewTestLogDB()
-	return newEntryLog(logdb)
+	return newEntryLog(logdb, server.NewRateLimiter(0))
 }
 
 func TestLogEntryLogCanBeCreated(t *testing.T) {
@@ -37,8 +38,8 @@ func TestLogEntryLogCanBeCreated(t *testing.T) {
 	if first != 1 || last != 3 {
 		t.Errorf("unexpected range")
 	}
-	el := newEntryLog(logdb)
-	if el.committed != 0 || el.applied != 0 || el.inmem.markerIndex != 4 {
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
+	if el.committed != 0 || el.processed != 0 || el.inmem.markerIndex != 4 {
 		t.Errorf("unexpected log state %+v", el)
 	}
 }
@@ -105,9 +106,9 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 	ents[30].Cmd = make([]byte, maxEntriesToApplySize*2)
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.committed = 128
-	el.applied = 0
+	el.processed = 0
 	results := make([]pb.Entry, 0)
 	count := 0
 	for {
@@ -117,7 +118,7 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 		}
 		count++
 		results = append(results, re...)
-		el.applied = re[len(re)-1].Index
+		el.processed = re[len(re)-1].Index
 	}
 	if len(results) != 128 {
 		t.Errorf("failed to get all entries")
@@ -139,7 +140,7 @@ func TestLogReturnLastIndexInLogDBWhenNoSnapshotInMem(t *testing.T) {
 		{Index: 2, Term: 1},
 		{Index: 3, Term: 2},
 	})
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.firstIndex() != 1 {
 		t.Errorf("unexpected first index, %d", el.firstIndex())
 	}
@@ -164,7 +165,7 @@ func TestLogLastIndexReturnLogDBLastIndexWhenNothingInInMem(t *testing.T) {
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 1},
 	})
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.lastIndex() != 2 {
 		t.Errorf("unexpected last index %d", el.lastIndex())
 	}
@@ -186,7 +187,7 @@ func TestLogLastTerm(t *testing.T) {
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 5},
 	})
-	el = newEntryLog(logdb)
+	el = newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.lastTerm() != 5 {
 		t.Errorf("unexpected last term %d", el.lastTerm())
 	}
@@ -215,7 +216,7 @@ func TestLogTerm(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el = newEntryLog(logdb)
+	el = newEntryLog(logdb, server.NewRateLimiter(0))
 	for idx, ent := range ents {
 		term, err := el.term(ent.Index)
 		if err != nil {
@@ -290,7 +291,7 @@ func TestLogGetEntryFromLogDB(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	ents, err := el.getEntries(1, 5, math.MaxUint64)
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
@@ -316,7 +317,7 @@ func TestLogGetEntryFromLogDBAndInMem(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -385,7 +386,7 @@ func TestLogMatchTerm(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -422,7 +423,7 @@ func TestLogUpToDate(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -458,7 +459,7 @@ func TestLogGetConflictIndex(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -493,7 +494,7 @@ func TestLogCommitTo(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -524,7 +525,7 @@ func TestLogCommitToPanicWhenCommitToUnavailableIndex(t *testing.T) {
 	}
 	logdb := NewTestLogDB()
 	logdb.Append(ents)
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
 		{Index: 6, Term: 3},
@@ -541,11 +542,11 @@ func TestLogRestoreSnapshot(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	el := newEntryLog(logdb)
+	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append(ents)
 	ss := pb.Snapshot{Index: 100, Term: 10}
 	el.restore(ss)
-	if el.committed != 100 || el.applied != 100 {
+	if el.committed != 100 || el.processed != 100 {
 		t.Errorf("committed/applied not updated")
 	}
 	if el.inmem.markerIndex != 101 {
@@ -560,11 +561,11 @@ func TestLogCommitUpdateSetsApplied(t *testing.T) {
 	el := getTestEntryLog()
 	el.committed = 10
 	cu := pb.UpdateCommit{
-		AppliedTo: 5,
+		Processed: 5,
 	}
 	el.commitUpdate(cu)
-	if el.applied != 5 {
-		t.Errorf("applied %d, want 5", el.applied)
+	if el.processed != 5 {
+		t.Errorf("applied %d, want 5", el.processed)
 	}
 }
 
@@ -575,10 +576,10 @@ func TestLogCommitUpdatePanicWhenApplyTwice(t *testing.T) {
 		}
 	}()
 	el := getTestEntryLog()
-	el.applied = 6
+	el.processed = 6
 	el.committed = 10
 	cu := pb.UpdateCommit{
-		AppliedTo: 5,
+		Processed: 5,
 	}
 	el.commitUpdate(cu)
 }
@@ -590,10 +591,47 @@ func TestLogCommitUpdatePanicWhenApplyingNotCommitEntry(t *testing.T) {
 		}
 	}()
 	el := getTestEntryLog()
-	el.applied = 6
+	el.processed = 6
 	el.committed = 10
 	cu := pb.UpdateCommit{
-		AppliedTo: 12,
+		Processed: 12,
 	}
 	el.commitUpdate(cu)
+}
+
+func TestGetUncommittedEntries(t *testing.T) {
+	el := getTestEntryLog()
+	ents := el.getUncommittedEntries()
+	if len(ents) != 0 {
+		t.Errorf("unexpected length")
+	}
+	el.Append([]pb.Entry{
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 1},
+		{Index: 3, Term: 2},
+		{Index: 4, Term: 3},
+	})
+	tests := []struct {
+		committed  uint64
+		length     int
+		firstIndex uint64
+	}{
+		{0, 4, 1},
+		{1, 3, 2},
+		{2, 2, 3},
+		{3, 1, 4},
+		{4, 0, 0},
+	}
+	for idx, tt := range tests {
+		el.committed = tt.committed
+		ents = el.getUncommittedEntries()
+		if len(ents) != tt.length {
+			t.Errorf("unexpected length")
+		}
+		if len(ents) > 0 {
+			if ents[0].Index != tt.firstIndex {
+				t.Errorf("%d, first index %d, want %d", idx, ents[0].Index, tt.firstIndex)
+			}
+		}
+	}
 }

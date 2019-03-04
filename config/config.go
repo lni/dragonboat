@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 
+	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/netutil"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
 	"github.com/lni/dragonboat/logger"
@@ -97,6 +98,14 @@ type Config struct {
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.
 	OrderedConfigChange bool
+	// MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored in
+	// memory. Raft logs waiting to be committed and applied are stored in memory.
+	// When MaxInMemLogSize is 0, the limit is set to math.MaxUint64 which
+	// basically means no limit. When MaxInMemLogSize is set and the limit is
+	// reached, error will be returned when clients try to make any new proposals.
+	// MaxInMemLogSize should be left as 0 or be set to be greater than
+	// 3 * MaxProposalPayloadSize, MaxProposalPayloadSize is 32Mbytes by default.
+	MaxInMemLogSize uint64
 }
 
 // Validate validates the Config instance and return an error when any member
@@ -116,6 +125,9 @@ func (c *Config) Validate() error {
 	}
 	if c.ElectionRTT <= 2*c.HeartbeatRTT {
 		return errors.New("invalid election rtt")
+	}
+	if c.MaxInMemLogSize > 0 && c.MaxInMemLogSize < settings.Soft.ExpectedMaxInMemLogSize {
+		return errors.New("MaxInMemLogSize is too small")
 	}
 	return nil
 }

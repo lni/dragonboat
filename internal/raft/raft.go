@@ -27,6 +27,7 @@ import (
 	"sort"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/random"
@@ -45,7 +46,7 @@ const (
 	// NoNode is the flag used to indicate that the node id field is not set.
 	NoNode          uint64 = 0
 	noLimit         uint64 = math.MaxUint64
-	numMessageTypes uint64 = 25
+	numMessageTypes uint64 = 26
 )
 
 var (
@@ -115,7 +116,7 @@ func getLocalStatus(r *raft) Status {
 		NodeID:    r.nodeID,
 		ClusterID: r.clusterID,
 		NodeState: r.state,
-		Applied:   r.log.applied,
+		Applied:   r.log.processed,
 		LeaderID:  r.leaderID,
 		State:     r.raftState(),
 	}
@@ -192,6 +193,7 @@ type raft struct {
 	term                      uint64
 	vote                      uint64
 	log                       *entryLog
+	rl                        *server.RateLimiter
 	remotes                   map[uint64]*remote
 	observers                 map[uint64]*remote
 	state                     State
@@ -224,19 +226,23 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 	if logdb == nil {
 		panic("logdb is nil")
 	}
+	rl := server.NewRateLimiter(c.MaxInMemLogSize)
 	r := &raft{
 		clusterID:        c.ClusterID,
 		nodeID:           c.NodeID,
 		leaderID:         NoLeader,
 		msgs:             make([]pb.Message, 0),
-		log:              newEntryLog(logdb),
+		log:              newEntryLog(logdb, rl),
 		remotes:          make(map[uint64]*remote),
 		observers:        make(map[uint64]*remote),
 		electionTimeout:  c.ElectionRTT,
 		heartbeatTimeout: c.HeartbeatRTT,
 		checkQuorum:      c.CheckQuorum,
 		readIndex:        newReadIndex(),
+		rl:               rl,
 	}
+	plog.Infof("raft log rate limit enabled: %t, %d",
+		r.rl.Enabled(), c.MaxInMemLogSize)
 	st, members := logdb.NodeState()
 	for p := range members.Addresses {
 		r.remotes[p] = &remote{
@@ -294,7 +300,7 @@ func (r *raft) describe() string {
 	fmtstr := "[f-idx:%d,l-idx:%d,logterm:%d,commit:%d,applied:%d] %s term %d"
 	return fmt.Sprintf(fmtstr,
 		r.log.firstIndex(), r.log.lastIndex(), t, r.log.committed,
-		r.log.applied, logutil.DescribeNode(r.clusterID, r.nodeID), r.term)
+		r.log.processed, logutil.DescribeNode(r.clusterID, r.nodeID), r.term)
 }
 
 func (r *raft) isObserver() bool {
@@ -444,6 +450,10 @@ func (r *raft) timeToAbortLeaderTransfer() bool {
 	return r.leaderTransfering() && r.electionTick >= r.electionTimeout
 }
 
+func (r *raft) timeForRateLimitCheck() bool {
+	return r.tickCount%r.electionTimeout == 0
+}
+
 func (r *raft) tick() {
 	r.tickCount++
 	if r.state == leader {
@@ -458,6 +468,12 @@ func (r *raft) nonLeaderTick() {
 		panic("noleader tick called on leader node")
 	}
 	r.electionTick++
+	if r.timeForRateLimitCheck() {
+		if r.rl.Enabled() {
+			r.rl.HeartbeatTick()
+			r.sendRateLimitMessage()
+		}
+	}
 	// section 4.2.1 of the raft thesis
 	// non-voting member is not to do anything related to election
 	if r.isObserver() {
@@ -478,6 +494,11 @@ func (r *raft) leaderTick() {
 		panic("leaderTick called on a non-leader node")
 	}
 	r.electionTick++
+	if r.timeForRateLimitCheck() {
+		if r.rl.Enabled() {
+			r.rl.HeartbeatTick()
+		}
+	}
 	timeToAbortLeaderTransfer := r.timeToAbortLeaderTransfer()
 	if r.timeForCheckQuorum() {
 		r.electionTick = 0
@@ -531,6 +552,30 @@ func (r *raft) send(m pb.Message) {
 	m.From = r.nodeID
 	m = r.finalizeMessageTerm(m)
 	r.msgs = append(r.msgs, m)
+}
+
+func (r *raft) sendRateLimitMessage() {
+	if r.state == leader {
+		plog.Panicf("leader node called sendRateLimitMessage")
+	}
+	if r.leaderID == NoLeader {
+		plog.Infof("%s rate limit message skipped, no leader", r.describe())
+		return
+	}
+	if !r.rl.Enabled() {
+		return
+	}
+	mv := uint64(0)
+	if r.rl.RateLimited() {
+		inmemSz := r.rl.GetInMemLogSize()
+		notCommitedSz := getEntrySliceSize(r.log.getUncommittedEntries())
+		mv = max(inmemSz-notCommitedSz, 0)
+	}
+	r.send(pb.Message{
+		Type: pb.RateLimit,
+		To:   r.leaderID,
+		Hint: mv,
+	})
 }
 
 func (r *raft) makeInstallSnapshotMessage(to uint64, m *pb.Message) uint64 {
@@ -661,10 +706,10 @@ func (r *raft) broadcastHeartbeatMessageWithHint(ctx pb.SystemCtx) {
 	}
 }
 
-func (r *raft) sendTimeoutNowMessage(target uint64) {
+func (r *raft) sendTimeoutNowMessage(nodeID uint64) {
 	r.send(pb.Message{
 		Type: pb.TimeoutNow,
-		To:   target,
+		To:   nodeID,
 	})
 }
 
@@ -782,6 +827,9 @@ func (r *raft) reset(term uint64) {
 	if r.term != term {
 		r.term = term
 		r.vote = NoLeader
+	}
+	if r.rl.Enabled() {
+		r.rl.ResetFollowerState()
 	}
 	r.setLeaderID(NoLeader)
 	r.votes = make(map[uint64]bool)
@@ -1476,6 +1524,15 @@ func (r *raft) handleLeaderUnreachable(m pb.Message, rp *remote) {
 	r.enterRetryState(rp)
 }
 
+func (r *raft) handleLeaderRateLimit(m pb.Message) {
+	if r.rl.Enabled() {
+		r.rl.SetFollowerState(m.From, m.Hint)
+	} else {
+		plog.Warningf("%s dropped a rate limit message as rate limiter not enabled",
+			r.describe())
+	}
+}
+
 func (r *raft) enterRetryState(rp *remote) {
 	if rp.state == remoteReplicate {
 		rp.becomeRetry()
@@ -1706,6 +1763,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[leader][pb.LocalTick] = r.handleLocalTick
 	r.handlers[leader][pb.SnapshotReceived] = r.handleRestoreRemote
+	r.handlers[leader][pb.RateLimit] = r.handleLeaderRateLimit
 	// observer
 	r.handlers[observer][pb.Heartbeat] = r.handleObserverHeartbeat
 	r.handlers[observer][pb.Replicate] = r.handleObserverReplicate

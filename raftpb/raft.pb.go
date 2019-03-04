@@ -48,6 +48,7 @@ const (
 	SnapshotReceived  MessageType = 22
 	LeaderTransfer    MessageType = 23
 	TimeoutNow        MessageType = 24
+	RateLimit         MessageType = 25
 )
 
 var MessageType_name = map[int32]string{
@@ -76,6 +77,7 @@ var MessageType_name = map[int32]string{
 	22: "SnapshotReceived",
 	23: "LeaderTransfer",
 	24: "TimeoutNow",
+	25: "RateLimit",
 }
 var MessageType_value = map[string]int32{
 	"LocalTick":         0,
@@ -103,6 +105,7 @@ var MessageType_value = map[string]int32{
 	"SnapshotReceived":  22,
 	"LeaderTransfer":    23,
 	"TimeoutNow":        24,
+	"RateLimit":         25,
 }
 
 func (x MessageType) Enum() *MessageType {

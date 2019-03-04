@@ -386,6 +386,8 @@ func (s *execEngine) execSMs(workerID uint64,
 			continue
 		}
 		commit, snapshotRequired := node.handleCommit(batch, entries)
+		// batched last applied might updated, give the node work a chance to run
+		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
 			if commit.SnapshotAvailable {
 				plog.Infof("check incoming snapshot, %s", node.describe())

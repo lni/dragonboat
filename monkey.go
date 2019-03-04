@@ -19,6 +19,7 @@ package dragonboat
 import (
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/raftio"
 )
@@ -117,6 +118,14 @@ func (rn *node) GetSessionHash() uint64 {
 
 func (rn *node) GetMembershipHash() uint64 {
 	return rn.getMembershipHash()
+}
+
+func (rn *node) GetRateLimiter() *server.RateLimiter {
+	return rn.node.GetRateLimiter()
+}
+
+func (rn *node) GetInMemLogSize() uint64 {
+	return rn.node.GetInMemLogSize()
 }
 
 // Set how many snapshot worker to use in step engine. This function is

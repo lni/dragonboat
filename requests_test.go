@@ -206,7 +206,7 @@ func getBlankTestSession() *client.Session {
 
 func TestPendingProposalCanBeCreatedAndClosed(t *testing.T) {
 	pp, c := getPendingProposal()
-	if len(c.get()) > 0 {
+	if len(c.get(false)) > 0 {
 		t.Errorf("unexpected item in entry queue")
 	}
 	pp.close()
@@ -237,7 +237,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 		t.Errorf("not suppose to have anything completed")
 	default:
 	}
-	q := c.get()
+	q := c.get(false)
 	if len(q) != 1 {
 		t.Errorf("len(c)=%d, want 1", len(q))
 	}

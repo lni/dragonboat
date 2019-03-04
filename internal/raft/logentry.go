@@ -17,6 +17,7 @@ package raft
 import (
 	"errors"
 
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	pb "github.com/lni/dragonboat/raftpb"
 )
@@ -80,16 +81,17 @@ type entryLog struct {
 	logdb     ILogDB
 	inmem     inMemory
 	committed uint64
-	applied   uint64
+	// committed entries already returned as Updated to be applied.
+	processed uint64
 }
 
-func newEntryLog(logdb ILogDB) *entryLog {
+func newEntryLog(logdb ILogDB, rl *server.RateLimiter) *entryLog {
 	firstIndex, lastIndex := logdb.GetRange()
 	l := &entryLog{
 		logdb:     logdb,
-		inmem:     newInMemory(lastIndex),
+		inmem:     newInMemory(lastIndex, rl),
 		committed: firstIndex - 1,
-		applied:   firstIndex - 1,
+		processed: firstIndex - 1,
 	}
 	return l
 }
@@ -174,6 +176,11 @@ func (l *entryLog) checkBound(low uint64, high uint64) error {
 	return nil
 }
 
+func (l *entryLog) getUncommittedEntries() []pb.Entry {
+	lastIndex := l.inmem.markerIndex + uint64(len(l.inmem.entries))
+	return l.getEntriesFromInMem([]pb.Entry{}, l.committed+1, lastIndex)
+}
+
 func (l *entryLog) getEntriesFromLogDB(low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, bool, error) {
 	if low >= l.inmem.markerIndex {
@@ -243,7 +250,7 @@ func (l *entryLog) snapshot() pb.Snapshot {
 }
 
 func (l *entryLog) firstNotAppliedIndex() uint64 {
-	return max(l.applied+1, l.firstIndex())
+	return max(l.processed+1, l.firstIndex())
 }
 
 func (l *entryLog) toApplyIndexLimit() uint64 {
@@ -324,13 +331,19 @@ func (l *entryLog) commitTo(index uint64) {
 
 func (l *entryLog) commitUpdate(cu pb.UpdateCommit) {
 	l.inmem.commitUpdate(cu)
-	if cu.AppliedTo > 0 {
-		if cu.AppliedTo < l.applied || cu.AppliedTo > l.committed {
-			plog.Panicf("invalid applyto %d, current applied %d, committed %d",
-				cu.AppliedTo, l.applied, l.committed)
+	if cu.Processed > 0 {
+		if cu.Processed < l.processed || cu.Processed > l.committed {
+			plog.Panicf("invalid ApplyReturnedTo %d, current applied %d, committed %d",
+				cu.Processed, l.processed, l.committed)
 		}
-		l.applied = cu.AppliedTo
-		l.inmem.appliedLogTo(cu.AppliedTo)
+		l.processed = cu.Processed
+	}
+	if cu.LastApplied > 0 {
+		if cu.LastApplied > l.committed {
+			plog.Panicf("invalid last applied %d, committed %d",
+				cu.LastApplied, l.committed)
+		}
+		l.inmem.appliedLogTo(cu.LastApplied)
 	}
 }
 
@@ -377,5 +390,5 @@ func (l *entryLog) restore(s pb.Snapshot) {
 	plog.Infof("applying snapshot %d,%d", s.Index, s.Term)
 	l.inmem.restore(s)
 	l.committed = s.Index
-	l.applied = s.Index
+	l.processed = s.Index
 }

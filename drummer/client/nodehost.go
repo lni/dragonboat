@@ -322,6 +322,7 @@ func getConfig(req pb.NodeHostRequest) config.Config {
 		CheckQuorum:        req.Config.CheckQuorum,
 		SnapshotEntries:    req.Config.SnapshotEntries,
 		CompactionOverhead: req.Config.CompactionOverhead,
+		MaxInMemLogSize:    req.Config.MaxInMemLogSize,
 	}
 }
 

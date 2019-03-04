@@ -15,6 +15,7 @@
 package raft
 
 import (
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	pb "github.com/lni/dragonboat/raftpb"
 )
@@ -31,12 +32,14 @@ type inMemory struct {
 	entries     []pb.Entry
 	markerIndex uint64
 	savedTo     uint64
+	rl          *server.RateLimiter
 }
 
-func newInMemory(lastIndex uint64) inMemory {
+func newInMemory(lastIndex uint64, rl *server.RateLimiter) inMemory {
 	return inMemory{
 		markerIndex: lastIndex + 1,
 		savedTo:     lastIndex,
+		rl:          rl,
 	}
 }
 
@@ -101,7 +104,6 @@ func (im *inMemory) commitUpdate(cu pb.UpdateCommit) {
 func (im *inMemory) entriesToSave() []pb.Entry {
 	idx := im.savedTo + 1
 	if idx-im.markerIndex > uint64(len(im.entries)) {
-		plog.Infof("nothing to save %+v", im)
 		return []pb.Entry{}
 	}
 	return im.entries[idx-im.markerIndex:]
@@ -132,10 +134,14 @@ func (im *inMemory) appliedLogTo(index uint64) {
 		return
 	}
 	newMarkerIndex := index
+	applied := im.entries[:newMarkerIndex-im.markerIndex]
 	im.entries = im.entries[newMarkerIndex-im.markerIndex:]
 	im.markerIndex = newMarkerIndex
 	im.resizeEntrySlice()
 	im.checkMarkerIndex()
+	if im.rateLimited() {
+		im.rl.DecreaseInMemLogSize(getEntrySliceSize(applied))
+	}
 }
 
 func (im *inMemory) savedSnapshotTo(index uint64) {
@@ -160,11 +166,17 @@ func (im *inMemory) merge(ents []pb.Entry) {
 	if firstNewIndex == im.markerIndex+uint64(len(im.entries)) {
 		checkEntriesToAppend(im.entries, ents)
 		im.entries = append(im.entries, ents...)
+		if im.rateLimited() {
+			im.rl.IncreaseInMemLogSize(getEntrySliceSize(ents))
+		}
 	} else if firstNewIndex <= im.markerIndex {
 		im.markerIndex = firstNewIndex
 		// ents might come from entryQueue, copy it to its own storage
 		im.entries = newEntrySlice(ents)
 		im.savedTo = firstNewIndex - 1
+		if im.rateLimited() {
+			im.rl.SetInMemLogSize(getEntrySliceSize(ents))
+		}
 	} else {
 		existing := im.getEntries(im.markerIndex, firstNewIndex)
 		checkEntriesToAppend(existing, ents)
@@ -172,6 +184,10 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.entries = append(im.entries, existing...)
 		im.entries = append(im.entries, ents...)
 		im.savedTo = min(im.savedTo, firstNewIndex-1)
+		if im.rateLimited() {
+			sz := getEntrySliceSize(ents) + getEntrySliceSize(existing)
+			im.rl.SetInMemLogSize(sz)
+		}
 	}
 	im.checkMarkerIndex()
 }
@@ -181,4 +197,11 @@ func (im *inMemory) restore(ss pb.Snapshot) {
 	im.markerIndex = ss.Index + 1
 	im.entries = nil
 	im.savedTo = ss.Index
+	if im.rateLimited() {
+		im.rl.SetInMemLogSize(0)
+	}
+}
+
+func (im *inMemory) rateLimited() bool {
+	return im.rl != nil && im.rl.Enabled()
 }

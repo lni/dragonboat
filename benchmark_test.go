@@ -81,7 +81,7 @@ func BenchmarkAddToEntryQueue(b *testing.B) {
 			t := atomic.AddUint64(&total, 1)
 			if t%2048 == 0 {
 				atomic.StoreUint64(&total, 0)
-				q.get()
+				q.get(false)
 			} else {
 				q.add(entry)
 			}
@@ -113,7 +113,7 @@ func benchmarkProposeN(b *testing.B, sz int) {
 			}
 			if v%128 == 0 {
 				atomic.StoreUint64(&total, 0)
-				q.get()
+				q.get(false)
 			}
 			pp.applied(rs.key, rs.clientID, rs.seriesID, 1, false)
 			rs.Release()

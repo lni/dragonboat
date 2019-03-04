@@ -35,12 +35,18 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/server"
+	"github.com/lni/dragonboat/internal/settings"
 	pb "github.com/lni/dragonboat/raftpb"
+)
+
+var (
+	testRateLimit uint64 = settings.MaxProposalPayloadSize * 4
 )
 
 func (r *raft) testOnlyHasConfigChangeToApply() bool {
 	entries := r.log.getEntriesToApply(noLimit)
-	if r.log.committed > r.log.applied && len(entries) > 0 {
+	if r.log.committed > r.log.processed && len(entries) > 0 {
 		return countConfigChange(entries) > 0
 	}
 
@@ -81,7 +87,7 @@ func mustTemp(pre, body string) string {
 
 func ltoa(l *entryLog) string {
 	s := fmt.Sprintf("committed: %d\n", l.committed)
-	s += fmt.Sprintf("applied:  %d\n", l.applied)
+	s += fmt.Sprintf("applied:  %d\n", l.processed)
 	for i, e := range getAllEntries(l) {
 		s += fmt.Sprintf("#%d: %+v\n", i, e)
 	}
@@ -98,7 +104,7 @@ func nextEnts(r *raft, s ILogDB) (ents []pb.Entry) {
 	})
 	ents = r.log.entriesToApply()
 	r.log.commitUpdate(pb.UpdateCommit{
-		AppliedTo: r.log.committed,
+		Processed: r.log.committed,
 	})
 	return ents
 }
@@ -227,12 +233,12 @@ func TestLeaderTransferAfterSnapshot(t *testing.T) {
 	lead := nt.peers[1].(*raft)
 	nextEnts(lead, nt.storage[1])
 	m := getTestMembership(lead.nodes())
-	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.applied, &m)
+	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.processed, &m)
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}
 	nt.storage[1].CreateSnapshot(ss)
-	nt.storage[1].Compact(lead.log.applied)
+	nt.storage[1].Compact(lead.log.processed)
 	nt.recover()
 	if lead.remotes[3].match != 1 {
 		t.Fatalf("node 1 has match %x for node 3, want %x", lead.remotes[3].match, 1)
@@ -814,7 +820,7 @@ func TestDuelingCandidates(t *testing.T) {
 	}{
 		{a, follower, 2, wlog},
 		{b, follower, 2, wlog},
-		{c, follower, 2, newEntryLog(NewTestLogDB())},
+		{c, follower, 2, newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))},
 	}
 
 	for i, tt := range tests {
@@ -1031,7 +1037,7 @@ func TestProposal(t *testing.T) {
 		send(pb.Message{From: 1, To: 1, Type: pb.Election})
 		send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: data}}})
 
-		wantLog := newEntryLog(NewTestLogDB())
+		wantLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
 		if tt.success {
 			wantLog = &entryLog{
 				logdb: &TestLogDB{
@@ -2368,12 +2374,12 @@ func TestSlowNodeRestore(t *testing.T) {
 	lead := nt.peers[1].(*raft)
 	nextEnts(lead, nt.storage[1])
 	m := getTestMembership(lead.nodes())
-	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.applied, &m)
+	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.processed, &m)
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}
 	nt.storage[1].CreateSnapshot(ss)
-	nt.storage[1].Compact(lead.log.applied)
+	nt.storage[1].Compact(lead.log.processed)
 	follower := nt.peers[3].(*raft)
 	nt.recover()
 	// send heartbeats so that the leader can learn everyone is active.
@@ -2955,6 +2961,23 @@ func newTestConfig(id uint64, election, heartbeat int, logdb ILogDB) *config.Con
 
 func newTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
 	r := newRaft(newTestConfig(id, election, heartbeat, logdb), logdb)
+	if len(r.remotes) == 0 {
+		for _, p := range peers {
+			r.remotes[p] = &remote{next: 1}
+		}
+	}
+	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply
+	return r
+}
+
+func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
+	cfg := &config.Config{
+		NodeID:          id,
+		ElectionRTT:     uint64(election),
+		HeartbeatRTT:    uint64(heartbeat),
+		MaxInMemLogSize: testRateLimit,
+	}
+	r := newRaft(cfg, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}

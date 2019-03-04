@@ -17,11 +17,12 @@
 package raft
 
 import (
+	"github.com/lni/dragonboat/internal/server"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func NewLog(logdb ILogDB) *entryLog {
-	return newEntryLog(logdb)
+	return newEntryLog(logdb, server.NewRateLimiter(0))
 }
 
 func (l *entryLog) GetConflictIndex(ents []pb.Entry) uint64 {
@@ -105,7 +106,7 @@ func (l *entryLog) TryCommit(index uint64, term uint64) bool {
 }
 
 func (l *entryLog) AppliedTo(index uint64) {
-	l.commitUpdate(pb.UpdateCommit{AppliedTo: index})
+	l.commitUpdate(pb.UpdateCommit{Processed: index})
 }
 
 func (l *entryLog) HasEntriesToApply() bool {

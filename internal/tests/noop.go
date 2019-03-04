@@ -18,12 +18,14 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"time"
 
 	"github.com/lni/dragonboat/statemachine"
 )
 
 // NoOP is a IStateMachine struct used for testing purpose.
 type NoOP struct {
+	MillisecondToSleep uint64
 }
 
 // Lookup locally looks up the data.
@@ -33,6 +35,9 @@ func (n *NoOP) Lookup(key []byte) []byte {
 
 // Update updates the object.
 func (n *NoOP) Update(data []byte) uint64 {
+	if n.MillisecondToSleep > 0 {
+		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
+	}
 	return uint64(len(data))
 }
 

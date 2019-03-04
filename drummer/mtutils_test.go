@@ -475,6 +475,22 @@ func checkPartitionedNodeHost(t *testing.T, nodes []*testNode) {
 	}
 }
 
+func checkRateLimiterState(t *testing.T, nodes []*testNode) {
+	for _, n := range nodes {
+		nh := n.nh
+		for _, rn := range nh.Clusters() {
+			rl := rn.GetRateLimiter()
+			clusterID := rn.ClusterID()
+			nodeID := rn.NodeID()
+			if rl.GetInMemLogSize() != rn.GetInMemLogSize() {
+				t.Fatalf("%s, rl mem log size %d, in mem log size %d",
+					logutil.DescribeNode(clusterID, nodeID),
+					rl.GetInMemLogSize(), rn.GetInMemLogSize())
+			}
+		}
+	}
+}
+
 func checkNodeHostSynced(t *testing.T, nodes []*testNode) {
 	count := 0
 	for {
@@ -543,11 +559,11 @@ func getEntryHash(ent raftpb.Entry) uint64 {
 	return binary.LittleEndian.Uint64(h.Sum(nil)[:8])
 }
 
-func snapshotDisabledInRaftConfig() bool {
+func getConfigFromDeployedJson() config.Config {
 	cfg := config.Config{}
 	fn := "dragonboat-drummer.json"
 	if _, err := os.Stat(fn); os.IsNotExist(err) {
-		return false
+		panic(err)
 	}
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {
@@ -556,6 +572,16 @@ func snapshotDisabledInRaftConfig() bool {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		panic(err)
 	}
+	return cfg
+}
+
+func rateLimiterDisabledInRaftConfig() bool {
+	cfg := getConfigFromDeployedJson()
+	return cfg.MaxInMemLogSize == 0
+}
+
+func snapshotDisabledInRaftConfig() bool {
+	cfg := getConfigFromDeployedJson()
 	return cfg.SnapshotEntries == 0
 }
 
@@ -1496,6 +1522,10 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	plog.Infof("check logdb entries")
 	if snapshotDisabledInRaftConfig() {
 		checkLogdbEntriesSynced(t, nodehostNodes)
+	}
+	plog.Infof("going to check in mem log sizes")
+	if !rateLimiterDisabledInRaftConfig() {
+		checkRateLimiterState(t, nodehostNodes)
 	}
 	plog.Infof("going to check cluster accessibility")
 	checkClustersAreAccessible(t, numOfClustersInMonkeyTesting, dl)

@@ -14,6 +14,10 @@
 
 package settings
 
+const (
+	EntryNonCmdFieldsSize = 16 * 8
+)
+
 //
 // Tuning configuration parameters here will impact the performance of your
 // system. It will not corrupt your data. Only tune these parameters when
@@ -62,6 +66,9 @@ type soft struct {
 	// allocated once the free entry size in the current slice is less than
 	// MinEntrySliceFreeSize.
 	MinEntrySliceFreeSize uint64
+	// ExpectedMaxInMemLogSize is the minimum MaxInMemLogSize value expected
+	// in a raft config.
+	ExpectedMaxInMemLogSize uint64
 
 	//
 	// Multiraft
@@ -238,6 +245,7 @@ func getDefaultSoftSettings() soft {
 		MaxEntrySize:                        2 * MaxProposalPayloadSize,
 		InMemEntrySliceSize:                 512,
 		MinEntrySliceFreeSize:               96,
+		ExpectedMaxInMemLogSize:             2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
 		IncomingReadIndexQueueLength:        4096,
 		IncomingProposalQueueLength:         2048,
 		UnknownRegionName:                   "UNKNOWN",

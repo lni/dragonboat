@@ -925,7 +925,7 @@ func commitNoopEntry(r *raft, s ILogDB) {
 	r.readMessages()
 	s.Append(r.log.entriesToSave())
 	r.log.commitUpdate(pb.UpdateCommit{
-		AppliedTo:     r.log.committed,
+		Processed:     r.log.committed,
 		StableLogTo:   r.log.lastIndex(),
 		StableLogTerm: r.log.lastTerm(),
 	})

@@ -37,8 +37,8 @@ func TestLazyFreeCanBeDisabled(t *testing.T) {
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
-	q.get()
-	q.get()
+	q.get(false)
+	q.get(false)
 	tq := q.targetQueue()
 	for i := 0; i < 3; i++ {
 		if tq[i].Cmd == nil {
@@ -52,8 +52,8 @@ func TestLazyFreeCanBeUsed(t *testing.T) {
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
-	q.get()
-	q.get()
+	q.get(false)
+	q.get(false)
 	tq := q.targetQueue()
 	for i := 0; i < 3; i++ {
 		if tq[i].Cmd != nil {
@@ -67,24 +67,24 @@ func TestLazyFreeCycleCanBeSet(t *testing.T) {
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
-	q.get()
-	q.get()
+	q.get(false)
+	q.get(false)
 	tq := q.targetQueue()
 	for i := 0; i < 3; i++ {
 		if tq[i].Cmd == nil {
 			t.Errorf("data unexpectedly freed")
 		}
 	}
-	q.get()
-	q.get()
+	q.get(false)
+	q.get(false)
 	tq = q.targetQueue()
 	for i := 0; i < 3; i++ {
 		if tq[i].Cmd == nil {
 			t.Errorf("data unexpectedly freed")
 		}
 	}
-	q.get()
-	q.get()
+	q.get(false)
+	q.get(false)
 	tq = q.targetQueue()
 	for i := 0; i < 3; i++ {
 		if tq[i].Cmd != nil {
@@ -158,7 +158,7 @@ func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
 			t.Errorf("failed to add new entry")
 		}
 	}
-	r := q.get()
+	r := q.get(false)
 	if len(r) != 3 {
 		t.Errorf("len %d, want %d", len(r), 3)
 	}
@@ -175,7 +175,7 @@ func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
 			t.Errorf("failed to add new entry")
 		}
 		if q.idx == q.size {
-			r := q.get()
+			r := q.get(false)
 			if len(r) != 5 {
 				t.Errorf("len %d, want %d", len(r), 5)
 			}

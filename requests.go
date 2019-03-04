@@ -51,6 +51,8 @@ var (
 	// ErrPayloadTooBig indicates that the payload is too big.
 	ErrPayloadTooBig = errors.New("payload is too big")
 	// ErrSystemBusy indicates that the system is too busy to handle the request.
+	// This might be caused when the Raft node reached its MaxInMemLogSize limit
+	// or other system limits.
 	ErrSystemBusy = errors.New("system is too busy try again later")
 	// ErrClusterClosed indicates that the requested cluster is being shut down.
 	ErrClusterClosed = errors.New("raft cluster already closed")

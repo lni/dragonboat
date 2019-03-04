@@ -270,6 +270,7 @@ message Config {
   optional string CAFile               = 14 [(gogoproto.nullable) = false];
   optional string CertFile             = 15 [(gogoproto.nullable) = false];
   optional string KeyFile              = 16 [(gogoproto.nullable) = false];
+  optional uint64 MaxInMemLogSize      = 17 [(gogoproto.nullable) = false];
 }
 
 service Drummer {

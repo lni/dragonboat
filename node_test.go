@@ -524,7 +524,6 @@ func TestProposalCanBeMadeWithMessageDrops(t *testing.T) {
 			return
 		}
 		for i := 0; i < 20; i++ {
-			plog.Infof("making proposal id %d", i)
 			maxLastApplied := getMaxLastApplied(smList)
 			makeCheckedTestProposal(t, session, []byte("test-data"), 4000,
 				nodes, smList, router, requestCompleted, false, 0)
@@ -1333,6 +1332,7 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 }
 
 func TestSnapshotRecordCanBeSet(t *testing.T) {
+	defer leaktest.AfterTest(t)()
 	sr := snapshotRecord{}
 	rec := rsm.Commit{}
 	sr.setRecord(rec)
@@ -1342,6 +1342,7 @@ func TestSnapshotRecordCanBeSet(t *testing.T) {
 }
 
 func TestSnapshotRecordCanNotBeSetTwice(t *testing.T) {
+	defer leaktest.AfterTest(t)()
 	defer func() {
 		if r := recover(); r != nil {
 			return
@@ -1355,6 +1356,7 @@ func TestSnapshotRecordCanNotBeSetTwice(t *testing.T) {
 }
 
 func TestCanGetSnapshotRecord(t *testing.T) {
+	defer leaktest.AfterTest(t)()
 	sr := snapshotRecord{}
 	rec, ok := sr.getRecord()
 	if ok {
