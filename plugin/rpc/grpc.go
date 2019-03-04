@@ -322,6 +322,7 @@ func (g *RaftGRPC) RaftSnapshot(stream pb.Transport_RaftSnapshotServer) error {
 		case err := <-errorC:
 			return err
 		case <-g.stopper.ShouldStop():
+			<-errorC
 			return nil
 		case <-ticker.C:
 			chunks.Tick()
