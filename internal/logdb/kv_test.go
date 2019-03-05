@@ -27,10 +27,10 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open kv rocksdb")
 	}
+	defer deleteTestDB()
 	if err := kvs.Close(); err != nil {
 		t.Errorf("failed to close kv rocksdb")
 	}
-	deleteTestDB()
 }
 
 func runKVTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
@@ -162,4 +162,29 @@ func testKVIterateValue(t *testing.T,
 func TestKVIterateValue(t *testing.T) {
 	testKVIterateValue(t, []byte("key0"), []byte("key5"), true, 6)
 	testKVIterateValue(t, []byte("key0"), []byte("key5"), false, 5)
+}
+
+func TestWriteBatchCanBeCleared(t *testing.T) {
+	tf := func(t *testing.T, kvs IKvStore) {
+		wb := kvs.GetWriteBatch(nil)
+		wb.Put([]byte("key-1"), []byte("val-1"))
+		wb.Put([]byte("key-2"), []byte("val-2"))
+		if wb.Count() != 2 {
+			t.Errorf("unexpected count %d, want 2", wb.Count())
+		}
+		wb.Clear()
+		if err := kvs.CommitWriteBatch(wb); err != nil {
+			t.Fatalf("failed to commit write batch")
+		}
+		if err := kvs.GetValue([]byte("key-1"),
+			func(data []byte) error {
+				if len(data) != 0 {
+					t.Fatalf("unexpected value")
+				}
+				return nil
+			}); err != nil {
+			t.Fatalf("get value failed %v", err)
+		}
+	}
+	runKVTest(t, tf)
 }
