@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_leveldb
-// +build !dragonboat_pebble
-// +build !dragonboat_custom_logdb
+// +build dragonboat_pebble
 
 package logdb
 
@@ -25,37 +23,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
+	//"time"
 
-	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
+	//"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 )
-
-func TestCompactRangeInLogDBWorks(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	useRangeDelete = true
-	compactFunc := func(db raftio.ILogDB, clusterID uint64, nodeID uint64, maxIndex uint64) {
-		rrdb, ok := db.(*ShardedRDB)
-		if !ok {
-			t.Errorf("failed to get *MultiDiskRDB")
-		}
-		err := rrdb.RemoveEntriesTo(clusterID, nodeID, maxIndex-10)
-		if err != nil {
-			t.Errorf("delete range failed %v", err)
-		}
-		for i := 0; i < 1000; i++ {
-			time.Sleep(100 * time.Millisecond)
-			if atomic.LoadUint64(&rrdb.completedCompactions) > 0 {
-				break
-			}
-		}
-	}
-	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}
 
 func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	f func(raftio.ILogDB, uint64, uint64, uint64)) {
@@ -97,18 +71,12 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	if !ok {
 		t.Fatalf("failed to get *MultiDiskRDB")
 	}
-	var cr gorocksdb.Range
 	key1 := newKey(maxKeySize, nil)
 	key2 := newKey(maxKeySize, nil)
 	key1.SetEntryBatchKey(0, 4, 0)
 	key2.SetEntryBatchKey(0, 4, math.MaxUint64)
-	opts := gorocksdb.NewCompactionOptions()
-	opts.SetExclusiveManualCompaction(false)
-	opts.SetForceBottommostLevelCompaction()
-	defer opts.Destroy()
-	cr.Start = key1.Key()
-	cr.Limit = key2.Key()
-	rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
+	pdb := rrdb.shards[0].kvs.(*pebbleKV).db
+	pdb.Compact(key1.Key(), key2.Key())
 	initialSz, err := getDBDirSize(dir, 0)
 	if err != nil {
 		t.Errorf("failed to get db size %v", err)
@@ -121,11 +89,12 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to get db size %v", err)
 	}
-	if sz > initialSz/10 {
-		t.Errorf("sz %d > initialSz/10", sz)
+	if sz > initialSz/5 {
+		t.Errorf("sz %d > initialSz/5", sz)
 	}
 }
 
+/*
 func TestRawCompactRangeWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	useRangeDelete = true
@@ -143,28 +112,22 @@ func TestRawCompactRangeWorks(t *testing.T) {
 		lastKey := newKey(maxKeySize, nil)
 		firstKey.SetEntryBatchKey(clusterID, nodeID, 0)
 		lastKey.SetEntryBatchKey(clusterID, nodeID, batchID-1)
-		err := rrdb.shards[0].kvs.(*rocksdbKV).deleteRange(firstKey.Key(), lastKey.Key())
+		pdb := rrdb.shards[0].kvs.(*pebbleKV)
+		err := pdb.Compaction(firstKey.Key(), lastKey.Key())
 		if err != nil {
-			t.Errorf("delete range failed %v", err)
+			t.Errorf("compaction failed %v", err)
 		}
-		var cr gorocksdb.Range
 		key1 := newKey(maxKeySize, nil)
 		key2 := newKey(maxKeySize, nil)
 		key1.SetEntryBatchKey(clusterID, nodeID, 0)
 		key2.SetEntryBatchKey(clusterID, nodeID, batchID)
-		opts := gorocksdb.NewCompactionOptions()
-		opts.SetExclusiveManualCompaction(false)
-		opts.SetForceBottommostLevelCompaction()
-		defer opts.Destroy()
 		st := time.Now()
-		cr.Start = key1.Key()
-		cr.Limit = key2.Key()
-		rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
+		pdb.db.Compact(key1.Key(), key2.Key())
 		cost := time.Now().Sub(st).Nanoseconds()
 		plog.Infof("cost %d nanoseconds to complete the compact range op", cost)
 	}
 	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
-}
+}*/
 
 func modifyLogDBContent(fp string) {
 	idx := int64(0)
@@ -202,6 +165,7 @@ func modifyLogDBContent(fp string) {
 	if err != nil {
 		panic(err)
 	}
+	plog.Infof("sst file modified")
 }
 
 func sstFileToCorruptFilePath() []string {
@@ -243,11 +207,9 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 		ClusterID:     3,
 		NodeID:        4,
 	}
-	for i := 0; i < 128; i++ {
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+	err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+	if err != nil {
+		t.Errorf("failed to save single de rec")
 	}
 	db.Close()
 	db = getNewTestDB(dir, lldir)
@@ -266,6 +228,7 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 	f(db)
 }
 
+/*
 func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	f := func(fdb raftio.ILogDB) {
@@ -280,17 +243,16 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 		rdb := fdb.(*ShardedRDB).shards[3]
 		fk := rdb.keys.get()
 		fk.SetEntryKey(3, 4, 10)
-		iter := rdb.kvs.(*rocksdbKV).db.NewIterator(rdb.kvs.(*rocksdbKV).ro)
-		iter.Seek(fk.key)
+		iter := rdb.kvs.(*pebbleKV).db.NewIter(rdb.kvs.(*pebbleKV).ro)
+		iter.SeekGE(fk.key)
 		for ; iteratorIsValid(iter); iter.Next() {
-			plog.Infof("here")
 			val := iter.Value()
 			var e pb.Entry
-			if err := e.Unmarshal(val.Data()); err != nil {
+			if err := e.Unmarshal(val); err != nil {
 				panic(err)
 			}
 			plog.Infof(string(e.Cmd))
 		}
 	}
 	testDiskDataCorruptionIsHandled(t, f)
-}
+}*/

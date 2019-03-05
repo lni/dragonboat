@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // +build !dragonboat_leveldb
+// +build !dragonboat_pebble
 // +build !dragonboat_custom_logdb
 
 package logdb
