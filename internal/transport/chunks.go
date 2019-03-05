@@ -180,7 +180,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 		return
 	}
 	if err := c.saveChunk(chunk); err != nil {
-		plog.Errorf("failed to save a chun %s, %v", key, err)
+		plog.Errorf("failed to save a chunk %s, %v", key, err)
 		c.deleteTempChunkDir(chunk)
 		panic(err)
 	}

@@ -24,7 +24,14 @@ func ExampleNodeHostConfig() {
 		WALDir:         "/data/wal",
 		NodeHostDir:    "/data/dragonboat-data",
 		RTTMillisecond: 200,
-		RaftAddress:    "node01.raft.company.com:5012",
+		// RaftAddress is the public address that will be used by others to contact
+		// this NodeHost instance.
+		RaftAddress: "node01.raft.company.com:5012",
+		// ListenAddress is the local address to listen on. This field is typically
+		// set when there is port forwarding involved, e.g. your docker container
+		// might has a private address of 172.17.0.2 when the public address of the
+		// host is node01.raft.company.com and tcp port 5012 has been published.
+		ListenAddress: "172.17.0.2:5012",
 		// set this if you want to use gRPC based RPC module for exchanging raft data between raft nodes.
 		// RaftRPCFactory: rpc.NewRaftGRPC,
 	}
@@ -43,12 +50,29 @@ func checkInvalidAddress(t *testing.T, addr string) {
 	}
 }
 
+func TestListenAddress(t *testing.T) {
+	nhc := NodeHostConfig{
+		ListenAddress: "listen.address:12345",
+		RaftAddress:   "raft.address:23456",
+	}
+	if nhc.GetListenAddress() != nhc.ListenAddress {
+		t.Errorf("unexpected listen address %s, want %s",
+			nhc.GetListenAddress(), nhc.ListenAddress)
+	}
+	nhc.ListenAddress = ""
+	if nhc.GetListenAddress() != nhc.RaftAddress {
+		t.Errorf("unexpected listen address %s, want %s",
+			nhc.GetListenAddress(), nhc.RaftAddress)
+	}
+}
+
 func TestIsValidAddress(t *testing.T) {
 	va := []string{
 		"192.0.0.1:12345",
 		"202.96.1.23:1234",
 		"myhost:214",
-		"0.0.0.0:1", // your choice
+		"0.0.0.0:12345",
+		"node1.mydomain.com.cn:12345",
 		"myhost.test:12345",
 		"    myhost.test:12345 ",
 	}

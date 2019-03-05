@@ -335,9 +335,10 @@ func (nh *NodeHost) Stop() {
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
-// the node to make it ready for accepting incoming requests. The input
-// parameter nodes is a map of node ID to RaftAddress for indicating what
-// are initial nodes when the Raft cluster is first created. The join flag
+// the node to make it ready for accepting incoming requests.
+//
+// The input parameter nodes is a map of node ID to RaftAddress for indicating
+// what are initial nodes when the Raft cluster is first created. The join flag
 // indicates whether the node is a new node joining an existing cluster.
 // createStateMachine is a factory function for creating the IStateMachine
 // instance, config is the configuration instance that will be passed to the
@@ -753,8 +754,8 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
 // should be set to the most recent Config Change Index value returned by the
 // GetClusterMembership method. The requested delete node operation will be
-// rejected if other membership change has happened since the last call to
-// GetClusterMembership.
+// rejected if other membership change has been applied since the call to
+// the GetClusterMembership method.
 func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	nodeID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
@@ -781,12 +782,13 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // responsibility to call StartCluster on the right NodeHost instance to actually
 // start the Raft cluster node.
 //
-// When the raft cluster is created with the OrderedConfigChange config flag
-// set as false, the configChangeIndex parameter is ignored. Otherwise, it
-// should be set to the most recent Config Change Index value returned by the
-// GetClusterMembership method. The requested add node operation will be
-// rejected if other membership change has happened since the last call to
-// GetClusterMembership.
+// The input address parameter is the RaftAddress of the NodeHost where the new
+// Raft node being added will be running. When the raft cluster is created with
+// the OrderedConfigChange config flag set as false, the configChangeIndex
+// parameter is ignored. Otherwise, it should be set to the most recent Config
+// Change Index value returned by the GetClusterMembership method. The requested
+// add node operation will be rejected if other membership change has been
+// applied since the call to the GetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -815,12 +817,13 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// When the raft cluster is created with the OrderedConfigChange config flag
-// set as false, the configChangeIndex parameter is ignored. Otherwise, it
-// should be set to the most recent Config Change Index value returned by the
-// GetClusterMembership method. The requested add observer operation will be
-// rejected if other membership change has happened since the last call to
-// GetClusterMembership.
+// The input address parameter is the RaftAddress of the NodeHost where the new
+// observer being added will be running. When the raft cluster is created with
+// the OrderedConfigChange config flag set as false, the configChangeIndex
+// parameter is ignored. Otherwise, it should be set to the most recent Config
+// Change Index value returned by the GetClusterMembership method. The requested
+// add observer operation will be rejected if other membership change has been
+// applied since the call to the GetClusterMembership method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1225,7 +1228,7 @@ func (nh *NodeHost) reportNodeHostInfo(ctx context.Context,
 	defer cancel()
 	random.ShuffleStringList(servers)
 	nhi := NodeHostInfo{
-		NodeHostAddress:    nh.nhConfig.RaftAddress,
+		NodeHostAddress:    nh.RaftAddress(),
 		NodeHostAPIAddress: nh.nhConfig.APIAddress,
 		Region:             nh.region,
 		ClusterInfoList:    clusterInfoList,

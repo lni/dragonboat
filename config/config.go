@@ -166,10 +166,19 @@ type NodeHostConfig struct {
 	// used for benchmarking purposes is up to 500 microseconds when the ping time
 	// between them is 100 microseconds.
 	RTTMillisecond uint64
-	// RaftAddress is a hostname:port address used by the Raft RPC module for
-	// exchanging Raft messages. This is also the identifier value to identify
-	// a NodeHost instance.
+	// RaftAddress is a hostname:port or IP:port address used by the Raft RPC
+	// module for exchanging Raft messages and snapshots. This is also the
+	// identifier for a NodeHost instance. RaftAddress should be set to the
+	// public address that can be accessed from remote NodeHost instances.
 	RaftAddress string
+	// ListenAddress is a hostname:port or IP:port address used by the Raft RPC
+	// module to listen on for Raft message and snapshots. When the ListenAddress
+	// field is not set, The Raft RPC module listens on RaftAddress. If 0.0.0.0
+	// is specified as the IP of the ListenAddress, Dragonboat listens to the
+	// specified port on all interfaces. When hostname or domain name is
+	// specified, it is locally resolved to IP addresses first and Dragonboat
+	// listens to all resolved IP addresses.
+	ListenAddress string
 	// APIAddress is the address used by the optional NodeHost RPC API. Empty
 	// value means NodeHost API RPC server is not used. This optional field
 	// only need to be set when using Master servers.
@@ -209,6 +218,9 @@ func (c *NodeHostConfig) Validate() error {
 	if !stringutil.IsValidAddress(c.RaftAddress) {
 		return errors.New("invalid NodeHost address")
 	}
+	if len(c.ListenAddress) > 0 && !stringutil.IsValidAddress(c.ListenAddress) {
+		return errors.New("invalid ListenAddress")
+	}
 	if len(c.APIAddress) > 0 && !stringutil.IsValidAddress(c.APIAddress) {
 		return errors.New("invalid NodeHost API address")
 	}
@@ -240,6 +252,15 @@ func (c *NodeHostConfig) Validate() error {
 // run in Master mode.
 func (c *NodeHostConfig) MasterMode() bool {
 	return len(c.MasterServers) > 0
+}
+
+// GetListenAddress returns the actual address the RPC module is going to
+// listen on.
+func (c *NodeHostConfig) GetListenAddress() string {
+	if len(c.ListenAddress) > 0 {
+		return c.ListenAddress
+	}
+	return c.RaftAddress
 }
 
 // GetServerTLSConfig returns the server tls.Config instance based on the

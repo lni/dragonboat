@@ -317,7 +317,7 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 
 // Start starts the TCP transport module.
 func (g *TCPTransport) Start() error {
-	address := g.nhConfig.RaftAddress
+	address := g.nhConfig.GetListenAddress()
 	tlsConfig, err := g.nhConfig.GetServerTLSConfig()
 	if err != nil {
 		return err
