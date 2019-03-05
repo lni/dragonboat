@@ -152,8 +152,7 @@ func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// request node with ID 1 to be removed as a member node of raft cluster 100.
-	// the third parameter is OrderID, it is only relevant when using Master
-	// servers.
+	// the third parameter is OrderID.
 	rs, err := nh.RequestDeleteNode(100, 1, 0, 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the membership change request
@@ -171,8 +170,8 @@ func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
 	} else if s.Terminated() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
-		// request rejected as it is out of order. this can only happen when
-		// you are using IMasterClient. Try again with a correct order id value.
+		// request rejected as it is out of order. try again with the latest order
+		// id value returned by NodeHost's GetClusterMembership() method.
 	}
 }
 
@@ -182,8 +181,7 @@ func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// request node with ID 4 running at myhostname4:5012 to be added as a member
-	// node of raft cluster 100. the fourth parameter is OrderID, it is only
-	// relevant when using Master servers.
+	// node of raft cluster 100. the fourth parameter is OrderID.
 	rs, err := nh.RequestAddNode(100,
 		4, "myhostname4:5012", 0, 2000*time.Millisecond)
 	if err != nil {
@@ -216,8 +214,8 @@ func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
 	} else if s.Terminated() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
-		// request rejected as it is out of order. this can only happen when
-		// you are using IMasterClient. Try again with a correct order id value.
+		// request rejected as it is out of order. try again with the latest order
+		// id value returned by NodeHost's GetClusterMembership() method.
 	}
 }
 
