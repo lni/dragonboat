@@ -43,6 +43,7 @@ func (w *leveldbWriteBatch) Put(key []byte, val []byte) {
 }
 
 func (w *leveldbWriteBatch) Clear() {
+	w.wb.Clear()
 	w.count = 0
 }
 
