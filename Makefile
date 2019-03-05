@@ -649,7 +649,6 @@ static-check: cpp-static-check
 		then \
 			gocyclo -over 41 $$p; \
 		fi; \
-		gosec -quiet -exclude G103,G204,G401,G404,G501 $$p; \
 	done;
 
 cpp-static-check:
