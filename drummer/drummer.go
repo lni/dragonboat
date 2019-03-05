@@ -56,7 +56,7 @@ var (
 
 var (
 	loopIntervalFactor   = settings.Soft.DrummerLoopIntervalFactor
-	reportInterval       = dragonboat.NodeHostInfoReportSecond
+	reportInterval       = settings.Soft.NodeHostInfoReportSecond
 	maxServerMsgSize     = int(settings.Soft.MaxDrummerServerMsgSize)
 	tickIntervalSecond   = uint64(5)
 	raftTimeoutSecond    = uint64(10)

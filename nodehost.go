@@ -91,7 +91,6 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
@@ -112,16 +111,11 @@ const (
 )
 
 var (
-	// NodeHostInfoReportSecond defines how often NodeHost reports its info to
-	// optional Master servers. It is defined in the number of seconds.
-	NodeHostInfoReportSecond     uint64 = settings.Soft.NodeHostInfoReportSecond
-	persistentLogReportCycle     uint64 = settings.Soft.PersisentLogReportCycle
-	receiveQueueSize             uint64 = settings.Soft.RaftNodeReceiveQueueLength
-	setDeploymentIDTimeoutSecond uint64 = settings.Soft.SetDeploymentIDTimeoutSecond
-	delaySampleRatio             uint64 = settings.Soft.LatencySampleRatio
-	rsPoolSize                   uint64 = settings.Soft.NodeHostSyncPoolSize
-	streamConnections            uint64 = settings.Soft.StreamConnections
-	monitorInterval                     = 100 * time.Millisecond
+	receiveQueueSize  uint64 = settings.Soft.RaftNodeReceiveQueueLength
+	delaySampleRatio  uint64 = settings.Soft.LatencySampleRatio
+	rsPoolSize        uint64 = settings.Soft.NodeHostSyncPoolSize
+	streamConnections uint64 = settings.Soft.StreamConnections
+	monitorInterval          = 100 * time.Millisecond
 )
 
 var (
@@ -140,10 +134,6 @@ var (
 	ErrInvalidDeadline = errors.New("invalid deadline")
 )
 
-// MasterClientFactoryFunc is the factory function for creating a new
-// IMasterClient instance.
-type MasterClientFactoryFunc func(*NodeHost) IMasterClient
-
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
@@ -159,21 +149,18 @@ type NodeHost struct {
 		requests map[uint64]*server.MessageQueue
 	}
 	snapshotStatus   *snapshotFeedback
-	cancel           context.CancelFunc
 	serverCtx        *server.Context
 	nhConfig         config.NodeHostConfig
 	stopper          *syncutil.Stopper
 	duStopper        *syncutil.Stopper
 	nodes            *transport.Nodes
 	region           string
-	masterClient     IMasterClient
 	deploymentID     uint64
 	rsPool           []*sync.Pool
 	execEngine       *execEngine
 	logdb            raftio.ILogDB
 	transport        transport.ITransport
 	msgHandler       *messageHandler
-	initializedC     chan struct{}
 	transportLatency *sample
 }
 
@@ -181,15 +168,6 @@ type NodeHost struct {
 // is configured using the specified NodeHostConfig instance. In a typical
 // application, it is expected to have one NodeHost on each server.
 func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
-	return NewNodeHostWithMasterClientFactory(nhConfig, nil)
-}
-
-// NewNodeHostWithMasterClientFactory creates a new NodeHost instance and uses
-// the specified MasterClientFactoryFunc function to create the optional master
-// client. Master server details should be provided in the MasterServers field
-// in nhConfig. Note that Master Client and Master Servers are both optional.
-func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
-	factory MasterClientFactoryFunc) *NodeHost {
 	logBuildTagsAndVersion()
 	if err := nhConfig.Validate(); err != nil {
 		plog.Panicf("invalid nodehost config, %v", err)
@@ -200,7 +178,6 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 		stopper:          syncutil.NewStopper(),
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
-		initializedC:     make(chan struct{}),
 		transportLatency: newSample(),
 	}
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
@@ -208,56 +185,21 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
 	nh.createPools()
 	nh.createTransport()
-	if nhConfig.MasterMode() {
-		plog.Infof("master servers specified, creating the master client")
-		nh.masterClient = newMasterClient(nh, factory)
-		plog.Infof("master client type: %s", nh.masterClient.Name())
+	did := unmanagedDeploymentID
+	if nhConfig.DeploymentID == 0 {
+		plog.Warningf("DeploymentID not set in NodeHostConfig")
+		nh.transport.SetUnmanagedDeploymentID()
 	} else {
-		plog.Infof("no master server specified, running in standalone mode")
-		did := unmanagedDeploymentID
-		if nhConfig.DeploymentID == 0 {
-			plog.Warningf("DeploymentID not set in NodeHostConfig")
-			nh.transport.SetUnmanagedDeploymentID()
-		} else {
-			did = nhConfig.DeploymentID
-			nh.transport.SetDeploymentID(nhConfig.DeploymentID)
-		}
-		plog.Infof("DeploymentID set to %d", unmanagedDeploymentID)
-		nh.deploymentID = did
-		nh.createLogDB(nhConfig, did)
+		did = nhConfig.DeploymentID
+		nh.transport.SetDeploymentID(did)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	nh.cancel = cancel
-	initializeFn := func() {
-		if err := nh.initialize(ctx, nhConfig); err != nil {
-			if err != context.Canceled && err != ErrCanceled {
-				plog.Panicf("nh.initialize failed %v", err)
-			}
-		}
-	}
-	waitFn := func() func() {
-		if nh.masterMode() {
-			plog.Infof("master mode, nh.initialize() invoked in new goroutine")
-			nh.stopper.RunWorker(func() {
-				initializeFn()
-			})
-			return func() { nh.waitUntilInitialized() }
-		}
-		plog.Infof("standalone mode, nh.initialize() directly invoked")
-		initializeFn()
-		return func() {}
-	}()
-	defer waitFn()
+	plog.Infof("DeploymentID set to %d", did)
+	nh.deploymentID = did
+	nh.createLogDB(nhConfig, did)
+	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
+	nh.setRegion(context.Background())
 	nh.stopper.RunWorker(func() {
-		nh.masterRequestHandler(ctx)
-	})
-	// info reporting worker is using a different stopper as we need to stop it
-	// separately during monkey test
-	nh.duStopper.RunWorker(func() {
-		nh.reportingWorker(ctx)
-	})
-	nh.stopper.RunWorker(func() {
-		nh.nodeMonitorMain(ctx, nhConfig)
+		nh.nodeMonitorMain(nhConfig)
 	})
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
@@ -302,15 +244,11 @@ func (nh *NodeHost) Stop() {
 				logutil.ClusterID(node.ClusterID))
 		}
 	}
-	nh.cancel()
 	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
 	if nh.duStopper != nil {
 		nh.duStopper.Stop()
 	}
 	nh.stopper.Stop()
-	if nh.masterClient != nil {
-		nh.masterClient.Stop()
-	}
 	plog.Debugf("%s is going to stop the exec engine", nh.describe())
 	if nh.execEngine != nil {
 		nh.execEngine.stop()
@@ -883,6 +821,22 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 	return true
 }
 
+func (nh *NodeHost) GetNodeHostInfo() *NodeHostInfo {
+	clusterInfoList, clusterIDList := nh.getClusterInfo()
+	plogInfo, err := nh.logdb.ListNodeInfo()
+	if err != nil {
+		plog.Panicf("failed to list all logs on logdb %v", err)
+	}
+	return &NodeHostInfo{
+		RaftAddress:     nh.RaftAddress(),
+		APIAddress:      nh.nhConfig.APIAddress,
+		Region:          nh.region,
+		ClusterInfoList: clusterInfoList,
+		ClusterIDList:   clusterIDList,
+		LogInfo:         plogInfo,
+	}
+}
+
 func (nh *NodeHost) propose(s *client.Session,
 	cmd []byte, handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
@@ -1202,105 +1156,6 @@ func (nh *NodeHost) getClusterInfo() ([]ClusterInfo, []uint64) {
 	return clusterInfoList, clusterIDList
 }
 
-func (nh *NodeHost) reportNodeHostInfo(ctx context.Context,
-	servers []string, plogIncluded bool) error {
-	if !nh.masterMode() {
-		return nil
-	}
-	plog.Debugf("nodehost %s is going to call getClusterInfo()",
-		nh.RaftAddress())
-	clusterInfoList, clusterIDList := nh.getClusterInfo()
-	plog.Debugf("nodehost %s completed getClusterInfo()",
-		nh.RaftAddress())
-	var plogInfo []raftio.NodeInfo
-	var err error
-	if plogIncluded {
-		plogInfo, err = nh.logdb.ListNodeInfo()
-		if err != nil {
-			plog.Panicf("failed to list all on logdb %v", err)
-		}
-	}
-	// FIXME
-	// magic number 2, why 2?
-	timeoutSecond := time.Duration(NodeHostInfoReportSecond * 2)
-	rctx, cancel := context.WithTimeout(ctx, timeoutSecond*time.Second)
-	defer cancel()
-	random.ShuffleStringList(servers)
-	nhi := NodeHostInfo{
-		NodeHostAddress:    nh.RaftAddress(),
-		NodeHostAPIAddress: nh.nhConfig.APIAddress,
-		Region:             nh.region,
-		ClusterInfoList:    clusterInfoList,
-		ClusterIDList:      clusterIDList,
-		LogInfoIncluded:    plogIncluded,
-		LogInfo:            plogInfo,
-	}
-	for _, url := range servers {
-		err := nh.masterClient.SendNodeHostInfo(rctx, url, nhi)
-		if err != nil {
-			if err == context.Canceled {
-				return err
-			}
-			plog.Warningf("%s failed to send node host info to %s, %v",
-				nh.describe(), url, err)
-		} else {
-			break
-		}
-	}
-	return nil
-}
-
-func (nh *NodeHost) getDeploymentID(ctx context.Context) (uint64, error) {
-	if _, err := getTimeoutFromContext(ctx); err != ErrDeadlineNotSet {
-		panic("deadline unexpectedly set")
-	}
-	for {
-		plog.Infof("trying to get deployment id from the master servers")
-		for _, url := range nh.nhConfig.MasterServers {
-			timeoutSecond := time.Duration(setDeploymentIDTimeoutSecond)
-			tctx, cancel := context.WithTimeout(ctx, timeoutSecond*time.Second)
-			deploymentID, err := nh.masterClient.GetDeploymentID(tctx, url)
-			cancel()
-			if err == nil {
-				plog.Infof("master reported DeploymentID %d", deploymentID)
-				return deploymentID, nil
-			} else if err == context.Canceled {
-				return 0, err
-			}
-		}
-		wait := func() error {
-			timer := time.NewTimer(5 * time.Second)
-			defer timer.Stop()
-			select {
-			case <-timer.C:
-				return nil
-			case <-ctx.Done():
-				if ctx.Err() == context.Canceled {
-					return ErrCanceled
-				} else if ctx.Err() == context.DeadlineExceeded {
-					return ErrTimeout
-				} else {
-					panic("unknown ctx err")
-				}
-			}
-		}
-		if err := wait(); err != nil {
-			return 0, err
-		}
-	}
-}
-
-func (nh *NodeHost) setDeploymentID(ctx context.Context) (uint64, error) {
-	deploymentID, err := nh.getDeploymentID(ctx)
-	if err == nil {
-		plog.Infof("DeploymentID has been set to %d", deploymentID)
-		nh.transport.SetDeploymentID(deploymentID)
-		nh.deploymentID = deploymentID
-		return deploymentID, nil
-	}
-	return 0, err
-}
-
 func (nh *NodeHost) setRegion(ctx context.Context) {
 	if region, err := getRegion(ctx); err != nil {
 		panic("failed to get region")
@@ -1318,50 +1173,9 @@ func (nh *NodeHost) setRegion(ctx context.Context) {
 
 func (nh *NodeHost) initialize(ctx context.Context,
 	nhConfig config.NodeHostConfig) error {
-	if nh.masterMode() {
-		did, err := nh.setDeploymentID(ctx)
-		if err != nil {
-			return err
-		}
-		nh.createLogDB(nhConfig, did)
-	}
 	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
 	nh.setRegion(ctx)
-	nh.setInitialized()
 	return nil
-}
-
-func (nh *NodeHost) masterRequestHandler(ctx context.Context) {
-	tf := func() bool {
-		if nh.masterClient != nil {
-			err := nh.masterClient.HandleMasterRequests(ctx)
-			if err == context.Canceled {
-				return true
-			}
-		}
-		return false
-	}
-	lang.RunTicker(time.Second, tf, ctx.Done(), nh.stopper.ShouldStop())
-}
-
-func (nh *NodeHost) reportingWorker(ctx context.Context) {
-	duration := time.Duration(NodeHostInfoReportSecond) * time.Second
-	count := uint64(0)
-	servers := make([]string, 0)
-	servers = append(servers, nh.nhConfig.MasterServers...)
-	tf := func() bool {
-		if !nh.initialized() {
-			return false
-		}
-		count++
-		includePlog := false
-		if count == 1 || count%persistentLogReportCycle == 0 {
-			includePlog = true
-		}
-		err := nh.reportNodeHostInfo(ctx, servers, includePlog)
-		return err == context.Canceled
-	}
-	lang.RunTicker(duration, tf, ctx.Done(), nh.duStopper.ShouldStop())
 }
 
 func (nh *NodeHost) tickWorkerMain() {
@@ -1479,8 +1293,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 	}
 }
 
-func (nh *NodeHost) nodeMonitorMain(ctx context.Context,
-	nhConfig config.NodeHostConfig) {
+func (nh *NodeHost) nodeMonitorMain(nhConfig config.NodeHostConfig) {
 	count := uint64(0)
 	tf := func() bool {
 		count++
@@ -1537,23 +1350,6 @@ func (nh *NodeHost) sendNoOPMessage(clusterID uint64, nodeID uint64) {
 	nh.msgHandler.HandleMessageBatch(batch)
 }
 
-func (nh *NodeHost) initialized() bool {
-	select {
-	case <-nh.initializedC:
-		return true
-	default:
-		return false
-	}
-}
-
-func (nh *NodeHost) waitUntilInitialized() {
-	<-nh.initializedC
-}
-
-func (nh *NodeHost) setInitialized() {
-	close(nh.initializedC)
-}
-
 func (nh *NodeHost) increaseTick() {
 	atomic.AddUint64(&nh.tick, 1)
 }
@@ -1571,10 +1367,6 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 
 func (nh *NodeHost) describe() string {
 	return nh.RaftAddress()
-}
-
-func (nh *NodeHost) masterMode() bool {
-	return nh.nhConfig.MasterMode()
 }
 
 func (nh *NodeHost) logNodeHostDetails() {

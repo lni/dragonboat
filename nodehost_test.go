@@ -152,8 +152,6 @@ func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// request node with ID 1 to be removed as a member node of raft cluster 100.
-	// the third parameter is OrderID, it is only relevant when using Master
-	// servers.
 	rs, err := nh.RequestDeleteNode(100, 1, 0, 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the membership change request
@@ -171,8 +169,8 @@ func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
 	} else if s.Terminated() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
-		// request rejected as it is out of order. this can only happen when
-		// you are using IMasterClient. Try again with a correct order id value.
+		// request rejected as it is out of order. try again with a correct order
+		// id value.
 	}
 }
 
@@ -182,8 +180,7 @@ func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// request node with ID 4 running at myhostname4:5012 to be added as a member
-	// node of raft cluster 100. the fourth parameter is OrderID, it is only
-	// relevant when using Master servers.
+	// node of raft cluster 100.
 	rs, err := nh.RequestAddNode(100,
 		4, "myhostname4:5012", 0, 2000*time.Millisecond)
 	if err != nil {
@@ -216,8 +213,7 @@ func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
 	} else if s.Terminated() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
-		// request rejected as it is out of order. this can only happen when
-		// you are using IMasterClient. Try again with a correct order id value.
+		// request rejected as it is out of order.
 	}
 }
 
@@ -373,110 +369,6 @@ func TestRaftRPCCanBeExtended(t *testing.T) {
 	if tt.GetRaftRPC().Name() != transport.NOOPRaftName {
 		t.Errorf("raft rpc type name %s, expect %s",
 			tt.GetRaftRPC().Name(), transport.NOOPRaftName)
-	}
-}
-
-func TestMasterClientIsNotCreateWhenNoMasterServerIsConfigured(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	nh := NewNodeHost(*c)
-	defer nh.Stop()
-	if nh.masterClient != nil {
-		t.Errorf("master client unexpectedly created")
-	}
-}
-
-type noopMasterClient struct {
-	sendCount   uint64
-	handleCount uint64
-}
-
-func (n *noopMasterClient) Name() string { return "noop-masterclient" }
-func (n *noopMasterClient) Stop()        {}
-func (n *noopMasterClient) GetDeploymentID(ctx context.Context,
-	url string) (uint64, error) {
-	return 1, nil
-}
-func (n *noopMasterClient) HandleMasterRequests(ctx context.Context) error {
-	atomic.AddUint64(&n.handleCount, 1)
-	return nil
-}
-
-func (n *noopMasterClient) SendNodeHostInfo(ctx context.Context, url string,
-	nhi NodeHostInfo) error {
-	atomic.AddUint64(&n.sendCount, 1)
-	return nil
-}
-
-func (n *noopMasterClient) getSendCount() uint64 {
-	return atomic.LoadUint64(&n.sendCount)
-}
-
-func (n *noopMasterClient) getHandleCount() uint64 {
-	return atomic.LoadUint64(&n.handleCount)
-}
-
-func TestMasterClientCanBeExtended(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	c.MasterServers = []string{"localhost:22222"}
-	mc := &noopMasterClient{}
-	factory := func(*NodeHost) IMasterClient {
-		return mc
-	}
-	nh := NewNodeHostWithMasterClientFactory(*c, factory)
-	if !nh.initialized() {
-		t.Fatalf("returned nodehost is not initialized")
-	}
-	defer nh.Stop()
-	if nh.masterClient.Name() != mc.Name() {
-		t.Errorf("master client type name %s, expect %s",
-			nh.masterClient.Name(), mc.Name())
-	}
-}
-
-func TestMasterClientIsPeriodicallyUsed(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	ov := NodeHostInfoReportSecond
-	NodeHostInfoReportSecond = 1
-	c := getTestNodeHostConfig()
-	c.MasterServers = []string{"localhost:22222"}
-	mc := &noopMasterClient{}
-	factory := func(*NodeHost) IMasterClient {
-		return mc
-	}
-	nh := NewNodeHostWithMasterClientFactory(*c, factory)
-	defer func() { NodeHostInfoReportSecond = ov }()
-	defer nh.Stop()
-	if nh.masterClient.Name() != mc.Name() {
-		t.Errorf("master client type name %s, expect %s",
-			nh.masterClient.Name(), mc.Name())
-	}
-	var prevSendCount uint64
-	var prevHandleCount uint64
-	done := false
-	for iter := 1; iter < 50; iter++ {
-		prevSendCount = mc.getSendCount()
-		prevHandleCount = mc.getHandleCount()
-		time.Sleep(3 * time.Second)
-		sc := mc.getSendCount()
-		hc := mc.getHandleCount()
-		if sc >= prevSendCount+2 && hc >= prevHandleCount+2 {
-			done = true
-			break
-		} else {
-			plog.Infof("sc %d, prev sc %d, hc %d, prev hc %d",
-				sc, prevSendCount, hc, prevHandleCount)
-		}
-	}
-	if !done {
-		t.Errorf("SendNodeHostInfo or HandleMasterRequests not periodically called")
 	}
 }
 

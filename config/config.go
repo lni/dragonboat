@@ -183,10 +183,6 @@ type NodeHostConfig struct {
 	// value means NodeHost API RPC server is not used. This optional field
 	// only need to be set when using Master servers.
 	APIAddress string
-	// MasterServers is a list of Master server addresses to use. Master servers
-	// are optional component. Empty or nil value means that there is no Master
-	// server configured for this deployment.
-	MasterServers []string
 	// MutualTLS defines whether to use mutual TLS for authenticating servers
 	// and clients. Insecure communication is used when MutualTLS is set to
 	// False.
@@ -224,11 +220,6 @@ func (c *NodeHostConfig) Validate() error {
 	if len(c.APIAddress) > 0 && !stringutil.IsValidAddress(c.APIAddress) {
 		return errors.New("invalid NodeHost API address")
 	}
-	for _, da := range c.MasterServers {
-		if !stringutil.IsValidAddress(da) {
-			return errors.New("invalid drummer address")
-		}
-	}
 	if !c.MutualTLS &&
 		(len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0) {
 		plog.Warningf("CAFile/CertFile/KeyFile specified when MutualTLS is disabled")
@@ -246,12 +237,6 @@ func (c *NodeHostConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// MasterMode returns a boolean value indicating whether the NodeHost is set to
-// run in Master mode.
-func (c *NodeHostConfig) MasterMode() bool {
-	return len(c.MasterServers) > 0
 }
 
 // GetListenAddress returns the actual address the RPC module is going to
