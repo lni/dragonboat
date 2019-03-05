@@ -15,6 +15,8 @@
 package settings
 
 const (
+	// EntryNonCmdFieldsSize defines the upper limit of the non-cmd field
+	// length in pb.Entry.
 	EntryNonCmdFieldsSize = 16 * 8
 )
 
@@ -56,7 +58,7 @@ type soft struct {
 	//
 
 	// MaxEntrySize defines the max total entry size that can be included in
-	// MsgAppend.
+	// the Replicate message.
 	MaxEntrySize uint64
 	// InMemEntrySliceSize defines the maximum length of the in memory entry
 	// slice.

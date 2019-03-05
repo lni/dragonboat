@@ -27,6 +27,7 @@ type followerState struct {
 	inMemLogSize uint64
 }
 
+// RateLimiter is the struct used to keep tracking the in memory rate log size.
 type RateLimiter struct {
 	tick                  uint64
 	inMemLogSize          uint64
@@ -34,6 +35,7 @@ type RateLimiter struct {
 	followerInMemLogSizes map[uint64]followerState
 }
 
+// NewRateLimiter creates and returns a rate limiter instance.
 func NewRateLimiter(maxSize uint64) *RateLimiter {
 	return &RateLimiter{
 		maxSize:               maxSize,
@@ -41,38 +43,48 @@ func NewRateLimiter(maxSize uint64) *RateLimiter {
 	}
 }
 
+// Enabled returns a boolean flag indicating whether the rate limiter is
+// enabled.
 func (r *RateLimiter) Enabled() bool {
 	return r.maxSize > 0 && r.maxSize != math.MaxUint64
 }
 
+// HeartbeatTick advances the internal logical clock.
 func (r *RateLimiter) HeartbeatTick() {
 	r.tick++
 }
 
+// GetHeartbeatTick returns the internal logical clock value.
 func (r *RateLimiter) GetHeartbeatTick() uint64 {
 	return r.tick
 }
 
+// IncreaseInMemLogSize increases the recorded in memory log size by sz bytes.
 func (r *RateLimiter) IncreaseInMemLogSize(sz uint64) {
 	r.inMemLogSize += sz
 }
 
+// DecreaseInMemLogSize decreases the recorded in memory log size by sz bytes.
 func (r *RateLimiter) DecreaseInMemLogSize(sz uint64) {
 	r.inMemLogSize -= sz
 }
 
+// SetInMemLogSize sets the recorded in memory log size to sz bytes.
 func (r *RateLimiter) SetInMemLogSize(sz uint64) {
 	r.inMemLogSize = sz
 }
 
+// GetInMemLogSize returns the recorded in memory log size.
 func (r *RateLimiter) GetInMemLogSize() uint64 {
 	return r.inMemLogSize
 }
 
+// ResetFollowerState clears all recorded follower states.
 func (r *RateLimiter) ResetFollowerState() {
 	r.followerInMemLogSizes = make(map[uint64]followerState)
 }
 
+// SetFollowerState sets the follower rate identiified by nodeID to sz bytes.
 func (r *RateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
 	state := followerState{
 		tick:         r.tick,
@@ -81,6 +93,8 @@ func (r *RateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
 	r.followerInMemLogSizes[nodeID] = state
 }
 
+// RateLimited returns a boolean flag indicating whether the node is rate
+// limited.
 func (r *RateLimiter) RateLimited() bool {
 	return r.limitedByInMemSize()
 }
