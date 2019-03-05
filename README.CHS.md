@@ -22,6 +22,22 @@ Raft这样的共识算法使得只要系统中的多数成员在线便可使得�
 * 支持定制的Raft log存储与Raft RPC模块，可方便整合最新IO类技术产品
 * 多Raft组由自带的[Drummer](/drummer)服务器组件管理以获得良好的高可用
 
+Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
+* leader election, log replication, snapshotting and log compaction
+* membership changes
+* ReadIndex protocol for read-only queries
+* leadership transfer and non-voting members
+* idempotent updates transparent to applications
+* batching and pipelining
+
+Diego Ongaro的[Raft博士学位论文](https://ramcloud.stanford.edu/~ongaro/thesis.pdf)中提及的绝大多数功能都已实现：
+* 选主、log复制、状态机快照与log清理
+* Raft组成员变更
+* 基于ReadIndex协议的只读查询
+* 主节点转移与无投票权成员
+* 应用透明的幂等更新支持
+* 成组处理优化与流水化处理
+
 ## 性能 ##
 Dragonboat是目前Github网站上最快的开源多组Raft实现。
 

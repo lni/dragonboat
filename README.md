@@ -21,6 +21,14 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 * Optional [Drummer](/drummer) server component for managing large number of Raft groups with high availability
 * [Extensively tested](/doc/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
 
+Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
+* leader election, log replication, snapshotting and log compaction
+* membership changes
+* ReadIndex protocol for read-only queries
+* leadership transfer and non-voting members
+* idempotent updates transparent to applications
+* batching and pipelining
+
 ## Performance ##
 Dragonboat is the __fastest__ open source multi-group Raft implementation on Github. 
 
