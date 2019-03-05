@@ -93,6 +93,36 @@ func TestLazyFreeCycleCanBeSet(t *testing.T) {
 	}
 }
 
+func TestEntryQueueCanBePaused(t *testing.T) {
+	q := newEntryQueue(5, 0)
+	if q.paused {
+		t.Errorf("entry queue is paused by default")
+	}
+	for i := 0; i < 5; i++ {
+		ok, stopped := q.add(raftpb.Entry{})
+		if !ok || stopped {
+			t.Errorf("failed to add new entry")
+		}
+		if q.stopped {
+			t.Errorf("stopped too early")
+		}
+	}
+	v := q.get(true)
+	if len(v) != 5 {
+		t.Errorf("failed to get all entries")
+	}
+	if !q.paused {
+		t.Errorf("not paused")
+	}
+	ok, stopped := q.add(raftpb.Entry{})
+	if ok {
+		t.Errorf("entry added to paused queue")
+	}
+	if stopped {
+		t.Errorf("entry queue unexpectedly stopped")
+	}
+}
+
 func TestEntryQueueCanBeClosed(t *testing.T) {
 	q := newEntryQueue(5, 0)
 	if q.stopped {

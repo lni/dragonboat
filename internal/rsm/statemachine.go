@@ -236,6 +236,12 @@ func (s *StateMachine) GetBatchedLastApplied() uint64 {
 	return v
 }
 
+// SetBatchedLastApplied sets the batched last applied value. This method
+// is mostly used in tests.
+func (s *StateMachine) SetBatchedLastApplied(idx uint64) {
+	s.setBatchedLastApplied(idx)
+}
+
 func (s *StateMachine) setBatchedLastApplied(idx uint64) {
 	s.batchedLastApplied.Lock()
 	s.batchedLastApplied.index = idx

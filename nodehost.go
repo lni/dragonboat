@@ -242,11 +242,10 @@ func NewNodeHostWithMasterClientFactory(nhConfig config.NodeHostConfig,
 				initializeFn()
 			})
 			return func() { nh.waitUntilInitialized() }
-		} else {
-			plog.Infof("standalone mode, nh.initialize() directly invoked")
-			initializeFn()
-			return func() {}
 		}
+		plog.Infof("standalone mode, nh.initialize() directly invoked")
+		initializeFn()
+		return func() {}
 	}()
 	defer waitFn()
 	nh.stopper.RunWorker(func() {

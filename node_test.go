@@ -506,6 +506,36 @@ func runRaftNodeTest(t *testing.T, quiesce bool,
 	tf(t, nodes, smList, router, ldb)
 }
 
+func TestLastAppliedValueCanBeReturned(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		sm := smList[0]
+		for i := uint64(1); i <= 100; i++ {
+			sm.SetBatchedLastApplied(i)
+			if !n.handleEvents() {
+				t.Errorf("handle events reported no event")
+			}
+			ud, ok := n.getUpdate()
+			if !ok {
+				t.Errorf("no update")
+			} else {
+				if ud.LastApplied != i {
+					t.Errorf("last applied value not returned, got %d want %d",
+						ud.LastApplied, i)
+				}
+			}
+		}
+		if n.handleEvents() {
+			t.Errorf("unexpected event")
+		}
+		if _, ok := n.getUpdate(); ok {
+			t.Errorf("unexpected update")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
 func TestProposalCanBeMadeWithMessageDrops(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {

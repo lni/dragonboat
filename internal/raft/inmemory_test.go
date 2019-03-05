@@ -348,7 +348,7 @@ func TestInMemMerge(t *testing.T) {
 	}
 }
 
-func TestInMemEntriesToSaveReturnNotStabledEntries(t *testing.T) {
+func TestInMemEntriesToSaveReturnNotSavedEntries(t *testing.T) {
 	im := inMemory{
 		markerIndex: 5,
 		entries: []pb.Entry{
@@ -382,7 +382,7 @@ func TestInMemEntriesToSaveReturnNotStabledEntries(t *testing.T) {
 	}
 }
 
-func TestInMemSaveLogToUpdatesStableTo(t *testing.T) {
+func TestInMemSaveLogToUpdatesSaveTo(t *testing.T) {
 	tests := []struct {
 		index   uint64
 		term    uint64
@@ -410,7 +410,7 @@ func TestInMemSaveLogToUpdatesStableTo(t *testing.T) {
 	}
 }
 
-func TestInMemSetStableToWhenRestoringSnapshot(t *testing.T) {
+func TestInMemSetSaveToWhenRestoringSnapshot(t *testing.T) {
 	ss := pb.Snapshot{Index: 100, Term: 10}
 	im := inMemory{
 		markerIndex: 5,
@@ -425,7 +425,7 @@ func TestInMemSetStableToWhenRestoringSnapshot(t *testing.T) {
 	}
 }
 
-func TestInMemMergeSetStableTo(t *testing.T) {
+func TestInMemMergeSetSaveTo(t *testing.T) {
 	im := inMemory{
 		markerIndex: 6,
 		entries: []pb.Entry{
@@ -483,6 +483,43 @@ func TestInMemMergeSetStableTo(t *testing.T) {
 	im.merge(ents)
 	if im.savedTo != 5 {
 		t.Errorf("savedTo %d, want 5", im.savedTo)
+	}
+}
+
+func TestAppliedLogTo(t *testing.T) {
+	im := inMemory{
+		markerIndex: 5,
+		entries: []pb.Entry{
+			{Index: 5, Term: 5},
+			{Index: 6, Term: 6},
+			{Index: 7, Term: 7},
+			{Index: 8, Term: 8},
+			{Index: 9, Term: 9},
+			{Index: 10, Term: 10},
+		},
+		savedTo: 4,
+	}
+	tests := []struct {
+		appliedTo  uint64
+		length     int
+		firstIndex uint64
+	}{
+		{5, 6, 5},
+		{11, 6, 5},
+		{6, 5, 6},
+		{6, 5, 6},
+		{10, 1, 10},
+	}
+	for idx, tt := range tests {
+		im.appliedLogTo(tt.appliedTo)
+		if len(im.entries) != tt.length {
+			t.Errorf("%d, unexpected entry slice len %d, want %d",
+				idx, len(im.entries), tt.length)
+		}
+		if im.entries[0].Index != tt.firstIndex {
+			t.Errorf("%d, unexpected first index %d, want %d",
+				idx, im.entries[0].Index, tt.firstIndex)
+		}
 	}
 }
 

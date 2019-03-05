@@ -605,7 +605,7 @@ func TestGetUncommittedEntries(t *testing.T) {
 	if len(ents) != 0 {
 		t.Errorf("unexpected length")
 	}
-	el.Append([]pb.Entry{
+	el.append([]pb.Entry{
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 1},
 		{Index: 3, Term: 2},

@@ -219,6 +219,22 @@ func TestRaftAPIProposeAndConfigChange(t *testing.T) {
 	testRaftAPIProposeAndConfigChange(raftpb.AddObserver, 2, t)
 }
 
+func TestGetUpdateIncludeLastAppliedValue(t *testing.T) {
+	s := NewTestLogDB()
+	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	if err != nil {
+		t.Fatalf("failed to launch peer %v", err)
+	}
+	ud := rawNode.GetUpdate(true, 1232)
+	if ud.LastApplied != 1232 {
+		t.Errorf("unexpected last applied value %d, want 1232", ud.LastApplied)
+	}
+	uc := getUpdateCommit(ud)
+	if uc.LastApplied != 1232 {
+		t.Errorf("unexpected last applied value %d, want 1232", uc.LastApplied)
+	}
+}
+
 func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 	s := NewTestLogDB()
 	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
