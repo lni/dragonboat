@@ -511,7 +511,7 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		sm := smList[0]
-		for i := uint64(1); i <= 100; i++ {
+		for i := uint64(5); i <= 100; i++ {
 			sm.SetBatchedLastApplied(i)
 			if !n.handleEvents() {
 				t.Errorf("handle events reported no event")
@@ -525,13 +525,32 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 						ud.LastApplied, i)
 				}
 			}
+			ud.UpdateCommit.LastApplied = 0
+			n.node.Commit(ud)
 		}
 		if n.handleEvents() {
 			t.Errorf("unexpected event")
 		}
-		if _, ok := n.getUpdate(); ok {
-			t.Errorf("unexpected update")
+		if ud, ok := n.getUpdate(); ok {
+			t.Errorf("unexpected update, %+v", ud)
 		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
+func TestLastAppliedValueIsAlwaysOneWayIncreasing(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("not panic")
+			}
+		}()
+		n := nodes[0]
+		sm := smList[0]
+		sm.SetBatchedLastApplied(1)
+		n.handleEvents()
+		n.getUpdate()
 	}
 	runRaftNodeTest(t, false, tf)
 }

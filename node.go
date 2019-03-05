@@ -553,6 +553,10 @@ func (rc *node) getUpdate() (pb.Update, bool) {
 	moreEntriesToApply := rc.canHaveMoreEntriesToApply()
 	if rc.node.HasUpdate(moreEntriesToApply) ||
 		rc.confirmedLastApplied != rc.lastApplied {
+		if rc.lastApplied < rc.confirmedLastApplied {
+			plog.Panicf("last applied value moving backwards, %d, now %d",
+				rc.confirmedLastApplied, rc.lastApplied)
+		}
 		ud := rc.node.GetUpdate(moreEntriesToApply, rc.lastApplied)
 		for idx := range ud.Messages {
 			ud.Messages[idx].ClusterId = rc.clusterID
