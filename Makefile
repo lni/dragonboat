@@ -20,6 +20,9 @@ ifeq ($(DRAGONBOAT_LOGDB),leveldb)
 $(info using leveldb based log storage)
 GOCMD=go
 LOGDB_TAG=dragonboat_leveldb
+else ifeq ($(DRAGONBOAT_LOGDB),pebble)
+GOCMD=go
+LOGDB_TAG=dragonboat_pebble
 else ifeq ($(DRAGONBOAT_LOGDB),custom)
 $(info using custom lodb)
 GOCMD=go
