@@ -17,7 +17,7 @@ package drummer
 import (
 	"errors"
 
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/random"

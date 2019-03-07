@@ -23,7 +23,7 @@ import (
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/drummer/multiraftpb"
+	pb "github.com/lni/dragonboat/internal/drummer/multiraftpb"
 	"github.com/lni/dragonboat/internal/utils/netutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 )

@@ -15,7 +15,7 @@
 package drummer
 
 import (
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 )
 

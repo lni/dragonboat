@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/internal/utils/syncutil"

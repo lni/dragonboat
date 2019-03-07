@@ -37,7 +37,7 @@ import (
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/compression"
 	"github.com/lni/dragonboat/internal/utils/envutil"

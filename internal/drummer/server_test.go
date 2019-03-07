@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/utils/compression/snappy"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/random"

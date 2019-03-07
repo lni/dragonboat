@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/lni/dragonboat/drummer/client"
-	mr "github.com/lni/dragonboat/drummer/multiraftpb"
+	"github.com/lni/dragonboat/internal/drummer/client"
+	mr "github.com/lni/dragonboat/internal/drummer/multiraftpb"
 	kvpb "github.com/lni/dragonboat/internal/tests/kvpb"
 )
 

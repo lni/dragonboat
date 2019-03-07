@@ -24,7 +24,7 @@ import (
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/config"
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"

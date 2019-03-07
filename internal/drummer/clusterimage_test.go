@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 )
 
 func TestZeroTickZeroFirstObservedNodeIsConsideredAsDailed(t *testing.T) {

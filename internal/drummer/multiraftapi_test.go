@@ -26,9 +26,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/client"
-	dc "github.com/lni/dragonboat/drummer/client"
-	pb "github.com/lni/dragonboat/drummer/drummerpb"
-	mr "github.com/lni/dragonboat/drummer/multiraftpb"
+	dc "github.com/lni/dragonboat/internal/drummer/client"
+	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
+	mr "github.com/lni/dragonboat/internal/drummer/multiraftpb"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/random"

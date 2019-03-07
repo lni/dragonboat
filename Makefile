@@ -308,7 +308,7 @@ plugin-concurrentkv: $(PLUGIN_CONCURRENTKV_BIN)
 
 $(DRUMMER_MONKEY_TESTING_BIN):
 	$(GO) test $(RACE_DETECTOR_FLAG) $(VERBOSE) \
-		-tags="$(DRUMMER_MONKEY_TEST_BUILDTAGS)" -c -o $@ $(PKGNAME)/drummer
+		-tags="$(DRUMMER_MONKEY_TEST_BUILDTAGS)" -c -o $@ $(PKGNAME)/internal/drummer
 drummer-monkey-test-bin: $(DRUMMER_MONKEY_TESTING_BIN)
 
 $(PORCUPINE_CHECKER_BIN):
@@ -410,7 +410,7 @@ test-grpc-transport:
 test-multiraft:
 	$(GOTEST) $(PKGNAME)
 test-drummer:
-	$(GOTEST) $(PKGNAME)/drummer
+	$(GOTEST) $(PKGNAME)/internal/drummer
 test-wrapper: $(PLUGIN_CPP_EXAMPLE_BIN)
 	$(GOTEST) -o $(WRAPPER_TESTING_BIN) -c $(PKGNAME)/internal/cpp
 	./$(WRAPPER_TESTING_BIN) -test.v
@@ -430,7 +430,7 @@ test-slow-multiraft:
 
 test-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
 test-slow-drummer: plugin-kvtest
-	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/drummer
+	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
 test-monkey-multiraft: TESTTAGVALS+=$(MULTIRAFT_MONKEY_TEST_BUILDTAGS)
@@ -439,7 +439,7 @@ test-monkey-multiraft:
 
 test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
 test-monkey-drummer: plugin-kvtest plugin-cppkvtest plugin-concurrentkv
-	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/drummer
+	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
 ###############################################################################
@@ -463,11 +463,11 @@ slow-multiraft:
 
 slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
 slow-drummer: plugin-kvtest
-	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/drummer
+	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
 monkey-drummer: plugin-kvtest
-	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/drummer
+	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 all-slow-monkey-tests: slow-multiraft slow-drummer monkey-drummer
 
@@ -610,9 +610,9 @@ CHECKED_PKGS=internal/raft internal/logdb internal/transport \
 	internal/utils/fileutil internal/utils/syncutil \
 	internal/utils/stringutil internal/utils/logutil internal/utils/netutil \
 	internal/utils/cache internal/utils/envutil internal/utils/compression \
-	internal/server drummer/server/drummer drummer/server/nodehost \
-	drummer/server/drummercmd raftpb \
-	logger raftio config binding statemachine drummer client drummer/client
+	internal/server raftpb \
+	logger raftio config binding statemachine internal/drummer client \
+	internal/drummer/client
 CPP_CHECKED_DIRS=$(BINDING_INC_PATH)/*.h binding/cpp/*.cpp \
 	internal/cpp/*.h internal/cpp/*.cpp
 CPPLINT_FILTERS=--filter=-whitespace/braces,-build/include,-build/c++11
@@ -632,7 +632,7 @@ static-check: cpp-static-check
 		fi; \
 		golint $$p; \
 		ineffassign $$p; \
-		if [ $$p != "drummer" ] ; \
+		if [ $$p != "internal/drummer" ] ; \
 		then \
 			gocyclo -over 41 $$p; \
 		fi; \
