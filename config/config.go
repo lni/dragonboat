@@ -179,10 +179,6 @@ type NodeHostConfig struct {
 	// specified, it is locally resolved to IP addresses first and Dragonboat
 	// listens to all resolved IP addresses.
 	ListenAddress string
-	// APIAddress is the address used by the optional NodeHost RPC API. Empty
-	// value means NodeHost API RPC server is not used. This optional field
-	// only need to be set when using Master servers.
-	APIAddress string
 	// MutualTLS defines whether to use mutual TLS for authenticating servers
 	// and clients. Insecure communication is used when MutualTLS is set to
 	// False.
@@ -216,9 +212,6 @@ func (c *NodeHostConfig) Validate() error {
 	}
 	if len(c.ListenAddress) > 0 && !stringutil.IsValidAddress(c.ListenAddress) {
 		return errors.New("invalid ListenAddress")
-	}
-	if len(c.APIAddress) > 0 && !stringutil.IsValidAddress(c.APIAddress) {
-		return errors.New("invalid NodeHost API address")
 	}
 	if !c.MutualTLS &&
 		(len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0) {

@@ -41,7 +41,7 @@ func NewNodehostAPI(address string, nh *dragonboat.NodeHost) *NodehostAPI {
 	stoppableListener, err := netutil.NewStoppableListener(address, nil,
 		stopper.ShouldStop())
 	if err != nil {
-		plog.Panicf("%v", err)
+		plog.Panicf("addr %s, %v", address, err)
 	}
 	var opts []grpc.ServerOption
 	tt := "insecure"

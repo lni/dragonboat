@@ -33,8 +33,9 @@ var (
 // NodeHostClient is a NodeHost drummer client.
 type NodeHostClient struct {
 	nh              *dragonboat.NodeHost
-	masterClient    *client.DrummerClient
+	client          *client.DrummerClient
 	masterServers   []string
+	apiAddress      string
 	reporterStopper *syncutil.Stopper
 	stopper         *syncutil.Stopper
 	ctx             context.Context
@@ -43,7 +44,7 @@ type NodeHostClient struct {
 
 // NewNodeHostClient creates and returns a new NodeHostClient instance.
 func NewNodeHostClient(nh *dragonboat.NodeHost,
-	drummerServers []string) *NodeHostClient {
+	drummerServers []string, apiAddress string) *NodeHostClient {
 	if len(drummerServers) == 0 {
 		plog.Panicf("drummer server address not specified")
 	}
@@ -55,8 +56,9 @@ func NewNodeHostClient(nh *dragonboat.NodeHost,
 	reporterStopper := syncutil.NewStopper()
 	dnh := &NodeHostClient{
 		nh:              nh,
-		masterClient:    masterClient,
+		client:          masterClient,
 		masterServers:   servers,
+		apiAddress:      apiAddress,
 		stopper:         stopper,
 		reporterStopper: reporterStopper,
 		ctx:             ctx,
@@ -79,8 +81,8 @@ func (dnh *NodeHostClient) Stop() {
 		dnh.reporterStopper.Stop()
 	}
 	dnh.stopper.Stop()
-	if dnh.masterClient != nil {
-		dnh.masterClient.Stop()
+	if dnh.client != nil {
+		dnh.client.Stop()
 	}
 }
 
@@ -96,7 +98,7 @@ func (dnh *NodeHostClient) masterRequestWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := dnh.masterClient.HandleMasterRequests(ctx); err == context.Canceled {
+			if err := dnh.client.HandleMasterRequests(ctx); err == context.Canceled {
 				return
 			}
 		case <-ctx.Done():
@@ -116,11 +118,11 @@ func (dnh *NodeHostClient) reportWorker(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			count++
-			includePlog := false
+			incPlog := false
 			if count == 1 || count%persistentLogReportCycle == 0 {
-				includePlog = true
+				incPlog = true
 			}
-			if err := dnh.reportNodeHostInfo(ctx, includePlog); err == context.Canceled {
+			if err := dnh.reportNodeHostInfo(ctx, incPlog); err == context.Canceled {
 				return
 			}
 		case <-ctx.Done():
@@ -137,17 +139,15 @@ func (dnh *NodeHostClient) reportNodeHostInfo(ctx context.Context,
 	if !plogIncluded {
 		nhi.LogInfo = []raftio.NodeInfo{}
 	}
-	nhi.LogInfoIncluded = plogIncluded
 	servers := make([]string, 0)
-	for _, v := range dnh.masterServers {
-		servers = append(servers, v)
-	}
+	servers = append(servers, dnh.masterServers...)
 	timeoutSecond := time.Duration(NodeHostInfoReportSecond * 2)
 	rctx, cancel := context.WithTimeout(dnh.ctx, timeoutSecond*time.Second)
 	defer cancel()
 	random.ShuffleStringList(servers)
 	for _, url := range servers {
-		err := dnh.masterClient.SendNodeHostInfo(rctx, url, *nhi)
+		err := dnh.client.SendNodeHostInfo(rctx,
+			url, *nhi, dnh.apiAddress, plogIncluded)
 		if err != nil {
 			if err == context.Canceled {
 				return err

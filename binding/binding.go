@@ -235,7 +235,6 @@ func NewNodeHost(cfg C.NodeHostConfig) uint64 {
 		NodeHostDir:    charArrayToString(cfg.NodeHostDir.str, cfg.NodeHostDir.len),
 		RTTMillisecond: uint64(cfg.RTTMillisecond),
 		RaftAddress:    charArrayToString(cfg.RaftAddress.str, cfg.RaftAddress.len),
-		APIAddress:     charArrayToString(cfg.APIAddress.str, cfg.APIAddress.len),
 		MutualTLS:      cboolToBool(cfg.MutualTLS),
 		CAFile:         charArrayToString(cfg.CAFile.str, cfg.CAFile.len),
 		CertFile:       charArrayToString(cfg.CertFile.str, cfg.CertFile.len),

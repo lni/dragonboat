@@ -122,9 +122,7 @@ func (rr *RequestResult) Terminated() bool {
 // client ID has already been registered. When requesting a client session to
 // be unregistered, Rejected means the specified client session is not found
 // on the server side. For a membership change request, it means the request
-// is out of order and thus ignored. Note that the out-of-order check when
-// making membership changes is only imposed when IMasterClient is used in
-// NodeHost.
+// is out of order and thus not applied.
 func (rr *RequestResult) Rejected() bool {
 	return rr.code == requestRejected
 }

@@ -17,9 +17,6 @@ Package drummer implements a reference Master server and client. They can manage
 and monitor large number of NodeHosts distributed across the network. Raft nodes
 running on failed NodeHost instances can be detected and replaced automatically
 by Drummer servers, thus bring in high availability to the system.
-
-Note that both Drummer servers and its IMasterClient client provided in this
-package are optional.
 */
 package drummer
 

@@ -79,8 +79,15 @@ func (dc *DrummerClient) Stop() {
 	dc.connections.Close()
 }
 
+type clusterInfo struct {
+	info       dragonboat.ClusterInfo
+	incomplete bool
+}
+
 func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
-	drummerAPIAddress string, nhi dragonboat.NodeHostInfo) error {
+	drummerAPIAddress string,
+	nhi dragonboat.NodeHostInfo,
+	APIAddress string, logInfoIncluded bool) error {
 	if IsNodeHostPartitioned(dc.nh) {
 		plog.Infof("in partitioned test mode, dropping NodeHost Info report msg")
 		return nil
@@ -97,32 +104,35 @@ func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
 	}
 	plog.Debugf("%s got cluster config change index from %s: %v",
 		nhi.RaftAddress, drummerAPIAddress, il.Indexes)
-	cil := make([]dragonboat.ClusterInfo, 0)
+	cil := make([]clusterInfo, 0)
+	clusterIDList := make([]uint64, 0)
 	for _, v := range nhi.ClusterInfoList {
+		incomplete := false
+		clusterIDList = append(clusterIDList, v.ClusterID)
 		cci, ok := il.Indexes[v.ClusterID]
 		if ok && cci >= v.ConfigChangeIndex && !v.Pending {
-			v.Incomplete = true
+			incomplete = true
 			v.Nodes = nil
 		}
-		cil = append(cil, v)
+		ci := clusterInfo{info: v, incomplete: incomplete}
+		cil = append(cil, ci)
 	}
 	for _, v := range cil {
-		if !v.Incomplete && !v.Pending && len(v.Nodes) > 0 {
+		info := v.info
+		if !v.incomplete && !info.Pending && len(info.Nodes) > 0 {
 			plog.Debugf("%s updating nodehost info, %d, %v",
-				nhi.RaftAddress, v.ConfigChangeIndex, v.Nodes)
+				nhi.RaftAddress, info.ConfigChangeIndex, info.Nodes)
 		}
 	}
-	if !nhi.LogInfoIncluded {
-		if len(nhi.LogInfo) != 0 {
-			panic("!plogIncluded but len(logInfo) != 0")
-		}
+	if !logInfoIncluded && len(nhi.LogInfo) != 0 {
+		panic("!plogIncluded but len(logInfo) != 0")
 	}
 	info := &pb.NodeHostInfo{
 		RaftAddress:      nhi.RaftAddress,
-		RPCAddress:       nhi.APIAddress,
+		RPCAddress:       APIAddress,
 		ClusterInfo:      toDrummerPBClusterInfo(cil),
-		ClusterIdList:    nhi.ClusterIDList,
-		PlogInfoIncluded: nhi.LogInfoIncluded,
+		ClusterIdList:    clusterIDList,
+		PlogInfoIncluded: logInfoIncluded,
 		PlogInfo:         toDrummerPBLogInfo(nhi.LogInfo),
 		Region:           nhi.Region,
 	}
@@ -142,16 +152,18 @@ func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
 	return nil
 }
 
-func toDrummerPBClusterInfo(cil []dragonboat.ClusterInfo) []pb.ClusterInfo {
+func toDrummerPBClusterInfo(cil []clusterInfo) []pb.ClusterInfo {
 	result := make([]pb.ClusterInfo, 0)
-	for _, v := range cil {
+	for _, vv := range cil {
+		v := vv.info
+		incomplete := vv.incomplete
 		pbv := pb.ClusterInfo{
 			ClusterId:         v.ClusterID,
 			NodeId:            v.NodeID,
 			IsLeader:          v.IsLeader,
 			Nodes:             v.Nodes,
 			ConfigChangeIndex: v.ConfigChangeIndex,
-			Incomplete:        v.Incomplete,
+			Incomplete:        incomplete,
 			Pending:           v.Pending,
 		}
 		result = append(result, pbv)

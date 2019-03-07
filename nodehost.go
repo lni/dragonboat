@@ -134,6 +134,41 @@ var (
 	ErrInvalidDeadline = errors.New("invalid deadline")
 )
 
+// ClusterInfo is a record for representing the state of a Raft cluster based
+// on the knowledge of the local NodeHost instance.
+type ClusterInfo struct {
+	// ClusterID is the cluster ID of the Raft cluster node.
+	ClusterID uint64
+	// NodeID is the node ID of the Raft cluster node.
+	NodeID uint64
+	// IsLeader indicates whether this is a leader node.
+	IsLeader bool
+	// Nodes is a map of member node IDs to their Raft addresses.
+	Nodes map[uint64]string
+	// ConfigChangeIndex is the current config change index of the Raft node.
+	// ConfigChangeIndex is Raft Log index of the last applied membership
+	// change entry.
+	ConfigChangeIndex uint64
+	// Pending is a boolean flag indicating whether details of the cluster node
+	// is not available. The Pending flag is set to true usually because the node
+	// has not had anything applied yet.
+	Pending bool
+}
+
+// NodeHostInfo provides info about the NodeHost, including its managed Raft
+// cluster nodes and available Raft logs saved in its local persistent storage.
+type NodeHostInfo struct {
+	// RaftAddress is the public address and the identifier of the NodeHost.
+	RaftAddress string
+	// Region is the region of the NodeHost.
+	Region string
+	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
+	ClusterInfoList []ClusterInfo
+	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
+	// stored on the NodeHost.
+	LogInfo []raftio.NodeInfo
+}
+
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
@@ -821,18 +856,19 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 	return true
 }
 
+// GetNodeHostInfo returns a NodeHostInfo instance that contains all details
+// of the NodeHost, this includes details of all Raft clusters managed by the
+// the NodeHost instance.
 func (nh *NodeHost) GetNodeHostInfo() *NodeHostInfo {
-	clusterInfoList, clusterIDList := nh.getClusterInfo()
+	clusterInfoList := nh.getClusterInfo()
 	plogInfo, err := nh.logdb.ListNodeInfo()
 	if err != nil {
 		plog.Panicf("failed to list all logs on logdb %v", err)
 	}
 	return &NodeHostInfo{
 		RaftAddress:     nh.RaftAddress(),
-		APIAddress:      nh.nhConfig.APIAddress,
 		Region:          nh.region,
 		ClusterInfoList: clusterInfoList,
-		ClusterIDList:   clusterIDList,
 		LogInfo:         plogInfo,
 	}
 }
@@ -1139,21 +1175,18 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 	return nil
 }
 
-func (nh *NodeHost) getClusterInfo() ([]ClusterInfo, []uint64) {
+func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 	clusterInfoList := make([]ClusterInfo, 0)
-	clusterIDList := make([]uint64, 0)
 	nodes := make([]*node, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodes = append(nodes, node)
 		return true
 	})
 	for _, n := range nodes {
-		cid := n.clusterID
-		clusterIDList = append(clusterIDList, cid)
 		clusterInfo := n.getClusterInfo()
 		clusterInfoList = append(clusterInfoList, *clusterInfo)
 	}
-	return clusterInfoList, clusterIDList
+	return clusterInfoList
 }
 
 func (nh *NodeHost) setRegion(ctx context.Context) {

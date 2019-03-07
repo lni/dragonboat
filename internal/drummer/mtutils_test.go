@@ -454,7 +454,7 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	config.NodeHostDir = filepath.Join(n.dir, nhc.NodeHostDir)
 	config.WALDir = filepath.Join(n.dir, nhc.WALDir)
 	config.RaftAddress = dl.nodehostAddressList[n.listIndex]
-	config.APIAddress = dl.nodehostAPIAddressList[n.listIndex]
+	apiAddress := dl.nodehostAPIAddressList[n.listIndex]
 	if n.mutualTLS {
 		config.MutualTLS = true
 		config.CAFile = caFile
@@ -465,8 +465,8 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	nh := dragonboat.NewNodeHost(config)
 	plog.Infof("nodehost for nodehost node created")
 	n.nh = nh
-	n.drummerNodeHost = NewNodeHostClient(nh, dl.apiAddressList)
-	n.apiServer = NewNodehostAPI(config.APIAddress, nh)
+	n.drummerNodeHost = NewNodeHostClient(nh, dl.apiAddressList, apiAddress)
+	n.apiServer = NewNodehostAPI(apiAddress, nh)
 	n.stopped = false
 }
 
