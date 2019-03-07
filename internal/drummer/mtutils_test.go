@@ -231,6 +231,7 @@ type testNode struct {
 	nh                 *dragonboat.NodeHost
 	drummer            *Drummer
 	apiServer          *NodehostAPI
+	drummerNodeHost    *NodeHostClient
 	drummerStopped     bool
 	stopped            bool
 	partitionTestNode  bool
@@ -328,6 +329,9 @@ func (n *testNode) Stop() {
 	plog.Infof("going to stop the nh of %s", addr)
 	if n.apiServer != nil {
 		n.apiServer.Stop()
+	}
+	if n.drummerNodeHost != nil {
+		n.drummerNodeHost.Stop()
 	}
 	n.nh.Stop()
 	plog.Infof("the nh part of %s stopped", addr)
@@ -444,8 +448,6 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	if !n.stopped {
 		panic("already running")
 	}
-	// FIXME:
-	// pass master server address list to the nodehost
 	_, nhc := getMonkeyTestConfig()
 	config := config.NodeHostConfig{}
 	config = nhc
@@ -453,7 +455,6 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	config.WALDir = filepath.Join(n.dir, nhc.WALDir)
 	config.RaftAddress = dl.nodehostAddressList[n.listIndex]
 	config.APIAddress = dl.nodehostAPIAddressList[n.listIndex]
-	//config.MasterServers = dl.apiAddressList
 	if n.mutualTLS {
 		config.MutualTLS = true
 		config.CAFile = caFile
@@ -464,6 +465,7 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	nh := dragonboat.NewNodeHost(config)
 	plog.Infof("nodehost for nodehost node created")
 	n.nh = nh
+	n.drummerNodeHost = NewNodeHostClient(nh, dl.apiAddressList)
 	n.apiServer = NewNodehostAPI(config.APIAddress, nh)
 	n.stopped = false
 }
@@ -561,11 +563,11 @@ func getEntryHash(ent raftpb.Entry) uint64 {
 	return binary.LittleEndian.Uint64(h.Sum(nil)[:8])
 }
 
-func getConfigFromDeployedJson() config.Config {
+func getConfigFromDeployedJson() (config.Config, bool) {
 	cfg := config.Config{}
 	fn := "dragonboat-drummer.json"
 	if _, err := os.Stat(fn); os.IsNotExist(err) {
-		panic(err)
+		return config.Config{}, false
 	}
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {
@@ -574,16 +576,22 @@ func getConfigFromDeployedJson() config.Config {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		panic(err)
 	}
-	return cfg
+	return cfg, true
 }
 
 func rateLimiterDisabledInRaftConfig() bool {
-	cfg := getConfigFromDeployedJson()
+	cfg, ok := getConfigFromDeployedJson()
+	if !ok {
+		return true
+	}
 	return cfg.MaxInMemLogSize == 0
 }
 
 func snapshotDisabledInRaftConfig() bool {
-	cfg := getConfigFromDeployedJson()
+	cfg, ok := getConfigFromDeployedJson()
+	if !ok {
+		return false
+	}
 	return cfg.SnapshotEntries == 0
 }
 
@@ -917,7 +925,7 @@ func monkeyPlay(nodes []*testNode, low int64, high int64,
 
 func stopDrummerActivity(nodehostNodes []*testNode, drummerNodes []*testNode) {
 	for _, n := range nodehostNodes {
-		n.nh.StopNodeHostInfoReporter()
+		n.drummerNodeHost.StopNodeHostInfoReporter()
 	}
 	for _, n := range drummerNodes {
 		n.stopper.Stop()

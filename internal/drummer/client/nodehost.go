@@ -44,7 +44,7 @@ func isGRPCTempError(err error) bool {
 	return grpc.Code(err) == codes.Unavailable
 }
 
-type drummerClient struct {
+type DrummerClient struct {
 	nh  *dragonboat.NodeHost
 	req struct {
 		sync.Mutex
@@ -59,8 +59,8 @@ type drummerClient struct {
 }
 
 // NewDrummerClient creates a new drummer client instance.
-func NewDrummerClient(nh *dragonboat.NodeHost) *drummerClient {
-	dc := &drummerClient{
+func NewDrummerClient(nh *dragonboat.NodeHost) *DrummerClient {
+	dc := &DrummerClient{
 		nh:          nh,
 		connections: NewDrummerConnectionPool(),
 	}
@@ -71,15 +71,15 @@ func NewDrummerClient(nh *dragonboat.NodeHost) *drummerClient {
 	return dc
 }
 
-func (dc *drummerClient) Name() string {
+func (dc *DrummerClient) Name() string {
 	return DrummerClientName
 }
 
-func (dc *drummerClient) Stop() {
+func (dc *DrummerClient) Stop() {
 	dc.connections.Close()
 }
 
-func (dc *drummerClient) SendNodeHostInfo(ctx context.Context,
+func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
 	drummerAPIAddress string, nhi dragonboat.NodeHostInfo) error {
 	if IsNodeHostPartitioned(dc.nh) {
 		plog.Infof("in partitioned test mode, dropping NodeHost Info report msg")
@@ -171,7 +171,7 @@ func toDrummerPBLogInfo(loginfo []raftio.NodeInfo) []pb.LogInfo {
 	return result
 }
 
-func (dc *drummerClient) GetDeploymentID(ctx context.Context,
+func (dc *DrummerClient) GetDeploymentID(ctx context.Context,
 	drummerAPIAddress string) (uint64, error) {
 	conn, err := dc.getDrummerConnection(ctx, drummerAPIAddress)
 	if err != nil {
@@ -186,7 +186,7 @@ func (dc *drummerClient) GetDeploymentID(ctx context.Context,
 	return 0, err
 }
 
-func (dc *drummerClient) HandleMasterRequests(ctx context.Context) error {
+func (dc *DrummerClient) HandleMasterRequests(ctx context.Context) error {
 	reqs := dc.getRequests()
 	if len(reqs) == 0 {
 		return nil
@@ -212,7 +212,7 @@ func (dc *drummerClient) HandleMasterRequests(ctx context.Context) error {
 	return nil
 }
 
-func (dc *drummerClient) getDrummerConnection(ctx context.Context,
+func (dc *DrummerClient) getDrummerConnection(ctx context.Context,
 	drummerAPIAddress string) (*Connection, error) {
 	getConnTimeout := time.Duration(getConnectedTimeoutSec) * time.Second
 	getConnCtx, cancel := context.WithTimeout(ctx, getConnTimeout)
@@ -230,13 +230,13 @@ func (dc *drummerClient) getDrummerConnection(ctx context.Context,
 	return conn, nil
 }
 
-func (dc *drummerClient) addRequests(reqs []pb.NodeHostRequest) {
+func (dc *DrummerClient) addRequests(reqs []pb.NodeHostRequest) {
 	dc.req.Lock()
 	defer dc.req.Unlock()
 	dc.req.requests = append(dc.req.requests, reqs...)
 }
 
-func (dc *drummerClient) getRequests() []pb.NodeHostRequest {
+func (dc *DrummerClient) getRequests() []pb.NodeHostRequest {
 	dc.req.Lock()
 	defer dc.req.Unlock()
 	results := dc.req.requests
@@ -244,7 +244,7 @@ func (dc *drummerClient) getRequests() []pb.NodeHostRequest {
 	return results
 }
 
-func (dc *drummerClient) handleRequest(ctx context.Context,
+func (dc *DrummerClient) handleRequest(ctx context.Context,
 	req pb.NodeHostRequest) {
 	reqCtx, cancel := context.WithTimeout(ctx, localTimeoutMs)
 	defer cancel()
@@ -260,7 +260,7 @@ func (dc *drummerClient) handleRequest(ctx context.Context,
 	}
 }
 
-func (dc *drummerClient) handleKillRequest(req pb.NodeHostRequest) {
+func (dc *DrummerClient) handleKillRequest(req pb.NodeHostRequest) {
 	nodeID := req.Change.Members[0]
 	clusterID := req.Change.ClusterId
 	plog.Debugf("kill request handled on %s for %s",
@@ -271,7 +271,7 @@ func (dc *drummerClient) handleKillRequest(req pb.NodeHostRequest) {
 	}
 }
 
-func (dc *drummerClient) handleAddDeleteRequest(ctx context.Context,
+func (dc *DrummerClient) handleAddDeleteRequest(ctx context.Context,
 	req pb.NodeHostRequest) {
 	nodeID := req.Change.Members[0]
 	clusterID := req.Change.ClusterId
@@ -326,7 +326,7 @@ func getConfig(req pb.NodeHostRequest) config.Config {
 	}
 }
 
-func (dc *drummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
+func (dc *DrummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 	requestType := ""
 	nodeID := req.InstantiateNodeId
 	clusterID := req.Change.ClusterId

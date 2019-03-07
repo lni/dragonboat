@@ -65,13 +65,6 @@ func SetReceiveQueueSize(sz uint64) {
 	receiveQueueSize = sz
 }
 
-// StopNodeHostInfoReporter stops the nodehost info reporter task. This is
-// is required at the end of the monkey test.
-func (nh *NodeHost) StopNodeHostInfoReporter() {
-	nh.duStopper.Stop()
-	nh.duStopper = nil
-}
-
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {
 	nh.transport.(*transport.Transport).SetPreSendMessageBatchHook(f)
 }

@@ -361,7 +361,7 @@ ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 test: dragonboat-test test-drummer
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
-monkey-test: test-monkey-multiraft test-monkey-drummer
+monkey-test: test-monkey-drummer
 dev-test: test test-grpc-transport test-cppwrapper
 
 ###############################################################################
@@ -432,10 +432,6 @@ test-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
 test-slow-drummer: plugin-kvtest
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
-
-test-monkey-multiraft: TESTTAGVALS+=$(MULTIRAFT_MONKEY_TEST_BUILDTAGS)
-test-monkey-multiraft:
-	$(GOTEST) $(PKGNAME)
 
 test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
 test-monkey-drummer: plugin-kvtest plugin-cppkvtest plugin-concurrentkv
