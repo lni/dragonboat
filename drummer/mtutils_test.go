@@ -413,7 +413,7 @@ func (n *testNode) startDrummerNode(dl *mtAddressList) {
 		config.KeyFile = keyFile
 	}
 	plog.Infof("creating new nodehost for drummer node")
-	nh := dragonboat.NewNodeHostWithMasterClientFactory(config, client.NewDrummerClient)
+	nh := dragonboat.NewNodeHost(config)
 	plog.Infof("nodehost ready for drummer node")
 	n.nh = nh
 	peers := make(map[uint64]string)
@@ -444,6 +444,8 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	if !n.stopped {
 		panic("already running")
 	}
+	// FIXME:
+	// pass master server address list to the nodehost
 	_, nhc := getMonkeyTestConfig()
 	config := config.NodeHostConfig{}
 	config = nhc
@@ -451,7 +453,7 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	config.WALDir = filepath.Join(n.dir, nhc.WALDir)
 	config.RaftAddress = dl.nodehostAddressList[n.listIndex]
 	config.APIAddress = dl.nodehostAPIAddressList[n.listIndex]
-	config.MasterServers = dl.apiAddressList
+	//config.MasterServers = dl.apiAddressList
 	if n.mutualTLS {
 		config.MutualTLS = true
 		config.CAFile = caFile
@@ -459,7 +461,7 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 		config.KeyFile = keyFile
 	}
 	plog.Infof("creating nodehost for nodehost node")
-	nh := dragonboat.NewNodeHostWithMasterClientFactory(config, client.NewDrummerClient)
+	nh := dragonboat.NewNodeHost(config)
 	plog.Infof("nodehost for nodehost node created")
 	n.nh = nh
 	n.apiServer = NewNodehostAPI(config.APIAddress, nh)
@@ -1350,7 +1352,7 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 		nodehostNodes[1].DoPartitionTests(partitionTestDuration)
 	}
 	// start the cluster
-	reportInterval := dragonboat.NodeHostInfoReportSecond
+	reportInterval := NodeHostInfoReportSecond
 	time.Sleep(time.Duration(3*reportInterval) * time.Second)
 	plog.Infof("going to submit jobs")
 	if !submitTestJobs(numOfClustersInMonkeyTesting, appname, dl, false) {

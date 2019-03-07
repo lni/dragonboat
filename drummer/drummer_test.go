@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 )
 
@@ -44,7 +43,7 @@ func testDrummerIsAwareOfNodeHosts(t *testing.T, tls bool) {
 	waitForStableNodes(drummerNodes, 25)
 	waitForStableNodes(nodehostNodes, 25)
 
-	time.Sleep(time.Duration(3*dragonboat.NodeHostInfoReportSecond) * time.Second)
+	time.Sleep(time.Duration(3*NodeHostInfoReportSecond) * time.Second)
 	for _, node := range drummerNodes {
 		mnh, err := node.GetNodeHostInfo()
 		if err != nil {
@@ -75,11 +74,11 @@ func testClusterCanBeLaunched(t *testing.T, dl *mtAddressList,
 		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	waitForStableNodes(drummerNodes, 25)
 	waitForStableNodes(nodehostNodes, 25)
-	time.Sleep(time.Duration(3*dragonboat.NodeHostInfoReportSecond) * time.Second)
+	time.Sleep(time.Duration(3*NodeHostInfoReportSecond) * time.Second)
 	if !submitSimpleTestJob(dl, false) {
 		t.Errorf("failed to submit the test job")
 	}
-	waitTimeSec := (loopIntervalFactor + 5) * dragonboat.NodeHostInfoReportSecond
+	waitTimeSec := (loopIntervalFactor + 5) * NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	for _, node := range drummerNodes {
 		mc, err := node.GetMultiCluster()
@@ -114,7 +113,7 @@ func TestDrummerCanRestoreUnavailableClusters(t *testing.T) {
 	// stop the second/third nodehost instances
 	nodehostNodes[1].Stop()
 	nodehostNodes[2].Stop()
-	waitTimeSec := nodeHostTTL + dragonboat.NodeHostInfoReportSecond
+	waitTimeSec := nodeHostTTL + NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	// make sure the second/third nodehost instances are down
 	// and the cluster is considered as unavailable
@@ -154,7 +153,7 @@ func TestDrummerCanRestoreUnavailableClusters(t *testing.T) {
 	nodehostNodes[2].Start(dl)
 	setRegionForNodehostNodes(nodehostNodes,
 		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
-	waitTimeSec = (loopIntervalFactor + 4) * dragonboat.NodeHostInfoReportSecond
+	waitTimeSec = (loopIntervalFactor + 4) * NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	// make sure the second/third nodehost instances have recovered
 	// and the cluster is reported as available

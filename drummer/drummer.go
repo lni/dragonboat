@@ -55,14 +55,14 @@ var (
 )
 
 var (
-	loopIntervalFactor   = settings.Soft.DrummerLoopIntervalFactor
-	reportInterval       = settings.Soft.NodeHostInfoReportSecond
-	maxServerMsgSize     = int(settings.Soft.MaxDrummerServerMsgSize)
-	tickIntervalSecond   = uint64(5)
-	raftTimeoutSecond    = uint64(10)
-	sessionTimeoutSecond = uint64(3)
-	configFilename       = "dragonboat-drummer.json"
-	loopIntervalSecond   = reportInterval * loopIntervalFactor
+	loopIntervalFactor       = settings.Soft.DrummerLoopIntervalFactor
+	maxServerMsgSize         = int(settings.Soft.MaxDrummerServerMsgSize)
+	tickIntervalSecond       = uint64(5)
+	raftTimeoutSecond        = uint64(10)
+	sessionTimeoutSecond     = uint64(3)
+	configFilename           = "dragonboat-drummer.json"
+	NodeHostInfoReportSecond = settings.Soft.NodeHostInfoReportSecond
+	loopIntervalSecond       = NodeHostInfoReportSecond * loopIntervalFactor
 )
 
 type sessionUser struct {

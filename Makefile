@@ -228,8 +228,7 @@ CPPWRAPPER_TEST_BUILDTAGS=dragonboat_cppwrappertest
 GRPC_TEST_BUILDTAGS=dragonboat_grpc_test
 
 all: binding
-rebuild-all: clean servers binding all-slow-monkey-tests unit-test-bin
-servers: drummer nodehost drummercmd
+rebuild-all: clean binding all-slow-monkey-tests unit-test-bin
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
@@ -296,22 +295,7 @@ gen-gitversion:
 	@echo "package dragonboat\n" > gitversion.go
 	@echo "const GITVERSION = \"$(shell git rev-parse HEAD)\"" >> gitversion.go
 
-DRUMMER_SERVER_BIN=dragonboat-drummer-server
-DRUMMER_CMD_BIN=dragonboat-drummer-cmd
-NODEHOST_SERVER_BIN=dragonboat-nodehost-server
 GOBUILD=$(GO) build $(VERBOSE) -tags=$(GOBUILDTAGS) -o $@
-$(DRUMMER_SERVER_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/drummer
-drummer: $(DRUMMER_SERVER_BIN)
-
-$(NODEHOST_SERVER_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/nodehost
-nodehost: $(NODEHOST_SERVER_BIN)
-
-$(DRUMMER_CMD_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/drummercmd
-drummercmd: $(DRUMMER_CMD_BIN)
-
 $(PLUGIN_KVSTORE_BIN):
 	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
 		$(PKGNAME)/internal/tests/kvtest
@@ -678,9 +662,6 @@ clean:
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
 		$(DRUMMER_MONKEY_TESTING_BIN) \
-		$(DRUMMER_SERVER_BIN) \
-		$(NODEHOST_SERVER_BIN) \
-		$(DRUMMER_CMD_BIN) \
 		$(PLUGIN_KVSTORE_BIN) \
 		$(PLUGIN_CONCURRENTKV_BIN) \
 		$(PLUGIN_CPP_KVTEST_BIN) \
@@ -701,11 +682,10 @@ clean:
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
   drummercmd drummer nodehost \
-	$(DRUMMER_SERVER_BIN) $(NODEHOST_SERVER_BIN) $(DRUMMER_CMD_BIN) \
 	$(PLUGIN_CPP_KVTEST_BIN) $(DRUMMER_MONKEY_TESTING_BIN) \
 	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) $(PLUGIN_CONCURRENTKV_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
-	plugin-cppkvtest drummer-monkey-test-bin binding test servers \
+	plugin-cppkvtest drummer-monkey-test-bin binding test \
 	test-raft test-rsm test-logdb test-transport test-multiraft test-drummer \
 	test-session test-server test-utils test-config test-cppwrapper \
 	static-check cpp-static-check clean plugin-kvtest logdb-checker \

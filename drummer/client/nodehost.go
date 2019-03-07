@@ -59,7 +59,7 @@ type drummerClient struct {
 }
 
 // NewDrummerClient creates a new drummer client instance.
-func NewDrummerClient(nh *dragonboat.NodeHost) dragonboat.IMasterClient {
+func NewDrummerClient(nh *dragonboat.NodeHost) *drummerClient {
 	dc := &drummerClient{
 		nh:          nh,
 		connections: NewDrummerConnectionPool(),
@@ -96,7 +96,7 @@ func (dc *drummerClient) SendNodeHostInfo(ctx context.Context,
 		return err
 	}
 	plog.Debugf("%s got cluster config change index from %s: %v",
-		nhi.NodeHostAddress, drummerAPIAddress, il.Indexes)
+		nhi.RaftAddress, drummerAPIAddress, il.Indexes)
 	cil := make([]dragonboat.ClusterInfo, 0)
 	for _, v := range nhi.ClusterInfoList {
 		cci, ok := il.Indexes[v.ClusterID]
@@ -109,7 +109,7 @@ func (dc *drummerClient) SendNodeHostInfo(ctx context.Context,
 	for _, v := range cil {
 		if !v.Incomplete && !v.Pending && len(v.Nodes) > 0 {
 			plog.Debugf("%s updating nodehost info, %d, %v",
-				nhi.NodeHostAddress, v.ConfigChangeIndex, v.Nodes)
+				nhi.RaftAddress, v.ConfigChangeIndex, v.Nodes)
 		}
 	}
 	if !nhi.LogInfoIncluded {
@@ -118,8 +118,8 @@ func (dc *drummerClient) SendNodeHostInfo(ctx context.Context,
 		}
 	}
 	info := &pb.NodeHostInfo{
-		RaftAddress:      nhi.NodeHostAddress,
-		RPCAddress:       nhi.NodeHostAPIAddress,
+		RaftAddress:      nhi.RaftAddress,
+		RPCAddress:       nhi.APIAddress,
 		ClusterInfo:      toDrummerPBClusterInfo(cil),
 		ClusterIdList:    nhi.ClusterIDList,
 		PlogInfoIncluded: nhi.LogInfoIncluded,

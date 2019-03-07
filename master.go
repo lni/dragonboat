@@ -60,7 +60,8 @@ type NodeHostInfo struct {
 	ClusterInfoList []ClusterInfo
 	// ClusterIDList is a list of cluster IDs for all Raft clusters managed by
 	// the NodeHost
-	ClusterIDList []uint64
+	ClusterIDList   []uint64
+	LogInfoIncluded bool
 	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
 	// stored on the NodeHost. This list will be empty when LogInfoIncluded is
 	// set to false.

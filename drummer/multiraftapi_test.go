@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
 	dc "github.com/lni/dragonboat/drummer/client"
 	pb "github.com/lni/dragonboat/drummer/drummerpb"
@@ -89,11 +88,11 @@ func runMultiraftAPITest(t *testing.T, mutualTLS bool, tf clientSessionTester) {
 	defer stopTestNodes(nodehostNodes)
 	waitForStableNodes(drummerNodes, 25)
 	waitForStableNodes(nodehostNodes, 25)
-	time.Sleep(time.Duration(3*dragonboat.NodeHostInfoReportSecond) * time.Second)
+	time.Sleep(time.Duration(3*NodeHostInfoReportSecond) * time.Second)
 	if !submitSimpleTestJob(dl, mutualTLS) {
 		t.Errorf("failed to submit the test job")
 	}
-	waitTimeSec := (loopIntervalFactor + 5) * dragonboat.NodeHostInfoReportSecond
+	waitTimeSec := (loopIntervalFactor + 5) * NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	for _, node := range drummerNodes {
 		mc, err := node.GetMultiCluster()
@@ -157,11 +156,11 @@ func TestMultiraftAPICanQueryClusterInfoFromDrummer(t *testing.T) {
 	defer stopTestNodes(nodehostNodes)
 	waitForStableNodes(drummerNodes, 25)
 	waitForStableNodes(nodehostNodes, 25)
-	time.Sleep(time.Duration(3*dragonboat.NodeHostInfoReportSecond) * time.Second)
+	time.Sleep(time.Duration(3*NodeHostInfoReportSecond) * time.Second)
 	if !submitSimpleTestJob(dl, false) {
 		t.Errorf("failed to submit the test job")
 	}
-	waitTimeSec := (loopIntervalFactor + 7) * dragonboat.NodeHostInfoReportSecond
+	waitTimeSec := (loopIntervalFactor + 7) * NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	for _, node := range drummerNodes {
 		mc, err := node.GetMultiCluster()
