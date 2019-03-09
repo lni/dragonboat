@@ -37,6 +37,7 @@ package transport
 
 import (
 	"errors"
+	"sync/atomic"
 
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
@@ -48,8 +49,8 @@ import (
 var (
 	// FIXME:
 	// move to the settings package.
-	maxLaneCount     = 64
-	maxSnapshotCount = settings.Soft.MaxSnapshotCount
+	maxLaneCount     uint32 = 64
+	maxSnapshotCount        = settings.Soft.MaxSnapshotCount
 )
 
 // ASyncSendSnapshot sends raft snapshot message to its target.
@@ -78,42 +79,38 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	lane := t.getOrCreateLane(key, addr, false, len(chunks))
+	lane := t.tryCreateLane(key, addr, false, len(chunks))
 	if lane == nil {
 		return false
 	}
-	lane.SendSavedSnapshot(m)
+	lane.sendSavedSnapshot(m)
 	return true
 }
 
-func (t *Transport) getOrCreateLane(key raftio.NodeInfo,
+func (t *Transport) tryCreateLane(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *lane {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	lane, ok := t.mu.lanes[key]
-	if !ok {
-		if len(t.mu.lanes) >= maxLaneCount {
-			return nil
-		}
-		lane = NewLane(key.ClusterID, key.NodeID,
-			t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())
-		lane.streamChunkSent = t.streamChunkSent
-		lane.preStreamChunkSend = t.preStreamChunkSend
-		if streaming {
-			t.mu.lanes[key] = lane
-		}
-		shutdown := func() {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			delete(t.mu.lanes, key)
-		}
-		t.stopper.RunWorker(func() {
-			t.connectAndProcessSnapshot(lane, addr)
-			plog.Infof("%s connectAndProcessSnapshot returned",
-				logutil.DescribeNode(key.ClusterID, key.NodeID))
-			shutdown()
-		})
+	if v := atomic.AddUint32(&t.lanes, 1); v > maxLaneCount {
+		atomic.AddUint32(&t.lanes, ^uint32(0))
+		return nil
 	}
+	return t.createLane(key, addr, streaming, sz)
+}
+
+func (t *Transport) createLane(key raftio.NodeInfo,
+	addr string, streaming bool, sz int) *lane {
+	lane := newLane(key.ClusterID, key.NodeID,
+		t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())
+	lane.streamChunkSent = t.streamChunkSent
+	lane.preStreamChunkSend = t.preStreamChunkSend
+	shutdown := func() {
+		atomic.AddUint32(&t.lanes, ^uint32(0))
+	}
+	t.stopper.RunWorker(func() {
+		t.connectAndProcessSnapshot(lane, addr)
+		plog.Infof("%s connectAndProcessSnapshot returned",
+			logutil.DescribeNode(key.ClusterID, key.NodeID))
+		shutdown()
+	})
 	return lane
 }
 
@@ -122,20 +119,19 @@ func (t *Transport) connectAndProcessSnapshot(lane *lane, addr string) {
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
 	if err := func() error {
-		err := lane.Connect(addr)
-		if err != nil {
+		if err := lane.connect(addr); err != nil {
 			plog.Warningf("failed to get snapshot client to %s",
 				logutil.DescribeNode(lane.clusterID, lane.nodeID))
 			t.sendSnapshotNotification(lane.clusterID, lane.nodeID, true)
 			return err
 		}
-		defer lane.Close()
+		defer lane.close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
 			plog.Infof("snapshot stream to %s (%s) established",
 				logutil.DescribeNode(lane.clusterID, lane.nodeID), addr)
 		}
-		err = lane.Process()
+		err := lane.process()
 		t.sendSnapshotNotification(lane.clusterID, lane.nodeID, err != nil)
 		return err
 	}(); err != nil {

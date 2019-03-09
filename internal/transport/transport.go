@@ -120,9 +120,8 @@ type ITransport interface {
 }
 
 //
-// funcs used in mainly in testing
+// funcs used mainly in testing
 //
-type onStreamChunkSentFunc func(pb.SnapshotChunk)
 
 // StreamChunkSendFunc is a func type that is used to determine whether a
 // snapshot chunk should indeed be sent. This func is used in test only.
@@ -170,9 +169,9 @@ type Transport struct {
 		sync.Mutex
 		// each (cluster id, node id) pair has its own queue and breaker
 		queues   map[string]chan pb.Message
-		lanes    map[raftio.NodeInfo]*lane
 		breakers map[string]*circuit.Breaker
 	}
+	lanes               uint32
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
 	sourceAddress       string
@@ -182,7 +181,7 @@ type Transport struct {
 	raftRPC             raftio.IRaftRPC
 	handlerRemovedFlag  uint32
 	handler             atomic.Value
-	streamChunkSent     onStreamChunkSentFunc
+	streamChunkSent     atomic.Value
 	preStreamChunkSend  atomic.Value // StreamChunkSendFunc
 	preSendMessageBatch atomic.Value // SendMessageBatchFunc
 	ctx                 context.Context
@@ -218,7 +217,6 @@ func NewTransport(nhConfig config.NodeHostConfig, ctx *server.Context,
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]chan pb.Message)
-	t.mu.lanes = make(map[raftio.NodeInfo]*lane)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
 	return t
 }

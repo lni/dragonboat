@@ -842,7 +842,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 			plog.Infof("test file removed: %s", fp)
 		}
 	}
-	trans.streamChunkSent = onStreamChunkSent
+	trans.streamChunkSent.Store(onStreamChunkSent)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = snapshotSize*2 + rsm.SnapshotHeaderSize
