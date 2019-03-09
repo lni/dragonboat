@@ -675,7 +675,6 @@ func waitForTotalSnapshotStatusUpdateCount(handler *testMessageHandler,
 	for total < maxWait {
 		time.Sleep(10 * time.Millisecond)
 		total += 10
-
 		handler.mu.Lock()
 		c := uint64(0)
 		for _, v := range handler.snapshotFailedCount {
@@ -711,7 +710,8 @@ func waitForSnapshotCountUpdate(handler *testMessageHandler, maxWait uint64) {
 	for total < maxWait {
 		time.Sleep(10 * time.Millisecond)
 		total += 10
-		if handler.getReceivedSnapshotCount(100, 2) > 0 {
+		count := handler.getReceivedSnapshotCount(100, 2)
+		if count > 0 {
 			return
 		}
 	}
@@ -764,51 +764,6 @@ func testSnapshotCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	if !bytes.Equal(md5Original, md5Received) {
 		t.Errorf("snapshot content changed during transmission")
 	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
-	}
-}
-
-func testNoSnapshotWillBeSentBeforeDeploymentIDIsSet(t *testing.T, mutualTLS bool) {
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
-	defer trans.serverCtx.Stop()
-	defer tt.cleanup()
-	defer trans.Stop()
-	defer stopper.Stop()
-	handler := newTestMessageHandler()
-	trans.SetMessageHandler(handler)
-	// do not set deployment id
-	nodes.AddNode(100, 2, grpcServerURL)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", 1024)
-	m := getTestSnapshotMessage(2)
-	m.Snapshot.FileSize = 1024*2 + rsm.SnapshotHeaderSize
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
-	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
-	waitForFirstSnapshotStatusUpdate(handler, 1000)
-	waitForSnapshotCountUpdate(handler, 1000)
-	if handler.getSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
-	}
-	// such snapshot dropped on the sending side should be reported.
-	if handler.getFailedSnapshotCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getFailedSnapshotCount(100, 2))
-	}
-	if handler.getSnapshotSuccessCount(100, 2) != 0 {
-		t.Errorf("got %d, want 0", handler.getSnapshotSuccessCount(100, 2))
-	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
-	}
-}
-
-func TestNoSnapshotWillBeSentBeforeDeploymentIDIsSet(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	testNoSnapshotWillBeSentBeforeDeploymentIDIsSet(t, true)
-	testNoSnapshotWillBeSentBeforeDeploymentIDIsSet(t, false)
 }
 
 func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
@@ -827,11 +782,11 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	m.Snapshot.FileSize = 1024*2 + rsm.SnapshotHeaderSize
 	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
 	// send the snapshot file
+	trans.SetPreStreamChunkSendHook(f)
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
-	trans.SetPreStreamChunkSendHook(f)
 	waitForFirstSnapshotStatusUpdate(handler, 1000)
 	waitForSnapshotCountUpdate(handler, 1000)
 	if handler.getSnapshotCount(100, 2) != 0 {
@@ -843,9 +798,6 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	}
 	if handler.getSnapshotSuccessCount(100, 2) != 1 {
 		t.Errorf("got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
-	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
 	}
 }
 
@@ -910,9 +862,6 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	if handler.getSnapshotSuccessCount(100, 2) != 0 {
 		t.Errorf("got %d, want 0", handler.getSnapshotSuccessCount(100, 2))
 	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
-	}
 }
 
 func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
@@ -954,9 +903,6 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
 	if handler.getFailedSnapshotCount(100, 2) == 0 {
 		t.Errorf("got %d, want > 0", handler.getFailedSnapshotCount(100, 2))
 	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
-	}
 }
 
 func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
@@ -991,38 +937,31 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	m.Snapshot.FileSize = snapshotSize*2 + rsm.SnapshotHeaderSize
 	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
 	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	trans.ASyncSendSnapshot(m)
+	plog.Infof("m sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize)
 	m2 := getTestSnapshotMessage(2)
 	m2.Snapshot.FileSize = snapshotSize*2 + rsm.SnapshotHeaderSize
 	m2.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot1.gbsnap")
 	// send the snapshot file
-	done = trans.ASyncSendSnapshot(m2)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	trans.ASyncSendSnapshot(m2)
+	plog.Infof("m2 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize)
 	m3 := getTestSnapshotMessage(3)
 	m3.Snapshot.FileSize = snapshotSize*2 + rsm.SnapshotHeaderSize
 	m3.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
 	// send the snapshot file
-	done = trans.ASyncSendSnapshot(m3)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	trans.ASyncSendSnapshot(m3)
+	plog.Infof("m3 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize)
 	m4 := getTestSnapshotMessage(2)
 	m4.Snapshot.FileSize = snapshotSize*2 + rsm.SnapshotHeaderSize
 	m4.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot2.gbsnap")
 	// send the snapshot file
-	done = trans.ASyncSendSnapshot(m4)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	plog.Infof("going to call send m4")
+	trans.ASyncSendSnapshot(m4)
 	atomic.StoreUint32(&snapshotSent, 1)
+	plog.Infof("m4 sent going to call waitForTotalSnapshotStatusUpdateCount")
 	waitForTotalSnapshotStatusUpdateCount(handler, 1000, 4)
 	if handler.getSnapshotCount(100, 2) != 0 {
 		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
@@ -1035,9 +974,6 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	}
 	if handler.getFailedSnapshotCount(100, 3) != 1 {
 		t.Errorf("got %d, want 1", handler.getFailedSnapshotCount(100, 3))
-	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
 	}
 }
 
@@ -1109,9 +1045,6 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T, sz uint64, maxWait uin
 		if !bytes.Equal(md5Original, md5Received) {
 			t.Errorf("snapshot content changed during transmission")
 		}
-	}
-	if trans.getSnapshotCount() != 0 {
-		t.Errorf("snapshot count %d, want 0", trans.getSnapshotCount())
 	}
 }
 

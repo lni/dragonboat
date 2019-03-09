@@ -169,10 +169,9 @@ type Transport struct {
 	mu struct {
 		sync.Mutex
 		// each (cluster id, node id) pair has its own queue and breaker
-		queues      map[string]chan pb.Message
-		chunks      map[string]chan pb.SnapshotChunk
-		chunksClose map[string]chan struct{}
-		breakers    map[string]*circuit.Breaker
+		queues   map[string]chan pb.Message
+		lanes    map[raftio.NodeInfo]*lane
+		breakers map[string]*circuit.Breaker
 	}
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
@@ -219,8 +218,7 @@ func NewTransport(nhConfig config.NodeHostConfig, ctx *server.Context,
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]chan pb.Message)
-	t.mu.chunks = make(map[string]chan pb.SnapshotChunk)
-	t.mu.chunksClose = make(map[string]chan struct{})
+	t.mu.lanes = make(map[raftio.NodeInfo]*lane)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
 	return t
 }
@@ -523,7 +521,6 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 
 func (t *Transport) sendSnapshotNotification(clusterID uint64,
 	nodeID uint64, rejected bool) {
-	t.decreaseSnapshotCount()
 	if t.handlerRemoved() {
 		plog.Warningf("handler removed, snapshot notification to %s ignored",
 			logutil.DescribeNode(clusterID, nodeID))
