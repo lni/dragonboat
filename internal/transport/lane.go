@@ -34,6 +34,19 @@ var (
 	ErrStopped         = errors.New("lane stopped")
 )
 
+type IChunkSink interface {
+	// return (sent, stopped)
+	Receive(chunk pb.SnapshotChunk) (bool, bool)
+}
+
+type sink struct {
+	l *lane
+}
+
+func (s *sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+	return s.l.SendSnapshotChunk(chunk)
+}
+
 type lane struct {
 	clusterID          uint64
 	nodeID             uint64
@@ -44,6 +57,7 @@ type lane struct {
 	ch                 chan pb.SnapshotChunk
 	conn               raftio.ISnapshotConnection
 	stopc              chan struct{}
+	failed             chan struct{}
 	streamChunkSent    atomic.Value
 	preStreamChunkSend atomic.Value
 }
@@ -59,6 +73,7 @@ func newLane(clusterID uint64, nodeID uint64,
 		ctx:          ctx,
 		rpc:          rpc,
 		stopc:        stopc,
+		failed:       make(chan struct{}),
 	}
 	var chsz int
 	if streaming {
@@ -98,12 +113,14 @@ func (l *lane) sendSavedSnapshot(m pb.Message) {
 	}
 }
 
-func (l *lane) SendSnapshotChunk(chunk pb.SnapshotChunk) bool {
+func (l *lane) SendSnapshotChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	select {
 	case l.ch <- chunk:
-		return true
+		return true, false
+	case <-l.failed:
+		return false, false
 	case <-l.stopc:
-		return false
+		return false, true
 	}
 }
 
@@ -159,9 +176,6 @@ func (l *lane) sendChunks(chunks []pb.SnapshotChunk) error {
 		chunkData := make([]byte, snapChunkSize)
 		data, err := loadSnapshotChunkData(chunk, chunkData)
 		if err != nil {
-			// for whatever reason, we failed to get the current chunk data
-			// report this snapshot as failed. the connection is still good,
-			// everything in ch should continue
 			plog.Errorf("failed to read the snapshot chunk, %v", err)
 			return err
 		}
@@ -172,8 +186,6 @@ func (l *lane) sendChunks(chunks []pb.SnapshotChunk) error {
 				logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 			return err
 		}
-		// when t.streamChunkSent is set, it is called after each successful
-		// chunk sent
 		if v := l.streamChunkSent.Load(); v != nil {
 			v.(func(pb.SnapshotChunk))(chunk)
 		}

@@ -64,6 +64,27 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
+func (t *Transport) GetStreamLane(m pb.Message) IChunkSink {
+	toNodeID := m.To
+	clusterID := m.ClusterId
+	if m.Type != pb.InstallSnapshot {
+		panic("non-snapshot message received by ASyncSendSnapshot")
+	}
+	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
+	if err != nil {
+		return nil
+	}
+	if !t.GetCircuitBreaker(addr).Ready() {
+		return nil
+	}
+	key := raftio.GetNodeInfo(clusterID, toNodeID)
+	if lane := t.tryCreateLane(key, addr, true, 0); lane != nil {
+		return &sink{l: lane}
+	} else {
+		return nil
+	}
+}
+
 func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	toNodeID := m.To
 	clusterID := m.ClusterId
@@ -123,6 +144,7 @@ func (t *Transport) connectAndProcessSnapshot(lane *lane, addr string) {
 			plog.Warningf("failed to get snapshot client to %s",
 				logutil.DescribeNode(lane.clusterID, lane.nodeID))
 			t.sendSnapshotNotification(lane.clusterID, lane.nodeID, true)
+			close(lane.failed)
 			return err
 		}
 		defer lane.close()
@@ -132,6 +154,9 @@ func (t *Transport) connectAndProcessSnapshot(lane *lane, addr string) {
 				logutil.DescribeNode(lane.clusterID, lane.nodeID), addr)
 		}
 		err := lane.process()
+		if err != nil {
+			close(lane.failed)
+		}
 		t.sendSnapshotNotification(lane.clusterID, lane.nodeID, err != nil)
 		return err
 	}(); err != nil {
