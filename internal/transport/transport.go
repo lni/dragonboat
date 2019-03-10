@@ -171,7 +171,7 @@ type Transport struct {
 		queues   map[string]chan pb.Message
 		breakers map[string]*circuit.Breaker
 	}
-	lanes               uint32
+	connections         uint32
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
 	sourceAddress       string

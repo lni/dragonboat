@@ -78,8 +78,8 @@ func (t *Transport) GetStreamLane(m pb.Message) IChunkSink {
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	if lane := t.tryCreateLane(key, addr, true, 0); lane != nil {
-		return &sink{l: lane}
+	if c := t.tryCreateLane(key, addr, true, 0); c != nil {
+		return &sink{l: c}
 	} else {
 		return nil
 	}
@@ -100,64 +100,66 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	lane := t.tryCreateLane(key, addr, false, len(chunks))
-	if lane == nil {
+	c := t.tryCreateLane(key, addr, false, len(chunks))
+	if c == nil {
 		return false
 	}
-	lane.sendSavedSnapshot(m)
+	c.sendSavedSnapshot(m)
 	return true
 }
 
 func (t *Transport) tryCreateLane(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *lane {
-	if v := atomic.AddUint32(&t.lanes, 1); v > maxLaneCount {
-		atomic.AddUint32(&t.lanes, ^uint32(0))
+	addr string, streaming bool, sz int) *connection {
+	if v := atomic.AddUint32(&t.connections, 1); v > maxLaneCount {
+		atomic.AddUint32(&t.connections, ^uint32(0))
 		return nil
 	}
 	return t.createLane(key, addr, streaming, sz)
 }
 
 func (t *Transport) createLane(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *lane {
-	lane := newLane(key.ClusterID, key.NodeID,
+	addr string, streaming bool, sz int) *connection {
+	c := newConnection(key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())
-	lane.streamChunkSent = t.streamChunkSent
-	lane.preStreamChunkSend = t.preStreamChunkSend
+	c.streamChunkSent = t.streamChunkSent
+	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {
-		atomic.AddUint32(&t.lanes, ^uint32(0))
+		atomic.AddUint32(&t.connections, ^uint32(0))
 	}
 	t.stopper.RunWorker(func() {
-		t.connectAndProcessSnapshot(lane, addr)
+		t.connectAndProcessSnapshot(c, addr)
 		plog.Infof("%s connectAndProcessSnapshot returned",
 			logutil.DescribeNode(key.ClusterID, key.NodeID))
 		shutdown()
 	})
-	return lane
+	return c
 }
 
-func (t *Transport) connectAndProcessSnapshot(lane *lane, addr string) {
+func (t *Transport) connectAndProcessSnapshot(c *connection, addr string) {
 	breaker := t.GetCircuitBreaker(addr)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
+	clusterID := c.clusterID
+	nodeID := c.nodeID
 	if err := func() error {
-		if err := lane.connect(addr); err != nil {
+		if err := c.connect(addr); err != nil {
 			plog.Warningf("failed to get snapshot client to %s",
-				logutil.DescribeNode(lane.clusterID, lane.nodeID))
-			t.sendSnapshotNotification(lane.clusterID, lane.nodeID, true)
-			close(lane.failed)
+				logutil.DescribeNode(clusterID, nodeID))
+			t.sendSnapshotNotification(clusterID, nodeID, true)
+			close(c.failed)
 			return err
 		}
-		defer lane.close()
+		defer c.close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
 			plog.Infof("snapshot stream to %s (%s) established",
-				logutil.DescribeNode(lane.clusterID, lane.nodeID), addr)
+				logutil.DescribeNode(clusterID, nodeID), addr)
 		}
-		err := lane.process()
+		err := c.process()
 		if err != nil {
-			close(lane.failed)
+			close(c.failed)
 		}
-		t.sendSnapshotNotification(lane.clusterID, lane.nodeID, err != nil)
+		t.sendSnapshotNotification(clusterID, nodeID, err != nil)
 		return err
 	}(); err != nil {
 		plog.Warningf("connectAndProcessSnapshot failed: %v", err)
