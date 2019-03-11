@@ -79,6 +79,9 @@ type hard struct {
 	LogDBEntryBatchSize uint64
 }
 
+// BlockFileMagicNumber is the magic number used in block based snapshot files.
+var BlockFileMagicNumber = []byte{0x3F, 0x5B, 0xCB, 0xF1, 0xFA, 0xBA, 0x81, 0x9F}
+
 const (
 	//
 	// RSM
