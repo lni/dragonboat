@@ -19,17 +19,12 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"io"
-	"math"
 	"testing"
 )
 
-func getExpSz(sz int, blockSize int) int {
-	return int(math.Ceil(float64(sz)/float64(blockSize)))*4 + sz
-}
-
 func TestBlockWriterCanWriteData(t *testing.T) {
-	blockSize := 128
-	testSz := []int{
+	blockSize := uint64(128)
+	testSz := []uint64{
 		1,
 		blockSize - 1,
 		blockSize + 1,
@@ -69,10 +64,10 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 		writer := newBlockWriter(blockSize, onBlock)
 		input := make([]byte, sz)
 		for i := range input {
-			input[i] = byte((sz + i) % 256)
+			input[i] = byte((sz + uint64(i)) % 256)
 		}
 		n, err := writer.Write(input)
-		if n != sz {
+		if uint64(n) != sz {
 			t.Errorf("failed to write all data")
 		}
 		if err != nil {
@@ -82,9 +77,9 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 		writer.Flush()
 		result := written[:len(written)-16]
 		meta := written[len(written)-16:]
-		total := int(binary.LittleEndian.Uint64(meta[:8]))
+		total := binary.LittleEndian.Uint64(meta[:8])
 		magic := meta[8:]
-		expSz := getExpSz(sz, blockSize)
+		expSz := getChecksumedBlockSize(sz, blockSize)
 		if total != expSz {
 			t.Errorf("%d, total %d, size %d", idx, total, sz)
 		}
@@ -98,8 +93,8 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 }
 
 func TestBlockReaderCanReadData(t *testing.T) {
-	blockSize := 128
-	testSz := []int{
+	blockSize := uint64(128)
+	testSz := []uint64{
 		1,
 		blockSize - 1,
 		blockSize + 1,
@@ -133,7 +128,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			v++
 		}
 		n, err := writer.Write(input)
-		if n != sz {
+		if uint64(n) != sz {
 			t.Errorf("failed to write all data")
 		}
 		if err != nil {
@@ -141,12 +136,12 @@ func TestBlockReaderCanReadData(t *testing.T) {
 		}
 		writer.Flush()
 		written := buf.Bytes()
-		expSz := getExpSz(sz, blockSize) + 16
-		if expSz != len(written) {
+		expSz := getChecksumedBlockSize(sz, blockSize) + 16
+		if expSz != uint64(len(written)) {
 			t.Errorf("exp %d, written %d", expSz, len(written))
 		}
 		allRead := make([]byte, 0)
-		readBufSz := []int{1, 3, blockSize - 1, blockSize, blockSize + 1, sz, sz - 1, sz + 1}
+		readBufSz := []uint64{1, 3, blockSize - 1, blockSize, blockSize + 1, sz, sz - 1, sz + 1}
 		for _, bufSz := range readBufSz {
 			if bufSz == 0 {
 				continue
@@ -173,7 +168,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 }
 
 func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
-	blockSize := 128
+	blockSize := uint64(128)
 	sz := blockSize*5 + 4
 	buf := bytes.NewBuffer(make([]byte, 0, blockSize*12))
 	onBlock := func(data []byte, crc []byte) error {
@@ -195,7 +190,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 		v++
 	}
 	n, err := writer.Write(input)
-	if n != sz {
+	if uint64(n) != sz {
 		t.Errorf("failed to write all data")
 	}
 	if err != nil {

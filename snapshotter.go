@@ -73,7 +73,7 @@ func (s *snapshotter) Save(savable rsm.IManagedStateMachine,
 	}
 	files := newFileCollection()
 	fp := env.GetTempFilepath()
-	writer, err := rsm.NewSnapshotWriter(fp)
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
 	if err != nil {
 		return nil, env, err
 	}

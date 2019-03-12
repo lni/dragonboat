@@ -308,12 +308,16 @@ func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 		plog.Errorf("save snapshot failed, %v", err)
 		return 0, err
 	}
+	if err := writer.Flush(); err != nil {
+		return 0, err
+	}
 	sz := uint64(r.size)
 	if err := writer.SaveHeader(smsz, sz); err != nil {
 		plog.Errorf("save header failed %v", err)
 		return 0, err
 	}
-	return uint64(r.size) + smsz + rsm.SnapshotHeaderSize, nil
+	actualSz := writer.GetPayloadSize(uint64(r.size) + smsz)
+	return actualSz + rsm.SnapshotHeaderSize, nil
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state

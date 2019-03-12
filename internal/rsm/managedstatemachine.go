@@ -408,10 +408,14 @@ func (ds *NativeStateMachine) SaveSnapshot(
 	if err != nil {
 		return 0, err
 	}
+	if err = writer.Flush(); err != nil {
+		return 0, err
+	}
 	if err = writer.SaveHeader(smsz, sz); err != nil {
 		return 0, err
 	}
-	return sz + smsz + SnapshotHeaderSize, nil
+	actualSz := writer.GetPayloadSize(sz + smsz)
+	return actualSz + SnapshotHeaderSize, nil
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot

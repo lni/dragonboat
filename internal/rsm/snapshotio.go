@@ -34,8 +34,8 @@ type SnapshotVersion uint64
 const (
 	v1SnapshotVersion SnapshotVersion = 1
 	v2SnapshotVersion SnapshotVersion = 2
-	// current snapshot binary format version.
-	currentSnapshotVersion SnapshotVersion = v1SnapshotVersion
+	// Current snapshot binary format version.
+	CurrentSnapshotVersion SnapshotVersion = v2SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.
 	SnapshotHeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
@@ -148,6 +148,10 @@ func (sw *SnapshotWriter) Flush() error {
 	return sw.vw.Flush()
 }
 
+func (sw *SnapshotWriter) GetPayloadSize(sz uint64) uint64 {
+	return sw.vw.GetPayloadSize(sz)
+}
+
 // SaveHeader saves the snapshot header to the snapshot.
 func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 	sh := pb.SnapshotHeader{
@@ -250,6 +254,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 			return empty, err
 		}
 		fileSz := st.Size()
+		plog.Infof("file size %d", fileSz)
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - 16
 		reader = io.LimitReader(reader, payloadSz)
 	}

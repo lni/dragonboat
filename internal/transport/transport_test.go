@@ -112,7 +112,7 @@ func (g *getTestSnapshotDirStruct) generateSnapshotFile(clusterID uint64,
 	fp := filepath.Join(snapDir, filename)
 	data := make([]byte, sz)
 	rand.Read(data)
-	writer, err := rsm.NewSnapshotWriter(fp)
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
 	if err != nil {
 		panic(err)
 	}

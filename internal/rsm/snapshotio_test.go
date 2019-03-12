@@ -29,7 +29,7 @@ const (
 )
 
 func TestSnapshotWriterCanBeCreated(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename, currentSnapshotVersion)
+	w, err := NewSnapshotWriter(testSnapshotFilename, CurrentSnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -45,7 +45,7 @@ func TestSnapshotWriterCanBeCreated(t *testing.T) {
 }
 
 func TestSaveHeaderSavesTheHeader(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename, currentSnapshotVersion)
+	w, err := NewSnapshotWriter(testSnapshotFilename, CurrentSnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
