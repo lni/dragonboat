@@ -680,6 +680,9 @@ func (nh *NodeHost) ReadLocal(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
+	if !v.initialized() {
+		plog.Panicf("ReadLocal called on %s when not initialized", v.describe())
+	}
 	// translate the rsm.ErrClusterClosed to ErrClusterClosed
 	// internally, the IManagedStateMachine might obtain a RLock before performing
 	// the local read. The critical section is used to make sure we don't read
@@ -699,6 +702,10 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	query []byte) ([]byte, error) {
 	if rs.node == nil {
 		panic("invalid rs")
+	}
+	if !rs.node.initialized() {
+		plog.Panicf("ReadLocalNode called on %s when not initialized",
+			rs.node.describe())
 	}
 	// translate the rsm.ErrClusterClosed to ErrClusterClosed
 	// internally, the IManagedStateMachine might obtain a RLock before performing

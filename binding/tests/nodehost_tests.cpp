@@ -666,9 +666,15 @@ TEST_F(NodeHostTest, TooSmallReadBufferForReadIndexIsReported)
   p.AddMember("localhost:9050", 1);
   dragonboat::Status s = nh_->StartCluster(p, false, TestPluginFilename, config);
   EXPECT_TRUE(s.OK());
-  dragonboat::Buffer query(128);
-  dragonboat::Buffer result(2);
-  dragonboat::Status readStatus = nh_->ReadLocal(1, query, &result);
+  auto timeout = dragonboat::Milliseconds(5000);
+  dragonboat::Buffer query1(128);
+  dragonboat::Buffer result1(256);
+  waitForElectionToComplete();
+  dragonboat::Status readStatus = nh_->SyncRead(1, query1, &result1, timeout);
+  EXPECT_TRUE(readStatus.OK());
+  dragonboat::Buffer query2(128);
+  dragonboat::Buffer result2(2);
+  readStatus = nh_->ReadLocal(1, query2, &result2);
   EXPECT_FALSE(readStatus.OK());
   EXPECT_EQ(readStatus.Code(), dragonboat::Status::ErrResultBufferTooSmall);
 }
