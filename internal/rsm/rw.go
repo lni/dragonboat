@@ -63,6 +63,20 @@ func getChecksumedBlockSize(sz uint64, blockSize uint64) uint64 {
 	return uint64(math.Ceil(float64(sz)/float64(blockSize)))*4 + sz
 }
 
+func validateBlock(block []byte, h hash.Hash) bool {
+	if len(block) <= 4 {
+		return false
+	}
+	payload := block[:len(block)-4]
+	crc := block[len(block)-4:]
+	h.Reset()
+	_, err := h.Write(payload)
+	if err != nil {
+		panic(err)
+	}
+	return bytes.Equal(crc, h.Sum(nil))
+}
+
 type blockWriter struct {
 	h          hash.Hash
 	block      []byte
@@ -190,18 +204,11 @@ func (br *blockReader) readBlock() (int, error) {
 		return n, err
 	}
 	br.block = br.block[:n]
-	if n <= 4 {
-		panic("invalid block")
-	}
-	exp := br.block[len(br.block)-4:]
-	br.block = br.block[:len(br.block)-4]
 	h := getDefaultChecksum()
-	if _, err := h.Write(br.block); err != nil {
-		panic(err)
-	}
-	if bytes.Compare(h.Sum(nil), exp) != 0 {
+	if !validateBlock(br.block, h) {
 		panic("corrupted block")
 	}
+	br.block = br.block[:len(br.block)-4]
 	return len(br.block), nil
 }
 
@@ -408,7 +415,6 @@ func (v *v2validator) AddChunk(data []byte, chunkID uint64) bool {
 
 func (v *v2validator) Validate() bool {
 	if uint64(len(v.block)) < tailSize {
-		plog.Infof("unexpected size")
 		return false
 	}
 	tail := v.block[uint64(len(v.block))-tailSize:]
@@ -445,13 +451,5 @@ func (v *v2validator) validateMagicSize(tail []byte) bool {
 }
 
 func (v *v2validator) validateBlock(block []byte) bool {
-	payload := block[:len(block)-4]
-	crc := block[len(block)-4:]
-	v.h.Reset()
-	_, err := v.h.Write(payload)
-	if err != nil {
-		panic(err)
-	}
-	r := bytes.Equal(crc, v.h.Sum(nil))
-	return r
+	return validateBlock(block, v.h)
 }

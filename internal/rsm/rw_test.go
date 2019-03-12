@@ -19,8 +19,184 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"io"
+	"math/rand"
 	"testing"
 )
+
+func TestTooShortBlockAreRejected(t *testing.T) {
+	for i := 1; i <= 4; i++ {
+		v := make([]byte, i)
+		if validateBlock(v, getDefaultChecksum()) {
+			t.Fatalf("not rejected")
+		}
+	}
+}
+
+func TestRandomBlocksAreRejected(t *testing.T) {
+	for i := 1; i < 128; i++ {
+		v := make([]byte, i*128)
+		rand.Read(v)
+		if validateBlock(v, getDefaultChecksum()) {
+			t.Fatalf("not rejected")
+		}
+	}
+}
+
+func TestWellFormedBlocksAreAccepted(t *testing.T) {
+	for i := 1; i < 128; i++ {
+		v := make([]byte, i*128)
+		rand.Read(v)
+		h := getDefaultChecksum()
+		_, err := h.Write(v)
+		if err != nil {
+			t.Fatalf("failed to write %v", err)
+		}
+		v = append(v, h.Sum(nil)...)
+		if !validateBlock(v, h) {
+			t.Fatalf("incorrectly rejected")
+		}
+	}
+}
+
+func TestWellFormedDataCanPassV2Validator(t *testing.T) {
+	szs := []uint64{
+		1,
+		snapshotBlockSize,
+		snapshotBlockSize - 1,
+		snapshotBlockSize + 1,
+		snapshotBlockSize * 5,
+		snapshotBlockSize*6 - 1,
+		snapshotBlockSize*6 + 1,
+	}
+	for idx, sz := range szs {
+		v := make([]byte, sz)
+		rand.Read(v)
+		buf := bytes.NewBuffer(make([]byte, 0, 1024))
+		w := newV2Writer(buf)
+		_, err := w.Write(v)
+		if err != nil {
+			t.Fatalf("failed to write %v", err)
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("failed to flush %v", err)
+		}
+		header := make([]byte, SnapshotHeaderSize)
+		data := append(header, buf.Bytes()...)
+		validator := newV2Validator(getDefaultChecksum())
+		if !validator.AddChunk(data, 0) {
+			t.Errorf("%d, add chunk failed", idx)
+		}
+		if !validator.Validate() {
+			t.Errorf("%d, validation failed", idx)
+		}
+		if sz > SnapshotHeaderSize {
+			s := sz / 2
+			fh := data[:s]
+			lh := data[s:]
+			validator := newV2Validator(getDefaultChecksum())
+			if !validator.AddChunk(fh, 0) {
+				t.Errorf("%d, add fh chunk failed", idx)
+			}
+			if !validator.AddChunk(lh, 1) {
+				t.Errorf("%d, add lh chunk failed", idx)
+			}
+			if !validator.Validate() {
+				t.Errorf("%d, parts validation failed", idx)
+			}
+		}
+	}
+}
+
+func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
+	corruptFn func([]byte) []byte, ok bool) {
+	szs := []uint64{
+		1,
+		snapshotBlockSize,
+		snapshotBlockSize - 1,
+		snapshotBlockSize + 1,
+		snapshotBlockSize * 3,
+		snapshotBlockSize*3 - 1,
+		snapshotBlockSize*3 + 1,
+	}
+	for idx, sz := range szs {
+		v := make([]byte, sz)
+		rand.Read(v)
+		buf := bytes.NewBuffer(make([]byte, 0, 1024))
+		w := newV2Writer(buf)
+		_, err := w.Write(v)
+		if err != nil {
+			t.Fatalf("failed to write %v", err)
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("failed to flush %v", err)
+		}
+		payload := buf.Bytes()
+		payload = corruptFn(payload)
+		header := make([]byte, SnapshotHeaderSize)
+		data := append(header, payload...)
+		vf := func(data []byte) bool {
+			validator := newV2Validator(getDefaultChecksum())
+			if !validator.AddChunk(data, 0) {
+				return false
+			}
+			return validator.Validate()
+		}
+		if result := vf(data); result != ok {
+			t.Errorf("%d, validation failed", idx)
+		}
+		if sz > SnapshotHeaderSize {
+			vf := func(data []byte) bool {
+				s := sz / 2
+				fh := data[:s]
+				lh := data[s:]
+				validator := newV2Validator(getDefaultChecksum())
+				if !validator.AddChunk(fh, 0) {
+					return false
+				}
+				if !validator.AddChunk(lh, 1) {
+					return false
+				}
+				return validator.Validate()
+			}
+			if result := vf(data); result != ok {
+				t.Errorf("%d, half-half validation failed", idx)
+			}
+		}
+	}
+}
+
+func TestCorruptedDataCanBeDetectedByValidator(t *testing.T) {
+	noop := func(data []byte) []byte {
+		return data
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, noop, true)
+	firstByte := func(data []byte) []byte {
+		data[0] = byte(data[0] + 1)
+		return data
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, firstByte, false)
+	lastByte := func(data []byte) []byte {
+		data[len(data)-1] = byte(data[len(data)-1] + 1)
+		return data
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, lastByte, false)
+	truncateFirstByte := func(data []byte) []byte {
+		return data[1:]
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, truncateFirstByte, false)
+	truncateLastByte := func(data []byte) []byte {
+		return data[:len(data)-1]
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, truncateLastByte, false)
+	extraFirstByte := func(data []byte) []byte {
+		return append([]byte{0}, data...)
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, extraFirstByte, false)
+	extraLastByte := func(data []byte) []byte {
+		return append(data, 0)
+	}
+	testCorruptedDataCanBeDetectedByValidator(t, extraLastByte, false)
+}
 
 func TestBlockWriterCanWriteData(t *testing.T) {
 	blockSize := uint64(128)
