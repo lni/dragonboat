@@ -233,7 +233,7 @@ func (v1w *v1writer) Write(data []byte) (int, error) {
 }
 
 func (v1w *v1writer) GetVersion() SnapshotVersion {
-	return v1SnapshotVersion
+	return V1SnapshotVersion
 }
 
 func (v1w *v1writer) GetPayloadSize(sz uint64) uint64 {
@@ -292,7 +292,7 @@ func (v2w *v2writer) Write(data []byte) (int, error) {
 }
 
 func (v2w *v2writer) GetVersion() SnapshotVersion {
-	return v2SnapshotVersion
+	return V2SnapshotVersion
 }
 
 func (v2w *v2writer) GetPayloadSize(sz uint64) uint64 {

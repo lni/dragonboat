@@ -150,8 +150,8 @@ func testCorruptedHeaderWillBeDetected(t *testing.T, v SnapshotVersion) {
 }
 
 func TestCorruptedHeaderWillBeDetected(t *testing.T) {
-	testCorruptedHeaderWillBeDetected(t, v1SnapshotVersion)
-	testCorruptedHeaderWillBeDetected(t, v2SnapshotVersion)
+	testCorruptedHeaderWillBeDetected(t, V1SnapshotVersion)
+	testCorruptedHeaderWillBeDetected(t, V2SnapshotVersion)
 }
 
 func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
@@ -188,8 +188,8 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
 }
 
 func TestCorruptedPayloadWillBeDetected(t *testing.T) {
-	testCorruptedPayloadWillBeDetected(t, v1SnapshotVersion)
-	testCorruptedPayloadWillBeDetected(t, v2SnapshotVersion)
+	testCorruptedPayloadWillBeDetected(t, V1SnapshotVersion)
+	testCorruptedPayloadWillBeDetected(t, V2SnapshotVersion)
 }
 
 func testNormalSnapshotCanPassValidation(t *testing.T, v SnapshotVersion) {
@@ -225,8 +225,8 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SnapshotVersion) {
 }
 
 func TestNormalSnapshotCanPassValidation(t *testing.T) {
-	testNormalSnapshotCanPassValidation(t, v1SnapshotVersion)
-	testNormalSnapshotCanPassValidation(t, v2SnapshotVersion)
+	testNormalSnapshotCanPassValidation(t, V1SnapshotVersion)
+	testNormalSnapshotCanPassValidation(t, V2SnapshotVersion)
 }
 
 func readTestSnapshot(fn string, sz uint64) ([]byte, error) {
@@ -269,8 +269,8 @@ func testSingleBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
 }
 
 func TestSingleBlockSnapshotValidation(t *testing.T) {
-	testSingleBlockSnapshotValidation(t, v1SnapshotVersion)
-	testSingleBlockSnapshotValidation(t, v2SnapshotVersion)
+	testSingleBlockSnapshotValidation(t, V1SnapshotVersion)
+	testSingleBlockSnapshotValidation(t, V2SnapshotVersion)
 }
 
 func testMultiBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
@@ -306,6 +306,6 @@ func testMultiBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
 }
 
 func TestMultiBlockSnapshotValidation(t *testing.T) {
-	testMultiBlockSnapshotValidation(t, v1SnapshotVersion)
-	testMultiBlockSnapshotValidation(t, v2SnapshotVersion)
+	testMultiBlockSnapshotValidation(t, V1SnapshotVersion)
+	testMultiBlockSnapshotValidation(t, V2SnapshotVersion)
 }

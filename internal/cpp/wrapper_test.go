@@ -201,7 +201,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
-	writer, err := rsm.NewSnapshotWriter(fp)
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}

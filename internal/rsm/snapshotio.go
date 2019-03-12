@@ -32,12 +32,10 @@ import (
 type SnapshotVersion uint64
 
 const (
-	v1SnapshotVersion SnapshotVersion = 1
-	v2SnapshotVersion SnapshotVersion = 2
-	V1SnapshotVersion SnapshotVersion = v1SnapshotVersion
-	V2SnapshotVersion SnapshotVersion = v2SnapshotVersion
+	V1SnapshotVersion SnapshotVersion = 1
+	V2SnapshotVersion SnapshotVersion = 2
 	// Current snapshot binary format version.
-	CurrentSnapshotVersion SnapshotVersion = v2SnapshotVersion
+	CurrentSnapshotVersion SnapshotVersion = V2SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.
 	SnapshotHeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
@@ -69,9 +67,9 @@ func getDefaultChecksum() hash.Hash {
 }
 
 func getVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
-	if v == v1SnapshotVersion {
+	if v == V1SnapshotVersion {
 		return newV1Wrtier(w)
-	} else if v == v2SnapshotVersion {
+	} else if v == V2SnapshotVersion {
 		return newV2Writer(w)
 	} else {
 		panic("unsupported v")
@@ -79,9 +77,9 @@ func getVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
 }
 
 func getVersionReader(r io.Reader, v SnapshotVersion) IVReader {
-	if v == v1SnapshotVersion {
+	if v == V1SnapshotVersion {
 		return newV1Reader(r)
-	} else if v == v2SnapshotVersion {
+	} else if v == V2SnapshotVersion {
 		return newV2Reader(r)
 	} else {
 		panic("unsupported v")
@@ -90,9 +88,9 @@ func getVersionReader(r io.Reader, v SnapshotVersion) IVReader {
 
 func getVersionValidator(header pb.SnapshotHeader) IVValidator {
 	v := (SnapshotVersion)(header.Version)
-	if v == v1SnapshotVersion {
+	if v == V1SnapshotVersion {
 		return newV1Validator(header)
-	} else if v == v2SnapshotVersion {
+	} else if v == V2SnapshotVersion {
 		h := getChecksum(header.ChecksumType)
 		return newV2Validator(h)
 	} else {
@@ -250,13 +248,12 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		return empty, io.ErrUnexpectedEOF
 	}
 	var reader io.Reader = sr.file
-	if (SnapshotVersion)(r.Version) == v2SnapshotVersion {
+	if (SnapshotVersion)(r.Version) == V2SnapshotVersion {
 		st, err := sr.file.Stat()
 		if err != nil {
 			return empty, err
 		}
 		fileSz := st.Size()
-		plog.Infof("file size %d", fileSz)
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - 16
 		reader = io.LimitReader(reader, payloadSz)
 	}
