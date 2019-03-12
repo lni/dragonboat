@@ -34,6 +34,8 @@ type SnapshotVersion uint64
 const (
 	v1SnapshotVersion SnapshotVersion = 1
 	v2SnapshotVersion SnapshotVersion = 2
+	V1SnapshotVersion SnapshotVersion = v1SnapshotVersion
+	V2SnapshotVersion SnapshotVersion = v2SnapshotVersion
 	// Current snapshot binary format version.
 	CurrentSnapshotVersion SnapshotVersion = v2SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.

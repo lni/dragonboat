@@ -175,7 +175,8 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 		return
 	}
 	td = c.tracked[key]
-	if c.validate && !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
+	if c.validate && !chunk.HasFileInfo &&
+		!td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
 		plog.Warningf("ignored a invalid chunk %s", key)
 		return
 	}

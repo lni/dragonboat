@@ -190,7 +190,6 @@ func (l *connection) sendChunks(chunks []pb.SnapshotChunk) error {
 			v.(func(pb.SnapshotChunk))(chunk)
 		}
 	}
-	plog.Infof("chunks sent")
 	return nil
 }
 

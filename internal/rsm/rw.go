@@ -51,6 +51,10 @@ var (
 	tailSize          = uint64(16)
 )
 
+func GetV2PayloadSize(sz uint64) uint64 {
+	return getV2PayloadSize(sz, snapshotBlockSize)
+}
+
 func getV2PayloadSize(sz uint64, blockSize uint64) uint64 {
 	return getChecksumedBlockSize(sz, blockSize) + tailSize
 }
@@ -182,7 +186,6 @@ func (br *blockReader) Read(data []byte) (int, error) {
 func (br *blockReader) readBlock() (int, error) {
 	br.block = make([]byte, br.blockSize+4)
 	n, err := io.ReadFull(br.r, br.block)
-	plog.Infof("read block got %d, err %v", n, err)
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return n, err
 	}
@@ -277,7 +280,6 @@ func newV2Writer(fw io.Writer) *v2writer {
 		if n != len(v) {
 			return io.ErrShortWrite
 		}
-		plog.Infof("Write returned %v", err)
 		return err
 	}
 	return &v2writer{
@@ -378,6 +380,7 @@ type v2validator struct {
 }
 
 func newV2Validator(h hash.Hash) *v2validator {
+	plog.Infof("creating v2 validator")
 	return &v2validator{
 		block: make([]byte, 0, snapshotBlockSize+4),
 		h:     h,
@@ -405,6 +408,7 @@ func (v *v2validator) AddChunk(data []byte, chunkID uint64) bool {
 
 func (v *v2validator) Validate() bool {
 	if uint64(len(v.block)) < tailSize {
+		plog.Infof("unexpected size")
 		return false
 	}
 	tail := v.block[uint64(len(v.block))-tailSize:]
@@ -448,5 +452,6 @@ func (v *v2validator) validateBlock(block []byte) bool {
 	if err != nil {
 		panic(err)
 	}
-	return bytes.Equal(crc, v.h.Sum(nil))
+	r := bytes.Equal(crc, v.h.Sum(nil))
+	return r
 }
