@@ -79,7 +79,7 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 			t.Errorf("write failed %v", err)
 		}
 
-		writer.Close()
+		writer.Flush()
 		result := written[:len(written)-16]
 		meta := written[len(written)-16:]
 		total := int(binary.LittleEndian.Uint64(meta[:8]))
@@ -139,7 +139,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 		if err != nil {
 			t.Errorf("write failed %v", err)
 		}
-		writer.Close()
+		writer.Flush()
 		written := buf.Bytes()
 		expSz := getExpSz(sz, blockSize) + 16
 		if expSz != len(written) {
@@ -201,7 +201,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 	if err != nil {
 		t.Errorf("write failed %v", err)
 	}
-	writer.Close()
+	writer.Flush()
 	written := append([]byte{}, buf.Bytes()...)
 	for idx := 0; idx < len(written)-16; idx++ {
 		func() {

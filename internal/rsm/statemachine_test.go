@@ -175,7 +175,7 @@ func (s *testSnapshotter) Save(savable IManagedStateMachine,
 	env := server.NewSnapshotEnv(f, 1, 1, s.index, 1, server.SnapshottingMode)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := filepath.Join(testSnapshotterDir, fn)
-	writer, err := NewSnapshotWriter(fp)
+	writer, err := NewSnapshotWriter(fp, currentSnapshotVersion)
 	if err != nil {
 		return nil, env, err
 	}

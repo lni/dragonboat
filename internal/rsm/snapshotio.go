@@ -29,9 +29,13 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
+type SnapshotVersion uint64
+
 const (
+	v1SnapshotVersion SnapshotVersion = 1
+	v2SnapshotVersion SnapshotVersion = 2
 	// current snapshot binary format version.
-	currentSnapshotVersion = 1
+	currentSnapshotVersion SnapshotVersion = v1SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.
 	SnapshotHeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
@@ -62,15 +66,48 @@ func getDefaultChecksum() hash.Hash {
 	return getChecksum(getChecksumType())
 }
 
+func getVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
+	if v == v1SnapshotVersion {
+		return newV1Wrtier(w)
+	} else if v == v2SnapshotVersion {
+		return newV2Writer(w)
+	} else {
+		panic("unsupported v")
+	}
+}
+
+func getVersionReader(r io.Reader, v SnapshotVersion) IVReader {
+	if v == v1SnapshotVersion {
+		return newV1Reader(r)
+	} else if v == v2SnapshotVersion {
+		return newV2Reader(r)
+	} else {
+		panic("unsupported v")
+	}
+}
+
+func getVersionValidator(header pb.SnapshotHeader) IVValidator {
+	v := (SnapshotVersion)(header.Version)
+	if v == v1SnapshotVersion {
+		return newV1Validator(header)
+	} else if v == v2SnapshotVersion {
+		h := getChecksum(header.ChecksumType)
+		return newV2Validator(h)
+	} else {
+		panic("unsupported v")
+	}
+}
+
 // SnapshotWriter is an io.Writer used to write snapshot file.
 type SnapshotWriter struct {
-	h    hash.Hash
+	vw   IVWriter
 	file *os.File
 	fp   string
 }
 
 // NewSnapshotWriter creates a new snapshot writer instance.
-func NewSnapshotWriter(fp string) (*SnapshotWriter, error) {
+func NewSnapshotWriter(fp string,
+	version SnapshotVersion) (*SnapshotWriter, error) {
 	f, err := os.OpenFile(fp,
 		os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileutil.DefaultFileMode)
 	if err != nil {
@@ -84,7 +121,7 @@ func NewSnapshotWriter(fp string) (*SnapshotWriter, error) {
 		return nil, err
 	}
 	sw := &SnapshotWriter{
-		h:    getDefaultChecksum(),
+		vw:   getVersionWriter(f, version),
 		file: f,
 		fp:   fp,
 	}
@@ -104,10 +141,11 @@ func (sw *SnapshotWriter) Close() error {
 
 // Write writes the specified data to the snapshot.
 func (sw *SnapshotWriter) Write(data []byte) (int, error) {
-	if _, err := sw.h.Write(data); err != nil {
-		panic(err)
-	}
-	return sw.file.Write(data)
+	return sw.vw.Write(data)
+}
+
+func (sw *SnapshotWriter) Flush() error {
+	return sw.vw.Flush()
 }
 
 // SaveHeader saves the snapshot header to the snapshot.
@@ -116,9 +154,9 @@ func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 		SessionSize:     smsz,
 		DataStoreSize:   sz,
 		UnreliableTime:  uint64(time.Now().UnixNano()),
-		PayloadChecksum: sw.h.Sum(nil),
+		PayloadChecksum: sw.vw.GetPayloadSum(),
 		ChecksumType:    getChecksumType(),
-		Version:         currentSnapshotVersion,
+		Version:         uint64(sw.vw.GetVersion()),
 	}
 	data, err := sh.Marshal()
 	if err != nil {
@@ -153,7 +191,7 @@ func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 
 // SnapshotReader is an io.Reader for reading from snapshot files.
 type SnapshotReader struct {
-	h    hash.Hash
+	r    IVReader
 	file *os.File
 }
 
@@ -198,7 +236,6 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if err := r.Unmarshal(data); err != nil {
 		panic(err)
 	}
-	sr.h = getChecksum(r.ChecksumType)
 	offset, err := sr.file.Seek(int64(SnapshotHeaderSize), 0)
 	if err != nil {
 		return empty, err
@@ -206,25 +243,32 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if uint64(offset) != SnapshotHeaderSize {
 		return empty, io.ErrUnexpectedEOF
 	}
+	var reader io.Reader = sr.file
+	if (SnapshotVersion)(r.Version) == v2SnapshotVersion {
+		st, err := sr.file.Stat()
+		if err != nil {
+			return empty, err
+		}
+		fileSz := st.Size()
+		payloadSz := fileSz - int64(SnapshotHeaderSize) - 16
+		reader = io.LimitReader(reader, payloadSz)
+	}
+	sr.r = getVersionReader(reader, (SnapshotVersion)(r.Version))
 	return r, nil
 }
 
 // Read reads up to len(data) bytes from the snapshot file.
 func (sr *SnapshotReader) Read(data []byte) (int, error) {
-	n, err := sr.file.Read(data)
-	if err != nil {
-		return n, err
+	if sr.r == nil {
+		panic("Read called before GetHeader")
 	}
-	if _, err = sr.h.Write(data[:n]); err != nil {
-		panic(err)
-	}
-	return n, nil
+	return sr.r.Read(data)
 }
 
 // ValidatePayload validates whether the snapshot content matches the checksum
 // recorded in the header.
 func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
-	checksum := sr.h.Sum(nil)
+	checksum := sr.r.Sum()
 	if !bytes.Equal(checksum, header.PayloadChecksum) {
 		panic("corrupted snapshot payload")
 	}
@@ -247,15 +291,11 @@ func (sr *SnapshotReader) ValidateHeader(header pb.SnapshotHeader) {
 	if !bytes.Equal(headerChecksum, checksum) {
 		panic("corrupted snapshot header")
 	}
-	if header.Version != currentSnapshotVersion {
-		panic("unknown version")
-	}
 }
 
 // SnapshotValidator is the validator used to check incoming snapshot chunks.
 type SnapshotValidator struct {
-	header pb.SnapshotHeader
-	h      hash.Hash
+	v IVValidator
 }
 
 // NewSnapshotValidator creates and returns a new SnapshotValidator instance.
@@ -263,50 +303,30 @@ func NewSnapshotValidator() *SnapshotValidator {
 	return &SnapshotValidator{}
 }
 
-func (v *SnapshotValidator) getHeader(data []byte) bool {
-	if uint64(len(data)) < SnapshotHeaderSize {
-		panic("first chunk is too small")
-	}
-	if v.h != nil {
-		panic("getHeader invoked twice")
-	}
-	sz := binary.LittleEndian.Uint64(data)
-	if sz > SnapshotHeaderSize-8 {
-		return false
-	}
-	headerData := data[8 : 8+sz]
-	r := pb.SnapshotHeader{}
-	if err := r.Unmarshal(headerData); err != nil {
-		return false
-	}
-	v.h = getChecksum(r.ChecksumType)
-	v.header = r
-	return true
-}
-
 // AddChunk adds a new snapshot chunk to the validator.
 func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
-	var chunkData []byte
 	if chunkID == 0 {
-		if !v.getHeader(data) {
+		header, ok := getHeaderFromFirstChunk(data)
+		if !ok {
 			return false
 		}
-		chunkData = data[SnapshotHeaderSize:]
+		if v.v != nil {
+			return false
+		}
+		v.v = getVersionValidator(header)
 	} else {
-		chunkData = data
+		if v.v == nil {
+			return false
+		}
 	}
-	if v.h == nil {
-		panic("never got the first chunk")
-	}
-	n, err := v.h.Write(chunkData)
-	if err != nil {
-		return false
-	}
-	return n == len(chunkData)
+	return v.v.AddChunk(data, chunkID)
 }
 
 // Validate validates the added chunks and return a boolean flag indicating
 // whether the snapshot chunks are valid.
 func (v *SnapshotValidator) Validate() bool {
-	return bytes.Equal(v.h.Sum(nil), v.header.PayloadChecksum)
+	if v.v == nil {
+		return false
+	}
+	return v.v.Validate()
 }

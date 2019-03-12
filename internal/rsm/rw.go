@@ -35,10 +35,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"hash"
-	"hash/crc32"
 	"io"
 
 	"github.com/lni/dragonboat/internal/settings"
+	pb "github.com/lni/dragonboat/raftpb"
+)
+
+const (
+	snapshotBlockSize = int(settings.SnapshotChunkSize)
 )
 
 var (
@@ -53,6 +57,7 @@ type blockWriter struct {
 	nextStop   int
 	written    int
 	total      int
+	done       bool
 }
 
 func newBlockWriter(blockSize int,
@@ -62,11 +67,14 @@ func newBlockWriter(blockSize int,
 		block:      make([]byte, 0, blockSize+4),
 		onNewBlock: onNewBlock,
 		nextStop:   blockSize,
-		h:          crc32.NewIEEE(),
+		h:          getDefaultChecksum(),
 	}
 }
 
 func (bw *blockWriter) Write(bs []byte) (int, error) {
+	if bw.done {
+		panic("write called after flush")
+	}
 	var totalN int
 	for len(bs) > 0 {
 		l := bw.nextStop - bw.written
@@ -93,16 +101,23 @@ func (bw *blockWriter) Write(bs []byte) (int, error) {
 	return totalN, nil
 }
 
-func (bw *blockWriter) Close() error {
+func (bw *blockWriter) Flush() error {
+	if bw.done {
+		panic("flush called again")
+	} else {
+		bw.done = true
+	}
 	if len(bw.block) > 0 {
 		bw.total += (len(bw.block) + 4)
 		if err := bw.onNewBlock(bw.block, bw.h.Sum(nil)); err != nil {
+			plog.Infof("onNewBlock failed %v", err)
 			return err
 		}
 	}
 	totalbs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(totalbs, uint64(bw.total))
 	if err := bw.onNewBlock(append(totalbs, writerMagicNumber...), nil); err != nil {
+		plog.Infof("on tail failed %v", err)
 		return err
 	}
 	return nil
@@ -157,6 +172,7 @@ func (br *blockReader) Read(data []byte) (int, error) {
 func (br *blockReader) readBlock() (int, error) {
 	br.block = make([]byte, br.blockSize+4)
 	n, err := io.ReadFull(br.r, br.block)
+	plog.Infof("read block got %d, err %v", n, err)
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return n, err
 	}
@@ -166,7 +182,7 @@ func (br *blockReader) readBlock() (int, error) {
 	}
 	exp := br.block[len(br.block)-4:]
 	br.block = br.block[:len(br.block)-4]
-	h := crc32.NewIEEE()
+	h := getDefaultChecksum()
 	if _, err := h.Write(br.block); err != nil {
 		panic(err)
 	}
@@ -174,4 +190,244 @@ func (br *blockReader) readBlock() (int, error) {
 		panic("corrupted block")
 	}
 	return len(br.block), nil
+}
+
+type IVWriter interface {
+	Write(data []byte) (int, error)
+	GetVersion() SnapshotVersion
+	GetPayloadSum() []byte
+	Flush() error
+}
+
+type IVReader interface {
+	Read(data []byte) (int, error)
+	Sum() []byte
+}
+
+type v1writer struct {
+	f io.Writer
+	h hash.Hash
+}
+
+func newV1Wrtier(f io.Writer) *v1writer {
+	h := getDefaultChecksum()
+	return &v1writer{f: io.MultiWriter(f, h), h: h}
+}
+
+func (v1w *v1writer) Write(data []byte) (int, error) {
+	return v1w.f.Write(data)
+}
+
+func (v1w *v1writer) GetVersion() SnapshotVersion {
+	return v1SnapshotVersion
+}
+
+func (v1w *v1writer) GetPayloadSum() []byte {
+	return v1w.h.Sum(nil)
+}
+
+func (v1w *v1writer) Flush() error {
+	return nil
+}
+
+type v1reader struct {
+	r io.Reader
+	h hash.Hash
+}
+
+func newV1Reader(r io.Reader) *v1reader {
+	h := getDefaultChecksum()
+	return &v1reader{
+		r: io.TeeReader(r, h),
+		h: h,
+	}
+}
+
+func (v1r *v1reader) Read(data []byte) (int, error) {
+	return v1r.r.Read(data)
+}
+
+func (v1r *v1reader) Sum() []byte {
+	return v1r.h.Sum(nil)
+}
+
+type v2writer struct {
+	bw *blockWriter
+}
+
+func newV2Writer(fw io.Writer) *v2writer {
+	onBlock := func(data []byte, crc []byte) error {
+		v := append(data, crc...)
+		n, err := fw.Write(v)
+		if n != len(v) {
+			return io.ErrShortWrite
+		}
+		plog.Infof("Write returned %v", err)
+		return err
+	}
+	return &v2writer{
+		bw: newBlockWriter(snapshotBlockSize, onBlock),
+	}
+}
+
+func (v2w *v2writer) Write(data []byte) (int, error) {
+	return v2w.bw.Write(data)
+}
+
+func (v2w *v2writer) GetVersion() SnapshotVersion {
+	return v2SnapshotVersion
+}
+
+func (v2w *v2writer) GetPayloadSum() []byte {
+	return []byte{0, 0, 0, 0}
+}
+
+func (v2w *v2writer) Flush() error {
+	return v2w.bw.Flush()
+}
+
+type v2reader struct {
+	br *blockReader
+}
+
+func newV2Reader(fr io.Reader) *v2reader {
+	return &v2reader{br: newBlockReader(fr, snapshotBlockSize)}
+}
+
+func (br *v2reader) Read(data []byte) (int, error) {
+	return br.br.Read(data)
+}
+
+func (br *v2reader) Sum() []byte {
+	return []byte{0, 0, 0, 0}
+}
+
+func getHeaderFromFirstChunk(data []byte) (pb.SnapshotHeader, bool) {
+	if uint64(len(data)) < SnapshotHeaderSize {
+		panic("first chunk is too small")
+	}
+	sz := binary.LittleEndian.Uint64(data)
+	if sz > SnapshotHeaderSize-8 {
+		return pb.SnapshotHeader{}, false
+	}
+	headerData := data[8 : 8+sz]
+	r := pb.SnapshotHeader{}
+	if err := r.Unmarshal(headerData); err != nil {
+		return pb.SnapshotHeader{}, false
+	}
+	return r, true
+}
+
+type IVValidator interface {
+	AddChunk(data []byte, chunkID uint64) bool
+	Validate() bool
+}
+
+type v1validator struct {
+	header pb.SnapshotHeader
+	h      hash.Hash
+}
+
+func newV1Validator(header pb.SnapshotHeader) *v1validator {
+	return &v1validator{
+		header: header,
+		h:      getChecksum(header.ChecksumType),
+	}
+}
+
+func (v *v1validator) AddChunk(data []byte, chunkID uint64) bool {
+	var p []byte
+	if chunkID == 0 {
+		p = data[SnapshotHeaderSize:]
+	} else {
+		p = data
+	}
+	if _, err := v.h.Write(p); err != nil {
+		return false
+	}
+	return true
+}
+
+func (v *v1validator) Validate() bool {
+	return bytes.Equal(v.h.Sum(nil), v.header.PayloadChecksum)
+}
+
+type v2validator struct {
+	block []byte
+	total int
+	h     hash.Hash
+}
+
+func newV2Validator(h hash.Hash) *v2validator {
+	return &v2validator{
+		block: make([]byte, 0, snapshotBlockSize+4),
+		h:     h,
+	}
+}
+
+func (v *v2validator) AddChunk(data []byte, chunkID uint64) bool {
+	var p []byte
+	if chunkID == 0 {
+		p = data[SnapshotHeaderSize:]
+	} else {
+		p = data
+	}
+	v.total += len(p)
+	v.block = append(v.block, p...)
+	for len(v.block) >= 2*(snapshotBlockSize+4) {
+		block := v.block[:snapshotBlockSize+4]
+		v.block = v.block[snapshotBlockSize+4:]
+		if !v.validateBlock(block) {
+			return false
+		}
+	}
+	return true
+}
+
+func (v *v2validator) Validate() bool {
+	if len(v.block) < 16 {
+		return false
+	}
+	tail := v.block[len(v.block)-16:]
+	block := v.block[:len(v.block)-16]
+	if !v.validateMagicSize(tail) {
+		return false
+	}
+	for len(block) > snapshotBlockSize+4 {
+		c := block[:snapshotBlockSize+4]
+		block = block[snapshotBlockSize+4:]
+		if !v.validateBlock(c) {
+			return false
+		}
+	}
+	if len(block) > 0 {
+		if !v.validateBlock(block) {
+			return false
+		}
+	}
+	return true
+}
+
+func (v *v2validator) validateMagicSize(tail []byte) bool {
+	if len(tail) != 16 {
+		panic("invalid size")
+	}
+	total := tail[:8]
+	magic := tail[8:]
+	if !bytes.Equal(magic, writerMagicNumber) {
+		return false
+	}
+	totalSz := binary.LittleEndian.Uint64(total)
+	return totalSz == uint64(v.total)-16
+}
+
+func (v *v2validator) validateBlock(block []byte) bool {
+	payload := block[:len(block)-4]
+	crc := block[len(block)-4:]
+	v.h.Reset()
+	_, err := v.h.Write(payload)
+	if err != nil {
+		panic(err)
+	}
+	return bytes.Equal(crc, v.h.Sum(nil))
 }

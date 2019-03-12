@@ -29,7 +29,7 @@ const (
 )
 
 func TestSnapshotWriterCanBeCreated(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename)
+	w, err := NewSnapshotWriter(testSnapshotFilename, currentSnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -45,7 +45,7 @@ func TestSnapshotWriterCanBeCreated(t *testing.T) {
 }
 
 func TestSaveHeaderSavesTheHeader(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename)
+	w, err := NewSnapshotWriter(testSnapshotFilename, currentSnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -62,7 +62,7 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if err != nil || m != len(storeData) {
 		t.Fatalf("failed to write the store data")
 	}
-	storeChecksum := w.h.Sum(nil)
+	storeChecksum := w.vw.GetPayloadSum()
 	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -92,8 +92,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 }
 
 func makeTestSnapshotFile(t *testing.T, ssz uint64,
-	psz uint64) (*SnapshotWriter, []byte, []byte) {
-	w, err := NewSnapshotWriter(testSnapshotFilename)
+	psz uint64, v SnapshotVersion) (*SnapshotWriter, []byte, []byte) {
+	os.RemoveAll(testSnapshotFilename)
+	w, err := NewSnapshotWriter(testSnapshotFilename, v)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -109,6 +110,9 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	if err != nil || m != len(storeData) {
 		t.Fatalf("failed to write the store data")
 	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("flush failed")
+	}
 	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -119,12 +123,13 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	return w, sessionData, storeData
 }
 
-func createTestSnapshotFile(t *testing.T) (*SnapshotWriter, []byte, []byte) {
-	return makeTestSnapshotFile(t, testSessionSize, testPayloadSize)
+func createTestSnapshotFile(t *testing.T,
+	v SnapshotVersion) (*SnapshotWriter, []byte, []byte) {
+	return makeTestSnapshotFile(t, testSessionSize, testPayloadSize, v)
 }
 
-func TestCorruptedHeaderWillBeDetected(t *testing.T) {
-	createTestSnapshotFile(t)
+func testCorruptedHeaderWillBeDetected(t *testing.T, v SnapshotVersion) {
+	createTestSnapshotFile(t, v)
 	defer os.RemoveAll(testSnapshotFilename)
 	r, err := NewSnapshotReader(testSnapshotFilename)
 	if err != nil {
@@ -137,16 +142,20 @@ func TestCorruptedHeaderWillBeDetected(t *testing.T) {
 	}
 	rand.Read(header.HeaderChecksum)
 	defer func() {
-		if r := recover(); r != nil {
-			return
+		if r := recover(); r == nil {
+			t.Fatalf("validation error not reported")
 		}
-		t.Fatalf("validation error not reported")
 	}()
 	r.ValidateHeader(header)
 }
 
-func TestCorruptedPayloadWillBeDetected(t *testing.T) {
-	createTestSnapshotFile(t)
+func TestCorruptedHeaderWillBeDetected(t *testing.T) {
+	testCorruptedHeaderWillBeDetected(t, v1SnapshotVersion)
+	testCorruptedHeaderWillBeDetected(t, v2SnapshotVersion)
+}
+
+func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
+	createTestSnapshotFile(t, v)
 	defer os.RemoveAll(testSnapshotFilename)
 	r, err := NewSnapshotReader(testSnapshotFilename)
 	if err != nil {
@@ -163,23 +172,28 @@ func TestCorruptedPayloadWillBeDetected(t *testing.T) {
 	p := make([]byte, testPayloadSize)
 	n, err := io.ReadFull(r, s)
 	if uint64(n) != testSessionSize || err != nil {
-		t.Fatalf("failed to get session data")
+		t.Fatalf("failed to get session data %d, %d, %v",
+			uint64(n), testSessionSize, err)
 	}
 	n, err = io.ReadFull(r, p)
 	if uint64(n) != testPayloadSize || err != nil {
 		t.Fatalf("failed to get payload data")
 	}
 	defer func() {
-		if r := recover(); r != nil {
-			return
+		if r := recover(); r == nil {
+			t.Fatalf("validation error not reported")
 		}
-		t.Fatalf("validation error not reported")
 	}()
 	r.ValidatePayload(header)
 }
 
-func TestNormalSnapshotCanPassValidation(t *testing.T) {
-	_, sessionData, storeData := createTestSnapshotFile(t)
+func TestCorruptedPayloadWillBeDetected(t *testing.T) {
+	testCorruptedPayloadWillBeDetected(t, v1SnapshotVersion)
+	testCorruptedPayloadWillBeDetected(t, v2SnapshotVersion)
+}
+
+func testNormalSnapshotCanPassValidation(t *testing.T, v SnapshotVersion) {
+	_, sessionData, storeData := createTestSnapshotFile(t, v)
 	defer os.RemoveAll(testSnapshotFilename)
 	r, err := NewSnapshotReader(testSnapshotFilename)
 	if err != nil {
@@ -210,6 +224,11 @@ func TestNormalSnapshotCanPassValidation(t *testing.T) {
 	}
 }
 
+func TestNormalSnapshotCanPassValidation(t *testing.T) {
+	testNormalSnapshotCanPassValidation(t, v1SnapshotVersion)
+	testNormalSnapshotCanPassValidation(t, v2SnapshotVersion)
+}
+
 func readTestSnapshot(fn string, sz uint64) ([]byte, error) {
 	file, err := os.Open(fn)
 	if err != nil {
@@ -224,8 +243,8 @@ func readTestSnapshot(fn string, sz uint64) ([]byte, error) {
 	return data[:n], nil
 }
 
-func TestSingleBlockSnapshotValidation(t *testing.T) {
-	createTestSnapshotFile(t)
+func testSingleBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
+	createTestSnapshotFile(t, sv)
 	defer os.RemoveAll(testSnapshotFilename)
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024)
 	if err != nil {
@@ -249,8 +268,13 @@ func TestSingleBlockSnapshotValidation(t *testing.T) {
 	}
 }
 
-func TestMultiBlockSnapshotValidation(t *testing.T) {
-	makeTestSnapshotFile(t, 1024*1024, 1024*1024*8)
+func TestSingleBlockSnapshotValidation(t *testing.T) {
+	testSingleBlockSnapshotValidation(t, v1SnapshotVersion)
+	testSingleBlockSnapshotValidation(t, v2SnapshotVersion)
+}
+
+func testMultiBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
+	makeTestSnapshotFile(t, 1024*1024, 1024*1024*8, sv)
 	defer os.RemoveAll(testSnapshotFilename)
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024*10)
 	if err != nil {
@@ -279,4 +303,9 @@ func TestMultiBlockSnapshotValidation(t *testing.T) {
 	if v.Validate() {
 		t.Fatalf("validation failed to pick up the corrupted snapshot")
 	}
+}
+
+func TestMultiBlockSnapshotValidation(t *testing.T) {
+	testMultiBlockSnapshotValidation(t, v1SnapshotVersion)
+	testMultiBlockSnapshotValidation(t, v2SnapshotVersion)
 }
