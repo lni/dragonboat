@@ -399,7 +399,7 @@ func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
 
 func TestGetMembership(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members = &pb.Membership{
+		sm.members.members = &pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -428,7 +428,7 @@ func TestGetMembership(t *testing.T) {
 
 func TestGetMembershipNodes(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members = &pb.Membership{
+		sm.members.members = &pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -459,7 +459,7 @@ func TestGetMembershipNodes(t *testing.T) {
 
 func TestGetMembershipHash(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members = &pb.Membership{
+		sm.members.members = &pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -467,7 +467,7 @@ func TestGetMembershipHash(t *testing.T) {
 			ConfigChangeId: 12345,
 		}
 		h1 := sm.GetMembershipHash()
-		sm.members.Addresses[200] = "a200"
+		sm.members.members.Addresses[200] = "a200"
 		h2 := sm.GetMembershipHash()
 		if h1 == h2 {
 			t.Errorf("hash doesn't change after membership change")
@@ -490,7 +490,7 @@ func TestGetSnapshotMetaPanicWhenThereIsNoMember(t *testing.T) {
 
 func TestGetSnapshotMeta(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members = &pb.Membership{
+		sm.members.members = &pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -539,7 +539,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 		if !nodeProxy.addPeer {
 			t.Errorf("add peer not called")
 		}
-		v, ok := sm.members.Addresses[4]
+		v, ok := sm.members.members.Addresses[4]
 		if !ok {
 			t.Errorf("members not updated")
 		}
@@ -644,10 +644,10 @@ func TestObserverPromoteToNode(t *testing.T) {
 		if !nodeProxy.addPeer {
 			t.Errorf("add peer not called")
 		}
-		if len(sm.members.Addresses) != 1 {
+		if len(sm.members.members.Addresses) != 1 {
 			t.Errorf("node count != 1")
 		}
-		if len(sm.members.Observers) != 0 {
+		if len(sm.members.members.Observers) != 0 {
 			t.Errorf("observer count != 0")
 		}
 	}
@@ -686,7 +686,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			124)
 
 		sm.Handle(batch, nil)
-		v, ok := sm.members.Addresses[4]
+		v, ok := sm.members.members.Addresses[4]
 		if !ok {
 			t.Errorf("address not found")
 		}
@@ -700,7 +700,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 func TestHandleConfChangeRemoveNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.Addresses[1] = "localhost:1010"
+		sm.members.members.Addresses[1] = "localhost:1010"
 		applyConfigChangeEntry(sm,
 			1,
 			pb.RemoveNode,
@@ -708,7 +708,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 			"",
 			123)
 
-		_, ok := sm.members.Addresses[1]
+		_, ok := sm.members.members.Addresses[1]
 		if !ok {
 			t.Errorf("node 1 not in members")
 		}
@@ -723,11 +723,11 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 		if !nodeProxy.removePeer {
 			t.Errorf("remove peer not called")
 		}
-		_, ok = sm.members.Addresses[1]
+		_, ok = sm.members.members.Addresses[1]
 		if ok {
 			t.Errorf("failed to remove node 1 from members")
 		}
-		_, ok = sm.members.Removed[1]
+		_, ok = sm.members.members.Removed[1]
 		if !ok {
 			t.Errorf("removed node not recorded as removed")
 		}
@@ -738,7 +738,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 func TestOrderedConfChangeIsAccepted(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.ConfigChangeId = 6
+		sm.members.members.ConfigChangeId = 6
 		applyConfigChangeEntry(sm,
 			6,
 			pb.RemoveNode,
@@ -756,8 +756,8 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 		if !nodeProxy.removePeer {
 			t.Errorf("remove peer not called")
 		}
-		if sm.members.ConfigChangeId != 123 {
-			t.Errorf("conf change id not updated, %d", sm.members.ConfigChangeId)
+		if sm.members.members.ConfigChangeId != 123 {
+			t.Errorf("conf change id not updated, %d", sm.members.members.ConfigChangeId)
 		}
 	}
 	runSMTest2(t, tf)
@@ -766,8 +766,8 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.ConfigChangeId = 6
-		sm.members.Addresses[100] = "test.nodehost"
+		sm.members.members.ConfigChangeId = 6
+		sm.members.members.Addresses[100] = "test.nodehost"
 		applyConfigChangeEntry(sm,
 			7,
 			pb.AddNode,
@@ -782,8 +782,8 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 		if nodeProxy.addPeer {
 			t.Errorf("add peer unexpectedly called")
 		}
-		if sm.members.ConfigChangeId == 123 {
-			t.Errorf("conf change unexpected updated, %d", sm.members.ConfigChangeId)
+		if sm.members.members.ConfigChangeId == 123 {
+			t.Errorf("conf change unexpected updated, %d", sm.members.members.ConfigChangeId)
 		}
 	}
 	runSMTest2(t, tf)
@@ -792,8 +792,8 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.ConfigChangeId = 6
-		sm.members.Removed[2] = true
+		sm.members.members.ConfigChangeId = 6
+		sm.members.members.Removed[2] = true
 		applyConfigChangeEntry(sm,
 			7,
 			pb.AddNode,
@@ -815,8 +815,8 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.ordered = true
-		sm.members.ConfigChangeId = 6
+		sm.members.ordered = true
+		sm.members.members.ConfigChangeId = 6
 		applyConfigChangeEntry(sm,
 			1,
 			pb.RemoveNode,
@@ -920,7 +920,7 @@ func TestHandleUpate(t *testing.T) {
 func TestSnapshotCanBeApplied(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.Addresses[1] = "localhost:1234"
+		sm.members.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.index = 3
@@ -938,7 +938,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
 		sm2 := NewStateMachine(ds2, snapshotter2, false, nodeProxy2)
-		if len(sm2.members.Addresses) != 0 {
+		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}
 		index2, err := sm2.RecoverFromSnapshot(commit)
@@ -954,11 +954,11 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 				hash2, hash1, len(store2.(*tests.KVTest).KVStore))
 		}
 		// see whether members info are recovered
-		if len(sm2.members.Addresses) != 2 {
+		if len(sm2.members.members.Addresses) != 2 {
 			t.Errorf("failed to restore members")
 		}
-		v1, ok1 := sm2.members.Addresses[1]
-		v2, ok2 := sm2.members.Addresses[2]
+		v1, ok1 := sm2.members.members.Addresses[1]
+		v2, ok2 := sm2.members.members.Addresses[2]
 		if !ok1 || !ok2 {
 			t.Errorf("failed to save member info")
 		}
@@ -975,8 +975,8 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.Addresses[1] = "localhost:1"
-		sm.members.Addresses[2] = "localhost:2"
+		sm.members.members.Addresses[1] = "localhost:1"
+		sm.members.members.Addresses[2] = "localhost:2"
 		ss, _, err := sm.SaveSnapshot()
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
@@ -1000,8 +1000,8 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 func TestSnapshotTwiceIsHandled(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		sm.members.Addresses[1] = "localhost:1"
-		sm.members.Addresses[2] = "localhost:2"
+		sm.members.members.Addresses[1] = "localhost:1"
+		sm.members.members.Addresses[2] = "localhost:2"
 		batch := make([]Commit, 0, 8)
 		sm.Handle(batch, nil)
 		data := getTestKVData()

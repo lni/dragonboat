@@ -22,12 +22,8 @@ package rsm
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 	"sync"
 
 	"github.com/lni/dragonboat/internal/raft"
@@ -104,11 +100,10 @@ type StateMachine struct {
 	node               INodeProxy
 	sm                 IManagedStateMachine
 	sessions           *SessionManager
+	members            *membership
 	index              uint64
 	term               uint64
 	snapshotIndex      uint64
-	members            *pb.Membership
-	ordered            bool
 	commitC            chan Commit
 	aborted            bool
 	batchedLastApplied struct {
@@ -125,14 +120,9 @@ func NewStateMachine(sm IManagedStateMachine,
 		snapshotter: snapshotter,
 		sm:          sm,
 		commitC:     make(chan Commit, commitChanLength),
-		ordered:     ordered,
 		node:        proxy,
 		sessions:    NewSessionManager(),
-	}
-	a.members = &pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
 	}
 	return a
 }
@@ -217,8 +207,7 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	// set the confState and the last applied value
 	s.index = ss.Index
 	s.term = ss.Term
-	cm := deepCopyMembership(ss.Membership)
-	s.members = &cm
+	s.members.set(ss.Membership)
 	return true, 0, nil
 }
 
@@ -288,19 +277,7 @@ func (s *StateMachine) GetMembership() (map[uint64]string,
 	map[uint64]string, map[uint64]struct{}, uint64) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	members := make(map[uint64]string)
-	observers := make(map[uint64]string)
-	removed := make(map[uint64]struct{})
-	for nid, addr := range s.members.Addresses {
-		members[nid] = addr
-	}
-	for nid, addr := range s.members.Observers {
-		observers[nid] = addr
-	}
-	for nid := range s.members.Removed {
-		removed[nid] = struct{}{}
-	}
-	return members, observers, removed, s.members.ConfigChangeId
+	return s.members.get()
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
@@ -336,25 +313,7 @@ func (s *StateMachine) GetSessionHash() uint64 {
 func (s *StateMachine) GetMembershipHash() uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.members == nil {
-		return 0
-	}
-	vals := make([]uint64, 0)
-	for v := range s.members.Addresses {
-		vals = append(vals, v)
-	}
-	sort.Slice(vals, func(i, j int) bool { return vals[i] < vals[j] })
-	vals = append(vals, s.members.ConfigChangeId)
-	data := make([]byte, 8)
-	hash := md5.New()
-	for _, v := range vals {
-		binary.LittleEndian.PutUint64(data, v)
-		if _, err := hash.Write(data); err != nil {
-			panic(err)
-		}
-	}
-	md5sum := hash.Sum(nil)
-	return binary.LittleEndian.Uint64(md5sum[:8])
+	return s.members.getHash()
 }
 
 // Handle pulls the committed record and apply it if there is any available.
@@ -390,7 +349,7 @@ func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool)
 }
 
 func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
-	if len(s.members.Addresses) == 0 {
+	if s.members.isEmpty() {
 		plog.Panicf("%s has empty membership", s.describe())
 	}
 	meta := &SnapshotMeta{
@@ -398,7 +357,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
 		Index:      s.index,
 		Term:       s.term,
 		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
-		Membership: deepCopyMembership(*s.members),
+		Membership: s.members.getMembership(),
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
 		s.describe(), meta.Index, meta.Membership.Addresses)
@@ -624,89 +583,6 @@ func (s *StateMachine) handleAllUpdateEntries(ents []pb.Entry) {
 	}
 }
 
-func (s *StateMachine) isConfChangeUpToDate(cc pb.ConfigChange) bool {
-	if !s.ordered || cc.Initialize {
-		return true
-	}
-	if s.members.ConfigChangeId == cc.ConfigChangeId {
-		return true
-	}
-	return false
-}
-
-func (s *StateMachine) isAddingRemovedNode(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver {
-		_, ok := s.members.Removed[cc.NodeID]
-		return ok
-	}
-	return false
-}
-
-func addressEqual(addr1 string, addr2 string) bool {
-	return strings.ToLower(strings.TrimSpace(addr1)) ==
-		strings.ToLower(strings.TrimSpace(addr2))
-}
-
-func (s *StateMachine) isAddingExistingMember(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddNode {
-		plog.Infof("%s adding node %d:%s, existing members: %v",
-			s.describe(), cc.NodeID, string(cc.Address), s.members.Addresses)
-		for _, addr := range s.members.Addresses {
-			if addressEqual(addr, string(cc.Address)) {
-				return true
-			}
-		}
-	}
-	if cc.Type == pb.AddObserver {
-		plog.Infof("%s adding observer %d:%s, existing members: %v",
-			s.describe(), cc.NodeID, string(cc.Address), s.members.Addresses)
-		for _, addr := range s.members.Observers {
-			if addressEqual(addr, string(cc.Address)) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (s *StateMachine) isAddingNodeAsObserver(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddObserver {
-		_, ok := s.members.Addresses[cc.NodeID]
-		return ok
-	}
-	return false
-}
-
-func (s *StateMachine) applyConfigChangeLocked(cc pb.ConfigChange,
-	index uint64) {
-	s.members.ConfigChangeId = index
-	s.node.ApplyConfigChange(cc)
-	switch cc.Type {
-	case pb.AddNode:
-		nodeAddr := string(cc.Address)
-		if addr, ok := s.members.Observers[cc.NodeID]; ok {
-			delete(s.members.Observers, cc.NodeID)
-			if !addressEqual(nodeAddr, addr) {
-				plog.Warningf("promoting observer, addr changed to %s, use %s",
-					nodeAddr, addr)
-			}
-			nodeAddr = addr
-		}
-		s.members.Addresses[cc.NodeID] = nodeAddr
-	case pb.AddObserver:
-		if _, ok := s.members.Addresses[cc.NodeID]; ok {
-			panic("not suppose to reach here")
-		}
-		s.members.Observers[cc.NodeID] = string(cc.Address)
-	case pb.RemoveNode:
-		delete(s.members.Addresses, cc.NodeID)
-		delete(s.members.Observers, cc.NodeID)
-		s.members.Removed[cc.NodeID] = true
-	default:
-		panic("unknown config change type")
-	}
-}
-
 func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
 	var cc pb.ConfigChange
 	if err := cc.Unmarshal(ent.Cmd); err != nil {
@@ -715,54 +591,14 @@ func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
 	if cc.Type == pb.AddNode && len(cc.Address) == 0 {
 		panic("empty address in AddNode request")
 	}
-	accepted := false
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// order id requested by user
-	ccid := cc.ConfigChangeId
-	nodeBecomingObserver := s.isAddingNodeAsObserver(cc)
-	alreadyMember := s.isAddingExistingMember(cc)
-	addRemovedNode := s.isAddingRemovedNode(cc)
-	upToDateCC := s.isConfChangeUpToDate(cc)
 	s.updateLastApplied(ent.Index, ent.Term)
-	if upToDateCC && !addRemovedNode && !alreadyMember && !nodeBecomingObserver {
-		// current entry index, it will be recorded as the conf change id of the members
-		s.applyConfigChangeLocked(cc, ent.Index)
-		if cc.Type == pb.AddNode {
-			plog.Infof("%s applied ConfChange Add ccid %d, node %s index %d address %s",
-				s.describe(), ccid, logutil.NodeID(cc.NodeID),
-				ent.Index, string(cc.Address))
-		} else if cc.Type == pb.RemoveNode {
-			plog.Infof("%s applied ConfChange Remove ccid %d, node %s, index %d",
-				s.describe(), ccid, logutil.NodeID(cc.NodeID), ent.Index)
-		} else if cc.Type == pb.AddObserver {
-			plog.Infof("%s applied ConfChange Add Observer ccid %d, node %s index %d address %s",
-				s.describe(), ccid, logutil.NodeID(cc.NodeID),
-				ent.Index, string(cc.Address))
-		} else {
-			plog.Panicf("unknown cc.Type value")
-		}
-		accepted = true
-	} else {
-		if !upToDateCC {
-			plog.Warningf("%s rejected out-of-order ConfChange ccid %d, type %s, index %d",
-				s.describe(), ccid, cc.Type, ent.Index)
-		} else if addRemovedNode {
-			plog.Warningf("%s rejected adding removed node ccid %d, node id %d, index %d",
-				s.describe(), ccid, cc.NodeID, ent.Index)
-		} else if alreadyMember {
-			plog.Warningf("%s rejected adding existing member to raft cluster ccid %d "+
-				"node id %d, index %d, address %s",
-				s.describe(), ccid, cc.NodeID, ent.Index, cc.Address)
-		} else if nodeBecomingObserver {
-			plog.Warningf("%s rejected adding existing member as observer ccid %d "+
-				"node id %d, index %d, address %s",
-				s.describe(), ccid, cc.NodeID, ent.Index, cc.Address)
-		} else {
-			plog.Panicf("config change rejected for unknown reasons")
-		}
+	if s.members.handleConfigChange(cc, ent.Index) {
+		s.node.ApplyConfigChange(cc)
+		return true
 	}
-	return accepted
+	return false
 }
 
 func (s *StateMachine) handleRegisterSession(ent pb.Entry) uint64 {
@@ -834,25 +670,6 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 
 func (s *StateMachine) describe() string {
 	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
-}
-
-func deepCopyMembership(m pb.Membership) pb.Membership {
-	c := pb.Membership{
-		ConfigChangeId: m.ConfigChangeId,
-		Addresses:      make(map[uint64]string),
-		Removed:        make(map[uint64]bool),
-		Observers:      make(map[uint64]string),
-	}
-	for nid, addr := range m.Addresses {
-		c.Addresses[nid] = addr
-	}
-	for nid := range m.Removed {
-		c.Removed[nid] = true
-	}
-	for nid, addr := range m.Observers {
-		c.Observers[nid] = addr
-	}
-	return c
 }
 
 func snapshotInfo(ss pb.Snapshot) string {

@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/internal/rsm"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func TestWorkReadyCanBeCreated(t *testing.T) {
@@ -192,10 +193,19 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 	processTakingSnapshotNode(n)
 }
 
+type testDummyNodeProxy struct{}
+
+func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot)                     {}
+func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, uint64, bool, bool, bool) {}
+func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange)              {}
+func (np *testDummyNodeProxy) ConfigChangeProcessed(uint64, bool)             {}
+func (np *testDummyNodeProxy) NodeID() uint64                                 { return 1 }
+func (np *testDummyNodeProxy) ClusterID() uint64                              { return 1 }
+
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeStateMachine(&rsm.RegularStateMachine{}, nil), nil, false, nil)
+		rsm.NewNativeStateMachine(&rsm.RegularStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
 	if n.concurrentSnapshot() {
 		t.Errorf("concurrency not suppose to be supported")
 	}
@@ -209,7 +219,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeStateMachine(&rsm.ConcurrentStateMachine{}, nil), nil, false, nil)
+		rsm.NewNativeStateMachine(&rsm.ConcurrentStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
 	if !n.concurrentSnapshot() {
 		t.Errorf("concurrency not supported")
 	}
