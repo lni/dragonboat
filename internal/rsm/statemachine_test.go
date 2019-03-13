@@ -166,7 +166,7 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 	return err.Error() == "no snapshot available"
 }
 
-func (s *testSnapshotter) Save(savable IManagedStateMachine,
+func (s *testSnapshotter) Save(savable ISavable,
 	meta *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
 	s.index = meta.Index
 	f := func(cid uint64, nid uint64) string {
@@ -198,6 +198,31 @@ func (s *testSnapshotter) Save(savable IManagedStateMachine,
 		Term:       meta.Term,
 	}
 	return ss, env, nil
+}
+
+func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
+	loadableSM ILoadableSM,
+	fp string, snapshotFiles []sm.SnapshotFile) error {
+	reader, err := NewSnapshotReader(fp)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = reader.Close()
+	}()
+	header, err := reader.GetHeader()
+	if err != nil {
+		return err
+	}
+	reader.ValidateHeader(header)
+	if err := loadableSessions.LoadSessions(reader); err != nil {
+		return err
+	}
+	if err := loadableSM.RecoverFromSnapshot(reader, snapshotFiles); err != nil {
+		return err
+	}
+	reader.ValidatePayload(header)
+	return nil
 }
 
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
@@ -1057,8 +1082,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		if sm.GetLastApplied() != 789 {
 			t.Errorf("last applied %d, want 789", sm.GetLastApplied())
 		}
-		nds := ds.(*NativeStateMachine)
-		sessionManager := nds.sessions
+		sessionManager := sm.sessions.sessions
 		_, ok := sessionManager.getSession(RaftClientID(clientID))
 		if !ok {
 			t.Errorf("session not found")
@@ -1095,8 +1119,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		nds := ds.(*NativeStateMachine)
-		sessionManager := nds.sessions
+		sessionManager := sm.sessions.sessions
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
 		if !ok {
 			t.Errorf("session not found")
@@ -1139,8 +1162,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		nds := ds.(*NativeStateMachine)
-		sessionManager := nds.sessions
+		sessionManager := sm.sessions.sessions
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
 		if ok {
 			t.Errorf("session not suppose to be there")
@@ -1243,8 +1265,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		// update the respondedto value
 		e = applyTestEntry(sm, 12345, 1, 791, 1, data)
 		sm.Handle(batch, nil)
-		nds := ds.(*NativeStateMachine)
-		sessionManager := nds.sessions
+		sessionManager := sm.sessions.sessions
 		session, _ := sessionManager.getSession(RaftClientID(12345))
 		if session.RespondedUpTo != RaftSeriesID(1) {
 			t.Errorf("responded to %d, want 1", session.RespondedUpTo)

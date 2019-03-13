@@ -65,7 +65,7 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
-func (s *snapshotter) Save(savable rsm.IManagedStateMachine,
+func (s *snapshotter) Save(savable rsm.ISavable,
 	meta *rsm.SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
 	env := s.getSnapshotEnv(meta.Index)
 	if err := env.CreateTempDir(); err != nil {
@@ -100,6 +100,31 @@ func (s *snapshotter) Save(savable rsm.IManagedStateMachine,
 		Files:      fs,
 	}
 	return ss, env, nil
+}
+
+func (s *snapshotter) Load(loadableSessions rsm.ILoadableSessions,
+	loadableSM rsm.ILoadableSM,
+	fp string, snapshotFiles []sm.SnapshotFile) error {
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = reader.Close()
+	}()
+	header, err := reader.GetHeader()
+	if err != nil {
+		return err
+	}
+	reader.ValidateHeader(header)
+	if err := loadableSessions.LoadSessions(reader); err != nil {
+		return err
+	}
+	if err := loadableSM.RecoverFromSnapshot(reader, snapshotFiles); err != nil {
+		return err
+	}
+	reader.ValidatePayload(header)
+	return nil
 }
 
 func (s *snapshotter) Commit(snapshot pb.Snapshot) error {

@@ -104,24 +104,6 @@ func TestCppStateMachineCanBeUpdated(t *testing.T) {
 	defer ds.(*StateMachineWrapper).destroy()
 }
 
-func TestUpdatePanicWhenClientIDIsUnknown(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
-	if ds == nil {
-		t.Errorf("failed to return the data store object")
-	}
-	defer ds.(*StateMachineWrapper).destroy()
-	v := ds.RegisterClientID(100)
-	if v != 100 {
-		t.Errorf("failed to register the client")
-	}
-	session, ok := ds.ClientRegistered(100)
-	if !ok {
-		t.Errorf("failed to get session object")
-	}
-	ds.Update(session, 1, 0, 0, []byte("test-data"))
-}
-
 func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	ds := NewStateMachineWrapper(1, 1, "example", nil)
@@ -129,17 +111,9 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*StateMachineWrapper).destroy()
-	v := ds.RegisterClientID(100)
-	if v != 100 {
-		t.Errorf("failed to register the client")
-	}
-	session, ok := ds.ClientRegistered(100)
-	if !ok {
-		t.Errorf("failed to get session object")
-	}
-	v1 := ds.Update(session, 1, 0, 0, []byte("test-data-1"))
-	v2 := ds.Update(session, 2, 0, 0, []byte("test-data-2"))
-	v3 := ds.Update(session, 3, 0, 0, []byte("test-data-3"))
+	v1 := ds.Update(nil, 1, 0, 0, []byte("test-data-1"))
+	v2 := ds.Update(nil, 2, 0, 0, []byte("test-data-2"))
+	v3 := ds.Update(nil, 3, 0, 0, []byte("test-data-3"))
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -149,7 +123,7 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	}
 	v4 := binary.LittleEndian.Uint32(result)
 	if uint64(v4) != v3 {
-		t.Errorf("returned %d, want %d", v, v3)
+		t.Errorf("returned %d, want %d", v4, v3)
 	}
 }
 
@@ -160,10 +134,6 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*StateMachineWrapper).destroy()
-	v := ds.RegisterClientID(100)
-	if v != 100 {
-		t.Errorf("failed to register the client")
-	}
 	k := "test-key"
 	d := "test-value"
 	kv := kvpb.PBKV{
@@ -171,11 +141,7 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 		Val: &d,
 	}
 	data, _ := proto.Marshal(&kv)
-	session, ok := ds.ClientRegistered(100)
-	if !ok {
-		t.Errorf("failed to get session object")
-	}
-	ds.Update(session, 1, 0, 0, data)
+	ds.Update(nil, 1, 0, 0, data)
 }
 
 func TestCppSnapshotWorks(t *testing.T) {
@@ -187,17 +153,9 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*StateMachineWrapper).destroy()
-	v := ds.RegisterClientID(100)
-	if v != 100 {
-		t.Errorf("failed to register the client")
-	}
-	session, ok := ds.ClientRegistered(100)
-	if !ok {
-		t.Errorf("failed to get session object")
-	}
-	v1 := ds.Update(session, 1, 0, 0, []byte("test-data-1"))
-	v2 := ds.Update(session, 2, 0, 0, []byte("test-data-2"))
-	v3 := ds.Update(session, 3, 0, 0, []byte("test-data-3"))
+	v1 := ds.Update(nil, 1, 0, 0, []byte("test-data-1"))
+	v2 := ds.Update(nil, 2, 0, 0, []byte("test-data-2"))
+	v3 := ds.Update(nil, 3, 0, 0, []byte("test-data-3"))
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -206,7 +164,6 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
 	sessions := bytes.NewBuffer(make([]byte, 0, 1024*1024))
-	ds.SaveSessions(sessions)
 	sz, err := ds.SaveSnapshot(nil, writer, sessions.Bytes(), nil)
 	if err != nil {
 		t.Errorf("failed to save snapshot, %v", err)
@@ -231,14 +188,24 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds2.(*StateMachineWrapper).destroy()
-	err = ds2.RecoverFromSnapshot(fp, nil)
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		err = reader.Close()
+	}()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	reader.ValidateHeader(header)
+	err = ds2.RecoverFromSnapshot(reader, nil)
 	if err != nil {
 		t.Errorf("failed to recover from snapshot %v", err)
 	}
+	reader.ValidatePayload(header)
 	if ds2.GetHash() != ds.GetHash() {
 		t.Errorf("hash does not match")
-	}
-	if ds2.GetSessionHash() != ds.GetSessionHash() {
-		t.Errorf("session hash does not match")
 	}
 }

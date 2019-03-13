@@ -91,8 +91,8 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
-	Save(IManagedStateMachine,
-		*SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
+	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
+	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
 }
 
@@ -103,6 +103,7 @@ type StateMachine struct {
 	snapshotter        ISnapshotter
 	node               INodeProxy
 	sm                 IManagedStateMachine
+	sessions           *SessionManager
 	index              uint64
 	term               uint64
 	snapshotIndex      uint64
@@ -126,6 +127,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		commitC:     make(chan Commit, commitChanLength),
 		ordered:     ordered,
 		node:        proxy,
+		sessions:    NewSessionManager(),
 	}
 	a.members = &pb.Membership{
 		Addresses: make(map[uint64]string),
@@ -202,7 +204,7 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 		s.describe(), ss.Term, ss.Index, snapshotInfo(ss), initial)
 	snapshotFiles := getSnapshotFiles(ss)
 	fn := s.snapshotter.GetFilePath(ss.Index)
-	if err := s.sm.RecoverFromSnapshot(fn, snapshotFiles); err != nil {
+	if err := s.snapshotter.Load(s.sessions, s.sm, fn, snapshotFiles); err != nil {
 		plog.Infof("%s called RecoverFromSnapshot %d, returned %v",
 			s.describe(), ss.Index, err)
 		if err == sm.ErrSnapshotStopped {
@@ -327,7 +329,7 @@ func (s *StateMachine) GetHash() uint64 {
 func (s *StateMachine) GetSessionHash() uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.sm.GetSessionHash()
+	return s.sessions.GetSessionHash()
 }
 
 // GetMembershipHash returns the hash of the membership instance.
@@ -400,7 +402,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
 		s.describe(), meta.Index, meta.Membership.Addresses)
-	if _, err := s.sm.SaveSessions(meta.Session); err != nil {
+	if _, err := s.sessions.SaveSessions(meta.Session); err != nil {
 		plog.Panicf("failed to save sessions %v", err)
 	}
 	return meta
@@ -593,13 +595,13 @@ func (s *StateMachine) handleAllUpdateEntries(ents []pb.Entry) {
 		lastInBatch := idx == lastIdx
 		s.updateLastApplied(entry.Index, entry.Term)
 		if !entry.IsNoOPSession() {
-			session, ok = s.sm.ClientRegistered(entry.ClientID)
+			session, ok = s.sessions.ClientRegistered(entry.ClientID)
 			if !ok {
 				s.onUpdateApplied(entry, 0, false, true, lastInBatch)
 				continue
 			}
-			s.sm.UpdateRespondedTo(session, entry.RespondedTo)
-			result, responded, updateRequired := s.sm.UpdateRequired(session,
+			s.sessions.UpdateRespondedTo(session, entry.RespondedTo)
+			result, responded, updateRequired := s.sessions.UpdateRequired(session,
 				entry.SeriesID)
 			if responded {
 				s.onUpdateApplied(entry, 0, true, false, lastInBatch)
@@ -766,7 +768,7 @@ func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
 func (s *StateMachine) handleRegisterSession(ent pb.Entry) uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sm.RegisterClientID(ent.ClientID)
+	smResult := s.sessions.RegisterClientID(ent.ClientID)
 	if smResult == 0 {
 		plog.Errorf("on %s register client failed, %v", s.describe(), ent)
 	}
@@ -777,7 +779,7 @@ func (s *StateMachine) handleRegisterSession(ent pb.Entry) uint64 {
 func (s *StateMachine) handleUnregisterSession(ent pb.Entry) uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sm.UnregisterClientID(ent.ClientID)
+	smResult := s.sessions.UnregisterClientID(ent.ClientID)
 	if smResult == 0 {
 		plog.Errorf("%s unregister client %d failed, %v",
 			s.describe(), ent.ClientID, ent)
@@ -804,13 +806,13 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 	var session *Session
 	s.updateLastApplied(ent.Index, ent.Term)
 	if !ent.IsNoOPSession() {
-		session, ok = s.sm.ClientRegistered(ent.ClientID)
+		session, ok = s.sessions.ClientRegistered(ent.ClientID)
 		if !ok {
 			// client is expected to crash
 			return 0, false, true
 		}
-		s.sm.UpdateRespondedTo(session, ent.RespondedTo)
-		result, responded, updateRequired := s.sm.UpdateRequired(session,
+		s.sessions.UpdateRespondedTo(session, ent.RespondedTo)
+		result, responded, updateRequired := s.sessions.UpdateRequired(session,
 			ent.SeriesID)
 		if responded {
 			// should ignore. client is expected to timeout

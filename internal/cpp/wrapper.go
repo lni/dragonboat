@@ -171,7 +171,6 @@ type StateMachineWrapper struct {
 	dataStore *C.CPPStateMachine
 	done      <-chan struct{}
 	mu        sync.RWMutex
-	rsm.SessionManager
 }
 
 func isValidCPPPlugin(soFilepath string) bool {
@@ -191,9 +190,8 @@ func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
 	cDSName := C.CString(getCPPSOFileName(dsname))
 	defer C.free(unsafe.Pointer(cDSName))
 	return &StateMachineWrapper{
-		dataStore:      C.CreateDBStateMachine(cClusterID, cNodeID, cDSName),
-		done:           done,
-		SessionManager: rsm.NewSessionManager(),
+		dataStore: C.CreateDBStateMachine(cClusterID, cNodeID, cDSName),
+		done:      done,
 	}
 }
 
@@ -235,12 +233,9 @@ func (ds *StateMachineWrapper) Update(session *rsm.Session,
 	if len(data) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 	}
-	if session != nil {
-		ds.MustHaveClientSeries(session, seriesID)
-	}
 	v := C.UpdateDBStateMachine(ds.dataStore, dp, C.size_t(len(data)))
 	if session != nil {
-		ds.AddResponse(session, seriesID, uint64(v))
+		session.AddResponse((rsm.RaftSeriesID)(seriesID), uint64(v))
 	}
 	return uint64(v)
 }
@@ -328,23 +323,9 @@ func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *StateMachineWrapper) RecoverFromSnapshot(fp string,
+func (ds *StateMachineWrapper) RecoverFromSnapshot(reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
-	reader, err := rsm.NewSnapshotReader(fp)
-	if err != nil {
-		return err
-	}
-	header, err := reader.GetHeader()
-	if err != nil {
-		reader.Close()
-		return err
-	}
-	reader.ValidateHeader(header)
-	err = ds.LoadSessions(reader)
-	if err != nil {
-		return err
-	}
 	cf := C.GetCollectedFile()
 	defer C.FreeCollectedFile(cf)
 	for _, file := range files {
@@ -358,13 +339,7 @@ func (ds *StateMachineWrapper) RecoverFromSnapshot(fp string,
 	doneChOID := AddManagedObject(ds.done)
 	r := C.RecoverFromSnapshotDBStateMachine(ds.dataStore,
 		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
-	err = getErrorFromErrNo(int(r))
-	if err != nil {
-		reader.Close()
-		return err
-	}
-	reader.ValidatePayload(header)
-	return reader.Close()
+	return getErrorFromErrNo(int(r))
 }
 
 func (ds *StateMachineWrapper) ensureNotDestroyed() {

@@ -57,6 +57,10 @@ func newSession(id RaftClientID) *Session {
 	}
 }
 
+func (s *Session) AddResponse(id RaftSeriesID, resp uint64) {
+	s.addResponse(id, resp)
+}
+
 func (s *Session) getResponse(id RaftSeriesID) (uint64, bool) {
 	v, ok := s.History[id]
 	return v, ok
