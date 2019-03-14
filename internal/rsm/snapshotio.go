@@ -47,43 +47,61 @@ func newCRC32Hash() hash.Hash {
 	return crc32.NewIEEE()
 }
 
-func getChecksum(t pb.ChecksumType) hash.Hash {
-	if t == pb.CRC32IEEE {
-		return newCRC32Hash()
-	} else if t == pb.HIGHWAY {
-		panic("highway hash not supported yet")
-	} else {
-		plog.Panicf("not supported checksum type %d", t)
-	}
-	panic("not suppose to reach here")
-}
-
 func getChecksumType() pb.ChecksumType {
 	return defaultChecksumType
 }
 
 func getDefaultChecksum() hash.Hash {
-	return getChecksum(getChecksumType())
+	return mustGetChecksum(getChecksumType())
 }
 
-func getVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
-	if v == V1SnapshotVersion {
-		return newV1Wrtier(w)
-	} else if v == V2SnapshotVersion {
-		return newV2Writer(w)
-	} else {
-		panic("unsupported SnapshotVersion")
+func getChecksum(t pb.ChecksumType) (hash.Hash, bool) {
+	if t == pb.CRC32IEEE {
+		return newCRC32Hash(), true
 	}
+	return nil, false
 }
 
-func getVersionReader(r io.Reader, v SnapshotVersion) IVReader {
-	if v == V1SnapshotVersion {
-		return newV1Reader(r)
-	} else if v == V2SnapshotVersion {
-		return newV2Reader(r)
-	} else {
-		panic("unsupported v")
+func mustGetChecksum(t pb.ChecksumType) hash.Hash {
+	c, ok := getChecksum(t)
+	if !ok {
+		plog.Panicf("failed to get checksum, type %d", t)
 	}
+	return c
+}
+
+func getVersionWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
+	if v == V1SnapshotVersion {
+		return newV1Wrtier(w), true
+	} else if v == V2SnapshotVersion {
+		return newV2Writer(w), true
+	}
+	return nil, false
+}
+
+func mustGetVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
+	vw, ok := getVersionWriter(w, v)
+	if !ok {
+		plog.Panicf("failed to get version writer, v %d", v)
+	}
+	return vw
+}
+
+func getVersionReader(r io.Reader, v SnapshotVersion) (IVReader, bool) {
+	if v == V1SnapshotVersion {
+		return newV1Reader(r), true
+	} else if v == V2SnapshotVersion {
+		return newV2Reader(r), true
+	}
+	return nil, false
+}
+
+func mustGetVersionReader(r io.Reader, v SnapshotVersion) IVReader {
+	vr, ok := getVersionReader(r, v)
+	if !ok {
+		plog.Panicf("failed to get version reader, v %d", v)
+	}
+	return vr
 }
 
 func getVersionValidator(header pb.SnapshotHeader) (IVValidator, bool) {
@@ -91,7 +109,10 @@ func getVersionValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Validator(header), true
 	} else if v == V2SnapshotVersion {
-		h := getChecksum(header.ChecksumType)
+		h, ok := getChecksum(header.ChecksumType)
+		if !ok {
+			return nil, false
+		}
 		return newV2Validator(h), true
 	}
 	return nil, false
@@ -120,7 +141,7 @@ func NewSnapshotWriter(fp string,
 		return nil, err
 	}
 	sw := &SnapshotWriter{
-		vw:   getVersionWriter(f, version),
+		vw:   mustGetVersionWriter(f, version),
 		file: f,
 		fp:   fp,
 	}
@@ -256,7 +277,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - 16
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	sr.r = getVersionReader(reader, (SnapshotVersion)(r.Version))
+	sr.r = mustGetVersionReader(reader, (SnapshotVersion)(r.Version))
 	return r, nil
 }
 
@@ -280,18 +301,7 @@ func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
 // ValidateHeader validates whether the header matches the header checksum
 // recorded in the header.
 func (sr *SnapshotReader) ValidateHeader(header pb.SnapshotHeader) {
-	checksum := header.HeaderChecksum
-	header.HeaderChecksum = nil
-	data, err := header.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	headerHash := getChecksum(header.ChecksumType)
-	if _, err := headerHash.Write(data); err != nil {
-		panic(err)
-	}
-	headerChecksum := headerHash.Sum(nil)
-	if !bytes.Equal(headerChecksum, checksum) {
+	if !validateHeader(header) {
 		panic("corrupted snapshot header")
 	}
 }
@@ -314,6 +324,9 @@ func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
 			return false
 		}
 		if v.v != nil {
+			return false
+		}
+		if !validateHeader(header) {
 			return false
 		}
 		v.v, ok = getVersionValidator(header)
