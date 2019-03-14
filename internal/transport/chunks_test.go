@@ -26,17 +26,17 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
-	"github.com/lni/dragonboat/raftpb"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
 const (
 	testDeploymentID uint64 = 0
 )
 
-func getTestChunks() []raftpb.SnapshotChunk {
-	result := make([]raftpb.SnapshotChunk, 0)
+func getTestChunks() []pb.SnapshotChunk {
+	result := make([]pb.SnapshotChunk, 0)
 	for chunkID := uint64(0); chunkID < 10; chunkID++ {
-		c := raftpb.SnapshotChunk{
+		c := pb.SnapshotChunk{
 			BinVer:         raftio.RPCBinVersion,
 			ClusterId:      100,
 			NodeId:         2,
@@ -59,7 +59,7 @@ func getTestChunks() []raftpb.SnapshotChunk {
 	return result
 }
 
-func hasSnapshotTempFile(cs *chunks, c raftpb.SnapshotChunk) bool {
+func hasSnapshotTempFile(cs *chunks, c pb.SnapshotChunk) bool {
 	env := cs.getSnapshotEnv(c)
 	fp := env.GetTempFilepath()
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
@@ -68,7 +68,7 @@ func hasSnapshotTempFile(cs *chunks, c raftpb.SnapshotChunk) bool {
 	return true
 }
 
-func hasExternalFile(cs *chunks, c raftpb.SnapshotChunk, fn string, sz uint64) bool {
+func hasExternalFile(cs *chunks, c pb.SnapshotChunk, fn string, sz uint64) bool {
 	env := cs.getSnapshotEnv(c)
 	efp := filepath.Join(env.GetFinalDir(), fn)
 	fs, err := os.Stat(efp)
@@ -135,6 +135,64 @@ func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
 		}
 	}
 	runChunkTest(t, fn)
+}
+
+func TestNotTrackedChunkWillBeIgnored(t *testing.T) {
+	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		inputs := getTestChunks()
+		if chunks.onNewChunk(inputs[1]) != nil {
+			t.Errorf("not tracked chunk not rejected")
+		}
+	}
+	runChunkTest(t, fn)
+}
+
+func TestGetOrCreateSnapshotLock(t *testing.T) {
+	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		l := chunks.getOrCreateSnapshotLock("k1")
+		l1, ok := chunks.locks["k1"]
+		if !ok || l != l1 {
+			t.Errorf("lock not recorded")
+		}
+		l2 := chunks.getOrCreateSnapshotLock("k2")
+		l3 := chunks.getOrCreateSnapshotLock("k3")
+		if l2 == nil || l3 == nil {
+			t.Errorf("lock not returned")
+		}
+		ll := chunks.getOrCreateSnapshotLock("k1")
+		if l1 != ll {
+			t.Errorf("lock changed")
+		}
+		if len(chunks.locks) != 3 {
+			t.Errorf("%d locks, want 3", len(chunks.locks))
+		}
+	}
+	runChunkTest(t, fn)
+}
+
+func TestShouldUpdateValidator(t *testing.T) {
+	tests := []struct {
+		validate    bool
+		hasFileInfo bool
+		chunkID     uint64
+		result      bool
+	}{
+		{true, true, 0, false},
+		{true, false, 0, false},
+		{false, true, 0, false},
+		{false, false, 0, false},
+		{true, true, 1, false},
+		{true, false, 1, true},
+		{false, true, 1, false},
+		{false, false, 1, false},
+	}
+	for idx, tt := range tests {
+		c := &chunks{validate: tt.validate}
+		input := pb.SnapshotChunk{ChunkId: tt.chunkID, HasFileInfo: tt.hasFileInfo}
+		if result := c.shouldUpdateValidator(input); result != tt.result {
+			t.Errorf("%d, result %t, want %t", idx, result, tt.result)
+		}
+	}
 }
 
 func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
@@ -218,7 +276,7 @@ func TestOutOfDateSnapshotChunksWithFlagFileCanBeHandled(t *testing.T) {
 		if err := os.MkdirAll(snapDir, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
 		}
-		msg := &raftpb.Message{}
+		msg := &pb.Message{}
 		if err := fileutil.CreateFlagFile(snapDir, fileutil.SnapshotFlagFilename, msg); err != nil {
 			t.Errorf("failed to create flag file")
 		}
@@ -305,7 +363,7 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 }
 
 func checkTestSnapshotFile(chunks *chunks,
-	chunk raftpb.SnapshotChunk, size uint64) bool {
+	chunk pb.SnapshotChunk, size uint64) bool {
 	env := chunks.getSnapshotEnv(chunk)
 	finalFp := env.GetFilepath()
 	f, err := os.Open(finalFp)
@@ -355,27 +413,27 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 	validate bool, snapshotCount uint64) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
 		chunks.validate = validate
-		sf1 := &raftpb.SnapshotFile{
+		sf1 := &pb.SnapshotFile{
 			Filepath: "/data/external1.data",
 			FileSize: 100,
 			FileId:   1,
 			Metadata: make([]byte, 16),
 		}
-		sf2 := &raftpb.SnapshotFile{
+		sf2 := &pb.SnapshotFile{
 			Filepath: "/data/external2.data",
 			FileSize: snapChunkSize + 100,
 			FileId:   2,
 			Metadata: make([]byte, 32),
 		}
-		ss := raftpb.Snapshot{
+		ss := pb.Snapshot{
 			Filepath: "filepath.data",
 			FileSize: snapChunkSize*3 + 100,
 			Index:    100,
 			Term:     200,
-			Files:    []*raftpb.SnapshotFile{sf1, sf2},
+			Files:    []*pb.SnapshotFile{sf1, sf2},
 		}
-		msg := raftpb.Message{
-			Type:      raftpb.InstallSnapshot,
+		msg := pb.Message{
+			Type:      pb.InstallSnapshot,
 			To:        2,
 			From:      1,
 			ClusterId: 100,
@@ -409,14 +467,14 @@ func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
 }
 
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
-	ss := raftpb.Snapshot{
+	ss := pb.Snapshot{
 		Filepath: "filepath.data",
 		FileSize: snapChunkSize*3 + 100,
 		Index:    100,
 		Term:     200,
 	}
-	msg := raftpb.Message{
-		Type:      raftpb.InstallSnapshot,
+	msg := pb.Message{
+		Type:      pb.InstallSnapshot,
 		To:        2,
 		From:      1,
 		ClusterId: 100,
@@ -477,27 +535,27 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 }
 
 func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
-	sf1 := &raftpb.SnapshotFile{
+	sf1 := &pb.SnapshotFile{
 		Filepath: "/data/external1.data",
 		FileSize: 100,
 		FileId:   1,
 		Metadata: make([]byte, 16),
 	}
-	sf2 := &raftpb.SnapshotFile{
+	sf2 := &pb.SnapshotFile{
 		Filepath: "/data/external2.data",
 		FileSize: snapChunkSize + 100,
 		FileId:   2,
 		Metadata: make([]byte, 32),
 	}
-	ss := raftpb.Snapshot{
+	ss := pb.Snapshot{
 		Filepath: "filepath.data",
 		FileSize: snapChunkSize*3 + 100,
 		Index:    100,
 		Term:     200,
-		Files:    []*raftpb.SnapshotFile{sf1, sf2},
+		Files:    []*pb.SnapshotFile{sf1, sf2},
 	}
-	msg := raftpb.Message{
-		Type:      raftpb.InstallSnapshot,
+	msg := pb.Message{
+		Type:      pb.InstallSnapshot,
 		To:        2,
 		From:      1,
 		ClusterId: 100,
@@ -549,20 +607,20 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 
 func TestGetMessageFromChunk(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
-		sf1 := &raftpb.SnapshotFile{
+		sf1 := &pb.SnapshotFile{
 			Filepath: "/data/external1.data",
 			FileSize: 100,
 			FileId:   1,
 			Metadata: make([]byte, 16),
 		}
-		sf2 := &raftpb.SnapshotFile{
+		sf2 := &pb.SnapshotFile{
 			Filepath: "/data/external2.data",
 			FileSize: snapChunkSize + 100,
 			FileId:   2,
 			Metadata: make([]byte, 32),
 		}
-		files := []*raftpb.SnapshotFile{sf1, sf2}
-		chunk := raftpb.SnapshotChunk{
+		files := []*pb.SnapshotFile{sf1, sf2}
+		chunk := pb.SnapshotChunk{
 			ClusterId:    123,
 			NodeId:       3,
 			From:         2,
@@ -584,7 +642,7 @@ func TestGetMessageFromChunk(t *testing.T) {
 		if msg.DeploymentId != chunk.DeploymentId {
 			t.Errorf("deployment id not set")
 		}
-		if req.Type != raftpb.InstallSnapshot {
+		if req.Type != pb.InstallSnapshot {
 			t.Errorf("not a snapshot message")
 		}
 		if req.From != chunk.From || req.To != chunk.NodeId || req.ClusterId != chunk.ClusterId {

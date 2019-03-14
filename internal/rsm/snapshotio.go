@@ -274,7 +274,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 			return empty, err
 		}
 		fileSz := st.Size()
-		payloadSz := fileSz - int64(SnapshotHeaderSize) - 16
+		payloadSz := fileSz - int64(SnapshotHeaderSize) - tailSize
 		reader = io.LimitReader(reader, payloadSz)
 	}
 	sr.r = mustGetVersionReader(reader, (SnapshotVersion)(r.Version))
