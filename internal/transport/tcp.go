@@ -38,7 +38,9 @@ var (
 	// ErrBadMessage is the error returned to indicate the incoming message is
 	// corrupted.
 	ErrBadMessage       = errors.New("invalid message")
+	errPoisonReceived   = errors.New("poison received")
 	magicNumber         = [2]byte{0xAE, 0x7D}
+	poisonNumber        = [2]byte{0x0, 0x0}
 	payloadBufferSize   = settings.SnapshotChunkSize + 1024*128
 	tlsHandshackTimeout = 10 * time.Second
 	magicNumberDuration = 1 * time.Second
@@ -104,6 +106,33 @@ func (h *requestHeader) decode(buf []byte) bool {
 type Marshaler interface {
 	MarshalTo([]byte) (int, error)
 	Size() int
+}
+
+func sendPoison(conn net.Conn, poison []byte) error {
+	tt := time.Now().Add(magicNumberDuration).Add(magicNumberDuration)
+	if err := conn.SetWriteDeadline(tt); err != nil {
+		return err
+	}
+	if _, err := conn.Write(poison); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sendPoisonAck(conn net.Conn, poisonAck []byte) error {
+	return sendPoison(conn, poisonAck)
+}
+
+func waitPoisonAck(conn net.Conn) {
+	ack := make([]byte, len(poisonNumber))
+	tt := time.Now().Add(keepAlivePeriod)
+	if err := conn.SetReadDeadline(tt); err != nil {
+		return
+	}
+	if _, err := io.ReadFull(conn, ack); err != nil {
+		plog.Errorf("failed to get poison ack %v", err)
+		return
+	}
 }
 
 func writeMessage(conn net.Conn,
@@ -210,6 +239,10 @@ func readMagicNumber(conn net.Conn, magicNum []byte) error {
 	if _, err := io.ReadFull(conn, magicNum); err != nil {
 		return err
 	}
+	if bytes.Equal(magicNum, poisonNumber[:]) {
+		plog.Infof("poison received")
+		return errPoisonReceived
+	}
 	if !bytes.Equal(magicNum, magicNumber[:]) {
 		plog.Errorf("invalid magic number")
 		return ErrBadMessage
@@ -258,24 +291,6 @@ func (c *TCPConnection) SendMessageBatch(batch raftpb.MessageBatch) error {
 	return writeMessage(c.conn, header, buf[:n], c.header)
 }
 
-func closeWriteConn(conn net.Conn) {
-	tcpconn, ok := conn.(*net.TCPConn)
-	if ok {
-		if err := tcpconn.CloseWrite(); err != nil {
-			plog.Errorf("failed to close write %v", err)
-		}
-		return
-	}
-	tlsconn, ok := conn.(*tls.Conn)
-	if ok {
-		if err := tlsconn.CloseWrite(); err != nil {
-			plog.Errorf("failed to close write on tls conn")
-		}
-	} else {
-		panic("not a net.TCPConn, not a tls.Conn, what is the conn type?")
-	}
-}
-
 // TCPSnapshotConnection is the connection for sending raft snapshot chunks to
 // remote nodes.
 type TCPSnapshotConnection struct {
@@ -293,7 +308,11 @@ func NewTCPSnapshotConnection(conn net.Conn) *TCPSnapshotConnection {
 
 // Close closes the snapshot connection.
 func (c *TCPSnapshotConnection) Close() {
-	closeWriteConn(c.conn)
+	defer c.conn.Close()
+	if err := sendPoison(c.conn, poisonNumber[:]); err != nil {
+		return
+	}
+	waitPoisonAck(c.conn)
 }
 
 // SendSnapshotChunk sends the specified snapshot chunk to remote node.
@@ -405,7 +424,6 @@ func (g *TCPTransport) Name() string {
 }
 
 func (g *TCPTransport) serveConn(conn net.Conn) {
-	closeWriteConn(conn)
 	magicNum := make([]byte, len(magicNumber))
 	header := make([]byte, requestHeaderSize)
 	tbuf := make([]byte, payloadBufferSize)
@@ -420,6 +438,10 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 	for {
 		err := readMagicNumber(conn, magicNum)
 		if err != nil {
+			if err == errPoisonReceived {
+				sendPoisonAck(conn, poisonNumber[:])
+				return
+			}
 			if err == ErrBadMessage {
 				return
 			}
