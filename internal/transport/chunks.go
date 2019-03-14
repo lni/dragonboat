@@ -49,6 +49,19 @@ type tracked struct {
 	validator  *rsm.SnapshotValidator
 	nextChunk  uint64
 	tick       uint64
+	lock       *snapshotLock
+}
+
+type snapshotLock struct {
+	mu sync.Mutex
+}
+
+func (l *snapshotLock) lock() {
+	l.mu.Lock()
+}
+
+func (l *snapshotLock) unlock() {
+	l.mu.Unlock()
 }
 
 // chunks managed on the receiving side
@@ -60,6 +73,7 @@ type chunks struct {
 	confirm         func(uint64, uint64, uint64)
 	getDeploymentID func() uint64
 	tracked         map[string]*tracked
+	locks           map[string]*snapshotLock
 	timeoutTick     uint64
 	gcTick          uint64
 	mu              sync.Mutex
@@ -75,6 +89,7 @@ func newSnapshotChunks(onReceive func(pb.MessageBatch),
 		confirm:         confirm,
 		getDeploymentID: getDeploymentID,
 		tracked:         make(map[string]*tracked),
+		locks:           make(map[string]*snapshotLock),
 		timeoutTick:     snapshotChunkTimeoutTick,
 		gcTick:          gcIntervalTick,
 		getSnapshotDir:  getSnapshotDirFunc,
@@ -131,11 +146,20 @@ func (c *chunks) resetSnapshotLocked(key string) {
 	delete(c.tracked, key)
 }
 
-// returns whether this incoming chunk needs to be processed
-func (c *chunks) onNewChunk(key string,
-	td *tracked, chunk pb.SnapshotChunk) bool {
+func (c *chunks) getOrCreateSnapshotLock(key string) *snapshotLock {
+	l, ok := c.locks[key]
+	if !ok {
+		l = &snapshotLock{}
+		c.locks[key] = l
+	}
+	return l
+}
+
+func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	key := snapshotKey(chunk)
+	td := c.tracked[key]
 	if chunk.ChunkId == 0 {
 		plog.Infof("new snapshot chunk 0, key %s", key)
 		if td != nil {
@@ -145,31 +169,32 @@ func (c *chunks) onNewChunk(key string,
 		validator := rsm.NewSnapshotValidator()
 		if c.validate && !chunk.HasFileInfo {
 			if !validator.AddChunk(chunk.Data, chunk.ChunkId) {
-				return false
+				return nil
 			}
 		}
 		td = &tracked{
+			nextChunk:  1,
+			lock:       c.getOrCreateSnapshotLock(key),
 			firstChunk: chunk,
 			validator:  validator,
-			nextChunk:  1,
 			extraFiles: make([]*pb.SnapshotFile, 0),
 		}
 		c.tracked[key] = td
 	} else {
 		if td == nil {
-			// not tracked,
-			// the receiving end probably had an recoverable error and restarted
-			return false
+			plog.Errorf("ignored a not tracked chunk %s, chunk id",
+				key, chunk.ChunkId)
+			return nil
 		}
 		if td.nextChunk != chunk.ChunkId {
-			plog.Errorf("ignored out of order chunk %s, expected chunk id %d, got %d",
+			plog.Errorf("ignored out of order chunk %s, want chunk id %d, got %d",
 				key, td.nextChunk, chunk.ChunkId)
-			return false
+			return nil
 		}
 		if td.firstChunk.From != chunk.From {
 			plog.Errorf("ignored chunk %s, expected from %d, from %d",
 				key, td.firstChunk.From, chunk.From)
-			return false
+			return nil
 		}
 		td.nextChunk = chunk.ChunkId + 1
 	}
@@ -177,23 +202,29 @@ func (c *chunks) onNewChunk(key string,
 		td.extraFiles = append(td.extraFiles, &chunk.FileInfo)
 	}
 	td.tick = c.getCurrentTick()
-	return true
+	return td
+}
+
+func (c *chunks) shouldUpdateValidator(chunk pb.SnapshotChunk) bool {
+	return c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0
 }
 
 func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 	key := snapshotKey(chunk)
 	plog.Infof("addChunk called, %s, chunkid %d, has file info %t",
 		key, chunk.ChunkId, chunk.HasFileInfo)
-	td := c.tracked[key]
-	if !c.onNewChunk(key, td, chunk) {
+	td := c.onNewChunk(chunk)
+	if td == nil {
 		plog.Warningf("ignored a chunk belongs to %s", key)
 		return
 	}
-	td = c.tracked[key]
-	if c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0 &&
-		!td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
-		plog.Warningf("ignored a invalid chunk %s", key)
-		return
+	td.lock.lock()
+	defer td.lock.unlock()
+	if c.shouldUpdateValidator(chunk) {
+		if !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
+			plog.Warningf("ignored a invalid chunk %s", key)
+			return
+		}
 	}
 	if err := c.saveChunk(chunk); err != nil {
 		plog.Errorf("failed to save a chunk %s, %v", key, err)
@@ -203,10 +234,12 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 	if chunk.ChunkCount == chunk.ChunkId+1 {
 		plog.Infof("last chunk %s received", key)
 		defer c.resetSnapshot(key)
-		if c.validate && !td.validator.Validate() {
-			plog.Warningf("dropped an invalid snapshot %s", key)
-			c.deleteTempChunkDir(chunk)
-			return
+		if c.validate {
+			if !td.validator.Validate() {
+				plog.Warningf("dropped an invalid snapshot %s", key)
+				c.deleteTempChunkDir(chunk)
+				return
+			}
 		}
 		if err := c.finalizeSnapshotFile(chunk, td); err != nil {
 			c.deleteTempChunkDir(chunk)

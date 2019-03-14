@@ -106,7 +106,7 @@ func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 		td := chunks.tracked[key]
 		next := td.nextChunk
 		td.nextChunk = next + 10
-		if chunks.onNewChunk(key, td, inputs[1]) {
+		if chunks.onNewChunk(inputs[1]) != nil {
 			t.Fatalf("out of order chunk is not rejected")
 		}
 		td = chunks.tracked[key]
@@ -126,7 +126,7 @@ func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
 		td := chunks.tracked[key]
 		next := td.nextChunk
 		td.firstChunk.From = td.firstChunk.From + 1
-		if chunks.onNewChunk(key, td, inputs[1]) {
+		if chunks.onNewChunk(inputs[1]) != nil {
 			t.Fatalf("chunk from a different leader is not rejected")
 		}
 		td = chunks.tracked[key]
