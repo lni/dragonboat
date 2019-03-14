@@ -72,7 +72,7 @@ func getVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
 	} else if v == V2SnapshotVersion {
 		return newV2Writer(w)
 	} else {
-		panic("unsupported v")
+		panic("unsupported SnapshotVersion")
 	}
 }
 
@@ -86,16 +86,15 @@ func getVersionReader(r io.Reader, v SnapshotVersion) IVReader {
 	}
 }
 
-func getVersionValidator(header pb.SnapshotHeader) IVValidator {
+func getVersionValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	v := (SnapshotVersion)(header.Version)
 	if v == V1SnapshotVersion {
-		return newV1Validator(header)
+		return newV1Validator(header), true
 	} else if v == V2SnapshotVersion {
 		h := getChecksum(header.ChecksumType)
-		return newV2Validator(h)
-	} else {
-		panic("unsupported v")
+		return newV2Validator(h), true
 	}
+	return nil, false
 }
 
 // SnapshotWriter is an io.Writer used to write snapshot file.
@@ -317,7 +316,10 @@ func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
 		if v.v != nil {
 			return false
 		}
-		v.v = getVersionValidator(header)
+		v.v, ok = getVersionValidator(header)
+		if !ok {
+			return false
+		}
 	} else {
 		if v.v == nil {
 			return false

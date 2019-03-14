@@ -117,6 +117,26 @@ func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 	runChunkTest(t, fn)
 }
 
+func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
+	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		inputs := getTestChunks()
+		chunks.validate = false
+		chunks.addChunk(inputs[0])
+		key := snapshotKey(inputs[0])
+		td := chunks.tracked[key]
+		next := td.nextChunk
+		td.firstChunk.From = td.firstChunk.From + 1
+		if chunks.onNewChunk(key, td, inputs[1]) {
+			t.Fatalf("chunk from a different leader is not rejected")
+		}
+		td = chunks.tracked[key]
+		if next != td.nextChunk {
+			t.Fatalf("next chunk id unexpected moved")
+		}
+	}
+	runChunkTest(t, fn)
+}
+
 func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
@@ -331,9 +351,10 @@ func TestAddingFirstChunkAgainResetsTempFile(t *testing.T) {
 	runChunkTest(t, fn)
 }
 
-func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
+func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
+	validate bool, snapshotCount uint64) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
-		chunks.validate = false
+		chunks.validate = validate
 		sf1 := &raftpb.SnapshotFile{
 			Filepath: "/data/external1.data",
 			FileSize: 100,
@@ -365,15 +386,26 @@ func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
 			c.Data = make([]byte, c.ChunkSize)
 			chunks.addChunk(c)
 		}
-		if handler.getSnapshotCount(100, 2) != 1 {
-			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
-		}
-		if !hasExternalFile(chunks, inputs[0], "external1.data", 100) ||
-			!hasExternalFile(chunks, inputs[0], "external2.data", snapChunkSize+100) {
-			t.Errorf("external file missing")
+		if snapshotCount > 0 {
+			if handler.getSnapshotCount(100, 2) != 1 {
+				t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
+			}
+			if !hasExternalFile(chunks, inputs[0], "external1.data", 100) ||
+				!hasExternalFile(chunks, inputs[0], "external2.data", snapChunkSize+100) {
+				t.Errorf("external file missing")
+			}
+		} else {
+			if handler.getSnapshotCount(100, 2) != 0 {
+				t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
+			}
 		}
 	}
 	runChunkTest(t, fn)
+}
+
+func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
+	testSnapshotWithExternalFilesAreHandledByChunks(t, true, 0)
+	testSnapshotWithExternalFilesAreHandledByChunks(t, false, 1)
 }
 
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {

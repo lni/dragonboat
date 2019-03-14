@@ -142,9 +142,15 @@ func (c *chunks) onNewChunk(key string,
 			plog.Warningf("removing unclaimed chunks %s", key)
 			c.deleteTempChunkDir(td.firstChunk)
 		}
+		validator := rsm.NewSnapshotValidator()
+		if c.validate && !chunk.HasFileInfo {
+			if !validator.AddChunk(chunk.Data, chunk.ChunkId) {
+				return false
+			}
+		}
 		td = &tracked{
 			firstChunk: chunk,
-			validator:  rsm.NewSnapshotValidator(),
+			validator:  validator,
 			nextChunk:  1,
 			extraFiles: make([]*pb.SnapshotFile, 0),
 		}
@@ -156,6 +162,13 @@ func (c *chunks) onNewChunk(key string,
 			return false
 		}
 		if td.nextChunk != chunk.ChunkId {
+			plog.Errorf("ignored out of order chunk %s, expected chunk id %d, got %d",
+				key, td.nextChunk, chunk.ChunkId)
+			return false
+		}
+		if td.firstChunk.From != chunk.From {
+			plog.Errorf("ignored chunk %s, expected from %d, from %d",
+				key, td.firstChunk.From, chunk.From)
 			return false
 		}
 		td.nextChunk = chunk.ChunkId + 1
@@ -169,13 +182,15 @@ func (c *chunks) onNewChunk(key string,
 
 func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 	key := snapshotKey(chunk)
+	plog.Infof("addChunk called, %s, chunkid %d, has file info %t",
+		key, chunk.ChunkId, chunk.HasFileInfo)
 	td := c.tracked[key]
 	if !c.onNewChunk(key, td, chunk) {
 		plog.Warningf("ignored a chunk belongs to %s", key)
 		return
 	}
 	td = c.tracked[key]
-	if c.validate && !chunk.HasFileInfo &&
+	if c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0 &&
 		!td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
 		plog.Warningf("ignored a invalid chunk %s", key)
 		return
@@ -188,7 +203,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 	if chunk.ChunkCount == chunk.ChunkId+1 {
 		plog.Infof("last chunk %s received", key)
 		defer c.resetSnapshot(key)
-		if c.validate && !chunk.HasFileInfo && !td.validator.Validate() {
+		if c.validate && !td.validator.Validate() {
 			plog.Warningf("dropped an invalid snapshot %s", key)
 			c.deleteTempChunkDir(chunk)
 			return
