@@ -258,6 +258,24 @@ func (c *TCPConnection) SendMessageBatch(batch raftpb.MessageBatch) error {
 	return writeMessage(c.conn, header, buf[:n], c.header)
 }
 
+func closeWriteConn(conn net.Conn) {
+	tcpconn, ok := conn.(*net.TCPConn)
+	if ok {
+		if err := tcpconn.CloseWrite(); err != nil {
+			plog.Errorf("failed to close write %v", err)
+		}
+		return
+	}
+	tlsconn, ok := conn.(*tls.Conn)
+	if ok {
+		if err := tlsconn.CloseWrite(); err != nil {
+			plog.Errorf("failed to close write on tls conn")
+		}
+	} else {
+		panic("not a net.TCPConn, not a tls.Conn, what is the conn type?")
+	}
+}
+
 // TCPSnapshotConnection is the connection for sending raft snapshot chunks to
 // remote nodes.
 type TCPSnapshotConnection struct {
@@ -275,9 +293,7 @@ func NewTCPSnapshotConnection(conn net.Conn) *TCPSnapshotConnection {
 
 // Close closes the snapshot connection.
 func (c *TCPSnapshotConnection) Close() {
-	if err := c.conn.Close(); err != nil {
-		plog.Errorf("failed to close the snapshot connection %v", err)
-	}
+	closeWriteConn(c.conn)
 }
 
 // SendSnapshotChunk sends the specified snapshot chunk to remote node.
@@ -389,6 +405,7 @@ func (g *TCPTransport) Name() string {
 }
 
 func (g *TCPTransport) serveConn(conn net.Conn) {
+	closeWriteConn(conn)
 	magicNum := make([]byte, len(magicNumber))
 	header := make([]byte, requestHeaderSize)
 	tbuf := make([]byte, payloadBufferSize)

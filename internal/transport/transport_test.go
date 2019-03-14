@@ -608,14 +608,14 @@ func getTestSnapshotMessage(to uint64) raftpb.Message {
 
 func TestSnapshotCanBeSend(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	mutualTLSValues := []bool{true}
+	mutualTLSValues := []bool{true, false}
 	for _, v := range mutualTLSValues {
 		testSnapshotCanBeSend(t, snapChunkSize-1, 3000, v)
-		/*testSnapshotCanBeSend(t, snapChunkSize/2, 3000, v)
+		testSnapshotCanBeSend(t, snapChunkSize/2, 3000, v)
 		testSnapshotCanBeSend(t, snapChunkSize+1, 3000, v)
 		testSnapshotCanBeSend(t, snapChunkSize*3, 3000, v)
 		testSnapshotCanBeSend(t, snapChunkSize*3+1, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize*3-1, 3000, v)*/
+		testSnapshotCanBeSend(t, snapChunkSize*3-1, 3000, v)
 	}
 }
 
