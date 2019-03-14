@@ -140,7 +140,7 @@ func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
 }
 
 func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddNode {
+	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver {
 		plog.Infof("%s adding node %d:%s, existing members: %v",
 			m.describe(), cc.NodeID, string(cc.Address), m.members.Addresses)
 		for _, addr := range m.members.Addresses {
