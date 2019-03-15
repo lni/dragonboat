@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/internal/settings"
+	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
@@ -155,7 +156,7 @@ type ILoadableSessions interface {
 // IManagedStateMachine is the interface used to manage data store.
 type IManagedStateMachine interface {
 	Open() (uint64, error)
-	Update(*Session, uint64, uint64, uint64, []byte) uint64
+	Update(*Session, pb.Entry) uint64
 	BatchedUpdate([]sm.Entry) []sm.Entry
 	Lookup([]byte) ([]byte, error)
 	GetHash() uint64
@@ -230,21 +231,20 @@ func (ds *NativeStateMachine) AllDiskStateMachine() bool {
 }
 
 // Update updates the data store.
-func (ds *NativeStateMachine) Update(session *Session,
-	seriesID uint64, index uint64, term uint64, data []byte) uint64 {
+func (ds *NativeStateMachine) Update(session *Session, e pb.Entry) uint64 {
 	if session != nil {
-		_, ok := session.getResponse(RaftSeriesID(seriesID))
+		_, ok := session.getResponse(RaftSeriesID(e.SeriesID))
 		if ok {
 			panic("already has response in session")
 		}
 	}
-	entries := []sm.Entry{sm.Entry{Index: index, Cmd: data}}
+	entries := []sm.Entry{sm.Entry{Index: e.Index, Cmd: e.Cmd}}
 	results := ds.sm.Update(entries)
 	if len(results) != 1 {
 		panic("len(results) != 1")
 	}
 	if session != nil {
-		session.addResponse(RaftSeriesID(seriesID), results[0].Result)
+		session.addResponse(RaftSeriesID(e.SeriesID), results[0].Result)
 	}
 	return results[0].Result
 }

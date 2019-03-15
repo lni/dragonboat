@@ -46,6 +46,7 @@ import (
 
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/logger"
+	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
@@ -228,18 +229,16 @@ func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
 }
 
 // Update updates the data store.
-func (ds *StateMachineWrapper) Update(session *rsm.Session,
-	seriesID uint64, index uint64, term uint64,
-	data []byte) uint64 {
+func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) uint64 {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
 	dp = nil
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	if len(e.Cmd) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	v := C.UpdateDBStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
 	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(seriesID), uint64(v))
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), uint64(v))
 	}
 	return uint64(v)
 }

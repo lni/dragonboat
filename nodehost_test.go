@@ -553,6 +553,33 @@ func createConcurrentTestNodeHost(addr string,
 	return nh, nil
 }
 
+func createFakeDiskTestNodeHost(addr string,
+	datadir string, initialApplied uint64) (*NodeHost, error) {
+	rc := config.Config{
+		ClusterID:    uint64(1),
+		NodeID:       uint64(1),
+		ElectionRTT:  5,
+		HeartbeatRTT: 1,
+		CheckQuorum:  true,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = addr
+	nhc := config.NodeHostConfig{
+		WALDir:         datadir,
+		NodeHostDir:    datadir,
+		RTTMillisecond: 1,
+		RaftAddress:    peers[1],
+	}
+	nh := NewNodeHost(nhc)
+	newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+		return tests.NewFakeDiskSM(initialApplied)
+	}
+	if err := nh.StartAllDiskCluster(peers, false, newSM, rc); err != nil {
+		return nil, err
+	}
+	return nh, nil
+}
+
 func singleConcurrentNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost), snapshotEntry uint64, concurrent bool) {
 	defer leaktest.AfterTest(t)()
@@ -569,6 +596,23 @@ func singleConcurrentNodeHostTest(t *testing.T,
 		nh.Stop()
 	}()
 	tf(t, nh)
+}
+
+func singleFakeDiskNodeHostTest(t *testing.T,
+	tf func(t *testing.T, nh *NodeHost, initialApplied uint64), initialApplied uint64) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, initialApplied)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	waitForLeaderToBeElected(t, nh, 1)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		nh.Stop()
+	}()
+	tf(t, nh, initialApplied)
 }
 
 func createRateLimitedTestNodeHost(addr string,
@@ -1149,6 +1193,30 @@ func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 		}
 	}
 	singleNodeHostTest(t, tf)
+}
+
+func TestAllDiskStateMachineCanBeOpened(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		session := nh.GetNoOPSession(1)
+		for i := uint64(2); i < initialApplied*2; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err != nil && i > 4 {
+				t.Errorf("SyncPropose iter %d returned err %v", i, err)
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		count, err := nh.SyncRead(ctx, 1, nil)
+		cancel()
+		if err != nil {
+			t.Errorf("SyncRead returned err %v", err)
+		}
+		if binary.LittleEndian.Uint64(count) != initialApplied {
+			t.Errorf("got %d, want %d", binary.LittleEndian.Uint64(count), initialApplied)
+		}
+	}
+	singleFakeDiskNodeHostTest(t, tf, 5)
 }
 
 func TestConcurrentStateMachineLookup(t *testing.T) {

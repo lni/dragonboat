@@ -186,8 +186,9 @@ func (sm *ConcurrentStateMachine) AllDiskStateMachine() bool {
 }
 
 type AllDiskStateMachine struct {
-	sm     sm.IAllDiskStateMachine
-	opened bool
+	sm           sm.IAllDiskStateMachine
+	opened       bool
+	initialIndex uint64
 }
 
 func NewAllDiskStateMachine(sm sm.IAllDiskStateMachine) *AllDiskStateMachine {
@@ -199,11 +200,22 @@ func (sm *AllDiskStateMachine) Open() (uint64, error) {
 		panic("Open() called more than once on AllDiskStateMachine")
 	}
 	sm.opened = true
-	return sm.sm.Open()
+	applied, err := sm.sm.Open()
+	if err != nil {
+		return applied, err
+	}
+	sm.initialIndex = applied
+	return applied, nil
 }
 
 // Update updates the state machine.
 func (sm *AllDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
+	if len(entries) > 0 {
+		if entries[len(entries)-1].Index <= sm.initialIndex {
+			plog.Panicf("last entry index to apply %d, initial index %d",
+				entries[len(entries)-1].Index, sm.initialIndex)
+		}
+	}
 	return sm.sm.Update(entries)
 }
 

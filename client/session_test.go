@@ -116,3 +116,18 @@ func TestValidForSessionOp(t *testing.T) {
 		t.Errorf("vad ValidForSessionOp result")
 	}
 }
+
+func TestIsNoOPSession(t *testing.T) {
+	s := NewNoOPSession(1, random.LockGuardedRand)
+	if !s.IsNoOPSession() {
+		t.Errorf("not considered as a noop session")
+	}
+	s.ClientID = s.ClientID + 1
+	if !s.IsNoOPSession() {
+		t.Errorf("not considered as a noop session")
+	}
+	s.SeriesID = s.SeriesID + 1
+	if s.IsNoOPSession() {
+		t.Errorf("still considered as a noop session")
+	}
+}

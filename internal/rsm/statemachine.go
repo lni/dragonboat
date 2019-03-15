@@ -528,6 +528,9 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 					if !ignored {
 						s.node.ApplyUpdate(ent, smResult, rejected, ignored, lastInBatch)
 					}
+				} else {
+					// treat it as a NoOP entry
+					s.handleNoOP(pb.Entry{Index: ent.Index, Term: ent.Term})
 				}
 			}
 		}
@@ -562,8 +565,8 @@ func (s *StateMachine) handleBatchedNoOPEntries(ents []pb.Entry,
 	for _, ent := range ents {
 		if !s.entryAppliedInDiskSM(ent.Index) {
 			entries = append(entries, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
-			s.updateLastApplied(ent.Index, ent.Term)
 		}
+		s.updateLastApplied(ent.Index, ent.Term)
 	}
 	if len(entries) > 0 {
 		results := s.sm.BatchedUpdate(entries)
@@ -658,7 +661,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
-	result = s.sm.Update(session, ent.SeriesID, ent.Index, ent.Term, ent.Cmd)
+	result = s.sm.Update(session, ent)
 	return result, false, false
 }
 

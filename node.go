@@ -467,7 +467,7 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	if err != nil {
 		panic(err)
 	}
-	if !rc.initialized() && rc.allDiskStateMachine() {
+	if rec.InitialSnapshot && rc.allDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
 		rc.sm.OpenAllDiskStateMachine()
 	}

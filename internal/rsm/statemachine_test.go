@@ -1343,3 +1343,40 @@ func TestGetSnapshotFilesReturnFiles(t *testing.T) {
 		t.Errorf("unexpected file value")
 	}
 }
+
+func TestNoOPEntryIsNotBatched(t *testing.T) {
+	updates, _ := getEntryTypes([]pb.Entry{pb.Entry{}})
+	if updates {
+		t.Errorf("NoOP entry is considered as regular update entry")
+	}
+}
+
+func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
+	e := pb.Entry{
+		ClientID: client.NotSessionManagedClientID + 1,
+		SeriesID: client.NoOPSeriesID + 1,
+	}
+	_, allNoOP := getEntryTypes([]pb.Entry{pb.Entry{}, e})
+	if allNoOP {
+		t.Errorf("regular sessioned entry not detected")
+	}
+}
+
+func TestNonUpdateEntryIsNotBatched(t *testing.T) {
+	cce := pb.Entry{Type: pb.ConfigChangeEntry}
+	notSessionManaged := pb.Entry{ClientID: client.NotSessionManagedClientID}
+	newSessionEntry := pb.Entry{SeriesID: client.SeriesIDForRegister}
+	unSessionEntry := pb.Entry{SeriesID: client.SeriesIDForUnregister}
+	entries := []pb.Entry{cce, notSessionManaged, newSessionEntry, unSessionEntry}
+	for _, e := range entries {
+		if e.IsUpdateEntry() {
+			t.Errorf("incorrectly considered as update entry")
+		}
+	}
+	for _, e := range entries {
+		updates, _ := getEntryTypes([]pb.Entry{e})
+		if updates {
+			t.Errorf("incorrectly considered as update entry")
+		}
+	}
+}
