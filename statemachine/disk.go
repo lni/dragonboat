@@ -18,12 +18,12 @@ import (
 	"io"
 )
 
-type IDiskStateMachine interface {
-	Open() (uint64, uint64, error)
+type IAllDiskStateMachine interface {
+	Open() (uint64, error)
 	Update([]Entry) []Entry
 	Lookup([]byte) ([]byte, error)
 	PrepareSnapshot() (interface{}, error)
-	StreamSnapshot(io.Writer, <-chan struct{}) error
+	CreateSnapshot(io.Writer, <-chan struct{}) error
 	RecoverFromSnapshot(io.Reader, <-chan struct{}) error
 	Close()
 	GetHash() uint64

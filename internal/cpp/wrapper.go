@@ -199,6 +199,10 @@ func (ds *StateMachineWrapper) destroy() {
 	C.DestroyDBStateMachine(ds.dataStore)
 }
 
+func (ds *StateMachineWrapper) Open() (uint64, error) {
+	panic("Open() called on StateMachineWrapper")
+}
+
 // Offloaded offloads the data store from the specified part of the system.
 func (ds *StateMachineWrapper) Offloaded(from rsm.From) {
 	ds.mu.Lock()
@@ -318,6 +322,10 @@ func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
 // machine is capable of taking concurrent snapshots.
 func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
+	return false
+}
+
+func (ds *StateMachineWrapper) AllDiskStateMachine() bool {
 	return false
 }
 

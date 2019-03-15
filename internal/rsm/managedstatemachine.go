@@ -154,6 +154,7 @@ type ILoadableSessions interface {
 
 // IManagedStateMachine is the interface used to manage data store.
 type IManagedStateMachine interface {
+	Open() (uint64, error)
 	Update(*Session, uint64, uint64, uint64, []byte) uint64
 	BatchedUpdate([]sm.Entry) []sm.Entry
 	Lookup([]byte) ([]byte, error)
@@ -165,6 +166,7 @@ type IManagedStateMachine interface {
 	Offloaded(From)
 	Loaded(From)
 	ConcurrentSnapshot() bool
+	AllDiskStateMachine() bool
 }
 
 // ManagedStateMachineFactory is the factory function type for creating an
@@ -195,6 +197,10 @@ func (ds *NativeStateMachine) closeStateMachine() {
 	ds.sm.Close()
 }
 
+func (ds *NativeStateMachine) Open() (uint64, error) {
+	return ds.sm.Open()
+}
+
 // Offloaded offloads the data store from the specified part of the system.
 func (ds *NativeStateMachine) Offloaded(from From) {
 	ds.mu.Lock()
@@ -217,6 +223,10 @@ func (ds *NativeStateMachine) Loaded(from From) {
 // state machine instance is capable of doing concurrent snapshots.
 func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
 	return ds.sm.ConcurrentSnapshot()
+}
+
+func (ds *NativeStateMachine) AllDiskStateMachine() bool {
+	return ds.sm.AllDiskStateMachine()
 }
 
 // Update updates the data store.

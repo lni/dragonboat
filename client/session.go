@@ -71,6 +71,10 @@ func NewNoOPSession(clusterID uint64, rng random.Source) *Session {
 	}
 }
 
+func (cs *Session) IsNoOPSession() bool {
+	return cs.SeriesID == NoOPSeriesID
+}
+
 // ClusterIDMustMatch asserts that the input cluster id matches the cluster id
 // of the client session.
 func (cs *Session) ClusterIDMustMatch(clusterID uint64) {

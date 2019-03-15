@@ -356,6 +356,19 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	return nh.startCluster(nodes, join, cf, stopc, config)
 }
 
+func (nh *NodeHost) StartAllDiskCluster(nodes map[uint64]string,
+	join bool,
+	createStateMachine func(uint64, uint64) sm.IAllDiskStateMachine,
+	config config.Config) error {
+	stopc := make(chan struct{})
+	cf := func(clusterID uint64, nodeID uint64,
+		done <-chan struct{}) rsm.IManagedStateMachine {
+		sm := createStateMachine(clusterID, nodeID)
+		return rsm.NewNativeStateMachine(rsm.NewAllDiskStateMachine(sm), done)
+	}
+	return nh.startCluster(nodes, join, cf, stopc, config)
+}
+
 // StartClusterUsingPlugin adds a new cluster node to the NodeHost and start
 // running the new node. Different from the StartCluster method in which you
 // specify the factory function used for creating the IStateMachine instance,
@@ -651,6 +664,9 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
+	if !v.supportClientSession() && !session.IsNoOPSession() {
+		plog.Panicf("Regular client session not supported, must use NoOPSession")
+	}
 	req, err := v.proposeSession(session, nil, timeout)
 	nh.execEngine.setNodeReady(session.ClusterID)
 	return req, err
@@ -888,11 +904,13 @@ func (nh *NodeHost) propose(s *client.Session,
 	if sampled {
 		st = time.Now()
 	}
-	c, ok := nh.clusterMu.clusters.Load(s.ClusterID)
+	v, ok := nh.getClusterNotLocked(s.ClusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	v := c.(*node)
+	if !v.supportClientSession() && !s.IsNoOPSession() {
+		plog.Panicf("Regular client session not supported, must use NoOPSession")
+	}
 	req, err := v.propose(s, cmd, handler, timeout)
 	nh.execEngine.setNodeReady(s.ClusterID)
 	if sampled {

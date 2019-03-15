@@ -188,6 +188,14 @@ func (rc *node) concurrentSnapshot() bool {
 	return rc.sm.ConcurrentSnapshot()
 }
 
+func (rc *node) supportClientSession() bool {
+	return !rc.allDiskStateMachine()
+}
+
+func (rc *node) allDiskStateMachine() bool {
+	return rc.sm.AllDiskStateMachine()
+}
+
 func (rc *node) proposeSession(session *client.Session,
 	handler ICompleteHandler, timeout time.Duration) (*RequestState, error) {
 	if !session.ValidForSessionOp(rc.clusterID) {
@@ -458,6 +466,10 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	}
 	if err != nil {
 		panic(err)
+	}
+	if !rc.initialized() && rc.allDiskStateMachine() {
+		plog.Infof("all disk SM %s beng initialized", rc.describe())
+		rc.sm.OpenAllDiskStateMachine()
 	}
 	return index, false
 }

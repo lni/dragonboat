@@ -104,6 +104,7 @@ type StateMachine struct {
 	index              uint64
 	term               uint64
 	snapshotIndex      uint64
+	diskSMIndex        uint64
 	commitC            chan Commit
 	aborted            bool
 	batchedLastApplied struct {
@@ -152,8 +153,8 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 		rec.InitialSnapshot); !recovered {
 		return idx, err
 	}
-	s.setBatchedLastApplied(snapshot.Index)
 	s.node.RestoreRemotes(snapshot)
+	s.setBatchedLastApplied(snapshot.Index)
 	plog.Infof("%s snapshot %d restored, members %v",
 		s.describe(), snapshot.Index, snapshot.Membership.Addresses)
 	return snapshot.Index, nil
@@ -190,25 +191,40 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	if s.aborted {
 		return false, 0, sm.ErrSnapshotStopped
 	}
-	plog.Infof("%s restarting at term %d, index %d, %s, initial snapshot %t",
-		s.describe(), ss.Term, ss.Index, snapshotInfo(ss), initial)
-	snapshotFiles := getSnapshotFiles(ss)
-	fn := s.snapshotter.GetFilePath(ss.Index)
-	if err := s.snapshotter.Load(s.sessions, s.sm, fn, snapshotFiles); err != nil {
-		plog.Infof("%s called RecoverFromSnapshot %d, returned %v",
-			s.describe(), ss.Index, err)
-		if err == sm.ErrSnapshotStopped {
-			// no more lookup allowed
-			s.aborted = true
-			return false, 0, err
+	if !s.AllDiskStateMachine() {
+		plog.Infof("%s restarting at term %d, index %d, %s, initial snapshot %t",
+			s.describe(), ss.Term, ss.Index, snapshotInfo(ss), initial)
+		snapshotFiles := getSnapshotFiles(ss)
+		fn := s.snapshotter.GetFilePath(ss.Index)
+		if err := s.snapshotter.Load(s.sessions, s.sm, fn, snapshotFiles); err != nil {
+			plog.Infof("%s called RecoverFromSnapshot %d, returned %v",
+				s.describe(), ss.Index, err)
+			if err == sm.ErrSnapshotStopped {
+				// no more lookup allowed
+				s.aborted = true
+				return false, 0, err
+			}
+			return false, 0, ErrRestoreSnapshot
 		}
-		return false, 0, ErrRestoreSnapshot
+	} else {
+		plog.Infof("all disk SM %s, sessions/SM not restored in this step",
+			s.describe())
 	}
 	// set the confState and the last applied value
 	s.index = ss.Index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
 	return true, 0, nil
+}
+
+func (s *StateMachine) OpenAllDiskStateMachine() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, err := s.sm.Open()
+	if err != nil {
+		panic(err)
+	}
+	s.diskSMIndex = index
 }
 
 // GetLastApplied returns the last applied value.
@@ -284,6 +300,10 @@ func (s *StateMachine) GetMembership() (map[uint64]string,
 // machine is capable of taking concurrent snapshot.
 func (s *StateMachine) ConcurrentSnapshot() bool {
 	return s.sm.ConcurrentSnapshot()
+}
+
+func (s *StateMachine) AllDiskStateMachine() bool {
+	return s.sm.AllDiskStateMachine()
 }
 
 // SaveSnapshot creates a snapshot.
@@ -503,9 +523,11 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 				smResult := s.handleUnregisterSession(ent)
 				s.node.ApplyUpdate(ent, smResult, smResult == 0, false, lastInBatch)
 			} else {
-				smResult, ignored, rejected := s.handleUpdate(ent)
-				if !ignored {
-					s.node.ApplyUpdate(ent, smResult, rejected, ignored, lastInBatch)
+				if !s.entryAppliedInDiskSM(ent.Index) {
+					smResult, ignored, rejected := s.handleUpdate(ent)
+					if !ignored {
+						s.node.ApplyUpdate(ent, smResult, rejected, ignored, lastInBatch)
+					}
 				}
 			}
 		}
@@ -517,6 +539,13 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 	if lastInBatch {
 		s.setBatchedLastApplied(ent.Index)
 	}
+}
+
+func (s *StateMachine) entryAppliedInDiskSM(index uint64) bool {
+	if !s.AllDiskStateMachine() {
+		return false
+	}
+	return index <= s.diskSMIndex
 }
 
 func (s *StateMachine) onUpdateApplied(ent pb.Entry,
@@ -531,52 +560,17 @@ func (s *StateMachine) handleBatchedNoOPEntries(ents []pb.Entry,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, ent := range ents {
-		entries = append(entries, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
-		s.updateLastApplied(ent.Index, ent.Term)
-	}
-	results := s.sm.BatchedUpdate(entries)
-	for idx, ent := range results {
-		lastInBatch := idx == len(ents)-1
-		s.onUpdateApplied(ents[idx], ent.Result, false, false, lastInBatch)
-	}
-	if len(ents) > 0 {
-		s.setBatchedLastApplied(ents[len(ents)-1].Index)
-	}
-}
-
-func (s *StateMachine) handleAllUpdateEntries(ents []pb.Entry) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	lastIdx := len(ents) - 1
-	for idx, entry := range ents {
-		var session *Session
-		var ok bool
-		lastInBatch := idx == lastIdx
-		s.updateLastApplied(entry.Index, entry.Term)
-		if !entry.IsNoOPSession() {
-			session, ok = s.sessions.ClientRegistered(entry.ClientID)
-			if !ok {
-				s.onUpdateApplied(entry, 0, false, true, lastInBatch)
-				continue
-			}
-			s.sessions.UpdateRespondedTo(session, entry.RespondedTo)
-			result, responded, updateRequired := s.sessions.UpdateRequired(session,
-				entry.SeriesID)
-			if responded {
-				s.onUpdateApplied(entry, 0, true, false, lastInBatch)
-				continue
-			}
-			if !updateRequired {
-				s.onUpdateApplied(entry, result, false, false, lastInBatch)
-				continue
-			}
+		if !s.entryAppliedInDiskSM(ent.Index) {
+			entries = append(entries, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+			s.updateLastApplied(ent.Index, ent.Term)
 		}
-		if !entry.IsNoOPSession() && session == nil {
-			panic("session is nil")
+	}
+	if len(entries) > 0 {
+		results := s.sm.BatchedUpdate(entries)
+		for idx, ent := range results {
+			lastInBatch := idx == len(ents)-1
+			s.onUpdateApplied(ents[idx], ent.Result, false, false, lastInBatch)
 		}
-		result := s.sm.Update(session,
-			entry.SeriesID, entry.Index, entry.Term, entry.Cmd)
-		s.onUpdateApplied(entry, result, false, false, lastInBatch)
 	}
 	if len(ents) > 0 {
 		s.setBatchedLastApplied(ents[len(ents)-1].Index)
