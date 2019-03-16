@@ -149,8 +149,8 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 		rec.InitialSnapshot); !recovered {
 		return idx, err
 	}
-	s.setBatchedLastApplied(snapshot.Index)
 	s.node.RestoreRemotes(snapshot)
+	s.setBatchedLastApplied(snapshot.Index)
 	plog.Infof("%s snapshot %d restored, members %v",
 		s.describe(), snapshot.Index, snapshot.Membership.Addresses)
 	return snapshot.Index, nil
