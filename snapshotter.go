@@ -65,6 +65,12 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
+func (s *snapshotter) StreamSnapshot(savable rsm.ISavable,
+	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
+	// FIXME: implement this
+	return nil
+}
+
 func (s *snapshotter) Save(savable rsm.ISavable,
 	meta *rsm.SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
 	env := s.getSnapshotEnv(meta.Index)

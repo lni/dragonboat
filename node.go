@@ -456,6 +456,15 @@ func (rc *node) saveSnapshot() {
 	rc.ss.setSnapshotIndex(ss.Index)
 }
 
+func (rc *node) streamSnapshot(sink pb.IChunkSink) {
+	if err := rc.sm.StreamSnapshot(sink); err != nil {
+		// FIXME: allow network issues
+		if err != sm.ErrSnapshotStopped {
+			panic(err)
+		}
+	}
+}
+
 func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	rc.snapshotLock.Lock()
 	defer rc.snapshotLock.Unlock()
@@ -469,23 +478,30 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	}
 	if rec.InitialSnapshot && rc.allDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
-		rc.sm.OpenAllDiskStateMachine()
+		if err := rc.sm.OpenAllDiskStateMachine(); err != nil {
+			panic(err)
+		}
 	}
 	return index, false
 }
 
+func (rc *node) streamSnapshotDone() {
+	rc.ss.notifySnapshotStatus(false, false, true, false, 0)
+	rc.commitReady(rc.clusterID)
+}
+
 func (rc *node) saveSnapshotDone() {
-	rc.ss.notifySnapshotStatus(true, false, false, 0)
+	rc.ss.notifySnapshotStatus(true, false, false, false, 0)
 	rc.commitReady(rc.clusterID)
 }
 
 func (rc *node) initialSnapshotDone(index uint64) {
-	rc.ss.notifySnapshotStatus(false, true, true, index)
+	rc.ss.notifySnapshotStatus(false, true, false, true, index)
 	rc.commitReady(rc.clusterID)
 }
 
 func (rc *node) recoverFromSnapshotDone() {
-	rc.ss.notifySnapshotStatus(false, true, false, 0)
+	rc.ss.notifySnapshotStatus(false, true, false, false, 0)
 	rc.commitReady(rc.clusterID)
 }
 

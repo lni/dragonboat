@@ -15,7 +15,13 @@
 package statemachine
 
 import (
+	"errors"
+
 	"io"
+)
+
+var (
+	ErrSnapshotStreaming = errors.New("failed to stream the snapshot")
 )
 
 type IAllDiskStateMachine interface {

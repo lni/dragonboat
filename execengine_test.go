@@ -145,7 +145,7 @@ func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.ss.setRecoveringFromSnapshot()
-	n.ss.notifySnapshotStatus(false, true, true, 100)
+	n.ss.notifySnapshotStatus(false, true, false, true, 100)
 	if processRecoveringNode(n) {
 		t.Errorf("node unexpectedly skipped")
 	}
@@ -171,7 +171,7 @@ func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
 func TestTakingSnapshotNodeCanComplete(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.ss.setTakingSnapshot()
-	n.ss.notifySnapshotStatus(true, false, false, 0)
+	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.initializedMu.initialized = true
 	if processTakingSnapshotNode(n) {
 		t.Errorf("node unexpectedly skipped")
@@ -189,7 +189,7 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 	}()
 	n := &node{ss: &snapshotState{}}
 	n.ss.setTakingSnapshot()
-	n.ss.notifySnapshotStatus(true, false, false, 0)
+	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	processTakingSnapshotNode(n)
 }
 

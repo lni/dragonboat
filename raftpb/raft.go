@@ -265,3 +265,11 @@ func (snapshot *Snapshot) Validate() bool {
 func (f *SnapshotFile) Filename() string {
 	return fmt.Sprintf("external-file-%d", f.FileId)
 }
+
+type IChunkSink interface {
+	// return (sent, stopped)
+	Receive(chunk SnapshotChunk) (bool, bool)
+	ClusterID() uint64
+	ToNodeID() uint64
+	FromNodeID() uint64
+}

@@ -99,6 +99,7 @@ type execEngine struct {
 	commitWorkReady            *workReady
 	snapshotWorkReady          *workReady
 	requestedSnapshotWorkReady *workReady
+	streamSnapshotWorkReady    *workReady
 	sendLocalMsg               sendLocalMessageFunc
 }
 
@@ -115,6 +116,7 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 		commitWorkReady:            newWorkReady(commitWorkerCount),
 		snapshotWorkReady:          newWorkReady(snapshotWorkerCount),
 		requestedSnapshotWorkReady: newWorkReady(snapshotWorkerCount),
+		streamSnapshotWorkReady:    newWorkReady(snapshotWorkerCount),
 		ctxs:                       make([]raftio.IContext, workerCount),
 		profilers:                  make([]*profiler, workerCount),
 		sendLocalMsg:               sendLocalMsg,
@@ -218,6 +220,15 @@ func (s *execEngine) snapshotWorkerMain(workerID uint64) {
 					return
 				}
 			}
+		case <-s.streamSnapshotWorkReady.waitCh(workerID):
+			clusterIDMap := s.streamSnapshotWorkReady.getReadyMap(workerID)
+			for clusterID := range clusterIDMap {
+				nodes, cci = s.loadSnapshotNodes(workerID, cci, nodes)
+				s.streamSnapshot(clusterID, nodes)
+				if s.snapshotWorkerClosed(nodes) {
+					return
+				}
+			}
 		}
 	}
 }
@@ -240,6 +251,23 @@ func (s *execEngine) saveSnapshot(clusterID uint64,
 	plog.Infof("%s called saveSnapshot", node.describe())
 	node.saveSnapshot()
 	node.saveSnapshotDone()
+}
+
+func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
+	node, ok := nodes[clusterID]
+	if !ok {
+		return
+	}
+	_, getSinkFn, ok := node.ss.getStreamSnapshotReq()
+	if !ok {
+		return
+	}
+	sink := getSinkFn()
+	if sink != nil {
+		plog.Infof("%s called streamSnapshot")
+		node.streamSnapshot(sink)
+	}
+	node.streamSnapshotDone()
 }
 
 func (s *execEngine) recoverFromSnapshot(clusterID uint64,
@@ -389,18 +417,15 @@ func (s *execEngine) execSMs(workerID uint64,
 		// batched last applied might updated, give the node work a chance to run
 		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
+			if node.ss.recoveringFromSnapshot() {
+				plog.Panicf("recovering from snapshot again")
+			}
 			if commit.SnapshotAvailable {
 				plog.Infof("check incoming snapshot, %s", node.describe())
-				if node.ss.recoveringFromSnapshot() {
-					plog.Panicf("recovering from snapshot again")
-				}
 				node.ss.setRecoveringFromSnapshot()
 				s.reportAvailableSnapshot(node, commit)
 			} else if commit.SnapshotRequested {
 				plog.Infof("reportRequestedSnapshot, %s", node.describe())
-				if node.ss.recoveringFromSnapshot() {
-					plog.Panicf("recovering from snapshot again")
-				}
 				if !node.ss.takingSnapshot() {
 					node.ss.setTakingSnapshot()
 				} else {
@@ -408,6 +433,16 @@ func (s *execEngine) execSMs(workerID uint64,
 					continue
 				}
 				s.reportRequestedSnapshot(node, commit)
+			} else if commit.StreamSnapshot {
+				if !node.ss.streamingSnapshot() {
+					node.ss.setStreamingSnapshot()
+				} else {
+					plog.Infof("commit.StreamSnapshot ignored on %s", node.describe())
+					// FIXME:
+					// notify the NodeHost such failed snapshot incident
+					continue
+				}
+				s.reportStreamSnapshot(node)
 			} else {
 				panic("unknown returned commit rec type")
 			}
@@ -416,6 +451,10 @@ func (s *execEngine) execSMs(workerID uint64,
 	if p != nil {
 		p.exec.end()
 	}
+}
+
+func (s *execEngine) reportStreamSnapshot(node *node) {
+	// FIXME: implement this
 }
 
 func (s *execEngine) reportRequestedSnapshot(node *node,

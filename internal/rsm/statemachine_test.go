@@ -166,6 +166,11 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 	return err.Error() == "no snapshot available"
 }
 
+func (s *testSnapshotter) StreamSnapshot(savable ISavable,
+	meta *SnapshotMeta, sink pb.IChunkSink) error {
+	panic("not implemented")
+}
+
 func (s *testSnapshotter) Save(savable ISavable,
 	meta *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
 	s.index = meta.Index

@@ -59,13 +59,18 @@ type SnapshotMeta struct {
 	Ctx        interface{}
 }
 
-// Commit is the processing units that can be handled by StateMachines.
+// Commit describes a task that need to be handled by StateMachine.
 type Commit struct {
 	Index             uint64
 	SnapshotAvailable bool
 	InitialSnapshot   bool
 	SnapshotRequested bool
+	StreamSnapshot    bool
 	Entries           []pb.Entry
+}
+
+func (c *Commit) isSnapshotRelated() bool {
+	return c.SnapshotAvailable || c.SnapshotRequested || c.StreamSnapshot
 }
 
 // SMFactoryFunc is the function type for creating an IStateMachine instance
@@ -87,6 +92,7 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
+	StreamSnapshot(ISavable, *SnapshotMeta, pb.IChunkSink) error
 	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
 	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
@@ -217,14 +223,24 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	return true, 0, nil
 }
 
-func (s *StateMachine) OpenAllDiskStateMachine() {
+// we can not stream a full snapshot when membership state is catching up with
+// the all disk SM state. however, meta only snapshot can be taken at any time.
+func (s *StateMachine) readyToStreamSnapshot() bool {
+	if !s.AllDiskStateMachine() {
+		return true
+	}
+	return s.GetLastApplied() >= s.diskSMIndex
+}
+
+func (s *StateMachine) OpenAllDiskStateMachine() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	s.diskSMIndex = index
+	return nil
 }
 
 // GetLastApplied returns the last applied value.
@@ -315,6 +331,10 @@ func (s *StateMachine) SaveSnapshot() (*pb.Snapshot,
 	return s.saveSnapshot()
 }
 
+func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
+	return s.streamSnapshot(sink)
+}
+
 // GetHash returns the state machine hash.
 func (s *StateMachine) GetHash() uint64 {
 	s.mu.RLock()
@@ -343,7 +363,7 @@ func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool)
 	entries = entries[:0]
 	select {
 	case rec := <-s.commitC:
-		if rec.SnapshotAvailable || rec.SnapshotRequested {
+		if rec.isSnapshotRelated() {
 			return rec, true
 		}
 		batch = append(batch, rec)
@@ -352,7 +372,7 @@ func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool)
 		for !done {
 			select {
 			case rec := <-s.commitC:
-				if rec.SnapshotAvailable || rec.SnapshotRequested {
+				if rec.isSnapshotRelated() {
 					s.handle(batch, entries)
 					return rec, true
 				}
@@ -431,6 +451,20 @@ func (s *StateMachine) saveConcurrentSnapshot() (*pb.Snapshot,
 	return s.doSaveSnapshot(meta)
 }
 
+func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
+	var err error
+	var meta *SnapshotMeta
+	if err := func() error {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		meta, err = s.prepareSnapshot()
+		return err
+	}(); err != nil {
+		return err
+	}
+	return s.snapshotter.StreamSnapshot(s.sm, meta, sink)
+}
+
 func (s *StateMachine) saveSnapshot() (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	s.mu.RLock()
@@ -486,7 +520,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 func (s *StateMachine) handle(batch []Commit, entries []sm.Entry) {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
-		if batch[b].SnapshotAvailable || batch[b].SnapshotRequested {
+		if batch[b].isSnapshotRelated() {
 			panic("trying to handle a snapshot request")
 		}
 		ents := batch[b].Entries

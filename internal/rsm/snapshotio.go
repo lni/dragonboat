@@ -41,6 +41,7 @@ const (
 	// which checksum type to use.
 	// CRC32IEEE and google's highway hash are supported
 	defaultChecksumType = pb.CRC32IEEE
+	DefaultChecksumType = defaultChecksumType
 )
 
 func newCRC32Hash() hash.Hash {
@@ -49,6 +50,10 @@ func newCRC32Hash() hash.Hash {
 
 func getChecksumType() pb.ChecksumType {
 	return defaultChecksumType
+}
+
+func GetDefaultChecksum() hash.Hash {
+	return getDefaultChecksum()
 }
 
 func getDefaultChecksum() hash.Hash {

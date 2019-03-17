@@ -49,8 +49,8 @@ import (
 var (
 	// FIXME:
 	// move to the settings package.
-	maxLaneCount     uint32 = 64
-	maxSnapshotCount        = settings.Soft.MaxSnapshotCount
+	maxConnectionCount uint32 = 64
+	maxSnapshotCount          = settings.Soft.MaxSnapshotCount
 )
 
 // ASyncSendSnapshot sends raft snapshot message to its target.
@@ -64,21 +64,17 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
-func (t *Transport) GetStreamLane(m pb.Message) IChunkSink {
-	toNodeID := m.To
-	clusterID := m.ClusterId
-	if m.Type != pb.InstallSnapshot {
-		panic("non-snapshot message received by ASyncSendSnapshot")
-	}
-	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
+func (t *Transport) GetStreamConnection(clusterID uint64,
+	nodeID uint64) *sink {
+	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
 		return nil
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
 		return nil
 	}
-	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	if c := t.tryCreateLane(key, addr, true, 0); c != nil {
+	key := raftio.GetNodeInfo(clusterID, nodeID)
+	if c := t.tryCreateConnection(key, addr, true, 0); c != nil {
 		return &sink{l: c}
 	} else {
 		return nil
@@ -100,7 +96,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	c := t.tryCreateLane(key, addr, false, len(chunks))
+	c := t.tryCreateConnection(key, addr, false, len(chunks))
 	if c == nil {
 		return false
 	}
@@ -108,16 +104,16 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
-func (t *Transport) tryCreateLane(key raftio.NodeInfo,
+func (t *Transport) tryCreateConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *connection {
-	if v := atomic.AddUint32(&t.connections, 1); v > maxLaneCount {
+	if v := atomic.AddUint32(&t.connections, 1); v > maxConnectionCount {
 		atomic.AddUint32(&t.connections, ^uint32(0))
 		return nil
 	}
-	return t.createLane(key, addr, streaming, sz)
+	return t.createConnection(key, addr, streaming, sz)
 }
 
-func (t *Transport) createLane(key raftio.NodeInfo,
+func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *connection {
 	c := newConnection(key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())

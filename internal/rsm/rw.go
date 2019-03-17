@@ -114,6 +114,16 @@ type blockWriter struct {
 	done       bool
 }
 
+type IBlockWriter interface {
+	Write(bs []byte) (int, error)
+	Flush() error
+}
+
+func NewBlockWriter(blockSize uint64,
+	onNewBlock func(data []byte, crc []byte) error) *blockWriter {
+	return newBlockWriter(blockSize, onNewBlock)
+}
+
 func newBlockWriter(blockSize uint64,
 	onNewBlock func(data []byte, crc []byte) error) *blockWriter {
 	return &blockWriter{

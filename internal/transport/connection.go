@@ -34,11 +34,6 @@ var (
 	ErrStopped         = errors.New("connection stopped")
 )
 
-type IChunkSink interface {
-	// return (sent, stopped)
-	Receive(chunk pb.SnapshotChunk) (bool, bool)
-}
-
 type sink struct {
 	l *connection
 }
