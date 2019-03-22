@@ -65,9 +65,15 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
-func (s *snapshotter) StreamSnapshot(savable rsm.ISavable,
+func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
-	// FIXME: implement this
+	writer := newChunkWriter(sink, meta)
+	if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
 	return nil
 }
 

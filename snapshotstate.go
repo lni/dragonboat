@@ -145,6 +145,11 @@ func (rs *snapshotState) setCompactLogTo(v uint64) {
 	atomic.StoreUint64(&rs.compactLogTo, v)
 }
 
+func (rs *snapshotState) setStreamSnapshotReq(rec rsm.Commit,
+	getSinkFn getSink) {
+	rs.streamSnapshotReady.setStreamRecord(rec, getSinkFn)
+}
+
 func (rs *snapshotState) setRecoverFromSnapshotReq(rec rsm.Commit) {
 	rs.recoverReady.setRecord(rec)
 }

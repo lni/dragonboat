@@ -140,6 +140,10 @@ func (o *OffloadedStatus) SetOffloaded(from From) {
 	}
 }
 
+type IStreamable interface {
+	StreamSnapshot(interface{}, io.Writer) error
+}
+
 type ISavable interface {
 	SaveSnapshot(interface{},
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
@@ -164,6 +168,7 @@ type IManagedStateMachine interface {
 	SaveSnapshot(interface{},
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
 	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
+	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From)
 	Loaded(From)
 	ConcurrentSnapshot() bool
@@ -309,6 +314,12 @@ func (ds *NativeStateMachine) SaveSnapshot(
 	}
 	actualSz := writer.GetPayloadSize(sz + smsz)
 	return actualSz + SnapshotHeaderSize, nil
+}
+
+func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
+	writer io.Writer) error {
+	_, err := ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
+	return err
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot

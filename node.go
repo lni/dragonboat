@@ -329,6 +329,16 @@ func (rc *node) publishEntries(ents []pb.Entry) bool {
 	return true
 }
 
+func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
+	nodeID uint64) bool {
+	rec := rsm.Commit{
+		ClusterID:      clusterID,
+		NodeID:         nodeID,
+		StreamSnapshot: true,
+	}
+	return rc.publishCommitRec(rec)
+}
+
 func (rc *node) publishTakeSnapshotRequest() bool {
 	rec := rsm.Commit{SnapshotRequested: true}
 	return rc.publishCommitRec(rec)
@@ -567,7 +577,7 @@ func (rc *node) sendMessages(msgs []pb.Message) {
 	}
 }
 
-func (rc *node) sendAppendMessages(ud pb.Update) {
+func (rc *node) sendReplicateMessages(ud pb.Update) {
 	msgs := ud.Messages
 	for _, msg := range msgs {
 		if isFreeOrderMessage(msg) {

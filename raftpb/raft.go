@@ -271,5 +271,4 @@ type IChunkSink interface {
 	Receive(chunk SnapshotChunk) (bool, bool)
 	ClusterID() uint64
 	ToNodeID() uint64
-	FromNodeID() uint64
 }

@@ -1287,7 +1287,15 @@ func (nh *NodeHost) asyncSendRaftRequest(msg pb.Message) {
 			logutil.DescribeNode(msg.ClusterId, msg.From),
 			logutil.DescribeNode(msg.ClusterId, msg.To),
 			msg.Snapshot.Index, msg.Snapshot.FileSize)
-		nh.transport.ASyncSendSnapshot(msg)
+		n, ok := nh.getCluster(msg.From)
+		if !ok {
+			return
+		}
+		if !n.allDiskStateMachine() {
+			nh.transport.ASyncSendSnapshot(msg)
+		} else {
+			n.publishStreamSnapshotRequest(msg.ClusterId, msg.To)
+		}
 	}
 }
 

@@ -166,7 +166,7 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 	return err.Error() == "no snapshot available"
 }
 
-func (s *testSnapshotter) StreamSnapshot(savable ISavable,
+func (s *testSnapshotter) StreamSnapshot(streamable IStreamable,
 	meta *SnapshotMeta, sink pb.IChunkSink) error {
 	panic("not implemented")
 }

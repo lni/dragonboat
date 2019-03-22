@@ -281,7 +281,7 @@ func step(nodes []*node) bool {
 		node := activeNodes[idx]
 		node.processSnapshot(ud)
 		node.applyRaftUpdates(ud)
-		node.sendAppendMessages(ud)
+		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 	}
 	if rtc == nil {

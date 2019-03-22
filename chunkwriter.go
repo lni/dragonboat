@@ -34,10 +34,10 @@ type chunkWriter struct {
 	chunkID uint64
 	sink    pb.IChunkSink
 	bw      rsm.IBlockWriter
-	meta    rsm.SnapshotMeta
+	meta    *rsm.SnapshotMeta
 }
 
-func newChunkWriter(sink pb.IChunkSink, meta rsm.SnapshotMeta) *chunkWriter {
+func newChunkWriter(sink pb.IChunkSink, meta *rsm.SnapshotMeta) *chunkWriter {
 	cw := &chunkWriter{
 		sink: sink,
 		meta: meta,
@@ -117,7 +117,7 @@ func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
 	return pb.SnapshotChunk{
 		ClusterId:  cw.sink.ClusterID(),
 		NodeId:     cw.sink.ToNodeID(),
-		From:       cw.sink.FromNodeID(),
+		From:       cw.meta.From,
 		ChunkId:    cw.chunkID,
 		Index:      cw.meta.Index,
 		Term:       cw.meta.Term,

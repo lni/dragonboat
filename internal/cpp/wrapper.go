@@ -275,6 +275,11 @@ func (ds *StateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	panic("PrepareSnapshot not suppose to be called")
 }
 
+func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
+	writer io.Writer) error {
+	panic("StreamSnapshot not suppose to be called")
+}
+
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
 func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},

@@ -20,6 +20,7 @@ import (
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -264,7 +265,7 @@ func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	}
 	sink := getSinkFn()
 	if sink != nil {
-		plog.Infof("%s called streamSnapshot")
+		plog.Infof("%s called streamSnapshot", node.describe())
 		node.streamSnapshot(sink)
 	}
 	node.streamSnapshotDone()
@@ -442,7 +443,7 @@ func (s *execEngine) execSMs(workerID uint64,
 					// notify the NodeHost such failed snapshot incident
 					continue
 				}
-				s.reportStreamSnapshot(node)
+				s.reportStreamSnapshot(node, commit)
 			} else {
 				panic("unknown returned commit rec type")
 			}
@@ -453,19 +454,31 @@ func (s *execEngine) execSMs(workerID uint64,
 	}
 }
 
-func (s *execEngine) reportStreamSnapshot(node *node) {
-	// FIXME: implement this
+func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
+	nh, ok := s.nh.(*NodeHost)
+	if !ok {
+		panic("failed to get nh")
+	}
+	getSinkFn := func() pb.IChunkSink {
+		conn := nh.transport.GetStreamConnection(rec.ClusterID, rec.NodeID)
+		if conn == nil {
+			plog.Errorf("failed to get connection to %s",
+				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
+			nh.msgHandler.HandleSnapshotStatus(rec.ClusterID, rec.NodeID, true)
+		}
+		return conn
+	}
+	node.ss.setStreamSnapshotReq(rec, getSinkFn)
+	s.streamSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
-func (s *execEngine) reportRequestedSnapshot(node *node,
-	commitRec rsm.Commit) {
-	node.ss.setSaveSnapshotReq(commitRec)
+func (s *execEngine) reportRequestedSnapshot(node *node, rec rsm.Commit) {
+	node.ss.setSaveSnapshotReq(rec)
 	s.requestedSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
-func (s *execEngine) reportAvailableSnapshot(node *node,
-	commitRec rsm.Commit) {
-	node.ss.setRecoverFromSnapshotReq(commitRec)
+func (s *execEngine) reportAvailableSnapshot(node *node, rec rsm.Commit) {
+	node.ss.setRecoverFromSnapshotReq(rec)
 	s.snapshotWorkReady.clusterReady(node.clusterID)
 }
 
@@ -569,7 +582,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
-		node.sendAppendMessages(ud)
+		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 	}
 	p.step.end()

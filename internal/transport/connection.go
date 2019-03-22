@@ -42,6 +42,14 @@ func (s *sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	return s.l.SendSnapshotChunk(chunk)
 }
 
+func (s *sink) ClusterID() uint64 {
+	return s.l.clusterID
+}
+
+func (s *sink) ToNodeID() uint64 {
+	return s.l.nodeID
+}
+
 type connection struct {
 	clusterID          uint64
 	nodeID             uint64

@@ -52,6 +52,7 @@ var (
 
 // SnapshotMeta is the metadata of a snapshot.
 type SnapshotMeta struct {
+	From       uint64
 	Index      uint64
 	Term       uint64
 	Membership pb.Membership
@@ -61,6 +62,8 @@ type SnapshotMeta struct {
 
 // Commit describes a task that need to be handled by StateMachine.
 type Commit struct {
+	ClusterID         uint64
+	NodeID            uint64
 	Index             uint64
 	SnapshotAvailable bool
 	InitialSnapshot   bool
@@ -92,7 +95,7 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
-	StreamSnapshot(ISavable, *SnapshotMeta, pb.IChunkSink) error
+	StreamSnapshot(IStreamable, *SnapshotMeta, pb.IChunkSink) error
 	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
 	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
@@ -393,6 +396,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
 		plog.Panicf("%s has empty membership", s.describe())
 	}
 	meta := &SnapshotMeta{
+		From:       s.node.NodeID(),
 		Ctx:        ctx,
 		Index:      s.index,
 		Term:       s.term,
