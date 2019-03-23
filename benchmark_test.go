@@ -277,29 +277,31 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	db := getNewTestDB("db", "lldb")
 	defer os.RemoveAll(rdbTestDirectory)
 	defer db.Close()
-	e := pb.Entry{
-		Index:       12843560,
-		Term:        123,
-		Type:        pb.ApplicationEntry,
-		Key:         13563799145,
-		ClientID:    234926831800,
-		SeriesID:    12843560,
-		RespondedTo: 12843550,
-		Cmd:         make([]byte, sz),
-	}
-	bytes := e.Size() * 128
-	u := pb.Update{
-		ClusterID: 1,
-		NodeID:    1,
-	}
-	iidx := e.Index
-	for i := uint64(0); i < 128; i++ {
-		e.Index = iidx + i
-		u.EntriesToSave = append(u.EntriesToSave, e)
-	}
+	clusterID := uint64(1)
 	b.StartTimer()
 	b.RunParallel(func(pbt *testing.PB) {
 		rdbctx := db.GetLogDBThreadContext()
+		e := pb.Entry{
+			Index:       12843560,
+			Term:        123,
+			Type:        pb.ApplicationEntry,
+			Key:         13563799145,
+			ClientID:    234926831800,
+			SeriesID:    12843560,
+			RespondedTo: 12843550,
+			Cmd:         make([]byte, sz),
+		}
+		cid := atomic.AddUint64(&clusterID, 1)
+		bytes := e.Size() * 128
+		u := pb.Update{
+			ClusterID: cid,
+			NodeID:    1,
+		}
+		iidx := e.Index
+		for i := uint64(0); i < 128; i++ {
+			e.Index = iidx + i
+			u.EntriesToSave = append(u.EntriesToSave, e)
+		}
 		for pbt.Next() {
 			rdbctx.Reset()
 			if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
