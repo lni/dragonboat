@@ -28,6 +28,7 @@ import (
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
@@ -111,9 +112,12 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*StateMachineWrapper).destroy()
-	v1 := ds.Update(nil, 1, 0, 0, []byte("test-data-1"))
-	v2 := ds.Update(nil, 2, 0, 0, []byte("test-data-2"))
-	v3 := ds.Update(nil, 3, 0, 0, []byte("test-data-3"))
+	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
+	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
+	v1 := ds.Update(nil, e1)
+	v2 := ds.Update(nil, e2)
+	v3 := ds.Update(nil, e3)
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -141,7 +145,8 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 		Val: &d,
 	}
 	data, _ := proto.Marshal(&kv)
-	ds.Update(nil, 1, 0, 0, data)
+	e := pb.Entry{Index: 1, Cmd: data}
+	ds.Update(nil, e)
 }
 
 func TestCppSnapshotWorks(t *testing.T) {
@@ -153,9 +158,12 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*StateMachineWrapper).destroy()
-	v1 := ds.Update(nil, 1, 0, 0, []byte("test-data-1"))
-	v2 := ds.Update(nil, 2, 0, 0, []byte("test-data-2"))
-	v3 := ds.Update(nil, 3, 0, 0, []byte("test-data-3"))
+	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
+	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
+	v1 := ds.Update(nil, e1)
+	v2 := ds.Update(nil, e2)
+	v3 := ds.Update(nil, e3)
 	if v2 != v1+1 || v3 != v2+1 {
 		t.Errorf("Unexpected update result")
 	}
