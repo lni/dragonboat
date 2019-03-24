@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -34,9 +35,10 @@ import (
 var (
 	// ErrSnapshotOutOfDate is returned when the snapshot being received is
 	// considered as out of date.
-	ErrSnapshotOutOfDate     = errors.New("snapshot is out of date")
-	gcIntervalTick           = settings.Soft.SnapshotGCTick
-	snapshotChunkTimeoutTick = settings.Soft.SnapshotChunkTimeoutTick
+	ErrSnapshotOutOfDate            = errors.New("snapshot is out of date")
+	LastChunkCount           uint64 = math.MaxUint64
+	gcIntervalTick                  = settings.Soft.SnapshotGCTick
+	snapshotChunkTimeoutTick        = settings.Soft.SnapshotChunkTimeoutTick
 )
 
 func snapshotKey(c pb.SnapshotChunk) string {
@@ -77,6 +79,14 @@ type chunks struct {
 	timeoutTick     uint64
 	gcTick          uint64
 	mu              sync.Mutex
+}
+
+func NewSnapshotChunks(onReceive func(pb.MessageBatch),
+	confirm func(uint64, uint64, uint64),
+	getDeploymentID func() uint64,
+	getSnapshotDirFunc server.GetSnapshotDirFunc) *chunks {
+	return newSnapshotChunks(onReceive,
+		confirm, getDeploymentID, getSnapshotDirFunc)
 }
 
 func newSnapshotChunks(onReceive func(pb.MessageBatch),
@@ -231,7 +241,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 		c.deleteTempChunkDir(chunk)
 		panic(err)
 	}
-	if chunk.ChunkCount == chunk.ChunkId+1 {
+	if isLastChunk(chunk) {
 		plog.Infof("last chunk %s received", key)
 		defer c.resetSnapshot(key)
 		if c.validate {
@@ -370,4 +380,14 @@ func (c *chunks) toMessage(chunk pb.SnapshotChunk,
 		DeploymentId: chunk.DeploymentId,
 		Requests:     []pb.Message{m},
 	}
+}
+
+func isLastChunk(chunk pb.SnapshotChunk) bool {
+	return chunk.ChunkCount == LastChunkCount ||
+		chunk.ChunkCount == chunk.ChunkId+1
+}
+
+func isLastFileChunk(chunk pb.SnapshotChunk) bool {
+	return chunk.FileChunkCount == LastChunkCount ||
+		chunk.FileChunkId+1 == chunk.FileChunkCount
 }

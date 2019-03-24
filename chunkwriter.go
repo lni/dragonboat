@@ -19,7 +19,10 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/internal/rsm"
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/transport"
+	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -57,7 +60,10 @@ func (cw *chunkWriter) Write(data []byte) (int, error) {
 }
 
 func (cw *chunkWriter) Flush() error {
-	return cw.bw.Flush()
+	if err := cw.bw.Flush(); err != nil {
+		return err
+	}
+	return cw.onNewChunk(cw.getTailChunk())
 }
 
 func (cw *chunkWriter) onNewBlock(data []byte, crc []byte) error {
@@ -72,6 +78,11 @@ func (cw *chunkWriter) onNewBlock(data []byte, crc []byte) error {
 	payload = append(payload, data...)
 	payload = append(payload, crc...)
 	chunk.Data = payload
+	chunk.ChunkSize = uint64(len(payload))
+	return cw.onNewChunk(chunk)
+}
+
+func (cw *chunkWriter) onNewChunk(chunk pb.SnapshotChunk) error {
 	sent, stopped := cw.sink.Receive(chunk)
 	if stopped {
 		cw.stopped = true
@@ -115,13 +126,23 @@ func (cw *chunkWriter) getHeader() []byte {
 
 func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
 	return pb.SnapshotChunk{
-		ClusterId:  cw.sink.ClusterID(),
-		NodeId:     cw.sink.ToNodeID(),
-		From:       cw.meta.From,
-		ChunkId:    cw.chunkID,
-		Index:      cw.meta.Index,
-		Term:       cw.meta.Term,
-		Membership: cw.meta.Membership,
+		ClusterId:   cw.sink.ClusterID(),
+		NodeId:      cw.sink.ToNodeID(),
+		From:        cw.meta.From,
+		ChunkId:     cw.chunkID,
+		FileChunkId: cw.chunkID,
+		Index:       cw.meta.Index,
+		Term:        cw.meta.Term,
+		Membership:  cw.meta.Membership,
+		BinVer:      raftio.RPCBinVersion,
+		Filepath:    server.GetSnapshotFilename(cw.meta.Index),
 		// FIXME: might need to set the filepath field
 	}
+}
+
+func (cw *chunkWriter) getTailChunk() pb.SnapshotChunk {
+	tailChunk := cw.getChunk()
+	tailChunk.ChunkCount = transport.LastChunkCount
+	tailChunk.FileChunkCount = transport.LastChunkCount
+	return tailChunk
 }

@@ -52,6 +52,10 @@ func GetSnapshotDirName(index uint64) string {
 	return getSnapshotDirName(index)
 }
 
+func GetSnapshotFilename(index uint64) string {
+	return getSnapshotFilename(index)
+}
+
 func mustBeChild(parent string, child string) error {
 	if v, err := filepath.Rel(parent, child); err != nil {
 		plog.Panicf("%v", err)
