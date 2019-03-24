@@ -30,6 +30,7 @@ var (
 	genTmpDirSuffix    = "generating"
 	recvTmpDirSuffix   = "receiving"
 	snapshotFileSuffix = "gbsnap"
+	shrinkedSuffix     = "shrinked"
 )
 
 // GetSnapshotDirFunc is the function type that returns the snapshot dir
@@ -74,6 +75,10 @@ func getSnapshotDirName(index uint64) string {
 
 func getSnapshotFilename(index uint64) string {
 	return fmt.Sprintf("snapshot-%016X.%s", index, snapshotFileSuffix)
+}
+
+func getShrinkedSnapshotFilename(index uint64) string {
+	return fmt.Sprintf("snapshot-%016X.%s", index, shrinkedSuffix)
 }
 
 func getTempSnapshotDirName(rootDir string,
@@ -224,6 +229,10 @@ func (se *SnapshotEnv) GetFilename() string {
 // GetFilepath returns the snapshot file path.
 func (se *SnapshotEnv) GetFilepath() string {
 	return filepath.Join(se.finalDir, getSnapshotFilename(se.index))
+}
+
+func (se *SnapshotEnv) GetShrinkedFilepath() string {
+	return filepath.Join(se.finalDir, getShrinkedSnapshotFilename(se.index))
 }
 
 // GetTempFilepath returns the temp snapshot file path.

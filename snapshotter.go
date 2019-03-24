@@ -201,6 +201,27 @@ func (s *snapshotter) IsNoSnapshotError(e error) bool {
 	return e == ErrNoSnapshot
 }
 
+func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
+	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
+	if err != nil {
+		return err
+	}
+	for _, ss := range snapshots {
+		if ss.Index <= shrinkTo {
+			env := s.getSnapshotEnv(ss.Index)
+			fp := env.GetFilepath()
+			shrinkedFp := env.GetShrinkedFilepath()
+			if err := rsm.ShrinkSnapshot(fp, shrinkedFp); err != nil {
+				return err
+			}
+			if err := rsm.ReplaceSnapshotFile(shrinkedFp, fp); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *snapshotter) Compaction(clusterID uint64, nodeID uint64,
 	removeUpTo uint64) error {
 	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)

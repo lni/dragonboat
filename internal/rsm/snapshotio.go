@@ -15,6 +15,7 @@
 package rsm
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"hash"
@@ -353,4 +354,92 @@ func (v *SnapshotValidator) Validate() bool {
 		return false
 	}
 	return v.v.Validate()
+}
+
+func IsEmptySMSnapshotFile(fp string) (bool, error) {
+	reader, err := NewSnapshotReader(fp)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	if _, err := reader.GetHeader(); err != nil {
+		return false, err
+	}
+	sz := make([]byte, 8)
+	if _, err := io.ReadFull(reader, sz); err != nil {
+		return false, err
+	}
+	size := binary.LittleEndian.Uint64(sz)
+	br := bufio.NewReader(reader)
+	if skipped, err := br.Discard(int(size)); err != nil || skipped != int(size) {
+		return false, err
+	}
+	oneByte := make([]byte, 1)
+	n, err := io.ReadFull(reader, oneByte)
+	if err == nil || n != 0 {
+		return false, nil
+	} else if err == io.ErrUnexpectedEOF {
+		return true, nil
+	}
+	return false, err
+}
+
+func mustInSameDir(fp string, newFp string) {
+	if filepath.Dir(fp) != filepath.Dir(newFp) {
+		plog.Panicf("not in the same dir, dir 1: %d, dir 2: %s",
+			filepath.Dir(fp), filepath.Dir(newFp))
+	}
+}
+
+func ShrinkSnapshot(fp string, newFp string) error {
+	mustInSameDir(fp, newFp)
+	reader, err := NewSnapshotReader(fp)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	writer, err := NewSnapshotWriter(newFp, CurrentSnapshotVersion)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := writer.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	if _, err := reader.GetHeader(); err != nil {
+		return err
+	}
+	sz := make([]byte, 8)
+	if _, err := io.ReadFull(reader, sz); err != nil {
+		return err
+	}
+	size := binary.LittleEndian.Uint64(sz)
+	cs := make([]byte, size)
+	if _, err := io.ReadFull(reader, cs); err != nil {
+		return err
+	}
+	if _, err := writer.Write(cs); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return writer.SaveHeader(size, 0)
+}
+
+func ReplaceSnapshotFile(newFp string, fp string) error {
+	mustInSameDir(fp, newFp)
+	if err := os.Rename(newFp, fp); err != nil {
+		return err
+	}
+	return fileutil.SyncDir(filepath.Dir(fp))
 }
