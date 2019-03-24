@@ -51,6 +51,9 @@ func CreateFlagFile(dir string, filename string, msg proto.Message) error {
 		if err := f.Close(); err != nil {
 			panic(err)
 		}
+		if err := SyncDir(dir); err != nil {
+			panic(err)
+		}
 	}()
 	data, err := proto.Marshal(msg)
 	if err != nil {
