@@ -294,6 +294,18 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 func (ds *NativeStateMachine) SaveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
 	collection sm.ISnapshotFileCollection) (uint64, error) {
+	if ds.sm.AllDiskStateMachine() {
+		if err := writer.SaveHeader(0, 0); err != nil {
+			return 0, err
+		}
+		return SnapshotHeaderSize, nil
+	}
+	return ds.saveSnapshot(ssctx, writer, session, collection)
+}
+
+func (ds *NativeStateMachine) saveSnapshot(
+	ssctx interface{}, writer *SnapshotWriter, session []byte,
+	collection sm.ISnapshotFileCollection) (uint64, error) {
 	n, err := writer.Write(session)
 	if err != nil {
 		return 0, err

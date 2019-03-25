@@ -56,8 +56,9 @@ func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 	return struct{}{}, nil
 }
 
-func (f *FakeDiskSM) CreateSnapshot(io.Writer, <-chan struct{}) error {
-	return nil
+func (f *FakeDiskSM) CreateSnapshot(interface{}, io.Writer, <-chan struct{}) (uint64, error) {
+	panic("not suppose to be called")
+	return 0, nil
 }
 
 func (f *FakeDiskSM) RecoverFromSnapshot(uint64, io.Reader, <-chan struct{}) error {

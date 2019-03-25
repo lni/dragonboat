@@ -247,7 +247,8 @@ func (s *StateMachine) OpenAllDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
-	plog.Infof("%s opened disk state machine, index %d, err %v", index, err)
+	plog.Infof("%s opened disk state machine, index %d, err %v",
+		s.describe(), index, err)
 	if err != nil {
 		return 0, err
 	}

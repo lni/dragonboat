@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/transport"
@@ -556,11 +557,13 @@ func createConcurrentTestNodeHost(addr string,
 func createFakeDiskTestNodeHost(addr string,
 	datadir string, initialApplied uint64) (*NodeHost, error) {
 	rc := config.Config{
-		ClusterID:    uint64(1),
-		NodeID:       uint64(1),
-		ElectionRTT:  5,
-		HeartbeatRTT: 1,
-		CheckQuorum:  true,
+		ClusterID:          uint64(1),
+		NodeID:             uint64(1),
+		ElectionRTT:        5,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    30,
+		CompactionOverhead: 30,
 	}
 	peers := make(map[uint64]string)
 	peers[1] = addr
@@ -1217,6 +1220,49 @@ func TestAllDiskStateMachineCanBeOpened(t *testing.T) {
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 5)
+}
+
+func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		session := nh.GetNoOPSession(1)
+		logdb := nh.logdb
+		snapshotted := false
+		var ss pb.Snapshot
+		for i := uint64(2); i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err != nil && i > 4 {
+				t.Errorf("SyncPropose iter %d returned err %v", i, err)
+			}
+			snapshots, err := logdb.ListSnapshots(1, 1)
+			if len(snapshots) > 0 {
+				snapshotted = true
+				ss = snapshots[0]
+				break
+			}
+		}
+		if !snapshotted {
+			t.Fatalf("failed to snapshot")
+		}
+		reader, err := rsm.NewSnapshotReader(ss.Filepath)
+		if err != nil {
+			t.Fatalf("failed to read snapshot %v", err)
+		}
+		h, err := reader.GetHeader()
+		if err != nil {
+			t.Errorf("failed to get header")
+		}
+		if h.DataStoreSize != 0 || h.SessionSize != 0 {
+			t.Errorf("not a dummy snapshot file")
+		}
+		if h.Version != uint64(rsm.CurrentSnapshotVersion) {
+			t.Errorf("unexpected snapshot version, got %d, want %d",
+				h.Version, rsm.CurrentSnapshotVersion)
+		}
+		reader.ValidateHeader(h)
+	}
+	singleFakeDiskNodeHostTest(t, tf, 3)
 }
 
 func TestConcurrentStateMachineLookup(t *testing.T) {

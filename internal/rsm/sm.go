@@ -30,7 +30,6 @@ type IStateMachine interface {
 	SaveSnapshot(interface{},
 		io.Writer,
 		sm.ISnapshotFileCollection, <-chan struct{}) (uint64, error)
-	CreateSnapshot(io.Writer, <-chan struct{}) error
 	RecoverFromSnapshot(uint64,
 		io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
@@ -82,11 +81,6 @@ func (sm *RegularStateMachine) SaveSnapshot(ctx interface{},
 		panic("ctx is not nil")
 	}
 	return sm.sm.SaveSnapshot(w, fc, stopc)
-}
-
-func (sm *RegularStateMachine) CreateSnapshot(w io.Writer,
-	stopc <-chan struct{}) error {
-	panic("CreateSnapshot() called on RegularStateMachine")
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
@@ -151,11 +145,6 @@ func (sm *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
 	stopc <-chan struct{}) (uint64, error) {
 	return sm.sm.SaveSnapshot(ctx, w, fc, stopc)
-}
-
-func (sm *ConcurrentStateMachine) CreateSnapshot(w io.Writer,
-	stopc <-chan struct{}) error {
-	panic("CreateSnapshot() called on RegularStateMachine")
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
@@ -240,12 +229,7 @@ func (sm *AllDiskStateMachine) PrepareSnapshot() (interface{}, error) {
 func (sm *AllDiskStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
 	stopc <-chan struct{}) (uint64, error) {
-	panic("SaveSnapshot() called on AllDiskStateMachine")
-}
-
-func (sm *AllDiskStateMachine) CreateSnapshot(w io.Writer,
-	stopc <-chan struct{}) error {
-	return sm.sm.CreateSnapshot(w, stopc)
+	return sm.sm.CreateSnapshot(ctx, w, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
