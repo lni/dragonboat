@@ -526,6 +526,15 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 	return rc.snapshotter.removeFlagFile(index)
 }
 
+func (rc *node) shrinkSnapshots(index uint64) {
+	if rc.allDiskStateMachine() {
+		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
+			plog.Panicf("%d failed to shrink snapshot to %d, %v",
+				rc.describe(), index, err)
+		}
+	}
+}
+
 func (rc *node) compactLog() error {
 	compactTo := rc.ss.getCompactLogTo()
 	if compactTo == 0 {

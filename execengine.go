@@ -288,6 +288,9 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 		// by commit worker
 		return
 	}
+	if index > 0 {
+		node.shrinkSnapshots(index)
+	}
 	if !node.initialized() {
 		node.initialSnapshotDone(index)
 	} else {
