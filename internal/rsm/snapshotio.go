@@ -356,7 +356,7 @@ func (v *SnapshotValidator) Validate() bool {
 	return v.v.Validate()
 }
 
-func IsEmptySMSnapshotFile(fp string) (bool, error) {
+func IsShrinkedSnapshotFile(fp string) (bool, error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
 		return false, err
@@ -374,6 +374,9 @@ func IsEmptySMSnapshotFile(fp string) (bool, error) {
 		return false, err
 	}
 	size := binary.LittleEndian.Uint64(sz)
+	if size != 0 {
+		plog.Panicf("trying to shrink a snapshot with client sessions")
+	}
 	br := bufio.NewReader(reader)
 	if skipped, err := br.Discard(int(size)); err != nil || skipped != int(size) {
 		return false, err
@@ -382,7 +385,7 @@ func IsEmptySMSnapshotFile(fp string) (bool, error) {
 	n, err := io.ReadFull(reader, oneByte)
 	if err == nil || n != 0 {
 		return false, nil
-	} else if err == io.ErrUnexpectedEOF {
+	} else if err == io.ErrUnexpectedEOF || err == io.EOF {
 		return true, nil
 	}
 	return false, err
@@ -390,7 +393,7 @@ func IsEmptySMSnapshotFile(fp string) (bool, error) {
 
 func mustInSameDir(fp string, newFp string) {
 	if filepath.Dir(fp) != filepath.Dir(newFp) {
-		plog.Panicf("not in the same dir, dir 1: %d, dir 2: %s",
+		plog.Panicf("not in the same dir, dir 1: %s, dir 2: %s",
 			filepath.Dir(fp), filepath.Dir(newFp))
 	}
 }
@@ -419,21 +422,14 @@ func ShrinkSnapshot(fp string, newFp string) error {
 		return err
 	}
 	sz := make([]byte, 8)
-	if _, err := io.ReadFull(reader, sz); err != nil {
-		return err
-	}
-	size := binary.LittleEndian.Uint64(sz)
-	cs := make([]byte, size)
-	if _, err := io.ReadFull(reader, cs); err != nil {
-		return err
-	}
-	if _, err := writer.Write(cs); err != nil {
+	binary.LittleEndian.PutUint64(sz, uint64(0))
+	if _, err := writer.Write(sz); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	return writer.SaveHeader(size, 0)
+	return writer.SaveHeader(0, 0)
 }
 
 func ReplaceSnapshotFile(newFp string, fp string) error {

@@ -18,6 +18,7 @@
 package dragonboat
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/internal/logdb"
+	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
@@ -66,6 +68,7 @@ func runSnapshotterTest(t *testing.T,
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
+	deleteTestRDB()
 	ldb := getNewTestDB(dir, lldir)
 	s := getTestSnapshotter(ldb)
 	defer deleteTestRDB()
@@ -395,6 +398,81 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			if _, err := os.Stat(snapDir); !os.IsNotExist(err) {
 				t.Errorf("snapshot dir didn't get removed")
 			}
+		}
+	}
+	runSnapshotterTest(t, fn)
+}
+
+func TestShrinkSnapshots(t *testing.T) {
+	fn := func(t *testing.T, ldb raftio.ILogDB, snapshotter *snapshotter) {
+		for i := uint64(1); i <= 3; i++ {
+			index := i * 10
+			env := snapshotter.getSnapshotEnv(index)
+			fp := env.GetFilepath()
+			s := pb.Snapshot{
+				Index:    index,
+				Term:     2,
+				FileSize: 1234,
+				Filepath: fp,
+			}
+			if err := env.CreateTempDir(); err != nil {
+				t.Errorf("failed to create snapshot dir")
+			}
+			if err := snapshotter.Commit(s); err != nil {
+				t.Errorf("failed to save snapshot record")
+			}
+			fp = snapshotter.GetFilePath(s.Index)
+			writer, err := rsm.NewSnapshotWriter(fp, rsm.V2SnapshotVersion)
+			if err != nil {
+				t.Fatalf("failed to create the snapshot %v", err)
+			}
+			sz := make([]byte, 8)
+			binary.LittleEndian.PutUint64(sz, 0)
+			if _, err := writer.Write(sz); err != nil {
+				t.Fatalf("failed to write %v", err)
+			}
+			for j := 0; j < 10; j++ {
+				data := make([]byte, 1024*1024)
+				if _, err := writer.Write(data); err != nil {
+					t.Fatalf("failed to write %v", err)
+				}
+			}
+			if err := writer.Flush(); err != nil {
+				t.Fatalf("flush failed %v", err)
+			}
+			if err := writer.SaveHeader(0, 1024*1024*10); err != nil {
+				t.Fatalf("failed to save header %v", err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatalf("close failed %v", err)
+			}
+		}
+		if err := snapshotter.ShrinkSnapshots(20); err != nil {
+			t.Fatalf("shrink snapshots failed %v", err)
+		}
+		env1 := snapshotter.getSnapshotEnv(10)
+		env2 := snapshotter.getSnapshotEnv(20)
+		env3 := snapshotter.getSnapshotEnv(30)
+		cf := func(p string, esz uint64) {
+			fi, err := os.Stat(p)
+			if err != nil {
+				t.Fatalf("failed to get file st %v", err)
+			}
+			if uint64(fi.Size()) != esz {
+				// 1024 header, 8 size client session size, 4 bytes crc, 16 bytes tails
+				// 1052 bytes in total
+				t.Fatalf("unexpected size %d, want %d", fi.Size(), esz)
+			}
+		}
+		cf(env1.GetFilepath(), 1052)
+		cf(env2.GetFilepath(), 1052)
+		cf(env3.GetFilepath(), 10486832)
+		snapshots, err := ldb.ListSnapshots(1, 1)
+		if err != nil {
+			t.Errorf("failed to list snapshot")
+		}
+		if len(snapshots) != 3 {
+			t.Errorf("snapshot rec missing")
 		}
 	}
 	runSnapshotterTest(t, fn)

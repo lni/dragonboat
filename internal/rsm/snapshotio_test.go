@@ -16,6 +16,7 @@ package rsm
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"math/rand"
 	"os"
@@ -308,4 +309,136 @@ func testMultiBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
 func TestMultiBlockSnapshotValidation(t *testing.T) {
 	testMultiBlockSnapshotValidation(t, V1SnapshotVersion)
 	testMultiBlockSnapshotValidation(t, V2SnapshotVersion)
+}
+
+func TestMustInSameDir(t *testing.T) {
+	tests := []struct {
+		path1   string
+		path2   string
+		sameDir bool
+	}{
+		{"/d1/d2/f1.data", "/d1/d2/f2.data", true},
+		{"/d1/d2/f1.data", "/d1/d3/f2.data", false},
+		{"/d1/d2/f1.data", "/d1/d2/d3/f2.data", false},
+		{"/d1/d2/f1.data", "f2.data", false},
+		{"/d1/d2/f1.data", "/d2/f2.data", false},
+		{"/d1/d2/f1.data", "d2/f2.data", false},
+	}
+	for idx, tt := range tests {
+		func() {
+			defer func() {
+				r := recover()
+				if !tt.sameDir && r == nil {
+					t.Errorf("%d, failed to detect not same dir", idx)
+				}
+			}()
+			mustInSameDir(tt.path1, tt.path2)
+		}()
+	}
+}
+
+func TestShrinkSnapshot(t *testing.T) {
+	snapshotFilename := "test_snapshot_safe_to_delete.data"
+	shrinkedFilename := "test_snapshot_safe_to_delete.shrinked"
+	writer, err := NewSnapshotWriter(snapshotFilename, V2SnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to get writer %v", err)
+	}
+	defer func() {
+		os.RemoveAll(snapshotFilename)
+	}()
+	sz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(sz, uint64(0))
+	if _, err := writer.Write(sz); err != nil {
+		t.Fatalf("failed to write session size %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		data := make([]byte, 1024*1024+i*256)
+		rand.Read(data)
+		if _, err := writer.Write(data); err != nil {
+			t.Fatalf("write failed %v", err)
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("failed to flush %v", err)
+	}
+	if err := writer.SaveHeader(0, 199); err != nil {
+		t.Fatalf("failed to write the header %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close failed %v", err)
+	}
+	shrinked, err := IsShrinkedSnapshotFile(snapshotFilename)
+	if err != nil {
+		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+	}
+	if shrinked {
+		t.Errorf("incorrectly reported as shrinked")
+	}
+	if err := ShrinkSnapshot(snapshotFilename, shrinkedFilename); err != nil {
+		t.Errorf("failed to shrink snapshot %v", err)
+	}
+	defer func() {
+		os.RemoveAll(shrinkedFilename)
+	}()
+	shrinked, err = IsShrinkedSnapshotFile(snapshotFilename)
+	if err != nil {
+		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+	}
+	if shrinked {
+		t.Errorf("incorrectly reported as shrinked")
+	}
+	shrinked, err = IsShrinkedSnapshotFile(shrinkedFilename)
+	if err != nil {
+		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+	}
+	if !shrinked {
+		t.Errorf("not shrinked")
+	}
+	fi, err := os.Stat(shrinkedFilename)
+	if err != nil {
+		t.Fatalf("failed to get file stat")
+	}
+	if fi.Size() > 1024*2 {
+		t.Errorf("not shrinked according to file size")
+	}
+}
+
+func TestReplaceSnapshotFile(t *testing.T) {
+	f1name := "test_snapshot_safe_to_delete.data"
+	f2name := "test_snapshot_safe_to_delete.data2"
+	createFile := func(fn string, sz uint64) {
+		f1, err := os.Create(fn)
+		if err != nil {
+			t.Fatalf("failed to ")
+		}
+		data := make([]byte, sz)
+		rand.Read(data)
+		if _, err := f1.Write(data); err != nil {
+			t.Fatalf("failed to write data %v", err)
+		}
+		if err := f1.Close(); err != nil {
+			t.Fatalf("failed to close %v", err)
+		}
+	}
+	createFile(f1name, 1024)
+	createFile(f2name, 2048)
+	defer func() {
+		os.RemoveAll(f1name)
+		os.RemoveAll(f2name)
+	}()
+	if err := ReplaceSnapshotFile(f2name, f1name); err != nil {
+		t.Fatalf("failed to replace file %v", err)
+	}
+	fi, err := os.Stat(f2name)
+	if err == nil {
+		t.Errorf("f2 still exist")
+	}
+	fi, err = os.Stat(f1name)
+	if err != nil {
+		t.Errorf("failed to get file info %v", err)
+	}
+	if fi.Size() != 2048 {
+		t.Errorf("file not replaced")
+	}
 }
