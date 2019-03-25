@@ -30,7 +30,7 @@ type IAllDiskStateMachine interface {
 	Lookup([]byte) ([]byte, error)
 	PrepareSnapshot() (interface{}, error)
 	CreateSnapshot(io.Writer, <-chan struct{}) error
-	RecoverFromSnapshot(io.Reader, <-chan struct{}) error
+	RecoverFromSnapshot(uint64, io.Reader, <-chan struct{}) error
 	Close()
 	GetHash() uint64
 }

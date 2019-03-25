@@ -97,7 +97,7 @@ type ISnapshotter interface {
 	GetFilePath(uint64) string
 	StreamSnapshot(IStreamable, *SnapshotMeta, pb.IChunkSink) error
 	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
-	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
+	Load(uint64, ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
 }
 
@@ -150,23 +150,22 @@ func (s *StateMachine) CommitChanBusy() bool {
 
 // RecoverFromSnapshot applies the snapshot.
 func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
-	snapshot, err := s.getSnapshot(rec)
+	ss, err := s.getSnapshot(rec)
 	if err != nil {
 		return 0, err
 	}
-	if pb.IsEmptySnapshot(snapshot) {
+	if pb.IsEmptySnapshot(ss) {
 		return 0, nil
 	}
-	snapshot.Validate()
-	if recovered, idx, err := s.recoverSnapshot(snapshot,
-		rec.InitialSnapshot); !recovered {
+	ss.Validate()
+	if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
 		return idx, err
 	}
-	s.node.RestoreRemotes(snapshot)
-	s.setBatchedLastApplied(snapshot.Index)
+	s.node.RestoreRemotes(ss)
+	s.setBatchedLastApplied(ss.Index)
 	plog.Infof("%s snapshot %d restored, members %v",
-		s.describe(), snapshot.Index, snapshot.Membership.Addresses)
-	return snapshot.Index, nil
+		s.describe(), ss.Index, ss.Membership.Addresses)
+	return ss.Index, nil
 }
 
 func (s *StateMachine) getSnapshot(rec Commit) (pb.Snapshot, error) {
@@ -190,24 +189,33 @@ func (s *StateMachine) getSnapshot(rec Commit) (pb.Snapshot, error) {
 	return snapshot, nil
 }
 
+func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
+	if !s.AllDiskStateMachine() {
+		return true
+	}
+	if !init {
+		return true
+	}
+	return s.AllDiskStateMachine() && init && ss.Index > s.diskSMIndex
+}
+
 func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	initial bool) (bool, uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.index >= ss.Index {
+	index := ss.Index
+	if s.index >= index {
 		return false, s.index, nil
 	}
 	if s.aborted {
 		return false, 0, sm.ErrSnapshotStopped
 	}
-	if !s.AllDiskStateMachine() {
-		plog.Infof("%s restarting at term %d, index %d, %s, initial snapshot %t",
-			s.describe(), ss.Term, ss.Index, snapshotInfo(ss), initial)
-		snapshotFiles := getSnapshotFiles(ss)
-		fn := s.snapshotter.GetFilePath(ss.Index)
-		if err := s.snapshotter.Load(s.sessions, s.sm, fn, snapshotFiles); err != nil {
-			plog.Infof("%s called RecoverFromSnapshot %d, returned %v",
-				s.describe(), ss.Index, err)
+	if s.recoverSMRequired(ss, initial) {
+		plog.Infof("%s recover snapshot, term %d, index %d, %s, init %t",
+			s.describe(), ss.Term, index, snapshotInfo(ss), initial)
+		fs := getSnapshotFiles(ss)
+		fn := s.snapshotter.GetFilePath(index)
+		if err := s.snapshotter.Load(index, s.sessions, s.sm, fn, fs); err != nil {
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
@@ -216,11 +224,11 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 			return false, 0, ErrRestoreSnapshot
 		}
 	} else {
-		plog.Infof("all disk SM %s, sessions/SM not restored in this step",
-			s.describe())
+		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
+			s.describe(), index, s.diskSMIndex)
 	}
 	// set the confState and the last applied value
-	s.index = ss.Index
+	s.index = index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
 	return true, 0, nil
@@ -235,15 +243,16 @@ func (s *StateMachine) readyToStreamSnapshot() bool {
 	return s.GetLastApplied() >= s.diskSMIndex
 }
 
-func (s *StateMachine) OpenAllDiskStateMachine() error {
+func (s *StateMachine) OpenAllDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
+	plog.Infof("%s opened disk state machine, index %d, err %v", index, err)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	s.diskSMIndex = index
-	return nil
+	return index, nil
 }
 
 // GetLastApplied returns the last applied value.

@@ -468,8 +468,7 @@ func (rc *node) saveSnapshot() {
 
 func (rc *node) streamSnapshot(sink pb.IChunkSink) {
 	if err := rc.sm.StreamSnapshot(sink); err != nil {
-		// FIXME: allow network issues
-		if err != sm.ErrSnapshotStopped {
+		if err != sm.ErrSnapshotStopped && err != sm.ErrSnapshotStreaming {
 			panic(err)
 		}
 	}
@@ -478,19 +477,22 @@ func (rc *node) streamSnapshot(sink pb.IChunkSink) {
 func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	rc.snapshotLock.Lock()
 	defer rc.snapshotLock.Unlock()
-	index, err := rc.sm.RecoverFromSnapshot(rec)
+	var index uint64
+	var err error
+	if rec.InitialSnapshot && rc.allDiskStateMachine() {
+		plog.Infof("all disk SM %s beng initialized", rc.describe())
+		index, err = rc.sm.OpenAllDiskStateMachine()
+		if err != nil {
+			panic(err)
+		}
+	}
+	index, err = rc.sm.RecoverFromSnapshot(rec)
 	if err == sm.ErrSnapshotStopped {
 		plog.Infof("%s aborted its RecoverFromSnapshot", rc.describe())
 		return 0, true
 	}
 	if err != nil {
 		panic(err)
-	}
-	if rec.InitialSnapshot && rc.allDiskStateMachine() {
-		plog.Infof("all disk SM %s beng initialized", rc.describe())
-		if err := rc.sm.OpenAllDiskStateMachine(); err != nil {
-			panic(err)
-		}
 	}
 	return index, false
 }

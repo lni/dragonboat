@@ -60,7 +60,7 @@ func (f *FakeDiskSM) CreateSnapshot(io.Writer, <-chan struct{}) error {
 	return nil
 }
 
-func (f *FakeDiskSM) RecoverFromSnapshot(io.Reader, <-chan struct{}) error {
+func (f *FakeDiskSM) RecoverFromSnapshot(uint64, io.Reader, <-chan struct{}) error {
 	return nil
 }
 

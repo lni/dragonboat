@@ -31,8 +31,8 @@ type IStateMachine interface {
 		io.Writer,
 		sm.ISnapshotFileCollection, <-chan struct{}) (uint64, error)
 	CreateSnapshot(io.Writer, <-chan struct{}) error
-	RecoverFromSnapshot(io.Reader,
-		[]sm.SnapshotFile, <-chan struct{}) error
+	RecoverFromSnapshot(uint64,
+		io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
 	GetHash() uint64
 	ConcurrentSnapshot() bool
@@ -90,8 +90,8 @@ func (sm *RegularStateMachine) CreateSnapshot(w io.Writer,
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *RegularStateMachine) RecoverFromSnapshot(r io.Reader,
-	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+func (sm *RegularStateMachine) RecoverFromSnapshot(index uint64,
+	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	return sm.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
@@ -159,8 +159,8 @@ func (sm *ConcurrentStateMachine) CreateSnapshot(w io.Writer,
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *ConcurrentStateMachine) RecoverFromSnapshot(r io.Reader,
-	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+func (sm *ConcurrentStateMachine) RecoverFromSnapshot(index uint64,
+	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	return sm.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
@@ -242,9 +242,9 @@ func (sm *AllDiskStateMachine) CreateSnapshot(w io.Writer,
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *AllDiskStateMachine) RecoverFromSnapshot(r io.Reader,
-	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return sm.sm.RecoverFromSnapshot(r, stopc)
+func (sm *AllDiskStateMachine) RecoverFromSnapshot(index uint64,
+	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+	return sm.sm.RecoverFromSnapshot(index, r, stopc)
 }
 
 // Close closes the state machine.

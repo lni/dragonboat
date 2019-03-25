@@ -150,7 +150,7 @@ type ISavable interface {
 }
 
 type ILoadableSM interface {
-	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
+	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 }
 
 type ILoadableSessions interface {
@@ -167,7 +167,7 @@ type IManagedStateMachine interface {
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
-	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
+	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From)
 	Loaded(From)
@@ -324,7 +324,8 @@ func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *NativeStateMachine) RecoverFromSnapshot(reader *SnapshotReader,
+func (ds *NativeStateMachine) RecoverFromSnapshot(index uint64,
+	reader *SnapshotReader,
 	files []sm.SnapshotFile) error {
-	return ds.sm.RecoverFromSnapshot(reader, files, ds.done)
+	return ds.sm.RecoverFromSnapshot(index, reader, files, ds.done)
 }

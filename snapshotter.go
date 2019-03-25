@@ -114,9 +114,10 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	return ss, env, nil
 }
 
-func (s *snapshotter) Load(loadableSessions rsm.ILoadableSessions,
+func (s *snapshotter) Load(index uint64,
+	loadableSessions rsm.ILoadableSessions,
 	loadableSM rsm.ILoadableSM,
-	fp string, snapshotFiles []sm.SnapshotFile) error {
+	fp string, fs []sm.SnapshotFile) error {
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
 		return err
@@ -132,7 +133,7 @@ func (s *snapshotter) Load(loadableSessions rsm.ILoadableSessions,
 	if err := loadableSessions.LoadSessions(reader); err != nil {
 		return err
 	}
-	if err := loadableSM.RecoverFromSnapshot(reader, snapshotFiles); err != nil {
+	if err := loadableSM.RecoverFromSnapshot(index, reader, fs); err != nil {
 		return err
 	}
 	reader.ValidatePayload(header)
