@@ -618,6 +618,63 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 	tf(t, nh, initialApplied)
 }
 
+func twoFakeDiskNodeHostTest(t *testing.T,
+	tf func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost)) {
+	defer leaktest.AfterTest(t)()
+	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
+	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	nh1, nh2, err := createFakeDiskTwoTestNodeHosts(nodeHostTestAddr1,
+		nodeHostTestAddr2, nh1dir, nh2dir)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		nh1.Stop()
+		nh2.Stop()
+	}()
+	tf(t, nh1, nh2)
+}
+
+func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
+	datadir1 string, datadir2 string) (*NodeHost, *NodeHost, error) {
+	rc := config.Config{
+		ClusterID:          1,
+		NodeID:             1,
+		ElectionRTT:        3,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    5,
+		CompactionOverhead: 2,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = addr1
+	nhc1 := config.NodeHostConfig{
+		WALDir:         datadir1,
+		NodeHostDir:    datadir1,
+		RTTMillisecond: 10,
+		RaftAddress:    addr1,
+	}
+	nhc2 := config.NodeHostConfig{
+		WALDir:         datadir2,
+		NodeHostDir:    datadir2,
+		RTTMillisecond: 10,
+		RaftAddress:    addr2,
+	}
+	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
+	nh1 := NewNodeHost(nhc1)
+	nh2 := NewNodeHost(nhc2)
+	newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+		return tests.NewFakeDiskSM(3)
+	}
+	if err := nh1.StartAllDiskCluster(peers, false, newSM, rc); err != nil {
+		return nil, nil, err
+	}
+	return nh1, nh2, nil
+}
+
 func createRateLimitedTestNodeHost(addr string,
 	datadir string) (*NodeHost, error) {
 	// config for raft
@@ -1263,6 +1320,75 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		reader.ValidateHeader(h)
 	}
 	singleFakeDiskNodeHostTest(t, tf, 3)
+}
+
+func TestAllDiskSMCanStreamSnapshot(t *testing.T) {
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		logdb := nh1.logdb
+		snapshotted := false
+		session := nh1.GetNoOPSession(1)
+		for i := uint64(2); i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			_, err := nh1.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err != nil && i > 4 {
+				t.Errorf("SyncPropose iter %d returned err %v", i, err)
+			}
+			snapshots, err := logdb.ListSnapshots(1, 1)
+			if len(snapshots) >= 3 {
+				snapshotted = true
+				break
+			}
+		}
+		if !snapshotted {
+			t.Fatalf("failed to take 3 snapshots")
+		}
+		rs, err := nh1.RequestAddNode(1, 2, nodeHostTestAddr2, 0, time.Second)
+		if err != nil {
+			t.Fatalf("failed to add node %v", err)
+		}
+		select {
+		case s := <-rs.CompletedC:
+			if !s.Completed() {
+				t.Fatalf("failed to complete the add node request")
+			}
+		}
+		rc := config.Config{
+			ClusterID:          1,
+			NodeID:             2,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+			return tests.NewFakeDiskSM(3)
+		}
+		peers := make(map[uint64]string)
+		if err := nh2.StartAllDiskCluster(peers, true, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		snapshotted = false
+		logdb = nh2.logdb
+		for i := uint64(2); i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			_, err := nh2.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err != nil {
+				continue
+			}
+			snapshots, err := logdb.ListSnapshots(1, 2)
+			if len(snapshots) >= 3 {
+				snapshotted = true
+				break
+			}
+		}
+		if !snapshotted {
+			t.Fatalf("failed to take 3 snapshots")
+		}
+	}
+	twoFakeDiskNodeHostTest(t, tf)
 }
 
 func TestConcurrentStateMachineLookup(t *testing.T) {

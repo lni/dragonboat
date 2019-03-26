@@ -16,6 +16,7 @@ package tests
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	sm "github.com/lni/dragonboat/statemachine"
@@ -60,6 +61,7 @@ func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) (uint64, error) {
 	pit := ctx.(*FakeDiskSM)
+	fmt.Printf("saving initial %d, count %d\n", pit.initialApplied, pit.count)
 	v := make([]byte, 8)
 	binary.LittleEndian.PutUint64(v, pit.initialApplied)
 	if _, err := w.Write(v); err != nil {
@@ -83,6 +85,7 @@ func (f *FakeDiskSM) RecoverFromSnapshot(applied uint64,
 		return err
 	}
 	f.count = binary.LittleEndian.Uint64(v)
+	fmt.Printf("loading initial %d, count %d\n", f.initialApplied, f.count)
 	return nil
 }
 

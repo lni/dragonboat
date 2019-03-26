@@ -444,8 +444,10 @@ func (s *StateMachine) checkSnapshotStatus() error {
 	if s.index < s.snapshotIndex {
 		panic("s.index < s.snapshotIndex")
 	}
-	if s.index > 0 && s.index == s.snapshotIndex {
-		return raft.ErrSnapshotOutOfDate
+	if !s.AllDiskStateMachine() {
+		if s.index > 0 && s.index == s.snapshotIndex {
+			return raft.ErrSnapshotOutOfDate
+		}
 	}
 	return nil
 }

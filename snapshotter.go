@@ -68,6 +68,13 @@ func newSnapshotter(clusterID uint64,
 func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
 	writer := newChunkWriter(sink, meta)
+	session := meta.Session.Bytes()
+	if len(session) != 16 {
+		plog.Panicf("unexpected client session data length %d", len(session))
+	}
+	if _, err := writer.Write(session); err != nil {
+		return err
+	}
 	if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
 		return err
 	}
