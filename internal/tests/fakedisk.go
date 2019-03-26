@@ -53,15 +53,36 @@ func (f *FakeDiskSM) Lookup(query []byte) ([]byte, error) {
 }
 
 func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
-	return struct{}{}, nil
+	pit := &FakeDiskSM{initialApplied: f.initialApplied, count: f.count}
+	return pit, nil
 }
 
-func (f *FakeDiskSM) CreateSnapshot(interface{}, io.Writer, <-chan struct{}) (uint64, error) {
-	panic("not suppose to be called")
-	return 0, nil
+func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
+	w io.Writer, stopc <-chan struct{}) (uint64, error) {
+	pit := ctx.(*FakeDiskSM)
+	v := make([]byte, 8)
+	binary.LittleEndian.PutUint64(v, pit.initialApplied)
+	if _, err := w.Write(v); err != nil {
+		return 0, err
+	}
+	binary.LittleEndian.PutUint64(v, pit.count)
+	if _, err := w.Write(v); err != nil {
+		return 0, err
+	}
+	return 16, nil
 }
 
-func (f *FakeDiskSM) RecoverFromSnapshot(uint64, io.Reader, <-chan struct{}) error {
+func (f *FakeDiskSM) RecoverFromSnapshot(applied uint64,
+	r io.Reader, stopc <-chan struct{}) error {
+	v := make([]byte, 8)
+	if _, err := io.ReadFull(r, v); err != nil {
+		return err
+	}
+	f.initialApplied = binary.LittleEndian.Uint64(v)
+	if _, err := io.ReadFull(r, v); err != nil {
+		return err
+	}
+	f.count = binary.LittleEndian.Uint64(v)
 	return nil
 }
 
