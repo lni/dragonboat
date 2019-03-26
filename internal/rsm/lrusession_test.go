@@ -241,3 +241,19 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 		}
 	}
 }
+
+func TestGetEmptyLRUSession(t *testing.T) {
+	s := newLRUSession(LRUMaxSessionCount)
+	buf := bytes.NewBuffer(make([]byte, 0))
+	n, err := s.save(buf)
+	if n != EmptyClientSessionLength {
+		t.Fatalf("unexpected length %d", n)
+	}
+	if err != nil {
+		t.Fatalf("failed to save %v", err)
+	}
+	data := buf.Bytes()
+	if !bytes.Equal(data, GetEmptyLRUSession()) {
+		t.Errorf("unexpected data")
+	}
+}
