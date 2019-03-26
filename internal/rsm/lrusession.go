@@ -24,6 +24,21 @@ import (
 	"github.com/lni/dragonboat/internal/utils/cache"
 )
 
+const (
+	EmptyClientSessionLength uint64 = 16
+)
+
+func GetEmptyLRUSession() []byte {
+	v := make([]byte, 0)
+	sz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(sz, LRUMaxSessionCount)
+	total := make([]byte, 8)
+	binary.LittleEndian.PutUint64(total, 0)
+	v = append(v, sz...)
+	v = append(v, total...)
+	return v
+}
+
 // lrusession is a session manager that keeps up to size number of client
 // sessions. LRU is the policy for evicting old ones.
 type lrusession struct {

@@ -17,6 +17,7 @@ package dragonboat
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"math/rand"
 	"os"
 	"path"
@@ -60,7 +61,10 @@ func getTestSnapshotMeta() *rsm.SnapshotMeta {
 
 func TestChunkWriterCanBeWritten(t *testing.T) {
 	meta := getTestSnapshotMeta()
-	cw := newChunkWriter(&testSink{}, meta)
+	cw, err := newChunkWriter(&testSink{}, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
 		if _, err := cw.Write(data); err != nil {
@@ -70,8 +74,8 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 	if err := cw.Flush(); err != nil {
 		t.Fatalf("failed to flush %v", err)
 	}
-	if len(cw.sink.(*testSink).chunks) != 12 {
-		t.Errorf("chunks count %d, want 12", len(cw.sink.(*testSink).chunks))
+	if len(cw.sink.(*testSink).chunks) != 13 {
+		t.Errorf("chunks count %d, want 13", len(cw.sink.(*testSink).chunks))
 	}
 	for idx, chunk := range cw.sink.(*testSink).chunks {
 		if idx == 0 {
@@ -81,7 +85,7 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 			if err := header.Unmarshal(headerData); err != nil {
 				t.Fatalf("failed to unmarshal %v", err)
 			}
-		} else if idx == 11 {
+		} else if idx == 12 {
 			if chunk.ChunkCount != transport.LastChunkCount {
 				t.Errorf("last chunk not marked")
 			}
@@ -99,7 +103,10 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 func TestChunkWriterCanFailWrite(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw := newChunkWriter(sink, meta)
+	cw, err := newChunkWriter(sink, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
 		if _, err := cw.Write(data); err != nil {
@@ -108,7 +115,7 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 	}
 	sink.sendFailed = true
 	data := make([]byte, SnapshotChunkSize)
-	_, err := cw.Write(data)
+	_, err = cw.Write(data)
 	if err == nil {
 		t.Fatalf("writer didn't fail")
 	}
@@ -120,7 +127,10 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 func TestChunkWriterCanBeStopped(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw := newChunkWriter(sink, meta)
+	cw, err := newChunkWriter(sink, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
 		if _, err := cw.Write(data); err != nil {
@@ -129,7 +139,7 @@ func TestChunkWriterCanBeStopped(t *testing.T) {
 	}
 	sink.stopped = true
 	data := make([]byte, SnapshotChunkSize)
-	_, err := cw.Write(data)
+	_, err = cw.Write(data)
 	if err == nil {
 		t.Fatalf("writer didn't fail")
 	}
@@ -191,9 +201,13 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &testSink2{receiver: chunks}
 	meta := getTestSnapshotMeta()
-	cw := newChunkWriter(sink, meta)
+	cw, err := newChunkWriter(sink, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
 	defer os.RemoveAll(testSnapshotDir)
 	payload := make([]byte, 0)
+	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
 		rand.Read(data)
@@ -217,17 +231,17 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get a snapshot reader %v", err)
 	}
-	_, err = reader.GetHeader()
-	if err != nil {
+	if _, err = reader.GetHeader(); err != nil {
 		t.Fatalf("failed to get header %v", err)
 	}
 	got := make([]byte, 0)
 	buf := make([]byte, 1024*256)
 	for {
-		n, _ := reader.Read(buf)
+		n, err := reader.Read(buf)
 		if n > 0 {
-			got = append(got, buf...)
-		} else {
+			got = append(got, buf[:n]...)
+		}
+		if err == io.EOF {
 			break
 		}
 	}

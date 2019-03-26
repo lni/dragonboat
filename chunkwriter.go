@@ -40,13 +40,17 @@ type chunkWriter struct {
 	meta    *rsm.SnapshotMeta
 }
 
-func newChunkWriter(sink pb.IChunkSink, meta *rsm.SnapshotMeta) *chunkWriter {
+func newChunkWriter(sink pb.IChunkSink,
+	meta *rsm.SnapshotMeta) (*chunkWriter, error) {
 	cw := &chunkWriter{
 		sink: sink,
 		meta: meta,
 	}
 	cw.bw = rsm.NewBlockWriter(SnapshotChunkSize, cw.onNewBlock)
-	return cw
+	if _, err := cw.Write(rsm.GetEmptyLRUSession()); err != nil {
+		return nil, err
+	}
+	return cw, nil
 }
 
 func (cw *chunkWriter) Write(data []byte) (int, error) {

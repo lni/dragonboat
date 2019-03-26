@@ -372,15 +372,10 @@ func IsShrinkedSnapshotFile(fp string) (bool, error) {
 	if _, err := io.ReadFull(reader, sz); err != nil {
 		return false, err
 	}
-	size := binary.LittleEndian.Uint64(sz)
-	if size != 0 {
-		return false, nil
-	}
 	if _, err := io.ReadFull(reader, sz); err != nil {
 		return false, err
 	}
-	size = binary.LittleEndian.Uint64(sz)
-	if size != 0 {
+	if size := binary.LittleEndian.Uint64(sz); size != 0 {
 		return false, nil
 	}
 	oneByte := make([]byte, 1)
@@ -423,13 +418,7 @@ func ShrinkSnapshot(fp string, newFp string) error {
 	if _, err := reader.GetHeader(); err != nil {
 		return err
 	}
-	// write two uint64(0) as the client session data
-	sz := make([]byte, 8)
-	binary.LittleEndian.PutUint64(sz, uint64(0))
-	if _, err := writer.Write(sz); err != nil {
-		return err
-	}
-	if _, err := writer.Write(sz); err != nil {
+	if _, err := writer.Write(GetEmptyLRUSession()); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
