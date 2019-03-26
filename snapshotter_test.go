@@ -459,13 +459,13 @@ func TestShrinkSnapshots(t *testing.T) {
 				t.Fatalf("failed to get file st %v", err)
 			}
 			if uint64(fi.Size()) != esz {
-				// 1024 header, 8 size client session size, 4 bytes crc, 16 bytes tails
-				// 1052 bytes in total
+				// 1024 header, 8 size client session size, 8 bytes client session
+				// count, 4 bytes crc, 16 bytes tails 1052 bytes in total
 				t.Fatalf("unexpected size %d, want %d", fi.Size(), esz)
 			}
 		}
-		cf(env1.GetFilepath(), 1052)
-		cf(env2.GetFilepath(), 1052)
+		cf(env1.GetFilepath(), 1060)
+		cf(env2.GetFilepath(), 1060)
 		cf(env3.GetFilepath(), 10486832)
 		snapshots, err := ldb.ListSnapshots(1, 1)
 		if err != nil {

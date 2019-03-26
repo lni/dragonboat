@@ -15,7 +15,6 @@
 package rsm
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"hash"
@@ -375,11 +374,14 @@ func IsShrinkedSnapshotFile(fp string) (bool, error) {
 	}
 	size := binary.LittleEndian.Uint64(sz)
 	if size != 0 {
-		plog.Panicf("trying to shrink a snapshot with client sessions")
+		return false, nil
 	}
-	br := bufio.NewReader(reader)
-	if skipped, err := br.Discard(int(size)); err != nil || skipped != int(size) {
+	if _, err := io.ReadFull(reader, sz); err != nil {
 		return false, err
+	}
+	size = binary.LittleEndian.Uint64(sz)
+	if size != 0 {
+		return false, nil
 	}
 	oneByte := make([]byte, 1)
 	n, err := io.ReadFull(reader, oneByte)
@@ -421,8 +423,12 @@ func ShrinkSnapshot(fp string, newFp string) error {
 	if _, err := reader.GetHeader(); err != nil {
 		return err
 	}
+	// write two uint64(0) as the client session data
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, uint64(0))
+	if _, err := writer.Write(sz); err != nil {
+		return err
+	}
 	if _, err := writer.Write(sz); err != nil {
 		return err
 	}

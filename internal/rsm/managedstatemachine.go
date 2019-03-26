@@ -295,12 +295,24 @@ func (ds *NativeStateMachine) SaveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
 	collection sm.ISnapshotFileCollection) (uint64, error) {
 	if ds.sm.AllDiskStateMachine() {
-		if err := writer.SaveHeader(0, 0); err != nil {
-			return 0, err
-		}
-		return SnapshotHeaderSize, nil
+		return ds.saveDummySnapshot(writer, session)
 	}
 	return ds.saveSnapshot(ssctx, writer, session, collection)
+}
+
+func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
+	session []byte) (uint64, error) {
+	_, err := writer.Write(session)
+	if err != nil {
+		return 0, err
+	}
+	if err = writer.Flush(); err != nil {
+		return 0, err
+	}
+	if err := writer.SaveHeader(16, 0); err != nil {
+		return 0, err
+	}
+	return writer.GetPayloadSize(16) + SnapshotHeaderSize, nil
 }
 
 func (ds *NativeStateMachine) saveSnapshot(

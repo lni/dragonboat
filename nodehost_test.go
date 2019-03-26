@@ -1302,6 +1302,13 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to snapshot")
 		}
+		fi, err := os.Stat(ss.Filepath)
+		if err != nil {
+			t.Fatalf("failed to get file st %v", err)
+		}
+		if fi.Size() != 1060 {
+			t.Fatalf("unexpected dummy snapshot file size %d", fi.Size())
+		}
 		reader, err := rsm.NewSnapshotReader(ss.Filepath)
 		if err != nil {
 			t.Fatalf("failed to read snapshot %v", err)
@@ -1310,7 +1317,7 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to get header")
 		}
-		if h.DataStoreSize != 0 || h.SessionSize != 0 {
+		if h.DataStoreSize != 0 || h.SessionSize != 16 {
 			t.Errorf("not a dummy snapshot file")
 		}
 		if h.Version != uint64(rsm.CurrentSnapshotVersion) {
