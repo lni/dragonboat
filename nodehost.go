@@ -1287,7 +1287,7 @@ func (nh *NodeHost) asyncSendRaftRequest(msg pb.Message) {
 			logutil.DescribeNode(msg.ClusterId, msg.From),
 			logutil.DescribeNode(msg.ClusterId, msg.To),
 			msg.Snapshot.Index, msg.Snapshot.FileSize)
-		n, ok := nh.getCluster(msg.From)
+		n, ok := nh.getCluster(msg.ClusterId)
 		if !ok {
 			return
 		}
