@@ -696,7 +696,7 @@ func createRateLimitedTestNodeHost(addr string,
 	}
 	nh := NewNodeHost(nhc)
 	newRSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-		return &tests.NoOP{MillisecondToSleep: 10}
+		return &tests.NoOP{MillisecondToSleep: 20}
 	}
 	oldv := settings.Soft.ExpectedMaxInMemLogSize
 	settings.Soft.ExpectedMaxInMemLogSize = 3 * 1024
@@ -765,11 +765,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			if leaderID == 1 {
 				leaderNh = nh1
 				followerNh = nh2
-				sm2.MillisecondToSleep = 10
+				sm2.MillisecondToSleep = 20
 			} else {
 				leaderNh = nh2
 				followerNh = nh1
-				sm1.MillisecondToSleep = 10
+				sm1.MillisecondToSleep = 20
 			}
 			return leaderNh, followerNh, nil
 		}
