@@ -113,6 +113,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		Index:      meta.Index,
 		Term:       meta.Term,
 		Files:      fs,
+		Checksum:   writer.GetPayloadChecksum(),
 	}
 	return ss, env, nil
 }
@@ -146,6 +147,9 @@ func (s *snapshotter) Load(index uint64,
 func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
 	env := s.getSnapshotEnv(snapshot.Index)
 	if err := env.CreateFlagFile(&snapshot); err != nil {
+		return err
+	}
+	if err := env.SaveSnapshotMetadata(&snapshot); err != nil {
 		return err
 	}
 	if readyToReturnTestKnob(s.stopc, "final dir check") {

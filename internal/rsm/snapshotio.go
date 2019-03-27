@@ -177,13 +177,20 @@ func (sw *SnapshotWriter) GetPayloadSize(sz uint64) uint64 {
 	return sw.vw.GetPayloadSize(sz)
 }
 
+func (sw *SnapshotWriter) GetPayloadChecksum() []byte {
+	return sw.vw.GetPayloadSum()
+}
+
 // SaveHeader saves the snapshot header to the snapshot.
 func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
+	// for v2
+	// the PayloadChecksu field is really the checksum of all block
+	// checksums
 	sh := pb.SnapshotHeader{
 		SessionSize:     smsz,
 		DataStoreSize:   sz,
 		UnreliableTime:  uint64(time.Now().UnixNano()),
-		PayloadChecksum: sw.vw.GetPayloadSum(),
+		PayloadChecksum: sw.GetPayloadChecksum(),
 		ChecksumType:    getChecksumType(),
 		Version:         uint64(sw.vw.GetVersion()),
 	}
@@ -220,8 +227,9 @@ func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 
 // SnapshotReader is an io.Reader for reading from snapshot files.
 type SnapshotReader struct {
-	r    IVReader
-	file *os.File
+	r      IVReader
+	file   *os.File
+	header pb.SnapshotHeader
 }
 
 // NewSnapshotReader creates a new snapshot reader instance.
@@ -261,8 +269,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if n != len(data) {
 		return empty, io.ErrUnexpectedEOF
 	}
-	r := pb.SnapshotHeader{}
-	if err := r.Unmarshal(data); err != nil {
+	if err := sr.header.Unmarshal(data); err != nil {
 		panic(err)
 	}
 	offset, err := sr.file.Seek(int64(SnapshotHeaderSize), 0)
@@ -273,7 +280,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		return empty, io.ErrUnexpectedEOF
 	}
 	var reader io.Reader = sr.file
-	if (SnapshotVersion)(r.Version) == V2SnapshotVersion {
+	if (SnapshotVersion)(sr.header.Version) == V2SnapshotVersion {
 		st, err := sr.file.Stat()
 		if err != nil {
 			return empty, err
@@ -282,8 +289,8 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	sr.r = mustGetVersionReader(reader, (SnapshotVersion)(r.Version))
-	return r, nil
+	sr.r = mustGetVersionReader(reader, (SnapshotVersion)(sr.header.Version))
+	return sr.header, nil
 }
 
 // Read reads up to len(data) bytes from the snapshot file.
@@ -297,9 +304,14 @@ func (sr *SnapshotReader) Read(data []byte) (int, error) {
 // ValidatePayload validates whether the snapshot content matches the checksum
 // recorded in the header.
 func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
-	checksum := sr.r.Sum()
-	if !bytes.Equal(checksum, header.PayloadChecksum) {
-		panic("corrupted snapshot payload")
+	if sr.r == nil {
+		panic("ValidatePayload called when the header is not even read")
+	}
+	if sr.header.Version == uint64(V1SnapshotVersion) {
+		checksum := sr.r.Sum()
+		if !bytes.Equal(checksum, header.PayloadChecksum) {
+			panic("corrupted snapshot payload")
+		}
 	}
 }
 

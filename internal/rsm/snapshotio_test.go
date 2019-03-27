@@ -63,7 +63,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if err != nil || m != len(storeData) {
 		t.Fatalf("failed to write the store data")
 	}
-	storeChecksum := w.vw.GetPayloadSum()
+	if err := w.Flush(); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -87,6 +89,7 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if header.DataStoreSize != uint64(len(storeData)) {
 		t.Errorf("data store size mismatch")
 	}
+	storeChecksum := w.vw.GetPayloadSum()
 	if !bytes.Equal(header.PayloadChecksum, storeChecksum) {
 		t.Errorf("data store checksum mismatch")
 	}
@@ -117,11 +120,35 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
 		t.Fatalf("%v", err)
 	}
-	err = w.Close()
-	if err != nil {
+	if err := w.Close(); err != nil {
 		t.Fatalf("%v", err)
 	}
 	return w, sessionData, storeData
+}
+
+func corruptSnapshotPayload(t *testing.T) {
+	f, err := os.OpenFile(testSnapshotFilename, os.O_RDWR, 0755)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	s := (testSessionSize + testPayloadSize) / 2
+	if _, err := f.Seek(int64(SnapshotHeaderSize+s), 0); err != nil {
+		t.Fatalf("%v", err)
+	}
+	data := make([]byte, 1)
+	if _, err := f.Read(data); err != nil {
+		t.Fatalf("%v", err)
+	}
+	data[0] = byte(data[0] + 1)
+	if _, err := f.Seek(int64(SnapshotHeaderSize+s), 0); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func createTestSnapshotFile(t *testing.T,
@@ -157,7 +184,14 @@ func TestCorruptedHeaderWillBeDetected(t *testing.T) {
 
 func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
 	createTestSnapshotFile(t, v)
+	corruptSnapshotPayload(t)
 	defer os.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("validation error not reported")
+		}
+	}()
+
 	r, err := NewSnapshotReader(testSnapshotFilename)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -180,11 +214,6 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
 	if uint64(n) != testPayloadSize || err != nil {
 		t.Fatalf("failed to get payload data")
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("validation error not reported")
-		}
-	}()
 	r.ValidatePayload(header)
 }
 
@@ -441,4 +470,35 @@ func TestReplaceSnapshotFile(t *testing.T) {
 	if fi.Size() != 2048 {
 		t.Errorf("file not replaced")
 	}
+}
+
+func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64) {
+	makeTestSnapshotFile(t, 0, sz, V2SnapshotVersion)
+	reader, err := NewSnapshotReader(testSnapshotFilename)
+	if err != nil {
+		t.Fatalf("failed to create reader %v", err)
+	}
+	defer func() {
+		reader.Close()
+	}()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get header")
+	}
+	crc, err := GetV2PayloadChecksum(testSnapshotFilename)
+	if err != nil {
+		t.Fatalf("failed to get v2 payload checksum %v", err)
+	}
+	if !bytes.Equal(crc, header.PayloadChecksum) {
+		t.Fatalf("crc changed")
+	}
+}
+
+func TestV2PayloadChecksumCanBeRead(t *testing.T) {
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize-1)
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize)
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize+1)
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3-1)
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3)
+	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3+1)
 }

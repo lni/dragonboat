@@ -118,6 +118,7 @@ message Snapshot {
   optional uint64 term            = 5 [(gogoproto.nullable) = false];
   optional Membership membership  = 6 [(gogoproto.nullable) = false];
   repeated SnapshotFile files     = 7;
+  optional bytes Checksum         = 8;
 }
 
 message Message {

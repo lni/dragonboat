@@ -18,6 +18,7 @@
 package dragonboat
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -26,6 +27,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -36,6 +38,7 @@ import (
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/transport"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
@@ -996,6 +999,51 @@ func TestUnregisterNotRegisterClientSessionWillBeReported(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		cs := nh.GetNoOPSession(2)
+		logdb := nh.logdb
+		snapshotted := false
+		var snapshot pb.Snapshot
+		for i := 0; i < 1000; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, cs, []byte("test-data"))
+			cancel()
+			if err != nil {
+				continue
+			}
+			snapshots, err := logdb.ListSnapshots(2, 1)
+			if err != nil {
+				t.Fatalf("failed to list snapshots")
+			}
+			if len(snapshots) > 0 {
+				snapshotted = true
+				snapshot = snapshots[0]
+				break
+			}
+		}
+		if !snapshotted {
+			t.Fatalf("snapshot not triggered")
+		}
+		crc, err := rsm.GetV2PayloadChecksum(snapshot.Filepath)
+		if err != nil {
+			t.Fatalf("failed to get payload checksum")
+		}
+		if !bytes.Equal(crc, snapshot.Checksum) {
+			t.Errorf("checksum changed")
+		}
+		ss := pb.Snapshot{}
+		if err := fileutil.GetFlagFileContent(filepath.Dir(snapshot.Filepath),
+			"snapshot.metadata", &ss); err != nil {
+			t.Fatalf("failed to get content %v", err)
+		}
+		if !reflect.DeepEqual(&ss, &snapshot) {
+			t.Errorf("snapshot record changed")
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName string) {
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
 		singleNodeHostTestDir, false)
@@ -1289,8 +1337,8 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
-			if err != nil && i > 4 {
-				t.Errorf("SyncPropose iter %d returned err %v", i, err)
+			if err != nil {
+				continue
 			}
 			snapshots, err := logdb.ListSnapshots(1, 1)
 			if len(snapshots) > 0 {
@@ -1309,6 +1357,7 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		if fi.Size() != 1060 {
 			t.Fatalf("unexpected dummy snapshot file size %d", fi.Size())
 		}
+		plog.Infof("going to check %s", ss.Filepath)
 		reader, err := rsm.NewSnapshotReader(ss.Filepath)
 		if err != nil {
 			t.Fatalf("failed to read snapshot %v", err)
@@ -1318,7 +1367,8 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 			t.Errorf("failed to get header")
 		}
 		if h.DataStoreSize != 0 || h.SessionSize != 16 {
-			t.Errorf("not a dummy snapshot file")
+			t.Errorf("not a dummy snapshot file %d:%d", h.DataStoreSize, h.SessionSize)
+			reader.ValidateHeader(h)
 		}
 		if h.Version != uint64(rsm.CurrentSnapshotVersion) {
 			t.Errorf("unexpected snapshot version, got %d, want %d",

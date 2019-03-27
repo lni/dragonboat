@@ -27,10 +27,11 @@ import (
 )
 
 var (
-	genTmpDirSuffix    = "generating"
-	recvTmpDirSuffix   = "receiving"
-	snapshotFileSuffix = "gbsnap"
-	shrinkedSuffix     = "shrinked"
+	snapshotMetadataFilename = "snapshot.metadata"
+	genTmpDirSuffix          = "generating"
+	recvTmpDirSuffix         = "receiving"
+	snapshotFileSuffix       = "gbsnap"
+	shrinkedSuffix           = "shrinked"
 )
 
 // GetSnapshotDirFunc is the function type that returns the snapshot dir
@@ -204,6 +205,11 @@ func (se *SnapshotEnv) RenameTempDirToFinalDir() (bool, error) {
 func (se *SnapshotEnv) CreateFlagFile(msg proto.Message) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		fileutil.SnapshotFlagFilename, msg)
+}
+
+func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
+	return fileutil.CreateFlagFile(se.tmpDir,
+		snapshotMetadataFilename, msg)
 }
 
 // HasFlagFile returns a boolean flag indicating whether the flag file is
