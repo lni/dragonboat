@@ -1338,8 +1338,8 @@ func TestAllDiskSMCanStreamSnapshot(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			_, err := nh1.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
-			if err != nil && i > 4 {
-				t.Errorf("SyncPropose iter %d returned err %v", i, err)
+			if err != nil {
+				continue
 			}
 			snapshots, err := logdb.ListSnapshots(1, 1)
 			if len(snapshots) >= 3 {
@@ -1388,12 +1388,22 @@ func TestAllDiskSMCanStreamSnapshot(t *testing.T) {
 			snapshots, err := logdb.ListSnapshots(1, 2)
 			if len(snapshots) >= 3 {
 				snapshotted = true
+				for _, ss := range snapshots {
+					shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
+					if err != nil {
+						t.Errorf("failed to check whether snapshot is shrinked %v", err)
+					}
+					if !shrinked {
+						t.Errorf("failed to shrink snapshot")
+					}
+				}
 				break
 			}
 		}
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
+
 	}
 	twoFakeDiskNodeHostTest(t, tf)
 }

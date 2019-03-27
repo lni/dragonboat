@@ -416,22 +416,22 @@ func isSoftSnapshotError(err error) bool {
 	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
 }
 
-func (rc *node) saveSnapshot() {
+func (rc *node) saveSnapshot() uint64 {
 	// this is suppose to be called in snapshot worker thread.
 	// calling this rc.sm.GetLastApplied() won't block the raft sm.
 	if rc.sm.GetLastApplied() <= rc.ss.getSnapshotIndex() {
 		// a snapshot has been published to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
-		return
+		return 0
 	}
 	ss, ssenv, err := rc.sm.SaveSnapshot()
 	if err != nil {
 		if err == sm.ErrSnapshotStopped {
 			ssenv.MustRemoveTempDir()
 			plog.Infof("%s aborted SaveSnapshot", rc.describe())
-			return
+			return 0
 		} else if isSoftSnapshotError(err) {
-			return
+			return 0
 		}
 		panic(err)
 	}
@@ -441,11 +441,11 @@ func (rc *node) saveSnapshot() {
 		if err == errSnapshotOutOfDate {
 			plog.Warningf("snapshot aborted on %s, idx %d", rc.describe(), ss.Index)
 			ssenv.MustRemoveTempDir()
-			return
+			return 0
 		}
 		// this can only happen in monkey test
 		if err == sm.ErrSnapshotStopped {
-			return
+			return 0
 		}
 		panic(err)
 	}
@@ -457,13 +457,14 @@ func (rc *node) saveSnapshot() {
 		if !isSoftSnapshotError(err) {
 			panic(err)
 		} else {
-			return
+			return 0
 		}
 	}
 	if ss.Index > rc.config.CompactionOverhead {
 		rc.ss.setCompactLogTo(ss.Index - rc.config.CompactionOverhead)
 	}
 	rc.ss.setSnapshotIndex(ss.Index)
+	return ss.Index
 }
 
 func (rc *node) streamSnapshot(sink pb.IChunkSink) {
@@ -547,8 +548,10 @@ func (rc *node) compactLog() error {
 				return err
 			}
 		}
-		if err := rc.snapshotter.Compaction(rc.clusterID,
-			rc.nodeID, compactTo); err != nil {
+		if err := rc.snapshotter.Compaction(compactTo); err != nil {
+			return err
+		}
+		if err := rc.snapshotter.ShrinkSnapshots(compactTo); err != nil {
 			return err
 		}
 		if err := rc.logdb.RemoveEntriesTo(rc.clusterID,

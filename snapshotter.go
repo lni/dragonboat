@@ -226,8 +226,7 @@ func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
 	return nil
 }
 
-func (s *snapshotter) Compaction(clusterID uint64, nodeID uint64,
-	removeUpTo uint64) error {
+func (s *snapshotter) Compaction(removeUpTo uint64) error {
 	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
 	if err != nil {
 		return err
@@ -235,13 +234,14 @@ func (s *snapshotter) Compaction(clusterID uint64, nodeID uint64,
 	if len(snapshots) <= snapshotsToKeep {
 		return nil
 	}
-	shortListed := snapshots[:len(snapshots)-snapshotsToKeep]
-	for _, snap := range shortListed {
-		if snap.Index < removeUpTo {
-			if err := s.logdb.DeleteSnapshot(clusterID, nodeID, snap.Index); err != nil {
+	selected := snapshots[:len(snapshots)-snapshotsToKeep]
+	for _, ss := range selected {
+		if ss.Index < removeUpTo {
+			if err := s.logdb.DeleteSnapshot(s.clusterID,
+				s.nodeID, ss.Index); err != nil {
 				return err
 			}
-			env := s.getSnapshotEnv(snap.Index)
+			env := s.getSnapshotEnv(ss.Index)
 			if err := env.RemoveFinalDir(); err != nil {
 				return err
 			}

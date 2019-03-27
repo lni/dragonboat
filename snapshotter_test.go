@@ -372,7 +372,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 				t.Errorf("snapshot dir didn't get created, %s", snapDir)
 			}
 		}
-		if err = snapshotter.Compaction(1, 1, upTo); err != nil {
+		if err = snapshotter.Compaction(upTo); err != nil {
 			t.Errorf("failed to remove unused snapshots, %v", err)
 		}
 		snapshots, err = ldb.ListSnapshots(1, 1)
