@@ -428,8 +428,19 @@ func TestShrinkSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get file stat")
 	}
-	if fi.Size() > 1024*2 {
+	if fi.Size() != 1060 {
 		t.Errorf("not shrinked according to file size")
+	}
+	reader, err := NewSnapshotReader(shrinkedFilename)
+	if err != nil {
+		t.Fatalf("failed to create snapshot reader %v", err)
+	}
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get header %v", err)
+	}
+	if header.DataStoreSize != 0 || header.SessionSize != EmptyClientSessionLength {
+		t.Fatalf("unexpected header value")
 	}
 }
 

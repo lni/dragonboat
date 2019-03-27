@@ -436,7 +436,7 @@ func ShrinkSnapshot(fp string, newFp string) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	return writer.SaveHeader(0, 0)
+	return writer.SaveHeader(EmptyClientSessionLength, 0)
 }
 
 func ReplaceSnapshotFile(newFp string, fp string) error {
