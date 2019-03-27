@@ -551,7 +551,7 @@ func (rc *node) compactLog() error {
 		if err := rc.snapshotter.Compaction(compactTo); err != nil {
 			return err
 		}
-		if err := rc.snapshotter.ShrinkSnapshots(compactTo); err != nil {
+		if err := rc.snapshotter.ShrinkSnapshots(rc.lastApplied); err != nil {
 			return err
 		}
 		if err := rc.logdb.RemoveEntriesTo(rc.clusterID,
