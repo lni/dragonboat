@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lni/dragonboat/internal/rsm"
+	"github.com/lni/dragonboat/internal/utils/random"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
@@ -137,6 +138,10 @@ func (rs *snapshotState) setReqSnapshotIndex(idx uint64) {
 	atomic.StoreUint64(&rs.reqSnapshotIndex, idx)
 }
 
+func (rs *snapshotState) hasCompactLogTo() bool {
+	return atomic.LoadUint64(&rs.compactLogTo) > 0
+}
+
 func (rs *snapshotState) getCompactLogTo() uint64 {
 	return atomic.SwapUint64(&rs.compactLogTo, 0)
 }
@@ -217,4 +222,27 @@ func (rs *snapshotState) getRecoverCompleted() (rsm.Commit, bool) {
 
 func (rs *snapshotState) getSaveSnapshotCompleted() (rsm.Commit, bool) {
 	return rs.saveSnapshotCompleted.getRecord()
+}
+
+type task struct {
+	intervalMs uint64
+	lastRun    uint64
+}
+
+func newTask(interval uint64) *task {
+	if interval == 0 {
+		panic("invalid interval")
+	}
+	return &task{
+		intervalMs: interval,
+		lastRun:    random.LockGuardedRand.Uint64() % interval,
+	}
+}
+
+func (t *task) timeToRun(tt uint64) bool {
+	if tt-t.lastRun >= t.intervalMs {
+		t.lastRun = tt
+		return true
+	}
+	return false
 }

@@ -289,7 +289,7 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 		return
 	}
 	if index > 0 {
-		node.shrinkSnapshots(index)
+		node.doShrinkSnapshots(index)
 	}
 	if !node.initialized() {
 		node.initialSnapshotDone(index)

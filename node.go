@@ -39,10 +39,11 @@ const (
 )
 
 var (
-	incomingProposalsMaxLen = settings.Soft.IncomingProposalQueueLength
-	incomingReadIndexMaxLen = settings.Soft.IncomingReadIndexQueueLength
-	lazyFreeCycle           = settings.Soft.LazyFreeCycle
-	logUnreachable          = true
+	incomingProposalsMaxLen    = settings.Soft.IncomingProposalQueueLength
+	incomingReadIndexMaxLen    = settings.Soft.IncomingReadIndexQueueLength
+	lazyFreeCycle              = settings.Soft.LazyFreeCycle
+	snapshotShrinkTaskInterval = uint64(180000)
+	logUnreachable             = true
 )
 
 type node struct {
@@ -74,6 +75,8 @@ type node struct {
 	clusterInfo          atomic.Value
 	tickCount            uint64
 	expireNotified       uint64
+	tickMillisecond      uint64
+	snapshotShrink       *task
 	rateLimited          bool
 	closeOnce            sync.Once
 	ss                   *snapshotState
@@ -108,6 +111,7 @@ func newNode(raftAddress string,
 	pcc := newPendingConfigChange(confChangeC, tickMillisecond)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rc := &node{
+		tickMillisecond:     tickMillisecond,
 		config:              config,
 		raftAddress:         raftAddress,
 		incomingProposals:   proposals,
@@ -138,6 +142,9 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, nodeProxy)
 	rc.commitC = sm.CommitC()
 	rc.sm = sm
+	if sm.AllDiskStateMachine() {
+		rc.snapshotShrink = newTask(snapshotShrinkTaskInterval)
+	}
 	rc.startRaft(config, rc.logreader, peers, initialMember)
 	return rc
 }
@@ -527,9 +534,26 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 	return rc.snapshotter.removeFlagFile(index)
 }
 
-func (rc *node) shrinkSnapshots(index uint64) error {
+func (rc *node) doShrinkSnapshots(index uint64) {
 	if rc.allDiskStateMachine() {
 		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (rc *node) shrinkSnapshots() error {
+	if rc.snapshotShrink == nil ||
+		!rc.snapshotShrink.timeToRun(rc.millisecondSinceStart()) {
+		return nil
+	}
+	if rc.snapshotLock.TryLock() {
+		defer rc.snapshotLock.Unlock()
+		if !rc.sm.AllDiskStateMachine() {
+			panic("trying to shrink snapshots on non all disk SMs")
+		}
+		plog.Infof("%s will shrink snapshots up to %d", rc.lastApplied)
+		if err := rc.snapshotter.ShrinkSnapshots(rc.lastApplied); err != nil {
 			return err
 		}
 	}
@@ -537,21 +561,18 @@ func (rc *node) shrinkSnapshots(index uint64) error {
 }
 
 func (rc *node) compactLog() error {
-	compactTo := rc.ss.getCompactLogTo()
-	if compactTo == 0 {
-		return nil
-	}
-	if rc.snapshotLock.TryLock() {
+	if rc.ss.hasCompactLogTo() && rc.snapshotLock.TryLock() {
 		defer rc.snapshotLock.Unlock()
+		compactTo := rc.ss.getCompactLogTo()
+		if compactTo == 0 {
+			panic("racy compact log to value?")
+		}
 		if err := rc.logreader.Compact(compactTo); err != nil {
 			if err != raft.ErrCompacted {
 				return err
 			}
 		}
 		if err := rc.snapshotter.Compaction(compactTo); err != nil {
-			return err
-		}
-		if err := rc.shrinkSnapshots(rc.lastApplied); err != nil {
 			return err
 		}
 		if err := rc.logdb.RemoveEntriesTo(rc.clusterID,
@@ -656,6 +677,9 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 	rc.logreader.Append(ud.EntriesToSave)
 	rc.sendMessages(ud.Messages)
 	if err := rc.compactLog(); err != nil {
+		panic(err)
+	}
+	if err := rc.shrinkSnapshots(); err != nil {
 		panic(err)
 	}
 	if required := rc.saveSnapshotRequired(ud.LastApplied); required {
@@ -1056,4 +1080,8 @@ func (rc *node) setInitialized() {
 	rc.initializedMu.Lock()
 	defer rc.initializedMu.Unlock()
 	rc.initializedMu.initialized = true
+}
+
+func (rc *node) millisecondSinceStart() uint64 {
+	return rc.tickMillisecond * rc.tickCount
 }
