@@ -39,6 +39,7 @@ var (
 	LastChunkCount           uint64 = math.MaxUint64
 	gcIntervalTick                  = settings.Soft.SnapshotGCTick
 	snapshotChunkTimeoutTick        = settings.Soft.SnapshotChunkTimeoutTick
+	maxConcurrentSlot               = settings.Soft.MaxConcurrentStreamingSnapshot
 )
 
 func snapshotKey(c pb.SnapshotChunk) string {
@@ -106,13 +107,13 @@ func newSnapshotChunks(onReceive func(pb.MessageBatch),
 	}
 }
 
-func (c *chunks) AddChunk(chunk pb.SnapshotChunk) {
+func (c *chunks) AddChunk(chunk pb.SnapshotChunk) bool {
 	did := c.getDeploymentID()
 	if chunk.DeploymentId != did ||
 		chunk.BinVer != raftio.RPCBinVersion {
-		return
+		return false
 	}
-	c.addChunk(chunk)
+	return c.addChunk(chunk)
 }
 
 func (c *chunks) Tick() {
@@ -165,6 +166,10 @@ func (c *chunks) getOrCreateSnapshotLock(key string) *snapshotLock {
 	return l
 }
 
+func (c *chunks) canAddNewTracked() bool {
+	return uint64(len(c.tracked)) < maxConcurrentSlot
+}
+
 func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -175,6 +180,11 @@ func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 		if td != nil {
 			plog.Warningf("removing unclaimed chunks %s", key)
 			c.deleteTempChunkDir(td.firstChunk)
+		} else {
+			if !c.canAddNewTracked() {
+				plog.Errorf("max slot count reached, dropped a chunk %s", key)
+				return nil
+			}
 		}
 		validator := rsm.NewSnapshotValidator()
 		if c.validate && !chunk.HasFileInfo {
@@ -192,7 +202,7 @@ func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 		c.tracked[key] = td
 	} else {
 		if td == nil {
-			plog.Errorf("ignored a not tracked chunk %s, chunk id",
+			plog.Errorf("ignored a not tracked chunk %s, chunk id %d",
 				key, chunk.ChunkId)
 			return nil
 		}
@@ -219,21 +229,21 @@ func (c *chunks) shouldUpdateValidator(chunk pb.SnapshotChunk) bool {
 	return c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0
 }
 
-func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
+func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 	key := snapshotKey(chunk)
 	plog.Infof("addChunk called, %s, chunkid %d, has file info %t",
 		key, chunk.ChunkId, chunk.HasFileInfo)
 	td := c.onNewChunk(chunk)
 	if td == nil {
 		plog.Warningf("ignored a chunk belongs to %s", key)
-		return
+		return false
 	}
 	td.lock.lock()
 	defer td.lock.unlock()
 	if c.shouldUpdateValidator(chunk) {
 		if !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
 			plog.Warningf("ignored a invalid chunk %s", key)
-			return
+			return false
 		}
 	}
 	if err := c.saveChunk(chunk); err != nil {
@@ -248,7 +258,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 			if !td.validator.Validate() {
 				plog.Warningf("dropped an invalid snapshot %s", key)
 				c.deleteTempChunkDir(chunk)
-				return
+				return false
 			}
 		}
 		if err := c.finalizeSnapshotFile(chunk, td); err != nil {
@@ -258,7 +268,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 			}
 			if !c.flagFileExists(chunk) {
 				plog.Warningf("out-of-date chunk without flag file %s", key)
-				return
+				return false
 			}
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
@@ -268,6 +278,7 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) {
 		c.onReceive(snapshotMessage)
 		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)
 	}
+	return true
 }
 
 func (c *chunks) saveChunk(chunk pb.SnapshotChunk) error {

@@ -147,6 +147,9 @@ type soft struct {
 	// transport
 	//
 
+	// MaxConcurrentStreamingSnapshot defines the max number of concurrent
+	// ongoing snapshot streaming.
+	MaxConcurrentStreamingSnapshot uint64
 	// SendQueueLength is the length of the send queue used to hold messages
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
@@ -241,6 +244,7 @@ func getSoftSettings() soft {
 func getDefaultSoftSettings() soft {
 	NodeHostInfoReportSecond := uint64(20)
 	return soft{
+		MaxConcurrentStreamingSnapshot:      128,
 		ShrinkSnapshotTaskInterval:          180000,
 		PanicOnSizeMismatch:                 1,
 		LazyFreeCycle:                       1,

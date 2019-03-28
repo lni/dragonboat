@@ -333,7 +333,7 @@ type TCPTransport struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
 	requestHandler raftio.RequestHandler
-	sinkFactory    raftio.ChunkSinkFactory
+	chunks         raftio.IChunkSink
 }
 
 // NewTCPTransport creates and returns a new TCP transport module.
@@ -342,11 +342,25 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 	sinkFactory raftio.ChunkSinkFactory) raftio.IRaftRPC {
 	plog.Infof("Using the default TCP RPC, switch to gRPC based RPC module " +
 		"(github.com/lni/dragonboat/plugin/rpc) for HTTP2 based transport")
+	chunks := sinkFactory()
+	stopper := syncutil.NewStopper()
+	stopper.RunWorker(func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				chunks.Tick()
+			case <-stopper.ShouldStop():
+				return
+			}
+		}
+	})
 	return &TCPTransport{
 		nhConfig:       nhConfig,
-		stopper:        syncutil.NewStopper(),
+		stopper:        stopper,
 		requestHandler: requestHandler,
-		sinkFactory:    sinkFactory,
+		chunks:         chunks,
 	}
 }
 
@@ -395,6 +409,7 @@ func (g *TCPTransport) Start() error {
 // Stop stops the TCP transport module.
 func (g *TCPTransport) Stop() {
 	g.stopper.Stop()
+	g.chunks.Close()
 }
 
 // GetConnection returns a new raftio.IConnection for sending raft messages.
@@ -427,14 +442,6 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 	magicNum := make([]byte, len(magicNumber))
 	header := make([]byte, requestHeaderSize)
 	tbuf := make([]byte, payloadBufferSize)
-	var chunks raftio.IChunkSink
-	stopper := syncutil.NewStopper()
-	defer func() {
-		if chunks != nil {
-			chunks.Close()
-		}
-	}()
-	defer stopper.Stop()
 	for {
 		err := readMagicNumber(conn, magicNum)
 		if err != nil {
@@ -467,22 +474,10 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}
-			if chunks == nil {
-				chunks = g.sinkFactory()
-				stopper.RunWorker(func() {
-					ticker := time.NewTicker(time.Second)
-					defer ticker.Stop()
-					for {
-						select {
-						case <-ticker.C:
-							chunks.Tick()
-						case <-stopper.ShouldStop():
-							return
-						}
-					}
-				})
+			if !g.chunks.AddChunk(chunk) {
+				plog.Errorf("chunk rejected")
+				return
 			}
-			chunks.AddChunk(chunk)
 		}
 	}
 }

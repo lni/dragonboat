@@ -47,7 +47,7 @@ type IChunkSink interface {
 	// AddChunk adds a new snapshot chunk to the snapshot chunk sink. All chunks
 	// belong to the snapshot will be combined into the snapshot image and then
 	// be passed to Dragonboat once all member chunks are received.
-	AddChunk(chunk pb.SnapshotChunk)
+	AddChunk(chunk pb.SnapshotChunk) bool
 	// Tick moves forward the internal logic clock. It is suppose to be called
 	// roughly every second.
 	Tick()

@@ -97,6 +97,34 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler
 	fn(t, chunks, handler)
 }
 
+func TestMaxSlotIsEnforced(t *testing.T) {
+	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		inputs := getTestChunks()
+		chunks.validate = false
+		v := uint64(1)
+		c := inputs[0]
+		for i := uint64(0); i < maxConcurrentSlot; i++ {
+			v++
+			c.ClusterId = v
+			if !chunks.addChunk(c) {
+				t.Errorf("failed to add chunk")
+			}
+		}
+		count := len(chunks.tracked)
+		for i := uint64(0); i < maxConcurrentSlot; i++ {
+			v++
+			c.ClusterId = v
+			if chunks.addChunk(c) {
+				t.Errorf("not rejected")
+			}
+		}
+		if len(chunks.tracked) != count {
+			t.Errorf("tracked count changed")
+		}
+	}
+	runChunkTest(t, fn)
+}
+
 func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
@@ -227,7 +255,9 @@ func TestGcRemovesRecordAndTempFile(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
-		chunks.addChunk(inputs[0])
+		if !chunks.addChunk(inputs[0]) {
+			t.Fatalf("failed to add chunk")
+		}
 		count := chunks.timeoutTick + chunks.gcTick
 		for i := uint64(0); i < count; i++ {
 			chunks.Tick()
@@ -251,7 +281,9 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		for _, c := range inputs {
-			chunks.addChunk(c)
+			if !chunks.addChunk(c) {
+				t.Errorf("failed to add chunk")
+			}
 		}
 		_, ok := chunks.tracked[snapshotKey(inputs[0])]
 		if ok {
@@ -282,7 +314,9 @@ func TestOutOfDateSnapshotChunksWithFlagFileCanBeHandled(t *testing.T) {
 		}
 		chunks.validate = false
 		for _, c := range inputs {
-			chunks.addChunk(c)
+			if !chunks.addChunk(c) {
+				t.Errorf("failed to add chunk")
+			}
 		}
 		if _, ok := chunks.tracked[snapshotKey(inputs[0])]; ok {
 			t.Errorf("failed to remove last received time")
@@ -346,7 +380,9 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 		}
 		// now we have the remaining chunks
 		for _, c := range inputs[1:] {
-			chunks.addChunk(c)
+			if chunks.addChunk(c) {
+				t.Errorf("failed to reject chunks")
+			}
 		}
 		_, ok = chunks.tracked[snapshotKey(inputs[0])]
 		if ok {
@@ -390,7 +426,9 @@ func TestAddingFirstChunkAgainResetsTempFile(t *testing.T) {
 		inputs = getTestChunks()
 		// now add everything
 		for _, c := range inputs {
-			chunks.addChunk(c)
+			if !chunks.addChunk(c) {
+				t.Errorf("chunk rejected")
+			}
 		}
 		_, ok := chunks.tracked[snapshotKey(inputs[0])]
 		if ok {
@@ -442,7 +480,10 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 		inputs := splitSnapshotMessage(msg)
 		for _, c := range inputs {
 			c.Data = make([]byte, c.ChunkSize)
-			chunks.addChunk(c)
+			added := chunks.addChunk(c)
+			if snapshotCount == 0 && added {
+				t.Errorf("failed to reject a chunk")
+			}
 		}
 		if snapshotCount > 0 {
 			if handler.getSnapshotCount(100, 2) != 1 {

@@ -149,7 +149,7 @@ func TestChunkWriterCanBeStopped(t *testing.T) {
 }
 
 type chunkReceiver interface {
-	AddChunk(chunk pb.SnapshotChunk)
+	AddChunk(chunk pb.SnapshotChunk) bool
 }
 
 type chunks struct {
