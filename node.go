@@ -42,7 +42,7 @@ var (
 	incomingProposalsMaxLen    = settings.Soft.IncomingProposalQueueLength
 	incomingReadIndexMaxLen    = settings.Soft.IncomingReadIndexQueueLength
 	lazyFreeCycle              = settings.Soft.LazyFreeCycle
-	snapshotShrinkTaskInterval = uint64(180000)
+	snapshotShrinkTaskInterval = settings.Soft.ShrinkSnapshotTaskInterval
 	logUnreachable             = true
 )
 
