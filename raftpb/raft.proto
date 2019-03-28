@@ -63,9 +63,17 @@ enum ConfigChangeType {
   AddObserver = 2;
 }
 
+enum StateMachineType {
+  UnknownStateMachine     = 0;
+  RegularStateMachine     = 1;
+  ConcurrentStateMachine  = 2;
+  AllDiskStateMachine     = 3;
+}
+
 message Bootstrap {
   map<uint64, string> addresses   = 1;
   optional bool join              = 2 [(gogoproto.nullable) = false];
+  optional StateMachineType Type  = 3 [(gogoproto.nullable) = false];
 }
 
 message RaftDataStatus {
@@ -119,6 +127,7 @@ message Snapshot {
   optional Membership membership  = 6 [(gogoproto.nullable) = false];
   repeated SnapshotFile files     = 7;
   optional bytes Checksum         = 8;
+  optional bool Dummy             = 9 [(gogoproto.nullable) = false];
 }
 
 message Message {

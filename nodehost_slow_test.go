@@ -38,8 +38,8 @@ func testNodeHostLinearizableReadWorks(t *testing.T, size int) {
 	k := "test-key"
 	d := random.String(size)
 	kv := &kvpb.PBKV{
-		Key: &k,
-		Val: &d,
+		Key: k,
+		Val: d,
 	}
 	rec, err := proto.Marshal(kv)
 	if err != nil {
@@ -50,7 +50,7 @@ func testNodeHostLinearizableReadWorks(t *testing.T, size int) {
 	}
 	testProposalCanBeMade(t, nhList[3], rec)
 	testLinearizableReadReturnExpectedResult(t,
-		nhList[2], []byte(*kv.Key), []byte(*kv.Val))
+		nhList[2], []byte(kv.Key), []byte(kv.Val))
 }
 
 func TestNodeHostLinearizableReadWorksInMostBasicSettings(t *testing.T) {
@@ -72,8 +72,8 @@ func getTestKVData() []byte {
 	d := "test-data"
 	// make a proposal
 	kv := &kvpb.PBKV{
-		Key: &k,
-		Val: &d,
+		Key: k,
+		Val: d,
 	}
 	rec, err := proto.Marshal(kv)
 	if err != nil {

@@ -927,6 +927,17 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	waitForLeaderToBeElected(t, nh, 2)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	createProposalsToTriggerSnapshot(t, nh, 25, false)
+	logdb := nh.logdb
+	snapshots, err := logdb.ListSnapshots(2, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(snapshots) == 0 {
+		t.Fatalf("failed to save snapshots")
+	}
+	if snapshots[0].Dummy {
+		t.Errorf("regular snapshot created dummy snapshot")
+	}
 	nh.Stop()
 	nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
 		singleNodeHostTestDir, false)
@@ -1344,6 +1355,9 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 			if len(snapshots) > 0 {
 				snapshotted = true
 				ss = snapshots[0]
+				if !ss.Dummy {
+					t.Fatalf("dummy snapshot is not recorded as dummy")
+				}
 				break
 			}
 		}

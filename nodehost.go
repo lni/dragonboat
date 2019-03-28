@@ -338,7 +338,7 @@ func (nh *NodeHost) StartCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config)
+	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
@@ -353,7 +353,7 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeStateMachine(rsm.NewConcurrentStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config)
+	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
 
 func (nh *NodeHost) StartAllDiskCluster(nodes map[uint64]string,
@@ -366,7 +366,7 @@ func (nh *NodeHost) StartAllDiskCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeStateMachine(rsm.NewAllDiskStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config)
+	return nh.startCluster(nodes, join, cf, stopc, config, pb.AllDiskStateMachine)
 }
 
 // StartClusterUsingPlugin adds a new cluster node to the NodeHost and start
@@ -382,7 +382,7 @@ func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config)
+	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
@@ -1034,7 +1034,8 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
 // 3. bootstrap record is used as the node info record in our default Log DB
 //    implementation
 func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
-	join bool, config config.Config) (map[uint64]string, bool, error) {
+	join bool, config config.Config,
+	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
 	// bootstrap the cluster by recording a bootstrap info rec into the LogDB
 	if err == raftio.ErrNoBootstrapInfo {
@@ -1045,6 +1046,7 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 		bootstrap := pb.Bootstrap{
 			Join:      join,
 			Addresses: make(map[uint64]string),
+			Type:      smType,
 		}
 		for nid, addr := range nodes {
 			bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
@@ -1057,7 +1059,7 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	} else if err != nil {
 		return nil, false, err
 	}
-	if !binfo.Validate(nodes, join) {
+	if !binfo.Validate(nodes, join, smType) {
 		plog.Errorf("bootstrap validation failed for %s, %v, %t, %v, %t",
 			logutil.DescribeNode(config.ClusterID, config.NodeID),
 			binfo.Addresses, binfo.Join, nodes, join)
@@ -1072,7 +1074,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	join bool,
 	createStateMachine rsm.ManagedStateMachineFactory,
 	stopc chan struct{},
-	config config.Config) error {
+	config config.Config,
+	smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
 	plog.Infof("startCluster called for %s, join %t, nodes %v",
@@ -1090,7 +1093,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 			logutil.DescribeNode(clusterID, nodeID), nodes)
 		return ErrInvalidClusterSettings
 	}
-	addresses, initialMember, err := nh.bootstrapCluster(nodes, join, config)
+	addrs, members, err := nh.bootstrapCluster(nodes, join, config, smType)
 	if err == ErrInvalidClusterSettings {
 		return ErrInvalidClusterSettings
 	}
@@ -1098,9 +1101,9 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		panic(err)
 	}
 	plog.Infof("bootstrap for %s returned address list %v",
-		logutil.DescribeNode(clusterID, nodeID), addresses)
+		logutil.DescribeNode(clusterID, nodeID), addrs)
 	queue := server.NewMessageQueue(receiveQueueSize, false, lazyFreeCycle)
-	for k, v := range addresses {
+	for k, v := range addrs {
 		if k != nodeID {
 			plog.Infof("AddNode called with node %s, addr %s",
 				logutil.DescribeNode(clusterID, k), v)
@@ -1120,8 +1123,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		panic(err)
 	}
 	rn := newNode(nh.nhConfig.RaftAddress,
-		addresses,
-		initialMember,
+		addrs,
+		members,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		nh.execEngine.SetCommitReady,

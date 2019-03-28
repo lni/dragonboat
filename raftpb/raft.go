@@ -188,7 +188,12 @@ func (e *Entry) IsUpdateEntry() bool {
 
 // Validate checks whether the incoming nodes parameter and the join flag is
 // valid given the recorded bootstrap infomration in Log DB.
-func (b *Bootstrap) Validate(nodes map[uint64]string, join bool) bool {
+func (b *Bootstrap) Validate(nodes map[uint64]string,
+	join bool, smType StateMachineType) bool {
+	if b.Type != UnknownStateMachine && b.Type != smType {
+		plog.Errorf("recorded sm type %s, got %s", b.Type, smType)
+		return false
+	}
 	if !b.Join && len(b.Addresses) == 0 {
 		panic("invalid non-join bootstrap record with 0 address")
 	}

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-/usr/local/bin/protoc --go_out=. --proto_path=../..:$GOPATH/src:. kv.proto
+/usr/local/bin/protoc --proto_path=..:$GOPATH/src:. --gogofaster_out=. kv.proto

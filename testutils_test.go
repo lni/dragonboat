@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
 	serverConfig "github.com/lni/dragonboat/config"
@@ -34,6 +33,7 @@ import (
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/random"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
 type multiraftMonkeyTestAddrList struct {
@@ -158,7 +158,8 @@ func (n *mtNodeHost) Start() {
 
 		plog.Infof("starting cluster %d node %d", rc.ClusterID, rc.NodeID)
 		if err := n.nh.startCluster(peers,
-			false, createStateMachine, make(chan struct{}), rc); err != nil {
+			false, createStateMachine, make(chan struct{}),
+			rc, pb.RegularStateMachine); err != nil {
 			panic(err)
 		}
 	}
@@ -181,7 +182,8 @@ func (n *mtNodeHost) RestartCluster(clusterID uint64) {
 	plog.Infof("starting cluster %d node %d on node with list index %d",
 		rc.ClusterID, rc.NodeID, n.listIndex)
 	if err := n.nh.startCluster(nil,
-		true, createStateMachine, make(chan struct{}), rc); err != nil {
+		true, createStateMachine, make(chan struct{}), rc,
+		pb.RegularStateMachine); err != nil {
 		panic(err)
 	}
 }
@@ -324,10 +326,10 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 			key := fmt.Sprintf("key-%d", rand.Int())
 			value := string(getRandomStringBytes(valsz))
 			kv := &kvpb.PBKV{
-				Key: &key,
-				Val: &value,
+				Key: key,
+				Val: value,
 			}
-			rec, err := proto.Marshal(kv)
+			rec, err := kv.Marshal()
 			if err != nil {
 				panic(err)
 			}
@@ -356,9 +358,9 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 					defer cancel()
 					readIdx := rand.Int() % len(nhList)
 					if !nhList[readIdx].Running() {
-						resp, err := nhList[readIdx].nh.SyncRead(ctx, clusterID, []byte(*kv.Key))
+						resp, err := nhList[readIdx].nh.SyncRead(ctx, clusterID, []byte(kv.Key))
 						if err == nil {
-							if string(resp) != string(*kv.Val) {
+							if string(resp) != string(kv.Val) {
 								plog.Panicf("got %s, want %s", string(resp), kv.Val)
 							}
 						}

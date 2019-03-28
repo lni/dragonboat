@@ -164,8 +164,8 @@ func (p *process) write(addr string, clusterID uint64, value uint64) error {
 	}
 	v := p.getValue(value)
 	kv := &kvpb.PBKV{
-		Key: &lcmKey,
-		Val: &v,
+		Key: lcmKey,
+		Val: v,
 	}
 	data, err := proto.Marshal(kv)
 	if err != nil {

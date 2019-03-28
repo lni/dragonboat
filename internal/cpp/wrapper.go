@@ -285,14 +285,15 @@ func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
 func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 	writer *rsm.SnapshotWriter,
 	session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, error) {
+	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
+	dummy := false
 	ds.ensureNotDestroyed()
 	n, err := writer.Write(session)
 	if err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if n != len(session) {
-		return 0, io.ErrShortWrite
+		return 0, dummy, io.ErrShortWrite
 	}
 	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
@@ -309,18 +310,18 @@ func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 	err = getErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		return 0, err
+		return 0, dummy, err
 	}
 	if err := writer.Flush(); err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	sz := uint64(r.size)
 	if err := writer.SaveHeader(smsz, sz); err != nil {
 		plog.Errorf("save header failed %v", err)
-		return 0, err
+		return 0, dummy, err
 	}
 	actualSz := writer.GetPayloadSize(uint64(r.size) + smsz)
-	return actualSz + rsm.SnapshotHeaderSize, nil
+	return actualSz + rsm.SnapshotHeaderSize, dummy, nil
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state

@@ -23,15 +23,15 @@ import (
 
 func TestBootstrapValidateHandlesJoiningNode(t *testing.T) {
 	bootstrap := Bootstrap{Join: true}
-	if !bootstrap.Validate(nil, true) {
+	if !bootstrap.Validate(nil, true, UnknownStateMachine) {
 		t.Errorf("incorrect result")
 	}
-	if !bootstrap.Validate(nil, false) {
+	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
 		t.Errorf("incorrect result")
 	}
 	bootstrap = Bootstrap{Join: false, Addresses: make(map[uint64]string)}
 	bootstrap.Addresses[100] = "address1"
-	if bootstrap.Validate(nil, true) {
+	if bootstrap.Validate(nil, true, UnknownStateMachine) {
 		t.Errorf("incorrect result not reported")
 	}
 }
@@ -44,7 +44,7 @@ func TestCorruptedBootstrapValueIsChecked(t *testing.T) {
 		t.Errorf("didn't panic")
 	}()
 	bootstrap := Bootstrap{Join: false, Addresses: make(map[uint64]string)}
-	bootstrap.Validate(nil, true)
+	bootstrap.Validate(nil, true, UnknownStateMachine)
 }
 
 func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
@@ -52,25 +52,55 @@ func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
 	bootstrap.Addresses[100] = "address1"
 	bootstrap.Addresses[200] = "address2"
 	bootstrap.Addresses[300] = "address3"
-	if !bootstrap.Validate(nil, false) {
+	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
 		t.Errorf("unexpected validation result")
 	}
 	nodes1 := make(map[uint64]string)
-	if !bootstrap.Validate(nodes1, false) {
+	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
 		t.Errorf("restarting node should be allowed")
 	}
 	nodes1[100] = "address1"
-	if bootstrap.Validate(nodes1, false) {
+	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
 		t.Errorf("inconsistent members not reported")
 	}
 	nodes1[200] = "address2"
 	nodes1[300] = "address3"
-	if !bootstrap.Validate(nodes1, false) {
+	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
 		t.Errorf("correct members incorrected flagged")
 	}
 	nodes1[300] = "address4"
-	if bootstrap.Validate(nodes1, false) {
+	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
 		t.Errorf("inconsistent members not reported")
+	}
+}
+
+func TestInconsistentStateMachineTypeIsDetected(t *testing.T) {
+	tests := []struct {
+		bt     StateMachineType
+		ct     StateMachineType
+		result bool
+	}{
+		{UnknownStateMachine, UnknownStateMachine, true},
+		{UnknownStateMachine, RegularStateMachine, true},
+		{UnknownStateMachine, ConcurrentStateMachine, true},
+		{UnknownStateMachine, AllDiskStateMachine, true},
+		{RegularStateMachine, RegularStateMachine, true},
+		{RegularStateMachine, ConcurrentStateMachine, false},
+		{RegularStateMachine, AllDiskStateMachine, false},
+		{ConcurrentStateMachine, RegularStateMachine, false},
+		{ConcurrentStateMachine, ConcurrentStateMachine, true},
+		{ConcurrentStateMachine, AllDiskStateMachine, false},
+		{AllDiskStateMachine, RegularStateMachine, false},
+		{AllDiskStateMachine, ConcurrentStateMachine, false},
+		{AllDiskStateMachine, AllDiskStateMachine, true},
+	}
+	for idx, tt := range tests {
+		addr := make(map[uint64]string)
+		addr[100] = "addr1"
+		bs := Bootstrap{Type: tt.bt, Addresses: addr}
+		if bs.Validate(nil, false, tt.ct) != tt.result {
+			t.Errorf("%d, validation failed", idx)
+		}
 	}
 }
 

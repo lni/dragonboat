@@ -225,8 +225,8 @@ func TestMultiraftAPICanProposalAndRead(t *testing.T) {
 			k := "test-key"
 			v := random.String(sz)
 			kv := &kvpb.PBKV{
-				Key: &k,
-				Val: &v,
+				Key: k,
+				Val: v,
 			}
 			data, err := proto.Marshal(kv)
 			if err != nil {
@@ -249,14 +249,14 @@ func TestMultiraftAPICanProposalAndRead(t *testing.T) {
 			cs.ProposalCompleted()
 			ri := &mr.RaftReadIndex{
 				ClusterId: mtClusterID,
-				Data:      []byte(*kv.Key),
+				Data:      []byte(kv.Key),
 			}
 			resp, err = client.Read(ctx, ri)
 			if err != nil {
 				t.Errorf("failed to read, %v", err)
 			} else {
-				if string(resp.Data) != *kv.Val {
-					t.Errorf("got %s, want %s", string(resp.Data), *kv.Val)
+				if string(resp.Data) != kv.Val {
+					t.Errorf("got %s, want %s", string(resp.Data), kv.Val)
 				}
 			}
 			ri2 := &mr.RaftReadIndex{
@@ -282,8 +282,8 @@ func getTestKVData() []byte {
 	key := "test-key"
 	val := "test-data"
 	kv := &kvpb.PBKV{
-		Key: &key,
-		Val: &val,
+		Key: key,
+		Val: val,
 	}
 	data, err := proto.Marshal(kv)
 	if err != nil {
@@ -296,8 +296,8 @@ func getTestKVData2() []byte {
 	key := "test-key-2"
 	val := "test-data-2"
 	kv := &kvpb.PBKV{
-		Key: &key,
-		Val: &val,
+		Key: key,
+		Val: val,
 	}
 	data, err := proto.Marshal(kv)
 	if err != nil {

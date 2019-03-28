@@ -190,7 +190,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	sz, err := savable.SaveSnapshot(nil, writer, session, nil)
+	sz, _, err := savable.SaveSnapshot(nil, writer, session, nil)
 	s.dataSize = sz
 	if err != nil {
 		return nil, env, err
@@ -867,8 +867,8 @@ func getTestKVData() []byte {
 	k := "test-key"
 	d := "test-value"
 	u := kvpb.PBKV{
-		Key: &k,
-		Val: &d,
+		Key: k,
+		Val: d,
 	}
 	data, err := proto.Marshal(&u)
 	if err != nil {

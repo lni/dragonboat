@@ -23,8 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
@@ -141,10 +139,13 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	k := "test-key"
 	d := "test-value"
 	kv := kvpb.PBKV{
-		Key: &k,
-		Val: &d,
+		Key: k,
+		Val: d,
 	}
-	data, _ := proto.Marshal(&kv)
+	data, err := kv.Marshal()
+	if err != nil {
+		panic(err)
+	}
 	e := pb.Entry{Index: 1, Cmd: data}
 	ds.Update(nil, e)
 }

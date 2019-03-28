@@ -1196,16 +1196,16 @@ func makeReadRequest(ctx context.Context,
 	client mr.NodehostAPIClient, clusterID uint64, kv *kvpb.PBKV) bool {
 	ri := &mr.RaftReadIndex{
 		ClusterId: clusterID,
-		Data:      []byte(*kv.Key),
+		Data:      []byte(kv.Key),
 	}
 	resp, err := client.Read(ctx, ri)
 	if err != nil {
 		plog.Warningf("failed to read, %v", err)
 		return false
 	} else {
-		if string(resp.Data) != *kv.Val {
+		if string(resp.Data) != kv.Val {
 			plog.Panicf("inconsistent state, got %s, want %s",
-				string(resp.Data), *kv.Val)
+				string(resp.Data), kv.Val)
 		} else {
 			plog.Infof("test read write comparison completed successfully")
 		}
@@ -1233,8 +1233,8 @@ func makeMonkeyTestRequests(ctx context.Context,
 		key := fmt.Sprintf("key-%d", rand.Uint64())
 		val := random.String(rand.Int()%16 + 8)
 		kv := &kvpb.PBKV{
-			Key: &key,
-			Val: &val,
+			Key: key,
+			Val: val,
 		}
 		cctx, cancel := context.WithTimeout(ctx, defaultTestTimeout)
 		if makeWriteRequest(cctx, writeClient, clusterID, kv) {

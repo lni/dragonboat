@@ -146,7 +146,7 @@ type IStreamable interface {
 
 type ISavable interface {
 	SaveSnapshot(interface{},
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
+		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, bool, error)
 }
 
 type ILoadableSM interface {
@@ -166,7 +166,7 @@ type IManagedStateMachine interface {
 	GetHash() uint64
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, error)
+		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, bool, error)
 	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From)
@@ -293,7 +293,7 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 // by the fp input string.
 func (ds *NativeStateMachine) SaveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, error) {
+	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
 	if ds.sm.AllDiskStateMachine() {
 		return ds.saveDummySnapshot(writer, session)
 	}
@@ -301,43 +301,45 @@ func (ds *NativeStateMachine) SaveSnapshot(
 }
 
 func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
-	session []byte) (uint64, error) {
+	session []byte) (uint64, bool, error) {
+	dummy := true
 	_, err := writer.Write(session)
 	if err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if err = writer.Flush(); err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if err := writer.SaveHeader(16, 0); err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
-	return writer.GetPayloadSize(16) + SnapshotHeaderSize, nil
+	return writer.GetPayloadSize(16) + SnapshotHeaderSize, dummy, nil
 }
 
 func (ds *NativeStateMachine) saveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, error) {
+	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
+	dummy := false
 	n, err := writer.Write(session)
 	if err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if n != len(session) {
-		return 0, io.ErrShortWrite
+		return 0, dummy, io.ErrShortWrite
 	}
 	smsz := uint64(len(session))
 	sz, err := ds.sm.SaveSnapshot(ssctx, writer, collection, ds.done)
 	if err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if err = writer.Flush(); err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	if err = writer.SaveHeader(smsz, sz); err != nil {
-		return 0, err
+		return 0, dummy, err
 	}
 	actualSz := writer.GetPayloadSize(sz + smsz)
-	return actualSz + SnapshotHeaderSize, nil
+	return actualSz + SnapshotHeaderSize, dummy, nil
 }
 
 func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
