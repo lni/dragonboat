@@ -485,6 +485,7 @@ func TestReplaceSnapshotFile(t *testing.T) {
 
 func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64) {
 	makeTestSnapshotFile(t, 0, sz, V2SnapshotVersion)
+	defer os.RemoveAll(testSnapshotFilename)
 	reader, err := NewSnapshotReader(testSnapshotFilename)
 	if err != nil {
 		t.Fatalf("failed to create reader %v", err)
