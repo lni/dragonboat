@@ -79,7 +79,7 @@ func getVersionWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Wrtier(w), true
 	} else if v == V2SnapshotVersion {
-		return newV2Writer(w), true
+		return newV2Writer(w, defaultChecksumType), true
 	}
 	return nil, false
 }
@@ -92,17 +92,19 @@ func mustGetVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
 	return vw
 }
 
-func getVersionReader(r io.Reader, v SnapshotVersion) (IVReader, bool) {
+func getVersionReader(r io.Reader,
+	v SnapshotVersion, t pb.ChecksumType) (IVReader, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Reader(r), true
 	} else if v == V2SnapshotVersion {
-		return newV2Reader(r), true
+		return newV2Reader(r, t), true
 	}
 	return nil, false
 }
 
-func mustGetVersionReader(r io.Reader, v SnapshotVersion) IVReader {
-	vr, ok := getVersionReader(r, v)
+func mustGetVersionReader(r io.Reader,
+	v SnapshotVersion, t pb.ChecksumType) IVReader {
+	vr, ok := getVersionReader(r, v, t)
 	if !ok {
 		plog.Panicf("failed to get version reader, v %d", v)
 	}
@@ -289,7 +291,9 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	sr.r = mustGetVersionReader(reader, (SnapshotVersion)(sr.header.Version))
+	v := (SnapshotVersion)(sr.header.Version)
+	t := (pb.ChecksumType)(sr.header.ChecksumType)
+	sr.r = mustGetVersionReader(reader, v, t)
 	return sr.header, nil
 }
 

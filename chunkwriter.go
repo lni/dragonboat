@@ -46,7 +46,8 @@ func newChunkWriter(sink pb.IChunkSink,
 		sink: sink,
 		meta: meta,
 	}
-	cw.bw = rsm.NewBlockWriter(SnapshotChunkSize, cw.onNewBlock)
+	cw.bw = rsm.NewBlockWriter(SnapshotChunkSize,
+		cw.onNewBlock, rsm.DefaultChecksumType)
 	if _, err := cw.Write(rsm.GetEmptyLRUSession()); err != nil {
 		return nil, err
 	}

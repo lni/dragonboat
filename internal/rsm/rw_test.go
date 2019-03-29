@@ -72,7 +72,7 @@ func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 		v := make([]byte, sz)
 		rand.Read(v)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
-		w := newV2Writer(buf)
+		w := newV2Writer(buf, defaultChecksumType)
 		_, err := w.Write(v)
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
@@ -122,7 +122,7 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 		v := make([]byte, sz)
 		rand.Read(v)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
-		w := newV2Writer(buf)
+		w := newV2Writer(buf, defaultChecksumType)
 		_, err := w.Write(v)
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
@@ -237,7 +237,7 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 			written = append(written, data...)
 			return nil
 		}
-		writer := newBlockWriter(blockSize, onBlock)
+		writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
 		input := make([]byte, sz)
 		for i := range input {
 			input[i] = byte((sz + uint64(i)) % 256)
@@ -296,7 +296,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			}
 			return nil
 		}
-		writer := newBlockWriter(blockSize, onBlock)
+		writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
 		input := make([]byte, sz)
 		v := 0
 		for i := range input {
@@ -324,7 +324,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			}
 			curRead := make([]byte, bufSz)
 			lr := io.LimitReader(buf, int64(len(buf.Bytes())-16))
-			reader := newBlockReader(lr, blockSize)
+			reader := newBlockReader(lr, blockSize, defaultChecksumType)
 			for {
 				n, err = reader.Read(curRead)
 				if err != nil && err != io.EOF {
@@ -358,7 +358,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 		}
 		return nil
 	}
-	writer := newBlockWriter(blockSize, onBlock)
+	writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
 	input := make([]byte, sz)
 	v := 0
 	for i := range input {
@@ -385,7 +385,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 			curRead := make([]byte, 4)
 			written[idx] = byte(written[idx] + 1)
 			lr := io.LimitReader(bytes.NewBuffer(written), int64(len(written)-16))
-			reader := newBlockReader(lr, blockSize)
+			reader := newBlockReader(lr, blockSize, defaultChecksumType)
 			for {
 				n, err = reader.Read(curRead)
 				if err != nil && err != io.EOF {

@@ -125,19 +125,21 @@ type IBlockWriter interface {
 }
 
 func NewBlockWriter(blockSize uint64,
-	onNewBlock func(data []byte, crc []byte) error) *blockWriter {
-	return newBlockWriter(blockSize, onNewBlock)
+	onNewBlock func(data []byte, crc []byte) error,
+	t pb.ChecksumType) *blockWriter {
+	return newBlockWriter(blockSize, onNewBlock, t)
 }
 
 func newBlockWriter(blockSize uint64,
-	onNewBlock func(data []byte, crc []byte) error) *blockWriter {
+	onNewBlock func(data []byte, crc []byte) error,
+	t pb.ChecksumType) *blockWriter {
 	return &blockWriter{
 		blockSize:  blockSize,
 		block:      make([]byte, 0, blockSize+checksumSize),
 		onNewBlock: onNewBlock,
 		nextStop:   blockSize,
-		h:          getDefaultChecksum(),
-		fh:         getDefaultChecksum(),
+		h:          mustGetChecksum(t),
+		fh:         mustGetChecksum(t),
 	}
 }
 
@@ -211,6 +213,7 @@ func (bw *blockWriter) processNewBlock(data []byte, crc []byte) error {
 
 type blockReader struct {
 	r         io.Reader
+	t         pb.ChecksumType
 	blockSize uint64
 	block     []byte
 	hf        hash.Hash
@@ -219,9 +222,11 @@ type blockReader struct {
 // the input reader should be a reader to all blocks, thus the 16 bytes length
 // and magic number fields should not be included, use a io.LimitReader to
 // exclude them
-func newBlockReader(r io.Reader, blockSize uint64) *blockReader {
+func newBlockReader(r io.Reader,
+	blockSize uint64, t pb.ChecksumType) *blockReader {
 	return &blockReader{
 		r:         r,
+		t:         t,
 		blockSize: blockSize,
 		block:     make([]byte, 0, blockSize+checksumSize),
 	}
@@ -263,7 +268,7 @@ func (br *blockReader) readBlock() (int, error) {
 		return n, err
 	}
 	br.block = br.block[:n]
-	h := getDefaultChecksum()
+	h := mustGetChecksum(br.t)
 	if !validateBlock(br.block, h) {
 		panic("corrupted block")
 	}
@@ -290,7 +295,8 @@ type v1writer struct {
 }
 
 func newV1Wrtier(f io.Writer) *v1writer {
-	h := getDefaultChecksum()
+	// v1 is hard coded to use pb.CRC32IEEE
+	h := mustGetChecksum(pb.CRC32IEEE)
 	return &v1writer{f: io.MultiWriter(f, h), h: h}
 }
 
@@ -320,7 +326,8 @@ type v1reader struct {
 }
 
 func newV1Reader(r io.Reader) *v1reader {
-	h := getDefaultChecksum()
+	// v1 is hard coded to use pb.CRC32IEEE
+	h := mustGetChecksum(pb.CRC32IEEE)
 	return &v1reader{
 		r: io.TeeReader(r, h),
 		h: h,
@@ -339,7 +346,7 @@ type v2writer struct {
 	bw *blockWriter
 }
 
-func newV2Writer(fw io.Writer) *v2writer {
+func newV2Writer(fw io.Writer, t pb.ChecksumType) *v2writer {
 	onBlock := func(data []byte, crc []byte) error {
 		v := append(data, crc...)
 		n, err := fw.Write(v)
@@ -349,7 +356,7 @@ func newV2Writer(fw io.Writer) *v2writer {
 		return err
 	}
 	return &v2writer{
-		bw: newBlockWriter(snapshotBlockSize, onBlock),
+		bw: newBlockWriter(snapshotBlockSize, onBlock, t),
 	}
 }
 
@@ -377,8 +384,8 @@ type v2reader struct {
 	br *blockReader
 }
 
-func newV2Reader(fr io.Reader) *v2reader {
-	return &v2reader{br: newBlockReader(fr, snapshotBlockSize)}
+func newV2Reader(fr io.Reader, t pb.ChecksumType) *v2reader {
+	return &v2reader{br: newBlockReader(fr, snapshotBlockSize, t)}
 }
 
 func (br *v2reader) Read(data []byte) (int, error) {
@@ -518,7 +525,11 @@ func GetV2PayloadChecksum(fp string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := getDefaultChecksum()
+	t, err := getV2ChecksumType(fp)
+	if err != nil {
+		return nil, err
+	}
+	h := mustGetChecksum(t)
 	f, err := os.OpenFile(fp, os.O_RDONLY, 0755)
 	if err != nil {
 		return nil, err
@@ -541,6 +552,22 @@ func GetV2PayloadChecksum(fp string) ([]byte, error) {
 		}
 	}
 	return h.Sum(nil), err
+}
+
+func getV2ChecksumType(fp string) (pb.ChecksumType, error) {
+	reader, err := NewSnapshotReader(fp)
+	if err != nil {
+		return pb.ChecksumType(0), err
+	}
+	header, err := reader.GetHeader()
+	if err != nil {
+		return pb.ChecksumType(0), err
+	}
+	reader.ValidateHeader(header)
+	if header.Version != uint64(V2SnapshotVersion) {
+		return pb.ChecksumType(0), errors.New("not a v2 snapshot file")
+	}
+	return header.ChecksumType, nil
 }
 
 func getV2CRCOffsetList(fp string) ([]uint64, error) {
