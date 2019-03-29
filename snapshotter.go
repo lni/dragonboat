@@ -216,7 +216,7 @@ func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
 		return err
 	}
 	for _, ss := range snapshots {
-		if ss.Index <= shrinkTo {
+		if !ss.Dummy && ss.Index <= shrinkTo {
 			env := s.getSnapshotEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()

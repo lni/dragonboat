@@ -160,10 +160,10 @@ func (sw *SnapshotWriter) Close() error {
 	if err := sw.file.Sync(); err != nil {
 		return err
 	}
-	if err := fileutil.SyncDir(filepath.Dir(sw.fp)); err != nil {
+	if err := sw.file.Close(); err != nil {
 		return err
 	}
-	return sw.file.Close()
+	return fileutil.SyncDir(filepath.Dir(sw.fp))
 }
 
 // Write writes the specified data to the snapshot.
