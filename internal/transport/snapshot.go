@@ -49,7 +49,7 @@ import (
 var (
 	// FIXME:
 	// move to the settings package.
-	maxConnectionCount uint32 = 64
+	maxConnectionCount uint32 = uint32(settings.Soft.MaxSnapshotConnections)
 	maxSnapshotCount          = settings.Soft.MaxSnapshotCount
 )
 
@@ -107,7 +107,8 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 func (t *Transport) tryCreateConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *connection {
 	if v := atomic.AddUint32(&t.connections, 1); v > maxConnectionCount {
-		atomic.AddUint32(&t.connections, ^uint32(0))
+		r := atomic.AddUint32(&t.connections, ^uint32(0))
+		plog.Errorf("connection count is rate limited %d", r)
 		return nil
 	}
 	return t.createConnection(key, addr, streaming, sz)
@@ -115,6 +116,7 @@ func (t *Transport) tryCreateConnection(key raftio.NodeInfo,
 
 func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *connection {
+
 	c := newConnection(key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())
 	c.streamChunkSent = t.streamChunkSent

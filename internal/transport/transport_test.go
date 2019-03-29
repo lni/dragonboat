@@ -877,6 +877,54 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	}
 }
 
+func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
+	trans, nodes, stopper, tt := newTestTransport(false)
+	defer trans.serverCtx.Stop()
+	defer tt.cleanup()
+	defer trans.Stop()
+	defer stopper.Stop()
+	trans.SetDeploymentID(12345)
+	nodes.AddNode(100, 2, grpcServerURL)
+	conns := make([]*sink, 0)
+	for i := uint32(0); i < maxConnectionCount; i++ {
+		sink := trans.GetStreamConnection(100, 2)
+		if sink == nil {
+			t.Errorf("failed to get sink")
+		}
+		conns = append(conns, sink)
+	}
+	for i := uint32(0); i < maxConnectionCount; i++ {
+		sink := trans.GetStreamConnection(100, 2)
+		if sink != nil {
+			t.Errorf("connection is not limited")
+		}
+	}
+	for _, v := range conns {
+		close(v.l.ch)
+	}
+	for {
+		if atomic.LoadUint32(&trans.connections) != 0 {
+			time.Sleep(time.Millisecond)
+		} else {
+			break
+		}
+	}
+	breaker := trans.GetCircuitBreaker(grpcServerURL)
+	for {
+		breaker.Success()
+		if breaker.Ready() {
+			break
+		}
+	}
+	for i := uint32(0); i < maxConnectionCount; i++ {
+		sink := trans.GetStreamConnection(100, 2)
+		if sink == nil {
+			t.Errorf("failed to get sink again %d", i)
+		}
+		conns = append(conns, sink)
+	}
+}
+
 func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	testFailedSnapshotLoadChunkWillBeReported(t, false)
