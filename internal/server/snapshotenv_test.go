@@ -102,86 +102,101 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	mustBeChild(rootDir, finalDir)
 }
 
-func TestRenameTempDirToFinalDir(t *testing.T) {
+func runEnvTest(t *testing.T, f func(t *testing.T, env *SnapshotEnv)) {
 	rd := "server-pkg-test-data-safe-to-delete"
-	f := func(cid uint64, nid uint64) string {
+	ff := func(cid uint64, nid uint64) string {
 		return rd
 	}
 	defer func() {
 		os.RemoveAll(rd)
 	}()
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSnapshotEnv(ff, 1, 1, 1, 2, SnapshottingMode)
 	tmpDir := env.GetTempDir()
-	finalDir := env.GetFinalDir()
 	os.MkdirAll(tmpDir, 0755)
-	os.MkdirAll(finalDir, 0755)
-	exists, err := env.RenameTempDirToFinalDir()
-	if err == nil {
-		t.Errorf("err is nil")
+	f(t, env)
+}
+
+func TestRenameTempDirToFinalDir(t *testing.T) {
+	tf := func(t *testing.T, env *SnapshotEnv) {
+		finalDir := env.GetFinalDir()
+		os.MkdirAll(finalDir, 0755)
+		err := env.renameTempDirToFinalDir()
+		if err != ErrSnapshotOutOfDate {
+			t.Errorf("err is nil")
+		}
 	}
-	if !exists {
-		t.Errorf("exists not true")
-	}
+	runEnvTest(t, tf)
 }
 
 func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
-	rd := "server-pkg-test-data-safe-to-delete"
-	f := func(cid uint64, nid uint64) string {
-		return rd
+	tf := func(t *testing.T, env *SnapshotEnv) {
+		if env.isFinalDirExists() {
+			t.Errorf("final dir already exist")
+		}
+		err := env.renameTempDirToFinalDir()
+		if err != nil {
+			t.Errorf("rename tmp dir to final dir failed %v", err)
+		}
+		if !env.isFinalDirExists() {
+			t.Errorf("final dir does not exist")
+		}
+		if env.HasFlagFile() {
+			t.Errorf("flag file not suppose to be there")
+		}
 	}
-	defer func() {
-		os.RemoveAll(rd)
-	}()
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
-	tmpDir := env.GetTempDir()
-	os.MkdirAll(tmpDir, 0755)
-	if env.IsFinalDirExists() {
-		t.Errorf("final dir already exist")
-	}
-	exists, err := env.RenameTempDirToFinalDir()
-	if err != nil {
-		t.Errorf("rename tmp dir to final dir failed %v", err)
-	}
-	if exists {
-		t.Errorf("exists is true")
-	}
-	if !env.IsFinalDirExists() {
-		t.Errorf("final dir does not exist")
-	}
-	if env.HasFlagFile() {
-		t.Errorf("flag file not suppose to be there")
-	}
+	runEnvTest(t, tf)
 }
 
 func TestFlagFileExists(t *testing.T) {
-	rd := "server-pkg-test-data-safe-to-delete"
-	f := func(cid uint64, nid uint64) string {
-		return rd
+	tf := func(t *testing.T, env *SnapshotEnv) {
+		if env.isFinalDirExists() {
+			t.Errorf("final dir already exist")
+		}
+		msg := &pb.Message{}
+		if err := env.createFlagFile(msg); err != nil {
+			t.Errorf("failed to create flag file")
+		}
+		err := env.renameTempDirToFinalDir()
+		if err != nil {
+			t.Errorf("rename tmp dir to final dir failed %v", err)
+		}
+		if !env.isFinalDirExists() {
+			t.Errorf("final dir does not exist")
+		}
+		if !env.HasFlagFile() {
+			t.Errorf("flag file not suppose to be there")
+		}
 	}
-	defer func() {
-		os.RemoveAll(rd)
-	}()
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
-	tmpDir := env.GetTempDir()
-	os.MkdirAll(tmpDir, 0755)
-	if env.IsFinalDirExists() {
-		t.Errorf("final dir already exist")
+	runEnvTest(t, tf)
+}
+
+func TestFinalizeSnapshotCanComplete(t *testing.T) {
+	tf := func(t *testing.T, env *SnapshotEnv) {
+		m := &pb.Message{}
+		if err := env.FinalizeSnapshot(m); err != nil {
+			t.Errorf("failed to finalize snapshot %v", err)
+		}
+		if !env.HasFlagFile() {
+			t.Errorf("no flag file")
+		}
+		if !env.isFinalDirExists() {
+			t.Errorf("no final dir")
+		}
 	}
-	msg := &pb.Message{}
-	if err := env.CreateFlagFile(msg); err != nil {
-		t.Errorf("failed to create flag file")
+	runEnvTest(t, tf)
+}
+
+func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
+	tf := func(t *testing.T, env *SnapshotEnv) {
+		finalDir := env.GetFinalDir()
+		os.MkdirAll(finalDir, 0755)
+		m := &pb.Message{}
+		if err := env.FinalizeSnapshot(m); err != ErrSnapshotOutOfDate {
+			t.Errorf("didn't return ErrSnapshotOutOfDate %v", err)
+		}
+		if env.HasFlagFile() {
+			t.Errorf("flag file exist")
+		}
 	}
-	exists, err := env.RenameTempDirToFinalDir()
-	if err != nil {
-		t.Errorf("rename tmp dir to final dir failed %v", err)
-	}
-	if exists {
-		t.Errorf("exists is true")
-	}
-	if !env.IsFinalDirExists() {
-		t.Errorf("final dir does not exist")
-	}
-	if !env.HasFlagFile() {
-		t.Errorf("flag file not suppose to be there")
-	}
+	runEnvTest(t, tf)
 }

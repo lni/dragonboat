@@ -261,15 +261,12 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 				return false
 			}
 		}
-		if err := c.finalizeSnapshotFile(chunk, td); err != nil {
+		if err := c.finalizeSnapshot(chunk, td); err != nil {
 			c.deleteTempChunkDir(chunk)
 			if err != ErrSnapshotOutOfDate {
 				plog.Panicf("%s failed when finalizing, %v", key, err)
 			}
-			if !c.flagFileExists(chunk) {
-				plog.Warningf("out-of-date chunk without flag file %s", key)
-				return false
-			}
+			return false
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
 		plog.Infof("%s received snapshot from %d, idx %d, term %d",
@@ -316,14 +313,6 @@ func (c *chunks) saveChunk(chunk pb.SnapshotChunk) error {
 	return nil
 }
 
-func (c *chunks) generateFlagFile(td *tracked, env *server.SnapshotEnv) error {
-	msg := c.toMessage(td.firstChunk, td.extraFiles)
-	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
-		panic("invalid message")
-	}
-	return env.CreateFlagFile(&msg.Requests[0].Snapshot)
-}
-
 func (c *chunks) getSnapshotEnv(chunk pb.SnapshotChunk) *server.SnapshotEnv {
 	return server.NewSnapshotEnv(c.getSnapshotDir,
 		chunk.ClusterId, chunk.NodeId, chunk.Index, chunk.From,
@@ -335,25 +324,18 @@ func (c *chunks) flagFileExists(chunk pb.SnapshotChunk) bool {
 	return env.HasFlagFile()
 }
 
-func (c *chunks) finalizeSnapshotFile(chunk pb.SnapshotChunk,
-	td *tracked) error {
+func (c *chunks) finalizeSnapshot(chunk pb.SnapshotChunk, td *tracked) error {
 	env := c.getSnapshotEnv(chunk)
-	if err := c.generateFlagFile(td, env); err != nil {
-		return err
+	msg := c.toMessage(td.firstChunk, td.extraFiles)
+	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
+		panic("invalid message")
 	}
-	if !env.IsFinalDirExists() {
-		if outOfDate, err := env.RenameTempDirToFinalDir(); err != nil {
-			if outOfDate {
-				return ErrSnapshotOutOfDate
-			}
-			return err
-		}
-	} else {
-		plog.Warningf("snapshot dir %s exists, remove the tmp dir",
-			env.GetFinalDir())
+	ss := &msg.Requests[0].Snapshot
+	err := env.FinalizeSnapshot(ss)
+	if err == server.ErrSnapshotOutOfDate {
 		return ErrSnapshotOutOfDate
 	}
-	return nil
+	return err
 }
 
 func (c *chunks) deleteTempChunkDir(chunk pb.SnapshotChunk) {

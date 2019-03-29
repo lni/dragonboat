@@ -147,32 +147,17 @@ func (s *snapshotter) Load(index uint64,
 
 func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
 	env := s.getSnapshotEnv(snapshot.Index)
-	if err := env.CreateFlagFile(&snapshot); err != nil {
-		return err
-	}
 	if err := env.SaveSnapshotMetadata(&snapshot); err != nil {
 		return err
 	}
-	if readyToReturnTestKnob(s.stopc, "final dir check") {
-		return sm.ErrSnapshotStopped
-	}
-	if env.IsFinalDirExists() {
-		return errSnapshotOutOfDate
-	}
-	if outOfDate, err := env.RenameTempDirToFinalDir(); err != nil {
-		if outOfDate {
+	if err := env.FinalizeSnapshot(&snapshot); err != nil {
+		if err == server.ErrSnapshotOutOfDate {
 			return errSnapshotOutOfDate
 		}
 		return err
 	}
-	if readyToReturnTestKnob(s.stopc, "saving to logdb") {
-		return sm.ErrSnapshotStopped
-	}
 	if err := s.saveToLogDB(snapshot); err != nil {
 		return err
-	}
-	if readyToReturnTestKnob(s.stopc, "removing flag file") {
-		return sm.ErrSnapshotStopped
 	}
 	return env.RemoveFlagFile()
 }

@@ -23,7 +23,6 @@ import (
 
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -294,39 +293,6 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 		}
 		if handler.getSnapshotCount(100, 2) != 1 {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
-		}
-	}
-	runChunkTest(t, fn)
-}
-
-// when flag file is still there
-func TestOutOfDateSnapshotChunksWithFlagFileCanBeHandled(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
-		inputs := getTestChunks()
-		env := chunks.getSnapshotEnv(inputs[0])
-		snapDir := env.GetFinalDir()
-		if err := os.MkdirAll(snapDir, 0755); err != nil {
-			t.Errorf("failed to create dir %v", err)
-		}
-		msg := &pb.Message{}
-		if err := fileutil.CreateFlagFile(snapDir, fileutil.SnapshotFlagFilename, msg); err != nil {
-			t.Errorf("failed to create flag file")
-		}
-		chunks.validate = false
-		for _, c := range inputs {
-			if !chunks.addChunk(c) {
-				t.Errorf("failed to add chunk")
-			}
-		}
-		if _, ok := chunks.tracked[snapshotKey(inputs[0])]; ok {
-			t.Errorf("failed to remove last received time")
-		}
-		if handler.getSnapshotCount(100, 2) != 1 {
-			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
-		}
-		tmpSnapDir := env.GetTempDir()
-		if _, err := os.Stat(tmpSnapDir); !os.IsNotExist(err) {
-			t.Errorf("tmp dir not removed")
 		}
 	}
 	runChunkTest(t, fn)

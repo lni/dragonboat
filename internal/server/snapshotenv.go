@@ -15,10 +15,12 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/golang/protobuf/proto"
@@ -27,12 +29,15 @@ import (
 )
 
 var (
+	ErrSnapshotOutOfDate     = errors.New("snapshot out of order")
 	snapshotMetadataFilename = "snapshot.metadata"
 	genTmpDirSuffix          = "generating"
 	recvTmpDirSuffix         = "receiving"
 	snapshotFileSuffix       = "gbsnap"
 	shrinkedSuffix           = "shrinked"
 )
+
+var finalizeLock sync.Mutex
 
 // GetSnapshotDirFunc is the function type that returns the snapshot dir
 // for the specified raft node.
@@ -162,6 +167,22 @@ func (se *SnapshotEnv) MustRemoveTempDir() {
 	}
 }
 
+func (se *SnapshotEnv) FinalizeSnapshot(msg proto.Message) error {
+	finalizeLock.Lock()
+	defer finalizeLock.Unlock()
+	if err := se.createFlagFile(msg); err != nil {
+		return err
+	}
+	if se.isFinalDirExists() {
+		return ErrSnapshotOutOfDate
+	}
+	err := se.renameTempDirToFinalDir()
+	if err == ErrSnapshotOutOfDate {
+		panic("got ErrSnapshotOutOfDate after confirming no final dir")
+	}
+	return err
+}
+
 // CreateTempDir creates the temp snapshot directory.
 func (se *SnapshotEnv) CreateTempDir() error {
 	return se.createDir(se.tmpDir)
@@ -170,41 +191,6 @@ func (se *SnapshotEnv) CreateTempDir() error {
 // RemoveFinalDir removes the final snapshot directory.
 func (se *SnapshotEnv) RemoveFinalDir() error {
 	return se.removeDir(se.finalDir)
-}
-
-// IsFinalDirExists returns a boolean value indicating whether the final
-// directory exists.
-func (se *SnapshotEnv) IsFinalDirExists() bool {
-	if _, err := os.Stat(se.finalDir); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// see rename() in go/src/os/file_unix.go for details
-// checked on golang 1.10/1.11
-func isTargetDirExistError(err error) bool {
-	e, ok := err.(*os.LinkError)
-	if ok {
-		return e.Err == syscall.EEXIST || e.Err == syscall.ENOTEMPTY
-	}
-	return false
-}
-
-// RenameTempDirToFinalDir renames the temp directory to the final directory
-// name. It return a boolean value indicating whether the operation failed
-// due to target directory already exists.
-func (se *SnapshotEnv) RenameTempDirToFinalDir() (bool, error) {
-	if err := os.Rename(se.tmpDir, se.finalDir); err != nil {
-		return isTargetDirExistError(err), err
-	}
-	return false, fileutil.SyncDir(se.rootDir)
-}
-
-// CreateFlagFile creates the flag file in the temp directory.
-func (se *SnapshotEnv) CreateFlagFile(msg proto.Message) error {
-	return fileutil.CreateFlagFile(se.tmpDir,
-		fileutil.SnapshotFlagFilename, msg)
 }
 
 func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
@@ -264,4 +250,36 @@ func (se *SnapshotEnv) removeDir(dir string) error {
 		return err
 	}
 	return fileutil.SyncDir(se.rootDir)
+}
+
+func (se *SnapshotEnv) isFinalDirExists() bool {
+	if _, err := os.Stat(se.finalDir); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func (se *SnapshotEnv) renameTempDirToFinalDir() error {
+	if err := os.Rename(se.tmpDir, se.finalDir); err != nil {
+		if isTargetDirExistError(err) {
+			return ErrSnapshotOutOfDate
+		}
+		return err
+	}
+	return fileutil.SyncDir(se.rootDir)
+}
+
+func (se *SnapshotEnv) createFlagFile(msg proto.Message) error {
+	return fileutil.CreateFlagFile(se.tmpDir,
+		fileutil.SnapshotFlagFilename, msg)
+}
+
+// see rename() in go/src/os/file_unix.go for details
+// checked on golang 1.10/1.11
+func isTargetDirExistError(err error) bool {
+	e, ok := err.(*os.LinkError)
+	if ok {
+		return e.Err == syscall.EEXIST || e.Err == syscall.ENOTEMPTY
+	}
+	return false
 }

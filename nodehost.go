@@ -1526,14 +1526,18 @@ func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 
 func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) {
 	nh := h.nh
+	mustKeep := false
 	if nh.isPartitioned() {
+		// InstallSnapshot is a in-memory local message type that will never be
+		// dropped in production as it will never be sent via networks
 		for _, req := range msg.Requests {
 			if req.Type == pb.InstallSnapshot {
-				plog.Warningf("dropped a snapshot to %s in partition mode, index %d",
-					logutil.DescribeNode(req.ClusterId, req.To), req.Snapshot.Index)
+				mustKeep = true
 			}
 		}
-		return
+		if !mustKeep {
+			return
+		}
 	}
 	for _, req := range msg.Requests {
 		if req.Type == pb.SnapshotReceived {
