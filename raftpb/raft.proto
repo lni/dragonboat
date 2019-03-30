@@ -67,7 +67,7 @@ enum StateMachineType {
   UnknownStateMachine     = 0;
   RegularStateMachine     = 1;
   ConcurrentStateMachine  = 2;
-  AllDiskStateMachine     = 3;
+  OnDiskStateMachine     = 3;
 }
 
 message Bootstrap {

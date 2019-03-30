@@ -210,20 +210,20 @@ const (
 	UnknownStateMachine    StateMachineType = 0
 	RegularStateMachine    StateMachineType = 1
 	ConcurrentStateMachine StateMachineType = 2
-	AllDiskStateMachine    StateMachineType = 3
+	OnDiskStateMachine     StateMachineType = 3
 )
 
 var StateMachineType_name = map[int32]string{
 	0: "UnknownStateMachine",
 	1: "RegularStateMachine",
 	2: "ConcurrentStateMachine",
-	3: "AllDiskStateMachine",
+	3: "OnDiskStateMachine",
 }
 var StateMachineType_value = map[string]int32{
 	"UnknownStateMachine":    0,
 	"RegularStateMachine":    1,
 	"ConcurrentStateMachine": 2,
-	"AllDiskStateMachine":    3,
+	"OnDiskStateMachine":     3,
 }
 
 func (x StateMachineType) Enum() *StateMachineType {

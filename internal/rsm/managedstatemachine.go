@@ -172,7 +172,7 @@ type IManagedStateMachine interface {
 	Offloaded(From)
 	Loaded(From)
 	ConcurrentSnapshot() bool
-	AllDiskStateMachine() bool
+	OnDiskStateMachine() bool
 }
 
 // ManagedStateMachineFactory is the factory function type for creating an
@@ -231,8 +231,8 @@ func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
 	return ds.sm.ConcurrentSnapshot()
 }
 
-func (ds *NativeStateMachine) AllDiskStateMachine() bool {
-	return ds.sm.AllDiskStateMachine()
+func (ds *NativeStateMachine) OnDiskStateMachine() bool {
+	return ds.sm.OnDiskStateMachine()
 }
 
 // Update updates the data store.
@@ -294,7 +294,7 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 func (ds *NativeStateMachine) SaveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
 	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
-	if ds.sm.AllDiskStateMachine() {
+	if ds.sm.OnDiskStateMachine() {
 		return ds.saveDummySnapshot(writer, session)
 	}
 	return ds.saveSnapshot(ssctx, writer, session, collection)

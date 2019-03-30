@@ -330,7 +330,7 @@ func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
 	return false
 }
 
-func (ds *StateMachineWrapper) AllDiskStateMachine() bool {
+func (ds *StateMachineWrapper) OnDiskStateMachine() bool {
 	return false
 }
 

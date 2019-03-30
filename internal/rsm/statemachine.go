@@ -190,13 +190,13 @@ func (s *StateMachine) getSnapshot(rec Commit) (pb.Snapshot, error) {
 }
 
 func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
-	if !s.AllDiskStateMachine() {
+	if !s.OnDiskStateMachine() {
 		return true
 	}
 	if !init {
 		return true
 	}
-	return s.AllDiskStateMachine() && init && ss.Index > s.diskSMIndex
+	return s.OnDiskStateMachine() && init && ss.Index > s.diskSMIndex
 }
 
 func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
@@ -237,13 +237,13 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 // we can not stream a full snapshot when membership state is catching up with
 // the all disk SM state. however, meta only snapshot can be taken at any time.
 func (s *StateMachine) readyToStreamSnapshot() bool {
-	if !s.AllDiskStateMachine() {
+	if !s.OnDiskStateMachine() {
 		return true
 	}
 	return s.GetLastApplied() >= s.diskSMIndex
 }
 
-func (s *StateMachine) OpenAllDiskStateMachine() (uint64, error) {
+func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
@@ -331,8 +331,8 @@ func (s *StateMachine) ConcurrentSnapshot() bool {
 	return s.sm.ConcurrentSnapshot()
 }
 
-func (s *StateMachine) AllDiskStateMachine() bool {
-	return s.sm.AllDiskStateMachine()
+func (s *StateMachine) OnDiskStateMachine() bool {
+	return s.sm.OnDiskStateMachine()
 }
 
 // SaveSnapshot creates a snapshot.
@@ -444,7 +444,7 @@ func (s *StateMachine) checkSnapshotStatus() error {
 	if s.index < s.snapshotIndex {
 		panic("s.index < s.snapshotIndex")
 	}
-	if !s.AllDiskStateMachine() {
+	if !s.OnDiskStateMachine() {
 		if s.index > 0 && s.index == s.snapshotIndex {
 			return raft.ErrSnapshotOutOfDate
 		}
@@ -595,7 +595,7 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 }
 
 func (s *StateMachine) entryAppliedInDiskSM(index uint64) bool {
-	if !s.AllDiskStateMachine() {
+	if !s.OnDiskStateMachine() {
 		return false
 	}
 	return index <= s.diskSMIndex

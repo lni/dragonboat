@@ -577,10 +577,10 @@ func createFakeDiskTestNodeHost(addr string,
 		RaftAddress:    peers[1],
 	}
 	nh := NewNodeHost(nhc)
-	newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 		return tests.NewFakeDiskSM(initialApplied)
 	}
-	if err := nh.StartAllDiskCluster(peers, false, newSM, rc); err != nil {
+	if err := nh.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
 		return nil, err
 	}
 	return nh, nil
@@ -669,10 +669,10 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1 := NewNodeHost(nhc1)
 	nh2 := NewNodeHost(nhc2)
-	newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 		return tests.NewFakeDiskSM(3)
 	}
-	if err := nh1.StartAllDiskCluster(peers, false, newSM, rc); err != nil {
+	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
 		return nil, nil, err
 	}
 	return nh1, nh2, nil
@@ -1314,7 +1314,7 @@ func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
-func TestAllDiskStateMachineCanBeOpened(t *testing.T) {
+func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
 		session := nh.GetNoOPSession(1)
 		for i := uint64(2); i < initialApplied*2; i++ {
@@ -1338,7 +1338,7 @@ func TestAllDiskStateMachineCanBeOpened(t *testing.T) {
 	singleFakeDiskNodeHostTest(t, tf, 5)
 }
 
-func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
+func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
 		session := nh.GetNoOPSession(1)
 		logdb := nh.logdb
@@ -1393,7 +1393,7 @@ func TestAllDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 	singleFakeDiskNodeHostTest(t, tf, 3)
 }
 
-func TestAllDiskSMCanStreamSnapshot(t *testing.T) {
+func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
 		logdb := nh1.logdb
 		snapshotted := false
@@ -1433,11 +1433,11 @@ func TestAllDiskSMCanStreamSnapshot(t *testing.T) {
 			SnapshotEntries:    5,
 			CompactionOverhead: 2,
 		}
-		newSM := func(uint64, uint64) sm.IAllDiskStateMachine {
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewFakeDiskSM(3)
 		}
 		peers := make(map[uint64]string)
-		if err := nh2.StartAllDiskCluster(peers, true, newSM, rc); err != nil {
+		if err := nh2.StartOnDiskCluster(peers, true, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		snapshotted = false

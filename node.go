@@ -142,7 +142,7 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, nodeProxy)
 	rc.commitC = sm.CommitC()
 	rc.sm = sm
-	if sm.AllDiskStateMachine() {
+	if sm.OnDiskStateMachine() {
 		rc.snapshotShrink = newTask(snapshotShrinkTaskInterval)
 	}
 	rc.startRaft(config, rc.logreader, peers, initialMember)
@@ -200,7 +200,7 @@ func (rc *node) supportClientSession() bool {
 }
 
 func (rc *node) allDiskStateMachine() bool {
-	return rc.sm.AllDiskStateMachine()
+	return rc.sm.OnDiskStateMachine()
 }
 
 func (rc *node) proposeSession(session *client.Session,
@@ -489,7 +489,7 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	var err error
 	if rec.InitialSnapshot && rc.allDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
-		index, err = rc.sm.OpenAllDiskStateMachine()
+		index, err = rc.sm.OpenOnDiskStateMachine()
 		if err != nil {
 			panic(err)
 		}
@@ -549,7 +549,7 @@ func (rc *node) shrinkSnapshots() error {
 	}
 	if rc.snapshotLock.TryLock() {
 		defer rc.snapshotLock.Unlock()
-		if !rc.sm.AllDiskStateMachine() {
+		if !rc.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
 		plog.Infof("%s will shrink snapshots up to %d", rc.lastApplied)

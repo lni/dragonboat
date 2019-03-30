@@ -356,17 +356,17 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
 
-func (nh *NodeHost) StartAllDiskCluster(nodes map[uint64]string,
+func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 	join bool,
-	createStateMachine func(uint64, uint64) sm.IAllDiskStateMachine,
+	createStateMachine func(uint64, uint64) sm.IOnDiskStateMachine,
 	config config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(rsm.NewAllDiskStateMachine(sm), done)
+		return rsm.NewNativeStateMachine(rsm.NewOnDiskStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.AllDiskStateMachine)
+	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
 }
 
 // StartClusterUsingPlugin adds a new cluster node to the NodeHost and start

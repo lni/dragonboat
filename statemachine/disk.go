@@ -24,7 +24,7 @@ var (
 	ErrSnapshotStreaming = errors.New("failed to stream the snapshot")
 )
 
-type IAllDiskStateMachine interface {
+type IOnDiskStateMachine interface {
 	Open() (uint64, error)
 	Update([]Entry) []Entry
 	Lookup([]byte) ([]byte, error)

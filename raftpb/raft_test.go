@@ -83,16 +83,16 @@ func TestInconsistentStateMachineTypeIsDetected(t *testing.T) {
 		{UnknownStateMachine, UnknownStateMachine, true},
 		{UnknownStateMachine, RegularStateMachine, true},
 		{UnknownStateMachine, ConcurrentStateMachine, true},
-		{UnknownStateMachine, AllDiskStateMachine, true},
+		{UnknownStateMachine, OnDiskStateMachine, true},
 		{RegularStateMachine, RegularStateMachine, true},
 		{RegularStateMachine, ConcurrentStateMachine, false},
-		{RegularStateMachine, AllDiskStateMachine, false},
+		{RegularStateMachine, OnDiskStateMachine, false},
 		{ConcurrentStateMachine, RegularStateMachine, false},
 		{ConcurrentStateMachine, ConcurrentStateMachine, true},
-		{ConcurrentStateMachine, AllDiskStateMachine, false},
-		{AllDiskStateMachine, RegularStateMachine, false},
-		{AllDiskStateMachine, ConcurrentStateMachine, false},
-		{AllDiskStateMachine, AllDiskStateMachine, true},
+		{ConcurrentStateMachine, OnDiskStateMachine, false},
+		{OnDiskStateMachine, RegularStateMachine, false},
+		{OnDiskStateMachine, ConcurrentStateMachine, false},
+		{OnDiskStateMachine, OnDiskStateMachine, true},
 	}
 	for idx, tt := range tests {
 		addr := make(map[uint64]string)
