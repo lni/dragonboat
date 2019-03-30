@@ -201,6 +201,9 @@ func (sm *OnDiskStateMachine) Open() (uint64, error) {
 
 // Update updates the state machine.
 func (sm *OnDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
+	if !sm.opened {
+		panic("Update called before open()")
+	}
 	if len(entries) > 0 {
 		if entries[len(entries)-1].Index <= sm.initialIndex {
 			plog.Panicf("last entry index to apply %d, initial index %d",
@@ -217,11 +220,17 @@ func (sm *OnDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
 
 // Lookup queries the state machine.
 func (sm *OnDiskStateMachine) Lookup(query []byte) ([]byte, error) {
+	if !sm.opened {
+		panic("lookup called when not opened")
+	}
 	return sm.sm.Lookup(query)
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
 func (sm *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
+	if !sm.opened {
+		panic("prepare snapshot called when not opened")
+	}
 	return sm.sm.PrepareSnapshot()
 }
 
@@ -229,12 +238,18 @@ func (sm *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
 func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
 	stopc <-chan struct{}) (uint64, error) {
+	if !sm.opened {
+		panic("save snapshot called when not opened")
+	}
 	return sm.sm.CreateSnapshot(ctx, w, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
 func (sm *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
 	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+	if !sm.opened {
+		panic("recover from snapshot called when not opened")
+	}
 	if index <= sm.applied {
 		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
 			index, sm.applied)
