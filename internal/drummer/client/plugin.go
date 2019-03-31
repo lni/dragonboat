@@ -16,8 +16,8 @@ package client
 
 import (
 	"fmt"
-	"plugin"
 
+	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -50,49 +50,9 @@ func getPluginMap(path string) map[string]pluginDetails {
 
 func getNativePlugins(path string,
 	result map[string]pluginDetails) map[string]pluginDetails {
-	for _, cp := range fileutil.GetPossibleSOFiles(path) {
-		p, err := plugin.Open(cp)
-		if err != nil {
-			plog.Panicf("failed to open so file %s, %s", cp, err.Error())
-		}
-		nf, err := p.Lookup("DragonboatApplicationName")
-		if err != nil {
-			plog.Panicf("no DragonboatApplicationName in plugin %s", cp)
-		}
-		appName := *nf.(*string)
-		csm, err := p.Lookup("CreateStateMachine")
-		if err == nil {
-			cf := csm.(func(uint64, uint64) sm.IStateMachine)
-			if _, ok := result[appName]; ok {
-				plog.Panicf("plugins with the same appName %s already exist", appName)
-			} else {
-				result[appName] = pluginDetails{createNativeStateMachine: cf}
-				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
-			}
-			continue
-		}
-		csm, err = p.Lookup("CreateConcurrentStateMachine")
-		if err == nil {
-			cf := csm.(func(uint64, uint64) sm.IConcurrentStateMachine)
-			if _, ok := result[appName]; ok {
-				plog.Panicf("plugins with the same appName %s already exist", appName)
-			} else {
-				result[appName] = pluginDetails{createConcurrentStateMachine: cf}
-				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
-			}
-			continue
-		}
-		csm, err = p.Lookup("CreateOnDiskStateMachine")
-		if err == nil {
-			cf := csm.(func(uint64, uint64) sm.IOnDiskStateMachine)
-			if _, ok := result[appName]; ok {
-				plog.Panicf("plugins with the same appName %s already exist", appName)
-			} else {
-				result[appName] = pluginDetails{createOnDiskStateMachine: cf}
-				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
-			}
-		}
-	}
+	result["kvtest"] = pluginDetails{createNativeStateMachine: tests.NewKVTest}
+	result["concurrentkv"] = pluginDetails{createConcurrentStateMachine: tests.NewConcurrentKVTest}
+	result["diskkv"] = pluginDetails{createOnDiskStateMachine: tests.NewDiskKVTest}
 	return result
 }
 
