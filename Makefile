@@ -355,9 +355,10 @@ TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
 	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-utils test-wrapper test-config test-client test-server
+	test-multiraft test-utils test-wrapper test-config test-client test-server \
+	test-tests
 ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-utils test-wrapper test-config test-client test-server
+  test-utils test-wrapper test-config test-client test-server test-tests
 test: dragonboat-test test-drummer
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
@@ -409,6 +410,8 @@ test-grpc-transport:
 	$(GOTEST) $(PKGNAME)/internal/transport
 test-multiraft:
 	$(GOTEST) $(PKGNAME)
+test-tests:
+	$(GOTEST) $(PKGNAME)/internal/tests
 test-drummer:
 	$(GOTEST) $(PKGNAME)/internal/drummer
 test-wrapper: $(PLUGIN_CPP_EXAMPLE_BIN)
@@ -683,7 +686,7 @@ clean:
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	plugin-cppkvtest drummer-monkey-test-bin binding test \
 	test-raft test-rsm test-logdb test-transport test-multiraft test-drummer \
-	test-session test-server test-utils test-config test-cppwrapper \
+	test-session test-server test-utils test-config test-cppwrapper test-tests \
 	static-check cpp-static-check clean plugin-kvtest logdb-checker \
 	test-monkey-drummer test-wrapper test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \
