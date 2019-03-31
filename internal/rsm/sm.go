@@ -30,8 +30,7 @@ type IStateMachine interface {
 	SaveSnapshot(interface{},
 		io.Writer,
 		sm.ISnapshotFileCollection, <-chan struct{}) (uint64, error)
-	RecoverFromSnapshot(uint64,
-		io.Reader, []sm.SnapshotFile, <-chan struct{}) error
+	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
 	GetHash() uint64
 	ConcurrentSnapshot() bool
@@ -255,7 +254,7 @@ func (sm *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
 			index, sm.applied)
 	}
 	sm.applied = index
-	return sm.sm.RecoverFromSnapshot(index, r, stopc)
+	return sm.sm.RecoverFromSnapshot(r, stopc)
 }
 
 // Close closes the state machine.

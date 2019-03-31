@@ -74,8 +74,8 @@ func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
 	return 16, nil
 }
 
-func (f *FakeDiskSM) RecoverFromSnapshot(applied uint64,
-	r io.Reader, stopc <-chan struct{}) error {
+func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
+	stopc <-chan struct{}) error {
 	v := make([]byte, 8)
 	if _, err := io.ReadFull(r, v); err != nil {
 		return err

@@ -395,8 +395,8 @@ func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 	return saveToWriter(db, ss, w)
 }
 
-func (d *DiskKVTest) RecoverFromSnapshot(index uint64,
-	r io.Reader, done <-chan struct{}) error {
+func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
+	done <-chan struct{}) error {
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	dbdir := getNewRandomDBDirName(dir)
 	oldDirName, err := getCurrentDBDirName(dir)

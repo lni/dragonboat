@@ -353,7 +353,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 			t.Errorf("hash doesn't change")
 		}
 		reader := bytes.NewBuffer(buf.Bytes())
-		if err := odsm.RecoverFromSnapshot(1, reader, nil); err != nil {
+		if err := odsm.RecoverFromSnapshot(reader, nil); err != nil {
 			t.Fatalf("recover from snapshot failed %v", err)
 		}
 		hash3 := odsm.GetHash()
