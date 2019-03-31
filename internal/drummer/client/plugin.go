@@ -19,14 +19,14 @@ import (
 	"plugin"
 
 	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 type pluginDetails struct {
 	filepath                     string
-	createNativeStateMachine     func(uint64, uint64) statemachine.IStateMachine
-	createConcurrentStateMachine func(uint64, uint64) statemachine.IConcurrentStateMachine
-	cresteOnDiskStateMachine     func(uint64, uint64) statemachine.IOnDiskStateMachine
+	createNativeStateMachine     func(uint64, uint64) sm.IStateMachine
+	createConcurrentStateMachine func(uint64, uint64) sm.IConcurrentStateMachine
+	createOnDiskStateMachine     func(uint64, uint64) sm.IOnDiskStateMachine
 }
 
 func (pd *pluginDetails) isRegularStateMachine() bool {
@@ -62,7 +62,7 @@ func getNativePlugins(path string,
 		appName := *nf.(*string)
 		csm, err := p.Lookup("CreateStateMachine")
 		if err == nil {
-			cf := csm.(func(uint64, uint64) statemachine.IStateMachine)
+			cf := csm.(func(uint64, uint64) sm.IStateMachine)
 			if _, ok := result[appName]; ok {
 				plog.Panicf("plugins with the same appName %s already exist", appName)
 			} else {
@@ -73,7 +73,7 @@ func getNativePlugins(path string,
 		}
 		csm, err = p.Lookup("CreateConcurrentStateMachine")
 		if err == nil {
-			cf := csm.(func(uint64, uint64) statemachine.IConcurrentStateMachine)
+			cf := csm.(func(uint64, uint64) sm.IConcurrentStateMachine)
 			if _, ok := result[appName]; ok {
 				plog.Panicf("plugins with the same appName %s already exist", appName)
 			} else {
@@ -84,7 +84,7 @@ func getNativePlugins(path string,
 		}
 		csm, err = p.Lookup("CreateOnDiskStateMachine")
 		if err == nil {
-			cf := csm.(func(uint64, uint64) statemachine.IOnDiskStateMachine)
+			cf := csm.(func(uint64, uint64) sm.IOnDiskStateMachine)
 			if _, ok := result[appName]; ok {
 				plog.Panicf("plugins with the same appName %s already exist", appName)
 			} else {
