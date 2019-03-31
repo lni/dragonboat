@@ -26,6 +26,7 @@ type pluginDetails struct {
 	filepath                     string
 	createNativeStateMachine     func(uint64, uint64) statemachine.IStateMachine
 	createConcurrentStateMachine func(uint64, uint64) statemachine.IConcurrentStateMachine
+	cresteOnDiskStateMachine     func(uint64, uint64) statemachine.IOnDiskStateMachine
 }
 
 func (pd *pluginDetails) isRegularStateMachine() bool {
@@ -34,6 +35,10 @@ func (pd *pluginDetails) isRegularStateMachine() bool {
 
 func (pd *pluginDetails) isConcurrentStateMachine() bool {
 	return pd.createConcurrentStateMachine != nil
+}
+
+func (pd *pluginDetails) isOnDiskStateMachine() bool {
+	return pd.createOnDiskStateMachine != nil
 }
 
 func getPluginMap(path string) map[string]pluginDetails {
@@ -62,8 +67,7 @@ func getNativePlugins(path string,
 				plog.Panicf("plugins with the same appName %s already exist", appName)
 			} else {
 				result[appName] = pluginDetails{createNativeStateMachine: cf}
-				plog.Infof("added a create sm function from %s, appName: %s",
-					cp, appName)
+				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
 			}
 			continue
 		}
@@ -74,8 +78,18 @@ func getNativePlugins(path string,
 				plog.Panicf("plugins with the same appName %s already exist", appName)
 			} else {
 				result[appName] = pluginDetails{createConcurrentStateMachine: cf}
-				plog.Infof("added a create sm function from %s, appName: %s",
-					cp, appName)
+				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
+			}
+			continue
+		}
+		csm, err = p.Lookup("CreateOnDiskStateMachine")
+		if err == nil {
+			cf := csm.(func(uint64, uint64) statemachine.IOnDiskStateMachine)
+			if _, ok := result[appName]; ok {
+				plog.Panicf("plugins with the same appName %s already exist", appName)
+			} else {
+				result[appName] = pluginDetails{createOnDiskStateMachine: cf}
+				plog.Infof("added a create sm function from %s, appName: %s", cp, appName)
 			}
 		}
 	}

@@ -395,6 +395,9 @@ func (dc *DrummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 	} else if pd.isConcurrentStateMachine() {
 		err = dc.nh.StartConcurrentCluster(peers,
 			req.Join, pd.createConcurrentStateMachine, config)
+	} else if pd.isOnDiskStateMachine() {
+		err = dc.nh.StartOnDiskCluster(peers,
+			req.Join, pd.createOnDiskStateMachine, config)
 	} else {
 		err = dc.nh.StartClusterUsingPlugin(peers, req.Join, pd.filepath, config)
 	}
