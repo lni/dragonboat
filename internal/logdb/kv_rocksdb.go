@@ -86,6 +86,8 @@ func getRocksDBOptions(directory string,
 	}
 	opts.SetCompression(gorocksdb.NoCompression)
 	if inMonkeyTesting {
+		// rocksdb perallocates size for its log file and the size is calculated
+		// based on the write buffer size.
 		opts.SetWriteBufferSize(512 * 1024)
 	} else {
 		opts.SetWriteBufferSize(256 * 1024 * 1024)
