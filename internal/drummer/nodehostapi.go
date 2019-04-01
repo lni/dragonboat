@@ -16,6 +16,8 @@ package drummer
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -26,13 +28,16 @@ import (
 	pb "github.com/lni/dragonboat/internal/drummer/multiraftpb"
 	"github.com/lni/dragonboat/internal/utils/netutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // NodehostAPI implements the grpc server used for making raft IO requests.
 type NodehostAPI struct {
-	nh      *dragonboat.NodeHost
-	stopper *syncutil.Stopper
-	server  *grpc.Server
+	nh        *dragonboat.NodeHost
+	stopper   *syncutil.Stopper
+	server    *grpc.Server
+	mu        sync.Mutex
+	supportCS map[uint64]bool
 }
 
 // NewNodehostAPI creates a new NodehostAPI server instance.
@@ -56,9 +61,10 @@ func NewNodehostAPI(address string, nh *dragonboat.NodeHost) *NodehostAPI {
 	}
 	server := grpc.NewServer(opts...)
 	m := &NodehostAPI{
-		nh:      nh,
-		stopper: stopper,
-		server:  server,
+		nh:        nh,
+		stopper:   stopper,
+		server:    server,
+		supportCS: make(map[uint64]bool),
 	}
 	pb.RegisterNodehostAPIServer(server, m)
 	stopper.RunWorker(func() {
@@ -77,16 +83,44 @@ func (api *NodehostAPI) Stop() {
 	api.server.Stop()
 }
 
+func (api *NodehostAPI) supportRegularSession(clusterID uint64) (bool, error) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	v, ok := api.supportCS[clusterID]
+	if ok {
+		return v, nil
+	}
+	nhi := api.nh.GetNodeHostInfo()
+	for _, ci := range nhi.ClusterInfoList {
+		api.supportCS[clusterID] = ci.StateMachineType != sm.OnDiskStateMachine
+	}
+	v, ok = api.supportCS[clusterID]
+	if ok {
+		return v, nil
+	}
+	return false, errors.New("unknown state machine type")
+}
+
 // GetSession gets a new client session instance.
 func (api *NodehostAPI) GetSession(ctx context.Context,
 	req *pb.SessionRequest) (*client.Session, error) {
-	cs, err := api.nh.GetNewSession(ctx, req.ClusterId)
-	return cs, grpcError(err)
+	s, err := api.supportRegularSession(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+	if s {
+		cs, err := api.nh.GetNewSession(ctx, req.ClusterId)
+		return cs, grpcError(err)
+	}
+	return api.nh.GetNoOPSession(req.ClusterId), nil
 }
 
 // CloseSession closes the specified client session instance.
 func (api *NodehostAPI) CloseSession(ctx context.Context,
 	cs *client.Session) (*pb.SessionResponse, error) {
+	if cs.IsNoOPSession() {
+		return &pb.SessionResponse{Completed: true}, nil
+	}
 	if err := api.nh.CloseSession(ctx, cs); err != nil {
 		e := grpcError(err)
 		return &pb.SessionResponse{Completed: false}, e

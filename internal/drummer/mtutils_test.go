@@ -1184,7 +1184,9 @@ func makeWriteRequest(ctx context.Context,
 		if resp.Result != uint64(len(data)) {
 			plog.Panicf("result %d, want %d", resp.Result, uint64(len(data)))
 		}
-		cs.ProposalCompleted()
+		if !cs.IsNoOPSession() {
+			cs.ProposalCompleted()
+		}
 	} else {
 		plog.Warningf("failed to make proposal %v", err)
 		return false
