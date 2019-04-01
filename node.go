@@ -552,7 +552,8 @@ func (rc *node) shrinkSnapshots() error {
 		if !rc.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
-		plog.Infof("%s will shrink snapshots up to %d", rc.lastApplied)
+		plog.Infof("%s will shrink snapshots up to %d",
+			rc.describe(), rc.lastApplied)
 		if err := rc.snapshotter.ShrinkSnapshots(rc.lastApplied); err != nil {
 			return err
 		}
