@@ -67,7 +67,9 @@ func (r *rocksdb) lookup(query []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return []byte(""), nil
 	}
-	return data, nil
+	v := make([]byte, len(data))
+	copy(v, data)
+	return v, nil
 }
 
 func (r *rocksdb) close() {
