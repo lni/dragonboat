@@ -143,6 +143,8 @@ type ClusterInfo struct {
 	NodeID uint64
 	// IsLeader indicates whether this is a leader node.
 	IsLeader bool
+	// StateMachineType is the type of the state machine.
+	StateMachineType sm.StateMachineType
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
 	// ConfigChangeIndex is the current config change index of the Raft node.
@@ -1127,6 +1129,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		members,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
+		smType,
 		nh.execEngine.SetCommitReady,
 		nh.asyncSendRaftRequest,
 		queue,

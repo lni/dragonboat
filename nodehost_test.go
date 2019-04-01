@@ -1316,6 +1316,14 @@ func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 
 func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		nhi := nh.GetNodeHostInfo()
+		for _, ci := range nhi.ClusterInfoList {
+			if ci.ClusterID == 1 {
+				if ci.StateMachineType != sm.OnDiskStateMachine {
+					t.Errorf("unexpected state machine type")
+				}
+			}
+		}
 		session := nh.GetNoOPSession(1)
 		for i := uint64(2); i < initialApplied*2; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -1517,6 +1525,14 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 	clusterID := 1 + commitWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
+		nhi := nh.GetNodeHostInfo()
+		for _, ci := range nhi.ClusterInfoList {
+			if ci.ClusterID == clusterID {
+				if ci.StateMachineType != sm.ConcurrentStateMachine {
+					t.Errorf("unexpected state machine type")
+				}
+			}
+		}
 		result := make(map[uint64]struct{})
 		session := nh.GetNoOPSession(clusterID)
 		for i := 0; i < 10000; i++ {
@@ -1555,6 +1571,14 @@ func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 	failed := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
+		nhi := nh.GetNodeHostInfo()
+		for _, ci := range nhi.ClusterInfoList {
+			if ci.ClusterID == 1 {
+				if ci.StateMachineType != sm.RegularStateMachine {
+					t.Errorf("unexpected state machine type")
+				}
+			}
+		}
 		stopper := syncutil.NewStopper()
 		stopper.RunWorker(func() {
 			for i := 0; i < 100; i++ {

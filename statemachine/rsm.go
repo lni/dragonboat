@@ -53,6 +53,14 @@ var (
 	ErrSnapshotStopped = errors.New("snapshot stopped")
 )
 
+type StateMachineType uint64
+
+const (
+	RegularStateMachine    = 1
+	ConcurrentStateMachine = 2
+	OnDiskStateMachine     = 3
+)
+
 // SnapshotFile is the struct used to describe external files included in a
 // snapshot.
 type SnapshotFile struct {

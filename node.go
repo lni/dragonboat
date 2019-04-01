@@ -60,6 +60,7 @@ type node struct {
 	commitReady          func(uint64)
 	sendRaftMessage      func(pb.Message)
 	sm                   *rsm.StateMachine
+	smType               pb.StateMachineType
 	incomingProposals    *entryQueue
 	incomingReadIndexes  *readIndexQueue
 	pendingProposals     *pendingProposal
@@ -93,6 +94,7 @@ func newNode(raftAddress string,
 	initialMember bool,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
+	smType pb.StateMachineType,
 	commitReady func(uint64),
 	sendMessage func(pb.Message),
 	mq *server.MessageQueue,
@@ -130,6 +132,7 @@ func newNode(raftAddress string,
 		logdb:               ldb,
 		snapshotLock:        syncutil.NewLock(),
 		ss:                  &snapshotState{},
+		smType:              smType,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -992,13 +995,26 @@ func (rc *node) captureClusterConfig() {
 	rc.clusterInfo.Store(ci)
 }
 
+func (rc *node) getStateMachineType() sm.StateMachineType {
+	if rc.smType == pb.RegularStateMachine {
+		return sm.RegularStateMachine
+	} else if rc.smType == pb.ConcurrentStateMachine {
+		return sm.ConcurrentStateMachine
+	} else if rc.smType == pb.OnDiskStateMachine {
+		return sm.OnDiskStateMachine
+	} else {
+		panic("unknown type")
+	}
+}
+
 func (rc *node) getClusterInfo() *ClusterInfo {
 	v := rc.clusterInfo.Load()
 	if v == nil {
 		return &ClusterInfo{
-			ClusterID: rc.clusterID,
-			NodeID:    rc.nodeID,
-			Pending:   true,
+			ClusterID:        rc.clusterID,
+			NodeID:           rc.nodeID,
+			Pending:          true,
+			StateMachineType: rc.getStateMachineType(),
 		}
 	}
 	ci := v.(*ClusterInfo)
@@ -1008,6 +1024,7 @@ func (rc *node) getClusterInfo() *ClusterInfo {
 		IsLeader:          rc.isLeader(),
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
+		StateMachineType:  rc.getStateMachineType(),
 	}
 }
 
