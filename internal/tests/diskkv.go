@@ -96,6 +96,9 @@ func createDB(dbdir string) (*rocksdb, error) {
 	opts.SetCreateIfMissing(true)
 	opts.SetUseFsync(true)
 	opts.SetCompression(gorocksdb.NoCompression)
+	// rocksdb perallocates size for its log file and the size is calculated
+	// based on the write buffer size.
+	opts.SetWriteBufferSize(1024)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
 	ro := gorocksdb.NewDefaultReadOptions()
