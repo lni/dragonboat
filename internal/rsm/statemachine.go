@@ -158,8 +158,11 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
-		return idx, err
+	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", ss)
+	if !ss.Dummy {
+		if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
+			return idx, err
+		}
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
@@ -193,10 +196,16 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	if !s.OnDiskStateMachine() {
 		return true
 	}
-	if !init {
+	if ss.Dummy {
+		return false
+	}
+	if init && ss.Index > s.diskSMIndex {
+		plog.Infof("initial recover, ss.Index %d, disk index %d, time to recover",
+			ss.Index, s.diskSMIndex)
 		return true
 	}
-	return s.OnDiskStateMachine() && init && ss.Index > s.diskSMIndex
+	plog.Infof("disk SM, not initial recover, always recover")
+	return true
 }
 
 func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
