@@ -216,6 +216,7 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
 		if err := s.snapshotter.Load(index, s.sessions, s.sm, fn, fs); err != nil {
+			plog.Errorf("snapshotter.load failed on %s, %v", s.describe(), err)
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
