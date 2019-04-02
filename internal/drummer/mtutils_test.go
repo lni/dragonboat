@@ -505,8 +505,6 @@ func checkNodeHostSynced(t *testing.T, nodes []*testNode) {
 			for _, rn := range nh.Clusters() {
 				clusterID := rn.ClusterID()
 				lastApplied := rn.GetLastApplied()
-				plog.Infof("%s reports last applied index %d",
-					logutil.DescribeNode(clusterID, rn.NodeID()), lastApplied)
 				existingLastApplied, ok := appliedMap[clusterID]
 				if !ok {
 					appliedMap[clusterID] = lastApplied
