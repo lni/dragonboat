@@ -16,6 +16,7 @@
 
 OS=`uname`
 if [ $OS = "Darwin" ]; then
+  # sudo diskutil erasevolume HFS+ "ramdisk" `hdiutil attach -nomount ram://4629672`
   TARGETDIR="/Volumes/ramdisk"
 else
   TARGETDIR="/media/drummermt-ramdisk-test"
@@ -24,9 +25,6 @@ EXECNAME="drummer-monkey-testing"
 PKGNAME="github.com/lni/dragonboat"
 RUNTEST="run_drummermt_test.sh"
 PIDNAME="drummertest.pid"
-PLUGINNAME="dragonboat-plugin-kvtest.so"
-CONCURRENTPLUGINNAME="dragonboat-plugin-concurrentkv.so"
-ONDISKPLUGINNAME="dragonboat-plugin-diskkv.so"
 TARGETBIN=$TARGETDIR/bin
 
 if [ ! -d "$TARGETDIR" ]; then
@@ -52,18 +50,12 @@ seq=`seq 1 $NOJ`
 deploy()
 {
   set -e
-  go build -o $PLUGINNAME -buildmode=plugin $PKGNAME/internal/tests/kvtest
-  go build -o $CONCURRENTPLUGINNAME -buildmode=plugin $PKGNAME/internal/tests/concurrentkv
-  go build -o $ONDISKPLUGINNAME -buildmode=plugin $PKGNAME/internal/tests/diskkv 
   DRAGONBOAT_RDBPATCHED=1 make -C ../.. drummer-monkey-test-bin
   make -C ../.. porcupine-checker
   rm -rf $TARGETDIR/*
   cp rdttools.sh $TARGETDIR
   mkdir $TARGETBIN
   cp ../../porcupine-checker-bin $TARGETBIN
-  cp $PLUGINNAME $TARGETBIN
-  cp $CONCURRENTPLUGINNAME $TARGETBIN
-  cp $ONDISKPLUGINNAME $TARGETBIN
   cp ../../$EXECNAME $TARGETBIN
   mkdir $TARGETDIR/lcmlog
   base=24000
@@ -79,16 +71,12 @@ deploy()
       cp dragonboat-drummer-no-snapshot.json $DIR/dragonboat-drummer.json
     fi
     ln -s $TARGETDIR/bin/porcupine-checker-bin $DIR/porcupine-checker-bin
-    ln -s $TARGETDIR/bin/$PLUGINNAME $DIR/$PLUGINNAME
-    ln -s $TARGETDIR/bin/$CONCURRENTPLUGINNAME $DIR/$CONCURRENTPLUGINNAME
-    ln -s $TARGETDIR/bin/$ONDISKPLUGINNAME $DIR/$ONDISKPLUGINNAME
     ln -s $TARGETDIR/bin/$EXECNAME $DIR/$EXECNAME
     base=$((base+incv))
     sedcmd="sed -e s/BASEPORT/${base}/g"
     cat runscript_template.sh | ${sedcmd} > $DIR/$RUNTEST
     chmod +x $DIR/$RUNTEST
   done
-  rm $PLUGINNAME
   return
 }
 
