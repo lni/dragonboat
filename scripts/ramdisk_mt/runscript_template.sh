@@ -15,7 +15,7 @@
 # limitations under the License.
 
 OS=`uname`
-TESTNAME="TestClusterCanSurviveDrummerMonkeyPlay"
+TESTNAME="TestOnDiskClusterCanSurviveDrummerMonkeyPlay"
 curdir=`pwd`
 [[ $curdir =~ test([0-9]+)$ ]] && testno=${BASH_REMATCH[1]}
 
@@ -55,6 +55,7 @@ do
     ./porcupine-checker-bin -path drummer-lcm.jepsen -timeout 30
     if [ $? -ne 0 ]; then
       echo "" > linearizability-checker-error-$i.txt
+      mv drummer-lcm.jepsen drummer-lcm-error-$i.jepsen
     fi
   fi
   ednfn="../lcmlog/drummer-lcm-$i-$testno.edn"
