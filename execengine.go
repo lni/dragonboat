@@ -442,8 +442,7 @@ func (s *execEngine) execSMs(workerID uint64,
 					node.ss.setStreamingSnapshot()
 				} else {
 					plog.Infof("commit.StreamSnapshot ignored on %s", node.describe())
-					// FIXME:
-					// notify the NodeHost such failed snapshot incident
+					s.reportFailedStreamSnapshot(node, commit)
 					continue
 				}
 				s.reportStreamSnapshot(node, commit)
@@ -455,6 +454,14 @@ func (s *execEngine) execSMs(workerID uint64,
 	if p != nil {
 		p.exec.end()
 	}
+}
+
+func (s *execEngine) reportFailedStreamSnapshot(node *node, rec rsm.Commit) {
+	nh, ok := s.nh.(*NodeHost)
+	if !ok {
+		panic("failed to get nh")
+	}
+	nh.msgHandler.HandleSnapshotStatus(rec.ClusterID, rec.NodeID, true)
 }
 
 func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
