@@ -937,6 +937,7 @@ func (rc *node) restoreRemotes(snapshot pb.Snapshot) {
 			rc.requestRemoval()
 		}
 	}
+	plog.Infof("%s is restoring remotes %+v", rc.describe(), snapshot.Membership)
 	rc.node.RestoreRemotes(snapshot)
 	rc.captureClusterConfig()
 }
@@ -981,7 +982,7 @@ func (rc *node) captureClusterConfig() {
 	// ApplySnapshot
 	nodes, _, _, index := rc.sm.GetMembership()
 	if len(nodes) == 0 {
-		plog.Panicf("empty nodes")
+		plog.Panicf("empty nodes %s", rc.describe())
 	}
 	plog.Infof("%s called captureClusterConfig, nodes %v",
 		rc.describe(), nodes)

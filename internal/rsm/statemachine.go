@@ -158,7 +158,7 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", ss)
+	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.describe(), ss)
 	if !ss.Dummy {
 		if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
 			return idx, err
