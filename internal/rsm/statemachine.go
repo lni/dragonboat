@@ -159,10 +159,8 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 	}
 	ss.Validate()
 	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.describe(), ss)
-	if !ss.Dummy {
-		if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
-			return idx, err
-		}
+	if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
+		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
