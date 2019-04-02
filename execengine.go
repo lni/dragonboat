@@ -468,6 +468,7 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
 			plog.Errorf("failed to get connection to %s",
 				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
 			nh.msgHandler.HandleSnapshotStatus(rec.ClusterID, rec.NodeID, true)
+			return nil
 		}
 		return conn
 	}
