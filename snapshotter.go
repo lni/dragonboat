@@ -24,6 +24,7 @@ import (
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
+	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -205,6 +206,8 @@ func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
 			env := s.getSnapshotEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
+			plog.Infof("%s shrinking snapshot %d",
+				logutil.DescribeNode(s.clusterID, s.nodeID), ss.Index)
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp); err != nil {
 				return err
 			}
