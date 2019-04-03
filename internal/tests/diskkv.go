@@ -274,6 +274,11 @@ func (d *DiskKVTest) Open() (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+		if _, err := os.Stat(dbdir); err != nil {
+			if os.IsNotExist(err) {
+				panic("db dir unexpectedly deleted")
+			}
+		}
 		fmt.Printf("[DKVE] %s being re-opened at %s\n", d.describe(), dbdir)
 	} else {
 		fmt.Printf("[DKVE] %s doing a new run\n", d.describe())
