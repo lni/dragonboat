@@ -291,7 +291,9 @@ func (d *DiskKVTest) Open() (uint64, error) {
 	if len(data) == 0 {
 		return 0, nil
 	}
-	return binary.LittleEndian.Uint64(val.Data()), nil
+	v := binary.LittleEndian.Uint64(val.Data())
+	fmt.Printf("[DKVE] %s opened its disk sm, index %d\n", d.describe(), v)
+	return v, nil
 }
 
 func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
@@ -381,6 +383,10 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 			Key: string(key.Data()),
 			Val: string(val.Data()),
 		}
+		if dataKv.Key == appliedIndexKey {
+			v := binary.LittleEndian.Uint64([]byte(dataKv.Val))
+			fmt.Printf("[DKVE] %s saving appliedIndexKey as %d\n", d.describe(), v)
+		}
 		data, err := dataKv.Marshal()
 		if err != nil {
 			panic(err)
@@ -463,6 +469,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 }
 
 func (d *DiskKVTest) Close() {
+	fmt.Printf("[DKVE] %s called close", d.describe())
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
 		db.close()
@@ -476,6 +483,8 @@ func (d *DiskKVTest) GetHash() uint64 {
 	h := md5.New()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	ss := db.db.NewSnapshot()
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 	if _, err := d.saveToWriter(db, ss, h); err != nil {
 		panic(err)
 	}
