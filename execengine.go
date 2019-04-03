@@ -380,6 +380,19 @@ func processTakingSnapshotNode(node *node) bool {
 	return false
 }
 
+func processStreamingSnapshotNode(node *node) bool {
+	if node.ss.streamingSnapshot() {
+		completed, ok := node.ss.getStreamSnapshotCompleted()
+		if !ok {
+			return false
+		}
+		plog.Infof("%s received completed streaming snapshot rec %+v",
+			node.describe(), completed)
+		node.ss.clearStreamingSnapshot()
+	}
+	return false
+}
+
 // T: take snapshot
 // R: recover from snapshot
 // existing op, new op, action
@@ -408,6 +421,9 @@ func (s *execEngine) execSMs(workerID uint64,
 			continue
 		}
 		if processTakingSnapshotNode(node) {
+			continue
+		}
+		if processStreamingSnapshotNode(node) {
 			continue
 		}
 		if processRecoveringNode(node) {
