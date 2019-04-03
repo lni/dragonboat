@@ -222,8 +222,13 @@ func cleanupNodeDataDir(dir string) error {
 		return err
 	}
 	for _, fi := range files {
-		if fi.IsDir() && fi.Name() != dbdir {
+		if !fi.IsDir() {
+			continue
+		}
+		fmt.Printf("[DKVE] fi.Name %s, dbdir %s, dir %s\n", fi.Name(), dbdir, dir)
+		if fi.Name() != dbdir {
 			toDelete := path.Join(dir, fi.Name())
+			fmt.Printf("[DKVE] to delete db %s\n", toDelete)
 			if err := os.RemoveAll(toDelete); err != nil {
 				return err
 			}
@@ -475,6 +480,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if old != nil {
 		old.close()
 	}
+	fmt.Printf("[DKVE] %s to delete olddb at %s\n", d.describe(), oldDirName)
 	return os.RemoveAll(oldDirName)
 }
 
