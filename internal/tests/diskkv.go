@@ -286,7 +286,8 @@ func (d *DiskKVTest) Open() (uint64, error) {
 		fmt.Printf("[DKVE] %s failed to create db\n", d.describe())
 		return 0, err
 	}
-	d.db = unsafe.Pointer(db)
+	fmt.Printf("[DKVE] %s returned from create db\n", d.describe())
+	atomic.SwapPointer(&d.db, unsafe.Pointer(db))
 	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
 	if err != nil {
 		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
@@ -295,7 +296,7 @@ func (d *DiskKVTest) Open() (uint64, error) {
 	defer val.Free()
 	data := val.Data()
 	if len(data) == 0 {
-		fmt.Printf("%s does not have applied index stored yet\n", d.describe())
+		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.describe())
 		return 0, nil
 	}
 	v := binary.LittleEndian.Uint64(data)
@@ -429,7 +430,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[DKVE] %s is creating a new db at %s\n", d.describe(), dbdir)
+	fmt.Printf("[DKVE] %s is creating a tmp db at %s\n", d.describe(), dbdir)
 	db, err := createDB(dbdir)
 	if err != nil {
 		return err
