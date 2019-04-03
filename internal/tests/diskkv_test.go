@@ -174,7 +174,7 @@ func TestCleanupNodeDataDir(t *testing.T) {
 	if err := os.MkdirAll(path.Join(dbdir, "d2"), 0755); err != nil {
 		t.Fatalf("failed to create dir %v", err)
 	}
-	if err := saveCurrentDBDirName(dbdir, toKeep); err != nil {
+	if err := saveCurrentDBDirName(dbdir, path.Join(dbdir, toKeep)); err != nil {
 		t.Fatalf("failed to save current file %v", err)
 	}
 	if err := replaceCurrentDBFile(dbdir); err != nil {

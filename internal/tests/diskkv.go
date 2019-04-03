@@ -225,10 +225,10 @@ func cleanupNodeDataDir(dir string) error {
 		if !fi.IsDir() {
 			continue
 		}
-		fmt.Printf("[DKVE] fi.Name %s, dbdir %s, dir %s\n", fi.Name(), dbdir, dir)
-		if fi.Name() != dbdir {
-			toDelete := path.Join(dir, fi.Name())
-			fmt.Printf("[DKVE] to delete db %s\n", toDelete)
+		fmt.Printf("dbdir %s, fi.name %s, dir %s\n", dbdir, fi.Name(), dir)
+		toDelete := path.Join(dir, fi.Name())
+		if toDelete != dbdir {
+			fmt.Printf("removing %s\n", toDelete)
 			if err := os.RemoveAll(toDelete); err != nil {
 				return err
 			}
