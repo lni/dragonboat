@@ -265,8 +265,14 @@ func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	}
 	sink := getSinkFn()
 	if sink != nil {
-		plog.Infof("%s called streamSnapshot", node.describe())
-		node.streamSnapshot(sink)
+		plog.Infof("%s called streamSnapshot to node %d",
+			node.describe(), sink.ToNodeID())
+		err := node.streamSnapshot(sink)
+		if err != nil &&
+			err != sm.ErrSnapshotStopped && err != sm.ErrSnapshotStreaming {
+			panic(err)
+		}
+		s.reportSnapshotStatus(node.clusterID, sink.ToNodeID(), err != nil)
 	}
 	node.streamSnapshotDone()
 }
@@ -458,7 +464,7 @@ func (s *execEngine) execSMs(workerID uint64,
 					node.ss.setStreamingSnapshot()
 				} else {
 					plog.Infof("commit.StreamSnapshot ignored on %s", node.describe())
-					s.reportFailedStreamSnapshot(node, commit)
+					s.reportSnapshotStatus(commit.ClusterID, commit.NodeID, true)
 					continue
 				}
 				s.reportStreamSnapshot(node, commit)
@@ -472,12 +478,13 @@ func (s *execEngine) execSMs(workerID uint64,
 	}
 }
 
-func (s *execEngine) reportFailedStreamSnapshot(node *node, rec rsm.Commit) {
+func (s *execEngine) reportSnapshotStatus(clusterID uint64,
+	nodeID uint64, failed bool) {
 	nh, ok := s.nh.(*NodeHost)
 	if !ok {
 		panic("failed to get nh")
 	}
-	nh.msgHandler.HandleSnapshotStatus(rec.ClusterID, rec.NodeID, true)
+	nh.msgHandler.HandleSnapshotStatus(clusterID, nodeID, failed)
 }
 
 func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
@@ -490,7 +497,7 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
 		if conn == nil {
 			plog.Errorf("failed to get connection to %s",
 				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
-			nh.msgHandler.HandleSnapshotStatus(rec.ClusterID, rec.NodeID, true)
+			s.reportSnapshotStatus(rec.ClusterID, rec.NodeID, true)
 			return nil
 		}
 		return conn
