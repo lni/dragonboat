@@ -32,6 +32,7 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
+	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -249,6 +250,10 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 	return d
 }
 
+func (s *DiskKVTest) describe() string {
+	return logutil.DescribeNode(s.clusterID, s.nodeID)
+}
+
 func (d *DiskKVTest) Open() (uint64, error) {
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	createNodeDataDir(dir)
@@ -263,6 +268,7 @@ func (d *DiskKVTest) Open() (uint64, error) {
 			return 0, err
 		}
 	} else {
+		fmt.Printf("[DKVE] %s doing a new run\n", d.describe())
 		dbdir = getNewRandomDBDirName(dir)
 		if err := saveCurrentDBDirName(dir, dbdir); err != nil {
 			return 0, err
@@ -313,6 +319,7 @@ func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 	idx := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idx, ents[len(ents)-1].Index)
 	wb.Put([]byte(appliedIndexKey), idx)
+	fmt.Printf("[DKVE] %s applied index recorded as %d\n", d.describe(), ents[len(ents)-1].Index)
 	if err := db.db.Write(db.wo, wb); err != nil {
 		panic(err)
 	}
@@ -340,7 +347,7 @@ func iteratorIsValid(iter *gorocksdb.Iterator) bool {
 	return v
 }
 
-func saveToWriter(db *rocksdb,
+func (d *DiskKVTest) saveToWriter(db *rocksdb,
 	ss *gorocksdb.Snapshot, w io.Writer) (uint64, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetSnapshot(ss)
@@ -353,6 +360,7 @@ func saveToWriter(db *rocksdb,
 	for iter.SeekToFirst(); iteratorIsValid(iter); iter.Next() {
 		count++
 	}
+	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.describe(), count)
 	total := uint64(0)
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, count)
@@ -397,7 +405,7 @@ func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	ss := ctxdata.snapshot
-	return saveToWriter(db, ss, w)
+	return d.saveToWriter(db, ss, w)
 }
 
 func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
@@ -417,6 +425,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 		return err
 	}
 	total := binary.LittleEndian.Uint64(sz)
+	fmt.Printf("[DKVE] %s recovering from a snapshot with %d pairs of KV\n", d.describe(), total)
 	wb := gorocksdb.NewWriteBatch()
 	for i := uint64(0); i < total; i++ {
 		if _, err := io.ReadFull(r, sz); err != nil {
@@ -430,6 +439,10 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 		dataKv := &kvpb.PBKV{}
 		if err := dataKv.Unmarshal(data); err != nil {
 			panic(err)
+		}
+		if dataKv.Key == appliedIndexKey {
+			v := binary.LittleEndian.Uint64([]byte(dataKv.Val))
+			fmt.Printf("[DKVE] %s recovering appliedIndexKey to %d\n", d.describe(), v)
 		}
 		wb.Put([]byte(dataKv.Key), []byte(dataKv.Val))
 	}
@@ -459,10 +472,11 @@ func (d *DiskKVTest) Close() {
 }
 
 func (d *DiskKVTest) GetHash() uint64 {
+	fmt.Printf("[DKVE] %s called GetHash\n", d.describe())
 	h := md5.New()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	ss := db.db.NewSnapshot()
-	if _, err := saveToWriter(db, ss, h); err != nil {
+	if _, err := d.saveToWriter(db, ss, h); err != nil {
 		panic(err)
 	}
 	md5sum := h.Sum(nil)
