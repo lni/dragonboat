@@ -245,6 +245,7 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 		clusterID: clusterID,
 		nodeID:    nodeID,
 	}
+	fmt.Printf("[DKVE] %s is being created\n", d.describe())
 	v := os.Getenv("EXTERNALFILETEST")
 	d.externalFileTest = len(v) > 0
 	return d
@@ -255,6 +256,7 @@ func (s *DiskKVTest) describe() string {
 }
 
 func (d *DiskKVTest) Open() (uint64, error) {
+	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	createNodeDataDir(dir)
 	var dbdir string
@@ -267,6 +269,7 @@ func (d *DiskKVTest) Open() (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+		fmt.Printf("[DKVE] %s being re-opened at %s\n", d.describe(), dbdir)
 	} else {
 		fmt.Printf("[DKVE] %s doing a new run\n", d.describe())
 		dbdir = getNewRandomDBDirName(dir)
@@ -277,21 +280,25 @@ func (d *DiskKVTest) Open() (uint64, error) {
 			return 0, err
 		}
 	}
+	fmt.Printf("[DKVE] %s going to create db at %s\n", d.describe(), dbdir)
 	db, err := createDB(dbdir)
 	if err != nil {
+		fmt.Printf("[DKVE] %s failed to create db\n", d.describe())
 		return 0, err
 	}
 	d.db = unsafe.Pointer(db)
 	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
 	if err != nil {
+		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
 		return 0, err
 	}
 	defer val.Free()
 	data := val.Data()
 	if len(data) == 0 {
+		fmt.Printf("%s does not have applied index stored yet\n", d.describe())
 		return 0, nil
 	}
-	v := binary.LittleEndian.Uint64(val.Data())
+	v := binary.LittleEndian.Uint64(data)
 	fmt.Printf("[DKVE] %s opened its disk sm, index %d\n", d.describe(), v)
 	return v, nil
 }
@@ -422,6 +429,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err != nil {
 		return err
 	}
+	fmt.Printf("[DKVE] %s is creating a new db at %s\n", d.describe(), dbdir)
 	db, err := createDB(dbdir)
 	if err != nil {
 		return err
@@ -461,6 +469,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err := replaceCurrentDBFile(dir); err != nil {
 		return err
 	}
+	fmt.Printf("[DKVE] %s replaced db %s with %s\n", d.describe(), oldDirName, dbdir)
 	old := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(db)))
 	if old != nil {
 		old.close()
@@ -469,7 +478,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 }
 
 func (d *DiskKVTest) Close() {
-	fmt.Printf("[DKVE] %s called close", d.describe())
+	fmt.Printf("[DKVE] %s called close\n", d.describe())
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
 		db.close()
