@@ -63,5 +63,6 @@ do
   cp drummer-lcm.edn $ednfn
   cp drummer-lcm.jepsen $jepsenfn
   rm -f external-*.data
+  rm -f test_rocksdb_db_dir_*
 done
 
