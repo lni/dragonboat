@@ -37,6 +37,7 @@ var (
 	// considered as out of date.
 	ErrSnapshotOutOfDate            = errors.New("snapshot is out of date")
 	LastChunkCount           uint64 = math.MaxUint64
+	PoisonChunkCount         uint64 = math.MaxUint64 - 1
 	gcIntervalTick                  = settings.Soft.SnapshotGCTick
 	snapshotChunkTimeoutTick        = settings.Soft.SnapshotChunkTimeoutTick
 	maxConcurrentSlot               = settings.Soft.MaxConcurrentStreamingSnapshot

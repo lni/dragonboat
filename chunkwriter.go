@@ -54,6 +54,11 @@ func newChunkWriter(sink pb.IChunkSink,
 	return cw, nil
 }
 
+func (cw *chunkWriter) Fail() {
+	chunk := pb.SnapshotChunk{ChunkCount: transport.PoisonChunkCount}
+	cw.sink.Receive(chunk)
+}
+
 func (cw *chunkWriter) Write(data []byte) (int, error) {
 	if cw.stopped {
 		return 0, sm.ErrSnapshotStopped

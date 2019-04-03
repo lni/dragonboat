@@ -17,7 +17,6 @@ package transport
 import (
 	"context"
 	"errors"
-	"math"
 	"sync/atomic"
 
 	"github.com/lni/dragonboat/internal/utils/logutil"
@@ -30,8 +29,8 @@ const (
 )
 
 var (
-	LastChunkID uint64 = math.MaxUint64
-	ErrStopped         = errors.New("connection stopped")
+	ErrStopped        = errors.New("connection stopped")
+	ErrStreamSnapshot = errors.New("stream snapshot failed")
 )
 
 type sink struct {
@@ -144,12 +143,16 @@ func (l *connection) streamSnapshot() error {
 			return ErrStopped
 		case chunk := <-l.ch:
 			chunk.DeploymentId = l.deploymentID
+			if chunk.ChunkCount == PoisonChunkCount {
+				plog.Infof("poison chunk received")
+				return ErrStreamSnapshot
+			}
 			if err := l.sendSnapshotChunk(chunk, l.conn); err != nil {
-				plog.Debugf("stream snapshot chunk to %s failed",
+				plog.Errorf("stream snapshot chunk to %s failed",
 					logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 				return err
 			}
-			if chunk.ChunkId == LastChunkID {
+			if chunk.ChunkCount == LastChunkCount {
 				return nil
 			}
 		}

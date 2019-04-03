@@ -73,9 +73,11 @@ func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 		return err
 	}
 	if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
+		writer.Fail()
 		return err
 	}
 	if err := writer.Flush(); err != nil {
+		writer.Fail()
 		return err
 	}
 	return nil

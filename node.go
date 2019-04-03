@@ -477,8 +477,12 @@ func (rc *node) saveSnapshot() uint64 {
 	return ss.Index
 }
 
-func (rc *node) streamSnapshot(sink pb.IChunkSink) error {
-	return rc.sm.StreamSnapshot(sink)
+func (rc *node) streamSnapshot(sink pb.IChunkSink) {
+	if err := rc.sm.StreamSnapshot(sink); err != nil {
+		if err != sm.ErrSnapshotStopped && err != sm.ErrSnapshotStreaming {
+			panic(err)
+		}
+	}
 }
 
 func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {

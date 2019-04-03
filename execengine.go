@@ -267,12 +267,7 @@ func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	if sink != nil {
 		plog.Infof("%s called streamSnapshot to node %d",
 			node.describe(), sink.ToNodeID())
-		err := node.streamSnapshot(sink)
-		if err != nil &&
-			err != sm.ErrSnapshotStopped && err != sm.ErrSnapshotStreaming {
-			panic(err)
-		}
-		s.reportSnapshotStatus(node.clusterID, sink.ToNodeID(), err != nil)
+		node.streamSnapshot(sink)
 	}
 	node.streamSnapshotDone()
 }
@@ -497,7 +492,6 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
 		if conn == nil {
 			plog.Errorf("failed to get connection to %s",
 				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
-			s.reportSnapshotStatus(rec.ClusterID, rec.NodeID, true)
 			return nil
 		}
 		return conn

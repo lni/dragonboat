@@ -77,6 +77,7 @@ func (t *Transport) GetStreamConnection(clusterID uint64,
 	if c := t.tryCreateConnection(key, addr, true, 0); c != nil {
 		return &sink{l: c}
 	} else {
+		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 }
@@ -116,7 +117,6 @@ func (t *Transport) tryCreateConnection(key raftio.NodeInfo,
 
 func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *connection {
-
 	c := newConnection(key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.ctx, t.raftRPC, t.stopper.ShouldStop())
 	c.streamChunkSent = t.streamChunkSent
