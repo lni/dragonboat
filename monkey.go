@@ -19,7 +19,11 @@ package dragonboat
 import (
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/cpp"
+	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/transport"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/raftio"
 )
 
@@ -33,6 +37,22 @@ import (
 func (nh *NodeHost) SetRegion(region string) {
 	plog.Infof("setting the region to be %s", region)
 	nh.region = region
+}
+
+// StartClusterUsingPlugin adds a new cluster node to the NodeHost and start
+// running the new node. Different from the StartCluster method in which you
+// specify the factory function used for creating the IStateMachine instance,
+// StartClusterUsingPlugin requires the full path of the CPP plugin you want
+// the Raft cluster to use.
+func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
+	join bool, pluginFilename string, config config.Config) error {
+	stopc := make(chan struct{})
+	appName := fileutil.GetAppNameFromFilename(pluginFilename)
+	cf := func(clusterID uint64, nodeID uint64,
+		done <-chan struct{}) rsm.IManagedStateMachine {
+		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
+	}
+	return nh.startCluster(nodes, join, cf, stopc, config)
 }
 
 // Clusters returns a list of raft nodes managed by the nodehost instance.
