@@ -66,20 +66,26 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 
 func (t *Transport) GetStreamConnection(clusterID uint64,
 	nodeID uint64) *sink {
+	s := t.getStreamConnection(clusterID, nodeID)
+	if s == nil {
+		t.sendSnapshotNotification(clusterID, nodeID, true)
+	}
+	return s
+}
+
+func (t *Transport) getStreamConnection(clusterID uint64,
+	nodeID uint64) *sink {
 	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
-		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
-		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	if c := t.tryCreateConnection(key, addr, true, 0); c != nil {
 		return &sink{l: c}
 	} else {
-		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 }
