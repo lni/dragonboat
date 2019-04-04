@@ -234,7 +234,7 @@ func (s *testSnapshotter) Load(index uint64,
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
-	ds := NewNativeStateMachine(&RegularStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -248,7 +248,7 @@ func runSMTest2(t *testing.T,
 	createTestDir()
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
-	ds := NewNativeStateMachine(&RegularStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -260,7 +260,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeStateMachine(&ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -304,7 +304,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeStateMachine(&ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -940,7 +940,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
-		ds2 := NewNativeStateMachine(&RegularStateMachine{sm: store2}, make(chan struct{}))
+		ds2 := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store2}, make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
 		sm2 := NewStateMachine(ds2, snapshotter2, false, nodeProxy2)

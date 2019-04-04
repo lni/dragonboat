@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/utils/logutil"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -53,9 +54,22 @@ const (
 	FromSnapshotWorker
 )
 
+var fromNames = [...]string{
+	"FromNodeHost",
+	"FromStepWorker",
+	"FromCommitWorker",
+	"FromSnapshotWorker",
+}
+
+func (f From) String() string {
+	return fromNames[uint64(f)]
+}
+
 // OffloadedStatus is used for tracking whether the managed data store has been
 // offloaded from various system components.
 type OffloadedStatus struct {
+	clusterID                   uint64
+	nodeID                      uint64
 	readyToDestroy              bool
 	destroyed                   bool
 	offloadedFromNodeHost       bool
@@ -132,12 +146,20 @@ func (o *OffloadedStatus) SetOffloaded(from From) {
 			o.offloadedFromSnapshotWorker = true
 		}
 	}
+	plog.Infof("%s offload status %t,%t,%t,%t, loaded status %t,%t,%t",
+		o.describe(), o.offloadedFromNodeHost, o.offloadedFromCommitWorker,
+		o.offloadedFromSnapshotWorker, o.offloadedFromStepWorker,
+		o.loadedByStepWorker, o.loadedByCommitWorker, o.loadedBySnapshotWorker)
 	if o.offloadedFromNodeHost &&
 		o.offloadedFromCommitWorker &&
 		o.offloadedFromSnapshotWorker &&
 		o.offloadedFromStepWorker {
 		o.readyToDestroy = true
 	}
+}
+
+func (o *OffloadedStatus) describe() string {
+	return logutil.DescribeNode(o.clusterID, o.nodeID)
 }
 
 type IStreamable interface {
@@ -190,12 +212,14 @@ type NativeStateMachine struct {
 }
 
 // NewNativeStateMachine creates and returns a new NativeStateMachine object.
-func NewNativeStateMachine(sm IStateMachine,
+func NewNativeStateMachine(clusterID uint64, nodeID uint64, sm IStateMachine,
 	done <-chan struct{}) IManagedStateMachine {
 	s := &NativeStateMachine{
 		sm:   sm,
 		done: done,
 	}
+	s.clusterID = clusterID
+	s.nodeID = nodeID
 	return s
 }
 

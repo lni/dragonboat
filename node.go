@@ -283,6 +283,7 @@ func (rc *node) getLeaderID() (uint64, bool) {
 }
 
 func (rc *node) notifyOffloaded(from rsm.From) {
+	plog.Infof("%s offloaded from %s", rc.describe(), from)
 	rc.sm.Offloaded(from)
 }
 

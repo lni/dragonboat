@@ -338,7 +338,8 @@ func (nh *NodeHost) StartCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(sm), done)
+		return rsm.NewNativeStateMachine(clusterID,
+			nodeID, rsm.NewRegularStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
@@ -353,7 +354,8 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(rsm.NewConcurrentStateMachine(sm), done)
+		return rsm.NewNativeStateMachine(clusterID,
+			nodeID, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
@@ -366,7 +368,8 @@ func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(rsm.NewOnDiskStateMachine(sm), done)
+		return rsm.NewNativeStateMachine(clusterID,
+			nodeID, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
 }

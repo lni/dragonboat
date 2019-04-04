@@ -257,7 +257,8 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 }
 
 func (s *DiskKVTest) describe() string {
-	return logutil.DescribeNode(s.clusterID, s.nodeID)
+	id := logutil.DescribeNode(s.clusterID, s.nodeID)
+	return fmt.Sprintf("%s %s", time.Now().Format("2006-01-02 15:04:05.000000"), id)
 }
 
 func (d *DiskKVTest) Open() (uint64, error) {

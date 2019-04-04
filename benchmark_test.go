@@ -454,7 +454,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
-	nds := rsm.NewNativeStateMachine(rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
 	smo := rsm.NewStateMachine(nds, nil, false, &noopNodeProxy{})
 	idx := uint64(0)
 	var s *client.Session
