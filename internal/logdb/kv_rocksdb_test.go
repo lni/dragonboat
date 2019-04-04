@@ -122,7 +122,7 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 		t.Fatalf("failed to get db size %v", err)
 	}
 	if sz > initialSz/10 {
-		t.Errorf("sz %d > initialSz/10", sz)
+		t.Errorf("sz %d > initialSz/10 (%d)", sz, initialSz/10)
 	}
 }
 
