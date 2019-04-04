@@ -68,9 +68,11 @@ func (t *Transport) GetStreamConnection(clusterID uint64,
 	nodeID uint64) *sink {
 	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
+		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
+		t.sendSnapshotNotification(clusterID, nodeID, true)
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
