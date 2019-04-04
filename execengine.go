@@ -548,7 +548,7 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 			func() bool {
 				for cid, node := range nodes {
 					_, ok := newNodes[cid]
-					if !ok {
+					if !ok || node.stopped() {
 						node.notifyOffloaded(from)
 					}
 				}
