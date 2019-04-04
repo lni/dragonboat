@@ -307,8 +307,36 @@ func (r *rocksdbKV) Compaction(firstKey []byte, lastKey []byte) error {
 }
 
 func (r *rocksdbKV) deleteRange(firstKey []byte, lastKey []byte) error {
+	iter := r.db.NewIterator(r.ro)
+	defer iter.Close()
+	toDelete := make([][]byte, 0)
+	for iter.Seek(firstKey); iteratorIsValid(iter); iter.Next() {
+		if done := func() bool {
+			key, ok := iter.OKey()
+			if !ok {
+				panic("failed to get key")
+			}
+			defer key.Free()
+			kd := key.Data()
+			if bytes.Compare(kd, lastKey) >= 0 {
+				return true
+			} else {
+				v := make([]byte, len(kd))
+				copy(v, kd)
+				toDelete = append(toDelete, v)
+			}
+			return false
+		}(); done {
+			break
+		}
+	}
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	wb.DeleteRange(firstKey, lastKey)
-	return r.db.Write(r.wo, wb)
+	for _, key := range toDelete {
+		wb.Delete(key)
+	}
+	if wb.Count() > 0 {
+		return r.db.Write(r.wo, wb)
+	}
+	return nil
 }
