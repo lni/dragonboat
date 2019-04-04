@@ -81,14 +81,12 @@ import (
 
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/cpp"
 	"github.com/lni/dragonboat/internal/logdb"
 	"github.com/lni/dragonboat/internal/raft"
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
@@ -372,22 +370,6 @@ func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 			nodeID, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
-}
-
-// StartClusterUsingPlugin adds a new cluster node to the NodeHost and start
-// running the new node. Different from the StartCluster method in which you
-// specify the factory function used for creating the IStateMachine instance,
-// StartClusterUsingPlugin requires the full path of the CPP plugin you want
-// the Raft cluster to use.
-func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
-	join bool, pluginFilename string, config config.Config) error {
-	stopc := make(chan struct{})
-	appName := fileutil.GetAppNameFromFilename(pluginFilename)
-	cf := func(clusterID uint64, nodeID uint64,
-		done <-chan struct{}) rsm.IManagedStateMachine {
-		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
-	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
