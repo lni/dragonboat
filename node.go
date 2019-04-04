@@ -539,6 +539,8 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 }
 
 func (rc *node) doShrinkSnapshots(index uint64) {
+	rc.snapshotLock.Lock()
+	defer rc.snapshotLock.Unlock()
 	if rc.allDiskStateMachine() {
 		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
 			panic(err)
