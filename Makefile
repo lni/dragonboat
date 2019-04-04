@@ -228,7 +228,7 @@ CPPWRAPPER_TEST_BUILDTAGS=dragonboat_cppwrappertest
 GRPC_TEST_BUILDTAGS=dragonboat_grpc_test
 
 all: binding
-rebuild-all: clean servers binding all-slow-monkey-tests unit-test-bin
+rebuild-all: clean binding all-slow-monkey-tests unit-test-bin
 servers: drummer nodehost drummercmd
 ###############################################################################
 # download and install rocksdb
