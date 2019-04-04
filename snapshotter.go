@@ -66,6 +66,10 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
+func (s *snapshotter) describe() string {
+	return logutil.DescribeNode(s.clusterID, s.nodeID)
+}
+
 func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
 	writer, err := newChunkWriter(sink, meta)
@@ -203,13 +207,13 @@ func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
 	if err != nil {
 		return err
 	}
-	for _, ss := range snapshots {
+	plog.Infof("%s has %d snapshots to shrink", s.describe(), len(snapshots))
+	for idx, ss := range snapshots {
 		if !ss.Dummy && ss.Index <= shrinkTo {
 			env := s.getSnapshotEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
-			plog.Infof("%s shrinking snapshot %d",
-				logutil.DescribeNode(s.clusterID, s.nodeID), ss.Index)
+			plog.Infof("%s shrinking snapshot %d, %d", s.describe(), ss.Index, idx)
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp); err != nil {
 				return err
 			}
@@ -230,8 +234,10 @@ func (s *snapshotter) Compaction(removeUpTo uint64) error {
 		return nil
 	}
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
-	for _, ss := range selected {
+	plog.Infof("%s has %d snapshots to compact", s.describe(), len(selected))
+	for idx, ss := range selected {
 		if ss.Index < removeUpTo {
+			plog.Infof("%s compacting snapshot %d, %d", s.describe(), ss.Index, idx)
 			if err := s.logdb.DeleteSnapshot(s.clusterID,
 				s.nodeID, ss.Index); err != nil {
 				return err
