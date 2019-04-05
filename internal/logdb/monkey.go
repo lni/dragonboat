@@ -25,16 +25,6 @@ func SetEntryBatchSize(sz uint64) {
 	batchSize = sz
 }
 
-// Disable range delete.
-func DisableRangeDelete() {
-	useRangeDelete = false
-}
-
-// Enable range delete.
-func EnableRangeDelete() {
-	useRangeDelete = true
-}
-
 // SetLogDBInstanceCount set the number of rocksdb instances to use.
 func SetLogDBInstanceCount(count uint64) {
 	numOfRocksDBInstance = count

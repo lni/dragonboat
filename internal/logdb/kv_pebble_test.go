@@ -97,7 +97,6 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 /*
 func TestRawCompactRangeWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	useRangeDelete = true
 	compactFunc := func(db raftio.ILogDB,
 		clusterID uint64, nodeID uint64, maxIndex uint64) {
 		rrdb, ok := db.(*ShardedRDB)

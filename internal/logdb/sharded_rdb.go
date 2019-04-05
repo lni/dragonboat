@@ -28,7 +28,6 @@ import (
 )
 
 var (
-	useRangeDelete        = settings.Soft.UseRangeDelete
 	numOfStepEngineWorker = settings.Hard.StepEngineWorkerCount
 	numOfRocksDBInstance  = settings.Hard.LogDBPoolSize
 	// RDBContextValueSize defines the size of byte array managed in RDB context.
@@ -68,11 +67,6 @@ func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
 		compactions:  newCompactions(),
 		compactionCh: make(chan struct{}, 1),
 		stopper:      syncutil.NewStopper(),
-	}
-	if useRangeDelete {
-		plog.Infof("RangeDelete is enabled in %s", mw.Name())
-	} else {
-		plog.Infof("RangeDelete is disabled in %s", mw.Name())
 	}
 	mw.stopper.RunWorker(func() {
 		mw.compactionWorkerMain()
@@ -179,9 +173,7 @@ func (mw *ShardedRDB) RemoveEntriesTo(clusterID uint64,
 		nodeID, index); err != nil {
 		return err
 	}
-	if useRangeDelete {
-		mw.addCompaction(clusterID, nodeID, index)
-	}
+	mw.addCompaction(clusterID, nodeID, index)
 	return nil
 }
 

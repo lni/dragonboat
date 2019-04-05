@@ -26,7 +26,6 @@ import (
 	"github.com/lni/dragonboat/internal/logdb"
 	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
 )
 
@@ -47,12 +46,6 @@ func runDrummerMonkeyTest(t *testing.T, appname string) {
 	logdb.SetEntryBatchSize(4)
 	logdb.SetLogDBInstanceCount(1)
 	logdb.SetRDBContextSize(1)
-	useRangeDelete := random.NewProbability(900000)
-	if useRangeDelete.Hit() {
-		logdb.DisableRangeDelete()
-	} else {
-		logdb.EnableRangeDelete()
-	}
 	rand.Seed(int64(os.Getpid()))
 	logger.GetLogger("dragonboat").SetLevel(logger.DEBUG)
 	logger.GetLogger("transport").SetLevel(logger.DEBUG)
