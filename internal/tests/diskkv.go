@@ -93,7 +93,12 @@ func (r *rocksdb) close() {
 }
 
 func createDB(dbdir string) (*rocksdb, error) {
+	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
+	bbto.SetWholeKeyFiltering(true)
+	bbto.SetBlockSize(1024)
+	bbto.SetNoBlockCache(true)
 	opts := gorocksdb.NewDefaultOptions()
+	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
 	opts.SetUseFsync(true)
 	opts.SetCompression(gorocksdb.NoCompression)
