@@ -243,11 +243,11 @@ func cleanupNodeDataDir(dir string) error {
 }
 
 type DiskKVTest struct {
-	clusterID        uint64
-	nodeID           uint64
-	db               unsafe.Pointer
-	externalFileTest bool
-	closed           uint32
+	clusterID uint64
+	nodeID    uint64
+	db        unsafe.Pointer
+	closed    bool
+	aborted   bool
 }
 
 func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
@@ -256,8 +256,6 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 		nodeID:    nodeID,
 	}
 	fmt.Printf("[DKVE] %s is being created\n", d.describe())
-	v := os.Getenv("EXTERNALFILETEST")
-	d.externalFileTest = len(v) > 0
 	return d
 }
 
@@ -323,12 +321,23 @@ func (d *DiskKVTest) Open() (uint64, error) {
 func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	if db != nil {
-		return db.lookup(key)
+		v, err := db.lookup(key)
+		if err == nil && d.closed {
+			panic("lookup returned valid result when DiskKVTest is already closed")
+		}
+		return v, err
 	}
 	return nil, errors.New("db closed")
 }
 
 func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
+	if d.aborted {
+		panic("update() called after abort set to true")
+	}
+	if d.closed {
+		panic("update called after Close()")
+	}
+	generateRandomDelay()
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
@@ -358,6 +367,12 @@ type diskKVCtx struct {
 }
 
 func (d *DiskKVTest) PrepareSnapshot() (interface{}, error) {
+	if d.closed {
+		panic("prepare snapshot called after Close()")
+	}
+	if d.aborted {
+		panic("prepare snapshot called after abort")
+	}
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	return &diskKVCtx{
 		db:       db,
@@ -430,6 +445,24 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 
 func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 	w io.Writer, done <-chan struct{}) (uint64, error) {
+	if d.closed {
+		panic("prepare snapshot called after Close()")
+	}
+	if d.aborted {
+		panic("prepare snapshot called after abort")
+	}
+	delay := getLargeRandomDelay()
+	fmt.Printf("random delay %d ms\n", delay)
+	for delay > 0 {
+		delay -= 10
+		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-done:
+			d.aborted = true
+			return 0, sm.ErrSnapshotStopped
+		default:
+		}
+	}
 	ctxdata := ctx.(*diskKVCtx)
 	db := ctxdata.db
 	db.mu.RLock()
@@ -440,6 +473,21 @@ func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 
 func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	done <-chan struct{}) error {
+	if d.closed {
+		panic("recover from snapshot called after Close()")
+	}
+	delay := getLargeRandomDelay()
+	fmt.Printf("random delay %d ms\n", delay)
+	for delay > 0 {
+		delay -= 10
+		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-done:
+			d.aborted = true
+			return sm.ErrSnapshotStopped
+		default:
+		}
+	}
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	dbdir := getNewRandomDBDirName(dir)
 	oldDirName, err := getCurrentDBDirName(dir)
