@@ -283,14 +283,7 @@ func (r *rocksdbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 	if err := r.db.DeleteFileInRange(firstKey, lastKey); err != nil {
 		return err
 	}
-	if useRangeDelete {
-		for {
-			if err := r.deleteRange(firstKey, lastKey); err == nil {
-				break
-			}
-		}
-	}
-	return nil
+	return r.deleteRange(firstKey, lastKey)
 }
 
 func (r *rocksdbKV) Compaction(firstKey []byte, lastKey []byte) error {
