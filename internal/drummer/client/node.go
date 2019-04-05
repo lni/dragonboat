@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package drummer
+package client
 
 import (
 	"context"
 	"time"
 
 	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/internal/drummer/client"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
@@ -27,13 +26,14 @@ import (
 )
 
 var (
+	NodeHostInfoReportSecond        = settings.Soft.NodeHostInfoReportSecond
 	persistentLogReportCycle uint64 = settings.Soft.PersisentLogReportCycle
 )
 
 // NodeHostClient is a NodeHost drummer client.
 type NodeHostClient struct {
 	nh              *dragonboat.NodeHost
-	client          *client.DrummerClient
+	client          *DrummerClient
 	masterServers   []string
 	apiAddress      string
 	reporterStopper *syncutil.Stopper
@@ -50,7 +50,7 @@ func NewNodeHostClient(nh *dragonboat.NodeHost,
 	}
 	servers := make([]string, 0)
 	servers = append(servers, drummerServers...)
-	masterClient := client.NewDrummerClient(nh)
+	masterClient := NewDrummerClient(nh)
 	ctx, cancel := context.WithCancel(context.Background())
 	stopper := syncutil.NewStopper()
 	reporterStopper := syncutil.NewStopper()

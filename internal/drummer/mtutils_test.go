@@ -231,7 +231,7 @@ type testNode struct {
 	nh                 *dragonboat.NodeHost
 	drummer            *Drummer
 	apiServer          *NodehostAPI
-	drummerNodeHost    *NodeHostClient
+	drummerNodeHost    *client.NodeHostClient
 	drummerStopped     bool
 	stopped            bool
 	partitionTestNode  bool
@@ -465,7 +465,7 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 	nh := dragonboat.NewNodeHost(config)
 	plog.Infof("nodehost for nodehost node created")
 	n.nh = nh
-	n.drummerNodeHost = NewNodeHostClient(nh, dl.apiAddressList, apiAddress)
+	n.drummerNodeHost = client.NewNodeHostClient(nh, dl.apiAddressList, apiAddress)
 	n.apiServer = NewNodehostAPI(apiAddress, nh)
 	n.stopped = false
 }
