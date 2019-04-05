@@ -506,6 +506,11 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	if err != nil {
 		panic(err)
 	}
+	if index > 0 && rc.allDiskStateMachine() {
+		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
+			panic(err)
+		}
+	}
 	return index, false
 }
 
@@ -536,16 +541,6 @@ func (rc *node) handleCommit(batch []rsm.Commit,
 
 func (rc *node) removeSnapshotFlagFile(index uint64) error {
 	return rc.snapshotter.removeFlagFile(index)
-}
-
-func (rc *node) doShrinkSnapshots(index uint64) {
-	rc.snapshotLock.Lock()
-	defer rc.snapshotLock.Unlock()
-	if rc.allDiskStateMachine() {
-		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
-			panic(err)
-		}
-	}
 }
 
 func (rc *node) shrinkSnapshots() error {
