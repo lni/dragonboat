@@ -269,6 +269,9 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	plog.Infof("%s opened disk state machine, index %d, err %v",
 		s.describe(), index, err)
 	if err != nil {
+		if err == sm.ErrSnapshotStopped {
+			s.aborted = true
+		}
 		return 0, err
 	}
 	s.diskSMIndex = index

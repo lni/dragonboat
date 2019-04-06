@@ -23,7 +23,7 @@ import (
 // IStateMachine is an adapter interface for underlying IStateMachine or
 // IConcurrentStateMachine instances.
 type IStateMachine interface {
-	Open() (uint64, error)
+	Open(<-chan struct{}) (uint64, error)
 	Update(entries []sm.Entry) []sm.Entry
 	Lookup(query []byte) ([]byte, error)
 	PrepareSnapshot() (interface{}, error)
@@ -48,7 +48,7 @@ func NewRegularStateMachine(sm sm.IStateMachine) *RegularStateMachine {
 	return &RegularStateMachine{sm: sm}
 }
 
-func (sm *RegularStateMachine) Open() (uint64, error) {
+func (sm *RegularStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
 
@@ -120,7 +120,7 @@ func NewConcurrentStateMachine(sm sm.IConcurrentStateMachine) *ConcurrentStateMa
 	return &ConcurrentStateMachine{sm: sm}
 }
 
-func (sm *ConcurrentStateMachine) Open() (uint64, error) {
+func (sm *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
 
@@ -184,12 +184,12 @@ func NewOnDiskStateMachine(sm sm.IOnDiskStateMachine) *OnDiskStateMachine {
 	return &OnDiskStateMachine{sm: sm}
 }
 
-func (sm *OnDiskStateMachine) Open() (uint64, error) {
+func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	if sm.opened {
 		panic("Open() called more than once on OnDiskStateMachine")
 	}
 	sm.opened = true
-	applied, err := sm.sm.Open()
+	applied, err := sm.sm.Open(stopc)
 	if err != nil {
 		return 0, err
 	}

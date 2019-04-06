@@ -281,7 +281,7 @@ func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
 	return binary.LittleEndian.Uint64(data), nil
 }
 
-func (d *DiskKVTest) Open() (uint64, error) {
+func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
 	generateRandomDelay()
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)

@@ -228,7 +228,7 @@ func (ds *NativeStateMachine) closeStateMachine() {
 }
 
 func (ds *NativeStateMachine) Open() (uint64, error) {
-	return ds.sm.Open()
+	return ds.sm.Open(ds.done)
 }
 
 // Offloaded offloads the data store from the specified part of the system.

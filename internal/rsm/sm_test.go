@@ -26,7 +26,7 @@ func TestOnDiskSMCanBeOpened(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	idx, err := od.Open()
+	idx, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -45,7 +45,7 @@ func TestOnDiskSMCanNotBeOpenedMoreThanOnce(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	idx, err := od.Open()
+	idx, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -57,14 +57,14 @@ func TestOnDiskSMCanNotBeOpenedMoreThanOnce(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Open()
+	od.Open(nil)
 }
 
 func TestOnDiskSMRecordAppliedIndex(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	idx, err := od.Open()
+	idx, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -106,7 +106,7 @@ func TestUpdateOnDiskSMWithAppliedIndexWillPanic(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	_, err := od.Open()
+	_, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -124,7 +124,7 @@ func TestUpdateOnDiskSMWithIndexLessThanInitialIndexWillPanic(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	_, err := od.Open()
+	_, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -154,7 +154,7 @@ func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	_, err := od.Open()
+	_, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -168,7 +168,7 @@ func TestRecoverFromSnapshotCanComplete(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	_, err := od.Open()
+	_, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
@@ -184,7 +184,7 @@ func TestRecoverFromSnapshotWillPanicWhenIndexIsLessThanApplied(t *testing.T) {
 	applied := uint64(123)
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
-	_, err := od.Open()
+	_, err := od.Open(nil)
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}

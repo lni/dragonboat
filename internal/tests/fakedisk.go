@@ -31,7 +31,7 @@ func NewFakeDiskSM(initialApplied uint64) *FakeDiskSM {
 	return &FakeDiskSM{initialApplied: initialApplied}
 }
 
-func (f *FakeDiskSM) Open() (uint64, error) {
+func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 	return f.initialApplied, nil
 }
 

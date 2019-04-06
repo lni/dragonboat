@@ -25,7 +25,7 @@ var (
 )
 
 type IOnDiskStateMachine interface {
-	Open() (uint64, error)
+	Open(<-chan struct{}) (uint64, error)
 	Update([]Entry) []Entry
 	Lookup([]byte) ([]byte, error)
 	PrepareSnapshot() (interface{}, error)

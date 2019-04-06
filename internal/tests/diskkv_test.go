@@ -226,7 +226,7 @@ func runDiskKVTest(t *testing.T, f func(t *testing.T, odsm sm.IOnDiskStateMachin
 
 func TestDiskKVCanBeOpened(t *testing.T) {
 	tf := func(t *testing.T, odsm sm.IOnDiskStateMachine) {
-		idx, err := odsm.Open()
+		idx, err := odsm.Open(nil)
 		if err != nil {
 			t.Fatalf("failed to open %v", err)
 		}
@@ -244,7 +244,7 @@ func TestDiskKVCanBeOpened(t *testing.T) {
 
 func TestDiskKVCanBeUpdated(t *testing.T) {
 	tf := func(t *testing.T, odsm sm.IOnDiskStateMachine) {
-		idx, err := odsm.Open()
+		idx, err := odsm.Open(nil)
 		if err != nil {
 			t.Fatalf("failed to open %v", err)
 		}
@@ -294,7 +294,7 @@ func TestDiskKVCanBeUpdated(t *testing.T) {
 
 func TestDiskKVSnapshot(t *testing.T) {
 	tf := func(t *testing.T, odsm sm.IOnDiskStateMachine) {
-		idx, err := odsm.Open()
+		idx, err := odsm.Open(nil)
 		if err != nil {
 			t.Fatalf("failed to open %v", err)
 		}
@@ -354,7 +354,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 		}
 		reader := bytes.NewBuffer(buf.Bytes())
 		odsm2 := NewDiskKVTest(1024, 1024)
-		idx, err = odsm2.Open()
+		idx, err = odsm2.Open(nil)
 		if err != nil {
 			t.Fatalf("failed to open %v", err)
 		}
