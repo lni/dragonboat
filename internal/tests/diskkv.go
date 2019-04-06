@@ -98,6 +98,7 @@ func createDB(dbdir string) (*rocksdb, error) {
 	bbto.SetBlockSize(1024)
 	bbto.SetNoBlockCache(true)
 	opts := gorocksdb.NewDefaultOptions()
+	opts.SetManifestPreallocationSize(1024 * 32)
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
 	opts.SetUseFsync(true)
