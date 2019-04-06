@@ -266,6 +266,7 @@ func (s *DiskKVTest) describe() string {
 
 func (d *DiskKVTest) Open() (uint64, error) {
 	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
+	generateRandomDelay()
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	createNodeDataDir(dir)
 	var dbdir string
@@ -544,9 +545,9 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 
 func (d *DiskKVTest) Close() {
 	fmt.Printf("[DKVE] %s called close\n", d.describe())
-	d.closed = true
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
+		d.closed = true
 		db.close()
 	} else {
 		if d.closed {
