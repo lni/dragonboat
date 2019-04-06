@@ -458,7 +458,6 @@ func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 		time.Sleep(10 * time.Millisecond)
 		select {
 		case <-done:
-			d.aborted = true
 			return 0, sm.ErrSnapshotStopped
 		default:
 		}
@@ -545,11 +544,14 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 
 func (d *DiskKVTest) Close() {
 	fmt.Printf("[DKVE] %s called close\n", d.describe())
+	d.closed = true
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
 		db.close()
 	} else {
-		panic("close called twice")
+		if d.closed {
+			panic("close called twice")
+		}
 	}
 }
 
