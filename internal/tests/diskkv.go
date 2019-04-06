@@ -556,11 +556,16 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err != nil {
 		panic(err)
 	}
-	if d.lastApplied >= newLastApplied {
+	// when d.lastApplied == newLastApplied, it probably means there were some
+	// dummy entries or membership change entries as part of the new snapshot
+	// that never reached the SM and thus never moved the last applied index
+	// in the SM snapshot.
+	if d.lastApplied > newLastApplied {
 		fmt.Printf("[DKVE] %s last applied in snapshot not moving forward %d,%d\n",
 			d.describe(), d.lastApplied, newLastApplied)
 		panic("last applied not moving forward")
 	}
+	d.lastApplied = newLastApplied
 	old := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(db)))
 	if old != nil {
 		old.close()
