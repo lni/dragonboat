@@ -244,11 +244,12 @@ func cleanupNodeDataDir(dir string) error {
 }
 
 type DiskKVTest struct {
-	clusterID uint64
-	nodeID    uint64
-	db        unsafe.Pointer
-	closed    bool
-	aborted   bool
+	clusterID   uint64
+	nodeID      uint64
+	lastApplied uint64
+	db          unsafe.Pointer
+	closed      bool
+	aborted     bool
 }
 
 func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
@@ -263,6 +264,21 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 func (s *DiskKVTest) describe() string {
 	id := logutil.DescribeNode(s.clusterID, s.nodeID)
 	return fmt.Sprintf("%s %s", time.Now().Format("2006-01-02 15:04:05.000000"), id)
+}
+
+func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
+	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
+	if err != nil {
+		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
+		return 0, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if len(data) == 0 {
+		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.describe())
+		return 0, nil
+	}
+	return binary.LittleEndian.Uint64(data), nil
 }
 
 func (d *DiskKVTest) Open() (uint64, error) {
@@ -304,20 +320,14 @@ func (d *DiskKVTest) Open() (uint64, error) {
 	}
 	fmt.Printf("[DKVE] %s returned from create db\n", d.describe())
 	atomic.SwapPointer(&d.db, unsafe.Pointer(db))
-	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
+	appliedIndex, err := d.queryAppliedIndex(db)
 	if err != nil {
-		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
-		return 0, err
+		panic(err)
 	}
-	defer val.Free()
-	data := val.Data()
-	if len(data) == 0 {
-		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.describe())
-		return 0, nil
-	}
-	v := binary.LittleEndian.Uint64(data)
-	fmt.Printf("[DKVE] %s opened its disk sm, index %d\n", d.describe(), v)
-	return v, nil
+	fmt.Printf("[DKVE] %s opened its disk sm, index %d\n",
+		d.describe(), appliedIndex)
+	d.lastApplied = appliedIndex
+	return appliedIndex, nil
 }
 
 func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
@@ -360,6 +370,12 @@ func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 	if err := db.db.Write(db.wo, wb); err != nil {
 		panic(err)
 	}
+	if d.lastApplied >= ents[len(ents)-1].Index {
+		fmt.Printf("[DKVE] %s last applied not moving forward %d,%d\n",
+			d.describe(), ents[len(ents)-1].Index, d.lastApplied)
+		panic("lastApplied not moving forward")
+	}
+	d.lastApplied = ents[len(ents)-1].Index
 	return ents
 }
 
@@ -536,6 +552,15 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 		return err
 	}
 	fmt.Printf("[DKVE] %s replaced db %s with %s\n", d.describe(), oldDirName, dbdir)
+	newLastApplied, err := d.queryAppliedIndex(db)
+	if err != nil {
+		panic(err)
+	}
+	if d.lastApplied >= newLastApplied {
+		fmt.Printf("[DKVE] %s last applied in snapshot not moving forward %d,%d\n",
+			d.describe(), d.lastApplied, newLastApplied)
+		panic("last applied not moving forward")
+	}
 	old := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(db)))
 	if old != nil {
 		old.close()

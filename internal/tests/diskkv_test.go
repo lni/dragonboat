@@ -353,22 +353,30 @@ func TestDiskKVSnapshot(t *testing.T) {
 			t.Errorf("hash doesn't change")
 		}
 		reader := bytes.NewBuffer(buf.Bytes())
-		if err := odsm.RecoverFromSnapshot(reader, nil); err != nil {
+		odsm2 := NewDiskKVTest(1024, 1024)
+		idx, err = odsm2.Open()
+		if err != nil {
+			t.Fatalf("failed to open %v", err)
+		}
+		if idx != 0 {
+			t.Fatalf("idx %d", idx)
+		}
+		if err := odsm2.RecoverFromSnapshot(reader, nil); err != nil {
 			t.Fatalf("recover from snapshot failed %v", err)
 		}
-		hash3 := odsm.GetHash()
+		hash3 := odsm2.GetHash()
 		if hash3 != hash1 {
 			t.Errorf("hash changed")
 		}
-		result, err = odsm.Lookup([]byte("test-key3"))
+		result, err = odsm2.Lookup([]byte("test-key3"))
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
 		if len(result) > 0 {
 			t.Fatalf("test-key3 still available in the db")
 		}
-		odsm.Close()
-		result, err = odsm.Lookup([]byte("test-key3"))
+		odsm2.Close()
+		result, err = odsm2.Lookup([]byte("test-key3"))
 		if err == nil {
 			t.Fatalf("lookup allowed after close")
 		}
