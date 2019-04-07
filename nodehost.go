@@ -652,7 +652,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 		return nil, ErrClusterNotFound
 	}
 	if !v.supportClientSession() && !session.IsNoOPSession() {
-		plog.Panicf("Regular client session not supported, must use NoOPSession")
+		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.proposeSession(session, nil, timeout)
 	nh.execEngine.setNodeReady(session.ClusterID)
@@ -896,7 +896,7 @@ func (nh *NodeHost) propose(s *client.Session,
 		return nil, ErrClusterNotFound
 	}
 	if !v.supportClientSession() && !s.IsNoOPSession() {
-		plog.Panicf("Regular client session not supported, must use NoOPSession")
+		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.propose(s, cmd, handler, timeout)
 	nh.execEngine.setNodeReady(s.ClusterID)

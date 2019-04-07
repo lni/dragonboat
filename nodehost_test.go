@@ -1314,6 +1314,22 @@ func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("no panic when proposing session on disk SM")
+			}
+		}()
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		_, err := nh.GetNewSession(ctx, 1)
+		if err != nil {
+			t.Fatalf("failed to get new session")
+		}
+	}
+	singleFakeDiskNodeHostTest(t, tf, 5)
+}
+
 func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
 		nhi := nh.GetNodeHostInfo()
