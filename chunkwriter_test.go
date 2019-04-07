@@ -249,3 +249,36 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 		t.Errorf("snapshot content changed")
 	}
 }
+
+func TestGetTailChunk(t *testing.T) {
+	meta := getTestSnapshotMeta()
+	sink := &testSink{}
+	cw, err := newChunkWriter(sink, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
+	chunk := cw.getTailChunk()
+	if chunk.ChunkCount != transport.LastChunkCount {
+		t.Errorf("chunk count %d, want %d",
+			chunk.ChunkCount, transport.LastChunkCount)
+	}
+	if chunk.FileChunkCount != transport.LastChunkCount {
+		t.Errorf("file chunk count %d, want %d",
+			chunk.FileChunkCount, transport.LastChunkCount)
+	}
+}
+
+func TestFailChunk(t *testing.T) {
+	meta := getTestSnapshotMeta()
+	sink := &testSink{}
+	cw, err := newChunkWriter(sink, meta)
+	if err != nil {
+		t.Fatalf("failed to get chunk writer %v", err)
+	}
+	cw.Fail()
+	chunk := sink.chunks[0]
+	if chunk.ChunkCount != transport.LastChunkCount-1 {
+		t.Errorf("chunk count %d, want %d",
+			chunk.ChunkCount, transport.LastChunkCount-1)
+	}
+}
