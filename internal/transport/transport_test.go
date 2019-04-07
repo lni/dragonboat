@@ -1240,3 +1240,84 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 		t.Errorf("connected %d, want 1", noopRPC.tryConnect)
 	}
 }
+
+// unknown target
+func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
+	tt, nodes, _, _, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, grpcServerURL)
+	sink := tt.GetStreamConnection(100, 3)
+	if sink != nil {
+		t.Errorf("unexpectedly returned a sink")
+	}
+	if handler.getFailedSnapshotCount(100, 3) != 1 {
+		t.Errorf("snapshot failed count %d", handler.snapshotFailedCount)
+	}
+	if handler.getSnapshotSuccessCount(100, 3) != 0 {
+		t.Errorf("snapshot succeed count %d", handler.snapshotSuccessCount)
+	}
+}
+
+// failed to connect
+func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
+	tt, nodes, _, req, connReq := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, grpcServerURL)
+	connReq.SetToFail(true)
+	req.SetToFail(true)
+	tt.GetStreamConnection(100, 2)
+	failedSnapshotReported := false
+	for i := 0; i < 10000; i++ {
+		if handler.getFailedSnapshotCount(100, 2) != 1 {
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		failedSnapshotReported = true
+		break
+	}
+	if !failedSnapshotReported {
+		t.Fatalf("failed snapshot not reported")
+	}
+}
+
+// failed to connect due to too many connections
+func TestFailedStreamConnectionDueToTooManyConnectionsWillHaveSnapshotStatusUpdated(t *testing.T) {
+	tt, nodes, _, _, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, grpcServerURL)
+	for i := uint32(0); i < maxConnectionCount; i++ {
+		sink := tt.GetStreamConnection(100, 2)
+		if sink == nil {
+			t.Errorf("failed to connect")
+		}
+	}
+	for i := uint32(0); i < 2*maxConnectionCount; i++ {
+		sink := tt.GetStreamConnection(100, 2)
+		if sink != nil {
+			t.Errorf("stream connection not limited")
+		}
+	}
+	failedSnapshotReported := false
+	for i := 0; i < 10000; i++ {
+		count := handler.getFailedSnapshotCount(100, 2)
+		plog.Infof("count: %d, want %d", count)
+		if count != uint64(2*maxConnectionCount) {
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		failedSnapshotReported = true
+		break
+	}
+	if !failedSnapshotReported {
+		t.Fatalf("failed snapshot not reported")
+	}
+}
