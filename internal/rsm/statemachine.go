@@ -115,6 +115,7 @@ type StateMachine struct {
 	snapshotIndex      uint64
 	diskSMIndex        uint64
 	commitC            chan Commit
+	onDiskSM           bool
 	aborted            bool
 	batchedLastApplied struct {
 		sync.Mutex
@@ -129,6 +130,7 @@ func NewStateMachine(sm IManagedStateMachine,
 	a := &StateMachine{
 		snapshotter: snapshotter,
 		sm:          sm,
+		onDiskSM:    sm.OnDiskStateMachine(),
 		commitC:     make(chan Commit, commitChanLength),
 		node:        proxy,
 		sessions:    NewSessionManager(),
@@ -354,7 +356,7 @@ func (s *StateMachine) ConcurrentSnapshot() bool {
 }
 
 func (s *StateMachine) OnDiskStateMachine() bool {
-	return s.sm.OnDiskStateMachine()
+	return s.onDiskSM
 }
 
 // SaveSnapshot creates a snapshot.
@@ -392,10 +394,10 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 }
 
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool) {
+func (s *StateMachine) Handle(batch []Commit, toApply []sm.Entry) (Commit, bool) {
 	processed := 0
 	batch = batch[:0]
-	entries = entries[:0]
+	toApply = toApply[:0]
 	select {
 	case rec := <-s.commitC:
 		if rec.isSnapshotRelated() {
@@ -408,7 +410,7 @@ func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool)
 			select {
 			case rec := <-s.commitC:
 				if rec.isSnapshotRelated() {
-					s.handle(batch, entries)
+					s.handle(batch, toApply)
 					return rec, true
 				}
 				batch = append(batch, rec)
@@ -419,7 +421,7 @@ func (s *StateMachine) Handle(batch []Commit, entries []sm.Entry) (Commit, bool)
 		}
 	default:
 	}
-	s.handle(batch, entries)
+	s.handle(batch, toApply)
 	return Commit{}, false
 }
 
@@ -555,7 +557,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 	return allUpdate, allNoOP
 }
 
-func (s *StateMachine) handle(batch []Commit, entries []sm.Entry) {
+func (s *StateMachine) handle(batch []Commit, toApply []sm.Entry) {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
 		if batch[b].isSnapshotRelated() {
@@ -564,7 +566,7 @@ func (s *StateMachine) handle(batch []Commit, entries []sm.Entry) {
 		ents := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(ents)
 		if batchSupport && allUpdate && allNoOP {
-			s.handleBatchedNoOPEntries(ents, entries)
+			s.handleBatchedNoOPEntries(ents, toApply)
 		} else {
 			for i := range ents {
 				notifyRead := b == len(batch)-1 && i == len(ents)-1
@@ -630,25 +632,28 @@ func (s *StateMachine) onUpdateApplied(ent pb.Entry,
 	}
 }
 
-func (s *StateMachine) handleBatchedNoOPEntries(ents []pb.Entry,
-	entries []sm.Entry) {
+func (s *StateMachine) handleBatchedNoOPEntries(input []pb.Entry,
+	toApply []sm.Entry) {
+	if len(toApply) != 0 {
+		panic("toApply is not empty")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, ent := range ents {
+	for _, ent := range input {
 		if !s.entryAppliedInDiskSM(ent.Index) {
-			entries = append(entries, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+			toApply = append(toApply, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
 		}
 		s.updateLastApplied(ent.Index, ent.Term)
 	}
-	if len(entries) > 0 {
-		results := s.sm.BatchedUpdate(entries)
+	if len(toApply) > 0 {
+		results := s.sm.BatchedUpdate(toApply)
 		for idx, ent := range results {
-			lastInBatch := idx == len(ents)-1
-			s.onUpdateApplied(ents[idx], ent.Result, false, false, lastInBatch)
+			lastInBatch := idx == len(input)-1
+			s.onUpdateApplied(input[idx], ent.Result, false, false, lastInBatch)
 		}
 	}
-	if len(ents) > 0 {
-		s.setBatchedLastApplied(ents[len(ents)-1].Index)
+	if len(input) > 0 {
+		s.setBatchedLastApplied(input[len(input)-1].Index)
 	}
 }
 

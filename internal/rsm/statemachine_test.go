@@ -1386,3 +1386,26 @@ func TestNonUpdateEntryIsNotBatched(t *testing.T) {
 		}
 	}
 }
+
+func TestEntryAppliedInDiskSM(t *testing.T) {
+	tests := []struct {
+		onDiskSM    bool
+		diskSMIndex uint64
+		index       uint64
+		result      bool
+	}{
+		{true, 100, 50, true},
+		{true, 100, 100, true},
+		{true, 100, 200, false},
+		{false, 100, 50, false},
+		{false, 100, 100, false},
+		{false, 100, 200, false},
+	}
+	for idx, tt := range tests {
+		sm := StateMachine{onDiskSM: tt.onDiskSM, diskSMIndex: tt.diskSMIndex}
+		result := sm.entryAppliedInDiskSM(tt.index)
+		if result != tt.result {
+			t.Errorf("%d failed", idx)
+		}
+	}
+}
