@@ -29,7 +29,11 @@ const (
 )
 
 var (
-	ErrStopped        = errors.New("connection stopped")
+	// ErrStopped is the error returned to indicate that the connection has
+	// already been stopped.
+	ErrStopped = errors.New("connection stopped")
+	// ErrStreamSnapshot is the error returned to indicate that snapshot
+	// streaming failed.
 	ErrStreamSnapshot = errors.New("stream snapshot failed")
 )
 
@@ -64,8 +68,9 @@ type connection struct {
 	preStreamChunkSend atomic.Value
 }
 
-func newConnection(clusterID uint64, nodeID uint64,
-	did uint64, streaming bool, sz int, ctx context.Context, rpc raftio.IRaftRPC,
+func newConnection(ctx context.Context,
+	clusterID uint64, nodeID uint64,
+	did uint64, streaming bool, sz int, rpc raftio.IRaftRPC,
 	stopc chan struct{}) *connection {
 	l := &connection{
 		clusterID:    clusterID,

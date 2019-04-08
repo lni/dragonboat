@@ -162,19 +162,25 @@ func (o *OffloadedStatus) describe() string {
 	return logutil.DescribeNode(o.clusterID, o.nodeID)
 }
 
+// IStreamable is the interface for types that can be snapshot streamed.
 type IStreamable interface {
 	StreamSnapshot(interface{}, io.Writer) error
 }
 
+// ISavable is the interface for types that can its content saved as snapshots.
 type ISavable interface {
 	SaveSnapshot(interface{},
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, bool, error)
 }
 
+// ILoadableSM is the interface for types that can have its state restored from
+// snapshots.
 type ILoadableSM interface {
 	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 }
 
+// ILoadableSessions is the interface for types that can load client session
+// state from a snapshot.
 type ILoadableSessions interface {
 	LoadSessions(reader io.Reader) error
 }
@@ -227,6 +233,7 @@ func (ds *NativeStateMachine) closeStateMachine() {
 	ds.sm.Close()
 }
 
+// Open opens on disk state machine.
 func (ds *NativeStateMachine) Open() (uint64, error) {
 	return ds.sm.Open(ds.done)
 }
@@ -255,6 +262,8 @@ func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
 	return ds.sm.ConcurrentSnapshot()
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether the state
+// machine is an on disk state machine.
 func (ds *NativeStateMachine) OnDiskStateMachine() bool {
 	return ds.sm.OnDiskStateMachine()
 }
@@ -366,6 +375,7 @@ func (ds *NativeStateMachine) saveSnapshot(
 	return actualSz + SnapshotHeaderSize, dummy, nil
 }
 
+// StreamSnapshot creates and streams snapshot to a remote node.
 func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 	writer io.Writer) error {
 	_, err := ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)

@@ -315,11 +315,10 @@ func (r *rocksdbKV) deleteRange(firstKey []byte, lastKey []byte) error {
 			kd := key.Data()
 			if bytes.Compare(kd, lastKey) >= 0 {
 				return true
-			} else {
-				v := make([]byte, len(kd))
-				copy(v, kd)
-				toDelete = append(toDelete, v)
 			}
+			v := make([]byte, len(kd))
+			copy(v, kd)
+			toDelete = append(toDelete, v)
 			return false
 		}(); done {
 			break

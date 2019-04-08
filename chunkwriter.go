@@ -28,6 +28,7 @@ import (
 )
 
 const (
+	// SnapshotChunkSize is the size of each snapshot chunk.
 	SnapshotChunkSize = settings.SnapshotChunkSize
 )
 

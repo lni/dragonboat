@@ -1321,8 +1321,9 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 				t.Fatalf("no panic when proposing session on disk SM")
 			}
 		}()
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		_, err := nh.GetNewSession(ctx, 1)
+		cancel()
 		if err != nil {
 			t.Fatalf("failed to get new session")
 		}

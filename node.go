@@ -1006,9 +1006,8 @@ func (rc *node) getStateMachineType() sm.StateMachineType {
 		return sm.ConcurrentStateMachine
 	} else if rc.smType == pb.OnDiskStateMachine {
 		return sm.OnDiskStateMachine
-	} else {
-		panic("unknown type")
 	}
+	panic("unknown type")
 }
 
 func (rc *node) getClusterInfo() *ClusterInfo {

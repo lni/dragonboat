@@ -358,6 +358,8 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
 
+// StartOnDiskCluster is similar to the StartCluster method but it is used to
+// add and start a Raft node backed by an IOnDiskStateMachine.
 func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IOnDiskStateMachine,

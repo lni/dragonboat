@@ -25,9 +25,11 @@ import (
 )
 
 const (
+	// EmptyClientSessionLength defines the length of an empty sessions instance.
 	EmptyClientSessionLength uint64 = 16
 )
 
+// GetEmptyLRUSession returns an marshaled empty sessions instance.
 func GetEmptyLRUSession() []byte {
 	v := make([]byte, 0)
 	sz := make([]byte, 8)

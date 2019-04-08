@@ -35,8 +35,12 @@ import (
 var (
 	// ErrSnapshotOutOfDate is returned when the snapshot being received is
 	// considered as out of date.
-	ErrSnapshotOutOfDate            = errors.New("snapshot is out of date")
-	LastChunkCount           uint64 = math.MaxUint64
+	ErrSnapshotOutOfDate = errors.New("snapshot is out of date")
+	// LastChunkCount is the special chunk count value used to indicate that the
+	// chunk is the last one.
+	LastChunkCount uint64 = math.MaxUint64
+	// PoisonChunkCount is the special chunk count value used to indicate that
+	// the processing goroutine should return.
 	PoisonChunkCount         uint64 = math.MaxUint64 - 1
 	gcIntervalTick                  = settings.Soft.SnapshotGCTick
 	snapshotChunkTimeoutTick        = settings.Soft.SnapshotChunkTimeoutTick
@@ -83,6 +87,7 @@ type chunks struct {
 	mu              sync.Mutex
 }
 
+// NewSnapshotChunks creates and returns a new snapshot chunks instance.
 func NewSnapshotChunks(onReceive func(pb.MessageBatch),
 	confirm func(uint64, uint64, uint64),
 	getDeploymentID func() uint64,

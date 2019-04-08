@@ -184,13 +184,13 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 	initialSnapshot bool, index uint64) {
 	count := 0
 	if saveSnapshot {
-		count += 1
+		count++
 	}
 	if recoverFromSnapshot {
-		count += 1
+		count++
 	}
 	if streamSnapshot {
-		count += 1
+		count++
 	}
 	if count != 1 {
 		plog.Panicf("invalid request, save %t, recover %t, stream %t",

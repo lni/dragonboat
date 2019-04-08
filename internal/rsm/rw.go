@@ -54,6 +54,8 @@ var (
 	checksumSize      = uint64(4)
 )
 
+// GetV2PayloadSize returns the actual on disk size for the input user payload
+// size.
 func GetV2PayloadSize(sz uint64) uint64 {
 	return getV2PayloadSize(sz, snapshotBlockSize)
 }
@@ -118,12 +120,14 @@ type blockWriter struct {
 	done       bool
 }
 
+// IBlockWriter is the interface for writing checksumed data blocks.
 type IBlockWriter interface {
 	Write(bs []byte) (int, error)
 	Flush() error
 	GetPayloadChecksum() []byte
 }
 
+// NewBlockWriter creates and returns a block writer.
 func NewBlockWriter(blockSize uint64,
 	onNewBlock func(data []byte, crc []byte) error,
 	t pb.ChecksumType) *blockWriter {
@@ -143,6 +147,7 @@ func newBlockWriter(blockSize uint64,
 	}
 }
 
+// Write writes the specified data using the block writer.
 func (bw *blockWriter) Write(bs []byte) (int, error) {
 	if bw.done {
 		panic("write called after flush")
@@ -173,6 +178,7 @@ func (bw *blockWriter) Write(bs []byte) (int, error) {
 	return int(totalN), nil
 }
 
+// Flush writes all in memory buffered data.
 func (bw *blockWriter) Flush() error {
 	if bw.done {
 		panic("flush called again")
@@ -195,6 +201,7 @@ func (bw *blockWriter) Flush() error {
 	return nil
 }
 
+// GetPayloadChecksum returns the checksum for the entire payload.
 func (bw *blockWriter) GetPayloadChecksum() []byte {
 	if !bw.done {
 		panic("not flushed yet")
@@ -276,6 +283,7 @@ func (br *blockReader) readBlock() (int, error) {
 	return len(br.block), nil
 }
 
+// IWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
 	Write(data []byte) (int, error)
 	GetVersion() SnapshotVersion
@@ -284,6 +292,7 @@ type IVWriter interface {
 	Flush() error
 }
 
+// IVReader is the interface for versioned snapshot reader.
 type IVReader interface {
 	Read(data []byte) (int, error)
 	Sum() []byte
@@ -412,6 +421,7 @@ func getHeaderFromFirstChunk(data []byte) (pb.SnapshotHeader, bool) {
 	return r, true
 }
 
+// IVValidator is the interface for versioned validator.
 type IVValidator interface {
 	AddChunk(data []byte, chunkID uint64) bool
 	Validate() bool
@@ -520,6 +530,8 @@ func (v *v2validator) validateBlock(block []byte) bool {
 	return validateBlock(block, v.h)
 }
 
+// GetV2PayloadChecksum calculates the payload checksum of the specified
+// snapshot file.
 func GetV2PayloadChecksum(fp string) ([]byte, error) {
 	offsets, err := getV2CRCOffsetList(fp)
 	if err != nil {
