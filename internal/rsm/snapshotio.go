@@ -29,18 +29,22 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
+// SnapshotVersion is the snapshot version value type.
 type SnapshotVersion uint64
 
 const (
+	// V1SnapshotVersion is the value of snapshot version 1.
 	V1SnapshotVersion SnapshotVersion = 1
+	// V2SnapshotVersion is the value of snapshot version 2.
 	V2SnapshotVersion SnapshotVersion = 2
-	// Current snapshot binary format version.
+	// CurrentSnapshotVersion is the snapshot binary format version.
 	CurrentSnapshotVersion SnapshotVersion = V2SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.
 	SnapshotHeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
 	// CRC32IEEE and google's highway hash are supported
 	defaultChecksumType = pb.CRC32IEEE
+	// DefaultChecksumType is the default checksum type.
 	DefaultChecksumType = defaultChecksumType
 )
 
@@ -52,6 +56,7 @@ func getChecksumType() pb.ChecksumType {
 	return defaultChecksumType
 }
 
+// GetDefaultChecksum returns the default hash.Hash instance.
 func GetDefaultChecksum() hash.Hash {
 	return getDefaultChecksum()
 }
@@ -171,14 +176,17 @@ func (sw *SnapshotWriter) Write(data []byte) (int, error) {
 	return sw.vw.Write(data)
 }
 
+// Flush flushes the underlying IVWriter instance.
 func (sw *SnapshotWriter) Flush() error {
 	return sw.vw.Flush()
 }
 
+// GetPayloadSize returns the payload size.
 func (sw *SnapshotWriter) GetPayloadSize(sz uint64) uint64 {
 	return sw.vw.GetPayloadSize(sz)
 }
 
+// GetPayloadChecksum returns the payload checksum.
 func (sw *SnapshotWriter) GetPayloadChecksum() []byte {
 	return sw.vw.GetPayloadSum()
 }
@@ -371,6 +379,8 @@ func (v *SnapshotValidator) Validate() bool {
 	return v.v.Validate()
 }
 
+// IsShrinkedSnapshotFile returns a boolean flag indicating whether the
+// specified snapshot file is already shrinked.
 func IsShrinkedSnapshotFile(fp string) (bool, error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
@@ -411,6 +421,8 @@ func mustInSameDir(fp string, newFp string) {
 	}
 }
 
+// ShrinkSnapshot shrinks the specified snapshot file and save the generated
+// shrinked version to the path specified by newFp.
 func ShrinkSnapshot(fp string, newFp string) error {
 	mustInSameDir(fp, newFp)
 	reader, err := NewSnapshotReader(fp)
@@ -443,6 +455,8 @@ func ShrinkSnapshot(fp string, newFp string) error {
 	return writer.SaveHeader(EmptyClientSessionLength, 0)
 }
 
+// ReplaceSnapshotFile replace the specified snapshot file with the shrinked
+// version atomically.
 func ReplaceSnapshotFile(newFp string, fp string) error {
 	mustInSameDir(fp, newFp)
 	if err := os.Rename(newFp, fp); err != nil {

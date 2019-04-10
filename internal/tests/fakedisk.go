@@ -22,19 +22,23 @@ import (
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
+// FakeDiskSM is a test state machine.
 type FakeDiskSM struct {
 	initialApplied uint64
 	count          uint64
 }
 
+// NewFakeDiskSM creates a new fake disk sm for testing purpose.
 func NewFakeDiskSM(initialApplied uint64) *FakeDiskSM {
 	return &FakeDiskSM{initialApplied: initialApplied}
 }
 
+// Open opens the state machine.
 func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 	return f.initialApplied, nil
 }
 
+// Update updates the state machine.
 func (f *FakeDiskSM) Update(ents []sm.Entry) []sm.Entry {
 	for _, e := range ents {
 		if e.Index <= f.initialApplied {
@@ -47,17 +51,20 @@ func (f *FakeDiskSM) Update(ents []sm.Entry) []sm.Entry {
 	return ents
 }
 
+// Lookup queries the state machine.
 func (f *FakeDiskSM) Lookup(query []byte) ([]byte, error) {
 	result := make([]byte, 8)
 	binary.LittleEndian.PutUint64(result, f.count)
 	return result, nil
 }
 
+// PrepareSnapshot prepares snapshotting.
 func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 	pit := &FakeDiskSM{initialApplied: f.initialApplied, count: f.count}
 	return pit, nil
 }
 
+// CreateSnapshot saves the state to a snapshot.
 func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) (uint64, error) {
 	pit := ctx.(*FakeDiskSM)
@@ -74,6 +81,7 @@ func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
 	return 16, nil
 }
 
+// RecoverFromSnapshot recovers the state of the state machine from a snapshot.
 func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 	stopc <-chan struct{}) error {
 	v := make([]byte, 8)
@@ -89,9 +97,11 @@ func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 	return nil
 }
 
+// Close closes the state machine.
 func (f *FakeDiskSM) Close() {
 }
 
+// GetHash returns the hash of the state.
 func (f *FakeDiskSM) GetHash() uint64 {
 	return 0
 }

@@ -53,12 +53,19 @@ var (
 	ErrSnapshotStopped = errors.New("snapshot stopped")
 )
 
-type StateMachineType uint64
+// Type is the state machine type.
+type Type uint64
 
 const (
-	RegularStateMachine    = 1
+	// RegularStateMachine is the state machine type that implements
+	// IStateMachine.
+	RegularStateMachine = 1
+	// ConcurrentStateMachine is the state machine type that implements
+	// IConcurrentStateMachine
 	ConcurrentStateMachine = 2
-	OnDiskStateMachine     = 3
+	// OnDiskStateMachine is the state machine type that implements
+	// IOnDiskStateMachine
+	OnDiskStateMachine = 3
 )
 
 // SnapshotFile is the struct used to describe external files included in a

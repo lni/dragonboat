@@ -142,7 +142,7 @@ type ClusterInfo struct {
 	// IsLeader indicates whether this is a leader node.
 	IsLeader bool
 	// StateMachineType is the type of the state machine.
-	StateMachineType sm.StateMachineType
+	StateMachineType sm.Type
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
 	// ConfigChangeIndex is the current config change index of the Raft node.

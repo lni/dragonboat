@@ -52,12 +52,14 @@ var (
 )
 
 var (
-	loopIntervalFactor       = settings.Soft.DrummerLoopIntervalFactor
-	maxServerMsgSize         = int(settings.Soft.MaxDrummerServerMsgSize)
-	tickIntervalSecond       = uint64(5)
-	raftTimeoutSecond        = uint64(10)
-	sessionTimeoutSecond     = uint64(3)
-	configFilename           = "dragonboat-drummer.json"
+	loopIntervalFactor   = settings.Soft.DrummerLoopIntervalFactor
+	maxServerMsgSize     = int(settings.Soft.MaxDrummerServerMsgSize)
+	tickIntervalSecond   = uint64(5)
+	raftTimeoutSecond    = uint64(10)
+	sessionTimeoutSecond = uint64(3)
+	configFilename       = "dragonboat-drummer.json"
+	// NodeHostInfoReportSecond defines how often should the NodeHost reports its
+	// full details to drummer servers.
 	NodeHostInfoReportSecond = settings.Soft.NodeHostInfoReportSecond
 	loopIntervalSecond       = NodeHostInfoReportSecond * loopIntervalFactor
 )

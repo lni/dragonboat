@@ -264,6 +264,7 @@ func (s *StateMachine) readyToStreamSnapshot() bool {
 	return s.GetLastApplied() >= s.diskSMIndex
 }
 
+// OpenOnDiskStateMachine opens the on disk state machine.
 func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -355,6 +356,8 @@ func (s *StateMachine) ConcurrentSnapshot() bool {
 	return s.sm.ConcurrentSnapshot()
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether it is an on
+// disk state machine.
 func (s *StateMachine) OnDiskStateMachine() bool {
 	return s.onDiskSM
 }
@@ -368,6 +371,8 @@ func (s *StateMachine) SaveSnapshot() (*pb.Snapshot,
 	return s.saveSnapshot()
 }
 
+// StreamSnapshot starts to stream snapshot from the current SM to a remote
+// node targetted by the provided sink.
 func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
 	return s.streamSnapshot(sink)
 }

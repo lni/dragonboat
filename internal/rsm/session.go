@@ -57,6 +57,7 @@ func newSession(id RaftClientID) *Session {
 	}
 }
 
+// AddResponse adds a response.
 func (s *Session) AddResponse(id RaftSeriesID, resp uint64) {
 	s.addResponse(id, resp)
 }

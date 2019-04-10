@@ -29,7 +29,8 @@ import (
 )
 
 var (
-	ErrSnapshotOutOfDate     = errors.New("snapshot out of order")
+	// ErrSnapshotOutOfDate is the error to indicate that snapshot is out of date.
+	ErrSnapshotOutOfDate     = errors.New("snapshot out of date")
 	snapshotMetadataFilename = "snapshot.metadata"
 	genTmpDirSuffix          = "generating"
 	recvTmpDirSuffix         = "receiving"
@@ -59,6 +60,7 @@ func GetSnapshotDirName(index uint64) string {
 	return getSnapshotDirName(index)
 }
 
+// GetSnapshotFilename returns the filename of the snapshot file.
 func GetSnapshotFilename(index uint64) string {
 	return getSnapshotFilename(index)
 }
@@ -167,6 +169,7 @@ func (se *SnapshotEnv) MustRemoveTempDir() {
 	}
 }
 
+// Finalize finalizes the snapshot.
 func (se *SnapshotEnv) FinalizeSnapshot(msg proto.Message) error {
 	finalizeLock.Lock()
 	defer finalizeLock.Unlock()
@@ -193,6 +196,7 @@ func (se *SnapshotEnv) RemoveFinalDir() error {
 	return se.removeDir(se.finalDir)
 }
 
+// SaveSnapshotMetadata saves the metadata of the snapshot file.
 func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		snapshotMetadataFilename, msg)
@@ -223,6 +227,7 @@ func (se *SnapshotEnv) GetFilepath() string {
 	return filepath.Join(se.finalDir, getSnapshotFilename(se.index))
 }
 
+// GetShrinkedFilepath returns the file path of the shrinked snapshot.
 func (se *SnapshotEnv) GetShrinkedFilepath() string {
 	return filepath.Join(se.finalDir, getShrinkedSnapshotFilename(se.index))
 }

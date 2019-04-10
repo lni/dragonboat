@@ -26,6 +26,8 @@ import (
 )
 
 var (
+	// NodeHostInfoReportSecond defines how often should the NodeHost info be
+	// reported to drummer servers.
 	NodeHostInfoReportSecond        = settings.Soft.NodeHostInfoReportSecond
 	persistentLogReportCycle uint64 = settings.Soft.PersisentLogReportCycle
 )

@@ -283,7 +283,7 @@ func (br *blockReader) readBlock() (int, error) {
 	return len(br.block), nil
 }
 
-// IWriter is the interface for versioned snapshot writer.
+// IVWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
 	Write(data []byte) (int, error)
 	GetVersion() SnapshotVersion

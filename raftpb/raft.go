@@ -271,6 +271,8 @@ func (f *SnapshotFile) Filename() string {
 	return fmt.Sprintf("external-file-%d", f.FileId)
 }
 
+// IChunkSink is the snapshot chunk sink for handling snapshot chunks being
+// streamed.
 type IChunkSink interface {
 	// return (sent, stopped)
 	Receive(chunk SnapshotChunk) (bool, bool)

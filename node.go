@@ -999,7 +999,7 @@ func (rc *node) captureClusterConfig() {
 	rc.clusterInfo.Store(ci)
 }
 
-func (rc *node) getStateMachineType() sm.StateMachineType {
+func (rc *node) getStateMachineType() sm.Type {
 	if rc.smType == pb.RegularStateMachine {
 		return sm.RegularStateMachine
 	} else if rc.smType == pb.ConcurrentStateMachine {

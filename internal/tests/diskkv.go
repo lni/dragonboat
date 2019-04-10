@@ -243,6 +243,7 @@ func cleanupNodeDataDir(dir string) error {
 	return nil
 }
 
+// DiskKVTest is a state machine used for testing on disk kv.
 type DiskKVTest struct {
 	clusterID   uint64
 	nodeID      uint64
@@ -252,6 +253,7 @@ type DiskKVTest struct {
 	aborted     bool
 }
 
+// NewDiskKVTest creates a new disk kv test state machine.
 func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 	d := &DiskKVTest{
 		clusterID: clusterID,
@@ -261,8 +263,8 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 	return d
 }
 
-func (s *DiskKVTest) describe() string {
-	id := logutil.DescribeNode(s.clusterID, s.nodeID)
+func (d *DiskKVTest) describe() string {
+	id := logutil.DescribeNode(d.clusterID, d.nodeID)
 	return fmt.Sprintf("%s %s", time.Now().Format("2006-01-02 15:04:05.000000"), id)
 }
 
@@ -281,6 +283,7 @@ func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
 	return binary.LittleEndian.Uint64(data), nil
 }
 
+// Open opens the state machine.
 func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
 	generateRandomDelay()
@@ -330,6 +333,7 @@ func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 	return appliedIndex, nil
 }
 
+// Lookup queries the state machine.
 func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	if db != nil {
@@ -342,6 +346,7 @@ func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
 	return nil, errors.New("db closed")
 }
 
+// Update updates the state machine.
 func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 	if d.aborted {
 		panic("update() called after abort set to true")
@@ -384,6 +389,7 @@ type diskKVCtx struct {
 	snapshot *gorocksdb.Snapshot
 }
 
+// PrepareSnapshot prepares snapshotting.
 func (d *DiskKVTest) PrepareSnapshot() (interface{}, error) {
 	if d.closed {
 		panic("prepare snapshot called after Close()")
@@ -461,6 +467,7 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 	return total, nil
 }
 
+// CreateSnapshot saves the state machine state.
 func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 	w io.Writer, done <-chan struct{}) (uint64, error) {
 	if d.closed {
@@ -488,6 +495,7 @@ func (d *DiskKVTest) CreateSnapshot(ctx interface{},
 	return d.saveToWriter(db, ss, w)
 }
 
+// RecoverFromSnapshot recovers the state machine state from snapshot.
 func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	done <-chan struct{}) error {
 	if d.closed {
@@ -574,6 +582,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	return os.RemoveAll(oldDirName)
 }
 
+// Close closes the state machine.
 func (d *DiskKVTest) Close() {
 	fmt.Printf("[DKVE] %s called close\n", d.describe())
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
@@ -587,6 +596,7 @@ func (d *DiskKVTest) Close() {
 	}
 }
 
+// GetHash returns a hash value representing the state of the state machine.
 func (d *DiskKVTest) GetHash() uint64 {
 	fmt.Printf("[DKVE] %s called GetHash\n", d.describe())
 	h := md5.New()

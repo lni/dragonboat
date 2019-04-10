@@ -48,6 +48,7 @@ func NewRegularStateMachine(sm sm.IStateMachine) *RegularStateMachine {
 	return &RegularStateMachine{sm: sm}
 }
 
+// Open opens the state machine.
 func (sm *RegularStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
@@ -120,6 +121,7 @@ func NewConcurrentStateMachine(sm sm.IConcurrentStateMachine) *ConcurrentStateMa
 	return &ConcurrentStateMachine{sm: sm}
 }
 
+// Open opens the state machine.
 func (sm *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
@@ -169,10 +171,13 @@ func (sm *ConcurrentStateMachine) ConcurrentSnapshot() bool {
 	return true
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether this is a on
+// disk state machine.
 func (sm *ConcurrentStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
+// OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
 	sm           sm.IOnDiskStateMachine
 	opened       bool
@@ -180,10 +185,12 @@ type OnDiskStateMachine struct {
 	applied      uint64
 }
 
+// NewOnDiskStateMachine creates and returns an on disk state machine.
 func NewOnDiskStateMachine(sm sm.IOnDiskStateMachine) *OnDiskStateMachine {
 	return &OnDiskStateMachine{sm: sm}
 }
 
+// Open opens the state machine.
 func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	if sm.opened {
 		panic("Open() called more than once on OnDiskStateMachine")
@@ -274,6 +281,8 @@ func (sm *OnDiskStateMachine) ConcurrentSnapshot() bool {
 	return true
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether this is an on
+// disk state machine.
 func (sm *OnDiskStateMachine) OnDiskStateMachine() bool {
 	return true
 }

@@ -44,6 +44,7 @@ func isGRPCTempError(err error) bool {
 	return grpc.Code(err) == codes.Unavailable
 }
 
+// DrummerClient is the client used to contact drummer servers.
 type DrummerClient struct {
 	nh  *dragonboat.NodeHost
 	req struct {
@@ -71,10 +72,12 @@ func NewDrummerClient(nh *dragonboat.NodeHost) *DrummerClient {
 	return dc
 }
 
+// Name returns the name of the drummer client.
 func (dc *DrummerClient) Name() string {
 	return DrummerClientName
 }
 
+// Stop stops the drummer client.
 func (dc *DrummerClient) Stop() {
 	dc.connections.Close()
 }
@@ -84,6 +87,7 @@ type clusterInfo struct {
 	incomplete bool
 }
 
+// SendNodeHostInfo send the node host info the specified drummer server.
 func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
 	drummerAPIAddress string,
 	nhi dragonboat.NodeHostInfo,
@@ -183,21 +187,7 @@ func toDrummerPBLogInfo(loginfo []raftio.NodeInfo) []pb.LogInfo {
 	return result
 }
 
-func (dc *DrummerClient) GetDeploymentID(ctx context.Context,
-	drummerAPIAddress string) (uint64, error) {
-	conn, err := dc.getDrummerConnection(ctx, drummerAPIAddress)
-	if err != nil {
-		return 0, err
-	}
-	client := pb.NewDrummerClient(conn.ClientConn())
-	di, err := client.GetDeploymentInfo(ctx, &pb.Empty{})
-	if err == nil {
-		return di.DeploymentId, nil
-	}
-	conn.Close()
-	return 0, err
-}
-
+// HandleMasterRequests handles requests made by master servers.
 func (dc *DrummerClient) HandleMasterRequests(ctx context.Context) error {
 	reqs := dc.getRequests()
 	if len(reqs) == 0 {

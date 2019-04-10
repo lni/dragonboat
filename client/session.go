@@ -71,6 +71,8 @@ func NewNoOPSession(clusterID uint64, rng random.Source) *Session {
 	}
 }
 
+// IsNoOPSession returns a boolean flag indicating whether the session instance
+// is a NoOP session.
 func (cs *Session) IsNoOPSession() bool {
 	return cs.SeriesID == NoOPSeriesID
 }
