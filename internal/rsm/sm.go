@@ -247,7 +247,7 @@ func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 	if !sm.opened {
 		panic("save snapshot called when not opened")
 	}
-	return sm.sm.CreateSnapshot(ctx, w, stopc)
+	return sm.sm.SaveSnapshot(ctx, w, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.

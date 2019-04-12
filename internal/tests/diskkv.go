@@ -467,8 +467,8 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 	return total, nil
 }
 
-// CreateSnapshot saves the state machine state.
-func (d *DiskKVTest) CreateSnapshot(ctx interface{},
+// SaveSnapshot saves the state machine state.
+func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 	w io.Writer, done <-chan struct{}) (uint64, error) {
 	if d.closed {
 		panic("prepare snapshot called after Close()")

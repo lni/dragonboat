@@ -64,8 +64,8 @@ func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 	return pit, nil
 }
 
-// CreateSnapshot saves the state to a snapshot.
-func (f *FakeDiskSM) CreateSnapshot(ctx interface{},
+// SaveSnapshot saves the state to a snapshot.
+func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) (uint64, error) {
 	pit := ctx.(*FakeDiskSM)
 	fmt.Printf("saving initial %d, count %d\n", pit.initialApplied, pit.count)

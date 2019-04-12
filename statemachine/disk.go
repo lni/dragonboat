@@ -124,7 +124,8 @@ type IOnDiskStateMachine interface {
 	// PrepareSnapshot returns an error when there is unrecoverable error for
 	// preparing the snapshot.
 	PrepareSnapshot() (interface{}, error)
-	CreateSnapshot(interface{}, io.Writer, <-chan struct{}) (uint64, error)
+
+	SaveSnapshot(interface{}, io.Writer, <-chan struct{}) (uint64, error)
 	// RecoverFromSnapshot recovers the state of the IOnDiskStateMachine
 	// instance from a snapshot captured by the SaveSnapshot() method. The saved
 	// snapshot is provided as an io.Reader backed by a file on disk.
