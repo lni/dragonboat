@@ -494,7 +494,7 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	if rec.InitialSnapshot && rc.allDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
 		index, err = rc.sm.OpenOnDiskStateMachine()
-		if err == sm.ErrSnapshotStopped {
+		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
 			plog.Infof("%s aborted its RecoverFromSnapshot when opening its SM",
 				rc.describe())
 			return 0, true
