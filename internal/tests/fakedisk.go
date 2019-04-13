@@ -66,19 +66,19 @@ func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot saves the state to a snapshot.
 func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
-	w io.Writer, stopc <-chan struct{}) (uint64, error) {
+	w io.Writer, stopc <-chan struct{}) error {
 	pit := ctx.(*FakeDiskSM)
 	fmt.Printf("saving initial %d, count %d\n", pit.initialApplied, pit.count)
 	v := make([]byte, 8)
 	binary.LittleEndian.PutUint64(v, pit.initialApplied)
 	if _, err := w.Write(v); err != nil {
-		return 0, err
+		return err
 	}
 	binary.LittleEndian.PutUint64(v, pit.count)
 	if _, err := w.Write(v); err != nil {
-		return 0, err
+		return err
 	}
-	return 16, nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the state of the state machine from a snapshot.

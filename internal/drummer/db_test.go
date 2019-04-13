@@ -62,7 +62,7 @@ func TestDBCanBeSnapshottedAndRestored(t *testing.T) {
 	testRequestsCanBeUpdated(t, d)
 	testNodeHostInfoUpdateUpdatesClusterAndNodeHostImage(t, d)
 	w := bytes.NewBufferString("")
-	_, err := d.SaveSnapshot(w, nil, nil)
+	err := d.SaveSnapshot(w, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}

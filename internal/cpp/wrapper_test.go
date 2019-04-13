@@ -173,7 +173,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
 	sessions := bytes.NewBuffer(make([]byte, 0, 1024*1024))
-	sz, _, err := ds.SaveSnapshot(nil, writer, sessions.Bytes(), nil)
+	_, sz, err := ds.SaveSnapshot(nil, writer, sessions.Bytes(), nil)
 	if err != nil {
 		t.Errorf("failed to save snapshot, %v", err)
 	}

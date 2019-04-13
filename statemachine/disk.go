@@ -158,7 +158,7 @@ type IOnDiskStateMachine interface {
 	//
 	// The SaveSnapshot method is possible be invoked when there is concurrent
 	// call to the Update method.
-	SaveSnapshot(interface{}, io.Writer, <-chan struct{}) (uint64, error)
+	SaveSnapshot(interface{}, io.Writer, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IOnDiskStateMachine
 	// instance from a snapshot captured by the SaveSnapshot() method. The saved
 	// snapshot is provided as an io.Reader backed by a file on disk.

@@ -203,14 +203,13 @@ func checkExternalFile(files []statemachine.SnapshotFile, clusterID uint64) {
 // specified io.Writer object.
 func (s *KVTest) SaveSnapshot(w io.Writer,
 	fileCollection statemachine.ISnapshotFileCollection,
-	done <-chan struct{}) (uint64, error) {
+	done <-chan struct{}) error {
 	if s.closed {
 		panic("save snapshot called after Close()")
 	}
 	if s.externalFileTest {
 		s.saveExternalFile(fileCollection)
 	}
-
 	delay := getLargeRandomDelay()
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
@@ -218,7 +217,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 		time.Sleep(10 * time.Millisecond)
 		select {
 		case <-done:
-			return 0, statemachine.ErrSnapshotStopped
+			return statemachine.ErrSnapshotStopped
 		default:
 		}
 	}
@@ -228,13 +227,12 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 	}
 	n, err := w.Write(data)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if n != len(data) {
 		panic("didn't write the whole data buf")
 	}
-
-	return uint64(len(data)), nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the state using the provided snapshot.

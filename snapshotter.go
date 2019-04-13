@@ -105,7 +105,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	sz, dummy, err := savable.SaveSnapshot(meta.Ctx, writer, session, files)
+	dummy, sz, err := savable.SaveSnapshot(meta.Ctx, writer, session, files)
 	if err != nil {
 		return nil, env, err
 	}

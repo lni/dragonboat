@@ -433,15 +433,15 @@ func (n *PST) Update(data []byte) uint64 {
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
 func (n *PST) SaveSnapshot(w io.Writer,
 	fileCollection sm.ISnapshotFileCollection,
-	done <-chan struct{}) (uint64, error) {
+	done <-chan struct{}) error {
 	plog.Infof("save snapshot called")
 	n.saved = true
 	if !n.slowSave {
-		n, err := w.Write([]byte("random-data"))
+		_, err := w.Write([]byte("random-data"))
 		if err != nil {
 			panic(err)
 		}
-		return uint64(n), nil
+		return nil
 	}
 	for {
 		time.Sleep(10 * time.Millisecond)
@@ -449,7 +449,7 @@ func (n *PST) SaveSnapshot(w io.Writer,
 		case <-done:
 			n.stopped = true
 			plog.Infof("saveSnapshot stopped")
-			return 0, sm.ErrSnapshotStopped
+			return sm.ErrSnapshotStopped
 		default:
 		}
 	}

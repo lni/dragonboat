@@ -464,3 +464,17 @@ func ReplaceSnapshotFile(newFp string, fp string) error {
 	}
 	return fileutil.SyncDir(filepath.Dir(fp))
 }
+
+type countedWriter struct {
+	w     io.Writer
+	total uint64
+}
+
+func (cw *countedWriter) Write(data []byte) (int, error) {
+	n, err := cw.w.Write(data)
+	if err != nil {
+		return 0, err
+	}
+	cw.total = cw.total + uint64(n)
+	return n, nil
+}

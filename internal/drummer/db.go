@@ -148,7 +148,7 @@ func (d *DB) checkLaunchDeadline() {
 
 // SaveSnapshot generates a snapshot of the DB
 func (d *DB) SaveSnapshot(w io.Writer, fc statemachine.ISnapshotFileCollection,
-	done <-chan struct{}) (uint64, error) {
+	done <-chan struct{}) error {
 	d.assertNotFailed()
 	data, err := json.Marshal(d)
 	if err != nil {
@@ -156,9 +156,9 @@ func (d *DB) SaveSnapshot(w io.Writer, fc statemachine.ISnapshotFileCollection,
 	}
 	_, err = w.Write(data)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return uint64(len(data)), nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers DB state from a snapshot.

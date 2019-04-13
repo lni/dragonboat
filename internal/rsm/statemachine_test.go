@@ -190,7 +190,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	sz, _, err := savable.SaveSnapshot(nil, writer, session, nil)
+	_, sz, err := savable.SaveSnapshot(nil, writer, session, nil)
 	s.dataSize = sz
 	if err != nil {
 		return nil, env, err

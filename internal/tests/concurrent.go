@@ -48,7 +48,7 @@ func (c *TestUpdate) Lookup(query []byte) []byte {
 
 // SaveSnapshot saves the snapshot.
 func (c *TestUpdate) SaveSnapshot(w io.Writer,
-	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) (uint64, error) {
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	panic("not implemented")
 }
 
@@ -103,7 +103,7 @@ func (c *ConcurrentUpdate) PrepareSnapshot() (interface{}, error) {
 // SaveSnapshot saves the snapshot.
 func (c *ConcurrentUpdate) SaveSnapshot(ctx interface{},
 	w io.Writer,
-	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) (uint64, error) {
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	panic("not implemented")
 }
 
@@ -140,7 +140,7 @@ func (c *TestSnapshot) Lookup(query []byte) []byte {
 
 // SaveSnapshot saves the snapshot.
 func (c *TestSnapshot) SaveSnapshot(w io.Writer,
-	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) (uint64, error) {
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	atomic.StoreUint32(&c.val, 0)
 	for i := 0; i < 100; i++ {
 		atomic.StoreUint32(&c.val, 1)
@@ -152,7 +152,7 @@ func (c *TestSnapshot) SaveSnapshot(w io.Writer,
 	if err != nil {
 		panic(err)
 	}
-	return 4, nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
@@ -195,7 +195,7 @@ func (c *ConcurrentSnapshot) PrepareSnapshot() (interface{}, error) {
 // SaveSnapshot saves the snapshot.
 func (c *ConcurrentSnapshot) SaveSnapshot(ctx interface{},
 	w io.Writer,
-	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) (uint64, error) {
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	atomic.StoreUint32(&c.val, 0)
 	for i := 0; i < 100; i++ {
 		atomic.StoreUint32(&c.val, 1)
@@ -207,7 +207,7 @@ func (c *ConcurrentSnapshot) SaveSnapshot(ctx interface{},
 	if err != nil {
 		panic(err)
 	}
-	return 4, nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.

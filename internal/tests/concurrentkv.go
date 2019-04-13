@@ -121,7 +121,7 @@ func (s *ConcurrentKVTest) PrepareSnapshot() (interface{}, error) {
 func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 	w io.Writer,
 	fileCollection sm.ISnapshotFileCollection,
-	done <-chan struct{}) (uint64, error) {
+	done <-chan struct{}) error {
 	if s.isClosed() {
 		panic("save snapshot called after Close()")
 	}
@@ -132,7 +132,7 @@ func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 		time.Sleep(10 * time.Millisecond)
 		select {
 		case <-done:
-			return 0, sm.ErrSnapshotStopped
+			return sm.ErrSnapshotStopped
 		default:
 		}
 	}
@@ -154,12 +154,12 @@ func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 	}
 	n, err := w.Write(data)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if n != len(data) {
 		panic("didn't write the whole data buf")
 	}
-	return uint64(len(data)), nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the state using the provided snapshot.

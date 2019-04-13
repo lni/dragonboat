@@ -170,7 +170,7 @@ type IStreamable interface {
 // ISavable is the interface for types that can its content saved as snapshots.
 type ISavable interface {
 	SaveSnapshot(interface{},
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, bool, error)
+		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
 }
 
 // ILoadableSM is the interface for types that can have its state restored from
@@ -194,7 +194,7 @@ type IManagedStateMachine interface {
 	GetHash() uint64
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (uint64, bool, error)
+		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
 	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From)
@@ -326,60 +326,61 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 // by the fp input string.
 func (ds *NativeStateMachine) SaveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
+	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
 	if ds.sm.OnDiskStateMachine() {
-		return ds.saveDummySnapshot(writer, session)
+		sz, err := ds.saveDummySnapshot(writer, session)
+		return true, sz, err
 	}
-	return ds.saveSnapshot(ssctx, writer, session, collection)
+	sz, err := ds.saveSnapshot(ssctx, writer, session, collection)
+	return false, sz, err
 }
 
 func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
-	session []byte) (uint64, bool, error) {
-	dummy := true
+	session []byte) (uint64, error) {
 	_, err := writer.Write(session)
 	if err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
 	if err = writer.Flush(); err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
 	if err := writer.SaveHeader(16, 0); err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
-	return writer.GetPayloadSize(16) + SnapshotHeaderSize, dummy, nil
+	return writer.GetPayloadSize(16) + SnapshotHeaderSize, nil
 }
 
 func (ds *NativeStateMachine) saveSnapshot(
 	ssctx interface{}, writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
-	dummy := false
+	collection sm.ISnapshotFileCollection) (uint64, error) {
 	n, err := writer.Write(session)
 	if err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
 	if n != len(session) {
-		return 0, dummy, io.ErrShortWrite
+		return 0, io.ErrShortWrite
 	}
 	smsz := uint64(len(session))
-	sz, err := ds.sm.SaveSnapshot(ssctx, writer, collection, ds.done)
+	cw := &countedWriter{w: writer}
+	err = ds.sm.SaveSnapshot(ssctx, cw, collection, ds.done)
 	if err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
 	if err = writer.Flush(); err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
+	sz := cw.total
 	if err = writer.SaveHeader(smsz, sz); err != nil {
-		return 0, dummy, err
+		return 0, err
 	}
 	actualSz := writer.GetPayloadSize(sz + smsz)
-	return actualSz + SnapshotHeaderSize, dummy, nil
+	return actualSz + SnapshotHeaderSize, nil
 }
 
 // StreamSnapshot creates and streams snapshot to a remote node.
 func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 	writer io.Writer) error {
-	_, err := ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
-	return err
+	return ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot

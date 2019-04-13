@@ -176,14 +176,13 @@ type IStateMachine interface {
 	// can choose to abort the SaveSnapshot procedure and return
 	// ErrSnapshotStopped immediately.
 	//
-	// SaveSnapshot returns the number of bytes written to the provided io.Write
-	// and the encountered error when generating the snapshot. Other than the
-	// above mentioned ErrSnapshotStopped error, the IStateMachine implementation
-	// should only return a non-nil error when the system need to be immediately
-	// halted for critical errors, e.g. disk error preventing you from saving the
-	// snapshot.
+	// SaveSnapshot returns the encountered error when generating the snapshot.
+	// Other than the above mentioned ErrSnapshotStopped error, the IStateMachine
+	// implementation should only return a non-nil error when the system need to
+	// be immediately halted for critical errors, e.g. disk error preventing you
+	// from saving the snapshot.
 	SaveSnapshot(io.Writer,
-		ISnapshotFileCollection, <-chan struct{}) (uint64, error)
+		ISnapshotFileCollection, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IStateMachine object from a
 	// previously saved snapshot captured by the SaveSnapshot() method. The
 	// saved snapshot is provided as an io.Reader backed by a file on disk and
@@ -333,14 +332,13 @@ type IConcurrentStateMachine interface {
 	// IConcurrentStateMachine can choose to abort the SaveSnapshot procedure and
 	// return ErrSnapshotStopped immediately.
 	//
-	// SaveSnapshot returns the number of bytes written to the provided io.Write
-	// and the encountered error when generating the snapshot. Other than the
-	// above mentioned ErrSnapshotStopped error, the IConcurrentStateMachine
-	// implementation should only return a non-nil error when the system need to
-	// be immediately halted for critical errors, e.g. disk error preventing you
-	// from saving the snapshot.
+	// SaveSnapshot returns the encountered error when generating the snapshot.
+	// Other than the above mentioned ErrSnapshotStopped error, the
+	// IConcurrentStateMachine implementation should only return a non-nil error
+	// when the system need to be immediately halted for critical errors, e.g.
+	// disk error preventing you from saving the snapshot.
 	SaveSnapshot(interface{},
-		io.Writer, ISnapshotFileCollection, <-chan struct{}) (uint64, error)
+		io.Writer, ISnapshotFileCollection, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IConcurrentStateMachine
 	// instance from a previously saved snapshot captured by the SaveSnapshot()
 	// method. The saved snapshot is provided as an io.Reader backed by a file

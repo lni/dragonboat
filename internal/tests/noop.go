@@ -44,18 +44,16 @@ func (n *NoOP) Update(data []byte) uint64 {
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
 func (n *NoOP) SaveSnapshot(w io.Writer,
 	fileCollection statemachine.ISnapshotFileCollection,
-	done <-chan struct{}) (uint64, error) {
+	done <-chan struct{}) error {
 	data, err := json.Marshal(n)
 	if err != nil {
 		panic(err)
 	}
-
 	_, err = w.Write(data)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	return uint64(len(data)), nil
+	return nil
 }
 
 // RecoverFromSnapshot recovers the object from the snapshot specified by the

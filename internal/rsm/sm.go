@@ -29,7 +29,7 @@ type IStateMachine interface {
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
 		io.Writer,
-		sm.ISnapshotFileCollection, <-chan struct{}) (uint64, error)
+		sm.ISnapshotFileCollection, <-chan struct{}) error
 	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
 	GetHash() uint64
@@ -76,7 +76,7 @@ func (sm *RegularStateMachine) PrepareSnapshot() (interface{}, error) {
 func (sm *RegularStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer,
 	fc sm.ISnapshotFileCollection,
-	stopc <-chan struct{}) (uint64, error) {
+	stopc <-chan struct{}) error {
 	if ctx != nil {
 		panic("ctx is not nil")
 	}
@@ -144,7 +144,7 @@ func (sm *ConcurrentStateMachine) PrepareSnapshot() (interface{}, error) {
 // SaveSnapshot saves the snapshot.
 func (sm *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
-	stopc <-chan struct{}) (uint64, error) {
+	stopc <-chan struct{}) error {
 	return sm.sm.SaveSnapshot(ctx, w, fc, stopc)
 }
 
@@ -243,7 +243,7 @@ func (sm *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
 // SaveSnapshot saves the snapshot.
 func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
-	stopc <-chan struct{}) (uint64, error) {
+	stopc <-chan struct{}) error {
 	if !sm.opened {
 		panic("save snapshot called when not opened")
 	}

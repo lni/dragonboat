@@ -285,15 +285,14 @@ func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
 func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 	writer *rsm.SnapshotWriter,
 	session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, bool, error) {
-	dummy := false
+	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
 	ds.ensureNotDestroyed()
 	n, err := writer.Write(session)
 	if err != nil {
-		return 0, dummy, err
+		return false, 0, err
 	}
 	if n != len(session) {
-		return 0, dummy, io.ErrShortWrite
+		return false, 0, io.ErrShortWrite
 	}
 	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
@@ -310,18 +309,18 @@ func (ds *StateMachineWrapper) SaveSnapshot(ctx interface{},
 	err = getErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		return 0, dummy, err
+		return false, 0, err
 	}
 	if err := writer.Flush(); err != nil {
-		return 0, dummy, err
+		return false, 0, err
 	}
 	sz := uint64(r.size)
 	if err := writer.SaveHeader(smsz, sz); err != nil {
 		plog.Errorf("save header failed %v", err)
-		return 0, dummy, err
+		return false, 0, err
 	}
 	actualSz := writer.GetPayloadSize(uint64(r.size) + smsz)
-	return actualSz + rsm.SnapshotHeaderSize, dummy, nil
+	return false, actualSz + rsm.SnapshotHeaderSize, nil
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state

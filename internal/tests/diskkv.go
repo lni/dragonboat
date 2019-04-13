@@ -413,7 +413,7 @@ func iteratorIsValid(iter *gorocksdb.Iterator) bool {
 }
 
 func (d *DiskKVTest) saveToWriter(db *rocksdb,
-	ss *gorocksdb.Snapshot, w io.Writer) (uint64, error) {
+	ss *gorocksdb.Snapshot, w io.Writer) error {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetSnapshot(ss)
 	ro.SetFillCache(false)
@@ -426,13 +426,11 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 		count++
 	}
 	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.describe(), count)
-	total := uint64(0)
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, count)
 	if _, err := w.Write(sz); err != nil {
-		return 0, err
+		return err
 	}
-	total += 8
 	for iter.SeekToFirst(); iteratorIsValid(iter); iter.Next() {
 		key, ok := iter.OKey()
 		if !ok {
@@ -456,20 +454,18 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 		}
 		binary.LittleEndian.PutUint64(sz, uint64(len(data)))
 		if _, err := w.Write(sz); err != nil {
-			return 0, err
+			return err
 		}
-		total += 8
 		if _, err := w.Write(data); err != nil {
-			return 0, err
+			return err
 		}
-		total += uint64(len(data))
 	}
-	return total, nil
+	return nil
 }
 
 // SaveSnapshot saves the state machine state.
 func (d *DiskKVTest) SaveSnapshot(ctx interface{},
-	w io.Writer, done <-chan struct{}) (uint64, error) {
+	w io.Writer, done <-chan struct{}) error {
 	if d.closed {
 		panic("prepare snapshot called after Close()")
 	}
@@ -483,7 +479,7 @@ func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 		time.Sleep(10 * time.Millisecond)
 		select {
 		case <-done:
-			return 0, sm.ErrSnapshotStopped
+			return sm.ErrSnapshotStopped
 		default:
 		}
 	}
@@ -604,7 +600,7 @@ func (d *DiskKVTest) GetHash() uint64 {
 	ss := db.db.NewSnapshot()
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	if _, err := d.saveToWriter(db, ss, h); err != nil {
+	if err := d.saveToWriter(db, ss, h); err != nil {
 		panic(err)
 	}
 	md5sum := h.Sum(nil)

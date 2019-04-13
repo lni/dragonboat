@@ -336,7 +336,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("prepare snapshot failed %v", err)
 		}
-		_, err = odsm.SaveSnapshot(ctx, buf, nil)
+		err = odsm.SaveSnapshot(ctx, buf, nil)
 		if err != nil {
 			t.Fatalf("create snapshot failed %v", err)
 		}
