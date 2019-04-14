@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // NoOP is a IStateMachine struct used for testing purpose.
@@ -34,16 +34,16 @@ func (n *NoOP) Lookup(key []byte) []byte {
 }
 
 // Update updates the object.
-func (n *NoOP) Update(data []byte) uint64 {
+func (n *NoOP) Update(data []byte) sm.Result {
 	if n.MillisecondToSleep > 0 {
 		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
 	}
-	return uint64(len(data))
+	return sm.Result{Value: uint64(len(data))}
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
 func (n *NoOP) SaveSnapshot(w io.Writer,
-	fileCollection statemachine.ISnapshotFileCollection,
+	fileCollection sm.ISnapshotFileCollection,
 	done <-chan struct{}) error {
 	data, err := json.Marshal(n)
 	if err != nil {
@@ -59,7 +59,7 @@ func (n *NoOP) SaveSnapshot(w io.Writer,
 // RecoverFromSnapshot recovers the object from the snapshot specified by the
 // io.Reader object.
 func (n *NoOP) RecoverFromSnapshot(r io.Reader,
-	files []statemachine.SnapshotFile,
+	files []sm.SnapshotFile,
 	done <-chan struct{}) error {
 	var sn NoOP
 	data, err := ioutil.ReadAll(r)

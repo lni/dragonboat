@@ -83,7 +83,7 @@ type SMFactoryFunc func(clusterID uint64,
 // INodeProxy is the interface used as proxy to a nodehost.
 type INodeProxy interface {
 	RestoreRemotes(pb.Snapshot)
-	ApplyUpdate(pb.Entry, uint64, bool, bool, bool)
+	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
 	ApplyConfigChange(pb.ConfigChange)
 	ConfigChangeProcessed(uint64, bool)
 	NodeID() uint64
@@ -581,6 +581,10 @@ func (s *StateMachine) handle(batch []Commit, toApply []sm.Entry) {
 	}
 }
 
+func isEmptyResult(result sm.Result) bool {
+	return result.Data == nil && result.Value == 0
+}
+
 func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 	// ConfChnage also go through the SM so the index value is updated
 	if ent.IsConfigChange() {
@@ -590,17 +594,17 @@ func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
 		if !ent.IsSessionManaged() {
 			if ent.IsEmpty() {
 				s.handleNoOP(ent)
-				s.node.ApplyUpdate(ent, 0, false, true, lastInBatch)
+				s.node.ApplyUpdate(ent, sm.Result{}, false, true, lastInBatch)
 			} else {
 				panic("not session managed, not empty")
 			}
 		} else {
 			if ent.IsNewSessionRequest() {
 				smResult := s.handleRegisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, smResult == 0, false, lastInBatch)
+				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, lastInBatch)
 			} else if ent.IsEndOfSessionRequest() {
 				smResult := s.handleUnregisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, smResult == 0, false, lastInBatch)
+				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, lastInBatch)
 			} else {
 				if !s.entryAppliedInDiskSM(ent.Index) {
 					smResult, ignored, rejected := s.handleUpdate(ent)
@@ -631,7 +635,7 @@ func (s *StateMachine) entryAppliedInDiskSM(index uint64) bool {
 }
 
 func (s *StateMachine) onUpdateApplied(ent pb.Entry,
-	result uint64, ignored bool, rejected bool, lastInBatch bool) {
+	result sm.Result, ignored bool, rejected bool, lastInBatch bool) {
 	if !ignored {
 		s.node.ApplyUpdate(ent, result, rejected, ignored, lastInBatch)
 	}
@@ -680,22 +684,22 @@ func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
 	return false
 }
 
-func (s *StateMachine) handleRegisterSession(ent pb.Entry) uint64 {
+func (s *StateMachine) handleRegisterSession(ent pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	smResult := s.sessions.RegisterClientID(ent.ClientID)
-	if smResult == 0 {
+	if isEmptyResult(smResult) {
 		plog.Errorf("on %s register client failed, %v", s.describe(), ent)
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
 	return smResult
 }
 
-func (s *StateMachine) handleUnregisterSession(ent pb.Entry) uint64 {
+func (s *StateMachine) handleUnregisterSession(ent pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	smResult := s.sessions.UnregisterClientID(ent.ClientID)
-	if smResult == 0 {
+	if isEmptyResult(smResult) {
 		plog.Errorf("%s unregister client %d failed, %v",
 			s.describe(), ent.ClientID, ent)
 	}
@@ -713,10 +717,9 @@ func (s *StateMachine) handleNoOP(ent pb.Entry) {
 }
 
 // result a tuple of (result, should ignore, rejected)
-func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
+func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var result uint64
 	var ok bool
 	var session *Session
 	s.updateLastApplied(ent.Index, ent.Term)
@@ -724,14 +727,14 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 		session, ok = s.sessions.ClientRegistered(ent.ClientID)
 		if !ok {
 			// client is expected to crash
-			return 0, false, true
+			return sm.Result{}, false, true
 		}
 		s.sessions.UpdateRespondedTo(session, ent.RespondedTo)
 		result, responded, updateRequired := s.sessions.UpdateRequired(session,
 			ent.SeriesID)
 		if responded {
 			// should ignore. client is expected to timeout
-			return 0, true, false
+			return sm.Result{}, true, false
 		}
 		if !updateRequired {
 			// server responded, client never confirmed
@@ -743,8 +746,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (uint64, bool, bool) {
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
-	result = s.sm.Update(session, ent)
-	return result, false, false
+	return s.sm.Update(session, ent), false, false
 }
 
 func (s *StateMachine) describe() string {

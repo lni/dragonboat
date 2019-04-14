@@ -426,8 +426,8 @@ func (n *PST) Lookup(key []byte) []byte {
 }
 
 // Update updates the object.
-func (n *PST) Update(data []byte) uint64 {
-	return uint64(len(data))
+func (n *PST) Update(data []byte) sm.Result {
+	return sm.Result{Value: uint64(len(data))}
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
@@ -1138,7 +1138,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		if err != nil {
 			t.Errorf("make proposal failed %v", err)
 		}
-		if v != 128 {
+		if v.Value != 128 {
 			t.Errorf("unexpected result")
 		}
 		data, err := nh.SyncRead(ctx, 2, make([]byte, 128))
@@ -1559,7 +1559,7 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to make proposal %v", err)
 			}
-			result[v] = struct{}{}
+			result[v.Value] = struct{}{}
 			if len(result) > 1 {
 				return
 			}
@@ -1643,7 +1643,7 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			result[v] = struct{}{}
+			result[v.Value] = struct{}{}
 			if len(result) > 1 {
 				t.Fatalf("unexpected concurrent save snapshot observed")
 			}

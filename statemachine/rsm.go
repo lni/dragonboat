@@ -104,6 +104,27 @@ type ISnapshotFileCollection interface {
 	AddFile(fileID uint64, path string, metadata []byte)
 }
 
+type Result struct {
+	Value uint64
+	Data  []byte
+}
+
+// Entry represents a Raft log entry that is going to be provided to the Update
+// method of an IConcurrentStateMachine instance.
+type Entry struct {
+	// Index is the Raft log index of the entry. The field is set by the
+	// Dragonboat library and it is read-only for user IConcurrentStateMachine
+	// instances.
+	Index uint64
+	// Result is the result value obtained from the Update method of an
+	// IConcurrentStateMachine instance. This field is set by user
+	// IConcurrentStateMachine instances.
+	Result Result
+	// Cmd is the proposed command. This field is read-only for user
+	// IConcurrentStateMachine instances.
+	Cmd []byte
+}
+
 // IStateMachine is the interface required to be implemented by application's
 // state machine, it defines how application data should be internally stored,
 // updated and queried.
@@ -148,7 +169,7 @@ type IStateMachine interface {
 	//
 	// Update returns an uint64 value used to indicate the result of the update
 	// operation.
-	Update([]byte) uint64
+	Update([]byte) Result
 	// Lookup queries the state of the IStateMachine instance and returns the
 	// query result as a byte slice. The input byte slice specifies what to query,
 	// it is up to the IStateMachine implementation to interpret the input byte
@@ -220,22 +241,6 @@ type IStateMachine interface {
 	//
 	// GetHash is a read only operation on the IStateMachine instance.
 	GetHash() uint64
-}
-
-// Entry represents a Raft log entry that is going to be provided to the Update
-// method of an IConcurrentStateMachine instance.
-type Entry struct {
-	// Index is the Raft log index of the entry. The field is set by the
-	// Dragonboat library and it is read-only for user IConcurrentStateMachine
-	// instances.
-	Index uint64
-	// Result is the result value obtained from the Update method of an
-	// IConcurrentStateMachine instance. This field is set by user
-	// IConcurrentStateMachine instances.
-	Result uint64
-	// Cmd is the proposed command. This field is read-only for user
-	// IConcurrentStateMachine instances.
-	Cmd []byte
 }
 
 // IConcurrentStateMachine is the interface to be implemented by application's

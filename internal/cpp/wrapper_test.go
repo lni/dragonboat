@@ -116,7 +116,7 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	v1 := ds.Update(nil, e1)
 	v2 := ds.Update(nil, e2)
 	v3 := ds.Update(nil, e3)
-	if v2 != v1+1 || v3 != v2+1 {
+	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result")
 	}
 	result, err := ds.Lookup([]byte("test-lookup-data"))
@@ -124,7 +124,7 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 		t.Errorf("failed to lookup")
 	}
 	v4 := binary.LittleEndian.Uint32(result)
-	if uint64(v4) != v3 {
+	if uint64(v4) != v3.Value {
 		t.Errorf("returned %d, want %d", v4, v3)
 	}
 }
@@ -165,7 +165,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 	v1 := ds.Update(nil, e1)
 	v2 := ds.Update(nil, e2)
 	v3 := ds.Update(nil, e3)
-	if v2 != v1+1 || v3 != v2+1 {
+	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result")
 	}
 	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)

@@ -31,6 +31,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
 	pb "github.com/lni/dragonboat/raftpb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -90,10 +91,10 @@ type RequestResultCode int
 type RequestResult struct {
 	// code is the result state of the request.
 	code RequestResultCode
-	// Result is the returned result from the Update method of the IStateMachine
+	// Result is the returned result from the Update method of the state machine
 	// instance. Result is only available when making a proposal and the Code
 	// value is RequestCompleted.
-	result uint64
+	result sm.Result
 }
 
 // Timeout returns a boolean value indicating whether the Request timed out.
@@ -130,7 +131,7 @@ func (rr *RequestResult) Rejected() bool {
 // GetResult returns the result value of the request. When making a proposal,
 // the returned result is the value returned by the Update method of the
 // IStateMachine instance.
-func (rr *RequestResult) GetResult() uint64 {
+func (rr *RequestResult) GetResult() sm.Result {
 	return rr.result
 }
 
@@ -652,7 +653,7 @@ func (p *pendingProposal) close() {
 }
 
 func (p *pendingProposal) applied(clientID uint64,
-	seriesID uint64, key uint64, result uint64, rejected bool) {
+	seriesID uint64, key uint64, result sm.Result, rejected bool) {
 	pp := p.shards[key%p.ps]
 	pp.applied(clientID, seriesID, key, result, rejected)
 }
@@ -782,7 +783,7 @@ func (p *proposalShard) getProposal(clientID uint64,
 }
 
 func (p *proposalShard) applied(clientID uint64,
-	seriesID uint64, key uint64, result uint64, rejected bool) {
+	seriesID uint64, key uint64, result sm.Result, rejected bool) {
 	now := p.getTick()
 	var code RequestResultCode
 	if rejected {

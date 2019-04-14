@@ -37,7 +37,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // random delays
@@ -91,7 +91,7 @@ type KVTest struct {
 }
 
 // NewKVTest creates and return a new KVTest object.
-func NewKVTest(clusterID uint64, nodeID uint64) statemachine.IStateMachine {
+func NewKVTest(clusterID uint64, nodeID uint64) sm.IStateMachine {
 	fmt.Println("kvtest with stoppable snapshot created")
 	s := &KVTest{
 		KVStore:   make(map[string]string),
@@ -134,7 +134,7 @@ func (s *KVTest) Lookup(key []byte) []byte {
 }
 
 // Update updates the object using the specified committed raft entry.
-func (s *KVTest) Update(data []byte) uint64 {
+func (s *KVTest) Update(data []byte) sm.Result {
 	s.Count++
 	if s.aborted {
 		panic("update() called after abort set to true")
@@ -151,10 +151,10 @@ func (s *KVTest) Update(data []byte) uint64 {
 	s.updateStore(dataKv.GetKey(), dataKv.GetVal())
 	s.pbkvPool.Put(dataKv)
 
-	return uint64(len(data))
+	return sm.Result{Value: uint64(len(data))}
 }
 
-func (s *KVTest) saveExternalFile(fileCollection statemachine.ISnapshotFileCollection) {
+func (s *KVTest) saveExternalFile(fileCollection sm.ISnapshotFileCollection) {
 	dir, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -179,7 +179,7 @@ func (s *KVTest) saveExternalFile(fileCollection statemachine.ISnapshotFileColle
 	fileCollection.AddFile(1, fp, []byte(content))
 }
 
-func checkExternalFile(files []statemachine.SnapshotFile, clusterID uint64) {
+func checkExternalFile(files []sm.SnapshotFile, clusterID uint64) {
 	if len(files) != 1 {
 		panic("snapshot external file missing")
 	}
@@ -202,7 +202,7 @@ func checkExternalFile(files []statemachine.SnapshotFile, clusterID uint64) {
 // SaveSnapshot saves the current object state into a snapshot using the
 // specified io.Writer object.
 func (s *KVTest) SaveSnapshot(w io.Writer,
-	fileCollection statemachine.ISnapshotFileCollection,
+	fileCollection sm.ISnapshotFileCollection,
 	done <-chan struct{}) error {
 	if s.closed {
 		panic("save snapshot called after Close()")
@@ -217,7 +217,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 		time.Sleep(10 * time.Millisecond)
 		select {
 		case <-done:
-			return statemachine.ErrSnapshotStopped
+			return sm.ErrSnapshotStopped
 		default:
 		}
 	}
@@ -237,7 +237,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 
 // RecoverFromSnapshot recovers the state using the provided snapshot.
 func (s *KVTest) RecoverFromSnapshot(r io.Reader,
-	files []statemachine.SnapshotFile,
+	files []sm.SnapshotFile,
 	done <-chan struct{}) error {
 	if s.closed {
 		panic("recover from snapshot called after Close()")
@@ -255,7 +255,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 		select {
 		case <-done:
 			s.aborted = true
-			return statemachine.ErrSnapshotStopped
+			return sm.ErrSnapshotStopped
 		default:
 		}
 	}

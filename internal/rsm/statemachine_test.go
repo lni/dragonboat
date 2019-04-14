@@ -56,7 +56,7 @@ type testNodeProxy struct {
 	removePeer         bool
 	reject             bool
 	accept             bool
-	smResult           uint64
+	smResult           sm.Result
 	index              uint64
 	rejected           bool
 	ignored            bool
@@ -72,7 +72,7 @@ func newTestNodeProxy() *testNodeProxy {
 }
 
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
-	result uint64, rejected bool, ignored bool, notifyReadClient bool) {
+	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	p.smResult = result
 	p.index = entry.Index
 	p.rejected = rejected
@@ -1093,8 +1093,8 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		if !ok {
 			t.Errorf("session not found")
 		}
-		if nodeProxy.smResult != clientID {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, clientID)
+		if nodeProxy.smResult.Value != clientID {
+			t.Errorf("smResult %d, want %d", nodeProxy.smResult.Value, clientID)
 		}
 		index := uint64(790)
 		applySessionUnregisterEntry(sm, 12345, index)
@@ -1108,7 +1108,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		if ok {
 			t.Errorf("session not removed")
 		}
-		if nodeProxy.smResult != clientID {
+		if nodeProxy.smResult.Value != clientID {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult, clientID)
 		}
 	}
@@ -1130,8 +1130,8 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		if !ok {
 			t.Errorf("session not found")
 		}
-		if nodeProxy.smResult != e.ClientID {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, e.ClientID)
+		if nodeProxy.smResult.Value != e.ClientID {
+			t.Errorf("smResult %d, want %d", nodeProxy.smResult.Value, e.ClientID)
 		}
 		e.Index = 790
 		commit := Commit{
@@ -1146,7 +1146,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		if nodeProxy.smResult != 0 {
+		if nodeProxy.smResult.Value != 0 {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult, 0)
 		}
 		if !nodeProxy.rejected {
@@ -1173,7 +1173,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 		if ok {
 			t.Errorf("session not suppose to be there")
 		}
-		if nodeProxy.smResult != 0 {
+		if nodeProxy.smResult.Value != 0 {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult, 0)
 		}
 		if !nodeProxy.rejected {
@@ -1200,7 +1200,7 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 		if nodeProxy.ignored {
 			t.Errorf("ignored %t, want false", nodeProxy.ignored)
 		}
-		if nodeProxy.smResult != 0 {
+		if nodeProxy.smResult.Value != 0 {
 			t.Errorf("smResult %d, want 0", nodeProxy.smResult)
 		}
 		if !nodeProxy.rejected {
@@ -1227,7 +1227,7 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		if !nodeProxy.applyUpdateInvoked {
 			t.Errorf("update not invoked")
 		}
-		if nodeProxy.smResult != uint64(len(data)) {
+		if nodeProxy.smResult.Value != uint64(len(data)) {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult, len(data))
 		}
 		nodeProxy.applyUpdateInvoked = false

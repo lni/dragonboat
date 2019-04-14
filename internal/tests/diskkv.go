@@ -366,7 +366,7 @@ func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 		key := dataKv.GetKey()
 		val := dataKv.GetVal()
 		wb.Put([]byte(key), []byte(val))
-		ents[idx].Result = uint64(len(ents[idx].Cmd))
+		ents[idx].Result = sm.Result{Value: uint64(len(ents[idx].Cmd))}
 	}
 	idx := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idx, ents[len(ents)-1].Index)

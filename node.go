@@ -887,7 +887,7 @@ func (rc *node) handleMessage(m pb.Message) bool {
 }
 
 func (rc *node) applyUpdate(entry pb.Entry,
-	result uint64, rejected bool, ignored bool, notifyReadClient bool) {
+	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	if notifyReadClient {
 		rc.pendingReadIndexes.applied(entry.Index)
 	}

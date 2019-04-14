@@ -96,7 +96,7 @@ func (s *ConcurrentKVTest) Update(ents []sm.Entry) []sm.Entry {
 	val := dataKv.GetVal()
 	kvdata := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
 	kvdata.kvs.Store(key, val)
-	ents[0].Result = uint64(len(ents[0].Cmd))
+	ents[0].Result = sm.Result{Value: uint64(len(ents[0].Cmd))}
 	return ents
 }
 

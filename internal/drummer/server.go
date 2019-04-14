@@ -26,6 +26,7 @@ import (
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/random"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 var (
@@ -181,15 +182,15 @@ func (s *server) SubmitChange(ctx context.Context,
 	if err != nil {
 		return nil, GRPCError(err)
 	}
-	if code == DBUpdated {
+	if code.Value == DBUpdated {
 		return &pb.ChangeResponse{
 			Code: pb.ChangeResponse_OK,
 		}, nil
-	} else if code == ClusterExists {
+	} else if code.Value == ClusterExists {
 		return &pb.ChangeResponse{
 			Code: pb.ChangeResponse_CLUSTER_EXIST,
 		}, nil
-	} else if code == DBBootstrapped {
+	} else if code.Value == DBBootstrapped {
 		return &pb.ChangeResponse{
 			Code: pb.ChangeResponse_BOOTSTRAPPED,
 		}, nil
@@ -383,7 +384,11 @@ func (s *server) makeDrummerVote(ctx context.Context,
 		Type:     pb.Update_KV,
 		KvUpdate: kv,
 	}
-	return s.proposeDrummerUpdate(ctx, session, u)
+	v, err := s.proposeDrummerUpdate(ctx, session, u)
+	if err != nil {
+		return 0, err
+	}
+	return v.Value, nil
 }
 
 func (s *server) getBootstrapped(ctx context.Context) (bool, error) {
@@ -491,7 +496,7 @@ func (s *server) lookupDB(ctx context.Context,
 }
 
 func (s *server) proposeDrummerUpdate(ctx context.Context,
-	session *client.Session, u pb.Update) (uint64, error) {
+	session *client.Session, u pb.Update) (sm.Result, error) {
 	session.ClusterIDMustMatch(defaultClusterID)
 	timeout := time.Duration(raftOpTimeoutMillisecond) * time.Millisecond
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -517,7 +522,11 @@ func (s *server) proposeFinalizedKV(ctx context.Context,
 		Type:     pb.Update_KV,
 		KvUpdate: kv,
 	}
-	return s.proposeDrummerUpdate(ctx, session, u)
+	result, err := s.proposeDrummerUpdate(ctx, session, u)
+	if err != nil {
+		return 0, err
+	}
+	return result.Value, err
 }
 
 func (s *server) lookupKV(ctx context.Context,

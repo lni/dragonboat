@@ -347,10 +347,10 @@ func (d *Drummer) tick() (uint64, error) {
 		return 0, err
 	}
 	d.clientProposalCompleted()
-	if tick == 0 {
+	if tick.Value == 0 {
 		plog.Panicf("invalid zero tick")
 	}
-	return tick, nil
+	return tick.Value, nil
 }
 
 func (d *Drummer) updateRequests(reqs []pb.NodeHostRequest) (uint64, error) {
@@ -373,7 +373,7 @@ func (d *Drummer) updateRequests(reqs []pb.NodeHostRequest) (uint64, error) {
 		return 0, err
 	}
 	d.clientProposalCompleted()
-	return count, nil
+	return count.Value, nil
 }
 
 func (d *Drummer) getSchedulerContext() (*schedulerContext, error) {

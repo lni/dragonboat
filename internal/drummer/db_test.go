@@ -94,16 +94,16 @@ func testTickCanBeIncreased(t *testing.T, db statemachine.IStateMachine) {
 	v1 := db.Update(data)
 	v2 := db.Update(data)
 	v3 := db.Update(data)
-	if v2 != v1+tickIntervalSecond ||
-		v3 != v2+tickIntervalSecond ||
-		v3 != 3*tickIntervalSecond {
+	if v2.Value != v1.Value+tickIntervalSecond ||
+		v3.Value != v2.Value+tickIntervalSecond ||
+		v3.Value != 3*tickIntervalSecond {
 		t.Errorf("not returning expected tick value")
 	}
 	if db.(*DB).Tick != 3*tickIntervalSecond {
 		t.Errorf("unexpected tick value")
 	}
 	v4 := db.Update(data)
-	if v4 != 4*tickIntervalSecond || db.(*DB).Tick != 4*tickIntervalSecond {
+	if v4.Value != 4*tickIntervalSecond || db.(*DB).Tick != 4*tickIntervalSecond {
 		t.Errorf("unexpected tick value")
 	}
 }
@@ -310,7 +310,7 @@ func testRequestsCanBeUpdated(t *testing.T, db statemachine.IStateMachine) {
 		panic(err)
 	}
 	v := db.Update(data)
-	if v != 3 {
+	if v.Value != 3 {
 		t.Errorf("unexpected returned value")
 	}
 	reqs := db.(*DB).Requests
@@ -468,12 +468,12 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	oldData := data
 	d := NewDB(0, 0)
 	code := d.Update(data)
-	if code != DBUpdated {
+	if code.Value != DBUpdated {
 		t.Errorf("code %d, want %d", code, DBUpdated)
 	}
 	// use the same input to update the drummer db again
 	code = d.Update(data)
-	if code != ClusterExists {
+	if code.Value != ClusterExists {
 		t.Errorf("code %d, want %d", code, ClusterExists)
 	}
 	// set the bootstrapped flag
@@ -495,7 +495,7 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 		t.Errorf("not bootstrapped")
 	}
 	code = d.Update(oldData)
-	if code != DBBootstrapped {
+	if code.Value != DBBootstrapped {
 		t.Errorf("code %d, want %d", code, DBBootstrapped)
 	}
 	if len(d.(*DB).Clusters) != 1 {
@@ -554,12 +554,12 @@ func TestKVMapCanBeUpdatedAndLookedUpForFinalizedValue(t *testing.T) {
 	}
 	d := NewDB(0, 0)
 	code := d.Update(data)
-	if code != DBKVUpdated {
+	if code.Value != DBKVUpdated {
 		t.Errorf("code %d, want %d", code, DBKVUpdated)
 	}
 	// apply the same update again, suppose to be rejected
 	code = d.Update(data)
-	if code != DBKVFinalized {
+	if code.Value != DBKVFinalized {
 		t.Errorf("code %d, want %d", code, DBKVFinalized)
 	}
 	if len(d.(*DB).KVMap) != 1 {
@@ -740,7 +740,7 @@ func TestLaunchRequestSetsTheLaunchFlag(t *testing.T) {
 		t.Fatalf("launched flag already unexpectedly set")
 	}
 	v := db.Update(data)
-	if v != 1 {
+	if v.Value != 1 {
 		t.Errorf("unexpected returned value")
 	}
 	if !db.(*DB).launched() {

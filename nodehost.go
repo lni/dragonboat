@@ -408,33 +408,33 @@ func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
 // event. When the proposal completed successfully, caller must call
 // client.ProposalCompleted() to get it ready to be used in future proposals.
 func (nh *NodeHost) SyncPropose(ctx context.Context,
-	session *client.Session, cmd []byte) (uint64, error) {
+	session *client.Session, cmd []byte) (sm.Result, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
-		return 0, err
+		return sm.Result{}, err
 	}
 	rs, err := nh.Propose(session, cmd, timeout)
 	if err != nil {
-		return 0, err
+		return sm.Result{}, err
 	}
 	select {
 	case s := <-rs.CompletedC:
 		if s.Timeout() {
-			return 0, ErrTimeout
+			return sm.Result{}, ErrTimeout
 		} else if s.Completed() {
 			rs.Release()
 			return s.GetResult(), nil
 		} else if s.Terminated() {
-			return 0, ErrClusterClosed
+			return sm.Result{}, ErrClusterClosed
 		} else if s.Rejected() {
-			return 0, ErrInvalidSession
+			return sm.Result{}, ErrInvalidSession
 		}
 		panic("unknown CompletedC value")
 	case <-ctx.Done():
 		if ctx.Err() == context.Canceled {
-			return 0, ErrCanceled
+			return sm.Result{}, ErrCanceled
 		} else if ctx.Err() == context.DeadlineExceeded {
-			return 0, ErrTimeout
+			return sm.Result{}, ErrTimeout
 		}
 		panic("unknown ctx error")
 	}
@@ -555,7 +555,7 @@ func (nh *NodeHost) GetNewSession(ctx context.Context,
 	}
 	select {
 	case r := <-rs.CompletedC:
-		if r.Completed() && r.GetResult() == cs.ClientID {
+		if r.Completed() && r.GetResult().Value == cs.ClientID {
 			cs.PrepareForPropose()
 			return cs, nil
 		} else if r.Rejected() {
@@ -595,7 +595,7 @@ func (nh *NodeHost) CloseSession(ctx context.Context,
 	}
 	select {
 	case r := <-rs.CompletedC:
-		if r.Completed() && r.GetResult() == session.ClientID {
+		if r.Completed() && r.GetResult().Value == session.ClientID {
 			return nil
 		} else if r.Rejected() {
 			return ErrRejected

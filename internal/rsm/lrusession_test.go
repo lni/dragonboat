@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 func TestRecCanBeEvicted(t *testing.T) {
@@ -64,7 +66,7 @@ func TestRecCanBeEvicted(t *testing.T) {
 func TestSessionIsMutable(t *testing.T) {
 	m := newLRUSession(1)
 	for i := RaftClientID(0); i < 1; i++ {
-		s := &Session{ClientID: i, History: make(map[RaftSeriesID]uint64)}
+		s := &Session{ClientID: i, History: make(map[RaftSeriesID]sm.Result)}
 		m.addSession(i, *s)
 	}
 	// client id 1 used here
@@ -75,7 +77,7 @@ func TestSessionIsMutable(t *testing.T) {
 		if r.ClientID != RaftClientID(0) {
 			t.Errorf("client id %d, want 0", r.ClientID)
 		} else {
-			r.History[RaftSeriesID(100)] = 200
+			r.History[RaftSeriesID(100)] = sm.Result{Value: 200}
 		}
 	}
 	r, ok = m.getSession(RaftClientID(0))
@@ -124,7 +126,7 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 		count := rand.Int() % 100
 		s := newSession(i)
 		for j := 0; j < count; j++ {
-			s.addResponse(RaftSeriesID(j), uint64(j))
+			s.addResponse(RaftSeriesID(j), sm.Result{Value: uint64(j)})
 		}
 		m.addSession(i, *s)
 	}
@@ -194,12 +196,12 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 	for i := RaftClientID(0); i < 3; i++ {
 		s := newSession(i)
 		if i == RaftClientID(1) {
-			s.addResponse(100, 200)
-			s.addResponse(200, 300)
+			s.addResponse(100, sm.Result{Value: 200})
+			s.addResponse(200, sm.Result{Value: 300})
 		} else if i == RaftClientID(2) {
-			s.addResponse(300, 500)
-			s.addResponse(400, 300)
-			s.addResponse(500, 700)
+			s.addResponse(300, sm.Result{Value: 500})
+			s.addResponse(400, sm.Result{Value: 300})
+			s.addResponse(500, sm.Result{Value: 700})
 		}
 		m.addSession(i, *s)
 	}

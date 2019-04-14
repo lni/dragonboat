@@ -135,7 +135,7 @@ func (api *NodehostAPI) Propose(ctx context.Context,
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	return &pb.RaftResponse{Result: v}, nil
+	return &pb.RaftResponse{Result: v.Value}, nil
 }
 
 // Read makes a linearizable read operation.

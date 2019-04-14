@@ -29,13 +29,13 @@ type TestUpdate struct {
 }
 
 // Update updates the state machine.
-func (c *TestUpdate) Update(data []byte) uint64 {
+func (c *TestUpdate) Update(data []byte) sm.Result {
 	atomic.StoreUint32(&c.val, 1)
 	for i := 0; i < 20; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 	atomic.StoreUint32(&c.val, 0)
-	return 100
+	return sm.Result{Value: 100}
 }
 
 // Lookup queries the state machine.
@@ -83,7 +83,7 @@ func (c *ConcurrentUpdate) Update(entries []sm.Entry) []sm.Entry {
 		atomic.AddUint32(&c.val, 1)
 		time.Sleep(1 * time.Millisecond)
 	}
-	entries[0].Result = 100
+	entries[0].Result = sm.Result{Value: 100}
 	return entries
 }
 
@@ -129,8 +129,8 @@ type TestSnapshot struct {
 }
 
 // Update updates the state machine.
-func (c *TestSnapshot) Update(data []byte) uint64 {
-	return uint64(atomic.LoadUint32(&c.val))
+func (c *TestSnapshot) Update(data []byte) sm.Result {
+	return sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}
 }
 
 // Lookup queries the state machine.
@@ -178,7 +178,7 @@ type ConcurrentSnapshot struct {
 
 // Update updates the state machine.
 func (c *ConcurrentSnapshot) Update(entries []sm.Entry) []sm.Entry {
-	entries[0].Result = uint64(atomic.LoadUint32(&c.val))
+	entries[0].Result = sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}
 	return entries
 }
 

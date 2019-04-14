@@ -188,7 +188,7 @@ type ILoadableSessions interface {
 // IManagedStateMachine is the interface used to manage data store.
 type IManagedStateMachine interface {
 	Open() (uint64, error)
-	Update(*Session, pb.Entry) uint64
+	Update(*Session, pb.Entry) sm.Result
 	BatchedUpdate([]sm.Entry) []sm.Entry
 	Lookup([]byte) ([]byte, error)
 	GetHash() uint64
@@ -269,7 +269,7 @@ func (ds *NativeStateMachine) OnDiskStateMachine() bool {
 }
 
 // Update updates the data store.
-func (ds *NativeStateMachine) Update(session *Session, e pb.Entry) uint64 {
+func (ds *NativeStateMachine) Update(session *Session, e pb.Entry) sm.Result {
 	if session != nil {
 		_, ok := session.getResponse(RaftSeriesID(e.SeriesID))
 		if ok {

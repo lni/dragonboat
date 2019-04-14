@@ -24,6 +24,7 @@ import (
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/statemachine"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -212,22 +213,22 @@ func (d *DB) GetHash() uint64 {
 }
 
 // Update updates the DB instance.
-func (d *DB) Update(data []byte) uint64 {
+func (d *DB) Update(data []byte) sm.Result {
 	d.assertNotFailed()
 	var c pb.Update
 	if err := c.Unmarshal(data); err != nil {
 		panic(err)
 	}
 	if c.Type == pb.Update_CLUSTER {
-		return d.applyClusterUpdate(c.Change)
+		return sm.Result{Value: d.applyClusterUpdate(c.Change)}
 	} else if c.Type == pb.Update_KV {
-		return d.applyKVUpdate(c.KvUpdate)
+		return sm.Result{Value: d.applyKVUpdate(c.KvUpdate)}
 	} else if c.Type == pb.Update_NODEHOST_INFO {
-		return d.applyNodeHostInfoUpdate(c.NodehostInfo)
+		return sm.Result{Value: d.applyNodeHostInfoUpdate(c.NodehostInfo)}
 	} else if c.Type == pb.Update_REQUESTS {
-		return d.applyRequestsUpdate(c.Requests)
+		return sm.Result{Value: d.applyRequestsUpdate(c.Requests)}
 	} else if c.Type == pb.Update_TICK {
-		return d.applyTickUpdate()
+		return sm.Result{Value: d.applyTickUpdate()}
 	}
 	panic("Unknown update type")
 }

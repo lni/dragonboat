@@ -45,7 +45,7 @@ func (f *FakeDiskSM) Update(ents []sm.Entry) []sm.Entry {
 			panic("already applied index received again")
 		} else {
 			f.count = f.count + 1
-			e.Result = f.count
+			e.Result = sm.Result{Value: f.count}
 		}
 	}
 	return ents

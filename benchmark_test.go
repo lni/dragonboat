@@ -115,7 +115,7 @@ func benchmarkProposeN(b *testing.B, sz int) {
 				atomic.StoreUint64(&total, 0)
 				q.get(false)
 			}
-			pp.applied(rs.key, rs.clientID, rs.seriesID, 1, false)
+			pp.applied(rs.key, rs.clientID, rs.seriesID, sm.Result{Value: 1}, false)
 			rs.Release()
 		}
 	})
@@ -444,12 +444,12 @@ func BenchmarkTransport1024(b *testing.B) {
 type noopNodeProxy struct {
 }
 
-func (n *noopNodeProxy) RestoreRemotes(pb.Snapshot)                     {}
-func (n *noopNodeProxy) ApplyUpdate(pb.Entry, uint64, bool, bool, bool) {}
-func (n *noopNodeProxy) ApplyConfigChange(pb.ConfigChange)              {}
-func (n *noopNodeProxy) ConfigChangeProcessed(uint64, bool)             {}
-func (n *noopNodeProxy) NodeID() uint64                                 { return 1 }
-func (n *noopNodeProxy) ClusterID() uint64                              { return 1 }
+func (n *noopNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
+func (n *noopNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
+func (n *noopNodeProxy) ApplyConfigChange(pb.ConfigChange)                 {}
+func (n *noopNodeProxy) ConfigChangeProcessed(uint64, bool)                {}
+func (n *noopNodeProxy) NodeID() uint64                                    { return 1 }
+func (n *noopNodeProxy) ClusterID() uint64                                 { return 1 }
 
 func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.ReportAllocs()

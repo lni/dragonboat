@@ -229,7 +229,7 @@ func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
 }
 
 // Update updates the data store.
-func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) uint64 {
+func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) sm.Result {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
 	dp = nil
@@ -238,9 +238,9 @@ func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) uint64 {
 	}
 	v := C.UpdateDBStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
 	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), uint64(v))
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
-	return uint64(v)
+	return sm.Result{Value: uint64(v)}
 }
 
 // Lookup queries the data store.

@@ -344,7 +344,7 @@ func NodeHostSyncPropose(oid uint64, timeout uint64,
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 	v, err := nh.SyncPropose(ctx, cs, cmd)
-	return v, getErrorCode(err)
+	return v.Value, getErrorCode(err)
 }
 
 type cppCompleteHandler struct {
@@ -357,7 +357,7 @@ func (h *cppCompleteHandler) Notify(result dragonboat.RequestResult) {
 		panic("h.waitable == nul")
 	}
 	C.CPPCompleteHandler(h.waitable, C.int(result.GetCode()),
-		C.uint64_t(result.GetResult()))
+		C.uint64_t(result.GetResult().Value))
 }
 
 func (h *cppCompleteHandler) Release() {

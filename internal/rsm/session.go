@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // RaftClientID is the type used as client id in sessions.
@@ -47,30 +48,30 @@ func (a *RaftClientID) Compare(b llrb.Comparable) int {
 type Session struct {
 	ClientID      RaftClientID
 	RespondedUpTo RaftSeriesID
-	History       map[RaftSeriesID]uint64
+	History       map[RaftSeriesID]sm.Result
 }
 
 func newSession(id RaftClientID) *Session {
 	return &Session{
 		ClientID: id,
-		History:  make(map[RaftSeriesID]uint64),
+		History:  make(map[RaftSeriesID]sm.Result),
 	}
 }
 
 // AddResponse adds a response.
-func (s *Session) AddResponse(id RaftSeriesID, resp uint64) {
-	s.addResponse(id, resp)
+func (s *Session) AddResponse(id RaftSeriesID, result sm.Result) {
+	s.addResponse(id, result)
 }
 
-func (s *Session) getResponse(id RaftSeriesID) (uint64, bool) {
+func (s *Session) getResponse(id RaftSeriesID) (sm.Result, bool) {
 	v, ok := s.History[id]
 	return v, ok
 }
 
-func (s *Session) addResponse(id RaftSeriesID, resp uint64) {
+func (s *Session) addResponse(id RaftSeriesID, result sm.Result) {
 	_, ok := s.History[id]
 	if !ok {
-		s.History[id] = resp
+		s.History[id] = result
 	} else {
 		panic("adding a duplicated response")
 	}

@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 func TestResponseCanBeAdded(t *testing.T) {
@@ -39,13 +41,13 @@ func TestResponseCanBeAdded(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], tt.valueList[idx])
+			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
 		}
 		if len(s.History) != tt.size {
 			t.Errorf("i %d, size %d, want %d", i, len(s.History), tt.size)
 		}
 		v, ok := s.getResponse(tt.testSeriesNum)
-		if v != tt.expectedValue {
+		if v.Value != tt.expectedValue {
 			t.Errorf("i %d, v %d, want %d", i, v, tt.expectedValue)
 		}
 		if ok != tt.expectedResult {
@@ -73,7 +75,7 @@ func TestCachedResponseDataCanBeCleared(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], tt.valueList[idx])
+			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
 		}
 		s.clearTo(tt.clearTo)
 		if len(s.History) != tt.sizeAfterClear {
@@ -105,7 +107,7 @@ func TestWhetherResponsedCanBeReturned(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], tt.valueList[idx])
+			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
 		}
 
 		s.clearTo(tt.clearTo)
@@ -128,7 +130,7 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], tt.valueList[idx])
+			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
 		}
 		snapshot := &bytes.Buffer{}
 		s.save(snapshot)

@@ -352,7 +352,7 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 					plog.Infof(err.Error())
 					continue
 				} else {
-					if result != uint64(len(rec)) {
+					if result.Value != uint64(len(rec)) {
 						plog.Panicf("result %d, want %d", result, len(rec))
 					}
 					ctx, cancel = context.WithTimeout(context.Background(), time.Second)

@@ -26,6 +26,7 @@ import (
 
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/raftpb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -267,7 +268,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
-	pp.applied(rs.clientID, rs.seriesID, rs.key+1, 0, false)
+	pp.applied(rs.clientID, rs.seriesID, rs.key+1, sm.Result{}, false)
 	select {
 	case <-rs.CompletedC:
 		t.Errorf("unexpected applied proposal with invalid client ID")
@@ -276,7 +277,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	if countPendingProposal(pp) == 0 {
 		t.Errorf("pending is empty")
 	}
-	pp.applied(rs.clientID, rs.seriesID, rs.key, 0, false)
+	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
@@ -296,7 +297,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
-	pp.applied(rs.clientID+1, rs.seriesID, rs.key, 0, false)
+	pp.applied(rs.clientID+1, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case <-rs.CompletedC:
 		t.Errorf("unexpected applied proposal with invalid client ID")
@@ -305,7 +306,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	if countPendingProposal(pp) == 0 {
 		t.Errorf("pending is empty")
 	}
-	pp.applied(rs.clientID, rs.seriesID, rs.key, 0, false)
+	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
@@ -325,7 +326,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
-	pp.applied(rs.clientID, rs.seriesID+1, rs.key, 0, false)
+	pp.applied(rs.clientID, rs.seriesID+1, rs.key, sm.Result{}, false)
 	select {
 	case <-rs.CompletedC:
 		t.Errorf("unexpected applied proposal with invalid client ID")
@@ -334,7 +335,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	if countPendingProposal(pp) == 0 {
 		t.Errorf("pending is empty")
 	}
-	pp.applied(rs.clientID, rs.seriesID, rs.key, 0, false)
+	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
@@ -456,7 +457,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	for i := uint64(0); i < pp.ps; i++ {
 		pp.shards[i].stopped = true
 	}
-	pp.applied(rs.clientID, rs.seriesID, rs.key, 1, false)
+	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{Value: 1}, false)
 	select {
 	case <-rs.CompletedC:
 		t.Fatalf("completedC unexpectedly signaled")

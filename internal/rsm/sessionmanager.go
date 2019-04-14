@@ -16,6 +16,8 @@ package rsm
 
 import (
 	"io"
+
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // SessionManager is the wrapper struct that implements client session related
@@ -47,7 +49,7 @@ func (ds *SessionManager) UpdateRespondedTo(session *Session,
 // RegisterClientID registers a new client, it returns the input client id
 // if it is previously unknown, or 0 when the client has already been
 // registered.
-func (ds *SessionManager) RegisterClientID(clientID uint64) uint64 {
+func (ds *SessionManager) RegisterClientID(clientID uint64) sm.Result {
 	es, ok := ds.sessions.getSession(RaftClientID(clientID))
 	if ok {
 		if es.ClientID != RaftClientID(clientID) {
@@ -55,27 +57,27 @@ func (ds *SessionManager) RegisterClientID(clientID uint64) uint64 {
 				es.ClientID, clientID)
 		}
 		plog.Warningf("client ID %d already exist", clientID)
-		return 0
+		return sm.Result{}
 	}
 	s := newSession(RaftClientID(clientID))
 	ds.sessions.addSession(RaftClientID(clientID), *s)
-	return clientID
+	return sm.Result{Value: clientID}
 }
 
 // UnregisterClientID removes the specified client session from the system.
 // It returns the client id if the client is successfully removed, or 0
 // if the client session does not exist.
-func (ds *SessionManager) UnregisterClientID(clientID uint64) uint64 {
+func (ds *SessionManager) UnregisterClientID(clientID uint64) sm.Result {
 	es, ok := ds.sessions.getSession(RaftClientID(clientID))
 	if !ok {
-		return 0
+		return sm.Result{}
 	}
 	if es.ClientID != RaftClientID(clientID) {
 		plog.Panicf("returned an expected session, got id %d, want %d",
 			es.ClientID, clientID)
 	}
 	ds.sessions.delSession(RaftClientID(clientID))
-	return clientID
+	return sm.Result{Value: clientID}
 }
 
 // ClientRegistered returns whether the specified client exists in the system.
@@ -93,15 +95,15 @@ func (ds *SessionManager) ClientRegistered(clientID uint64) (*Session, bool) {
 // UpdateRequired return a tuple of request result, responded before,
 // update required.
 func (ds *SessionManager) UpdateRequired(session *Session,
-	seriesID uint64) (uint64, bool, bool) {
+	seriesID uint64) (sm.Result, bool, bool) {
 	if session.hasResponded(RaftSeriesID(seriesID)) {
-		return 0, true, false
+		return sm.Result{}, true, false
 	}
 	v, ok := session.getResponse(RaftSeriesID(seriesID))
 	if ok {
 		return v, false, false
 	}
-	return 0, false, true
+	return sm.Result{}, false, true
 }
 
 // MustHaveClientSeries checks whether the session manager contains a client
@@ -116,7 +118,7 @@ func (ds *SessionManager) MustHaveClientSeries(session *Session,
 
 // AddResponse adds the specified result to the session.
 func (ds *SessionManager) AddResponse(session *Session,
-	seriesID uint64, result uint64) {
+	seriesID uint64, result sm.Result) {
 	session.addResponse(RaftSeriesID(seriesID), result)
 }
 

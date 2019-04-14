@@ -420,7 +420,7 @@ func getProposalTestClient(n *node,
 	stepNodes(nodes, smList, router, 5000)
 	select {
 	case v := <-rs.CompletedC:
-		if v.Completed() && v.GetResult() == cs.ClientID {
+		if v.Completed() && v.GetResult().Value == cs.ClientID {
 			cs.PrepareForPropose()
 			return cs, true
 		}
@@ -445,7 +445,7 @@ func closeProposalTestClient(n *node,
 	stepNodes(nodes, smList, router, 5000)
 	select {
 	case v := <-rs.CompletedC:
-		if v.Completed() && v.GetResult() == session.ClientID {
+		if v.Completed() && v.GetResult().Value == session.ClientID {
 			return
 		}
 	case <-n.stopc:
@@ -474,7 +474,7 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 			t.Errorf("got %d, want %d", v, expectedCode)
 		}
 		if checkResult {
-			if v.GetResult() != expectedResult {
+			if v.GetResult().Value != expectedResult {
 				t.Errorf("result %d, want %d", v.GetResult(), expectedResult)
 			}
 		}

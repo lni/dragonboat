@@ -16,6 +16,7 @@ package dragonboat
 
 import (
 	pb "github.com/lni/dragonboat/raftpb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // as indicated by its name, this is just a proxy type.
@@ -28,7 +29,7 @@ func newNodeProxy(rn *node) *nodeProxy {
 }
 
 func (n *nodeProxy) ApplyUpdate(ent pb.Entry,
-	result uint64, rejected bool, ignored bool, notifyReadClient bool) {
+	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	n.rn.applyUpdate(ent, result, rejected, ignored, notifyReadClient)
 }
 
