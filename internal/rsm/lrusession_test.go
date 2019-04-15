@@ -144,7 +144,7 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 	data := snapshot.Bytes()
 	toRecover := bytes.NewBuffer(data)
 	newLRUSession := newLRUSession(5)
-	newLRUSession.load(toRecover)
+	newLRUSession.load(toRecover, V2SnapshotVersion)
 	newList := make([]RaftClientID, 0)
 	newLRUSession.sessions.OrderedDo(func(k, v interface{}) {
 		key := k.(*RaftClientID)
@@ -211,7 +211,7 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 	toRecover := bytes.NewBuffer(data)
 	// set to a different size value
 	newLRUSession := newLRUSession(5)
-	newLRUSession.load(toRecover)
+	newLRUSession.load(toRecover, V2SnapshotVersion)
 	oldHash := m.getHash()
 	newHash := newLRUSession.getHash()
 	if oldHash != newHash {

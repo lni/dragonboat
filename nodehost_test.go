@@ -24,6 +24,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -1721,4 +1722,25 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 		t.Fatalf("failed to make proposal again")
 	}
 	rateLimitedTwoNodeHostTest(t, tf)
+}
+
+func TestUpdateResultIsReturnedToCaller(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		rand.Read(cmd)
+		result, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Errorf("failed to make proposal %v", err)
+		}
+		if result.Value != uint64(1518) {
+			t.Errorf("unexpected result value")
+		}
+		if bytes.Compare(result.Data, cmd) != 0 {
+			t.Errorf("unexpected result data")
+		}
+	}
+	rateLimitedNodeHostTest(t, tf)
 }

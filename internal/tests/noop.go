@@ -38,7 +38,9 @@ func (n *NoOP) Update(data []byte) sm.Result {
 	if n.MillisecondToSleep > 0 {
 		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
 	}
-	return sm.Result{Value: uint64(len(data))}
+	v := make([]byte, len(data))
+	copy(v, data)
+	return sm.Result{Value: uint64(len(data)), Data: v}
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.

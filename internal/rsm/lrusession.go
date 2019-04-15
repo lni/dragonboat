@@ -119,7 +119,7 @@ func (rec *lrusession) save(writer io.Writer) (uint64, error) {
 
 // Load restores the state the of lrusession from the provided reader.
 // reader contains lrusession state previously checkpointed.
-func (rec *lrusession) load(reader io.Reader) error {
+func (rec *lrusession) load(reader io.Reader, v SnapshotVersion) error {
 	rec.Lock()
 	defer rec.Unlock()
 	sessionList := make([]*Session, 0)
@@ -141,7 +141,8 @@ func (rec *lrusession) load(reader io.Reader) error {
 	}
 	total := binary.LittleEndian.Uint64(sizebuf)
 	for i := uint64(0); i < total; i++ {
-		s, err := createSessionFromSnapshot(reader)
+		s := &Session{}
+		err := s.recoverFromSnapshot(reader, v)
 		if err != nil {
 			return err
 		}

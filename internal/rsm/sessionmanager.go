@@ -128,6 +128,7 @@ func (ds *SessionManager) SaveSessions(writer io.Writer) (uint64, error) {
 }
 
 // LoadSessions loads and restores sessions from io.Reader.
-func (ds *SessionManager) LoadSessions(reader io.Reader) error {
-	return ds.sessions.load(reader)
+func (ds *SessionManager) LoadSessions(reader io.Reader,
+	v SnapshotVersion) error {
+	return ds.sessions.load(reader, v)
 }

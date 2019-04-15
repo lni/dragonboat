@@ -182,7 +182,7 @@ type ILoadableSM interface {
 // ILoadableSessions is the interface for types that can load client session
 // state from a snapshot.
 type ILoadableSessions interface {
-	LoadSessions(reader io.Reader) error
+	LoadSessions(io.Reader, SnapshotVersion) error
 }
 
 // IManagedStateMachine is the interface used to manage data store.

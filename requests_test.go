@@ -19,6 +19,7 @@ package dragonboat
 
 import (
 	"bytes"
+	"math/rand"
 	"reflect"
 	"sync"
 	"testing"
@@ -288,6 +289,32 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	}
 	if countPendingProposal(pp) != 0 {
 		t.Errorf("pending is not empty")
+	}
+}
+
+func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
+	pp, _ := getPendingProposal()
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	if err != nil {
+		t.Errorf("failed to make proposal, %v", err)
+	}
+	result := sm.Result{
+		Value: 1234,
+		Data:  make([]byte, 128),
+	}
+	rand.Read(result.Data)
+	pp.applied(rs.clientID, rs.seriesID, rs.key, result, false)
+	select {
+	case v := <-rs.CompletedC:
+		if !v.Completed() {
+			t.Errorf("get %d, want %d", v, requestCompleted)
+		}
+		r := v.GetResult()
+		if !reflect.DeepEqual(&r, &result) {
+			t.Errorf("result changed")
+		}
+	default:
+		t.Errorf("expect to get complete signal")
 	}
 }
 

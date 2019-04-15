@@ -51,6 +51,13 @@ type Session struct {
 	History       map[RaftSeriesID]sm.Result
 }
 
+// v1session is the session type used in v1 snapshot format.
+type v1session struct {
+	ClientID      RaftClientID
+	RespondedUpTo RaftSeriesID
+	History       map[RaftSeriesID]uint64
+}
+
 func newSession(id RaftClientID) *Session {
 	return &Session{
 		ClientID: id,
@@ -123,27 +130,46 @@ func (s *Session) save(writer io.Writer) (uint64, error) {
 	return uint64(len(data) + 8), nil
 }
 
-func createSessionFromSnapshot(reader io.Reader) (*Session, error) {
+func (s *Session) recoverFromSnapshot(reader io.Reader,
+	v SnapshotVersion) error {
 	lenbuf := make([]byte, 8)
 	n, err := io.ReadFull(reader, lenbuf)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if n != len(lenbuf) {
-		return nil, io.ErrUnexpectedEOF
+		return io.ErrUnexpectedEOF
 	}
 	sz := binary.LittleEndian.Uint64(lenbuf)
 	data := make([]byte, sz)
 	n, err = io.ReadFull(reader, data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if n != len(data) {
-		return nil, io.ErrUnexpectedEOF
+		return io.ErrUnexpectedEOF
 	}
-	s := newSession(0)
-	if err := json.Unmarshal(data, s); err != nil {
+	if v == V1SnapshotVersion {
+		s.recoverFromV1Snapshot(data)
+	} else if v == V2SnapshotVersion {
+		if err := json.Unmarshal(data, s); err != nil {
+			panic(err)
+		}
+	} else {
+		plog.Panicf("unknown version number %d", v)
+	}
+	return nil
+}
+
+func (s *Session) recoverFromV1Snapshot(data []byte) {
+	v := &v1session{}
+	if err := json.Unmarshal(data, v); err != nil {
 		panic(err)
 	}
-	return s, nil
+	s.ClientID = v.ClientID
+	s.RespondedUpTo = v.RespondedUpTo
+	s.History = make(map[RaftSeriesID]sm.Result)
+	for key, val := range v.History {
+		s.History[key] = sm.Result{Value: val}
+	}
 }

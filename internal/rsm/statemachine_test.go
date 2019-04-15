@@ -221,7 +221,8 @@ func (s *testSnapshotter) Load(index uint64,
 		return err
 	}
 	reader.ValidateHeader(header)
-	if err := loadableSessions.LoadSessions(reader); err != nil {
+	v := (SnapshotVersion)(header.Version)
+	if err := loadableSessions.LoadSessions(reader, v); err != nil {
 		return err
 	}
 	if err := loadableSM.RecoverFromSnapshot(index, reader, fs); err != nil {

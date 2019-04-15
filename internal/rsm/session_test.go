@@ -19,6 +19,9 @@ package rsm
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
+	"math/rand"
 	"reflect"
 	"testing"
 
@@ -130,18 +133,99 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
+			cmd := make([]byte, 1234)
+			rand.Read(cmd)
+			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx], Data: cmd})
 		}
 		snapshot := &bytes.Buffer{}
 		s.save(snapshot)
 		data := snapshot.Bytes()
 		toRecover := bytes.NewBuffer(data)
-		newS, err := createSessionFromSnapshot(toRecover)
+		newS := &Session{}
+		err := newS.recoverFromSnapshot(toRecover, V2SnapshotVersion)
 		if err != nil {
 			t.Fatalf("failed to create session from snapshot, %v", err)
 		}
 		if !reflect.DeepEqual(newS, s) {
 			t.Errorf("i %d, got %v, want %v", i, newS, s)
 		}
+	}
+}
+
+func TestSessionCanBeRestoredFromV1Snapshot(t *testing.T) {
+	session := &v1session{
+		ClientID:      123,
+		RespondedUpTo: 456789,
+		History:       make(map[RaftSeriesID]uint64),
+	}
+	session.History[1234] = 324
+	session.History[5678] = 458
+	ss := &bytes.Buffer{}
+	data, err := json.Marshal(session)
+	if err != nil {
+		panic(err)
+	}
+	sz := len(data)
+	lenbuf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lenbuf, uint64(sz))
+	_, err = ss.Write(lenbuf)
+	if err != nil {
+		t.Errorf("failed to write %v", err)
+	}
+	_, err = ss.Write(data)
+	if err != nil {
+		t.Errorf("failed to write %v", err)
+	}
+	newS := &Session{}
+	data = ss.Bytes()
+	toRecover := bytes.NewBuffer(data)
+	if err := newS.recoverFromSnapshot(toRecover, V1SnapshotVersion); err != nil {
+		t.Errorf("recover from ss %v", err)
+	}
+	if newS.ClientID != session.ClientID || newS.RespondedUpTo != session.RespondedUpTo {
+		t.Errorf("field changed")
+	}
+	v1, ok := newS.History[1234]
+	if !ok || v1.Value != 324 {
+		t.Errorf("unexpected v1")
+	}
+	v2, ok := newS.History[5678]
+	if !ok || v2.Value != 458 {
+		t.Errorf("unexpected v2")
+	}
+}
+
+func TestUnknownVersionCausePanicWhenRecoverSessionFromSnapshot(t *testing.T) {
+	session := &v1session{
+		ClientID:      123,
+		RespondedUpTo: 456789,
+		History:       make(map[RaftSeriesID]uint64),
+	}
+	ss := &bytes.Buffer{}
+	data, err := json.Marshal(session)
+	if err != nil {
+		panic(err)
+	}
+	sz := len(data)
+	lenbuf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lenbuf, uint64(sz))
+	_, err = ss.Write(lenbuf)
+	if err != nil {
+		t.Errorf("failed to write %v", err)
+	}
+	_, err = ss.Write(data)
+	if err != nil {
+		t.Errorf("failed to write %v", err)
+	}
+	newS := &Session{}
+	data = ss.Bytes()
+	toRecover := bytes.NewBuffer(data)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("panic not triggered")
+		}
+	}()
+	if err := newS.recoverFromSnapshot(toRecover, (SnapshotVersion)(3)); err != nil {
+		t.Errorf("recover from ss %v", err)
 	}
 }
