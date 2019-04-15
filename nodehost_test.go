@@ -1341,6 +1341,9 @@ func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 					t.Errorf("unexpected state machine type")
 				}
 			}
+			if ci.IsObserver {
+				t.Errorf("invalid IsObserver value")
+			}
 		}
 		session := nh.GetNoOPSession(1)
 		for i := uint64(2); i < initialApplied*2; i++ {
@@ -1550,6 +1553,9 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 					t.Errorf("unexpected state machine type")
 				}
 			}
+			if ci.IsObserver {
+				t.Errorf("unexpected IsObserver value")
+			}
 		}
 		result := make(map[uint64]struct{})
 		session := nh.GetNoOPSession(clusterID)
@@ -1595,6 +1601,9 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				if ci.StateMachineType != sm.RegularStateMachine {
 					t.Errorf("unexpected state machine type")
 				}
+			}
+			if ci.IsObserver {
+				t.Errorf("unexpected IsObserver value")
 			}
 		}
 		stopper := syncutil.NewStopper()
@@ -1743,4 +1752,46 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 		}
 	}
 	rateLimitedNodeHostTest(t, tf)
+}
+
+func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		rc := config.Config{
+			ClusterID:          1,
+			NodeID:             2,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			IsObserver:         true,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewFakeDiskSM(3)
+		}
+		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, 2000*time.Millisecond)
+		if err != nil {
+			t.Fatalf("failed to add observer %v", err)
+		}
+		select {
+		case <-rs.CompletedC:
+		}
+		if err := nh2.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+			t.Errorf("failed to start observer %v", err)
+		}
+		for i := 0; i < 10000; i++ {
+			nhi := nh2.GetNodeHostInfo()
+			for _, ci := range nhi.ClusterInfoList {
+				if ci.Pending {
+					continue
+				}
+				if ci.IsObserver && ci.NodeID == 2 {
+					return
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Errorf("failed to get is observer flag")
+	}
+	twoFakeDiskNodeHostTest(t, tf)
 }

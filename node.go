@@ -983,16 +983,18 @@ func (rc *node) captureClusterConfig() {
 	// this can only be called when RSM is not stepping any updates
 	// currently it is called from a RSM step function and from
 	// ApplySnapshot
-	nodes, _, _, index := rc.sm.GetMembership()
+	nodes, observers, _, index := rc.sm.GetMembership()
 	if len(nodes) == 0 {
 		plog.Panicf("empty nodes %s", rc.describe())
 	}
-	plog.Infof("%s called captureClusterConfig, nodes %v",
-		rc.describe(), nodes)
+	_, isObserver := observers[rc.nodeID]
+	plog.Infof("%s called captureClusterConfig, nodes %v, observers %v",
+		rc.describe(), nodes, observers)
 	ci := &ClusterInfo{
 		ClusterID:         rc.clusterID,
 		NodeID:            rc.nodeID,
 		IsLeader:          rc.isLeader(),
+		IsObserver:        isObserver,
 		ConfigChangeIndex: index,
 		Nodes:             nodes,
 	}
@@ -1025,6 +1027,7 @@ func (rc *node) getClusterInfo() *ClusterInfo {
 		ClusterID:         ci.ClusterID,
 		NodeID:            ci.NodeID,
 		IsLeader:          rc.isLeader(),
+		IsObserver:        ci.IsObserver,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
 		StateMachineType:  rc.getStateMachineType(),
