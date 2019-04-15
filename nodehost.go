@@ -1236,13 +1236,6 @@ func (nh *NodeHost) setRegion(ctx context.Context) {
 	}
 }
 
-func (nh *NodeHost) initialize(ctx context.Context,
-	nhConfig config.NodeHostConfig) error {
-	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
-	nh.setRegion(ctx)
-	return nil
-}
-
 func (nh *NodeHost) tickWorkerMain() {
 	count := uint64(0)
 	idx := uint64(0)
