@@ -146,10 +146,6 @@ func (o *OffloadedStatus) SetOffloaded(from From) {
 			o.offloadedFromSnapshotWorker = true
 		}
 	}
-	plog.Infof("%s offload status %t,%t,%t,%t, loaded status %t,%t,%t",
-		o.describe(), o.offloadedFromNodeHost, o.offloadedFromCommitWorker,
-		o.offloadedFromSnapshotWorker, o.offloadedFromStepWorker,
-		o.loadedByStepWorker, o.loadedByCommitWorker, o.loadedBySnapshotWorker)
 	if o.offloadedFromNodeHost &&
 		o.offloadedFromCommitWorker &&
 		o.offloadedFromSnapshotWorker &&
