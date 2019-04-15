@@ -16,9 +16,9 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 ## Features ##
 * Easy to use API for building Raft based applications in Go or C++
 * Feature complete and scalable multi-group Raft implementation
+* Disk based and memory based state machine support
 * Fully pipelined and TLS mutual authentication support, ready for high latency open environment
 * Custom Raft log storage and Raft RPC support, easy to integrate with latest I/O techs
-* Optional [Drummer](/drummer) server component for managing large number of Raft groups with high availability
 * [Extensively tested](/doc/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
 
 Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
