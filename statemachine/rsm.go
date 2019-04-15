@@ -63,7 +63,6 @@ When you are not sure which one to choose, the rule of thumb is to implement
 IStateMachine for your application and upgrade it to a IOnDiskStateMachine later
 when necessary.
 */
-
 package statemachine
 
 import (

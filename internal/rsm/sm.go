@@ -106,6 +106,8 @@ func (sm *RegularStateMachine) ConcurrentSnapshot() bool {
 	return false
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether this is an on
+// disk state machine.
 func (sm *RegularStateMachine) OnDiskStateMachine() bool {
 	return false
 }

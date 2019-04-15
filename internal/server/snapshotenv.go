@@ -169,7 +169,7 @@ func (se *SnapshotEnv) MustRemoveTempDir() {
 	}
 }
 
-// Finalize finalizes the snapshot.
+// FinalizeSnapshot finalizes the snapshot.
 func (se *SnapshotEnv) FinalizeSnapshot(msg proto.Message) error {
 	finalizeLock.Lock()
 	defer finalizeLock.Unlock()

@@ -200,6 +200,7 @@ func (ds *StateMachineWrapper) destroy() {
 	C.DestroyDBStateMachine(ds.dataStore)
 }
 
+// Open opens the state machine.
 func (ds *StateMachineWrapper) Open() (uint64, error) {
 	panic("Open() called on StateMachineWrapper")
 }
@@ -275,6 +276,7 @@ func (ds *StateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	panic("PrepareSnapshot not suppose to be called")
 }
 
+// StreamSnapshot streams the snapshot to the remote node.
 func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer io.Writer) error {
 	panic("StreamSnapshot not suppose to be called")
@@ -329,6 +331,8 @@ func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
 	return false
 }
 
+// OnDiskStateMachine returns a boolean flag indicating whether the state
+// machine is an on disk state machine.
 func (ds *StateMachineWrapper) OnDiskStateMachine() bool {
 	return false
 }

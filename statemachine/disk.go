@@ -24,7 +24,9 @@ var (
 	// ErrSnapshotStreaming is the error returned when the snapshot data being
 	// generated can not be streamed to its intended destination.
 	ErrSnapshotStreaming = errors.New("failed to stream the snapshot")
-	ErrOpenStopped       = errors.New("open method did not complete")
+	// ErrOpenStopped is the error returned by the Open method of an
+	// IOnDiskStateMachine type when it chooses to abort from its Open method.
+	ErrOpenStopped = errors.New("open method did not complete")
 )
 
 // IOnDiskStateMachine is the interface to be implemented by application's
