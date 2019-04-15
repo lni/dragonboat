@@ -28,39 +28,41 @@ available as long as the majority of its managing NodeHost instances (i.e. its
 underlying hosts) are available.
 
 User applications can leverage the power of the Raft protocol implemented in
-dragonboat by implementing its IStateMachine component. IStateMachine is defined in
-github.com/lni/dragonboat/sm. Each cluster node is associated with an
-IStateMachine instance, it is in charge of updating, querying and snapshotting
-application data, with minimum exposure to the complexity of the Raft protocol
-implementation.
+dragonboat by implementing its IStateMachine or IOnDiskStateMachine component.
+IStateMachine and IOnDiskStateMachine is defined in
+github.com/lni/dragonboat/statemachine. Each cluster node is associated with an
+IStateMachine or IOnDiskStateMachine instance, it is in charge of updating,
+querying and snapshotting application data, with minimum exposure to the
+complexity of the Raft protocol implementation.
 
 User applications can use NodeHost's APIs to update the state of their
-IStateMachine instances, this is called making proposals. Once accepted by the
-majority nodes of a Raft cluster, the proposal is considered as committed and
-it will be applied on all member nodes of the Raft cluster. Applications can
-also make linearizable reads to query the state of their IStateMachine
-instances. Dragonboat employs the ReadIndex protocol invented by Diego Ongaro
-to implement linearizable reads. Both read and write operations can be
-initiated on any member nodes, although initiating from the leader nodes incurs
-the lowest overhead.
+IStateMachine or IOnDiskStateMachine instances, this is called making proposals.
+Once accepted by the majority nodes of a Raft cluster, the proposal is considered
+as committed and it will be applied on all member nodes of the Raft cluster.
+Applications can also make linearizable reads to query the state of their
+IStateMachine or IOnDiskStateMachine instances. Dragonboat employs the ReadIndex
+protocol invented by Diego Ongaro to implement linearizable reads. Both read and
+write operations can be initiated on any member nodes, although initiating from
+the leader nodes incurs the lowest overhead.
 
 Dragonboat guarantees the linearizability of your I/O when interacting with the
-IStateMachine. In plain English, writes (via making proposal) to your Raft cluster
-appears to be instantaneous, once a write is completed, all later reads
-(linearizable read using the ReadIndex protocol as implemented and provided in
-dragonboat) should return the value of that write or a later write. Once a value
-is returned by a linearizable read, all later reads should return the same value
-or the result of a later write.
+IStateMachine or IOnDiskStateMachine instances. In plain English, writes (via
+making proposal) to your Raft cluster appears to be instantaneous, once a write
+is completed, all later reads (linearizable read using the ReadIndex protocol
+as implemented and provided in dragonboat) should return the value of that write
+or a later write. Once a value is returned by a linearizable read, all later
+reads should return the same value or the result of a later write.
 
 To strictly provide such guarantee, we need to implement the at-most-once
 semantic required by linearizability. For a client, when it retries the proposal
 that failed to complete before its deadline during the previous attempt, it has
 the risk to have the same proposal committed and applied twice into the
-IStateMachine. Dragonboat prevents this by implementing the client session concept
-described in Diego Ongaro's PhD thesis.
+IStateMachine. Dragonboat prevents this by implementing the client session
+concept described in Diego Ongaro's PhD thesis.
 
 Dragonboat is a feature complete Multi-Group Raft implementation - snapshotting,
-membership change, leadership transfer and non-voting members are also provided.
+membership change, leadership transfer, non-voting members and disk based state
+machine are all provided.
 
 Dragonboat is also extensively optimized. The Raft protocol implementation is
 fully pipelined, meaning proposals can start before the completion of previous
@@ -395,8 +397,9 @@ func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
 
 // SyncPropose makes a synchronous proposal on the Raft cluster specified by
 // the input client session object. It returns the result code returned by
-// IStateMachine's Update method, or the error encountered. The input byte slice
-// can be reused for other purposes immediate after the return of this method.
+// IStateMachine or IOnDiskStateMachine's Update method, or the error
+// encountered. The input byte slice can be reused for other purposes immediate
+// after the return of this method.
 //
 // After calling SyncPropose, unless NO-OP client session is used, it is
 // caller's responsibility to update the client session instance accordingly
@@ -442,9 +445,10 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 
 // SyncRead performs a synchronous linearizable read on the specified Raft
 // cluster. The query byte slice specifies what to query, it will be passed to
-// the Lookup method of the IStateMachine after the system determines that it is
-// safe to perform the local read on IStateMachine. It returns the query result
-// from IStateMachine's Lookup method or the error encountered.
+// the Lookup method of the IStateMachine or IOnDiskStateMachine after the
+// system determines that it is safe to perform the local read on IStateMachine
+// or IOnDiskStateMachine. It returns the query result from the Lookup method or
+// the error encountered.
 func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	query []byte) ([]byte, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
@@ -529,6 +533,9 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 //
 // Use this NO-OP client session when your IStateMachine provides idempotence in
 // its own implementation.
+//
+// NO-OP client session must be used for making proposals on IOnDiskStateMachine
+// based state machine.
 func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 	return client.NewNoOPSession(clusterID, nh.serverCtx.GetRandomSource())
 }
@@ -541,6 +548,10 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 // Returned client session instance should not be used concurrently. Use
 // multiple client sessions when you need to concurrently start multiple
 // proposals.
+//
+// Client session is not supported by IOnDiskStateMachine based state machine.
+// NO-OP client session must be used for making proposals on IOnDiskStateMachine
+// based state machine.
 func (nh *NodeHost) GetNewSession(ctx context.Context,
 	clusterID uint64) (*client.Session, error) {
 	timeout, err := getTimeoutFromContext(ctx)
@@ -666,8 +677,9 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 // or an error immediately. Application should wait on the CompleteC channel
 // of the returned RequestState object to get notified on the outcome of the
 // ReadIndex operation. On a successful completion, the ReadLocal method can
-// then be invoked to query the state of the IStateMachine to complete the read
-// operation with linearizability guarantee.
+// then be invoked to query the state of the IStateMachine or
+// IOnDiskStateMachine to complete the read operation with linearizability
+// guarantee.
 func (nh *NodeHost) ReadIndex(clusterID uint64,
 	timeout time.Duration) (*RequestState, error) {
 	rs, _, err := nh.readIndex(clusterID, nil, timeout)

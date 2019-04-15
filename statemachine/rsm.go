@@ -146,19 +146,16 @@ type Result struct {
 }
 
 // Entry represents a Raft log entry that is going to be provided to the Update
-// method of an IConcurrentStateMachine instance.
+// method of an IConcurrentStateMachine or IOnDiskStateMachine instance.
 type Entry struct {
 	// Index is the Raft log index of the entry. The field is set by the
-	// Dragonboat library and it is read-only for user IConcurrentStateMachine
-	// instances.
+	// Dragonboat library and it is strictly read-only.
 	Index uint64
-	// Result is the result value obtained from the Update method of an
-	// IConcurrentStateMachine instance. This field is set by user
-	// IConcurrentStateMachine instances.
-	Result Result
-	// Cmd is the proposed command. This field is read-only for user
-	// IConcurrentStateMachine instances.
+	// Cmd is the proposed command. This field is strictly read-only.
 	Cmd []byte
+	// Result is the result value obtained from the Update method of an
+	// IConcurrentStateMachine or IOnDiskStateMachine instance.
+	Result Result
 }
 
 // IStateMachine is the interface to be implemented by application's state
