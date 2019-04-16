@@ -389,7 +389,7 @@ func (dc *DrummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 		err = dc.nh.StartOnDiskCluster(peers,
 			req.Join, pd.createOnDiskStateMachine, config)
 	} else {
-		err = dc.nh.StartClusterUsingPlugin(peers, req.Join, pd.filepath, config)
+		panic("unknown type")
 	}
 	if err != nil {
 		plog.Errorf("add cluster %s failed: %v",
