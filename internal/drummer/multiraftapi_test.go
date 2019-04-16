@@ -82,8 +82,6 @@ func runMultiraftAPITest(t *testing.T, mutualTLS bool, tf clientSessionTester) {
 	}
 	startTestNodes(drummerNodes, dl)
 	startTestNodes(nodehostNodes, dl)
-	setRegionForNodehostNodes(nodehostNodes,
-		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	defer stopTestNodes(drummerNodes)
 	defer stopTestNodes(nodehostNodes)
 	waitForStableNodes(drummerNodes, 25)
@@ -150,8 +148,6 @@ func TestMultiraftAPICanQueryClusterInfoFromDrummer(t *testing.T) {
 	drummerNodes, nodehostNodes := createTestNodeLists(dl)
 	startTestNodes(drummerNodes, dl)
 	startTestNodes(nodehostNodes, dl)
-	setRegionForNodehostNodes(nodehostNodes,
-		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	defer stopTestNodes(drummerNodes)
 	defer stopTestNodes(nodehostNodes)
 	waitForStableNodes(drummerNodes, 25)

@@ -739,13 +739,6 @@ func removeNodeHostTestDirForTesting(listIndex uint64) {
 	}
 }
 
-func setRegionForNodehostNodes(nodes []*testNode, regions []string) {
-	for idx, node := range nodes {
-		node.MustBeNodehostNode()
-		node.nh.SetRegion(regions[idx])
-	}
-}
-
 func createTestNodeLists(dl *mtAddressList) ([]*testNode, []*testNode) {
 	drummerDirList, nodehostDirList := prepareMonkeyTestDirs(dl)
 	drummerNodes := make([]*testNode, len(dl.addressList))
@@ -1005,8 +998,8 @@ func submitSimpleTestJob(dl *mtAddressList, mutualTLS bool) bool {
 		return false
 	}
 	regions := pb.Regions{
-		Region: []string{"region-1", "region-2", "region-3"},
-		Count:  []uint64{1, 1, 1},
+		Region: []string{client.DefaultRegion},
+		Count:  []uint64{3},
 	}
 	if err := SubmitRegions(ctx, dc, regions); err != nil {
 		plog.Errorf("failed to submit region info")
@@ -1021,13 +1014,13 @@ func submitSimpleTestJob(dl *mtAddressList, mutualTLS bool) bool {
 }
 
 func submitMultipleTestClusters(count uint64,
-	appname string, client pb.DrummerClient) error {
+	appname string, dclient pb.DrummerClient) error {
 	plog.Infof("going to send cluster info to drummer")
 	for i := uint64(0); i < count; i++ {
 		clusterID := i + 1
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		if err := SubmitCreateDrummerChange(ctx,
-			client, clusterID, []uint64{2345, 6789, 9876}, appname); err != nil {
+			dclient, clusterID, []uint64{2345, 6789, 9876}, appname); err != nil {
 			plog.Errorf("failed to submit drummer change, cluster %d, %v",
 				clusterID, err)
 			cancel()
@@ -1036,18 +1029,18 @@ func submitMultipleTestClusters(count uint64,
 		cancel()
 	}
 	regions := pb.Regions{
-		Region: []string{"region-1", "region-2", "region-3"},
-		Count:  []uint64{1, 1, 1},
+		Region: []string{client.DefaultRegion},
+		Count:  []uint64{3},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	plog.Infof("going to set region")
-	if err := SubmitRegions(ctx, client, regions); err != nil {
+	if err := SubmitRegions(ctx, dclient, regions); err != nil {
 		plog.Errorf("failed to submit region info")
 		return err
 	}
 	plog.Infof("going to set the bootstrapped flag")
-	if err := SubmitBootstrappped(ctx, client); err != nil {
+	if err := SubmitBootstrappped(ctx, dclient); err != nil {
 		plog.Errorf("failed to set bootstrapped flag")
 		return err
 	}
@@ -1334,8 +1327,6 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	drummerNodes, nodehostNodes := createTestNodeLists(dl)
 	startTestNodes(drummerNodes, dl)
 	startTestNodes(nodehostNodes, dl)
-	setRegionForNodehostNodes(nodehostNodes,
-		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	defer func() {
 		plog.Infof("cleanup called, going to stop drummer nodes")
 		stopTestNodes(drummerNodes)

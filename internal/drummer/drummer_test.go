@@ -70,8 +70,6 @@ func testClusterCanBeLaunched(t *testing.T, dl *mtAddressList,
 	drummerNodes []*testNode, nodehostNodes []*testNode) {
 	startTestNodes(drummerNodes, dl)
 	startTestNodes(nodehostNodes, dl)
-	setRegionForNodehostNodes(nodehostNodes,
-		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	waitForStableNodes(drummerNodes, 25)
 	waitForStableNodes(nodehostNodes, 25)
 	time.Sleep(time.Duration(3*NodeHostInfoReportSecond) * time.Second)
@@ -151,8 +149,6 @@ func TestDrummerCanRestoreUnavailableClusters(t *testing.T) {
 	// restart the second/third nodehost instances
 	nodehostNodes[1].Start(dl)
 	nodehostNodes[2].Start(dl)
-	setRegionForNodehostNodes(nodehostNodes,
-		[]string{"region-1", "region-2", "region-3", "region-4", "region-5"})
 	waitTimeSec = (loopIntervalFactor + 4) * NodeHostInfoReportSecond
 	time.Sleep(time.Duration(waitTimeSec) * time.Second)
 	// make sure the second/third nodehost instances have recovered

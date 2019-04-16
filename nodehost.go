@@ -164,8 +164,6 @@ type ClusterInfo struct {
 type NodeHostInfo struct {
 	// RaftAddress is the public address and the identifier of the NodeHost.
 	RaftAddress string
-	// Region is the region of the NodeHost.
-	Region string
 	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
 	ClusterInfoList []ClusterInfo
 	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
@@ -236,7 +234,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
 	nh.deploymentID = did
 	nh.createLogDB(nhConfig, did)
 	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
-	nh.setRegion(context.Background())
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
 	})
@@ -893,7 +890,6 @@ func (nh *NodeHost) GetNodeHostInfo() *NodeHostInfo {
 	}
 	return &NodeHostInfo{
 		RaftAddress:     nh.RaftAddress(),
-		Region:          nh.region,
 		ClusterInfoList: clusterInfoList,
 		LogInfo:         plogInfo,
 	}
@@ -1219,21 +1215,6 @@ func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 		clusterInfoList = append(clusterInfoList, *clusterInfo)
 	}
 	return clusterInfoList
-}
-
-func (nh *NodeHost) setRegion(ctx context.Context) {
-	if region, err := getRegion(ctx); err != nil {
-		panic("failed to get region")
-	} else {
-		if region == regionUnknown {
-			if len(nh.region) == 0 {
-				nh.region = region
-			}
-		} else {
-			nh.region = region
-		}
-		plog.Infof("region is set to %s on %s", nh.region, nh.RaftAddress())
-	}
 }
 
 func (nh *NodeHost) tickWorkerMain() {

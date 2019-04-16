@@ -31,6 +31,11 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
+const (
+	// DefaultRegion is the default region name used in drummer monkey tests
+	DefaultRegion string = "default-region"
+)
+
 var (
 	// DrummerClientName is the name of the default master client.
 	DrummerClientName      = settings.Soft.DrummerClientName
@@ -138,7 +143,7 @@ func (dc *DrummerClient) SendNodeHostInfo(ctx context.Context,
 		ClusterIdList:    clusterIDList,
 		PlogInfoIncluded: logInfoIncluded,
 		PlogInfo:         toDrummerPBLogInfo(nhi.LogInfo),
-		Region:           nhi.Region,
+		Region:           DefaultRegion,
 	}
 	requestCollection, err := client.ReportAvailableNodeHost(ctx, info)
 	if err != nil {
