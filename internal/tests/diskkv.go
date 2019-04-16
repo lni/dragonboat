@@ -92,7 +92,11 @@ func (r *rocksdb) close() {
 	r.db = nil
 }
 
+var dbmu sync.Mutex
+
 func createDB(dbdir string) (*rocksdb, error) {
+	dbmu.Lock()
+	defer dbmu.Unlock()
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetWholeKeyFiltering(true)
 	bbto.SetBlockSize(1024)
