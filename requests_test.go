@@ -34,6 +34,194 @@ const (
 	testTickInMillisecond uint64 = 50
 )
 
+func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
+	snapshotC := make(chan<- *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	if len(ps.snapshotC) != 0 {
+		t.Errorf("snapshotC not empty")
+	}
+	if ps.pending != nil {
+		t.Errorf("pending not nil")
+	}
+	pending := &SnapshotState{
+		CompleteC: make(chan SnapshotResult, 1),
+	}
+	ps.pending = pending
+	ps.close()
+	if ps.pending != nil {
+		t.Errorf("pending not cleared")
+	}
+	select {
+	case v := <-pending.CompleteC:
+		if !v.Terminated() {
+			t.Errorf("unexpected code")
+		}
+	default:
+		t.Errorf("close() didn't set pending to terminated")
+	}
+}
+
+func TestPendingSnapshotCanBeRequested(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	if ps.pending == nil {
+		t.Errorf("pending not set")
+	}
+	if ss.deadline <= ps.getTick() {
+		t.Errorf("deadline not set")
+	}
+	select {
+	case <-snapshotC:
+	default:
+		t.Errorf("requested snapshot is not pushed")
+	}
+}
+
+func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
+	snapshotC := make(chan<- *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, 50)
+	ss, err := ps.request(49 * time.Millisecond)
+	if err != ErrTimeoutTooSmall {
+		t.Errorf("request not rejected")
+	}
+	if ss != nil {
+		t.Errorf("returned ss is not nil")
+	}
+}
+
+func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
+	snapshotC := make(chan<- *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	ss, err = ps.request(time.Second)
+	if err != ErrPendingSnapshotRequestExist {
+		t.Errorf("request not rejected")
+	}
+	if ss != nil {
+		t.Errorf("returned ss is not nil")
+	}
+}
+
+func TestPendingSnapshotCanBeGCed(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	if ps.pending == nil {
+		t.Errorf("pending not set")
+	}
+	for i := 0; i < 21; i++ {
+		ps.increaseTick()
+		ps.gc()
+		if ps.pending == nil {
+			t.Errorf("pending cleared")
+		}
+	}
+	ps.increaseTick()
+	ps.gc()
+	if ps.pending != nil {
+		t.Errorf("pending is not cleared")
+	}
+	select {
+	case v := <-ss.CompleteC:
+		if !v.Timeout() {
+			t.Errorf("not timeout")
+		}
+	default:
+		t.Errorf("not notify as timed out")
+	}
+}
+
+func TestPendingSnapshotCanBeApplied(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	ps.apply(ss.key, false, 123)
+	select {
+	case v := <-ss.CompleteC:
+		if v.GetIndex() != 123 {
+			t.Errorf("index value not returned")
+		}
+		if !v.Completed() {
+			t.Errorf("not completed")
+		}
+	default:
+		t.Errorf("ss is not applied")
+	}
+}
+
+func TestPendingSnapshotCanBeIgnored(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	ps.apply(ss.key, true, 123)
+	select {
+	case v := <-ss.CompleteC:
+		if v.GetIndex() != 0 {
+			t.Errorf("index value incorrectly set")
+		}
+		if !v.Rejected() {
+			t.Errorf("not rejected")
+		}
+	default:
+		t.Errorf("ss is not applied")
+	}
+}
+
+func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ss, err := ps.request(time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Errorf("nil ss returned")
+	}
+	if ps.pending == nil {
+		t.Errorf("pending not set")
+	}
+	ps.apply(ss.key+1, false, 123)
+	if ps.pending == nil {
+		t.Errorf("pending unexpectedly cleared")
+	}
+	select {
+	case <-ss.CompleteC:
+		t.Fatalf("unexpectedly notified")
+	default:
+	}
+}
+
 func getPendingConfigChange() (*pendingConfigChange, chan *RequestState) {
 	c := make(chan *RequestState, 1)
 	return newPendingConfigChange(c, testTickInMillisecond), c

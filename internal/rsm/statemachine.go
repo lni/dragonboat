@@ -60,6 +60,16 @@ type SnapshotMeta struct {
 	Ctx        interface{}
 }
 
+// SnapshotRequestType is the type of a snapshot request.
+type SnapshotRequestType uint64
+
+// SnapshotRequest is the type for decribing the details of a snapshot request.
+type SnapshotRequest struct {
+	Type SnapshotRequestType
+	Key  uint64
+	Path string
+}
+
 // Commit describes a task that need to be handled by StateMachine.
 type Commit struct {
 	ClusterID         uint64
@@ -69,6 +79,7 @@ type Commit struct {
 	InitialSnapshot   bool
 	SnapshotRequested bool
 	StreamSnapshot    bool
+	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
 }
 

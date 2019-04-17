@@ -62,6 +62,9 @@ var (
 	// ErrPendingConfigChangeExist indicates that there is already a pending
 	// membership change exist in the system.
 	ErrPendingConfigChangeExist = errors.New("pending config change request exist")
+	// ErrPendingSnapshotRequestExist indicates that there is already a pending
+	// snapshot request exist in the system.
+	ErrPendingSnapshotRequestExist = errors.New("pending snapshot request exist")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
 	// ErrSystemStopped indicates that the system is being shut down.
@@ -71,6 +74,50 @@ var (
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
 )
+
+// SnapshotResult is the result of a snapshot request.
+type SnapshotResult struct {
+	code  RequestResultCode
+	index uint64
+}
+
+// Timeout returns a boolean value indicating whether the request timed out.
+func (sr *SnapshotResult) Timeout() bool {
+	return sr.code == requestTimeout
+}
+
+// Completed returns a boolean value indicating the request completed
+// successfully.
+func (sr *SnapshotResult) Completed() bool {
+	return sr.code == requestCompleted
+}
+
+// Terminated returns a boolean value indicating the request terminated due to
+// the requested Raft cluster is being shut down.
+func (sr *SnapshotResult) Terminated() bool {
+	return sr.code == requestTerminated
+}
+
+// Rejected returns a boolean value indicating the request is rejected. A
+// snapshot request is rejected when a snapshot at the same raft log index
+// already exist or when the requestis received when snapshot is being created.
+func (sr *SnapshotResult) Rejected() bool {
+	return sr.code == requestRejected
+}
+
+// GetIndex returns the index value of the saved snapshot.
+func (sr *SnapshotResult) GetIndex() uint64 {
+	return sr.index
+}
+
+// SnapshotState is the returned state object used to track the outcome of the
+// requested snapshot.
+type SnapshotState struct {
+	key      uint64
+	deadline uint64
+	// CompleteC is a channel for delivering request result to users.
+	CompleteC chan SnapshotResult
+}
 
 // IsTempError returns a boolean value indicating whether the specified error
 // is a temporary error that worth to be retried later with the exact same
@@ -97,7 +144,7 @@ type RequestResult struct {
 	result sm.Result
 }
 
-// Timeout returns a boolean value indicating whether the Request timed out.
+// Timeout returns a boolean value indicating whether the request timed out.
 func (rr *RequestResult) Timeout() bool {
 	return rr.code == requestTimeout
 }
@@ -297,6 +344,106 @@ type pendingConfigChange struct {
 	pending     *RequestState
 	confChangeC chan<- *RequestState
 	logicalClock
+}
+
+type pendingSnapshot struct {
+	mu        sync.Mutex
+	pending   *SnapshotState
+	snapshotC chan<- *SnapshotState
+	logicalClock
+}
+
+func newPendingSnapshot(snapshotC chan<- *SnapshotState,
+	tickInMillisecond uint64) *pendingSnapshot {
+	gcTick := defaultGCTick
+	if gcTick == 0 {
+		panic("invalid gcTick")
+	}
+	lcu := logicalClock{
+		tickInMillisecond: tickInMillisecond,
+		gcTick:            gcTick,
+	}
+	return &pendingSnapshot{
+		logicalClock: lcu,
+		snapshotC:    snapshotC,
+	}
+}
+
+func (p *pendingSnapshot) close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending != nil {
+		r := SnapshotResult{code: requestTerminated}
+		select {
+		case p.pending.CompleteC <- r:
+		}
+		p.pending = nil
+	}
+}
+
+func (p *pendingSnapshot) request(timeout time.Duration) (*SnapshotState, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	timeoutTick := p.getTimeoutTick(timeout)
+	if timeoutTick == 0 {
+		return nil, ErrTimeoutTooSmall
+	}
+	if p.pending != nil {
+		return nil, ErrPendingSnapshotRequestExist
+	}
+	req := &SnapshotState{
+		key:       random.LockGuardedRand.Uint64(),
+		deadline:  p.getTick() + timeoutTick,
+		CompleteC: make(chan SnapshotResult, 1),
+	}
+	select {
+	case p.snapshotC <- req:
+		p.pending = req
+		return req, nil
+	default:
+	}
+	return nil, ErrSystemBusy
+}
+
+func (p *pendingSnapshot) gc() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending == nil {
+		return
+	}
+	now := p.getTick()
+	if now-p.lastGcTime < p.gcTick {
+		return
+	}
+	p.lastGcTime = now
+	if p.pending.deadline < now {
+		r := SnapshotResult{code: requestTimeout}
+		select {
+		case p.pending.CompleteC <- r:
+		}
+		p.pending = nil
+	}
+}
+
+func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending == nil {
+		return
+	}
+	if p.pending.key == key {
+		r := SnapshotResult{}
+		if ignored {
+			r.code = requestRejected
+		} else {
+			r.code = requestCompleted
+			r.index = index
+		}
+		select {
+		case p.pending.CompleteC <- r:
+		}
+		p.pending = nil
+	}
 }
 
 func newPendingConfigChange(confChangeC chan<- *RequestState,

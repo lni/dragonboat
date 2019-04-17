@@ -734,6 +734,17 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
+func (nh *NodeHost) RequestSnapshot(clusterID uint64,
+	timeout time.Duration) (*SnapshotState, error) {
+	v, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	req, err := v.requestSnapshot(timeout)
+	nh.execEngine.setNodeReady(clusterID)
+	return req, err
+}
+
 // RequestDeleteNode is a Raft cluster membership change method for requesting
 // the specified node to be removed from the specified Raft cluster. It starts
 // an asynchronous request to remove the node from the Raft cluster membership

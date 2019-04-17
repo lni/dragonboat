@@ -62,8 +62,11 @@ func NewLockedRand() *LockedRand {
 
 // Uint64 returns a new random uint64 value.
 func (r *LockedRand) Uint64() uint64 {
+	var v uint64
 	r.mu.Lock()
-	v := r.source.Uint64()
+	for v == 0 {
+		v = r.source.Uint64()
+	}
 	r.mu.Unlock()
 	return v
 }

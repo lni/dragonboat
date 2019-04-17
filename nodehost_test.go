@@ -400,11 +400,12 @@ var (
 )
 
 type PST struct {
-	mu       sync.Mutex
-	stopped  bool
-	saved    bool
-	restored bool
-	slowSave bool
+	mu                      sync.Mutex
+	stopped                 bool
+	saved                   bool
+	restored                bool
+	slowSave                bool
+	saveSnapshotCanComplete bool
 }
 
 func (n *PST) setRestored(v bool) {
@@ -1794,4 +1795,59 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		t.Errorf("failed to get is observer flag")
 	}
 	twoFakeDiskNodeHostTest(t, tf)
+}
+
+func TestSnapshotCanBeRequested(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	waitForLeaderToBeElected(t, nh, 2)
+	session := nh.GetNoOPSession(2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cmd := make([]byte, 1518)
+	_, err = nh.SyncPropose(ctx, session, cmd)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to make proposal %v", err)
+	}
+	sr, err := nh.RequestSnapshot(2, 3*time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	var index uint64
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Completed() {
+			t.Errorf("failed to complete the requested snapshot")
+		}
+		index = v.GetIndex()
+	}
+	plog.Infof("going to request snapshot again")
+	sr, err = nh.RequestSnapshot(2, 3*time.Second)
+	if err != nil {
+		t.Fatalf("failed to request snapshot")
+	}
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Rejected() {
+			t.Errorf("failed to complete the requested snapshot")
+		}
+	}
+	logdb := nh.logdb
+	snapshots, err := logdb.ListSnapshots(2, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(snapshots) == 0 {
+		t.Fatalf("failed to save snapshots")
+	}
+	if snapshots[0].Index != index {
+		t.Errorf("unexpected index value")
+	}
 }

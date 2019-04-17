@@ -52,6 +52,7 @@ type node struct {
 	raftAddress          string
 	config               config.Config
 	confChangeC          <-chan *RequestState
+	snapshotC            <-chan *SnapshotState
 	commitC              chan<- rsm.Commit
 	mq                   *server.MessageQueue
 	lastApplied          uint64
@@ -66,6 +67,7 @@ type node struct {
 	pendingProposals     *pendingProposal
 	pendingReadIndexes   *pendingReadIndex
 	pendingConfigChange  *pendingConfigChange
+	pendingSnapshot      *pendingSnapshot
 	raftMu               sync.Mutex
 	node                 *raft.Peer
 	logreader            *logdb.LogReader
@@ -107,10 +109,12 @@ func newNode(raftAddress string,
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan *RequestState, 1)
+	snapshotC := make(chan *SnapshotState, 1)
 	pp := newPendingProposal(requestStatePool,
 		proposals, config.ClusterID, config.NodeID, raftAddress, tickMillisecond)
 	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
 	pcc := newPendingConfigChange(confChangeC, tickMillisecond)
+	ps := newPendingSnapshot(snapshotC, tickMillisecond)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rc := &node{
 		tickMillisecond:     tickMillisecond,
@@ -119,11 +123,13 @@ func newNode(raftAddress string,
 		incomingProposals:   proposals,
 		incomingReadIndexes: readIndexes,
 		confChangeC:         confChangeC,
+		snapshotC:           snapshotC,
 		commitReady:         commitReady,
 		stopc:               stopc,
 		pendingProposals:    pp,
 		pendingReadIndexes:  pscr,
 		pendingConfigChange: pcc,
+		pendingSnapshot:     ps,
 		nodeRegistry:        nodeRegistry,
 		snapshotter:         snapshotter,
 		logreader:           lr,
@@ -172,6 +178,7 @@ func (rc *node) close() {
 	rc.pendingReadIndexes.close()
 	rc.pendingProposals.close()
 	rc.pendingConfigChange.close()
+	rc.pendingSnapshot.close()
 }
 
 func (rc *node) stopped() bool {
@@ -235,6 +242,14 @@ func (rc *node) read(handler ICompleteHandler,
 
 func (rc *node) requestLeaderTransfer(nodeID uint64) {
 	rc.node.RequestLeaderTransfer(nodeID)
+}
+
+func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
+	return rc.pendingSnapshot.request(timeout)
+}
+
+func (rc *node) reportIgnoredSnapshotRequest(key uint64) {
+	rc.pendingSnapshot.apply(key, true, 0)
 }
 
 func (rc *node) requestConfigChange(cct pb.ConfigChangeType,
@@ -349,8 +364,12 @@ func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
 	return rc.publishCommitRec(rec)
 }
 
-func (rc *node) publishTakeSnapshotRequest() bool {
-	rec := rsm.Commit{SnapshotRequested: true}
+func (rc *node) publishTakeSnapshotRequest(state *SnapshotState) bool {
+	sr := rsm.SnapshotRequest{}
+	if state != nil {
+		sr.Key = state.key
+	}
+	rec := rsm.Commit{SnapshotRequested: true, SnapshotRequest: sr}
 	return rc.publishCommitRec(rec)
 }
 
@@ -407,6 +426,23 @@ func (rc *node) replayLog(clusterID uint64, nodeID uint64) bool {
 	return newNode
 }
 
+// returns a tuple of (requested, ignored)
+func (rc *node) snapshotRequested(lastApplied uint64) (bool, *SnapshotState) {
+	var sr *SnapshotState
+	select {
+	case sr = <-rc.snapshotC:
+	default:
+		return false, nil
+	}
+	si := rc.ss.getReqSnapshotIndex()
+	if lastApplied == si {
+		rc.reportIgnoredSnapshotRequest(sr.key)
+		return false, nil
+	}
+	rc.ss.setReqSnapshotIndex(lastApplied)
+	return true, sr
+}
+
 func (rc *node) saveSnapshotRequired(lastApplied uint64) bool {
 	if rc.config.SnapshotEntries == 0 {
 		return false
@@ -426,7 +462,12 @@ func isSoftSnapshotError(err error) bool {
 	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
 }
 
-func (rc *node) saveSnapshot() uint64 {
+func (rc *node) saveSnapshot(rec rsm.Commit) {
+	index := rc.doSaveSnapshot()
+	rc.pendingSnapshot.apply(rec.SnapshotRequest.Key, index == 0, index)
+}
+
+func (rc *node) doSaveSnapshot() uint64 {
 	// this is suppose to be called in snapshot worker thread.
 	// calling this rc.sm.GetLastApplied() won't block the raft sm.
 	if rc.sm.GetLastApplied() <= rc.ss.getSnapshotIndex() {
@@ -689,7 +730,7 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 		panic(err)
 	}
 	if rc.saveSnapshotRequired(ud.LastApplied) {
-		return rc.publishTakeSnapshotRequest()
+		return rc.publishTakeSnapshotRequest(nil)
 	}
 	return true
 }
@@ -742,15 +783,36 @@ func (rc *node) handleEvents() bool {
 	if rc.handleProposals() {
 		hasEvent = true
 	}
+	if rc.handleSnapshotRequest(lastApplied) {
+		hasEvent = true
+	}
 	if hasEvent {
 		if rc.expireNotified != rc.tickCount {
 			rc.pendingProposals.gc()
 			rc.pendingConfigChange.gc()
+			rc.pendingSnapshot.gc()
 			rc.expireNotified = rc.tickCount
 		}
 		rc.pendingReadIndexes.applied(lastApplied)
 	}
 	return hasEvent
+}
+
+func (rc *node) handleSnapshotRequest(lastApplied uint64) bool {
+	var sr *SnapshotState
+	select {
+	case sr = <-rc.snapshotC:
+	default:
+		return false
+	}
+	si := rc.ss.getReqSnapshotIndex()
+	if lastApplied == si {
+		rc.reportIgnoredSnapshotRequest(sr.key)
+		return false
+	}
+	rc.ss.setReqSnapshotIndex(lastApplied)
+	rc.publishTakeSnapshotRequest(sr)
+	return true
 }
 
 func (rc *node) handleProposals() bool {

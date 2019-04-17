@@ -301,7 +301,7 @@ func step(nodes []*node) bool {
 		running := node.processRaftUpdate(ud)
 		node.commitRaftUpdate(ud)
 		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
-			node.saveSnapshot()
+			node.saveSnapshot(rsm.Commit{})
 		}
 		if running {
 			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Commit, 0), nil)
@@ -311,7 +311,7 @@ func step(nodes []*node) bool {
 						panic(err)
 					}
 				} else if commitRec.SnapshotRequested {
-					node.saveSnapshot()
+					node.saveSnapshot(rsm.Commit{})
 				}
 			}
 		}
@@ -1290,8 +1290,8 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			node.saveSnapshot()
-			node.saveSnapshot()
+			node.saveSnapshot(rsm.Commit{})
+			node.saveSnapshot(rsm.Commit{})
 		}
 	}
 	runRaftNodeTest(t, false, tf)

@@ -240,17 +240,17 @@ func (s *execEngine) loadSnapshotNodes(workerID uint64, cci uint64,
 		s.snapshotWorkReady.getPartitioner(), rsm.FromSnapshotWorker)
 }
 
-func (s *execEngine) saveSnapshot(clusterID uint64,
-	nodes map[uint64]*node) {
+func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	node, ok := nodes[clusterID]
 	if !ok {
 		return
 	}
-	if _, ok := node.ss.getSaveSnapshotReq(); !ok {
+	rec, ok := node.ss.getSaveSnapshotReq()
+	if !ok {
 		return
 	}
 	plog.Infof("%s called saveSnapshot", node.describe())
-	node.saveSnapshot()
+	node.saveSnapshot(rec)
 	node.saveSnapshotDone()
 }
 
@@ -448,6 +448,7 @@ func (s *execEngine) execSMs(workerID uint64,
 					node.ss.setTakingSnapshot()
 				} else {
 					plog.Infof("commit.SnapshotRequested ignored on %s", node.describe())
+					node.reportIgnoredSnapshotRequest(commit.SnapshotRequest.Key)
 					continue
 				}
 				s.reportRequestedSnapshot(node, commit)
