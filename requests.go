@@ -309,11 +309,10 @@ func newPendingConfigChange(confChangeC chan<- *RequestState,
 		tickInMillisecond: tickInMillisecond,
 		gcTick:            gcTick,
 	}
-	p := &pendingConfigChange{
+	return &pendingConfigChange{
 		confChangeC:  confChangeC,
 		logicalClock: lcu,
 	}
-	return p
 }
 
 func (p *pendingConfigChange) close() {

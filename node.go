@@ -199,10 +199,10 @@ func (rc *node) concurrentSnapshot() bool {
 }
 
 func (rc *node) supportClientSession() bool {
-	return !rc.allDiskStateMachine()
+	return !rc.OnDiskStateMachine()
 }
 
-func (rc *node) allDiskStateMachine() bool {
+func (rc *node) OnDiskStateMachine() bool {
 	return rc.sm.OnDiskStateMachine()
 }
 
@@ -490,7 +490,7 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	defer rc.snapshotLock.Unlock()
 	var index uint64
 	var err error
-	if rec.InitialSnapshot && rc.allDiskStateMachine() {
+	if rec.InitialSnapshot && rc.OnDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
 		index, err = rc.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
@@ -510,7 +510,7 @@ func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
 	if err != nil {
 		panic(err)
 	}
-	if index > 0 && rc.allDiskStateMachine() {
+	if index > 0 && rc.OnDiskStateMachine() {
 		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
 			panic(err)
 		}
@@ -688,7 +688,7 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 	if err := rc.shrinkSnapshots(); err != nil {
 		panic(err)
 	}
-	if required := rc.saveSnapshotRequired(ud.LastApplied); required {
+	if rc.saveSnapshotRequired(ud.LastApplied) {
 		return rc.publishTakeSnapshotRequest()
 	}
 	return true

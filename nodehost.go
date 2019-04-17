@@ -1272,7 +1272,7 @@ func (nh *NodeHost) asyncSendRaftRequest(msg pb.Message) {
 		if !ok {
 			return
 		}
-		if !n.allDiskStateMachine() {
+		if !n.OnDiskStateMachine() {
 			nh.transport.ASyncSendSnapshot(msg)
 		} else {
 			n.publishStreamSnapshotRequest(msg.ClusterId, msg.To)
