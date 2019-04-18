@@ -1854,6 +1854,39 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 	}
 }
 
+func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	pst.slowSave = true
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	waitForLeaderToBeElected(t, nh, 2)
+	session := nh.GetNoOPSession(2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cmd := make([]byte, 1518)
+	_, err = nh.SyncPropose(ctx, session, cmd)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to make proposal %v", err)
+	}
+	sr, err := nh.RequestSnapshot(2, 200*time.Millisecond)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	plog.Infof("going to wait for snapshot request to complete")
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Timeout() {
+			t.Errorf("failed to report timeout")
+		}
+	}
+}
+
 func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)

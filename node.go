@@ -1035,6 +1035,7 @@ func (rc *node) tick() {
 	} else {
 		rc.node.Tick()
 	}
+	rc.pendingSnapshot.increaseTick()
 	rc.pendingProposals.increaseTick()
 	rc.pendingReadIndexes.increaseTick()
 	rc.pendingConfigChange.increaseTick()
