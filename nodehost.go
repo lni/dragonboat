@@ -1205,6 +1205,9 @@ func (nh *NodeHost) createPools() {
 func (nh *NodeHost) createLogDB(nhConfig config.NodeHostConfig,
 	deploymentID uint64) {
 	nhDirs, walDirs := nh.serverCtx.CreateNodeHostDir(deploymentID)
+	if !nh.serverCtx.TryLockNodeHostDir() {
+		plog.Panicf("failed to lock the NodeHostDir, another instance running?")
+	}
 	nh.serverCtx.CheckNodeHostDir(deploymentID, nh.nhConfig.RaftAddress)
 	var factory config.LogDBFactoryFunc
 	if nhConfig.LogDBFactory != nil {

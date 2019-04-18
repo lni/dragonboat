@@ -127,6 +127,31 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 	return dirs, dirs
 }
 
+// TryLockNodeHostDir tries to lock the nodehost dir and the WAL dir.
+func (sc *Context) TryLockNodeHostDir() bool {
+	fl := fileutil.New(sc.nhConfig.NodeHostDir)
+	locked, err := fl.TryLock()
+	if err != nil {
+		panic(err)
+	}
+	if !locked {
+		return false
+	}
+	if len(sc.nhConfig.WALDir) > 0 &&
+		sc.nhConfig.WALDir != sc.nhConfig.NodeHostDir {
+		wfl := fileutil.New(sc.nhConfig.WALDir)
+		locked, err := wfl.TryLock()
+		if err != nil {
+			panic(err)
+		}
+		if !locked {
+			fl.Unlock()
+			return false
+		}
+	}
+	return true
+}
+
 // CreateNodeHostDir creates the top level dirs used by nodehost.
 func (sc *Context) CreateNodeHostDir(deploymentID uint64) ([]string, []string) {
 	nhDirs, walDirs := sc.GetLogDBDirs(deploymentID)
