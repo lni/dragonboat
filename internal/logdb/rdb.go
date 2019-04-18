@@ -446,6 +446,9 @@ func (r *RDB) removeNodeData(clusterID uint64, nodeID uint64) error {
 	if err := r.kvs.CommitDeleteBatch(wb); err != nil {
 		return err
 	}
+	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {
+		return err
+	}
 	return r.compaction(clusterID, nodeID, math.MaxUint64)
 }
 

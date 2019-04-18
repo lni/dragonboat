@@ -44,6 +44,7 @@ type Context struct {
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
+	flocks       map[string]*fileutil.Flock
 }
 
 // NewContext creates and returns a new server Context object.
@@ -52,6 +53,7 @@ func NewContext(nhConfig config.NodeHostConfig) *Context {
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
 		partitioner:  NewFixedPartitioner(defaultClusterIDMod),
+		flocks:       make(map[string]*fileutil.Flock),
 	}
 	hostname, err := os.Hostname()
 	if err != nil || len(hostname) == 0 {
@@ -63,6 +65,9 @@ func NewContext(nhConfig config.NodeHostConfig) *Context {
 
 // Stop stops the context.
 func (sc *Context) Stop() {
+	for _, fl := range sc.flocks {
+		fl.Unlock()
+	}
 }
 
 // GetRandomSource returns the random source associated with the Nodehost.
@@ -127,31 +132,6 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 	return dirs, dirs
 }
 
-// TryLockNodeHostDir tries to lock the nodehost dir and the WAL dir.
-func (sc *Context) TryLockNodeHostDir() bool {
-	fl := fileutil.New(sc.nhConfig.NodeHostDir)
-	locked, err := fl.TryLock()
-	if err != nil {
-		panic(err)
-	}
-	if !locked {
-		return false
-	}
-	if len(sc.nhConfig.WALDir) > 0 &&
-		sc.nhConfig.WALDir != sc.nhConfig.NodeHostDir {
-		wfl := fileutil.New(sc.nhConfig.WALDir)
-		locked, err := wfl.TryLock()
-		if err != nil {
-			panic(err)
-		}
-		if !locked {
-			fl.Unlock()
-			return false
-		}
-	}
-	return true
-}
-
 // CreateNodeHostDir creates the top level dirs used by nodehost.
 func (sc *Context) CreateNodeHostDir(deploymentID uint64) ([]string, []string) {
 	nhDirs, walDirs := sc.GetLogDBDirs(deploymentID)
@@ -208,6 +188,21 @@ func (sc *Context) CheckNodeHostDir(did uint64, addr string) {
 	}
 }
 
+func (sc *Context) tryLockNodeHostDir(path string) bool {
+	fl, ok := sc.flocks[path]
+	if !ok {
+		fl = fileutil.New(path)
+		sc.flocks[path] = fl
+	} else {
+		return true
+	}
+	locked, err := fl.TryLock()
+	if err != nil {
+		panic(err)
+	}
+	return locked
+}
+
 func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
@@ -246,5 +241,8 @@ func (sc *Context) checkDirAddressMatch(dir string,
 		if status.HardHash != settings.Hard.Hash() {
 			plog.Panicf("had hash mismatch, hard settings changed?")
 		}
+	}
+	if !sc.tryLockNodeHostDir(fp) {
+		plog.Panicf("failed to lock %s", fp)
 	}
 }
