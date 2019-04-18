@@ -42,6 +42,11 @@ func (w *leveldbWriteBatch) Put(key []byte, val []byte) {
 	w.count++
 }
 
+func (w *leveldbWriteBatch) Delete(key []byte) {
+	w.wb.Delete(key)
+	w.count++
+}
+
 func (w *leveldbWriteBatch) Clear() {
 	w.wb.Clear()
 	w.count = 0
@@ -179,6 +184,10 @@ func (r *leveldbKV) CommitWriteBatch(wb IWriteBatch) error {
 		panic("unknown type")
 	}
 	return r.db.Write(r.wo, lwb.wb)
+}
+
+func (r *leveldbKV) CommitDeleteBatch(wb IWriteBatch) error {
+	return r.CommitWriteBatch(wb)
 }
 
 func (r *leveldbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {

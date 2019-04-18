@@ -24,6 +24,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -312,6 +313,7 @@ func (n *noopLogDB) ReadRaftState(clusterID uint64, nodeID uint64,
 	return nil, nil
 }
 func (n *noopLogDB) RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error { return nil }
+func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error                { return nil }
 func (n *noopLogDB) SaveSnapshots([]pb.Update) error                                     { return nil }
 func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error  { return nil }
 func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error) {
@@ -1849,5 +1851,97 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 	}
 	if snapshots[0].Index != index {
 		t.Errorf("unexpected index value")
+	}
+}
+
+func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	waitForLeaderToBeElected(t, nh, 2)
+	if err := nh.RemoveData(2, 1); err != ErrClusterNotStopped {
+		t.Fatalf("remove data didn't fail")
+	}
+}
+
+func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	waitForLeaderToBeElected(t, nh, 2)
+	session := nh.GetNoOPSession(2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cmd := make([]byte, 1518)
+	_, err = nh.SyncPropose(ctx, session, cmd)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to make proposal %v", err)
+	}
+	sr, err := nh.RequestSnapshot(2, 3*time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Completed() {
+			t.Errorf("failed to complete the requested snapshot")
+		}
+	}
+	nh.StopCluster(2)
+	logdb := nh.logdb
+	snapshots, err := logdb.ListSnapshots(2, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(snapshots) == 0 {
+		t.Fatalf("failed to save snapshots")
+	}
+	snapshotDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
+	if !fileutil.Exist(snapshotDir) {
+		t.Fatalf("snapshot dir %s does not exist", snapshotDir)
+	}
+	if err := nh.RemoveData(2, 1); err != nil {
+		t.Fatalf("remove data fail %v", err)
+	}
+	if fileutil.Exist(snapshotDir) {
+		t.Fatalf("snapshot dir %s still exist", snapshotDir)
+	}
+	bs, err := logdb.GetBootstrapInfo(2, 1)
+	if err != raftio.ErrNoBootstrapInfo {
+		t.Fatalf("failed to delete bootstrap %v", err)
+	}
+	if bs != nil {
+		t.Fatalf("bs not nil")
+	}
+	ents, sz, err := logdb.IterateEntries(nil, 0, 2, 1, 0,
+		math.MaxUint64, math.MaxUint64)
+	if err != nil {
+		t.Fatalf("failed to get entries %v", err)
+	}
+	if len(ents) != 0 || sz != 0 {
+		t.Fatalf("entry returned")
+	}
+	snapshots, err = logdb.ListSnapshots(2, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(snapshots) != 0 {
+		t.Fatalf("snapshot not deleted")
+	}
+	_, err = logdb.ReadRaftState(2, 1, 1)
+	if err != raftio.ErrNoSavedLog {
+		t.Fatalf("raft state not deleted %v", err)
 	}
 }

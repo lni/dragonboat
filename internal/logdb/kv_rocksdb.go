@@ -279,6 +279,10 @@ func (r *rocksdbKV) CommitWriteBatch(wb IWriteBatch) error {
 	return r.db.Write(r.wo, rocksdbwb)
 }
 
+func (r *rocksdbKV) CommitDeleteBatch(wb IWriteBatch) error {
+	return r.CommitWriteBatch(wb)
+}
+
 func (r *rocksdbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 	if err := r.db.DeleteFileInRange(firstKey, lastKey); err != nil {
 		return err

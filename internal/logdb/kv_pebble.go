@@ -51,6 +51,11 @@ func (w *pebbleWriteBatch) Put(key []byte, val []byte) {
 	w.count++
 }
 
+func (w *pebbleWriteBatch) Delete(key []byte) {
+	w.wb.Delete(key, w.wo)
+	w.count++
+}
+
 func (w *pebbleWriteBatch) Clear() {
 	w.wb = w.db.NewBatch()
 	w.count = 0
@@ -169,6 +174,10 @@ func (r *pebbleKV) CommitWriteBatch(wb IWriteBatch) error {
 		panic("unknown type")
 	}
 	return r.db.Apply(pwb.wb, r.wo)
+}
+
+func (r *pebbleKV) CommitDeleteBatch(wb IWriteBatch) error {
+	return r.CommitWriteBatch(wb)
 }
 
 func (r *pebbleKV) RemoveEntries(firstKey []byte, lastKey []byte) error {

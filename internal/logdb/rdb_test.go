@@ -1243,3 +1243,81 @@ func TestReadRaftStateWithCompactedEntries(t *testing.T) {
 	}
 	runLogDBTest(t, tf)
 }
+
+func TestRemoveNodeData(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		clusterID := uint64(0)
+		nodeID := uint64(4)
+		ents := make([]pb.Entry, 0)
+		hs := pb.State{
+			Term:   1,
+			Vote:   3,
+			Commit: 100,
+		}
+		ss := pb.Snapshot{
+			FileSize: 1234,
+			Filepath: "f2",
+			Index:    1,
+			Term:     2,
+		}
+		for i := uint64(0); i <= batchSize*3+1; i++ {
+			e := pb.Entry{
+				Term:  1,
+				Index: i,
+				Type:  pb.ApplicationEntry,
+			}
+			ents = append(ents, e)
+		}
+		ud := pb.Update{
+			EntriesToSave: ents,
+			State:         hs,
+			ClusterID:     clusterID,
+			NodeID:        nodeID,
+			Snapshot:      ss,
+		}
+		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err != nil {
+			t.Fatalf("failed to save recs")
+		}
+		state, err := db.ReadRaftState(clusterID, nodeID, 1)
+		if err != nil {
+			t.Fatalf("failed to read raft state %v", err)
+		}
+		if state.FirstIndex != 1 {
+			t.Errorf("first index %d, want %d", state.FirstIndex, 1)
+		}
+		if state.EntryCount != batchSize*3+1 {
+			t.Errorf("length %d, want %d", state.EntryCount, batchSize*3+1)
+		}
+		if err := db.RemoveNodeData(clusterID, nodeID); err != nil {
+			t.Fatalf("failed to remove node data")
+		}
+		state, err = db.ReadRaftState(clusterID, nodeID, 1)
+		if err != raftio.ErrNoSavedLog {
+			t.Fatalf("raft state not deleted %v", err)
+		}
+		snapshots, err := db.ListSnapshots(clusterID, nodeID)
+		if err != nil {
+			t.Fatalf("failed to list snapshots %v", err)
+		}
+		if len(snapshots) != 0 {
+			t.Fatalf("snapshot not deleted")
+		}
+		bs, err := db.GetBootstrapInfo(clusterID, nodeID)
+		if err != raftio.ErrNoBootstrapInfo {
+			t.Fatalf("failed to delete bootstrap %v", err)
+		}
+		if bs != nil {
+			t.Fatalf("bs not nil")
+		}
+		ents, sz, err := db.IterateEntries(nil, 0, clusterID, nodeID, 0,
+			math.MaxUint64, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("failed to get entries %v", err)
+		}
+		if len(ents) != 0 || sz != 0 {
+			t.Fatalf("entry returned")
+		}
+	}
+	runLogDBTest(t, tf)
+}

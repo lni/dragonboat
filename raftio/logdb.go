@@ -135,4 +135,6 @@ type ILogDB interface {
 	// ListSnapshots lists all available snapshots associated with the specified
 	// Raft node.
 	ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error)
+	// RemoveNodeData removes all data associated with the specified node.
+	RemoveNodeData(clusterID uint64, nodeID uint64) error
 }

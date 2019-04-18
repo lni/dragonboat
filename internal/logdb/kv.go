@@ -45,6 +45,9 @@ type IKvStore interface {
 	// CommitWriteBatch atomically writes everything included in the write batch
 	// to the underlying key-value store.
 	CommitWriteBatch(wb IWriteBatch) error
+	// CommitDeleteBatch atomically deletes everything included in the write
+	// batch from the underlying key-value store.
+	CommitDeleteBatch(wb IWriteBatch) error
 	// RemoveEntries removes entries specified by the range [firstKey, lastKey).
 	// RemoveEntries is called in the main execution thread of raft, it is
 	// suppose to immediately return without significant delay.
@@ -60,13 +63,15 @@ type IKvStore interface {
 type IWriteBatch interface {
 	Destroy()
 	Put([]byte, []byte)
+	Delete([]byte)
 	Clear()
 	Count() int
 }
 
 type kvpair struct {
-	key []byte
-	val []byte
+	delete bool
+	key    []byte
+	val    []byte
 }
 
 type simpleWriteBatch struct {
@@ -87,6 +92,12 @@ func (wb *simpleWriteBatch) Put(key []byte, val []byte) {
 	copy(k, key)
 	copy(v, val)
 	wb.vals = append(wb.vals, kvpair{key: k, val: v})
+}
+
+func (wb *simpleWriteBatch) Delete(key []byte) {
+	k := make([]byte, len(key))
+	copy(k, key)
+	wb.vals = append(wb.vals, kvpair{key: k, val: nil, delete: true})
 }
 
 func (wb *simpleWriteBatch) Clear() {

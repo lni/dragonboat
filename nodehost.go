@@ -123,6 +123,9 @@ var (
 	ErrClusterNotFound = errors.New("cluster not found")
 	// ErrClusterAlreadyExist indicates that the specified cluster already exist.
 	ErrClusterAlreadyExist = errors.New("cluster already exist")
+	// ErrClusterNotStopped indicates that the specified cluster is still running
+	// and thus prevented the requested operation to be completed.
+	ErrClusterNotStopped = errors.New("cluster not stopped")
 	// ErrInvalidClusterSettings indicates that cluster settings specified for
 	// the StartCluster method are invalid.
 	ErrInvalidClusterSettings = errors.New("cluster settings are invalid")
@@ -734,6 +737,19 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
+// RequestSnapshot requests snapshot to be created on the specified node. For
+// each Raft node, only one pending create snapshot operation is allowed.
+//
+// This method returns a SnapshotState instance or an error immediately.
+// Application can wait on the CompleteC member channel of the returned
+// SnapshotState instance to get notified for the outcome of the create snasphot
+// operation and access to the result of the create snapshot operation.
+//
+// Requested create snapshot operation will be rejected if there is already an
+// existing snapshot in the system at the same index.
+//
+// Snapshots created as the result of RequestSnapshot are managed by Dragonboat.
+// Users are not suppose to move, copy, modify or delete the generated snapshot.
 func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	timeout time.Duration) (*SnapshotState, error) {
 	v, ok := nh.getCluster(clusterID)
@@ -857,6 +873,25 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	plog.Infof("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
 	v.requestLeaderTransfer(targetNodeID)
+	return nil
+}
+
+// RemoveData removes all data associated with the specified node. This method
+// should only be used after the node has been deleted from its Raft cluster.
+// Calling RemoveData on a node that is still a Raft cluster member will corrupt
+// the Raft cluster.
+func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
+	_, ok := nh.getCluster(clusterID)
+	if ok {
+		return ErrClusterNotStopped
+	}
+	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
+		plog.Panicf("failed to remove data from Raft LogDB %v", err)
+	}
+	did := nh.deploymentID
+	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+		plog.Panicf("failed to remove snapshot dir %v", err)
+	}
 	return nil
 }
 

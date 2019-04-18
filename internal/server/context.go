@@ -85,6 +85,14 @@ func (sc *Context) GetClientTLSConfig(hostname string) (*tls.Config, error) {
 	return sc.nhConfig.GetClientTLSConfig(hostname)
 }
 
+// RemoveSnapshotDir removes the snapshot directory belong to the specified
+// node.
+func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
+	nodeID uint64) error {
+	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	return os.RemoveAll(dir)
+}
+
 // GetSnapshotDir returns the snapshot directory name.
 func (sc *Context) GetSnapshotDir(did uint64, clusterID uint64,
 	nodeID uint64) string {

@@ -422,6 +422,33 @@ func (r *RDB) removeEntriesTo(clusterID uint64,
 	return r.rangedEntryOp(clusterID, nodeID, index, op)
 }
 
+func (r *RDB) removeNodeData(clusterID uint64, nodeID uint64) error {
+	wb := r.getWriteBatch()
+	defer wb.Clear()
+	stateKey := newKey(maxKeySize, nil)
+	stateKey.SetStateKey(clusterID, nodeID)
+	wb.Delete(stateKey.Key())
+	bootstrapKey := newKey(maxKeySize, nil)
+	bootstrapKey.setBootstrapKey(clusterID, nodeID)
+	wb.Delete(bootstrapKey.Key())
+	maxIndexKey := newKey(maxKeySize, nil)
+	maxIndexKey.SetMaxIndexKey(clusterID, nodeID)
+	wb.Delete(maxIndexKey.Key())
+	snapshots, err := r.listSnapshots(clusterID, nodeID)
+	if err != nil {
+		return err
+	}
+	for _, ss := range snapshots {
+		key := newKey(maxKeySize, nil)
+		key.setSnapshotKey(clusterID, nodeID, ss.Index)
+		wb.Delete(key.Key())
+	}
+	if err := r.kvs.CommitDeleteBatch(wb); err != nil {
+		return err
+	}
+	return r.compaction(clusterID, nodeID, math.MaxUint64)
+}
+
 func (r *RDB) compaction(clusterID uint64, nodeID uint64, index uint64) error {
 	op := func(firstKey *PooledKey, lastKey *PooledKey) error {
 		return r.kvs.Compaction(firstKey.Key(), lastKey.Key())

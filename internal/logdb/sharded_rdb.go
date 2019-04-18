@@ -177,6 +177,12 @@ func (mw *ShardedRDB) RemoveEntriesTo(clusterID uint64,
 	return nil
 }
 
+// RemoveNodeData deletes all node data that belongs to the specified node.
+func (mw *ShardedRDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
+	idx := mw.partitioner.GetPartitionID(clusterID)
+	return mw.shards[idx].removeNodeData(clusterID, nodeID)
+}
+
 // Close closes the ShardedRDB instance.
 func (mw *ShardedRDB) Close() {
 	mw.stopper.Stop()
