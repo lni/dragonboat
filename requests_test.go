@@ -129,13 +129,13 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 		t.Errorf("pending not set")
 	}
 	for i := 0; i < 21; i++ {
-		ps.increaseTick()
+		ps.tick()
 		ps.gc()
 		if ps.pending == nil {
 			t.Errorf("pending cleared")
 		}
 	}
-	ps.increaseTick()
+	ps.tick()
 	ps.gc()
 	if ps.pending != nil {
 		t.Errorf("pending is not cleared")
@@ -306,7 +306,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	for i := uint64(0); i < tickCount; i++ {
-		pcc.increaseTick()
+		pcc.tick()
 		pcc.gc()
 	}
 	select {
@@ -315,7 +315,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 	default:
 	}
 	for i := uint64(0); i < defaultGCTick+1; i++ {
-		pcc.increaseTick()
+		pcc.tick()
 		pcc.gc()
 	}
 	select {
@@ -573,7 +573,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 	}
 	tickCount := uint64(1000 / testTickInMillisecond)
 	for i := uint64(0); i < tickCount; i++ {
-		pp.increaseTick()
+		pp.tick()
 		pp.gc()
 	}
 	select {
@@ -582,7 +582,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 	default:
 	}
 	for i := uint64(0); i < defaultGCTick+1; i++ {
-		pp.increaseTick()
+		pp.tick()
 		pp.gc()
 	}
 	select {
@@ -786,7 +786,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 	pp.addReadyToRead([]pb.ReadyToRead{readState})
 	tickToWait := 1000/testTickInMillisecond + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
-		pp.increaseTick()
+		pp.tick()
 		pp.applied(499)
 	}
 	select {
@@ -813,7 +813,7 @@ func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	pp.addPendingRead(s, []*RequestState{rs})
 	tickToWait := 1000/testTickInMillisecond + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
-		pp.increaseTick()
+		pp.tick()
 		pp.applied(499)
 	}
 	select {
@@ -837,7 +837,7 @@ func TestExpiredSystemGcWillBeCollected(t *testing.T) {
 	expireTick := sysGcMillisecond / pp.tickInMillisecond
 	for i := uint64(0); i < expireTick+1; i++ {
 		pp.nextCtx()
-		pp.increaseTick()
+		pp.tick()
 	}
 	if uint64(len(pp.systemGcTime)) != expireTick+1 {
 		t.Errorf("unexpected system gc time length")
@@ -864,7 +864,7 @@ func TestSystemGcTimeInSCReadCanBeCleanedUp(t *testing.T) {
 		t.Errorf("len(pp.systemGcTime)=%d, want >100000", len(pp.systemGcTime))
 	}
 	for i := 0; i < 100000; i++ {
-		pp.increaseTick()
+		pp.tick()
 		pp.applied(499)
 	}
 	pp.applied(499)

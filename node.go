@@ -1035,10 +1035,10 @@ func (rc *node) tick() {
 	} else {
 		rc.node.Tick()
 	}
-	rc.pendingSnapshot.increaseTick()
-	rc.pendingProposals.increaseTick()
-	rc.pendingReadIndexes.increaseTick()
-	rc.pendingConfigChange.increaseTick()
+	rc.pendingSnapshot.tick()
+	rc.pendingProposals.tick()
+	rc.pendingReadIndexes.tick()
+	rc.pendingConfigChange.tick()
 }
 
 func (rc *node) captureClusterConfig() {

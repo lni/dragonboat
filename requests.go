@@ -217,18 +217,18 @@ const (
 )
 
 type logicalClock struct {
-	tick              uint64
+	ltick             uint64
 	lastGcTime        uint64
 	gcTick            uint64
 	tickInMillisecond uint64
 }
 
-func (p *logicalClock) increaseTick() {
-	atomic.AddUint64(&p.tick, 1)
+func (p *logicalClock) tick() {
+	atomic.AddUint64(&p.ltick, 1)
 }
 
 func (p *logicalClock) getTick() uint64 {
-	return atomic.LoadUint64(&p.tick)
+	return atomic.LoadUint64(&p.ltick)
 }
 
 func (p *logicalClock) getTimeoutTick(timeout time.Duration) uint64 {
@@ -808,9 +808,9 @@ func (p *pendingProposal) nextKey(clientID uint64) uint64 {
 	return p.keyg[clientID%p.ps].nextKey()
 }
 
-func (p *pendingProposal) increaseTick() {
+func (p *pendingProposal) tick() {
 	for i := uint64(0); i < p.ps; i++ {
-		p.shards[i].increaseTick()
+		p.shards[i].tick()
 	}
 }
 
