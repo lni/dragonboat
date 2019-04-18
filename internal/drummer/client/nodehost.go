@@ -275,6 +275,13 @@ func (dc *DrummerClient) handleKillRequest(req pb.NodeHostRequest) {
 	if err := dc.nh.StopNode(clusterID, nodeID); err != nil {
 		plog.Errorf("removeClusterNode for %s failed, %v",
 			logutil.DescribeNode(clusterID, nodeID), err)
+	} else {
+		plog.Infof("going to remove data for %s",
+			logutil.DescribeNode(clusterID, nodeID))
+		if err := dc.nh.RemoveData(clusterID, nodeID); err != nil {
+			plog.Errorf("remove data failed %s, %v",
+				logutil.DescribeNode(clusterID, nodeID), err)
+		}
 	}
 }
 
@@ -282,7 +289,6 @@ func (dc *DrummerClient) handleAddDeleteRequest(ctx context.Context,
 	req pb.NodeHostRequest) {
 	nodeID := req.Change.Members[0]
 	clusterID := req.Change.ClusterId
-
 	var rs *dragonboat.RequestState
 	var err error
 	if req.Change.Type == pb.Request_DELETE {
@@ -317,6 +323,14 @@ func (dc *DrummerClient) handleAddDeleteRequest(ctx context.Context,
 			!v.Terminated() &&
 			!v.Rejected() {
 			plog.Panicf("unknown result code: %v", v)
+		}
+		if v.Completed() && req.Change.Type == pb.Request_DELETE {
+			plog.Infof("DELETE node completed, try to remove data for %s",
+				logutil.DescribeNode(clusterID, nodeID))
+			if err := dc.nh.RemoveData(clusterID, nodeID); err != nil {
+				plog.Errorf("remove data failed %s, %v",
+					logutil.DescribeNode(clusterID, nodeID), err)
+			}
 		}
 		return
 	}
