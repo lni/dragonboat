@@ -739,16 +739,16 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
-// RequestSnapshot requests snapshot to be created on the specified node. For
-// each Raft node, only one pending create snapshot operation is allowed.
+// RequestSnapshot requests a snapshot to be created for the specified node. For
+// each Raft node, only one pending requested snapshot operation is allowed.
 //
 // This method returns a SnapshotState instance or an error immediately.
 // Application can wait on the CompleteC member channel of the returned
 // SnapshotState instance to get notified for the outcome of the create snasphot
-// operation and access to the result of the create snapshot operation.
+// operation and access to the result of the operation.
 //
 // Requested create snapshot operation will be rejected if there is already an
-// existing snapshot in the system at the same index.
+// existing snapshot in the system at the same Raft log index.
 //
 // Snapshots created as the result of RequestSnapshot are managed by Dragonboat.
 // Users are not suppose to move, copy, modify or delete the generated snapshot.
@@ -763,20 +763,20 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	return req, err
 }
 
-// ExportSnapshot requests a snapshot to be created into the specified directory.
+// ExportSnapshot requests a snapshot to be exported into the specified directory.
 //
 // This method returns a SnapshotState instance or an error immediately.
 // Application can wait on the CompleteC member channel of the returned
 // SnapshotState instance to get notified for the outcome of the create snasphot
 // operation and access to the result of the create snapshot operation.
 //
-// Requested create snapshot operation will be rejected if there is already an
+// Requested export snapshot operation will be rejected if there is already an
 // existing snapshot in the system at the same index.
 //
 // Once created, the exported snapshot is owned by the caller, it is caller's
 // responsibility to backup or delete the exported snapshot when necessary. The
 // exported snapshot is typically used as a backup of the state machine state.
-// See dragonboat's DevOps docs on how to use such exported snapshot.
+// See Dragonboat's DevOps docs on how to use such exported snapshot.
 func (nh *NodeHost) ExportSnapshot(clusterID uint64,
 	path string, timeout time.Duration) (*SnapshotState, error) {
 	v, ok := nh.getCluster(clusterID)

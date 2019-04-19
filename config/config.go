@@ -75,12 +75,17 @@ type Config struct {
 	// HeartbeatRTT is the number of message RTT between heartbeats. Message
 	// RTT is defined by NodeHostConfig.RTTMillisecond. The Raft paper suggest the
 	// heartbeat interval to be close to the average RTT between nodes.
-	HeartbeatRTT uint64
-	// SnapshotEntries defines how often state machine should be snapshotted. It
-	// is defined in terms of the number of applied Raft log entries. Set
-	// SnapshotEntries to 0 to disable snapshotting and Raft log compaction.
 	//
-	// When SnapshotEntries is set to N, it means a snapshot will be generated for
+	// As an example, assuming NodeHostConfig.RTTMillisecond is 100 millisecond,
+	// to set the heartbeat interval to be every 200 milliseconds, then
+	// HeartbeatRTT should be set to 2.
+	HeartbeatRTT uint64
+	// SnapshotEntries defines how often the state machine should be snapshotted
+	// automcatically. It is defined in terms of the number of applied Raft log
+	// entries. SnapshotEntries can be set to 0 to disable such automatic
+	// snapshotting.
+	//
+	// When SnapshotEntries is set to N, it means a snapshot is created for
 	// roughly every N applied Raft log entries (proposals). This also implies
 	// that sending N log entries to a follower is more expensive than sending a
 	// snapshot.
@@ -88,12 +93,25 @@ type Config struct {
 	// Once a snapshot is generated, Raft log entries covered by the new snapshot
 	// can be compacted. See the godoc on CompactionOverhead to see what log
 	// entries are actually compacted after taking a snapshot.
+	//
+	// NodeHost.RequestSnapshot can be called to manually request a snapshot to
+	// be created to capture current node state.
 	SnapshotEntries uint64
 	// CompactionOverhead defines the number of most recent entries to keep after
-	// Raft log compaction. Such overhead Raft log entries are already covered by
-	// the most recent snapshot, but they are kept after the Raft log compaction
-	// so the leader can send them to a slow follower to allow it to catch up
-	// without sending a full snapshot.
+	// each Raft log compaction. Raft log compaction is performance automatically
+	// every time when a snapshot is created.
+	//
+	// For example, when a snapshot is created at let's say index 10,000, then all
+	// Raft log entries with index <= 10,000 can be removed from that node as they
+	// have already been covered by the created snapshot image. This frees up the
+	// maximum storage space but comes at the cost that the full snapshot will
+	// have to be sent to the follower if the follower requires any Raft log entry
+	// at index <= 10,000. When CompactionOverhead is set to say 500, Dragonboat
+	// then compacts the Raft log up to index 9,500 and keeps Raft log entries
+	// between index (9,500, 1,0000]. As a result, the node can still replicate
+	// Raft log entries between index (9,500, 1,0000] to other peers and only fall
+	// back to stream the full snapshot if any Raft log entry with index <= 9,500
+	// is required to be replicated.
 	CompactionOverhead uint64
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.

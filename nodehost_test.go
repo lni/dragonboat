@@ -1801,58 +1801,51 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 }
 
 func TestSnapshotCanBeRequested(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
-	}
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer nh.Stop()
-	waitForLeaderToBeElected(t, nh, 2)
-	session := nh.GetNoOPSession(2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cmd := make([]byte, 1518)
-	_, err = nh.SyncPropose(ctx, session, cmd)
-	cancel()
-	if err != nil {
-		t.Fatalf("failed to make proposal %v", err)
-	}
-	sr, err := nh.RequestSnapshot(2, 3*time.Second)
-	if err != nil {
-		t.Errorf("failed to request snapshot")
-	}
-	var index uint64
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Completed() {
-			t.Errorf("failed to complete the requested snapshot")
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
 		}
-		index = v.GetIndex()
-	}
-	plog.Infof("going to request snapshot again")
-	sr, err = nh.RequestSnapshot(2, 3*time.Second)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Rejected() {
-			t.Errorf("failed to complete the requested snapshot")
+		sr, err := nh.RequestSnapshot(2, 3*time.Second)
+		if err != nil {
+			t.Errorf("failed to request snapshot")
+		}
+		var index uint64
+		select {
+		case v := <-sr.CompleteC:
+			if !v.Completed() {
+				t.Errorf("failed to complete the requested snapshot")
+			}
+			index = v.GetIndex()
+		}
+		plog.Infof("going to request snapshot again")
+		sr, err = nh.RequestSnapshot(2, 3*time.Second)
+		if err != nil {
+			t.Fatalf("failed to request snapshot")
+		}
+		select {
+		case v := <-sr.CompleteC:
+			if !v.Rejected() {
+				t.Errorf("failed to complete the requested snapshot")
+			}
+		}
+		logdb := nh.logdb
+		snapshots, err := logdb.ListSnapshots(2, 1)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) == 0 {
+			t.Fatalf("failed to save snapshots")
+		}
+		if snapshots[0].Index != index {
+			t.Errorf("unexpected index value")
 		}
 	}
-	logdb := nh.logdb
-	snapshots, err := logdb.ListSnapshots(2, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if len(snapshots) == 0 {
-		t.Fatalf("failed to save snapshots")
-	}
-	if snapshots[0].Index != index {
-		t.Errorf("unexpected index value")
-	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
@@ -1889,151 +1882,130 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 }
 
 func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
+	tf := func(t *testing.T, nh *NodeHost) {
+		if err := nh.RemoveData(2, 1); err != ErrClusterNotStopped {
+			t.Fatalf("remove data didn't fail")
+		}
 	}
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer nh.Stop()
-	waitForLeaderToBeElected(t, nh, 2)
-	if err := nh.RemoveData(2, 1); err != ErrClusterNotStopped {
-		t.Fatalf("remove data didn't fail")
-	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
-	}
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer nh.Stop()
-	waitForLeaderToBeElected(t, nh, 2)
-	session := nh.GetNoOPSession(2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cmd := make([]byte, 1518)
-	_, err = nh.SyncPropose(ctx, session, cmd)
-	cancel()
-	if err != nil {
-		t.Fatalf("failed to make proposal %v", err)
-	}
-	sr, err := nh.RequestSnapshot(2, 3*time.Second)
-	if err != nil {
-		t.Errorf("failed to request snapshot")
-	}
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Completed() {
-			t.Errorf("failed to complete the requested snapshot")
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		sr, err := nh.RequestSnapshot(2, 3*time.Second)
+		if err != nil {
+			t.Errorf("failed to request snapshot")
+		}
+		select {
+		case v := <-sr.CompleteC:
+			if !v.Completed() {
+				t.Errorf("failed to complete the requested snapshot")
+			}
+		}
+		nh.StopCluster(2)
+		logdb := nh.logdb
+		snapshots, err := logdb.ListSnapshots(2, 1)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) == 0 {
+			t.Fatalf("failed to save snapshots")
+		}
+		snapshotDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
+		if !fileutil.Exist(snapshotDir) {
+			t.Fatalf("snapshot dir %s does not exist", snapshotDir)
+		}
+		if err := nh.RemoveData(2, 1); err != nil {
+			t.Fatalf("remove data fail %v", err)
+		}
+		if fileutil.Exist(snapshotDir) {
+			t.Fatalf("snapshot dir %s still exist", snapshotDir)
+		}
+		bs, err := logdb.GetBootstrapInfo(2, 1)
+		if err != raftio.ErrNoBootstrapInfo {
+			t.Fatalf("failed to delete bootstrap %v", err)
+		}
+		if bs != nil {
+			t.Fatalf("bs not nil")
+		}
+		ents, sz, err := logdb.IterateEntries(nil, 0, 2, 1, 0,
+			math.MaxUint64, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("failed to get entries %v", err)
+		}
+		if len(ents) != 0 || sz != 0 {
+			t.Fatalf("entry returned")
+		}
+		snapshots, err = logdb.ListSnapshots(2, 1)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) != 0 {
+			t.Fatalf("snapshot not deleted")
+		}
+		_, err = logdb.ReadRaftState(2, 1, 1)
+		if err != raftio.ErrNoSavedLog {
+			t.Fatalf("raft state not deleted %v", err)
 		}
 	}
-	nh.StopCluster(2)
-	logdb := nh.logdb
-	snapshots, err := logdb.ListSnapshots(2, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if len(snapshots) == 0 {
-		t.Fatalf("failed to save snapshots")
-	}
-	snapshotDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
-	if !fileutil.Exist(snapshotDir) {
-		t.Fatalf("snapshot dir %s does not exist", snapshotDir)
-	}
-	if err := nh.RemoveData(2, 1); err != nil {
-		t.Fatalf("remove data fail %v", err)
-	}
-	if fileutil.Exist(snapshotDir) {
-		t.Fatalf("snapshot dir %s still exist", snapshotDir)
-	}
-	bs, err := logdb.GetBootstrapInfo(2, 1)
-	if err != raftio.ErrNoBootstrapInfo {
-		t.Fatalf("failed to delete bootstrap %v", err)
-	}
-	if bs != nil {
-		t.Fatalf("bs not nil")
-	}
-	ents, sz, err := logdb.IterateEntries(nil, 0, 2, 1, 0,
-		math.MaxUint64, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("failed to get entries %v", err)
-	}
-	if len(ents) != 0 || sz != 0 {
-		t.Fatalf("entry returned")
-	}
-	snapshots, err = logdb.ListSnapshots(2, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if len(snapshots) != 0 {
-		t.Fatalf("snapshot not deleted")
-	}
-	_, err = logdb.ReadRaftState(2, 1, 1)
-	if err != raftio.ErrNoSavedLog {
-		t.Fatalf("raft state not deleted %v", err)
-	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestSnapshotCanBeExported(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	sspath := "exported_snapshot_safe_to_delete"
-	os.RemoveAll(sspath)
-	os.MkdirAll(sspath, 0755)
-	defer os.RemoveAll(sspath)
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
-	}
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer nh.Stop()
-	waitForLeaderToBeElected(t, nh, 2)
-	session := nh.GetNoOPSession(2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cmd := make([]byte, 1518)
-	_, err = nh.SyncPropose(ctx, session, cmd)
-	cancel()
-	if err != nil {
-		t.Fatalf("failed to make proposal %v", err)
-	}
-	sr, err := nh.ExportSnapshot(2, sspath, 3*time.Second)
-	if err != nil {
-		t.Errorf("failed to request snapshot")
-	}
-	var index uint64
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Completed() {
-			t.Fatalf("failed to complete the requested snapshot")
+	tf := func(t *testing.T, nh *NodeHost) {
+		sspath := "exported_snapshot_safe_to_delete"
+		os.RemoveAll(sspath)
+		os.MkdirAll(sspath, 0755)
+		defer os.RemoveAll(sspath)
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
 		}
-		index = v.GetIndex()
+		sr, err := nh.ExportSnapshot(2, sspath, 3*time.Second)
+		if err != nil {
+			t.Errorf("failed to request snapshot")
+		}
+		var index uint64
+		select {
+		case v := <-sr.CompleteC:
+			if !v.Completed() {
+				t.Fatalf("failed to complete the requested snapshot")
+			}
+			index = v.GetIndex()
+		}
+		logdb := nh.logdb
+		snapshots, err := logdb.ListSnapshots(2, 1)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) != 0 {
+			t.Fatalf("snapshot record unexpectedly inserted into the system")
+		}
+		plog.Infof("snapshot index %d", index)
+		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+		snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
+		fp := path.Join(sspath, snapshotDir, snapshotFile)
+		if !fileutil.Exist(fp) {
+			t.Errorf("snapshot file not saved")
+		}
+		metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
+		if !fileutil.Exist(metafp) {
+			t.Errorf("snapshot metadata not saved")
+		}
 	}
-	logdb := nh.logdb
-	snapshots, err := logdb.ListSnapshots(2, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if len(snapshots) != 0 {
-		t.Fatalf("snapshot record unexpectedly inserted into the system")
-	}
-	plog.Infof("snapshot index %d", index)
-	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
-	snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
-	fp := path.Join(sspath, snapshotDir, snapshotFile)
-	if !fileutil.Exist(fp) {
-		t.Errorf("snapshot file not saved")
-	}
-	metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
-	if !fileutil.Exist(metafp) {
-		t.Errorf("snapshot metadata not saved")
-	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
