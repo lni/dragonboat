@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/client"
+	"github.com/lni/dragonboat/internal/rsm"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -64,7 +65,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	snapshotC := make(chan *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -87,7 +88,7 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 	snapshotC := make(chan<- *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, 50)
-	ss, err := ps.request(49 * time.Millisecond)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", 49*time.Millisecond)
 	if err != ErrTimeoutTooSmall {
 		t.Errorf("request not rejected")
 	}
@@ -99,14 +100,14 @@ func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 	snapshotC := make(chan<- *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ss, err = ps.request(time.Second)
+	ss, err = ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != ErrPendingSnapshotRequestExist {
 		t.Errorf("request not rejected")
 	}
@@ -118,7 +119,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	snapshotC := make(chan *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -153,7 +154,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	snapshotC := make(chan *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -177,7 +178,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	snapshotC := make(chan *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -201,7 +202,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	snapshotC := make(chan *SnapshotState, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -219,6 +220,23 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	case <-ss.CompleteC:
 		t.Fatalf("unexpectedly notified")
 	default:
+	}
+}
+
+func TestRequestedSnapshotDetailsAreKept(t *testing.T) {
+	snapshotC := make(chan *SnapshotState, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	path := "/test-data"
+	st := rsm.ExportedSnapshot
+	ss, err := ps.request(st, path, time.Second)
+	if err != nil {
+		t.Fatalf("failed to request snapshot")
+	}
+	if ss == nil {
+		t.Fatalf("nil ss returned")
+	}
+	if ss.st != st || ss.path != path {
+		t.Errorf("snapshot details not kept")
 	}
 }
 

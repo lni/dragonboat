@@ -245,7 +245,7 @@ func (rc *node) requestLeaderTransfer(nodeID uint64) {
 }
 
 func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
-	return rc.pendingSnapshot.request(timeout)
+	return rc.pendingSnapshot.request(rsm.UserRequestedSnapshot, "", timeout)
 }
 
 func (rc *node) reportIgnoredSnapshotRequest(key uint64) {

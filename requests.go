@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/client"
+	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
@@ -113,6 +114,8 @@ func (sr *SnapshotResult) GetIndex() uint64 {
 // SnapshotState is the returned state object used to track the outcome of the
 // requested snapshot.
 type SnapshotState struct {
+	st       rsm.SnapshotRequestType
+	path     string
 	key      uint64
 	deadline uint64
 	// CompleteC is a channel for delivering request result to users.
@@ -381,7 +384,8 @@ func (p *pendingSnapshot) close() {
 	}
 }
 
-func (p *pendingSnapshot) request(timeout time.Duration) (*SnapshotState, error) {
+func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
+	path string, timeout time.Duration) (*SnapshotState, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	timeoutTick := p.getTimeoutTick(timeout)
@@ -392,6 +396,8 @@ func (p *pendingSnapshot) request(timeout time.Duration) (*SnapshotState, error)
 		return nil, ErrPendingSnapshotRequestExist
 	}
 	req := &SnapshotState{
+		st:        st,
+		path:      path,
 		key:       random.LockGuardedRand.Uint64(),
 		deadline:  p.getTick() + timeoutTick,
 		CompleteC: make(chan SnapshotResult, 1),

@@ -50,24 +50,35 @@ var (
 	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
 )
 
-// SnapshotMeta is the metadata of a snapshot.
-type SnapshotMeta struct {
-	From       uint64
-	Index      uint64
-	Term       uint64
-	Membership pb.Membership
-	Session    *bytes.Buffer
-	Ctx        interface{}
-}
-
 // SnapshotRequestType is the type of a snapshot request.
 type SnapshotRequestType uint64
+
+const (
+	// PeriodicSnapshot is the value to indicate periodic snapshot.
+	PeriodicSnapshot SnapshotRequestType = iota
+	// UserRequestedSnapshot is the value to indicate user requested snapshot.
+	UserRequestedSnapshot
+	// ExportedSnapshot is the value to indicate exported snapshot.
+	ExportedSnapshot
+)
 
 // SnapshotRequest is the type for decribing the details of a snapshot request.
 type SnapshotRequest struct {
 	Type SnapshotRequestType
 	Key  uint64
 	Path string
+}
+
+// SnapshotMeta is the metadata of a snapshot.
+type SnapshotMeta struct {
+	From       uint64
+	Index      uint64
+	Term       uint64
+	Type       SnapshotRequestType
+	Path       string
+	Membership pb.Membership
+	Session    *bytes.Buffer
+	Ctx        interface{}
 }
 
 // Commit describes a task that need to be handled by StateMachine.
