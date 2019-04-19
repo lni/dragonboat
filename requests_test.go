@@ -240,6 +240,19 @@ func TestRequestedSnapshotDetailsAreKept(t *testing.T) {
 	}
 }
 
+func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ps.close()
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	if err != ErrClusterClosed {
+		t.Errorf("not report as closed")
+	}
+	if ss != nil {
+		t.Errorf("snapshot state returned")
+	}
+}
+
 func getPendingConfigChange() (*pendingConfigChange, chan configChangeRequest) {
 	c := make(chan configChangeRequest, 1)
 	return newPendingConfigChange(c, testTickInMillisecond), c

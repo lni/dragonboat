@@ -376,6 +376,7 @@ func newPendingSnapshot(snapshotC chan<- rsm.SnapshotRequest,
 func (p *pendingSnapshot) close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.snapshotC = nil
 	if p.pending != nil {
 		r := SnapshotResult{code: requestTerminated}
 		select {
@@ -395,6 +396,9 @@ func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
 	}
 	if p.pending != nil {
 		return nil, ErrPendingSnapshotRequestExist
+	}
+	if p.snapshotC == nil {
+		return nil, ErrClusterClosed
 	}
 	ssreq := rsm.SnapshotRequest{
 		Type: st,
