@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
@@ -1977,4 +1978,108 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 	if err != raftio.ErrNoSavedLog {
 		t.Fatalf("raft state not deleted %v", err)
 	}
+}
+
+func TestSnapshotCanBeExported(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	sspath := "exported_snapshot_safe_to_delete"
+	os.RemoveAll(sspath)
+	os.MkdirAll(sspath, 0755)
+	defer os.RemoveAll(sspath)
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	waitForLeaderToBeElected(t, nh, 2)
+	session := nh.GetNoOPSession(2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cmd := make([]byte, 1518)
+	_, err = nh.SyncPropose(ctx, session, cmd)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to make proposal %v", err)
+	}
+	sr, err := nh.ExportSnapshot(2, sspath, 3*time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	var index uint64
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Completed() {
+			t.Fatalf("failed to complete the requested snapshot")
+		}
+		index = v.GetIndex()
+	}
+	logdb := nh.logdb
+	snapshots, err := logdb.ListSnapshots(2, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(snapshots) != 0 {
+		t.Fatalf("snapshot record unexpectedly inserted into the system")
+	}
+	plog.Infof("snapshot index %d", index)
+	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+	snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
+	fp := path.Join(sspath, snapshotDir, snapshotFile)
+	if !fileutil.Exist(fp) {
+		t.Errorf("snapshot file not saved")
+	}
+	metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
+	if !fileutil.Exist(metafp) {
+		t.Errorf("snapshot metadata not saved")
+	}
+}
+
+func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		sspath := "exported_snapshot_safe_to_delete"
+		os.RemoveAll(sspath)
+		os.MkdirAll(sspath, 0755)
+		defer os.RemoveAll(sspath)
+		sr, err := nh.ExportSnapshot(1, sspath, 3*time.Second)
+		if err != nil {
+			t.Fatalf("failed to request snapshot %v", err)
+		}
+		var index uint64
+		select {
+		case v := <-sr.CompleteC:
+			if !v.Completed() {
+				t.Fatalf("failed to complete the requested snapshot")
+			}
+			index = v.GetIndex()
+		}
+		logdb := nh.logdb
+		snapshots, err := logdb.ListSnapshots(1, 1)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) != 0 {
+			t.Fatalf("snapshot record unexpectedly inserted into the system")
+		}
+		plog.Infof("snapshot index %d", index)
+		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+		snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
+		fp := path.Join(sspath, snapshotDir, snapshotFile)
+		if !fileutil.Exist(fp) {
+			t.Errorf("snapshot file not saved")
+		}
+		metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
+		if !fileutil.Exist(metafp) {
+			t.Errorf("snapshot metadata not saved")
+		}
+		shrinked, err := rsm.IsShrinkedSnapshotFile(fp)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if shrinked {
+			t.Errorf("exported snapshot is considered as shrinked")
+		}
+	}
+	singleFakeDiskNodeHostTest(t, tf, 3)
 }

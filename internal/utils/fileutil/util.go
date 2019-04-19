@@ -29,7 +29,7 @@ const (
 // Exist returns whether the specified filesystem entry exists.
 func Exist(name string) bool {
 	_, err := os.Stat(name)
-	return err == nil
+	return !os.IsNotExist(err)
 }
 
 // MkdirAll creates the specified dir.

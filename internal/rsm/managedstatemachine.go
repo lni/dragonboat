@@ -165,7 +165,7 @@ type IStreamable interface {
 
 // ISavable is the interface for types that can its content saved as snapshots.
 type ISavable interface {
-	SaveSnapshot(interface{},
+	SaveSnapshot(*SnapshotMeta,
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
 }
 
@@ -189,7 +189,7 @@ type IManagedStateMachine interface {
 	Lookup([]byte) ([]byte, error)
 	GetHash() uint64
 	PrepareSnapshot() (interface{}, error)
-	SaveSnapshot(interface{},
+	SaveSnapshot(*SnapshotMeta,
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
 	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, io.Writer) error
@@ -320,14 +320,14 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
-func (ds *NativeStateMachine) SaveSnapshot(
-	ssctx interface{}, writer *SnapshotWriter, session []byte,
+func (ds *NativeStateMachine) SaveSnapshot(meta *SnapshotMeta,
+	writer *SnapshotWriter, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
-	if ds.sm.OnDiskStateMachine() {
+	if ds.sm.OnDiskStateMachine() && !meta.IsExportedSnapshot() {
 		sz, err := ds.saveDummySnapshot(writer, session)
 		return true, sz, err
 	}
-	sz, err := ds.saveSnapshot(ssctx, writer, session, collection)
+	sz, err := ds.saveSnapshot(meta.Ctx, writer, session, collection)
 	return false, sz, err
 }
 

@@ -69,6 +69,12 @@ type SnapshotRequest struct {
 	Path string
 }
 
+// IsExportedSnapshot returns a boolean value indicating whether the snapshot
+// request is to create an exported snapshot.
+func (sr *SnapshotRequest) IsExportedSnapshot() bool {
+	return sr.Type == ExportedSnapshot
+}
+
 // SnapshotMeta is the metadata of a snapshot.
 type SnapshotMeta struct {
 	From       uint64
@@ -79,6 +85,10 @@ type SnapshotMeta struct {
 	Membership pb.Membership
 	Session    *bytes.Buffer
 	Ctx        interface{}
+}
+
+func (meta *SnapshotMeta) IsExportedSnapshot() bool {
+	return meta.Type == ExportedSnapshot
 }
 
 // Commit describes a task that need to be handled by StateMachine.
@@ -92,6 +102,10 @@ type Commit struct {
 	StreamSnapshot    bool
 	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
+}
+
+func (c *Commit) IsExportedSnapshot() bool {
+	return c.SnapshotRequest.Type == ExportedSnapshot
 }
 
 func (c *Commit) isSnapshotRelated() bool {
@@ -385,12 +399,12 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 }
 
 // SaveSnapshot creates a snapshot.
-func (s *StateMachine) SaveSnapshot() (*pb.Snapshot,
+func (s *StateMachine) SaveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	if s.sm.ConcurrentSnapshot() {
-		return s.saveConcurrentSnapshot()
+		return s.saveConcurrentSnapshot(req)
 	}
-	return s.saveSnapshot()
+	return s.saveSnapshot(req)
 }
 
 // StreamSnapshot starts to stream snapshot from the current SM to a remote
@@ -452,7 +466,8 @@ func (s *StateMachine) Handle(batch []Commit, toApply []sm.Entry) (Commit, bool)
 	return Commit{}, false
 }
 
-func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
+func (s *StateMachine) getSnapshotMeta(ctx interface{},
+	req SnapshotRequest) *SnapshotMeta {
 	if s.members.isEmpty() {
 		plog.Panicf("%s has empty membership", s.describe())
 	}
@@ -461,6 +476,8 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{}) *SnapshotMeta {
 		Ctx:        ctx,
 		Index:      s.index,
 		Term:       s.term,
+		Type:       req.Type,
+		Path:       req.Path,
 		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
 		Membership: s.members.getMembership(),
 	}
@@ -503,14 +520,14 @@ func (s *StateMachine) checkSnapshotStatus() error {
 	return nil
 }
 
-func (s *StateMachine) saveConcurrentSnapshot() (*pb.Snapshot,
+func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	var err error
 	var meta *SnapshotMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot()
+		meta, err = s.prepareSnapshot(req)
 		return err
 	}(); err != nil {
 		return nil, nil, err
@@ -524,7 +541,7 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot()
+		meta, err = s.prepareSnapshot(SnapshotRequest{})
 		return err
 	}(); err != nil {
 		return err
@@ -532,11 +549,11 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	return s.snapshotter.StreamSnapshot(s.sm, meta, sink)
 }
 
-func (s *StateMachine) saveSnapshot() (*pb.Snapshot,
+func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	meta, err := s.prepareSnapshot()
+	meta, err := s.prepareSnapshot(req)
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
 		return nil, nil, err
@@ -544,7 +561,8 @@ func (s *StateMachine) saveSnapshot() (*pb.Snapshot,
 	return s.doSaveSnapshot(meta)
 }
 
-func (s *StateMachine) prepareSnapshot() (*SnapshotMeta, error) {
+func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta,
+	error) {
 	if err := s.checkSnapshotStatus(); err != nil {
 		return nil, err
 	}
@@ -556,7 +574,7 @@ func (s *StateMachine) prepareSnapshot() (*SnapshotMeta, error) {
 			panic(err)
 		}
 	}
-	return s.getSnapshotMeta(ctx), nil
+	return s.getSnapshotMeta(ctx, req), nil
 }
 
 func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,

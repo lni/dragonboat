@@ -198,8 +198,9 @@ func (se *SnapshotEnv) RemoveFinalDir() error {
 
 // SaveSnapshotMetadata saves the metadata of the snapshot file.
 func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
-	return fileutil.CreateFlagFile(se.tmpDir,
+	err := fileutil.CreateFlagFile(se.tmpDir,
 		snapshotMetadataFilename, msg)
+	return err
 }
 
 // HasFlagFile returns a boolean flag indicating whether the flag file is

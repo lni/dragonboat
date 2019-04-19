@@ -92,7 +92,7 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 		if err := env.CreateTempDir(); err != nil {
 			t.Errorf("create tmp snapshot dir failed %v", err)
 		}
-		if err := s.Commit(ss); err != errSnapshotOutOfDate {
+		if err := s.Commit(ss, rsm.SnapshotRequest{}); err != errSnapshotOutOfDate {
 			t.Errorf("unexpected error result %v", err)
 		}
 	}
@@ -125,7 +125,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		}
 		f.Write(make([]byte, 12))
 		f.Close()
-		if err = s.Commit(ss); err != nil {
+		if err = s.Commit(ss, rsm.SnapshotRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)
 		}
 		snapshots, err := ldb.ListSnapshots(1, 1)
@@ -348,7 +348,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			if err := env.CreateTempDir(); err != nil {
 				t.Errorf("failed to create snapshot dir")
 			}
-			if err := snapshotter.Commit(s); err != nil {
+			if err := snapshotter.Commit(s, rsm.SnapshotRequest{}); err != nil {
 				t.Errorf("failed to save snapshot record")
 			}
 			fp := snapshotter.GetFilePath(s.Index)
@@ -418,7 +418,7 @@ func TestShrinkSnapshots(t *testing.T) {
 			if err := env.CreateTempDir(); err != nil {
 				t.Errorf("failed to create snapshot dir")
 			}
-			if err := snapshotter.Commit(s); err != nil {
+			if err := snapshotter.Commit(s, rsm.SnapshotRequest{}); err != nil {
 				t.Errorf("failed to save snapshot record")
 			}
 			fp = snapshotter.GetFilePath(s.Index)

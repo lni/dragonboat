@@ -187,7 +187,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	_, sz, err := savable.SaveSnapshot(nil, writer, session, nil)
+	_, sz, err := savable.SaveSnapshot(&SnapshotMeta{}, writer, session, nil)
 	s.dataSize = sz
 	if err != nil {
 		return nil, env, err
@@ -487,7 +487,7 @@ func TestGetSnapshotMetaPanicWhenThereIsNoMember(t *testing.T) {
 				t.Fatalf("didn't panic")
 			}
 		}()
-		sm.getSnapshotMeta(nil)
+		sm.getSnapshotMeta(nil, SnapshotRequest{})
 	}
 	runSMTest(t, tf)
 }
@@ -504,7 +504,7 @@ func TestGetSnapshotMeta(t *testing.T) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		sm.index = 100
 		sm.term = 101
-		meta := sm.getSnapshotMeta(make([]byte, 123))
+		meta := sm.getSnapshotMeta(make([]byte, 123), SnapshotRequest{})
 		if meta.Index != 100 || meta.Term != 101 {
 			t.Errorf("index/term not recorded")
 		}
@@ -929,7 +929,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.index = 3
 		hash1 := sm.GetHash()
-		ss, _, err := sm.SaveSnapshot()
+		ss, _, err := sm.SaveSnapshot(SnapshotRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
 		}
@@ -981,7 +981,7 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
-		ss, _, err := sm.SaveSnapshot()
+		ss, _, err := sm.SaveSnapshot(SnapshotRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
@@ -1015,11 +1015,11 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		_, _, err := sm.SaveSnapshot()
+		_, _, err := sm.SaveSnapshot(SnapshotRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
-		_, _, err = sm.SaveSnapshot()
+		_, _, err = sm.SaveSnapshot(SnapshotRequest{})
 		if err != raft.ErrSnapshotOutOfDate {
 			t.Errorf("snapshot twice completed, %v", err)
 		}

@@ -135,6 +135,7 @@ var (
 	// ErrInvalidDeadline indicates that the specified deadline is invalid, e.g.
 	// time in the past.
 	ErrInvalidDeadline = errors.New("invalid deadline")
+	ErrPathNotExist    = errors.New("specified path does not exist")
 )
 
 // ClusterInfo is a record for representing the state of a Raft cluster based
@@ -757,6 +758,31 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestSnapshot(timeout)
+	nh.execEngine.setNodeReady(clusterID)
+	return req, err
+}
+
+// ExportSnapshot requests a snapshot to be created into the specified directory.
+//
+// This method returns a SnapshotState instance or an error immediately.
+// Application can wait on the CompleteC member channel of the returned
+// SnapshotState instance to get notified for the outcome of the create snasphot
+// operation and access to the result of the create snapshot operation.
+//
+// Requested create snapshot operation will be rejected if there is already an
+// existing snapshot in the system at the same index.
+//
+// Once created, the exported snapshot is owned by the caller, it is caller's
+// responsibility to backup or delete the exported snapshot when necessary. The
+// exported snapshot is typically used as a backup of the state machine state.
+// See dragonboat's DevOps docs on how to use such exported snapshot.
+func (nh *NodeHost) ExportSnapshot(clusterID uint64,
+	path string, timeout time.Duration) (*SnapshotState, error) {
+	v, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	req, err := v.exportSnapshot(path, timeout)
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }

@@ -89,7 +89,7 @@ func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 
 func (s *snapshotter) Save(savable rsm.ISavable,
 	meta *rsm.SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
-	env := s.getSnapshotEnv(meta.Index)
+	env := s.getCustomSnapshotEnv(meta)
 	if err := env.CreateTempDir(); err != nil {
 		return nil, env, err
 	}
@@ -105,7 +105,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	dummy, sz, err := savable.SaveSnapshot(meta.Ctx, writer, session, files)
+	dummy, sz, err := savable.SaveSnapshot(meta, writer, session, files)
 	if err != nil {
 		return nil, env, err
 	}
@@ -152,8 +152,14 @@ func (s *snapshotter) Load(index uint64,
 	return nil
 }
 
-func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
-	env := s.getSnapshotEnv(snapshot.Index)
+func (s *snapshotter) Commit(snapshot pb.Snapshot,
+	req rsm.SnapshotRequest) error {
+	meta := &rsm.SnapshotMeta{
+		Index: snapshot.Index,
+		Type:  req.Type,
+		Path:  req.Path,
+	}
+	env := s.getCustomSnapshotEnv(meta)
 	if err := env.SaveSnapshotMetadata(&snapshot); err != nil {
 		return err
 	}
@@ -163,8 +169,10 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot) error {
 		}
 		return err
 	}
-	if err := s.saveToLogDB(snapshot); err != nil {
-		return err
+	if !meta.IsExportedSnapshot() {
+		if err := s.saveToLogDB(snapshot); err != nil {
+			return err
+		}
 	}
 	return env.RemoveFlagFile()
 }
@@ -319,6 +327,20 @@ func (s *snapshotter) removeFlagFile(index uint64) error {
 func (s *snapshotter) getSnapshotEnv(index uint64) *server.SnapshotEnv {
 	return server.NewSnapshotEnv(s.rootDirFunc,
 		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshottingMode)
+}
+
+func (s *snapshotter) getCustomSnapshotEnv(meta *rsm.SnapshotMeta) *server.SnapshotEnv {
+	if meta.Type == rsm.ExportedSnapshot {
+		if len(meta.Path) == 0 {
+			plog.Panicf("Path is empty when exporting snapshot")
+		}
+		getPath := func(clusterID uint64, nodeID uint64) string {
+			return meta.Path
+		}
+		return server.NewSnapshotEnv(getPath,
+			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode)
+	}
+	return s.getSnapshotEnv(meta.Index)
 }
 
 func (s *snapshotter) saveToLogDB(snapshot pb.Snapshot) error {

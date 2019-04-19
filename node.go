@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
@@ -248,6 +249,14 @@ func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
 	return rc.pendingSnapshot.request(rsm.UserRequestedSnapshot, "", timeout)
 }
 
+func (rc *node) exportSnapshot(path string,
+	timeout time.Duration) (*SnapshotState, error) {
+	if !fileutil.Exist(path) {
+		return nil, ErrPathNotExist
+	}
+	return rc.pendingSnapshot.request(rsm.ExportedSnapshot, path, timeout)
+}
+
 func (rc *node) reportIgnoredSnapshotRequest(key uint64) {
 	rc.pendingSnapshot.apply(key, true, 0)
 }
@@ -368,6 +377,8 @@ func (rc *node) publishTakeSnapshotRequest(state *SnapshotState) bool {
 	sr := rsm.SnapshotRequest{}
 	if state != nil {
 		sr.Key = state.key
+		sr.Type = state.st
+		sr.Path = state.path
 	}
 	rec := rsm.Commit{SnapshotRequested: true, SnapshotRequest: sr}
 	return rc.publishCommitRec(rec)
@@ -463,11 +474,11 @@ func isSoftSnapshotError(err error) bool {
 }
 
 func (rc *node) saveSnapshot(rec rsm.Commit) {
-	index := rc.doSaveSnapshot()
+	index := rc.doSaveSnapshot(rec.SnapshotRequest)
 	rc.pendingSnapshot.apply(rec.SnapshotRequest.Key, index == 0, index)
 }
 
-func (rc *node) doSaveSnapshot() uint64 {
+func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 	// this is suppose to be called in snapshot worker thread.
 	// calling this rc.sm.GetLastApplied() won't block the raft sm.
 	if rc.sm.GetLastApplied() <= rc.ss.getSnapshotIndex() {
@@ -475,7 +486,8 @@ func (rc *node) doSaveSnapshot() uint64 {
 		// or the snapshot has been applied and there is no further progress
 		return 0
 	}
-	ss, ssenv, err := rc.sm.SaveSnapshot()
+	exported := req.IsExportedSnapshot()
+	ss, ssenv, err := rc.sm.SaveSnapshot(req)
 	if err != nil {
 		if err == sm.ErrSnapshotStopped {
 			ssenv.MustRemoveTempDir()
@@ -488,7 +500,7 @@ func (rc *node) doSaveSnapshot() uint64 {
 	}
 	plog.Infof("%s snapshotted, index %d, term %d, file count %d",
 		rc.describe(), ss.Index, ss.Term, len(ss.Files))
-	if err := rc.snapshotter.Commit(*ss); err != nil {
+	if err := rc.snapshotter.Commit(*ss, req); err != nil {
 		if err == errSnapshotOutOfDate {
 			plog.Warningf("snapshot aborted on %s, idx %d", rc.describe(), ss.Index)
 			ssenv.MustRemoveTempDir()
@@ -499,6 +511,9 @@ func (rc *node) doSaveSnapshot() uint64 {
 			return 0
 		}
 		panic(err)
+	}
+	if exported {
+		return ss.Index
 	}
 	if !ss.Validate() {
 		plog.Panicf("invalid snapshot %v", ss)
