@@ -135,7 +135,8 @@ var (
 	// ErrInvalidDeadline indicates that the specified deadline is invalid, e.g.
 	// time in the past.
 	ErrInvalidDeadline = errors.New("invalid deadline")
-	ErrPathNotExist    = errors.New("specified path does not exist")
+	// ErrDirNotExist indicates that the specified dir does not exist.
+	ErrDirNotExist = errors.New("specified dir does not exist")
 )
 
 // ClusterInfo is a record for representing the state of a Raft cluster based

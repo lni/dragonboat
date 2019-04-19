@@ -52,8 +52,8 @@ type node struct {
 	leaderID             uint64
 	raftAddress          string
 	config               config.Config
-	confChangeC          <-chan *RequestState
-	snapshotC            <-chan *SnapshotState
+	confChangeC          <-chan configChangeRequest
+	snapshotC            <-chan rsm.SnapshotRequest
 	commitC              chan<- rsm.Commit
 	mq                   *server.MessageQueue
 	lastApplied          uint64
@@ -109,8 +109,8 @@ func newNode(raftAddress string,
 	ldb raftio.ILogDB) *node {
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
-	confChangeC := make(chan *RequestState, 1)
-	snapshotC := make(chan *SnapshotState, 1)
+	confChangeC := make(chan configChangeRequest, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	pp := newPendingProposal(requestStatePool,
 		proposals, config.ClusterID, config.NodeID, raftAddress, tickMillisecond)
 	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
@@ -252,7 +252,7 @@ func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
 func (rc *node) exportSnapshot(path string,
 	timeout time.Duration) (*SnapshotState, error) {
 	if !fileutil.Exist(path) {
-		return nil, ErrPathNotExist
+		return nil, ErrDirNotExist
 	}
 	return rc.pendingSnapshot.request(rsm.ExportedSnapshot, path, timeout)
 }
@@ -373,14 +373,8 @@ func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
 	return rc.publishCommitRec(rec)
 }
 
-func (rc *node) publishTakeSnapshotRequest(state *SnapshotState) bool {
-	sr := rsm.SnapshotRequest{}
-	if state != nil {
-		sr.Key = state.key
-		sr.Type = state.st
-		sr.Path = state.path
-	}
-	rec := rsm.Commit{SnapshotRequested: true, SnapshotRequest: sr}
+func (rc *node) publishTakeSnapshotRequest(req rsm.SnapshotRequest) bool {
+	rec := rsm.Commit{SnapshotRequested: true, SnapshotRequest: req}
 	return rc.publishCommitRec(rec)
 }
 
@@ -435,23 +429,6 @@ func (rc *node) replayLog(clusterID uint64, nodeID uint64) bool {
 		newNode = false
 	}
 	return newNode
-}
-
-// returns a tuple of (requested, ignored)
-func (rc *node) snapshotRequested(lastApplied uint64) (bool, *SnapshotState) {
-	var sr *SnapshotState
-	select {
-	case sr = <-rc.snapshotC:
-	default:
-		return false, nil
-	}
-	si := rc.ss.getReqSnapshotIndex()
-	if lastApplied == si {
-		rc.reportIgnoredSnapshotRequest(sr.key)
-		return false, nil
-	}
-	rc.ss.setReqSnapshotIndex(lastApplied)
-	return true, sr
 }
 
 func (rc *node) saveSnapshotRequired(lastApplied uint64) bool {
@@ -745,7 +722,7 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 		panic(err)
 	}
 	if rc.saveSnapshotRequired(ud.LastApplied) {
-		return rc.publishTakeSnapshotRequest(nil)
+		return rc.publishTakeSnapshotRequest(rsm.SnapshotRequest{})
 	}
 	return true
 }
@@ -814,19 +791,19 @@ func (rc *node) handleEvents() bool {
 }
 
 func (rc *node) handleSnapshotRequest(lastApplied uint64) bool {
-	var sr *SnapshotState
+	var req rsm.SnapshotRequest
 	select {
-	case sr = <-rc.snapshotC:
+	case req = <-rc.snapshotC:
 	default:
 		return false
 	}
 	si := rc.ss.getReqSnapshotIndex()
 	if lastApplied == si {
-		rc.reportIgnoredSnapshotRequest(sr.key)
+		rc.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}
 	rc.ss.setReqSnapshotIndex(lastApplied)
-	rc.publishTakeSnapshotRequest(sr)
+	rc.publishTakeSnapshotRequest(req)
 	return true
 }
 

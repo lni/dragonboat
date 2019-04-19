@@ -323,7 +323,7 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 func (ds *NativeStateMachine) SaveSnapshot(meta *SnapshotMeta,
 	writer *SnapshotWriter, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
-	if ds.sm.OnDiskStateMachine() && !meta.IsExportedSnapshot() {
+	if ds.sm.OnDiskStateMachine() && !meta.Request.IsExportedSnapshot() {
 		sz, err := ds.saveDummySnapshot(writer, session)
 		return true, sz, err
 	}

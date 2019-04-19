@@ -36,7 +36,7 @@ const (
 )
 
 func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
-	snapshotC := make(chan<- *SnapshotState, 1)
+	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	if len(ps.snapshotC) != 0 {
 		t.Errorf("snapshotC not empty")
@@ -63,7 +63,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeRequested(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 }
 
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
-	snapshotC := make(chan<- *SnapshotState, 1)
+	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, 50)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", 49*time.Millisecond)
 	if err != ErrTimeoutTooSmall {
@@ -98,7 +98,7 @@ func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 }
 
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
-	snapshotC := make(chan<- *SnapshotState, 1)
+	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -152,7 +152,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeApplied(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -161,7 +161,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.key, false, 123)
+	ps.apply(ss.req.Key, false, 123)
 	select {
 	case v := <-ss.CompleteC:
 		if v.GetIndex() != 123 {
@@ -176,7 +176,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeIgnored(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.key, true, 123)
+	ps.apply(ss.req.Key, true, 123)
 	select {
 	case v := <-ss.CompleteC:
 		if v.GetIndex() != 0 {
@@ -200,7 +200,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 }
 
 func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
 	if err != nil {
@@ -212,7 +212,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	if ps.pending == nil {
 		t.Errorf("pending not set")
 	}
-	ps.apply(ss.key+1, false, 123)
+	ps.apply(ss.req.Key+1, false, 123)
 	if ps.pending == nil {
 		t.Errorf("pending unexpectedly cleared")
 	}
@@ -224,7 +224,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 }
 
 func TestRequestedSnapshotDetailsAreKept(t *testing.T) {
-	snapshotC := make(chan *SnapshotState, 1)
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	path := "/test-data"
 	st := rsm.ExportedSnapshot
@@ -235,19 +235,18 @@ func TestRequestedSnapshotDetailsAreKept(t *testing.T) {
 	if ss == nil {
 		t.Fatalf("nil ss returned")
 	}
-	if ss.st != st || ss.path != path {
+	if ss.req.Type != st || ss.req.Path != path {
 		t.Errorf("snapshot details not kept")
 	}
 }
 
-func getPendingConfigChange() (*pendingConfigChange, chan *RequestState) {
-	c := make(chan *RequestState, 1)
+func getPendingConfigChange() (*pendingConfigChange, chan configChangeRequest) {
+	c := make(chan configChangeRequest, 1)
 	return newPendingConfigChange(c, testTickInMillisecond), c
 }
 
 func TestRequestStateRelease(t *testing.T) {
 	rs := RequestState{
-		data:        make([]byte, 10),
 		key:         100,
 		clientID:    200,
 		seriesID:    300,

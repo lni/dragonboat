@@ -80,15 +80,10 @@ type SnapshotMeta struct {
 	From       uint64
 	Index      uint64
 	Term       uint64
-	Type       SnapshotRequestType
-	Path       string
+	Request    SnapshotRequest
 	Membership pb.Membership
 	Session    *bytes.Buffer
 	Ctx        interface{}
-}
-
-func (meta *SnapshotMeta) IsExportedSnapshot() bool {
-	return meta.Type == ExportedSnapshot
 }
 
 // Commit describes a task that need to be handled by StateMachine.
@@ -102,10 +97,6 @@ type Commit struct {
 	StreamSnapshot    bool
 	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
-}
-
-func (c *Commit) IsExportedSnapshot() bool {
-	return c.SnapshotRequest.Type == ExportedSnapshot
 }
 
 func (c *Commit) isSnapshotRelated() bool {
@@ -476,8 +467,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		Ctx:        ctx,
 		Index:      s.index,
 		Term:       s.term,
-		Type:       req.Type,
-		Path:       req.Path,
+		Request:    req,
 		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
 		Membership: s.members.getMembership(),
 	}

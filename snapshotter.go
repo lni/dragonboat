@@ -155,9 +155,8 @@ func (s *snapshotter) Load(index uint64,
 func (s *snapshotter) Commit(snapshot pb.Snapshot,
 	req rsm.SnapshotRequest) error {
 	meta := &rsm.SnapshotMeta{
-		Index: snapshot.Index,
-		Type:  req.Type,
-		Path:  req.Path,
+		Index:   snapshot.Index,
+		Request: req,
 	}
 	env := s.getCustomSnapshotEnv(meta)
 	if err := env.SaveSnapshotMetadata(&snapshot); err != nil {
@@ -169,7 +168,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot,
 		}
 		return err
 	}
-	if !meta.IsExportedSnapshot() {
+	if !meta.Request.IsExportedSnapshot() {
 		if err := s.saveToLogDB(snapshot); err != nil {
 			return err
 		}
@@ -330,12 +329,12 @@ func (s *snapshotter) getSnapshotEnv(index uint64) *server.SnapshotEnv {
 }
 
 func (s *snapshotter) getCustomSnapshotEnv(meta *rsm.SnapshotMeta) *server.SnapshotEnv {
-	if meta.Type == rsm.ExportedSnapshot {
-		if len(meta.Path) == 0 {
+	if meta.Request.IsExportedSnapshot() {
+		if len(meta.Request.Path) == 0 {
 			plog.Panicf("Path is empty when exporting snapshot")
 		}
 		getPath := func(clusterID uint64, nodeID uint64) string {
-			return meta.Path
+			return meta.Request.Path
 		}
 		return server.NewSnapshotEnv(getPath,
 			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode)

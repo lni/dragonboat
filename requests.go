@@ -114,9 +114,7 @@ func (sr *SnapshotResult) GetIndex() uint64 {
 // SnapshotState is the returned state object used to track the outcome of the
 // requested snapshot.
 type SnapshotState struct {
-	st       rsm.SnapshotRequestType
-	path     string
-	key      uint64
+	req      rsm.SnapshotRequest
 	deadline uint64
 	// CompleteC is a channel for delivering request result to users.
 	CompleteC chan SnapshotResult
@@ -249,7 +247,6 @@ type ICompleteHandler interface {
 
 // RequestState is the object used to provide request result to users.
 type RequestState struct {
-	data            []byte
 	key             uint64
 	clientID        uint64
 	seriesID        uint64
@@ -279,7 +276,6 @@ func (r *RequestState) notify(result RequestResult) {
 // Release puts the RequestState object back to the sync.Pool pool.
 func (r *RequestState) Release() {
 	if r.pool != nil {
-		r.data = nil
 		r.deadline = 0
 		r.key = 0
 		r.seriesID = 0
@@ -342,21 +338,26 @@ type pendingReadIndex struct {
 	logicalClock
 }
 
+type configChangeRequest struct {
+	data []byte
+	key  uint64
+}
+
 type pendingConfigChange struct {
 	mu          sync.Mutex
 	pending     *RequestState
-	confChangeC chan<- *RequestState
+	confChangeC chan<- configChangeRequest
 	logicalClock
 }
 
 type pendingSnapshot struct {
 	mu        sync.Mutex
 	pending   *SnapshotState
-	snapshotC chan<- *SnapshotState
+	snapshotC chan<- rsm.SnapshotRequest
 	logicalClock
 }
 
-func newPendingSnapshot(snapshotC chan<- *SnapshotState,
+func newPendingSnapshot(snapshotC chan<- rsm.SnapshotRequest,
 	tickInMillisecond uint64) *pendingSnapshot {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
@@ -395,15 +396,18 @@ func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
 	if p.pending != nil {
 		return nil, ErrPendingSnapshotRequestExist
 	}
+	ssreq := rsm.SnapshotRequest{
+		Type: st,
+		Path: path,
+		Key:  random.LockGuardedRand.Uint64(),
+	}
 	req := &SnapshotState{
-		st:        st,
-		path:      path,
-		key:       random.LockGuardedRand.Uint64(),
+		req:       ssreq,
 		deadline:  p.getTick() + timeoutTick,
 		CompleteC: make(chan SnapshotResult, 1),
 	}
 	select {
-	case p.snapshotC <- req:
+	case p.snapshotC <- ssreq:
 		p.pending = req
 		return req, nil
 	default:
@@ -437,7 +441,7 @@ func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
 	if p.pending == nil {
 		return
 	}
-	if p.pending.key == key {
+	if p.pending.req.Key == key {
 		r := SnapshotResult{}
 		if ignored {
 			r.code = requestRejected
@@ -452,7 +456,7 @@ func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
 	}
 }
 
-func newPendingConfigChange(confChangeC chan<- *RequestState,
+func newPendingConfigChange(confChangeC chan<- configChangeRequest,
 	tickInMillisecond uint64) *pendingConfigChange {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
@@ -499,14 +503,17 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 	if err != nil {
 		panic(err)
 	}
+	ccreq := configChangeRequest{
+		key:  random.LockGuardedRand.Uint64(),
+		data: data,
+	}
 	req := &RequestState{
-		key:        random.LockGuardedRand.Uint64(),
-		data:       data,
+		key:        ccreq.key,
 		deadline:   p.getTick() + timeoutTick,
 		CompletedC: make(chan RequestResult, 1),
 	}
 	select {
-	case p.confChangeC <- req:
+	case p.confChangeC <- ccreq:
 		p.pending = req
 		return req, nil
 	default:
