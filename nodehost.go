@@ -908,6 +908,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 // Calling RemoveData on a node that is still a Raft cluster member will corrupt
 // the Raft cluster.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
+	plog.Infof("RemoveData called on %s", logutil.DescribeNode(clusterID, nodeID))
 	_, ok := nh.getCluster(clusterID)
 	if ok {
 		return ErrClusterNotStopped

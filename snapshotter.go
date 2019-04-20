@@ -93,7 +93,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	if err := env.CreateTempDir(); err != nil {
 		return nil, env, err
 	}
-	files := newFileCollection()
+	files := rsm.NewFileCollection()
 	fp := env.GetTempFilepath()
 	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	if err != nil {
 		return nil, env, err
 	}
-	fs, err := files.prepareFiles(env.GetTempDir(), env.GetFinalDir())
+	fs, err := files.PrepareFiles(env.GetTempDir(), env.GetFinalDir())
 	if err != nil {
 		return nil, env, err
 	}
@@ -259,11 +259,11 @@ func (s *snapshotter) Compaction(removeUpTo uint64) error {
 }
 
 func (s *snapshotter) ProcessOrphans() error {
-	fiList, err := ioutil.ReadDir(s.dir)
+	files, err := ioutil.ReadDir(s.dir)
 	if err != nil {
 		return err
 	}
-	for _, fi := range fiList {
+	for _, fi := range files {
 		if !fi.IsDir() {
 			continue
 		}
@@ -366,63 +366,4 @@ func (s *snapshotter) isOrphanDir(dir string) bool {
 	}
 	fdir := filepath.Join(s.dir, dir)
 	return fileutil.HasFlagFile(fdir, fileutil.SnapshotFlagFilename)
-}
-
-type files struct {
-	files []*pb.SnapshotFile
-	idmap map[uint64]struct{}
-}
-
-func newFileCollection() *files {
-	return &files{
-		files: make([]*pb.SnapshotFile, 0),
-		idmap: make(map[uint64]struct{}),
-	}
-}
-
-func (fc *files) AddFile(fileID uint64,
-	path string, metadata []byte) {
-	if _, ok := fc.idmap[fileID]; ok {
-		plog.Panicf("trying to add file %d again", fileID)
-	}
-	f := &pb.SnapshotFile{
-		Filepath: path,
-		FileId:   fileID,
-		Metadata: metadata,
-	}
-	fc.files = append(fc.files, f)
-	fc.idmap[fileID] = struct{}{}
-}
-
-func (fc *files) Size() uint64 {
-	return uint64(len(fc.files))
-}
-
-func (fc *files) GetFileAt(idx uint64) *pb.SnapshotFile {
-	return fc.files[idx]
-}
-
-func (fc *files) prepareFiles(tmpdir string,
-	finaldir string) ([]*pb.SnapshotFile, error) {
-	for _, file := range fc.files {
-		fn := file.Filename()
-		fp := filepath.Join(tmpdir, fn)
-		if err := os.Link(file.Filepath, fp); err != nil {
-			return nil, err
-		}
-		fi, err := os.Stat(fp)
-		if err != nil {
-			return nil, err
-		}
-		if fi.IsDir() {
-			plog.Panicf("%s is a dir", fp)
-		}
-		if fi.Size() == 0 {
-			plog.Panicf("empty file found, id %d",
-				file.FileId)
-		}
-		file.Filepath = filepath.Join(finaldir, fn)
-		file.FileSize = uint64(fi.Size())
-	}
-	return fc.files, nil
 }

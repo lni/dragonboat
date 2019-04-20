@@ -246,11 +246,13 @@ func (rc *node) requestLeaderTransfer(nodeID uint64) {
 }
 
 func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
+	plog.Infof("request snapshot called on %s", rc.describe())
 	return rc.pendingSnapshot.request(rsm.UserRequestedSnapshot, "", timeout)
 }
 
 func (rc *node) exportSnapshot(path string,
 	timeout time.Duration) (*SnapshotState, error) {
+	plog.Infof("export snapshot called on %s", rc.describe())
 	if !fileutil.Exist(path) {
 		return nil, ErrDirNotExist
 	}
