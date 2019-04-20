@@ -254,7 +254,7 @@ func step(nodes []*node) bool {
 	// step the events, collect all ready structs
 	for _, node := range nodes {
 		if !node.initialized() {
-			commit := rsm.Commit{
+			commit := rsm.Task{
 				InitialSnapshot: true,
 			}
 			index, _ := node.sm.RecoverFromSnapshot(commit)
@@ -301,17 +301,17 @@ func step(nodes []*node) bool {
 		running := node.processRaftUpdate(ud)
 		node.commitRaftUpdate(ud)
 		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
-			node.saveSnapshot(rsm.Commit{})
+			node.saveSnapshot(rsm.Task{})
 		}
 		if running {
-			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Commit, 0), nil)
+			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Task, 0), nil)
 			if snapshotRequired {
 				if commitRec.SnapshotAvailable || commitRec.InitialSnapshot {
 					if _, err := node.sm.RecoverFromSnapshot(commitRec); err != nil {
 						panic(err)
 					}
 				} else if commitRec.SnapshotRequested {
-					node.saveSnapshot(rsm.Commit{})
+					node.saveSnapshot(rsm.Task{})
 				}
 			}
 		}
@@ -1290,8 +1290,8 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			node.saveSnapshot(rsm.Commit{})
-			node.saveSnapshot(rsm.Commit{})
+			node.saveSnapshot(rsm.Task{})
+			node.saveSnapshot(rsm.Task{})
 		}
 	}
 	runRaftNodeTest(t, false, tf)
@@ -1385,7 +1385,7 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 func TestSnapshotRecordCanBeSet(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	sr := snapshotRecord{}
-	rec := rsm.Commit{}
+	rec := rsm.Task{}
 	sr.setRecord(rec)
 	if !sr.hasRecord {
 		t.Errorf("rec not set")
@@ -1401,7 +1401,7 @@ func TestSnapshotRecordCanNotBeSetTwice(t *testing.T) {
 		t.Errorf("panic not triggered")
 	}()
 	sr := snapshotRecord{}
-	rec := rsm.Commit{}
+	rec := rsm.Task{}
 	sr.setRecord(rec)
 	sr.setRecord(rec)
 }
@@ -1413,7 +1413,7 @@ func TestCanGetSnapshotRecord(t *testing.T) {
 	if ok {
 		t.Errorf("unexpected record")
 	}
-	rec = rsm.Commit{}
+	rec = rsm.Task{}
 	sr.setRecord(rec)
 	r, ok := sr.getRecord()
 	if !ok {

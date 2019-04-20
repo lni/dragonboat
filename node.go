@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	snapshotCommitCSlots = uint64(3)
+	snapshotTaskCSlots = uint64(3)
 )
 
 var (
@@ -54,7 +54,7 @@ type node struct {
 	config               config.Config
 	confChangeC          <-chan configChangeRequest
 	snapshotC            <-chan rsm.SnapshotRequest
-	commitC              chan<- rsm.Commit
+	taskC                chan<- rsm.Task
 	mq                   *server.MessageQueue
 	lastApplied          uint64
 	confirmedLastApplied uint64
@@ -150,7 +150,7 @@ func newNode(raftAddress string,
 	nodeProxy := newNodeProxy(rc)
 	ordered := config.OrderedConfigChange
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, nodeProxy)
-	rc.commitC = sm.CommitC()
+	rc.taskC = sm.TaskC()
 	rc.sm = sm
 	if sm.OnDiskStateMachine() {
 		rc.snapshotShrink = newTask(snapshotShrinkTaskInterval)
@@ -340,12 +340,12 @@ func (rc *node) entriesToApply(ents []pb.Entry) (nents []pb.Entry) {
 	return
 }
 
-func (rc *node) publishCommitRec(rec rsm.Commit) bool {
+func (rc *node) publishCommitRec(rec rsm.Task) bool {
 	if rc.stopped() {
 		return false
 	}
 	select {
-	case rc.commitC <- rec:
+	case rc.taskC <- rec:
 		rc.commitReady(rc.clusterID)
 	case <-rc.stopc:
 		return false
@@ -357,7 +357,7 @@ func (rc *node) publishEntries(ents []pb.Entry) bool {
 	if len(ents) == 0 {
 		return true
 	}
-	rec := rsm.Commit{Entries: ents}
+	rec := rsm.Task{Entries: ents}
 	if !rc.publishCommitRec(rec) {
 		return false
 	}
@@ -367,7 +367,7 @@ func (rc *node) publishEntries(ents []pb.Entry) bool {
 
 func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
 	nodeID uint64) bool {
-	rec := rsm.Commit{
+	rec := rsm.Task{
 		ClusterID:      clusterID,
 		NodeID:         nodeID,
 		StreamSnapshot: true,
@@ -376,7 +376,7 @@ func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
 }
 
 func (rc *node) publishTakeSnapshotRequest(req rsm.SnapshotRequest) bool {
-	rec := rsm.Commit{SnapshotRequested: true, SnapshotRequest: req}
+	rec := rsm.Task{SnapshotRequested: true, SnapshotRequest: req}
 	return rc.publishCommitRec(rec)
 }
 
@@ -390,7 +390,7 @@ func (rc *node) publishSnapshot(snapshot pb.Snapshot,
 		snapshot.Index < lastApplied {
 		panic("got a snapshot older than current applied state")
 	}
-	rec := rsm.Commit{
+	rec := rsm.Task{
 		SnapshotAvailable: true,
 		Index:             snapshot.Index,
 	}
@@ -452,7 +452,7 @@ func isSoftSnapshotError(err error) bool {
 	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
 }
 
-func (rc *node) saveSnapshot(rec rsm.Commit) {
+func (rc *node) saveSnapshot(rec rsm.Task) {
 	index := rc.doSaveSnapshot(rec.SnapshotRequest)
 	rc.pendingSnapshot.apply(rec.SnapshotRequest.Key, index == 0, index)
 }
@@ -520,7 +520,7 @@ func (rc *node) streamSnapshot(sink pb.IChunkSink) {
 	}
 }
 
-func (rc *node) recoverFromSnapshot(rec rsm.Commit) (uint64, bool) {
+func (rc *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	rc.snapshotLock.Lock()
 	defer rc.snapshotLock.Unlock()
 	var index uint64
@@ -573,9 +573,8 @@ func (rc *node) recoverFromSnapshotDone() {
 	rc.commitReady(rc.clusterID)
 }
 
-func (rc *node) handleCommit(batch []rsm.Commit,
-	entries []sm.Entry) (rsm.Commit, bool) {
-	return rc.sm.Handle(batch, entries)
+func (rc *node) handleTask(batch []rsm.Task, ents []sm.Entry) (rsm.Task, bool) {
+	return rc.sm.Handle(batch, ents)
 }
 
 func (rc *node) removeSnapshotFlagFile(index uint64) error {
@@ -736,7 +735,7 @@ func (rc *node) commitRaftUpdate(ud pb.Update) {
 }
 
 func (rc *node) canHaveMoreEntriesToApply() bool {
-	return uint64(cap(rc.commitC)-len(rc.commitC)) > snapshotCommitCSlots
+	return uint64(cap(rc.taskC)-len(rc.taskC)) > snapshotTaskCSlots
 }
 
 func (rc *node) updateBatchedLastApplied() uint64 {
@@ -861,7 +860,7 @@ func (rc *node) handleConfigChangeMessage() bool {
 
 func (rc *node) isBusySnapshotting() bool {
 	snapshotting := rc.ss.takingSnapshot() || rc.ss.recoveringFromSnapshot()
-	return snapshotting && rc.sm.CommitChanBusy()
+	return snapshotting && rc.sm.TaskChanBusy()
 }
 
 func (rc *node) handleLocalTickMessage(count uint64) {

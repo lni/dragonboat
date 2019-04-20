@@ -478,9 +478,9 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 		Cmd:         make([]byte, sz),
 	}
 	entries := make([]pb.Entry, 0)
-	batch := make([]rsm.Commit, 0)
+	batch := make([]rsm.Task, 0)
 	smEntries := make([]sm.Entry, 0)
-	commit := rsm.Commit{
+	task := rsm.Task{
 		SnapshotAvailable: false,
 	}
 	if !noopSession {
@@ -488,8 +488,8 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 		e.Index = idx
 		e.SeriesID = client.SeriesIDForRegister
 		entries = append(entries, e)
-		commit.Entries = entries
-		smo.CommitC() <- commit
+		task.Entries = entries
+		smo.TaskC() <- task
 		smo.Handle(batch, smEntries)
 	}
 	b.StartTimer()
@@ -500,8 +500,8 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 			e.Index = idx
 			entries = append(entries, e)
 		}
-		commit.Entries = entries
-		smo.CommitC() <- commit
+		task.Entries = entries
+		smo.TaskC() <- task
 		smo.Handle(batch, smEntries)
 	}
 }

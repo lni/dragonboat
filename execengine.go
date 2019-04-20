@@ -300,7 +300,7 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
-	batch := make([]rsm.Commit, 0, commitBatchSize)
+	batch := make([]rsm.Task, 0, commitBatchSize)
 	entries := make([]sm.Entry, 0, commitBatchSize)
 	cci := uint64(0)
 	for {
@@ -311,7 +311,7 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 		case <-ticker.C:
 			nodes, cci = s.loadSMs(workerID, cci, nodes)
 			s.execSMs(workerID, make(map[uint64]struct{}), nodes, batch, entries)
-			batch = make([]rsm.Commit, 0, commitBatchSize)
+			batch = make([]rsm.Task, 0, commitBatchSize)
 			entries = make([]sm.Entry, 0, commitBatchSize)
 		case <-s.commitWorkReady.waitCh(workerID):
 			clusterIDMap := s.commitWorkReady.getReadyMap(workerID)
@@ -326,11 +326,11 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 		s.commitWorkReady.getPartitioner(), rsm.FromCommitWorker)
 }
 
-func processUninitializedNode(node *node) *rsm.Commit {
+func processUninitializedNode(node *node) *rsm.Task {
 	if !node.initialized() {
 		plog.Infof("check initial snapshot, %s", node.describe())
 		node.ss.setRecoveringFromSnapshot()
-		return &rsm.Commit{
+		return &rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
 		}
@@ -401,7 +401,7 @@ func processStreamingSnapshotNode(node *node) bool {
 
 func (s *execEngine) execSMs(workerID uint64,
 	idmap map[uint64]struct{},
-	nodes map[uint64]*node, batch []rsm.Commit, entries []sm.Entry) {
+	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
 	if len(idmap) == 0 {
 		for k := range nodes {
 			idmap[k] = struct{}{}
@@ -431,7 +431,7 @@ func (s *execEngine) execSMs(workerID uint64,
 			s.reportAvailableSnapshot(node, *rec)
 			continue
 		}
-		commit, snapshotRequired := node.handleCommit(batch, entries)
+		commit, snapshotRequired := node.handleTask(batch, entries)
 		// batched last applied might updated, give the node work a chance to run
 		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
@@ -480,7 +480,7 @@ func (s *execEngine) reportSnapshotStatus(clusterID uint64,
 	nh.msgHandler.HandleSnapshotStatus(clusterID, nodeID, failed)
 }
 
-func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
+func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Task) {
 	nh, ok := s.nh.(*NodeHost)
 	if !ok {
 		panic("failed to get nh")
@@ -498,12 +498,12 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Commit) {
 	s.streamSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
-func (s *execEngine) reportRequestedSnapshot(node *node, rec rsm.Commit) {
+func (s *execEngine) reportRequestedSnapshot(node *node, rec rsm.Task) {
 	node.ss.setSaveSnapshotReq(rec)
 	s.requestedSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
-func (s *execEngine) reportAvailableSnapshot(node *node, rec rsm.Commit) {
+func (s *execEngine) reportAvailableSnapshot(node *node, rec rsm.Task) {
 	node.ss.setRecoverFromSnapshotReq(rec)
 	s.snapshotWorkReady.clusterReady(node.clusterID)
 }

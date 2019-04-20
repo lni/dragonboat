@@ -44,10 +44,10 @@ var (
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
-	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
-	commitChanLength        uint64 = settings.Soft.NodeCommitChanLength
-	commitChanBusyThreshold uint64 = settings.Soft.NodeCommitChanLength / 2
-	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
+	ErrRestoreSnapshot           = errors.New("failed to restore from snapshot")
+	taskChanLength        uint64 = settings.Soft.NodeTaskChanLength
+	taskChanBusyThreshold uint64 = settings.Soft.NodeTaskChanLength / 2
+	batchedEntryApply     bool   = settings.Soft.BatchedEntryApply
 )
 
 // SnapshotRequestType is the type of a snapshot request.
@@ -86,8 +86,8 @@ type SnapshotMeta struct {
 	Ctx        interface{}
 }
 
-// Commit describes a task that need to be handled by StateMachine.
-type Commit struct {
+// Task describes a task that need to be handled by StateMachine.
+type Task struct {
 	ClusterID         uint64
 	NodeID            uint64
 	Index             uint64
@@ -99,8 +99,8 @@ type Commit struct {
 	Entries           []pb.Entry
 }
 
-func (c *Commit) isSnapshotRelated() bool {
-	return c.SnapshotAvailable || c.SnapshotRequested || c.StreamSnapshot
+func (t *Task) isSnapshotRelated() bool {
+	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
 }
 
 // SMFactoryFunc is the function type for creating an IStateMachine instance
@@ -141,7 +141,7 @@ type StateMachine struct {
 	term               uint64
 	snapshotIndex      uint64
 	diskSMIndex        uint64
-	commitC            chan Commit
+	taskC              chan Task
 	onDiskSM           bool
 	aborted            bool
 	batchedLastApplied struct {
@@ -158,7 +158,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		snapshotter: snapshotter,
 		sm:          sm,
 		onDiskSM:    sm.OnDiskStateMachine(),
-		commitC:     make(chan Commit, commitChanLength),
+		taskC:       make(chan Task, taskChanLength),
 		node:        proxy,
 		sessions:    NewSessionManager(),
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
@@ -166,20 +166,20 @@ func NewStateMachine(sm IManagedStateMachine,
 	return a
 }
 
-// CommitC returns the commit channel.
-func (s *StateMachine) CommitC() chan Commit {
-	return s.commitC
+// TaskC returns the task channel.
+func (s *StateMachine) TaskC() chan Task {
+	return s.taskC
 }
 
-// CommitChanBusy returns whether the CommitC chan is busy. Busy is defined as
+// TaskChanBusy returns whether the TaskC chan is busy. Busy is defined as
 // having more than half of its buffer occupied.
-func (s *StateMachine) CommitChanBusy() bool {
-	return uint64(len(s.commitC)) > commitChanBusyThreshold
+func (s *StateMachine) TaskChanBusy() bool {
+	return uint64(len(s.taskC)) > taskChanBusyThreshold
 }
 
 // RecoverFromSnapshot applies the snapshot.
-func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
-	ss, err := s.getSnapshot(rec)
+func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
+	ss, err := s.getSnapshot(t)
 	if err != nil {
 		return 0, err
 	}
@@ -188,7 +188,7 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 	}
 	ss.Validate()
 	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.describe(), ss)
-	if r, idx, err := s.recoverSnapshot(ss, rec.InitialSnapshot); !r {
+	if r, idx, err := s.recoverSnapshot(ss, t.InitialSnapshot); !r {
 		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
@@ -198,7 +198,7 @@ func (s *StateMachine) RecoverFromSnapshot(rec Commit) (uint64, error) {
 	return ss.Index, nil
 }
 
-func (s *StateMachine) getSnapshot(rec Commit) (pb.Snapshot, error) {
+func (s *StateMachine) getSnapshot(rec Task) (pb.Snapshot, error) {
 	if !rec.InitialSnapshot {
 		snapshot, err := s.snapshotter.GetSnapshot(rec.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
@@ -426,12 +426,12 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 }
 
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Commit, toApply []sm.Entry) (Commit, bool) {
+func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
 	processed := 0
 	batch = batch[:0]
 	toApply = toApply[:0]
 	select {
-	case rec := <-s.commitC:
+	case rec := <-s.taskC:
 		if rec.isSnapshotRelated() {
 			return rec, true
 		}
@@ -440,7 +440,7 @@ func (s *StateMachine) Handle(batch []Commit, toApply []sm.Entry) (Commit, bool)
 		done := false
 		for !done {
 			select {
-			case rec := <-s.commitC:
+			case rec := <-s.taskC:
 				if rec.isSnapshotRelated() {
 					s.handle(batch, toApply)
 					return rec, true
@@ -454,7 +454,7 @@ func (s *StateMachine) Handle(batch []Commit, toApply []sm.Entry) (Commit, bool)
 	default:
 	}
 	s.handle(batch, toApply)
-	return Commit{}, false
+	return Task{}, false
 }
 
 func (s *StateMachine) getSnapshotMeta(ctx interface{},
@@ -592,7 +592,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 	return allUpdate, allNoOP
 }
 
-func (s *StateMachine) handle(batch []Commit, toApply []sm.Entry) {
+func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
 		if batch[b].isSnapshotRelated() {
@@ -605,7 +605,7 @@ func (s *StateMachine) handle(batch []Commit, toApply []sm.Entry) {
 		} else {
 			for i := range ents {
 				notifyRead := b == len(batch)-1 && i == len(ents)-1
-				s.handleCommitRec(ents[i], notifyRead)
+				s.handleEntry(ents[i], notifyRead)
 			}
 		}
 	}
@@ -615,7 +615,7 @@ func isEmptyResult(result sm.Result) bool {
 	return result.Data == nil && result.Value == 0
 }
 
-func (s *StateMachine) handleCommitRec(ent pb.Entry, lastInBatch bool) {
+func (s *StateMachine) handleEntry(ent pb.Entry, lastInBatch bool) {
 	// ConfChnage also go through the SM so the index value is updated
 	if ent.IsConfigChange() {
 		accepted := s.handleConfigChange(ent)

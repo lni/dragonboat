@@ -94,8 +94,8 @@ type soft struct {
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
 	// before pushing the snapshot results to raftNode.
 	SnapshotStatusPushDelayMS uint64
-	// NodeCommitChanLength defined the length of each node's commitC channel.
-	NodeCommitChanLength uint64
+	// NodeTaskChanLength defined the length of each node's commitC channel.
+	NodeTaskChanLength uint64
 	// SetDeploymentIDTimeoutSecond defines the number of seconds allowed to
 	// wait for setting deployment ID.
 	SetDeploymentIDTimeoutSecond uint64
@@ -263,7 +263,7 @@ func getDefaultSoftSettings() soft {
 		UnknownRegionName:                   "UNKNOWN",
 		RaftNodeReceiveQueueLength:          1024,
 		SnapshotStatusPushDelayMS:           1000,
-		NodeCommitChanLength:                1024,
+		NodeTaskChanLength:                  1024,
 		SetDeploymentIDTimeoutSecond:        5,
 		NodeHostSyncPoolSize:                8,
 		CommitBatchSize:                     512,

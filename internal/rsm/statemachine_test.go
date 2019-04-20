@@ -280,13 +280,13 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 		Index:    237,
 		Term:     1,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 	// two commits to handle
-	batch := make([]Commit, 0, 8)
+	batch := make([]Task, 0, 8)
 	sm.Handle(batch, nil)
 	if sm.GetLastApplied() != 237 {
 		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
@@ -324,13 +324,13 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 		Index:    237,
 		Term:     1,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 	// two commits to handle
-	batch := make([]Commit, 0, 8)
+	batch := make([]Task, 0, 8)
 	sm.Handle(batch, nil)
 	if sm.GetLastApplied() != 237 {
 		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
@@ -342,7 +342,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 
 func TestStateMachineCanBeCreated(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		if sm.CommitChanBusy() {
+		if sm.TaskChanBusy() {
 			t.Errorf("commitChan busy")
 		}
 	}
@@ -370,11 +370,11 @@ func applyConfigChangeEntry(sm *StateMachine,
 		Index: index,
 		Term:  1,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 }
 
 func TestBatchedLastAppliedValue(t *testing.T) {
@@ -532,7 +532,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 			4,
 			"localhost:1010",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -563,7 +563,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			4,
 			"localhost:1010",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -592,7 +592,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 			"localhost:1010",
 			123)
 
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -620,7 +620,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			"localhost:1010",
 			123)
 
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -668,7 +668,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			"localhost:1010",
 			123)
 
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -716,7 +716,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 		if !ok {
 			t.Errorf("node 1 not in members")
 		}
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 123 {
 			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
@@ -749,7 +749,7 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 			1,
 			"",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if nodeProxy.reject {
 			t.Errorf("rejected")
@@ -778,7 +778,7 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 			2,
 			"test.nodehost",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
@@ -804,7 +804,7 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 			2,
 			"a1",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
@@ -827,7 +827,7 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 			1,
 			"",
 			123)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if !nodeProxy.reject {
 			t.Errorf("not rejected")
@@ -847,12 +847,12 @@ func TestHandleEmptyEvent(t *testing.T) {
 			Index: 234,
 			Term:  1,
 		}
-		commit := Commit{
+		commit := Task{
 			Entries: []pb.Entry{e},
 		}
 		sm.index = 233
-		sm.CommitC() <- commit
-		batch := make([]Commit, 0, 8)
+		sm.TaskC() <- commit
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 234 {
 			t.Errorf("last applied %d, want 234", sm.GetLastApplied())
@@ -892,13 +892,13 @@ func TestHandleUpate(t *testing.T) {
 			Index:    236,
 			Term:     1,
 		}
-		commit := Commit{
+		commit := Task{
 			Entries: []pb.Entry{e1, e2},
 		}
 		sm.index = 234
-		sm.CommitC() <- commit
+		sm.TaskC() <- commit
 		// two commits to handle
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 236 {
 			t.Errorf("last applied %d, want 236", sm.GetLastApplied())
@@ -934,7 +934,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			t.Fatalf("failed to make snapshot %v", err)
 		}
 		index := ss.Index
-		commit := Commit{
+		commit := Task{
 			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
@@ -1006,7 +1006,7 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 1, 0, data)
@@ -1035,11 +1035,11 @@ func applySessionRegisterEntry(sm *StateMachine,
 		Index:    index,
 		Term:     1,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 	return e
 }
 
@@ -1051,10 +1051,10 @@ func applySessionUnregisterEntry(sm *StateMachine,
 		Index:    index,
 		Term:     1,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 	return e
 }
 
@@ -1069,10 +1069,10 @@ func applyTestEntry(sm *StateMachine,
 		Cmd:         data,
 		RespondedTo: respondedTo,
 	}
-	commit := Commit{
+	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.CommitC() <- commit
+	sm.TaskC() <- commit
 	return e
 }
 
@@ -1081,7 +1081,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		clientID := uint64(12345)
 		applySessionRegisterEntry(sm, clientID, 789)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != 789 {
 			t.Errorf("last applied %d, want 789", sm.GetLastApplied())
@@ -1117,7 +1117,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		e := applySessionRegisterEntry(sm, 12345, 789)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
@@ -1132,10 +1132,10 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult.Value, e.ClientID)
 		}
 		e.Index = 790
-		commit := Commit{
+		commit := Task{
 			Entries: []pb.Entry{e},
 		}
-		sm.CommitC() <- commit
+		sm.TaskC() <- commit
 		if nodeProxy.rejected {
 			t.Errorf("rejected flag set too early")
 		}
@@ -1160,7 +1160,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 
 		sm.index = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
@@ -1187,7 +1187,7 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		sm.index = 789
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
@@ -1212,7 +1212,7 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
@@ -1255,7 +1255,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
@@ -1296,7 +1296,7 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
-		batch := make([]Commit, 0, 8)
+		batch := make([]Task, 0, 8)
 		sm.Handle(batch, nil)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 790, 0, data)

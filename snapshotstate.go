@@ -28,11 +28,11 @@ type getSink func() pb.IChunkSink
 type snapshotRecord struct {
 	mu        sync.Mutex
 	getSinkFn getSink
-	record    rsm.Commit
+	record    rsm.Task
 	hasRecord bool
 }
 
-func (sr *snapshotRecord) setStreamRecord(rec rsm.Commit,
+func (sr *snapshotRecord) setStreamRecord(rec rsm.Task,
 	getSinkFn getSink) bool {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -45,7 +45,7 @@ func (sr *snapshotRecord) setStreamRecord(rec rsm.Commit,
 	return true
 }
 
-func (sr *snapshotRecord) getStreamRecord() (rsm.Commit, getSink, bool) {
+func (sr *snapshotRecord) getStreamRecord() (rsm.Task, getSink, bool) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	hasRecord := sr.hasRecord
@@ -53,7 +53,7 @@ func (sr *snapshotRecord) getStreamRecord() (rsm.Commit, getSink, bool) {
 	return sr.record, sr.getSinkFn, hasRecord
 }
 
-func (sr *snapshotRecord) setRecord(rec rsm.Commit) {
+func (sr *snapshotRecord) setRecord(rec rsm.Task) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	if sr.hasRecord {
@@ -63,7 +63,7 @@ func (sr *snapshotRecord) setRecord(rec rsm.Commit) {
 	sr.record = rec
 }
 
-func (sr *snapshotRecord) getRecord() (rsm.Commit, bool) {
+func (sr *snapshotRecord) getRecord() (rsm.Task, bool) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	hasRecord := sr.hasRecord
@@ -150,31 +150,31 @@ func (rs *snapshotState) setCompactLogTo(v uint64) {
 	atomic.StoreUint64(&rs.compactLogTo, v)
 }
 
-func (rs *snapshotState) setStreamSnapshotReq(rec rsm.Commit,
+func (rs *snapshotState) setStreamSnapshotReq(rec rsm.Task,
 	getSinkFn getSink) {
 	rs.streamSnapshotReady.setStreamRecord(rec, getSinkFn)
 }
 
-func (rs *snapshotState) setRecoverFromSnapshotReq(rec rsm.Commit) {
+func (rs *snapshotState) setRecoverFromSnapshotReq(rec rsm.Task) {
 	rs.recoverReady.setRecord(rec)
 }
 
-func (rs *snapshotState) getRecoverFromSnapshotReq() (rsm.Commit, bool) {
+func (rs *snapshotState) getRecoverFromSnapshotReq() (rsm.Task, bool) {
 	return rs.recoverReady.getRecord()
 }
 
-func (rs *snapshotState) setSaveSnapshotReq(rec rsm.Commit) {
+func (rs *snapshotState) setSaveSnapshotReq(rec rsm.Task) {
 	rs.saveSnapshotReady.setRecord(rec)
 }
 
-func (rs *snapshotState) getSaveSnapshotReq() (rsm.Commit, bool) {
+func (rs *snapshotState) getSaveSnapshotReq() (rsm.Task, bool) {
 	return rs.saveSnapshotReady.getRecord()
 }
 
-func (rs *snapshotState) getStreamSnapshotReq() (rsm.Commit, getSink, bool) {
+func (rs *snapshotState) getStreamSnapshotReq() (rsm.Task, getSink, bool) {
 	r, ok := rs.streamSnapshotReady.getRecord()
 	if !ok {
-		return rsm.Commit{}, nil, false
+		return rsm.Task{}, nil, false
 	}
 	return r, rs.streamSnapshotReady.getSinkFn, true
 }
@@ -196,7 +196,7 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 		plog.Panicf("invalid request, save %t, recover %t, stream %t",
 			saveSnapshot, recoverFromSnapshot, streamSnapshot)
 	}
-	rec := rsm.Commit{
+	rec := rsm.Task{
 		SnapshotRequested: saveSnapshot,
 		SnapshotAvailable: recoverFromSnapshot,
 		StreamSnapshot:    streamSnapshot,
@@ -212,15 +212,15 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 	}
 }
 
-func (rs *snapshotState) getStreamSnapshotCompleted() (rsm.Commit, bool) {
+func (rs *snapshotState) getStreamSnapshotCompleted() (rsm.Task, bool) {
 	return rs.streamSnapshotCompleted.getRecord()
 }
 
-func (rs *snapshotState) getRecoverCompleted() (rsm.Commit, bool) {
+func (rs *snapshotState) getRecoverCompleted() (rsm.Task, bool) {
 	return rs.recoverCompleted.getRecord()
 }
 
-func (rs *snapshotState) getSaveSnapshotCompleted() (rsm.Commit, bool) {
+func (rs *snapshotState) getSaveSnapshotCompleted() (rsm.Task, bool) {
 	return rs.saveSnapshotCompleted.getRecord()
 }
 
