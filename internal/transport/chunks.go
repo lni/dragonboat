@@ -182,7 +182,7 @@ func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 	key := snapshotKey(chunk)
 	td := c.tracked[key]
 	if chunk.ChunkId == 0 {
-		plog.Infof("new snapshot chunk 0, key %s", key)
+		plog.Infof("received the first chunk of a snapshot, key %s", key)
 		if td != nil {
 			plog.Warningf("removing unclaimed chunks %s", key)
 			c.deleteTempChunkDir(td.firstChunk)
@@ -237,8 +237,6 @@ func (c *chunks) shouldUpdateValidator(chunk pb.SnapshotChunk) bool {
 
 func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 	key := snapshotKey(chunk)
-	plog.Infof("addChunk called, %s, chunkid %d, has file info %t",
-		key, chunk.ChunkId, chunk.HasFileInfo)
 	td := c.onNewChunk(chunk)
 	if td == nil {
 		plog.Warningf("ignored a chunk belongs to %s", key)

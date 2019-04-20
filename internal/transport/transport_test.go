@@ -885,7 +885,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	defer stopper.Stop()
 	trans.SetDeploymentID(12345)
 	nodes.AddNode(100, 2, grpcServerURL)
-	conns := make([]*sink, 0)
+	conns := make([]*Sink, 0)
 	for i := uint32(0); i < maxConnectionCount; i++ {
 		sink := trans.GetStreamConnection(100, 2)
 		if sink == nil {

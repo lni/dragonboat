@@ -116,7 +116,7 @@ type ITransport interface {
 	RemoveMessageHandler()
 	ASyncSend(pb.Message) bool
 	ASyncSendSnapshot(pb.Message) bool
-	GetStreamConnection(clusterID uint64, nodeID uint64) *sink
+	GetStreamConnection(clusterID uint64, nodeID uint64) *Sink
 	Stop()
 }
 

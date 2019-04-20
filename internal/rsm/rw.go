@@ -26,7 +26,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// the blockWriter implementation had reference reusee's project below
+// the blockWriter implementation had reference to reusee's project below
 // https://github.com/reusee/hashingwriter
 
 package rsm
@@ -108,7 +108,9 @@ func validateBlock(block []byte, h hash.Hash) bool {
 	return bytes.Equal(crc, h.Sum(nil))
 }
 
-type blockWriter struct {
+// BlockWriter is a writer type that writes the input data to the underlying
+// storage with checksum appended at the end of each block.
+type BlockWriter struct {
 	h          hash.Hash
 	fh         hash.Hash
 	block      []byte
@@ -130,14 +132,14 @@ type IBlockWriter interface {
 // NewBlockWriter creates and returns a block writer.
 func NewBlockWriter(blockSize uint64,
 	onNewBlock func(data []byte, crc []byte) error,
-	t pb.ChecksumType) *blockWriter {
+	t pb.ChecksumType) *BlockWriter {
 	return newBlockWriter(blockSize, onNewBlock, t)
 }
 
 func newBlockWriter(blockSize uint64,
 	onNewBlock func(data []byte, crc []byte) error,
-	t pb.ChecksumType) *blockWriter {
-	return &blockWriter{
+	t pb.ChecksumType) *BlockWriter {
+	return &BlockWriter{
 		blockSize:  blockSize,
 		block:      make([]byte, 0, blockSize+checksumSize),
 		onNewBlock: onNewBlock,
@@ -148,7 +150,7 @@ func newBlockWriter(blockSize uint64,
 }
 
 // Write writes the specified data using the block writer.
-func (bw *blockWriter) Write(bs []byte) (int, error) {
+func (bw *BlockWriter) Write(bs []byte) (int, error) {
 	if bw.done {
 		panic("write called after flush")
 	}
@@ -179,7 +181,7 @@ func (bw *blockWriter) Write(bs []byte) (int, error) {
 }
 
 // Flush writes all in memory buffered data.
-func (bw *blockWriter) Flush() error {
+func (bw *BlockWriter) Flush() error {
 	if bw.done {
 		panic("flush called again")
 	} else {
@@ -202,14 +204,14 @@ func (bw *blockWriter) Flush() error {
 }
 
 // GetPayloadChecksum returns the checksum for the entire payload.
-func (bw *blockWriter) GetPayloadChecksum() []byte {
+func (bw *BlockWriter) GetPayloadChecksum() []byte {
 	if !bw.done {
 		panic("not flushed yet")
 	}
 	return bw.fh.Sum(nil)
 }
 
-func (bw *blockWriter) processNewBlock(data []byte, crc []byte) error {
+func (bw *BlockWriter) processNewBlock(data []byte, crc []byte) error {
 	if len(crc) > 0 {
 		if _, err := bw.fh.Write(crc); err != nil {
 			panic(err)
@@ -352,7 +354,7 @@ func (v1r *v1reader) Sum() []byte {
 }
 
 type v2writer struct {
-	bw *blockWriter
+	bw *BlockWriter
 }
 
 func newV2Writer(fw io.Writer, t pb.ChecksumType) *v2writer {

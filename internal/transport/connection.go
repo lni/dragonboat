@@ -37,19 +37,24 @@ var (
 	ErrStreamSnapshot = errors.New("stream snapshot failed")
 )
 
-type sink struct {
+// Sink is the chunk sink for receiving generated snapshot chunk.
+type Sink struct {
 	l *connection
 }
 
-func (s *sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+// Receive receives a snapshot chunk.
+func (s *Sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	return s.l.SendSnapshotChunk(chunk)
 }
 
-func (s *sink) ClusterID() uint64 {
+// ClusterID returns the cluster ID of the source node.
+func (s *Sink) ClusterID() uint64 {
 	return s.l.clusterID
 }
 
-func (s *sink) ToNodeID() uint64 {
+// ToNodeID returns the node ID of the node intended to get and handle the
+// received snapshot chunk.
+func (s *Sink) ToNodeID() uint64 {
 	return s.l.nodeID
 }
 

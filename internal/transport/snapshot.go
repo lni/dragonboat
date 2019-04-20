@@ -66,7 +66,7 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 
 // GetStreamConnection returns a connection used for streaming snapshot.
 func (t *Transport) GetStreamConnection(clusterID uint64,
-	nodeID uint64) *sink {
+	nodeID uint64) *Sink {
 	s := t.getStreamConnection(clusterID, nodeID)
 	if s == nil {
 		t.sendSnapshotNotification(clusterID, nodeID, true)
@@ -75,7 +75,7 @@ func (t *Transport) GetStreamConnection(clusterID uint64,
 }
 
 func (t *Transport) getStreamConnection(clusterID uint64,
-	nodeID uint64) *sink {
+	nodeID uint64) *Sink {
 	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
 		return nil
@@ -85,7 +85,7 @@ func (t *Transport) getStreamConnection(clusterID uint64,
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	if c := t.tryCreateConnection(key, addr, true, 0); c != nil {
-		return &sink{l: c}
+		return &Sink{l: c}
 	}
 	return nil
 }
