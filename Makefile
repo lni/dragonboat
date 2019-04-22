@@ -225,7 +225,6 @@ GRPC_TEST_BUILDTAGS=dragonboat_grpc_test
 
 all: binding
 rebuild-all: clean binding all-slow-monkey-tests unit-test-bin
-servers: drummer nodehost drummercmd
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
@@ -291,22 +290,6 @@ install-dragonboat: gen-gitversion
 gen-gitversion:
 	@echo "package dragonboat\n" > gitversion.go
 	@echo "const GITVERSION = \"$(shell git rev-parse HEAD)\"" >> gitversion.go
-
-DRUMMER_SERVER_BIN=dragonboat-drummer-server
-DRUMMER_CMD_BIN=dragonboat-drummer-cmd
-NODEHOST_SERVER_BIN=dragonboat-nodehost-server
-GOBUILD=$(GO) build $(VERBOSE) -tags=$(GOBUILDTAGS) -o $@
-$(DRUMMER_SERVER_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/drummer
-drummer: $(DRUMMER_SERVER_BIN)
-
-$(NODEHOST_SERVER_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/nodehost
-nodehost: $(NODEHOST_SERVER_BIN)
-
-$(DRUMMER_CMD_BIN):
-	$(GOBUILD) $(PKGNAME)/drummer/server/drummercmd
-drummercmd: $(DRUMMER_CMD_BIN)
 
 $(PLUGIN_KVSTORE_BIN):
 	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
@@ -670,9 +653,6 @@ clean:
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
 		$(DRUMMER_MONKEY_TESTING_BIN) \
-		$(DRUMMER_SERVER_BIN) \
-		$(NODEHOST_SERVER_BIN) \
-		$(DRUMMER_CMD_BIN) \
 		$(PLUGIN_KVSTORE_BIN) \
 		$(PLUGIN_CPP_KVTEST_BIN) \
 		$(CPPKVTEST_OBJS) \
@@ -691,8 +671,6 @@ clean:
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
-  drummercmd drummer nodehost \
-	$(DRUMMER_SERVER_BIN) $(NODEHOST_SERVER_BIN) $(DRUMMER_CMD_BIN) \
 	$(PLUGIN_CPP_KVTEST_BIN) $(DRUMMER_MONKEY_TESTING_BIN) \
 	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
