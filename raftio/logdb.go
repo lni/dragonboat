@@ -137,4 +137,8 @@ type ILogDB interface {
 	ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error)
 	// RemoveNodeData removes all data associated with the specified node.
 	RemoveNodeData(clusterID uint64, nodeID uint64) error
+	// ImportSnapshot imports the specified snapshot by creating all required
+	// metadata in the logdb.
+	ImportSnapshot(snapshot pb.Snapshot,
+		nodeID uint64, smType pb.StateMachineType) error
 }

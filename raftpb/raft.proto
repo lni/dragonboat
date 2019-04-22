@@ -128,6 +128,7 @@ message Snapshot {
   repeated SnapshotFile files     = 7;
   optional bytes Checksum         = 8;
   optional bool Dummy             = 9 [(gogoproto.nullable) = false];
+  optional uint64 cluster_id      = 10 [(gogoproto.nullable) = false];
 }
 
 message Message {

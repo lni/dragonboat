@@ -31,10 +31,10 @@ import (
 var (
 	// ErrSnapshotOutOfDate is the error to indicate that snapshot is out of date.
 	ErrSnapshotOutOfDate     = errors.New("snapshot out of date")
-	snapshotMetadataFilename = "snapshot.metadata"
+	SnapshotMetadataFilename = "snapshot.metadata"
 	genTmpDirSuffix          = "generating"
 	recvTmpDirSuffix         = "receiving"
-	snapshotFileSuffix       = "gbsnap"
+	SnapshotFileSuffix       = "gbsnap"
 	shrinkedSuffix           = "shrinked"
 )
 
@@ -82,7 +82,7 @@ func getSnapshotDirName(index uint64) string {
 }
 
 func getSnapshotFilename(index uint64) string {
-	return fmt.Sprintf("snapshot-%016X.%s", index, snapshotFileSuffix)
+	return fmt.Sprintf("snapshot-%016X.%s", index, SnapshotFileSuffix)
 }
 
 func getShrinkedSnapshotFilename(index uint64) string {
@@ -199,7 +199,7 @@ func (se *SnapshotEnv) RemoveFinalDir() error {
 // SaveSnapshotMetadata saves the metadata of the snapshot file.
 func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
 	err := fileutil.CreateFlagFile(se.tmpDir,
-		snapshotMetadataFilename, msg)
+		SnapshotMetadataFilename, msg)
 	return err
 }
 

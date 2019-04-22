@@ -320,6 +320,10 @@ func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64
 func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error) {
 	return nil, nil
 }
+func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot,
+	nodeID uint64, smType pb.StateMachineType) error {
+	return nil
+}
 
 /*
 func TestRocksDBIsUsedByDefault(t *testing.T) {

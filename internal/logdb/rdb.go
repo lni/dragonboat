@@ -113,10 +113,32 @@ func (r *RDB) saveRaftState(updates []pb.Update,
 	return nil
 }
 
+func (r *RDB) importSnapshot(ss pb.Snapshot,
+	nodeID uint64, smType pb.StateMachineType) error {
+	wb := r.getWriteBatch()
+	bsrec := pb.Bootstrap{Join: true, Type: smType}
+	state := pb.State{Term: ss.Term, Commit: ss.Index}
+	r.recordBootstrap(wb, ss.ClusterId, nodeID, bsrec)
+	r.recordStateAllocs(ss.ClusterId, nodeID, state, wb)
+	r.recordSnapshot(wb, pb.Update{Snapshot: ss})
+	return r.kvs.CommitWriteBatch(wb)
+}
+
 func (r *RDB) setMaxIndex(wb IWriteBatch,
 	ud pb.Update, maxIndex uint64, ctx raftio.IContext) {
 	r.cs.setMaxIndex(ud.ClusterID, ud.NodeID, maxIndex)
 	r.recordMaxIndex(wb, ud.ClusterID, ud.NodeID, maxIndex, ctx)
+}
+
+func (r *RDB) recordBootstrap(wb IWriteBatch,
+	clusterID uint64, nodeID uint64, bsrec pb.Bootstrap) {
+	bskey := newKey(maxKeySize, nil)
+	bskey.setBootstrapKey(clusterID, nodeID)
+	bsdata, err := bsrec.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	wb.Put(bskey.Key(), bsdata)
 }
 
 func (r *RDB) recordSnapshot(wb IWriteBatch, ud pb.Update) {
@@ -142,6 +164,17 @@ func (r *RDB) recordMaxIndex(wb IWriteBatch,
 	wb.Put(ko.Key(), data)
 }
 
+func (r *RDB) recordStateAllocs(clusterID uint64,
+	nodeID uint64, st pb.State, wb IWriteBatch) {
+	data, err := st.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	key := newKey(snapshotKeySize, nil)
+	key.SetStateKey(clusterID, nodeID)
+	wb.Put(key.Key(), data)
+}
+
 func (r *RDB) recordState(clusterID uint64,
 	nodeID uint64, st pb.State,
 	wb IWriteBatch, ctx raftio.IContext) {
@@ -164,13 +197,9 @@ func (r *RDB) recordState(clusterID uint64,
 
 func (r *RDB) saveBootstrapInfo(clusterID uint64,
 	nodeID uint64, bootstrap pb.Bootstrap) error {
-	data, err := bootstrap.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	ko := newKey(maxKeySize, nil)
-	ko.setBootstrapKey(clusterID, nodeID)
-	return r.kvs.SaveValue(ko.Key(), data)
+	wb := r.getWriteBatch()
+	r.recordBootstrap(wb, clusterID, nodeID, bootstrap)
+	return r.kvs.CommitWriteBatch(wb)
 }
 
 func (r *RDB) getBootstrapInfo(clusterID uint64,

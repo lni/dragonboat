@@ -114,6 +114,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		return nil, env, err
 	}
 	ss := &pb.Snapshot{
+		ClusterId:  s.clusterID,
 		Filepath:   env.GetFilepath(),
 		FileSize:   sz,
 		Membership: meta.Membership,
