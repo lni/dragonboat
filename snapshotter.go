@@ -282,6 +282,7 @@ func (s *snapshotter) ProcessOrphans() error {
 			}
 			deleteDir := false
 			mrss, err := s.GetMostRecentSnapshot()
+			plog.Infof("most recent snapshot: %d, ss index %d", mrss.Index, ss.Index)
 			if err != nil {
 				if err == ErrNoSnapshot {
 					plog.Infof("no snapshot in logdb, delete the folder")

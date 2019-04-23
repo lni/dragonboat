@@ -1321,3 +1321,78 @@ func TestRemoveNodeData(t *testing.T) {
 	}
 	runLogDBTest(t, tf)
 }
+
+func TestImportSnapshot(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		clusterID := uint64(2)
+		nodeID := uint64(4)
+		ents := make([]pb.Entry, 0)
+		hs := pb.State{
+			Term:   1,
+			Vote:   3,
+			Commit: 100,
+		}
+		ss := pb.Snapshot{
+			FileSize: 1234,
+			Filepath: "f2",
+			Index:    120,
+			Term:     2,
+		}
+		for i := uint64(0); i <= batchSize*3+1; i++ {
+			e := pb.Entry{
+				Term:  1,
+				Index: i,
+				Type:  pb.ApplicationEntry,
+			}
+			ents = append(ents, e)
+		}
+		ud := pb.Update{
+			EntriesToSave: ents,
+			State:         hs,
+			ClusterID:     clusterID,
+			NodeID:        nodeID,
+			Snapshot:      ss,
+		}
+		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err != nil {
+			t.Fatalf("failed to save recs")
+		}
+		ssimport := pb.Snapshot{
+			Type:      pb.OnDiskStateMachine,
+			ClusterId: clusterID,
+			Index:     110,
+			Term:      2,
+		}
+		if err := db.ImportSnapshot(ssimport, nodeID); err != nil {
+			t.Fatalf("import snapshot failed %v", err)
+		}
+		snapshots, err := db.ListSnapshots(clusterID, nodeID)
+		if err != nil {
+			t.Fatalf("failed to list snapshots %v", err)
+		}
+		if len(snapshots) != 1 {
+			t.Fatalf("%d snapshot rec found", len(snapshots))
+		}
+		if snapshots[0].Index != ssimport.Index {
+			t.Errorf("unexpected snapshot index %d", snapshots[0].Index)
+		}
+		bs, err := db.GetBootstrapInfo(clusterID, nodeID)
+		if err != nil {
+			t.Fatalf("failed to delete bootstrap %v", err)
+		}
+		if bs.Type != pb.OnDiskStateMachine {
+			t.Errorf("unexpected type %d", bs.Type)
+		}
+		state, err := db.ReadRaftState(clusterID, nodeID, 1)
+		if err != nil {
+			t.Fatalf("raft state not deleted %v", err)
+		}
+		if state == nil {
+			t.Fatalf("failed to get raft state")
+		}
+		if state.State.Commit != snapshots[0].Index {
+			t.Errorf("unexpected commit value")
+		}
+	}
+	runLogDBTest(t, tf)
+}

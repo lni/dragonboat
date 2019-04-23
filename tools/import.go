@@ -46,14 +46,8 @@ var (
 
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
-	addr, ok := memberNodes[nodeID]
-	if !ok {
-		return ErrInvalidMembers
-	}
-	if nhConfig.RaftAddress != addr {
-		plog.Errorf("local node address in NodeHostConfig %s, in members %s",
-			nhConfig.RaftAddress, addr)
-		return ErrInvalidMembers
+	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
+		return err
 	}
 	ssfp, err := getSnapshotFilepath(srcDir)
 	if err != nil {
@@ -63,7 +57,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err != nil {
 		return err
 	}
-	ok, err = isCompleteSnapshotImage(ssfp, oldss)
+	ok, err := isCompleteSnapshotImage(ssfp, oldss)
 	if err != nil {
 		return err
 	}
@@ -81,24 +75,40 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	env := server.NewSnapshotEnv(getSnapshotDir,
-		oldss.ClusterId, nodeID, nodeID, oldss.Index, server.SnapshottingMode)
+		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshottingMode)
 	if err := env.CreateTempDir(); err != nil {
 		return err
 	}
 	dstDir := env.GetTempDir()
+	finalDir := env.GetFinalDir()
 	logdb, err := getLogDB(*serverCtx, nhConfig)
 	if err != nil {
 		return err
 	}
 	defer logdb.Close()
-	ss := getProcessedSnapshotRecord(oldss, memberNodes)
-	if err := copySnapshot(ss, srcDir, dstDir); err != nil {
+	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes)
+	if err := copySnapshot(oldss, srcDir, dstDir); err != nil {
 		return err
 	}
 	if err := env.FinalizeSnapshot(&ss); err != nil {
 		return err
 	}
-	return logdb.ImportSnapshot(ss, nodeID, oldss.Type)
+	return logdb.ImportSnapshot(ss, nodeID)
+}
+
+func checkImportSettings(nhConfig config.NodeHostConfig,
+	memberNodes map[uint64]string, nodeID uint64) error {
+	addr, ok := memberNodes[nodeID]
+	if !ok {
+		plog.Errorf("node ID not found in the memberNode map")
+		return ErrInvalidMembers
+	}
+	if nhConfig.RaftAddress != addr {
+		plog.Errorf("node address in NodeHostConfig %s, in members %s",
+			nhConfig.RaftAddress, addr)
+		return ErrInvalidMembers
+	}
+	return nil
 }
 
 func isCompleteSnapshotImage(ssfp string, ss pb.Snapshot) (bool, error) {
@@ -113,15 +123,11 @@ func getSnapshotFilepath(dir string) (string, error) {
 	if !fileutil.Exist(dir) {
 		return "", ErrPathNotExist
 	}
-	mf := filepath.Join(dir, server.SnapshotMetadataFilename)
-	if !fileutil.Exist(mf) {
-		return "", ErrIncompleteSnapshot
-	}
 	files, err := getSnapshotFiles(dir)
 	if err != nil {
 		return "", err
 	}
-	if len(files) == 1 {
+	if len(files) != 1 {
 		return "", ErrIncompleteSnapshot
 	}
 	return files[0], nil
@@ -170,66 +176,76 @@ func checkMembers(old pb.Membership, members map[uint64]string) error {
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
+		v, ok = old.Observers[nodeID]
+		if ok && v != addr {
+			return errors.New("node address changed")
+		}
+		if ok {
+			return errors.New("adding an observer as regular node")
+		}
 		_, ok = old.Removed[nodeID]
 		if ok {
 			return errors.New("adding a removed node")
-		}
-		_, ok = old.Observers[nodeID]
-		if ok {
-			return errors.New("adding an observer as regular node")
 		}
 	}
 	return nil
 }
 
-func getProcessedSnapshotRecord(old pb.Snapshot,
-	members map[uint64]string) pb.Snapshot {
+func getProcessedSnapshotRecord(dstDir string,
+	old pb.Snapshot, members map[uint64]string) pb.Snapshot {
+	for _, file := range old.Files {
+		file.Filepath = filepath.Join(dstDir, filepath.Base(file.Filepath))
+	}
 	ss := pb.Snapshot{
-		Filepath: old.Filepath,
+		Filepath: filepath.Join(dstDir, filepath.Base(old.Filepath)),
 		FileSize: old.FileSize,
 		Index:    old.Index,
 		Term:     old.Term,
-		Files:    old.Files,
 		Checksum: old.Checksum,
 		Dummy:    old.Dummy,
 		Membership: pb.Membership{
-			Removed:   make(map[uint64]bool),
-			Observers: make(map[uint64]string),
-			Addresses: make(map[uint64]string),
+			ConfigChangeId: old.Index,
+			Removed:        make(map[uint64]bool),
+			Observers:      make(map[uint64]string),
+			Addresses:      make(map[uint64]string),
 		},
+		Files:     old.Files,
 		Type:      old.Type,
 		ClusterId: old.ClusterId,
 	}
-	for nodeID, _ := range old.Membership.Addresses {
-		ss.Membership.Removed[nodeID] = true
+	for nid, _ := range old.Membership.Addresses {
+		_, ok := members[nid]
+		if !ok {
+			ss.Membership.Removed[nid] = true
+		}
 	}
-	for nodeID, _ := range old.Membership.Observers {
-		ss.Membership.Removed[nodeID] = true
+	for nid, _ := range old.Membership.Observers {
+		_, ok := members[nid]
+		if !ok {
+			ss.Membership.Removed[nid] = true
+		}
 	}
-	for nodeID := range old.Membership.Removed {
-		ss.Membership.Removed[nodeID] = true
+	for nid := range old.Membership.Removed {
+		ss.Membership.Removed[nid] = true
 	}
-	for nodeID, addr := range members {
-		ss.Membership.Addresses[nodeID] = addr
+	for nid, addr := range members {
+		ss.Membership.Addresses[nid] = addr
 	}
 	return ss
 }
 
 func copySnapshot(ss pb.Snapshot, srcDir string, dstDir string) error {
-	names, err := getSnapshotFilenames(srcDir)
+	fp, err := getSnapshotFilepath(srcDir)
 	if err != nil {
 		return err
 	}
-	if len(names) != 1 {
-		return ErrIncompleteSnapshot
-	}
-	if err := copySnapshotFile(filepath.Join(srcDir, names[0]),
-		filepath.Join(dstDir, names[0])); err != nil {
+	dstfp := filepath.Join(dstDir, filepath.Base(fp))
+	if err := copyFile(fp, dstfp); err != nil {
 		return err
 	}
 	for _, file := range ss.Files {
 		fname := filepath.Base(file.Filepath)
-		if err := copySnapshotFile(filepath.Join(srcDir, fname),
+		if err := copyFile(filepath.Join(srcDir, fname),
 			filepath.Join(dstDir, fname)); err != nil {
 			return err
 		}
@@ -237,22 +253,31 @@ func copySnapshot(ss pb.Snapshot, srcDir string, dstDir string) error {
 	return nil
 }
 
-func copySnapshotFile(src string, dst string) error {
+func copyFile(src string, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
+	fi, err := in.Stat()
+	if err != nil {
+		return err
+	}
 	out, err := os.Create(dst)
 	if err != nil {
+		return err
+	}
+	if err := out.Chmod(fi.Mode()); err != nil {
 		return err
 	}
 	_, err = io.Copy(out, in)
 	if err != nil {
 		return err
 	}
-	fileutil.SyncDir(filepath.Dir(dst))
-	return nil
+	if err := out.Sync(); err != nil {
+		return err
+	}
+	return fileutil.SyncDir(filepath.Dir(dst))
 }
 
 func getLogDB(ctx server.Context,

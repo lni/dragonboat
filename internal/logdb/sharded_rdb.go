@@ -183,10 +183,9 @@ func (mw *ShardedRDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
 	return mw.shards[idx].removeNodeData(clusterID, nodeID)
 }
 
-func (mw *ShardedRDB) ImportSnapshot(snapshot pb.Snapshot,
-	nodeID uint64, smType pb.StateMachineType) error {
-	idx := mw.partitioner.GetPartitionID(snapshot.ClusterId)
-	return mw.shards[idx].importSnapshot(snapshot, nodeID, smType)
+func (mw *ShardedRDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
+	idx := mw.partitioner.GetPartitionID(ss.ClusterId)
+	return mw.shards[idx].importSnapshot(ss, nodeID)
 }
 
 // Close closes the ShardedRDB instance.

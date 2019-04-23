@@ -1111,7 +1111,9 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
 	// bootstrap the cluster by recording a bootstrap info rec into the LogDB
+	plog.Infof("%d, %d, binfo: %+v", config.ClusterID, config.NodeID, binfo)
 	if err == raftio.ErrNoBootstrapInfo {
+		plog.Infof("no bootstrap info")
 		var members map[uint64]string
 		if !join {
 			members = nodes

@@ -113,14 +113,29 @@ func (r *RDB) saveRaftState(updates []pb.Update,
 	return nil
 }
 
-func (r *RDB) importSnapshot(ss pb.Snapshot,
-	nodeID uint64, smType pb.StateMachineType) error {
+func (r *RDB) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
+	if ss.Type == pb.UnknownStateMachine {
+		panic("Unknown state machine type")
+	}
+	snapshots, err := r.listSnapshots(ss.ClusterId, nodeID)
+	if err != nil {
+		return err
+	}
+	selectedss := make([]pb.Snapshot, 0)
+	for _, curss := range snapshots {
+		if curss.Index >= ss.Index {
+			selectedss = append(selectedss, curss)
+		}
+	}
 	wb := r.getWriteBatch()
-	bsrec := pb.Bootstrap{Join: true, Type: smType}
+	bsrec := pb.Bootstrap{Join: true, Type: ss.Type}
 	state := pb.State{Term: ss.Term, Commit: ss.Index}
+	r.recordRemoveNodeData(wb, selectedss, ss.ClusterId, nodeID)
 	r.recordBootstrap(wb, ss.ClusterId, nodeID, bsrec)
-	r.recordStateAllocs(ss.ClusterId, nodeID, state, wb)
-	r.recordSnapshot(wb, pb.Update{Snapshot: ss})
+	r.recordStateAllocs(wb, ss.ClusterId, nodeID, state)
+	r.recordSnapshot(wb, pb.Update{
+		ClusterID: ss.ClusterId, NodeID: nodeID, Snapshot: ss,
+	})
 	return r.kvs.CommitWriteBatch(wb)
 }
 
@@ -164,8 +179,8 @@ func (r *RDB) recordMaxIndex(wb IWriteBatch,
 	wb.Put(ko.Key(), data)
 }
 
-func (r *RDB) recordStateAllocs(clusterID uint64,
-	nodeID uint64, st pb.State, wb IWriteBatch) {
+func (r *RDB) recordStateAllocs(wb IWriteBatch,
+	clusterID uint64, nodeID uint64, st pb.State) {
 	data, err := st.Marshal()
 	if err != nil {
 		panic(err)
@@ -454,6 +469,22 @@ func (r *RDB) removeEntriesTo(clusterID uint64,
 func (r *RDB) removeNodeData(clusterID uint64, nodeID uint64) error {
 	wb := r.getWriteBatch()
 	defer wb.Clear()
+	snapshots, err := r.listSnapshots(clusterID, nodeID)
+	if err != nil {
+		return err
+	}
+	r.recordRemoveNodeData(wb, snapshots, clusterID, nodeID)
+	if err := r.kvs.CommitDeleteBatch(wb); err != nil {
+		return err
+	}
+	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {
+		return err
+	}
+	return r.compaction(clusterID, nodeID, math.MaxUint64)
+}
+
+func (r *RDB) recordRemoveNodeData(wb IWriteBatch,
+	snapshots []pb.Snapshot, clusterID uint64, nodeID uint64) {
 	stateKey := newKey(maxKeySize, nil)
 	stateKey.SetStateKey(clusterID, nodeID)
 	wb.Delete(stateKey.Key())
@@ -463,22 +494,11 @@ func (r *RDB) removeNodeData(clusterID uint64, nodeID uint64) error {
 	maxIndexKey := newKey(maxKeySize, nil)
 	maxIndexKey.SetMaxIndexKey(clusterID, nodeID)
 	wb.Delete(maxIndexKey.Key())
-	snapshots, err := r.listSnapshots(clusterID, nodeID)
-	if err != nil {
-		return err
-	}
 	for _, ss := range snapshots {
 		key := newKey(maxKeySize, nil)
 		key.setSnapshotKey(clusterID, nodeID, ss.Index)
 		wb.Delete(key.Key())
 	}
-	if err := r.kvs.CommitDeleteBatch(wb); err != nil {
-		return err
-	}
-	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {
-		return err
-	}
-	return r.compaction(clusterID, nodeID, math.MaxUint64)
 }
 
 func (r *RDB) compaction(clusterID uint64, nodeID uint64, index uint64) error {

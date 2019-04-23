@@ -47,6 +47,7 @@ import (
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/tools"
 )
 
 func ExampleNewNodeHost() {
@@ -320,8 +321,7 @@ func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64
 func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error) {
 	return nil, nil
 }
-func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot,
-	nodeID uint64, smType pb.StateMachineType) error {
+func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 	return nil
 }
 
@@ -2058,4 +2058,118 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 3)
+}
+
+func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
+	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	rc := config.Config{
+		ClusterID:          1,
+		NodeID:             1,
+		ElectionRTT:        3,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    5,
+		CompactionOverhead: 2,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = nodeHostTestAddr1
+	nhc1 := config.NodeHostConfig{
+		WALDir:         nh1dir,
+		NodeHostDir:    nh1dir,
+		RTTMillisecond: 10,
+		RaftAddress:    nodeHostTestAddr1,
+		DeploymentID:   1,
+	}
+	nhc2 := config.NodeHostConfig{
+		WALDir:         nh2dir,
+		NodeHostDir:    nh2dir,
+		RTTMillisecond: 10,
+		RaftAddress:    nodeHostTestAddr2,
+		DeploymentID:   1,
+	}
+	plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
+	var once sync.Once
+	nh1 := NewNodeHost(nhc1)
+	nh2 := NewNodeHost(nhc2)
+	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+		return tests.NewFakeDiskSM(3)
+	}
+	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+		t.Fatalf("failed to start cluster %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer once.Do(func() {
+		nh1.Stop()
+		nh2.Stop()
+	})
+	session := nh1.GetNoOPSession(1)
+	mkproposal := func(nh *NodeHost) {
+		done := false
+		for i := 0; i < 100; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err == nil {
+				done = true
+				break
+			}
+		}
+		if !done {
+			t.Fatalf("failed to make proposal on restored cluster")
+		}
+	}
+	mkproposal(nh1)
+	sspath := "exported_snapshot_safe_to_delete"
+	os.RemoveAll(sspath)
+	os.MkdirAll(sspath, 0755)
+	defer os.RemoveAll(sspath)
+	sr, err := nh1.ExportSnapshot(1, sspath, 3*time.Second)
+	if err != nil {
+		t.Fatalf("failed to request snapshot %v", err)
+	}
+	var index uint64
+	select {
+	case v := <-sr.CompleteC:
+		if !v.Completed() {
+			t.Fatalf("failed to complete the requested snapshot")
+		}
+		index = v.GetIndex()
+	}
+	plog.Infof("exported snapshot index %d", index)
+	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+	dir := path.Join(sspath, snapshotDir)
+	members := make(map[uint64]string)
+	members[1] = nhc1.RaftAddress
+	members[10] = nhc2.RaftAddress
+	once.Do(func() {
+		nh1.Stop()
+		nh2.Stop()
+	})
+	if err := tools.ImportSnapshot(nhc1, dir, members, 1); err != nil {
+		t.Fatalf("failed to import snapshot %v", err)
+	}
+	if err := tools.ImportSnapshot(nhc2, dir, members, 10); err != nil {
+		t.Fatalf("failed to import snapshot %v", err)
+	}
+	plog.Infof("snapshots imported")
+	rnh1 := NewNodeHost(nhc1)
+	rnh2 := NewNodeHost(nhc2)
+	defer func() {
+		rnh1.Stop()
+		rnh2.Stop()
+	}()
+	if err := rnh1.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+		t.Fatalf("failed to start cluster %v", err)
+	}
+	rc.NodeID = 10
+	if err := rnh2.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+		t.Fatalf("failed to start cluster %v", err)
+	}
+	waitForLeaderToBeElected(t, rnh1, 1)
+	mkproposal(rnh1)
+	mkproposal(rnh2)
 }

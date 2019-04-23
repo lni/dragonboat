@@ -309,9 +309,10 @@ TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
 	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-utils test-config test-client test-server test-tests
+	test-multiraft test-utils test-config test-client test-server test-tests \
+	test-tools
 ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-utils test-config test-client test-server test-tests
+  test-utils test-config test-client test-server test-tests test-tools
 test: dragonboat-test test-drummer
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
@@ -324,7 +325,7 @@ dev-test: test test-grpc-transport
 unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-multiraft test-utils test-config test-client test-server
+  test-multiraft test-utils test-config test-client test-server test-tools
 
 ###############################################################################
 # fast tests executed for every git push
@@ -367,6 +368,8 @@ test-tests:
 	$(GOTEST) $(PKGNAME)/internal/tests
 test-drummer:
 	$(GOTEST) $(PKGNAME)/internal/drummer
+test-tools:
+	$(GOTEST) $(PKGNAME)/tools
 
 ###############################################################################
 # slow tests excuted nightly & after major changes
@@ -474,7 +477,7 @@ clean:
 	$(PLUGIN_CPP_KVTEST_BIN) $(DRUMMER_MONKEY_TESTING_BIN) \
 	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) $(PLUGIN_CONCURRENTKV_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
-	drummer-monkey-test-bin test test-raft test-rsm test-logdb \
+	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
 	test-transport test-multiraft test-drummer test-session test-server test-utils \
 	test-config test-tests static-check clean plugin-kvtest logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
