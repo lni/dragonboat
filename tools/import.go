@@ -44,9 +44,8 @@ var (
 	ErrIncompleteSnapshot = errors.New("snapshot is incomplete")
 )
 
-func importSnapshot(nhConfig config.NodeHostConfig,
-	sspath string, memberNodes map[uint64]string, nodeID uint64,
-	smType pb.StateMachineType) error {
+func ImportSnapshot(nhConfig config.NodeHostConfig,
+	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
 	addr, ok := memberNodes[nodeID]
 	if !ok {
 		return ErrInvalidMembers
@@ -56,14 +55,15 @@ func importSnapshot(nhConfig config.NodeHostConfig,
 			nhConfig.RaftAddress, addr)
 		return ErrInvalidMembers
 	}
-	if err := checkSnapshotPath(sspath); err != nil {
-		return err
-	}
-	oldss, err := getSnapshotRecord(sspath, server.SnapshotMetadataFilename)
+	ssfp, err := getSnapshotFilepath(srcDir)
 	if err != nil {
 		return err
 	}
-	ok, err = isCompleteSnapshotImage(sspath, oldss)
+	oldss, err := getSnapshotRecord(srcDir, server.SnapshotMetadataFilename)
+	if err != nil {
+		return err
+	}
+	ok, err = isCompleteSnapshotImage(ssfp, oldss)
 	if err != nil {
 		return err
 	}
@@ -92,49 +92,39 @@ func importSnapshot(nhConfig config.NodeHostConfig,
 	}
 	defer logdb.Close()
 	ss := getProcessedSnapshotRecord(oldss, memberNodes)
-	if err := copySnapshot(ss, sspath, dstDir); err != nil {
+	if err := copySnapshot(ss, srcDir, dstDir); err != nil {
 		return err
 	}
 	if err := env.FinalizeSnapshot(&ss); err != nil {
 		return err
 	}
-	return logdb.ImportSnapshot(ss, nodeID, smType)
+	return logdb.ImportSnapshot(ss, nodeID, oldss.Type)
 }
 
-func isCompleteSnapshotImage(path string, ss pb.Snapshot) (bool, error) {
-	files, err := getSnapshotFiles(path)
+func isCompleteSnapshotImage(ssfp string, ss pb.Snapshot) (bool, error) {
+	checksum, err := rsm.GetV2PayloadChecksum(ssfp)
 	if err != nil {
 		return false, err
 	}
-	if len(files) == 1 {
-		return false, ErrIncompleteSnapshot
-	}
-	checksum, err := rsm.GetV2PayloadChecksum(files[0])
-	if err != nil {
-		return false, err
-	}
-	if bytes.Compare(checksum, ss.Checksum) != 0 {
-		return false, nil
-	}
-	return true, nil
+	return bytes.Compare(checksum, ss.Checksum) == 0, nil
 }
 
-func checkSnapshotPath(path string) error {
-	if !fileutil.Exist(path) {
-		return ErrPathNotExist
+func getSnapshotFilepath(dir string) (string, error) {
+	if !fileutil.Exist(dir) {
+		return "", ErrPathNotExist
 	}
-	mf := filepath.Join(path, server.SnapshotMetadataFilename)
+	mf := filepath.Join(dir, server.SnapshotMetadataFilename)
 	if !fileutil.Exist(mf) {
-		return ErrIncompleteSnapshot
+		return "", ErrIncompleteSnapshot
 	}
-	files, err := getSnapshotFiles(path)
+	files, err := getSnapshotFiles(dir)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(files) == 1 {
-		return ErrIncompleteSnapshot
+		return "", ErrIncompleteSnapshot
 	}
-	return nil
+	return files[0], nil
 }
 
 func getSnapshotFiles(path string) ([]string, error) {
@@ -207,6 +197,8 @@ func getProcessedSnapshotRecord(old pb.Snapshot,
 			Observers: make(map[uint64]string),
 			Addresses: make(map[uint64]string),
 		},
+		Type:      old.Type,
+		ClusterId: old.ClusterId,
 	}
 	for nodeID, _ := range old.Membership.Addresses {
 		ss.Membership.Removed[nodeID] = true

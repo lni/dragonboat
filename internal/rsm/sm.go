@@ -17,6 +17,7 @@ package rsm
 import (
 	"io"
 
+	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
@@ -35,6 +36,7 @@ type IStateMachine interface {
 	GetHash() uint64
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
+	StateMachineType() pb.StateMachineType
 }
 
 // RegularStateMachine is a regular state machine not capable of taking
@@ -112,6 +114,10 @@ func (sm *RegularStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
+func (sm *RegularStateMachine) StateMachineType() pb.StateMachineType {
+	return pb.RegularStateMachine
+}
+
 // ConcurrentStateMachine is an IStateMachine type capable of taking concurrent
 // snapshots.
 type ConcurrentStateMachine struct {
@@ -177,6 +183,10 @@ func (sm *ConcurrentStateMachine) ConcurrentSnapshot() bool {
 // disk state machine.
 func (sm *ConcurrentStateMachine) OnDiskStateMachine() bool {
 	return false
+}
+
+func (sm *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
+	return pb.ConcurrentStateMachine
 }
 
 // OnDiskStateMachine is the type to represent an on disk state machine.
@@ -287,4 +297,8 @@ func (sm *OnDiskStateMachine) ConcurrentSnapshot() bool {
 // disk state machine.
 func (sm *OnDiskStateMachine) OnDiskStateMachine() bool {
 	return true
+}
+
+func (sm *OnDiskStateMachine) StateMachineType() pb.StateMachineType {
+	return pb.OnDiskStateMachine
 }

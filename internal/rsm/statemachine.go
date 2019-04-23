@@ -82,6 +82,7 @@ type SnapshotMeta struct {
 	Term       uint64
 	Request    SnapshotRequest
 	Membership pb.Membership
+	Type       pb.StateMachineType
 	Session    *bytes.Buffer
 	Ctx        interface{}
 }
@@ -470,6 +471,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		Request:    req,
 		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
 		Membership: s.members.getMembership(),
+		Type:       s.sm.StateMachineType(),
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
 		s.describe(), meta.Index, meta.Membership.Addresses)

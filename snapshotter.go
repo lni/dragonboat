@@ -123,6 +123,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		Files:      fs,
 		Checksum:   writer.GetPayloadChecksum(),
 		Dummy:      dummy,
+		Type:       meta.Type,
 	}
 	return ss, env, nil
 }

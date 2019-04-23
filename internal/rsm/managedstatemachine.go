@@ -197,6 +197,7 @@ type IManagedStateMachine interface {
 	Loaded(From)
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
+	StateMachineType() pb.StateMachineType
 }
 
 // ManagedStateMachineFactory is the factory function type for creating an
@@ -262,6 +263,10 @@ func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
 // machine is an on disk state machine.
 func (ds *NativeStateMachine) OnDiskStateMachine() bool {
 	return ds.sm.OnDiskStateMachine()
+}
+
+func (ds *NativeStateMachine) StateMachineType() pb.StateMachineType {
+	return ds.sm.StateMachineType()
 }
 
 // Update updates the data store.
