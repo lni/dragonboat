@@ -431,7 +431,7 @@ CHECKED_PKGS=internal/raft internal/logdb internal/transport \
 	internal/utils/fileutil internal/utils/syncutil \
 	internal/utils/stringutil internal/utils/logutil internal/utils/netutil \
 	internal/utils/cache internal/utils/envutil internal/utils/compression \
-	internal/server raftpb \
+	internal/server raftpb tools \
 	logger raftio config statemachine internal/drummer client \
 	internal/drummer/client
 

@@ -265,6 +265,7 @@ func (ds *NativeStateMachine) OnDiskStateMachine() bool {
 	return ds.sm.OnDiskStateMachine()
 }
 
+// StateMachineType returns the state machine type.
 func (ds *NativeStateMachine) StateMachineType() pb.StateMachineType {
 	return ds.sm.StateMachineType()
 }

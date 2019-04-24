@@ -14,6 +14,11 @@
 
 package tools
 
+/*
+Package tools provides functions and types typically used to construct DevOps
+tools for managing Dragonboat based applications.
+*/
+
 import (
 	"bytes"
 	"errors"
@@ -38,12 +43,88 @@ var (
 )
 
 var (
-	ErrNodeExist          = errors.New("node exist")
-	ErrInvalidMembers     = errors.New("invalid members")
-	ErrPathNotExist       = errors.New("path does not exist")
+	// ErrInvalidMembers indicates that the provided member nodes is invalid.
+	ErrInvalidMembers = errors.New("invalid members")
+	// ErrPathNotExist indicates that the specified exported snapshot directory
+	// do not exist.
+	ErrPathNotExist = errors.New("path does not exist")
+	// ErrIncompleteSnapshot indicates that the specified exported snapshot
+	// directory does not contain a complete snapshot.
 	ErrIncompleteSnapshot = errors.New("snapshot is incomplete")
 )
 
+// ImportSnapshot is used to repair the Raft cluster already has its quorum
+// nodes permanently lost or damaged. Such repair is only required when the
+// Raft cluster permanently lose its quorum. You are not suppose to use this
+// function when the cluster still have its majority nodes running or when
+// the node failures are not permanent. In our experience, a well monitored
+// and managed Dragonboat system can usually avoid using the ImportSnapshot
+// tool by always replace permanently dead nodes with available ones in time.
+//
+// ImportSnapshot imports the exported snapshot available in the specified
+// srcDir directory to the system and rewrites the history of node nodeID so
+// the node owns the imported snapshot and the membership of the Raft cluster
+// is rewritten to the details specified in memberNodes.
+//
+// ImportSnapshot is typically invoked by a DevOps tool seperated from the
+// Dragonboat based application. The NodeHost instance must be stopped on that
+// host when invoking the function ImportSnapshot.
+//
+// As an example, consider a Raft cluster with three nodes with the NodeID
+// values being 1, 2 and 3, they run on three distributed hostss each with a
+// running NodeHost instance and the RaftAddress values are m1, m2 and
+// m3. The ClusterID value of the Raft cluster is 100. Let's say hosts
+// identified by m2 and m3 suddenly become permenantly gone and thus cause the
+// Raft cluster to lose its quorum nodes. To repair the cluster, we can use the
+// ImportSnapshot function to overwrite the state and membership of the Raft
+// cluster.
+//
+// Assuming we have two other running hosts identified as m4 and m5, we want to
+// have two new nodes with NodeID 4 and 5 to replace the permanently lost ndoes
+// 2 and 3. In this case, the memberNodes map should contain the following
+// content:
+//
+// memberNodes: map[uint64]string{
+//   {1: "m1"}, {4: "m4"}, {5: "m5"},
+// }
+//
+// we first shutdown NodeHost instances on all involved hosts and call the
+// ImportSnapshot function from the DevOps tool. Assuming the directory
+// /backup/cluster100 contains the exported snapshot we previously saved by using
+// NodeHost's ExportSnapshot method, then -
+//
+// on m1, we call -
+// ImportSnapshot(nhConfig1, "/backup/cluster100", memberNodes, 1)
+//
+// on m4 -
+// ImportSnapshot(nhConfig4, "/backup/cluster100", memberNodes, 4)
+//
+// on m5 -
+// ImportSnapshot(nhConfig5, "/backup/cluster100", memberNodes, 5)
+//
+// The nhConfig* value used above should be the same as the one used to start
+// your NodeHost instances, they are suppose to be slightly different on m1, m4
+// and m5 to reflect the differences between these hosts, e.g. the RaftAddress
+// values. srcDir values are all set to "/backup/cluster100", that directory
+// should contain the exact same snapshot. The memberNodes value should be the
+// same across all three hosts.
+//
+// Once ImportSnapshot is called on all three of those hosts, we end up having
+// the history of the Raft cluster overwritten to the state in which -
+// * there are 3 nodes in the Raft cluster, the NodeID values are 1, 4 and 5.
+//   they run on hosts m1, m4 and m5.
+// * nodes 2 and 3 are permanently removed from the cluster. you should never
+//   restart any of them as both hosts m2 and m3 are suppose to be permanently
+//   unavailable.
+// * the state captured in the snapshot became the state of the cluster. all
+//   proposals more recent than the state of the snapshot are lost.
+//
+// Once the NodeHost instances are restarted on m1, m4 and m5, nodes 1, 4 and 5
+// of the Raft cluster 100 can be restarted in the same way as after rebooting
+// the hosts m1, m4 and m5.
+//
+// It is your applications's responsibility to let m4 and m5 to be aware that
+// node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
@@ -213,13 +294,13 @@ func getProcessedSnapshotRecord(dstDir string,
 		Type:      old.Type,
 		ClusterId: old.ClusterId,
 	}
-	for nid, _ := range old.Membership.Addresses {
+	for nid := range old.Membership.Addresses {
 		_, ok := members[nid]
 		if !ok {
 			ss.Membership.Removed[nid] = true
 		}
 	}
-	for nid, _ := range old.Membership.Observers {
+	for nid := range old.Membership.Observers {
 		_, ok := members[nid]
 		if !ok {
 			ss.Membership.Removed[nid] = true
@@ -270,8 +351,7 @@ func copyFile(src string, dst string) error {
 	if err := out.Chmod(fi.Mode()); err != nil {
 		return err
 	}
-	_, err = io.Copy(out, in)
-	if err != nil {
+	if _, err = io.Copy(out, in); err != nil {
 		return err
 	}
 	if err := out.Sync(); err != nil {

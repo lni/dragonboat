@@ -21,11 +21,14 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
+// Files is a collection of external files specified by the SaveSnapshot
+// method of the state machine type.
 type Files struct {
 	files []*pb.SnapshotFile
 	idmap map[uint64]struct{}
 }
 
+// NewFileCollection creates and returns a Files instance.
 func NewFileCollection() *Files {
 	return &Files{
 		files: make([]*pb.SnapshotFile, 0),
@@ -33,6 +36,7 @@ func NewFileCollection() *Files {
 	}
 }
 
+// AddFile adds the specified file to the external file collection.
 func (fc *Files) AddFile(fileID uint64,
 	path string, metadata []byte) {
 	if _, ok := fc.idmap[fileID]; ok {
@@ -47,14 +51,18 @@ func (fc *Files) AddFile(fileID uint64,
 	fc.idmap[fileID] = struct{}{}
 }
 
+// Size returns the number of external files already added to the external file
+// collection.
 func (fc *Files) Size() uint64 {
 	return uint64(len(fc.files))
 }
 
+// GetFileAt returns the specified file.
 func (fc *Files) GetFileAt(idx uint64) *pb.SnapshotFile {
 	return fc.files[idx]
 }
 
+// PrepareFiles finalize the external files added to the collection.
 func (fc *Files) PrepareFiles(tmpdir string,
 	finaldir string) ([]*pb.SnapshotFile, error) {
 	for _, file := range fc.files {

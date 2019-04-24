@@ -183,6 +183,8 @@ func (mw *ShardedRDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
 	return mw.shards[idx].removeNodeData(clusterID, nodeID)
 }
 
+// ImportSnapshot imports the snapshot record and other metadata records to the
+// system.
 func (mw *ShardedRDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	idx := mw.partitioner.GetPartitionID(ss.ClusterId)
 	return mw.shards[idx].importSnapshot(ss, nodeID)

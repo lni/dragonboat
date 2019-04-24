@@ -30,12 +30,14 @@ import (
 
 var (
 	// ErrSnapshotOutOfDate is the error to indicate that snapshot is out of date.
-	ErrSnapshotOutOfDate     = errors.New("snapshot out of date")
+	ErrSnapshotOutOfDate = errors.New("snapshot out of date")
+	// SnapshotMetadataFilename is the filename of a snapshot's metadata file.
 	SnapshotMetadataFilename = "snapshot.metadata"
-	genTmpDirSuffix          = "generating"
-	recvTmpDirSuffix         = "receiving"
-	SnapshotFileSuffix       = "gbsnap"
-	shrinkedSuffix           = "shrinked"
+	// SnapshotFileSuffix is the filename suffix of a snapshot file.
+	SnapshotFileSuffix = "gbsnap"
+	genTmpDirSuffix    = "generating"
+	recvTmpDirSuffix   = "receiving"
+	shrinkedSuffix     = "shrinked"
 )
 
 var finalizeLock sync.Mutex

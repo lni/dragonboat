@@ -2162,11 +2162,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		rnh1.Stop()
 		rnh2.Stop()
 	}()
-	if err := rnh1.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+	if err := rnh1.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
 		t.Fatalf("failed to start cluster %v", err)
 	}
 	rc.NodeID = 10
-	if err := rnh2.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+	if err := rnh2.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
 		t.Fatalf("failed to start cluster %v", err)
 	}
 	waitForLeaderToBeElected(t, rnh1, 1)

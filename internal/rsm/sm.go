@@ -114,6 +114,7 @@ func (sm *RegularStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
+// StateMachineType returns the type of the state machine.
 func (sm *RegularStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.RegularStateMachine
 }
@@ -185,6 +186,7 @@ func (sm *ConcurrentStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
+// StateMachineType returns the type of the state machine.
 func (sm *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.ConcurrentStateMachine
 }
@@ -299,6 +301,7 @@ func (sm *OnDiskStateMachine) OnDiskStateMachine() bool {
 	return true
 }
 
+// StateMachineType returns the type of the state machine.
 func (sm *OnDiskStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.OnDiskStateMachine
 }
