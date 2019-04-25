@@ -278,9 +278,19 @@ func (dc *DrummerClient) handleKillRequest(req pb.NodeHostRequest) {
 	} else {
 		plog.Infof("going to remove data for %s",
 			logutil.DescribeNode(clusterID, nodeID))
-		if err := dc.nh.RemoveData(clusterID, nodeID); err != nil {
-			plog.Errorf("remove data failed %s, %v",
-				logutil.DescribeNode(clusterID, nodeID), err)
+		for {
+			err := dc.nh.RemoveData(clusterID, nodeID)
+			if err != nil {
+				plog.Errorf("remove data failed %s, %v",
+					logutil.DescribeNode(clusterID, nodeID), err)
+				if err == dragonboat.ErrClusterNotStopped {
+					time.Sleep(100 * time.Millisecond)
+				} else {
+					panic(err)
+				}
+			} else {
+				break
+			}
 		}
 	}
 }
@@ -327,9 +337,19 @@ func (dc *DrummerClient) handleAddDeleteRequest(ctx context.Context,
 		if v.Completed() && req.Change.Type == pb.Request_DELETE {
 			plog.Infof("DELETE node completed, try to remove data for %s",
 				logutil.DescribeNode(clusterID, nodeID))
-			if err := dc.nh.RemoveData(clusterID, nodeID); err != nil {
-				plog.Errorf("remove data failed %s, %v",
-					logutil.DescribeNode(clusterID, nodeID), err)
+			for {
+				err := dc.nh.RemoveData(clusterID, nodeID)
+				if err != nil {
+					plog.Errorf("remove deleted node's data failed %s, %v",
+						logutil.DescribeNode(clusterID, nodeID), err)
+					if err == dragonboat.ErrClusterNotStopped {
+						time.Sleep(100 * time.Millisecond)
+					} else {
+						panic(err)
+					}
+				} else {
+					break
+				}
 			}
 		}
 		return

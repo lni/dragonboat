@@ -525,12 +525,12 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 	return nodeID, valid, nil
 }
 
-// GetNoOPSession returns a NO-OP client session ready to be used for
-// making proposals. The NO-OP client session is a dummy client session that
-// will not be checked or enforced. Use this No-OP client session when you
-// want to ignore features provided by client sessions. A NO-OP client session
-// is not registered on the server side and thus not required to be closed at
-// the end of its life cycle.
+// GetNoOPSession returns a NO-OP client session ready to be used for making
+// proposals. The NO-OP client session is a dummy client session that will not
+// be checked or enforced. Use this No-OP client session when you want to ignore
+// features provided by client sessions. A NO-OP client session is not
+// registered on the server side and thus not required to be closed at the end
+// of its life cycle.
 //
 // Returned NO-OP client session instance can be concurrently used in multiple
 // goroutines.
@@ -910,7 +910,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	plog.Infof("RemoveData called on %s", logutil.DescribeNode(clusterID, nodeID))
 	_, ok := nh.getCluster(clusterID)
-	if ok {
+	if ok || nh.execEngine.nodeLoaded(clusterID) {
 		return ErrClusterNotStopped
 	}
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {

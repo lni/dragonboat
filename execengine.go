@@ -15,6 +15,7 @@
 package dragonboat
 
 import (
+	"sync"
 	"time"
 
 	"github.com/lni/dragonboat/internal/rsm"
@@ -39,6 +40,42 @@ type nodeLoader interface {
 	getClusterSetIndex() uint64
 	forEachClusterRun(bf func() bool,
 		af func() bool, f func(uint64, *node) bool)
+}
+
+type nodeType struct {
+	workerID uint64
+	from     rsm.From
+}
+
+type loadedNodes struct {
+	mu    sync.Mutex
+	nodes map[nodeType]map[uint64]*node
+}
+
+func newLoadedNodes() *loadedNodes {
+	return &loadedNodes{
+		nodes: make(map[nodeType]map[uint64]*node),
+	}
+}
+
+func (l *loadedNodes) loaded(clusterID uint64) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, m := range l.nodes {
+		_, ok := m[clusterID]
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *loadedNodes) update(workerID uint64,
+	from rsm.From, nodes map[uint64]*node) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	nt := nodeType{workerID: workerID, from: from}
+	l.nodes[nt] = nodes
 }
 
 type workReady struct {
@@ -92,6 +129,7 @@ type execEngine struct {
 	commitStopper              *syncutil.Stopper
 	snapshotStopper            *syncutil.Stopper
 	nh                         nodeLoader
+	loaded                     *loadedNodes
 	ctx                        *server.Context
 	logdb                      raftio.ILogDB
 	ctxs                       []raftio.IContext
@@ -110,6 +148,7 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 		nh:                         nh,
 		ctx:                        ctx,
 		logdb:                      logdb,
+		loaded:                     newLoadedNodes(),
 		nodeStopper:                syncutil.NewStopper(),
 		commitStopper:              syncutil.NewStopper(),
 		snapshotStopper:            syncutil.NewStopper(),
@@ -174,6 +213,10 @@ func (s *execEngine) logProfileStats() {
 	}
 }
 
+func (s *execEngine) nodeLoaded(clusterID uint64) bool {
+	return s.loaded.loaded(clusterID)
+}
+
 func (s *execEngine) snapshotWorkerClosed(nodes map[uint64]*node) bool {
 	select {
 	case <-s.snapshotStopper.ShouldStop():
@@ -236,8 +279,10 @@ func (s *execEngine) snapshotWorkerMain(workerID uint64) {
 
 func (s *execEngine) loadSnapshotNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.loadBucketNodes(workerID, cci, nodes,
+	result, cci := s.loadBucketNodes(workerID, cci, nodes,
 		s.snapshotWorkReady.getPartitioner(), rsm.FromSnapshotWorker)
+	s.loaded.update(workerID, rsm.FromSnapshotWorker, result)
+	return result, cci
 }
 
 func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
@@ -322,8 +367,10 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 
 func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.loadBucketNodes(workerID, cci, nodes,
+	result, cci := s.loadBucketNodes(workerID, cci, nodes,
 		s.commitWorkReady.getPartitioner(), rsm.FromCommitWorker)
+	s.loaded.update(workerID, rsm.FromCommitWorker, result)
+	return result, cci
 }
 
 func processUninitializedNode(node *node) *rsm.Task {
@@ -531,8 +578,10 @@ func (s *execEngine) nodeWorkerMain(workerID uint64) {
 
 func (s *execEngine) loadNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.loadBucketNodes(workerID, cci, nodes,
+	result, cci := s.loadBucketNodes(workerID, cci, nodes,
 		s.nodeWorkReady.getPartitioner(), rsm.FromStepWorker)
+	s.loaded.update(workerID, rsm.FromStepWorker, result)
+	return result, cci
 }
 
 func (s *execEngine) loadBucketNodes(workerID uint64,

@@ -1927,8 +1927,23 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if !fileutil.Exist(snapshotDir) {
 			t.Fatalf("snapshot dir %s does not exist", snapshotDir)
 		}
-		if err := nh.RemoveData(2, 1); err != nil {
-			t.Fatalf("remove data fail %v", err)
+		removed := false
+		for i := 0; i < 1000; i++ {
+			err := nh.RemoveData(2, 1)
+			if err == ErrClusterNotStopped {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if err != nil {
+				t.Fatalf("failed to remove data %v", err)
+			}
+			if err == nil {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			t.Fatalf("failed to remove node data")
 		}
 		if fileutil.Exist(snapshotDir) {
 			t.Fatalf("snapshot dir %s still exist", snapshotDir)
