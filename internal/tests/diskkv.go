@@ -487,6 +487,11 @@ func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 		default:
 		}
 	}
+	rubbish := make([]byte, 1024*1024*6)
+	_, err := w.Write(rubbish)
+	if err != nil {
+		return err
+	}
 	ctxdata := ctx.(*diskKVCtx)
 	db := ctxdata.db
 	db.mu.RLock()
@@ -512,6 +517,10 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 			return sm.ErrSnapshotStopped
 		default:
 		}
+	}
+	rubbish := make([]byte, 1024*1024*6)
+	if _, err := io.ReadFull(r, rubbish); err != nil {
+		return err
 	}
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	dbdir := getNewRandomDBDirName(dir)
