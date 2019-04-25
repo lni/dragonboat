@@ -58,12 +58,12 @@ func newLoadedNodes() *loadedNodes {
 	}
 }
 
-func (l *loadedNodes) loaded(clusterID uint64) bool {
+func (l *loadedNodes) loaded(clusterID uint64, nodeID uint64) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, m := range l.nodes {
-		_, ok := m[clusterID]
-		if ok {
+		n, ok := m[clusterID]
+		if ok && n.nodeID == nodeID {
 			return true
 		}
 	}
@@ -213,8 +213,8 @@ func (s *execEngine) logProfileStats() {
 	}
 }
 
-func (s *execEngine) nodeLoaded(clusterID uint64) bool {
-	return s.loaded.loaded(clusterID)
+func (s *execEngine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
+	return s.loaded.loaded(clusterID, nodeID)
 }
 
 func (s *execEngine) snapshotWorkerClosed(nodes map[uint64]*node) bool {

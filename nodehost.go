@@ -909,8 +909,11 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 // the Raft cluster.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	plog.Infof("RemoveData called on %s", logutil.DescribeNode(clusterID, nodeID))
-	_, ok := nh.getCluster(clusterID)
-	if ok || nh.execEngine.nodeLoaded(clusterID) {
+	n, ok := nh.getCluster(clusterID)
+	if ok && n.nodeID == nodeID {
+		return ErrClusterNotStopped
+	}
+	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
