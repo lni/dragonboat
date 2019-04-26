@@ -143,13 +143,13 @@ func (dnh *NodeHostClient) reportNodeHostInfo(ctx context.Context,
 	}
 	servers := make([]string, 0)
 	servers = append(servers, dnh.masterServers...)
-	timeoutSecond := time.Duration(NodeHostInfoReportSecond * 2)
-	rctx, cancel := context.WithTimeout(dnh.ctx, timeoutSecond*time.Second)
-	defer cancel()
+	timeoutSecond := time.Duration(NodeHostInfoReportSecond / 2)
 	random.ShuffleStringList(servers)
 	for _, url := range servers {
+		rctx, cancel := context.WithTimeout(dnh.ctx, timeoutSecond*time.Second)
 		err := dnh.client.SendNodeHostInfo(rctx,
 			url, *nhi, dnh.apiAddress, plogIncluded)
+		cancel()
 		if err != nil {
 			if err == context.Canceled {
 				return err
