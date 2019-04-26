@@ -24,11 +24,11 @@ import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 enum MessageType {
-	LocalTick        = 0;
+  LocalTick        = 0;
   Election         = 1;
-	LeaderHeartbeat  = 2;
+  LeaderHeartbeat  = 2;
   ConfigChangeEvent= 3;
-	NoOP             = 4;
+  NoOP             = 4;
   Ping             = 5;
   Pong             = 6;
   Propose          = 7;
@@ -36,15 +36,15 @@ enum MessageType {
   Unreachable      = 9;
   CheckQuorum      = 10;
   BatchedReadIndex = 11;
-	Replicate        = 12;
-	ReplicateResp    = 13;
-	RequestVote      = 14;
-	RequestVoteResp  = 15;
-	InstallSnapshot  = 16;
-	Heartbeat        = 17;
-	HeartbeatResp    = 18;
-	ReadIndex        = 19;
-	ReadIndexResp    = 20;
+  Replicate        = 12;
+  ReplicateResp    = 13;
+  RequestVote      = 14;
+  RequestVoteResp  = 15;
+  InstallSnapshot  = 16;
+  Heartbeat        = 17;
+  HeartbeatResp    = 18;
+  ReadIndex        = 19;
+  ReadIndexResp    = 20;
   Quiesce          = 21;
   SnapshotReceived = 22;
   LeaderTransfer   = 23;
@@ -53,12 +53,12 @@ enum MessageType {
 }
 
 enum EntryType {
-	ApplicationEntry  = 0;
-	ConfigChangeEntry = 1;
+  ApplicationEntry  = 0;
+  ConfigChangeEntry = 1;
 }
 
 enum ConfigChangeType {
-	AddNode     = 0;
+  AddNode     = 0;
   RemoveNode  = 1;
   AddObserver = 2;
 }
@@ -75,16 +75,16 @@ message RaftDataStatus {
 }
 
 message State {
-	optional uint64 term   = 1 [(gogoproto.nullable) = false];
-	optional uint64 vote   = 2 [(gogoproto.nullable) = false];
+  optional uint64 term   = 1 [(gogoproto.nullable) = false];
+  optional uint64 vote   = 2 [(gogoproto.nullable) = false];
   optional uint64 commit = 3 [(gogoproto.nullable) = false];
 }
 
 message Entry {
-	optional uint64     Term        = 1 [(gogoproto.nullable) = false];
-	optional uint64     Index       = 2 [(gogoproto.nullable) = false];
-	optional EntryType  Type        = 3 [(gogoproto.nullable) = false];
-	optional uint64     Key         = 4 [(gogoproto.nullable) = false];
+  optional uint64     Term        = 1 [(gogoproto.nullable) = false];
+  optional uint64     Index       = 2 [(gogoproto.nullable) = false];
+  optional EntryType  Type        = 3 [(gogoproto.nullable) = false];
+  optional uint64     Key         = 4 [(gogoproto.nullable) = false];
   optional uint64     ClientID    = 5 [(gogoproto.nullable) = false];
   optional uint64     SeriesID    = 6 [(gogoproto.nullable) = false];
   optional uint64     RespondedTo = 7 [(gogoproto.nullable) = false];
@@ -97,9 +97,9 @@ message EntryBatch {
 
 message Membership {
   optional uint64 config_change_id  = 1;
-  map<uint64, string> addresses   = 2;
-  map<uint64, bool> removed       = 3;
-  map<uint64, string> observers   = 4;
+  map<uint64, string> addresses     = 2;
+  map<uint64, bool> removed         = 3;
+  map<uint64, string> observers     = 4;
 }
 
 // field id 1 was used for optional string filename
@@ -112,7 +112,7 @@ message SnapshotFile {
 
 // field id 1 was used for optional string filename
 message Snapshot {
-	optional string filepath        = 2 [(gogoproto.nullable) = false];
+  optional string filepath        = 2 [(gogoproto.nullable) = false];
   optional uint64 file_size       = 3 [(gogoproto.nullable) = false];
   optional uint64 index           = 4 [(gogoproto.nullable) = false];  
   optional uint64 term            = 5 [(gogoproto.nullable) = false];
@@ -121,26 +121,26 @@ message Snapshot {
 }
 
 message Message {
-	optional MessageType type        = 1  [(gogoproto.nullable) = false];
-	optional uint64      to          = 2  [(gogoproto.nullable) = false];
-	optional uint64      from        = 3  [(gogoproto.nullable) = false];
-	optional uint64      cluster_id  = 4  [(gogoproto.nullable) = false];
+  optional MessageType type        = 1  [(gogoproto.nullable) = false];
+  optional uint64      to          = 2  [(gogoproto.nullable) = false];
+  optional uint64      from        = 3  [(gogoproto.nullable) = false];
+  optional uint64      cluster_id  = 4  [(gogoproto.nullable) = false];
   optional uint64      term        = 5  [(gogoproto.nullable) = false];
-	optional uint64      log_term    = 6  [(gogoproto.nullable) = false];
-	optional uint64      log_index   = 7  [(gogoproto.nullable) = false];
+  optional uint64      log_term    = 6  [(gogoproto.nullable) = false];
+  optional uint64      log_index   = 7  [(gogoproto.nullable) = false];
   optional uint64      commit      = 8  [(gogoproto.nullable) = false];
   optional bool        reject      = 9  [(gogoproto.nullable) = false];
-	optional uint64      hint        = 10 [(gogoproto.nullable) = false];
-	repeated Entry       entries     = 11 [(gogoproto.nullable) = false];
-	optional Snapshot    snapshot    = 12 [(gogoproto.nullable) = false];	
+  optional uint64      hint        = 10 [(gogoproto.nullable) = false];
+  repeated Entry       entries     = 11 [(gogoproto.nullable) = false];
+  optional Snapshot    snapshot    = 12 [(gogoproto.nullable) = false];  
   optional uint64      hint_high   = 13 [(gogoproto.nullable) = false];
 }
 
 message ConfigChange {
-	optional uint64            config_change_id = 1 [(gogoproto.nullable) = false];
-	optional ConfigChangeType  Type             = 2 [(gogoproto.nullable) = false];
-	optional uint64            NodeID           = 3 [(gogoproto.nullable) = false];
-	optional string            Address          = 4 [(gogoproto.nullable) = false];
+  optional uint64            config_change_id = 1 [(gogoproto.nullable) = false];
+  optional ConfigChangeType  Type             = 2 [(gogoproto.nullable) = false];
+  optional uint64            NodeID           = 3 [(gogoproto.nullable) = false];
+  optional string            Address          = 4 [(gogoproto.nullable) = false];
   optional bool              Initialize       = 5 [(gogoproto.nullable) = false];
 }
 
@@ -164,7 +164,7 @@ message SnapshotHeader {
 message Response {}
 
 message MessageBatch {
-  repeated Message requests  				= 1 [(gogoproto.nullable) = false];
+  repeated Message requests         = 1 [(gogoproto.nullable) = false];
   optional uint64 deployment_id     = 2 [(gogoproto.nullable) = false];
   optional string source_address    = 3 [(gogoproto.nullable) = false];
   optional uint32 bin_ver           = 4 [(gogoproto.nullable) = false];
