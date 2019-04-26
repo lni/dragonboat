@@ -14,54 +14,57 @@
 
 /*
 Package statemachine contains the definitions of the IStateMachine and
-IOnDiskStateMachine interfaces to be implemented by Dragonboat's application
-state machine types.
+IOnDiskStateMachine interfaces to be implemented by application state machine
+types.
 
 IStateMachine or IOnDiskStateMachine are the interfaces used by Dragonboat to
 interact with applications. Each IStateMachine or IOnDiskStateMachine instance
-is associated with a single Raft node from a certain Raft group. All update
-request, known as proposals, are arranged as a Raft Log, the Raft protocol is
-used to determine the sequence of such a Raft Log. Once a proposal is accepted
-by the majority of Raft nodes, it is considered as committed. Committed
-proposals will be passed to the Update method of the IStateMachine to be
-applied. Read only queries will eventually hit the Lookup method to query the
-state of the state machine. The PrepareSnapshot, SaveSnapshot and
+is associated with a single Raft node replica from a certain Raft group. All
+update requests, known as proposals, are arranged by the Raft protocol into a
+Raft Log, once a proposal is accepted by the majority of member Raft nodes, it
+is considered as committed. Committed proposals are passed to the Update method
+of the IStateMachine or IOnDiskStateMachine types to be applied into application
+state machines. Read only queries will eventually hit the Lookup method to query
+the state of the state machine. The PrepareSnapshot, SaveSnapshot and
 RecoverFromSnapshot methods are for generating and restoring from snapshots,
-snapshots are the mechanism to apply the entire state of a state machine
-without applying an arbitarily large number of Raft Log entries.
+snapshots are the mechanism to apply the entire state of a state machine without
+applying an arbitarily large number of Raft Log entries.
 
 Dragonboat users should first determine whether the application state machine
 should implement the IStateMachine or IOnDiskStateMachine interface -
 
-For in memory state machines which in general have low read/write latencies,
-IStateMachine is usually employed. It is the default type of state machine
-described by the Raft thesis. The major drawback is that each IStateMachine
-is internally guarded by a sync.RWMutex so read/write accesses are not allowed
-to be concurrently invoked on IStateMachine. Multiple read requests can be
-concurrently invoked on the same IStateMachine instance. As the state is
-in-memory, it needs to be reconstructed from the saved Snapshots and Raft Logs
-after reboot. The state is usually perioidically snapshotted to disks, CPU, disk
-bandwidth and disk space overheads are thus introduced for generating and
-storing such periodic snapshots.
+For in memory state machines which in general have low read/write latencies and
+relatively small amount of managed data, IStateMachine is usually employed. It
+is the default type of state machine described by the Raft thesis. The major
+drawback is that each IStateMachine is internally guarded by a sync.RWMutex so
+read/write accesses are not allowed to be concurrently invoked on IStateMachine.
+Multiple read requests can be concurrently invoked on the same IStateMachine
+instance. As the state is in-memory, it needs to be reconstructed from saved
+Snapshots and Raft Logs after each reboot. The state is usually perioidically
+snapshotted to disks. CPU, disk bandwidth and disk space overheads are thus
+introduced for generating and storing such periodic snapshots.
 
-For IOnDiskStateMachine based application state machine, the major
-difference is that the state machine state is persisted on disk and thus can
-surivive reboot without reconstruction. As the latest state is always persisted
-on disk by design, there is no need to periodically save it to disk again as
-snapshots. A snapshot is only generated and streamed to a remote node from the
-leader on demand when the remote node is left significantly behind the progress
-of its leader. Read and Write accesses can be concurrently invoked on
-IOnDiskStateMachine types. This allows the Lookup method to be concurrently
-invoked when the state machine is being updated. The Update method can also be
-executed when SaveSnapshot is being executed. It is up to the user
-implementation of such IOnDiskStateMachine type to correctly and safely maintain
-its internal data structures during concurrent accesses. IOnDiskStateMachine is
-basically the state machine type described in the section 5.2 of the Raft
-thesis.
+For IOnDiskStateMachine based application state machine, the major difference is
+that the state machine state is persisted on disk so it can surivive reboot
+without reconstruction from saved snapshots and Raft Logs. As the latest state
+is always persisted on disk by design, there is no need to periodically save the
+entire state to disk again as full snapshots. A full snapshot is only generated
+and streamed to a remote node from the leader on demand when the remote node is
+left significantly behind the progress of its leader. Read and Write accesses
+can be concurrently invoked on IOnDiskStateMachine types. This allows the Lookup
+method to be concurrently invoked when the state machine is being updated. The
+Update method can also be completed when SaveSnapshot is being executed. It is
+up to the user implementation to correctly and safely maintain its internal data
+structures during such concurrent accesses. IOnDiskStateMachine is basically the
+on disk state machine type described in the section 5.2 of the Raft thesis.
 
-When you are not sure which one to choose, the rule of thumb is to implement
-IStateMachine for your application and upgrade it to a IOnDiskStateMachine later
-when necessary.
+When you are not whether to IStateMachine or IOnDiskStateMachine in your project,
+the rule of thumb is to implement IStateMachine and upgrade it to an
+IOnDiskStateMachine later when necessary.
+
+IConcurrentStateMachine is another supported state machine interface, it aims to
+represent in memory state machine with concurrent read and write
+accesscapabilities.
 */
 package statemachine
 
@@ -162,19 +165,20 @@ type Entry struct {
 // is the most commonly used state machine type in Dragonboat, it also matches
 // the default state machine type described in the Raft thesis.
 //
-// Dragonboat uses a sync.RWMutex reader/writer mutual exclusion lock to guard
-// the IStateMachine instance when invoking IStateMachine methods. Update(),
-// RecoverFromSnapshot() and Close() are invoked when the write lock is
-// acquired, other methods are invoked when the read lock is acquired.
+// Dragonboat uses a sync.RWMutex as its reader/writer mutual exclusion lock to
+// guard the IStateMachine instance when invoking IStateMachine's member methods.
+// Tghe Update, RecoverFromSnapshot and Close methods are invoked when the write
+// lock is acquired, other methods are invoked when the shared read lock is
+// acquired.
 //
 // As the state is mostly in memory, snapshots are usually periodically captured
 // to save its state to disk. CPU, disk bandwidth and disk space overheads are
 // thus introduced by such periodical snapshots. After each reboot,
 // IStateMachine state will be reconstructed from an empty state based on the
-// latest snapshot and the saved Raft Log.
+// latest snapshot and its saved Raft Log.
 //
 // When created, an IStateMachine instance should always start from an empty
-// state. Saved snapshots and Raft Logs will be used to help a restarted
+// state. Saved snapshots and Raft Logs will be used to help a rebooted
 // IStateMachine instance to catch up to its previous state.
 type IStateMachine interface {
 	// Update updates the IStateMachine instance. The input data slice is the

@@ -30,9 +30,9 @@ var (
 )
 
 // IOnDiskStateMachine is the interface to be implemented by application's
-// state machine when the state of the state machine is always persisted on
-// disks. IOnDiskStateMachine basically matches the state machine type
-// described in the section 5.2 of the Raft thesis.
+// state machine when the state machine state is always persisted on disks.
+// IOnDiskStateMachine basically matches the state machine type described
+// in the section 5.2 of the Raft thesis.
 //
 // For IOnDiskStateMachine types, concurrent access to the state machine is
 // supported. An IOnDiskStateMachine type allows its Update method to be
@@ -42,16 +42,21 @@ var (
 // PrepareSnapshot, RecoverFromSnapshot and Close methods are guarded by the
 // system to ensure mutual exclusion.
 //
-// When created, its Open method is invoked to open and use its saved state on
-// disk to continue from its previous state before reboot. This makes it quite
-// different from the IStateMachine which require the state machine state to be
-// fully reconstructed from saved snapshots and Raft Log.
+// Once created, the Open method is immediately invoked to open and use the
+// saved state on disk to continue from its previous state before reboot. This
+// makes IOnDiskStateMachine quite different from the IStateMachine types which
+// require the state machine state to be fully reconstructed from saved
+// snapshots and Raft Log.
 //
-// Different from the IStateMachine types which rely on periodical snapshotting
-// to capture the state of the entire state machine, IOnDiskStateMachine already
-// has its latest state always kept on disk by design. Its SaveSnapshot method
-// is thus only invoked on demand when a snapshot is required to be streamed to
-// a remote node to help it to catch up.
+// As IOnDiskStateMachine always has its latest state kept on disk by design.
+// Its SaveSnapshot method is thus only invoked on demand when a full snapshot
+// is required to be streamed to a remote node to help it to catch up.
+//
+// Applications that implement IOnDiskStateMachine are still recommended to
+// setup periodic snapshotting, that only triggers the state machine's
+// metadata to be periodically snapshotted and thus adds negligible overheads
+// to the system. It also provides an opportunites for the system to signal
+// Raft Log compaction to free up disk spaces.
 type IOnDiskStateMachine interface {
 	// Open opens the existing on disk state machine to be used or it creates a
 	// new state machine if it does not exist. Open returns the most recent index
