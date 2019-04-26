@@ -33,7 +33,7 @@ func runDrummerMonkeyTest(t *testing.T, appname string) {
 	runtime.GOMAXPROCS(10)
 	dragonboat.SetSnapshotWorkerCount(8)
 	dragonboat.SetWorkerCount(4)
-	dragonboat.SetCommitWorkerCount(4)
+	dragonboat.SetTaskWorkerCount(4)
 	dragonboat.DisableLogUnreachable()
 	dragonboat.SetIncomingProposalsMaxLen(64)
 	dragonboat.SetIncomingReadIndexMaxLen(64)

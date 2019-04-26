@@ -135,11 +135,11 @@ func SetWorkerCount(count uint64) {
 	workerCount = count
 }
 
-// Set how many commit worker to use in step engine. This function is
+// Set how many task worker to use in step engine. This function is
 // expected to be called only during monkeytest, it doesn't exist when the
 // monkeytest tag is not set.
-func SetCommitWorkerCount(count uint64) {
-	commitWorkerCount = count
+func SetTaskWorkerCount(count uint64) {
+	taskWorkerCount = count
 }
 
 // testParitionState struct is used to manage the state whether nodehost is in

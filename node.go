@@ -60,7 +60,7 @@ type node struct {
 	lastApplied          uint64
 	confirmedLastApplied uint64
 	publishedIndex       uint64
-	commitReady          func(uint64)
+	taskReady            func(uint64)
 	sendRaftMessage      func(pb.Message)
 	sm                   *rsm.StateMachine
 	smType               pb.StateMachineType
@@ -101,7 +101,7 @@ func newNode(raftAddress string,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
-	commitReady func(uint64),
+	taskReady func(uint64),
 	sendMessage func(pb.Message),
 	mq *server.MessageQueue,
 	stopc chan struct{},
@@ -129,7 +129,7 @@ func newNode(raftAddress string,
 		incomingReadIndexes: readIndexes,
 		confChangeC:         confChangeC,
 		snapshotC:           snapshotC,
-		commitReady:         commitReady,
+		taskReady:           taskReady,
 		stopc:               stopc,
 		pendingProposals:    pp,
 		pendingReadIndexes:  pscr,
@@ -350,7 +350,7 @@ func (rc *node) publishCommitRec(rec rsm.Task) bool {
 	}
 	select {
 	case rc.taskC <- rec:
-		rc.commitReady(rc.clusterID)
+		rc.taskReady(rc.clusterID)
 	case <-rc.stopc:
 		return false
 	}
@@ -559,22 +559,22 @@ func (rc *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 
 func (rc *node) streamSnapshotDone() {
 	rc.ss.notifySnapshotStatus(false, false, true, false, 0)
-	rc.commitReady(rc.clusterID)
+	rc.taskReady(rc.clusterID)
 }
 
 func (rc *node) saveSnapshotDone() {
 	rc.ss.notifySnapshotStatus(true, false, false, false, 0)
-	rc.commitReady(rc.clusterID)
+	rc.taskReady(rc.clusterID)
 }
 
 func (rc *node) initialSnapshotDone(index uint64) {
 	rc.ss.notifySnapshotStatus(false, true, false, true, index)
-	rc.commitReady(rc.clusterID)
+	rc.taskReady(rc.clusterID)
 }
 
 func (rc *node) recoverFromSnapshotDone() {
 	rc.ss.notifySnapshotStatus(false, true, false, false, 0)
-	rc.commitReady(rc.clusterID)
+	rc.taskReady(rc.clusterID)
 }
 
 func (rc *node) handleTask(batch []rsm.Task, ents []sm.Entry) (rsm.Task, bool) {

@@ -555,7 +555,7 @@ func createConcurrentTestNodeHost(addr string,
 			return &tests.TestSnapshot{}
 		}
 	}
-	rc.ClusterID = 1 + commitWorkerCount
+	rc.ClusterID = 1 + taskWorkerCount
 	if err := nh.StartConcurrentCluster(peers, false, newConcurrentSM, rc); err != nil {
 		return nil, err
 	}
@@ -605,7 +605,7 @@ func singleConcurrentNodeHostTest(t *testing.T,
 		t.Fatalf("failed to create nodehost %v", err)
 	}
 	waitForLeaderToBeElected(t, nh, 1)
-	waitForLeaderToBeElected(t, nh, 1+commitWorkerCount)
+	waitForLeaderToBeElected(t, nh, 1+taskWorkerCount)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		nh.Stop()
@@ -1510,7 +1510,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 }
 
 func TestConcurrentStateMachineLookup(t *testing.T) {
-	clusterID := 1 + commitWorkerCount
+	clusterID := 1 + taskWorkerCount
 	done := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
 		count := uint32(0)
@@ -1552,7 +1552,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 }
 
 func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
-	clusterID := 1 + commitWorkerCount
+	clusterID := 1 + taskWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhi := nh.GetNodeHostInfo()
 		for _, ci := range nhi.ClusterInfoList {
@@ -1586,7 +1586,7 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 }
 
 func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
-	clusterID := 1 + commitWorkerCount
+	clusterID := 1 + taskWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
 		for i := 0; i < 100; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

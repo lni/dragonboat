@@ -30,10 +30,10 @@ import (
 
 var (
 	workerCount         = settings.Hard.StepEngineWorkerCount
-	commitWorkerCount   = settings.Soft.StepEngineCommitWorkerCount
+	taskWorkerCount     = settings.Soft.StepEngineTaskWorkerCount
 	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
 	nodeReloadInterval  = time.Millisecond * time.Duration(settings.Soft.NodeReloadMillisecond)
-	commitBatchSize     = settings.Soft.CommitBatchSize
+	taskBatchSize       = settings.Soft.TaskBatchSize
 )
 
 type nodeLoader interface {
@@ -126,7 +126,7 @@ type sendLocalMessageFunc func(clusterID uint64, nodeID uint64)
 
 type execEngine struct {
 	nodeStopper                *syncutil.Stopper
-	commitStopper              *syncutil.Stopper
+	taskStopper                *syncutil.Stopper
 	snapshotStopper            *syncutil.Stopper
 	nh                         nodeLoader
 	loaded                     *loadedNodes
@@ -135,7 +135,7 @@ type execEngine struct {
 	ctxs                       []raftio.IContext
 	profilers                  []*profiler
 	nodeWorkReady              *workReady
-	commitWorkReady            *workReady
+	taskWorkReady              *workReady
 	snapshotWorkReady          *workReady
 	requestedSnapshotWorkReady *workReady
 	streamSnapshotWorkReady    *workReady
@@ -150,10 +150,10 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 		logdb:                      logdb,
 		loaded:                     newLoadedNodes(),
 		nodeStopper:                syncutil.NewStopper(),
-		commitStopper:              syncutil.NewStopper(),
+		taskStopper:                syncutil.NewStopper(),
 		snapshotStopper:            syncutil.NewStopper(),
 		nodeWorkReady:              newWorkReady(workerCount),
-		commitWorkReady:            newWorkReady(commitWorkerCount),
+		taskWorkReady:              newWorkReady(taskWorkerCount),
 		snapshotWorkReady:          newWorkReady(snapshotWorkerCount),
 		requestedSnapshotWorkReady: newWorkReady(snapshotWorkerCount),
 		streamSnapshotWorkReady:    newWorkReady(snapshotWorkerCount),
@@ -170,10 +170,10 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 			s.nodeWorkerMain(workerID)
 		})
 	}
-	for i := uint64(1); i <= commitWorkerCount; i++ {
-		commitWorkerID := i
-		s.commitStopper.RunWorker(func() {
-			s.commitWorkerMain(commitWorkerID)
+	for i := uint64(1); i <= taskWorkerCount; i++ {
+		taskWorkerID := i
+		s.taskStopper.RunWorker(func() {
+			s.taskWorkerMain(taskWorkerID)
 		})
 	}
 	for i := uint64(1); i <= snapshotWorkerCount; i++ {
@@ -187,7 +187,7 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 
 func (s *execEngine) stop() {
 	s.nodeStopper.Stop()
-	s.commitStopper.Stop()
+	s.taskStopper.Stop()
 	s.snapshotStopper.Stop()
 	for _, ctx := range s.ctxs {
 		if ctx != nil {
@@ -323,15 +323,15 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	if !ok {
 		return
 	}
-	commitRec, ok := node.ss.getRecoverFromSnapshotReq()
+	rec, ok := node.ss.getRecoverFromSnapshotReq()
 	if !ok {
 		return
 	}
 	plog.Infof("%s called recoverFromSnapshot", node.describe())
-	index, stopped := node.recoverFromSnapshot(commitRec)
+	index, stopped := node.recoverFromSnapshot(rec)
 	if stopped {
 		// keep the paused for snapshot flag to make sure it won't be touched
-		// by commit worker
+		// by task worker
 		return
 	}
 	if !node.initialized() {
@@ -341,25 +341,25 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	}
 }
 
-func (s *execEngine) commitWorkerMain(workerID uint64) {
+func (s *execEngine) taskWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
-	batch := make([]rsm.Task, 0, commitBatchSize)
-	entries := make([]sm.Entry, 0, commitBatchSize)
+	batch := make([]rsm.Task, 0, taskBatchSize)
+	entries := make([]sm.Entry, 0, taskBatchSize)
 	cci := uint64(0)
 	for {
 		select {
-		case <-s.commitStopper.ShouldStop():
+		case <-s.taskStopper.ShouldStop():
 			s.offloadNodeMap(nodes, rsm.FromCommitWorker)
 			return
 		case <-ticker.C:
 			nodes, cci = s.loadSMs(workerID, cci, nodes)
 			s.execSMs(workerID, make(map[uint64]struct{}), nodes, batch, entries)
-			batch = make([]rsm.Task, 0, commitBatchSize)
-			entries = make([]sm.Entry, 0, commitBatchSize)
-		case <-s.commitWorkReady.waitCh(workerID):
-			clusterIDMap := s.commitWorkReady.getReadyMap(workerID)
+			batch = make([]rsm.Task, 0, taskBatchSize)
+			entries = make([]sm.Entry, 0, taskBatchSize)
+		case <-s.taskWorkReady.waitCh(workerID):
+			clusterIDMap := s.taskWorkReady.getReadyMap(workerID)
 			s.execSMs(workerID, clusterIDMap, nodes, batch, entries)
 		}
 	}
@@ -368,7 +368,7 @@ func (s *execEngine) commitWorkerMain(workerID uint64) {
 func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
 	result, cci := s.loadBucketNodes(workerID, cci, nodes,
-		s.commitWorkReady.getPartitioner(), rsm.FromCommitWorker)
+		s.taskWorkReady.getPartitioner(), rsm.FromCommitWorker)
 	s.loaded.update(workerID, rsm.FromCommitWorker, result)
 	return result, cci
 }
@@ -455,7 +455,7 @@ func (s *execEngine) execSMs(workerID uint64,
 		}
 	}
 	var p *profiler
-	if workerCount == commitWorkerCount {
+	if workerCount == taskWorkerCount {
 		p = s.profilers[workerID-1]
 		p.newCommitIteration()
 		p.exec.start()
@@ -760,7 +760,7 @@ func (s *execEngine) ProposeDelay(clusterID uint64, startTime time.Time) {
 }
 
 func (s *execEngine) SetCommitReady(clusterID uint64) {
-	s.commitWorkReady.clusterReady(clusterID)
+	s.taskWorkReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) offloadNodeMap(nodes map[uint64]*node,

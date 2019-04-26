@@ -120,25 +120,25 @@ type soft struct {
 	// step engine
 	//
 
-	// CommitBatchSize defines the length of the committed batch slice.
-	CommitBatchSize uint64
+	// TaskBatchSize defines the length of the committed batch slice.
+	TaskBatchSize uint64
 	// NodeReloadMillisecond defines how often step engine should reload
 	// nodes, it is defined in number of millisecond.
 	NodeReloadMillisecond uint64
-	// StepEngineCommitWorkerCount is the number of workers to use to apply
+	// StepEngineTaskWorkerCount is the number of workers to use to apply
 	// proposals (processing committed proposals) to application state
 	// machines.
-	StepEngineCommitWorkerCount uint64
+	StepEngineTaskWorkerCount uint64
 	// StepEngineSnapshotWorkerCount is the number of workers to take and
 	// apply application state machine snapshots.
 	StepEngineSnapshotWorkerCount uint64
 	// StepEngineNodeReadyChanBufferSize is the size of buffered channels
 	// used to notify step engine workers about ready nodes.
 	StepEngineNodeReadyChanBufferSize uint64
-	// StepEngineCommitReadyChanBufferSize is the size of buffered channels
+	// StepEngineTaskReadyChanBufferSize is the size of buffered channels
 	// used to notify step engine commit workers about pending committed
 	// proposals that can be processed.
-	StepEngineCommitReadyChanBufferSize uint64
+	StepEngineTaskReadyChanBufferSize uint64
 	// StepEngineLocalKeySize defines how many local keys should be kept
 	// by each step engine node worker
 	StepEngineLocalKeySize uint64
@@ -245,56 +245,56 @@ func getSoftSettings() soft {
 func getDefaultSoftSettings() soft {
 	NodeHostInfoReportSecond := uint64(20)
 	return soft{
-		MaxConcurrentStreamingSnapshot:      128,
-		MaxSnapshotConnections:              64,
-		ShrinkSnapshotTaskInterval:          180000,
-		PanicOnSizeMismatch:                 1,
-		LazyFreeCycle:                       1,
-		LatencySampleRatio:                  0,
-		BatchedEntryApply:                   true,
-		LocalRaftRequestTimeoutMs:           10000,
-		GetConnectedTimeoutSecond:           5,
-		MaxEntrySize:                        2 * MaxProposalPayloadSize,
-		InMemEntrySliceSize:                 512,
-		MinEntrySliceFreeSize:               96,
-		ExpectedMaxInMemLogSize:             2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
-		IncomingReadIndexQueueLength:        4096,
-		IncomingProposalQueueLength:         2048,
-		UnknownRegionName:                   "UNKNOWN",
-		RaftNodeReceiveQueueLength:          1024,
-		SnapshotStatusPushDelayMS:           1000,
-		NodeTaskChanLength:                  1024,
-		SetDeploymentIDTimeoutSecond:        5,
-		NodeHostSyncPoolSize:                8,
-		CommitBatchSize:                     512,
-		NodeReloadMillisecond:               200,
-		StepEngineCommitWorkerCount:         16,
-		StepEngineSnapshotWorkerCount:       64,
-		StepEngineNodeReadyChanBufferSize:   8192,
-		StepEngineCommitReadyChanBufferSize: 8192,
-		StepEngineLocalKeySize:              1024,
-		SendQueueLength:                     1024 * 8,
-		SnapshotSendQueueLength:             4096 * 16,
-		MaxSnapshotCount:                    128,
-		MaxTransportStreamCount:             256,
-		MaxDrummerServerMsgSize:             256 * 1024 * 1024,
-		MaxDrummerClientMsgSize:             256 * 1024 * 1024,
-		StreamConnections:                   4,
-		InitialWindowSize:                   64 * 1024 * 1024,
-		InitialConnWindowSize:               16 * 1024 * 1024,
-		PerConnectionBufferSize:             64 * 1024 * 1024,
-		PerCpnnectionRecvBufSize:            64 * 1024,
-		SnapshotGCTick:                      30,
-		SnapshotChunkTimeoutTick:            900,
-		DrummerClientName:                   "drummer-client",
-		NodeHostInfoReportSecond:            NodeHostInfoReportSecond,
-		NodeHostTTL:                         NodeHostInfoReportSecond * 3,
-		NodeToStartMaxWait:                  NodeHostInfoReportSecond * 12,
-		DrummerLoopIntervalFactor:           1,
-		PersisentLogReportCycle:             3,
-		LogDBCacheSizePerWorker:             1024 * 1024 * 256,
-		RDBMaxBackgroundCompactions:         2,
-		RDBMaxBackgroundFlushes:             2,
-		RDBLRUCacheSize:                     0,
+		MaxConcurrentStreamingSnapshot:    128,
+		MaxSnapshotConnections:            64,
+		ShrinkSnapshotTaskInterval:        180000,
+		PanicOnSizeMismatch:               1,
+		LazyFreeCycle:                     1,
+		LatencySampleRatio:                0,
+		BatchedEntryApply:                 true,
+		LocalRaftRequestTimeoutMs:         10000,
+		GetConnectedTimeoutSecond:         5,
+		MaxEntrySize:                      2 * MaxProposalPayloadSize,
+		InMemEntrySliceSize:               512,
+		MinEntrySliceFreeSize:             96,
+		ExpectedMaxInMemLogSize:           2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
+		IncomingReadIndexQueueLength:      4096,
+		IncomingProposalQueueLength:       2048,
+		UnknownRegionName:                 "UNKNOWN",
+		RaftNodeReceiveQueueLength:        1024,
+		SnapshotStatusPushDelayMS:         1000,
+		NodeTaskChanLength:                1024,
+		SetDeploymentIDTimeoutSecond:      5,
+		NodeHostSyncPoolSize:              8,
+		TaskBatchSize:                     512,
+		NodeReloadMillisecond:             200,
+		StepEngineTaskWorkerCount:         16,
+		StepEngineSnapshotWorkerCount:     64,
+		StepEngineNodeReadyChanBufferSize: 8192,
+		StepEngineTaskReadyChanBufferSize: 8192,
+		StepEngineLocalKeySize:            1024,
+		SendQueueLength:                   1024 * 8,
+		SnapshotSendQueueLength:           4096 * 16,
+		MaxSnapshotCount:                  128,
+		MaxTransportStreamCount:           256,
+		MaxDrummerServerMsgSize:           256 * 1024 * 1024,
+		MaxDrummerClientMsgSize:           256 * 1024 * 1024,
+		StreamConnections:                 4,
+		InitialWindowSize:                 64 * 1024 * 1024,
+		InitialConnWindowSize:             16 * 1024 * 1024,
+		PerConnectionBufferSize:           64 * 1024 * 1024,
+		PerCpnnectionRecvBufSize:          64 * 1024,
+		SnapshotGCTick:                    30,
+		SnapshotChunkTimeoutTick:          900,
+		DrummerClientName:                 "drummer-client",
+		NodeHostInfoReportSecond:          NodeHostInfoReportSecond,
+		NodeHostTTL:                       NodeHostInfoReportSecond * 3,
+		NodeToStartMaxWait:                NodeHostInfoReportSecond * 12,
+		DrummerLoopIntervalFactor:         1,
+		PersisentLogReportCycle:           3,
+		LogDBCacheSizePerWorker:           1024 * 1024 * 256,
+		RDBMaxBackgroundCompactions:       2,
+		RDBMaxBackgroundFlushes:           2,
+		RDBLRUCacheSize:                   0,
 	}
 }

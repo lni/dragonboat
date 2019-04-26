@@ -304,13 +304,13 @@ func step(nodes []*node) bool {
 			node.saveSnapshot(rsm.Task{})
 		}
 		if running {
-			commitRec, snapshotRequired := node.sm.Handle(make([]rsm.Task, 0), nil)
+			rec, snapshotRequired := node.sm.Handle(make([]rsm.Task, 0), nil)
 			if snapshotRequired {
-				if commitRec.SnapshotAvailable || commitRec.InitialSnapshot {
-					if _, err := node.sm.RecoverFromSnapshot(commitRec); err != nil {
+				if rec.SnapshotAvailable || rec.InitialSnapshot {
+					if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
 						panic(err)
 					}
-				} else if commitRec.SnapshotRequested {
+				} else if rec.SnapshotRequested {
 					node.saveSnapshot(rsm.Task{})
 				}
 			}
