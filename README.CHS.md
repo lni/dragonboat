@@ -6,6 +6,12 @@
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+## v3.0 测试版 ##
+
+本branch是dragonboat v3.0的测试版，用以提供给社区试用并测试新功能与改进，本branch不应该被用在任何生产环境。
+
+欢迎对任何问题提出issues讨论。
+
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。
 
