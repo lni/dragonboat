@@ -478,38 +478,38 @@ func (s *execEngine) execSMs(workerID uint64,
 			s.reportAvailableSnapshot(node, *rec)
 			continue
 		}
-		commit, snapshotRequired := node.handleTask(batch, entries)
+		task, snapshotRequired := node.handleTask(batch, entries)
 		// batched last applied might updated, give the node work a chance to run
 		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
 			if node.ss.recoveringFromSnapshot() {
 				plog.Panicf("recovering from snapshot again")
 			}
-			if commit.SnapshotAvailable {
+			if task.SnapshotAvailable {
 				plog.Infof("check incoming snapshot, %s", node.describe())
 				node.ss.setRecoveringFromSnapshot()
-				s.reportAvailableSnapshot(node, commit)
-			} else if commit.SnapshotRequested {
+				s.reportAvailableSnapshot(node, task)
+			} else if task.SnapshotRequested {
 				plog.Infof("reportRequestedSnapshot, %s", node.describe())
 				if !node.ss.takingSnapshot() {
 					node.ss.setTakingSnapshot()
 				} else {
-					plog.Infof("commit.SnapshotRequested ignored on %s", node.describe())
-					node.reportIgnoredSnapshotRequest(commit.SnapshotRequest.Key)
+					plog.Infof("task.SnapshotRequested ignored on %s", node.describe())
+					node.reportIgnoredSnapshotRequest(task.SnapshotRequest.Key)
 					continue
 				}
-				s.reportRequestedSnapshot(node, commit)
-			} else if commit.StreamSnapshot {
+				s.reportRequestedSnapshot(node, task)
+			} else if task.StreamSnapshot {
 				if !node.ss.streamingSnapshot() {
 					node.ss.setStreamingSnapshot()
 				} else {
-					plog.Infof("commit.StreamSnapshot ignored on %s", node.describe())
-					s.reportSnapshotStatus(commit.ClusterID, commit.NodeID, true)
+					plog.Infof("task.StreamSnapshot ignored on %s", node.describe())
+					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
 					continue
 				}
-				s.reportStreamSnapshot(node, commit)
+				s.reportStreamSnapshot(node, task)
 			} else {
-				panic("unknown returned commit rec type")
+				panic("unknown returned task rec type")
 			}
 		}
 	}
@@ -594,9 +594,13 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 		s.nh.forEachClusterRun(nil,
 			func() bool {
 				for cid, node := range nodes {
-					_, ok := newNodes[cid]
-					if !ok || node.stopped() {
+					nv, ok := newNodes[cid]
+					if !ok {
 						node.notifyOffloaded(from)
+					} else {
+						if nv.instanceID != node.instanceID {
+							node.notifyOffloaded(from)
+						}
 					}
 				}
 				return true

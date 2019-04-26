@@ -50,6 +50,7 @@ var (
 type node struct {
 	readReqCount         uint64
 	leaderID             uint64
+	instanceID           uint64
 	raftAddress          string
 	config               config.Config
 	confChangeC          <-chan configChangeRequest
@@ -92,6 +93,8 @@ type node struct {
 	quiesceManager
 }
 
+var instanceID uint64
+
 func newNode(raftAddress string,
 	peers map[uint64]string,
 	initialMember bool,
@@ -118,6 +121,7 @@ func newNode(raftAddress string,
 	ps := newPendingSnapshot(snapshotC, tickMillisecond)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rc := &node{
+		instanceID:          atomic.AddUint64(&instanceID, 1),
 		tickMillisecond:     tickMillisecond,
 		config:              config,
 		raftAddress:         raftAddress,
