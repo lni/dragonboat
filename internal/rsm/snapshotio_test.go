@@ -20,6 +20,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -513,4 +514,60 @@ func TestV2PayloadChecksumCanBeRead(t *testing.T) {
 	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3-1)
 	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3)
 	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3+1)
+}
+
+func TestV1SnapshotCanBeLoaded(t *testing.T) {
+	// rsm: idList sz 2
+	// rsm: client id 15771809973567514624, responded to 4, map[5:128]
+	// rsm: client id 6760681031265190231, responded to 2, map[3:128]
+	fp := filepath.Join("testdata", "v1snapshot.gbsnap")
+	reader, err := NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to get reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get header %v", err)
+	}
+	reader.ValidateHeader(header)
+	if header.Version != 1 {
+		t.Fatalf("not a version 1 snapshot file")
+	}
+	v := (SnapshotVersion)(header.Version)
+	sm := NewSessionManager()
+	if err := sm.LoadSessions(reader, v); err != nil {
+		t.Fatalf("failed to load sessions %v", err)
+	}
+	sessions := sm.sessions
+	s1, ok := sessions.getSession(15771809973567514624)
+	if !ok {
+		t.Fatalf("failed to get session")
+	}
+	s2, ok := sessions.getSession(6760681031265190231)
+	if !ok {
+		t.Fatalf("failed to get session")
+	}
+	if s1.ClientID != 15771809973567514624 || s1.RespondedUpTo != 4 {
+		t.Errorf("invalid content")
+	}
+	if s2.ClientID != 6760681031265190231 || s2.RespondedUpTo != 2 {
+		t.Errorf("invalid content")
+	}
+	r1, ok := s1.History[5]
+	if !ok || r1.Value != 128 || len(s1.History) != 1 {
+		t.Errorf("unexpected history")
+	}
+	r2, ok := s2.History[3]
+	if !ok || r2.Value != 128 || len(s2.History) != 1 {
+		t.Errorf("unexpected history")
+	}
+	data := make([]byte, 11)
+	if _, err := io.ReadFull(reader, data); err != nil {
+		t.Fatalf("failed to get snapshot content")
+	}
+	if string(data) != "random-data" {
+		t.Errorf("unexpected content")
+	}
+	reader.ValidatePayload(header)
 }
