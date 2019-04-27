@@ -1848,6 +1848,18 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		if snapshots[0].Index != index {
 			t.Errorf("unexpected index value")
 		}
+		reader, err := rsm.NewSnapshotReader(snapshots[0].Filepath)
+		if err != nil {
+			t.Fatalf("failed to new snapshot reader %v", err)
+		}
+		defer reader.Close()
+		header, err := reader.GetHeader()
+		if err != nil {
+			t.Fatalf("failed to get header %v", err)
+		}
+		if rsm.SnapshotVersion(header.Version) != rsm.V2SnapshotVersion {
+			t.Errorf("unexpected snapshot version")
+		}
 	}
 	singleNodeHostTest(t, tf)
 }
