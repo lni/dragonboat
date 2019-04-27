@@ -154,7 +154,6 @@ func (l *connection) streamSnapshot() error {
 		case chunk := <-l.ch:
 			chunk.DeploymentId = l.deploymentID
 			if chunk.ChunkCount == PoisonChunkCount {
-				plog.Infof("poison chunk received")
 				return ErrStreamSnapshot
 			}
 			if err := l.sendSnapshotChunk(chunk, l.conn); err != nil {

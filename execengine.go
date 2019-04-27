@@ -308,8 +308,7 @@ func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	if !ok {
 		return
 	}
-	sink := getSinkFn()
-	if sink != nil {
+	if sink := getSinkFn(); sink != nil {
 		plog.Infof("%s called streamSnapshot to node %d",
 			node.describe(), sink.ToNodeID())
 		node.streamSnapshot(sink)

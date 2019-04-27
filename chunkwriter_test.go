@@ -64,9 +64,10 @@ func getTestSnapshotMeta() *rsm.SnapshotMeta {
 
 func TestChunkWriterCanBeWritten(t *testing.T) {
 	meta := getTestSnapshotMeta()
-	cw, err := newChunkWriter(&testSink{}, meta)
+	cw := newChunkWriter(&testSink{}, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send empty LRU session %v", err)
 	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
@@ -106,9 +107,10 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 func TestChunkWriterCanFailWrite(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw, err := newChunkWriter(sink, meta)
+	cw := newChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send empty LRU session %v", err)
 	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
@@ -130,9 +132,10 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 func TestChunkWriterCanBeStopped(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw, err := newChunkWriter(sink, meta)
+	cw := newChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send empty LRU session %v", err)
 	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, SnapshotChunkSize)
@@ -204,9 +207,10 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &testSink2{receiver: chunks}
 	meta := getTestSnapshotMeta()
-	cw, err := newChunkWriter(sink, meta)
+	cw := newChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send LRU session %v", err)
 	}
 	defer os.RemoveAll(testSnapshotDir)
 	payload := make([]byte, 0)
@@ -256,9 +260,10 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 func TestGetTailChunk(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw, err := newChunkWriter(sink, meta)
+	cw := newChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send LRU session %v", err)
 	}
 	chunk := cw.getTailChunk()
 	if chunk.ChunkCount != transport.LastChunkCount {
@@ -274,9 +279,10 @@ func TestGetTailChunk(t *testing.T) {
 func TestFailChunk(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
-	cw, err := newChunkWriter(sink, meta)
+	cw := newChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
 	if err != nil {
-		t.Fatalf("failed to get chunk writer %v", err)
+		t.Fatalf("failed to send LRU session %v", err)
 	}
 	cw.Fail()
 	chunk := sink.chunks[0]

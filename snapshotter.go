@@ -72,15 +72,16 @@ func (s *snapshotter) describe() string {
 
 func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
-	writer, err := newChunkWriter(sink, meta)
-	if err != nil {
-		return err
-	}
-	if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
-		writer.Fail()
-		return err
-	}
-	if err := writer.Flush(); err != nil {
+	writer := newChunkWriter(sink, meta)
+	if err := func() error {
+		if _, err := writer.Write(rsm.GetEmptyLRUSession()); err != nil {
+			return err
+		}
+		if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
+			return err
+		}
+		return writer.Flush()
+	}(); err != nil {
 		writer.Fail()
 		return err
 	}
