@@ -31,9 +31,11 @@ Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.
 * leader election, log replication, snapshotting and log compaction
 * membership changes
 * ReadIndex protocol for read-only queries
-* leadership transfer and non-voting members
+* leadership transfer
+* non-voting members
 * idempotent updates transparent to applications
 * batching and pipelining
+* disk based state machine
 
 ## Performance ##
 Dragonboat is the __fastest__ open source multi-group Raft implementation on Github. 

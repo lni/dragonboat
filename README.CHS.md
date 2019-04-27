@@ -32,9 +32,11 @@ Diego Ongaro的[Raft博士学位论文](https://ramcloud.stanford.edu/~ongaro/th
 * 选主、log复制、状态机快照与log清理
 * Raft组成员变更
 * 基于ReadIndex协议的只读查询
-* 主节点转移与无投票权成员
+* 主节点转移
+* 无投票权成员
 * 应用透明的幂等更新支持
 * 成组处理优化与流水化处理
+* 基于磁盘的状态机
 
 ## 性能 ##
 Dragonboat是目前Github网站上最快的开源多组Raft实现。
