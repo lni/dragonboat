@@ -506,6 +506,11 @@ func (s *execEngine) execSMs(workerID uint64,
 					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
 					continue
 				}
+				if !node.sm.ReadyToStreamSnapshot() {
+					plog.Infof("not ready to stream snapshot %s", node.describe())
+					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
+					continue
+				}
 				s.reportStreamSnapshot(node, task)
 			} else {
 				panic("unknown returned task rec type")

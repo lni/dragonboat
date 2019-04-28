@@ -283,12 +283,13 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	return true, 0, nil
 }
 
-// FIXME:
-// this must be checked before streaming snapshots
-//
-// we can not stream a full snapshot when membership state is catching up with
-// the all disk SM state. however, meta only snapshot can be taken at any time.
-func (s *StateMachine) readyToStreamSnapshot() bool {
+//TODO: add test to cover the case when ReadyToStreamSnapshot returns false
+
+// ReadyToStreamSnapshot returns a boolean flag to indicate whether the state
+// machine is ready to stream snasphot. It can not stream a full snapshot when
+// membership state is catching up with the all disk SM state. however, meta
+// only snapshot can be taken at any time.
+func (s *StateMachine) ReadyToStreamSnapshot() bool {
 	if !s.OnDiskStateMachine() {
 		return true
 	}
