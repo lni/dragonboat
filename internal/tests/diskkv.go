@@ -292,7 +292,9 @@ func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
 	generateRandomDelay()
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
-	createNodeDataDir(dir)
+	if err := createNodeDataDir(dir); err != nil {
+		panic(err)
+	}
 	var dbdir string
 	if !isNewRun(dir) {
 		if err := cleanupNodeDataDir(dir); err != nil {

@@ -87,19 +87,7 @@ type mtNodeHost struct {
 	dir       string
 	nh        *NodeHost
 	stopped   bool
-	next      int64
 	addresses []string
-}
-
-func (n *mtNodeHost) setNext(low int64, high int64) {
-	if high <= low {
-		panic("high <= low")
-	}
-
-	v := (low + rand.Int63()%(high-low)) * 1000000
-	plog.Infof("next event for node %d is scheduled in %d second",
-		n.listIndex+1, v/1000000000)
-	n.next = time.Now().UnixNano() + v
 }
 
 func (n *mtNodeHost) Running() bool {

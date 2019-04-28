@@ -285,20 +285,10 @@ func (rc *node) requestDeleteNodeWithOrderID(nodeID uint64,
 		nodeID, "", orderID, timeout)
 }
 
-func (rc *node) requestDeleteNode(nodeID uint64,
-	timeout time.Duration) (*RequestState, error) {
-	return rc.requestDeleteNodeWithOrderID(nodeID, 0, timeout)
-}
-
 func (rc *node) requestAddNodeWithOrderID(nodeID uint64,
 	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
 	return rc.requestConfigChange(pb.AddNode,
 		nodeID, addr, orderID, timeout)
-}
-
-func (rc *node) requestAddNode(nodeID uint64,
-	addr string, timeout time.Duration) (*RequestState, error) {
-	return rc.requestAddNodeWithOrderID(nodeID, addr, 0, timeout)
 }
 
 func (rc *node) requestAddObserverWithOrderID(nodeID uint64,
@@ -344,7 +334,7 @@ func (rc *node) entriesToApply(ents []pb.Entry) (nents []pb.Entry) {
 	return
 }
 
-func (rc *node) publishCommitRec(rec rsm.Task) bool {
+func (rc *node) pushTask(rec rsm.Task) bool {
 	if rc.stopped() {
 		return false
 	}
@@ -362,7 +352,7 @@ func (rc *node) publishEntries(ents []pb.Entry) bool {
 		return true
 	}
 	rec := rsm.Task{Entries: ents}
-	if !rc.publishCommitRec(rec) {
+	if !rc.pushTask(rec) {
 		return false
 	}
 	rc.publishedIndex = ents[len(ents)-1].Index
@@ -376,12 +366,12 @@ func (rc *node) publishStreamSnapshotRequest(clusterID uint64,
 		NodeID:         nodeID,
 		StreamSnapshot: true,
 	}
-	return rc.publishCommitRec(rec)
+	return rc.pushTask(rec)
 }
 
 func (rc *node) publishTakeSnapshotRequest(req rsm.SnapshotRequest) bool {
 	rec := rsm.Task{SnapshotRequested: true, SnapshotRequest: req}
-	return rc.publishCommitRec(rec)
+	return rc.pushTask(rec)
 }
 
 func (rc *node) publishSnapshot(snapshot pb.Snapshot,
@@ -398,7 +388,7 @@ func (rc *node) publishSnapshot(snapshot pb.Snapshot,
 		SnapshotAvailable: true,
 		Index:             snapshot.Index,
 	}
-	if !rc.publishCommitRec(rec) {
+	if !rc.pushTask(rec) {
 		return false
 	}
 	rc.ss.setSnapshotIndex(snapshot.Index)

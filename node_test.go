@@ -940,7 +940,7 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 		n := nodes[0]
 		done := false
 		for i := 0; i < 5; i++ {
-			rs, err := n.requestAddNode(24680, "localhost:12345", time.Second)
+			rs, err := n.requestAddNodeWithOrderID(24680, "localhost:12345", 0, time.Second)
 			if err != nil {
 				t.Errorf("request to add node failed, %v", err)
 			}
@@ -1011,7 +1011,7 @@ func testNodeCanBeAdded(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		router.dropRate = 3
 		n := mustHasLeaderNode(nodes, t)
-		rs, err := n.requestAddNode(4, "a4:4", time.Duration(5*time.Second))
+		rs, err := n.requestAddNodeWithOrderID(4, "a4:4", 0, time.Duration(5*time.Second))
 		if err != nil {
 			t.Fatalf("request to delete node failed")
 		}
@@ -1037,7 +1037,7 @@ func TestNodeCanBeDeleted(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		rs, err := n.requestDeleteNode(2, time.Duration(2*time.Second))
+		rs, err := n.requestDeleteNodeWithOrderID(2, 0, time.Duration(2*time.Second))
 		if err != nil {
 			t.Fatalf("request to delete node failed")
 		}
@@ -1089,7 +1089,7 @@ func TestNodeCanBeAdded2(t *testing.T) {
 			session.ProposalCompleted()
 		}
 		closeProposalTestClient(n, nodes, smList, router, session)
-		rs, err := n.requestAddNode(4, "a4:4", time.Duration(2*time.Second))
+		rs, err := n.requestAddNodeWithOrderID(4, "a4:4", 0, time.Duration(2*time.Second))
 		if err != nil {
 			t.Fatalf("request to add node failed")
 		}
@@ -1132,7 +1132,7 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 	defer stopNodes(nodes)
 	defer ldb.Close()
 	n := nodes[0]
-	rs, err := n.requestAddNode(5, "a5:5", time.Duration(2*time.Second))
+	rs, err := n.requestAddNodeWithOrderID(5, "a5:5", 0, time.Duration(2*time.Second))
 	if err != nil {
 		t.Fatalf("request to add node failed")
 	}
@@ -1174,7 +1174,7 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 	defer stopNodes(nodes)
 	defer ldb.Close()
 	n := nodes[0]
-	rs, err := n.requestDeleteNode(2, time.Duration(2*time.Second))
+	rs, err := n.requestDeleteNodeWithOrderID(2, 0, time.Duration(2*time.Second))
 	if err != nil {
 		t.Fatalf("request to delete node failed")
 	}
