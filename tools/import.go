@@ -197,7 +197,7 @@ func isCompleteSnapshotImage(ssfp string, ss pb.Snapshot) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return bytes.Compare(checksum, ss.Checksum) == 0, nil
+	return bytes.Equal(checksum, ss.Checksum), nil
 }
 
 func getSnapshotFilepath(dir string) (string, error) {

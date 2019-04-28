@@ -196,7 +196,6 @@ type NodeHost struct {
 	stopper          *syncutil.Stopper
 	duStopper        *syncutil.Stopper
 	nodes            *transport.Nodes
-	region           string
 	deploymentID     uint64
 	rsPool           []*sync.Pool
 	execEngine       *execEngine
@@ -1700,6 +1699,6 @@ func logBuildTagsAndVersion() {
 		raft.RaftLogTypeName, logdb.LogDBType)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
 	if runtime.GOOS == "darwin" {
-		plog.Warningf("Running on darwin, don't use darwin for production purposes")
+		plog.Warningf("Running on darwin, don't use for production purposes")
 	}
 }

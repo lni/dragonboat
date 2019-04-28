@@ -47,7 +47,6 @@ func createTestDir() {
 }
 
 type testNodeProxy struct {
-	applySnapshot      bool
 	applyConfChange    bool
 	addPeer            bool
 	removePeer         bool
@@ -334,9 +333,6 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	sm.Handle(batch, nil)
 	if sm.GetLastApplied() != 237 {
 		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
-	}
-	count := store.UpdateCount
-	if count != 1 {
 	}
 }
 

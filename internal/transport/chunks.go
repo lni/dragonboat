@@ -323,11 +323,6 @@ func (c *chunks) getSnapshotEnv(chunk pb.SnapshotChunk) *server.SnapshotEnv {
 		server.ReceivingMode)
 }
 
-func (c *chunks) flagFileExists(chunk pb.SnapshotChunk) bool {
-	env := c.getSnapshotEnv(chunk)
-	return env.HasFlagFile()
-}
-
 func (c *chunks) finalizeSnapshot(chunk pb.SnapshotChunk, td *tracked) error {
 	env := c.getSnapshotEnv(chunk)
 	msg := c.toMessage(td.firstChunk, td.extraFiles)
@@ -382,9 +377,4 @@ func (c *chunks) toMessage(chunk pb.SnapshotChunk,
 func isLastChunk(chunk pb.SnapshotChunk) bool {
 	return chunk.ChunkCount == LastChunkCount ||
 		chunk.ChunkCount == chunk.ChunkId+1
-}
-
-func isLastFileChunk(chunk pb.SnapshotChunk) bool {
-	return chunk.FileChunkCount == LastChunkCount ||
-		chunk.FileChunkId+1 == chunk.FileChunkCount
 }

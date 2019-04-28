@@ -37,7 +37,3 @@ func SetPayloadBuffserSize(sz uint64) {
 func SetSnapshotChunkSize(sz uint64) {
 	snapChunkSize = sz
 }
-
-func SetSnapshotSendBufSize(sz uint64) {
-	snapSendBufSize = sz
-}

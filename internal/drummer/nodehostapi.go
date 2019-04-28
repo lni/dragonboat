@@ -176,10 +176,3 @@ func grpcError(err error) error {
 	}
 	return grpc.Errorf(code, err.Error())
 }
-
-func isTimeoutError(err error) bool {
-	if err == dragonboat.ErrTimeout {
-		return true
-	}
-	return grpc.Code(err) == codes.DeadlineExceeded
-}

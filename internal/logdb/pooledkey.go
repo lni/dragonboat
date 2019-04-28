@@ -22,7 +22,6 @@ import (
 const (
 	maxKeySize             uint64 = 28
 	entryKeySize           uint64 = 28
-	entryBatchKeySize      uint64 = 28
 	persistentStateKeySize uint64 = 20
 	maxIndexKeySize        uint64 = 20
 	nodeInfoKeySize        uint64 = 20
@@ -190,10 +189,7 @@ func (k *PooledKey) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64
 }
 
 type logdbKeyPool struct {
-	nextKeyIndex  int
-	localKeyCount int
-	localKeys     []*PooledKey
-	pool          *sync.Pool
+	pool *sync.Pool
 }
 
 func newLogdbKeyPool() *logdbKeyPool {

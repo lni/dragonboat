@@ -106,10 +106,6 @@ func getRocksDBOptions(directory string,
 	// these three options will be noop when not using patched rocksdb.
 	opts.SetMaxSubCompactions(2)
 	opts.EnablePipelinedWrite(true)
-	// FIXME
-	// this seems to cause problem when used together with DeleteRange.
-	// see dragonboat-doc/known-issues.md for details.
-	// opts.SetMemtableInsertWithHintFixedLengthPrefixExtractor(20)
 	opts.SetMinWriteBufferNumberToMerge(2)
 	opts.SetLevel0FileNumCompactionTrigger(8)
 	opts.SetLevel0SlowdownWritesTrigger(17)

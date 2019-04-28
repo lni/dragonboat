@@ -18,10 +18,6 @@ import (
 	"github.com/lni/dragonboat/internal/utils/random"
 )
 
-type selector interface {
-	findSuitableNodeHost([]*nodeHostSpec, int) []*nodeHostSpec
-}
-
 type randomSelector struct {
 	filter       nodeHostFilter
 	randomSource random.Source

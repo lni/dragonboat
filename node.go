@@ -501,7 +501,6 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 	if !ss.Validate() {
 		plog.Panicf("invalid snapshot %v", ss)
 	}
-
 	if err = rc.logreader.CreateSnapshot(*ss); err != nil {
 		if !isSoftSnapshotError(err) {
 			panic(err)
@@ -718,7 +717,9 @@ func (rc *node) applyRaftUpdates(ud pb.Update) bool {
 }
 
 func (rc *node) processRaftUpdate(ud pb.Update) bool {
-	rc.logreader.Append(ud.EntriesToSave)
+	if err := rc.logreader.Append(ud.EntriesToSave); err != nil {
+		panic(err)
+	}
 	rc.sendMessages(ud.Messages)
 	if err := rc.compactLog(); err != nil {
 		panic(err)

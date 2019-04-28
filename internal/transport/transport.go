@@ -82,11 +82,7 @@ var (
 	errChunkSendSkipped  = errors.New("chunk is skipped")
 	errBatchSendSkipped  = errors.New("raft request batch is skipped")
 	dialTimeoutSecond    = settings.Soft.GetConnectedTimeoutSecond
-	// max number of RaftSnapshotChunk that can be buffered in each channel, note
-	// that the vast majority of those chunks won't be actually buffered in the
-	// channel.
-	snapSendBufSize = settings.Soft.SnapshotSendQueueLength
-	idleTimeout     = time.Minute
+	idleTimeout          = time.Minute
 )
 
 // INodeAddressResolver converts the (cluster id, node id( tuple to network
@@ -187,9 +183,7 @@ type Transport struct {
 	preSendMessageBatch atomic.Value // SendMessageBatchFunc
 	ctx                 context.Context
 	cancel              context.CancelFunc
-	snapshotCount       int32
 	streamConnections   uint64
-	snapshotQueueMu     sync.Mutex
 }
 
 // NewTransport creates a new Transport object.

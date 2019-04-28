@@ -41,7 +41,6 @@ func runDrummerMonkeyTest(t *testing.T, appname string) {
 	transport.SetPerConnBufferSize(64 * 1024)
 	transport.SetSendBufferSize(64)
 	transport.SetSnapshotChunkSize(1024)
-	transport.SetSnapshotSendBufSize(2048)
 	transport.SetPayloadBuffserSize(1024 * 8)
 	logdb.SetEntryBatchSize(4)
 	logdb.SetLogDBInstanceCount(1)

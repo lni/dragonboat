@@ -381,7 +381,6 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 					t.Fatalf("panic not trigger")
 				}
 			}()
-			allRead := make([]byte, 0)
 			curRead := make([]byte, 4)
 			written[idx] = byte(written[idx] + 1)
 			lr := io.LimitReader(bytes.NewBuffer(written), int64(len(written)-16))
@@ -391,7 +390,6 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 				if err != nil && err != io.EOF {
 					t.Fatalf("failed to read %v", err)
 				}
-				allRead = append(allRead, curRead[:n]...)
 				if err == io.EOF {
 					break
 				}

@@ -47,10 +47,7 @@ import (
 )
 
 var (
-	// FIXME:
-	// move to the settings package.
 	maxConnectionCount uint32 = uint32(settings.Soft.MaxSnapshotConnections)
-	maxSnapshotCount          = settings.Soft.MaxSnapshotCount
 )
 
 // ASyncSendSnapshot sends raft snapshot message to its target.

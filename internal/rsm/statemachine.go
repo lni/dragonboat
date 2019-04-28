@@ -199,9 +199,9 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	return ss.Index, nil
 }
 
-func (s *StateMachine) getSnapshot(rec Task) (pb.Snapshot, error) {
-	if !rec.InitialSnapshot {
-		snapshot, err := s.snapshotter.GetSnapshot(rec.Index)
+func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
+	if !t.InitialSnapshot {
+		snapshot, err := s.snapshotter.GetSnapshot(t.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
 			plog.Errorf("%s, get snapshot failed: %v", s.describe(), err)
 			return pb.Snapshot{}, ErrRestoreSnapshot
@@ -283,6 +283,9 @@ func (s *StateMachine) recoverSnapshot(ss pb.Snapshot,
 	return true, 0, nil
 }
 
+// FIXME:
+// this must be checked before streaming snapshots
+//
 // we can not stream a full snapshot when membership state is catching up with
 // the all disk SM state. however, meta only snapshot can be taken at any time.
 func (s *StateMachine) readyToStreamSnapshot() bool {
@@ -512,6 +515,20 @@ func (s *StateMachine) checkSnapshotStatus() error {
 	return nil
 }
 
+func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
+	var err error
+	var meta *SnapshotMeta
+	if err := func() error {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		meta, err = s.prepareSnapshot(SnapshotRequest{})
+		return err
+	}(); err != nil {
+		return err
+	}
+	return s.snapshotter.StreamSnapshot(s.sm, meta, sink)
+}
+
 func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	var err error
@@ -525,20 +542,6 @@ func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot
 		return nil, nil, err
 	}
 	return s.doSaveSnapshot(meta)
-}
-
-func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
-	var err error
-	var meta *SnapshotMeta
-	if err := func() error {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot(SnapshotRequest{})
-		return err
-	}(); err != nil {
-		return err
-	}
-	return s.snapshotter.StreamSnapshot(s.sm, meta, sink)
 }
 
 func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,

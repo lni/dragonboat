@@ -30,7 +30,6 @@ import (
 const (
 	LogReaderTestClusterID uint64 = 2
 	LogReaderTestNodeID    uint64 = 12345
-	defaultCacheSize       uint64 = 1024 * 1024
 )
 
 func getNewLogReaderTestDB(entries []pb.Entry) raftio.ILogDB {

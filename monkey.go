@@ -28,14 +28,6 @@ import (
 // code here is used in testing only.
 //
 
-// SetRegion sets NodeHost's region value in test. This function is expected
-// to be called only during monkeytest, it doesn't exist when the monkeytest
-// tag is not set.
-func (nh *NodeHost) SetRegion(region string) {
-	plog.Infof("setting the region to be %s", region)
-	nh.region = region
-}
-
 // Clusters returns a list of raft nodes managed by the nodehost instance.
 func (nh *NodeHost) Clusters() []*node {
 	result := make([]*node, 0)

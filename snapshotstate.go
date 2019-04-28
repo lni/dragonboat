@@ -45,14 +45,6 @@ func (sr *snapshotRecord) setStreamRecord(rec rsm.Task,
 	return true
 }
 
-func (sr *snapshotRecord) getStreamRecord() (rsm.Task, getSink, bool) {
-	sr.mu.Lock()
-	defer sr.mu.Unlock()
-	hasRecord := sr.hasRecord
-	sr.hasRecord = false
-	return sr.record, sr.getSinkFn, hasRecord
-}
-
 func (sr *snapshotRecord) setRecord(rec rsm.Task) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()

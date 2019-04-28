@@ -1455,11 +1455,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
-		select {
-		case s := <-rs.CompletedC:
-			if !s.Completed() {
-				t.Fatalf("failed to complete the add node request")
-			}
+		s := <-rs.CompletedC
+		if !s.Completed() {
+			t.Fatalf("failed to complete the add node request")
 		}
 		rc := config.Config{
 			ClusterID:          1,

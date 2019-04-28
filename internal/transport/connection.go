@@ -44,7 +44,7 @@ type Sink struct {
 
 // Receive receives a snapshot chunk.
 func (s *Sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
-	return s.l.SendSnapshotChunk(chunk)
+	return s.l.SendChunk(chunk)
 }
 
 // ClusterID returns the cluster ID of the source node.
@@ -119,13 +119,11 @@ func (l *connection) sendSavedSnapshot(m pb.Message) {
 		plog.Panicf("cap of ch is %d, want %d", cap(l.ch), len(chunks))
 	}
 	for _, chunk := range chunks {
-		select {
-		case l.ch <- chunk:
-		}
+		l.ch <- chunk
 	}
 }
 
-func (l *connection) SendSnapshotChunk(chunk pb.SnapshotChunk) (bool, bool) {
+func (l *connection) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	select {
 	case l.ch <- chunk:
 		return true, false
@@ -156,7 +154,7 @@ func (l *connection) streamSnapshot() error {
 			if chunk.ChunkCount == PoisonChunkCount {
 				return ErrStreamSnapshot
 			}
-			if err := l.sendSnapshotChunk(chunk, l.conn); err != nil {
+			if err := l.sendChunk(chunk, l.conn); err != nil {
 				plog.Errorf("stream snapshot chunk to %s failed",
 					logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 				return err
@@ -196,7 +194,7 @@ func (l *connection) sendChunks(chunks []pb.SnapshotChunk) error {
 		}
 		chunk.Data = data
 		chunk.DeploymentId = l.deploymentID
-		if err := l.sendSnapshotChunk(chunk, l.conn); err != nil {
+		if err := l.sendChunk(chunk, l.conn); err != nil {
 			plog.Debugf("snapshot to %s failed",
 				logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 			return err
@@ -208,7 +206,7 @@ func (l *connection) sendChunks(chunks []pb.SnapshotChunk) error {
 	return nil
 }
 
-func (l *connection) sendSnapshotChunk(c pb.SnapshotChunk,
+func (l *connection) sendChunk(c pb.SnapshotChunk,
 	conn raftio.ISnapshotConnection) error {
 	if v := l.preStreamChunkSend.Load(); v != nil {
 		plog.Infof("pre stream chunk send set")

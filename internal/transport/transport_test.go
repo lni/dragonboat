@@ -921,7 +921,6 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		if sink == nil {
 			t.Errorf("failed to get sink again %d", i)
 		}
-		conns = append(conns, sink)
 	}
 }
 

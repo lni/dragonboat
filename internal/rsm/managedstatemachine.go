@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/logutil"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
 )
@@ -152,10 +151,6 @@ func (o *OffloadedStatus) SetOffloaded(from From) {
 		o.offloadedFromStepWorker {
 		o.readyToDestroy = true
 	}
-}
-
-func (o *OffloadedStatus) describe() string {
-	return logutil.DescribeNode(o.clusterID, o.nodeID)
 }
 
 // IStreamable is the interface for types that can be snapshot streamed.

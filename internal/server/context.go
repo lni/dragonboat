@@ -66,7 +66,9 @@ func NewContext(nhConfig config.NodeHostConfig) *Context {
 // Stop stops the context.
 func (sc *Context) Stop() {
 	for _, fl := range sc.flocks {
-		fl.Unlock()
+		if err := fl.Unlock(); err != nil {
+			panic(err)
+		}
 	}
 }
 

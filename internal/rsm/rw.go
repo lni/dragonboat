@@ -225,7 +225,6 @@ type blockReader struct {
 	t         pb.ChecksumType
 	blockSize uint64
 	block     []byte
-	hf        hash.Hash
 }
 
 // the input reader should be a reader to all blocks, thus the 16 bytes length

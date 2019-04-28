@@ -1292,7 +1292,7 @@ func TestRemoveNodeData(t *testing.T) {
 		if err := db.RemoveNodeData(clusterID, nodeID); err != nil {
 			t.Fatalf("failed to remove node data")
 		}
-		state, err = db.ReadRaftState(clusterID, nodeID, 1)
+		_, err = db.ReadRaftState(clusterID, nodeID, 1)
 		if err != raftio.ErrNoSavedLog {
 			t.Fatalf("raft state not deleted %v", err)
 		}

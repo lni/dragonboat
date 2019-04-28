@@ -23,12 +23,23 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+
+	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/utils/compression/snappy"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/random"
 )
+
+func isTimeoutError(err error) bool {
+	if err == dragonboat.ErrTimeout {
+		return true
+	}
+	return grpc.Code(err) == codes.DeadlineExceeded
+}
 
 func TestDeploymentIDCanBeSetAndGet(t *testing.T) {
 	defer leaktest.AfterTest(t)()

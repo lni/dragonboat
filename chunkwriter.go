@@ -144,7 +144,6 @@ func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
 		Membership:  cw.meta.Membership,
 		BinVer:      raftio.RPCBinVersion,
 		Filepath:    server.GetSnapshotFilename(cw.meta.Index),
-		// FIXME: might need to set the filepath field
 	}
 }
 

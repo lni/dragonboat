@@ -211,7 +211,7 @@ func TestCopySnapshotFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read the copied file %v", err)
 	}
-	if bytes.Compare(dstdata, data) != 0 {
+	if !bytes.Equal(dstdata, data) {
 		t.Fatalf("content changed")
 	}
 }
