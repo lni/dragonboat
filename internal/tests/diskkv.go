@@ -23,7 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,7 +39,7 @@ import (
 
 const (
 	appliedIndexKey    string = "disk_kv_applied_index"
-	dbNamePrefix       string = "test_rocksdb_db_dir_"
+	testDBDirName      string = "test_rocksdb_db_safe_to_delete"
 	currentDBFilename  string = "current"
 	updatingDBFilename string = "current.updating"
 )
@@ -129,7 +129,7 @@ func createDB(dbdir string) (*rocksdb, error) {
 }
 
 func isNewRun(dir string) bool {
-	fp := path.Join(dir, currentDBFilename)
+	fp := filepath.Join(dir, currentDBFilename)
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
 		return true
 	}
@@ -137,20 +137,20 @@ func isNewRun(dir string) bool {
 }
 
 func getNodeDBDirName(clusterID uint64, nodeID uint64) string {
-	part := "%d_%d"
-	return fmt.Sprintf(dbNamePrefix+part, clusterID, nodeID)
+	part := fmt.Sprintf("%d_%d", clusterID, nodeID)
+	return filepath.Join(testDBDirName, part)
 }
 
 func getNewRandomDBDirName(dir string) string {
-	part := "_%d_%d"
+	part := "%d_%d"
 	rn := random.LockGuardedRand.Uint64()
 	ct := time.Now().UnixNano()
-	return path.Join(dir, fmt.Sprintf(dir+part, rn, ct))
+	return filepath.Join(dir, fmt.Sprintf(part, rn, ct))
 }
 
 func replaceCurrentDBFile(dir string) error {
-	fp := path.Join(dir, currentDBFilename)
-	tmpFp := path.Join(dir, updatingDBFilename)
+	fp := filepath.Join(dir, currentDBFilename)
+	tmpFp := filepath.Join(dir, updatingDBFilename)
 	if err := os.Rename(tmpFp, fp); err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func saveCurrentDBDirName(dir string, dbdir string) error {
 	if _, err := h.Write([]byte(dbdir)); err != nil {
 		return err
 	}
-	fp := path.Join(dir, updatingDBFilename)
+	fp := filepath.Join(dir, updatingDBFilename)
 	f, err := os.Create(fp)
 	if err != nil {
 		return err
@@ -188,7 +188,7 @@ func saveCurrentDBDirName(dir string, dbdir string) error {
 }
 
 func getCurrentDBDirName(dir string) (string, error) {
-	fp := path.Join(dir, currentDBFilename)
+	fp := filepath.Join(dir, currentDBFilename)
 	f, err := os.OpenFile(fp, os.O_RDONLY, 0755)
 	if err != nil {
 		return "", err
@@ -222,7 +222,7 @@ func createNodeDataDir(dir string) error {
 }
 
 func cleanupNodeDataDir(dir string) error {
-	os.RemoveAll(path.Join(dir, updatingDBFilename))
+	os.RemoveAll(filepath.Join(dir, updatingDBFilename))
 	dbdir, err := getCurrentDBDirName(dir)
 	if err != nil {
 		return err
@@ -236,7 +236,7 @@ func cleanupNodeDataDir(dir string) error {
 			continue
 		}
 		fmt.Printf("dbdir %s, fi.name %s, dir %s\n", dbdir, fi.Name(), dir)
-		toDelete := path.Join(dir, fi.Name())
+		toDelete := filepath.Join(dir, fi.Name())
 		if toDelete != dbdir {
 			fmt.Printf("removing %s\n", toDelete)
 			if err := os.RemoveAll(toDelete); err != nil {

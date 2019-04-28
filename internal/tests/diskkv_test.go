@@ -18,10 +18,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/internal/tests/kvpb"
@@ -202,17 +200,7 @@ func TestCleanupNodeDataDir(t *testing.T) {
 }
 
 func removeAllDBDir() {
-	files, err := ioutil.ReadDir(".")
-	if err != nil {
-		panic(err)
-	}
-	for _, fi := range files {
-		if fi.IsDir() && strings.HasPrefix(fi.Name(), dbNamePrefix) {
-			if err := os.RemoveAll(fi.Name()); err != nil {
-				panic(err)
-			}
-		}
-	}
+	os.RemoveAll(testDBDirName)
 }
 
 func runDiskKVTest(t *testing.T, f func(t *testing.T, odsm sm.IOnDiskStateMachine)) {
