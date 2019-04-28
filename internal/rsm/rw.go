@@ -119,7 +119,7 @@ type BlockWriter struct {
 	nextStop   uint64
 	written    uint64
 	total      uint64
-	done       bool
+	flushed    bool
 }
 
 // IBlockWriter is the interface for writing checksumed data blocks.
@@ -151,7 +151,7 @@ func newBlockWriter(blockSize uint64,
 
 // Write writes the specified data using the block writer.
 func (bw *BlockWriter) Write(bs []byte) (int, error) {
-	if bw.done {
+	if bw.flushed {
 		panic("write called after flush")
 	}
 	var totalN uint64
@@ -182,10 +182,10 @@ func (bw *BlockWriter) Write(bs []byte) (int, error) {
 
 // Flush writes all in memory buffered data.
 func (bw *BlockWriter) Flush() error {
-	if bw.done {
+	if bw.flushed {
 		panic("flush called again")
 	} else {
-		bw.done = true
+		bw.flushed = true
 	}
 	if len(bw.block) > 0 {
 		bw.total += uint64(len(bw.block)) + checksumSize
@@ -196,8 +196,9 @@ func (bw *BlockWriter) Flush() error {
 	}
 	totalbs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(totalbs, uint64(bw.total))
-	if err := bw.processNewBlock(append(totalbs, writerMagicNumber...), nil); err != nil {
-		plog.Infof("on tail failed %v", err)
+	tailBlock := append(totalbs, writerMagicNumber...)
+	if err := bw.processNewBlock(tailBlock, nil); err != nil {
+		plog.Infof("process tail block failed %v", err)
 		return err
 	}
 	return nil
@@ -205,7 +206,7 @@ func (bw *BlockWriter) Flush() error {
 
 // GetPayloadChecksum returns the checksum for the entire payload.
 func (bw *BlockWriter) GetPayloadChecksum() []byte {
-	if !bw.done {
+	if !bw.flushed {
 		panic("not flushed yet")
 	}
 	return bw.fh.Sum(nil)

@@ -65,8 +65,8 @@ type connection struct {
 	streaming          bool
 	ctx                context.Context
 	rpc                raftio.IRaftRPC
-	ch                 chan pb.SnapshotChunk
 	conn               raftio.ISnapshotConnection
+	ch                 chan pb.SnapshotChunk
 	stopc              chan struct{}
 	failed             chan struct{}
 	streamChunkSent    atomic.Value
@@ -139,7 +139,11 @@ func (l *connection) process() error {
 		plog.Panicf("trying to process on nil ch, not connected?")
 	}
 	if l.streaming {
-		return l.streamSnapshot()
+		err := l.streamSnapshot()
+		if err != nil {
+			close(l.failed)
+		}
+		return err
 	}
 	return l.processSavedSnapshot()
 }
@@ -178,13 +182,13 @@ func (l *connection) processSavedSnapshot() error {
 			}
 			chunks = append(chunks, chunk)
 			if chunk.ChunkId+1 == chunk.ChunkCount {
-				return l.sendChunks(chunks)
+				return l.sendSavedChunks(chunks)
 			}
 		}
 	}
 }
 
-func (l *connection) sendChunks(chunks []pb.SnapshotChunk) error {
+func (l *connection) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 	for _, chunk := range chunks {
 		chunkData := make([]byte, snapChunkSize)
 		data, err := loadSnapshotChunkData(chunk, chunkData)

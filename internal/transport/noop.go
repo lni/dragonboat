@@ -86,7 +86,8 @@ func (c *NOOPConnection) SendMessageBatch(batch raftpb.MessageBatch) error {
 
 // NOOPSnapshotConnection is the connection used to send snapshots.
 type NOOPSnapshotConnection struct {
-	req *noopRequest
+	req             *noopRequest
+	sendChunksCount uint64
 }
 
 // Close closes the NOOPSnapshotConnection.
@@ -98,6 +99,7 @@ func (c *NOOPSnapshotConnection) SendSnapshotChunk(chunk raftpb.SnapshotChunk) e
 	if c.req.Fail() {
 		return ErrRequestedToFail
 	}
+	c.sendChunksCount++
 	return nil
 }
 

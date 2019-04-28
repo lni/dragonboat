@@ -160,7 +160,7 @@ func (t *Transport) connectAndProcessSnapshot(c *connection, addr string) {
 		}
 		err := c.process()
 		if err != nil {
-			close(c.failed)
+			plog.Errorf("snapshot chunk processing failed %v", err)
 		}
 		t.sendSnapshotNotification(clusterID, nodeID, err != nil)
 		return err
