@@ -151,9 +151,8 @@ func newNode(raftAddress string,
 			nodeID:       config.NodeID,
 		},
 	}
-	nodeProxy := newNodeProxy(rc)
 	ordered := config.OrderedConfigChange
-	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, nodeProxy)
+	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rc)
 	rc.taskC = sm.TaskC()
 	rc.sm = sm
 	if sm.OnDiskStateMachine() {
@@ -161,6 +160,83 @@ func newNode(raftAddress string,
 	}
 	rc.startRaft(config, rc.logreader, peers, initialMember)
 	return rc
+}
+
+func (rc *node) NodeID() uint64 {
+	return rc.nodeID
+}
+
+func (rc *node) ClusterID() uint64 {
+	return rc.clusterID
+}
+
+func (rc *node) ApplyUpdate(entry pb.Entry,
+	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	if notifyReadClient {
+		rc.pendingReadIndexes.applied(entry.Index)
+	}
+	if !ignored {
+		if entry.Key == 0 {
+			plog.Panicf("key is 0")
+		}
+		rc.pendingProposals.applied(entry.ClientID,
+			entry.SeriesID, entry.Key, result, rejected)
+	}
+}
+
+func (rc *node) ApplyConfigChange(cc pb.ConfigChange) {
+	rc.raftMu.Lock()
+	defer rc.raftMu.Unlock()
+	rc.node.ApplyConfigChange(cc)
+	switch cc.Type {
+	case pb.AddNode:
+		rc.nodeRegistry.AddNode(rc.clusterID, cc.NodeID, string(cc.Address))
+	case pb.AddObserver:
+		rc.nodeRegistry.AddNode(rc.clusterID, cc.NodeID, string(cc.Address))
+	case pb.RemoveNode:
+		if cc.NodeID == rc.nodeID {
+			plog.Infof("%s applied ConfChange Remove for itself", rc.describe())
+			rc.nodeRegistry.RemoveCluster(rc.clusterID)
+			rc.requestRemoval()
+		} else {
+			rc.nodeRegistry.RemoveNode(rc.clusterID, cc.NodeID)
+		}
+	default:
+		panic("unknown config change type")
+	}
+}
+
+func (rc *node) RestoreRemotes(snapshot pb.Snapshot) {
+	if snapshot.Membership.ConfigChangeId == 0 {
+		panic("invalid snapshot.Metadata.Membership.ConfChangeId")
+	}
+	rc.raftMu.Lock()
+	defer rc.raftMu.Unlock()
+	for nid, addr := range snapshot.Membership.Addresses {
+		rc.nodeRegistry.AddNode(rc.clusterID, nid, addr)
+	}
+	for nid, addr := range snapshot.Membership.Observers {
+		rc.nodeRegistry.AddNode(rc.clusterID, nid, addr)
+	}
+	for nid := range snapshot.Membership.Removed {
+		if nid == rc.nodeID {
+			rc.nodeRegistry.RemoveCluster(rc.clusterID)
+			rc.requestRemoval()
+		}
+	}
+	plog.Infof("%s is restoring remotes %+v", rc.describe(), snapshot.Membership)
+	rc.node.RestoreRemotes(snapshot)
+	rc.captureClusterConfig()
+}
+
+func (rc *node) ConfigChangeProcessed(key uint64, accepted bool) {
+	if accepted {
+		rc.pendingConfigChange.apply(key, false)
+		rc.captureClusterConfig()
+	} else {
+		rc.node.RejectConfigChange()
+		rc.pendingConfigChange.apply(key, true)
+	}
 }
 
 func (rc *node) startRaft(cc config.Config,
@@ -933,65 +1009,6 @@ func (rc *node) handleMessage(m pb.Message) bool {
 		return false
 	}
 	return true
-}
-
-func (rc *node) applyUpdate(entry pb.Entry,
-	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
-	if notifyReadClient {
-		rc.pendingReadIndexes.applied(entry.Index)
-	}
-	if !ignored {
-		if entry.Key == 0 {
-			plog.Panicf("key is 0")
-		}
-		rc.pendingProposals.applied(entry.ClientID,
-			entry.SeriesID, entry.Key, result, rejected)
-	}
-}
-
-func (rc *node) applyConfigChange(cc pb.ConfigChange) {
-	rc.raftMu.Lock()
-	defer rc.raftMu.Unlock()
-	rc.node.ApplyConfigChange(cc)
-	switch cc.Type {
-	case pb.AddNode:
-		rc.nodeRegistry.AddNode(rc.clusterID, cc.NodeID, string(cc.Address))
-	case pb.AddObserver:
-		rc.nodeRegistry.AddNode(rc.clusterID, cc.NodeID, string(cc.Address))
-	case pb.RemoveNode:
-		if cc.NodeID == rc.nodeID {
-			plog.Infof("%s applied ConfChange Remove for itself", rc.describe())
-			rc.nodeRegistry.RemoveCluster(rc.clusterID)
-			rc.requestRemoval()
-		} else {
-			rc.nodeRegistry.RemoveNode(rc.clusterID, cc.NodeID)
-		}
-	default:
-		panic("unknown config change type")
-	}
-}
-
-func (rc *node) restoreRemotes(snapshot pb.Snapshot) {
-	if snapshot.Membership.ConfigChangeId == 0 {
-		panic("invalid snapshot.Metadata.Membership.ConfChangeId")
-	}
-	rc.raftMu.Lock()
-	defer rc.raftMu.Unlock()
-	for nid, addr := range snapshot.Membership.Addresses {
-		rc.nodeRegistry.AddNode(rc.clusterID, nid, addr)
-	}
-	for nid, addr := range snapshot.Membership.Observers {
-		rc.nodeRegistry.AddNode(rc.clusterID, nid, addr)
-	}
-	for nid := range snapshot.Membership.Removed {
-		if nid == rc.nodeID {
-			rc.nodeRegistry.RemoveCluster(rc.clusterID)
-			rc.requestRemoval()
-		}
-	}
-	plog.Infof("%s is restoring remotes %+v", rc.describe(), snapshot.Membership)
-	rc.node.RestoreRemotes(snapshot)
-	rc.captureClusterConfig()
 }
 
 func (rc *node) setInitialStatus(index uint64) {

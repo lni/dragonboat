@@ -69,14 +69,6 @@ func (nh *NodeHost) GetLogDB() raftio.ILogDB {
 	return nh.logdb
 }
 
-func (rn *node) ClusterID() uint64 {
-	return rn.clusterID
-}
-
-func (rn *node) NodeID() uint64 {
-	return rn.nodeID
-}
-
 func (rn *node) GetLastApplied() uint64 {
 	return rn.sm.GetLastApplied()
 }
