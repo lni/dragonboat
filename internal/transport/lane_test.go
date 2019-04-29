@@ -99,7 +99,7 @@ func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 	c.close()
 }
 
-func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
+func testSpecialChunkCanStopTheProcessLoop(t *testing.T, tt uint64, experr error) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
 	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
 	if err := c.connect("a1"); err != nil {
@@ -111,7 +111,7 @@ func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
 		perr = c.process()
 	})
 	poison := pb.SnapshotChunk{
-		ChunkCount: PoisonChunkCount,
+		ChunkCount: tt,
 	}
 	sent, stopped := c.SendChunk(poison)
 	if !sent {
@@ -121,7 +121,15 @@ func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
 		t.Errorf("unexpectedly stopped")
 	}
 	stopper.Stop()
-	if perr != ErrStreamSnapshot {
+	if perr != experr {
 		t.Errorf("unexpected error val %v", perr)
 	}
+}
+
+func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
+	testSpecialChunkCanStopTheProcessLoop(t, pb.PoisonChunkCount, ErrStreamSnapshot)
+}
+
+func TestLastChunkCanStopTheProcessLoop(t *testing.T) {
+	testSpecialChunkCanStopTheProcessLoop(t, pb.LastChunkCount, nil)
 }

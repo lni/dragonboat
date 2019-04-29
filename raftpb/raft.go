@@ -16,6 +16,7 @@ package raftpb
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -279,3 +280,12 @@ type IChunkSink interface {
 	ClusterID() uint64
 	ToNodeID() uint64
 }
+
+var (
+	// LastChunkCount is the special chunk count value used to indicate that the
+	// chunk is the last one.
+	LastChunkCount uint64 = math.MaxUint64
+	// PoisonChunkCount is the special chunk count value used to indicate that
+	// the processing goroutine should return.
+	PoisonChunkCount uint64 = math.MaxUint64 - 1
+)

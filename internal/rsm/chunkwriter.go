@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dragonboat
+package rsm
 
 import (
 	"encoding/binary"
 	"time"
 
-	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -37,23 +35,22 @@ type chunkWriter struct {
 	stopped bool
 	chunkID uint64
 	sink    pb.IChunkSink
-	bw      rsm.IBlockWriter
-	meta    *rsm.SnapshotMeta
+	bw      IBlockWriter
+	meta    *SnapshotMeta
 }
 
-func newChunkWriter(sink pb.IChunkSink,
-	meta *rsm.SnapshotMeta) *chunkWriter {
+func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *chunkWriter {
 	cw := &chunkWriter{
 		sink: sink,
 		meta: meta,
 	}
-	cw.bw = rsm.NewBlockWriter(SnapshotChunkSize,
-		cw.onNewBlock, rsm.DefaultChecksumType)
+	cw.bw = NewBlockWriter(SnapshotChunkSize,
+		cw.onNewBlock, DefaultChecksumType)
 	return cw
 }
 
 func (cw *chunkWriter) Fail() {
-	chunk := pb.SnapshotChunk{ChunkCount: transport.PoisonChunkCount}
+	chunk := pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount}
 	cw.sink.Receive(chunk)
 }
 
@@ -109,14 +106,14 @@ func (cw *chunkWriter) getHeader() []byte {
 		DataStoreSize:   0,
 		UnreliableTime:  uint64(time.Now().UnixNano()),
 		PayloadChecksum: []byte{0, 0, 0, 0},
-		ChecksumType:    rsm.DefaultChecksumType,
-		Version:         uint64(rsm.V2SnapshotVersion),
+		ChecksumType:    DefaultChecksumType,
+		Version:         uint64(V2SnapshotVersion),
 	}
 	data, err := header.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	headerHash := rsm.GetDefaultChecksum()
+	headerHash := GetDefaultChecksum()
 	if _, err := headerHash.Write(data); err != nil {
 		panic(err)
 	}
@@ -126,7 +123,7 @@ func (cw *chunkWriter) getHeader() []byte {
 	if err != nil {
 		panic(err)
 	}
-	headerData := make([]byte, rsm.SnapshotHeaderSize)
+	headerData := make([]byte, SnapshotHeaderSize)
 	binary.LittleEndian.PutUint64(headerData, uint64(len(data)))
 	copy(headerData[8:], data)
 	return headerData
@@ -149,7 +146,7 @@ func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
 
 func (cw *chunkWriter) getTailChunk() pb.SnapshotChunk {
 	tailChunk := cw.getChunk()
-	tailChunk.ChunkCount = transport.LastChunkCount
-	tailChunk.FileChunkCount = transport.LastChunkCount
+	tailChunk.ChunkCount = pb.LastChunkCount
+	tailChunk.FileChunkCount = pb.LastChunkCount
 	return tailChunk
 }

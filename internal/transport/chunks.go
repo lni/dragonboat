@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -35,16 +34,10 @@ import (
 var (
 	// ErrSnapshotOutOfDate is returned when the snapshot being received is
 	// considered as out of date.
-	ErrSnapshotOutOfDate = errors.New("snapshot is out of date")
-	// LastChunkCount is the special chunk count value used to indicate that the
-	// chunk is the last one.
-	LastChunkCount uint64 = math.MaxUint64
-	// PoisonChunkCount is the special chunk count value used to indicate that
-	// the processing goroutine should return.
-	PoisonChunkCount         uint64 = math.MaxUint64 - 1
-	gcIntervalTick                  = settings.Soft.SnapshotGCTick
-	snapshotChunkTimeoutTick        = settings.Soft.SnapshotChunkTimeoutTick
-	maxConcurrentSlot               = settings.Soft.MaxConcurrentStreamingSnapshot
+	ErrSnapshotOutOfDate     = errors.New("snapshot is out of date")
+	gcIntervalTick           = settings.Soft.SnapshotGCTick
+	snapshotChunkTimeoutTick = settings.Soft.SnapshotChunkTimeoutTick
+	maxConcurrentSlot        = settings.Soft.MaxConcurrentStreamingSnapshot
 )
 
 func snapshotKey(c pb.SnapshotChunk) string {
@@ -375,6 +368,6 @@ func (c *chunks) toMessage(chunk pb.SnapshotChunk,
 }
 
 func isLastChunk(chunk pb.SnapshotChunk) bool {
-	return chunk.ChunkCount == LastChunkCount ||
+	return chunk.ChunkCount == pb.LastChunkCount ||
 		chunk.ChunkCount == chunk.ChunkId+1
 }
