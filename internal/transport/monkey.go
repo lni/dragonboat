@@ -25,7 +25,7 @@ func SetPerConnBufferSize(sz uint64) {
 }
 
 func SetSendBufferSize(sz uint64) {
-	rpcSendBufSize = sz
+	sendBufSize = sz
 }
 
 func SetPayloadBuffserSize(sz uint64) {
@@ -35,5 +35,5 @@ func SetPayloadBuffserSize(sz uint64) {
 // Set the size of snapshot chunk. This function is only available in
 // monekytest.
 func SetSnapshotChunkSize(sz uint64) {
-	snapChunkSize = sz
+	snapshotChunkSize = sz
 }
