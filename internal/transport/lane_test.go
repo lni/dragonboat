@@ -23,7 +23,7 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
-func TestSnapshotConnectionCanBeCreatedInSavedMode(t *testing.T) {
+func TestSnapshotLaneCanBeCreatedInSavedMode(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
 	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil)
 	if cap(c.ch) != 201 {
@@ -31,7 +31,7 @@ func TestSnapshotConnectionCanBeCreatedInSavedMode(t *testing.T) {
 	}
 }
 
-func TestSnapshotConnectionCanBeCreatedInStreamingMode(t *testing.T) {
+func TestSnapshotLaneCanBeCreatedInStreamingMode(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
 	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil)
 	if cap(c.ch) != streamingChanLength {
@@ -58,7 +58,7 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 	}
 }
 
-func TestKeepSendingChunksUsingFailedConnectionWillNotBlock(t *testing.T) {
+func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
 	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
 	if cap(c.ch) != streamingChanLength {
@@ -97,4 +97,31 @@ func TestKeepSendingChunksUsingFailedConnectionWillNotBlock(t *testing.T) {
 		t.Fatalf("failed chan not closed")
 	}
 	c.close()
+}
+
+func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
+	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
+	if err := c.connect("a1"); err != nil {
+		t.Fatalf("connect failed %v", err)
+	}
+	stopper := syncutil.NewStopper()
+	var perr error
+	stopper.RunWorker(func() {
+		perr = c.process()
+	})
+	poison := pb.SnapshotChunk{
+		ChunkCount: PoisonChunkCount,
+	}
+	sent, stopped := c.SendChunk(poison)
+	if !sent {
+		t.Fatalf("failed to send")
+	}
+	if stopped {
+		t.Errorf("unexpectedly stopped")
+	}
+	stopper.Stop()
+	if perr != ErrStreamSnapshot {
+		t.Errorf("unexpected error val %v", perr)
+	}
 }
