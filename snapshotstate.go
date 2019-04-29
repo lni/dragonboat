@@ -25,42 +25,40 @@ import (
 
 type getSink func() pb.IChunkSink
 
-type snapshotRecord struct {
+type snapshotTask struct {
 	mu        sync.Mutex
 	getSinkFn getSink
-	record    rsm.Task
-	hasRecord bool
+	t         rsm.Task
+	hasTask   bool
 }
 
-func (sr *snapshotRecord) setStreamRecord(rec rsm.Task,
-	getSinkFn getSink) bool {
+func (sr *snapshotTask) setStreamTask(t rsm.Task, getSinkFn getSink) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	if sr.hasRecord {
-		return false
+	if sr.hasTask {
+		plog.Panicf("setting stream snapshot task again %+v\n%+v", sr.t, t)
 	}
-	sr.hasRecord = true
-	sr.record = rec
+	sr.hasTask = true
+	sr.t = t
 	sr.getSinkFn = getSinkFn
-	return true
 }
 
-func (sr *snapshotRecord) setRecord(rec rsm.Task) {
+func (sr *snapshotTask) setTask(t rsm.Task) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	if sr.hasRecord {
-		plog.Panicf("setting snapshot record again %+v\n%+v", sr.record, rec)
+	if sr.hasTask {
+		plog.Panicf("setting snapshot task again %+v\n%+v", sr.t, t)
 	}
-	sr.hasRecord = true
-	sr.record = rec
+	sr.hasTask = true
+	sr.t = t
 }
 
-func (sr *snapshotRecord) getRecord() (rsm.Task, bool) {
+func (sr *snapshotTask) getTask() (rsm.Task, bool) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	hasRecord := sr.hasRecord
-	sr.hasRecord = false
-	return sr.record, hasRecord
+	hasTask := sr.hasTask
+	sr.hasTask = false
+	return sr.t, hasTask
 }
 
 type snapshotState struct {
@@ -70,12 +68,12 @@ type snapshotState struct {
 	snapshotIndex              uint64
 	reqSnapshotIndex           uint64
 	compactLogTo               uint64
-	recoverReady               snapshotRecord
-	saveSnapshotReady          snapshotRecord
-	streamSnapshotReady        snapshotRecord
-	recoverCompleted           snapshotRecord
-	saveSnapshotCompleted      snapshotRecord
-	streamSnapshotCompleted    snapshotRecord
+	recoverReady               snapshotTask
+	saveSnapshotReady          snapshotTask
+	streamSnapshotReady        snapshotTask
+	recoverCompleted           snapshotTask
+	saveSnapshotCompleted      snapshotTask
+	streamSnapshotCompleted    snapshotTask
 }
 
 func (rs *snapshotState) recoveringFromSnapshot() bool {
@@ -142,29 +140,28 @@ func (rs *snapshotState) setCompactLogTo(v uint64) {
 	atomic.StoreUint64(&rs.compactLogTo, v)
 }
 
-func (rs *snapshotState) setStreamSnapshotReq(rec rsm.Task,
-	getSinkFn getSink) {
-	rs.streamSnapshotReady.setStreamRecord(rec, getSinkFn)
+func (rs *snapshotState) setStreamSnapshotReq(t rsm.Task, getSinkFn getSink) {
+	rs.streamSnapshotReady.setStreamTask(t, getSinkFn)
 }
 
-func (rs *snapshotState) setRecoverFromSnapshotReq(rec rsm.Task) {
-	rs.recoverReady.setRecord(rec)
+func (rs *snapshotState) setRecoverFromSnapshotReq(t rsm.Task) {
+	rs.recoverReady.setTask(t)
 }
 
 func (rs *snapshotState) getRecoverFromSnapshotReq() (rsm.Task, bool) {
-	return rs.recoverReady.getRecord()
+	return rs.recoverReady.getTask()
 }
 
-func (rs *snapshotState) setSaveSnapshotReq(rec rsm.Task) {
-	rs.saveSnapshotReady.setRecord(rec)
+func (rs *snapshotState) setSaveSnapshotReq(t rsm.Task) {
+	rs.saveSnapshotReady.setTask(t)
 }
 
 func (rs *snapshotState) getSaveSnapshotReq() (rsm.Task, bool) {
-	return rs.saveSnapshotReady.getRecord()
+	return rs.saveSnapshotReady.getTask()
 }
 
 func (rs *snapshotState) getStreamSnapshotReq() (rsm.Task, getSink, bool) {
-	r, ok := rs.streamSnapshotReady.getRecord()
+	r, ok := rs.streamSnapshotReady.getTask()
 	if !ok {
 		return rsm.Task{}, nil, false
 	}
@@ -188,7 +185,7 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 		plog.Panicf("invalid request, save %t, recover %t, stream %t",
 			saveSnapshot, recoverFromSnapshot, streamSnapshot)
 	}
-	rec := rsm.Task{
+	t := rsm.Task{
 		SnapshotRequested: saveSnapshot,
 		SnapshotAvailable: recoverFromSnapshot,
 		StreamSnapshot:    streamSnapshot,
@@ -196,24 +193,24 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 		Index:             index,
 	}
 	if saveSnapshot {
-		rs.saveSnapshotCompleted.setRecord(rec)
+		rs.saveSnapshotCompleted.setTask(t)
 	} else if recoverFromSnapshot {
-		rs.recoverCompleted.setRecord(rec)
+		rs.recoverCompleted.setTask(t)
 	} else {
-		rs.streamSnapshotCompleted.setRecord(rec)
+		rs.streamSnapshotCompleted.setTask(t)
 	}
 }
 
 func (rs *snapshotState) getStreamSnapshotCompleted() (rsm.Task, bool) {
-	return rs.streamSnapshotCompleted.getRecord()
+	return rs.streamSnapshotCompleted.getTask()
 }
 
 func (rs *snapshotState) getRecoverCompleted() (rsm.Task, bool) {
-	return rs.recoverCompleted.getRecord()
+	return rs.recoverCompleted.getTask()
 }
 
 func (rs *snapshotState) getSaveSnapshotCompleted() (rsm.Task, bool) {
-	return rs.saveSnapshotCompleted.getRecord()
+	return rs.saveSnapshotCompleted.getTask()
 }
 
 type task struct {

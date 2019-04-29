@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1379,51 +1378,5 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 	timeout := v.Nanoseconds() / 1000000
 	if timeout <= 4500 || timeout > 5000 {
 		t.Errorf("v %d, want [4500,5000]", timeout)
-	}
-}
-
-func TestSnapshotRecordCanBeSet(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	sr := snapshotRecord{}
-	rec := rsm.Task{}
-	sr.setRecord(rec)
-	if !sr.hasRecord {
-		t.Errorf("rec not set")
-	}
-}
-
-func TestSnapshotRecordCanNotBeSetTwice(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Errorf("panic not triggered")
-	}()
-	sr := snapshotRecord{}
-	rec := rsm.Task{}
-	sr.setRecord(rec)
-	sr.setRecord(rec)
-}
-
-func TestCanGetSnapshotRecord(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	sr := snapshotRecord{}
-	rec, ok := sr.getRecord()
-	if ok {
-		t.Errorf("unexpected record")
-	}
-	rec = rsm.Task{}
-	sr.setRecord(rec)
-	r, ok := sr.getRecord()
-	if !ok {
-		t.Errorf("no record to get")
-	}
-	if !reflect.DeepEqual(&rec, &r) {
-		t.Errorf("unexpected rec")
-	}
-	rec, ok = sr.getRecord()
-	if ok {
-		t.Errorf("record is still available")
 	}
 }

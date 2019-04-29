@@ -312,8 +312,7 @@ func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	t := &getTestSnapshotDirStruct{}
 	c := config.NodeHostConfig{
-		RaftAddress:    grpcServerURL,
-		RaftRPCFactory: getRaftRPCFactoryFunc(),
+		RaftAddress: grpcServerURL,
 	}
 	if mutualTLS {
 		c.MutualTLS = true
