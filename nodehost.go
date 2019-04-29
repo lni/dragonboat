@@ -915,6 +915,8 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
+	plog.Infof("going to remove data that belong to %s",
+		logutil.DescribeNode(clusterID, nodeID))
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
 		plog.Panicf("failed to remove data from Raft LogDB %v", err)
 	}

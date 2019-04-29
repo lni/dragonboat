@@ -171,6 +171,26 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 	}
 }
 
+func (t *Transport) sendSnapshotNotification(clusterID uint64,
+	nodeID uint64, rejected bool) {
+	if t.handlerRemoved() {
+		plog.Warningf("handler removed, snapshot notification to %s ignored",
+			logutil.DescribeNode(clusterID, nodeID))
+		return
+	}
+	handler := t.handler.Load()
+	if handler != nil {
+		h := handler.(IRaftMessageHandler)
+		h.HandleSnapshotStatus(clusterID, nodeID, rejected)
+		plog.Debugf("snapshot notification to %s added, reject value %t",
+			logutil.DescribeNode(clusterID, nodeID), rejected)
+
+	} else {
+		plog.Warningf("no handler, snapshot notification to %s ignored",
+			logutil.DescribeNode(clusterID, nodeID))
+	}
+}
+
 func splitBySnapshotFile(msg pb.Message,
 	filepath string, filesize uint64, startChunkID uint64,
 	sf *pb.SnapshotFile) []pb.SnapshotChunk {

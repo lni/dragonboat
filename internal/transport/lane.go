@@ -124,6 +124,9 @@ func (l *lane) sendSavedSnapshot(m pb.Message) {
 }
 
 func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
+	plog.Infof("node %d is sending chunk %d to %s",
+		chunk.From, chunk.ChunkId,
+		logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 	select {
 	case l.ch <- chunk:
 		return true, false
@@ -152,6 +155,8 @@ func (l *lane) streamSnapshot() error {
 	for {
 		select {
 		case <-l.stopc:
+			plog.Infof("stream snapshot to %s terminated",
+				logutil.DescribeNode(l.clusterID, l.nodeID))
 			return ErrStopped
 		case chunk := <-l.ch:
 			chunk.DeploymentId = l.deploymentID
@@ -164,6 +169,8 @@ func (l *lane) streamSnapshot() error {
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
+				plog.Infof("%d just sent last chunk to %s",
+					chunk.From, logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
 				return nil
 			}
 		}
