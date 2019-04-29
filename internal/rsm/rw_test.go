@@ -230,7 +230,7 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 				if _, err := h.Write(data); err != nil {
 					t.Fatalf("failed to write %v", err)
 				}
-				if bytes.Compare(h.Sum(nil), crc) != 0 {
+				if !bytes.Equal(h.Sum(nil), crc) {
 					t.Errorf("unexpected CRC value")
 				}
 			}
@@ -259,10 +259,10 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 		if total != expSz {
 			t.Errorf("%d, total %d, size %d", idx, total, sz)
 		}
-		if bytes.Compare(magic, writerMagicNumber) != 0 {
+		if !bytes.Equal(magic, writerMagicNumber) {
 			t.Errorf("magic number changed")
 		}
-		if bytes.Compare(input, result) != 0 {
+		if !bytes.Equal(input, result) {
 			t.Errorf("%d, input changed, %+v, %+v", idx, input, result)
 		}
 	}
@@ -335,7 +335,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 					break
 				}
 			}
-			if bytes.Compare(allRead, input) != 0 {
+			if !bytes.Equal(allRead, input) {
 				t.Errorf("%d, returned data changed, input sz %d, returned sz %d",
 					idx, len(input), len(allRead))
 			}

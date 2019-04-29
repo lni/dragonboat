@@ -30,7 +30,9 @@ const (
 	SnapshotChunkSize = settings.SnapshotChunkSize
 )
 
-type chunkWriter struct {
+// ChunkWriter is a writer type that streams snapshot chunks to its intended
+// remote nodes.
+type ChunkWriter struct {
 	failed  bool
 	stopped bool
 	chunkID uint64
@@ -39,8 +41,9 @@ type chunkWriter struct {
 	meta    *SnapshotMeta
 }
 
-func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *chunkWriter {
-	cw := &chunkWriter{
+// NewChunkWriter creates and returns a chunk writer instance.
+func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *ChunkWriter {
+	cw := &ChunkWriter{
 		sink: sink,
 		meta: meta,
 	}
@@ -49,12 +52,14 @@ func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *chunkWriter {
 	return cw
 }
 
-func (cw *chunkWriter) Fail() {
-	chunk := pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount}
-	cw.sink.Receive(chunk)
+// Close closes the chunk writer.
+func (cw *ChunkWriter) Close() error {
+	cw.sink.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
-func (cw *chunkWriter) Write(data []byte) (int, error) {
+// Write writes the specified input data.
+func (cw *ChunkWriter) Write(data []byte) (int, error) {
 	if cw.stopped {
 		return 0, sm.ErrSnapshotStopped
 	}
@@ -64,14 +69,15 @@ func (cw *chunkWriter) Write(data []byte) (int, error) {
 	return cw.bw.Write(data)
 }
 
-func (cw *chunkWriter) Flush() error {
+// Flush flushes the buffered data.
+func (cw *ChunkWriter) Flush() error {
 	if err := cw.bw.Flush(); err != nil {
 		return err
 	}
 	return cw.onNewChunk(cw.getTailChunk())
 }
 
-func (cw *chunkWriter) onNewBlock(data []byte, crc []byte) error {
+func (cw *ChunkWriter) onNewBlock(data []byte, crc []byte) error {
 	defer func() {
 		cw.chunkID = cw.chunkID + 1
 	}()
@@ -87,7 +93,7 @@ func (cw *chunkWriter) onNewBlock(data []byte, crc []byte) error {
 	return cw.onNewChunk(chunk)
 }
 
-func (cw *chunkWriter) onNewChunk(chunk pb.SnapshotChunk) error {
+func (cw *ChunkWriter) onNewChunk(chunk pb.SnapshotChunk) error {
 	sent, stopped := cw.sink.Receive(chunk)
 	if stopped {
 		cw.stopped = true
@@ -100,7 +106,7 @@ func (cw *chunkWriter) onNewChunk(chunk pb.SnapshotChunk) error {
 	return nil
 }
 
-func (cw *chunkWriter) getHeader() []byte {
+func (cw *ChunkWriter) getHeader() []byte {
 	header := pb.SnapshotHeader{
 		SessionSize:     0,
 		DataStoreSize:   0,
@@ -129,7 +135,7 @@ func (cw *chunkWriter) getHeader() []byte {
 	return headerData
 }
 
-func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
+func (cw *ChunkWriter) getChunk() pb.SnapshotChunk {
 	return pb.SnapshotChunk{
 		ClusterId:   cw.sink.ClusterID(),
 		NodeId:      cw.sink.ToNodeID(),
@@ -144,7 +150,7 @@ func (cw *chunkWriter) getChunk() pb.SnapshotChunk {
 	}
 }
 
-func (cw *chunkWriter) getTailChunk() pb.SnapshotChunk {
+func (cw *ChunkWriter) getTailChunk() pb.SnapshotChunk {
 	tailChunk := cw.getChunk()
 	tailChunk.ChunkCount = pb.LastChunkCount
 	tailChunk.FileChunkCount = pb.LastChunkCount

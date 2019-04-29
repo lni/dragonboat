@@ -158,7 +158,7 @@ func TestRawCompactRangeWorks(t *testing.T) {
 		cr.Start = key1.Key()
 		cr.Limit = key2.Key()
 		rrdb.shards[0].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
-		cost := time.Now().Sub(st).Nanoseconds()
+		cost := time.Since(st).Nanoseconds()
 		plog.Infof("cost %d nanoseconds to complete the compact range op", cost)
 	}
 	testCompactRangeWithCompactionFilterWorks(t, compactFunc)

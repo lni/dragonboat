@@ -446,7 +446,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 		err := readMagicNumber(conn, magicNum)
 		if err != nil {
 			if err == errPoisonReceived {
-				sendPoisonAck(conn, poisonNumber[:])
+				_ = sendPoisonAck(conn, poisonNumber[:])
 				return
 			}
 			if err == ErrBadMessage {

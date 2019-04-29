@@ -163,7 +163,7 @@ func TestGetTailChunk(t *testing.T) {
 	}
 }
 
-func TestFailChunk(t *testing.T) {
+func TestCloseChunk(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
@@ -171,7 +171,7 @@ func TestFailChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to send LRU session %v", err)
 	}
-	cw.Fail()
+	cw.Close()
 	chunk := sink.chunks[0]
 	if chunk.ChunkCount != pb.LastChunkCount-1 {
 		t.Errorf("chunk count %d, want %d",

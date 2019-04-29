@@ -16,10 +16,6 @@
 
 package transport
 
-var (
-	monkeyTest = true
-)
-
 func SetPerConnBufferSize(sz uint64) {
 	perConnBufSize = sz
 }
