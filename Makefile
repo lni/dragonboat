@@ -149,21 +149,6 @@ LOGDB_CHECKER_BIN=logdb-checker-bin
 PORCUPINE_CHECKER_BIN=porcupine-checker-bin
 DRUMMER_MONKEY_TESTING_BIN=drummer-monkey-testing
 DUMMY_TEST_BIN=test.bin
-PLUGIN_KVSTORE_BIN=dragonboat-plugin-kvtest.so
-PLUGIN_CONCURRENTKV_BIN=dragonboat-plugin-concurrentkv.so
-PLUGIN_DATASTORE_BIN=dragonboat-plugin-kvstore.so
-
-ifeq ($(OS),Darwin)
-CPPTEST_LDFLAGS=-bundle -undefined dynamic_lookup \
-	-Wl,-install_name,$(PLUGIN_CPP_EXAMPLE_BIN)
-CPPKVTEST_LDFLAGS=-bundle -undefined dynamic_lookup \
-	-Wl,-install_name,$(PLUGIN_CPP_KVTEST_BIN)
-else ifeq ($(OS),Linux)
-CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-CPPKVTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_KVTEST_BIN)
-else
-$(error OS type $(OS) not supported)
-endif
 
 # go build tags
 GOBUILDTAGVALS+=$(LOGDB_TAG)
@@ -179,7 +164,6 @@ DRUMMER_SLOW_TEST_BUILDTAGS=dragonboat_slowtest $(GOBUILDTAGVALS)
 DRUMMER_MONKEY_TEST_BUILDTAGS=dragonboat_monkeytest $(GOBUILDTAGVALS)
 MULTIRAFT_SLOW_TEST_BUILDTAGS=dragonboat_slowtest
 LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
-GRPC_TEST_BUILDTAGS=dragonboat_grpc_test
 
 all:
 rebuild-all: clean all-slow-monkey-tests unit-test-bin
@@ -250,15 +234,6 @@ gen-gitversion:
 	@echo "const GITVERSION = \"$(shell git rev-parse HEAD)\"" >> gitversion.go
 
 GOBUILD=$(GO) build $(VERBOSE) -tags=$(GOBUILDTAGS) -o $@
-$(PLUGIN_KVSTORE_BIN):
-	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
-		$(PKGNAME)/internal/tests/kvtest
-plugin-kvtest: $(PLUGIN_KVSTORE_BIN)
-
-$(PLUGIN_CONCURRENTKV_BIN):
-	$(GO) build $(RACE_DETECTOR_FLAG) -o $@ $(VERBOSE) -buildmode=plugin \
-		$(PKGNAME)/internal/tests/concurrentkv
-plugin-concurrentkv: $(PLUGIN_CONCURRENTKV_BIN)
 
 $(DRUMMER_MONKEY_TESTING_BIN):
 	$(GO) test $(RACE_DETECTOR_FLAG) $(VERBOSE) \
@@ -358,9 +333,6 @@ test-rsm:
 test-logdb:
 	$(GOTEST) $(PKGNAME)/internal/logdb
 test-transport:
-	$(GOTEST) $(PKGNAME)/internal/transport
-test-grpc-transport: TESTTAGVALS+=$(GRPC_TEST_BUILDTAGS)
-test-grpc-transport:
 	$(GOTEST) $(PKGNAME)/internal/transport
 test-multiraft:
 	$(GOTEST) $(PKGNAME)
@@ -464,18 +436,14 @@ clean:
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
 		$(DRUMMER_MONKEY_TESTING_BIN) \
-		$(PLUGIN_KVSTORE_BIN) \
-		$(PLUGIN_CONCURRENTKV_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(SNAPSHOT_BENCHMARK_TESTING_BIN) \
-		$(PLUGIN_CPP_EXAMPLE_BIN) \
 		$(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) \
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
   drummercmd drummer nodehost \
-	$(PLUGIN_CPP_KVTEST_BIN) $(DRUMMER_MONKEY_TESTING_BIN) \
-	$(MULTIRAFT_MONKEY_TESTING_BIN) $(PLUGIN_KVSTORE_BIN) $(PLUGIN_CONCURRENTKV_BIN) \
+	$(DRUMMER_MONKEY_TESTING_BIN) $(MULTIRAFT_MONKEY_TESTING_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
 	test-transport test-multiraft test-drummer test-session test-server test-utils \
