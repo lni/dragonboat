@@ -63,8 +63,7 @@ import (
 )
 
 const (
-	// https://godoc.org/google.golang.org/grpc#ServerOption
-	rpcMaxMsgSize = settings.MaxMessageSize
+	maxMsgSize = settings.MaxMessageSize
 	// UnmanagedDeploymentID is the special DeploymentID used when the system is
 	// not managed by master servers.
 	UnmanagedDeploymentID = uint64(1)
@@ -75,14 +74,13 @@ var (
 )
 
 var (
-	plog                 = logger.GetLogger("transport")
-	snapChunkSize        = settings.SnapshotChunkSize
-	rpcStreamConnections = settings.Soft.StreamConnections
-	rpcSendBufSize       = settings.Soft.SendQueueLength
-	errChunkSendSkipped  = errors.New("chunk is skipped")
-	errBatchSendSkipped  = errors.New("raft request batch is skipped")
-	dialTimeoutSecond    = settings.Soft.GetConnectedTimeoutSecond
-	idleTimeout          = time.Minute
+	plog                = logger.GetLogger("transport")
+	streamConnections   = settings.Soft.StreamConnections
+	sendBufSize         = settings.Soft.SendQueueLength
+	errChunkSendSkipped = errors.New("chunk is skipped")
+	errBatchSendSkipped = errors.New("raft request batch is skipped")
+	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
+	idleTimeout         = time.Minute
 )
 
 // INodeAddressResolver converts the (cluster id, node id( tuple to network
@@ -168,7 +166,7 @@ type Transport struct {
 		queues   map[string]chan pb.Message
 		breakers map[string]*circuit.Breaker
 	}
-	connections         uint32
+	lanes               uint32
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
 	sourceAddress       string
@@ -198,7 +196,7 @@ func NewTransport(nhConfig config.NodeHostConfig, ctx *server.Context,
 		resolver:          resolver,
 		stopper:           stopper,
 		snapshotLocator:   locator,
-		streamConnections: rpcStreamConnections,
+		streamConnections: streamConnections,
 	}
 	sinkFactory := func() raftio.IChunkSink {
 		return newSnapshotChunks(t.handleRequest,
@@ -356,7 +354,7 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 	t.mu.Lock()
 	ch, ok := t.mu.queues[key]
 	if !ok {
-		ch = make(chan pb.Message, rpcSendBufSize)
+		ch = make(chan pb.Message, sendBufSize)
 		t.mu.queues[key] = ch
 	}
 	t.mu.Unlock()
@@ -444,7 +442,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 			// then each request can have multiple log entries.
 			// this batching design is largely for heartbeat messages as entries are
 			// already batched into much smaller number of messages.
-			for done := false; !done && sz < rpcMaxMsgSize; {
+			for done := false; !done && sz < maxMsgSize; {
 				select {
 				case req = <-ch:
 					sz += uint64(req.Size())
@@ -462,7 +460,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				continue
 			}
 			twoBatch := false
-			if sz < rpcMaxMsgSize || len(requests) == 1 {
+			if sz < maxMsgSize || len(requests) == 1 {
 				batch.Requests = requests
 			} else {
 				twoBatch = true

@@ -25,7 +25,7 @@ import (
 
 func TestSnapshotConnectionCanBeCreatedInSavedMode(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newConnection(context.Background(), 1, 1, 1, false, 201, transport, nil)
+	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil)
 	if cap(c.ch) != 201 {
 		t.Errorf("unexpected chan length %d, want 201", cap(c.ch))
 	}
@@ -33,7 +33,7 @@ func TestSnapshotConnectionCanBeCreatedInSavedMode(t *testing.T) {
 
 func TestSnapshotConnectionCanBeCreatedInStreamingMode(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newConnection(context.Background(), 1, 1, 1, true, 201, transport, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -48,7 +48,7 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 	}
 	chunks := splitSnapshotMessage(m)
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newConnection(context.Background(), 1, 1, 1, false, len(chunks), transport, nil)
+	c := newLane(context.Background(), 1, 1, 1, false, len(chunks), transport, nil)
 	if cap(c.ch) != len(chunks) {
 		t.Errorf("unexpected chan length %d", cap(c.ch))
 	}
@@ -60,7 +60,7 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 
 func TestKeepSendingChunksUsingFailedConnectionWillNotBlock(t *testing.T) {
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newConnection(context.Background(), 1, 1, 1, true, 0, transport, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}

@@ -425,13 +425,13 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 		}
 		sf2 := &pb.SnapshotFile{
 			Filepath: "/data/external2.data",
-			FileSize: snapChunkSize + 100,
+			FileSize: snapshotChunkSize + 100,
 			FileId:   2,
 			Metadata: make([]byte, 32),
 		}
 		ss := pb.Snapshot{
 			Filepath: "filepath.data",
-			FileSize: snapChunkSize*3 + 100,
+			FileSize: snapshotChunkSize*3 + 100,
 			Index:    100,
 			Term:     200,
 			Files:    []*pb.SnapshotFile{sf1, sf2},
@@ -456,7 +456,7 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 				t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
 			}
 			if !hasExternalFile(chunks, inputs[0], "external1.data", 100) ||
-				!hasExternalFile(chunks, inputs[0], "external2.data", snapChunkSize+100) {
+				!hasExternalFile(chunks, inputs[0], "external2.data", snapshotChunkSize+100) {
 				t.Errorf("external file missing")
 			}
 		} else {
@@ -476,7 +476,7 @@ func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 	ss := pb.Snapshot{
 		Filepath: "filepath.data",
-		FileSize: snapChunkSize*3 + 100,
+		FileSize: snapshotChunkSize*3 + 100,
 		Index:    100,
 		Term:     200,
 	}
@@ -550,13 +550,13 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 	}
 	sf2 := &pb.SnapshotFile{
 		Filepath: "/data/external2.data",
-		FileSize: snapChunkSize + 100,
+		FileSize: snapshotChunkSize + 100,
 		FileId:   2,
 		Metadata: make([]byte, 32),
 	}
 	ss := pb.Snapshot{
 		Filepath: "filepath.data",
-		FileSize: snapChunkSize*3 + 100,
+		FileSize: snapshotChunkSize*3 + 100,
 		Index:    100,
 		Term:     200,
 		Files:    []*pb.SnapshotFile{sf1, sf2},
@@ -588,7 +588,7 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 	if chunks[4].FileChunkCount != 1 || chunks[5].FileChunkCount != 2 {
 		t.Errorf("unexpected chunk count")
 	}
-	if chunks[4].FileSize != 100 || chunks[5].FileSize != snapChunkSize+100 {
+	if chunks[4].FileSize != 100 || chunks[5].FileSize != snapshotChunkSize+100 {
 		t.Errorf("unexpected file size")
 	}
 	for idx := range chunks {
@@ -622,7 +622,7 @@ func TestGetMessageFromChunk(t *testing.T) {
 		}
 		sf2 := &pb.SnapshotFile{
 			Filepath: "/data/external2.data",
-			FileSize: snapChunkSize + 100,
+			FileSize: snapshotChunkSize + 100,
 			FileId:   2,
 			Metadata: make([]byte, 32),
 		}

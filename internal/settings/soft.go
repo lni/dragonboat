@@ -157,12 +157,6 @@ type soft struct {
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
 	SendQueueLength uint64
-	// SnapshotSendQueueLength is the length of the send queue used to hold
-	// snapshot chunks exchanged between nodehosts.
-	SnapshotSendQueueLength uint64
-	// MaxSnapshotCount is the max number of snapshots that can be pending in
-	// snapshot queue waiting to be sent.
-	MaxSnapshotCount uint64
 	// MaxTransportStreamCount is the max number of streams to be handled on
 	// each nodehost. Each remote nodehost in the system requires 2 streams.
 	MaxTransportStreamCount uint64
@@ -274,8 +268,6 @@ func getDefaultSoftSettings() soft {
 		StepEngineTaskReadyChanBufferSize: 8192,
 		StepEngineLocalKeySize:            1024,
 		SendQueueLength:                   1024 * 8,
-		SnapshotSendQueueLength:           4096 * 16,
-		MaxSnapshotCount:                  128,
 		MaxTransportStreamCount:           256,
 		MaxDrummerServerMsgSize:           256 * 1024 * 1024,
 		MaxDrummerClientMsgSize:           256 * 1024 * 1024,

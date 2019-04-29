@@ -47,6 +47,7 @@ import (
 )
 
 var (
+	snapshotChunkSize         = settings.SnapshotChunkSize
 	maxConnectionCount uint32 = uint32(settings.Soft.MaxSnapshotConnections)
 )
 
@@ -81,7 +82,7 @@ func (t *Transport) getStreamConnection(clusterID uint64,
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	if c := t.tryCreateConnection(key, addr, true, 0); c != nil {
+	if c := t.tryCreateLane(key, addr, true, 0); c != nil {
 		return &Sink{l: c}
 	}
 	return nil
@@ -102,7 +103,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	c := t.tryCreateConnection(key, addr, false, len(chunks))
+	c := t.tryCreateLane(key, addr, false, len(chunks))
 	if c == nil {
 		return false
 	}
@@ -110,24 +111,24 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
-func (t *Transport) tryCreateConnection(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *connection {
-	if v := atomic.AddUint32(&t.connections, 1); v > maxConnectionCount {
-		r := atomic.AddUint32(&t.connections, ^uint32(0))
-		plog.Errorf("connection count is rate limited %d", r)
+func (t *Transport) tryCreateLane(key raftio.NodeInfo,
+	addr string, streaming bool, sz int) *lane {
+	if v := atomic.AddUint32(&t.lanes, 1); v > maxConnectionCount {
+		r := atomic.AddUint32(&t.lanes, ^uint32(0))
+		plog.Errorf("lane count is rate limited %d", r)
 		return nil
 	}
 	return t.createConnection(key, addr, streaming, sz)
 }
 
 func (t *Transport) createConnection(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *connection {
-	c := newConnection(t.ctx, key.ClusterID, key.NodeID,
+	addr string, streaming bool, sz int) *lane {
+	c := newLane(t.ctx, key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.raftRPC, t.stopper.ShouldStop())
 	c.streamChunkSent = t.streamChunkSent
 	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {
-		atomic.AddUint32(&t.connections, ^uint32(0))
+		atomic.AddUint32(&t.lanes, ^uint32(0))
 	}
 	t.stopper.RunWorker(func() {
 		t.connectAndProcessSnapshot(c, addr)
@@ -138,7 +139,7 @@ func (t *Transport) createConnection(key raftio.NodeInfo,
 	return c
 }
 
-func (t *Transport) connectAndProcessSnapshot(c *connection, addr string) {
+func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 	breaker := t.GetCircuitBreaker(addr)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -177,15 +178,15 @@ func splitBySnapshotFile(msg pb.Message,
 		panic("empty file included in snapshot")
 	}
 	results := make([]pb.SnapshotChunk, 0)
-	chunkCount := uint64((filesize-1)/snapChunkSize + 1)
+	chunkCount := uint64((filesize-1)/snapshotChunkSize + 1)
 	plog.Infof("splitBySnapshotFile called, chunkCount %d, filesize %d",
 		chunkCount, filesize)
 	for i := uint64(0); i < chunkCount; i++ {
 		var csz uint64
 		if i == chunkCount-1 {
-			csz = filesize - (chunkCount-1)*snapChunkSize
+			csz = filesize - (chunkCount-1)*snapshotChunkSize
 		} else {
-			csz = snapChunkSize
+			csz = snapshotChunkSize
 		}
 		c := pb.SnapshotChunk{
 			BinVer:         raftio.RPCBinVersion,
@@ -238,7 +239,7 @@ func loadSnapshotChunkData(chunk pb.SnapshotChunk,
 		return nil, err
 	}
 	defer f.Close()
-	offset := chunk.FileChunkId * snapChunkSize
+	offset := chunk.FileChunkId * snapshotChunkSize
 	if _, err = f.SeekFromBeginning(int64(offset)); err != nil {
 		return nil, err
 	}

@@ -610,12 +610,12 @@ func TestSnapshotCanBeSend(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	mutualTLSValues := []bool{true, false}
 	for _, v := range mutualTLSValues {
-		testSnapshotCanBeSend(t, snapChunkSize-1, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize/2, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize+1, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize*3, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize*3+1, 3000, v)
-		testSnapshotCanBeSend(t, snapChunkSize*3-1, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize-1, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize/2, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize+1, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize*3, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize*3+1, 3000, v)
+		testSnapshotCanBeSend(t, snapshotChunkSize*3-1, 3000, v)
 	}
 }
 
@@ -835,7 +835,7 @@ func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 }
 
 func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
-	snapshotSize := uint64(snapChunkSize) * 10
+	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -903,7 +903,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		close(v.l.ch)
 	}
 	for {
-		if atomic.LoadUint32(&trans.connections) != 0 {
+		if atomic.LoadUint32(&trans.lanes) != 0 {
 			time.Sleep(time.Millisecond)
 		} else {
 			break
@@ -931,7 +931,7 @@ func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
 }
 
 func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
-	snapshotSize := uint64(snapChunkSize) * 10
+	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -972,7 +972,7 @@ func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
 }
 
 func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
-	snapshotSize := uint64(snapChunkSize) * 10
+	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -1109,10 +1109,10 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T, sz uint64, maxWait uin
 }
 
 func TestSnapshotWithExternalFilesCanBeSend(t *testing.T) {
-	testSnapshotWithExternalFilesCanBeSend(t, snapChunkSize/2, 3000, false)
-	testSnapshotWithExternalFilesCanBeSend(t, snapChunkSize*3+100, 3000, false)
-	testSnapshotWithExternalFilesCanBeSend(t, snapChunkSize/2, 3000, true)
-	testSnapshotWithExternalFilesCanBeSend(t, snapChunkSize*3+100, 3000, true)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, false)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, false)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, true)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, true)
 }
 
 func TestNoOPTransportCanBeCreated(t *testing.T) {

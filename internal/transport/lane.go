@@ -39,7 +39,7 @@ var (
 
 // Sink is the chunk sink for receiving generated snapshot chunk.
 type Sink struct {
-	l *connection
+	l *lane
 }
 
 // Receive receives a snapshot chunk.
@@ -58,7 +58,7 @@ func (s *Sink) ToNodeID() uint64 {
 	return s.l.nodeID
 }
 
-type connection struct {
+type lane struct {
 	clusterID          uint64
 	nodeID             uint64
 	deploymentID       uint64
@@ -73,11 +73,11 @@ type connection struct {
 	preStreamChunkSend atomic.Value
 }
 
-func newConnection(ctx context.Context,
+func newLane(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	did uint64, streaming bool, sz int, rpc raftio.IRaftRPC,
-	stopc chan struct{}) *connection {
-	l := &connection{
+	stopc chan struct{}) *lane {
+	l := &lane{
 		clusterID:    clusterID,
 		nodeID:       nodeID,
 		deploymentID: did,
@@ -97,23 +97,23 @@ func newConnection(ctx context.Context,
 	return l
 }
 
-func (l *connection) close() {
+func (l *lane) close() {
 	if l.conn != nil {
 		l.conn.Close()
 	}
 }
 
-func (l *connection) connect(addr string) error {
+func (l *lane) connect(addr string) error {
 	conn, err := l.rpc.GetSnapshotConnection(l.ctx, addr)
 	if err != nil {
-		plog.Errorf("failed to get a connection to %s, %v", addr, err)
+		plog.Errorf("failed to get a lane to %s, %v", addr, err)
 		return err
 	}
 	l.conn = conn
 	return nil
 }
 
-func (l *connection) sendSavedSnapshot(m pb.Message) {
+func (l *lane) sendSavedSnapshot(m pb.Message) {
 	chunks := splitSnapshotMessage(m)
 	if len(chunks) != cap(l.ch) {
 		plog.Panicf("cap of ch is %d, want %d", cap(l.ch), len(chunks))
@@ -123,7 +123,7 @@ func (l *connection) sendSavedSnapshot(m pb.Message) {
 	}
 }
 
-func (l *connection) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
+func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	select {
 	case l.ch <- chunk:
 		return true, false
@@ -134,7 +134,7 @@ func (l *connection) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	}
 }
 
-func (l *connection) process() error {
+func (l *lane) process() error {
 	if l.conn == nil {
 		plog.Panicf("trying to process on nil ch, not connected?")
 	}
@@ -148,7 +148,7 @@ func (l *connection) process() error {
 	return l.processSavedSnapshot()
 }
 
-func (l *connection) streamSnapshot() error {
+func (l *lane) streamSnapshot() error {
 	for {
 		select {
 		case <-l.stopc:
@@ -170,7 +170,7 @@ func (l *connection) streamSnapshot() error {
 	}
 }
 
-func (l *connection) processSavedSnapshot() error {
+func (l *lane) processSavedSnapshot() error {
 	chunks := make([]pb.SnapshotChunk, 0)
 	for {
 		select {
@@ -188,9 +188,9 @@ func (l *connection) processSavedSnapshot() error {
 	}
 }
 
-func (l *connection) sendSavedChunks(chunks []pb.SnapshotChunk) error {
+func (l *lane) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 	for _, chunk := range chunks {
-		chunkData := make([]byte, snapChunkSize)
+		chunkData := make([]byte, snapshotChunkSize)
 		data, err := loadSnapshotChunkData(chunk, chunkData)
 		if err != nil {
 			plog.Errorf("failed to read the snapshot chunk, %v", err)
@@ -210,7 +210,7 @@ func (l *connection) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 	return nil
 }
 
-func (l *connection) sendChunk(c pb.SnapshotChunk,
+func (l *lane) sendChunk(c pb.SnapshotChunk,
 	conn raftio.ISnapshotConnection) error {
 	if v := l.preStreamChunkSend.Load(); v != nil {
 		plog.Infof("pre stream chunk send set")
