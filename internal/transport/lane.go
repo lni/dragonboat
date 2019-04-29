@@ -131,6 +131,8 @@ func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	case l.ch <- chunk:
 		return true, false
 	case <-l.failed:
+		plog.Infof("stream snapshot to %s terminated as connection failed",
+			logutil.DescribeNode(l.clusterID, l.nodeID))
 		return false, false
 	case <-l.stopc:
 		return false, true
