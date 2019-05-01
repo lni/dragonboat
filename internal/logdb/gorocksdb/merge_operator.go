@@ -1,3 +1,29 @@
+/*
+Copyright (C) 2016 Thomas Adam
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished
+to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+// This file is modified by the dragonboat project
+// exported names have been updated from gorocksdb_* to dragonboat_*
+// so user applications can use the gorocksdb package as well.
+
 package gorocksdb
 
 // #include "rocksdb/c.h"
@@ -72,8 +98,8 @@ func registerMergeOperator(merger MergeOperator) int {
 	return len(mergeOperators) - 1
 }
 
-//export gorocksdb_mergeoperator_full_merge
-func gorocksdb_mergeoperator_full_merge(idx int, cKey *C.char, cKeyLen C.size_t, cExistingValue *C.char, cExistingValueLen C.size_t, cOperands **C.char, cOperandsLen *C.size_t, cNumOperands C.int, cSuccess *C.uchar, cNewValueLen *C.size_t) *C.char {
+//export dragonboat_mergeoperator_full_merge
+func dragonboat_mergeoperator_full_merge(idx int, cKey *C.char, cKeyLen C.size_t, cExistingValue *C.char, cExistingValueLen C.size_t, cOperands **C.char, cOperandsLen *C.size_t, cNumOperands C.int, cSuccess *C.uchar, cNewValueLen *C.size_t) *C.char {
 	key := charToByte(cKey, cKeyLen)
 	rawOperands := charSlice(cOperands, cNumOperands)
 	operandsLen := sizeSlice(cOperandsLen, cNumOperands)
@@ -92,8 +118,8 @@ func gorocksdb_mergeoperator_full_merge(idx int, cKey *C.char, cKeyLen C.size_t,
 	return cByteSlice(newValue)
 }
 
-//export gorocksdb_mergeoperator_partial_merge_multi
-func gorocksdb_mergeoperator_partial_merge_multi(idx int, cKey *C.char, cKeyLen C.size_t, cOperands **C.char, cOperandsLen *C.size_t, cNumOperands C.int, cSuccess *C.uchar, cNewValueLen *C.size_t) *C.char {
+//export dragonboat_mergeoperator_partial_merge_multi
+func dragonboat_mergeoperator_partial_merge_multi(idx int, cKey *C.char, cKeyLen C.size_t, cOperands **C.char, cOperandsLen *C.size_t, cNumOperands C.int, cSuccess *C.uchar, cNewValueLen *C.size_t) *C.char {
 	key := charToByte(cKey, cKeyLen)
 	rawOperands := charSlice(cOperands, cNumOperands)
 	operandsLen := sizeSlice(cOperandsLen, cNumOperands)
@@ -122,7 +148,7 @@ func gorocksdb_mergeoperator_partial_merge_multi(idx int, cKey *C.char, cKeyLen 
 	return cByteSlice(newValue)
 }
 
-//export gorocksdb_mergeoperator_name
-func gorocksdb_mergeoperator_name(idx int) *C.char {
+//export dragonboat_mergeoperator_name
+func dragonboat_mergeoperator_name(idx int) *C.char {
 	return stringToChar(mergeOperators[idx].Name())
 }

@@ -1,3 +1,29 @@
+/*
+Copyright (C) 2016 Thomas Adam
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished
+to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+// This file is modified by the dragonboat project
+// exported names have been updated from gorocksdb_* to dragonboat_*
+// so user applications can use the gorocksdb package as well.
+
 package gorocksdb
 
 // #include "rocksdb/c.h"
@@ -47,8 +73,8 @@ func registerCompactionFilter(filter CompactionFilter) int {
 	return len(compactionFilters) - 1
 }
 
-//export gorocksdb_compactionfilter_filter
-func gorocksdb_compactionfilter_filter(idx int, cLevel C.int, cKey *C.char, cKeyLen C.size_t, cVal *C.char, cValLen C.size_t, cNewVal **C.char, cNewValLen *C.size_t, cValChanged *C.uchar) C.int {
+//export dragonboat_compactionfilter_filter
+func dragonboat_compactionfilter_filter(idx int, cLevel C.int, cKey *C.char, cKeyLen C.size_t, cVal *C.char, cValLen C.size_t, cNewVal **C.char, cNewValLen *C.size_t, cValChanged *C.uchar) C.int {
 	key := charToByte(cKey, cKeyLen)
 	val := charToByte(cVal, cValLen)
 
@@ -63,7 +89,7 @@ func gorocksdb_compactionfilter_filter(idx int, cLevel C.int, cKey *C.char, cKey
 	return C.int(0)
 }
 
-//export gorocksdb_compactionfilter_name
-func gorocksdb_compactionfilter_name(idx int) *C.char {
+//export dragonboat_compactionfilter_name
+func dragonboat_compactionfilter_name(idx int) *C.char {
 	return stringToChar(compactionFilters[idx].Name())
 }
