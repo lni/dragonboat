@@ -1,3 +1,29 @@
+/*
+Copyright (C) 2016 Thomas Adam
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished
+to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+// This file is modified by the dragonboat project
+// exported names have been updated from gorocksdb_* to dragonboat_*
+// so user applications can use the gorocksdb package as well.
+
 package gorocksdb
 
 // #include "rocksdb/c.h"
@@ -91,7 +117,7 @@ func (opts *Options) SetCompactionFilter(value CompactionFilter) {
 		opts.ccf = nc.c
 	} else {
 		idx := registerCompactionFilter(value)
-		opts.ccf = C.gorocksdb_compactionfilter_create(C.uintptr_t(idx))
+		opts.ccf = C.dragonboat_compactionfilter_create(C.uintptr_t(idx))
 	}
 	C.rocksdb_options_set_compaction_filter(opts.c, opts.ccf)
 }
@@ -103,7 +129,7 @@ func (opts *Options) SetComparator(value Comparator) {
 		opts.ccmp = nc.c
 	} else {
 		idx := registerComperator(value)
-		opts.ccmp = C.gorocksdb_comparator_create(C.uintptr_t(idx))
+		opts.ccmp = C.dragonboat_comparator_create(C.uintptr_t(idx))
 	}
 	C.rocksdb_options_set_comparator(opts.c, opts.ccmp)
 }
@@ -116,7 +142,7 @@ func (opts *Options) SetMergeOperator(value MergeOperator) {
 		opts.cmo = nmo.c
 	} else {
 		idx := registerMergeOperator(value)
-		opts.cmo = C.gorocksdb_mergeoperator_create(C.uintptr_t(idx))
+		opts.cmo = C.dragonboat_mergeoperator_create(C.uintptr_t(idx))
 	}
 	C.rocksdb_options_set_merge_operator(opts.c, opts.cmo)
 }
@@ -354,7 +380,7 @@ func (opts *Options) SetPrefixExtractor(value SliceTransform) {
 		opts.cst = nst.c
 	} else {
 		idx := registerSliceTransform(value)
-		opts.cst = C.gorocksdb_slicetransform_create(C.uintptr_t(idx))
+		opts.cst = C.dragonboat_slicetransform_create(C.uintptr_t(idx))
 	}
 	C.rocksdb_options_set_prefix_extractor(opts.c, opts.cst)
 }
