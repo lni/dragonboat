@@ -9,7 +9,8 @@ module github.com/lni/dragonboat
 // they are included here so dragonboat contributors can easily run monkey tests
 // implemented in github.com/lni/dragonboat/drummer.
 replace (
-	cloud.google.com/go => github.com/googleapis/google-cloud-go v0.36.0
+	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
+  cloud.google.com/go => github.com/googleapis/google-cloud-go v0.36.0
 	golang.org/x/build => github.com/golang/build v0.0.0-20190215225244-0261b66eb045
 	golang.org/x/crypto => github.com/golang/crypto v0.0.0-20181030022821-bc7917b19d8f
 	golang.org/x/exp => github.com/golang/exp v0.0.0-20190212162250-21964bba6549
