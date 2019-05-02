@@ -101,6 +101,9 @@ type ILogDB interface {
 	Name() string
 	// Close closes the ILogDB instance.
 	Close()
+	// BinaryFormat returns an constant uint32 value representing the binary
+	// format version compatible with the ILogDB instance.
+	BinaryFormat() uint32
 	// GetLogDBThreadContext returns a new IContext instance.
 	GetLogDBThreadContext() IContext
 	// ListNodeInfo lists all available NodeInfo found in the log DB.

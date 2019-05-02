@@ -79,6 +79,10 @@ func (mw *ShardedRDB) Name() string {
 	return LogDBType
 }
 
+func (mw *ShardedRDB) BinaryFormat() uint32 {
+	return raftio.LogDBBinVersion
+}
+
 // GetLogDBThreadContext return a IContext instance.
 func (mw *ShardedRDB) GetLogDBThreadContext() raftio.IContext {
 	wb := mw.shards[0].getWriteBatch()
