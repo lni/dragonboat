@@ -33,7 +33,7 @@ const (
 )
 
 func getNewLogReaderTestDB(entries []pb.Entry) raftio.ILogDB {
-	logdb := getNewTestDB("db-dir", "wal-db-dir")
+	logdb := getNewTestDB("db-dir", "wal-db-dir", false)
 	ud := pb.Update{
 		EntriesToSave: entries,
 		ClusterID:     LogReaderTestClusterID,

@@ -19,7 +19,6 @@ package logdb
 import (
 	"io"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/dragonboat/internal/logdb/levigo"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -89,11 +89,12 @@ func sstFileToCorruptFilePath() []string {
 
 // this is largely to check the rocksdb wrapper doesn't slightly swallow
 // detected data corruption related errors
-func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
+func testDiskDataCorruptionIsHandled(t *testing.T,
+	batched bool, f func(raftio.ILogDB)) {
 	dir := "db-dir"
 	lldir := "wal-db-dir"
 	deleteTestDB()
-	db := getNewTestDB(dir, lldir)
+	db := getNewTestDB(dir, lldir, batched)
 	defer deleteTestDB()
 	hs := pb.State{
 		Term:   2,
@@ -121,10 +122,11 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 	rdb := db.(*ShardedRDB).shards[3]
 	key1 := newKey(maxKeySize, nil)
 	key2 := newKey(maxKeySize, nil)
-	key1.SetEntryBatchKey(0, 4, 0)
-	key2.SetEntryBatchKey(100, 4, math.MaxUint64)
-	rdb.kvs.(*leveldbKV).Compaction(key1.Key(), key2.Key())
+	key1.SetMinimumKey()
+	key2.SetMaximumKey()
+	rdb.kvs.(*leveldbKV).db.CompactRange(levigo.Range{Start: key1.Key(), Limit: key2.Key()})
 	db.Close()
+
 	done := false
 	for _, fp := range sstFileToCorruptFilePath() {
 		plog.Infof("processing %s", fp)
@@ -135,7 +137,7 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 	if !done {
 		t.Fatalf("failed to locate the data")
 	}
-	db = getNewTestDB(dir, lldir)
+	db = getNewTestDB(dir, lldir, batched)
 	defer db.Close()
 	defer func() {
 		if r := recover(); r == nil {
@@ -147,7 +149,7 @@ func testDiskDataCorruptionIsHandled(t *testing.T, f func(raftio.ILogDB)) {
 
 func TestCompactRangeInLogDBWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	compactFunc := func(db raftio.ILogDB, clusterID uint64, nodeID uint64, maxIndex uint64) {
+	compactFunc := func(db raftio.ILogDB, clusterID uint64, nodeID uint64, maxIndex uint64, batched bool) {
 		rrdb, ok := db.(*ShardedRDB)
 		if !ok {
 			t.Errorf("failed to get *MultiDiskRDB")
@@ -163,15 +165,16 @@ func TestCompactRangeInLogDBWorks(t *testing.T) {
 			}
 		}
 	}
-	testCompactRangeWithCompactionFilterWorks(t, compactFunc)
+	testCompactRangeWithCompactionFilterWorks(t, true, compactFunc)
+	testCompactRangeWithCompactionFilterWorks(t, false, compactFunc)
 }
 
 func testCompactRangeWithCompactionFilterWorks(t *testing.T,
-	f func(raftio.ILogDB, uint64, uint64, uint64)) {
+	batched bool, f func(raftio.ILogDB, uint64, uint64, uint64, bool)) {
 	dir := "compaction-db-dir"
 	lldir := "compaction-wal-db-dir"
 	deleteTestDB()
-	db := getNewTestDB(dir, lldir)
+	db := getNewTestDB(dir, lldir, batched)
 	defer deleteTestDB()
 	defer db.Close()
 	hs := pb.State{
@@ -208,8 +211,8 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	}
 	key1 := newKey(maxKeySize, nil)
 	key2 := newKey(maxKeySize, nil)
-	key1.SetEntryBatchKey(0, 4, 0)
-	key2.SetEntryBatchKey(0, 4, math.MaxUint64)
+	key1.SetMinimumKey()
+	key2.SetMaximumKey()
 	rrdb.shards[0].kvs.(*leveldbKV).Compaction(key1.Key(), key2.Key())
 	initialSz, err := getDBDirSize(dir, 0)
 	if err != nil {
@@ -218,7 +221,7 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	if initialSz < 8*1024*1024 {
 		t.Errorf("sz %d < 8MBytes", initialSz)
 	}
-	f(db, ud.ClusterID, ud.NodeID, maxIndex)
+	f(db, ud.ClusterID, ud.NodeID, maxIndex, batched)
 	sz, err := getDBDirSize(dir, 0)
 	if err != nil {
 		t.Fatalf("failed to get db size %v", err)
@@ -233,7 +236,8 @@ func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
 	f := func(fdb raftio.ILogDB) {
 		fdb.ReadRaftState(3, 4, 0)
 	}
-	testDiskDataCorruptionIsHandled(t, f)
+	testDiskDataCorruptionIsHandled(t, true, f)
+	testDiskDataCorruptionIsHandled(t, false, f)
 }
 
 func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
@@ -254,5 +258,6 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 			plog.Infof(string(e.Cmd))
 		}
 	}
-	testDiskDataCorruptionIsHandled(t, f)
+	testDiskDataCorruptionIsHandled(t, true, f)
+	testDiskDataCorruptionIsHandled(t, false, f)
 }

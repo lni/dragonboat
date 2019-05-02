@@ -72,6 +72,20 @@ func (k *PooledKey) Key() []byte {
 	return k.key
 }
 
+func (k *PooledKey) SetMinimumKey() {
+	k.key = k.data
+	for i := 0; i < len(k.key); i++ {
+		k.key[i] = byte(0)
+	}
+}
+
+func (k *PooledKey) SetMaximumKey() {
+	k.key = k.data
+	for i := 0; i < len(k.key); i++ {
+		k.key[i] = byte(0xFF)
+	}
+}
+
 // SetEntryBatchKey sets the key value opf the entry batch.
 func (k *PooledKey) SetEntryBatchKey(clusterID uint64,
 	nodeID uint64, batchID uint64) {

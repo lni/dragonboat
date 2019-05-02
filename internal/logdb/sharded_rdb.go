@@ -45,7 +45,8 @@ type ShardedRDB struct {
 }
 
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
+func OpenShardedRDB(dirs []string,
+	lldirs []string, batched bool) (*ShardedRDB, error) {
 	shards := make([]*RDB, 0)
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
@@ -53,7 +54,7 @@ func OpenShardedRDB(dirs []string, lldirs []string) (*ShardedRDB, error) {
 		if len(lldirs) > 0 {
 			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		db, err := openRDB(dir, lldir)
+		db, err := openRDB(dir, lldir, batched)
 		if err != nil {
 			return nil, err
 		}

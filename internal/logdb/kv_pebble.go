@@ -181,12 +181,21 @@ func (r *pebbleKV) CommitDeleteBatch(wb IWriteBatch) error {
 }
 
 func (r *pebbleKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
+	iter := r.db.NewIter(r.ro)
+	defer iter.Close()
+	wb := r.GetWriteBatch(nil)
+	for iter.SeekGE(firstKey); iteratorIsValid(iter); iter.Next() {
+		if bytes.Compare(iter.Key(), lastKey) >= 0 {
+			break
+		}
+		wb.Delete(iter.Key())
+	}
+	if wb.Count() > 0 {
+		return r.CommitDeleteBatch(wb)
+	}
 	return nil
 }
 
 func (r *pebbleKV) Compaction(firstKey []byte, lastKey []byte) error {
-	if err := r.db.DeleteRange(firstKey, lastKey, r.wo); err != nil {
-		return err
-	}
 	return r.db.Compact(firstKey, lastKey)
 }

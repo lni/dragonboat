@@ -29,12 +29,12 @@ const (
 	RDBTestDirectory = "rdb_test_dir_safe_to_delete"
 )
 
-func getNewTestDB(dir string, lldir string) raftio.ILogDB {
+func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	d := filepath.Join(RDBTestDirectory, dir)
 	lld := filepath.Join(RDBTestDirectory, lldir)
 	os.MkdirAll(d, 0777)
 	os.MkdirAll(lld, 0777)
-	db, err := OpenLogDB([]string{d}, []string{lld})
+	db, err := openLogDB([]string{d}, []string{lld}, batched)
 	if err != nil {
 		panic(err)
 	}
@@ -45,14 +45,28 @@ func deleteTestDB() {
 	os.RemoveAll(RDBTestDirectory)
 }
 
-func runLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
+func runLogDBTestAs(t *testing.T,
+	batched bool, tf func(t *testing.T, db raftio.ILogDB)) {
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
-	db := getNewTestDB(dir, lldir)
+	db := getNewTestDB(dir, lldir, batched)
 	defer deleteTestDB()
 	defer db.Close()
 	tf(t, db)
+}
+
+func runLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
+	runLogDBTestAs(t, false, tf)
+	runLogDBTestAs(t, true, tf)
+}
+
+func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
+	runLogDBTestAs(t, true, tf)
+}
+
+func runPlainLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
+	runLogDBTestAs(t, false, tf)
 }
 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
@@ -424,53 +438,41 @@ func TestSaveRaftState(t *testing.T) {
 	runLogDBTest(t, tf)
 }
 
-// disabled the following test
-// as the DeleteRange feature in rocksdb is marked as experimental and it had
-// multiple data corruption incidents in the past few months, e.g.
-// https://github.com/facebook/rocksdb/issues/3169?ts=2
-// https://github.com/facebook/rocksdb/issues/2752?ts=2
-
-/*
 func TestRemoveEntries(t *testing.T) {
-	dir := "db-dir"
-	lldir := "wal-db-dir"
-	db := getNewTestDB(dir, lldir)
-	defer deleteTestDB()
-	defer db.Close()
-	testSaveRaftState(t, db)
-	if err := db.RemoveEntriesTo(3, 4, 7); err != nil {
-		t.Fatalf("failed to remove entries, %v", err)
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		testSaveRaftState(t, db)
+		if err := db.RemoveEntriesTo(3, 4, 7); err != nil {
+			t.Fatalf("failed to remove entries, %v", err)
+		}
+		// do we have all entries from index 1 to 10
+		ents, _, err := db.IterateEntries(nil, 0, 3, 4, 1, 11, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("IterateEntries failed %v", err)
+		}
+		if len(ents) != 0 {
+			t.Errorf("ents sz %d, want 0", len(ents))
+		}
+		ents, _, err = db.IterateEntries(nil, 0, 3, 4, 6, 11, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("IterateEntries failed %v", err)
+		}
+		if len(ents) != 0 {
+			t.Errorf("ents sz %d, want 0", len(ents))
+		}
+		ents, _, err = db.IterateEntries(nil, 0, 3, 4, 7, 11, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("IterateEntries failed %v", err)
+		}
+		if len(ents) != 4 {
+			t.Errorf("ents sz %d, want 4", len(ents))
+		}
+		if ents[0].Index != 7 || ents[1].Index != 8 ||
+			ents[2].Index != 9 || ents[3].Index != 10 {
+			t.Errorf("index mismatch")
+		}
 	}
-	// do we have all entries from index 1 to 10
-	ents, _, err := db.IterateEntries(nil, 0, 3, 4, 1, 11, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("IterateEntries failed %v", err)
-	}
-	if len(ents) != 0 {
-		t.Errorf("ents sz %d, want 0", len(ents))
-	}
-	// do we have all entries from index 6 to 10
-	ents, _, err = db.IterateEntries(nil, 0, 3, 4, 6, 11, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("IterateEntries failed %v", err)
-	}
-	if len(ents) != 0 {
-		t.Errorf("ents sz %d, want 0", len(ents))
-	}
-	// do we have all entries from index 7 to 10
-	ents, _, err = db.IterateEntries(nil, 0, 3, 4, 7, 11, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("IterateEntries failed %v", err)
-	}
-	if len(ents) != 4 {
-		t.Errorf("ents sz %d, want 4", len(ents))
-	}
-	if ents[0].Index != 7 || ents[1].Index != 8 ||
-		ents[2].Index != 9 || ents[3].Index != 10 {
-		t.Errorf("index mismatch")
-	}
+	runPlainLogDBTest(t, tf)
 }
-*/
 
 func TestStateIsUpdated(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
@@ -869,123 +871,6 @@ func TestParseNodeInfoKeyPanicOnUnexpectedKeySize(t *testing.T) {
 	parseNodeInfoKey(make([]byte, 21))
 }
 
-func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
-		e1 := pb.Entry{
-			Term:  1,
-			Index: 1,
-			Type:  pb.ApplicationEntry,
-		}
-		ud := pb.Update{
-			EntriesToSave: []pb.Entry{e1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		nextIndex := 1 + batchSize
-		e2 := pb.Entry{
-			Term:  1,
-			Index: nextIndex,
-			Type:  pb.ApplicationEntry,
-		}
-		ud = pb.Update{
-			EntriesToSave: []pb.Entry{e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].readMaxIndex(clusterID, nodeID)
-		if err != nil {
-			t.Errorf("failed to get max index")
-		}
-		if maxIndex != nextIndex {
-			t.Errorf("unexpected max index")
-		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
-		if !ok {
-			t.Errorf("failed to get the eb")
-		}
-		if len(eb.Entries) != 1 {
-			t.Fatalf("unexpected len %d, want 1", len(eb.Entries))
-		}
-		if eb.Entries[0].Index != nextIndex {
-			t.Errorf("unexpected index %d, want 10", eb.Entries[0].Index)
-		}
-	}
-	runLogDBTest(t, tf)
-}
-
-func TestEntryBatchMergedNotLastBatch(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
-		ud := pb.Update{
-			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		for i := uint64(1); i < batchSize+4; i++ {
-			e := pb.Entry{Index: i, Term: 1}
-			ud.EntriesToSave = append(ud.EntriesToSave, e)
-		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		ud = pb.Update{
-			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		for i := batchSize - 4; i <= batchSize+2; i++ {
-			e := pb.Entry{Index: i, Term: 2}
-			ud.EntriesToSave = append(ud.EntriesToSave, e)
-		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].readMaxIndex(clusterID, nodeID)
-		if err != nil {
-			t.Errorf("failed to get max index")
-		}
-		if maxIndex != batchSize+2 {
-			t.Errorf("unexpected max index")
-		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 0)
-		if !ok {
-			t.Errorf("failed to get the eb")
-		}
-		if uint64(len(eb.Entries)) != batchSize-1 {
-			t.Fatalf("unexpected len %d, want %d", len(eb.Entries), batchSize-1)
-		}
-		for i := uint64(0); i < batchSize-1; i++ {
-			e := eb.Entries[i]
-			if e.Index != uint64(i+1) {
-				t.Errorf("unexpected index %d, want %d", e.Index, uint64(i+1))
-			}
-			if e.Index < batchSize-4 {
-				if e.Term != uint64(1) {
-					t.Errorf("unexpected term %d", e.Term)
-				}
-			} else {
-				if e.Term != uint64(2) {
-					t.Errorf("unexpected term %d", e.Term)
-				}
-			}
-		}
-	}
-	runLogDBTest(t, tf)
-}
-
 func TestSaveEntriesWithIndexGap(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		clusterID := uint64(0)
@@ -1057,73 +942,6 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 		}
 		if ents[0].Index != 4 || ents[1].Index != 5 {
 			t.Errorf("unexpected index")
-		}
-	}
-	runLogDBTest(t, tf)
-}
-
-func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
-		e1 := pb.Entry{
-			Term:  1,
-			Index: 1,
-			Type:  pb.ApplicationEntry,
-		}
-		ud := pb.Update{
-			EntriesToSave: []pb.Entry{e1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		e2 := pb.Entry{
-			Term:  1,
-			Index: 2,
-			Type:  pb.ApplicationEntry,
-		}
-		ud = pb.Update{
-			EntriesToSave: []pb.Entry{e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		ud = pb.Update{
-			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		for idx := uint64(3); idx <= batchSize+1; idx++ {
-			e := pb.Entry{
-				Term:  1,
-				Index: idx,
-			}
-			ud.EntriesToSave = append(ud.EntriesToSave, e)
-		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		ents, _, err := db.IterateEntries([]pb.Entry{}, 0,
-			clusterID, nodeID, 1, batchSize+2, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if uint64(len(ents)) != batchSize+1 {
-			t.Errorf("ents sz %d, want %d", len(ents), batchSize+1)
-		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
-		if !ok {
-			t.Errorf("failed to get first batch")
-		}
-		for _, e := range eb.Entries {
-			plog.Infof("idx %d", e.Index)
 		}
 	}
 	runLogDBTest(t, tf)
