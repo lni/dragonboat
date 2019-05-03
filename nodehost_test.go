@@ -1312,6 +1312,26 @@ func TestNodeHostHasNodeInfo(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		WALDir:         singleNodeHostTestDir,
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 100,
+		RaftAddress:    nodeHostTestAddr1,
+	}
+	nh := NewNodeHost(nhc)
+	nh.Stop()
+	nhc.LogDBFactory = OpenBatchedLogDB
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("panic not triggered")
+		}
+	}()
+	NewNodeHost(nhc)
+}
+
 func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		if !nh.pushSnapshotStatus(123, 123, true) {

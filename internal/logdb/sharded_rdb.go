@@ -87,7 +87,7 @@ func (mw *ShardedRDB) Name() string {
 
 // BinaryFormat is the binary format supported by the sharded DB.
 func (mw *ShardedRDB) BinaryFormat() uint32 {
-	return raftio.LogDBBinVersion
+	return mw.shards[0].binaryFormat()
 }
 
 // GetLogDBThreadContext return a IContext instance.

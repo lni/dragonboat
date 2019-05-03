@@ -228,6 +228,13 @@ func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
 	}
+	defer func() {
+		// close all resources and panic
+		if r := recover(); r != nil {
+			nh.Stop()
+			panic(r)
+		}
+	}()
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
@@ -275,7 +282,9 @@ func (nh *NodeHost) Stop() {
 	nh.clusterMu.Lock()
 	nh.clusterMu.stopped = true
 	nh.clusterMu.Unlock()
-	nh.transport.RemoveMessageHandler()
+	if nh.transport != nil {
+		nh.transport.RemoveMessageHandler()
+	}
 	allNodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodeInfo := raftio.NodeInfo{
@@ -301,7 +310,9 @@ func (nh *NodeHost) Stop() {
 		nh.execEngine.stop()
 	}
 	plog.Debugf("%s is going to stop the tranport module", nh.describe())
-	nh.transport.Stop()
+	if nh.transport != nil {
+		nh.transport.Stop()
+	}
 	plog.Debugf("%s transport module stopped", nh.describe())
 	if nh.logdb != nil {
 		nh.logdb.Close()
@@ -1255,10 +1266,10 @@ func (nh *NodeHost) createLogDB(nhConfig config.NodeHostConfig, did uint64) {
 	if err != nil {
 		panic(err)
 	}
-	nh.serverCtx.CheckNodeHostDir(did,
-		nh.nhConfig.RaftAddress, logdb.BinaryFormat())
-	plog.Infof("logdb type name: %s", logdb.Name())
+	binVersion := logdb.BinaryFormat()
 	nh.logdb = logdb
+	nh.serverCtx.CheckNodeHostDir(did, nh.nhConfig.RaftAddress, binVersion)
+	plog.Infof("logdb type name: %s", logdb.Name())
 }
 
 func (nh *NodeHost) createTransport() {
