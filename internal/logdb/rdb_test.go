@@ -50,6 +50,10 @@ func runLogDBTestAs(t *testing.T,
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
+	d := filepath.Join(RDBTestDirectory, dir)
+	lld := filepath.Join(RDBTestDirectory, lldir)
+	os.RemoveAll(d)
+	os.RemoveAll(lld)
 	db := getNewTestDB(dir, lldir, batched)
 	defer deleteTestDB()
 	defer db.Close()

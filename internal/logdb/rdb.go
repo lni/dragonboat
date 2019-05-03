@@ -37,7 +37,8 @@ type entryManager interface {
 	getRange(clusterID uint64,
 		nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error)
 	rangedOp(clusterID uint64,
-		nodeID uint64, index uint64, op func(firstKey *PooledKey, lastKey *PooledKey) error) error
+		nodeID uint64, index uint64,
+		op func(firstKey *PooledKey, lastKey *PooledKey) error) error
 }
 
 // RDB is the struct used to manage rocksdb backed persistent Log stores.
@@ -57,8 +58,10 @@ func openRDB(dir string, wal string, batched bool) (*RDB, error) {
 	pool := newLogdbKeyPool()
 	var em entryManager
 	if batched {
+		//mustNoPlainEntry(kvs)
 		em = newBatchedEntries(cs, pool, kvs)
 	} else {
+		//mustNoBatchedEntry(kvs)
 		em = newPlainEntries(cs, pool, kvs)
 	}
 	return &RDB{
@@ -67,6 +70,28 @@ func openRDB(dir string, wal string, batched bool) (*RDB, error) {
 		kvs:     kvs,
 		entries: em,
 	}, nil
+}
+
+func mustNoPlainEntry(kvs IKvStore) {
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryKey(0, 0, 0)
+	lk.SetEntryKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	op := func(key []byte, data []byte) (bool, error) {
+		panic("plain entry found when using batched entry manager")
+	}
+	kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+}
+
+func mustNoBatchedEntry(kvs IKvStore) {
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryBatchKey(0, 0, 0)
+	lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	op := func(key []byte, data []byte) (bool, error) {
+		panic("plain batched entry found when using plain entry manager")
+	}
+	kvs.IterateValue(fk.Key(), lk.Key(), true, op)
 }
 
 func (r *RDB) close() {

@@ -229,46 +229,66 @@ func testDiskDataCorruptionIsHandled(t *testing.T,
 	batched bool, f func(raftio.ILogDB)) {
 	dir := "db-dir"
 	lldir := "wal-db-dir"
-	db := getNewTestDB(dir, lldir, batched)
 	defer deleteTestDB()
-	hs := pb.State{
-		Term:   2,
-		Vote:   3,
-		Commit: 100,
-	}
-	e1 := pb.Entry{
-		Term:  1,
-		Index: 10,
-		Type:  pb.ApplicationEntry,
-		Cmd:   []byte("XXXXXXXXXXXXXXXXXXXXXXXX"),
-	}
-	ud := pb.Update{
-		EntriesToSave: []pb.Entry{e1},
-		State:         hs,
-		ClusterID:     3,
-		NodeID:        4,
-	}
-	for i := 0; i < 128; i++ {
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Errorf("failed to save single de rec")
+	func() {
+		db := getNewTestDB(dir, lldir, batched)
+		defer db.Close()
+		hs := pb.State{
+			Term:   2,
+			Vote:   3,
+			Commit: 100,
 		}
-	}
-	db.Close()
-	db = getNewTestDB(dir, lldir, batched)
-	db.Close()
-	for _, fp := range sstFileToCorruptFilePath() {
-		plog.Infof(fp)
-		modifyLogDBContent(fp)
-	}
-	db = getNewTestDB(dir, lldir, batched)
-	defer db.Close()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("didn't crash")
+		e1 := pb.Entry{
+			Term:  1,
+			Index: 10,
+			Type:  pb.ApplicationEntry,
+			Cmd:   []byte("XXXXXXXXXXXXXXXXXXXXXXXX"),
+		}
+		ud := pb.Update{
+			EntriesToSave: []pb.Entry{e1},
+			State:         hs,
+			ClusterID:     3,
+			NodeID:        4,
+		}
+		for i := 0; i < 128; i++ {
+			err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+			if err != nil {
+				t.Errorf("failed to save single de rec")
+			}
 		}
 	}()
-	f(db)
+	func() {
+		db := getNewTestDB(dir, lldir, batched)
+		defer db.Close()
+		key1 := newKey(maxKeySize, nil)
+		key2 := newKey(maxKeySize, nil)
+		key1.SetMinimumKey()
+		key2.SetMaximumKey()
+		opts := gorocksdb.NewCompactionOptions()
+		opts.SetExclusiveManualCompaction(false)
+		opts.SetForceBottommostLevelCompaction()
+		defer opts.Destroy()
+		var cr gorocksdb.Range
+		cr.Start = key1.Key()
+		cr.Limit = key2.Key()
+		db.(*ShardedRDB).shards[3].kvs.(*rocksdbKV).db.CompactRangeWithOptions(opts, cr)
+	}()
+	if len(sstFileToCorruptFilePath()) == 0 {
+		t.Fatalf("no sst file")
+	}
+	for _, fp := range sstFileToCorruptFilePath() {
+		modifyLogDBContent(fp)
+	}
+	defer func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("didn't crash")
+			}
+		}()
+		db := getNewTestDB(dir, lldir, batched)
+		defer db.Close()
+		f(db)
+	}()
 }
 
 func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
@@ -289,7 +309,6 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 		iter := rdb.kvs.(*rocksdbKV).db.NewIterator(rdb.kvs.(*rocksdbKV).ro)
 		iter.Seek(fk.key)
 		for ; iteratorIsValid(iter); iter.Next() {
-			plog.Infof("here")
 			val := iter.Value()
 			var e pb.Entry
 			if err := e.Unmarshal(val.Data()); err != nil {
