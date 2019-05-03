@@ -28,6 +28,7 @@ var (
 )
 
 type entryManager interface {
+	binaryFormat() uint32
 	record(wb IWriteBatch,
 		clusterID uint64, nodeID uint64,
 		ctx raftio.IContext, entries []pb.Entry) uint64
@@ -92,6 +93,10 @@ func mustNoBatchedEntry(kvs IKvStore) {
 		panic("plain batched entry found when using plain entry manager")
 	}
 	kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+}
+
+func (r *RDB) binaryFormat() uint32 {
+	return r.entries.binaryFormat()
 }
 
 func (r *RDB) close() {

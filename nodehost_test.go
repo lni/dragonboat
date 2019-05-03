@@ -292,6 +292,7 @@ func getTestNodeHostConfig() *config.NodeHostConfig {
 type noopLogDB struct {
 }
 
+func (n *noopLogDB) BinaryFormat() uint32                                      { return 0 }
 func (n *noopLogDB) Name() string                                              { return "noopLogDB" }
 func (n *noopLogDB) Close()                                                    {}
 func (n *noopLogDB) GetLogDBThreadContext() raftio.IContext                    { return nil }

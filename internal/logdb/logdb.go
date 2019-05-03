@@ -49,9 +49,15 @@ func checkDirs(dirs []string, lldirs []string) {
 	}
 }
 
-// OpenLogDB opens a LogDB instance using the default implementation.
+// OpenLogDB opens a plain LogDB instance using the default implementation.
 func OpenLogDB(dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error) {
 	return openLogDB(dirs, lowLatencyDirs, false)
+}
+
+// OpenBatchedLogDB opens a batched LogDB instance.
+func OpenBatchedLogDB(dirs []string,
+	lowLatencyDirs []string) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lowLatencyDirs, true)
 }
 
 func openLogDB(dirs []string,

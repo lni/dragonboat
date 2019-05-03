@@ -26,7 +26,6 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
-	"github.com/lni/dragonboat/raftio"
 	"github.com/lni/dragonboat/raftpb"
 )
 
@@ -182,11 +181,11 @@ func (sc *Context) PrepareSnapshotDir(deploymentID uint64,
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (sc *Context) CheckNodeHostDir(did uint64, addr string) {
+func (sc *Context) CheckNodeHostDir(did uint64, addr string, ldbBinVer uint32) {
 	dirs, lldirs := sc.GetLogDBDirs(did)
 	for i := 0; i < len(dirs); i++ {
-		sc.checkDirAddressMatch(dirs[i], did, addr)
-		sc.checkDirAddressMatch(lldirs[i], did, addr)
+		sc.checkDirAddressMatch(dirs[i], did, addr, ldbBinVer)
+		sc.checkDirAddressMatch(lldirs[i], did, addr, ldbBinVer)
 	}
 }
 
@@ -210,7 +209,7 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 }
 
 func (sc *Context) checkDirAddressMatch(dir string,
-	deploymentID uint64, addr string) {
+	deploymentID uint64, addr string, ldbBinVer uint32) {
 	fp := filepath.Join(dir, dragonboatAddressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
@@ -219,7 +218,7 @@ func (sc *Context) checkDirAddressMatch(dir string,
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
 		status := raftpb.RaftDataStatus{
 			Address:  addr,
-			BinVer:   raftio.LogDBBinVersion,
+			BinVer:   ldbBinVer,
 			HardHash: settings.Hard.Hash(),
 		}
 		err = fileutil.CreateFlagFile(dir, dragonboatAddressFilename, &status)
@@ -236,9 +235,9 @@ func (sc *Context) checkDirAddressMatch(dir string,
 			plog.Panicf("nodehost data dirs belong to different nodehost %s",
 				strings.TrimSpace(status.Address))
 		}
-		if status.BinVer != raftio.LogDBBinVersion {
+		if status.BinVer != ldbBinVer {
 			plog.Panicf("binary compatibility version, data dir %d, software %d",
-				status.BinVer, raftio.LogDBBinVersion)
+				status.BinVer, ldbBinVer)
 		}
 		if status.HardHash != settings.Hard.Hash() {
 			plog.Panicf("had hash mismatch, hard settings changed?")

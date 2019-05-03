@@ -150,8 +150,14 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	serverCtx := server.NewContext(nhConfig)
 	defer serverCtx.Stop()
+	logdb, err := getLogDB(*serverCtx, nhConfig)
+	if err != nil {
+		return err
+	}
+	defer logdb.Close()
 	serverCtx.CreateNodeHostDir(nhConfig.DeploymentID)
-	serverCtx.CheckNodeHostDir(nhConfig.DeploymentID, nhConfig.RaftAddress)
+	serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
+		nhConfig.RaftAddress, logdb.BinaryFormat())
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
@@ -162,11 +168,6 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	dstDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
-	logdb, err := getLogDB(*serverCtx, nhConfig)
-	if err != nil {
-		return err
-	}
-	defer logdb.Close()
 	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes)
 	if err := copySnapshot(oldss, srcDir, dstDir); err != nil {
 		return err

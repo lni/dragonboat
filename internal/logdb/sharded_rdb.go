@@ -48,6 +48,11 @@ type ShardedRDB struct {
 func OpenShardedRDB(dirs []string,
 	lldirs []string, batched bool) (*ShardedRDB, error) {
 	shards := make([]*RDB, 0)
+	if batched {
+		plog.Infof("Using batched ShardedRDB")
+	} else {
+		plog.Infof("Using plain ShardedRDB")
+	}
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
@@ -80,6 +85,7 @@ func (mw *ShardedRDB) Name() string {
 	return LogDBType
 }
 
+// BinaryFormat is the binary format supported by the sharded DB.
 func (mw *ShardedRDB) BinaryFormat() uint32 {
 	return raftio.LogDBBinVersion
 }

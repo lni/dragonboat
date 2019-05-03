@@ -60,7 +60,7 @@ func TestNodeHostDirectoryWorksWhenEverythingMatches(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	ctx.CheckNodeHostDir(testDeploymentID, testAddress)
+	ctx.CheckNodeHostDir(testDeploymentID, testAddress, raftio.LogDBBinVersion)
 }
 
 func TestNodeHostDirectoryDetectsMismatchedBinVer(t *testing.T) {
@@ -90,5 +90,5 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T, addr string, binVer ui
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	ctx.CheckNodeHostDir(testDeploymentID, testAddress)
+	ctx.CheckNodeHostDir(testDeploymentID, testAddress, binVer)
 }

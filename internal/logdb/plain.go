@@ -158,3 +158,7 @@ func (pe *plainEntries) rangedOp(clusterID uint64,
 	lastKey.SetEntryKey(clusterID, nodeID, index)
 	return op(firstKey, lastKey)
 }
+
+func (pe *plainEntries) binaryFormat() uint32 {
+	return raftio.PlainLogDBBinVersion
+}

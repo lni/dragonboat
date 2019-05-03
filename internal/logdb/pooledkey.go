@@ -72,6 +72,7 @@ func (k *PooledKey) Key() []byte {
 	return k.key
 }
 
+// SetMinimumKey sets the key to the minimum possible value.
 func (k *PooledKey) SetMinimumKey() {
 	k.key = k.data
 	for i := 0; i < len(k.key); i++ {
@@ -79,6 +80,7 @@ func (k *PooledKey) SetMinimumKey() {
 	}
 }
 
+// SetMaximumKey sets the key to the maximum possible value.
 func (k *PooledKey) SetMaximumKey() {
 	k.key = k.data
 	for i := 0; i < len(k.key); i++ {

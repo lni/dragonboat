@@ -374,3 +374,7 @@ func (be *batchedEntries) getMergedFirstBatch(clusterID uint64,
 	}
 	return getMergedFirstBatch(eb, lb)
 }
+
+func (be *batchedEntries) binaryFormat() uint32 {
+	return raftio.LogDBBinVersion
+}
