@@ -186,12 +186,12 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 		ents = append(ents, e)
 		return ents, nil
 	}
-	firstKey := be.keys.get()
-	lastKey := be.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
-	firstKey.SetEntryBatchKey(clusterID, nodeID, low)
-	lastKey.SetEntryBatchKey(clusterID, nodeID, high)
+	fk := be.keys.get()
+	lk := be.keys.get()
+	defer fk.Release()
+	defer lk.Release()
+	fk.SetEntryBatchKey(clusterID, nodeID, low)
+	lk.SetEntryBatchKey(clusterID, nodeID, high)
 	expectedID := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
@@ -205,25 +205,27 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 		expectedID++
 		return true, nil
 	}
-	be.kvs.IterateValue(firstKey.Key(), lastKey.Key(), false, op)
+	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
+		panic(err)
+	}
 	return ents, nil
 }
 
 func (be *batchedEntries) getRange(clusterID uint64,
 	nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error) {
-	firstKey := be.keys.get()
-	lastKey := be.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
+	fk := be.keys.get()
+	lk := be.keys.get()
+	defer fk.Release()
+	defer lk.Release()
 	low, high := getBatchIDRange(lastIndex, maxIndex+1)
-	firstKey.SetEntryBatchKey(clusterID, nodeID, low)
-	lastKey.SetEntryBatchKey(clusterID, nodeID, high)
+	fk.SetEntryBatchKey(clusterID, nodeID, low)
+	lk.SetEntryBatchKey(clusterID, nodeID, high)
 	firstIndex := uint64(0)
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
 		if err := eb.Unmarshal(data); err != nil {
-			panic(err)
+			return false, err
 		}
 		if len(eb.Entries) == 0 {
 			panic("empty batch found")
@@ -241,24 +243,26 @@ func (be *batchedEntries) getRange(clusterID uint64,
 		}
 		return true, nil
 	}
-	be.kvs.IterateValue(firstKey.Key(), lastKey.Key(), false, op)
+	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
+		panic(err)
+	}
 	return firstIndex, length, nil
 }
 
 func (be *batchedEntries) rangedOp(clusterID uint64,
 	nodeID uint64, index uint64,
-	op func(firstKey *PooledKey, lastKey *PooledKey) error) error {
-	firstKey := be.keys.get()
-	lastKey := be.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
+	op func(fk *PooledKey, lk *PooledKey) error) error {
+	fk := be.keys.get()
+	lk := be.keys.get()
+	defer fk.Release()
+	defer lk.Release()
 	batchID := getBatchID(index)
 	if batchID == 0 || batchID == 1 {
 		return nil
 	}
-	firstKey.SetEntryBatchKey(clusterID, nodeID, 0)
-	lastKey.SetEntryBatchKey(clusterID, nodeID, batchID-1)
-	return op(firstKey, lastKey)
+	fk.SetEntryBatchKey(clusterID, nodeID, 0)
+	lk.SetEntryBatchKey(clusterID, nodeID, batchID-1)
+	return op(fk, lk)
 }
 
 func (be *batchedEntries) recordBatch(wb IWriteBatch,

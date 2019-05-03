@@ -120,7 +120,7 @@ func iteratorIsValid(iter *levigo.Iterator) bool {
 }
 
 func (r *leveldbKV) IterateValue(fk []byte, lk []byte, inc bool,
-	op func(key []byte, data []byte) (bool, error)) {
+	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
 	for iter.Seek(fk); iteratorIsValid(iter); iter.Next() {
@@ -128,21 +128,22 @@ func (r *leveldbKV) IterateValue(fk []byte, lk []byte, inc bool,
 		val := iter.Value()
 		if inc {
 			if bytes.Compare(key, lk) > 0 {
-				return
+				return nil
 			}
 		} else {
 			if bytes.Compare(key, lk) >= 0 {
-				return
+				return nil
 			}
 		}
 		cont, err := op(key, val)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !cont {
-			return
+			break
 		}
 	}
+	return nil
 }
 
 func (r *leveldbKV) GetValue(key []byte,
@@ -190,12 +191,12 @@ func (r *leveldbKV) CommitDeleteBatch(wb IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *leveldbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
+func (r *leveldbKV) RemoveEntries(fk []byte, lk []byte) error {
 	wb := levigo.NewWriteBatch()
 	it := r.db.NewIterator(r.ro)
 	defer it.Close()
-	for it.Seek(firstKey); it.Valid(); it.Next() {
-		if bytes.Compare(it.Key(), lastKey) < 0 {
+	for it.Seek(fk); it.Valid(); it.Next() {
+		if bytes.Compare(it.Key(), lk) < 0 {
 			wb.Delete(it.Key())
 		}
 	}
@@ -208,7 +209,7 @@ func (r *leveldbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 	return nil
 }
 
-func (r *leveldbKV) Compaction(firstKey []byte, lastKey []byte) error {
-	r.db.CompactRange(levigo.Range{Start: firstKey, Limit: lastKey})
+func (r *leveldbKV) Compaction(fk []byte, lk []byte) error {
+	r.db.CompactRange(levigo.Range{Start: fk, Limit: lk})
 	return nil
 }

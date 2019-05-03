@@ -283,6 +283,8 @@ func testDiskDataCorruptionIsHandled(t *testing.T,
 		defer func() {
 			if r := recover(); r == nil {
 				t.Fatal("didn't crash")
+			} else {
+				plog.Errorf("panic caught %v", r)
 			}
 		}()
 		db := getNewTestDB(dir, lldir, batched)
@@ -308,7 +310,14 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 		fk.SetEntryKey(3, 4, 10)
 		iter := rdb.kvs.(*rocksdbKV).db.NewIterator(rdb.kvs.(*rocksdbKV).ro)
 		iter.Seek(fk.key)
-		for ; iteratorIsValid(iter); iter.Next() {
+		for iter.Seek(fk.key); ; iter.Next() {
+			v, err := iter.IsValid()
+			if err != nil {
+				panic(err)
+			}
+			if !v {
+				break
+			}
 			val := iter.Value()
 			var e pb.Entry
 			if err := e.Unmarshal(val.Data()); err != nil {

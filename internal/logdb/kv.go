@@ -31,7 +31,7 @@ type IKvStore interface {
 	// on that key-value pair, the specified op func returns a boolean flag to
 	// indicate whether IterateValue should continue to iterate entries.
 	IterateValue(fk []byte,
-		lk []byte, inc bool, op func(key []byte, data []byte) (bool, error))
+		lk []byte, inc bool, op func(key []byte, data []byte) (bool, error)) error
 	// GetValue queries the value specified the input key, the returned value
 	// byte slice is passed to the specified op func.
 	GetValue(key []byte, op func([]byte) error) error

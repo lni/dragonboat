@@ -116,7 +116,7 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 }
 
 func (r *pebbleKV) IterateValue(fk []byte, lk []byte, inc bool,
-	op func(key []byte, data []byte) (bool, error)) {
+	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIter(r.ro)
 	defer iter.Close()
 	for iter.SeekGE(fk); iteratorIsValid(iter); iter.Next() {
@@ -124,21 +124,22 @@ func (r *pebbleKV) IterateValue(fk []byte, lk []byte, inc bool,
 		val := iter.Value()
 		if inc {
 			if bytes.Compare(key, lk) > 0 {
-				return
+				return nil
 			}
 		} else {
 			if bytes.Compare(key, lk) >= 0 {
-				return
+				return nil
 			}
 		}
 		cont, err := op(key, val)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !cont {
-			return
+			break
 		}
 	}
+	return nil
 }
 
 func (r *pebbleKV) GetValue(key []byte,
@@ -180,12 +181,12 @@ func (r *pebbleKV) CommitDeleteBatch(wb IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *pebbleKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
+func (r *pebbleKV) RemoveEntries(fk []byte, lk []byte) error {
 	iter := r.db.NewIter(r.ro)
 	defer iter.Close()
 	wb := r.GetWriteBatch(nil)
-	for iter.SeekGE(firstKey); iteratorIsValid(iter); iter.Next() {
-		if bytes.Compare(iter.Key(), lastKey) >= 0 {
+	for iter.SeekGE(fk); iteratorIsValid(iter); iter.Next() {
+		if bytes.Compare(iter.Key(), lk) >= 0 {
 			break
 		}
 		wb.Delete(iter.Key())
@@ -196,6 +197,6 @@ func (r *pebbleKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 	return nil
 }
 
-func (r *pebbleKV) Compaction(firstKey []byte, lastKey []byte) error {
-	return r.db.Compact(firstKey, lastKey)
+func (r *pebbleKV) Compaction(fk []byte, lk []byte) error {
+	return r.db.Compact(fk, lk)
 }

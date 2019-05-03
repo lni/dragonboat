@@ -760,6 +760,13 @@ func TestIterateEntries(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
+		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 11, math.MaxUint64)
+		if len(ents) != 1 {
+			t.Errorf("ents sz %d, want 3", len(ents))
+		}
+		if ents[0].Index != 10 {
+			t.Errorf("unexpected index %d", ents[0].Index)
+		}
 		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
 		if len(ents) != 3 {
 			t.Errorf("ents sz %d, want 3", len(ents))

@@ -38,6 +38,7 @@ import (
 
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/internal/rsm"
+	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/transport"
@@ -1320,16 +1321,32 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 100,
 		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   OpenBatchedLogDB,
 	}
 	nh := NewNodeHost(nhc)
+	bf := nh.logdb.BinaryFormat()
+	if bf != raftio.LogDBBinVersion {
+		t.Errorf("unexpected logdb bin ver %d", bf)
+	}
 	nh.Stop()
-	nhc.LogDBFactory = OpenBatchedLogDB
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("panic not triggered")
-		}
+	nhc.LogDBFactory = nil
+	func() {
+		defer func() {
+			if r := recover(); r != server.ErrLogDBBrokenChange {
+				t.Fatalf("panic not triggered")
+			} else {
+				plog.Infof("%v", r)
+			}
+		}()
+		NewNodeHost(nhc)
 	}()
-	NewNodeHost(nhc)
+	os.RemoveAll(singleNodeHostTestDir)
+	nh = NewNodeHost(nhc)
+	defer nh.Stop()
+	bf = nh.logdb.BinaryFormat()
+	if bf != raftio.PlainLogDBBinVersion {
+		t.Errorf("unexpected logdb bin ver %d", bf)
+	}
 }
 
 func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {

@@ -1262,14 +1262,24 @@ func (nh *NodeHost) createLogDB(nhConfig config.NodeHostConfig, did uint64) {
 	} else {
 		factory = logdb.OpenLogDB
 	}
-	logdb, err := factory(nhDirs, walDirs)
+	ldb, err := factory(nhDirs, walDirs)
 	if err != nil {
 		panic(err)
 	}
-	binVersion := logdb.BinaryFormat()
-	nh.logdb = logdb
+	binVersion := ldb.BinaryFormat()
+	nh.logdb = ldb
+	shardedrdb, ok := ldb.(*logdb.ShardedRDB)
+	if ok {
+		failed, err := shardedrdb.SelfCheckFailed()
+		if err != nil {
+			panic(err)
+		}
+		if failed {
+			panic(server.ErrLogDBBrokenChange)
+		}
+	}
 	nh.serverCtx.CheckNodeHostDir(did, nh.nhConfig.RaftAddress, binVersion)
-	plog.Infof("logdb type name: %s", logdb.Name())
+	plog.Infof("logdb type name: %s", ldb.Name())
 }
 
 func (nh *NodeHost) createTransport() {

@@ -16,6 +16,7 @@ package server
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,11 +27,17 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/raftio"
 	"github.com/lni/dragonboat/raftpb"
 )
 
 var (
 	plog = logger.GetLogger("server")
+	// ErrLogDBBrokenChange indicates that you NodeHost failed to be created as
+	// your code is hit by the LogDB broken change introduced in v3.0. Set your
+	// onfig.NodeHostConfig.LogDBFactory to dragonboat.OpenBatchedLogDB to
+	// continue.
+	ErrLogDBBrokenChange = errors.New("Using new LogDB implementation on existing Raft Log")
 )
 
 const (
@@ -236,6 +243,10 @@ func (sc *Context) checkDirAddressMatch(dir string,
 				strings.TrimSpace(status.Address))
 		}
 		if status.BinVer != ldbBinVer {
+			if status.BinVer == raftio.LogDBBinVersion &&
+				ldbBinVer == raftio.PlainLogDBBinVersion {
+				panic(ErrLogDBBrokenChange)
+			}
 			plog.Panicf("binary compatibility version, data dir %d, software %d",
 				status.BinVer, ldbBinVer)
 		}

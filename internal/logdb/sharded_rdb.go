@@ -37,7 +37,7 @@ var (
 // ShardedRDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedRDB struct {
 	completedCompactions uint64
-	shards               []*RDB
+	shards               []*rdb
 	partitioner          server.IPartitioner
 	compactionCh         chan struct{}
 	compactions          *compactions
@@ -47,7 +47,7 @@ type ShardedRDB struct {
 // OpenShardedRDB creates a ShardedRDB instance.
 func OpenShardedRDB(dirs []string,
 	lldirs []string, batched bool) (*ShardedRDB, error) {
-	shards := make([]*RDB, 0)
+	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("Using batched ShardedRDB")
 	} else {
@@ -88,6 +88,22 @@ func (mw *ShardedRDB) Name() string {
 // BinaryFormat is the binary format supported by the sharded DB.
 func (mw *ShardedRDB) BinaryFormat() uint32 {
 	return mw.shards[0].binaryFormat()
+}
+
+// SelfCheckFailed runs a self check on all db shards and report whether any
+// failure is observed.
+func (mw *ShardedRDB) SelfCheckFailed() (bool, error) {
+	hadFailure := false
+	for _, shard := range mw.shards {
+		failed, err := shard.selfCheckFailed()
+		if err != nil {
+			return false, err
+		}
+		if failed {
+			hadFailure = true
+		}
+	}
+	return hadFailure, nil
 }
 
 // GetLogDBThreadContext return a IContext instance.

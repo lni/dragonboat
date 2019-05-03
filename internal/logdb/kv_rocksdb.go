@@ -125,14 +125,6 @@ func getRocksDBOptions(directory string,
 	return opts, bbto, cache
 }
 
-func iteratorIsValid(iter *gorocksdb.Iterator) bool {
-	v, err := iter.IsValid()
-	if err != nil {
-		panic(err)
-	}
-	return v
-}
-
 func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
@@ -197,10 +189,19 @@ func (r *rocksdbKV) Close() error {
 }
 
 func (r *rocksdbKV) IterateValue(fk []byte, lk []byte, inc bool,
-	op func(key []byte, data []byte) (bool, error)) {
+	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
-	defer iter.Close()
-	for iter.Seek(fk); iteratorIsValid(iter); iter.Next() {
+	defer func() {
+		iter.Close()
+	}()
+	for iter.Seek(fk); ; iter.Next() {
+		v, err := iter.IsValid()
+		if err != nil {
+			return err
+		}
+		if !v {
+			break
+		}
 		key, ok := iter.OKey()
 		if !ok {
 			panic("failed to get key")
@@ -209,12 +210,12 @@ func (r *rocksdbKV) IterateValue(fk []byte, lk []byte, inc bool,
 		if inc {
 			if bytes.Compare(keyData, lk) > 0 {
 				key.Free()
-				return
+				return nil
 			}
 		} else {
 			if bytes.Compare(keyData, lk) >= 0 {
 				key.Free()
-				return
+				return nil
 			}
 		}
 		key.Free()
@@ -225,12 +226,13 @@ func (r *rocksdbKV) IterateValue(fk []byte, lk []byte, inc bool,
 		valData := val.Data()
 		cont, err := op(keyData, valData)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !cont {
-			return
+			break
 		}
 	}
+	return nil
 }
 
 func (r *rocksdbKV) GetValue(key []byte,
@@ -305,7 +307,14 @@ func (r *rocksdbKV) deleteRange(firstKey []byte, lastKey []byte) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
 	toDelete := make([][]byte, 0)
-	for iter.Seek(firstKey); iteratorIsValid(iter); iter.Next() {
+	for iter.Seek(firstKey); ; iter.Next() {
+		v, err := iter.IsValid()
+		if err != nil {
+			return err
+		}
+		if !v {
+			break
+		}
 		if done := func() bool {
 			key, ok := iter.OKey()
 			if !ok {

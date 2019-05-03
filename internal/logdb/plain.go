@@ -77,12 +77,12 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 	if high > maxIndex+1 {
 		high = maxIndex + 1
 	}
-	firstKey := pe.keys.get()
-	lastKey := pe.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
-	firstKey.SetEntryKey(clusterID, nodeID, low)
-	lastKey.SetEntryKey(clusterID, nodeID, high)
+	fk := pe.keys.get()
+	lk := pe.keys.get()
+	defer fk.Release()
+	defer lk.Release()
+	fk.SetEntryKey(clusterID, nodeID, low)
+	lk.SetEntryKey(clusterID, nodeID, high)
 	expectedIndex := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var e pb.Entry
@@ -100,7 +100,9 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 		}
 		return true, nil
 	}
-	pe.kvs.IterateValue(firstKey.Key(), lastKey.Key(), false, op)
+	if err := pe.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
+		panic(err)
+	}
 	return ents, size, nil
 }
 
@@ -124,12 +126,12 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 
 func (pe *plainEntries) getRange(clusterID uint64,
 	nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error) {
-	firstKey := pe.keys.get()
-	lastKey := pe.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
-	firstKey.SetEntryKey(clusterID, nodeID, lastIndex)
-	lastKey.SetEntryKey(clusterID, nodeID, maxIndex)
+	fk := pe.keys.get()
+	lk := pe.keys.get()
+	defer fk.Release()
+	defer lk.Release()
+	fk.SetEntryKey(clusterID, nodeID, lastIndex)
+	lk.SetEntryKey(clusterID, nodeID, maxIndex)
 	firstIndex := uint64(0)
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
@@ -143,20 +145,22 @@ func (pe *plainEntries) getRange(clusterID uint64,
 		}
 		return true, nil
 	}
-	pe.kvs.IterateValue(firstKey.Key(), lastKey.Key(), true, op)
+	if err := pe.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+		panic(err)
+	}
 	return firstIndex, length, nil
 }
 
 func (pe *plainEntries) rangedOp(clusterID uint64,
 	nodeID uint64, index uint64,
-	op func(firstKey *PooledKey, lastKey *PooledKey) error) error {
-	firstKey := pe.keys.get()
-	lastKey := pe.keys.get()
-	defer firstKey.Release()
-	defer lastKey.Release()
-	firstKey.SetEntryKey(clusterID, nodeID, 0)
-	lastKey.SetEntryKey(clusterID, nodeID, index)
-	return op(firstKey, lastKey)
+	op func(fk *PooledKey, lk *PooledKey) error) error {
+	fk := pe.keys.get()
+	lk := pe.keys.get()
+	defer fk.Release()
+	defer lk.Release()
+	fk.SetEntryKey(clusterID, nodeID, 0)
+	lk.SetEntryKey(clusterID, nodeID, index)
+	return op(fk, lk)
 }
 
 func (pe *plainEntries) binaryFormat() uint32 {
