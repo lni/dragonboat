@@ -224,7 +224,13 @@ func (sc *Context) LockNodeHostDir(did uint64) error {
 		if err := sc.tryCreateLockFile(dirs[i], lockFilename); err != nil {
 			return err
 		}
+		if err := sc.tryLockNodeHostDir(dirs[i]); err != nil {
+			return err
+		}
 		if err := sc.tryCreateLockFile(lldirs[i], lockFilename); err != nil {
+			return err
+		}
+		if err := sc.tryLockNodeHostDir(lldirs[i]); err != nil {
 			return err
 		}
 	}
