@@ -59,7 +59,7 @@ func TestNodeHostDirectoryWorksWhenEverythingMatches(t *testing.T) {
 		BinVer:   raftio.LogDBBinVersion,
 		HardHash: settings.Hard.Hash(),
 	}
-	err = fileutil.CreateFlagFile(dirs[0], dragonboatAddressFilename, &status)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -88,7 +88,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		Address: addr,
 		BinVer:  binVer,
 	}
-	err = fileutil.CreateFlagFile(dirs[0], dragonboatAddressFilename, &status)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}

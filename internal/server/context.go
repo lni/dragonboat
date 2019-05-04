@@ -52,7 +52,8 @@ var (
 )
 
 const (
-	dragonboatAddressFilename = "dragonboat.address"
+	addressFilename = "dragonboat.address"
+	lockFilename    = "LOCK"
 )
 
 // Context is the server context for NodeHost.
@@ -216,20 +217,55 @@ func (sc *Context) CheckNodeHostDir(did uint64,
 	return nil
 }
 
-func (sc *Context) tryLockNodeHostDir(path string) bool {
+// LockNodeHostDir tries to lock the NodeHost data directories.
+func (sc *Context) LockNodeHostDir(did uint64) error {
+	dirs, lldirs := sc.GetLogDBDirs(did)
+	for i := 0; i < len(dirs); i++ {
+		if err := sc.tryCreateLockFile(dirs[i], lockFilename); err != nil {
+			return err
+		}
+		if err := sc.tryCreateLockFile(lldirs[i], lockFilename); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sc *Context) tryCreateLockFile(dir string, fl string) error {
+	fp := filepath.Join(dir, fl)
+	if _, err := os.Stat(fp); os.IsNotExist(err) {
+		s := &raftpb.RaftDataStatus{}
+		err = fileutil.CreateFlagFile(dir, fl, s)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sc *Context) tryLockNodeHostDir(dir string) error {
+	fp := filepath.Join(dir, lockFilename)
+	if err := sc.tryCreateLockFile(dir, lockFilename); err != nil {
+		return err
+	}
 	var fl *fileutil.Flock
-	_, ok := sc.flocks[path]
+	_, ok := sc.flocks[fp]
 	if !ok {
-		fl = fileutil.New(path)
-		sc.flocks[path] = fl
+		fl = fileutil.New(fp)
+		sc.flocks[fp] = fl
 	} else {
-		return true
+		return nil
 	}
 	locked, err := fl.TryLock()
 	if err != nil {
-		panic(err)
+		return err
 	}
-	return locked
+	if locked {
+		return nil
+	}
+	return ErrLockDirectory
 }
 
 func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
@@ -238,7 +274,7 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 
 func (sc *Context) exclusiveAccessTo(dir string,
 	deploymentID uint64, addr string, ldbBinVer uint32) error {
-	fp := filepath.Join(dir, dragonboatAddressFilename)
+	fp := filepath.Join(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
 			strings.ToLower(strings.TrimSpace(s2))
@@ -249,13 +285,13 @@ func (sc *Context) exclusiveAccessTo(dir string,
 			BinVer:   ldbBinVer,
 			HardHash: settings.Hard.Hash(),
 		}
-		err = fileutil.CreateFlagFile(dir, dragonboatAddressFilename, &status)
+		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
 		if err != nil {
 			return err
 		}
 	} else {
 		status := raftpb.RaftDataStatus{}
-		err := fileutil.GetFlagFileContent(dir, dragonboatAddressFilename, &status)
+		err := fileutil.GetFlagFileContent(dir, addressFilename, &status)
 		if err != nil {
 			return err
 		}
@@ -274,9 +310,6 @@ func (sc *Context) exclusiveAccessTo(dir string,
 		if status.HardHash != settings.Hard.Hash() {
 			return ErrHardSettingsChanged
 		}
-	}
-	if !sc.tryLockNodeHostDir(fp) {
-		return ErrLockDirectory
 	}
 	return nil
 }

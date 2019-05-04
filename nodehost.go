@@ -1259,6 +1259,9 @@ func (nh *NodeHost) createPools() {
 
 func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	nhDirs, walDirs := nh.serverCtx.CreateNodeHostDir(did)
+	if err := nh.serverCtx.LockNodeHostDir(did); err != nil {
+		return err
+	}
 	var factory config.LogDBFactoryFunc
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
