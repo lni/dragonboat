@@ -297,7 +297,10 @@ func newNOOPTestTransport() (*Transport,
 		RaftAddress:    "localhost:9876",
 		RaftRPCFactory: NewNOOPTransport,
 	}
-	ctx := server.NewContext(c)
+	ctx, err := server.NewContext(c)
+	if err != nil {
+		panic(err)
+	}
 	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
 	if err != nil {
 		panic(err)
@@ -323,7 +326,10 @@ func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 		c.CertFile = certFile
 		c.KeyFile = keyFile
 	}
-	ctx := server.NewContext(c)
+	ctx, err := server.NewContext(c)
+	if err != nil {
+		panic(err)
+	}
 	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
 	if err != nil {
 		panic(err)
