@@ -185,8 +185,9 @@ type Transport struct {
 }
 
 // NewTransport creates a new Transport object.
-func NewTransport(nhConfig config.NodeHostConfig, ctx *server.Context,
-	resolver INodeAddressResolver, locator server.GetSnapshotDirFunc) *Transport {
+func NewTransport(nhConfig config.NodeHostConfig,
+	ctx *server.Context, resolver INodeAddressResolver,
+	locator server.GetSnapshotDirFunc) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	stopper := syncutil.NewStopper()
 	t := &Transport{
@@ -206,12 +207,14 @@ func NewTransport(nhConfig config.NodeHostConfig, ctx *server.Context,
 	plog.Infof("Raft RPC type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC
 	if err := t.raftRPC.Start(); err != nil {
-		panic(err)
+		plog.Errorf("transport rpc failed to start %v", err)
+		t.raftRPC.Stop()
+		return nil, err
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]chan pb.Message)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
-	return t
+	return t, nil
 }
 
 // Name returns the type name of the transport module

@@ -134,7 +134,10 @@ func (n *mtNodeHost) Start() {
 	config.NodeHostDir = filepath.Join(n.dir, nhc.NodeHostDir)
 	config.WALDir = filepath.Join(n.dir, nhc.WALDir)
 	config.RaftAddress = n.addresses[n.listIndex]
-	nh := NewNodeHost(config)
+	nh, err := NewNodeHost(config)
+	if err != nil {
+		panic(err)
+	}
 	n.nh = nh
 	peers := make(map[uint64]string)
 	for idx, v := range n.addresses {

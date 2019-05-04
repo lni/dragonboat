@@ -61,6 +61,9 @@ func OpenShardedRDB(dirs []string,
 		}
 		db, err := openRDB(dir, lldir, batched)
 		if err != nil {
+			for _, s := range shards {
+				s.close()
+			}
 			return nil, err
 		}
 		shards = append(shards, db)

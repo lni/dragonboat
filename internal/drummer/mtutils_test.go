@@ -417,7 +417,10 @@ func (n *testNode) startDrummerNode(dl *mtAddressList) {
 		config.KeyFile = keyFile
 	}
 	plog.Infof("creating new nodehost for drummer node")
-	nh := dragonboat.NewNodeHost(config)
+	nh, err := dragonboat.NewNodeHost(config)
+	if err != nil {
+		panic(err)
+	}
 	plog.Infof("nodehost ready for drummer node")
 	n.nh = nh
 	peers := make(map[uint64]string)
@@ -462,7 +465,10 @@ func (n *testNode) startNodehostNode(dl *mtAddressList) {
 		config.KeyFile = keyFile
 	}
 	plog.Infof("creating nodehost for nodehost node")
-	nh := dragonboat.NewNodeHost(config)
+	nh, err := dragonboat.NewNodeHost(config)
+	if err != nil {
+		panic(err)
+	}
 	plog.Infof("nodehost for nodehost node created")
 	n.nh = nh
 	n.drummerNodeHost = client.NewNodeHostClient(nh, dl.apiAddressList, apiAddress)

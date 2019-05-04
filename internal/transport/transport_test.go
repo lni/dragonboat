@@ -298,7 +298,10 @@ func newNOOPTestTransport() (*Transport,
 		RaftRPCFactory: NewNOOPTransport,
 	}
 	ctx := server.NewContext(c)
-	transport := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
+	if err != nil {
+		panic(err)
+	}
 	raftRPC, ok := transport.raftRPC.(*NOOPTransport)
 	if !ok {
 		panic("not a noop transport")
@@ -321,8 +324,10 @@ func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 		c.KeyFile = keyFile
 	}
 	ctx := server.NewContext(c)
-	transport := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
-
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
+	if err != nil {
+		panic(err)
+	}
 	return transport, nodes, stopper, t
 }
 

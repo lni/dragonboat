@@ -148,7 +148,10 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := checkMembers(oldss.Membership, memberNodes); err != nil {
 		return err
 	}
-	serverCtx := server.NewContext(nhConfig)
+	serverCtx, err := server.NewContext(nhConfig)
+	if err != nil {
+		return err
+	}
 	defer serverCtx.Stop()
 	logdb, err := getLogDB(*serverCtx, nhConfig)
 	if err != nil {

@@ -368,17 +368,29 @@ func benchmarkTransport(b *testing.B, sz int) {
 	nhc1 := config.NodeHostConfig{
 		RaftAddress: addr1,
 	}
-	ctx1 := server.NewContext(nhc1)
+	ctx1, err := server.NewContext(nhc1)
+	if err != nil {
+		b.Fatalf("failed to new context %v", err)
+	}
 	nhc2 := config.NodeHostConfig{
 		RaftAddress: addr2,
 	}
-	ctx2 := server.NewContext(nhc2)
+	ctx2, err := server.NewContext(nhc2)
+	if err != nil {
+		b.Fatalf("failed to new context %v", err)
+	}
 	nodes1 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes2 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes1.AddRemoteAddress(1, 2, addr2)
-	t1 := transport.NewTransport(nhc1, ctx1, nodes1, nil)
+	t1, err := transport.NewTransport(nhc1, ctx1, nodes1, nil)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
 	t1.SetUnmanagedDeploymentID()
-	t2 := transport.NewTransport(nhc2, ctx2, nodes2, nil)
+	t2, err := transport.NewTransport(nhc2, ctx2, nodes2, nil)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
 	t2.SetUnmanagedDeploymentID()
 	defer t2.Stop()
 	defer t1.Stop()

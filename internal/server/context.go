@@ -33,6 +33,17 @@ import (
 
 var (
 	plog = logger.GetLogger("server")
+	// ErrNotOwner indicates that the data directory belong to another NodeHost
+	// instance.
+	ErrNotOwner = errors.New("not the owner of the data directory")
+	// ErrLockDirectory indicates that obtaining exclusive lock to the data
+	// directory failed.
+	ErrLockDirectory = errors.New("failed to lock data directory")
+	// ErrHardSettingsChanged indicates that hard settings changed.
+	ErrHardSettingsChanged = errors.New("settings in internal/settings/hard.go changed")
+	// ErrIncompatibleData indicates that the configured data directory contains
+	// incompatible data.
+	ErrIncompatibleData = errors.New("Incompatible data")
 	// ErrLogDBBrokenChange indicates that you NodeHost failed to be created as
 	// your code is hit by the LogDB broken change introduced in v3.0. Set your
 	// onfig.NodeHostConfig.LogDBFactory to dragonboat.OpenBatchedLogDB to
@@ -54,7 +65,7 @@ type Context struct {
 }
 
 // NewContext creates and returns a new server Context object.
-func NewContext(nhConfig config.NodeHostConfig) *Context {
+func NewContext(nhConfig config.NodeHostConfig) (*Context, error) {
 	s := &Context{
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
@@ -62,11 +73,14 @@ func NewContext(nhConfig config.NodeHostConfig) *Context {
 		flocks:       make(map[string]*fileutil.Flock),
 	}
 	hostname, err := os.Hostname()
-	if err != nil || len(hostname) == 0 {
-		plog.Panicf("failed to get hostname %v", err)
+	if err != nil {
+		return nil, err
+	}
+	if len(hostname) == 0 {
+		panic("failed to get hostname")
 	}
 	s.hostname = hostname
-	return s
+	return s, nil
 }
 
 // Stop stops the context.
@@ -188,16 +202,23 @@ func (sc *Context) PrepareSnapshotDir(deploymentID uint64,
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (sc *Context) CheckNodeHostDir(did uint64, addr string, ldbBinVer uint32) {
+func (sc *Context) CheckNodeHostDir(did uint64,
+	addr string, ldbBinVer uint32) error {
 	dirs, lldirs := sc.GetLogDBDirs(did)
 	for i := 0; i < len(dirs); i++ {
-		sc.checkDirAddressMatch(dirs[i], did, addr, ldbBinVer)
-		sc.checkDirAddressMatch(lldirs[i], did, addr, ldbBinVer)
+		if err := sc.exclusiveAccessTo(dirs[i], did, addr, ldbBinVer); err != nil {
+			return err
+		}
+		if err := sc.exclusiveAccessTo(lldirs[i], did, addr, ldbBinVer); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (sc *Context) tryLockNodeHostDir(path string) bool {
-	fl, ok := sc.flocks[path]
+	var fl *fileutil.Flock
+	_, ok := sc.flocks[path]
 	if !ok {
 		fl = fileutil.New(path)
 		sc.flocks[path] = fl
@@ -215,8 +236,8 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
 
-func (sc *Context) checkDirAddressMatch(dir string,
-	deploymentID uint64, addr string, ldbBinVer uint32) {
+func (sc *Context) exclusiveAccessTo(dir string,
+	deploymentID uint64, addr string, ldbBinVer uint32) error {
 	fp := filepath.Join(dir, dragonboatAddressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
@@ -230,31 +251,32 @@ func (sc *Context) checkDirAddressMatch(dir string,
 		}
 		err = fileutil.CreateFlagFile(dir, dragonboatAddressFilename, &status)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	} else {
 		status := raftpb.RaftDataStatus{}
 		err := fileutil.GetFlagFileContent(dir, dragonboatAddressFilename, &status)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !se(string(status.Address), addr) {
-			plog.Panicf("nodehost data dirs belong to different nodehost %s",
-				strings.TrimSpace(status.Address))
+			return ErrNotOwner
 		}
 		if status.BinVer != ldbBinVer {
 			if status.BinVer == raftio.LogDBBinVersion &&
 				ldbBinVer == raftio.PlainLogDBBinVersion {
-				panic(ErrLogDBBrokenChange)
+				return ErrLogDBBrokenChange
 			}
-			plog.Panicf("binary compatibility version, data dir %d, software %d",
+			plog.Errorf("binary compatibility version, data dir %d, software %d",
 				status.BinVer, ldbBinVer)
+			return ErrIncompatibleData
 		}
 		if status.HardHash != settings.Hard.Hash() {
-			plog.Panicf("had hash mismatch, hard settings changed?")
+			return ErrHardSettingsChanged
 		}
 	}
 	if !sc.tryLockNodeHostDir(fp) {
-		plog.Panicf("failed to lock %s", fp)
+		return ErrLockDirectory
 	}
+	return nil
 }

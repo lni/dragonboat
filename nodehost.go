@@ -215,31 +215,31 @@ type NodeHost struct {
 // NewNodeHost creates a new NodeHost instance. The returned NodeHost instance
 // is configured using the specified NodeHostConfig instance. In a typical
 // application, it is expected to have one NodeHost on each server.
-func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
+func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	logBuildTagsAndVersion()
 	if err := nhConfig.Validate(); err != nil {
-		plog.Panicf("invalid nodehost config, %v", err)
+		return nil, err
+	}
+	serverCtx, err := server.NewContext(nhConfig)
+	if err != nil {
+		return nil, err
 	}
 	nh := &NodeHost{
-		serverCtx:        server.NewContext(nhConfig),
+		serverCtx:        serverCtx,
 		nhConfig:         nhConfig,
 		stopper:          syncutil.NewStopper(),
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
 	}
-	defer func() {
-		// close all resources and panic
-		if r := recover(); r != nil {
-			nh.Stop()
-			panic(r)
-		}
-	}()
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
 	nh.createPools()
-	nh.createTransport()
+	if err := nh.createTransport(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
 	did := unmanagedDeploymentID
 	if nhConfig.DeploymentID == 0 {
 		plog.Warningf("DeploymentID not set in NodeHostConfig")
@@ -250,7 +250,10 @@ func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
 	}
 	plog.Infof("DeploymentID set to %d", did)
 	nh.deploymentID = did
-	nh.createLogDB(nhConfig, did)
+	if err := nh.createLogDB(nhConfig, did); err != nil {
+		nh.Stop()
+		return nil, err
+	}
 	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
@@ -259,7 +262,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) *NodeHost {
 		nh.tickWorkerMain()
 	})
 	nh.logNodeHostDetails()
-	return nh
+	return nh, nil
 }
 
 // NodeHostConfig returns the NodeHostConfig instance used for configuring this
@@ -1254,17 +1257,17 @@ func (nh *NodeHost) createPools() {
 	}
 }
 
-func (nh *NodeHost) createLogDB(nhConfig config.NodeHostConfig, did uint64) {
+func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	nhDirs, walDirs := nh.serverCtx.CreateNodeHostDir(did)
 	var factory config.LogDBFactoryFunc
-	if nhConfig.LogDBFactory != nil {
-		factory = nhConfig.LogDBFactory
+	if cfg.LogDBFactory != nil {
+		factory = cfg.LogDBFactory
 	} else {
 		factory = logdb.OpenLogDB
 	}
 	ldb, err := factory(nhDirs, walDirs)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	binVersion := ldb.BinaryFormat()
 	nh.logdb = ldb
@@ -1272,23 +1275,33 @@ func (nh *NodeHost) createLogDB(nhConfig config.NodeHostConfig, did uint64) {
 	if ok {
 		failed, err := shardedrdb.SelfCheckFailed()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if failed {
-			panic(server.ErrLogDBBrokenChange)
+			return server.ErrLogDBBrokenChange
 		}
 	}
-	nh.serverCtx.CheckNodeHostDir(did, nh.nhConfig.RaftAddress, binVersion)
+	err = nh.serverCtx.CheckNodeHostDir(did,
+		nh.nhConfig.RaftAddress, binVersion)
+	if err != nil {
+		return err
+	}
 	plog.Infof("logdb type name: %s", ldb.Name())
+	return nil
 }
 
-func (nh *NodeHost) createTransport() {
+func (nh *NodeHost) createTransport() error {
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
-	nh.transport = transport.NewTransport(nh.nhConfig,
+	tsp, err := transport.NewTransport(nh.nhConfig,
 		nh.serverCtx, nh.nodes, getSnapshotDirFunc)
-	nh.transport.SetMessageHandler(nh.msgHandler)
+	if err != nil {
+		return err
+	}
+	tsp.SetMessageHandler(nh.msgHandler)
+	nh.transport = tsp
+	return nil
 }
 
 func (nh *NodeHost) stopNode(clusterID uint64,
