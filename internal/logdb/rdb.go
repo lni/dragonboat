@@ -209,26 +209,26 @@ func (r *rdb) setMaxIndex(wb IWriteBatch,
 
 func (r *rdb) recordBootstrap(wb IWriteBatch,
 	clusterID uint64, nodeID uint64, bsrec pb.Bootstrap) {
-	bskey := newKey(maxKeySize, nil)
-	bskey.setBootstrapKey(clusterID, nodeID)
-	bsdata, err := bsrec.Marshal()
+	k := newKey(maxKeySize, nil)
+	k.setBootstrapKey(clusterID, nodeID)
+	data, err := bsrec.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	wb.Put(bskey.Key(), bsdata)
+	wb.Put(k.Key(), data)
 }
 
 func (r *rdb) recordSnapshot(wb IWriteBatch, ud pb.Update) {
 	if pb.IsEmptySnapshot(ud.Snapshot) {
 		return
 	}
-	ko := newKey(snapshotKeySize, nil)
-	ko.setSnapshotKey(ud.ClusterID, ud.NodeID, ud.Snapshot.Index)
+	k := newKey(snapshotKeySize, nil)
+	k.setSnapshotKey(ud.ClusterID, ud.NodeID, ud.Snapshot.Index)
 	data, err := ud.Snapshot.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	wb.Put(ko.Key(), data)
+	wb.Put(k.Key(), data)
 }
 
 func (r *rdb) recordMaxIndex(wb IWriteBatch,
@@ -236,9 +236,9 @@ func (r *rdb) recordMaxIndex(wb IWriteBatch,
 	data := ctx.GetValueBuffer(8)
 	binary.BigEndian.PutUint64(data, index)
 	data = data[:8]
-	ko := ctx.GetKey()
-	ko.SetMaxIndexKey(clusterID, nodeID)
-	wb.Put(ko.Key(), data)
+	k := ctx.GetKey()
+	k.SetMaxIndexKey(clusterID, nodeID)
+	wb.Put(k.Key(), data)
 }
 
 func (r *rdb) recordStateAllocs(wb IWriteBatch,
@@ -247,9 +247,9 @@ func (r *rdb) recordStateAllocs(wb IWriteBatch,
 	if err != nil {
 		panic(err)
 	}
-	key := newKey(snapshotKeySize, nil)
-	key.SetStateKey(clusterID, nodeID)
-	wb.Put(key.Key(), data)
+	k := newKey(snapshotKeySize, nil)
+	k.SetStateKey(clusterID, nodeID)
+	wb.Put(k.Key(), data)
 }
 
 func (r *rdb) recordState(clusterID uint64,
@@ -266,9 +266,9 @@ func (r *rdb) recordState(clusterID uint64,
 		panic(err)
 	}
 	data = data[:ms]
-	ko := ctx.GetKey()
-	ko.SetStateKey(clusterID, nodeID)
-	wb.Put(ko.Key(), data)
+	k := ctx.GetKey()
+	k.SetStateKey(clusterID, nodeID)
+	wb.Put(k.Key(), data)
 }
 
 func (r *rdb) saveBootstrapInfo(clusterID uint64,
@@ -280,10 +280,10 @@ func (r *rdb) saveBootstrapInfo(clusterID uint64,
 
 func (r *rdb) getBootstrapInfo(clusterID uint64,
 	nodeID uint64) (*pb.Bootstrap, error) {
-	ko := newKey(maxKeySize, nil)
-	ko.setBootstrapKey(clusterID, nodeID)
+	k := newKey(maxKeySize, nil)
+	k.setBootstrapKey(clusterID, nodeID)
 	bootstrap := &pb.Bootstrap{}
-	if err := r.kvs.GetValue(ko.Key(), func(data []byte) error {
+	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return raftio.ErrNoBootstrapInfo
 		}
@@ -315,10 +315,10 @@ func (r *rdb) saveSnapshots(updates []pb.Update) error {
 
 func (r *rdb) deleteSnapshot(clusterID uint64,
 	nodeID uint64, snapshotIndex uint64) error {
-	ko := r.keys.get()
-	defer ko.Release()
-	ko.setSnapshotKey(clusterID, nodeID, snapshotIndex)
-	return r.kvs.DeleteValue(ko.Key())
+	k := r.keys.get()
+	defer k.Release()
+	k.setSnapshotKey(clusterID, nodeID, snapshotIndex)
+	return r.kvs.DeleteValue(k.Key())
 }
 
 func (r *rdb) listSnapshots(clusterID uint64,
@@ -346,11 +346,11 @@ func (r *rdb) readMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	if v, ok := r.cs.getMaxIndex(clusterID, nodeID); ok {
 		return v, nil
 	}
-	ko := r.keys.get()
-	defer ko.Release()
-	ko.SetMaxIndexKey(clusterID, nodeID)
+	k := r.keys.get()
+	defer k.Release()
+	k.SetMaxIndexKey(clusterID, nodeID)
 	maxIndex := uint64(0)
-	if err := r.kvs.GetValue(ko.Key(), func(data []byte) error {
+	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return raftio.ErrNoSavedLog
 		}
@@ -362,13 +362,12 @@ func (r *rdb) readMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	return maxIndex, nil
 }
 
-func (r *rdb) readState(clusterID uint64,
-	nodeID uint64) (*pb.State, error) {
-	ko := r.keys.get()
-	defer ko.Release()
-	ko.SetStateKey(clusterID, nodeID)
+func (r *rdb) readState(clusterID uint64, nodeID uint64) (*pb.State, error) {
+	k := r.keys.get()
+	defer k.Release()
+	k.SetStateKey(clusterID, nodeID)
 	hs := &pb.State{}
-	if err := r.kvs.GetValue(ko.Key(), func(data []byte) error {
+	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return raftio.ErrNoSavedLog
 		}
@@ -412,16 +411,16 @@ func (r *rdb) recordRemoveNodeData(wb IWriteBatch,
 	stateKey := newKey(maxKeySize, nil)
 	stateKey.SetStateKey(clusterID, nodeID)
 	wb.Delete(stateKey.Key())
-	bootstrapKey := newKey(maxKeySize, nil)
-	bootstrapKey.setBootstrapKey(clusterID, nodeID)
-	wb.Delete(bootstrapKey.Key())
-	maxIndexKey := newKey(maxKeySize, nil)
-	maxIndexKey.SetMaxIndexKey(clusterID, nodeID)
-	wb.Delete(maxIndexKey.Key())
+	bsKey := newKey(maxKeySize, nil)
+	bsKey.setBootstrapKey(clusterID, nodeID)
+	wb.Delete(bsKey.Key())
+	miKey := newKey(maxKeySize, nil)
+	miKey.SetMaxIndexKey(clusterID, nodeID)
+	wb.Delete(miKey.Key())
 	for _, ss := range snapshots {
-		key := newKey(maxKeySize, nil)
-		key.setSnapshotKey(clusterID, nodeID, ss.Index)
-		wb.Delete(key.Key())
+		k := newKey(maxKeySize, nil)
+		k.setSnapshotKey(clusterID, nodeID, ss.Index)
+		wb.Delete(k.Key())
 	}
 }
 

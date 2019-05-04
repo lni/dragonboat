@@ -51,9 +51,9 @@ func (pe *plainEntries) record(wb IWriteBatch,
 			panic(err)
 		}
 		data = data[:ms]
-		ko := ctx.GetKey()
-		ko.SetEntryKey(clusterID, nodeID, ent.Index)
-		wb.Put(ko.Key(), data)
+		k := ctx.GetKey()
+		k.SetEntryKey(clusterID, nodeID, ent.Index)
+		wb.Put(k.Key(), data)
 		if ent.Index > maxIndex {
 			maxIndex = ent.Index
 		}
@@ -108,9 +108,9 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 
 func (pe *plainEntries) getEntry(clusterID uint64,
 	nodeID uint64, index uint64) (pb.Entry, error) {
-	key := pe.keys.get()
-	defer key.Release()
-	key.SetEntryKey(clusterID, nodeID, index)
+	k := pe.keys.get()
+	defer k.Release()
+	k.SetEntryKey(clusterID, nodeID, index)
 	var e pb.Entry
 	op := func(v []byte) error {
 		if err := e.Unmarshal(v); err != nil {
@@ -118,7 +118,7 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 		}
 		return nil
 	}
-	if err := pe.kvs.GetValue(key.Key(), op); err != nil {
+	if err := pe.kvs.GetValue(k.Key(), op); err != nil {
 		return pb.Entry{}, err
 	}
 	return e, nil

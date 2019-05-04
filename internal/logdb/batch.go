@@ -292,9 +292,9 @@ func (be *batchedEntries) recordBatch(wb IWriteBatch,
 		panic(err)
 	}
 	data = data[:sz]
-	key := ctx.GetKey()
-	key.SetEntryBatchKey(clusterID, nodeID, batchID)
-	wb.Put(key.Key(), data)
+	k := ctx.GetKey()
+	k.SetEntryBatchKey(clusterID, nodeID, batchID)
+	wb.Put(k.Key(), data)
 }
 
 func (be *batchedEntries) record(wb IWriteBatch,
@@ -333,10 +333,10 @@ func (be *batchedEntries) record(wb IWriteBatch,
 func (be *batchedEntries) getBatchFromDB(clusterID uint64,
 	nodeID uint64, batchID uint64) (pb.EntryBatch, bool) {
 	var e pb.EntryBatch
-	key := be.keys.get()
-	defer key.Release()
-	key.SetEntryBatchKey(clusterID, nodeID, batchID)
-	if err := be.kvs.GetValue(key.Key(), func(data []byte) error {
+	k := be.keys.get()
+	defer k.Release()
+	k.SetEntryBatchKey(clusterID, nodeID, batchID)
+	if err := be.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return errors.New("no such entry")
 		}
