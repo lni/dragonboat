@@ -374,7 +374,7 @@ func (g *TCPTransport) Start() error {
 	listener, err := netutil.NewStoppableListener(address,
 		tlsConfig, g.stopper.ShouldStop())
 	if err != nil {
-		plog.Panicf("failed to new a stoppable listener, %v", err)
+		return err
 	}
 	g.stopper.RunWorker(func() {
 		for {
