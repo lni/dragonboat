@@ -2413,3 +2413,70 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 		t.Errorf("snapshot content changed")
 	}
 }
+
+func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    "microsoft.com:12345",
+	}
+	nh, err := NewNodeHost(nhc)
+	if err == nil {
+		nh.Stop()
+		t.Fatalf("NewNodeHost didn't fail")
+	}
+}
+
+func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		nhc.RaftAddress = nodeHostTestAddr2
+		_, err = NewNodeHost(nhc)
+		if err != server.ErrLockDirectory {
+			t.Fatalf("failed to return ErrLockDirectory")
+		}
+	}()
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrNotOwner {
+		t.Fatalf("failed to return ErrNotOwner")
+	}
+	nhc.RaftAddress = nodeHostTestAddr1
+	nhc.LogDBFactory = OpenBatchedLogDB
+	_, err = NewNodeHost(nhc)
+	if err != server.ErrIncompatibleData {
+		t.Fatalf("failed to return ErrIncompatibleData")
+	}
+}
+
+func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   OpenBatchedLogDB,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+	}()
+	nhc.LogDBFactory = nil
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrLogDBBrokenChange {
+		t.Fatalf("failed to return ErrIncompatibleData")
+	}
+}

@@ -156,8 +156,8 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 }
 
 // CreateNodeHostDir creates the top level dirs used by nodehost.
-func (sc *Context) CreateNodeHostDir(deploymentID uint64) ([]string, []string) {
-	nhDirs, walDirs := sc.GetLogDBDirs(deploymentID)
+func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string) {
+	nhDirs, walDirs := sc.GetLogDBDirs(did)
 	exists := func(path string) (bool, error) {
 		_, err := os.Stat(path)
 		if err == nil {
@@ -192,9 +192,9 @@ func (sc *Context) CreateNodeHostDir(deploymentID uint64) ([]string, []string) {
 }
 
 // PrepareSnapshotDir creates the snapshot directory for the specified node.
-func (sc *Context) PrepareSnapshotDir(deploymentID uint64,
+func (sc *Context) PrepareSnapshotDir(did uint64,
 	clusterID uint64, nodeID uint64) (string, error) {
-	snapshotDir := sc.GetSnapshotDir(deploymentID, clusterID, nodeID)
+	snapshotDir := sc.GetSnapshotDir(did, clusterID, nodeID)
 	if err := fileutil.MkdirAll(snapshotDir); err != nil {
 		return "", err
 	}
@@ -204,13 +204,13 @@ func (sc *Context) PrepareSnapshotDir(deploymentID uint64,
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
 func (sc *Context) CheckNodeHostDir(did uint64,
-	addr string, ldbBinVer uint32) error {
+	addr string, binVer uint32) error {
 	dirs, lldirs := sc.GetLogDBDirs(did)
 	for i := 0; i < len(dirs); i++ {
-		if err := sc.exclusiveAccessTo(dirs[i], did, addr, ldbBinVer); err != nil {
+		if err := sc.exclusiveAccessTo(dirs[i], did, addr, binVer); err != nil {
 			return err
 		}
-		if err := sc.exclusiveAccessTo(lldirs[i], did, addr, ldbBinVer); err != nil {
+		if err := sc.exclusiveAccessTo(lldirs[i], did, addr, binVer); err != nil {
 			return err
 		}
 	}
@@ -279,7 +279,7 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 }
 
 func (sc *Context) exclusiveAccessTo(dir string,
-	deploymentID uint64, addr string, ldbBinVer uint32) error {
+	did uint64, addr string, ldbBinVer uint32) error {
 	fp := filepath.Join(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
@@ -301,6 +301,7 @@ func (sc *Context) exclusiveAccessTo(dir string,
 		if err != nil {
 			return err
 		}
+		plog.Infof("%s vs %s", status.Address, addr)
 		if !se(string(status.Address), addr) {
 			return ErrNotOwner
 		}

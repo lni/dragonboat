@@ -16,6 +16,7 @@ package server
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/lni/dragonboat/config"
@@ -27,6 +28,7 @@ import (
 
 const (
 	singleNodeHostTestDir = "test_nodehost_dir_safe_to_delete"
+	testBinVer            = raftio.LogDBBinVersion
 	testAddress           = "localhost:1111"
 	testDeploymentID      = 100
 )
@@ -40,7 +42,7 @@ func getTestNodeHostConfig() config.NodeHostConfig {
 	}
 }
 
-func TestNodeHostDirectoryWorksWhenEverythingMatches(t *testing.T) {
+func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		if r := recover(); r != nil {
@@ -66,16 +68,8 @@ func TestNodeHostDirectoryWorksWhenEverythingMatches(t *testing.T) {
 	ctx.CheckNodeHostDir(testDeploymentID, testAddress, raftio.LogDBBinVersion)
 }
 
-func TestNodeHostDirectoryDetectsMismatchedBinVer(t *testing.T) {
-	testNodeHostDirectoryDetectsMismatches(t, testAddress, raftio.LogDBBinVersion+1, ErrHardSettingsChanged)
-}
-
-func TestNodeHostDirectoryDetectsMismatchedAddress(t *testing.T) {
-	testNodeHostDirectoryDetectsMismatches(t, "invalid:12345", raftio.LogDBBinVersion, ErrNotOwner)
-}
-
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
-	addr string, binVer uint32, expErr error) {
+	addr string, binVer uint32, hardHashMismatch bool, expErr error) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	c := getTestNodeHostConfig()
 	ctx, err := NewContext(c)
@@ -85,15 +79,65 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	ctx.CreateNodeHostDir(testDeploymentID)
 	dirs, _ := ctx.GetLogDBDirs(testDeploymentID)
 	status := raftpb.RaftDataStatus{
-		Address: addr,
-		BinVer:  binVer,
+		Address:  addr,
+		BinVer:   binVer,
+		HardHash: settings.Hard.Hash(),
+	}
+	if hardHashMismatch {
+		status.HardHash = 0
 	}
 	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	err = ctx.CheckNodeHostDir(testDeploymentID, testAddress, binVer)
+	err = ctx.CheckNodeHostDir(testDeploymentID, testAddress, testBinVer)
+	plog.Infof("err: %v", err)
 	if err != expErr {
 		t.Errorf("expect err %v, got %v", expErr, err)
+	}
+}
+
+func TestCanDetectMismatchedBinVer(t *testing.T) {
+	testNodeHostDirectoryDetectsMismatches(t,
+		testAddress, raftio.LogDBBinVersion+1, false, ErrIncompatibleData)
+}
+
+func TestCanDetectMismatchedAddress(t *testing.T) {
+	testNodeHostDirectoryDetectsMismatches(t,
+		"invalid:12345", raftio.LogDBBinVersion, false, ErrNotOwner)
+}
+
+func TestCanDetectMismatchedHardHash(t *testing.T) {
+	testNodeHostDirectoryDetectsMismatches(t,
+		testAddress, raftio.LogDBBinVersion, true, ErrHardSettingsChanged)
+}
+
+func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	c := getTestNodeHostConfig()
+	ctx, err := NewContext(c)
+	if err != nil {
+		t.Fatalf("failed to new context %v", err)
+	}
+	ctx.CreateNodeHostDir(c.DeploymentID)
+	if err := ctx.LockNodeHostDir(c.DeploymentID); err != nil {
+		t.Fatalf("failed to lock the directory %v", err)
+	}
+	for fp, _ := range ctx.flocks {
+		if filepath.Base(fp) != lockFilename {
+			t.Fatalf("not the lock file")
+		}
+		fl := fileutil.New(fp)
+		locked, err := fl.TryLock()
+		if err != nil {
+			t.Fatalf("try lock failed %v", err)
+		}
+		if locked {
+			t.Fatalf("managed to lock the file again")
+		}
+	}
+	ctx.Stop()
+	if err := ctx.LockNodeHostDir(c.DeploymentID); err != nil {
+		t.Fatalf("failed to lock the directory %v", err)
 	}
 }
