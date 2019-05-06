@@ -51,7 +51,7 @@ func checkAllShards(dirs []string, lldirs []string) (bool, error) {
 		if len(lldirs) > 0 {
 			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := checkRDB(dir, lldir)
+		batched, err := hasBatchedRecord(dir, lldir)
 		if err != nil {
 			return false, err
 		}

@@ -50,7 +50,28 @@ type rdb struct {
 	entries entryManager
 }
 
-func checkRDB(dir string, wal string) (bool, error) {
+func hasEntryRecord(kvs IKvStore, batched bool) (bool, error) {
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	if !batched {
+		fk.SetEntryKey(0, 0, 0)
+		lk.SetEntryKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	} else {
+		fk.SetEntryBatchKey(0, 0, 0)
+		lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	}
+	located := false
+	op := func(key []byte, data []byte) (bool, error) {
+		located = true
+		return false, nil
+	}
+	if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+		return false, err
+	}
+	return located, nil
+}
+
+func hasBatchedRecord(dir string, wal string) (bool, error) {
 	kvs, err := newKVStore(dir, wal)
 	if err != nil {
 		return false, err
@@ -60,19 +81,7 @@ func checkRDB(dir string, wal string) (bool, error) {
 			panic(err)
 		}
 	}()
-	fk := newKey(entryKeySize, nil)
-	lk := newKey(entryKeySize, nil)
-	fk.SetEntryBatchKey(0, 0, 0)
-	lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
-	batched := false
-	op := func(key []byte, data []byte) (bool, error) {
-		batched = true
-		return false, nil
-	}
-	if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
-		return false, err
-	}
-	return batched, nil
+	return hasEntryRecord(kvs, true)
 }
 
 func openRDB(dir string, wal string, batched bool) (*rdb, error) {
@@ -97,26 +106,8 @@ func openRDB(dir string, wal string, batched bool) (*rdb, error) {
 }
 
 func (r *rdb) selfCheckFailed() (bool, error) {
-	fk := newKey(entryKeySize, nil)
-	lk := newKey(entryKeySize, nil)
-	_, ok := r.entries.(*batchedEntries)
-	if ok {
-		fk.SetEntryKey(0, 0, 0)
-		lk.SetEntryKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
-	} else {
-		fk.SetEntryBatchKey(0, 0, 0)
-		lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
-	}
-	located := false
-	op := func(key []byte, data []byte) (bool, error) {
-		located = true
-		return false, nil
-	}
-	if err := r.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
-		return false, err
-	}
-	plog.Infof("self check result: %t", located)
-	return located, nil
+	_, batched := r.entries.(*batchedEntries)
+	return hasEntryRecord(r.kvs, !batched)
 }
 
 func (r *rdb) binaryFormat() uint32 {

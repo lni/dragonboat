@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/internal/utils/leaktest"
+	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func TestKVCanBeCreatedAndClosed(t *testing.T) {
@@ -40,10 +41,12 @@ func runKVTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
 	if err != nil {
 		t.Fatalf("failed to open kv rocksdb")
 	}
+	defer func() {
+		if err := kvs.Close(); err != nil {
+			t.Fatalf("failed to close kvs %v", err)
+		}
+	}()
 	tf(t, kvs)
-	if err := kvs.Close(); err != nil {
-		t.Errorf("failed to close kv rocksdb")
-	}
 }
 
 func TestKVGetAndSet(t *testing.T) {
@@ -184,6 +187,74 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 				return nil
 			}); err != nil {
 			t.Fatalf("get value failed %v", err)
+		}
+	}
+	runKVTest(t, tf)
+}
+
+func TestHasEntryRecord(t *testing.T) {
+	tf := func(t *testing.T, kvs IKvStore) {
+		has, err := hasEntryRecord(kvs, true)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if has {
+			t.Errorf("unexpected result")
+		}
+		has, err = hasEntryRecord(kvs, false)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if has {
+			t.Errorf("unexpected result")
+		}
+		eb := pb.EntryBatch{}
+		data, err := eb.Marshal()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		k := newKey(entryKeySize, nil)
+		k.SetEntryBatchKey(1, 1, 1)
+		if err := kvs.SaveValue(k.Key(), data); err != nil {
+			t.Fatalf("failed to save entry batch")
+		}
+		has, err = hasEntryRecord(kvs, true)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if !has {
+			t.Errorf("unexpected result")
+		}
+		has, err = hasEntryRecord(kvs, false)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if has {
+			t.Errorf("unexpected result")
+		}
+		ent := pb.Entry{}
+		data, err = ent.Marshal()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		k = newKey(entryKeySize, nil)
+		k.SetEntryKey(1, 1, 1)
+		if err := kvs.SaveValue(k.Key(), data); err != nil {
+			t.Fatalf("failed to save entry batch")
+		}
+		has, err = hasEntryRecord(kvs, true)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if !has {
+			t.Errorf("unexpected result")
+		}
+		has, err = hasEntryRecord(kvs, false)
+		if err != nil {
+			t.Fatalf("hasEntryRecord failed %v", err)
+		}
+		if !has {
+			t.Errorf("unexpected result")
 		}
 	}
 	runKVTest(t, tf)
