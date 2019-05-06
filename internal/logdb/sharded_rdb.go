@@ -44,14 +44,44 @@ type ShardedRDB struct {
 	stopper              *syncutil.Stopper
 }
 
+func checkAllShards(dirs []string, lldirs []string) (bool, error) {
+	for i := uint64(0); i < numOfRocksDBInstance; i++ {
+		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
+		lldir := ""
+		if len(lldirs) > 0 {
+			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
+		}
+		batched, err := checkRDB(dir, lldir)
+		if err != nil {
+			return false, err
+		}
+		if batched {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // OpenShardedRDB creates a ShardedRDB instance.
 func OpenShardedRDB(dirs []string,
-	lldirs []string, batched bool) (*ShardedRDB, error) {
+	lldirs []string, batched bool, check bool) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("Using batched ShardedRDB")
 	} else {
 		plog.Infof("Using plain ShardedRDB")
+	}
+	if check && batched {
+		panic("check && batched both set to true")
+	}
+	var err error
+	if check {
+		plog.Infof("checking all LogDB shards...")
+		batched, err = checkAllShards(dirs, lldirs)
+		if err != nil {
+			return nil, err
+		}
+		plog.Infof("all shards checked, batched: %t", batched)
 	}
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
@@ -96,17 +126,16 @@ func (mw *ShardedRDB) BinaryFormat() uint32 {
 // SelfCheckFailed runs a self check on all db shards and report whether any
 // failure is observed.
 func (mw *ShardedRDB) SelfCheckFailed() (bool, error) {
-	hadFailure := false
 	for _, shard := range mw.shards {
 		failed, err := shard.selfCheckFailed()
 		if err != nil {
 			return false, err
 		}
 		if failed {
-			hadFailure = true
+			return true, nil
 		}
 	}
-	return hadFailure, nil
+	return false, nil
 }
 
 // GetLogDBThreadContext return a IContext instance.

@@ -34,7 +34,7 @@ func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	lld := filepath.Join(RDBTestDirectory, lldir)
 	os.MkdirAll(d, 0777)
 	os.MkdirAll(lld, 0777)
-	db, err := openLogDB([]string{d}, []string{lld}, batched)
+	db, err := openLogDB([]string{d}, []string{lld}, batched, false)
 	if err != nil {
 		panic(err)
 	}

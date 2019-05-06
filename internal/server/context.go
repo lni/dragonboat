@@ -43,7 +43,7 @@ var (
 	ErrHardSettingsChanged = errors.New("settings in internal/settings/hard.go changed")
 	// ErrIncompatibleData indicates that the configured data directory contains
 	// incompatible data.
-	ErrIncompatibleData = errors.New("Incompatible data")
+	ErrIncompatibleData = errors.New("Incompatible LogDB data format")
 	// ErrLogDBBrokenChange indicates that you NodeHost failed to be created as
 	// your code is hit by the LogDB broken change introduced in v3.0. Set your
 	// onfig.NodeHostConfig.LogDBFactory to dragonboat.OpenBatchedLogDB to
@@ -301,7 +301,6 @@ func (sc *Context) exclusiveAccessTo(dir string,
 		if err != nil {
 			return err
 		}
-		plog.Infof("%s vs %s", status.Address, addr)
 		if !se(string(status.Address), addr) {
 			return ErrNotOwner
 		}

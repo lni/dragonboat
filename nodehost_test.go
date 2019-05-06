@@ -2480,3 +2480,88 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		t.Fatalf("failed to return ErrIncompatibleData")
 	}
 }
+
+func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		rc := config.Config{
+			NodeID:       1,
+			ClusterID:    1,
+			ElectionRTT:  5,
+			HeartbeatRTT: 1,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &PST{}
+		}
+		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		cs := nh.GetNoOPSession(1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+	}()
+	nhc.LogDBFactory = OpenBatchedLogDB
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrIncompatibleData {
+		t.Fatalf("failed to return server.ErrIncompatibleData")
+	}
+}
+
+func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   OpenBatchedLogDB,
+	}
+	tf := func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		rc := config.Config{
+			NodeID:       1,
+			ClusterID:    1,
+			ElectionRTT:  5,
+			HeartbeatRTT: 1,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &PST{}
+		}
+		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		cs := nh.GetNoOPSession(1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+	}
+	tf()
+	nhc.LogDBFactory = nil
+	tf()
+}

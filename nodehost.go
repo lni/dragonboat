@@ -178,9 +178,19 @@ type NodeHostInfo struct {
 
 // OpenBatchedLogDB is the factory function that creates an batched ILogDB
 // instance that has higher throughput at the cost of higher memory usage.
+// Set OpenBatchedLogDB to the LogDBFactory field of the NodeHostConfig
+// instance to use it.
 func OpenBatchedLogDB(dirs []string,
 	lowLatencyDirs []string) (raftio.ILogDB, error) {
 	return logdb.OpenBatchedLogDB(dirs, lowLatencyDirs)
+}
+
+// OpenPlainLogDB is the factory function that creates a plain ILogDB instance
+// that has slightly lower throughput at lower memory usage. Set OpenPlainLogDB
+// to the LogDBFactory field of the NodeHostConfig instance to use it.
+func OpenPlainLogDB(dirs []string,
+	lowLatencyDirs []string) (raftio.ILogDB, error) {
+	return logdb.OpenPlainLogDB(dirs, lowLatencyDirs)
 }
 
 // NodeHost manages Raft clusters and enables them to share resources such as
@@ -322,7 +332,7 @@ func (nh *NodeHost) Stop() {
 	} else {
 		// in standalone mode, when Stop() is called in the same goroutine as
 		// NewNodeHost, is nh.longdb == nil above is not going to happen
-		plog.Warningf("logdb not closed")
+		plog.Warningf("logdb is nil")
 	}
 	plog.Debugf("logdb closed, %s is now stopped", nh.describe())
 	nh.serverCtx.Stop()
@@ -1273,6 +1283,11 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		return err
 	}
 	binVersion := ldb.BinaryFormat()
+	err = nh.serverCtx.CheckNodeHostDir(did,
+		nh.nhConfig.RaftAddress, binVersion)
+	if err != nil {
+		return err
+	}
 	nh.logdb = ldb
 	shardedrdb, ok := ldb.(*logdb.ShardedRDB)
 	if ok {
@@ -1283,11 +1298,6 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		if failed {
 			return server.ErrLogDBBrokenChange
 		}
-	}
-	err = nh.serverCtx.CheckNodeHostDir(did,
-		nh.nhConfig.RaftAddress, binVersion)
-	if err != nil {
-		return err
 	}
 	plog.Infof("logdb type name: %s", ldb.Name())
 	return nil

@@ -50,6 +50,31 @@ type rdb struct {
 	entries entryManager
 }
 
+func checkRDB(dir string, wal string) (bool, error) {
+	kvs, err := newKVStore(dir, wal)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if err := kvs.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryBatchKey(0, 0, 0)
+	lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	batched := false
+	op := func(key []byte, data []byte) (bool, error) {
+		batched = true
+		return false, nil
+	}
+	if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+		return false, err
+	}
+	return batched, nil
+}
+
 func openRDB(dir string, wal string, batched bool) (*rdb, error) {
 	kvs, err := newKVStore(dir, wal)
 	if err != nil {
@@ -76,8 +101,8 @@ func (r *rdb) selfCheckFailed() (bool, error) {
 	lk := newKey(entryKeySize, nil)
 	_, ok := r.entries.(*batchedEntries)
 	if ok {
-		fk.SetEntryBatchKey(0, 0, 0)
-		lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+		fk.SetEntryKey(0, 0, 0)
+		lk.SetEntryKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
 	} else {
 		fk.SetEntryBatchKey(0, 0, 0)
 		lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
@@ -90,6 +115,7 @@ func (r *rdb) selfCheckFailed() (bool, error) {
 	if err := r.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
 		return false, err
 	}
+	plog.Infof("self check result: %t", located)
 	return located, nil
 }
 

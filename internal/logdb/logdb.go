@@ -51,17 +51,23 @@ func checkDirs(dirs []string, lldirs []string) {
 
 // OpenLogDB opens a plain LogDB instance using the default implementation.
 func OpenLogDB(dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lowLatencyDirs, false)
+	return openLogDB(dirs, lowLatencyDirs, false, true)
 }
 
 // OpenBatchedLogDB opens a batched LogDB instance.
 func OpenBatchedLogDB(dirs []string,
 	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lowLatencyDirs, true)
+	return openLogDB(dirs, lowLatencyDirs, true, false)
+}
+
+// OpenPlainLogDB opens a plain LogDB instance.
+func OpenPlainLogDB(dirs []string,
+	lowLatencyDirs []string) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lowLatencyDirs, false, false)
 }
 
 func openLogDB(dirs []string,
-	lowLatencyDirs []string, batched bool) (raftio.ILogDB, error) {
+	lowLatencyDirs []string, batched bool, check bool) (raftio.ILogDB, error) {
 	checkDirs(dirs, lowLatencyDirs)
 	llDirRequired := len(lowLatencyDirs) == 1
 	if len(dirs) == 1 {
@@ -72,5 +78,5 @@ func openLogDB(dirs []string,
 			}
 		}
 	}
-	return OpenShardedRDB(dirs, lowLatencyDirs, batched)
+	return OpenShardedRDB(dirs, lowLatencyDirs, batched, check)
 }
