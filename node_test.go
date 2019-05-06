@@ -788,7 +788,10 @@ func TestProposalsWithCorruptedSessionWillPanic(t *testing.T) {
 				t.Errorf("panic not triggered")
 			}
 		}()
-		n.propose(s1, nil, nil, time.Second)
+		_, err := n.propose(s1, nil, nil, time.Second)
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
 	}
 	runRaftNodeTest(t, false, tf)
 }

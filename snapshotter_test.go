@@ -123,7 +123,9 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to create test file")
 		}
-		f.Write(make([]byte, 12))
+		if _, err := f.Write(make([]byte, 12)); err != nil {
+			t.Fatalf("write failed %v", err)
+		}
 		f.Close()
 		if err = s.Commit(ss, rsm.SnapshotRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)

@@ -105,6 +105,36 @@ func (rn *node) GetInMemLogSize() uint64 {
 	return rn.node.GetInMemLogSize()
 }
 
+func (rc *node) getStateMachineHash() uint64 {
+	return rc.sm.GetHash()
+}
+
+func (rc *node) getSessionHash() uint64 {
+	return rc.sm.GetSessionHash()
+}
+
+func (rc *node) getMembershipHash() uint64 {
+	return rc.sm.GetMembershipHash()
+}
+
+func (rc *node) dumpRaftInfoToLog() {
+	if rc.node != nil {
+		addrMap := make(map[uint64]string)
+		nodes, _, _, _ := rc.sm.GetMembership()
+		for nodeID := range nodes {
+			if nodeID == rc.nodeID {
+				addrMap[nodeID] = rc.raftAddress
+			} else {
+				v, _, err := rc.nodeRegistry.Resolve(rc.clusterID, nodeID)
+				if err == nil {
+					addrMap[nodeID] = v
+				}
+			}
+		}
+		rc.node.DumpRaftInfoToLog(addrMap)
+	}
+}
+
 // Set how many snapshot worker to use in step engine. This function is
 // expected to be called only during monkeytest, it doesn't exist when the
 // monkeytest tag is not set.

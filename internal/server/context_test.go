@@ -123,7 +123,7 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	if err := ctx.LockNodeHostDir(c.DeploymentID); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
-	for fp, _ := range ctx.flocks {
+	for fp := range ctx.flocks {
 		if filepath.Base(fp) != lockFilename {
 			t.Fatalf("not the lock file")
 		}

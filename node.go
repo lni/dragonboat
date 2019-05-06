@@ -596,10 +596,9 @@ func (rc *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	var err error
 	if rec.InitialSnapshot && rc.OnDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", rc.describe())
-		index, err = rc.sm.OpenOnDiskStateMachine()
+		_, err = rc.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
-			plog.Infof("%s aborted its RecoverFromSnapshot when opening its SM",
-				rc.describe())
+			plog.Infof("%s aborted OpenOnDiskStateMachine", rc.describe())
 			return 0, true
 		}
 		if err != nil {
@@ -1121,36 +1120,6 @@ func (rc *node) isFollower() bool {
 		}
 	}
 	return false
-}
-
-func (rc *node) getStateMachineHash() uint64 {
-	return rc.sm.GetHash()
-}
-
-func (rc *node) getSessionHash() uint64 {
-	return rc.sm.GetSessionHash()
-}
-
-func (rc *node) getMembershipHash() uint64 {
-	return rc.sm.GetMembershipHash()
-}
-
-func (rc *node) dumpRaftInfoToLog() {
-	if rc.node != nil {
-		addrMap := make(map[uint64]string)
-		nodes, _, _, _ := rc.sm.GetMembership()
-		for nodeID := range nodes {
-			if nodeID == rc.nodeID {
-				addrMap[nodeID] = rc.raftAddress
-			} else {
-				v, _, err := rc.nodeRegistry.Resolve(rc.clusterID, nodeID)
-				if err == nil {
-					addrMap[nodeID] = v
-				}
-			}
-		}
-		rc.node.DumpRaftInfoToLog(addrMap)
-	}
 }
 
 func (rc *node) increaseReadReqCount() {

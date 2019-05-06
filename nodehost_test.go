@@ -154,7 +154,12 @@ func ExampleNodeHost_ReadIndex(nh *NodeHost) {
 	} else if s.Completed() {
 		// the ReadIndex operation completed. the local IStateMachine is ready to be
 		// queried
-		nh.ReadLocalNode(rs, data)
+		result, err := nh.ReadLocalNode(rs, data)
+		if err != nil {
+			return
+		}
+		// use query result here
+		_ = result
 	} else if s.Terminated() {
 		// the ReadIndex operation terminated as the system is being shut down,
 		// time to exit
@@ -248,7 +253,11 @@ func ExampleNodeHost_GetNewSession(ctx context.Context, nh *NodeHost) {
 		// again later.
 		return
 	}
-	defer nh.CloseSession(ctx, cs)
+	defer func() {
+		if err := nh.CloseSession(ctx, cs); err != nil {
+			log.Printf("close session failed %v\n", err)
+		}
+	}()
 	// make a proposal with the proposal content "test-data", timeout is set to
 	// 2000 milliseconds.
 	rs, err := nh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
@@ -427,12 +436,11 @@ var (
 )
 
 type PST struct {
-	mu                      sync.Mutex
-	stopped                 bool
-	saved                   bool
-	restored                bool
-	slowSave                bool
-	saveSnapshotCanComplete bool
+	mu       sync.Mutex
+	stopped  bool
+	saved    bool
+	restored bool
+	slowSave bool
 }
 
 func (n *PST) setRestored(v bool) {
@@ -1481,6 +1489,9 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 				continue
 			}
 			snapshots, err := logdb.ListSnapshots(1, 1)
+			if err != nil {
+				t.Fatalf("list snapshot failed %v", err)
+			}
 			if len(snapshots) > 0 {
 				snapshotted = true
 				ss = snapshots[0]
@@ -1535,6 +1546,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				continue
 			}
 			snapshots, err := logdb.ListSnapshots(1, 1)
+			if err != nil {
+				t.Fatalf("list snapshot failed %v", err)
+			}
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				break
@@ -1577,6 +1591,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				continue
 			}
 			snapshots, err := logdb.ListSnapshots(1, 2)
+			if err != nil {
+				t.Fatalf("list snapshot failed %v", err)
+			}
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				for _, ss := range snapshots {
@@ -1609,7 +1626,10 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 			for i := 0; i < 10000; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				session := nh.GetNoOPSession(clusterID)
-				nh.SyncPropose(ctx, session, []byte("test"))
+				_, err := nh.SyncPropose(ctx, session, []byte("test"))
+				if err != nil {
+					t.Fatalf("failed to make proposal %v", err)
+				}
 				cancel()
 				if atomic.LoadUint32(&count) > 0 {
 					return
@@ -1709,7 +1729,10 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 			for i := 0; i < 100; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				session := nh.GetNoOPSession(1)
-				nh.SyncPropose(ctx, session, []byte("test"))
+				_, err := nh.SyncPropose(ctx, session, []byte("test"))
+				if err != nil {
+					log.Printf("failed to make proposal %v\n", err)
+				}
 				cancel()
 				if atomic.LoadUint32(&failed) == 1 {
 					return
@@ -1845,7 +1868,7 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 		if result.Value != uint64(1518) {
 			t.Errorf("unexpected result value")
 		}
-		if bytes.Compare(result.Data, cmd) != 0 {
+		if !bytes.Equal(result.Data, cmd) {
 			t.Errorf("unexpected result data")
 		}
 	}
@@ -1871,9 +1894,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to add observer %v", err)
 		}
-		select {
-		case <-rs.CompletedC:
-		}
+		<-rs.CompletedC
 		if err := nh2.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
 			t.Errorf("failed to start observer %v", err)
 		}
@@ -1909,23 +1930,19 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		select {
-		case v := <-sr.CompleteC:
-			if !v.Completed() {
-				t.Errorf("failed to complete the requested snapshot")
-			}
-			index = v.GetIndex()
+		v := <-sr.CompleteC
+		if !v.Completed() {
+			t.Errorf("failed to complete the requested snapshot")
 		}
+		index = v.GetIndex()
 		plog.Infof("going to request snapshot again")
 		sr, err = nh.RequestSnapshot(2, 3*time.Second)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
-		select {
-		case v := <-sr.CompleteC:
-			if !v.Rejected() {
-				t.Errorf("failed to complete the requested snapshot")
-			}
+		v = <-sr.CompleteC
+		if !v.Rejected() {
+			t.Errorf("failed to complete the requested snapshot")
 		}
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1)
@@ -1979,11 +1996,9 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	plog.Infof("going to wait for snapshot request to complete")
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Timeout() {
-			t.Errorf("failed to report timeout")
-		}
+	v := <-sr.CompleteC
+	if !v.Timeout() {
+		t.Errorf("failed to report timeout")
 	}
 }
 
@@ -2010,13 +2025,13 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
-		select {
-		case v := <-sr.CompleteC:
-			if !v.Completed() {
-				t.Errorf("failed to complete the requested snapshot")
-			}
+		v := <-sr.CompleteC
+		if !v.Completed() {
+			t.Errorf("failed to complete the requested snapshot")
 		}
-		nh.StopCluster(2)
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to stop cluster %v", err)
+		}
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1)
 		if err != nil {
@@ -2099,13 +2114,11 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		select {
-		case v := <-sr.CompleteC:
-			if !v.Completed() {
-				t.Fatalf("failed to complete the requested snapshot")
-			}
-			index = v.GetIndex()
+		v := <-sr.CompleteC
+		if !v.Completed() {
+			t.Fatalf("failed to complete the requested snapshot")
 		}
+		index = v.GetIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1)
 		if err != nil {
@@ -2140,13 +2153,11 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
 		var index uint64
-		select {
-		case v := <-sr.CompleteC:
-			if !v.Completed() {
-				t.Fatalf("failed to complete the requested snapshot")
-			}
-			index = v.GetIndex()
+		v := <-sr.CompleteC
+		if !v.Completed() {
+			t.Fatalf("failed to complete the requested snapshot")
 		}
+		index = v.GetIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(1, 1)
 		if err != nil {
@@ -2255,13 +2266,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		t.Fatalf("failed to request snapshot %v", err)
 	}
 	var index uint64
-	select {
-	case v := <-sr.CompleteC:
-		if !v.Completed() {
-			t.Fatalf("failed to complete the requested snapshot")
-		}
-		index = v.GetIndex()
+	v := <-sr.CompleteC
+	if !v.Completed() {
+		t.Fatalf("failed to complete the requested snapshot")
 	}
+	index = v.GetIndex()
 	plog.Infof("exported snapshot index %d", index)
 	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 	dir := path.Join(sspath, snapshotDir)

@@ -125,7 +125,7 @@ func BenchmarkPropose16(b *testing.B) {
 	benchmarkProposeN(b, 16)
 }
 
-func BenchmarPropose128(b *testing.B) {
+func BenchmarkPropose128(b *testing.B) {
 	benchmarkProposeN(b, 128)
 }
 

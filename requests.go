@@ -379,9 +379,7 @@ func (p *pendingSnapshot) close() {
 	p.snapshotC = nil
 	if p.pending != nil {
 		r := SnapshotResult{code: requestTerminated}
-		select {
-		case p.pending.CompleteC <- r:
-		}
+		p.pending.CompleteC <- r
 		p.pending = nil
 	}
 }
@@ -432,9 +430,7 @@ func (p *pendingSnapshot) gc() {
 	p.lastGcTime = now
 	if p.pending.deadline < now {
 		r := SnapshotResult{code: requestTimeout}
-		select {
-		case p.pending.CompleteC <- r:
-		}
+		p.pending.CompleteC <- r
 		p.pending = nil
 	}
 }
@@ -453,9 +449,7 @@ func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
 			r.code = requestCompleted
 			r.index = index
 		}
-		select {
-		case p.pending.CompleteC <- r:
-		}
+		p.pending.CompleteC <- r
 		p.pending = nil
 	}
 }
