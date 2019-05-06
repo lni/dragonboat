@@ -1282,13 +1282,13 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	if err != nil {
 		return err
 	}
+	nh.logdb = ldb
 	binVersion := ldb.BinaryFormat()
 	err = nh.serverCtx.CheckNodeHostDir(did,
 		nh.nhConfig.RaftAddress, binVersion)
 	if err != nil {
 		return err
 	}
-	nh.logdb = ldb
 	shardedrdb, ok := ldb.(*logdb.ShardedRDB)
 	if ok {
 		failed, err := shardedrdb.SelfCheckFailed()
