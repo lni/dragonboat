@@ -57,7 +57,9 @@ func TestOnDiskSMCanNotBeOpenedMoreThanOnce(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Open(nil)
+	if _, err := od.Open(nil); err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 }
 
 func TestOnDiskSMRecordAppliedIndex(t *testing.T) {
@@ -147,7 +149,9 @@ func TestLookupCalledBeforeOnDiskSMIsOpenedWillPanic(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Lookup(nil)
+	if _, err := od.Lookup(nil); err != nil {
+		t.Fatalf("lookup failed %v", err)
+	}
 }
 
 func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
@@ -196,5 +200,7 @@ func TestRecoverFromSnapshotWillPanicWhenIndexIsLessThanApplied(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.RecoverFromSnapshot(applied-1, reader, nil, stopc)
+	if err := od.RecoverFromSnapshot(applied-1, reader, nil, stopc); err != nil {
+		t.Fatalf("recover failed %v", err)
+	}
 }

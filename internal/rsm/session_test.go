@@ -135,7 +135,9 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx], Data: cmd})
 		}
 		snapshot := &bytes.Buffer{}
-		s.save(snapshot)
+		if _, err := s.save(snapshot); err != nil {
+			t.Fatalf("save failed %v", err)
+		}
 		data := snapshot.Bytes()
 		toRecover := bytes.NewBuffer(data)
 		newS := &Session{}

@@ -137,11 +137,15 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 		oldList = append(oldList, *key)
 	})
 	snapshot := &bytes.Buffer{}
-	m.save(snapshot)
+	if _, err := m.save(snapshot); err != nil {
+		t.Fatalf("save failed %v", err)
+	}
 	data := snapshot.Bytes()
 	toRecover := bytes.NewBuffer(data)
 	newLRUSession := newLRUSession(5)
-	newLRUSession.load(toRecover, V2SnapshotVersion)
+	if err := newLRUSession.load(toRecover, V2SnapshotVersion); err != nil {
+		t.Fatalf("load failed %v", err)
+	}
 	newList := make([]RaftClientID, 0)
 	newLRUSession.sessions.OrderedDo(func(k, v interface{}) {
 		key := k.(*RaftClientID)
@@ -203,12 +207,16 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 		m.addSession(i, *s)
 	}
 	snapshot := &bytes.Buffer{}
-	m.save(snapshot)
+	if _, err := m.save(snapshot); err != nil {
+		t.Fatalf("save failed %v", err)
+	}
 	data := snapshot.Bytes()
 	toRecover := bytes.NewBuffer(data)
 	// set to a different size value
 	newLRUSession := newLRUSession(5)
-	newLRUSession.load(toRecover, V2SnapshotVersion)
+	if err := newLRUSession.load(toRecover, V2SnapshotVersion); err != nil {
+		t.Fatalf("load failed %v", err)
+	}
 	oldHash := m.getHash()
 	newHash := newLRUSession.getHash()
 	if oldHash != newHash {

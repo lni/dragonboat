@@ -135,7 +135,9 @@ func (r *rdb) listNodeInfo() ([]raftio.NodeInfo, error) {
 		ni = append(ni, raftio.GetNodeInfo(cid, nid))
 		return true, nil
 	}
-	r.kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+	if err := r.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+		return []raftio.NodeInfo{}, err
+	}
 	return ni, nil
 }
 
@@ -355,7 +357,9 @@ func (r *rdb) listSnapshots(clusterID uint64,
 		snapshots = append(snapshots, ss)
 		return true, nil
 	}
-	r.kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+	if err := r.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+		return []pb.Snapshot{}, err
+	}
 	return snapshots, nil
 }
 

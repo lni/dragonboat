@@ -43,7 +43,9 @@ func removeTestDir() {
 
 func createTestDir() {
 	removeTestDir()
-	os.MkdirAll(testSnapshotterDir, 0755)
+	if err := os.MkdirAll(testSnapshotterDir, 0755); err != nil {
+		panic(err)
+	}
 }
 
 type testNodeProxy struct {
