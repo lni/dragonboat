@@ -8,9 +8,21 @@
 
 ## v3.0 测试版 ##
 
-本branch是dragonboat v3.0的测试版，用以提供给社区试用并测试新功能与改进，本branch不应该被用在任何生产环境。
+本branch是dragonboat v3.0的测试版，用以提供给社区试用并测试新功能与改进，本branch不应该被用在任何生产环境。本branch的一些主要改进有：
 
-欢迎对任何问题提出issues讨论。
+* 增加了对基于磁盘的状态机的支持
+* 支持发起请求以创建或导出指定节点的snapshot快照
+* 支持对已经移除的Raft节点的数据进行清理以释放空间
+* 支持通过使用已导出的snapshot快照对已经永久失去多数节点的Raft组进行修复
+* 增加了一个不使用batch批量存储Raft Log记录的LogDB类型，它较慢但使用极少内存
+* 状态机的Update()方法现在可以选择返回[]byte的结果
+* 状态机的SaveSnapshot()方法不再需要返回已写字节数
+* NewNodeHost()开始在出错无法创建NodeHost实例后返回error
+* drummer组件被移动到了internal包中，不再对外可见
+* C++支持被暂时移除了，后续以一个独立的github repo形式继续提供C++支持
+* dragonboat库的很多部分进行了重构
+
+请阅读代码并欢迎对任何问题提出issues讨论。
 
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。

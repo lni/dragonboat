@@ -8,9 +8,21 @@
 
 ## v3.0 beta ##
 
-This is a pre-release of dragonboat v3.0, it is provided for the community to review and test new features and changes. It should not be used in any production environment. 
+This is a pre-release of dragonboat v3.0, it is provided for the community to review and test new features and changes. It should not be used in any production environment. Some of the major changes are - 
 
-Please raise issues when you see anything broken or strange. 
+* disk based state machine with concurrent read/write access support has been added
+* added the ability to request a snapshot to be captured
+* added the ability to cleanup all data that belongs to a removed Raft node
+* added the feature to repair a Raft cluster that have its majority nodes permanently lost
+* added a new LogDB type that doesn't batch Raft entries, it has slightly lower throughput but uses less memory
+* the Update() method of a state machine is now allowed to return a []byte as the update result
+* the SaveSnapshot() method of a state machine is no longer required to return the number of bytes saved
+* NewNodeHost() now returns an error when it fails to create a new NodeHost instance
+* the drummer component has been moved into the internal package
+* the C++ binding support has been moved out of the dragonboat repo for now, it is waiting be moved into its own repo
+* many parts of the dragonboat library have been refactored
+
+Please help to review the above changes and raise issues when you see anything broken or strange. 
 
 ## About ##
 Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/) with [C++11 binding](/binding) support.
