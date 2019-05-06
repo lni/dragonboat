@@ -132,9 +132,6 @@ func (c *Config) Validate() error {
 	if c.NodeID <= 0 {
 		return errors.New("invalid NodeID, it must be >= 1")
 	}
-	if c.ClusterID < 0 {
-		return errors.New("invalid ClusterID")
-	}
 	if c.HeartbeatRTT <= 0 {
 		return errors.New("HeartbeatRTT must be > 0")
 	}
