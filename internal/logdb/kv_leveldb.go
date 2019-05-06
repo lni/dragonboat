@@ -65,6 +65,7 @@ type leveldbKV struct {
 	opts *levigo.Options
 	ro   *levigo.ReadOptions
 	wo   *levigo.WriteOptions
+	fp   *levigo.FilterPolicy
 }
 
 func openLevelDB(dir string, wal string) (*leveldbKV, error) {
@@ -86,6 +87,7 @@ func openLevelDB(dir string, wal string) (*leveldbKV, error) {
 		ro:   ro,
 		wo:   wo,
 		opts: opts,
+		fp:   filter,
 	}, nil
 }
 
@@ -106,6 +108,9 @@ func (r *leveldbKV) Close() error {
 	}
 	if r.opts != nil {
 		r.opts.Close()
+	}
+	if r.fp != nil {
+		r.fp.Close()
 	}
 	r.db = nil
 	return nil
