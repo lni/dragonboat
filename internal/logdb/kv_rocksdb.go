@@ -73,6 +73,7 @@ func getRocksDBOptions(directory string,
 		}
 	}
 	opts := gorocksdb.NewDefaultOptions()
+	opts.SetMaxManifestFileSize(1024 * 1024 * 128)
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
 	opts.SetUseFsync(true)
