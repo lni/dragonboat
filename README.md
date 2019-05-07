@@ -6,6 +6,10 @@
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+## News ##
+* 2019-05-07 [v3.0 beta](https://github.com/lni/dragonboat/tree/beta-release-3.0) is now available for review.
+* 2019-04-22 [v2.1.6](https://github.com/lni/dragonboat/releases) has been released. 
+
 ## About ##
 Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/) with [C++11 binding](/binding) support.
 

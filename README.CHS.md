@@ -6,6 +6,10 @@
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+## 项目动态 ##
+* 2019-05-07 [v3.0 beta](https://github.com/lni/dragonboat/tree/beta-release-3.0) 期待您的试用与反馈。
+* 2019-04-22 [v2.1.6](https://github.com/lni/dragonboat/releases) 已被发布。
+
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。
 
