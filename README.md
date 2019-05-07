@@ -15,12 +15,15 @@ This is a pre-release of dragonboat v3.0, it is provided for the community to re
 * added the ability to cleanup all data that belongs to a removed Raft node
 * added the feature to repair a Raft cluster that have its majority nodes permanently lost
 * added a new LogDB type that doesn't batch Raft entries, it has slightly lower throughput but uses less memory
+* added a memory usage limiter to control the maximum total size of in memory Raft Log entries
 * the Update() method of a state machine is now allowed to return a []byte as the update result
 * the SaveSnapshot() method of a state machine is no longer required to return the number of bytes saved
 * NewNodeHost() now returns an error when it fails to create a new NodeHost instance
 * the drummer component has been moved into the internal package
 * the C++ binding support has been moved out of the dragonboat repo for now, it is waiting be moved into its own repo
 * many parts of the dragonboat library have been refactored
+
+[Examples](https://github.com/lni/dragonboat-example/tree/on-disk-state-machine) have been updated to reflect the above changes. We've also added a new on disk state machine example. 
 
 Please help to review the above changes and raise issues when you see anything broken or strange. 
 
