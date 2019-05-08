@@ -90,7 +90,7 @@ int CNodeHostStartCluster(uint64_t oid,
 
 int CNodeHostStartClusterFromFactory(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, uint64_t factory, RaftConfig cfg)
+  Bool join, void *factory, RaftConfig cfg)
 {
   return NodeHostStartClusterFromFactory(oid, nodeIDList, nodeAddressList, nodeListLen,
     join, factory, cfg);

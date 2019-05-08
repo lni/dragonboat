@@ -342,7 +342,7 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
     i++;
   }
   int code = CNodeHostStartClusterFromFactory(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<uint64_t>(factory), cfg);
+    peers.Len(), join, reinterpret_cast<void *>(factory), cfg);
   return Status(code);
 }
 

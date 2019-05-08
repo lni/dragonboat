@@ -231,7 +231,7 @@ int CNodeHostStartCluster(uint64_t oid,
   Bool join, DBString pluginFilename, RaftConfig cfg);
 int CNodeHostStartClusterFromFactory(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, uint64_t factory, RaftConfig cfg);
+  Bool join, void *factory, RaftConfig cfg);
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID);
 NewSessionResult CNodeHostGetNewSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);

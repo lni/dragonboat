@@ -298,7 +298,7 @@ func NodeHostStartCluster(oid uint64,
 //export NodeHostStartClusterFromFactory
 func NodeHostStartClusterFromFactory(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, cfactory C.uint64_t, cfg C.RaftConfig) int {
+	joinPeer C.char, factory unsafe.Pointer, cfg C.RaftConfig) int {
 	c := config.Config{
 		NodeID:              uint64(cfg.NodeID),
 		ClusterID:           uint64(cfg.ClusterID),
@@ -313,7 +313,6 @@ func NodeHostStartClusterFromFactory(oid uint64,
 	}
 	join := charToBool(joinPeer)
 	peers := make(map[uint64]string)
-	factory := uint64(cfactory)
 	var nap unsafe.Pointer
 	var nidp unsafe.Pointer
 	nap = (unsafe.Pointer)(nodeAddressList)

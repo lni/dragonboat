@@ -200,10 +200,10 @@ func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
 // NewStateMachineFromFactoryWrapper creates and returns the new NewStateMachineWrapper
 // instance.
 func NewStateMachineFromFactoryWrapper(clusterID uint64, nodeID uint64,
-	factory uint64, done <-chan struct{}) rsm.IManagedStateMachine {
+	factory unsafe.Pointer, done <-chan struct{}) rsm.IManagedStateMachine {
 	cClusterID := C.uint64_t(clusterID)
 	cNodeID := C.uint64_t(nodeID)
-	cFactory := C.uint64_t(factory)
+	cFactory := factory
 	return &StateMachineWrapper{
 		dataStore:      C.CreateDBStateMachineFromFactory(cClusterID, cNodeID, cFactory),
 		done:           done,

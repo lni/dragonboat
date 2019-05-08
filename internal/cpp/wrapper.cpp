@@ -67,7 +67,7 @@ CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
 }
 
 CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
-  uint64_t nodeID, uint64_t factory)
+  uint64_t nodeID, void *factory)
 {
   auto fn = reinterpret_cast<CPPStateMachine *(*)(uint64_t, uint64_t)>(factory);
   CPPStateMachine *ds = (*fn)(clusterID, nodeID);
