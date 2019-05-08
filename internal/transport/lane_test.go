@@ -64,14 +64,14 @@ func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
+	if err := c.connect("a1"); err != nil {
+		t.Fatalf("connect failed %v", err)
+	}
 	stopper := syncutil.NewStopper()
 	var perr error
 	stopper.RunWorker(func() {
 		perr = c.process()
 	})
-	if err := c.connect("a1"); err != nil {
-		t.Fatalf("connect failed %v", err)
-	}
 	noopConn, ok := c.conn.(*NOOPSnapshotConnection)
 	if !ok {
 		t.Fatalf("failed to get noopConn")
