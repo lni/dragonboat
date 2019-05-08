@@ -88,6 +88,14 @@ int CNodeHostStartCluster(uint64_t oid,
     join, pluginFilename, cfg);
 }
 
+int CNodeHostStartClusterFromFactory(uint64_t oid,
+  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+  Bool join, uint64_t factory, RaftConfig cfg)
+{
+  return NodeHostStartClusterFromFactory(oid, nodeIDList, nodeAddressList, nodeListLen,
+    join, factory, cfg);
+}
+
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID)
 {
   return NodeHostStopCluster(oid, clusterID);

@@ -66,6 +66,14 @@ CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
   return ds;
 }
 
+CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
+  uint64_t nodeID, uint64_t factory)
+{
+  auto fn = reinterpret_cast<CPPStateMachine *(*)(uint64_t, uint64_t)>(factory);
+  CPPStateMachine *ds = (*fn)(clusterID, nodeID);
+  return ds;
+}
+
 void DestroyDBStateMachine(CPPStateMachine *ds)
 {
   delete ds->sm;

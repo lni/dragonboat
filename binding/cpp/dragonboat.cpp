@@ -317,6 +317,35 @@ Status NodeHost::StartCluster(const Peers& peers,
   return Status(code);
 }
 
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  CPPStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  cfg.NodeID = config.NodeId;
+  cfg.ClusterID = config.ClusterId;
+  cfg.IsObserver = config.IsObserver;
+  cfg.CheckQuorum = config.CheckQuorum;
+  cfg.Quiesce = config.Quiesce;
+  cfg.ElectionRTT = config.ElectionRTT;
+  cfg.HeartbeatRTT = config.HeartbeatRTT;
+  cfg.SnapshotEntries = config.SnapshotEntries;
+  cfg.CompactionOverhead = config.CompactionOverhead;
+  cfg.OrderedConfigChange = config.OrderedConfigChange;
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  auto members = peers.GetMembership();
+  int i = 0;
+  for (auto& kv : members) {
+    strs.get()[i] = toDBString(kv.first);
+    nodeIDList.get()[i] = kv.second;
+    i++;
+  }
+  int code = CNodeHostStartClusterFromFactory(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<uint64_t>(factory), cfg);
+  return Status(code);
+}
+
 Status NodeHost::StopCluster(ClusterID clusterID) noexcept
 {
   return Status(CNodeHostStopCluster(oid_, clusterID));

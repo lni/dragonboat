@@ -292,6 +292,46 @@ func NodeHostStartCluster(oid uint64,
 	return getErrorCode(err)
 }
 
+// NodeHostStartClusterFromFactory adds a new raft cluster node to be managed by the
+// specified NodeHost and start the node to make it ready to accept incoming
+// requests.
+//export NodeHostStartClusterFromFactory
+func NodeHostStartClusterFromFactory(oid uint64,
+	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
+	joinPeer C.char, cfactory C.uint64_t, cfg C.RaftConfig) int {
+	c := config.Config{
+		NodeID:              uint64(cfg.NodeID),
+		ClusterID:           uint64(cfg.ClusterID),
+		IsObserver:          cboolToBool(cfg.IsObserver),
+		CheckQuorum:         cboolToBool(cfg.CheckQuorum),
+		Quiesce:             cboolToBool(cfg.Quiesce),
+		ElectionRTT:         uint64(cfg.ElectionRTT),
+		HeartbeatRTT:        uint64(cfg.HeartbeatRTT),
+		SnapshotEntries:     uint64(cfg.SnapshotEntries),
+		CompactionOverhead:  uint64(cfg.CompactionOverhead),
+		OrderedConfigChange: cboolToBool(cfg.OrderedConfigChange),
+	}
+	join := charToBool(joinPeer)
+	peers := make(map[uint64]string)
+	factory := uint64(cfactory)
+	var nap unsafe.Pointer
+	var nidp unsafe.Pointer
+	nap = (unsafe.Pointer)(nodeAddressList)
+	nidp = (unsafe.Pointer)(nodeIDList)
+	addrListSz := unsafe.Sizeof(*nodeAddressList)
+	idListSz := unsafe.Sizeof(*nodeIDList)
+	for i := 0; i < int(nodeListLen); i++ {
+		curNodeAddressPointer := (*C.DBString)(unsafe.Pointer(uintptr(nap) + addrListSz*uintptr(i)))
+		curNodeIDListPointer := (*C.uint64_t)(unsafe.Pointer(uintptr(nidp) + idListSz*uintptr(i)))
+		nodeAddress := charArrayToString(curNodeAddressPointer.str, curNodeAddressPointer.len)
+		nodeID := uint64(*curNodeIDListPointer)
+		peers[nodeID] = nodeAddress
+	}
+	nh := getNodeHost(oid)
+	err := nh.StartClusterUsingFactory(peers, join, factory, c)
+	return getErrorCode(err)
+}
+
 // NodeHostStopCluster removes the specified raft cluster node from the
 // NodeHost instance and stops the running node.
 //export NodeHostStopCluster
