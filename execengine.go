@@ -122,8 +122,6 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 	return readyMap.getReadyClusters()
 }
 
-type sendLocalMessageFunc func(clusterID uint64, nodeID uint64)
-
 type execEngine struct {
 	nodeStopper                *syncutil.Stopper
 	taskStopper                *syncutil.Stopper
@@ -139,11 +137,10 @@ type execEngine struct {
 	snapshotWorkReady          *workReady
 	requestedSnapshotWorkReady *workReady
 	streamSnapshotWorkReady    *workReady
-	sendLocalMsg               sendLocalMessageFunc
 }
 
-func newExecEngine(nh nodeLoader, ctx *server.Context,
-	logdb raftio.ILogDB, sendLocalMsg sendLocalMessageFunc) *execEngine {
+func newExecEngine(nh nodeLoader,
+	ctx *server.Context, logdb raftio.ILogDB) *execEngine {
 	s := &execEngine{
 		nh:                         nh,
 		ctx:                        ctx,
@@ -159,7 +156,6 @@ func newExecEngine(nh nodeLoader, ctx *server.Context,
 		streamSnapshotWorkReady:    newWorkReady(snapshotWorkerCount),
 		ctxs:                       make([]raftio.IContext, workerCount),
 		profilers:                  make([]*profiler, workerCount),
-		sendLocalMsg:               sendLocalMsg,
 	}
 	sampleRatio := int64(delaySampleRatio / 10)
 	for i := uint64(1); i <= workerCount; i++ {
@@ -478,7 +474,8 @@ func (s *execEngine) execSMs(workerID uint64,
 			continue
 		}
 		task, snapshotRequired := node.handleTask(batch, entries)
-		// batched last applied might updated, give the node work a chance to run
+		// batched last applied value probably updated, give the node worker a
+		// chance to run
 		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
 			if node.ss.recoveringFromSnapshot() {
@@ -724,7 +721,7 @@ func resetNodeUpdate(nodeUpdates []pb.Update) {
 
 func (s *execEngine) processRaftUpdate(ud pb.Update) {
 	if ud.MoreCommittedEntries {
-		s.sendLocalMsg(ud.ClusterID, ud.NodeID)
+		s.setNodeReady(ud.ClusterID)
 	}
 }
 

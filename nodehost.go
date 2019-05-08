@@ -264,7 +264,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
-	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb, nh.sendNoOPMessage)
+	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
 	})
@@ -1515,20 +1515,6 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 	plog.Warningf("failed to send snapshot status to %s",
 		logutil.DescribeNode(clusterID, nodeID))
 	return true
-}
-
-func (nh *NodeHost) sendNoOPMessage(clusterID uint64, nodeID uint64) {
-	batch := pb.MessageBatch{
-		Requests: make([]pb.Message, 0),
-	}
-	msg := pb.Message{
-		Type:      pb.NoOP,
-		To:        nodeID,
-		From:      nodeID,
-		ClusterId: clusterID,
-	}
-	batch.Requests = append(batch.Requests, msg)
-	nh.msgHandler.HandleMessageBatch(batch)
 }
 
 func (nh *NodeHost) increaseTick() {

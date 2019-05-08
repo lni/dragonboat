@@ -48,45 +48,45 @@ var (
 )
 
 type node struct {
-	readReqCount         uint64
-	leaderID             uint64
-	instanceID           uint64
-	raftAddress          string
-	config               config.Config
-	confChangeC          <-chan configChangeRequest
-	snapshotC            <-chan rsm.SnapshotRequest
-	taskC                chan<- rsm.Task
-	mq                   *server.MessageQueue
-	lastApplied          uint64
-	confirmedLastApplied uint64
-	publishedIndex       uint64
-	taskReady            func(uint64)
-	sendRaftMessage      func(pb.Message)
-	sm                   *rsm.StateMachine
-	smType               pb.StateMachineType
-	incomingProposals    *entryQueue
-	incomingReadIndexes  *readIndexQueue
-	pendingProposals     *pendingProposal
-	pendingReadIndexes   *pendingReadIndex
-	pendingConfigChange  *pendingConfigChange
-	pendingSnapshot      *pendingSnapshot
-	raftMu               sync.Mutex
-	node                 *raft.Peer
-	logreader            *logdb.LogReader
-	logdb                raftio.ILogDB
-	snapshotter          *snapshotter
-	nodeRegistry         transport.INodeRegistry
-	stopc                chan struct{}
-	clusterInfo          atomic.Value
-	tickCount            uint64
-	expireNotified       uint64
-	tickMillisecond      uint64
-	snapshotShrink       *task
-	rateLimited          bool
-	closeOnce            sync.Once
-	ss                   *snapshotState
-	snapshotLock         *syncutil.Lock
-	initializedMu        struct {
+	readReqCount        uint64
+	leaderID            uint64
+	instanceID          uint64
+	raftAddress         string
+	config              config.Config
+	confChangeC         <-chan configChangeRequest
+	snapshotC           <-chan rsm.SnapshotRequest
+	taskC               chan<- rsm.Task
+	mq                  *server.MessageQueue
+	smAppliedIndex      uint64
+	confirmedIndex      uint64
+	publishedIndex      uint64
+	taskReady           func(uint64)
+	sendRaftMessage     func(pb.Message)
+	sm                  *rsm.StateMachine
+	smType              pb.StateMachineType
+	incomingProposals   *entryQueue
+	incomingReadIndexes *readIndexQueue
+	pendingProposals    *pendingProposal
+	pendingReadIndexes  *pendingReadIndex
+	pendingConfigChange *pendingConfigChange
+	pendingSnapshot     *pendingSnapshot
+	raftMu              sync.Mutex
+	node                *raft.Peer
+	logreader           *logdb.LogReader
+	logdb               raftio.ILogDB
+	snapshotter         *snapshotter
+	nodeRegistry        transport.INodeRegistry
+	stopc               chan struct{}
+	clusterInfo         atomic.Value
+	tickCount           uint64
+	expireNotified      uint64
+	tickMillisecond     uint64
+	snapshotShrink      *task
+	rateLimited         bool
+	closeOnce           sync.Once
+	ss                  *snapshotState
+	snapshotLock        *syncutil.Lock
+	initializedMu       struct {
 		sync.Mutex
 		initialized bool
 	}
@@ -660,8 +660,8 @@ func (rc *node) shrinkSnapshots() error {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
 		plog.Infof("%s will shrink snapshots up to %d",
-			rc.describe(), rc.lastApplied)
-		if err := rc.snapshotter.ShrinkSnapshots(rc.lastApplied); err != nil {
+			rc.describe(), rc.smAppliedIndex)
+		if err := rc.snapshotter.ShrinkSnapshots(rc.smAppliedIndex); err != nil {
 			return err
 		}
 	}
@@ -733,16 +733,16 @@ func (rc *node) sendReplicateMessages(ud pb.Update) {
 func (rc *node) getUpdate() (pb.Update, bool) {
 	moreEntriesToApply := rc.canHaveMoreEntriesToApply()
 	if rc.node.HasUpdate(moreEntriesToApply) ||
-		rc.confirmedLastApplied != rc.lastApplied {
-		if rc.lastApplied < rc.confirmedLastApplied {
+		rc.confirmedIndex != rc.smAppliedIndex {
+		if rc.smAppliedIndex < rc.confirmedIndex {
 			plog.Panicf("last applied value moving backwards, %d, now %d",
-				rc.confirmedLastApplied, rc.lastApplied)
+				rc.confirmedIndex, rc.smAppliedIndex)
 		}
-		ud := rc.node.GetUpdate(moreEntriesToApply, rc.lastApplied)
+		ud := rc.node.GetUpdate(moreEntriesToApply, rc.smAppliedIndex)
 		for idx := range ud.Messages {
 			ud.Messages[idx].ClusterId = rc.clusterID
 		}
-		rc.confirmedLastApplied = rc.lastApplied
+		rc.confirmedIndex = rc.smAppliedIndex
 		return ud, true
 	}
 	return pb.Update{}, false
@@ -808,10 +808,14 @@ func (rc *node) canHaveMoreEntriesToApply() bool {
 	return uint64(cap(rc.taskC)-len(rc.taskC)) > snapshotTaskCSlots
 }
 
+func (rc *node) hasEntryToApply() bool {
+	return rc.node.HasEntryToApply()
+}
+
 func (rc *node) updateBatchedLastApplied() uint64 {
-	rc.lastApplied = rc.sm.GetBatchedLastApplied()
-	rc.node.NotifyRaftLastApplied(rc.lastApplied)
-	return rc.lastApplied
+	rc.smAppliedIndex = rc.sm.GetBatchedLastApplied()
+	rc.node.NotifyRaftLastApplied(rc.smAppliedIndex)
+	return rc.smAppliedIndex
 }
 
 func (rc *node) stepNode() (pb.Update, bool) {
@@ -831,7 +835,10 @@ func (rc *node) stepNode() (pb.Update, bool) {
 func (rc *node) handleEvents() bool {
 	hasEvent := false
 	lastApplied := rc.updateBatchedLastApplied()
-	if lastApplied != rc.confirmedLastApplied {
+	if lastApplied != rc.confirmedIndex {
+		hasEvent = true
+	}
+	if rc.hasEntryToApply() {
 		hasEvent = true
 	}
 	if rc.handleReadIndexRequests() {

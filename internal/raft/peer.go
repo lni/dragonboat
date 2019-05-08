@@ -277,6 +277,10 @@ func (rc *Peer) NotifyRaftLastApplied(lastApplied uint64) {
 	rc.raft.setApplied(lastApplied)
 }
 
+func (rc *Peer) HasEntryToApply() bool {
+	return rc.entryLog().hasEntriesToApply()
+}
+
 func (rc *Peer) recordLeader(leaderID uint64) {
 	atomic.StoreUint64(&rc.leaderID, leaderID)
 }
