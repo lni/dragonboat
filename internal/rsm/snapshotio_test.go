@@ -84,6 +84,14 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	r.ValidateHeader(header)
+	if header.Version != uint64(CurrentSnapshotVersion) {
+		t.Errorf("invalid version %d, want %d",
+			header.Version, CurrentSnapshotVersion)
+	}
+	if header.ChecksumType != DefaultChecksumType {
+		t.Errorf("unexpected checksum type %d, want %d",
+			header.ChecksumType, DefaultChecksumType)
+	}
 	if header.SessionSize != uint64(len(sessionData)) {
 		t.Errorf("session data size mismatch")
 	}

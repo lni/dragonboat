@@ -2354,6 +2354,28 @@ func (s *testSink2) ToNodeID() uint64 {
 	return 300
 }
 
+type dataCorruptionSink struct {
+	receiver chunkReceiver
+	enabled  bool
+}
+
+func (s *dataCorruptionSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+	if s.enabled && len(chunk.Data) > 0 {
+		idx := rand.Uint64() % uint64(len(chunk.Data))
+		chunk.Data[idx] = byte(chunk.Data[idx] + 1)
+	}
+	s.receiver.AddChunk(chunk)
+	return true, false
+}
+
+func (s *dataCorruptionSink) ClusterID() uint64 {
+	return 2000
+}
+
+func (s *dataCorruptionSink) ToNodeID() uint64 {
+	return 300
+}
+
 type chunkReceiver interface {
 	AddChunk(chunk pb.SnapshotChunk) bool
 }
@@ -2366,12 +2388,52 @@ func getTestSnapshotMeta() *rsm.SnapshotMeta {
 	}
 }
 
+func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
+	enabled bool, exp uint64) {
+	os.RemoveAll(testSnapshotDir)
+	c := &chunks{}
+	cks := transport.NewSnapshotChunks(c.onReceive,
+		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
+	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
+	meta := getTestSnapshotMeta()
+	cw := rsm.NewChunkWriter(sink, meta)
+	_, err := cw.Write(rsm.GetEmptyLRUSession())
+	if err != nil {
+		t.Fatalf("failed to send LRU session %v", err)
+	}
+	defer os.RemoveAll(testSnapshotDir)
+	payload := make([]byte, 0)
+	payload = append(payload, rsm.GetEmptyLRUSession()...)
+	for i := 0; i < 10; i++ {
+		data := make([]byte, rsm.SnapshotChunkSize)
+		rand.Read(data)
+		payload = append(payload, data...)
+		if _, err := cw.Write(data); err != nil {
+			t.Fatalf("failed to write the data %v", err)
+		}
+	}
+	if err := cw.Flush(); err != nil {
+		t.Fatalf("failed to flush %v", err)
+	}
+	if c.received != exp {
+		t.Fatalf("unexpected received count: %d, want %d", c.received, exp)
+	}
+	if c.confirmed != exp {
+		t.Fatalf("unexpected confirmed count: %d, want %d", c.confirmed, exp)
+	}
+}
+
+func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
+	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, false, 1)
+	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, true, 0)
+}
+
 func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
-	chunks := transport.NewSnapshotChunks(c.onReceive,
+	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
-	sink := &testSink2{receiver: chunks}
+	sink := &testSink2{receiver: cks}
 	meta := getTestSnapshotMeta()
 	cw := rsm.NewChunkWriter(sink, meta)
 	_, err := cw.Write(rsm.GetEmptyLRUSession())
