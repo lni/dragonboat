@@ -21,6 +21,7 @@
 #include "zupply.h"
 #include "dragonboat/dragonboat.h"
 #include "gtest/gtest.h"
+#include "dragonboat/statemachine.h"
 
 class NodeHostTest : public ::testing::Test
 {
@@ -49,6 +50,7 @@ const std::string NodeHostTest::NodeHostTestDir2 = "nodehost_test_dir2_safe_to_d
 const std::string NodeHostTest::TestPluginFilename = "dragonboat-cpp-plugin-example.so";
 const std::string NodeHostTest::RaftAddress = "localhost:9050";
 const std::string NodeHostTest::RaftAddress2 = "localhost:9051";
+
 
 dragonboat::NodeHostConfig NodeHostTest::getTestNodeHostConfig()
 {
@@ -157,8 +159,8 @@ void NodeHostTest::TearDown()
 bool NodeHostTest::TwoNodeHostRequired()
 {
   std::string name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
-  if(name == "ObserverCanSyncPropose" ||
-     name == "ObserverCanReadIndex")
+  if(name.find("ObserverCanSyncPropose") != std::string::npos ||
+     name.find("ObserverCanReadIndex") != std::string::npos)
   {
     return true;
   }
@@ -876,4 +878,132 @@ TEST_F(NodeHostTest, ObserverCanReadIndex)
   dragonboat::Buffer result(128);
   s = nh2_->SyncRead(1, query, &result, timeout);
   EXPECT_TRUE(s.OK());
+}
+
+class InPlaceHelloWorldStateMachine : public dragonboat::StateMachine
+{
+  public:
+    InPlaceHelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept 
+    : dragonboat::StateMachine(clusterID, nodeID), update_count_(0) {}
+
+    ~InPlaceHelloWorldStateMachine() {}
+  protected:
+    uint64_t update(const dragonboat::Byte *data,
+      size_t size) noexcept override 
+    {
+      // increase the update_count_ value
+      update_count_++;
+      return update_count_;
+    }
+
+    LookupResult lookup(const dragonboat::Byte *data,
+      size_t size) const noexcept override
+    {
+      // return the update_count_ value
+      LookupResult r;
+      r.result = new char[sizeof(int)];
+      r.size = sizeof(int);
+      *((int *)r.result) = update_count_;
+      return r;
+    }
+
+    uint64_t getHash() const noexcept override
+    {
+      return (uint64_t)update_count_;
+    }
+
+    SnapshotResult saveSnapshot(dragonboat::SnapshotWriter *writer,
+      dragonboat::SnapshotFileCollection *collection,
+      const dragonboat::DoneChan &done) const noexcept override
+    {
+      SnapshotResult r;
+      dragonboat::IOResult ret;
+      r.error = SNAPSHOT_OK;
+      r.size = 0;
+      ret = writer->Write((dragonboat::Byte *)&update_count_, sizeof(int));
+      if (ret.size != sizeof(int)) {
+        r.error = FAILED_TO_SAVE_SNAPSHOT;
+        return r;
+      }
+      r.size = sizeof(int);
+      return r;
+    }
+
+    int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
+      const std::vector<dragonboat::SnapshotFile> &files,
+      const dragonboat::DoneChan &done) noexcept override
+    {
+      dragonboat::IOResult ret;
+      dragonboat::Byte data[sizeof(int)];
+      ret = reader->Read(data, sizeof(int));
+      if (ret.size != sizeof(int)) {
+        return FAILED_TO_RECOVER_FROM_SNAPSHOT;
+      }
+      update_count_ = (int)(*data);
+      return SNAPSHOT_OK;
+    }
+
+    void freeLookupResult(LookupResult r) noexcept override
+    {
+      delete[] r.result;
+    }
+  private:
+    DISALLOW_COPY_MOVE_AND_ASSIGN(InPlaceHelloWorldStateMachine);
+    int update_count_;
+};
+
+CPPStateMachine *CreateDragonboatFactoryStateMachine(uint64_t clusterID,
+  uint64_t nodeID)
+{
+  CPPStateMachine *cds = new CPPStateMachine; 
+  cds->sm = new InPlaceHelloWorldStateMachine(clusterID, nodeID);
+  return cds;
+}
+
+TEST_F(NodeHostTest, ClusterFromCppFactoryCanBeAddedAndRemoved)
+{ 
+	dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  dragonboat::Status s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
+	EXPECT_TRUE(s.OK());
+  s = nh_->StopCluster(1);
+  EXPECT_TRUE(s.OK());
+}
+
+TEST_F(NodeHostTest, ClusterFromCppFactoryCanNotBeAddedTwice)
+{
+	dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  dragonboat::Status s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
+	EXPECT_TRUE(s.OK());
+  s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
+  EXPECT_FALSE(s.OK()); 
+  EXPECT_EQ(s.Code(), dragonboat::Status::ErrClusterAlreadyExist);
+}
+
+TEST_F(NodeHostTest, ClusterFromCppFactoryProposalAndReadCanBeMade)
+{
+  auto config = getTestConfig();
+	dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
+  EXPECT_TRUE(s.OK());
+  auto timeout = dragonboat::Milliseconds(5000);
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  EXPECT_TRUE(s.OK());
+  dragonboat::Buffer buf(128);
+  for(int i = 0; i < 16; i++) {
+    dragonboat::UpdateResult code;
+    s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
+    EXPECT_EQ(code, uint64_t(i + 1));
+    EXPECT_TRUE(s.OK());
+    cs->ProposalCompleted();
+  }
+  dragonboat::Buffer query(128);
+  dragonboat::Buffer result(128);
+  dragonboat::Status readStatus = nh_->SyncRead(1, query, &result, timeout);
+  EXPECT_TRUE(readStatus.OK());
 }

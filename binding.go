@@ -18,6 +18,7 @@ package dragonboat
 
 import (
 	"time"
+	"unsafe"
 
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
@@ -91,6 +92,19 @@ func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
+	}
+	return nh.startCluster(nodes, join, cf, stopc, config)
+}
+
+// StartClusterUsingFactory adds a new cluster node to the NodeHost and start
+// running the new node. StartClusterUsingFactory requires the pointer to CPP
+// statemachine factory function.
+func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string,
+	join bool, factory unsafe.Pointer, config config.Config) error {
+	stopc := make(chan struct{})
+	cf := func(clusterID uint64, nodeID uint64,
+		done <-chan struct{}) rsm.IManagedStateMachine {
+		return cpp.NewStateMachineFromFactoryWrapper(clusterID, nodeID, factory, done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config)
 }

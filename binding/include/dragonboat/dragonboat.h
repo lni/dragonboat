@@ -37,6 +37,9 @@
 // - Users can not specify custom logger to use in C++ applications.
 //
 
+// Forward declaration
+struct CPPStateMachine;
+
 namespace dragonboat {
 
 using Byte = unsigned char;
@@ -386,6 +389,10 @@ class NodeHost : public ManagedObject
   //    leave replicas empty
   Status StartCluster(const Peers& replicas,
     bool join, std::string pluginFilepath, Config config) noexcept;
+
+  Status StartCluster(const Peers& replicas, bool join,
+    CPPStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    Config config) noexcept;
   // StopCluster removes the specified cluster node from NodeHost. Note that
   // StopCluster makes the specified node no longer managed by the NodeHost
   // instance, it won't do any membership change to the raft cluster itself.

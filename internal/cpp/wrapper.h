@@ -28,6 +28,8 @@ typedef struct CollectedFiles CollectedFiles;
 int IsValidDragonboatPlugin(char *soFilename);
 CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
   uint64_t nodeID, char *soFilename);
+CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
+  uint64_t nodeID, void *factory);
 void DestroyDBStateMachine(CPPStateMachine *ds);
 uint64_t UpdateDBStateMachine(CPPStateMachine *ds,
   const unsigned char *data, size_t size);
