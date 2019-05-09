@@ -63,6 +63,20 @@ Config::Config(ClusterID clusterId, NodeID nodeId) noexcept
 {
 }
 
+void parseConfig(const Config &config, ::RaftConfig &cfg) noexcept
+{
+  cfg.NodeID = config.NodeId;
+  cfg.ClusterID = config.ClusterId;
+  cfg.IsObserver = config.IsObserver;
+  cfg.CheckQuorum = config.CheckQuorum;
+  cfg.Quiesce = config.Quiesce;
+  cfg.ElectionRTT = config.ElectionRTT;
+  cfg.HeartbeatRTT = config.HeartbeatRTT;
+  cfg.SnapshotEntries = config.SnapshotEntries;
+  cfg.CompactionOverhead = config.CompactionOverhead;
+  cfg.OrderedConfigChange = config.OrderedConfigChange;
+}
+
 NodeHostConfig::NodeHostConfig(std::string WALDir,
   std::string NodeHostDir) noexcept
   : DeploymentID(1), WALDir(WALDir), NodeHostDir(NodeHostDir),
@@ -160,6 +174,17 @@ size_t Peers::Len() const noexcept {
 std::map<std::string, NodeID> Peers::GetMembership() const noexcept
 {
   return members_;
+}
+
+void parsePeers(const Peers &peers, ::DBString strs[], uint64_t nodeIDList[]) noexcept
+{
+  auto members = peers.GetMembership();
+  int i = 0;
+  for (auto& kv : members) {
+    strs[i] = toDBString(kv.first);
+    nodeIDList[i] = kv.second;
+    i++;
+  }
 }
 
 LeaderID::LeaderID() noexcept
@@ -293,27 +318,26 @@ Status NodeHost::StartCluster(const Peers& peers,
   bool join, std::string pluginFilename, Config config) noexcept
 {
   ::RaftConfig cfg;
-  cfg.NodeID = config.NodeId;
-  cfg.ClusterID = config.ClusterId;
-  cfg.IsObserver = config.IsObserver;
-  cfg.CheckQuorum = config.CheckQuorum;
-  cfg.Quiesce = config.Quiesce;
-  cfg.ElectionRTT = config.ElectionRTT;
-  cfg.HeartbeatRTT = config.HeartbeatRTT;
-  cfg.SnapshotEntries = config.SnapshotEntries;
-  cfg.CompactionOverhead = config.CompactionOverhead;
-  cfg.OrderedConfigChange = config.OrderedConfigChange;
+  parseConfig(config, cfg);
   std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
-  auto members = peers.GetMembership();
-  int i = 0;
-  for (auto& kv : members) {
-    strs.get()[i] = toDBString(kv.first);
-    nodeIDList.get()[i] = kv.second;
-    i++;
-  }
+  parsePeers(peers, strs.get(), nodeIDList.get());
   int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
     peers.Len(), join, toDBString(pluginFilename), cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  CPPStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartClusterFromFactory(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(factory), cfg);
   return Status(code);
 }
 

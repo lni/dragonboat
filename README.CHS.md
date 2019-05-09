@@ -25,7 +25,6 @@
 [例程](https://github.com/lni/dragonboat-example/tree/on-disk-state-machine)已根据上述改进而更新，同时增加了一个基于磁盘状态机的例子。
 请阅读代码并欢迎对任何问题提出issues讨论。
 
-
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。
 
