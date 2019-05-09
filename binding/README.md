@@ -24,9 +24,8 @@ $ make test-cppwrapper
 We also have an [example program](https://github.com/lni/dragonboat-example) showing how to use the C++11 binding.
 
 ## Status ##
-The C++ binding is in BETA status.
+The C++ binding is in BETA status. The limitations are:
 
-There are some minor limitations:
+* Currently targetting Dragonboat v2.1.x, v3.0 features are not supported.
 * Custom Log DB or Raft RPC modules are not supported.
 * Custom logger is not supported.
-* IConcurrentStateMachine and IOnDiskStateMachine are not supported.
