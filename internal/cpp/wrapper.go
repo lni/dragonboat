@@ -196,9 +196,8 @@ func NewStateMachineFromFactoryWrapper(clusterID uint64, nodeID uint64,
 	cNodeID := C.uint64_t(nodeID)
 	cFactory := factory
 	return &StateMachineWrapper{
-		dataStore:      C.CreateDBStateMachineFromFactory(cClusterID, cNodeID, cFactory),
-		done:           done,
-		SessionManager: rsm.NewSessionManager(),
+		dataStore: C.CreateDBStateMachineFromFactory(cClusterID, cNodeID, cFactory),
+		done:      done,
 	}
 }
 
