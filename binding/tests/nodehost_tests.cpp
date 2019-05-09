@@ -983,63 +983,7 @@ TEST_F(NodeHostTest, ClusterFromCppFactoryCanNotBeAddedTwice)
   EXPECT_EQ(s.Code(), dragonboat::Status::ErrClusterAlreadyExist);
 }
 
-TEST_F(NodeHostTest, FromCppFactoryJoiningWithPeerListIsNotAllowed)
-{
-  dragonboat::Peers p;
-  p.AddMember("localhost:9050", 1);
-  auto config = getTestConfig();
-  dragonboat::Status s = nh_->StartCluster(p, true, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_FALSE(s.OK());
-  EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
-}
-
-TEST_F(NodeHostTest, FromCppFactoryRestartingWithDifferentPeerSetIsNotAllowed)
-{
-  dragonboat::Peers p;
-  p.AddMember("localhost:9050", 1);
-  auto config = getTestConfig();
-  dragonboat::Status s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_TRUE(s.OK());
-  dragonboat::Peers p2;
-  p2.AddMember("localhost:9051", 1);
-  s = nh_->StopCluster(config.ClusterId);
-  EXPECT_TRUE(s.OK());
-  s = nh_->StartCluster(p2, false, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_FALSE(s.OK());
-  EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
-}
-
-TEST_F(NodeHostTest, FromCppFactoryJoinAnInitialPeerIsNotAllowed)
-{
-  dragonboat::Peers p;
-  p.AddMember("localhost:9050", 1);
-  auto config = getTestConfig();
-  dragonboat::Status s = nh_->StartCluster(p, false, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_TRUE(s.OK());
-  dragonboat::Peers p2;
-  s = nh_->StopCluster(config.ClusterId);
-  EXPECT_TRUE(s.OK());
-  s = nh_->StartCluster(p2, true, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_FALSE(s.OK());
-  EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
-}
-
-TEST_F(NodeHostTest, FromCppFactoryRestartPreviouslyJoinedNodeWithPeerSetIsNotAllowed)
-{
-  auto config = getTestConfig();
-  dragonboat::Peers p;
-  dragonboat::Status s = nh_->StartCluster(p, true, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_TRUE(s.OK());
-  s = nh_->StopCluster(config.ClusterId);
-  EXPECT_TRUE(s.OK());
-  dragonboat::Peers p2;
-  p2.AddMember("localhost:9050", 1); 
-  s = nh_->StartCluster(p2, false, CreateDragonboatFactoryStateMachine, config);
-  EXPECT_FALSE(s.OK());
-  EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
-}
-
-TEST_F(NodeHostTest, FromCppFactoryProposalAndReadCanBeMade)
+TEST_F(NodeHostTest, ClusterFromCppFactoryProposalAndReadCanBeMade)
 {
   auto config = getTestConfig();
 	dragonboat::Peers p;

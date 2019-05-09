@@ -259,37 +259,8 @@ func StopNodeHost(oid uint64) {
 func NodeHostStartCluster(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
 	joinPeer C.char, pluginFilename C.DBString, cfg C.RaftConfig) int {
-	c := config.Config{
-		NodeID:              uint64(cfg.NodeID),
-		ClusterID:           uint64(cfg.ClusterID),
-		IsObserver:          cboolToBool(cfg.IsObserver),
-		CheckQuorum:         cboolToBool(cfg.CheckQuorum),
-		Quiesce:             cboolToBool(cfg.Quiesce),
-		ElectionRTT:         uint64(cfg.ElectionRTT),
-		HeartbeatRTT:        uint64(cfg.HeartbeatRTT),
-		SnapshotEntries:     uint64(cfg.SnapshotEntries),
-		CompactionOverhead:  uint64(cfg.CompactionOverhead),
-		OrderedConfigChange: cboolToBool(cfg.OrderedConfigChange),
-	}
-	join := charToBool(joinPeer)
-	pfn := charArrayToString(pluginFilename.str, pluginFilename.len)
-	peers := make(map[uint64]string)
-	var nap unsafe.Pointer
-	var nidp unsafe.Pointer
-	nap = (unsafe.Pointer)(nodeAddressList)
-	nidp = (unsafe.Pointer)(nodeIDList)
-	addrListSz := unsafe.Sizeof(*nodeAddressList)
-	idListSz := unsafe.Sizeof(*nodeIDList)
-	for i := 0; i < int(nodeListLen); i++ {
-		curNodeAddressPointer := (*C.DBString)(unsafe.Pointer(uintptr(nap) + addrListSz*uintptr(i)))
-		curNodeIDListPointer := (*C.uint64_t)(unsafe.Pointer(uintptr(nidp) + idListSz*uintptr(i)))
-		nodeAddress := charArrayToString(curNodeAddressPointer.str, curNodeAddressPointer.len)
-		nodeID := uint64(*curNodeIDListPointer)
-		peers[nodeID] = nodeAddress
-	}
-	nh := getNodeHost(oid)
-	err := nh.StartClusterUsingPlugin(peers, join, pfn, c)
-	return getErrorCode(err)
+	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
+		joinPeer, unsafe.Pointer(nil), pluginFilename, cfg)
 }
 
 // NodeHostStartClusterFromFactory adds a new raft cluster node to be managed by the
@@ -299,6 +270,14 @@ func NodeHostStartCluster(oid uint64,
 func NodeHostStartClusterFromFactory(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
 	joinPeer C.char, factory unsafe.Pointer, cfg C.RaftConfig) int {
+	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
+		joinPeer, factory, C.DBString{}, cfg)
+}
+
+func nodeHostStartCluster(oid uint64,
+	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
+	joinPeer C.char, factory unsafe.Pointer, pluginFilename C.DBString,
+	cfg C.RaftConfig) int {
 	c := config.Config{
 		NodeID:              uint64(cfg.NodeID),
 		ClusterID:           uint64(cfg.ClusterID),
@@ -327,7 +306,13 @@ func NodeHostStartClusterFromFactory(oid uint64,
 		peers[nodeID] = nodeAddress
 	}
 	nh := getNodeHost(oid)
-	err := nh.StartClusterUsingFactory(peers, join, factory, c)
+	var err error
+	if factory != unsafe.Pointer(nil) {
+		err = nh.StartClusterUsingFactory(peers, join, factory, c)
+	} else {
+		err = nh.StartClusterUsingPlugin(peers,
+			join, charArrayToString(pluginFilename.str, pluginFilename.len), c)
+	}
 	return getErrorCode(err)
 }
 
