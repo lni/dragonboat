@@ -101,9 +101,9 @@ import (
 const (
 	unmanagedDeploymentID uint64 = transport.UnmanagedDeploymentID
 	// DragonboatMajor is the major version number
-	DragonboatMajor = 2
+	DragonboatMajor = 3
 	// DragonboatMinor is the minor version number
-	DragonboatMinor = 2
+	DragonboatMinor = 0
 	// DragonboatPatch is the patch version number
 	DragonboatPatch = 0
 	// DEVVersion is a boolean flag indicating whether this is a dev version
