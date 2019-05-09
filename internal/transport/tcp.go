@@ -340,8 +340,6 @@ type TCPTransport struct {
 func NewTCPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
 	sinkFactory raftio.ChunkSinkFactory) raftio.IRaftRPC {
-	plog.Infof("Using the default TCP RPC, switch to gRPC based RPC module " +
-		"(github.com/lni/dragonboat/plugin/rpc) for HTTP2 based transport")
 	chunks := sinkFactory()
 	stopper := syncutil.NewStopper()
 	stopper.RunWorker(func() {

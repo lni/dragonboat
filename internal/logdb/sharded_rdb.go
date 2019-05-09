@@ -67,9 +67,9 @@ func OpenShardedRDB(dirs []string,
 	lldirs []string, batched bool, check bool) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
-		plog.Infof("Using batched ShardedRDB")
+		plog.Infof("using batched ShardedRDB")
 	} else {
-		plog.Infof("Using plain ShardedRDB")
+		plog.Infof("using plain ShardedRDB")
 	}
 	if check && batched {
 		panic("check && batched both set to true")

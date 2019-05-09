@@ -204,7 +204,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 			t.snapshotReceived, t.getDeploymentID, t.snapshotLocator)
 	}
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, sinkFactory)
-	plog.Infof("Raft RPC type: %s", raftRPC.Name())
+	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC
 	if err := t.raftRPC.Start(); err != nil {
 		plog.Errorf("transport rpc failed to start %v", err)

@@ -252,7 +252,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	}
 	did := unmanagedDeploymentID
 	if nhConfig.DeploymentID == 0 {
-		plog.Warningf("DeploymentID not set in NodeHostConfig")
+		plog.Warningf("DeploymentID not set in NodeHostConfig, default to %d",
+			transport.UnmanagedDeploymentID)
 		nh.transport.SetUnmanagedDeploymentID()
 	} else {
 		did = nhConfig.DeploymentID
@@ -1146,7 +1147,6 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
 	// bootstrap the cluster by recording a bootstrap info rec into the LogDB
-	plog.Infof("%d, %d, binfo: %+v", config.ClusterID, config.NodeID, binfo)
 	if err == raftio.ErrNoBootstrapInfo {
 		plog.Infof("no bootstrap info")
 		var members map[uint64]string
@@ -1299,7 +1299,6 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 			return server.ErrLogDBBrokenChange
 		}
 	}
-	plog.Infof("logdb type name: %s", ldb.Name())
 	return nil
 }
 

@@ -72,7 +72,7 @@ func LaunchPeer(config *config.Config, logdb ILogDB,
 	if newNode && !config.IsObserver {
 		r.becomeFollower(1, NoLeader)
 	}
-	plog.Infof("LaunchPeer %s, lastIndex %d, initial %t, newNode %t",
+	plog.Infof("raft node created, %s, lastIndex %d, initial %t, newNode %t",
 		r.describe(), lastIndex, initial, newNode)
 	if initial && newNode {
 		bootstrap(r, addresses)

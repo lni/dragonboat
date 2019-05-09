@@ -491,7 +491,7 @@ func (rc *node) replayLog(clusterID uint64, nodeID uint64) bool {
 		panic(err)
 	}
 	if rs.State != nil {
-		plog.Infof("%s logdb ents sz %d commit %d term %d",
+		plog.Infof("%s logdb entries size %d commit %d term %d",
 			rc.describe(), rs.EntryCount, rs.State.Commit, rs.State.Term)
 		rc.logreader.SetState(*rs.State)
 	}
