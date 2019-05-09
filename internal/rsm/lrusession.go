@@ -21,12 +21,19 @@ import (
 	"io"
 	"sync"
 
+	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/cache"
 )
 
 const (
 	// EmptyClientSessionLength defines the length of an empty sessions instance.
 	EmptyClientSessionLength uint64 = 16
+)
+
+var (
+	// LRUMaxSessionCount is the largest number of client sessions that can be
+	// concurrently managed by a LRUSession instance.
+	LRUMaxSessionCount = settings.Hard.LRUMaxSessionCount
 )
 
 // GetEmptyLRUSession returns an marshaled empty sessions instance.
