@@ -20,7 +20,6 @@
 * 状态机的SaveSnapshot()方法不再需要返回已写字节数
 * NewNodeHost()开始在出错无法创建NodeHost实例后返回error
 * drummer组件被移动到了internal包中，不再对外可见
-* C++支持被暂时移除了，后续以一个独立的github repo形式继续提供C++支持
 * dragonboat库的很多部分进行了重构
 
 [例程](https://github.com/lni/dragonboat-example/tree/on-disk-state-machine)已根据上述改进而更新，同时增加了一个基于磁盘状态机的例子。

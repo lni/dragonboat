@@ -20,7 +20,6 @@ This is a pre-release of dragonboat v3.0, it is provided for the community to re
 * the SaveSnapshot() method of a state machine is no longer required to return the number of bytes saved
 * NewNodeHost() now returns an error when it fails to create a new NodeHost instance
 * the drummer component has been moved into the internal package
-* the C++ binding support has been moved out of the dragonboat repo for now, it is waiting be moved into its own repo
 * many parts of the dragonboat library have been refactored
 
 [Examples](https://github.com/lni/dragonboat-example/tree/on-disk-state-machine) have been updated to reflect the above changes. We've also added a new on disk state machine example. 
