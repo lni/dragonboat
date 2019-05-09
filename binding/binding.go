@@ -57,8 +57,6 @@ type CompleteHandlerType int
 const (
 	// CompleteHandlerCPP is the completion handler type for C++.
 	CompleteHandlerCPP = iota
-	// CompleteHandlerPython is the completion handler type for Python.
-	CompleteHandlerPython
 )
 
 var completeHandlerPool = &sync.Pool{}
@@ -177,19 +175,17 @@ func SetLogLevel(packageName C.DBString, level int) int {
 func SelectOnRequestStateForMembershipChange(rsoid uint64) int {
 	rs := getRequestState(rsoid)
 	var err error
-	select {
-	case r := <-rs.CompletedC:
-		if r.Completed() {
-			err = nil
-		} else if r.Timeout() {
-			err = dragonboat.ErrTimeout
-		} else if r.Terminated() {
-			err = dragonboat.ErrClusterClosed
-		} else if r.Rejected() {
-			err = dragonboat.ErrRejected
-		} else {
-			panic("unknown code")
-		}
+	r := <-rs.CompletedC
+	if r.Completed() {
+		err = nil
+	} else if r.Timeout() {
+		err = dragonboat.ErrTimeout
+	} else if r.Terminated() {
+		err = dragonboat.ErrClusterClosed
+	} else if r.Rejected() {
+		err = dragonboat.ErrRejected
+	} else {
+		panic("unknown code")
 	}
 	return getErrorCode(err)
 }
@@ -497,8 +493,8 @@ func readIndex(oid uint64,
 
 // NodeHostReadLocal makes a local read on the specified StateMachine.
 //export NodeHostReadLocal
-func NodeHostReadLocal(oid uint64, clusterID uint64,
-	queryBuf *C.uchar, queryLen C.size_t,
+func NodeHostReadLocal(oid uint64,
+	clusterID uint64, queryBuf *C.uchar, queryLen C.size_t,
 	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
 	nh := getNodeHost(oid)
 	query := ucharToByte(queryBuf, queryLen)

@@ -277,6 +277,8 @@ func (rc *Peer) NotifyRaftLastApplied(lastApplied uint64) {
 	rc.raft.setApplied(lastApplied)
 }
 
+// HasEntryToApply returns a boolean flag indicating whether there are more
+// entries ready to be applied.
 func (rc *Peer) HasEntryToApply() bool {
 	return rc.entryLog().hasEntriesToApply()
 }

@@ -2402,12 +2402,9 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 		t.Fatalf("failed to send LRU session %v", err)
 	}
 	defer os.RemoveAll(testSnapshotDir)
-	payload := make([]byte, 0)
-	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.SnapshotChunkSize)
 		rand.Read(data)
-		payload = append(payload, data...)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}

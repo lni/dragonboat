@@ -187,8 +187,12 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	if ldb == nil {
 		nodeLogDir := filepath.Join(raftTestTopDir, logdbDir)
 		nodeLowLatencyLogDir := filepath.Join(raftTestTopDir, lowLatencyLogDBDir)
-		os.MkdirAll(nodeLogDir, 0755)
-		os.MkdirAll(nodeLowLatencyLogDir, 0755)
+		if err := os.MkdirAll(nodeLogDir, 0755); err != nil {
+			panic(err)
+		}
+		if err := os.MkdirAll(nodeLowLatencyLogDir, 0755); err != nil {
+			panic(err)
+		}
 		ldb, err = logdb.OpenLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir})
 		if err != nil {
 			plog.Panicf("failed to open logdb, %v", err)
@@ -200,7 +204,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		// create the snapshotter object
 		nodeSnapDir := fmt.Sprintf(snapDir, testClusterID, i)
 		snapdir := filepath.Join(raftTestTopDir, nodeSnapDir)
-		os.MkdirAll(snapdir, 0755)
+		if err := os.MkdirAll(snapdir, 0755); err != nil {
+			panic(err)
+		}
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}

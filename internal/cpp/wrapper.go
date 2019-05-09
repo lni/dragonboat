@@ -174,14 +174,6 @@ type StateMachineWrapper struct {
 	mu        sync.RWMutex
 }
 
-func isValidCPPPlugin(soFilepath string) bool {
-	fn := fmt.Sprintf("./%s", soFilepath)
-	soName := C.CString(fn)
-	defer C.free(unsafe.Pointer(soName))
-	v := C.IsValidDragonboatPlugin(soName)
-	return C.int(v) == 0
-}
-
 // NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
 // instance.
 func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
@@ -232,8 +224,7 @@ func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
 // Update updates the data store.
 func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) sm.Result {
 	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	dp = nil
+	var dp *C.uchar = nil
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
@@ -252,8 +243,7 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	dp = nil
+	var dp *C.uchar = nil
 	if len(data) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 	}
