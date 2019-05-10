@@ -16,6 +16,7 @@ package rsm
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1403,5 +1404,105 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 		if result != tt.result {
 			t.Errorf("%d failed", idx)
 		}
+	}
+}
+
+func TestRecoverSMRequired(t *testing.T) {
+	tests := []struct {
+		onDisk      bool
+		dummy       bool
+		shrinked    bool
+		init        bool
+		index       uint64
+		diskSMIndex uint64
+		required    bool
+	}{
+		{true, true, true, true, 100, 100, false},
+		{true, true, true, true, 200, 100, false},
+		{true, true, true, true, 100, 200, false},
+		{true, true, true, false, 100, 100, false},
+		{true, true, true, false, 200, 100, false},
+		{true, true, true, false, 100, 200, false},
+		{true, true, false, true, 100, 100, false},
+		{true, true, false, true, 200, 100, false},
+		{true, true, false, true, 100, 200, false},
+		{true, true, false, false, 100, 100, false},
+		{true, true, false, false, 200, 100, false},
+		{true, true, false, false, 100, 200, false},
+
+		{true, false, true, true, 100, 100, false},
+		{true, false, true, true, 200, 100, false},
+		{true, false, true, true, 100, 200, false},
+		{true, false, true, false, 100, 100, false},
+		{true, false, true, false, 200, 100, false},
+		{true, false, true, false, 100, 200, false},
+		{true, false, false, true, 100, 100, false},
+		{true, false, false, true, 200, 100, true},
+		{true, false, false, true, 100, 200, false},
+		{true, false, false, false, 100, 100, true},
+		{true, false, false, false, 200, 100, true},
+		{true, false, false, false, 100, 200, true},
+	}
+	for idx, tt := range tests {
+		func() {
+			defer os.RemoveAll(testSnapshotterDir)
+			os.RemoveAll(testSnapshotterDir)
+			os.MkdirAll(testSnapshotterDir, 0755)
+			snapshotter := newTestSnapshotter()
+			sm := &StateMachine{
+				snapshotter: snapshotter,
+				onDiskSM:    tt.onDisk,
+				diskSMIndex: tt.diskSMIndex,
+			}
+			fp := snapshotter.GetFilePath(tt.index)
+			if tt.shrinked {
+				fp = fp + ".tmp"
+			}
+			w, err := NewSnapshotWriter(fp, CurrentSnapshotVersion)
+			if err != nil {
+				t.Fatalf("failed to create snapshot writer %v", err)
+			}
+			sessionData := make([]byte, testSessionSize)
+			storeData := make([]byte, testPayloadSize)
+			rand.Read(sessionData)
+			rand.Read(storeData)
+			n, err := w.Write(sessionData)
+			if err != nil || n != len(sessionData) {
+				t.Fatalf("failed to write the session data")
+			}
+			m, err := w.Write(storeData)
+			if err != nil || m != len(storeData) {
+				t.Fatalf("failed to write the store data")
+			}
+			if err := w.Flush(); err != nil {
+				t.Fatalf("%v", err)
+			}
+			if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
+				t.Fatalf("%v", err)
+			}
+			err = w.Close()
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			if tt.shrinked {
+				if err := ShrinkSnapshot(fp, snapshotter.GetFilePath(tt.index)); err != nil {
+					t.Fatalf("failed to shrink %v", err)
+				}
+			}
+			ss := pb.Snapshot{
+				Dummy: tt.dummy,
+				Index: tt.index,
+			}
+			defer func() {
+				if tt.onDisk && !tt.dummy && !tt.init && tt.shrinked {
+					if r := recover(); r == nil {
+						t.Fatalf("not panic")
+					}
+				}
+			}()
+			if res := sm.recoverSMRequired(ss, tt.init); res != tt.required {
+				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
+			}
+		}()
 	}
 }

@@ -227,22 +227,21 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	if ss.Dummy {
 		return false
 	}
+	// just a self test to see whether it is trying to recover from a shrinked
+	// snapshot
 	fn := s.snapshotter.GetFilePath(ss.Index)
 	shrinked, err := IsShrinkedSnapshotFile(fn)
 	if err != nil {
 		panic(err)
 	}
-	if init && shrinked {
-		return false
-	}
 	if !init && shrinked {
 		panic("not initial recovery but snapshot shrinked")
 	}
-	// FIXME:
-	// this is probably very wrong
-	if init && ss.Index > s.diskSMIndex {
-		plog.Infof("initial recover, ss index %d, disk %d", ss.Index, s.diskSMIndex)
-		return true
+	if init {
+		if shrinked {
+			return false
+		}
+		return ss.Index > s.diskSMIndex
 	}
 	return true
 }

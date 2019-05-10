@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	testSessionSize      uint64 = 4
+	testSessionSize      uint64 = 16
 	testPayloadSize      uint64 = 8
 	testSnapshotFilename        = "testsnapshot_safe_to_delete.tmp"
 )
