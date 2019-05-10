@@ -70,6 +70,20 @@ type IManagedStateMachine interface {
 	StateMachineType() pb.StateMachineType
 }
 
+type countedWriter struct {
+	w     io.Writer
+	total uint64
+}
+
+func (cw *countedWriter) Write(data []byte) (int, error) {
+	n, err := cw.w.Write(data)
+	if err != nil {
+		return 0, err
+	}
+	cw.total = cw.total + uint64(n)
+	return n, nil
+}
+
 // ManagedStateMachineFactory is the factory function type for creating an
 // IManagedStateMachine instance.
 type ManagedStateMachineFactory func(clusterID uint64,
@@ -209,6 +223,9 @@ func (ds *NativeStateMachine) SaveSnapshot(meta *SnapshotMeta,
 
 func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
 	session []byte) (uint64, error) {
+	if ds.sm.StateMachineType() != pb.OnDiskStateMachine {
+		panic("saveDummySnapshot called on non OnDiskStateMachine")
+	}
 	_, err := writer.Write(session)
 	if err != nil {
 		return 0, err
@@ -216,10 +233,11 @@ func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
 	if err = writer.Flush(); err != nil {
 		return 0, err
 	}
-	if err := writer.SaveHeader(16, 0); err != nil {
+	sz := EmptyClientSessionLength
+	if err := writer.SaveHeader(sz, 0); err != nil {
 		return 0, err
 	}
-	return writer.GetPayloadSize(16) + SnapshotHeaderSize, nil
+	return writer.GetPayloadSize(sz) + SnapshotHeaderSize, nil
 }
 
 func (ds *NativeStateMachine) saveSnapshot(
@@ -258,7 +276,6 @@ func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
 func (ds *NativeStateMachine) RecoverFromSnapshot(index uint64,
-	reader *SnapshotReader,
-	files []sm.SnapshotFile) error {
+	reader *SnapshotReader, files []sm.SnapshotFile) error {
 	return ds.sm.RecoverFromSnapshot(index, reader, files, ds.done)
 }
