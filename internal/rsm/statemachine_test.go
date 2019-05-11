@@ -16,6 +16,7 @@ package rsm
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1504,5 +1505,134 @@ func TestRecoverSMRequired(t *testing.T) {
 				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
 			}
 		}()
+	}
+}
+
+func TestReadyToStreamSnapshot(t *testing.T) {
+	tests := []struct {
+		onDisk      bool
+		index       uint64
+		diskSMIndex uint64
+		ready       bool
+	}{
+		{true, 100, 100, true},
+		{true, 200, 100, true},
+		{true, 100, 200, false},
+		{false, 100, 100, true},
+		{false, 200, 100, true},
+		{false, 100, 200, true},
+	}
+	for idx, tt := range tests {
+		sm := &StateMachine{
+			onDiskSM:    tt.onDisk,
+			index:       tt.index,
+			diskSMIndex: tt.diskSMIndex,
+		}
+		if result := sm.ReadyToStreamSnapshot(); result != tt.ready {
+			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
+		}
+	}
+}
+
+func TestUpdateLastApplied(t *testing.T) {
+	tests := []struct {
+		index uint64
+		term  uint64
+		crash bool
+	}{
+		{0, 100, true},
+		{101, 0, true},
+		{100, 100, true},
+		{101, 100, false},
+		{100, 90, true},
+		{100, 101, true},
+		{100, 110, true},
+	}
+	for idx, tt := range tests {
+		sm := &StateMachine{index: 100, term: 100}
+		if tt.crash {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("no panic")
+				}
+			}()
+		}
+		sm.updateLastApplied(tt.index, tt.term)
+		if sm.index != tt.index {
+			t.Errorf("%d, index not updated", idx)
+		}
+		if sm.term != tt.term {
+			t.Errorf("%d, term not updated", idx)
+		}
+	}
+}
+
+type testManagedStateMachine struct {
+	first uint64
+	last  uint64
+}
+
+func (t *testManagedStateMachine) Open() (uint64, error)                 { return 0, nil }
+func (t *testManagedStateMachine) Update(*Session, pb.Entry) sm.Result   { return sm.Result{} }
+func (t *testManagedStateMachine) Lookup([]byte) ([]byte, error)         { return nil, nil }
+func (t *testManagedStateMachine) GetHash() uint64                       { return 0 }
+func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
+	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
+	return false, 0, nil
+}
+func (t *testManagedStateMachine) RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error {
+	return nil
+}
+func (t *testManagedStateMachine) StreamSnapshot(interface{}, io.Writer) error { return nil }
+func (t *testManagedStateMachine) Offloaded(From)                              {}
+func (t *testManagedStateMachine) Loaded(From)                                 {}
+func (t *testManagedStateMachine) ConcurrentSnapshot() bool                    { return false }
+func (t *testManagedStateMachine) OnDiskStateMachine() bool                    { return false }
+func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType       { return 0 }
+func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) []sm.Entry {
+	t.first = ents[0].Index
+	t.last = ents[len(ents)-1].Index
+	return ents
+}
+
+func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
+	tests := []struct {
+		diskSMIndex  uint64
+		index        uint64
+		first        uint64
+		last         uint64
+		firstApplied uint64
+		lastApplied  uint64
+	}{
+		{100, 50, 51, 60, 0, 0},
+		{100, 50, 51, 100, 0, 0},
+		{100, 50, 51, 110, 101, 110},
+	}
+	for idx, tt := range tests {
+		input := make([]pb.Entry, 0)
+		for i := tt.first; i <= tt.last; i++ {
+			input = append(input, pb.Entry{Index: i, Term: 100})
+		}
+		ents := make([]sm.Entry, 0)
+		msm := &testManagedStateMachine{}
+		sm := &StateMachine{
+			onDiskSM:    true,
+			diskSMIndex: tt.diskSMIndex,
+			index:       tt.index,
+			term:        100,
+			sm:          msm,
+			node:        newTestNodeProxy(),
+		}
+		sm.handleBatchedEntries(input, ents)
+		if msm.first != tt.firstApplied {
+			t.Errorf("%d, unexpected first value, %d, %d", idx, msm.first, tt.firstApplied)
+		}
+		if msm.last != tt.lastApplied {
+			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
+		}
+		if sm.batchedLastApplied.index != tt.last {
+			t.Errorf("%d, index %d, last %d", idx, sm.batchedLastApplied.index, tt.last)
+		}
 	}
 }

@@ -100,7 +100,7 @@ type Task struct {
 	Entries           []pb.Entry
 }
 
-func (t *Task) isSnapshotRelated() bool {
+func (t *Task) isSnapshotTask() bool {
 	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
 }
 
@@ -435,7 +435,7 @@ func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
 	toApply = toApply[:0]
 	select {
 	case rec := <-s.taskC:
-		if rec.isSnapshotRelated() {
+		if rec.isSnapshotTask() {
 			return rec, true
 		}
 		batch = append(batch, rec)
@@ -444,7 +444,7 @@ func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
 		for !done {
 			select {
 			case rec := <-s.taskC:
-				if rec.isSnapshotRelated() {
+				if rec.isSnapshotTask() {
 					s.handle(batch, toApply)
 					return rec, true
 				}
@@ -599,17 +599,17 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
-		if batch[b].isSnapshotRelated() {
+		if batch[b].isSnapshotTask() {
 			panic("trying to handle a snapshot request")
 		}
-		ents := batch[b].Entries
-		allUpdate, allNoOP := getEntryTypes(ents)
+		input := batch[b].Entries
+		allUpdate, allNoOP := getEntryTypes(input)
 		if batchSupport && allUpdate && allNoOP {
-			s.handleBatchedEntries(ents, toApply)
+			s.handleBatchedEntries(input, toApply)
 		} else {
-			for i := range ents {
-				last := b == len(batch)-1 && i == len(ents)-1
-				s.handleEntry(ents[i], last)
+			for i := range input {
+				last := b == len(batch)-1 && i == len(input)-1
+				s.handleEntry(input[i], last)
 			}
 		}
 	}
@@ -742,7 +742,7 @@ func (s *StateMachine) handleUnregisterSession(ent pb.Entry) sm.Result {
 func (s *StateMachine) handleNoOP(ent pb.Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !ent.IsEmpty() {
+	if !ent.IsEmpty() || ent.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
