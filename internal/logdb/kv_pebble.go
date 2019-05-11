@@ -62,7 +62,7 @@ func (w *pebbleWriteBatch) Count() int {
 }
 
 func newKVStore(dir string, wal string) (IKvStore, error) {
-	return openPebbleDB(dir)
+	return openPebbleDB(dir, wal)
 }
 
 type pebbleKV struct {
@@ -72,10 +72,15 @@ type pebbleKV struct {
 	wo   *db.WriteOptions
 }
 
-func openPebbleDB(dir string) (*pebbleKV, error) {
+func openPebbleDB(dir string, walDir string) (*pebbleKV, error) {
 	plog.Warningf("pebble support is experimental, DO NOT USE IN PRODUCTION")
 	lopts := db.LevelOptions{Compression: db.NoCompression}
-	opts := &db.Options{Levels: []db.LevelOptions{lopts}}
+	opts := &db.Options{
+		Levels: []db.LevelOptions{lopts},
+	}
+	if len(walDir) > 0 {
+		opts.WALDir = walDir
+	}
 	pdb, err := pebble.Open(dir, opts)
 	if err != nil {
 		return nil, err
