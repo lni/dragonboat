@@ -50,7 +50,7 @@ seq=`seq 1 $NOJ`
 deploy()
 {
   set -e
-  DRAGONBOAT_RDBPATCHED=1 make -C ../.. drummer-monkey-test-bin
+  make -C ../.. drummer-monkey-test-bin
   make -C ../.. porcupine-checker
   rm -rf $TARGETDIR/*
   cp rdttools.sh $TARGETDIR

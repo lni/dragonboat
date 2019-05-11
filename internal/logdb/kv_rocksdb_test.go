@@ -103,7 +103,6 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 	key2.SetMaximumKey()
 	opts := gorocksdb.NewCompactionOptions()
 	opts.SetExclusiveManualCompaction(false)
-	opts.SetForceBottommostLevelCompaction()
 	defer opts.Destroy()
 	cr.Start = key1.Key()
 	cr.Limit = key2.Key()
@@ -157,7 +156,6 @@ func TestRawCompactRangeWorks(t *testing.T) {
 		key2.SetMaximumKey()
 		opts := gorocksdb.NewCompactionOptions()
 		opts.SetExclusiveManualCompaction(false)
-		opts.SetForceBottommostLevelCompaction()
 		defer opts.Destroy()
 		st := time.Now()
 		cr.Start = key1.Key()
@@ -266,7 +264,6 @@ func testDiskDataCorruptionIsHandled(t *testing.T,
 		key2.SetMaximumKey()
 		opts := gorocksdb.NewCompactionOptions()
 		opts.SetExclusiveManualCompaction(false)
-		opts.SetForceBottommostLevelCompaction()
 		defer opts.Destroy()
 		var cr gorocksdb.Range
 		cr.Start = key1.Key()

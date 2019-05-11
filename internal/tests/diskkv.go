@@ -115,7 +115,6 @@ func createDB(dbdir string) (*rocksdb, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
-	ro.IgnoreRangeDeletions(true)
 	db, err := gorocksdb.OpenDb(opts, dbdir)
 	if err != nil {
 		return nil, err
@@ -424,7 +423,6 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 	ro.SetSnapshot(ss)
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
-	ro.IgnoreRangeDeletions(true)
 	iter := db.db.NewIterator(ro)
 	defer iter.Close()
 	count := uint64(0)

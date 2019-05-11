@@ -104,10 +104,6 @@ func getRocksDBOptions(directory string,
 	// note this is the size of a shard, and the content of the rdb is expected
 	// to be compacted by raft.
 	//
-	// these three options will be noop when not using patched rocksdb.
-	opts.SetMaxSubCompactions(2)
-	opts.EnablePipelinedWrite(true)
-	opts.SetMinWriteBufferNumberToMerge(2)
 	opts.SetLevel0FileNumCompactionTrigger(8)
 	opts.SetLevel0SlowdownWritesTrigger(17)
 	opts.SetLevel0StopWritesTrigger(24)
@@ -149,7 +145,6 @@ func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
-	ro.IgnoreRangeDeletions(true)
 	return &rocksdbKV{
 		directory: dir,
 		bbto:      bbto,
@@ -292,7 +287,6 @@ func (r *rocksdbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 func (r *rocksdbKV) Compaction(firstKey []byte, lastKey []byte) error {
 	opts := gorocksdb.NewCompactionOptions()
 	opts.SetExclusiveManualCompaction(false)
-	opts.SetForceBottommostLevelCompaction()
 	opts.SetChangeLevel(true)
 	opts.SetTargetLevel(-1)
 	defer opts.Destroy()

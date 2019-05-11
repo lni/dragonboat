@@ -110,13 +110,6 @@ ifeq ($(RACE),1)
 RACE_DETECTOR_FLAG=-race
 $(warning "data race detector enabled, this is a DEBUG build")
 endif
-# when using dragonboat patched rocksdb, some extra options not exported in
-# rocksdb's C interface can be enabled. see available patches in the scripts
-# directory for details. note that this is being deprecated. 
-ifneq ($(DRAGONBOAT_RDBPATCHED),)
-$(info RDB patched enabled, pipelined write and subcompactions are supported)
-RDBPATCHED_TAG=dragonboat_rdbpatched
-endif
 
 ifneq ($(TEST_TO_RUN),)
 $(info Running selected tests $(TEST_TO_RUN))
@@ -152,8 +145,6 @@ DUMMY_TEST_BIN=test.bin
 
 # go build tags
 GOBUILDTAGVALS+=$(LOGDB_TAG)
-GOBUILDTAGVALS+=$(RDBPATCHED_TAG)
-GOBUILDTAGVALS+=$(ADV_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
 TESTTAGVALS+=$(GOBUILDTAGVALS)
 TESTTAGVALS+=$(LOGDB_TEST_BUILDTAGS)
@@ -173,7 +164,7 @@ rebuild-all: clean all-slow-monkey-tests unit-test-bin
 LIBCONF_PATH=/etc/ld.so.conf.d/usr_local_lib.conf
 RDBTMPDIR=$(PKGROOT)/build/rocksdbtmp
 RDBURL=https://github.com/facebook/rocksdb/archive/v$(ROCKSDB_VER).tar.gz
-build-rocksdb: get-rocksdb patch-rocksdb make-rocksdb
+build-rocksdb: get-rocksdb make-rocksdb
 build-original-rocksdb : get-rocksdb make-rocksdb
 get-rocksdb:
 	@{ \
@@ -183,9 +174,6 @@ get-rocksdb:
 		wget $(RDBURL) -P $(RDBTMPDIR); \
 		tar xzvf $(RDBTMPDIR)/v$(ROCKSDB_VER).tar.gz -C $(RDBTMPDIR); \
 	}
-patch-rocksdb:
-	@(cd $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) \
-		&& patch -p1 < $(PKGROOT)/scripts/rocksdb-$(ROCKSDB_VER).patch)
 make-rocksdb:
 	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j16 shared_lib
 ldconfig-rocksdb-lib-ull:
