@@ -17,10 +17,6 @@
 package logdb
 
 // WARNING: pebble support is expermental, DO NOT USE IT IN PRODUCTION.
-// known issues -
-//  1. tests in kv_pebble_test.go didn't pass
-//  2. much slower than rocksdb/leveldb
-//  3. write batch can not be cleared
 
 import (
 	"bytes"
