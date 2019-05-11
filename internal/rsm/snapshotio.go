@@ -210,7 +210,7 @@ func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 	}
 	headerHash := getDefaultChecksum()
 	if _, err := headerHash.Write(data); err != nil {
-		panic(err)
+		return err
 	}
 	headerChecksum := headerHash.Sum(nil)
 	sh.HeaderChecksum = headerChecksum
@@ -222,7 +222,7 @@ func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
 		panic("snapshot header is too large")
 	}
 	if _, err = sw.file.Seek(0, 0); err != nil {
-		panic(err)
+		return err
 	}
 	lenbuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(lenbuf, uint64(len(data)))

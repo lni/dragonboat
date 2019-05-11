@@ -76,9 +76,7 @@ func (sm *RegularStateMachine) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot saves the snapshot.
 func (sm *RegularStateMachine) SaveSnapshot(ctx interface{},
-	w io.Writer,
-	fc sm.ISnapshotFileCollection,
-	stopc <-chan struct{}) error {
+	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	if ctx != nil {
 		panic("ctx is not nil")
 	}
@@ -152,8 +150,7 @@ func (sm *ConcurrentStateMachine) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot saves the snapshot.
 func (sm *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
-	w io.Writer, fc sm.ISnapshotFileCollection,
-	stopc <-chan struct{}) error {
+	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	return sm.sm.SaveSnapshot(ctx, w, fc, stopc)
 }
 
@@ -207,7 +204,7 @@ func NewOnDiskStateMachine(sm sm.IOnDiskStateMachine) *OnDiskStateMachine {
 // Open opens the state machine.
 func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	if sm.opened {
-		panic("Open() called more than once on OnDiskStateMachine")
+		panic("Open called more than once on OnDiskStateMachine")
 	}
 	sm.opened = true
 	applied, err := sm.sm.Open(stopc)
@@ -222,7 +219,7 @@ func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 // Update updates the state machine.
 func (sm *OnDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
 	if !sm.opened {
-		panic("Update called before open()")
+		panic("Update called before Open")
 	}
 	if len(entries) > 0 {
 		if entries[len(entries)-1].Index <= sm.initialIndex {
@@ -241,7 +238,7 @@ func (sm *OnDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
 // Lookup queries the state machine.
 func (sm *OnDiskStateMachine) Lookup(query []byte) ([]byte, error) {
 	if !sm.opened {
-		panic("lookup called when not opened")
+		panic("Lookup called when not opened")
 	}
 	return sm.sm.Lookup(query)
 }
@@ -249,7 +246,7 @@ func (sm *OnDiskStateMachine) Lookup(query []byte) ([]byte, error) {
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
 func (sm *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
 	if !sm.opened {
-		panic("prepare snapshot called when not opened")
+		panic("PrepareSnapshot called when not opened")
 	}
 	return sm.sm.PrepareSnapshot()
 }
@@ -259,7 +256,7 @@ func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
 	stopc <-chan struct{}) error {
 	if !sm.opened {
-		panic("save snapshot called when not opened")
+		panic("SaveSnapshot called when not opened")
 	}
 	return sm.sm.SaveSnapshot(ctx, w, stopc)
 }
@@ -268,7 +265,7 @@ func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 func (sm *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
 	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	if !sm.opened {
-		panic("recover from snapshot called when not opened")
+		panic("RecoverFromSnapshot called when not opened")
 	}
 	if index <= sm.applied {
 		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",

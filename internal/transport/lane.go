@@ -141,7 +141,7 @@ func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 
 func (l *lane) process() error {
 	if l.conn == nil {
-		plog.Panicf("trying to process on nil ch, not connected?")
+		panic("trying to process on nil ch, not connected?")
 	}
 	if l.streaming {
 		err := l.streamSnapshot()

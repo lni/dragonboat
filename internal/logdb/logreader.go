@@ -90,7 +90,7 @@ func (lr *LogReader) Entries(low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, error) {
 	ents, size, err := lr.entries(low, high, maxSize)
 	if err != nil {
-		return ents, err
+		return nil, err
 	}
 	if maxSize > 0 && size > maxSize && len(ents) > 1 {
 		return ents[:len(ents)-1], nil

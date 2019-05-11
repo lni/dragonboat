@@ -128,7 +128,13 @@ func (r *leveldbKV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
-	for iter.Seek(fk); iteratorIsValid(iter); iter.Next() {
+	for iter.Seek(fk); ; iter.Next() {
+		if err := iter.GetError(); err != nil {
+			return err
+		}
+		if !iter.Valid() {
+			break
+		}
 		key := iter.Key()
 		val := iter.Value()
 		if inc {
@@ -208,10 +214,7 @@ func (r *leveldbKV) RemoveEntries(fk []byte, lk []byte) error {
 	if err := it.GetError(); err != nil {
 		panic(err)
 	}
-	if err := r.db.Write(r.wo, wb); err != nil {
-		panic(err)
-	}
-	return nil
+	return r.db.Write(r.wo, wb)
 }
 
 func (r *leveldbKV) Compaction(fk []byte, lk []byte) error {

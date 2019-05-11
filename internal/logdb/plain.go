@@ -101,7 +101,7 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 		return true, nil
 	}
 	if err := pe.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
-		panic(err)
+		return nil, 0, err
 	}
 	return ents, size, nil
 }
@@ -146,7 +146,7 @@ func (pe *plainEntries) getRange(clusterID uint64,
 		return true, nil
 	}
 	if err := pe.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
-		panic(err)
+		return 0, 0, err
 	}
 	return firstIndex, length, nil
 }

@@ -166,7 +166,7 @@ func (r *rdb) getRange(clusterID uint64,
 		return lastIndex, 0, nil
 	}
 	if err != nil {
-		panic(err)
+		return 0, 0, err
 	}
 	return r.entries.getRange(clusterID, nodeID, lastIndex, maxIndex)
 }

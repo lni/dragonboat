@@ -206,7 +206,7 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 		return true, nil
 	}
 	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
-		panic(err)
+		return nil, err
 	}
 	return ents, nil
 }
@@ -244,7 +244,7 @@ func (be *batchedEntries) getRange(clusterID uint64,
 		return true, nil
 	}
 	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
-		panic(err)
+		return 0, 0, nil
 	}
 	return firstIndex, length, nil
 }

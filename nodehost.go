@@ -1268,7 +1268,10 @@ func (nh *NodeHost) createPools() {
 }
 
 func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
-	nhDirs, walDirs := nh.serverCtx.CreateNodeHostDir(did)
+	nhDirs, walDirs, err := nh.serverCtx.CreateNodeHostDir(did)
+	if err != nil {
+		return err
+	}
 	if err := nh.serverCtx.LockNodeHostDir(did); err != nil {
 		return err
 	}

@@ -565,7 +565,7 @@ func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta,
 	if s.ConcurrentSnapshot() {
 		ctx, err = s.sm.PrepareSnapshot()
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
 	return s.getSnapshotMeta(ctx, req), nil

@@ -90,7 +90,7 @@ func sstFileToCorruptFilePath() []string {
 // this is largely to check the rocksdb wrapper doesn't slightly swallow
 // detected data corruption related errors
 func testDiskDataCorruptionIsHandled(t *testing.T,
-	batched bool, f func(raftio.ILogDB)) {
+	batched bool, shouldPanic bool, f func(raftio.ILogDB)) {
 	dir := "db-dir"
 	lldir := "wal-db-dir"
 	deleteTestDB()
@@ -139,11 +139,13 @@ func testDiskDataCorruptionIsHandled(t *testing.T,
 	}
 	db = getNewTestDB(dir, lldir, batched)
 	defer db.Close()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("didn't crash")
-		}
-	}()
+	if shouldPanic {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("didn't crash")
+			}
+		}()
+	}
 	f(db)
 }
 
@@ -234,10 +236,13 @@ func testCompactRangeWithCompactionFilterWorks(t *testing.T,
 func TestReadRaftStateWithDiskCorruptionHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	f := func(fdb raftio.ILogDB) {
-		fdb.ReadRaftState(3, 4, 0)
+		_, err := fdb.ReadRaftState(3, 4, 0)
+		if err == nil {
+			t.Fatalf("failed to return error")
+		}
 	}
-	testDiskDataCorruptionIsHandled(t, true, f)
-	testDiskDataCorruptionIsHandled(t, false, f)
+	testDiskDataCorruptionIsHandled(t, true, false, f)
+	testDiskDataCorruptionIsHandled(t, false, false, f)
 }
 
 func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
@@ -258,6 +263,6 @@ func TestIteratorWithDiskCorruptionHandled(t *testing.T) {
 			plog.Infof(string(e.Cmd))
 		}
 	}
-	testDiskDataCorruptionIsHandled(t, true, f)
-	testDiskDataCorruptionIsHandled(t, false, f)
+	testDiskDataCorruptionIsHandled(t, true, true, f)
+	testDiskDataCorruptionIsHandled(t, false, true, f)
 }

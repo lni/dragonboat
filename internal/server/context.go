@@ -15,7 +15,6 @@
 package server
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"os"
@@ -98,21 +97,6 @@ func (sc *Context) GetRandomSource() random.Source {
 	return sc.randomSource
 }
 
-// GetServerTLSConfig returns the server TLS config.
-func (sc *Context) GetServerTLSConfig() *tls.Config {
-	tc, err := sc.nhConfig.GetServerTLSConfig()
-	if err != nil {
-		panic(err)
-	}
-	return tc
-}
-
-// GetClientTLSConfig returns the client TLS config configured for the
-// specified target hostname.
-func (sc *Context) GetClientTLSConfig(hostname string) (*tls.Config, error) {
-	return sc.nhConfig.GetClientTLSConfig(hostname)
-}
-
 // RemoveSnapshotDir removes the snapshot directory belong to the specified
 // node.
 func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
@@ -156,7 +140,7 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 }
 
 // CreateNodeHostDir creates the top level dirs used by nodehost.
-func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string) {
+func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string, error) {
 	nhDirs, walDirs := sc.GetLogDBDirs(did)
 	exists := func(path string) (bool, error) {
 		_, err := os.Stat(path)
@@ -171,24 +155,24 @@ func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string) {
 	for i := 0; i < len(nhDirs); i++ {
 		walExist, err := exists(walDirs[i])
 		if err != nil {
-			panic(err)
+			return nil, nil, err
 		}
 		nhExist, err := exists(nhDirs[i])
 		if err != nil {
-			panic(err)
+			return nil, nil, err
 		}
 		if !walExist {
 			if err := fileutil.MkdirAll(walDirs[i]); err != nil {
-				panic(err)
+				return nil, nil, err
 			}
 		}
 		if !nhExist {
 			if err := fileutil.MkdirAll(nhDirs[i]); err != nil {
-				panic(err)
+				return nil, nil, err
 			}
 		}
 	}
-	return nhDirs, walDirs
+	return nhDirs, walDirs, nil
 }
 
 // PrepareSnapshotDir creates the snapshot directory for the specified node.
