@@ -296,6 +296,9 @@ func testSingleBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
 	if !v.Validate() {
 		t.Fatalf("validation failed")
 	}
+	if v.AddChunk(data, 0) {
+		t.Fatalf("adding the first chunk again didn't fail")
+	}
 	// intentionally corrupt the data
 	data[len(data)-1] = data[len(data)-1] + 1
 	v = NewSnapshotValidator()

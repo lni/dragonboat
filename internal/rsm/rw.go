@@ -359,11 +359,10 @@ type v2writer struct {
 
 func newV2Writer(fw io.Writer, t pb.ChecksumType) *v2writer {
 	onBlock := func(data []byte, crc []byte) error {
-		v := append(data, crc...)
-		n, err := fw.Write(v)
-		if n != len(v) {
-			return io.ErrShortWrite
+		if len(crc) > 0 && uint64(len(crc)) != checksumSize {
+			panic("unexpected crc length")
 		}
+		_, err := fw.Write(append(data, crc...))
 		return err
 	}
 	return &v2writer{
@@ -544,7 +543,7 @@ func GetV2PayloadChecksum(fp string) ([]byte, error) {
 		return nil, err
 	}
 	h := mustGetChecksum(t)
-	f, err := os.OpenFile(fp, os.O_RDONLY, 0755)
+	f, err := os.OpenFile(fp, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -573,6 +572,11 @@ func getV2ChecksumType(fp string) (pb.ChecksumType, error) {
 	if err != nil {
 		return pb.ChecksumType(0), err
 	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	header, err := reader.GetHeader()
 	if err != nil {
 		return pb.ChecksumType(0), err

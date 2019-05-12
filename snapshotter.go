@@ -138,7 +138,9 @@ func (s *snapshotter) Load(index uint64,
 		return err
 	}
 	defer func() {
-		err = reader.Close()
+		if err := reader.Close(); err != nil {
+			panic(err)
+		}
 	}()
 	header, err := reader.GetHeader()
 	if err != nil {

@@ -80,7 +80,7 @@ func mustGetChecksum(t pb.ChecksumType) hash.Hash {
 	return c
 }
 
-func getVersionWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
+func getVersionedWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Wrtier(w), true
 	} else if v == V2SnapshotVersion {
@@ -89,15 +89,15 @@ func getVersionWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
 	return nil, false
 }
 
-func mustGetVersionWriter(w io.Writer, v SnapshotVersion) IVWriter {
-	vw, ok := getVersionWriter(w, v)
+func mustGetVersionedWriter(w io.Writer, v SnapshotVersion) IVWriter {
+	vw, ok := getVersionedWriter(w, v)
 	if !ok {
 		plog.Panicf("failed to get version writer, v %d", v)
 	}
 	return vw
 }
 
-func getVersionReader(r io.Reader,
+func getVersionedReader(r io.Reader,
 	v SnapshotVersion, t pb.ChecksumType) (IVReader, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Reader(r), true
@@ -107,16 +107,16 @@ func getVersionReader(r io.Reader,
 	return nil, false
 }
 
-func mustGetVersionReader(r io.Reader,
+func mustGetVersionedReader(r io.Reader,
 	v SnapshotVersion, t pb.ChecksumType) IVReader {
-	vr, ok := getVersionReader(r, v, t)
+	vr, ok := getVersionedReader(r, v, t)
 	if !ok {
 		plog.Panicf("failed to get version reader, v %d", v)
 	}
 	return vr
 }
 
-func getVersionValidator(header pb.SnapshotHeader) (IVValidator, bool) {
+func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	v := (SnapshotVersion)(header.Version)
 	if v == V1SnapshotVersion {
 		return newV1Validator(header), true
@@ -153,7 +153,7 @@ func NewSnapshotWriter(fp string,
 		return nil, err
 	}
 	sw := &SnapshotWriter{
-		vw:   mustGetVersionWriter(f, version),
+		vw:   mustGetVersionedWriter(f, version),
 		file: f,
 		fp:   fp,
 	}
@@ -301,7 +301,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	}
 	v := (SnapshotVersion)(sr.header.Version)
 	t := (pb.ChecksumType)(sr.header.ChecksumType)
-	sr.r = mustGetVersionReader(reader, v, t)
+	sr.r = mustGetVersionedReader(reader, v, t)
 	return sr.header, nil
 }
 
@@ -358,7 +358,7 @@ func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
 		if !validateHeader(header) {
 			return false
 		}
-		v.v, ok = getVersionValidator(header)
+		v.v, ok = getVersionedValidator(header)
 		if !ok {
 			return false
 		}

@@ -42,6 +42,23 @@ func TestRandomBlocksAreRejected(t *testing.T) {
 	}
 }
 
+func TestCorruptedBlockIsRejected(t *testing.T) {
+	v := make([]byte, 1023)
+	rand.Read(v)
+	h := GetDefaultChecksum()
+	if _, err := h.Write(v); err != nil {
+		t.Fatalf("failed to update hash")
+	}
+	v = append(v, h.Sum(nil)...)
+	if !validateBlock(v, h) {
+		t.Fatalf("validation failed")
+	}
+	v[0] = byte(v[0] + 1)
+	if validateBlock(v, h) {
+		t.Fatalf("validation didn't failed")
+	}
+}
+
 func TestWellFormedBlocksAreAccepted(t *testing.T) {
 	for i := 1; i < 128; i++ {
 		v := make([]byte, i*128)
