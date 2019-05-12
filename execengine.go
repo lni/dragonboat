@@ -371,7 +371,6 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 func processUninitializedNode(node *node) *rsm.Task {
 	if !node.initialized() {
 		plog.Infof("check initial snapshot, %s", node.describe())
-		node.ss.setRecoveringFromSnapshot()
 		return &rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
@@ -384,19 +383,19 @@ func processUninitializedNode(node *node) *rsm.Task {
 // further execSMs processing.
 func processRecoveringNode(node *node) bool {
 	if node.ss.recoveringFromSnapshot() {
-		completed, ok := node.ss.getRecoverCompleted()
+		rec, ok := node.ss.getRecoverCompleted()
 		if !ok {
 			return true
 		}
 		plog.Infof("%s received completed snapshot rec (1) %+v",
-			node.describe(), completed)
-		if completed.SnapshotRequested {
+			node.describe(), rec)
+		if rec.SnapshotRequested {
 			panic("got a completed.SnapshotRequested")
 		}
-		if completed.InitialSnapshot {
+		if rec.InitialSnapshot {
 			plog.Infof("%s handled initial snapshot, index %d",
-				node.describe(), completed.Index)
-			node.setInitialStatus(completed.Index)
+				node.describe(), rec.Index)
+			node.setInitialStatus(rec.Index)
 		}
 		node.ss.clearRecoveringFromSnapshot()
 	}
@@ -405,13 +404,13 @@ func processRecoveringNode(node *node) bool {
 
 func processTakingSnapshotNode(node *node) bool {
 	if node.ss.takingSnapshot() {
-		completed, ok := node.ss.getSaveSnapshotCompleted()
+		rec, ok := node.ss.getSaveSnapshotCompleted()
 		if !ok {
 			return !node.concurrentSnapshot()
 		}
 		plog.Infof("%s received completed snapshot rec (2) %+v",
-			node.describe(), completed)
-		if completed.SnapshotRequested && !node.initialized() {
+			node.describe(), rec)
+		if rec.SnapshotRequested && !node.initialized() {
 			plog.Panicf("%s taking a snapshot on uninitialized node",
 				node.describe())
 		}
@@ -422,12 +421,12 @@ func processTakingSnapshotNode(node *node) bool {
 
 func processStreamingSnapshotNode(node *node) bool {
 	if node.ss.streamingSnapshot() {
-		completed, ok := node.ss.getStreamSnapshotCompleted()
+		rec, ok := node.ss.getStreamSnapshotCompleted()
 		if !ok {
 			return false
 		}
-		plog.Infof("%s received completed streaming snapshot rec %+v",
-			node.describe(), completed)
+		plog.Infof("%s received completed streaming rec (3) %+v",
+			node.describe(), rec)
 		node.ss.clearStreamingSnapshot()
 	}
 	return false
@@ -470,6 +469,7 @@ func (s *execEngine) execSMs(workerID uint64,
 			continue
 		}
 		if rec := processUninitializedNode(node); rec != nil {
+			node.ss.setRecoveringFromSnapshot()
 			s.reportAvailableSnapshot(node, *rec)
 			continue
 		}
@@ -483,28 +483,26 @@ func (s *execEngine) execSMs(workerID uint64,
 			}
 			if task.SnapshotAvailable {
 				plog.Infof("check incoming snapshot, %s", node.describe())
-				node.ss.setRecoveringFromSnapshot()
 				s.reportAvailableSnapshot(node, task)
 			} else if task.SnapshotRequested {
 				plog.Infof("reportRequestedSnapshot, %s", node.describe())
-				if !node.ss.takingSnapshot() {
-					node.ss.setTakingSnapshot()
-				} else {
+				if node.ss.takingSnapshot() {
 					plog.Infof("task.SnapshotRequested ignored on %s", node.describe())
 					node.reportIgnoredSnapshotRequest(task.SnapshotRequest.Key)
 					continue
 				}
 				s.reportRequestedSnapshot(node, task)
 			} else if task.StreamSnapshot {
-				if !node.ss.streamingSnapshot() {
-					node.ss.setStreamingSnapshot()
-				} else {
+				ignored := false
+				if node.ss.streamingSnapshot() {
 					plog.Infof("task.StreamSnapshot ignored on %s", node.describe())
-					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
-					continue
+					ignored = true
 				}
 				if !node.sm.ReadyToStreamSnapshot() {
 					plog.Infof("not ready to stream snapshot %s", node.describe())
+					ignored = true
+				}
+				if ignored {
 					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
 					continue
 				}
@@ -533,6 +531,7 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Task) {
 	if !ok {
 		panic("failed to get nh")
 	}
+	node.ss.setStreamingSnapshot()
 	getSinkFn := func() pb.IChunkSink {
 		conn := nh.transport.GetStreamConnection(rec.ClusterID, rec.NodeID)
 		if conn == nil {
@@ -547,11 +546,13 @@ func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Task) {
 }
 
 func (s *execEngine) reportRequestedSnapshot(node *node, rec rsm.Task) {
+	node.ss.setTakingSnapshot()
 	node.ss.setSaveSnapshotReq(rec)
 	s.requestedSnapshotWorkReady.clusterReady(node.clusterID)
 }
 
 func (s *execEngine) reportAvailableSnapshot(node *node, rec rsm.Task) {
+	node.ss.setRecoveringFromSnapshot()
 	node.ss.setRecoverFromSnapshotReq(rec)
 	s.snapshotWorkReady.clusterReady(node.clusterID)
 }

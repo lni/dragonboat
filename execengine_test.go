@@ -121,9 +121,6 @@ func TestProcessUninitilizedNode(t *testing.T) {
 	if rec == nil {
 		t.Errorf("failed to returned the recover request")
 	}
-	if !n.ss.recoveringFromSnapshot() {
-		t.Errorf("not marked as recovering")
-	}
 	n2 := &node{ss: &snapshotState{}}
 	n2.initializedMu.initialized = true
 	rec2 := processUninitializedNode(n2)
