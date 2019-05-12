@@ -194,9 +194,9 @@ func (mw *ShardedRDB) DeleteSnapshot(clusterID uint64,
 // ListSnapshots lists all available snapshots associated with the specified
 // raft node.
 func (mw *ShardedRDB) ListSnapshots(clusterID uint64,
-	nodeID uint64) ([]pb.Snapshot, error) {
+	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
 	idx := mw.partitioner.GetPartitionID(clusterID)
-	return mw.shards[idx].listSnapshots(clusterID, nodeID)
+	return mw.shards[idx].listSnapshots(clusterID, nodeID, index)
 }
 
 // SaveBootstrapInfo saves the specified bootstrap info for the given node.

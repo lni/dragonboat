@@ -20,6 +20,7 @@ package dragonboat
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -130,7 +131,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if err = s.Commit(ss, rsm.SnapshotRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)
 		}
-		snapshots, err := ldb.ListSnapshots(1, 1)
+		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
 		}
@@ -184,7 +185,7 @@ func TestSnapshotCanBeSavedToLogDB(t *testing.T) {
 		if err := s.saveToLogDB(s1); err != nil {
 			t.Errorf("failed to save snapshot record %v", err)
 		}
-		snapshots, err := ldb.ListSnapshots(1, 1)
+		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
 		}
@@ -328,7 +329,7 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 func TestRemoveUnusedSnapshotRemoveSnapshots(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	// normal case
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 7)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 5)
 	// snapshotsToKeep snapshots will be kept
 	testRemoveUnusedSnapshotRemoveSnapshots(t, 4, 5, 2)
 	// snapshotsToKeep snapshots will be kept
@@ -360,7 +361,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			}
 			f.Close()
 		}
-		snapshots, err := ldb.ListSnapshots(1, 1)
+		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
 		}
@@ -374,10 +375,10 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 				t.Errorf("snapshot dir didn't get created, %s", snapDir)
 			}
 		}
-		if err = snapshotter.Compaction(upTo); err != nil {
+		if err = snapshotter.Compact(upTo); err != nil {
 			t.Errorf("failed to remove unused snapshots, %v", err)
 		}
-		snapshots, err = ldb.ListSnapshots(1, 1)
+		snapshots, err = ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
 		}
@@ -449,7 +450,7 @@ func TestShrinkSnapshots(t *testing.T) {
 				t.Fatalf("close failed %v", err)
 			}
 		}
-		if err := snapshotter.ShrinkSnapshots(20); err != nil {
+		if err := snapshotter.Shrink(20); err != nil {
 			t.Fatalf("shrink snapshots failed %v", err)
 		}
 		env1 := snapshotter.getSnapshotEnv(10)
@@ -469,7 +470,7 @@ func TestShrinkSnapshots(t *testing.T) {
 		cf(env1.GetFilepath(), 1060)
 		cf(env2.GetFilepath(), 1060)
 		cf(env3.GetFilepath(), 10486832)
-		snapshots, err := ldb.ListSnapshots(1, 1)
+		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
 		}

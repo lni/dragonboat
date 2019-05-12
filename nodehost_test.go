@@ -335,7 +335,7 @@ func (n *noopLogDB) RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint6
 func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error                { return nil }
 func (n *noopLogDB) SaveSnapshots([]pb.Update) error                                     { return nil }
 func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error  { return nil }
-func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64) ([]pb.Snapshot, error) {
+func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64, index uint64) ([]pb.Snapshot, error) {
 	return nil, nil
 }
 func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
@@ -992,7 +992,7 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	createProposalsToTriggerSnapshot(t, nh, 25, false)
 	logdb := nh.logdb
-	snapshots, err := logdb.ListSnapshots(2, 1)
+	snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -1087,7 +1087,7 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(2, 1)
+			snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("failed to list snapshots")
 			}
@@ -1488,7 +1488,7 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(1, 1)
+			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("list snapshot failed %v", err)
 			}
@@ -1545,7 +1545,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(1, 1)
+			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("list snapshot failed %v", err)
 			}
@@ -1590,7 +1590,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(1, 2)
+			snapshots, err := logdb.ListSnapshots(1, 2, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("list snapshot failed %v", err)
 			}
@@ -1945,7 +1945,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			t.Errorf("failed to complete the requested snapshot")
 		}
 		logdb := nh.logdb
-		snapshots, err := logdb.ListSnapshots(2, 1)
+		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -2033,7 +2033,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			t.Fatalf("failed to stop cluster %v", err)
 		}
 		logdb := nh.logdb
-		snapshots, err := logdb.ListSnapshots(2, 1)
+		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -2080,7 +2080,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if len(ents) != 0 || sz != 0 {
 			t.Fatalf("entry returned")
 		}
-		snapshots, err = logdb.ListSnapshots(2, 1)
+		snapshots, err = logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -2120,7 +2120,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		}
 		index = v.GetIndex()
 		logdb := nh.logdb
-		snapshots, err := logdb.ListSnapshots(2, 1)
+		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -2159,7 +2159,7 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		}
 		index = v.GetIndex()
 		logdb := nh.logdb
-		snapshots, err := logdb.ListSnapshots(1, 1)
+		snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

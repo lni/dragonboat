@@ -744,6 +744,9 @@ func (s *execEngine) onSnapshotSaved(updates []pb.Update,
 			if err := node.removeSnapshotFlagFile(ud.Snapshot.Index); err != nil {
 				return err
 			}
+			if err := node.compactSnapshots(ud.Snapshot.Index); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

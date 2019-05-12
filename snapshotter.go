@@ -17,6 +17,7 @@ package dragonboat
 import (
 	"errors"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -185,20 +186,20 @@ func (s *snapshotter) GetFilePath(index uint64) string {
 }
 
 func (s *snapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
-	snaps, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
+	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, index)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
-	for _, snap := range snaps {
-		if snap.Index == index {
-			return snap, nil
+	for _, ss := range snapshots {
+		if ss.Index == index {
+			return ss, nil
 		}
 	}
 	return pb.Snapshot{}, ErrNoSnapshot
 }
 
 func (s *snapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
-	snaps, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
+	snaps, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, math.MaxUint64)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
@@ -212,14 +213,17 @@ func (s *snapshotter) IsNoSnapshotError(e error) bool {
 	return e == ErrNoSnapshot
 }
 
-func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
+func (s *snapshotter) Shrink(shrinkTo uint64) error {
+	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, shrinkTo)
 	if err != nil {
 		return err
 	}
 	plog.Infof("%s has %d snapshots to shrink", s.describe(), len(snapshots))
 	for idx, ss := range snapshots {
-		if !ss.Dummy && ss.Index <= shrinkTo {
+		if ss.Index > shrinkTo {
+			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
+		}
+		if !ss.Dummy {
 			env := s.getSnapshotEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
@@ -235,8 +239,8 @@ func (s *snapshotter) ShrinkSnapshots(shrinkTo uint64) error {
 	return nil
 }
 
-func (s *snapshotter) Compaction(removeUpTo uint64) error {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID)
+func (s *snapshotter) Compact(removeUpTo uint64) error {
+	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, removeUpTo)
 	if err != nil {
 		return err
 	}
@@ -246,16 +250,14 @@ func (s *snapshotter) Compaction(removeUpTo uint64) error {
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
 	plog.Infof("%s has %d snapshots to compact", s.describe(), len(selected))
 	for idx, ss := range selected {
-		if ss.Index < removeUpTo {
-			plog.Infof("%s compacting snapshot %d, %d", s.describe(), ss.Index, idx)
-			if err := s.logdb.DeleteSnapshot(s.clusterID,
-				s.nodeID, ss.Index); err != nil {
-				return err
-			}
-			env := s.getSnapshotEnv(ss.Index)
-			if err := env.RemoveFinalDir(); err != nil {
-				return err
-			}
+		plog.Infof("%s compacting snapshot %d, %d", s.describe(), ss.Index, idx)
+		if err := s.logdb.DeleteSnapshot(s.clusterID,
+			s.nodeID, ss.Index); err != nil {
+			return err
+		}
+		env := s.getSnapshotEnv(ss.Index)
+		if err := env.RemoveFinalDir(); err != nil {
+			return err
 		}
 	}
 	return nil

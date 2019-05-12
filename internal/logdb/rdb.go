@@ -198,7 +198,7 @@ func (r *rdb) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	if ss.Type == pb.UnknownStateMachine {
 		panic("Unknown state machine type")
 	}
-	snapshots, err := r.listSnapshots(ss.ClusterId, nodeID)
+	snapshots, err := r.listSnapshots(ss.ClusterId, nodeID, math.MaxUint64)
 	if err != nil {
 		return err
 	}
@@ -341,13 +341,13 @@ func (r *rdb) deleteSnapshot(clusterID uint64,
 }
 
 func (r *rdb) listSnapshots(clusterID uint64,
-	nodeID uint64) ([]pb.Snapshot, error) {
+	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
 	fk := r.keys.get()
 	lk := r.keys.get()
 	defer fk.Release()
 	defer lk.Release()
 	fk.setSnapshotKey(clusterID, nodeID, 0)
-	lk.setSnapshotKey(clusterID, nodeID, math.MaxUint64)
+	lk.setSnapshotKey(clusterID, nodeID, index)
 	snapshots := make([]pb.Snapshot, 0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var ss pb.Snapshot
@@ -413,7 +413,7 @@ func (r *rdb) removeEntriesTo(clusterID uint64,
 func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 	wb := r.getWriteBatch()
 	defer wb.Clear()
-	snapshots, err := r.listSnapshots(clusterID, nodeID)
+	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
 	if err != nil {
 		return err
 	}

@@ -40,11 +40,11 @@ const (
 )
 
 var (
-	incomingProposalsMaxLen    = settings.Soft.IncomingProposalQueueLength
-	incomingReadIndexMaxLen    = settings.Soft.IncomingReadIndexQueueLength
-	lazyFreeCycle              = settings.Soft.LazyFreeCycle
-	snapshotShrinkTaskInterval = settings.Soft.ShrinkSnapshotTaskInterval
-	logUnreachable             = true
+	incomingProposalsMaxLen = settings.Soft.IncomingProposalQueueLength
+	incomingReadIndexMaxLen = settings.Soft.IncomingReadIndexQueueLength
+	lazyFreeCycle           = settings.Soft.LazyFreeCycle
+	snapshotTaskInterval    = settings.Soft.ShrinkSnapshotTaskInterval
+	logUnreachable          = true
 )
 
 type node struct {
@@ -81,7 +81,7 @@ type node struct {
 	tickCount           uint64
 	expireNotified      uint64
 	tickMillisecond     uint64
-	snapshotShrink      *task
+	snapshotTask        *task
 	rateLimited         bool
 	closeOnce           sync.Once
 	ss                  *snapshotState
@@ -143,6 +143,7 @@ func newNode(raftAddress string,
 		logdb:               ldb,
 		snapshotLock:        syncutil.NewLock(),
 		ss:                  &snapshotState{},
+		snapshotTask:        newTask(snapshotTaskInterval),
 		smType:              smType,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
@@ -155,9 +156,6 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rc)
 	rc.taskC = sm.TaskC()
 	rc.sm = sm
-	if sm.OnDiskStateMachine() {
-		rc.snapshotShrink = newTask(snapshotShrinkTaskInterval)
-	}
 	rc.startRaft(config, rc.logreader, peers, initialMember)
 	return rc
 }
@@ -576,6 +574,9 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 	}
 	if ss.Index > rc.config.CompactionOverhead {
 		rc.ss.setCompactLogTo(ss.Index - rc.config.CompactionOverhead)
+		if err := rc.snapshotter.Compact(ss.Index); err != nil {
+			panic(err)
+		}
 	}
 	rc.ss.setSnapshotIndex(ss.Index)
 	return ss.Index
@@ -613,8 +614,13 @@ func (rc *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	if err != nil {
 		panic(err)
 	}
-	if index > 0 && rc.OnDiskStateMachine() {
-		if err := rc.snapshotter.ShrinkSnapshots(index); err != nil {
+	if index > 0 {
+		if rc.OnDiskStateMachine() {
+			if err := rc.snapshotter.Shrink(index); err != nil {
+				panic(err)
+			}
+		}
+		if err := rc.snapshotter.Compact(index); err != nil {
 			panic(err)
 		}
 	}
@@ -649,11 +655,28 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 	return rc.snapshotter.removeFlagFile(index)
 }
 
-func (rc *node) shrinkSnapshots() error {
-	if rc.snapshotShrink == nil ||
-		!rc.snapshotShrink.timeToRun(rc.millisecondSinceStart()) {
+func (rc *node) runSnapshotTask() error {
+	if rc.snapshotTask == nil ||
+		!rc.snapshotTask.timeToRun(rc.millisecondSinceStart()) {
 		return nil
 	}
+	if rc.sm.OnDiskStateMachine() {
+		return rc.shrinkSnapshots()
+	}
+	return nil
+}
+
+func (rc *node) compactSnapshots(index uint64) error {
+	if rc.snapshotLock.TryLock() {
+		defer rc.snapshotLock.Unlock()
+		if err := rc.snapshotter.Compact(index); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (rc *node) shrinkSnapshots() error {
 	if rc.snapshotLock.TryLock() {
 		defer rc.snapshotLock.Unlock()
 		if !rc.sm.OnDiskStateMachine() {
@@ -661,7 +684,7 @@ func (rc *node) shrinkSnapshots() error {
 		}
 		plog.Infof("%s will shrink snapshots up to %d",
 			rc.describe(), rc.smAppliedIndex)
-		if err := rc.snapshotter.ShrinkSnapshots(rc.smAppliedIndex); err != nil {
+		if err := rc.snapshotter.Shrink(rc.smAppliedIndex); err != nil {
 			return err
 		}
 	}
@@ -669,8 +692,7 @@ func (rc *node) shrinkSnapshots() error {
 }
 
 func (rc *node) compactLog() error {
-	if rc.ss.hasCompactLogTo() && rc.snapshotLock.TryLock() {
-		defer rc.snapshotLock.Unlock()
+	if rc.ss.hasCompactLogTo() {
 		compactTo := rc.ss.getCompactLogTo()
 		if compactTo == 0 {
 			panic("racy compact log to value?")
@@ -680,14 +702,11 @@ func (rc *node) compactLog() error {
 				return err
 			}
 		}
-		if err := rc.snapshotter.Compaction(compactTo); err != nil {
-			return err
-		}
 		if err := rc.logdb.RemoveEntriesTo(rc.clusterID,
 			rc.nodeID, compactTo); err != nil {
 			return err
 		}
-		plog.Infof("%s compacted log at index %d", rc.describe(), compactTo)
+		plog.Infof("%s compacted log up to index %d", rc.describe(), compactTo)
 	}
 	return nil
 }
@@ -789,7 +808,7 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 	if err := rc.compactLog(); err != nil {
 		panic(err)
 	}
-	if err := rc.shrinkSnapshots(); err != nil {
+	if err := rc.runSnapshotTask(); err != nil {
 		panic(err)
 	}
 	if rc.saveSnapshotRequired(ud.LastApplied) {

@@ -251,14 +251,14 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
-		v, _ := db.ListSnapshots(3, 4)
+		v, _ := db.ListSnapshots(3, 4, math.MaxUint64)
 		if len(v) != 1 {
 			t.Fatalf("snapshot not saved")
 		}
 		if v[0].Index != snapshot1.Index {
 			t.Errorf("snapshot index %d, want %d", v[0].Index, snapshot1.Index)
 		}
-		v, _ = db.ListSnapshots(3, 3)
+		v, _ = db.ListSnapshots(3, 3, math.MaxUint64)
 		if len(v) != 1 {
 			t.Errorf("snapshot not saved")
 		}
@@ -809,7 +809,7 @@ func TestIterateEntries(t *testing.T) {
 
 func TestSaveSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		snapshotList, err := db.ListSnapshots(1, 2)
+		snapshotList, err := db.ListSnapshots(1, 2, math.MaxUint64)
 		if err != nil {
 			t.Errorf("err %v, want nil", err)
 		}
@@ -842,7 +842,7 @@ func TestSaveSnapshot(t *testing.T) {
 		if err != nil {
 			t.Errorf("err %v want nil", err)
 		}
-		snapshotList, err = db.ListSnapshots(1, 2)
+		snapshotList, err = db.ListSnapshots(1, 2, math.MaxUint64)
 		if err != nil {
 			t.Errorf("err %v, want nil", err)
 		}
@@ -858,7 +858,7 @@ func TestSaveSnapshot(t *testing.T) {
 		if err := db.DeleteSnapshot(1, 2, 1); err != nil {
 			t.Errorf("failed to delete snapshot %v", err)
 		}
-		snapshotList, err = db.ListSnapshots(1, 2)
+		snapshotList, err = db.ListSnapshots(1, 2, math.MaxUint64)
 		if err != nil {
 			t.Errorf("err %v, want nil", err)
 		}
@@ -1125,7 +1125,7 @@ func TestRemoveNodeData(t *testing.T) {
 		if err != raftio.ErrNoSavedLog {
 			t.Fatalf("raft state not deleted %v", err)
 		}
-		snapshots, err := db.ListSnapshots(clusterID, nodeID)
+		snapshots, err := db.ListSnapshots(clusterID, nodeID, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("failed to list snapshots %v", err)
 		}
@@ -1195,7 +1195,7 @@ func TestImportSnapshot(t *testing.T) {
 		if err := db.ImportSnapshot(ssimport, nodeID); err != nil {
 			t.Fatalf("import snapshot failed %v", err)
 		}
-		snapshots, err := db.ListSnapshots(clusterID, nodeID)
+		snapshots, err := db.ListSnapshots(clusterID, nodeID, math.MaxUint64)
 		if err != nil {
 			t.Fatalf("failed to list snapshots %v", err)
 		}
