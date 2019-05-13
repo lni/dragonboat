@@ -338,12 +338,16 @@ func copySnapshot(ss pb.Snapshot, srcDir string, dstDir string) error {
 	return nil
 }
 
-func copyFile(src string, dst string) error {
+func copyFile(src string, dst string) (err error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		if cerr := in.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	fi, err := in.Stat()
 	if err != nil {
 		return err

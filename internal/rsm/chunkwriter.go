@@ -53,9 +53,8 @@ func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *ChunkWriter {
 }
 
 // Close closes the chunk writer.
-func (cw *ChunkWriter) Close() error {
+func (cw *ChunkWriter) Close() {
 	cw.sink.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
-	return nil
 }
 
 // Write writes the specified input data.

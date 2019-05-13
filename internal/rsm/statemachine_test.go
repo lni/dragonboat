@@ -1448,7 +1448,9 @@ func TestRecoverSMRequired(t *testing.T) {
 		func() {
 			defer os.RemoveAll(testSnapshotterDir)
 			os.RemoveAll(testSnapshotterDir)
-			os.MkdirAll(testSnapshotterDir, 0755)
+			if err := os.MkdirAll(testSnapshotterDir, 0755); err != nil {
+				t.Fatalf("mkdir failed %v", err)
+			}
 			snapshotter := newTestSnapshotter()
 			sm := &StateMachine{
 				snapshotter: snapshotter,

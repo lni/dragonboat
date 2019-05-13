@@ -38,7 +38,7 @@ func MkdirAll(dir string) error {
 }
 
 // SyncDir calls fsync on the specified directory.
-func SyncDir(dir string) error {
+func SyncDir(dir string) (err error) {
 	fileInfo, err := os.Stat(dir)
 	if err != nil {
 		return err
@@ -51,8 +51,8 @@ func SyncDir(dir string) error {
 		return err
 	}
 	defer func() {
-		if err := df.Close(); err != nil {
-			panic(err)
+		if cerr := df.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	return df.Sync()

@@ -381,24 +381,24 @@ func (v *SnapshotValidator) Validate() bool {
 
 // IsShrinkedSnapshotFile returns a boolean flag indicating whether the
 // specified snapshot file is already shrinked.
-func IsShrinkedSnapshotFile(fp string) (bool, error) {
+func IsShrinkedSnapshotFile(fp string) (shrinked bool, err error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
 		return false, err
 	}
 	defer func() {
-		if err := reader.Close(); err != nil {
-			panic(err)
+		if cerr := reader.Close(); err == nil {
+			err = cerr
 		}
 	}()
-	if _, err := reader.GetHeader(); err != nil {
+	if _, err = reader.GetHeader(); err != nil {
 		return false, err
 	}
 	sz := make([]byte, 8)
 	if _, err := io.ReadFull(reader, sz); err != nil {
 		return false, err
 	}
-	if _, err := io.ReadFull(reader, sz); err != nil {
+	if _, err = io.ReadFull(reader, sz); err != nil {
 		return false, err
 	}
 	if size := binary.LittleEndian.Uint64(sz); size != 0 {
@@ -423,15 +423,15 @@ func mustInSameDir(fp string, newFp string) {
 
 // ShrinkSnapshot shrinks the specified snapshot file and save the generated
 // shrinked version to the path specified by newFp.
-func ShrinkSnapshot(fp string, newFp string) error {
+func ShrinkSnapshot(fp string, newFp string) (err error) {
 	mustInSameDir(fp, newFp)
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := reader.Close(); err != nil {
-			panic(err)
+		if cerr := reader.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	writer, err := NewSnapshotWriter(newFp, CurrentSnapshotVersion)
@@ -439,8 +439,8 @@ func ShrinkSnapshot(fp string, newFp string) error {
 		return err
 	}
 	defer func() {
-		if err := writer.Close(); err != nil {
-			panic(err)
+		if cerr := writer.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	if _, err := reader.GetHeader(); err != nil {

@@ -41,18 +41,18 @@ func getHash(data []byte) []byte {
 
 // CreateFlagFile creates a flag file in the specific location. The flag file
 // contains the marshaled data of the specified protobuf message.
-func CreateFlagFile(dir string, filename string, msg proto.Message) error {
+func CreateFlagFile(dir string, filename string, msg proto.Message) (err error) {
 	fp := filepath.Join(dir, filename)
 	f, err := os.Create(fp)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := f.Close(); err != nil {
-			panic(err)
+		if cerr := f.Close(); err == nil {
+			err = cerr
 		}
-		if err := SyncDir(dir); err != nil {
-			panic(err)
+		if cerr := SyncDir(dir); err == nil {
+			err = cerr
 		}
 	}()
 	data, err := proto.Marshal(msg)

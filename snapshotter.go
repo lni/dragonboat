@@ -90,8 +90,8 @@ func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
 }
 
 func (s *snapshotter) Save(savable rsm.ISavable,
-	meta *rsm.SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
-	env := s.getCustomSnapshotEnv(meta)
+	meta *rsm.SnapshotMeta) (ss *pb.Snapshot, env *server.SnapshotEnv, err error) {
+	env = s.getCustomSnapshotEnv(meta)
 	if err := env.CreateTempDir(); err != nil {
 		return nil, env, err
 	}
@@ -102,8 +102,8 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		return nil, env, err
 	}
 	defer func() {
-		if err := writer.Close(); err != nil {
-			panic(err)
+		if cerr := writer.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	session := meta.Session.Bytes()
@@ -115,7 +115,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	if err != nil {
 		return nil, env, err
 	}
-	ss := &pb.Snapshot{
+	ss = &pb.Snapshot{
 		ClusterId:  s.clusterID,
 		Filepath:   env.GetFilepath(),
 		FileSize:   sz,
@@ -132,14 +132,14 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 
 func (s *snapshotter) Load(index uint64,
 	sessions rsm.ILoadableSessions,
-	asm rsm.ILoadableSM, fp string, fs []sm.SnapshotFile) error {
+	asm rsm.ILoadableSM, fp string, fs []sm.SnapshotFile) (err error) {
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := reader.Close(); err != nil {
-			panic(err)
+		if cerr := reader.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	header, err := reader.GetHeader()

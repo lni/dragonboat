@@ -533,7 +533,7 @@ func (v *v2validator) validateBlock(block []byte) bool {
 
 // GetV2PayloadChecksum calculates the payload checksum of the specified
 // snapshot file.
-func GetV2PayloadChecksum(fp string) ([]byte, error) {
+func GetV2PayloadChecksum(fp string) (crc []byte, err error) {
 	offsets, err := getV2CRCOffsetList(fp)
 	if err != nil {
 		return nil, err
@@ -548,8 +548,8 @@ func GetV2PayloadChecksum(fp string) ([]byte, error) {
 		return nil, err
 	}
 	defer func() {
-		if err := f.Close(); err != nil {
-			panic(err)
+		if cerr := f.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	for _, offset := range offsets {
@@ -564,17 +564,18 @@ func GetV2PayloadChecksum(fp string) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return h.Sum(nil), err
+	crc = h.Sum(nil)
+	return
 }
 
-func getV2ChecksumType(fp string) (pb.ChecksumType, error) {
+func getV2ChecksumType(fp string) (ct pb.ChecksumType, err error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
-		return pb.ChecksumType(0), err
+		return 0, err
 	}
 	defer func() {
-		if err := reader.Close(); err != nil {
-			panic(err)
+		if cerr := reader.Close(); err == nil {
+			err = cerr
 		}
 	}()
 	header, err := reader.GetHeader()
