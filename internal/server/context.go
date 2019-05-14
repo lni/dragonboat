@@ -32,6 +32,8 @@ import (
 
 var (
 	plog = logger.GetLogger("server")
+	// ErrLogDBType is the error used to indicate that the LogDB type changed.
+	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
 	// instance.
 	ErrNotOwner = errors.New("not the owner of the data directory")
@@ -188,17 +190,13 @@ func (sc *Context) PrepareSnapshotDir(did uint64,
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
 func (sc *Context) CheckNodeHostDir(did uint64,
-	addr string, binVer uint32) error {
-	dirs, lldirs := sc.GetLogDBDirs(did)
-	for i := 0; i < len(dirs); i++ {
-		if err := sc.exclusiveAccessTo(dirs[i], did, addr, binVer); err != nil {
-			return err
-		}
-		if err := sc.exclusiveAccessTo(lldirs[i], did, addr, binVer); err != nil {
-			return err
-		}
-	}
-	return nil
+	addr string, binVer uint32, dbType string) error {
+	return sc.checkNodeHostDir(did, addr, binVer, dbType, false)
+}
+
+// CheckLogDBType checks whether LogDB type is compatible.
+func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
+	return sc.checkNodeHostDir(did, "", 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
@@ -215,6 +213,20 @@ func (sc *Context) LockNodeHostDir(did uint64) error {
 			return err
 		}
 		if err := sc.tryLockNodeHostDir(lldirs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sc *Context) checkNodeHostDir(did uint64,
+	addr string, binVer uint32, name string, dbto bool) error {
+	dirs, lldirs := sc.GetLogDBDirs(did)
+	for i := 0; i < len(dirs); i++ {
+		if err := sc.compatible(dirs[i], did, addr, binVer, name, dbto); err != nil {
+			return err
+		}
+		if err := sc.compatible(lldirs[i], did, addr, binVer, name, dbto); err != nil {
 			return err
 		}
 	}
@@ -262,18 +274,22 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
 
-func (sc *Context) exclusiveAccessTo(dir string,
-	did uint64, addr string, ldbBinVer uint32) error {
+func (sc *Context) compatible(dir string,
+	did uint64, addr string, ldbBinVer uint32, name string, dbto bool) error {
 	fp := filepath.Join(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
 			strings.ToLower(strings.TrimSpace(s2))
 	}
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
+		if dbto {
+			return nil
+		}
 		status := raftpb.RaftDataStatus{
-			Address:  addr,
-			BinVer:   ldbBinVer,
-			HardHash: settings.Hard.Hash(),
+			Address:   addr,
+			BinVer:    ldbBinVer,
+			HardHash:  settings.Hard.Hash(),
+			LogdbType: name,
 		}
 		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
 		if err != nil {
@@ -285,20 +301,25 @@ func (sc *Context) exclusiveAccessTo(dir string,
 		if err != nil {
 			return err
 		}
-		if !se(string(status.Address), addr) {
-			return ErrNotOwner
+		if len(status.LogdbType) > 0 && status.LogdbType != name {
+			return ErrLogDBType
 		}
-		if status.BinVer != ldbBinVer {
-			if status.BinVer == raftio.LogDBBinVersion &&
-				ldbBinVer == raftio.PlainLogDBBinVersion {
-				return ErrLogDBBrokenChange
+		if !dbto {
+			if !se(string(status.Address), addr) {
+				return ErrNotOwner
 			}
-			plog.Errorf("binary compatibility version, data dir %d, software %d",
-				status.BinVer, ldbBinVer)
-			return ErrIncompatibleData
-		}
-		if status.HardHash != settings.Hard.Hash() {
-			return ErrHardSettingsChanged
+			if status.BinVer != ldbBinVer {
+				if status.BinVer == raftio.LogDBBinVersion &&
+					ldbBinVer == raftio.PlainLogDBBinVersion {
+					return ErrLogDBBrokenChange
+				}
+				plog.Errorf("binary compatibility version, data dir %d, software %d",
+					status.BinVer, ldbBinVer)
+				return ErrIncompatibleData
+			}
+			if status.HardHash != settings.Hard.Hash() {
+				return ErrHardSettingsChanged
+			}
 		}
 	}
 	return nil

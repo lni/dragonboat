@@ -342,22 +342,6 @@ func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 	return nil
 }
 
-/*
-func TestRocksDBIsUsedByDefault(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	nh := NewNodeHost(*c)
-	plog.Infof("new node host returned")
-	defer nh.Stop()
-	if nh.logdb.Name() != logdb.RocksDBLogDBName {
-		t.Errorf("logdb type name %s, expect %s",
-			nh.logdb.Name(), logdb.RocksDBLogDBName)
-	}
-	plog.Infof("all good")
-}*/
-
 func TestLogDBCanBeExtended(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer os.RemoveAll(singleNodeHostTestDir)
@@ -1391,8 +1375,10 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 	func() {
 		plog.Infof("going to create nh using plain logdb")
 		nh, err := NewNodeHost(nhc)
+		plog.Infof("err : %v", err)
 		if err != server.ErrLogDBBrokenChange {
 			if err == nil && nh != nil {
+				plog.Infof("going to stop nh")
 				nh.Stop()
 			}
 			t.Fatalf("didn't return the expected error")
@@ -1401,6 +1387,7 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 	os.RemoveAll(singleNodeHostTestDir)
 	plog.Infof("going to create nh using plain logdb with existing data deleted")
 	nh, err = NewNodeHost(nhc)
+	plog.Infof("err2 : %v", err)
 	if err != nil {
 		t.Fatalf("failed to create node host %v", err)
 	}
@@ -2545,7 +2532,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	nhc := config.NodeHostConfig{
 		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
+		RTTMillisecond: 20,
 		RaftAddress:    nodeHostTestAddr1,
 	}
 	func() {
@@ -2557,7 +2544,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 		rc := config.Config{
 			NodeID:       1,
 			ClusterID:    1,
-			ElectionRTT:  5,
+			ElectionRTT:  3,
 			HeartbeatRTT: 1,
 		}
 		peers := make(map[uint64]string)
@@ -2588,7 +2575,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	nhc := config.NodeHostConfig{
 		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
+		RTTMillisecond: 20,
 		RaftAddress:    nodeHostTestAddr1,
 		LogDBFactory:   OpenBatchedLogDB,
 	}
@@ -2601,7 +2588,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		rc := config.Config{
 			NodeID:       1,
 			ClusterID:    1,
-			ElectionRTT:  5,
+			ElectionRTT:  3,
 			HeartbeatRTT: 1,
 		}
 		peers := make(map[uint64]string)
@@ -2624,4 +2611,30 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	tf()
 	nhc.LogDBFactory = nil
 	tf()
+}
+
+func TestNodeHostChecksLogDBType(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	f := func(dirs []string,
+		lowLatencyDirs []string) (raftio.ILogDB, error) {
+		return &noopLogDB{}, nil
+	}
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 20,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   f,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+	}()
+	nhc.LogDBFactory = nil
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrLogDBType {
+		t.Fatalf("didn't report logdb type error %v", err)
+	}
 }

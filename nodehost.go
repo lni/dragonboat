@@ -1281,19 +1281,25 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	} else {
 		factory = logdb.OpenLogDB
 	}
+	// create a tmp logdb to get LogDB type info
+	name, err := logdb.GetLogDBInfo(factory, nhDirs)
+	if err != nil {
+		return err
+	}
+	if err := nh.serverCtx.CheckLogDBType(did, name); err != nil {
+		return err
+	}
 	ldb, err := factory(nhDirs, walDirs)
 	if err != nil {
 		return err
 	}
 	nh.logdb = ldb
-	binVersion := ldb.BinaryFormat()
-	err = nh.serverCtx.CheckNodeHostDir(did,
-		nh.nhConfig.RaftAddress, binVersion)
-	if err != nil {
+	ver := ldb.BinaryFormat()
+	if err := nh.serverCtx.CheckNodeHostDir(did,
+		nh.nhConfig.RaftAddress, ver, name); err != nil {
 		return err
 	}
-	shardedrdb, ok := ldb.(*logdb.ShardedRDB)
-	if ok {
+	if shardedrdb, ok := ldb.(*logdb.ShardedRDB); ok {
 		failed, err := shardedrdb.SelfCheckFailed()
 		if err != nil {
 			return err

@@ -28,6 +28,7 @@ import (
 
 const (
 	singleNodeHostTestDir = "test_nodehost_dir_safe_to_delete"
+	testLogDBName         = "test-name"
 	testBinVer            = raftio.LogDBBinVersion
 	testAddress           = "localhost:1111"
 	testDeploymentID      = 100
@@ -56,20 +57,25 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	}
 	ctx.CreateNodeHostDir(testDeploymentID)
 	dirs, _ := ctx.GetLogDBDirs(testDeploymentID)
+	testName := "test-name"
 	status := raftpb.RaftDataStatus{
-		Address:  testAddress,
-		BinVer:   raftio.LogDBBinVersion,
-		HardHash: settings.Hard.Hash(),
+		Address:   testAddress,
+		BinVer:    raftio.LogDBBinVersion,
+		HardHash:  settings.Hard.Hash(),
+		LogdbType: testName,
 	}
 	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	ctx.CheckNodeHostDir(testDeploymentID, testAddress, raftio.LogDBBinVersion)
+	if err := ctx.CheckNodeHostDir(testDeploymentID,
+		testAddress, raftio.LogDBBinVersion, testName); err != nil {
+		t.Fatalf("check node host dir failed %v", err)
+	}
 }
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
-	addr string, binVer uint32, hardHashMismatch bool, expErr error) {
+	addr string, binVer uint32, name string, hardHashMismatch bool, expErr error) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	c := getTestNodeHostConfig()
 	ctx, err := NewContext(c)
@@ -79,9 +85,10 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	ctx.CreateNodeHostDir(testDeploymentID)
 	dirs, _ := ctx.GetLogDBDirs(testDeploymentID)
 	status := raftpb.RaftDataStatus{
-		Address:  addr,
-		BinVer:   binVer,
-		HardHash: settings.Hard.Hash(),
+		Address:   addr,
+		BinVer:    binVer,
+		HardHash:  settings.Hard.Hash(),
+		LogdbType: name,
 	}
 	if hardHashMismatch {
 		status.HardHash = 0
@@ -90,26 +97,31 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	err = ctx.CheckNodeHostDir(testDeploymentID, testAddress, testBinVer)
+	err = ctx.CheckNodeHostDir(testDeploymentID, testAddress, testBinVer, testLogDBName)
 	plog.Infof("err: %v", err)
 	if err != expErr {
 		t.Errorf("expect err %v, got %v", expErr, err)
 	}
 }
 
+func TestCanDetectMismatchedLogDBName(t *testing.T) {
+	testNodeHostDirectoryDetectsMismatches(t,
+		testAddress, raftio.LogDBBinVersion, "incorrect name", false, ErrLogDBType)
+}
+
 func TestCanDetectMismatchedBinVer(t *testing.T) {
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, raftio.LogDBBinVersion+1, false, ErrIncompatibleData)
+		testAddress, raftio.LogDBBinVersion+1, testLogDBName, false, ErrIncompatibleData)
 }
 
 func TestCanDetectMismatchedAddress(t *testing.T) {
 	testNodeHostDirectoryDetectsMismatches(t,
-		"invalid:12345", raftio.LogDBBinVersion, false, ErrNotOwner)
+		"invalid:12345", raftio.LogDBBinVersion, testLogDBName, false, ErrNotOwner)
 }
 
 func TestCanDetectMismatchedHardHash(t *testing.T) {
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, raftio.LogDBBinVersion, true, ErrHardSettingsChanged)
+		testAddress, raftio.LogDBBinVersion, testLogDBName, true, ErrHardSettingsChanged)
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {

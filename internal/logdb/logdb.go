@@ -21,6 +21,12 @@ to import this package.
 package logdb
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
 	"github.com/lni/dragonboat/raftio"
 )
@@ -47,6 +53,33 @@ func checkDirs(dirs []string, lldirs []string) {
 	} else {
 		panic("no regular dir")
 	}
+}
+
+func GetLogDBInfo(f config.LogDBFactoryFunc,
+	nhDirs []string) (name string, err error) {
+	tmpDirs := make([]string, 0)
+	for _, dir := range nhDirs {
+		tmp := fmt.Sprintf("tmp-%d", random.LockGuardedRand.Uint64())
+		td := filepath.Join(dir, tmp)
+		if err := os.MkdirAll(td, 0755); err != nil {
+			return "", err
+		}
+		tmpDirs = append(tmpDirs, filepath.Join(dir, tmp))
+	}
+	ldb, err := f(tmpDirs, tmpDirs)
+	if err != nil {
+		return "", err
+	}
+	name = ldb.Name()
+	defer func() {
+		ldb.Close()
+		for _, dir := range tmpDirs {
+			if cerr := os.RemoveAll(dir); err == nil {
+				err = cerr
+			}
+		}
+	}()
+	return name, nil
 }
 
 // OpenLogDB opens a plain LogDB instance using the default implementation.

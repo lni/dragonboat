@@ -160,7 +160,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	defer logdb.Close()
 	serverCtx.CreateNodeHostDir(nhConfig.DeploymentID)
 	serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
-		nhConfig.RaftAddress, logdb.BinaryFormat())
+		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name())
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
