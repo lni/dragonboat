@@ -440,12 +440,6 @@ func TestShrinkSnapshots(t *testing.T) {
 					t.Fatalf("failed to write %v", err)
 				}
 			}
-			if err := writer.Flush(); err != nil {
-				t.Fatalf("flush failed %v", err)
-			}
-			if err := writer.SaveHeader(0, 1024*1024*10); err != nil {
-				t.Fatalf("failed to save header %v", err)
-			}
 			if err := writer.Close(); err != nil {
 				t.Fatalf("close failed %v", err)
 			}

@@ -64,12 +64,6 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if err != nil || m != len(storeData) {
 		t.Fatalf("failed to write the store data")
 	}
-	if err := w.Flush(); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
-		t.Fatalf("%v", err)
-	}
 	err = w.Close()
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -91,12 +85,6 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if header.ChecksumType != DefaultChecksumType {
 		t.Errorf("unexpected checksum type %d, want %d",
 			header.ChecksumType, DefaultChecksumType)
-	}
-	if header.SessionSize != uint64(len(sessionData)) {
-		t.Errorf("session data size mismatch")
-	}
-	if header.DataStoreSize != uint64(len(storeData)) {
-		t.Errorf("data store size mismatch")
 	}
 	storeChecksum := w.vw.GetPayloadSum()
 	if !bytes.Equal(header.PayloadChecksum, storeChecksum) {
@@ -122,12 +110,6 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	m, err := w.Write(storeData)
 	if err != nil || m != len(storeData) {
 		t.Fatalf("failed to write the store data")
-	}
-	if err := w.Flush(); err != nil {
-		t.Fatalf("flush failed")
-	}
-	if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
-		t.Fatalf("%v", err)
 	}
 	if err := w.Close(); err != nil {
 		t.Fatalf("%v", err)
@@ -400,12 +382,6 @@ func TestShrinkSnapshot(t *testing.T) {
 			t.Fatalf("write failed %v", err)
 		}
 	}
-	if err := writer.Flush(); err != nil {
-		t.Fatalf("failed to flush %v", err)
-	}
-	if err := writer.SaveHeader(0, 199); err != nil {
-		t.Fatalf("failed to write the header %v", err)
-	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("close failed %v", err)
 	}
@@ -447,12 +423,8 @@ func TestShrinkSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot reader %v", err)
 	}
-	header, err := reader.GetHeader()
-	if err != nil {
+	if _, err := reader.GetHeader(); err != nil {
 		t.Fatalf("failed to get header %v", err)
-	}
-	if header.DataStoreSize != 0 || header.SessionSize != EmptyClientSessionLength {
-		t.Fatalf("unexpected header value")
 	}
 }
 

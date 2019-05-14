@@ -130,12 +130,6 @@ func (g *getTestSnapshotDirStruct) generateSnapshotFile(clusterID uint64,
 	if err != nil {
 		panic(err)
 	}
-	if err := writer.Flush(); err != nil {
-		panic(err)
-	}
-	if err := writer.SaveHeader(sz, sz); err != nil {
-		panic(err)
-	}
 	if err := writer.Close(); err != nil {
 		panic(err)
 	}

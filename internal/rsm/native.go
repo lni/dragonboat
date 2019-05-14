@@ -230,13 +230,7 @@ func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
 	if err != nil {
 		return 0, err
 	}
-	if err = writer.Flush(); err != nil {
-		return 0, err
-	}
 	sz := EmptyClientSessionLength
-	if err := writer.SaveHeader(sz, 0); err != nil {
-		return 0, err
-	}
 	return writer.GetPayloadSize(sz) + SnapshotHeaderSize, nil
 }
 
@@ -256,13 +250,7 @@ func (ds *NativeStateMachine) saveSnapshot(
 	if err != nil {
 		return 0, err
 	}
-	if err = writer.Flush(); err != nil {
-		return 0, err
-	}
 	sz := cw.total
-	if err = writer.SaveHeader(smsz, sz); err != nil {
-		return 0, err
-	}
 	actualSz := writer.GetPayloadSize(sz + smsz)
 	return actualSz + SnapshotHeaderSize, nil
 }

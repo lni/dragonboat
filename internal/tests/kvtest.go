@@ -87,6 +87,7 @@ type KVTest struct {
 	closed           bool
 	aborted          bool `json:"-"`
 	externalFileTest bool
+	noLargeDelay     bool
 	pbkvPool         *sync.Pool
 }
 
@@ -113,6 +114,10 @@ func NewKVTest(clusterID uint64, nodeID uint64) sm.IStateMachine {
 	}
 
 	return s
+}
+
+func (s *KVTest) DisableLargeDelay() {
+	s.noLargeDelay = true
 }
 
 // Lookup performances local looks up for the sepcified data.
@@ -211,6 +216,9 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 		s.saveExternalFile(fileCollection)
 	}
 	delay := getLargeRandomDelay()
+	if s.noLargeDelay {
+		delay = 0
+	}
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10
@@ -242,12 +250,13 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 	if s.closed {
 		panic("recover from snapshot called after Close()")
 	}
-
 	if s.externalFileTest {
 		checkExternalFile(files, s.ClusterID)
 	}
-
 	delay := getLargeRandomDelay()
+	if s.noLargeDelay {
+		delay = 0
+	}
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10

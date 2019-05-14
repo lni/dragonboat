@@ -1507,15 +1507,19 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to get header")
 		}
-		if h.DataStoreSize != 0 || h.SessionSize != 16 {
-			t.Errorf("not a dummy snapshot file %d:%d", h.DataStoreSize, h.SessionSize)
-			reader.ValidateHeader(h)
-		}
 		if h.Version != uint64(rsm.CurrentSnapshotVersion) {
 			t.Errorf("unexpected snapshot version, got %d, want %d",
 				h.Version, rsm.CurrentSnapshotVersion)
 		}
 		reader.ValidateHeader(h)
+		reader.Close()
+		shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
+		if err != nil {
+			t.Fatalf("failed to check shrinked %v", err)
+		}
+		if !shrinked {
+			t.Errorf("not a dummy snapshot")
+		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 3)
 }

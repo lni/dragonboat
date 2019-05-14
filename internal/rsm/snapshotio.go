@@ -162,6 +162,12 @@ func NewSnapshotWriter(fp string,
 
 // Close closes the snapshot writer instance.
 func (sw *SnapshotWriter) Close() error {
+	if err := sw.flush(); err != nil {
+		return err
+	}
+	if err := sw.saveHeader(); err != nil {
+		return err
+	}
 	if err := sw.file.Sync(); err != nil {
 		return err
 	}
@@ -176,11 +182,6 @@ func (sw *SnapshotWriter) Write(data []byte) (int, error) {
 	return sw.vw.Write(data)
 }
 
-// Flush flushes the underlying IVWriter instance.
-func (sw *SnapshotWriter) Flush() error {
-	return sw.vw.Flush()
-}
-
 // GetPayloadSize returns the payload size.
 func (sw *SnapshotWriter) GetPayloadSize(sz uint64) uint64 {
 	return sw.vw.GetPayloadSize(sz)
@@ -191,14 +192,14 @@ func (sw *SnapshotWriter) GetPayloadChecksum() []byte {
 	return sw.vw.GetPayloadSum()
 }
 
-// SaveHeader saves the snapshot header to the snapshot.
-func (sw *SnapshotWriter) SaveHeader(smsz uint64, sz uint64) error {
-	// for v2
-	// the PayloadChecksu field is really the checksum of all block
+func (sw *SnapshotWriter) flush() error {
+	return sw.vw.Flush()
+}
+
+func (sw *SnapshotWriter) saveHeader() error {
+	// for v2, the PayloadChecksu field is really the checksum of all block
 	// checksums
 	sh := pb.SnapshotHeader{
-		SessionSize:     smsz,
-		DataStoreSize:   sz,
 		UnreliableTime:  uint64(time.Now().UnixNano()),
 		PayloadChecksum: sw.GetPayloadChecksum(),
 		ChecksumType:    getChecksumType(),
@@ -449,10 +450,7 @@ func ShrinkSnapshot(fp string, newFp string) (err error) {
 	if _, err := writer.Write(GetEmptyLRUSession()); err != nil {
 		return err
 	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
-	return writer.SaveHeader(EmptyClientSessionLength, 0)
+	return nil
 }
 
 // ReplaceSnapshotFile replace the specified snapshot file with the shrinked

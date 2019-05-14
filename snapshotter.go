@@ -98,6 +98,9 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		if cerr := writer.Close(); err == nil {
 			err = cerr
 		}
+		if ss != nil {
+			ss.Checksum = writer.GetPayloadChecksum()
+		}
 	}()
 	session := meta.Session.Bytes()
 	dummy, sz, err := savable.SaveSnapshot(meta, writer, session, files)
@@ -116,7 +119,6 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		Index:      meta.Index,
 		Term:       meta.Term,
 		Files:      fs,
-		Checksum:   writer.GetPayloadChecksum(),
 		Dummy:      dummy,
 		Type:       meta.Type,
 	}

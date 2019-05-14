@@ -235,6 +235,7 @@ func (s *testSnapshotter) Load(index uint64,
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
+	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
@@ -249,6 +250,7 @@ func runSMTest2(t *testing.T,
 	createTestDir()
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
+	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
@@ -938,6 +940,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
+		store2.(*tests.KVTest).DisableLargeDelay()
 		ds2 := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store2}, make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
@@ -1477,14 +1480,7 @@ func TestRecoverSMRequired(t *testing.T) {
 			if err != nil || m != len(storeData) {
 				t.Fatalf("failed to write the store data")
 			}
-			if err := w.Flush(); err != nil {
-				t.Fatalf("%v", err)
-			}
-			if err := w.SaveHeader(uint64(n), uint64(m)); err != nil {
-				t.Fatalf("%v", err)
-			}
-			err = w.Close()
-			if err != nil {
+			if err := w.Close(); err != nil {
 				t.Fatalf("%v", err)
 			}
 			if tt.shrinked {
