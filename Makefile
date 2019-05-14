@@ -34,8 +34,7 @@ $(info using rocksdb based log storage)
 # tested rocksdb version -
 # rocksdb 5.13.x
 # very briefly tested -
-# rocksdb 5.15.10
-# rocksdb 5.16.6
+# rocksdb 5.15.10, 5.16.6, 5.17.2 and 6.0.2
 ROCKSDB_MAJOR_VER=5
 ROCKSDB_MINOR_VER=13
 ROCKSDB_PATCH_VER=4
