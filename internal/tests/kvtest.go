@@ -116,6 +116,7 @@ func NewKVTest(clusterID uint64, nodeID uint64) sm.IStateMachine {
 	return s
 }
 
+// DisableLargeDelay disables random large delays.
 func (s *KVTest) DisableLargeDelay() {
 	s.noLargeDelay = true
 }

@@ -55,6 +55,7 @@ func checkDirs(dirs []string, lldirs []string) {
 	}
 }
 
+// GetLogDBInfo returns logdb type name.
 func GetLogDBInfo(f config.LogDBFactoryFunc,
 	nhDirs []string) (name string, err error) {
 	tmpDirs := make([]string, 0)

@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	grpcServerURL     = "localhost:5601"
+	serverAddress     = "localhost:5601"
 	snapshotDir       = "gtransport_test_data_safe_to_delete"
 	caFile            = "tests/test-root-ca.crt"
 	certFile          = "tests/localhost.crt"
@@ -48,15 +48,15 @@ const (
 	testSnapshotIndex = uint64(12345)
 )
 
-type getTestSnapshotDirStruct struct{}
+type testSnapshotDir struct{}
 
-func (g *getTestSnapshotDirStruct) GetSnapshotRootDir(clusterID uint64,
+func (g *testSnapshotDir) GetSnapshotRootDir(clusterID uint64,
 	nodeID uint64) string {
 	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
 	return filepath.Join(snapshotDir, snapNodeDir)
 }
 
-func (g *getTestSnapshotDirStruct) GetSnapshotDir(clusterID uint64,
+func (g *testSnapshotDir) GetSnapshotDir(clusterID uint64,
 	nodeID uint64, lastApplied uint64) string {
 	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
 	snapDir := fmt.Sprintf("snapshot-%016X", lastApplied)
@@ -64,7 +64,7 @@ func (g *getTestSnapshotDirStruct) GetSnapshotDir(clusterID uint64,
 	return d
 }
 
-func (g *getTestSnapshotDirStruct) getSnapshotFileMD5(clusterID uint64,
+func (g *testSnapshotDir) getSnapshotFileMD5(clusterID uint64,
 	nodeID uint64, index uint64, filename string) ([]byte, error) {
 	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
 	fp := filepath.Join(snapDir, filename)
@@ -80,7 +80,7 @@ func (g *getTestSnapshotDirStruct) getSnapshotFileMD5(clusterID uint64,
 	return h.Sum(nil), nil
 }
 
-func (g *getTestSnapshotDirStruct) generateSnapshotExternalFile(clusterID uint64,
+func (g *testSnapshotDir) generateSnapshotExternalFile(clusterID uint64,
 	nodeID uint64, index uint64, filename string, sz uint64) {
 	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
 	if err := os.MkdirAll(snapDir, 0755); err != nil {
@@ -103,7 +103,7 @@ func (g *getTestSnapshotDirStruct) generateSnapshotExternalFile(clusterID uint64
 	f.Close()
 }
 
-func (g *getTestSnapshotDirStruct) generateSnapshotFile(clusterID uint64,
+func (g *testSnapshotDir) generateSnapshotFile(clusterID uint64,
 	nodeID uint64, index uint64, filename string, sz uint64) {
 	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
 	if err := os.MkdirAll(snapDir, 0755); err != nil {
@@ -135,7 +135,7 @@ func (g *getTestSnapshotDirStruct) generateSnapshotFile(clusterID uint64,
 	}
 }
 
-func (g *getTestSnapshotDirStruct) cleanup() {
+func (g *testSnapshotDir) cleanup() {
 	os.RemoveAll(snapshotDir)
 }
 
@@ -285,7 +285,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 
 func newNOOPTestTransport() (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
-	t := &getTestSnapshotDirStruct{}
+	t := &testSnapshotDir{}
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	c := config.NodeHostConfig{
 		RaftAddress:    "localhost:9876",
@@ -307,12 +307,12 @@ func newNOOPTestTransport() (*Transport,
 }
 
 func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
-	*syncutil.Stopper, *getTestSnapshotDirStruct) {
+	*syncutil.Stopper, *testSnapshotDir) {
 	stopper := syncutil.NewStopper()
 	nodes := NewNodes(settings.Soft.StreamConnections)
-	t := &getTestSnapshotDirStruct{}
+	t := &testSnapshotDir{}
 	c := config.NodeHostConfig{
-		RaftAddress: grpcServerURL,
+		RaftAddress: serverAddress,
 	}
 	if mutualTLS {
 		c.MutualTLS = true
@@ -339,7 +339,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	for i := 0; i < 20; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Heartbeat,
@@ -425,7 +425,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	for i := 0; i < 128; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Replicate,
@@ -465,7 +465,7 @@ func testNothingSentBeforeDeploymentIDIsSet(t *testing.T, mutualTLS bool) {
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	for i := 0; i < 100; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Heartbeat,
@@ -499,7 +499,7 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	trans.SetPreSendMessageBatchHook(f)
 	for i := 0; i < 100; i++ {
 		msg := raftpb.Message{
@@ -588,7 +588,8 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 		t.Errorf("breaker is not ready after wait")
 	}
 	if handler.getUnreachableCount(100, 2) == 0 {
-		t.Errorf("unreachable count %d, want 1", handler.getUnreachableCount(100, 2))
+		t.Errorf("unreachable count %d, want 1",
+			handler.getUnreachableCount(100, 2))
 	}
 }
 
@@ -637,7 +638,7 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -664,8 +665,8 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool) {
 	if !ok {
 		t.Errorf("did not record source address")
 	}
-	if v != grpcServerURL {
-		t.Errorf("v %s, want %s", v, grpcServerURL)
+	if v != serverAddress {
+		t.Errorf("v %s, want %s", v, serverAddress)
 	}
 }
 
@@ -743,11 +744,12 @@ func testSnapshotCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -770,11 +772,13 @@ func testSnapshotCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	if handler.getReceivedSnapshotCount(100, 2) != 1 {
 		t.Errorf("got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
 	}
-	md5Original, err := tt.getSnapshotFileMD5(100, 2, testSnapshotIndex, "testsnapshot.gbsnap")
+	md5Original, err := tt.getSnapshotFileMD5(100,
+		2, testSnapshotIndex, "testsnapshot.gbsnap")
 	if err != nil {
 		t.Errorf("err %v, want nil", err)
 	}
-	md5Received, err := tt.getSnapshotFileMD5(100, 12, testSnapshotIndex, "testsnapshot.gbsnap")
+	md5Received, err := tt.getSnapshotFileMD5(100,
+		12, testSnapshotIndex, "testsnapshot.gbsnap")
 	if err != nil {
 		t.Errorf("err %v, want nil", err)
 	}
@@ -793,11 +797,12 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", 1024)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(1024)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.SetPreStreamChunkSendHook(f)
 	done := trans.ASyncSendSnapshot(m)
@@ -848,7 +853,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 		fp := filepath.Join(snapDir, "testsnapshot.gbsnap")
@@ -860,10 +865,12 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 		}
 	}
 	trans.streamChunkSent.Store(onStreamChunkSent)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize)
+	tt.generateSnapshotFile(100,
+		12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -888,7 +895,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	defer trans.Stop()
 	defer stopper.Stop()
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	conns := make([]*Sink, 0)
 	for i := uint32(0); i < maxConnectionCount; i++ {
 		sink := trans.GetStreamConnection(100, 2)
@@ -913,7 +920,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 			break
 		}
 	}
-	breaker := trans.GetCircuitBreaker(grpcServerURL)
+	breaker := trans.GetCircuitBreaker(serverAddress)
 	for {
 		breaker.Success()
 		if breaker.Ready() {
@@ -949,7 +956,8 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -985,8 +993,8 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
-	nodes.AddNode(100, 3, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
+	nodes.AddNode(100, 3, serverAddress)
 	snapshotSent := uint32(0)
 	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
 		for atomic.LoadUint32(&snapshotSent) == 0 {
@@ -999,28 +1007,29 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m)
 	plog.Infof("m sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize)
 	m2 := getTestSnapshotMessage(2)
 	m2.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m2.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot1.gbsnap")
+	m2.Snapshot.Filepath = filepath.Join(dir, "testsnapshot1.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m2)
 	plog.Infof("m2 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize)
 	m3 := getTestSnapshotMessage(3)
 	m3.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m3.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	m3.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m3)
 	plog.Infof("m3 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize)
 	m4 := getTestSnapshotMessage(2)
 	m4.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m4.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot2.gbsnap")
+	m4.Snapshot.Filepath = filepath.Join(dir, "testsnapshot2.gbsnap")
 	// send the snapshot file
 	plog.Infof("going to call send m4")
 	trans.ASyncSendSnapshot(m4)
@@ -1047,7 +1056,8 @@ func TestFailedSnapshotSendWillBeReported(t *testing.T) {
 	testFailedSnapshotSendWillBeReported(t, false)
 }
 
-func testSnapshotWithExternalFilesCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bool) {
+func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
+	sz uint64, maxWait uint64, mutualTLS bool) {
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -1056,20 +1066,21 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T, sz uint64, maxWait uin
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external2.data", sz)
 	m := getTestSnapshotMessage(2)
+	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
-	m.Snapshot.Filepath = filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	f1 := &raftpb.SnapshotFile{
-		Filepath: filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "external1.data"),
+		Filepath: filepath.Join(dir, "external1.data"),
 		FileSize: sz,
 		FileId:   1,
 	}
 	f2 := &raftpb.SnapshotFile{
-		Filepath: filepath.Join(tt.GetSnapshotDir(100, 12, testSnapshotIndex), "external2.data"),
+		Filepath: filepath.Join(dir, "external2.data"),
 		FileSize: sz,
 		FileId:   2,
 	}
@@ -1124,13 +1135,13 @@ func TestNoOPTransportCanBeCreated(t *testing.T) {
 	defer tt.Stop()
 }
 
-func TestInitialMessageCanBeSendWithThePresenceOfCircuitBreaker(t *testing.T) {
+func TestInitialMessageCanBeSent(t *testing.T) {
 	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport()
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1148,7 +1159,6 @@ func TestInitialMessageCanBeSendWithThePresenceOfCircuitBreaker(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-
 	if tt.queueSize() != 1 {
 		t.Errorf("queue len %d, want 1", tt.queueSize())
 	}
@@ -1166,7 +1176,7 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1201,7 +1211,7 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1251,7 +1261,7 @@ func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	sink := tt.GetStreamConnection(100, 3)
 	if sink != nil {
 		t.Errorf("unexpectedly returned a sink")
@@ -1271,7 +1281,7 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	connReq.SetToFail(true)
 	req.SetToFail(true)
 	tt.GetStreamConnection(100, 2)
@@ -1290,13 +1300,13 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 }
 
 // failed to connect due to too many connections
-func TestFailedStreamConnectionDueToTooManyConnectionsWillHaveSnapshotStatusUpdated(t *testing.T) {
+func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	tt, nodes, _, _, _ := newNOOPTestTransport()
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, grpcServerURL)
+	nodes.AddNode(100, 2, serverAddress)
 	for i := uint32(0); i < maxConnectionCount; i++ {
 		sink := tt.GetStreamConnection(100, 2)
 		if sink == nil {

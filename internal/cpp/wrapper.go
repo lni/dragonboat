@@ -237,7 +237,7 @@ func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
 // Update updates the data store.
 func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) sm.Result {
 	ds.ensureNotDestroyed()
-	var dp *C.uchar = nil
+	var dp *C.uchar
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
@@ -256,7 +256,7 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	var dp *C.uchar = nil
+	var dp *C.uchar
 	if len(data) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 	}
@@ -316,15 +316,8 @@ func (ds *StateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		plog.Errorf("save snapshot failed, %v", err)
 		return false, 0, err
 	}
-	if err := writer.Flush(); err != nil {
-		return false, 0, err
-	}
 	sz := uint64(r.size)
-	if err := writer.SaveHeader(smsz, sz); err != nil {
-		plog.Errorf("save header failed %v", err)
-		return false, 0, err
-	}
-	actualSz := writer.GetPayloadSize(uint64(r.size) + smsz)
+	actualSz := writer.GetPayloadSize(sz + smsz)
 	return false, actualSz + rsm.SnapshotHeaderSize, nil
 }
 
