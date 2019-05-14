@@ -9,9 +9,6 @@
 /multiraft-monkey-testing
 /drummer-monkey-testing
 /dragonboat-cppwrapper-tests
-**/dragonboat-drummer-cmd
-**/dragonboat-drummer-server
-**/dragonboat-nodehost-server
 **/kvstore-example-client
 **/porcupine-checker-bin
 **/logdb-checker-bin
@@ -26,9 +23,8 @@ out.txt
 *.o
 *.a
 *-fuzz.zip
+*.bin
 gitversion.go
-test.bin
-test-*.bin
 drummer-lcm.edn
 drummer-lcm.jepsen
 drummer-data
