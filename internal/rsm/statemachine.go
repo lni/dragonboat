@@ -123,7 +123,7 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
-	StreamSnapshot(IStreamable, *SnapshotMeta, pb.IChunkSink) error
+	Stream(IStreamable, *SnapshotMeta, pb.IChunkSink) error
 	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
 	Load(uint64, ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
@@ -525,7 +525,7 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	}(); err != nil {
 		return err
 	}
-	return s.snapshotter.StreamSnapshot(s.sm, meta, sink)
+	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
 func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot,

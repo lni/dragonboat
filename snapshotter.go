@@ -71,22 +71,15 @@ func (s *snapshotter) describe() string {
 	return logutil.DescribeNode(s.clusterID, s.nodeID)
 }
 
-func (s *snapshotter) StreamSnapshot(streamable rsm.IStreamable,
-	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
+func (s *snapshotter) Stream(streamable rsm.IStreamable,
+	meta *rsm.SnapshotMeta, sink pb.IChunkSink) (err error) {
 	writer := rsm.NewChunkWriter(sink, meta)
-	defer writer.Close()
-	if err := func() error {
-		if _, err := writer.Write(rsm.GetEmptyLRUSession()); err != nil {
-			return err
+	defer func() {
+		if cerr := writer.Close(); err == nil {
+			err = cerr
 		}
-		if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
-			return err
-		}
-		return writer.Flush()
-	}(); err != nil {
-		return err
-	}
-	return nil
+	}()
+	return streamable.StreamSnapshot(meta.Ctx, writer)
 }
 
 func (s *snapshotter) Save(savable rsm.ISavable,

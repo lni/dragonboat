@@ -2397,19 +2397,15 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSnapshotMeta()
 	cw := rsm.NewChunkWriter(sink, meta)
-	_, err := cw.Write(rsm.GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send LRU session %v", err)
-	}
 	defer os.RemoveAll(testSnapshotDir)
 	for i := 0; i < 10; i++ {
-		data := make([]byte, rsm.SnapshotChunkSize)
+		data := make([]byte, rsm.ChunkSize)
 		rand.Read(data)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
 	}
-	if err := cw.Flush(); err != nil {
+	if err := cw.Close(); err != nil {
 		t.Fatalf("failed to flush %v", err)
 	}
 	if c.received != exp {
@@ -2433,22 +2429,18 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	sink := &testSink2{receiver: cks}
 	meta := getTestSnapshotMeta()
 	cw := rsm.NewChunkWriter(sink, meta)
-	_, err := cw.Write(rsm.GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send LRU session %v", err)
-	}
 	defer os.RemoveAll(testSnapshotDir)
 	payload := make([]byte, 0)
 	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
-		data := make([]byte, rsm.SnapshotChunkSize)
+		data := make([]byte, rsm.ChunkSize)
 		rand.Read(data)
 		payload = append(payload, data...)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
 	}
-	if err := cw.Flush(); err != nil {
+	if err := cw.Close(); err != nil {
 		t.Fatalf("failed to flush %v", err)
 	}
 	if c.received != 1 {

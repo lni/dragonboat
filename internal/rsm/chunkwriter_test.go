@@ -55,21 +55,17 @@ func getTestSnapshotMeta() *SnapshotMeta {
 func TestChunkWriterCanBeWritten(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	cw := NewChunkWriter(&testSink{}, meta)
-	_, err := cw.Write(GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send empty LRU session %v", err)
-	}
 	for i := 0; i < 10; i++ {
-		data := make([]byte, SnapshotChunkSize)
+		data := make([]byte, ChunkSize)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
 	}
-	if err := cw.Flush(); err != nil {
+	if err := cw.Close(); err != nil {
 		t.Fatalf("failed to flush %v", err)
 	}
-	if len(cw.sink.(*testSink).chunks) != 13 {
-		t.Errorf("chunks count %d, want 13", len(cw.sink.(*testSink).chunks))
+	if len(cw.sink.(*testSink).chunks) != 14 {
+		t.Errorf("chunks count %d, want 14", len(cw.sink.(*testSink).chunks))
 	}
 	for idx, chunk := range cw.sink.(*testSink).chunks {
 		if idx == 0 {
@@ -81,14 +77,15 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 			}
 		} else if idx == 12 {
 			if chunk.ChunkCount != pb.LastChunkCount {
-				t.Errorf("last chunk not marked")
+				t.Errorf("last chunk not marked, %d", idx)
 			}
 			if chunk.FileChunkCount != pb.LastChunkCount {
-				t.Errorf("last chunk not marked")
+				t.Errorf("last chunk not marked, %d", idx)
 			}
+		} else if idx == 13 {
 		} else {
 			if chunk.ChunkCount != 0 {
-				t.Errorf("unexpectedly marked last chunk")
+				t.Errorf("unexpectedly marked as last chunk, %d", idx)
 			}
 		}
 	}
@@ -98,19 +95,15 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
-	_, err := cw.Write(GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send empty LRU session %v", err)
-	}
 	for i := 0; i < 10; i++ {
-		data := make([]byte, SnapshotChunkSize)
+		data := make([]byte, ChunkSize)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
 	}
 	sink.sendFailed = true
-	data := make([]byte, SnapshotChunkSize)
-	_, err = cw.Write(data)
+	data := make([]byte, ChunkSize)
+	_, err := cw.Write(data)
 	if err == nil {
 		t.Fatalf("writer didn't fail")
 	}
@@ -123,19 +116,15 @@ func TestChunkWriterCanBeStopped(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
-	_, err := cw.Write(GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send empty LRU session %v", err)
-	}
 	for i := 0; i < 10; i++ {
-		data := make([]byte, SnapshotChunkSize)
+		data := make([]byte, ChunkSize)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
 	}
 	sink.stopped = true
-	data := make([]byte, SnapshotChunkSize)
-	_, err = cw.Write(data)
+	data := make([]byte, ChunkSize)
+	_, err := cw.Write(data)
 	if err == nil {
 		t.Fatalf("writer didn't fail")
 	}
@@ -148,10 +137,6 @@ func TestGetTailChunk(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
-	_, err := cw.Write(GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send LRU session %v", err)
-	}
 	chunk := cw.getTailChunk()
 	if chunk.ChunkCount != pb.LastChunkCount {
 		t.Errorf("chunk count %d, want %d",
@@ -167,12 +152,8 @@ func TestCloseChunk(t *testing.T) {
 	meta := getTestSnapshotMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
-	_, err := cw.Write(GetEmptyLRUSession())
-	if err != nil {
-		t.Fatalf("failed to send LRU session %v", err)
-	}
 	cw.Close()
-	chunk := sink.chunks[0]
+	chunk := sink.chunks[len(sink.chunks)-1]
 	if chunk.ChunkCount != pb.LastChunkCount-1 {
 		t.Errorf("chunk count %d, want %d",
 			chunk.ChunkCount, pb.LastChunkCount-1)

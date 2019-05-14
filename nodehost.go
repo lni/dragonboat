@@ -1239,7 +1239,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
 		nh.execEngine.SetCommitReady,
-		nh.asyncSendRaftRequest,
+		nh.sendMessage,
 		queue,
 		stopc,
 		nh.nodes,
@@ -1392,7 +1392,7 @@ func (nh *NodeHost) getCurrentClusters(index uint64,
 	return newIndex, newClusters, newQueues
 }
 
-func (nh *NodeHost) asyncSendRaftRequest(msg pb.Message) {
+func (nh *NodeHost) sendMessage(msg pb.Message) {
 	if nh.isPartitioned() {
 		return
 	}
@@ -1404,14 +1404,12 @@ func (nh *NodeHost) asyncSendRaftRequest(msg pb.Message) {
 			logutil.DescribeNode(msg.ClusterId, msg.From),
 			logutil.DescribeNode(msg.ClusterId, msg.To),
 			msg.Snapshot.Index, msg.Snapshot.FileSize)
-		n, ok := nh.getCluster(msg.ClusterId)
-		if !ok {
-			return
-		}
-		if !n.OnDiskStateMachine() {
-			nh.transport.ASyncSendSnapshot(msg)
-		} else {
-			n.publishStreamSnapshotRequest(msg.ClusterId, msg.To)
+		if n, ok := nh.getCluster(msg.ClusterId); ok {
+			if !n.OnDiskStateMachine() {
+				nh.transport.ASyncSendSnapshot(msg)
+			} else {
+				n.publishStreamSnapshotRequest(msg.ClusterId, msg.To)
+			}
 		}
 	}
 }
@@ -1708,7 +1706,7 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 	}
 	plog.Infof("%s is sending MsgSnapshotReceived to %d",
 		logutil.DescribeNode(clusterID, nodeID), from)
-	h.nh.asyncSendRaftRequest(msg)
+	h.nh.sendMessage(msg)
 }
 
 func (h *messageHandler) HandlePingMessage(msg pb.Message) {

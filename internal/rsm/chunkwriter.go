@@ -26,16 +26,17 @@ import (
 )
 
 const (
-	// SnapshotChunkSize is the size of each snapshot chunk.
-	SnapshotChunkSize = settings.SnapshotChunkSize
+	// ChunkSize is the size of each snapshot chunk.
+	ChunkSize = settings.SnapshotChunkSize
 )
 
-// ChunkWriter is a writer type that streams snapshot chunks to its intended
-// remote nodes.
+// ChunkWriter is an io.WriteCloser type that streams snapshot chunks to its
+// intended remote nodes.
 type ChunkWriter struct {
 	failed  bool
 	stopped bool
 	chunkID uint64
+	first   bool
 	sink    pb.IChunkSink
 	bw      IBlockWriter
 	meta    *SnapshotMeta
@@ -44,17 +45,21 @@ type ChunkWriter struct {
 // NewChunkWriter creates and returns a chunk writer instance.
 func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *ChunkWriter {
 	cw := &ChunkWriter{
-		sink: sink,
-		meta: meta,
+		sink:  sink,
+		meta:  meta,
+		first: true,
 	}
-	cw.bw = NewBlockWriter(SnapshotChunkSize,
-		cw.onNewBlock, DefaultChecksumType)
+	cw.bw = NewBlockWriter(ChunkSize, cw.onNewBlock, DefaultChecksumType)
 	return cw
 }
 
 // Close closes the chunk writer.
-func (cw *ChunkWriter) Close() {
+func (cw *ChunkWriter) Close() error {
+	if err := cw.flush(); err != nil {
+		return err
+	}
 	cw.sink.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
 // Write writes the specified input data.
@@ -65,11 +70,16 @@ func (cw *ChunkWriter) Write(data []byte) (int, error) {
 	if cw.failed {
 		return 0, sm.ErrSnapshotStreaming
 	}
+	if cw.first {
+		cw.first = false
+		if _, err := cw.Write(GetEmptyLRUSession()); err != nil {
+			return 0, err
+		}
+	}
 	return cw.bw.Write(data)
 }
 
-// Flush flushes the buffered data.
-func (cw *ChunkWriter) Flush() error {
+func (cw *ChunkWriter) flush() error {
 	if err := cw.bw.Flush(); err != nil {
 		return err
 	}
