@@ -82,9 +82,9 @@ func getTestDeploymentID() uint64 {
 }
 
 func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler)) {
-	defer leaktest.AfterTest(t)
-	trans, _, stopper, tt := newTestTransport(false)
+	defer os.RemoveAll(snapshotDir)
 	defer leaktest.AfterTest(t)()
+	trans, _, stopper, tt := newTestTransport(false)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -93,11 +93,15 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler
 	trans.SetMessageHandler(handler)
 	chunks := newSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
+	ts := getTestChunks()
+	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
+	os.MkdirAll(snapDir, 0755)
 	fn(t, chunks, handler)
 }
 
 func TestMaxSlotIsEnforced(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		defer os.RemoveAll(snapshotDir)
 		inputs := getTestChunks()
 		chunks.validate = false
 		v := uint64(1)
@@ -105,6 +109,8 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 		for i := uint64(0); i < maxConcurrentSlot; i++ {
 			v++
 			c.ClusterId = v
+			snapDir := chunks.getSnapshotDir(v, c.NodeId)
+			os.MkdirAll(snapDir, 0755)
 			if !chunks.addChunk(c) {
 				t.Errorf("failed to add chunk")
 			}
@@ -254,6 +260,7 @@ func TestGcRemovesRecordAndTempFile(t *testing.T) {
 	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
+		chunks.addChunk(inputs[0])
 		if !chunks.addChunk(inputs[0]) {
 			t.Fatalf("failed to add chunk")
 		}

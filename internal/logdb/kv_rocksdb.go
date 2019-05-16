@@ -125,13 +125,21 @@ func getRocksDBOptions(directory string,
 func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
-	if len(wal) > 0 && !fileutil.Exist(wal) {
-		if err := fileutil.MkdirAll(wal); err != nil {
+	walExist, err := fileutil.Exist(wal)
+	if err != nil {
+		return nil, err
+	}
+	if len(wal) > 0 && !walExist {
+		if err := fileutil.Mkdir(wal); err != nil {
 			plog.Panicf("cannot create dir for RDB WAL (%v)", err)
 		}
 	}
-	if !fileutil.Exist(dir) {
-		if err := fileutil.MkdirAll(dir); err != nil {
+	dirExist, err := fileutil.Exist(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !dirExist {
+		if err := fileutil.Mkdir(dir); err != nil {
 			plog.Panicf("cannot create dir (%v)", err)
 		}
 	}

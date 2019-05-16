@@ -244,10 +244,7 @@ func (se *SnapshotEnv) createDir(dir string) error {
 	if err := mustBeChild(se.rootDir, dir); err != nil {
 		return err
 	}
-	if err := fileutil.MkdirAll(dir); err != nil {
-		return err
-	}
-	return fileutil.SyncDir(se.rootDir)
+	return fileutil.Mkdir(dir)
 }
 
 func (se *SnapshotEnv) removeDir(dir string) error {

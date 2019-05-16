@@ -158,9 +158,17 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	defer logdb.Close()
-	serverCtx.CreateNodeHostDir(nhConfig.DeploymentID)
-	serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
-		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name())
+	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
+		return err
+	}
+	if err := serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
+		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name()); err != nil {
+		return err
+	}
+	if err := serverCtx.CreateSnapshotDir(nhConfig.DeploymentID,
+		oldss.ClusterId, nodeID); err != nil {
+		return err
+	}
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
@@ -205,7 +213,11 @@ func isCompleteSnapshotImage(ssfp string, ss pb.Snapshot) (bool, error) {
 }
 
 func getSnapshotFilepath(dir string) (string, error) {
-	if !fileutil.Exist(dir) {
+	exist, err := fileutil.Exist(dir)
+	if err != nil {
+		return "", err
+	}
+	if !exist {
 		return "", ErrPathNotExist
 	}
 	files, err := getSnapshotFiles(dir)

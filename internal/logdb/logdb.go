@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
 	"github.com/lni/dragonboat/raftio"
@@ -62,10 +63,10 @@ func GetLogDBInfo(f config.LogDBFactoryFunc,
 	for _, dir := range nhDirs {
 		tmp := fmt.Sprintf("tmp-%d", random.LockGuardedRand.Uint64())
 		td := filepath.Join(dir, tmp)
-		if err := os.MkdirAll(td, 0755); err != nil {
+		if err := fileutil.Mkdir(td); err != nil {
 			return "", err
 		}
-		tmpDirs = append(tmpDirs, filepath.Join(dir, tmp))
+		tmpDirs = append(tmpDirs, td)
 	}
 	ldb, err := f(tmpDirs, tmpDirs)
 	if err != nil {

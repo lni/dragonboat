@@ -611,23 +611,23 @@ func getTestSnapshotMessage(to uint64) raftpb.Message {
 	return m
 }
 
-func TestSnapshotCanBeSend(t *testing.T) {
+func TestSnapshotCanBeSent(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	mutualTLSValues := []bool{true, false}
 	for _, v := range mutualTLSValues {
-		testSnapshotCanBeSend(t, snapshotChunkSize-1, 3000, v)
-		testSnapshotCanBeSend(t, snapshotChunkSize/2, 3000, v)
-		testSnapshotCanBeSend(t, snapshotChunkSize+1, 3000, v)
-		testSnapshotCanBeSend(t, snapshotChunkSize*3, 3000, v)
-		testSnapshotCanBeSend(t, snapshotChunkSize*3+1, 3000, v)
-		testSnapshotCanBeSend(t, snapshotChunkSize*3-1, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize-1, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize/2, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize+1, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 3000, v)
 	}
 }
 
 func TestLargeSnapshotCanBeSent(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	testSnapshotCanBeSend(t, 64*1024*1024, 20000, true)
-	testSnapshotCanBeSend(t, 256*1024*1024+5, 20000, false)
+	testSnapshotCanBeSent(t, 64*1024*1024, 20000, true)
+	testSnapshotCanBeSent(t, 256*1024*1024+5, 20000, false)
 }
 
 func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool) {
@@ -735,8 +735,9 @@ func getTestSnapshotFileSize(sz uint64) uint64 {
 	}
 }
 
-func testSnapshotCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bool) {
+func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bool) {
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	defer os.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -749,6 +750,10 @@ func testSnapshotCanBeSend(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
+	chunks := newSnapshotChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
+	snapDir := chunks.getSnapshotDir(100, 2)
+	os.MkdirAll(snapDir, 0755)
 	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
@@ -844,6 +849,7 @@ func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 }
 
 func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
+	defer os.RemoveAll(snapshotDir)
 	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
@@ -853,6 +859,10 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
+	chunks := newSnapshotChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
+	snapDir := chunks.getSnapshotDir(100, 2)
+	os.MkdirAll(snapDir, 0755)
 	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
@@ -1058,6 +1068,7 @@ func TestFailedSnapshotSendWillBeReported(t *testing.T) {
 
 func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	sz uint64, maxWait uint64, mutualTLS bool) {
+	defer os.RemoveAll(snapshotDir)
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -1066,6 +1077,11 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
+	chunks := newSnapshotChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
+	ts := getTestChunks()
+	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
+	os.MkdirAll(snapDir, 0755)
 	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)

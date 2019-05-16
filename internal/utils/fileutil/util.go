@@ -27,14 +27,45 @@ const (
 )
 
 // Exist returns whether the specified filesystem entry exists.
-func Exist(name string) bool {
+func Exist(name string) (bool, error) {
 	_, err := os.Stat(name)
-	return !os.IsNotExist(err)
+	if err != nil && os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-// MkdirAll creates the specified dir.
+// MkdirAll creates the specified dir along with any necessary parents.
 func MkdirAll(dir string) error {
-	return os.MkdirAll(dir, defaultDirFileMode)
+	exist, err := Exist(dir)
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+	parent := filepath.Dir(dir)
+	exist, err = Exist(parent)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		if err := MkdirAll(parent); err != nil {
+			return err
+		}
+	}
+	return Mkdir(dir)
+}
+
+// Mkdir creates the specified dir.
+func Mkdir(dir string) error {
+	if err := os.Mkdir(dir, defaultDirFileMode); err != nil {
+		return err
+	}
+	return SyncDir(filepath.Dir(dir))
 }
 
 // SyncDir calls fsync on the specified directory.

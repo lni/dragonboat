@@ -1220,7 +1220,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 			nh.nodes.AddNode(clusterID, k, v)
 		}
 	}
-	if _, err := nh.serverCtx.PrepareSnapshotDir(nh.deploymentID,
+	if err := nh.serverCtx.CreateSnapshotDir(nh.deploymentID,
 		clusterID, nodeID); err != nil {
 		return err
 	}

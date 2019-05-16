@@ -331,7 +331,11 @@ func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
 func (rc *node) exportSnapshot(path string,
 	timeout time.Duration) (*SnapshotState, error) {
 	plog.Infof("export snapshot called on %s", rc.describe())
-	if !fileutil.Exist(path) {
+	exist, err := fileutil.Exist(path)
+	if err != nil {
+		return nil, err
+	}
+	if !exist {
 		return nil, ErrDirNotExist
 	}
 	return rc.pendingSnapshot.request(rsm.ExportedSnapshot, path, timeout)

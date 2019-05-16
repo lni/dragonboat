@@ -1110,7 +1110,7 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
-	if _, err = nh.serverCtx.PrepareSnapshotDir(nh.deploymentID, 2, 1); err != nil {
+	if err = nh.serverCtx.CreateSnapshotDir(nh.deploymentID, 2, 1); err != nil {
 		t.Fatalf("failed to get snap dir")
 	}
 	snapDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
@@ -2032,7 +2032,11 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			t.Fatalf("failed to save snapshots")
 		}
 		snapshotDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
-		if !fileutil.Exist(snapshotDir) {
+		exist, err := fileutil.Exist(snapshotDir)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if !exist {
 			t.Fatalf("snapshot dir %s does not exist", snapshotDir)
 		}
 		removed := false
@@ -2053,7 +2057,11 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if !removed {
 			t.Fatalf("failed to remove node data")
 		}
-		if fileutil.Exist(snapshotDir) {
+		exist, err = fileutil.Exist(snapshotDir)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if exist {
 			t.Fatalf("snapshot dir %s still exist", snapshotDir)
 		}
 		bs, err := logdb.GetBootstrapInfo(2, 1)
@@ -2122,11 +2130,19 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 		snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
 		fp := path.Join(sspath, snapshotDir, snapshotFile)
-		if !fileutil.Exist(fp) {
+		exist, err := fileutil.Exist(fp)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if !exist {
 			t.Errorf("snapshot file not saved")
 		}
 		metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
-		if !fileutil.Exist(metafp) {
+		exist, err = fileutil.Exist(metafp)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if !exist {
 			t.Errorf("snapshot metadata not saved")
 		}
 	}
@@ -2161,11 +2177,19 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 		snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
 		fp := path.Join(sspath, snapshotDir, snapshotFile)
-		if !fileutil.Exist(fp) {
+		exist, err := fileutil.Exist(fp)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if !exist {
 			t.Errorf("snapshot file not saved")
 		}
 		metafp := path.Join(sspath, snapshotDir, "snapshot.metadata")
-		if !fileutil.Exist(metafp) {
+		exist, err = fileutil.Exist(metafp)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if !exist {
 			t.Errorf("snapshot metadata not saved")
 		}
 		shrinked, err := rsm.IsShrinkedSnapshotFile(fp)
@@ -2383,6 +2407,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	enabled bool, exp uint64) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
+	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
@@ -2415,6 +2440,7 @@ func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
+	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &testSink2{receiver: cks}

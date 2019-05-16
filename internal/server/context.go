@@ -110,11 +110,20 @@ func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
 // GetSnapshotDir returns the snapshot directory name.
 func (sc *Context) GetSnapshotDir(did uint64, clusterID uint64,
 	nodeID uint64) string {
+	parts, _, _ := sc.getSnapshotDirParts(did, clusterID, nodeID)
+	return filepath.Join(parts...)
+}
+
+func (sc *Context) getSnapshotDirParts(did uint64,
+	clusterID uint64, nodeID uint64) ([]string, string, []string) {
 	dd := sc.getDeploymentIDSubDirName(did)
 	pd := fmt.Sprintf("snapshot-part-%d", sc.partitioner.GetPartitionID(clusterID))
 	sd := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
 	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
-	return filepath.Join(dirs[0], sc.hostname, dd, pd, sd)
+	parts := make([]string, 0)
+	toBeCreated := make([]string, 0)
+	return append(parts, dirs[0], sc.hostname, dd, pd, sd),
+		filepath.Join(dirs[0], sc.hostname, dd), append(toBeCreated, pd, sd)
 }
 
 // GetLogDBDirs returns the directory names for LogDB
@@ -143,48 +152,35 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 
 // CreateNodeHostDir creates the top level dirs used by nodehost.
 func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string, error) {
-	nhDirs, walDirs := sc.GetLogDBDirs(did)
-	exists := func(path string) (bool, error) {
-		_, err := os.Stat(path)
-		if err == nil {
-			return true, nil
-		}
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return true, err
-	}
-	for i := 0; i < len(nhDirs); i++ {
-		walExist, err := exists(walDirs[i])
-		if err != nil {
+	dirs, lldirs := sc.GetLogDBDirs(did)
+	for i := 0; i < len(dirs); i++ {
+		if err := fileutil.MkdirAll(dirs[i]); err != nil {
 			return nil, nil, err
 		}
-		nhExist, err := exists(nhDirs[i])
-		if err != nil {
+		if err := fileutil.MkdirAll(lldirs[i]); err != nil {
 			return nil, nil, err
 		}
-		if !walExist {
-			if err := fileutil.MkdirAll(walDirs[i]); err != nil {
-				return nil, nil, err
-			}
-		}
-		if !nhExist {
-			if err := fileutil.MkdirAll(nhDirs[i]); err != nil {
-				return nil, nil, err
-			}
-		}
 	}
-	return nhDirs, walDirs, nil
+	return dirs, lldirs, nil
 }
 
-// PrepareSnapshotDir creates the snapshot directory for the specified node.
-func (sc *Context) PrepareSnapshotDir(did uint64,
-	clusterID uint64, nodeID uint64) (string, error) {
-	snapshotDir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	if err := fileutil.MkdirAll(snapshotDir); err != nil {
-		return "", err
+// CreateSnapshotDir creates the snapshot directory for the specified node.
+func (sc *Context) CreateSnapshotDir(did uint64,
+	clusterID uint64, nodeID uint64) error {
+	_, path, parts := sc.getSnapshotDirParts(did, clusterID, nodeID)
+	for _, part := range parts {
+		path = filepath.Join(path, part)
+		exist, err := fileutil.Exist(path)
+		if err != nil {
+			return err
+		}
+		if !exist {
+			if err := fileutil.Mkdir(path); err != nil {
+				return err
+			}
+		}
 	}
-	return snapshotDir, nil
+	return nil
 }
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
