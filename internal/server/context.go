@@ -32,6 +32,11 @@ import (
 
 var (
 	plog = logger.GetLogger("server")
+	// ErrHostnameChanged is the error used to indicate that the hostname changed.
+	ErrHostnameChanged = errors.New("hostname changed")
+	// ErrDeploymentIDChanged is the error used to indicate that the deployment
+	// ID changed.
+	ErrDeploymentIDChanged = errors.New("Deployment ID changed")
 	// ErrLogDBType is the error used to indicate that the LogDB type changed.
 	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
@@ -53,7 +58,7 @@ var (
 )
 
 const (
-	addressFilename = "dragonboat.address"
+	addressFilename = "dragonboat.ds"
 	lockFilename    = "LOCK"
 )
 
@@ -128,15 +133,7 @@ func (sc *Context) getSnapshotDirParts(did uint64,
 
 // GetLogDBDirs returns the directory names for LogDB
 func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
-	lldirs := strings.Split(sc.nhConfig.WALDir, ":")
-	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
-	// low latency dir not empty
-	if len(sc.nhConfig.WALDir) > 0 {
-		if len(lldirs) != len(dirs) {
-			plog.Panicf("%d low latency dirs specified, but there are %d regular dirs",
-				len(lldirs), len(dirs))
-		}
-	}
+	dirs, lldirs := sc.GetDataDirs()
 	didStr := sc.getDeploymentIDSubDirName(did)
 	for i := 0; i < len(dirs); i++ {
 		dirs[i] = filepath.Join(dirs[i], sc.hostname, didStr)
@@ -144,6 +141,19 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 	if len(sc.nhConfig.WALDir) > 0 {
 		for i := 0; i < len(dirs); i++ {
 			lldirs[i] = filepath.Join(lldirs[i], sc.hostname, didStr)
+		}
+		return dirs, lldirs
+	}
+	return dirs, dirs
+}
+
+func (sc *Context) GetDataDirs() ([]string, []string) {
+	lldirs := strings.Split(sc.nhConfig.WALDir, ":")
+	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
+	if len(sc.nhConfig.WALDir) > 0 {
+		if len(dirs) != len(lldirs) {
+			plog.Panicf("%d low latency dirs specified, but there are %d regular dirs",
+				len(lldirs), len(dirs))
 		}
 		return dirs, lldirs
 	}
@@ -187,17 +197,17 @@ func (sc *Context) CreateSnapshotDir(did uint64,
 // current nodehost.
 func (sc *Context) CheckNodeHostDir(did uint64,
 	addr string, binVer uint32, dbType string) error {
-	return sc.checkNodeHostDir(did, addr, binVer, dbType, false)
+	return sc.checkNodeHostDir(did, addr, sc.hostname, binVer, dbType, false)
 }
 
 // CheckLogDBType checks whether LogDB type is compatible.
 func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
-	return sc.checkNodeHostDir(did, "", 0, dbType, true)
+	return sc.checkNodeHostDir(did, "", "", 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
-func (sc *Context) LockNodeHostDir(did uint64) error {
-	dirs, lldirs := sc.GetLogDBDirs(did)
+func (sc *Context) LockNodeHostDir() error {
+	dirs, lldirs := sc.GetDataDirs()
 	for i := 0; i < len(dirs); i++ {
 		if err := sc.tryCreateLockFile(dirs[i], lockFilename); err != nil {
 			return err
@@ -216,13 +226,13 @@ func (sc *Context) LockNodeHostDir(did uint64) error {
 }
 
 func (sc *Context) checkNodeHostDir(did uint64,
-	addr string, binVer uint32, name string, dbto bool) error {
-	dirs, lldirs := sc.GetLogDBDirs(did)
+	addr string, hostname string, binVer uint32, name string, dbto bool) error {
+	dirs, lldirs := sc.GetDataDirs()
 	for i := 0; i < len(dirs); i++ {
-		if err := sc.compatible(dirs[i], did, addr, binVer, name, dbto); err != nil {
+		if err := sc.compatible(dirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
 			return err
 		}
-		if err := sc.compatible(lldirs[i], did, addr, binVer, name, dbto); err != nil {
+		if err := sc.compatible(lldirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
 			return err
 		}
 	}
@@ -271,7 +281,11 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 }
 
 func (sc *Context) compatible(dir string,
-	did uint64, addr string, ldbBinVer uint32, name string, dbto bool) error {
+	did uint64, addr string, hostname string,
+	ldbBinVer uint32, name string, dbto bool) error {
+	if dir == "." {
+		panic("!!!")
+	}
 	fp := filepath.Join(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
@@ -282,10 +296,12 @@ func (sc *Context) compatible(dir string,
 			return nil
 		}
 		status := raftpb.RaftDataStatus{
-			Address:   addr,
-			BinVer:    ldbBinVer,
-			HardHash:  settings.Hard.Hash(),
-			LogdbType: name,
+			Address:      addr,
+			BinVer:       ldbBinVer,
+			HardHash:     settings.Hard.Hash(),
+			LogdbType:    name,
+			Hostname:     hostname,
+			DeploymentId: did,
 		}
 		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
 		if err != nil {
@@ -303,6 +319,12 @@ func (sc *Context) compatible(dir string,
 		if !dbto {
 			if !se(string(status.Address), addr) {
 				return ErrNotOwner
+			}
+			if len(status.Hostname) > 0 && !se(status.Hostname, hostname) {
+				return ErrHostnameChanged
+			}
+			if status.DeploymentId != 0 && status.DeploymentId != did {
+				return ErrDeploymentIDChanged
 			}
 			if status.BinVer != ldbBinVer {
 				if status.BinVer == raftio.LogDBBinVersion &&

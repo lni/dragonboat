@@ -265,6 +265,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
+	plog.Infof("LogDB created")
 	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
@@ -1272,7 +1273,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	if err != nil {
 		return err
 	}
-	if err := nh.serverCtx.LockNodeHostDir(did); err != nil {
+	if err := nh.serverCtx.LockNodeHostDir(); err != nil {
 		return err
 	}
 	var factory config.LogDBFactoryFunc

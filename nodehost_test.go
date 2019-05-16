@@ -2646,8 +2646,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
-	f := func(dirs []string,
-		lowLatencyDirs []string) (raftio.ILogDB, error) {
+	f := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 		return &noopLogDB{}, nil
 	}
 	nhc := config.NodeHostConfig{
@@ -2667,6 +2666,30 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 	_, err := NewNodeHost(nhc)
 	if err != server.ErrLogDBType {
 		t.Fatalf("didn't report logdb type error %v", err)
+	}
+}
+
+func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 20,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   leveldb.LevelDBLogDB,
+		DeploymentID:   100,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost, %v", err)
+		}
+		defer nh.Stop()
+	}()
+	nhc.DeploymentID = 200
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrDeploymentIDChanged {
+		t.Errorf("failed to return ErrDeploymentIDChanged, got %v", err)
 	}
 }
 

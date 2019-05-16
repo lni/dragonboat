@@ -77,10 +77,12 @@ message Bootstrap {
 }
 
 message RaftDataStatus {
-  optional string address   = 1 [(gogoproto.nullable) = false];
-  optional uint32 bin_ver   = 2 [(gogoproto.nullable) = false];
-  optional uint64 hard_hash = 3 [(gogoproto.nullable) = false];
-  optional string logdb_type = 4 [(gogoproto.nullable) = false];
+  optional string address       = 1 [(gogoproto.nullable) = false];
+  optional uint32 bin_ver       = 2 [(gogoproto.nullable) = false];
+  optional uint64 hard_hash     = 3 [(gogoproto.nullable) = false];
+  optional string logdb_type    = 4 [(gogoproto.nullable) = false];
+  optional string hostname      = 5 [(gogoproto.nullable) = false];
+  optional uint64 deployment_id = 6 [(gogoproto.nullable) = false]; 
 }
 
 message State {
