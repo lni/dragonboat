@@ -12,24 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_leveldb
-// +build !dragonboat_pebble
-// +build !dragonboat_custom_logdb
-
-package logdb
+package rocksdb
 
 import (
 	"bytes"
 
-	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
+	"github.com/lni/dragonboat/internal/logdb/kv"
+	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
+	"github.com/lni/dragonboat/logger"
 	"github.com/lni/dragonboat/raftio"
 )
 
-const (
-	// LogDBType is the logdb type name
-	LogDBType = "sharded-rocksdb"
+var (
+	plog = logger.GetLogger("rocksdb")
 )
 
 var (
@@ -38,11 +35,11 @@ var (
 	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
 )
 
-func newKVStore(dir string, wal string) (IKvStore, error) {
+func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return openRocksDB(dir, wal)
 }
 
-type rocksdbKV struct {
+type RocksDBKV struct {
 	directory string
 	bbto      *gorocksdb.BlockBasedTableOptions
 	cache     *gorocksdb.Cache
@@ -122,7 +119,7 @@ func getRocksDBOptions(directory string,
 	return opts, bbto, cache
 }
 
-func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
+func openRocksDB(dir string, wal string) (*RocksDBKV, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
 	walExist, err := fileutil.Exist(wal)
@@ -153,7 +150,7 @@ func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
-	return &rocksdbKV{
+	return &RocksDBKV{
 		directory: dir,
 		bbto:      bbto,
 		cache:     cache,
@@ -164,12 +161,12 @@ func openRocksDB(dir string, wal string) (*rocksdbKV, error) {
 	}, nil
 }
 
-func (r *rocksdbKV) Name() string {
+func (r *RocksDBKV) Name() string {
 	return "rocksdb"
 }
 
 // Close closes the RDB object.
-func (r *rocksdbKV) Close() error {
+func (r *RocksDBKV) Close() error {
 	if r.db != nil {
 		r.db.Close()
 	}
@@ -192,7 +189,7 @@ func (r *rocksdbKV) Close() error {
 	return nil
 }
 
-func (r *rocksdbKV) IterateValue(fk []byte, lk []byte, inc bool,
+func (r *RocksDBKV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
 	defer func() {
@@ -239,7 +236,7 @@ func (r *rocksdbKV) IterateValue(fk []byte, lk []byte, inc bool,
 	return nil
 }
 
-func (r *rocksdbKV) GetValue(key []byte,
+func (r *RocksDBKV) GetValue(key []byte,
 	op func([]byte) error) error {
 	val, err := r.db.Get(r.ro, key)
 	if err != nil {
@@ -249,21 +246,21 @@ func (r *rocksdbKV) GetValue(key []byte,
 	return op(val.Data())
 }
 
-func (r *rocksdbKV) SaveValue(key []byte, value []byte) error {
+func (r *RocksDBKV) SaveValue(key []byte, value []byte) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	wb.Put(key, value)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *rocksdbKV) DeleteValue(key []byte) error {
+func (r *RocksDBKV) DeleteValue(key []byte) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	wb.Delete(key)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *rocksdbKV) GetWriteBatch(ctx raftio.IContext) IWriteBatch {
+func (r *RocksDBKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb != nil {
@@ -273,7 +270,7 @@ func (r *rocksdbKV) GetWriteBatch(ctx raftio.IContext) IWriteBatch {
 	return gorocksdb.NewWriteBatch()
 }
 
-func (r *rocksdbKV) CommitWriteBatch(wb IWriteBatch) error {
+func (r *RocksDBKV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	rocksdbwb, ok := wb.(*gorocksdb.WriteBatch)
 	if !ok {
 		panic("unknown type")
@@ -281,18 +278,18 @@ func (r *rocksdbKV) CommitWriteBatch(wb IWriteBatch) error {
 	return r.db.Write(r.wo, rocksdbwb)
 }
 
-func (r *rocksdbKV) CommitDeleteBatch(wb IWriteBatch) error {
+func (r *RocksDBKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *rocksdbKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
+func (r *RocksDBKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
 	if err := r.db.DeleteFileInRange(firstKey, lastKey); err != nil {
 		return err
 	}
 	return r.deleteRange(firstKey, lastKey)
 }
 
-func (r *rocksdbKV) Compaction(firstKey []byte, lastKey []byte) error {
+func (r *RocksDBKV) Compaction(firstKey []byte, lastKey []byte) error {
 	opts := gorocksdb.NewCompactionOptions()
 	opts.SetExclusiveManualCompaction(false)
 	opts.SetChangeLevel(true)
@@ -306,7 +303,7 @@ func (r *rocksdbKV) Compaction(firstKey []byte, lastKey []byte) error {
 	return nil
 }
 
-func (r *rocksdbKV) deleteRange(firstKey []byte, lastKey []byte) error {
+func (r *RocksDBKV) deleteRange(firstKey []byte, lastKey []byte) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
 	toDelete := make([][]byte, 0)

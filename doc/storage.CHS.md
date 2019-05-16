@@ -19,10 +19,12 @@ RocksDB是Dragonboat默认的存储方案。建议在生产环境使用RocksDB�
 
 Dragonboat可以使用LevelDB来存储Raft日志数据。目前LevelDB的支持是BETA状态，不建议在生产环境使用。
 
-使用LevelDB的一大优势是不需要额外的安装步骤，编译您的应用也更简便，因为不再需要设定上述的CGO_CFLAGS和CGO_LDFLAGS环境变量。您仅需要在编译您的应用的时候打开一个名为dragonboat_leveldb的build tags：
+使用LevelDB的一大优势是不需要额外的安装步骤，编译您的应用也更简便，因为不再需要设定上述的CGO_CFLAGS和CGO_LDFLAGS环境变量。
+
+选择使用LevelDB来存储Raft Logs的话，需将NodeHostConfig的LogDBFactory值设置为github.com/lni/dragonboat/plugin/leveldb包中提供的factory函数，如果您的系统上未安装RocksDB库，可在编译您的应用的时候通过设置dragonboat_no_rocksdb这一build tag来规避对RocksDB库的依赖。
 
 ```
-go build -tags "dragonboat_leveldb" pkgname
+go build -tags dragonboat_no_rocksdb pkg_name
 ```
 
 请参考[中文说明](https://github.com/lni/dragonboat/blob/master/README.CHS.md)的“开始使用”一节以获知如何使用LevelDB来运行内建的测试。
@@ -31,8 +33,4 @@ go build -tags "dragonboat_leveldb" pkgname
 
 您可以扩展Dragonboat以使用您所选择的其它存储方案来保存Raft协议的日志数据。您需要实现在github.com/lni/dragonboat/raftio中定义的ILogDB接口，并将其实现以一个factory function的方式提供给NodeHostConfig的LogDBFactory成员。
 
-在使用这样的自定义存储方案时，您可以使用dragonboat_custom_logdb这个build tag来避免对RocksDB库的依赖。
-
-```
-go build -tags "dragonboat_custom_logdb" pkgname
-```
+在使用这样的自定义存储方案时，您可以使用dragonboat_no_rocksdb这个build tag来避免对RocksDB库的依赖。请注意，如果您的系统上已安装有RocksDB库，则无需设置这个build tag。

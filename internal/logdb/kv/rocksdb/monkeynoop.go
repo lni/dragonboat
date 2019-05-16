@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logdb
+// +build !dragonboat_monkeytest
 
-func directIOSupported(dir string) bool {
-	return false
-}
+package rocksdb
+
+const (
+	inMonkeyTesting = false
+)

@@ -45,6 +45,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
+	"github.com/lni/dragonboat/plugin/leveldb"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -2667,4 +2668,20 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 	if err != server.ErrLogDBType {
 		t.Fatalf("didn't report logdb type error %v", err)
 	}
+}
+
+func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 20,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   leveldb.LevelDBLogDB,
+	}
+	nh, err := NewNodeHost(nhc)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer nh.Stop()
 }

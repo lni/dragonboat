@@ -18,13 +18,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
 func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	kvs, err := newKVStore(RDBTestDirectory, RDBTestDirectory)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
 		t.Fatalf("failed to open kv rocksdb")
 	}
@@ -34,10 +35,10 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	}
 }
 
-func runKVTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
+func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore)) {
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB()
-	kvs, err := newKVStore(RDBTestDirectory, RDBTestDirectory)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
 		t.Fatalf("failed to open kv rocksdb")
 	}
@@ -50,7 +51,7 @@ func runKVTest(t *testing.T, tf func(t *testing.T, kvs IKvStore)) {
 }
 
 func TestKVGetAndSet(t *testing.T) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
 			t.Errorf("failed to save the value")
 		}
@@ -77,7 +78,7 @@ func TestKVGetAndSet(t *testing.T) {
 }
 
 func TestKVValueCanBeDeleted(t *testing.T) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
 			t.Errorf("failed to save the value")
 		}
@@ -107,7 +108,7 @@ func TestKVValueCanBeDeleted(t *testing.T) {
 }
 
 func TestKVWriteBatch(t *testing.T) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		wb := kvs.GetWriteBatch(nil)
 		defer wb.Destroy()
 		wb.Put([]byte("test-key"), []byte("test-value"))
@@ -141,7 +142,7 @@ func TestKVWriteBatch(t *testing.T) {
 
 func testKVIterateValue(t *testing.T,
 	fk []byte, lk []byte, inc bool, count uint64) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		for i := 0; i < 10; i++ {
 			key := fmt.Sprintf("key%d", i)
 			val := fmt.Sprintf("val%d", i)
@@ -168,7 +169,7 @@ func TestKVIterateValue(t *testing.T) {
 }
 
 func TestWriteBatchCanBeCleared(t *testing.T) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		wb := kvs.GetWriteBatch(nil)
 		wb.Put([]byte("key-1"), []byte("val-1"))
 		wb.Put([]byte("key-2"), []byte("val-2"))
@@ -193,7 +194,7 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 }
 
 func TestHasEntryRecord(t *testing.T) {
-	tf := func(t *testing.T, kvs IKvStore) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
 		has, err := hasEntryRecord(kvs, true)
 		if err != nil {
 			t.Fatalf("hasEntryRecord failed %v", err)

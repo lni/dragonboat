@@ -18,11 +18,13 @@ When using RocksDB for storage, you need to install RocksDB first, see the [Gett
 
 Dragonboat can use LevelDB to store Raft logs as well. It is currently in BETA status and not recommended for any production use.
 
-A major benefit for choosing LevelDB is that no extra installation step is required. It is also easier to build your own application as setting the CGO_CFLAGS and CGO_LDFLAGS environmental variables is no longer required. You just need to enable a Golang build tags named dragonboat_leveldb when building your application.
+A major benefit for choosing LevelDB is that no extra installation step is required. It is also easier to build your own application as setting the CGO_CFLAGS and CGO_LDFLAGS environmental variables is no longer required. 
+
+To use LevelDB to store Raft logs, set the LogDBFactory field of your config.NodeHostConfig to its factory function provided in the github.com/lni/dragonboat/plugin/leveldb package. When RocksDB is not install, the dragonboat_no_rocksdb build tag must be set when building your application.
 
 ```
-go build -tags "dragonboat_leveldb" pkgname
-```
+go build -tags dragonboat_no_rocksdb pkg_name
+``` 
 
 See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using LevelDB.
 
@@ -32,8 +34,4 @@ You can extend Dragonboat to use your preferred storage solution to store Raft l
 
 * implement the ILogDB interface defined in the github.com/lni/dragonboat/raftio package
 * pass a factory function that creates such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig instance
-* when building your applications, set the build tag named dragonboat_custom_logdb so RocksDB won't be required
-
-```
-go build -tags "dragonboat_custom_logdb" pkgname
-``` 
+* when building your applications, set the build tag named dragonboat_no_rocksdb so RocksDB won't be required. You don't have to set this build tag if RocksDB is available on your system.

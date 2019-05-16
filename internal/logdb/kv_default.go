@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !dragonboat_no_rocksdb
+// +build !dragonboat_pebble_test
+// +build !dragonboat_leveldb_test
+
 package logdb
 
 import (
-	"os"
-	"path/filepath"
-	"syscall"
+	"github.com/lni/dragonboat/internal/logdb/kv"
+	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb"
 )
 
-func directIOSupported(dir string) bool {
-	testfp := filepath.Join(dir, ".direct_io_test_safe_to_delete.dragonboat")
-	defer os.Remove(testfp)
-	f, err := os.OpenFile(testfp, os.O_CREATE|syscall.O_DIRECT, 0x777)
-	if err != nil {
-		plog.Errorf("direct io failed: %v", err)
-		return false
-	}
-	f.Close()
-	return true
+func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
+	return rocksdb.NewKVStore(dir, wal)
 }

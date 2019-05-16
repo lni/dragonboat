@@ -12,15 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_leveldb_test
+package rocksdb
 
-package logdb
-
-import (
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/logdb/kv/leveldb"
-)
-
-func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
-	return leveldb.NewKVStore(dir, wal)
+func directIOSupported(dir string) bool {
+	return false
 }

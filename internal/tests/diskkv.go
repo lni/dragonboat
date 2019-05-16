@@ -29,7 +29,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/lni/dragonboat/internal/logdb/gorocksdb"
+	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb/gorocksdb"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/logutil"

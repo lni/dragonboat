@@ -193,7 +193,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		if err := os.MkdirAll(nodeLowLatencyLogDir, 0755); err != nil {
 			panic(err)
 		}
-		ldb, err = logdb.OpenLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir})
+		ldb, err = logdb.OpenDefaultLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir})
 		if err != nil {
 			plog.Panicf("failed to open logdb, %v", err)
 		}

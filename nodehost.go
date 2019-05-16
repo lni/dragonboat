@@ -182,7 +182,7 @@ type NodeHostInfo struct {
 // instance to use it.
 func OpenBatchedLogDB(dirs []string,
 	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenBatchedLogDB(dirs, lowLatencyDirs)
+	return logdb.OpenBatchedDefaultLogDB(dirs, lowLatencyDirs)
 }
 
 // OpenPlainLogDB is the factory function that creates a plain ILogDB instance
@@ -190,7 +190,7 @@ func OpenBatchedLogDB(dirs []string,
 // to the LogDBFactory field of the NodeHostConfig instance to use it.
 func OpenPlainLogDB(dirs []string,
 	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenPlainLogDB(dirs, lowLatencyDirs)
+	return logdb.OpenPlainDefaultLogDB(dirs, lowLatencyDirs)
 }
 
 // NodeHost manages Raft clusters and enables them to share resources such as
@@ -1279,7 +1279,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
 	} else {
-		factory = logdb.OpenLogDB
+		factory = logdb.OpenDefaultLogDB
 	}
 	// create a tmp logdb to get LogDB type info
 	name, err := logdb.GetLogDBInfo(factory, nhDirs)
@@ -1742,9 +1742,8 @@ func logBuildTagsAndVersion() {
 		devstr = "Dev"
 	}
 	plog.Infof("go version: %s", runtime.Version())
-	plog.Infof("dragonboat version: %d.%d.%d (%s), raftlog type: %s, logdb type: %s",
-		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr,
-		raft.RaftLogTypeName, logdb.LogDBType)
+	plog.Infof("dragonboat version: %d.%d.%d (%s), raftlog type: %s",
+		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr, raft.RaftLogTypeName)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
 	if runtime.GOOS == "darwin" {
 		plog.Warningf("Running on darwin, don't use for production purposes")

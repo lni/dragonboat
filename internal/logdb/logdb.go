@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 
 	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/logger"
@@ -35,6 +36,53 @@ import (
 var (
 	plog = logger.GetLogger("logdb")
 )
+
+type kvFactory func(string, string) (kv.IKVStore, error)
+
+// OpenDefaultLogDB opens a plain LogDB instance using the default implementation.
+func OpenDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, false, true, newDefaultKVStore)
+}
+
+func OpenBatchedDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, true, false, newDefaultKVStore)
+}
+
+func OpenPlainDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, false, false, newDefaultKVStore)
+}
+
+// OpenBatchedLogDB opens a batched LogDB instance.
+func OpenBatchedLogDB(dirs []string,
+	lldirs []string, f kvFactory) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, true, false, f)
+}
+
+// OpenPlainLogDB opens a plain LogDB instance.
+func OpenPlainLogDB(dirs []string,
+	lldirs []string, f kvFactory) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, false, false, f)
+}
+
+func OpenLogDB(dirs []string, lldirs []string,
+	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
+	return openLogDB(dirs, lldirs, batched, check, f)
+}
+
+func openLogDB(dirs []string, lldirs []string,
+	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
+	checkDirs(dirs, lldirs)
+	llDirRequired := len(lldirs) == 1
+	if len(dirs) == 1 {
+		for i := uint64(1); i < numOfRocksDBInstance; i++ {
+			dirs = append(dirs, dirs[0])
+			if llDirRequired {
+				lldirs = append(lldirs, lldirs[0])
+			}
+		}
+	}
+	return OpenShardedRDB(dirs, lldirs, batched, check, f)
+}
 
 func checkDirs(dirs []string, lldirs []string) {
 	if len(dirs) == 1 {
@@ -82,36 +130,4 @@ func GetLogDBInfo(f config.LogDBFactoryFunc,
 		}
 	}()
 	return name, nil
-}
-
-// OpenLogDB opens a plain LogDB instance using the default implementation.
-func OpenLogDB(dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lowLatencyDirs, false, true)
-}
-
-// OpenBatchedLogDB opens a batched LogDB instance.
-func OpenBatchedLogDB(dirs []string,
-	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lowLatencyDirs, true, false)
-}
-
-// OpenPlainLogDB opens a plain LogDB instance.
-func OpenPlainLogDB(dirs []string,
-	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lowLatencyDirs, false, false)
-}
-
-func openLogDB(dirs []string,
-	lowLatencyDirs []string, batched bool, check bool) (raftio.ILogDB, error) {
-	checkDirs(dirs, lowLatencyDirs)
-	llDirRequired := len(lowLatencyDirs) == 1
-	if len(dirs) == 1 {
-		for i := uint64(1); i < numOfRocksDBInstance; i++ {
-			dirs = append(dirs, dirs[0])
-			if llDirRequired {
-				lowLatencyDirs = append(lowLatencyDirs, lowLatencyDirs[0])
-			}
-		}
-	}
-	return OpenShardedRDB(dirs, lowLatencyDirs, batched, check)
 }

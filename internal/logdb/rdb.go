@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"math"
 
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -29,7 +30,7 @@ var (
 
 type entryManager interface {
 	binaryFormat() uint32
-	record(wb IWriteBatch,
+	record(wb kv.IWriteBatch,
 		clusterID uint64, nodeID uint64,
 		ctx raftio.IContext, entries []pb.Entry) uint64
 	iterate(ents []pb.Entry, maxIndex uint64,
@@ -46,11 +47,11 @@ type entryManager interface {
 type rdb struct {
 	cs      *rdbcache
 	keys    *logdbKeyPool
-	kvs     IKvStore
+	kvs     kv.IKVStore
 	entries entryManager
 }
 
-func hasEntryRecord(kvs IKvStore, batched bool) (bool, error) {
+func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 	fk := newKey(entryKeySize, nil)
 	lk := newKey(entryKeySize, nil)
 	if !batched {
@@ -71,8 +72,8 @@ func hasEntryRecord(kvs IKvStore, batched bool) (bool, error) {
 	return located, nil
 }
 
-func hasBatchedRecord(dir string, wal string) (bool, error) {
-	kvs, err := newKVStore(dir, wal)
+func hasBatchedRecord(dir string, wal string, kvf kvFactory) (bool, error) {
+	kvs, err := kvf(dir, wal)
 	if err != nil {
 		return false, err
 	}
@@ -84,8 +85,9 @@ func hasBatchedRecord(dir string, wal string) (bool, error) {
 	return hasEntryRecord(kvs, true)
 }
 
-func openRDB(dir string, wal string, batched bool) (*rdb, error) {
-	kvs, err := newKVStore(dir, wal)
+func openRDB(dir string, wal string,
+	batched bool, kvf kvFactory) (*rdb, error) {
+	kvs, err := kvf(dir, wal)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +107,10 @@ func openRDB(dir string, wal string, batched bool) (*rdb, error) {
 	}, nil
 }
 
+func (r *rdb) name() string {
+	return r.kvs.Name()
+}
+
 func (r *rdb) selfCheckFailed() (bool, error) {
 	_, batched := r.entries.(*batchedEntries)
 	return hasEntryRecord(r.kvs, !batched)
@@ -120,7 +126,7 @@ func (r *rdb) close() {
 	}
 }
 
-func (r *rdb) getWriteBatch() IWriteBatch {
+func (r *rdb) getWriteBatch() kv.IWriteBatch {
 	return r.kvs.GetWriteBatch(nil)
 }
 
@@ -220,13 +226,13 @@ func (r *rdb) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	return r.kvs.CommitWriteBatch(wb)
 }
 
-func (r *rdb) setMaxIndex(wb IWriteBatch,
+func (r *rdb) setMaxIndex(wb kv.IWriteBatch,
 	ud pb.Update, maxIndex uint64, ctx raftio.IContext) {
 	r.cs.setMaxIndex(ud.ClusterID, ud.NodeID, maxIndex)
 	r.recordMaxIndex(wb, ud.ClusterID, ud.NodeID, maxIndex, ctx)
 }
 
-func (r *rdb) recordBootstrap(wb IWriteBatch,
+func (r *rdb) recordBootstrap(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, bsrec pb.Bootstrap) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
@@ -237,7 +243,7 @@ func (r *rdb) recordBootstrap(wb IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) recordSnapshot(wb IWriteBatch, ud pb.Update) {
+func (r *rdb) recordSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 	if pb.IsEmptySnapshot(ud.Snapshot) {
 		return
 	}
@@ -250,7 +256,7 @@ func (r *rdb) recordSnapshot(wb IWriteBatch, ud pb.Update) {
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) recordMaxIndex(wb IWriteBatch,
+func (r *rdb) recordMaxIndex(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, index uint64, ctx raftio.IContext) {
 	data := ctx.GetValueBuffer(8)
 	binary.BigEndian.PutUint64(data, index)
@@ -260,7 +266,7 @@ func (r *rdb) recordMaxIndex(wb IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) recordStateAllocs(wb IWriteBatch,
+func (r *rdb) recordStateAllocs(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, st pb.State) {
 	data, err := st.Marshal()
 	if err != nil {
@@ -272,7 +278,7 @@ func (r *rdb) recordStateAllocs(wb IWriteBatch,
 }
 
 func (r *rdb) recordState(clusterID uint64,
-	nodeID uint64, st pb.State, wb IWriteBatch, ctx raftio.IContext) {
+	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx raftio.IContext) {
 	if pb.IsEmptyState(st) {
 		return
 	}
@@ -427,7 +433,7 @@ func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 	return r.compaction(clusterID, nodeID, math.MaxUint64)
 }
 
-func (r *rdb) recordRemoveNodeData(wb IWriteBatch,
+func (r *rdb) recordRemoveNodeData(wb kv.IWriteBatch,
 	snapshots []pb.Snapshot, clusterID uint64, nodeID uint64) {
 	stateKey := newKey(maxKeySize, nil)
 	stateKey.SetStateKey(clusterID, nodeID)
@@ -453,7 +459,7 @@ func (r *rdb) compaction(clusterID uint64, nodeID uint64, index uint64) error {
 }
 
 func (r *rdb) saveEntries(updates []pb.Update,
-	wb IWriteBatch, ctx raftio.IContext) {
+	wb kv.IWriteBatch, ctx raftio.IContext) {
 	if len(updates) == 0 {
 		return
 	}

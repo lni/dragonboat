@@ -44,14 +44,15 @@ type ShardedRDB struct {
 	stopper              *syncutil.Stopper
 }
 
-func checkAllShards(dirs []string, lldirs []string) (bool, error) {
+func checkAllShards(dirs []string,
+	lldirs []string, kvf kvFactory) (bool, error) {
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lldirs) > 0 {
 			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := hasBatchedRecord(dir, lldir)
+		batched, err := hasBatchedRecord(dir, lldir, kvf)
 		if err != nil {
 			return false, err
 		}
@@ -63,8 +64,8 @@ func checkAllShards(dirs []string, lldirs []string) (bool, error) {
 }
 
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(dirs []string,
-	lldirs []string, batched bool, check bool) (*ShardedRDB, error) {
+func OpenShardedRDB(dirs []string, lldirs []string,
+	batched bool, check bool, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("using batched ShardedRDB")
@@ -77,7 +78,7 @@ func OpenShardedRDB(dirs []string,
 	var err error
 	if check {
 		plog.Infof("checking all LogDB shards...")
-		batched, err = checkAllShards(dirs, lldirs)
+		batched, err = checkAllShards(dirs, lldirs, kvf)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +90,7 @@ func OpenShardedRDB(dirs []string,
 		if len(lldirs) > 0 {
 			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		db, err := openRDB(dir, lldir, batched)
+		db, err := openRDB(dir, lldir, batched, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()
@@ -115,7 +116,7 @@ func OpenShardedRDB(dirs []string,
 
 // Name returns the type name of the instance.
 func (mw *ShardedRDB) Name() string {
-	return LogDBType
+	return fmt.Sprintf("sharded-%s", mw.shards[0].name())
 }
 
 // BinaryFormat is the binary format supported by the sharded DB.

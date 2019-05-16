@@ -18,6 +18,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 )
@@ -127,11 +128,11 @@ func getMergedFirstBatch(eb pb.EntryBatch, lb pb.EntryBatch) pb.EntryBatch {
 type batchedEntries struct {
 	cs   *rdbcache
 	keys *logdbKeyPool
-	kvs  IKvStore
+	kvs  kv.IKVStore
 }
 
 func newBatchedEntries(cs *rdbcache,
-	keys *logdbKeyPool, kvs IKvStore) entryManager {
+	keys *logdbKeyPool, kvs kv.IKVStore) entryManager {
 	return &batchedEntries{
 		cs:   cs,
 		keys: keys,
@@ -265,7 +266,7 @@ func (be *batchedEntries) rangedOp(clusterID uint64,
 	return op(fk, lk)
 }
 
-func (be *batchedEntries) recordBatch(wb IWriteBatch,
+func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, eb pb.EntryBatch,
 	firstBatchID uint64, lastBatchID uint64, ctx raftio.IContext) {
 	if len(eb.Entries) == 0 {
@@ -297,7 +298,7 @@ func (be *batchedEntries) recordBatch(wb IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (be *batchedEntries) record(wb IWriteBatch,
+func (be *batchedEntries) record(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64,
 	ctx raftio.IContext, entries []pb.Entry) uint64 {
 	if len(entries) == 0 {

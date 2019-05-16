@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_custom_logdb
+// +build dragonboat_no_rocksdb
 
 package logdb
 
 import (
 	"flag"
+
+	"github.com/lni/dragonboat/internal/logdb/kv"
 )
 
-const (
-	// LogDBType is the logdb type name
-	LogDBType = "custom-noop"
-)
-
-func newKVStore(dir string, wal string) (IKvStore, error) {
+func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
 	if v := flag.Lookup("test.v"); v == nil || v.Value.String() != "true" {
-		panic("no suppose to be called")
+		panic("not suppose to be called")
 	} else {
-		panic("trying to run logdb tests when logdb is diabled")
+		panic("trying to run logdb tests with invalid build tag")
 	}
 }

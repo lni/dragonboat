@@ -12,15 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_leveldb_test
-
-package logdb
+package leveldb
 
 import (
-	"github.com/lni/dragonboat/internal/logdb/kv"
+	"github.com/lni/dragonboat/internal/logdb"
 	"github.com/lni/dragonboat/internal/logdb/kv/leveldb"
+	"github.com/lni/dragonboat/raftio"
 )
 
-func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
-	return leveldb.NewKVStore(dir, wal)
+func LevelDBLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.OpenLogDB(dirs, lldirs, false, true, leveldb.NewKVStore)
+}
+
+func LevelDBBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.OpenLogDB(dirs, lldirs, true, false, leveldb.NewKVStore)
+}
+
+func LevelDBPlainLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.OpenLogDB(dirs, lldirs, false, false, leveldb.NewKVStore)
 }

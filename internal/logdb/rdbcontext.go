@@ -15,6 +15,7 @@
 package logdb
 
 import (
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 )
@@ -32,11 +33,11 @@ type rdbcontext struct {
 	key     *PooledKey
 	val     []byte
 	updates []pb.Update
-	wb      IWriteBatch
+	wb      kv.IWriteBatch
 }
 
 // newRDBContext creates a new RDB context instance.
-func newRDBContext(valSize uint64, wb IWriteBatch) *rdbcontext {
+func newRDBContext(valSize uint64, wb kv.IWriteBatch) *rdbcontext {
 	ctx := &rdbcontext{
 		valSize: valSize,
 		key:     newKey(maxKeySize, nil),

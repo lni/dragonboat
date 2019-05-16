@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logdb
+package kv
 
 import (
 	"github.com/lni/dragonboat/raftio"
 )
 
-// IKvStore is the interface used by the RDB struct to access the underlying
+// IKVStore is the interface used by the RDB struct to access the underlying
 // Key-Value store.
-type IKvStore interface {
-	// Name is the IKvStore name.
+type IKVStore interface {
+	// Name is the IKVStore name.
 	Name() string
 	// Close closes the underlying Key-Value store.
 	Close() error
@@ -74,19 +74,19 @@ type kvpair struct {
 	val    []byte
 }
 
-type simpleWriteBatch struct {
+type SimpleWriteBatch struct {
 	vals []kvpair
 }
 
-func newSimpleWriteBatch() *simpleWriteBatch {
-	return &simpleWriteBatch{vals: make([]kvpair, 0)}
+func NewSimpleWriteBatch() *SimpleWriteBatch {
+	return &SimpleWriteBatch{vals: make([]kvpair, 0)}
 }
 
-func (wb *simpleWriteBatch) Destroy() {
+func (wb *SimpleWriteBatch) Destroy() {
 	wb.vals = nil
 }
 
-func (wb *simpleWriteBatch) Put(key []byte, val []byte) {
+func (wb *SimpleWriteBatch) Put(key []byte, val []byte) {
 	k := make([]byte, len(key))
 	v := make([]byte, len(val))
 	copy(k, key)
@@ -94,16 +94,16 @@ func (wb *simpleWriteBatch) Put(key []byte, val []byte) {
 	wb.vals = append(wb.vals, kvpair{key: k, val: v})
 }
 
-func (wb *simpleWriteBatch) Delete(key []byte) {
+func (wb *SimpleWriteBatch) Delete(key []byte) {
 	k := make([]byte, len(key))
 	copy(k, key)
 	wb.vals = append(wb.vals, kvpair{key: k, val: nil, delete: true})
 }
 
-func (wb *simpleWriteBatch) Clear() {
+func (wb *SimpleWriteBatch) Clear() {
 	wb.vals = make([]kvpair, 0)
 }
 
-func (wb *simpleWriteBatch) Count() int {
+func (wb *SimpleWriteBatch) Count() int {
 	return len(wb.vals)
 }

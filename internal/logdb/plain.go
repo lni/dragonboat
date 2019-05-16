@@ -15,6 +15,7 @@
 package logdb
 
 import (
+	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 )
@@ -22,11 +23,11 @@ import (
 type plainEntries struct {
 	cs   *rdbcache
 	keys *logdbKeyPool
-	kvs  IKvStore
+	kvs  kv.IKVStore
 }
 
 func newPlainEntries(cs *rdbcache,
-	keys *logdbKeyPool, kvs IKvStore) entryManager {
+	keys *logdbKeyPool, kvs kv.IKVStore) entryManager {
 	return &plainEntries{
 		cs:   cs,
 		keys: keys,
@@ -34,7 +35,7 @@ func newPlainEntries(cs *rdbcache,
 	}
 }
 
-func (pe *plainEntries) record(wb IWriteBatch,
+func (pe *plainEntries) record(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64,
 	ctx raftio.IContext, entries []pb.Entry) uint64 {
 	idx := 0
