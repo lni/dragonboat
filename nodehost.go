@@ -176,23 +176,6 @@ type NodeHostInfo struct {
 	LogInfo []raftio.NodeInfo
 }
 
-// OpenBatchedLogDB is the factory function that creates an batched ILogDB
-// instance that has higher throughput at the cost of higher memory usage.
-// Set OpenBatchedLogDB to the LogDBFactory field of the NodeHostConfig
-// instance to use it.
-func OpenBatchedLogDB(dirs []string,
-	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenBatchedDefaultLogDB(dirs, lowLatencyDirs)
-}
-
-// OpenPlainLogDB is the factory function that creates a plain ILogDB instance
-// that has slightly lower throughput at lower memory usage. Set OpenPlainLogDB
-// to the LogDBFactory field of the NodeHostConfig instance to use it.
-func OpenPlainLogDB(dirs []string,
-	lowLatencyDirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenPlainDefaultLogDB(dirs, lowLatencyDirs)
-}
-
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
@@ -1280,7 +1263,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
 	} else {
-		factory = logdb.OpenDefaultLogDB
+		factory = logdb.NewDefaultLogDB
 	}
 	// create a tmp logdb to get LogDB type info
 	name, err := logdb.GetLogDBInfo(factory, nhDirs)

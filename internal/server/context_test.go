@@ -57,7 +57,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		t.Fatalf("failed to new context %v", err)
 	}
 	ctx.CreateNodeHostDir(testDeploymentID)
-	dirs, _ := ctx.GetDataDirs()
+	dirs, _ := ctx.getDataDirs()
 	testName := "test-name"
 	status := raftpb.RaftDataStatus{
 		Address:      testAddress,
@@ -86,7 +86,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		t.Fatalf("failed to new context %v", err)
 	}
 	ctx.CreateNodeHostDir(testDeploymentID)
-	dirs, _ := ctx.GetDataDirs()
+	dirs, _ := ctx.getDataDirs()
 	status := raftpb.RaftDataStatus{
 		Address:   addr,
 		BinVer:    binVer,

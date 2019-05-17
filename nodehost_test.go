@@ -46,6 +46,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/plugin/leveldb"
+	"github.com/lni/dragonboat/plugin/rocksdb"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -1359,7 +1360,7 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 100,
 		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   OpenBatchedLogDB,
+		LogDBFactory:   rocksdb.NewBatchedLogDB,
 	}
 	plog.Infof("going to create nh using batched logdb")
 	nh, err := NewNodeHost(nhc)
@@ -2530,7 +2531,7 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 		t.Fatalf("failed to return ErrNotOwner")
 	}
 	nhc.RaftAddress = nodeHostTestAddr1
-	nhc.LogDBFactory = OpenBatchedLogDB
+	nhc.LogDBFactory = rocksdb.NewBatchedLogDB
 	_, err = NewNodeHost(nhc)
 	if err != server.ErrIncompatibleData {
 		t.Fatalf("failed to return ErrIncompatibleData")
@@ -2543,7 +2544,7 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 200,
 		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   OpenBatchedLogDB,
+		LogDBFactory:   rocksdb.NewBatchedLogDB,
 	}
 	func() {
 		nh, err := NewNodeHost(nhc)
@@ -2595,7 +2596,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 			t.Fatalf("failed to make proposal %v", err)
 		}
 	}()
-	nhc.LogDBFactory = OpenBatchedLogDB
+	nhc.LogDBFactory = rocksdb.NewBatchedLogDB
 	_, err := NewNodeHost(nhc)
 	if err != server.ErrIncompatibleData {
 		t.Fatalf("failed to return server.ErrIncompatibleData")
@@ -2608,7 +2609,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 20,
 		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   OpenBatchedLogDB,
+		LogDBFactory:   rocksdb.NewBatchedLogDB,
 	}
 	tf := func() {
 		nh, err := NewNodeHost(nhc)
@@ -2676,7 +2677,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 20,
 		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   leveldb.LevelDBLogDB,
+		LogDBFactory:   leveldb.NewLogDB,
 		DeploymentID:   100,
 	}
 	func() {
@@ -2700,7 +2701,7 @@ func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 20,
 		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   leveldb.LevelDBLogDB,
+		LogDBFactory:   leveldb.NewLogDB,
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {

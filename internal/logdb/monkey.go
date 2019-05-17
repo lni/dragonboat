@@ -16,10 +16,6 @@
 
 package logdb
 
-const (
-	inMonkeyTesting = true
-)
-
 // SetEntryBatchSize sets the entry batch size.
 func SetEntryBatchSize(sz uint64) {
 	batchSize = sz

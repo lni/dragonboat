@@ -383,5 +383,5 @@ func copyFile(src string, dst string) (err error) {
 func getLogDB(ctx server.Context,
 	nhConfig config.NodeHostConfig) (raftio.ILogDB, error) {
 	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
-	return logdb.OpenDefaultLogDB(nhDir, walDir)
+	return logdb.NewDefaultLogDB(nhDir, walDir)
 }

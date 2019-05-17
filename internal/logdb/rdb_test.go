@@ -34,7 +34,7 @@ func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	lld := filepath.Join(RDBTestDirectory, lldir)
 	os.MkdirAll(d, 0777)
 	os.MkdirAll(lld, 0777)
-	db, err := openLogDB([]string{d}, []string{lld}, batched, false, newDefaultKVStore)
+	db, err := newLogDB([]string{d}, []string{lld}, batched, false, newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}
@@ -67,10 +67,6 @@ func runLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
 
 func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
 	runLogDBTestAs(t, true, tf)
-}
-
-func runPlainLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB)) {
-	runLogDBTestAs(t, false, tf)
 }
 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {

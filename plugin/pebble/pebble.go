@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+Package pebble provides factory functions for creating pebble based Log DB.
+
+Pebble support is in ALPHA status, it is NOT ready for production use.
+*/
 package pebble
 
 import (
@@ -20,14 +25,16 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
-func PebbleLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenLogDB(dirs, lldirs, false, true, pebble.NewKVStore)
+// NewLogDB is the factory function for creating Pebble based Log DB instances.
+// Raft entries are stored in its plain format, it uses less memory than the
+// batched alternative implementation but comes at the cost of lower throughput.
+func NewLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.NewLogDB(dirs, lldirs, false, false, pebble.NewKVStore)
 }
 
-func PebbleBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenLogDB(dirs, lldirs, true, false, pebble.NewKVStore)
-}
-
-func PebblePlainLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.OpenLogDB(dirs, lldirs, false, false, pebble.NewKVStore)
+// NewBatchedLogDB is the factory function for creating Pebble based Log DB
+// instances. Raft entries are batched before they get stored into Pebble, it
+// uses more memory and provides better throughput performance.
+func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.NewLogDB(dirs, lldirs, true, false, pebble.NewKVStore)
 }

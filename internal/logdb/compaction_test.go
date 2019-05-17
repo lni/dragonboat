@@ -15,7 +15,6 @@
 package logdb
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,11 +33,6 @@ func getDirSize(path string) (int64, error) {
 		return nil
 	})
 	return size, err
-}
-
-func getDBDirSize(dataDir string, idx uint64) (int64, error) {
-	p := filepath.Join(RDBTestDirectory, dataDir, fmt.Sprintf("logdb-%d", idx))
-	return getDirSize(p)
 }
 
 func TestCompactionTaskCanBeCreated(t *testing.T) {

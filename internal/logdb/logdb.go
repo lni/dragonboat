@@ -39,37 +39,35 @@ var (
 
 type kvFactory func(string, string) (kv.IKVStore, error)
 
-// OpenDefaultLogDB opens a plain LogDB instance using the default implementation.
-func OpenDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, false, true, newDefaultKVStore)
+// NewDefaultLogDB creates a Log DB instance using the default KV store
+// implementation. The created Log DB tries to store entry records in
+// plain format but it switches to the batched mode if there is already
+// batched entries saved in the existing DB.
+func NewDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return newLogDB(dirs, lldirs, false, true, newDefaultKVStore)
 }
 
-func OpenBatchedDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, true, false, newDefaultKVStore)
+// NewBatchedDefaultLogDB creates a batched Log DB instance using the default
+// KV store implementation.
+func NewBatchedDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return newLogDB(dirs, lldirs, true, false, newDefaultKVStore)
 }
 
-func OpenPlainDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, false, false, newDefaultKVStore)
+// NewPlainDefaultLogDB creates a plain Log DB instance using the default
+// KV store implementation.
+func NewPlainDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return newLogDB(dirs, lldirs, false, false, newDefaultKVStore)
 }
 
-// OpenBatchedLogDB opens a batched LogDB instance.
-func OpenBatchedLogDB(dirs []string,
-	lldirs []string, f kvFactory) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, true, false, f)
-}
-
-// OpenPlainLogDB opens a plain LogDB instance.
-func OpenPlainLogDB(dirs []string,
-	lldirs []string, f kvFactory) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, false, false, f)
-}
-
-func OpenLogDB(dirs []string, lldirs []string,
+// NewLogDB creates a Log DB instance based on provided configuration
+// parameters. The underlying KV store used by the Log DB instance is created
+// by the provided factory function.
+func NewLogDB(dirs []string, lldirs []string,
 	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
-	return openLogDB(dirs, lldirs, batched, check, f)
+	return newLogDB(dirs, lldirs, batched, check, f)
 }
 
-func openLogDB(dirs []string, lldirs []string,
+func newLogDB(dirs []string, lldirs []string,
 	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
 	checkDirs(dirs, lldirs)
 	llDirRequired := len(lldirs) == 1

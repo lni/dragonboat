@@ -275,7 +275,7 @@ dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-tools
 ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-utils test-config test-client test-server test-tests test-tools
-test: dragonboat-test test-drummer
+test: dragonboat-test test-drummer test-plugins
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
 monkey-test: test-monkey-drummer
@@ -299,6 +299,8 @@ benchmark-fsync:
 	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
 
 GOTEST=$(GO) $(TEST_OPTIONS)
+test-plugins:
+	$(GOTEST) $(PKGNAME)/plugin
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/syncutil
 	$(GOTEST) $(PKGNAME)/internal/utils/netutil
@@ -545,6 +547,7 @@ CHECKED_PKGS=internal/raft internal/logdb internal/transport \
 	internal/utils/stringutil internal/utils/logutil internal/utils/netutil \
 	internal/utils/cache internal/utils/envutil internal/utils/compression \
 	internal/server internal/drummer internal/drummer/client \
+	plugin/leveldb plugin/pebble plugin/rocksdb \
 	raftpb tools binding logger raftio config statemachine client
 
 static-check:

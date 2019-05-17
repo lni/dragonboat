@@ -161,7 +161,9 @@ func testKVIterateValue(t *testing.T,
 			opcalled++
 			return true, nil
 		}
-		kvs.IterateValue(fk, lk, inc, op)
+		if err := kvs.IterateValue(fk, lk, inc, op); err != nil {
+			t.Fatalf("iterate value failed %v", err)
+		}
 		if opcalled != count {
 			t.Errorf("op called %d times, want %d", opcalled, count)
 		}
@@ -368,8 +370,8 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	}
 }
 
-var flagContent string = "YYYY"
-var corruptedContent string = "XXXX"
+var flagContent = "YYYY"
+var corruptedContent = "XXXX"
 
 func getDataFilePathList(dir string) ([]string, error) {
 	fi, err := ioutil.ReadDir(dir)
@@ -434,10 +436,14 @@ func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
 		defer kvs.Close()
 		wb := kvs.GetWriteBatch(nil)
 		defer wb.Destroy()
+		data := make([]byte, 0)
+		for i := 0; i < 16; i++ {
+			data = append(data, []byte(flagContent)...)
+		}
 		for i := uint64(1); i <= 1024; i++ {
 			key := newKey(entryKeySize, nil)
 			key.SetEntryKey(100, 1, i)
-			wb.Put(key.Key(), []byte(flagContent))
+			wb.Put(key.Key(), data)
 		}
 		if err := kvs.CommitWriteBatch(wb); err != nil {
 			t.Fatalf("failed to commit wb %v", err)

@@ -133,7 +133,7 @@ func (sc *Context) getSnapshotDirParts(did uint64,
 
 // GetLogDBDirs returns the directory names for LogDB
 func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
-	dirs, lldirs := sc.GetDataDirs()
+	dirs, lldirs := sc.getDataDirs()
 	didStr := sc.getDeploymentIDSubDirName(did)
 	for i := 0; i < len(dirs); i++ {
 		dirs[i] = filepath.Join(dirs[i], sc.hostname, didStr)
@@ -147,7 +147,7 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 	return dirs, dirs
 }
 
-func (sc *Context) GetDataDirs() ([]string, []string) {
+func (sc *Context) getDataDirs() ([]string, []string) {
 	lldirs := strings.Split(sc.nhConfig.WALDir, ":")
 	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
 	if len(sc.nhConfig.WALDir) > 0 {
@@ -207,7 +207,7 @@ func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
 func (sc *Context) LockNodeHostDir() error {
-	dirs, lldirs := sc.GetDataDirs()
+	dirs, lldirs := sc.getDataDirs()
 	for i := 0; i < len(dirs); i++ {
 		if err := sc.tryCreateLockFile(dirs[i], lockFilename); err != nil {
 			return err
@@ -227,7 +227,7 @@ func (sc *Context) LockNodeHostDir() error {
 
 func (sc *Context) checkNodeHostDir(did uint64,
 	addr string, hostname string, binVer uint32, name string, dbto bool) error {
-	dirs, lldirs := sc.GetDataDirs()
+	dirs, lldirs := sc.getDataDirs()
 	for i := 0; i < len(dirs); i++ {
 		if err := sc.compatible(dirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
 			return err
