@@ -113,26 +113,16 @@ To run built-in tests using LevelDB based storage:
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
 ```
-To build the your application using LevelDB based Raft log storage
-```
-go build -v -tags="dragonboat_leveldb" pkgname
-```
+To use LevelDB based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function leveldb.NewLogDB provided in the github.com/lni/dragonboat/plugin/leveldb package.
 
-### Optional - C++ binding ###
-The C++ binding is only required when you want to use Dragonboat in your C++ project. To install the C++ binding:
+To build the your application when you don't have RocksDB installed
 ```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make binding
-$ sudo make install-binding
-```
-Run C++ binding tests (gtest is required):
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make clean
-$ make test-cppwrapper
+go build -v -tags="dragonboat_no_rocksdb" pkgname
 ```
 
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example) and [online chat](https://gitter.im/lni/dragonboat) are available.
+
+C++ Binding info can be found [here](https://github.com/lni/dragonboat/blob/master/binding/README.md).
 
 ## Examples ##
 Dragonboat examples are [here](https://github.com/lni/dragonboat-example).

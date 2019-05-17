@@ -112,26 +112,16 @@ CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lro
 $ cd $GOPATH/src/github.com/lni/dragonboat
 $ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
 ```
-或者编译同样该应用:
-```
-go build -v -tags="dragonboat_leveldb" pkgname
-```
+在应用中使用基于LevelDB的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为leveldb.NewLogDB这一在github.com/lni/dragonboat/plugin/leveldb包中提供的factory函数。
 
-### 可选 - 装C++ Binding ###
-C++ Binding的安装仅在您希望在C++项目中使用Dragonboat时才需要：
+编译应用时可如此避免对RocksDB库的依赖:
 ```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make binding
-$ sudo make install-binding
-```
-运行C++ binding测试(需gtest库):
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make clean
-$ make test-cppwrapper
+go build -v -tags="dragonboat_no_rocksdb" pkgname
 ```
 
 欢迎阅读或使用[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)和在线[讨论组](https://gitter.im/lni/dragonboat)。
+
+C++ binding的信息可参考[这里](https://github.com/lni/dragonboat/blob/master/binding/README.md)。
 
 ## 中文例程 ##
 中文例程在[这里](https://github.com/lni/dragonboat-example)。
