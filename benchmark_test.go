@@ -502,7 +502,9 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 		entries = append(entries, e)
 		task.Entries = entries
 		smo.TaskC() <- task
-		smo.Handle(batch, smEntries)
+		if _, _, err := smo.Handle(batch, smEntries); err != nil {
+			b.Fatalf("handle failed %v", err)
+		}
 	}
 	b.StartTimer()
 	for x := 0; x < b.N; x++ {
@@ -514,7 +516,9 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 		}
 		task.Entries = entries
 		smo.TaskC() <- task
-		smo.Handle(batch, smEntries)
+		if _, _, err := smo.Handle(batch, smEntries); err != nil {
+			b.Fatalf("handle failed %v", err)
+		}
 	}
 }
 

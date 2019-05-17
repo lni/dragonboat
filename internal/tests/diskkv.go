@@ -352,7 +352,7 @@ func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
 }
 
 // Update updates the state machine.
-func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
+func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	if d.aborted {
 		panic("update() called after abort set to true")
 	}
@@ -378,7 +378,7 @@ func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 	wb.Put([]byte(appliedIndexKey), idx)
 	fmt.Printf("[DKVE] %s applied index recorded as %d\n", d.describe(), ents[len(ents)-1].Index)
 	if err := db.db.Write(db.wo, wb); err != nil {
-		panic(err)
+		return nil, err
 	}
 	if d.lastApplied >= ents[len(ents)-1].Index {
 		fmt.Printf("[DKVE] %s last applied not moving forward %d,%d\n",
@@ -386,7 +386,7 @@ func (d *DiskKVTest) Update(ents []sm.Entry) []sm.Entry {
 		panic("lastApplied not moving forward")
 	}
 	d.lastApplied = ents[len(ents)-1].Index
-	return ents
+	return ents, nil
 }
 
 type diskKVCtx struct {

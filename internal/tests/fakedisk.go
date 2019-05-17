@@ -39,7 +39,7 @@ func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 }
 
 // Update updates the state machine.
-func (f *FakeDiskSM) Update(ents []sm.Entry) []sm.Entry {
+func (f *FakeDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	for _, e := range ents {
 		if e.Index <= f.initialApplied {
 			panic("already applied index received again")
@@ -48,7 +48,7 @@ func (f *FakeDiskSM) Update(ents []sm.Entry) []sm.Entry {
 			e.Result = sm.Result{Value: f.count}
 		}
 	}
-	return ents
+	return ents, nil
 }
 
 // Lookup queries the state machine.

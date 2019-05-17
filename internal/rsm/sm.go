@@ -25,12 +25,11 @@ import (
 // IConcurrentStateMachine instances.
 type IStateMachine interface {
 	Open(<-chan struct{}) (uint64, error)
-	Update(entries []sm.Entry) []sm.Entry
+	Update(entries []sm.Entry) ([]sm.Entry, error)
 	Lookup(query []byte) ([]byte, error)
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
-		io.Writer,
-		sm.ISnapshotFileCollection, <-chan struct{}) error
+		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
 	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
 	GetHash() uint64
@@ -56,12 +55,12 @@ func (sm *RegularStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 }
 
 // Update updates the state machine.
-func (sm *RegularStateMachine) Update(entries []sm.Entry) []sm.Entry {
+func (sm *RegularStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if len(entries) != 1 {
 		panic("len(entries) != 1")
 	}
 	entries[0].Result = sm.sm.Update(entries[0].Cmd)
-	return entries
+	return entries, nil
 }
 
 // Lookup queries the state machine.
@@ -134,8 +133,8 @@ func (sm *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 }
 
 // Update updates the state machine.
-func (sm *ConcurrentStateMachine) Update(entries []sm.Entry) []sm.Entry {
-	return sm.sm.Update(entries)
+func (sm *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
+	return sm.sm.Update(entries), nil
 }
 
 // Lookup queries the state machine.
@@ -217,7 +216,7 @@ func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 }
 
 // Update updates the state machine.
-func (sm *OnDiskStateMachine) Update(entries []sm.Entry) []sm.Entry {
+func (sm *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if !sm.opened {
 		panic("Update called before Open")
 	}

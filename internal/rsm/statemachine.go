@@ -429,14 +429,15 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 }
 
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
+func (s *StateMachine) Handle(batch []Task,
+	toApply []sm.Entry) (Task, bool, error) {
 	processed := 0
 	batch = batch[:0]
 	toApply = toApply[:0]
 	select {
 	case rec := <-s.taskC:
 		if rec.isSnapshotTask() {
-			return rec, true
+			return rec, true, nil
 		}
 		batch = append(batch, rec)
 		processed++
@@ -445,8 +446,10 @@ func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
 			select {
 			case rec := <-s.taskC:
 				if rec.isSnapshotTask() {
-					s.handle(batch, toApply)
-					return rec, true
+					if err := s.handle(batch, toApply); err != nil {
+						return Task{}, false, err
+					}
+					return rec, true, nil
 				}
 				batch = append(batch, rec)
 				processed++
@@ -456,8 +459,7 @@ func (s *StateMachine) Handle(batch []Task, toApply []sm.Entry) (Task, bool) {
 		}
 	default:
 	}
-	s.handle(batch, toApply)
-	return Task{}, false
+	return Task{}, false, s.handle(batch, toApply)
 }
 
 func (s *StateMachine) getSnapshotMeta(ctx interface{},
@@ -596,7 +598,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 	return allUpdate, allNoOP
 }
 
-func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) {
+func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
 		if batch[b].isSnapshotTask() {
@@ -605,14 +607,19 @@ func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) {
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)
 		if batchSupport && allUpdate && allNoOP {
-			s.handleBatchedEntries(input, toApply)
+			if err := s.handleBatchedEntries(input, toApply); err != nil {
+				return err
+			}
 		} else {
 			for i := range input {
 				last := b == len(batch)-1 && i == len(input)-1
-				s.handleEntry(input[i], last)
+				if err := s.handleEntry(input[i], last); err != nil {
+					return err
+				}
 			}
 		}
 	}
+	return nil
 }
 
 func isEmptyResult(result sm.Result) bool {
@@ -626,7 +633,7 @@ func (s *StateMachine) entryAppliedInDiskSM(index uint64) bool {
 	return index <= s.diskSMIndex
 }
 
-func (s *StateMachine) handleEntry(ent pb.Entry, last bool) {
+func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
 	// ConfChnage also go through the SM so the index value is updated
 	if ent.IsConfigChange() {
 		accepted := s.handleConfigChange(ent)
@@ -648,7 +655,10 @@ func (s *StateMachine) handleEntry(ent pb.Entry, last bool) {
 				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
 			} else {
 				if !s.entryAppliedInDiskSM(ent.Index) {
-					smResult, ignored, rejected := s.handleUpdate(ent)
+					smResult, ignored, rejected, err := s.handleUpdate(ent)
+					if err != nil {
+						return err
+					}
 					if !ignored {
 						s.node.ApplyUpdate(ent, smResult, rejected, ignored, last)
 					}
@@ -666,6 +676,7 @@ func (s *StateMachine) handleEntry(ent pb.Entry, last bool) {
 	if last {
 		s.setBatchedLastApplied(ent.Index)
 	}
+	return nil
 }
 
 func (s *StateMachine) onUpdateApplied(ent pb.Entry,
@@ -675,7 +686,7 @@ func (s *StateMachine) onUpdateApplied(ent pb.Entry,
 	}
 }
 
-func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) {
+func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) error {
 	if len(ents) != 0 {
 		panic("ents is not empty")
 	}
@@ -688,7 +699,10 @@ func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) {
 		s.updateLastApplied(ent.Index, ent.Term)
 	}
 	if len(ents) > 0 {
-		results := s.sm.BatchedUpdate(ents)
+		results, err := s.sm.BatchedUpdate(ents)
+		if err != nil {
+			return err
+		}
 		for idx, ent := range results {
 			last := idx == len(input)-1
 			s.onUpdateApplied(input[idx], ent.Result, false, false, last)
@@ -697,6 +711,7 @@ func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) {
 	if len(input) > 0 {
 		s.setBatchedLastApplied(input[len(input)-1].Index)
 	}
+	return nil
 }
 
 func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
@@ -749,7 +764,7 @@ func (s *StateMachine) handleNoOP(ent pb.Entry) {
 }
 
 // result a tuple of (result, should ignore, rejected)
-func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool) {
+func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ok bool
@@ -759,26 +774,30 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool) {
 		session, ok = s.sessions.ClientRegistered(ent.ClientID)
 		if !ok {
 			// client is expected to crash
-			return sm.Result{}, false, true
+			return sm.Result{}, false, true, nil
 		}
 		s.sessions.UpdateRespondedTo(session, ent.RespondedTo)
 		result, responded, updateRequired := s.sessions.UpdateRequired(session,
 			ent.SeriesID)
 		if responded {
 			// should ignore. client is expected to timeout
-			return sm.Result{}, true, false
+			return sm.Result{}, true, false, nil
 		}
 		if !updateRequired {
 			// server responded, client never confirmed
 			// return the result again but not update the sm again
 			// this implements the no-more-than-once update of the SM
-			return result, false, false
+			return result, false, false, nil
 		}
 	}
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
-	return s.sm.Update(session, ent), false, false
+	result, err := s.sm.Update(session, ent)
+	if err != nil {
+		return sm.Result{}, false, false, err
+	}
+	return result, false, false, nil
 }
 
 func (s *StateMachine) describe() string {

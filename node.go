@@ -652,7 +652,11 @@ func (rc *node) recoverFromSnapshotDone() {
 }
 
 func (rc *node) handleTask(batch []rsm.Task, ents []sm.Entry) (rsm.Task, bool) {
-	return rc.sm.Handle(batch, ents)
+	t, sr, err := rc.sm.Handle(batch, ents)
+	if err != nil {
+		panic(err)
+	}
+	return t, sr
 }
 
 func (rc *node) removeSnapshotFlagFile(index uint64) error {

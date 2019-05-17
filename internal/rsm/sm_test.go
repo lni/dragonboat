@@ -81,7 +81,9 @@ func TestOnDiskSMRecordAppliedIndex(t *testing.T) {
 		{Index: applied + 2},
 		{Index: applied + 3},
 	}
-	od.Update(entries)
+	if _, err := od.Update(entries); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
 	if od.applied != applied+uint64(len(entries)) {
 		t.Errorf("applied value not recorded")
 	}
@@ -101,7 +103,9 @@ func TestUpdateAnUnopenedOnDiskSMWillPanic(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Update(entries)
+	if _, err := od.Update(entries); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
 }
 
 func TestUpdateOnDiskSMWithAppliedIndexWillPanic(t *testing.T) {
@@ -113,13 +117,17 @@ func TestUpdateOnDiskSMWithAppliedIndexWillPanic(t *testing.T) {
 		t.Fatalf("failed to open %v", err)
 	}
 	entries := []sm.Entry{{Index: applied + 1}}
-	od.Update(entries)
+	if _, err := od.Update(entries); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Update(entries)
+	if _, err := od.Update(entries); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
 }
 
 func TestUpdateOnDiskSMWithIndexLessThanInitialIndexWillPanic(t *testing.T) {
@@ -137,7 +145,9 @@ func TestUpdateOnDiskSMWithIndexLessThanInitialIndexWillPanic(t *testing.T) {
 			t.Errorf("no panic")
 		}
 	}()
-	od.Update(entries)
+	if _, err := od.Update(entries); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
 }
 
 func TestLookupCalledBeforeOnDiskSMIsOpenedWillPanic(t *testing.T) {

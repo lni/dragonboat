@@ -54,8 +54,8 @@ type ILoadableSessions interface {
 // IManagedStateMachine is the interface used to manage data store.
 type IManagedStateMachine interface {
 	Open() (uint64, error)
-	Update(*Session, pb.Entry) sm.Result
-	BatchedUpdate([]sm.Entry) []sm.Entry
+	Update(*Session, pb.Entry) (sm.Result, error)
+	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
 	Lookup([]byte) ([]byte, error)
 	GetHash() uint64
 	PrepareSnapshot() (interface{}, error)
@@ -155,7 +155,8 @@ func (ds *NativeStateMachine) StateMachineType() pb.StateMachineType {
 }
 
 // Update updates the data store.
-func (ds *NativeStateMachine) Update(session *Session, e pb.Entry) sm.Result {
+func (ds *NativeStateMachine) Update(session *Session,
+	e pb.Entry) (sm.Result, error) {
 	if session != nil {
 		_, ok := session.getResponse(RaftSeriesID(e.SeriesID))
 		if ok {
@@ -163,24 +164,30 @@ func (ds *NativeStateMachine) Update(session *Session, e pb.Entry) sm.Result {
 		}
 	}
 	entries := []sm.Entry{sm.Entry{Index: e.Index, Cmd: e.Cmd}}
-	results := ds.sm.Update(entries)
+	results, err := ds.sm.Update(entries)
+	if err != nil {
+		return sm.Result{}, err
+	}
 	if len(results) != 1 {
 		panic("len(results) != 1")
 	}
 	if session != nil {
 		session.addResponse(RaftSeriesID(e.SeriesID), results[0].Result)
 	}
-	return results[0].Result
+	return results[0].Result, nil
 }
 
 // BatchedUpdate applies committed entries in a batch to hide latency.
-func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) []sm.Entry {
+func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	il := len(ents)
-	results := ds.sm.Update(ents)
+	results, err := ds.sm.Update(ents)
+	if err != nil {
+		return nil, err
+	}
 	if len(results) != il {
 		panic("unexpected result length")
 	}
-	return results
+	return results, nil
 }
 
 // Lookup queries the data store.

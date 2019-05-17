@@ -230,12 +230,13 @@ func (ds *StateMachineWrapper) Loaded(from rsm.From) {
 
 // BatchedUpdate applies committed entries in a batch to hide latency. This
 // method is not supported in the C++ wrapper.
-func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) []sm.Entry {
+func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	panic("not supported")
 }
 
 // Update updates the data store.
-func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) sm.Result {
+func (ds *StateMachineWrapper) Update(session *rsm.Session,
+	e pb.Entry) (sm.Result, error) {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
 	if len(e.Cmd) > 0 {
@@ -245,7 +246,7 @@ func (ds *StateMachineWrapper) Update(session *rsm.Session, e pb.Entry) sm.Resul
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
-	return sm.Result{Value: uint64(v)}
+	return sm.Result{Value: uint64(v)}, nil
 }
 
 // Lookup queries the data store.
