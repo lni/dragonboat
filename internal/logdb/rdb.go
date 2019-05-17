@@ -411,7 +411,7 @@ func (r *rdb) readState(clusterID uint64, nodeID uint64) (*pb.State, error) {
 func (r *rdb) removeEntriesTo(clusterID uint64,
 	nodeID uint64, index uint64) error {
 	op := func(fk *PooledKey, lk *PooledKey) error {
-		return r.kvs.RemoveEntries(fk.Key(), lk.Key())
+		return r.kvs.BulkRemoveEntries(fk.Key(), lk.Key())
 	}
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }
@@ -453,7 +453,7 @@ func (r *rdb) recordRemoveNodeData(wb kv.IWriteBatch,
 
 func (r *rdb) compaction(clusterID uint64, nodeID uint64, index uint64) error {
 	op := func(fk *PooledKey, lk *PooledKey) error {
-		return r.kvs.Compaction(fk.Key(), lk.Key())
+		return r.kvs.CompactEntries(fk.Key(), lk.Key())
 	}
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }

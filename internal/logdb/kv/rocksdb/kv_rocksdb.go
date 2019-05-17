@@ -282,32 +282,53 @@ func (r *RocksDBKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *RocksDBKV) RemoveEntries(firstKey []byte, lastKey []byte) error {
-	if err := r.db.DeleteFileInRange(firstKey, lastKey); err != nil {
-		return err
-	}
-	return r.deleteRange(firstKey, lastKey)
+func (r *RocksDBKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+	return nil
 }
 
-func (r *RocksDBKV) Compaction(firstKey []byte, lastKey []byte) error {
+func (r *RocksDBKV) CompactEntries(fk []byte, lk []byte) error {
+	if err := r.deleteRange(fk, lk); err != nil {
+		return err
+	}
 	opts := gorocksdb.NewCompactionOptions()
 	opts.SetExclusiveManualCompaction(false)
 	opts.SetChangeLevel(true)
 	opts.SetTargetLevel(-1)
 	defer opts.Destroy()
 	rng := gorocksdb.Range{
-		Start: firstKey,
-		Limit: lastKey,
+		Start: fk,
+		Limit: lk,
 	}
 	r.db.CompactRangeWithOptions(opts, rng)
 	return nil
 }
 
-func (r *RocksDBKV) deleteRange(firstKey []byte, lastKey []byte) error {
+func (r *RocksDBKV) FullCompaction() error {
+	fk := make([]byte, kv.MaxKeyLength)
+	lk := make([]byte, kv.MaxKeyLength)
+	for i := uint64(0); i < kv.MaxKeyLength; i++ {
+		fk[i] = 0
+		lk[i] = 0xFF
+	}
+	opts := gorocksdb.NewCompactionOptions()
+	opts.SetExclusiveManualCompaction(false)
+	opts.SetChangeLevel(true)
+	opts.SetTargetLevel(-1)
+	defer opts.Destroy()
+	rng := gorocksdb.Range{
+		Start: fk,
+		Limit: lk,
+	}
+	r.db.CompactRangeWithOptions(opts, rng)
+	return nil
+}
+
+func (r *RocksDBKV) deleteRange(fk []byte, lk []byte) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
-	toDelete := make([][]byte, 0)
-	for iter.Seek(firstKey); ; iter.Next() {
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	for iter.Seek(fk); ; iter.Next() {
 		v, err := iter.IsValid()
 		if err != nil {
 			return err
@@ -315,28 +336,18 @@ func (r *RocksDBKV) deleteRange(firstKey []byte, lastKey []byte) error {
 		if !v {
 			break
 		}
-		if done := func() bool {
-			key, ok := iter.OKey()
-			if !ok {
-				panic("failed to get key")
-			}
-			defer key.Free()
-			kd := key.Data()
-			if bytes.Compare(kd, lastKey) >= 0 {
-				return true
-			}
-			v := make([]byte, len(kd))
-			copy(v, kd)
-			toDelete = append(toDelete, v)
-			return false
-		}(); done {
+		key, ok := iter.OKey()
+		if !ok {
+			panic("failed to get key")
+		}
+		kd := key.Data()
+		if bytes.Compare(kd, lk) < 0 {
+			wb.Delete(kd)
+			key.Free()
+		} else {
+			key.Free()
 			break
 		}
-	}
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	for _, key := range toDelete {
-		wb.Delete(key)
 	}
 	if wb.Count() > 0 {
 		return r.db.Write(r.wo, wb)

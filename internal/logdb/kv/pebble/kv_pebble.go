@@ -177,7 +177,11 @@ func (r *PebbleKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *PebbleKV) RemoveEntries(fk []byte, lk []byte) error {
+func (r *PebbleKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+	return nil
+}
+
+func (r *PebbleKV) deleteRange(fk []byte, lk []byte) error {
 	iter := r.db.NewIter(r.ro)
 	defer iter.Close()
 	wb := r.GetWriteBatch(nil)
@@ -193,6 +197,19 @@ func (r *PebbleKV) RemoveEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *PebbleKV) Compaction(fk []byte, lk []byte) error {
+func (r *PebbleKV) CompactEntries(fk []byte, lk []byte) error {
+	if err := r.deleteRange(fk, lk); err != nil {
+		return err
+	}
+	return r.db.Compact(fk, lk)
+}
+
+func (r *PebbleKV) FullCompaction() error {
+	fk := make([]byte, kv.MaxKeyLength)
+	lk := make([]byte, kv.MaxKeyLength)
+	for i := uint64(0); i < kv.MaxKeyLength; i++ {
+		fk[i] = 0
+		lk[i] = 0xFF
+	}
 	return r.db.Compact(fk, lk)
 }

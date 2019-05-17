@@ -442,42 +442,6 @@ func TestSaveRaftState(t *testing.T) {
 	runLogDBTest(t, tf)
 }
 
-func TestRemoveEntries(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		testSaveRaftState(t, db)
-		if err := db.RemoveEntriesTo(3, 4, 7); err != nil {
-			t.Fatalf("failed to remove entries, %v", err)
-		}
-		// do we have all entries from index 1 to 10
-		ents, _, err := db.IterateEntries(nil, 0, 3, 4, 1, 11, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("IterateEntries failed %v", err)
-		}
-		if len(ents) != 0 {
-			t.Errorf("ents sz %d, want 0", len(ents))
-		}
-		ents, _, err = db.IterateEntries(nil, 0, 3, 4, 6, 11, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("IterateEntries failed %v", err)
-		}
-		if len(ents) != 0 {
-			t.Errorf("ents sz %d, want 0", len(ents))
-		}
-		ents, _, err = db.IterateEntries(nil, 0, 3, 4, 7, 11, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("IterateEntries failed %v", err)
-		}
-		if len(ents) != 4 {
-			t.Errorf("ents sz %d, want 4", len(ents))
-		}
-		if ents[0].Index != 7 || ents[1].Index != 8 ||
-			ents[2].Index != 9 || ents[3].Index != 10 {
-			t.Errorf("index mismatch")
-		}
-	}
-	runPlainLogDBTest(t, tf)
-}
-
 func TestStateIsUpdated(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		hs := pb.State{

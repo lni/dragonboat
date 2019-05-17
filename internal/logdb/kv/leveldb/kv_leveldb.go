@@ -196,7 +196,11 @@ func (r *LevelDBKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *LevelDBKV) RemoveEntries(fk []byte, lk []byte) error {
+func (r *LevelDBKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+	return nil
+}
+
+func (r *LevelDBKV) deleteRange(fk []byte, lk []byte) error {
 	wb := levigo.NewWriteBatch()
 	it := r.db.NewIterator(r.ro)
 	defer it.Close()
@@ -206,12 +210,26 @@ func (r *LevelDBKV) RemoveEntries(fk []byte, lk []byte) error {
 		}
 	}
 	if err := it.GetError(); err != nil {
-		panic(err)
+		return err
 	}
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *LevelDBKV) Compaction(fk []byte, lk []byte) error {
+func (r *LevelDBKV) CompactEntries(fk []byte, lk []byte) error {
+	if err := r.deleteRange(fk, lk); err != nil {
+		return err
+	}
+	r.db.CompactRange(levigo.Range{Start: fk, Limit: lk})
+	return nil
+}
+
+func (r *LevelDBKV) FullCompaction() error {
+	fk := make([]byte, kv.MaxKeyLength)
+	lk := make([]byte, kv.MaxKeyLength)
+	for i := uint64(0); i < kv.MaxKeyLength; i++ {
+		fk[i] = 0
+		lk[i] = 0xFF
+	}
 	r.db.CompactRange(levigo.Range{Start: fk, Limit: lk})
 	return nil
 }

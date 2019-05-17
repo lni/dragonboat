@@ -16,6 +16,12 @@ package logdb
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/internal/logdb/kv"
@@ -259,4 +265,220 @@ func TestHasEntryRecord(t *testing.T) {
 		}
 	}
 	runKVTest(t, tf)
+}
+
+func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
+	tf := func(t *testing.T, kvs kv.IKVStore) {
+		wb := kvs.GetWriteBatch(nil)
+		defer wb.Destroy()
+		for i := uint64(1); i <= 100; i++ {
+			key := newKey(entryKeySize, nil)
+			key.SetEntryKey(100, 1, i)
+			data := make([]byte, 16)
+			wb.Put(key.Key(), data)
+		}
+		if err := kvs.CommitWriteBatch(wb); err != nil {
+			t.Fatalf("failed to commit wb %v", err)
+		}
+		fk := newKey(entryKeySize, nil)
+		lk := newKey(entryKeySize, nil)
+		fk.SetEntryKey(100, 1, 1)
+		lk.SetEntryKey(100, 1, 100)
+		count := 0
+		op := func(key []byte, data []byte) (bool, error) {
+			count++
+			return true, nil
+		}
+		if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+			t.Fatalf("iterate value failed %v", err)
+		}
+		if count != 100 {
+			t.Fatalf("failed to get all key value pairs, count %d", count)
+		}
+		lk.SetEntryKey(100, 1, 21)
+		if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
+			t.Fatalf("remove entry failed %v", err)
+		}
+		if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
+			t.Fatalf("compaction failed %v", err)
+		}
+		count = 0
+		lk.SetEntryKey(100, 1, 100)
+		if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
+			t.Fatalf("iterate value failed %v", err)
+		}
+		if count != 80 {
+			t.Fatalf("failed to get all key value pairs, count %d", count)
+		}
+	}
+	runKVTest(t, tf)
+}
+
+func TestCompactionReleaseStorageSpace(t *testing.T) {
+	deleteTestDB()
+	defer deleteTestDB()
+	maxIndex := uint64(1024 * 128)
+	func() {
+		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+		if err != nil {
+			t.Fatalf("failed to open kv rocksdb")
+		}
+		defer kvs.Close()
+		wb := kvs.GetWriteBatch(nil)
+		defer wb.Destroy()
+		for i := uint64(1); i <= maxIndex; i++ {
+			key := newKey(entryKeySize, nil)
+			key.SetEntryKey(100, 1, i)
+			data := make([]byte, 64)
+			rand.Read(data)
+			wb.Put(key.Key(), data)
+		}
+		if err := kvs.CommitWriteBatch(wb); err != nil {
+			t.Fatalf("failed to commit wb %v", err)
+		}
+	}()
+	sz, err := getDirSize(RDBTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to get sz %v", err)
+	}
+	if sz < 1024*1024*8 {
+		t.Errorf("unexpected size %d", sz)
+	}
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to open kv rocksdb")
+	}
+	defer kvs.Close()
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryKey(100, 1, 1)
+	lk.SetEntryKey(100, 1, maxIndex+1)
+	if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
+		t.Fatalf("remove entry failed %v", err)
+	}
+	if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
+		t.Fatalf("compaction failed %v", err)
+	}
+	sz, err = getDirSize(RDBTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to get sz %v", err)
+	}
+	if sz > 1024*1024 {
+		t.Errorf("unexpected size %d", sz)
+	}
+}
+
+var flagContent string = "YYYY"
+var corruptedContent string = "XXXX"
+
+func getDataFilePathList(dir string) ([]string, error) {
+	fi, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0)
+	for _, v := range fi {
+		if strings.HasSuffix(v.Name(), ".ldb") || strings.HasSuffix(v.Name(), ".sst") {
+			result = append(result, filepath.Join(dir, v.Name()))
+		}
+	}
+	return result, nil
+}
+
+func modifyDataFile(fp string) (bool, error) {
+	idx := int64(0)
+	f, err := os.OpenFile(fp, os.O_RDWR, 0755)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	located := false
+	data := make([]byte, 4)
+	for {
+		_, err := f.Read(data)
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				return false, err
+			}
+		}
+		if string(data) == flagContent {
+			located = true
+			break
+		}
+		idx += 4
+	}
+	if !located {
+		return false, nil
+	}
+	_, err = f.Seek(idx, 0)
+	if err != nil {
+		return false, err
+	}
+	_, err = f.Write([]byte(corruptedContent))
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
+	deleteTestDB()
+	defer deleteTestDB()
+	func() {
+		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+		if err != nil {
+			t.Fatalf("failed to open kv rocksdb")
+		}
+		defer kvs.Close()
+		wb := kvs.GetWriteBatch(nil)
+		defer wb.Destroy()
+		for i := uint64(1); i <= 1024; i++ {
+			key := newKey(entryKeySize, nil)
+			key.SetEntryKey(100, 1, i)
+			wb.Put(key.Key(), []byte(flagContent))
+		}
+		if err := kvs.CommitWriteBatch(wb); err != nil {
+			t.Fatalf("failed to commit wb %v", err)
+		}
+		if err := kvs.FullCompaction(); err != nil {
+			t.Fatalf("full compaction failed %v", err)
+		}
+	}()
+	files, err := getDataFilePathList(RDBTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to get data files %v", err)
+	}
+	corrupted := false
+	for _, fp := range files {
+		done, err := modifyDataFile(fp)
+		if err != nil {
+			t.Fatalf("failed to modify data file %v", err)
+		}
+		if done {
+			corrupted = true
+			break
+		}
+	}
+	if !corrupted {
+		t.Fatalf("failed to corrupt data files")
+	}
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to open kv rocksdb")
+	}
+	defer kvs.Close()
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryKey(100, 1, 1)
+	lk.SetEntryKey(100, 1, 1024)
+	count := 0
+	op := func(key []byte, data []byte) (bool, error) {
+		count++
+		return true, nil
+	}
+	if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err == nil {
+		t.Fatalf("no checksum error returned")
+	}
 }

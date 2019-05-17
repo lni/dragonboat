@@ -18,6 +18,11 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
+const (
+	// MaxKeyLength is the max length of keys allowed
+	MaxKeyLength uint64 = 1024
+)
+
 // IKVStore is the interface used by the RDB struct to access the underlying
 // Key-Value store.
 type IKVStore interface {
@@ -48,14 +53,17 @@ type IKVStore interface {
 	// CommitDeleteBatch atomically deletes everything included in the write
 	// batch from the underlying key-value store.
 	CommitDeleteBatch(wb IWriteBatch) error
-	// RemoveEntries removes entries specified by the range [firstKey, lastKey).
-	// RemoveEntries is called in the main execution thread of raft, it is
-	// suppose to immediately return without significant delay.
-	RemoveEntries(firstKey []byte, lastKey []byte) error
-	// Compaction is called by the compaction goroutine to compact the key-value
-	// store for the specified range [firstKey, lastKey). This method is expected
-	// to complete in the order of seconds.
-	Compaction(firstKey []byte, lastKey []byte) error
+	// BulkRemoveEntries removes entries specified by the range [firstKey,
+	// lastKey). BulkRemoveEntries is called in the main execution thread of raft,
+	// it is suppose to immediately return without significant delay.
+	// BulkRemoveEntries is usually implemented in KV store's range delete feature.
+	BulkRemoveEntries(firstKey []byte, lastKey []byte) error
+	// CompactEntries is called by the compaction goroutine for the specified
+	// range [firstKey, lastKey). CompactEntries is triggered by the
+	// BulkRemoveEntries method for the same key range.
+	CompactEntries(firstKey []byte, lastKey []byte) error
+	// FullCompaction compact the entire key space.
+	FullCompaction() error
 }
 
 // IWriteBatch is the interface representing a write batch capable of
