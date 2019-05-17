@@ -287,7 +287,8 @@ dev-test: test test-grpc-transport
 unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-multiraft test-utils test-config test-client test-server test-tools
+  test-multiraft test-utils test-config test-client test-server test-tools \
+	test-plugins
 
 ###############################################################################
 # fast tests executed for every git push
