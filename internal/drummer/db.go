@@ -108,7 +108,6 @@ func NewDB(clusterID uint64, nodeID uint64) statemachine.IStateMachine {
 		Requests:      make(map[string][]pb.NodeHostRequest),
 		Outgoing:      make(map[string][]pb.NodeHostRequest),
 	}
-
 	return d
 }
 
@@ -197,7 +196,7 @@ func (d *DB) RecoverFromSnapshot(r io.Reader, files []statemachine.SnapshotFile,
 func (d *DB) Close() {}
 
 // GetHash returns the state machine hash.
-func (d *DB) GetHash() uint64 {
+func (d *DB) GetHash() (uint64, error) {
 	d.assertNotFailed()
 	data, err := json.Marshal(d)
 	if err != nil {
@@ -208,27 +207,26 @@ func (d *DB) GetHash() uint64 {
 		panic(err)
 	}
 	md5sum := hash.Sum(nil)
-
-	return binary.LittleEndian.Uint64(md5sum[:8])
+	return binary.LittleEndian.Uint64(md5sum[:8]), nil
 }
 
 // Update updates the DB instance.
-func (d *DB) Update(data []byte) sm.Result {
+func (d *DB) Update(data []byte) (sm.Result, error) {
 	d.assertNotFailed()
 	var c pb.Update
 	if err := c.Unmarshal(data); err != nil {
 		panic(err)
 	}
 	if c.Type == pb.Update_CLUSTER {
-		return sm.Result{Value: d.applyClusterUpdate(c.Change)}
+		return sm.Result{Value: d.applyClusterUpdate(c.Change)}, nil
 	} else if c.Type == pb.Update_KV {
-		return sm.Result{Value: d.applyKVUpdate(c.KvUpdate)}
+		return sm.Result{Value: d.applyKVUpdate(c.KvUpdate)}, nil
 	} else if c.Type == pb.Update_NODEHOST_INFO {
-		return sm.Result{Value: d.applyNodeHostInfoUpdate(c.NodehostInfo)}
+		return sm.Result{Value: d.applyNodeHostInfoUpdate(c.NodehostInfo)}, nil
 	} else if c.Type == pb.Update_REQUESTS {
-		return sm.Result{Value: d.applyRequestsUpdate(c.Requests)}
+		return sm.Result{Value: d.applyRequestsUpdate(c.Requests)}, nil
 	} else if c.Type == pb.Update_TICK {
-		return sm.Result{Value: d.applyTickUpdate()}
+		return sm.Result{Value: d.applyTickUpdate()}, nil
 	}
 	panic("Unknown update type")
 }
@@ -379,22 +377,22 @@ func (d *DB) tryCreateCluster(c pb.Change) uint64 {
 }
 
 // Lookup performances local data lookup on the DB.
-func (d *DB) Lookup(key []byte) []byte {
+func (d *DB) Lookup(key []byte) ([]byte, error) {
 	d.assertNotFailed()
 	var req pb.LookupRequest
 	if err := req.Unmarshal(key); err != nil {
 		panic(err)
 	}
 	if req.Type == pb.LookupRequest_CLUSTER {
-		return d.handleClusterLookup(req)
+		return d.handleClusterLookup(req), nil
 	} else if req.Type == pb.LookupRequest_KV {
-		return d.handleKVLookup(req)
+		return d.handleKVLookup(req), nil
 	} else if req.Type == pb.LookupRequest_SCHEDULER_CONTEXT {
-		return d.handleSchedulerContextLookup()
+		return d.handleSchedulerContextLookup(), nil
 	} else if req.Type == pb.LookupRequest_REQUESTS {
-		return d.handleRequestsLookup(req)
+		return d.handleRequestsLookup(req), nil
 	} else if req.Type == pb.LookupRequest_CLUSTER_STATES {
-		return d.handleClusterStatesLookup(req)
+		return d.handleClusterStatesLookup(req), nil
 	}
 	panic("unknown request type")
 }

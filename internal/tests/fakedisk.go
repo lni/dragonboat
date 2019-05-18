@@ -107,6 +107,6 @@ func (f *FakeDiskSM) Close() {
 }
 
 // GetHash returns the hash of the state.
-func (f *FakeDiskSM) GetHash() uint64 {
-	return 0
+func (f *FakeDiskSM) GetHash() (uint64, error) {
+	return 0, nil
 }

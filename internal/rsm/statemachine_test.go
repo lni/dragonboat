@@ -964,7 +964,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.index = 3
-		hash1 := sm.GetHash()
+		hash1, _ := sm.GetHash()
 		ss, _, err := sm.SaveSnapshot(SnapshotRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
@@ -989,7 +989,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		if index2 != index {
 			t.Errorf("last applied %d, want %d", index2, index)
 		}
-		hash2 := sm2.GetHash()
+		hash2, _ := sm2.GetHash()
 		if hash1 != hash2 {
 			t.Errorf("bad hash %d, want %d, sz %d",
 				hash2, hash1, len(store2.(*tests.KVTest).KVStore))
@@ -1645,7 +1645,7 @@ func (t *testManagedStateMachine) Update(*Session, pb.Entry) (sm.Result, error) 
 }
 func (t *testManagedStateMachine) Lookup([]byte) ([]byte, error)         { return nil, nil }
 func (t *testManagedStateMachine) Sync() error                           { return nil }
-func (t *testManagedStateMachine) GetHash() uint64                       { return 0 }
+func (t *testManagedStateMachine) GetHash() (uint64, error)              { return 0, nil }
 func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
 func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
 	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {

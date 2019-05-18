@@ -197,8 +197,9 @@ type IStateMachine interface {
 	// byte slice after return.
 	//
 	// Update returns a Result value used to indicate the result of the update
-	// operation.
-	Update([]byte) Result
+	// operation. An error is returned when there is unrecoverable error when
+	// updating the state machine.
+	Update([]byte) (Result, error)
 	// Lookup queries the state of the IStateMachine instance and returns the
 	// query result as a byte slice. The input byte slice specifies what to query,
 	// it is up to the IStateMachine implementation to interpret the input byte
@@ -209,8 +210,13 @@ type IStateMachine interface {
 	// byte slice after return.
 	//
 	// The Lookup method is a read only method, it should never change the state
-	// of IStateMachine.
-	Lookup([]byte) []byte
+	// of IStateMachine. An error is returned when there is unrecoverable error
+	// when querying the state machine.
+	//
+	// When an error is returned by the Lookup method, the error will be passed
+	// to the caller of NodeHost's ReadLocalNode() or SyncRead() methods to be
+	// handled.
+	Lookup([]byte) ([]byte, error)
 	// SaveSnapshot saves the current state of the IStateMachine instance to the
 	// provided io.Writer backed by a file on disk and the provided
 	// ISnapshotFileCollection instance. This is a read only operation on the
@@ -232,8 +238,7 @@ type IStateMachine interface {
 	// implementation should only return a non-nil error when the system need to
 	// be immediately halted for critical errors, e.g. disk error preventing you
 	// from saving the snapshot.
-	SaveSnapshot(io.Writer,
-		ISnapshotFileCollection, <-chan struct{}) error
+	SaveSnapshot(io.Writer, ISnapshotFileCollection, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IStateMachine object from a
 	// previously saved snapshot captured by the SaveSnapshot method. The saved
 	// snapshot is provided as an io.Reader backed by a file on disk and
@@ -271,5 +276,8 @@ type IStateMachine interface {
 	// related capability by returning a constant uint64 value from this method.
 	//
 	// GetHash is a read only operation on the IStateMachine instance.
-	GetHash() uint64
+	//
+	// An error is returned when there is an unrecoverable error when generating
+	// the state machine hash.
+	GetHash() (uint64, error)
 }

@@ -33,7 +33,7 @@ type IStateMachine interface {
 		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
 	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close()
-	GetHash() uint64
+	GetHash() (uint64, error)
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
 	StateMachineType() pb.StateMachineType
@@ -60,13 +60,14 @@ func (sm *RegularStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if len(entries) != 1 {
 		panic("len(entries) != 1")
 	}
-	entries[0].Result = sm.sm.Update(entries[0].Cmd)
-	return entries, nil
+	var err error
+	entries[0].Result, err = sm.sm.Update(entries[0].Cmd)
+	return entries, err
 }
 
 // Lookup queries the state machine.
 func (sm *RegularStateMachine) Lookup(query []byte) ([]byte, error) {
-	return sm.sm.Lookup(query), nil
+	return sm.sm.Lookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
@@ -101,7 +102,7 @@ func (sm *RegularStateMachine) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *RegularStateMachine) GetHash() uint64 {
+func (sm *RegularStateMachine) GetHash() (uint64, error) {
 	return sm.sm.GetHash()
 }
 
@@ -140,7 +141,7 @@ func (sm *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 
 // Update updates the state machine.
 func (sm *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
-	return sm.sm.Update(entries), nil
+	return sm.sm.Update(entries)
 }
 
 // Lookup queries the state machine.
@@ -177,7 +178,7 @@ func (sm *ConcurrentStateMachine) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *ConcurrentStateMachine) GetHash() uint64 {
+func (sm *ConcurrentStateMachine) GetHash() (uint64, error) {
 	return sm.sm.GetHash()
 }
 
@@ -300,7 +301,7 @@ func (sm *OnDiskStateMachine) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *OnDiskStateMachine) GetHash() uint64 {
+func (sm *OnDiskStateMachine) GetHash() (uint64, error) {
 	return sm.sm.GetHash()
 }
 

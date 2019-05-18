@@ -444,13 +444,13 @@ func (n *PST) getRestored() bool {
 func (n *PST) Close() {}
 
 // Lookup locally looks up the data.
-func (n *PST) Lookup(key []byte) []byte {
-	return make([]byte, 1)
+func (n *PST) Lookup(key []byte) ([]byte, error) {
+	return make([]byte, 1), nil
 }
 
 // Update updates the object.
-func (n *PST) Update(data []byte) sm.Result {
-	return sm.Result{Value: uint64(len(data))}
+func (n *PST) Update(data []byte) (sm.Result, error) {
+	return sm.Result{Value: uint64(len(data))}, nil
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
@@ -495,9 +495,8 @@ func (n *PST) RecoverFromSnapshot(r io.Reader,
 }
 
 // GetHash returns a uint64 value representing the current state of the object.
-func (n *PST) GetHash() uint64 {
-	// the hash value is always 0, so it is of course always consistent
-	return 0
+func (n *PST) GetHash() (uint64, error) {
+	return 0, nil
 }
 
 func createSingleNodeTestNodeHost(addr string,
@@ -627,12 +626,12 @@ func singleConcurrentNodeHostTest(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
-	waitForLeaderToBeElected(t, nh, 1)
-	waitForLeaderToBeElected(t, nh, 1+taskWorkerCount)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		nh.Stop()
 	}()
+	waitForLeaderToBeElected(t, nh, 1)
+	waitForLeaderToBeElected(t, nh, 1+taskWorkerCount)
 	tf(t, nh)
 }
 

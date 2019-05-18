@@ -86,7 +86,7 @@ func (s *ConcurrentKVTest) Lookup(key []byte) ([]byte, error) {
 }
 
 // Update updates the object using the specified committed raft entry.
-func (s *ConcurrentKVTest) Update(ents []sm.Entry) []sm.Entry {
+func (s *ConcurrentKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	dataKv := &kvpb.PBKV{}
 	err := proto.Unmarshal(ents[0].Cmd, dataKv)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *ConcurrentKVTest) Update(ents []sm.Entry) []sm.Entry {
 	kvdata := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
 	kvdata.kvs.Store(key, val)
 	ents[0].Result = sm.Result{Value: uint64(len(ents[0].Cmd))}
-	return ents
+	return ents, nil
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
@@ -204,7 +204,7 @@ func (s *ConcurrentKVTest) Close() {
 }
 
 // GetHash returns a uint64 representing the current object state.
-func (s *ConcurrentKVTest) GetHash() uint64 {
+func (s *ConcurrentKVTest) GetHash() (uint64, error) {
 	p := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
 	jsondata := &KVJson{
 		KVStore: make(map[string]string),
@@ -225,7 +225,7 @@ func (s *ConcurrentKVTest) GetHash() uint64 {
 		panic(err)
 	}
 	md5sum := hash.Sum(nil)
-	return binary.LittleEndian.Uint64(md5sum[:8])
+	return binary.LittleEndian.Uint64(md5sum[:8]), nil
 }
 
 func (s *ConcurrentKVTest) isClosed() bool {

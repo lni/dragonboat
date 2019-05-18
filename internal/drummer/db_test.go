@@ -66,7 +66,7 @@ func TestDBCanBeSnapshottedAndRestored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}
-	hash1 := d.GetHash()
+	hash1, _ := d.GetHash()
 	r := bytes.NewBuffer(w.Bytes())
 	newDB := &DB{}
 	err = newDB.RecoverFromSnapshot(r, nil, nil)
@@ -77,7 +77,7 @@ func TestDBCanBeSnapshottedAndRestored(t *testing.T) {
 		t.Errorf("recovered drummerdb not equal to the original, %v \n\n\n %v",
 			newDB, d)
 	}
-	hash2 := newDB.GetHash()
+	hash2, _ := newDB.GetHash()
 	if hash1 != hash2 {
 		t.Errorf("hash value mismatch")
 	}
@@ -91,9 +91,9 @@ func testTickCanBeIncreased(t *testing.T, db statemachine.IStateMachine) {
 	if err != nil {
 		panic(err)
 	}
-	v1 := db.Update(data)
-	v2 := db.Update(data)
-	v3 := db.Update(data)
+	v1, _ := db.Update(data)
+	v2, _ := db.Update(data)
+	v3, _ := db.Update(data)
 	if v2.Value != v1.Value+tickIntervalSecond ||
 		v3.Value != v2.Value+tickIntervalSecond ||
 		v3.Value != 3*tickIntervalSecond {
@@ -102,7 +102,7 @@ func testTickCanBeIncreased(t *testing.T, db statemachine.IStateMachine) {
 	if db.(*DB).Tick != 3*tickIntervalSecond {
 		t.Errorf("unexpected tick value")
 	}
-	v4 := db.Update(data)
+	v4, _ := db.Update(data)
 	if v4.Value != 4*tickIntervalSecond || db.(*DB).Tick != 4*tickIntervalSecond {
 		t.Errorf("unexpected tick value")
 	}
@@ -309,7 +309,7 @@ func testRequestsCanBeUpdated(t *testing.T, db statemachine.IStateMachine) {
 	if err != nil {
 		panic(err)
 	}
-	v := db.Update(data)
+	v, _ := db.Update(data)
 	if v.Value != 3 {
 		t.Errorf("unexpected returned value")
 	}
@@ -349,7 +349,7 @@ func TestRequestLookup(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	result := db.Lookup(data)
+	result, _ := db.Lookup(data)
 	var resp pb.LookupResponse
 	if err := resp.Unmarshal(result); err != nil {
 		panic(err)
@@ -359,7 +359,7 @@ func TestRequestLookup(t *testing.T) {
 			len(resp.Requests.Requests))
 	}
 	testNodeHostInfoUpdateUpdatesClusterAndNodeHostImage(t, db)
-	result = db.Lookup(data)
+	result, _ = db.Lookup(data)
 	if err := resp.Unmarshal(result); err != nil {
 		panic(err)
 	}
@@ -408,7 +408,7 @@ func TestSchedulerContextLookup(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	result := db.Lookup(data)
+	result, _ := db.Lookup(data)
 	var sc schedulerContext
 	if err := json.Unmarshal(result, &sc); err != nil {
 		panic(err)
@@ -467,12 +467,12 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	}
 	oldData := data
 	d := NewDB(0, 0)
-	code := d.Update(data)
+	code, _ := d.Update(data)
 	if code.Value != DBUpdated {
 		t.Errorf("code %d, want %d", code, DBUpdated)
 	}
 	// use the same input to update the drummer db again
-	code = d.Update(data)
+	code, _ = d.Update(data)
 	if code.Value != ClusterExists {
 		t.Errorf("code %d, want %d", code, ClusterExists)
 	}
@@ -494,7 +494,7 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	if !d.(*DB).bootstrapped() {
 		t.Errorf("not bootstrapped")
 	}
-	code = d.Update(oldData)
+	code, _ = d.Update(oldData)
 	if code.Value != DBBootstrapped {
 		t.Errorf("code %d, want %d", code, DBBootstrapped)
 	}
@@ -517,7 +517,7 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal lookup request")
 	}
-	data = d.Lookup(data)
+	data, _ = d.Lookup(data)
 	var resp pb.LookupResponse
 	err = resp.Unmarshal(data)
 	if err != nil {
@@ -553,12 +553,12 @@ func TestKVMapCanBeUpdatedAndLookedUpForFinalizedValue(t *testing.T) {
 		t.Fatalf("failed to marshal")
 	}
 	d := NewDB(0, 0)
-	code := d.Update(data)
+	code, _ := d.Update(data)
 	if code.Value != DBKVUpdated {
 		t.Errorf("code %d, want %d", code, DBKVUpdated)
 	}
 	// apply the same update again, suppose to be rejected
-	code = d.Update(data)
+	code, _ = d.Update(data)
 	if code.Value != DBKVFinalized {
 		t.Errorf("code %d, want %d", code, DBKVFinalized)
 	}
@@ -739,7 +739,7 @@ func TestLaunchRequestSetsTheLaunchFlag(t *testing.T) {
 	if db.(*DB).launched() {
 		t.Fatalf("launched flag already unexpectedly set")
 	}
-	v := db.Update(data)
+	v, _ := db.Update(data)
 	if v.Value != 1 {
 		t.Errorf("unexpected returned value")
 	}

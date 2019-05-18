@@ -122,7 +122,7 @@ func (s *KVTest) DisableLargeDelay() {
 }
 
 // Lookup performances local looks up for the sepcified data.
-func (s *KVTest) Lookup(key []byte) []byte {
+func (s *KVTest) Lookup(key []byte) ([]byte, error) {
 	if s.closed {
 		panic("lookup called after Close()")
 	}
@@ -133,14 +133,14 @@ func (s *KVTest) Lookup(key []byte) []byte {
 	v, ok := s.KVStore[string(key)]
 	generateRandomDelay()
 	if ok {
-		return []byte(v)
+		return []byte(v), nil
 	}
 
-	return []byte("")
+	return []byte(""), nil
 }
 
 // Update updates the object using the specified committed raft entry.
-func (s *KVTest) Update(data []byte) sm.Result {
+func (s *KVTest) Update(data []byte) (sm.Result, error) {
 	s.Count++
 	if s.aborted {
 		panic("update() called after abort set to true")
@@ -156,8 +156,7 @@ func (s *KVTest) Update(data []byte) sm.Result {
 	}
 	s.updateStore(dataKv.GetKey(), dataKv.GetVal())
 	s.pbkvPool.Put(dataKv)
-
-	return sm.Result{Value: uint64(len(data))}
+	return sm.Result{Value: uint64(len(data))}, nil
 }
 
 func (s *KVTest) saveExternalFile(fileCollection sm.ISnapshotFileCollection) {
@@ -294,7 +293,7 @@ func (s *KVTest) Close() {
 }
 
 // GetHash returns a uint64 representing the current object state.
-func (s *KVTest) GetHash() uint64 {
+func (s *KVTest) GetHash() (uint64, error) {
 	data, err := json.Marshal(s)
 	if err != nil {
 		panic(err)
@@ -305,7 +304,7 @@ func (s *KVTest) GetHash() uint64 {
 		panic(err)
 	}
 	md5sum := hash.Sum(nil)
-	return binary.LittleEndian.Uint64(md5sum[:8])
+	return binary.LittleEndian.Uint64(md5sum[:8]), nil
 }
 
 func (s *KVTest) updateStore(key string, value string) {

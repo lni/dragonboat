@@ -29,18 +29,18 @@ type NoOP struct {
 }
 
 // Lookup locally looks up the data.
-func (n *NoOP) Lookup(key []byte) []byte {
-	return make([]byte, 1)
+func (n *NoOP) Lookup(key []byte) ([]byte, error) {
+	return make([]byte, 1), nil
 }
 
 // Update updates the object.
-func (n *NoOP) Update(data []byte) sm.Result {
+func (n *NoOP) Update(data []byte) (sm.Result, error) {
 	if n.MillisecondToSleep > 0 {
 		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
 	}
 	v := make([]byte, len(data))
 	copy(v, data)
-	return sm.Result{Value: uint64(len(data)), Data: v}
+	return sm.Result{Value: uint64(len(data)), Data: v}, nil
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
@@ -80,7 +80,6 @@ func (n *NoOP) RecoverFromSnapshot(r io.Reader,
 func (n *NoOP) Close() {}
 
 // GetHash returns a uint64 value representing the current state of the object.
-func (n *NoOP) GetHash() uint64 {
-	// the hash value is always 0, so it is of course always consistent
-	return 0
+func (n *NoOP) GetHash() (uint64, error) {
+	return 0, nil
 }

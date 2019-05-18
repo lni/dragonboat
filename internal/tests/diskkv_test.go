@@ -318,7 +318,10 @@ func TestDiskKVSnapshot(t *testing.T) {
 			{Index: 2, Cmd: data2},
 		}
 		odsm.Update(ents)
-		hash1 := odsm.GetHash()
+		hash1, err := odsm.GetHash()
+		if err != nil {
+			t.Fatalf("failed to get hash %v", err)
+		}
 		buf := bytes.NewBuffer(make([]byte, 0, 128))
 		ctx, err := odsm.PrepareSnapshot()
 		if err != nil {
@@ -336,7 +339,10 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if !bytes.Equal(result, []byte("test-val3")) {
 			t.Errorf("value not set")
 		}
-		hash2 := odsm.GetHash()
+		hash2, err := odsm.GetHash()
+		if err != nil {
+			t.Fatalf("failed to get hash %v", err)
+		}
 		if hash1 == hash2 {
 			t.Errorf("hash doesn't change")
 		}
@@ -352,7 +358,10 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err := odsm2.RecoverFromSnapshot(reader, nil); err != nil {
 			t.Fatalf("recover from snapshot failed %v", err)
 		}
-		hash3 := odsm2.GetHash()
+		hash3, err := odsm2.GetHash()
+		if err != nil {
+			t.Fatalf("failed to get hash %v", err)
+		}
 		if hash3 != hash1 {
 			t.Errorf("hash changed")
 		}

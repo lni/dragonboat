@@ -626,7 +626,7 @@ func (d *DiskKVTest) Close() {
 }
 
 // GetHash returns a hash value representing the state of the state machine.
-func (d *DiskKVTest) GetHash() uint64 {
+func (d *DiskKVTest) GetHash() (uint64, error) {
 	fmt.Printf("[DKVE] %s called GetHash\n", d.describe())
 	h := md5.New()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
@@ -634,8 +634,8 @@ func (d *DiskKVTest) GetHash() uint64 {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	if err := d.saveToWriter(db, ss, h); err != nil {
-		panic(err)
+		return 0, err
 	}
 	md5sum := h.Sum(nil)
-	return binary.LittleEndian.Uint64(md5sum[:8])
+	return binary.LittleEndian.Uint64(md5sum[:8]), nil
 }

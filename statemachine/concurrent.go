@@ -60,7 +60,11 @@ type IConcurrentStateMachine interface {
 	//
 	// Update returns the input entry slice with the Result field of all its
 	// members set.
-	Update([]Entry) []Entry
+	//
+	// Update returns an error when there is unrecoverable error for updating the
+	// on disk state machine, e.g. disk failure when trying to update the state
+	// machine.
+	Update([]Entry) ([]Entry, error)
 	// Lookup queries the state of the IConcurrentStateMachine instance and
 	// returns the query result as a byte slice. The input byte slice specifies
 	// what to query, it is up to the IConcurrentStateMachine implementation to
@@ -175,5 +179,8 @@ type IConcurrentStateMachine interface {
 	// this method.
 	//
 	// GetHash is a read only method on the IConcurrentStateMachine instance.
-	GetHash() uint64
+	//
+	// An error is returned when there is an unrecoverable error when generating
+	// the state machine hash.
+	GetHash() (uint64, error)
 }

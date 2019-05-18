@@ -271,11 +271,11 @@ TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
 	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-utils test-config test-client test-server test-tests \
+	test-multiraft test-utils test-config test-client test-server \
 	test-tools
 ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-utils test-config test-client test-server test-tests test-tools
-test: dragonboat-test test-drummer test-plugins
+test: dragonboat-test test-drummer test-plugins test-tests
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
 monkey-test: test-monkey-drummer
@@ -288,7 +288,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-multiraft test-utils test-config test-client test-server test-tools \
-	test-plugins
+	test-plugins test-tests
 
 ###############################################################################
 # fast tests executed for every git push

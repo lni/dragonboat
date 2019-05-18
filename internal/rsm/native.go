@@ -58,7 +58,7 @@ type IManagedStateMachine interface {
 	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
 	Lookup([]byte) ([]byte, error)
 	Sync() error
-	GetHash() uint64
+	GetHash() (uint64, error)
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(*SnapshotMeta,
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
@@ -211,7 +211,7 @@ func (ds *NativeStateMachine) Sync() error {
 }
 
 // GetHash returns an integer value representing the state of the data store.
-func (ds *NativeStateMachine) GetHash() uint64 {
+func (ds *NativeStateMachine) GetHash() (uint64, error) {
 	return ds.sm.GetHash()
 }
 

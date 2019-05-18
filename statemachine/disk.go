@@ -223,5 +223,8 @@ type IOnDiskStateMachine interface {
 	// this method.
 	//
 	// GetHash is a read only method on the IOnDiskStateMachine instance.
-	GetHash() uint64
+	//
+	// An error is returned when there is an unrecoverable error when generating
+	// the state machine hash.
+	GetHash() (uint64, error)
 }

@@ -408,7 +408,7 @@ func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
 }
 
 // GetHash returns the state machine hash.
-func (s *StateMachine) GetHash() uint64 {
+func (s *StateMachine) GetHash() (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sm.GetHash()

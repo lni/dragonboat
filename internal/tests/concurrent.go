@@ -29,21 +29,21 @@ type TestUpdate struct {
 }
 
 // Update updates the state machine.
-func (c *TestUpdate) Update(data []byte) sm.Result {
+func (c *TestUpdate) Update(data []byte) (sm.Result, error) {
 	atomic.StoreUint32(&c.val, 1)
 	for i := 0; i < 20; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 	atomic.StoreUint32(&c.val, 0)
-	return sm.Result{Value: 100}
+	return sm.Result{Value: 100}, nil
 }
 
 // Lookup queries the state machine.
-func (c *TestUpdate) Lookup(query []byte) []byte {
+func (c *TestUpdate) Lookup(query []byte) ([]byte, error) {
 	result := make([]byte, 4)
 	v := atomic.LoadUint32(&c.val)
 	binary.LittleEndian.PutUint32(result, v)
-	return result
+	return result, nil
 }
 
 // SaveSnapshot saves the snapshot.
@@ -64,8 +64,8 @@ func (c *TestUpdate) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (c *TestUpdate) GetHash() uint64 {
-	return 0
+func (c *TestUpdate) GetHash() (uint64, error) {
+	return 0, nil
 }
 
 // ConcurrentUpdate is a IConcurrentStateMachine used for testing purposes.
@@ -75,7 +75,7 @@ type ConcurrentUpdate struct {
 }
 
 // Update updates the state machine.
-func (c *ConcurrentUpdate) Update(entries []sm.Entry) []sm.Entry {
+func (c *ConcurrentUpdate) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if c.UpdateCount == 0 {
 		c.UpdateCount = len(entries)
 	}
@@ -84,7 +84,7 @@ func (c *ConcurrentUpdate) Update(entries []sm.Entry) []sm.Entry {
 		time.Sleep(1 * time.Millisecond)
 	}
 	entries[0].Result = sm.Result{Value: 100}
-	return entries
+	return entries, nil
 }
 
 // Lookup queries the state machine.
@@ -119,8 +119,8 @@ func (c *ConcurrentUpdate) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (c *ConcurrentUpdate) GetHash() uint64 {
-	return 0
+func (c *ConcurrentUpdate) GetHash() (uint64, error) {
+	return 0, nil
 }
 
 // TestSnapshot is a IConcurrentStateMachine used for testing purposes.
@@ -129,13 +129,13 @@ type TestSnapshot struct {
 }
 
 // Update updates the state machine.
-func (c *TestSnapshot) Update(data []byte) sm.Result {
-	return sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}
+func (c *TestSnapshot) Update(data []byte) (sm.Result, error) {
+	return sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}, nil
 }
 
 // Lookup queries the state machine.
-func (c *TestSnapshot) Lookup(query []byte) []byte {
-	return nil
+func (c *TestSnapshot) Lookup(query []byte) ([]byte, error) {
+	return nil, nil
 }
 
 // SaveSnapshot saves the snapshot.
@@ -167,8 +167,8 @@ func (c *TestSnapshot) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (c *TestSnapshot) GetHash() uint64 {
-	return 0
+func (c *TestSnapshot) GetHash() (uint64, error) {
+	return 0, nil
 }
 
 // ConcurrentSnapshot is a IConcurrentStateMachine used for testing purposes.
@@ -177,9 +177,9 @@ type ConcurrentSnapshot struct {
 }
 
 // Update updates the state machine.
-func (c *ConcurrentSnapshot) Update(entries []sm.Entry) []sm.Entry {
+func (c *ConcurrentSnapshot) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	entries[0].Result = sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}
-	return entries
+	return entries, nil
 }
 
 // Lookup queries the state machine.
@@ -222,6 +222,6 @@ func (c *ConcurrentSnapshot) Close() {
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (c *ConcurrentSnapshot) GetHash() uint64 {
-	return 0
+func (c *ConcurrentSnapshot) GetHash() (uint64, error) {
+	return 0, nil
 }

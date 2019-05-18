@@ -106,7 +106,11 @@ func (rn *node) GetInMemLogSize() uint64 {
 }
 
 func (rc *node) getStateMachineHash() uint64 {
-	return rc.sm.GetHash()
+	if v, err := rc.sm.GetHash(); err != nil {
+		panic(err)
+	} else {
+		return v
+	}
 }
 
 func (rc *node) getSessionHash() uint64 {
