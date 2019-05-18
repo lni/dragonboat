@@ -82,10 +82,12 @@ type IOnDiskStateMachine interface {
 	// value of the most recent processed entry. It is the index value to be
 	// returned by the Open method when the IOnDiskStateMachine instance reboots.
 	//
-	// The Update method must persist all state changes to its permanent storage
-	// so the the state machine can continue from its latest state after reboot.
-	// In many cases, synchronizing the in-core state of all involved files with
-	// that on disk is required.
+	// The Update method can choose to synchronize all its in-core state with that
+	// on disk. This can minimize the number of committed Raft entries that need
+	// to be re-applied after reboot. Update is also allowed to postpone such
+	// synchronization until the Sync method is invoked, this approach produces
+	// higher throughput during fault free running at the cost that some of the
+	// most recent Raft entries will have to be re-applied after reboot.
 	//
 	// The Update method must be deterministic, meaning given the same initial
 	// state of IOnDiskStateMachine and the same input sequence, it should reach
@@ -125,6 +127,13 @@ type IOnDiskStateMachine interface {
 	// The Lookup method is a read only method, it should never change the state
 	// of IOnDiskStateMachine.
 	Lookup([]byte) ([]byte, error)
+	// Sync synchronizes all in-core state of the state machine to permanent
+	// storage so the state machine can continue from its latest state after
+	// reboot.
+	//
+	// Sync returns an error when there is unrecoverable error for synchronizing
+	// the in-core state.
+	Sync() error
 	// PrepareSnapshot prepares the snapshot to be concurrently captured and saved.
 	// PrepareSnapshot is invoked before SaveSnapshot is called and it is invoked
 	// with mutual exclusion protection from the Update, RecoverFromSnapshot and

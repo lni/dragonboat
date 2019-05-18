@@ -396,6 +396,9 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 func (s *StateMachine) SaveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	if s.sm.ConcurrentSnapshot() {
+		if err := s.sync(); err != nil {
+			return nil, nil, err
+		}
 		return s.saveConcurrentSnapshot(req)
 	}
 	return s.saveSnapshot(req)
@@ -571,6 +574,16 @@ func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta,
 		}
 	}
 	return s.getSnapshotMeta(ctx, req), nil
+}
+
+func (s *StateMachine) sync() error {
+	if !s.OnDiskStateMachine() {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	plog.Infof("%s is being synchronized, index %d", s.describe(), s.index)
+	return s.sm.Sync()
 }
 
 func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,

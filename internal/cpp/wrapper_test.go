@@ -110,9 +110,9 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v1 := ds.Update(nil, e1)
-	v2 := ds.Update(nil, e2)
-	v3 := ds.Update(nil, e3)
+	v1, _ := ds.Update(nil, e1)
+	v2, _ := ds.Update(nil, e2)
+	v3, _ := ds.Update(nil, e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -159,9 +159,9 @@ func TestCppSnapshotWorks(t *testing.T) {
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v1 := ds.Update(nil, e1)
-	v2 := ds.Update(nil, e2)
-	v3 := ds.Update(nil, e3)
+	v1, _ := ds.Update(nil, e1)
+	v2, _ := ds.Update(nil, e2)
+	v3, _ := ds.Update(nil, e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result")
 	}

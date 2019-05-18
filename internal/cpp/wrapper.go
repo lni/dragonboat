@@ -268,6 +268,10 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 	return result, nil
 }
 
+func (ds *StateMachineWrapper) Sync() error {
+	panic("Sync not suppose to be called")
+}
+
 // GetHash returns an integer value representing the state of the data store.
 func (ds *StateMachineWrapper) GetHash() uint64 {
 	ds.ensureNotDestroyed()

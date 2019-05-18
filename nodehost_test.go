@@ -1500,7 +1500,6 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		if fi.Size() != 1060 {
 			t.Fatalf("unexpected dummy snapshot file size %d", fi.Size())
 		}
-		plog.Infof("going to check %s", ss.Filepath)
 		reader, err := rsm.NewSnapshotReader(ss.Filepath)
 		if err != nil {
 			t.Fatalf("failed to read snapshot %v", err)

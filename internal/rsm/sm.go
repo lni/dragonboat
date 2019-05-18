@@ -27,6 +27,7 @@ type IStateMachine interface {
 	Open(<-chan struct{}) (uint64, error)
 	Update(entries []sm.Entry) ([]sm.Entry, error)
 	Lookup(query []byte) ([]byte, error)
+	Sync() error
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
 		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
@@ -66,6 +67,11 @@ func (sm *RegularStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 // Lookup queries the state machine.
 func (sm *RegularStateMachine) Lookup(query []byte) ([]byte, error) {
 	return sm.sm.Lookup(query), nil
+}
+
+// Sync synchronizes all in-core state with that on disk.
+func (sm *RegularStateMachine) Sync() error {
+	panic("Sync called on RegularStateMachine")
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
@@ -140,6 +146,11 @@ func (sm *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error)
 // Lookup queries the state machine.
 func (sm *ConcurrentStateMachine) Lookup(query []byte) ([]byte, error) {
 	return sm.sm.Lookup(query)
+}
+
+// Sync synchronizes all in-core state with that on disk.
+func (sm *ConcurrentStateMachine) Sync() error {
+	panic("Sync called on ConcurrentStateMachine")
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
@@ -240,6 +251,14 @@ func (sm *OnDiskStateMachine) Lookup(query []byte) ([]byte, error) {
 		panic("Lookup called when not opened")
 	}
 	return sm.sm.Lookup(query)
+}
+
+// Sync synchronizes all in-core state with that on disk.
+func (sm *OnDiskStateMachine) Sync() error {
+	if !sm.opened {
+		panic("Sync called when not opened")
+	}
+	return sm.sm.Sync()
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.

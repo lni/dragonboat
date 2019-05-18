@@ -57,6 +57,7 @@ type IManagedStateMachine interface {
 	Update(*Session, pb.Entry) (sm.Result, error)
 	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
 	Lookup([]byte) ([]byte, error)
+	Sync() error
 	GetHash() uint64
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(*SnapshotMeta,
@@ -200,6 +201,13 @@ func (ds *NativeStateMachine) Lookup(data []byte) ([]byte, error) {
 	v, err := ds.sm.Lookup(data)
 	ds.mu.RUnlock()
 	return v, err
+}
+
+func (ds *NativeStateMachine) Sync() error {
+	if !ds.sm.OnDiskStateMachine() {
+		panic("sync called on non-ondisk SM")
+	}
+	return ds.sm.Sync()
 }
 
 // GetHash returns an integer value representing the state of the data store.

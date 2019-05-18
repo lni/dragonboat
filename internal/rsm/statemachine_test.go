@@ -1644,6 +1644,7 @@ func (t *testManagedStateMachine) Update(*Session, pb.Entry) (sm.Result, error) 
 	return sm.Result{}, nil
 }
 func (t *testManagedStateMachine) Lookup([]byte) ([]byte, error)         { return nil, nil }
+func (t *testManagedStateMachine) Sync() error                           { return nil }
 func (t *testManagedStateMachine) GetHash() uint64                       { return 0 }
 func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
 func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,

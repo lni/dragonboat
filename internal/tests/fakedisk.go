@@ -64,6 +64,11 @@ func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
 	return pit, nil
 }
 
+// Sync synchronize all in-core state.
+func (f *FakeDiskSM) Sync() error {
+	return nil
+}
+
 // SaveSnapshot saves the state to a snapshot.
 func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) error {

@@ -49,6 +49,7 @@ type rocksdb struct {
 	db     *gorocksdb.DB
 	ro     *gorocksdb.ReadOptions
 	wo     *gorocksdb.WriteOptions
+	syncwo *gorocksdb.WriteOptions
 	opts   *gorocksdb.Options
 	closed bool
 }
@@ -86,6 +87,9 @@ func (r *rocksdb) close() {
 	if r.wo != nil {
 		r.wo.Destroy()
 	}
+	if r.syncwo != nil {
+		r.syncwo.Destroy()
+	}
 	if r.ro != nil {
 		r.ro.Destroy()
 	}
@@ -111,7 +115,8 @@ func createDB(dbdir string) (*rocksdb, error) {
 	// based on the write buffer size.
 	opts.SetWriteBufferSize(1024)
 	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(true)
+	syncwo := gorocksdb.NewDefaultWriteOptions()
+	syncwo.SetSync(true)
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
@@ -120,10 +125,11 @@ func createDB(dbdir string) (*rocksdb, error) {
 		return nil, err
 	}
 	return &rocksdb{
-		db:   db,
-		ro:   ro,
-		wo:   wo,
-		opts: opts,
+		db:     db,
+		ro:     ro,
+		wo:     wo,
+		syncwo: syncwo,
+		opts:   opts,
 	}, nil
 }
 
@@ -387,6 +393,20 @@ func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	}
 	d.lastApplied = ents[len(ents)-1].Index
 	return ents, nil
+}
+
+func (d *DiskKVTest) Sync() error {
+	if d.aborted {
+		panic("update() called after abort set to true")
+	}
+	if d.closed {
+		panic("update called after Close()")
+	}
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	db := (*rocksdb)(atomic.LoadPointer(&d.db))
+	wb.Put([]byte("dummy-key"), []byte("dummy-value"))
+	return db.db.Write(db.syncwo, wb)
 }
 
 type diskKVCtx struct {
