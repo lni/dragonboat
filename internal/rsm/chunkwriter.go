@@ -83,7 +83,10 @@ func (cw *ChunkWriter) flush() error {
 	if err := cw.bw.Flush(); err != nil {
 		return err
 	}
-	return cw.onNewChunk(cw.getTailChunk())
+	if !cw.failed {
+		return cw.onNewChunk(cw.getTailChunk())
+	}
+	return nil
 }
 
 func (cw *ChunkWriter) onNewBlock(data []byte, crc []byte) error {

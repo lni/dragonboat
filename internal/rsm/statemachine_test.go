@@ -16,7 +16,6 @@ package rsm
 
 import (
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1654,12 +1653,12 @@ func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
 func (t *testManagedStateMachine) RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error {
 	return nil
 }
-func (t *testManagedStateMachine) StreamSnapshot(interface{}, io.Writer) error { return nil }
-func (t *testManagedStateMachine) Offloaded(From)                              {}
-func (t *testManagedStateMachine) Loaded(From)                                 {}
-func (t *testManagedStateMachine) ConcurrentSnapshot() bool                    { return false }
-func (t *testManagedStateMachine) OnDiskStateMachine() bool                    { return false }
-func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType       { return 0 }
+func (t *testManagedStateMachine) StreamSnapshot(interface{}, *ChunkWriter) error { return nil }
+func (t *testManagedStateMachine) Offloaded(From)                                 {}
+func (t *testManagedStateMachine) Loaded(From)                                    {}
+func (t *testManagedStateMachine) ConcurrentSnapshot() bool                       { return false }
+func (t *testManagedStateMachine) OnDiskStateMachine() bool                       { return false }
+func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType          { return 0 }
 func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	t.first = ents[0].Index
 	t.last = ents[len(ents)-1].Index

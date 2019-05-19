@@ -30,7 +30,7 @@ var (
 
 // IStreamable is the interface for types that can be snapshot streamed.
 type IStreamable interface {
-	StreamSnapshot(interface{}, io.Writer) error
+	StreamSnapshot(interface{}, *ChunkWriter) error
 }
 
 // ISavable is the interface for types that can its content saved as snapshots.
@@ -63,7 +63,7 @@ type IManagedStateMachine interface {
 	SaveSnapshot(*SnapshotMeta,
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
 	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
-	StreamSnapshot(interface{}, io.Writer) error
+	StreamSnapshot(interface{}, *ChunkWriter) error
 	Offloaded(From)
 	Loaded(From)
 	ConcurrentSnapshot() bool
@@ -272,8 +272,12 @@ func (ds *NativeStateMachine) saveSnapshot(
 
 // StreamSnapshot creates and streams snapshot to a remote node.
 func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
-	writer io.Writer) error {
-	return ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
+	writer *ChunkWriter) error {
+	err := ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
+	if err != nil {
+		writer.failed = true
+	}
+	return err
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
