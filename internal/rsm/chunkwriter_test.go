@@ -15,6 +15,7 @@
 package rsm
 
 import (
+	"bytes"
 	"encoding/binary"
 	"testing"
 
@@ -157,5 +158,45 @@ func TestCloseChunk(t *testing.T) {
 	if chunk.ChunkCount != pb.LastChunkCount-1 {
 		t.Errorf("chunk count %d, want %d",
 			chunk.ChunkCount, pb.LastChunkCount-1)
+	}
+}
+
+func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
+	meta := getTestSnapshotMeta()
+	sink := &testSink{}
+	cw := NewChunkWriter(sink, meta)
+	cw.failed = true
+	cw.Close()
+	for idx, chunk := range cw.sink.(*testSink).chunks {
+		if idx == 0 {
+			sz := binary.LittleEndian.Uint64(chunk.Data)
+			headerdata := chunk.Data[8 : 8+sz]
+			var header pb.SnapshotHeader
+			if err := header.Unmarshal(headerdata); err != nil {
+				t.Fatalf("%v", err)
+			}
+			if uint64(len(chunk.Data)) != uint64(SnapshotHeaderSize)+tailSize {
+				t.Errorf("unexpected data size")
+			}
+			checksum := header.HeaderChecksum
+			header.HeaderChecksum = nil
+			data, err := header.Marshal()
+			if err != nil {
+				panic(err)
+			}
+			headerHash := GetDefaultChecksum()
+			if _, err := headerHash.Write(data); err != nil {
+				panic(err)
+			}
+			if !bytes.Equal(headerHash.Sum(nil), checksum) {
+				t.Fatalf("not a valid header")
+			}
+		} else if idx == 1 {
+			if chunk.ChunkCount != pb.PoisonChunkCount {
+				t.Fatalf("unexpected chunk count")
+			}
+		} else {
+			t.Fatalf("unexpected chunk received")
+		}
 	}
 }
