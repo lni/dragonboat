@@ -211,7 +211,9 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to recover from snapshot %v", err)
 	}
 	reader.ValidatePayload(header)
-	if ds2.GetHash() != ds.GetHash() {
+	h, _ := ds.GetHash()
+	h2, _ := ds.GetHash()
+	if h != h2 {
 		t.Errorf("hash does not match")
 	}
 }

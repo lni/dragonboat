@@ -273,10 +273,10 @@ func (ds *StateMachineWrapper) Sync() error {
 }
 
 // GetHash returns an integer value representing the state of the data store.
-func (ds *StateMachineWrapper) GetHash() uint64 {
+func (ds *StateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
 	v := C.GetHashDBStateMachine(ds.dataStore)
-	return uint64(v)
+	return uint64(v), nil
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
@@ -286,7 +286,7 @@ func (ds *StateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 
 // StreamSnapshot streams the snapshot to the remote node.
 func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
-	writer io.Writer) error {
+	writer *rsm.ChunkWriter) error {
 	panic("StreamSnapshot not suppose to be called")
 }
 
