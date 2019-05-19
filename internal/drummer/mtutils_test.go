@@ -1063,7 +1063,7 @@ func checkClustersAreAccessible(t *testing.T,
 			clusterOk := false
 			plog.Infof("checking cluster availability for %d", clusterID)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			if !makeMonkeyTestRequests(ctx, clusterID, dl) {
+			if !makeMonkeyTestRequests(ctx, clusterID, dl, true) {
 				notSync[clusterID] = true
 			} else {
 				clusterOk = true
@@ -1213,7 +1213,7 @@ func makeReadRequest(ctx context.Context,
 }
 
 func makeMonkeyTestRequests(ctx context.Context,
-	clusterID uint64, dl *mtAddressList) bool {
+	clusterID uint64, dl *mtAddressList, repeated bool) bool {
 	writeAddress, readAddress, ok := getRequestAddress(ctx, clusterID, dl)
 	if !ok {
 		plog.Warningf("failed to get read write address")
@@ -1227,7 +1227,10 @@ func makeMonkeyTestRequests(ctx context.Context,
 		plog.Warningf("failed to get read write client")
 		return false
 	}
-	repeat := rand.Int()%3 + 1
+	repeat := 1
+	if repeated {
+		repeat = rand.Int()%3 + 1
+	}
 	for i := 0; i < repeat; i++ {
 		key := fmt.Sprintf("key-%d", rand.Uint64())
 		val := random.String(rand.Int()%16 + 8)
@@ -1237,7 +1240,11 @@ func makeMonkeyTestRequests(ctx context.Context,
 		}
 		cctx, cancel := context.WithTimeout(ctx, defaultTestTimeout)
 		if makeWriteRequest(cctx, writeClient, clusterID, kv) {
-			makeReadRequest(cctx, readClient, clusterID, kv)
+			if !makeReadRequest(cctx, readClient, clusterID, kv) {
+				return false
+			}
+		} else {
+			return false
 		}
 		cancel()
 	}
@@ -1246,6 +1253,29 @@ func makeMonkeyTestRequests(ctx context.Context,
 
 func getRandomClusterID(size uint64) uint64 {
 	return (rand.Uint64() % size) + 1
+}
+
+func startHardWorker(stopper *syncutil.Stopper, dl *mtAddressList) {
+	stopper.RunWorker(func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		select {
+		case <-stopper.ShouldStop():
+		case <-ticker.C:
+			for {
+				if cont := func() bool {
+					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+					defer cancel()
+					if !makeMonkeyTestRequests(ctx, 1, dl, false) {
+						return false
+					}
+					return true
+				}(); !cont {
+					break
+				}
+			}
+		}
+	})
 }
 
 func startTestRequestWorkers(stopper *syncutil.Stopper, dl *mtAddressList) {
@@ -1268,7 +1298,7 @@ func startTestRequestWorkers(stopper *syncutil.Stopper, dl *mtAddressList) {
 						clusterID := getRandomClusterID(numOfClustersInMonkeyTesting)
 						ctx, cancel := context.WithTimeout(context.Background(),
 							3*defaultTestTimeout)
-						if makeMonkeyTestRequests(ctx, clusterID, dl) {
+						if makeMonkeyTestRequests(ctx, clusterID, dl, true) {
 							lastDone = tick
 						}
 						cancel()
@@ -1394,6 +1424,11 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	// to the system
 	stopper := syncutil.NewStopper()
 	startTestRequestWorkers(stopper, dl)
+	pd := random.NewProbability(50000)
+	if pd.Hit() {
+		plog.Infof("going to start the hard worker")
+		startHardWorker(stopper, dl)
+	}
 	// start the linearizability checker manager
 	checker := lcm.NewCoordinator(context.Background(),
 		LCMWorkerCount, 1, dl.apiAddressList)
