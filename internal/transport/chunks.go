@@ -50,7 +50,6 @@ type tracked struct {
 	validator  *rsm.SnapshotValidator
 	nextChunk  uint64
 	tick       uint64
-	lock       *snapshotLock
 }
 
 type snapshotLock struct {
@@ -157,6 +156,8 @@ func (c *chunks) resetSnapshotLocked(key string) {
 }
 
 func (c *chunks) getOrCreateSnapshotLock(key string) *snapshotLock {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	l, ok := c.locks[key]
 	if !ok {
 		l = &snapshotLock{}
@@ -193,7 +194,6 @@ func (c *chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 		}
 		td = &tracked{
 			nextChunk:  1,
-			lock:       c.getOrCreateSnapshotLock(key),
 			firstChunk: chunk,
 			validator:  validator,
 			extraFiles: make([]*pb.SnapshotFile, 0),
@@ -230,13 +230,14 @@ func (c *chunks) shouldUpdateValidator(chunk pb.SnapshotChunk) bool {
 
 func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 	key := snapshotKey(chunk)
+	lock := c.getOrCreateSnapshotLock(key)
+	lock.lock()
+	defer lock.unlock()
 	td := c.onNewChunk(chunk)
 	if td == nil {
 		plog.Warningf("ignored a chunk belongs to %s", key)
 		return false
 	}
-	td.lock.lock()
-	defer td.lock.unlock()
 	if c.shouldUpdateValidator(chunk) {
 		if !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
 			plog.Warningf("ignored a invalid chunk %s", key)
@@ -302,7 +303,7 @@ func (c *chunks) saveChunk(chunk pb.SnapshotChunk) error {
 	if len(chunk.Data) != n {
 		return io.ErrShortWrite
 	}
-	if chunk.FileChunkId+1 == chunk.FileChunkCount {
+	if isLastChunk(chunk) || isLastFileChunk(chunk) {
 		if err := f.Sync(); err != nil {
 			return err
 		}
@@ -365,6 +366,10 @@ func (c *chunks) toMessage(chunk pb.SnapshotChunk,
 		DeploymentId: chunk.DeploymentId,
 		Requests:     []pb.Message{m},
 	}
+}
+
+func isLastFileChunk(chunk pb.SnapshotChunk) bool {
+	return chunk.FileChunkId+1 == chunk.FileChunkCount
 }
 
 func isLastChunk(chunk pb.SnapshotChunk) bool {

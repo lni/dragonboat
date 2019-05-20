@@ -17,11 +17,14 @@ package fileutil
 import (
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // ChunkFile is the snapshot chunk file being transferred.
 type ChunkFile struct {
-	file *os.File
+	file    *os.File
+	syncDir bool
+	dir     string
 }
 
 // OpenChunkFileForAppend opens the chunk file at fp for appending.
@@ -48,7 +51,7 @@ func CreateChunkFile(fp string) (*ChunkFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ChunkFile{file: f}, nil
+	return &ChunkFile{file: f, syncDir: true, dir: filepath.Dir(fp)}, nil
 }
 
 // SeekFromBeginning seeks the underlying file from the beginning.
@@ -70,6 +73,11 @@ func (cf *ChunkFile) Write(data []byte) (int, error) {
 func (cf *ChunkFile) Close() {
 	if err := cf.file.Close(); err != nil {
 		panic(err)
+	}
+	if cf.syncDir {
+		if err := SyncDir(cf.dir); err != nil {
+			panic(err)
+		}
 	}
 }
 
