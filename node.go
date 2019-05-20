@@ -530,6 +530,8 @@ func (rc *node) saveSnapshot(rec rsm.Task) {
 }
 
 func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
+	rc.snapshotLock.Lock()
+	defer rc.snapshotLock.Unlock()
 	// this is suppose to be called in snapshot worker thread.
 	// calling this rc.sm.GetLastApplied() won't block the raft sm.
 	if rc.sm.GetLastApplied() <= rc.ss.getSnapshotIndex() {
