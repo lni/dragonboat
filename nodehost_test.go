@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -2039,9 +2040,26 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if !exist {
 			t.Fatalf("snapshot dir %s does not exist", snapshotDir)
 		}
+		files, err := ioutil.ReadDir(snapshotDir)
+		if err != nil {
+			t.Fatalf("failed to read dir %v", err)
+		}
+		sscount := 0
+		for _, fi := range files {
+			if !fi.IsDir() {
+				continue
+			}
+			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+				sscount++
+			}
+		}
+		if sscount == 0 {
+			t.Fatalf("no snapshot dir found")
+		}
 		removed := false
 		for i := 0; i < 1000; i++ {
 			err := nh.RemoveData(2, 1)
+			plog.Infof("err : %v", err)
 			if err == ErrClusterNotStopped {
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -2057,12 +2075,24 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if !removed {
 			t.Fatalf("failed to remove node data")
 		}
-		exist, err = fileutil.Exist(snapshotDir)
+		marked, err := fileutil.IsDirMarkedAsDeleted(snapshotDir)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		if exist {
+		if !marked {
 			t.Fatalf("snapshot dir %s still exist", snapshotDir)
+		}
+		files, err = ioutil.ReadDir(snapshotDir)
+		if err != nil {
+			t.Fatalf("failed to read dir %v", err)
+		}
+		for _, fi := range files {
+			if !fi.IsDir() {
+				continue
+			}
+			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+				t.Fatalf("failed to delete the snapshot dir %s", fi.Name())
+			}
 		}
 		bs, err := logdb.GetBootstrapInfo(2, 1)
 		if err != raftio.ErrNoBootstrapInfo {

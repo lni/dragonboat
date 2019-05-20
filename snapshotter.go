@@ -260,6 +260,25 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	return nil
 }
 
+func removeSavedSnapshots(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			continue
+		}
+		if snapshotDirNameRe.Match([]byte(fi.Name())) {
+			ssdir := filepath.Join(dir, fi.Name())
+			if err := os.RemoveAll(ssdir); err != nil {
+				return err
+			}
+		}
+	}
+	return fileutil.SyncDir(dir)
+}
+
 func (s *snapshotter) ProcessOrphans() error {
 	files, err := ioutil.ReadDir(s.dir)
 	if err != nil {

@@ -244,6 +244,15 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 			return false
 		}
 	}
+	removed, err := c.nodeRemoved(chunk)
+	if err != nil {
+		panic(err)
+	}
+	if removed {
+		c.deleteTempChunkDir(chunk)
+		plog.Warningf("node removed, ignored chunk %s", key)
+		return false
+	}
 	if err := c.saveChunk(chunk); err != nil {
 		plog.Errorf("failed to save a chunk %s, %v", key, err)
 		c.deleteTempChunkDir(chunk)
@@ -274,6 +283,12 @@ func (c *chunks) addChunk(chunk pb.SnapshotChunk) bool {
 		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)
 	}
 	return true
+}
+
+func (c *chunks) nodeRemoved(chunk pb.SnapshotChunk) (bool, error) {
+	env := c.getSnapshotEnv(chunk)
+	dir := env.GetRootDir()
+	return fileutil.IsDirMarkedAsDeleted(dir)
 }
 
 func (c *chunks) saveChunk(chunk pb.SnapshotChunk) error {

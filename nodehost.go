@@ -928,6 +928,8 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
 	}
+	nh.clusterMu.Lock()
+	defer nh.clusterMu.Unlock()
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
@@ -937,7 +939,12 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 		plog.Panicf("failed to remove data from Raft LogDB %v", err)
 	}
 	did := nh.deploymentID
+	// mark the snapshot dir as removed
 	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+		plog.Panicf("failed to remove snapshot dir %v", err)
+	}
+	dir := nh.serverCtx.GetSnapshotDir(did, clusterID, nodeID)
+	if err := removeSavedSnapshots(dir); err != nil {
 		plog.Panicf("failed to remove snapshot dir %v", err)
 	}
 	return nil

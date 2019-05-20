@@ -23,6 +23,7 @@ import (
 
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -300,6 +301,37 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 		}
 		if handler.getSnapshotCount(100, 2) != 1 {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
+		}
+	}
+	runChunkTest(t, fn)
+}
+
+func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
+	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+		inputs := getTestChunks()
+		env := chunks.getSnapshotEnv(inputs[0])
+		chunks.validate = false
+		if !chunks.addChunk(inputs[0]) {
+			t.Fatalf("failed to add chunk")
+		}
+		if !chunks.addChunk(inputs[1]) {
+			t.Fatalf("failed to add chunk")
+		}
+		snapshotDir := env.GetRootDir()
+		if err := fileutil.MarkDirAsDeleted(snapshotDir, &pb.Message{}); err != nil {
+			t.Fatalf("failed to create the delete flag %v", err)
+		}
+		for idx, c := range inputs {
+			if idx <= 1 {
+				continue
+			}
+			if chunks.addChunk(c) {
+				t.Fatalf("chunks not rejected")
+			}
+		}
+		tmpSnapDir := env.GetTempDir()
+		if _, err := os.Stat(tmpSnapDir); !os.IsNotExist(err) {
+			t.Errorf("tmp dir not removed")
 		}
 	}
 	runChunkTest(t, fn)

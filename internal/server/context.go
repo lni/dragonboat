@@ -109,7 +109,8 @@ func (sc *Context) GetRandomSource() random.Source {
 func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
 	nodeID uint64) error {
 	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	return os.RemoveAll(dir)
+	s := &raftpb.RaftDataStatus{}
+	return fileutil.MarkDirAsDeleted(dir, s)
 }
 
 // GetSnapshotDir returns the snapshot directory name.

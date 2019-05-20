@@ -17,6 +17,8 @@ package fileutil
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 	// Dragonboat.
 	DefaultFileMode    = 0640
 	defaultDirFileMode = 0750
+	deleteFilename     = "DELETED.dragonboat"
 )
 
 // Exist returns whether the specified filesystem entry exists.
@@ -87,4 +90,13 @@ func SyncDir(dir string) (err error) {
 		}
 	}()
 	return df.Sync()
+}
+
+func MarkDirAsDeleted(dir string, msg proto.Message) error {
+	return CreateFlagFile(dir, deleteFilename, msg)
+}
+
+func IsDirMarkedAsDeleted(dir string) (bool, error) {
+	fp := filepath.Join(dir, deleteFilename)
+	return Exist(fp)
 }

@@ -20,6 +20,7 @@ package dragonboat
 import (
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -528,4 +529,37 @@ func TestZombieSnapshotDirNameMatchWorks(t *testing.T) {
 		}
 	}
 	runSnapshotterTest(t, fn)
+}
+
+func TestRemoveSavedSnapshots(t *testing.T) {
+	os.RemoveAll(rdbTestDirectory)
+	os.MkdirAll(rdbTestDirectory, 0755)
+	defer os.RemoveAll(rdbTestDirectory)
+	for i := 0; i < 16; i++ {
+		ssdir := filepath.Join(rdbTestDirectory, fmt.Sprintf("snapshot-%X", i))
+		if err := os.MkdirAll(ssdir, 0755); err != nil {
+			t.Fatalf("failed to mkdir %v", err)
+		}
+	}
+	for i := 1; i <= 2; i++ {
+		ssdir := filepath.Join(rdbTestDirectory, fmt.Sprintf("mydata-%X", i))
+		if err := os.MkdirAll(ssdir, 0755); err != nil {
+			t.Fatalf("failed to mkdir %v", err)
+		}
+	}
+	if err := removeSavedSnapshots(rdbTestDirectory); err != nil {
+		t.Fatalf("failed to remove saved snapshots %v", err)
+	}
+	files, err := ioutil.ReadDir(rdbTestDirectory)
+	if err != nil {
+		t.Fatalf("failed to read dir %v", err)
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			t.Errorf("found unexpected file %v", fi)
+		}
+		if fi.Name() != "mydata-1" && fi.Name() != "mydata-2" {
+			t.Errorf("unexpected dir found %s", fi.Name())
+		}
+	}
 }
