@@ -89,6 +89,7 @@ import (
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
+	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
@@ -940,12 +941,18 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	}
 	did := nh.deploymentID
 	// mark the snapshot dir as removed
-	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
-		plog.Panicf("failed to remove snapshot dir %v", err)
-	}
 	dir := nh.serverCtx.GetSnapshotDir(did, clusterID, nodeID)
-	if err := removeSavedSnapshots(dir); err != nil {
-		plog.Panicf("failed to remove snapshot dir %v", err)
+	exist, err := fileutil.Exist(dir)
+	if err != nil {
+		plog.Panicf("failed to check snapshot dir %v", err)
+	}
+	if exist {
+		if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+			plog.Panicf("failed to remove snapshot dir %v", err)
+		}
+		if err := removeSavedSnapshots(dir); err != nil {
+			plog.Panicf("failed to remove snapshot dir %v", err)
+		}
 	}
 	return nil
 }
