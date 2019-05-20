@@ -210,7 +210,6 @@ func (rc *node) read(handler ICompleteHandler,
 	rs, err := rc.pendingReadIndexes.read(handler, timeout)
 	if err == nil {
 		rs.node = rc
-		rc.increaseReadReqCount()
 	}
 	return rs, err
 }
