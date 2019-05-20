@@ -2857,15 +2857,23 @@ func newNetworkWithConfig(configFunc func(*config.Config), peers ...stateMachine
 			npeers[id] = sm
 		case *raft:
 			observers := make(map[uint64]bool)
+			witnesses := make(map[uint64]bool)
 			for i := range v.observers {
 				observers[i] = true
 			}
+			for i := range v.witnesses {
+				witnesses[i] = true
+			}
+
 			v.nodeID = id
 			v.remotes = make(map[uint64]*remote)
 			v.observers = make(map[uint64]*remote)
+			v.witnesses = make(map[uint64]*remote)
 			for i := 0; i < size; i++ {
 				if _, ok := observers[peerAddrs[i]]; ok {
 					v.observers[peerAddrs[i]] = &remote{}
+				} else if _, ok := witnesses[peerAddrs[i]]; ok {
+					v.witnesses[peerAddrs[i]] = &remote{}
 				} else {
 					v.remotes[peerAddrs[i]] = &remote{}
 				}
@@ -3027,6 +3035,24 @@ func newTestObserver(id uint64, peers []uint64, observers []uint64, election, he
 	if len(r.observers) == 0 {
 		for _, p := range observers {
 			r.observers[p] = &remote{next: 1}
+		}
+	}
+	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply
+	return r
+}
+
+func newTestWitness(id uint64, peers []uint64, witnesses []uint64, election, heartbeat int) *raft {
+	cfg := newTestConfig(id, election, heartbeat, nil)
+	cfg.IsWitness = true
+	r := newRaft(cfg, nil)
+	if len(r.remotes) == 0 {
+		for _, p := range peers {
+			r.remotes[p] = &remote{next: 1}
+		}
+	}
+	if len(r.witnesses) == 0 {
+		for _, p := range witnesses {
+			r.witnesses[p] = &remote{next: 1}
 		}
 	}
 	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply

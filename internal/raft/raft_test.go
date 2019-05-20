@@ -633,6 +633,297 @@ func TestObserverCanBeRemoved(t *testing.T) {
 	}
 }
 
+func TestWitnessWillNotStartElection(t *testing.T) {
+	p := newTestWitness(1, nil, []uint64{1}, 10, 1)
+	if !p.isWitness() {
+		t.Errorf("not a witness")
+	}
+	if len(p.remotes) != 0 {
+		t.Errorf("p.romotes len: %d", len(p.remotes))
+	}
+	for i := uint64(0); i < p.randomizedElectionTimeout*10; i++ {
+		p.tick()
+	}
+	// gRequestVote won't be sent
+	if len(p.msgs) != 0 {
+		t.Errorf("unexpected msg found %+v", p.msgs)
+	}
+}
+
+func TestWitnessWillVoteInElection(t *testing.T) {
+	p := newTestWitness(1, nil, []uint64{1}, 10, 1)
+	if !p.isWitness() {
+		t.Errorf("not a witness")
+	}
+	p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100})
+	if len(p.msgs) != 1 {
+		t.Errorf("witness is not voting")
+	}
+}
+
+func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Should panic while promoting from witness")
+		}
+	}()
+	nodeId := uint64(1)
+
+	p := newTestWitness(nodeId, nil, []uint64{1}, 10, 1)
+	if !p.isWitness() {
+		t.Errorf("not an witness")
+	}
+	p.addNode(nodeId)
+}
+
+func TestWitnessReplication(t *testing.T) {
+	p1 := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	p2 := newTestWitness(2, nil, []uint64{}, 10, 1)
+	p1.addNode(1)
+	p1.addWitness(2)
+	p2.addNode(1)
+	if p1.isObserver() {
+		t.Errorf("p1 is still observer")
+	}
+	if !p2.isWitness() {
+		t.Errorf("p2 is not witness")
+	}
+	nt := newNetwork(p1, p2)
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if len(p1.remotes) != 1 {
+		t.Errorf("remotes len: %d, want 0", len(p1.remotes))
+	}
+	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
+		p1.tick()
+	}
+	if p1.state != leader {
+		t.Errorf("failed to start election")
+	}
+	committed := p1.log.committed
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+
+	expectedIndex := committed + 1
+	if expectedIndex != p1.log.committed {
+		t.Errorf("entry not committed on leader: %d", p2.log.committed)
+	}
+	// the no-op blank entry appended after p1 becomes the leader is also replicated
+	if expectedIndex != p2.log.committed {
+		t.Errorf("entry not committed on witness: %d", p2.log.committed)
+	}
+	if expectedIndex != p1.witnesses[2].match {
+		t.Errorf("match value expected: %d, actual: %d", expectedIndex, p1.witnesses[2].match)
+	}
+}
+
+func TestWitnessCanPropose(t *testing.T) {
+	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p2 := newTestWitness(2, nil, []uint64{2}, 10, 1)
+	p1.addWitness(2)
+	p2.addNode(1)
+	if !p2.isWitness() {
+		t.Errorf("p2 is not witness")
+	}
+	nt := newNetwork(p1, p2)
+	if len(p1.remotes) != 1 {
+		t.Errorf("remotes len: %d, want 1", len(p1.remotes))
+	}
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if p1.state != leader {
+		t.Errorf("failed to start election")
+	}
+	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
+		p1.tick()
+		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
+	}
+	if !p2.isWitness() {
+		t.Errorf("not witness")
+	}
+	committed := p1.log.committed
+	for i := 0; i < 10; i++ {
+		nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+	}
+
+	expectedIndex := committed + 10
+	if expectedIndex != p1.log.committed {
+		t.Errorf("entry not committed on leader: %d", p1.log.committed)
+	}
+	// the no-op blank entry appended after p1 becomes the leader is also replicated
+	if expectedIndex != p2.log.committed {
+		t.Errorf("entry not committed on witness: %d", p2.log.committed)
+	}
+	if expectedIndex != p1.witnesses[2].match {
+		t.Errorf("match value expected: %d, actual %d", expectedIndex, p1.witnesses[2].match)
+	}
+}
+
+func TestWitnessCanReadIndexQuorum2(t *testing.T) {
+	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p2 := newTestRaft(2, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p3 := newTestWitness(3, nil, []uint64{3}, 10, 1)
+	p1.addWitness(3)
+	p2.addWitness(3)
+	p3.addNode(1)
+	p3.addNode(2)
+
+	nt := newNetwork(p1, p2, p3)
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if p1.state != leader {
+		t.Errorf("failed to start election")
+	}
+	if p2.state != follower {
+		t.Errorf("not a follower")
+	}
+	if !p3.isWitness() {
+		t.Errorf("not a witness")
+	}
+	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
+		p1.tick()
+		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
+	}
+	committed := p1.log.committed
+	for i := 0; i < 10; i++ {
+		nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+	}
+	if committed+10 != p1.log.committed {
+		t.Errorf("entry not committed")
+	}
+	nt.send(pb.Message{From: 3, To: 3, Type: pb.ReadIndex, Hint: 12345})
+	if len(p3.readyToRead) != 1 {
+		t.Fatalf("ready to read len is not 1")
+	}
+	if p3.readyToRead[0].Index != p1.log.committed {
+		t.Errorf("unexpected ready to read index")
+	}
+}
+
+func TestWitnessCanReceiveSnapshot(t *testing.T) {
+	members := pb.Membership{
+		Addresses: make(map[uint64]string),
+		Witnesses: make(map[uint64]string),
+		Removed:   make(map[uint64]bool),
+	}
+	members.Addresses[1] = "a1"
+	members.Addresses[2] = "a2"
+	ss := pb.Snapshot{
+		Index:      20,
+		Term:       20,
+		Membership: members,
+	}
+	p1 := newTestWitness(3, []uint64{1}, []uint64{2}, 10, 1)
+	if !p1.isWitness() {
+		t.Errorf("not a witness")
+	}
+	p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss})
+	if p1.log.committed != 20 {
+		t.Errorf("snapshot not applied")
+	}
+}
+
+func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
+	p1 := newTestWitness(2, []uint64{1}, []uint64{2}, 10, 1)
+	m := pb.Message{
+		From:     1,
+		To:       2,
+		Type:     pb.Replicate,
+		LogIndex: 0,
+		LogTerm:  0,
+		Commit:   0,
+		Entries:  make([]pb.Entry, 0),
+	}
+
+	m.Entries = append(m.Entries, pb.Entry{Index: 1, Term: 1, Type: pb.MetadataEntry})
+	m.Entries = append(m.Entries, pb.Entry{Index: 2, Term: 1, Type: pb.MetadataEntry})
+	m.Entries = append(m.Entries, pb.Entry{Index: 3, Term: 1, Type: pb.MetadataEntry})
+
+	p1.Handle(m)
+	if p1.log.lastIndex() != 3 {
+		t.Errorf("last index unexpected: %d, want 3", p1.log.lastIndex())
+	}
+	if p1.log.committed != 0 {
+		t.Errorf("unexpected committed value %d, want 0", p1.log.committed)
+	}
+	hbm := pb.Message{
+		Type:   pb.Heartbeat,
+		Commit: 3,
+		From:   1,
+		To:     2,
+	}
+	p1.Handle(hbm)
+	if p1.log.committed != 3 {
+		t.Errorf("unexpected committed value %d, want 3", p1.log.committed)
+	}
+}
+
+func TestWitnessCanNotBeRestored(t *testing.T) {
+	members := pb.Membership{
+		Addresses: make(map[uint64]string),
+		Witnesses: make(map[uint64]string),
+		Removed:   make(map[uint64]bool),
+	}
+	members.Addresses[1] = "a1"
+	members.Addresses[2] = "a2"
+	members.Witnesses[3] = "a3"
+	ss := pb.Snapshot{
+		Index:      20,
+		Term:       20,
+		Membership: members,
+	}
+	p1 := newTestWitness(3, []uint64{1, 2}, []uint64{3}, 10, 1)
+	if ok := p1.restore(ss); !ok {
+		t.Errorf("failed to restore")
+	}
+}
+
+func TestWitnessCanNotMoveNodeBackToWitnessBySnapshot(t *testing.T) {
+	members := pb.Membership{
+		Addresses: make(map[uint64]string),
+		Witnesses: make(map[uint64]string),
+		Removed:   make(map[uint64]bool),
+	}
+	members.Addresses[1] = "a1"
+	members.Addresses[2] = "a2"
+	members.Witnesses[3] = "a3"
+	ss := pb.Snapshot{
+		Index:      20,
+		Term:       20,
+		Membership: members,
+	}
+	p1 := newTestRaft(3, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	defer func() {
+		if r := recover(); r == nil {
+			panic("restore didn't cause panic")
+		}
+	}()
+	if ok := p1.restore(ss); ok {
+		t.Errorf("restore unexpectedly completed")
+	}
+}
+
+func TestWitnessCanBeAdded(t *testing.T) {
+	p1 := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	if len(p1.witnesses) != 0 {
+		t.Errorf("unexpected witness record")
+	}
+	p1.addWitness(2)
+	if len(p1.witnesses) != 1 {
+		t.Errorf("witness not added")
+	}
+	if p1.isWitness() {
+		t.Errorf("unexpectedly changed to observer")
+	}
+}
+
+func TestWitnessCanBeRemoved(t *testing.T) {
+	p1 := newTestWitness(1, []uint64{1}, []uint64{2}, 10, 1)
+	if len(p1.witnesses) != 1 {
+		t.Errorf("unexpected witness count")
+	}
+	p1.removeNode(2)
+	if len(p1.witnesses) != 0 {
+		t.Errorf("witness not removed")
+	}
+}
+
 func TestFollowerTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeFollower(10, 2)
@@ -1048,9 +1339,10 @@ func TestSendHeartbeatMessage(t *testing.T) {
 	r.becomeCandidate()
 	r.becomeLeader()
 	hint := pb.SystemCtx{Low: 100, High: 200}
-	r.remotes[2].match = 100
+	match := uint64(100)
+	r.remotes[2].match = match
 	r.log.committed = 200
-	r.sendHeartbeatMessage(2, hint, false)
+	r.sendHeartbeatMessage(2, hint, match)
 	msgs := r.msgs
 	if len(msgs) != 1 {
 		t.Fatalf("unexpected msgs list length")

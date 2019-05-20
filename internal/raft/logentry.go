@@ -26,6 +26,12 @@ var (
 	maxEntriesToApplySize = settings.Soft.MaxEntrySize
 )
 
+const (
+	defaultFirstIndex = 1
+	defaultLastIndex  = 0
+	defaultTerm       = 0
+)
+
 // ErrCompacted is the error returned to indicate that the requested entries
 // are no longer in the LogDB due to compaction.
 var ErrCompacted = errors.New("entry compacted")
@@ -47,7 +53,7 @@ type ILogDB interface {
 	GetRange() (uint64, uint64)
 	// SetRange updates the ILogDB to extend the entry range known to the ILogDB.
 	SetRange(index uint64, length uint64)
-	// NodeState returns the state of the node persistented in LogDB.
+	// NodeState returns the state of the node persistent in LogDB.
 	NodeState() (pb.State, pb.Membership)
 	// SetState sets the persistent state known to ILogDB.
 	SetState(ps pb.State)
@@ -84,7 +90,14 @@ type entryLog struct {
 }
 
 func newEntryLog(logdb ILogDB, rl *server.RateLimiter) *entryLog {
-	firstIndex, lastIndex := logdb.GetRange()
+	var firstIndex uint64 = defaultFirstIndex
+	var lastIndex uint64 = defaultLastIndex
+
+	// Could happen with a witness role.
+	if logdb != nil {
+		firstIndex, lastIndex = logdb.GetRange()
+	}
+
 	l := &entryLog{
 		logdb:     logdb,
 		inmem:     newInMemory(lastIndex, rl),
@@ -99,6 +112,10 @@ func (l *entryLog) firstIndex() uint64 {
 	if ok {
 		return index + 1
 	}
+	if l.logdb == nil {
+		return defaultFirstIndex
+	}
+
 	index, _ = l.logdb.GetRange()
 	return index
 }
@@ -108,6 +125,10 @@ func (l *entryLog) lastIndex() uint64 {
 	if ok {
 		return index
 	}
+	if l.logdb == nil {
+		return defaultLastIndex
+	}
+
 	_, index = l.logdb.GetRange()
 	return index
 }
@@ -146,6 +167,10 @@ func (l *entryLog) term(index uint64) (uint64, error) {
 	if t, ok := l.inmem.getTerm(index); ok {
 		return t, nil
 	}
+	if l.logdb == nil {
+		return defaultTerm, nil
+	}
+
 	t, err := l.logdb.Term(index)
 	if err != nil && err != ErrCompacted && err != ErrUnavailable {
 		panic(err)
@@ -181,9 +206,10 @@ func (l *entryLog) getUncommittedEntries() []pb.Entry {
 
 func (l *entryLog) getEntriesFromLogDB(low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, bool, error) {
-	if low >= l.inmem.markerIndex {
+	if low >= l.inmem.markerIndex || l.logdb == nil {
 		return nil, true, nil
 	}
+
 	upperBound := min(high, l.inmem.markerIndex)
 	ents, err := l.logdb.Entries(low, upperBound, maxSize)
 	if err == ErrCompacted {

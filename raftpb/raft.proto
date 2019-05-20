@@ -55,13 +55,15 @@ enum MessageType {
 enum EntryType {
 	ApplicationEntry  = 0;
 	ConfigChangeEntry = 1;
-  EncodedEntry = 2;
+    EncodedEntry      = 2;
+	MetadataEntry     = 3;
 }
 
 enum ConfigChangeType {
 	AddNode     = 0;
   RemoveNode  = 1;
   AddObserver = 2;
+  AddWitness = 3;
 }
 
 enum StateMachineType {
