@@ -178,9 +178,9 @@ get-rocksdb:
 		tar xzvf $(RDBTMPDIR)/v$(ROCKSDB_VER).tar.gz -C $(RDBTMPDIR); \
 	}
 make-rocksdb:
-	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j16 shared_lib
+	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
 make-rocksdb-static:
-	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j16 static_lib
+	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
 ldconfig-rocksdb-lib-ull:
 	if [ $(OS) = Linux ]; then \
 		sudo sh -c "if [ ! -f $(LIBCONF_PATH) ]; \
