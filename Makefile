@@ -78,6 +78,9 @@ endif
 endif
 endif 
 
+# by default, shared rocksdb lib is used. when using the static rocksdb lib,
+# you may need to add
+# -lbz2 -lsnappy -lz -llz4 
 ifeq ($(ROCKSDB_LIB_PATH),)
 CDEPS_LDFLAGS=-lrocksdb
 else
@@ -164,6 +167,7 @@ LIBCONF_PATH=/etc/ld.so.conf.d/usr_local_lib.conf
 RDBTMPDIR=$(PKGROOT)/build/rocksdbtmp
 RDBURL=https://github.com/facebook/rocksdb/archive/v$(ROCKSDB_VER).tar.gz
 build-rocksdb: get-rocksdb make-rocksdb
+build-rocksdb-static: get-rocksdb make-rocksdb-static
 build-original-rocksdb : get-rocksdb make-rocksdb
 get-rocksdb:
 	@{ \
@@ -175,6 +179,8 @@ get-rocksdb:
 	}
 make-rocksdb:
 	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j16 shared_lib
+make-rocksdb-static:
+	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j16 static_lib
 ldconfig-rocksdb-lib-ull:
 	if [ $(OS) = Linux ]; then \
 		sudo sh -c "if [ ! -f $(LIBCONF_PATH) ]; \
@@ -192,20 +198,21 @@ install-rocksdb-lib-ull:
 			$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-shared; \
 		rm -rf $(RDBTMPDIR); \
 	}
-do-install-rocksdb-ull: install-rocksdb-lib-ull ldconfig-rocksdb-lib-ull
-
-do-install-rocksdb-ull-darwin:
+install-rocksdb-lib-ull-static:
 	@{ \
-		sudo INSTALL_PATH=/usr/local make -C \
-			$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-shared; \
-		rm -rf $(RDBTMPDIR); \
-	}
+    set -e; \
+    sudo INSTALL_PATH=/usr/local make -C \
+      $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-static; \
+    rm -rf $(RDBTMPDIR); \
+  }
+do-install-rocksdb-ull: install-rocksdb-lib-ull ldconfig-rocksdb-lib-ull
 do-install-rocksdb:
 	@(INSTALL_PATH=$(PKGROOT)/build make -C \
 		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-shared && rm -rf $(RDBTMPDIR))
 
-install-rocksdb-ull-darwin: build-rocksdb do-install-rocksdb-ull-darwin
+install-rocksdb-ull-darwin: build-rocksdb install-rocksdb-ull
 install-rocksdb-ull: build-rocksdb do-install-rocksdb-ull
+install-rocksdb-ull-static: build-rocksdb-static install-rocksdb-lib-ull-static
 install-rocksdb: build-rocksdb do-install-rocksdb
 install-original-rocksdb-ull: build-original-rocksdb do-install-rocksdb-ull
 install-original-rocksdb: build-original-rocksdb do-install-rocksdb
