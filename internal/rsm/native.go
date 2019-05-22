@@ -203,6 +203,7 @@ func (ds *NativeStateMachine) Lookup(data []byte) ([]byte, error) {
 	return v, err
 }
 
+// Sync synchronizes state machine's in-core state with that on disk.
 func (ds *NativeStateMachine) Sync() error {
 	if !ds.sm.OnDiskStateMachine() {
 		panic("sync called on non-ondisk SM")

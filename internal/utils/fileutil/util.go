@@ -92,10 +92,13 @@ func SyncDir(dir string) (err error) {
 	return df.Sync()
 }
 
+// MarkDirAsDeleted marks the specified directory as deleted.
 func MarkDirAsDeleted(dir string, msg proto.Message) error {
 	return CreateFlagFile(dir, deleteFilename, msg)
 }
 
+// IsDirMarkedAsDeleted returns a boolean flag indicating whether the specified
+// directory has been marked as deleted.
 func IsDirMarkedAsDeleted(dir string) (bool, error) {
 	fp := filepath.Join(dir, deleteFilename)
 	return Exist(fp)

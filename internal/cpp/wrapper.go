@@ -268,6 +268,7 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 	return result, nil
 }
 
+// Sync synchronizes the state machine's in-core state with that on disk.
 func (ds *StateMachineWrapper) Sync() error {
 	panic("Sync not suppose to be called")
 }

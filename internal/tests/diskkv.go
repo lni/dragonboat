@@ -395,6 +395,7 @@ func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	return ents, nil
 }
 
+// Sync synchronizes state machine's in-core state with that on disk.
 func (d *DiskKVTest) Sync() error {
 	if d.aborted {
 		panic("update() called after abort set to true")

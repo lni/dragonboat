@@ -96,8 +96,16 @@ type Task struct {
 	InitialSnapshot   bool
 	SnapshotRequested bool
 	StreamSnapshot    bool
+	PeriodicSync      bool
 	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
+}
+
+func (t *Task) isSyncTask() bool {
+	if t.PeriodicSync && t.isSnapshotTask() {
+		panic("invalid task")
+	}
+	return t.PeriodicSync
 }
 
 func (t *Task) isSnapshotTask() bool {
@@ -132,19 +140,23 @@ type ISnapshotter interface {
 // StateMachine is a manager class that manages application state
 // machine
 type StateMachine struct {
-	mu                 sync.RWMutex
-	snapshotter        ISnapshotter
-	node               INodeProxy
-	sm                 IManagedStateMachine
-	sessions           *SessionManager
-	members            *membership
-	index              uint64
-	term               uint64
-	snapshotIndex      uint64
-	diskSMIndex        uint64
-	taskC              chan Task
-	onDiskSM           bool
-	aborted            bool
+	mu            sync.RWMutex
+	snapshotter   ISnapshotter
+	node          INodeProxy
+	sm            IManagedStateMachine
+	sessions      *SessionManager
+	members       *membership
+	index         uint64
+	term          uint64
+	snapshotIndex uint64
+	diskSMIndex   uint64
+	taskC         chan Task
+	onDiskSM      bool
+	aborted       bool
+	syncedIndex   struct {
+		sync.Mutex
+		index uint64
+	}
 	batchedLastApplied struct {
 		sync.Mutex
 		index uint64
@@ -327,15 +339,32 @@ func (s *StateMachine) GetBatchedLastApplied() uint64 {
 	return v
 }
 
-// SetBatchedLastApplied sets the batched last applied value. This method
-// is mostly used in tests.
-func (s *StateMachine) SetBatchedLastApplied(idx uint64) {
-	s.setBatchedLastApplied(idx)
+// GetSyncedIndex returns the index value that is known to have been
+// synchronized.
+func (s *StateMachine) GetSyncedIndex() uint64 {
+	s.syncedIndex.Lock()
+	defer s.syncedIndex.Unlock()
+	return s.syncedIndex.index
 }
 
-func (s *StateMachine) setBatchedLastApplied(idx uint64) {
+// SetBatchedLastApplied sets the batched last applied value. This method
+// is mostly used in tests.
+func (s *StateMachine) SetBatchedLastApplied(index uint64) {
+	s.setBatchedLastApplied(index)
+}
+
+func (s *StateMachine) setSyncedIndex(index uint64) {
+	s.syncedIndex.Lock()
+	defer s.syncedIndex.Unlock()
+	if s.syncedIndex.index > index {
+		panic("s.syncedIndex.index > index")
+	}
+	s.syncedIndex.index = index
+}
+
+func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedLastApplied.Lock()
-	s.batchedLastApplied.index = idx
+	s.batchedLastApplied.index = index
 	s.batchedLastApplied.Unlock()
 }
 
@@ -407,6 +436,11 @@ func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
 	return s.streamSnapshot(sink)
 }
 
+// Sync synchronizes state machine's in-core state with that on disk.
+func (s *StateMachine) Sync() error {
+	return s.sync()
+}
+
 // GetHash returns the state machine hash.
 func (s *StateMachine) GetHash() (uint64, error) {
 	s.mu.RLock()
@@ -431,7 +465,6 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 // Handle pulls the committed record and apply it if there is any available.
 func (s *StateMachine) Handle(batch []Task,
 	toApply []sm.Entry) (Task, bool, error) {
-	processed := 0
 	batch = batch[:0]
 	toApply = toApply[:0]
 	select {
@@ -439,8 +472,13 @@ func (s *StateMachine) Handle(batch []Task,
 		if rec.isSnapshotTask() {
 			return rec, true, nil
 		}
-		batch = append(batch, rec)
-		processed++
+		if !rec.isSyncTask() {
+			batch = append(batch, rec)
+		} else {
+			if err := s.periodicSync(); err != nil {
+				return Task{}, false, err
+			}
+		}
 		done := false
 		for !done {
 			select {
@@ -451,8 +489,13 @@ func (s *StateMachine) Handle(batch []Task,
 					}
 					return rec, true, nil
 				}
-				batch = append(batch, rec)
-				processed++
+				if !rec.isSyncTask() {
+					batch = append(batch, rec)
+				} else {
+					if err := s.periodicSync(); err != nil {
+						return Task{}, false, err
+					}
+				}
 			default:
 				done = true
 			}
@@ -586,6 +629,19 @@ func (s *StateMachine) sync() error {
 	return s.sm.Sync()
 }
 
+func (s *StateMachine) periodicSync() error {
+	if !s.OnDiskStateMachine() {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.sm.Sync(); err != nil {
+		return err
+	}
+	s.setSyncedIndex(s.index)
+	return nil
+}
+
 func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
@@ -614,8 +670,8 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
-		if batch[b].isSnapshotTask() {
-			panic("trying to handle a snapshot request")
+		if batch[b].isSnapshotTask() || batch[b].isSyncTask() {
+			panic("trying to handle a snapshot/sync request")
 		}
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)

@@ -76,9 +76,9 @@ type soft struct {
 	// Multiraft
 	//
 
-	// ShrinkSnapshotTaskInterval defines the interval in millisecond of periodic
-	// shrink snapshot task.
-	ShrinkSnapshotTaskInterval uint64
+	// SyncTaskInterval defines the interval in millisecond of periodic sync
+	// state machine task.
+	SyncTaskInterval uint64
 	// IncomingReadIndexQueueLength defines the number of pending read index
 	// requests allowed for each raft group.
 	IncomingReadIndexQueueLength uint64
@@ -241,7 +241,7 @@ func getDefaultSoftSettings() soft {
 	return soft{
 		MaxConcurrentStreamingSnapshot:    128,
 		MaxSnapshotConnections:            64,
-		ShrinkSnapshotTaskInterval:        180000,
+		SyncTaskInterval:                  180000,
 		PanicOnSizeMismatch:               1,
 		LazyFreeCycle:                     1,
 		LatencySampleRatio:                0,

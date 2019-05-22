@@ -42,8 +42,8 @@ const (
 var (
 	incomingProposalsMaxLen = settings.Soft.IncomingProposalQueueLength
 	incomingReadIndexMaxLen = settings.Soft.IncomingReadIndexQueueLength
+	syncTaskInterval        = settings.Soft.SyncTaskInterval
 	lazyFreeCycle           = settings.Soft.LazyFreeCycle
-	snapshotTaskInterval    = settings.Soft.ShrinkSnapshotTaskInterval
 	logUnreachable          = true
 )
 
@@ -81,7 +81,7 @@ type node struct {
 	tickCount           uint64
 	expireNotified      uint64
 	tickMillisecond     uint64
-	snapshotTask        *task
+	syncTask            *task
 	rateLimited         bool
 	closeOnce           sync.Once
 	ss                  *snapshotState
@@ -143,7 +143,7 @@ func newNode(raftAddress string,
 		logdb:               ldb,
 		snapshotLock:        syncutil.NewLock(),
 		ss:                  &snapshotState{},
-		snapshotTask:        newTask(snapshotTaskInterval),
+		syncTask:            newTask(syncTaskInterval),
 		smType:              smType,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
@@ -621,6 +621,9 @@ func (rc *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	}
 	if index > 0 {
 		if rc.OnDiskStateMachine() {
+			if err := rc.sm.Sync(); err != nil {
+				panic(err)
+			}
 			if err := rc.snapshotter.Shrink(index); err != nil {
 				panic(err)
 			}
@@ -664,13 +667,35 @@ func (rc *node) removeSnapshotFlagFile(index uint64) error {
 	return rc.snapshotter.removeFlagFile(index)
 }
 
-func (rc *node) runSnapshotTask() error {
-	if rc.snapshotTask == nil ||
-		!rc.snapshotTask.timeToRun(rc.millisecondSinceStart()) {
-		return nil
+func (rc *node) runSyncTask() (bool, error) {
+	if !rc.sm.OnDiskStateMachine() {
+		return true, nil
 	}
-	if rc.sm.OnDiskStateMachine() {
-		return rc.shrinkSnapshots()
+	if rc.syncTask == nil ||
+		!rc.syncTask.timeToRun(rc.millisecondSinceStart()) {
+		return true, nil
+	}
+	task := rsm.Task{PeriodicSync: true}
+	if !rc.pushTask(task) {
+		return false, nil
+	}
+	syncedIndex := rc.sm.GetSyncedIndex()
+	if err := rc.shrinkSnapshots(syncedIndex); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (rc *node) shrinkSnapshots(index uint64) error {
+	if rc.snapshotLock.TryLock() {
+		defer rc.snapshotLock.Unlock()
+		if !rc.sm.OnDiskStateMachine() {
+			panic("trying to shrink snapshots on non all disk SMs")
+		}
+		plog.Infof("%s will shrink snapshots up to %d", rc.describe(), index)
+		if err := rc.snapshotter.Shrink(index); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -679,21 +704,6 @@ func (rc *node) compactSnapshots(index uint64) error {
 	if rc.snapshotLock.TryLock() {
 		defer rc.snapshotLock.Unlock()
 		if err := rc.snapshotter.Compact(index); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (rc *node) shrinkSnapshots() error {
-	if rc.snapshotLock.TryLock() {
-		defer rc.snapshotLock.Unlock()
-		if !rc.sm.OnDiskStateMachine() {
-			panic("trying to shrink snapshots on non all disk SMs")
-		}
-		plog.Infof("%s will shrink snapshots up to %d",
-			rc.describe(), rc.smAppliedIndex)
-		if err := rc.snapshotter.Shrink(rc.smAppliedIndex); err != nil {
 			return err
 		}
 	}
@@ -817,8 +827,12 @@ func (rc *node) processRaftUpdate(ud pb.Update) bool {
 	if err := rc.compactLog(); err != nil {
 		panic(err)
 	}
-	if err := rc.runSnapshotTask(); err != nil {
+	cont, err := rc.runSyncTask()
+	if err != nil {
 		panic(err)
+	}
+	if !cont {
+		return false
 	}
 	if rc.saveSnapshotRequired(ud.LastApplied) {
 		return rc.publishTakeSnapshotRequest(rsm.SnapshotRequest{})
