@@ -24,6 +24,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +47,49 @@ const (
 	updatingDBFilename string = "current.updating"
 )
 
+type inmem struct {
+	mu    sync.Mutex
+	kv    sync.Map
+	index uint64
+}
+
+func (im *inmem) put(key []byte, val []byte, index uint64) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.kv.Store(string(key), string(val))
+	im.index = index
+}
+
+func (im *inmem) get(key []byte) ([]byte, bool) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	val, ok := im.kv.Load(string(key))
+	if ok {
+		return []byte(val.(string)), true
+	}
+	return nil, false
+}
+
+func (im *inmem) getIndex() uint64 {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	return im.index
+}
+
+func (im *inmem) deepCopy() *inmem {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	nim := &inmem{
+		index: im.index,
+	}
+	r := func(k, v interface{}) bool {
+		nim.kv.Store(k, v)
+		return true
+	}
+	im.kv.Range(r)
+	return nim
+}
+
 type rocksdb struct {
 	mu     sync.RWMutex
 	db     *gorocksdb.DB
@@ -51,6 +97,7 @@ type rocksdb struct {
 	wo     *gorocksdb.WriteOptions
 	syncwo *gorocksdb.WriteOptions
 	opts   *gorocksdb.Options
+	inmem  *inmem
 	closed bool
 }
 
@@ -59,6 +106,10 @@ func (r *rocksdb) lookup(query []byte) ([]byte, error) {
 	defer r.mu.RUnlock()
 	if r.closed {
 		return nil, errors.New("db already closed")
+	}
+	v, ok := r.inmem.get(query)
+	if ok {
+		return v, nil
 	}
 	val, err := r.db.Get(r.ro, query)
 	if err != nil {
@@ -69,9 +120,9 @@ func (r *rocksdb) lookup(query []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return []byte(""), nil
 	}
-	v := make([]byte, len(data))
-	copy(v, data)
-	return v, nil
+	buf := make([]byte, len(data))
+	copy(buf, data)
+	return buf, nil
 }
 
 func (r *rocksdb) close() {
@@ -130,6 +181,7 @@ func createDB(dbdir string) (*rocksdb, error) {
 		wo:     wo,
 		syncwo: syncwo,
 		opts:   opts,
+		inmem:  &inmem{},
 	}, nil
 }
 
@@ -278,6 +330,10 @@ func (d *DiskKVTest) describe() string {
 }
 
 func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
+	idx := db.inmem.getIndex()
+	if idx > 0 {
+		return idx, nil
+	}
 	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
 	if err != nil {
 		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
@@ -289,7 +345,7 @@ func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
 		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.describe())
 		return 0, nil
 	}
-	return binary.LittleEndian.Uint64(data), nil
+	return strconv.ParseUint(string(data), 10, 64)
 }
 
 // Open opens the state machine.
@@ -366,8 +422,6 @@ func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 		panic("update called after Close()")
 	}
 	generateRandomDelay()
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Destroy()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	for idx, e := range ents {
 		dataKv := &kvpb.PBKV{}
@@ -376,16 +430,13 @@ func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 		}
 		key := dataKv.GetKey()
 		val := dataKv.GetVal()
-		wb.Put([]byte(key), []byte(val))
+		db.inmem.put([]byte(key), []byte(val), e.Index)
 		ents[idx].Result = sm.Result{Value: uint64(len(ents[idx].Cmd))}
 	}
-	idx := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idx, ents[len(ents)-1].Index)
-	wb.Put([]byte(appliedIndexKey), idx)
+	// idx := make([]byte, 8)
+	// binary.LittleEndian.PutUint64(idx, ents[len(ents)-1].Index)
+	// wb.Put([]byte(appliedIndexKey), idx)
 	fmt.Printf("[DKVE] %s applied index recorded as %d\n", d.describe(), ents[len(ents)-1].Index)
-	if err := db.db.Write(db.wo, wb); err != nil {
-		return nil, err
-	}
 	if d.lastApplied >= ents[len(ents)-1].Index {
 		fmt.Printf("[DKVE] %s last applied not moving forward %d,%d\n",
 			d.describe(), ents[len(ents)-1].Index, d.lastApplied)
@@ -406,13 +457,23 @@ func (d *DiskKVTest) Sync() error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
-	wb.Put([]byte("dummy-key"), []byte("dummy-value"))
+	im := db.inmem.deepCopy()
+	r := func(k, v interface{}) bool {
+		wb.Put([]byte(k.(string)), []byte(v.(string)))
+		return true
+	}
+	im.kv.Range(r)
+	if im.index > 0 {
+		idx := fmt.Sprintf("%d", im.index)
+		wb.Put([]byte(appliedIndexKey), []byte(idx))
+	}
 	return db.db.Write(db.syncwo, wb)
 }
 
 type diskKVCtx struct {
 	db       *rocksdb
 	snapshot *gorocksdb.Snapshot
+	inmem    *inmem
 }
 
 // PrepareSnapshot prepares snapshotting.
@@ -427,6 +488,7 @@ func (d *DiskKVTest) PrepareSnapshot() (interface{}, error) {
 	return &diskKVCtx{
 		db:       db,
 		snapshot: db.db.NewSnapshot(),
+		inmem:    db.inmem.deepCopy(),
 	}, nil
 }
 
@@ -439,23 +501,15 @@ func iteratorIsValid(iter *gorocksdb.Iterator) bool {
 }
 
 func (d *DiskKVTest) saveToWriter(db *rocksdb,
-	ss *gorocksdb.Snapshot, w io.Writer) error {
+	inmem *inmem, ss *gorocksdb.Snapshot, w io.Writer) error {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetSnapshot(ss)
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
 	iter := db.db.NewIterator(ro)
 	defer iter.Close()
-	count := uint64(0)
-	for iter.SeekToFirst(); iteratorIsValid(iter); iter.Next() {
-		count++
-	}
-	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.describe(), count)
-	sz := make([]byte, 8)
-	binary.LittleEndian.PutUint64(sz, count)
-	if _, err := w.Write(sz); err != nil {
-		return err
-	}
+	var dataMap sync.Map
+	values := make([]*kvpb.PBKV, 0)
 	for iter.SeekToFirst(); iteratorIsValid(iter); iter.Next() {
 		key, ok := iter.OKey()
 		if !ok {
@@ -465,12 +519,43 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 		if !ok {
 			panic("failed to get value")
 		}
-		dataKv := &kvpb.PBKV{
-			Key: string(key.Data()),
-			Val: string(val.Data()),
+		dataMap.Store(string(key.Data()), string(val.Data()))
+	}
+	r := func(k, v interface{}) bool {
+		dataMap.Store(k, v)
+		return true
+	}
+	inmem.kv.Range(r)
+	applied := inmem.getIndex()
+	if applied > 0 {
+		idx := fmt.Sprintf("%d", applied)
+		dataMap.Store(appliedIndexKey, idx)
+	}
+	toList := func(k, v interface{}) bool {
+		kv := &kvpb.PBKV{
+			Key: k.(string),
+			Val: v.(string),
 		}
+		values = append(values, kv)
+		return true
+	}
+	dataMap.Range(toList)
+	sort.Slice(values, func(i, j int) bool {
+		return strings.Compare(values[i].Key, values[j].Key) < 0
+	})
+	count := uint64(len(values))
+	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.describe(), count)
+	sz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(sz, count)
+	if _, err := w.Write(sz); err != nil {
+		return err
+	}
+	for _, dataKv := range values {
 		if dataKv.Key == appliedIndexKey {
-			v := binary.LittleEndian.Uint64([]byte(dataKv.Val))
+			v, err := strconv.ParseUint(string(dataKv.Val), 10, 64)
+			if err != nil {
+				panic(err)
+			}
 			fmt.Printf("[DKVE] %s saving appliedIndexKey as %d\n", d.describe(), v)
 		}
 		data, err := dataKv.Marshal()
@@ -518,7 +603,8 @@ func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	ss := ctxdata.snapshot
-	return d.saveToWriter(db, ss, w)
+	inmem := ctxdata.inmem
+	return d.saveToWriter(db, inmem, ss, w)
 }
 
 // RecoverFromSnapshot recovers the state machine state from snapshot.
@@ -575,12 +661,15 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 			panic(err)
 		}
 		if dataKv.Key == appliedIndexKey {
-			v := binary.LittleEndian.Uint64([]byte(dataKv.Val))
+			v, err := strconv.ParseUint(dataKv.Val, 10, 64)
+			if err != nil {
+				panic(err)
+			}
 			fmt.Printf("[DKVE] %s recovering appliedIndexKey to %d\n", d.describe(), v)
 		}
 		wb.Put([]byte(dataKv.Key), []byte(dataKv.Val))
 	}
-	if err := db.db.Write(db.wo, wb); err != nil {
+	if err := db.db.Write(db.syncwo, wb); err != nil {
 		return err
 	}
 	if err := saveCurrentDBDirName(dir, dbdir); err != nil {
@@ -634,7 +723,7 @@ func (d *DiskKVTest) GetHash() (uint64, error) {
 	ss := db.db.NewSnapshot()
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	if err := d.saveToWriter(db, ss, h); err != nil {
+	if err := d.saveToWriter(db, db.inmem, ss, h); err != nil {
 		return 0, err
 	}
 	md5sum := h.Sum(nil)

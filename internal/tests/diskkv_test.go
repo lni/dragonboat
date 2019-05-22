@@ -16,10 +16,10 @@ package tests
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"testing"
 
 	"github.com/lni/dragonboat/internal/tests/kvpb"
@@ -260,11 +260,17 @@ func TestDiskKVCanBeUpdated(t *testing.T) {
 			{Index: 2, Cmd: data2},
 		}
 		odsm.Update(ents)
+		if err := odsm.Sync(); err != nil {
+			t.Fatalf("sync failed %v", err)
+		}
 		result, err := odsm.Lookup([]byte(appliedIndexKey))
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
-		idx = binary.LittleEndian.Uint64(result)
+		idx, err = strconv.ParseUint(string(result), 10, 64)
+		if err != nil {
+			t.Fatalf("failed to convert the index value %v", err)
+		}
 		if idx != 2 {
 			t.Errorf("last applied %d, want 2", idx)
 		}
