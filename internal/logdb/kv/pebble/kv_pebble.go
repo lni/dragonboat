@@ -23,13 +23,12 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/kv"
 	"github.com/lni/dragonboat/raftio"
 	"github.com/petermattis/pebble"
-	"github.com/petermattis/pebble/db"
 )
 
 type pebbleWriteBatch struct {
 	wb    *pebble.Batch
 	db    *pebble.DB
-	wo    *db.WriteOptions
+	wo    *pebble.WriteOptions
 	count int
 }
 
@@ -62,16 +61,16 @@ func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
 
 type PebbleKV struct {
 	db   *pebble.DB
-	opts *db.Options
-	ro   *db.IterOptions
-	wo   *db.WriteOptions
+	opts *pebble.Options
+	ro   *pebble.IterOptions
+	wo   *pebble.WriteOptions
 }
 
 func openPebbleDB(dir string, walDir string) (*PebbleKV, error) {
 	fmt.Printf("pebble support is experimental, DO NOT USE IN PRODUCTION\n")
-	lopts := db.LevelOptions{Compression: db.NoCompression}
-	opts := &db.Options{
-		Levels: []db.LevelOptions{lopts},
+	lopts := pebble.LevelOptions{Compression: pebble.NoCompression}
+	opts := &pebble.Options{
+		Levels: []pebble.LevelOptions{lopts},
 	}
 	if len(walDir) > 0 {
 		opts.WALDir = walDir
@@ -80,8 +79,8 @@ func openPebbleDB(dir string, walDir string) (*PebbleKV, error) {
 	if err != nil {
 		return nil, err
 	}
-	ro := &db.IterOptions{}
-	wo := &db.WriteOptions{Sync: true}
+	ro := &pebble.IterOptions{}
+	wo := &pebble.WriteOptions{Sync: true}
 	return &PebbleKV{
 		db:   pdb,
 		ro:   ro,
@@ -141,7 +140,7 @@ func (r *PebbleKV) IterateValue(fk []byte, lk []byte, inc bool,
 func (r *PebbleKV) GetValue(key []byte,
 	op func([]byte) error) error {
 	val, err := r.db.Get(key)
-	if err != nil && err != db.ErrNotFound {
+	if err != nil && err != pebble.ErrNotFound {
 		return err
 	}
 	return op(val)
