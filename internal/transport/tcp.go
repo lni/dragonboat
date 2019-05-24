@@ -240,11 +240,9 @@ func readMagicNumber(conn net.Conn, magicNum []byte) error {
 		return err
 	}
 	if bytes.Equal(magicNum, poisonNumber[:]) {
-		plog.Infof("poison received")
 		return errPoisonReceived
 	}
 	if !bytes.Equal(magicNum, magicNumber[:]) {
-		plog.Errorf("invalid magic number")
 		return ErrBadMessage
 	}
 	return nil
@@ -473,7 +471,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 				return
 			}
 			if !g.chunks.AddChunk(chunk) {
-				plog.Errorf("chunk rejected")
+				plog.Errorf("chunk rejected %s", snapshotKey(chunk))
 				return
 			}
 		}

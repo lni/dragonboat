@@ -1021,30 +1021,25 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m)
-	plog.Infof("m sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize)
 	m2 := getTestSnapshotMessage(2)
 	m2.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m2.Snapshot.Filepath = filepath.Join(dir, "testsnapshot1.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m2)
-	plog.Infof("m2 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize)
 	m3 := getTestSnapshotMessage(3)
 	m3.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m3.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m3)
-	plog.Infof("m3 sent")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize)
 	m4 := getTestSnapshotMessage(2)
 	m4.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m4.Snapshot.Filepath = filepath.Join(dir, "testsnapshot2.gbsnap")
 	// send the snapshot file
-	plog.Infof("going to call send m4")
 	trans.ASyncSendSnapshot(m4)
 	atomic.StoreUint32(&snapshotSent, 1)
-	plog.Infof("m4 sent going to call waitForTotalSnapshotStatusUpdateCount")
 	waitForTotalSnapshotStatusUpdateCount(handler, 1000, 4)
 	if handler.getSnapshotCount(100, 2) != 0 {
 		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)

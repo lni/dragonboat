@@ -46,6 +46,9 @@ package transport
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -326,8 +329,9 @@ func (t *Transport) sendUnreachableNotification(addr string) {
 	}
 	h := handler.(IRaftMessageHandler)
 	edp := t.resolver.ReverseResolve(addr)
-	for i := range edp {
-		rec := edp[i]
+	plog.Infof("node %s becomes unreachable, affecting %d raft nodes, %s",
+		addr, len(edp), sampleNodeInfoList(edp))
+	for _, rec := range edp {
 		h.HandleUnreachable(rec.ClusterID, rec.NodeID)
 	}
 }
@@ -535,4 +539,28 @@ func createTransportRPC(nhConfig config.NodeHostConfig,
 		factory = NewTCPTransport
 	}
 	return factory(nhConfig, requestHandler, sinkFactory)
+}
+
+func sampleNodeInfoList(l []raftio.NodeInfo) string {
+	if len(l) <= 32 {
+		return strings.Join(nodeInfoListToString(l), ",")
+	}
+	other := len(l) - 32
+	fp := l[:16]
+	lp := l[len(l)-16:]
+	return fmt.Sprintf("%s ... and other %d nodes ... %s",
+		strings.Join(nodeInfoListToString(fp), ","), other,
+		strings.Join(nodeInfoListToString(lp), ","))
+}
+
+func nodeInfoListToString(l []raftio.NodeInfo) []string {
+	result := make([]string, 0)
+	for _, rec := range l {
+		s := logutil.DescribeNode(rec.ClusterID, rec.NodeID)
+		result = append(result, s)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return strings.Compare(result[i], result[j]) < 0
+	})
+	return result
 }

@@ -44,7 +44,6 @@ var (
 	incomingReadIndexMaxLen = settings.Soft.IncomingReadIndexQueueLength
 	syncTaskInterval        = settings.Soft.SyncTaskInterval
 	lazyFreeCycle           = settings.Soft.LazyFreeCycle
-	logUnreachable          = true
 )
 
 type node struct {
@@ -224,13 +223,13 @@ func (rc *node) RestoreRemotes(snapshot pb.Snapshot) {
 	}
 	plog.Infof("%s is restoring remotes %+v", rc.describe(), snapshot.Membership)
 	rc.node.RestoreRemotes(snapshot)
-	rc.captureClusterConfig()
+	rc.captureClusterState()
 }
 
 func (rc *node) ConfigChangeProcessed(key uint64, accepted bool) {
 	if accepted {
 		rc.pendingConfigChange.apply(key, false)
-		rc.captureClusterConfig()
+		rc.captureClusterState()
 	} else {
 		rc.node.RejectConfigChange()
 		rc.pendingConfigChange.apply(key, true)
@@ -1048,10 +1047,6 @@ func (rc *node) handleMessage(m pb.Message) bool {
 			rc.describe(), m.From, m.Reject)
 		rc.node.ReportSnapshotStatus(m.From, m.Reject)
 	case pb.Unreachable:
-		if logUnreachable {
-			plog.Debugf("%s report unreachable from %s",
-				rc.describe(), raft.NodeID(m.From))
-		}
 		rc.node.ReportUnreachableNode(m.From)
 	default:
 		return false
@@ -1094,16 +1089,15 @@ func (rc *node) tick() {
 	rc.pendingConfigChange.tick()
 }
 
-func (rc *node) captureClusterConfig() {
+func (rc *node) captureClusterState() {
 	// this can only be called when RSM is not stepping any updates
-	// currently it is called from a RSM step function and from
-	// ApplySnapshot
+	// currently it is called from a RSM step function and from ApplySnapshot
 	nodes, observers, _, index := rc.sm.GetMembership()
 	if len(nodes) == 0 {
 		plog.Panicf("empty nodes %s", rc.describe())
 	}
 	_, isObserver := observers[rc.nodeID]
-	plog.Infof("%s called captureClusterConfig, nodes %v, observers %v",
+	plog.Infof("%s called captureClusterState, nodes %v, observers %v",
 		rc.describe(), nodes, observers)
 	ci := &ClusterInfo{
 		ClusterID:         rc.clusterID,

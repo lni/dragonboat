@@ -464,7 +464,6 @@ type v2validator struct {
 }
 
 func newV2Validator(h hash.Hash) *v2validator {
-	plog.Infof("creating v2 validator")
 	return &v2validator{
 		block: make([]byte, 0, snapshotBlockSize+checksumSize),
 		h:     h,
