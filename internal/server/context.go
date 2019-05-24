@@ -31,7 +31,8 @@ import (
 )
 
 var (
-	plog = logger.GetLogger("server")
+	plog                  = logger.GetLogger("server")
+	ErrDirMarkedAsDeleted = errors.New("trying to use a dir marked as deleted")
 	// ErrHostnameChanged is the error used to indicate that the hostname changed.
 	ErrHostnameChanged = errors.New("hostname changed")
 	// ErrDeploymentIDChanged is the error used to indicate that the deployment
@@ -189,6 +190,14 @@ func (sc *Context) CreateSnapshotDir(did uint64,
 			if err := fileutil.Mkdir(path); err != nil {
 				return err
 			}
+		} else {
+			deleted, err := fileutil.IsDirMarkedAsDeleted(path)
+			if err != nil {
+				return err
+			}
+			if deleted {
+				return ErrDirMarkedAsDeleted
+			}
 		}
 	}
 	return nil
@@ -284,9 +293,6 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 func (sc *Context) compatible(dir string,
 	did uint64, addr string, hostname string,
 	ldbBinVer uint32, name string, dbto bool) error {
-	if dir == "." {
-		panic("!!!")
-	}
 	fp := filepath.Join(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==

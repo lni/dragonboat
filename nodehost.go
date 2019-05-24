@@ -120,6 +120,8 @@ var (
 )
 
 var (
+	// ErrNodeRemoved indictes that the requested node has been removed.
+	ErrNodeRemoved = errors.New("node removed")
 	// ErrClusterNotFound indicates that the specified cluster is not found.
 	ErrClusterNotFound = errors.New("cluster not found")
 	// ErrClusterAlreadyExist indicates that the specified cluster already exist.
@@ -1220,7 +1222,10 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	}
 	if err := nh.serverCtx.CreateSnapshotDir(nh.deploymentID,
 		clusterID, nodeID); err != nil {
-		return err
+		if err == server.ErrDirMarkedAsDeleted {
+			return ErrNodeRemoved
+		}
+		panic(err)
 	}
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)

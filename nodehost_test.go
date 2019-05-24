@@ -2003,6 +2003,43 @@ func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to remove cluster %v", err)
+		}
+		for {
+			if err := nh.RemoveData(2, 1); err != nil {
+				if err == ErrClusterNotStopped {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				} else {
+					t.Fatalf("remove data failed %v", err)
+				}
+			}
+			break
+		}
+		rc := config.Config{
+			NodeID:             uint64(1),
+			ClusterID:          2,
+			ElectionRTT:        5,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    10,
+			CompactionOverhead: 5,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &PST{}
+		}
+		if err := nh.StartCluster(peers, false, newPST, rc); err != ErrNodeRemoved {
+			t.Fatalf("start cluster failed %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
