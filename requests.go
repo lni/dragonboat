@@ -58,6 +58,9 @@ var (
 	ErrSystemBusy = errors.New("system is too busy try again later")
 	// ErrClusterClosed indicates that the requested cluster is being shut down.
 	ErrClusterClosed = errors.New("raft cluster already closed")
+	// ErrClusterNotInitialized indicates that the requested cluster has not been
+	// initialized yet.
+	ErrClusterNotInitialized = errors.New("raft cluster not initialized yet")
 	// ErrBadKey indicates that the key is bad, retry the request is recommended.
 	ErrBadKey = errors.New("bad key try again later")
 	// ErrPendingConfigChangeExist indicates that there is already a pending

@@ -18,12 +18,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync/atomic"
+	"time"
 
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
 // FakeDiskSM is a test state machine.
 type FakeDiskSM struct {
+	SlowOpen       uint32
 	initialApplied uint64
 	count          uint64
 }
@@ -35,6 +38,9 @@ func NewFakeDiskSM(initialApplied uint64) *FakeDiskSM {
 
 // Open opens the state machine.
 func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
+	for atomic.LoadUint32(&f.SlowOpen) > 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
 	return f.initialApplied, nil
 }
 
