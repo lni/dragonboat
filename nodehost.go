@@ -751,12 +751,15 @@ var staleReadCalled uint32
 // ReadIndex and ReadLocalNode method to achieve linearizable read.
 func (nh *NodeHost) StaleRead(clusterID uint64,
 	query interface{}) (interface{}, error) {
-	if fc := atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1); fc {
+	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
 		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
 	v, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
+	}
+	if !v.initialized() {
+		return nil, ErrClusterNotInitialized
 	}
 	data, err := v.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {

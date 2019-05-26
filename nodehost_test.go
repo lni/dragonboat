@@ -587,7 +587,8 @@ func createConcurrentTestNodeHost(addr string,
 }
 
 func createFakeDiskTestNodeHost(addr string,
-	datadir string, initialApplied uint64) (*NodeHost, error) {
+	datadir string, initialApplied uint64,
+	slowOpen bool) (*NodeHost, sm.IOnDiskStateMachine, error) {
 	rc := config.Config{
 		ClusterID:          uint64(1),
 		NodeID:             uint64(1),
@@ -607,15 +608,19 @@ func createFakeDiskTestNodeHost(addr string,
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	fakeDiskSM := tests.NewFakeDiskSM(initialApplied)
+	if slowOpen {
+		atomic.StoreUint32(&fakeDiskSM.SlowOpen, 1)
 	}
 	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-		return tests.NewFakeDiskSM(initialApplied)
+		return fakeDiskSM
 	}
 	if err := nh.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return nh, nil
+	return nh, fakeDiskSM, nil
 }
 
 func singleConcurrentNodeHostTest(t *testing.T,
@@ -640,8 +645,8 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost, initialApplied uint64), initialApplied uint64) {
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
-	nh, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, initialApplied)
+	nh, _, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, initialApplied, false)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
@@ -1197,23 +1202,6 @@ func TestNALookupCanReturnErrNotImplemented(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
-func TestStaleReadCanBeCalled(t *testing.T) {
-	tf := func(t *testing.T, nh *NodeHost) {
-		result, err := nh.StaleRead(2, nil)
-		if err != nil {
-			t.Errorf("stale read failed %v", err)
-		}
-		if result == nil {
-			t.Fatalf("unexpected result")
-		}
-		v := result.([]byte)
-		if len(v) != 1 {
-			t.Errorf("unexpected result length")
-		}
-	}
-	singleNodeHostTest(t, tf)
-}
-
 func TestNodeHostSyncIOAPIs(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		cs := nh.GetNoOPSession(2)
@@ -1462,6 +1450,41 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 5)
+}
+
+func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	nh, fakeDiskSM, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
+		singleNodeHostTestDir, 1, true)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	testSM := fakeDiskSM.(*tests.FakeDiskSM)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		nh.Stop()
+	}()
+	n, ok := nh.getClusterNotLocked(1)
+	if !ok {
+		t.Fatalf("failed to get the node")
+	}
+	if n.initialized() {
+		t.Fatalf("node unexpectedly initialized")
+	}
+	if _, err := nh.StaleRead(1, nil); err != ErrClusterNotInitialized {
+		t.Fatalf("expected to return ErrClusterNotInitialized")
+	}
+	atomic.StoreUint32(&testSM.SlowOpen, 0)
+	for !n.initialized() {
+	}
+	v, err := nh.StaleRead(1, nil)
+	if err != nil {
+		t.Fatalf("stale read failed %v", err)
+	}
+	if len(v.([]byte)) != 8 {
+		t.Fatalf("unexpected result %v", v)
+	}
 }
 
 func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
