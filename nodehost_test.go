@@ -442,10 +442,10 @@ func (n *PST) getRestored() bool {
 	return n.restored
 }
 
-func (n *PST) Close() {}
+func (n *PST) Close() error { return nil }
 
 // Lookup locally looks up the data.
-func (n *PST) Lookup(key []byte) ([]byte, error) {
+func (n *PST) Lookup(key interface{}) (interface{}, error) {
 	return make([]byte, 1), nil
 }
 
@@ -1179,6 +1179,41 @@ func TestNodeHostReadIndex(t *testing.T) {
 	testNodeHostReadIndex(t)
 }
 
+func TestNALookupCanReturnErrNotImplemented(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		rs, err := nh.ReadIndex(2, time.Second)
+		if err != nil {
+			t.Errorf("failed to read index %v", err)
+		}
+		v := <-rs.CompletedC
+		if !v.Completed() {
+			t.Errorf("failed to complete read index")
+		}
+		_, err = nh.NAReadLocalNode(rs, make([]byte, 128))
+		if err != sm.ErrNotImplemented {
+			t.Errorf("failed to return sm.ErrNotImplemented, got %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestStaleReadCanBeCalled(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		result, err := nh.StaleRead(2, nil)
+		if err != nil {
+			t.Errorf("stale read failed %v", err)
+		}
+		if result == nil {
+			t.Fatalf("unexpected result")
+		}
+		v := result.([]byte)
+		if len(v) != 1 {
+			t.Errorf("unexpected result length")
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestNodeHostSyncIOAPIs(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		cs := nh.GetNoOPSession(2)
@@ -1195,7 +1230,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		if err != nil {
 			t.Errorf("make linearizable read failed %v", err)
 		}
-		if len(data) == 0 {
+		if data == nil || len(data.([]byte)) == 0 {
 			t.Errorf("failed to get result")
 		}
 		if err := nh.StopCluster(2); err != nil {
@@ -1457,8 +1492,8 @@ func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 		if err != nil {
 			t.Errorf("SyncRead returned err %v", err)
 		}
-		if binary.LittleEndian.Uint64(count) != initialApplied {
-			t.Errorf("got %d, want %d", binary.LittleEndian.Uint64(count), initialApplied)
+		if binary.LittleEndian.Uint64(count.([]byte)) != initialApplied {
+			t.Errorf("got %d, want %d", binary.LittleEndian.Uint64(count.([]byte)), initialApplied)
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 5)
@@ -1636,7 +1671,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				v := binary.LittleEndian.Uint32(result)
+				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v%2 == 1 {
 					plog.Infof("a concurrent read has been confirmed")
 					atomic.AddUint32(&count, 1)
@@ -1739,7 +1774,7 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				v := binary.LittleEndian.Uint32(result)
+				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v == 1 {
 					plog.Infof("got a v == 1 result")
 					atomic.StoreUint32(&failed, 1)

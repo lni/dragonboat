@@ -472,7 +472,7 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 // or IOnDiskStateMachine. It returns the query result from the Lookup method or
 // the error encountered.
 func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
-	query []byte) ([]byte, error) {
+	query interface{}) (interface{}, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
 		func(node *node) (interface{}, error) {
 			data, err := node.sm.Lookup(query)
@@ -484,10 +484,7 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	if err != nil {
 		return nil, err
 	}
-	if v == nil {
-		return nil, nil
-	}
-	return v.([]byte), nil
+	return v, nil
 }
 
 // Membership is the struct used to describe Raft cluster membership query
@@ -708,49 +705,60 @@ func (nh *NodeHost) ReadIndex(clusterID uint64,
 	return rs, err
 }
 
-// ReadLocal queries the specified Raft node. To ensure the linearizability of
-// the I/O, ReadLocal should only be called after receiving a RequestCompleted
-// notification from the ReadIndex method.
-//
-// Deprecated: Applications should use ReadLocalNode instead.
-func (nh *NodeHost) ReadLocal(clusterID uint64,
-	query []byte) ([]byte, error) {
-	v, ok := nh.getClusterNotLocked(clusterID)
-	if !ok {
-		return nil, ErrClusterNotFound
-	}
-	if !v.initialized() {
-		plog.Panicf("ReadLocal called on %s when not initialized", v.describe())
-	}
+// ReadLocalNode queries the Raft node identified by the input RequestState
+// instance. To ensure the IO linearizability, ReadLocalNode should only be
+// called after receiving a RequestCompleted notification from the ReadIndex
+// method. See ReadIndex's example for more details.
+func (nh *NodeHost) ReadLocalNode(rs *RequestState,
+	query interface{}) (interface{}, error) {
+	rs.mustBeReadyForLocalRead()
 	// translate the rsm.ErrClusterClosed to ErrClusterClosed
 	// internally, the IManagedStateMachine might obtain a RLock before performing
 	// the local read. The critical section is used to make sure we don't read
 	// from a destroyed C++ StateMachine object
-	data, err := v.sm.Lookup(query)
+	data, err := rs.node.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {
 		return nil, ErrClusterClosed
 	}
 	return data, err
 }
 
-// ReadLocalNode queries the Raft node identified by the input RequestState
-// instance. To ensure the IO linearizability, ReadLocalNode should only be
-// called after receiving a RequestCompleted notification from the ReadIndex
-// method. See ReadIndex's example for more details.
-func (nh *NodeHost) ReadLocalNode(rs *RequestState,
+// NAReadLocalNode is a variant of ReadLocalNode, it uses byte slice as its
+// input and output data for read only queries to minimize extra heap
+// allocations caused by using interface{}. Users are recommended to use
+// ReadLocalNode unless performance is the top priority.
+//
+// As an optional method, the underlying state machine must implement the
+// statemachine.IExtended interface. NAReadLocalNode returns
+// statemachine.ErrNotImplemented if the underlying state machine does not
+// implement the statemachine.IExtended interface.
+func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
 	query []byte) ([]byte, error) {
-	if rs.node == nil {
-		panic("invalid rs")
+	rs.mustBeReadyForLocalRead()
+	data, err := rs.node.sm.NALookup(query)
+	if err == rsm.ErrClusterClosed {
+		return nil, ErrClusterClosed
 	}
-	if !rs.node.initialized() {
-		plog.Panicf("ReadLocalNode called on %s when not initialized",
-			rs.node.describe())
+	return data, err
+}
+
+var staleReadCalled uint32
+
+// StaleRead queries the specified Raft node directly without any
+// linearizability guarantee.
+//
+// Users are recommended to use the SyncRead method or a combination of the
+// ReadIndex and ReadLocalNode method to achieve linearizable read.
+func (nh *NodeHost) StaleRead(clusterID uint64,
+	query interface{}) (interface{}, error) {
+	if fc := atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1); fc {
+		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
-	// translate the rsm.ErrClusterClosed to ErrClusterClosed
-	// internally, the IManagedStateMachine might obtain a RLock before performing
-	// the local read. The critical section is used to make sure we don't read
-	// from a destroyed C++ StateMachine object
-	data, err := rs.node.sm.Lookup(query)
+	v, ok := nh.getClusterNotLocked(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	data, err := v.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {
 		return nil, ErrClusterClosed
 	}

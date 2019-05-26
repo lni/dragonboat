@@ -34,7 +34,6 @@ func runDrummerMonkeyTest(t *testing.T, appname string) {
 	dragonboat.SetSnapshotWorkerCount(8)
 	dragonboat.SetWorkerCount(4)
 	dragonboat.SetTaskWorkerCount(4)
-	dragonboat.DisableLogUnreachable()
 	dragonboat.SetIncomingProposalsMaxLen(64)
 	dragonboat.SetIncomingReadIndexMaxLen(64)
 	dragonboat.SetReceiveQueueSize(64)

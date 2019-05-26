@@ -252,6 +252,7 @@ type RequestState struct {
 	seriesID        uint64
 	respondedTo     uint64
 	deadline        uint64
+	readyToRead     uint32
 	completeHandler ICompleteHandler
 	// CompleteC is a channel for delivering request result to users.
 	CompletedC chan RequestResult
@@ -283,7 +284,32 @@ func (r *RequestState) Release() {
 		r.respondedTo = 0
 		r.completeHandler = nil
 		r.node = nil
+		r.clearReadyToRead()
 		r.pool.Put(r)
+	}
+}
+
+func (r *RequestState) readyForLocalRead() bool {
+	return atomic.LoadUint32(&r.readyToRead) == 1
+}
+
+func (r *RequestState) clearReadyToRead() {
+	atomic.StoreUint32(&r.readyToRead, 0)
+}
+
+func (r *RequestState) setReadyToRead() {
+	atomic.StoreUint32(&r.readyToRead, 1)
+}
+
+func (r *RequestState) mustBeReadyForLocalRead() {
+	if r.node == nil {
+		panic("invalid rs")
+	}
+	if !r.node.initialized() {
+		plog.Panicf("%s not initialized", r.node.describe())
+	}
+	if !r.readyForLocalRead() {
+		panic("not ready for local read")
 	}
 }
 
@@ -715,6 +741,7 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			toDelete = append(toDelete, userKey)
 			var v RequestResult
 			if req.deadline > now {
+				req.setReadyToRead()
 				v.code = requestCompleted
 			} else {
 				v.code = requestTimeout

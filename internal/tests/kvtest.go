@@ -122,7 +122,7 @@ func (s *KVTest) DisableLargeDelay() {
 }
 
 // Lookup performances local looks up for the sepcified data.
-func (s *KVTest) Lookup(key []byte) ([]byte, error) {
+func (s *KVTest) Lookup(key interface{}) (interface{}, error) {
 	if s.closed {
 		panic("lookup called after Close()")
 	}
@@ -130,7 +130,7 @@ func (s *KVTest) Lookup(key []byte) ([]byte, error) {
 	if s.aborted {
 		panic("Lookup() called after abort set to true")
 	}
-	v, ok := s.KVStore[string(key)]
+	v, ok := s.KVStore[string(key.([]byte))]
 	generateRandomDelay()
 	if ok {
 		return []byte(v), nil
@@ -287,9 +287,10 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the IStateMachine instance
-func (s *KVTest) Close() {
+func (s *KVTest) Close() error {
 	s.closed = true
 	log.Printf("%d:%dKVStore has been closed", s.ClusterID, s.NodeID)
+	return nil
 }
 
 // GetHash returns a uint64 representing the current object state.

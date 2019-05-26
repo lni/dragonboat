@@ -351,7 +351,7 @@ func TestRequestLookup(t *testing.T) {
 	}
 	result, _ := db.Lookup(data)
 	var resp pb.LookupResponse
-	if err := resp.Unmarshal(result); err != nil {
+	if err := resp.Unmarshal(result.([]byte)); err != nil {
 		panic(err)
 	}
 	if len(resp.Requests.Requests) != 0 {
@@ -360,7 +360,7 @@ func TestRequestLookup(t *testing.T) {
 	}
 	testNodeHostInfoUpdateUpdatesClusterAndNodeHostImage(t, db)
 	result, _ = db.Lookup(data)
-	if err := resp.Unmarshal(result); err != nil {
+	if err := resp.Unmarshal(result.([]byte)); err != nil {
 		panic(err)
 	}
 	reqs := resp.Requests.Requests
@@ -410,7 +410,7 @@ func TestSchedulerContextLookup(t *testing.T) {
 	}
 	result, _ := db.Lookup(data)
 	var sc schedulerContext
-	if err := json.Unmarshal(result, &sc); err != nil {
+	if err := json.Unmarshal(result.([]byte), &sc); err != nil {
 		panic(err)
 	}
 	if sc.Tick != 2*tickIntervalSecond {
@@ -517,9 +517,12 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal lookup request")
 	}
-	data, _ = d.Lookup(data)
+	result, err := d.Lookup(data)
+	if err != nil {
+		t.Fatalf("lookup failed %v", err)
+	}
 	var resp pb.LookupResponse
-	err = resp.Unmarshal(data)
+	err = resp.Unmarshal(result.([]byte))
 	if err != nil {
 		t.Fatalf("failed to unmarshal")
 	}

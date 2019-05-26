@@ -26,13 +26,14 @@ import (
 type IStateMachine interface {
 	Open(<-chan struct{}) (uint64, error)
 	Update(entries []sm.Entry) ([]sm.Entry, error)
-	Lookup(query []byte) ([]byte, error)
+	Lookup(query interface{}) (interface{}, error)
+	NALookup(query []byte) ([]byte, error)
 	Sync() error
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
 		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
 	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
-	Close()
+	Close() error
 	GetHash() (uint64, error)
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
@@ -43,83 +44,104 @@ type IStateMachine interface {
 // concurrent snapshots.
 type RegularStateMachine struct {
 	sm sm.IStateMachine
+	h  sm.IHash
+	na sm.IExtended
 }
 
 // NewRegularStateMachine creates a new RegularStateMachine instance.
-func NewRegularStateMachine(sm sm.IStateMachine) *RegularStateMachine {
-	return &RegularStateMachine{sm: sm}
+func NewRegularStateMachine(s sm.IStateMachine) *RegularStateMachine {
+	r := &RegularStateMachine{sm: s}
+	h, ok := s.(sm.IHash)
+	if ok {
+		r.h = h
+	}
+	na, ok := s.(sm.IExtended)
+	if ok {
+		r.na = na
+	}
+	return r
 }
 
 // Open opens the state machine.
-func (sm *RegularStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
+func (s *RegularStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
 
 // Update updates the state machine.
-func (sm *RegularStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
+func (s *RegularStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if len(entries) != 1 {
 		panic("len(entries) != 1")
 	}
 	var err error
-	entries[0].Result, err = sm.sm.Update(entries[0].Cmd)
+	entries[0].Result, err = s.sm.Update(entries[0].Cmd)
 	return entries, err
 }
 
 // Lookup queries the state machine.
-func (sm *RegularStateMachine) Lookup(query []byte) ([]byte, error) {
-	return sm.sm.Lookup(query)
+func (s *RegularStateMachine) Lookup(query interface{}) (interface{}, error) {
+	return s.sm.Lookup(query)
+}
+
+func (s *RegularStateMachine) NALookup(query []byte) ([]byte, error) {
+	if s.na == nil {
+		return nil, sm.ErrNotImplemented
+	}
+	return s.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
-func (sm *RegularStateMachine) Sync() error {
+func (s *RegularStateMachine) Sync() error {
 	panic("Sync called on RegularStateMachine")
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
-func (sm *RegularStateMachine) PrepareSnapshot() (interface{}, error) {
+func (s *RegularStateMachine) PrepareSnapshot() (interface{}, error) {
 	panic("PrepareSnapshot called on RegularStateMachine")
 }
 
 // SaveSnapshot saves the snapshot.
-func (sm *RegularStateMachine) SaveSnapshot(ctx interface{},
+func (s *RegularStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	if ctx != nil {
 		panic("ctx is not nil")
 	}
-	return sm.sm.SaveSnapshot(w, fc, stopc)
+	return s.sm.SaveSnapshot(w, fc, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *RegularStateMachine) RecoverFromSnapshot(index uint64,
+func (s *RegularStateMachine) RecoverFromSnapshot(index uint64,
 	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return sm.sm.RecoverFromSnapshot(r, fs, stopc)
+	return s.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
 // Close closes the state machine.
-func (sm *RegularStateMachine) Close() {
-	sm.sm.Close()
+func (s *RegularStateMachine) Close() error {
+	return s.sm.Close()
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *RegularStateMachine) GetHash() (uint64, error) {
-	return sm.sm.GetHash()
+func (s *RegularStateMachine) GetHash() (uint64, error) {
+	if s.h == nil {
+		return 0, sm.ErrNotImplemented
+	}
+	return s.h.GetHash()
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
 // machine is capable of taking concurrent snapshot.
-func (sm *RegularStateMachine) ConcurrentSnapshot() bool {
+func (s *RegularStateMachine) ConcurrentSnapshot() bool {
 	return false
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether this is an on
 // disk state machine.
-func (sm *RegularStateMachine) OnDiskStateMachine() bool {
+func (s *RegularStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
 // StateMachineType returns the type of the state machine.
-func (sm *RegularStateMachine) StateMachineType() pb.StateMachineType {
+func (s *RegularStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.RegularStateMachine
 }
 
@@ -127,197 +149,239 @@ func (sm *RegularStateMachine) StateMachineType() pb.StateMachineType {
 // snapshots.
 type ConcurrentStateMachine struct {
 	sm sm.IConcurrentStateMachine
+	h  sm.IHash
+	na sm.IExtended
 }
 
 // NewConcurrentStateMachine creates a new ConcurrentStateMachine instance.
-func NewConcurrentStateMachine(sm sm.IConcurrentStateMachine) *ConcurrentStateMachine {
-	return &ConcurrentStateMachine{sm: sm}
+func NewConcurrentStateMachine(s sm.IConcurrentStateMachine) *ConcurrentStateMachine {
+	r := &ConcurrentStateMachine{sm: s}
+	h, ok := s.(sm.IHash)
+	if ok {
+		r.h = h
+	}
+	na, ok := s.(sm.IExtended)
+	if ok {
+		r.na = na
+	}
+	return r
 }
 
 // Open opens the state machine.
-func (sm *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
+func (s *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	panic("Open() called on RegularStateMachine")
 }
 
 // Update updates the state machine.
-func (sm *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
-	return sm.sm.Update(entries)
+func (s *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
+	return s.sm.Update(entries)
 }
 
 // Lookup queries the state machine.
-func (sm *ConcurrentStateMachine) Lookup(query []byte) ([]byte, error) {
-	return sm.sm.Lookup(query)
+func (s *ConcurrentStateMachine) Lookup(query interface{}) (interface{}, error) {
+	return s.sm.Lookup(query)
+}
+
+func (s *ConcurrentStateMachine) NALookup(query []byte) ([]byte, error) {
+	if s.na == nil {
+		return nil, sm.ErrNotImplemented
+	}
+	return s.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
-func (sm *ConcurrentStateMachine) Sync() error {
+func (s *ConcurrentStateMachine) Sync() error {
 	panic("Sync called on ConcurrentStateMachine")
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
-func (sm *ConcurrentStateMachine) PrepareSnapshot() (interface{}, error) {
-	return sm.sm.PrepareSnapshot()
+func (s *ConcurrentStateMachine) PrepareSnapshot() (interface{}, error) {
+	return s.sm.PrepareSnapshot()
 }
 
 // SaveSnapshot saves the snapshot.
-func (sm *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
+func (s *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
-	return sm.sm.SaveSnapshot(ctx, w, fc, stopc)
+	return s.sm.SaveSnapshot(ctx, w, fc, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *ConcurrentStateMachine) RecoverFromSnapshot(index uint64,
+func (s *ConcurrentStateMachine) RecoverFromSnapshot(index uint64,
 	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return sm.sm.RecoverFromSnapshot(r, fs, stopc)
+	return s.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
 // Close closes the state machine.
-func (sm *ConcurrentStateMachine) Close() {
-	sm.sm.Close()
+func (s *ConcurrentStateMachine) Close() error {
+	return s.sm.Close()
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *ConcurrentStateMachine) GetHash() (uint64, error) {
-	return sm.sm.GetHash()
+func (s *ConcurrentStateMachine) GetHash() (uint64, error) {
+	if s.h == nil {
+		return 0, sm.ErrNotImplemented
+	}
+	return s.h.GetHash()
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
 // machine is capable of taking concurrent snapshot.
-func (sm *ConcurrentStateMachine) ConcurrentSnapshot() bool {
+func (s *ConcurrentStateMachine) ConcurrentSnapshot() bool {
 	return true
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether this is a on
 // disk state machine.
-func (sm *ConcurrentStateMachine) OnDiskStateMachine() bool {
+func (s *ConcurrentStateMachine) OnDiskStateMachine() bool {
 	return false
 }
 
 // StateMachineType returns the type of the state machine.
-func (sm *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
+func (s *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.ConcurrentStateMachine
 }
 
 // OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
 	sm           sm.IOnDiskStateMachine
+	h            sm.IHash
+	na           sm.IExtended
 	opened       bool
 	initialIndex uint64
 	applied      uint64
 }
 
 // NewOnDiskStateMachine creates and returns an on disk state machine.
-func NewOnDiskStateMachine(sm sm.IOnDiskStateMachine) *OnDiskStateMachine {
-	return &OnDiskStateMachine{sm: sm}
+func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
+	r := &OnDiskStateMachine{sm: s}
+	h, ok := s.(sm.IHash)
+	if ok {
+		r.h = h
+	}
+	na, ok := s.(sm.IExtended)
+	if ok {
+		r.na = na
+	}
+	return r
 }
 
 // Open opens the state machine.
-func (sm *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
-	if sm.opened {
+func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
+	if s.opened {
 		panic("Open called more than once on OnDiskStateMachine")
 	}
-	sm.opened = true
-	applied, err := sm.sm.Open(stopc)
+	s.opened = true
+	applied, err := s.sm.Open(stopc)
 	if err != nil {
 		return 0, err
 	}
-	sm.initialIndex = applied
-	sm.applied = applied
+	s.initialIndex = applied
+	s.applied = applied
 	return applied, nil
 }
 
 // Update updates the state machine.
-func (sm *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
-	if !sm.opened {
+func (s *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
+	if !s.opened {
 		panic("Update called before Open")
 	}
 	if len(entries) > 0 {
-		if entries[len(entries)-1].Index <= sm.initialIndex {
+		if entries[len(entries)-1].Index <= s.initialIndex {
 			plog.Panicf("last entry index to apply %d, initial index %d",
-				entries[len(entries)-1].Index, sm.initialIndex)
+				entries[len(entries)-1].Index, s.initialIndex)
 		}
-		if entries[len(entries)-1].Index <= sm.applied {
+		if entries[len(entries)-1].Index <= s.applied {
 			plog.Panicf("last entry index to apply %d, applied %d",
-				entries[len(entries)-1].Index, sm.applied)
+				entries[len(entries)-1].Index, s.applied)
 		}
-		sm.applied = entries[len(entries)-1].Index
+		s.applied = entries[len(entries)-1].Index
 	}
-	return sm.sm.Update(entries)
+	return s.sm.Update(entries)
 }
 
 // Lookup queries the state machine.
-func (sm *OnDiskStateMachine) Lookup(query []byte) ([]byte, error) {
-	if !sm.opened {
+func (s *OnDiskStateMachine) Lookup(query interface{}) (interface{}, error) {
+	if !s.opened {
 		panic("Lookup called when not opened")
 	}
-	return sm.sm.Lookup(query)
+	return s.sm.Lookup(query)
+}
+
+func (s *OnDiskStateMachine) NALookup(query []byte) ([]byte, error) {
+	if s.na == nil {
+		return nil, sm.ErrNotImplemented
+	}
+	return s.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
-func (sm *OnDiskStateMachine) Sync() error {
-	if !sm.opened {
+func (s *OnDiskStateMachine) Sync() error {
+	if !s.opened {
 		panic("Sync called when not opened")
 	}
-	return sm.sm.Sync()
+	return s.sm.Sync()
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
-func (sm *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
-	if !sm.opened {
+func (s *OnDiskStateMachine) PrepareSnapshot() (interface{}, error) {
+	if !s.opened {
 		panic("PrepareSnapshot called when not opened")
 	}
-	return sm.sm.PrepareSnapshot()
+	return s.sm.PrepareSnapshot()
 }
 
 // SaveSnapshot saves the snapshot.
-func (sm *OnDiskStateMachine) SaveSnapshot(ctx interface{},
+func (s *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection,
 	stopc <-chan struct{}) error {
-	if !sm.opened {
+	if !s.opened {
 		panic("SaveSnapshot called when not opened")
 	}
-	return sm.sm.SaveSnapshot(ctx, w, stopc)
+	return s.sm.SaveSnapshot(ctx, w, stopc)
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (sm *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
+func (s *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
 	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	if !sm.opened {
+	if !s.opened {
 		panic("RecoverFromSnapshot called when not opened")
 	}
-	if index <= sm.applied {
+	if index <= s.applied {
 		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
-			index, sm.applied)
+			index, s.applied)
 	}
-	sm.applied = index
-	return sm.sm.RecoverFromSnapshot(r, stopc)
+	s.applied = index
+	return s.sm.RecoverFromSnapshot(r, stopc)
 }
 
 // Close closes the state machine.
-func (sm *OnDiskStateMachine) Close() {
-	sm.sm.Close()
+func (s *OnDiskStateMachine) Close() error {
+	return s.sm.Close()
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
 // machine.
-func (sm *OnDiskStateMachine) GetHash() (uint64, error) {
-	return sm.sm.GetHash()
+func (s *OnDiskStateMachine) GetHash() (uint64, error) {
+	if s.h == nil {
+		return 0, sm.ErrNotImplemented
+	}
+	return s.h.GetHash()
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
 // machine is capable of taking concurrent snapshot.
-func (sm *OnDiskStateMachine) ConcurrentSnapshot() bool {
+func (s *OnDiskStateMachine) ConcurrentSnapshot() bool {
 	return true
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether this is an on
 // disk state machine.
-func (sm *OnDiskStateMachine) OnDiskStateMachine() bool {
+func (s *OnDiskStateMachine) OnDiskStateMachine() bool {
 	return true
 }
 
 // StateMachineType returns the type of the state machine.
-func (sm *OnDiskStateMachine) StateMachineType() pb.StateMachineType {
+func (s *OnDiskStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.OnDiskStateMachine
 }

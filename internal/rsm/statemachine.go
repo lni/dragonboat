@@ -379,14 +379,14 @@ func (s *StateMachine) Loaded(from From) {
 }
 
 // Lookup performances local lookup on the data store.
-func (s *StateMachine) Lookup(query []byte) ([]byte, error) {
+func (s *StateMachine) Lookup(query interface{}) (interface{}, error) {
 	if s.sm.ConcurrentSnapshot() {
 		return s.concurrentLookup(query)
 	}
 	return s.lookup(query)
 }
 
-func (s *StateMachine) lookup(query []byte) ([]byte, error) {
+func (s *StateMachine) lookup(query interface{}) (interface{}, error) {
 	s.mu.RLock()
 	if s.aborted {
 		s.mu.RUnlock()
@@ -397,8 +397,31 @@ func (s *StateMachine) lookup(query []byte) ([]byte, error) {
 	return result, err
 }
 
-func (s *StateMachine) concurrentLookup(query []byte) ([]byte, error) {
+func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) {
 	return s.sm.Lookup(query)
+}
+
+// Lookup performances local lookup on the data store.
+func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
+	if s.sm.ConcurrentSnapshot() {
+		return s.naConcurrentLookup(query)
+	}
+	return s.nalookup(query)
+}
+
+func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
+	s.mu.RLock()
+	if s.aborted {
+		s.mu.RUnlock()
+		return nil, ErrClusterClosed
+	}
+	result, err := s.sm.NALookup(query)
+	s.mu.RUnlock()
+	return result, err
+}
+
+func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
+	return s.sm.NALookup(query)
 }
 
 // GetMembership returns the membership info maintained by the state machine.

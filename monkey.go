@@ -41,10 +41,6 @@ func (nh *NodeHost) Clusters() []*node {
 	return result
 }
 
-func DisableLogUnreachable() {
-	logUnreachable = false
-}
-
 func SetIncomingProposalsMaxLen(sz uint64) {
 	incomingProposalsMaxLen = sz
 }

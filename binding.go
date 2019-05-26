@@ -109,3 +109,25 @@ func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string,
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
+
+// ReadLocal queries the specified Raft node. To ensure the linearizability of
+// the I/O, ReadLocal should only be called after receiving a RequestCompleted
+// notification from the ReadIndex method.
+func (nh *NodeHost) ReadLocal(clusterID uint64, query []byte) ([]byte, error) {
+	v, ok := nh.getClusterNotLocked(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	// translate the rsm.ErrClusterClosed to ErrClusterClosed
+	// internally, the IManagedStateMachine might obtain a RLock before performing
+	// the local read. The critical section is used to make sure we don't read
+	// from a destroyed C++ StateMachine object
+	data, err := v.sm.Lookup(query)
+	if err == rsm.ErrClusterClosed {
+		return nil, ErrClusterClosed
+	}
+	if data == nil {
+		return nil, err
+	}
+	return data.([]byte), err
+}

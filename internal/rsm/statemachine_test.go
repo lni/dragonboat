@@ -235,7 +235,7 @@ func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -250,7 +250,7 @@ func runSMTest2(t *testing.T,
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -262,7 +262,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeStateMachine(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeStateMachine(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
@@ -949,8 +949,8 @@ func TestHandleUpate(t *testing.T) {
 		if err != nil {
 			t.Errorf("lookup failed")
 		}
-		if string(result) != "test-value" {
-			t.Errorf("result %s, want test-value", string(result))
+		if string(result.([]byte)) != "test-value" {
+			t.Errorf("result %s, want test-value", string(result.([]byte)))
 		}
 	}
 	runSMTest2(t, tf)
@@ -974,7 +974,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		}
 		store2 := tests.NewKVTest(1, 1)
 		store2.(*tests.KVTest).DisableLargeDelay()
-		ds2 := NewNativeStateMachine(1, 1, &RegularStateMachine{sm: store2}, make(chan struct{}))
+		ds2 := NewNativeStateMachine(1, 1, NewRegularStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
 		sm2 := NewStateMachine(ds2, snapshotter2, false, nodeProxy2)
@@ -1642,10 +1642,11 @@ func (t *testManagedStateMachine) Open() (uint64, error) { return 0, nil }
 func (t *testManagedStateMachine) Update(*Session, pb.Entry) (sm.Result, error) {
 	return sm.Result{}, nil
 }
-func (t *testManagedStateMachine) Lookup([]byte) ([]byte, error)         { return nil, nil }
-func (t *testManagedStateMachine) Sync() error                           { return nil }
-func (t *testManagedStateMachine) GetHash() (uint64, error)              { return 0, nil }
-func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) Lookup(interface{}) (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) NALookup([]byte) ([]byte, error)         { return nil, nil }
+func (t *testManagedStateMachine) Sync() error                             { return nil }
+func (t *testManagedStateMachine) GetHash() (uint64, error)                { return 0, nil }
+func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error)   { return nil, nil }
 func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
 	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
 	return false, 0, nil

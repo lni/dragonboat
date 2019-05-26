@@ -267,7 +267,7 @@ func TestDiskKVCanBeUpdated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
-		idx, err = strconv.ParseUint(string(result), 10, 64)
+		idx, err = strconv.ParseUint(string(result.([]byte)), 10, 64)
 		if err != nil {
 			t.Fatalf("failed to convert the index value %v", err)
 		}
@@ -278,7 +278,7 @@ func TestDiskKVCanBeUpdated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
-		if !bytes.Equal(result, []byte("test-val1")) {
+		if !bytes.Equal(result.([]byte), []byte("test-val1")) {
 			t.Errorf("value not set")
 		}
 		odsm.Close()
@@ -324,7 +324,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 			{Index: 2, Cmd: data2},
 		}
 		odsm.Update(ents)
-		hash1, err := odsm.GetHash()
+		hash1, err := odsm.(sm.IHash).GetHash()
 		if err != nil {
 			t.Fatalf("failed to get hash %v", err)
 		}
@@ -342,10 +342,10 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
-		if !bytes.Equal(result, []byte("test-val3")) {
+		if !bytes.Equal(result.([]byte), []byte("test-val3")) {
 			t.Errorf("value not set")
 		}
-		hash2, err := odsm.GetHash()
+		hash2, err := odsm.(sm.IHash).GetHash()
 		if err != nil {
 			t.Fatalf("failed to get hash %v", err)
 		}
@@ -364,7 +364,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err := odsm2.RecoverFromSnapshot(reader, nil); err != nil {
 			t.Fatalf("recover from snapshot failed %v", err)
 		}
-		hash3, err := odsm2.GetHash()
+		hash3, err := odsm2.(sm.IHash).GetHash()
 		if err != nil {
 			t.Fatalf("failed to get hash %v", err)
 		}
@@ -375,7 +375,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)
 		}
-		if len(result) > 0 {
+		if len(result.([]byte)) > 0 {
 			t.Fatalf("test-key3 still available in the db")
 		}
 		odsm2.Close()
@@ -383,7 +383,7 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err == nil {
 			t.Fatalf("lookup allowed after close")
 		}
-		if len(result) != 0 {
+		if result != nil {
 			t.Fatalf("returned something %v", result)
 		}
 	}

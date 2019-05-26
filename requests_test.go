@@ -35,6 +35,28 @@ const (
 	testTickInMillisecond uint64 = 50
 )
 
+func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
+	fn := func(rs *RequestState) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("failed to trigger panic")
+			}
+		}()
+		rs.mustBeReadyForLocalRead()
+	}
+	r1 := &RequestState{}
+	r2 := &RequestState{node: &node{}}
+	r3 := &RequestState{node: &node{}}
+	r3.node.setInitialized()
+	fn(r1)
+	fn(r2)
+	fn(r3)
+	r4 := &RequestState{node: &node{}}
+	r4.node.setInitialized()
+	r4.setReadyToRead()
+	r4.mustBeReadyForLocalRead()
+}
+
 func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
@@ -265,8 +287,10 @@ func TestRequestStateRelease(t *testing.T) {
 		seriesID:    300,
 		respondedTo: 400,
 		deadline:    500,
+		node:        &node{},
 		pool:        &sync.Pool{},
 	}
+	rs.setReadyToRead()
 	exp := RequestState{pool: rs.pool}
 	rs.Release()
 	if !reflect.DeepEqual(&exp, &rs) {

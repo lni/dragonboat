@@ -39,7 +39,7 @@ func (c *TestUpdate) Update(data []byte) (sm.Result, error) {
 }
 
 // Lookup queries the state machine.
-func (c *TestUpdate) Lookup(query []byte) ([]byte, error) {
+func (c *TestUpdate) Lookup(query interface{}) (interface{}, error) {
 	result := make([]byte, 4)
 	v := atomic.LoadUint32(&c.val)
 	binary.LittleEndian.PutUint32(result, v)
@@ -59,7 +59,8 @@ func (c *TestUpdate) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (c *TestUpdate) Close() {
+func (c *TestUpdate) Close() error {
+	return nil
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -88,7 +89,7 @@ func (c *ConcurrentUpdate) Update(entries []sm.Entry) ([]sm.Entry, error) {
 }
 
 // Lookup queries the state machine.
-func (c *ConcurrentUpdate) Lookup(query []byte) ([]byte, error) {
+func (c *ConcurrentUpdate) Lookup(query interface{}) (interface{}, error) {
 	result := make([]byte, 4)
 	v := atomic.LoadUint32(&c.val)
 	binary.LittleEndian.PutUint32(result, v)
@@ -114,7 +115,8 @@ func (c *ConcurrentUpdate) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (c *ConcurrentUpdate) Close() {
+func (c *ConcurrentUpdate) Close() error {
+	return nil
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -134,7 +136,7 @@ func (c *TestSnapshot) Update(data []byte) (sm.Result, error) {
 }
 
 // Lookup queries the state machine.
-func (c *TestSnapshot) Lookup(query []byte) ([]byte, error) {
+func (c *TestSnapshot) Lookup(query interface{}) (interface{}, error) {
 	return nil, nil
 }
 
@@ -162,7 +164,8 @@ func (c *TestSnapshot) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (c *TestSnapshot) Close() {
+func (c *TestSnapshot) Close() error {
+	return nil
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -183,7 +186,7 @@ func (c *ConcurrentSnapshot) Update(entries []sm.Entry) ([]sm.Entry, error) {
 }
 
 // Lookup queries the state machine.
-func (c *ConcurrentSnapshot) Lookup(query []byte) ([]byte, error) {
+func (c *ConcurrentSnapshot) Lookup(query interface{}) (interface{}, error) {
 	return nil, sm.ErrSnapshotStopped
 }
 
@@ -217,7 +220,8 @@ func (c *ConcurrentSnapshot) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (c *ConcurrentSnapshot) Close() {
+func (c *ConcurrentSnapshot) Close() error {
+	return nil
 }
 
 // GetHash returns the uint64 hash value representing the state of a state

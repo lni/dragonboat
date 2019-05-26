@@ -357,8 +357,8 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 					if !nhList[readIdx].Running() {
 						resp, err := nhList[readIdx].nh.SyncRead(ctx, clusterID, []byte(kv.Key))
 						if err == nil {
-							if string(resp) != string(kv.Val) {
-								plog.Panicf("got %s, want %s", string(resp), kv.Val)
+							if string(resp.([]byte)) != string(kv.Val) {
+								plog.Panicf("got %s, want %s", string(resp.([]byte)), kv.Val)
 							}
 						}
 					}
@@ -495,8 +495,8 @@ func testLinearizableReadReturnExpectedResult(t *testing.T, node *mtNodeHost,
 				t.Fatalf("failed to read, %v", err)
 			}
 		} else {
-			if string(result) != string(expected) {
-				t.Errorf("got size %d want size %d", len(result), len(expected))
+			if string(result.([]byte)) != string(expected) {
+				t.Errorf("got size %d want size %d", len(result.([]byte)), len(expected))
 			}
 			break
 		}

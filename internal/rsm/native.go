@@ -56,7 +56,8 @@ type IManagedStateMachine interface {
 	Open() (uint64, error)
 	Update(*Session, pb.Entry) (sm.Result, error)
 	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
-	Lookup([]byte) ([]byte, error)
+	Lookup(interface{}) (interface{}, error)
+	NALookup([]byte) ([]byte, error)
 	Sync() error
 	GetHash() (uint64, error)
 	PrepareSnapshot() (interface{}, error)
@@ -111,10 +112,6 @@ func NewNativeStateMachine(clusterID uint64, nodeID uint64, sm IStateMachine,
 	return s
 }
 
-func (ds *NativeStateMachine) closeStateMachine() {
-	ds.sm.Close()
-}
-
 // Open opens on disk state machine.
 func (ds *NativeStateMachine) Open() (uint64, error) {
 	return ds.sm.Open(ds.done)
@@ -126,7 +123,9 @@ func (ds *NativeStateMachine) Offloaded(from From) {
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
-		ds.closeStateMachine()
+		if err := ds.sm.Close(); err != nil {
+			panic(err)
+		}
 		ds.SetDestroyed()
 	}
 }
@@ -192,13 +191,25 @@ func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error)
 }
 
 // Lookup queries the data store.
-func (ds *NativeStateMachine) Lookup(data []byte) ([]byte, error) {
+func (ds *NativeStateMachine) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
 		ds.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
-	v, err := ds.sm.Lookup(data)
+	v, err := ds.sm.Lookup(query)
+	ds.mu.RUnlock()
+	return v, err
+}
+
+// NALookup queries the data store.
+func (ds *NativeStateMachine) NALookup(query []byte) ([]byte, error) {
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, ErrClusterClosed
+	}
+	v, err := ds.sm.NALookup(query)
 	ds.mu.RUnlock()
 	return v, err
 }

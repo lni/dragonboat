@@ -120,7 +120,7 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to lookup")
 	}
-	v4 := binary.LittleEndian.Uint32(result)
+	v4 := binary.LittleEndian.Uint32(result.([]byte))
 	if uint64(v4) != v3.Value {
 		t.Errorf("returned %d, want %d", v4, v3)
 	}

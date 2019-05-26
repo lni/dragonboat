@@ -75,9 +75,9 @@ func NewConcurrentKVTest(clusterID uint64, nodeID uint64) sm.IConcurrentStateMac
 }
 
 // Lookup performances local looks up for the sepcified data.
-func (s *ConcurrentKVTest) Lookup(key []byte) ([]byte, error) {
+func (s *ConcurrentKVTest) Lookup(key interface{}) (interface{}, error) {
 	kvdata := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
-	query := string(key)
+	query := string(key.([]byte))
 	v, ok := kvdata.kvs.Load(query)
 	if ok {
 		return []byte(v.(string)), nil
@@ -199,8 +199,9 @@ func (s *ConcurrentKVTest) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the IStateMachine instance
-func (s *ConcurrentKVTest) Close() {
+func (s *ConcurrentKVTest) Close() error {
 	atomic.StoreUint32(&s.closed, 1)
+	return nil
 }
 
 // GetHash returns a uint64 representing the current object state.

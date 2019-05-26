@@ -250,7 +250,7 @@ func (ds *StateMachineWrapper) Update(session *rsm.Session,
 }
 
 // Lookup queries the data store.
-func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
+func (ds *StateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
 		ds.mu.RUnlock()
@@ -258,6 +258,7 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 	}
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
+	data := query.([]byte)
 	if len(data) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 	}
@@ -266,6 +267,11 @@ func (ds *StateMachineWrapper) Lookup(data []byte) ([]byte, error) {
 	C.FreeLookupResult(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil
+}
+
+// NALookup queries the data store.
+func (ds *StateMachineWrapper) NALookup(query []byte) ([]byte, error) {
+	panic("not implemented")
 }
 
 // Sync synchronizes the state machine's in-core state with that on disk.

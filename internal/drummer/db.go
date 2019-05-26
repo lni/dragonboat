@@ -193,7 +193,7 @@ func (d *DB) RecoverFromSnapshot(r io.Reader, files []statemachine.SnapshotFile,
 }
 
 // Close closes the DB instance.
-func (d *DB) Close() {}
+func (d *DB) Close() error { return nil }
 
 // GetHash returns the state machine hash.
 func (d *DB) GetHash() (uint64, error) {
@@ -377,8 +377,9 @@ func (d *DB) tryCreateCluster(c pb.Change) uint64 {
 }
 
 // Lookup performances local data lookup on the DB.
-func (d *DB) Lookup(key []byte) ([]byte, error) {
+func (d *DB) Lookup(query interface{}) (interface{}, error) {
 	d.assertNotFailed()
+	key := query.([]byte)
 	var req pb.LookupRequest
 	if err := req.Unmarshal(key); err != nil {
 		panic(err)

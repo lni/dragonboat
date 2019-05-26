@@ -212,11 +212,11 @@ func (s *server) GetClusterStates(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	if len(respData) == 0 {
+	if len(respData.([]byte)) == 0 {
 		return nil, dragonboat.ErrClusterNotFound
 	}
 	c := &pb.ClusterStates{}
-	if err := c.Unmarshal(respData); err != nil {
+	if err := c.Unmarshal(respData.([]byte)); err != nil {
 		panic(err)
 	}
 	return c, nil
@@ -412,7 +412,7 @@ func (s *server) getSchedulerContext(ctx context.Context) (*schedulerContext, er
 		return nil, err
 	}
 	sc := &schedulerContext{}
-	if err := json.Unmarshal(respData, &sc); err != nil {
+	if err := json.Unmarshal(respData.([]byte), &sc); err != nil {
 		panic(err)
 	}
 	return sc, nil
@@ -454,7 +454,7 @@ func (s *server) getRequests(ctx context.Context,
 		return nil, err
 	}
 	var v pb.LookupResponse
-	if err = v.Unmarshal(result); err != nil {
+	if err = v.Unmarshal(result.([]byte)); err != nil {
 		panic(err)
 	}
 	return v.Requests.Requests, nil
@@ -489,7 +489,7 @@ func (s *server) lookupDB(ctx context.Context,
 		return nil, err
 	}
 	var v pb.LookupResponse
-	if err = v.Unmarshal(result); err != nil {
+	if err = v.Unmarshal(result.([]byte)); err != nil {
 		panic(err)
 	}
 	return &v, nil
@@ -547,7 +547,7 @@ func (s *server) lookupKV(ctx context.Context,
 		return nil, err
 	}
 	lookupResp := &pb.LookupResponse{}
-	if err = lookupResp.Unmarshal(resp); err != nil {
+	if err = lookupResp.Unmarshal(resp.([]byte)); err != nil {
 		panic(err)
 	}
 	return lookupResp, nil

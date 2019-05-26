@@ -52,7 +52,7 @@ func (f *FakeDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
 }
 
 // Lookup queries the state machine.
-func (f *FakeDiskSM) Lookup(query []byte) ([]byte, error) {
+func (f *FakeDiskSM) Lookup(query interface{}) (interface{}, error) {
 	result := make([]byte, 8)
 	binary.LittleEndian.PutUint64(result, f.count)
 	return result, nil
@@ -103,7 +103,8 @@ func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (f *FakeDiskSM) Close() {
+func (f *FakeDiskSM) Close() error {
+	return nil
 }
 
 // GetHash returns the hash of the state.

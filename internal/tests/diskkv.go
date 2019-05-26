@@ -401,10 +401,10 @@ func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 }
 
 // Lookup queries the state machine.
-func (d *DiskKVTest) Lookup(key []byte) ([]byte, error) {
+func (d *DiskKVTest) Lookup(key interface{}) (interface{}, error) {
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	if db != nil {
-		v, err := db.lookup(key)
+		v, err := db.lookup(key.([]byte))
 		if err == nil && d.closed {
 			panic("lookup returned valid result when DiskKVTest is already closed")
 		}
@@ -702,7 +702,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the state machine.
-func (d *DiskKVTest) Close() {
+func (d *DiskKVTest) Close() error {
 	fmt.Printf("[DKVE] %s called close\n", d.describe())
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
@@ -713,6 +713,7 @@ func (d *DiskKVTest) Close() {
 			panic("close called twice")
 		}
 	}
+	return nil
 }
 
 // GetHash returns a hash value representing the state of the state machine.

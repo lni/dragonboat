@@ -145,7 +145,7 @@ func (api *NodehostAPI) Read(ctx context.Context,
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	return &pb.RaftResponse{Data: data}, nil
+	return &pb.RaftResponse{Data: data.([]byte)}, nil
 }
 
 // GRPCError converts errors defined in package multiraft to gRPC errors

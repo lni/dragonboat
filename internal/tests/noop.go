@@ -29,8 +29,13 @@ type NoOP struct {
 }
 
 // Lookup locally looks up the data.
-func (n *NoOP) Lookup(key []byte) ([]byte, error) {
+func (n *NoOP) Lookup(key interface{}) (interface{}, error) {
 	return make([]byte, 1), nil
+}
+
+// NALookup locally looks up the data.
+func (n *NoOP) NALookup(key []byte) ([]byte, error) {
+	return key, nil
 }
 
 // Update updates the object.
@@ -77,7 +82,7 @@ func (n *NoOP) RecoverFromSnapshot(r io.Reader,
 }
 
 // Close closes the NoOP IStateMachine.
-func (n *NoOP) Close() {}
+func (n *NoOP) Close() error { return nil }
 
 // GetHash returns a uint64 value representing the current state of the object.
 func (n *NoOP) GetHash() (uint64, error) {

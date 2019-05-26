@@ -453,6 +453,44 @@ func BenchmarkTransport1024(b *testing.B) {
 	benchmarkTransport(b, 1024)
 }
 
+func BenchmarkLookup(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+	ds := &tests.NoOP{}
+	done := make(chan struct{})
+	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
+	input := make([]byte, 1)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := nds.Lookup(input)
+		if err != nil {
+			b.Fatalf("lookup failed %v", err)
+		}
+		if result == nil || len(result.([]byte)) != 1 {
+			b.Fatalf("unexpected result")
+		}
+	}
+}
+
+func BenchmarkNALookup(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+	ds := &tests.NoOP{}
+	done := make(chan struct{})
+	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
+	input := make([]byte, 1)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := nds.NALookup(input)
+		if err != nil {
+			b.Fatalf("lookup failed %v", err)
+		}
+		if len(result) != 1 {
+			b.Fatalf("unexpected result")
+		}
+	}
+}
+
 type noopNodeProxy struct {
 }
 
