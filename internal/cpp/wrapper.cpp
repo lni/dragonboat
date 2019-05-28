@@ -69,8 +69,9 @@ CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
 CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
   uint64_t nodeID, void *factory)
 {
-  auto fn = reinterpret_cast<CPPStateMachine *(*)(uint64_t, uint64_t)>(factory);
-  CPPStateMachine *ds = (*fn)(clusterID, nodeID);
+  auto fn = reinterpret_cast<dragonboat::StateMachine *(*)(uint64_t, uint64_t)>(factory);
+  CPPStateMachine *ds = new CPPStateMachine;
+  ds->sm = (*fn)(clusterID, nodeID);
   return ds;
 }
 
