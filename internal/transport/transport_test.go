@@ -288,8 +288,9 @@ func newNOOPTestTransport() (*Transport,
 	t := &testSnapshotDir{}
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	c := config.NodeHostConfig{
-		RaftAddress:    "localhost:9876",
-		RaftRPCFactory: NewNOOPTransport,
+		MaxSendQueueSize: 256 * 1024 * 1024,
+		RaftAddress:      "localhost:9876",
+		RaftRPCFactory:   NewNOOPTransport,
 	}
 	ctx, err := server.NewContext(c)
 	if err != nil {

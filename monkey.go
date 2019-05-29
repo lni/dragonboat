@@ -49,8 +49,8 @@ func SetIncomingReadIndexMaxLen(sz uint64) {
 	incomingReadIndexMaxLen = sz
 }
 
-func SetReceiveQueueSize(sz uint64) {
-	receiveQueueSize = sz
+func SetReceiveQueueLen(v uint64) {
+	receiveQueueLen = v
 }
 
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {

@@ -36,7 +36,7 @@ func runDrummerMonkeyTest(t *testing.T, appname string) {
 	dragonboat.SetTaskWorkerCount(4)
 	dragonboat.SetIncomingProposalsMaxLen(64)
 	dragonboat.SetIncomingReadIndexMaxLen(64)
-	dragonboat.SetReceiveQueueSize(64)
+	dragonboat.SetReceiveQueueLen(64)
 	transport.SetPerConnBufferSize(64 * 1024)
 	transport.SetSendQueueLength(64)
 	transport.SetSnapshotChunkSize(1024)

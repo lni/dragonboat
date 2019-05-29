@@ -299,11 +299,21 @@ func (rc *node) proposeSession(session *client.Session,
 	return rc.pendingProposals.propose(session, nil, handler, timeout)
 }
 
+func (rc *node) payloadTooBig(sz int) bool {
+	if rc.config.MaxInMemLogSize == 0 {
+		return false
+	}
+	return uint64(sz+settings.EntryNonCmdFieldsSize) > rc.config.MaxInMemLogSize
+}
+
 func (rc *node) propose(session *client.Session,
 	cmd []byte, handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
 	if !session.ValidForProposal(rc.clusterID) {
 		return nil, ErrInvalidSession
+	}
+	if rc.payloadTooBig(len(cmd)) {
+		return nil, ErrPayloadTooBig
 	}
 	return rc.pendingProposals.propose(session, cmd, handler, timeout)
 }

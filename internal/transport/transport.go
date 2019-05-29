@@ -80,7 +80,6 @@ var (
 	plog                = logger.GetLogger("transport")
 	streamConnections   = settings.Soft.StreamConnections
 	sendQueueLen        = settings.Soft.SendQueueLength
-	sendQueueSize       = settings.Soft.SendQueueSize
 	errChunkSendSkipped = errors.New("chunk is skipped")
 	errBatchSendSkipped = errors.New("raft request batch is skipped")
 	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
@@ -395,7 +394,7 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 	if !ok {
 		sq = sendQueue{
 			ch: make(chan pb.Message, sendQueueLen),
-			rl: server.NewRateLimiter(sendQueueSize),
+			rl: server.NewRateLimiter(t.nhConfig.MaxSendQueueSize),
 		}
 		t.mu.queues[key] = sq
 	}
