@@ -1425,6 +1425,7 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 		t.Fatalf("failed to get sq")
 	}
 	for len(sq.ch) != 0 {
+		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
 		sent := tt.ASyncSend(msg)
@@ -1433,6 +1434,7 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 		}
 	}
 	for len(sq.ch) != 0 {
+		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 1000; i++ {
 		time.Sleep(10 * time.Millisecond)
