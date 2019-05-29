@@ -492,10 +492,9 @@ func checkRateLimiterState(t *testing.T, nodes []*testNode) {
 			rl := rn.GetRateLimiter()
 			clusterID := rn.ClusterID()
 			nodeID := rn.NodeID()
-			if rl.GetInMemLogSize() != rn.GetInMemLogSize() {
+			if rl.Get() != rn.GetInMemLogSize() {
 				t.Fatalf("%s, rl mem log size %d, in mem log size %d",
-					logutil.DescribeNode(clusterID, nodeID),
-					rl.GetInMemLogSize(), rn.GetInMemLogSize())
+					logutil.DescribeNode(clusterID, nodeID), rl.Get(), rn.GetInMemLogSize())
 			}
 		}
 	}

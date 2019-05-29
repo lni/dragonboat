@@ -545,11 +545,11 @@ func TestRateLimited(t *testing.T) {
 func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
 	im := newInMemory(0, server.NewRateLimiter(10000))
 	im.merge([]pb.Entry{pb.Entry{Cmd: make([]byte, 1024)}})
-	if im.rl.GetInMemLogSize() == 0 {
+	if im.rl.Get() == 0 {
 		t.Errorf("log size not updated")
 	}
 	im.restore(pb.Snapshot{})
-	if im.rl.GetInMemLogSize() != 0 {
+	if im.rl.Get() != 0 {
 		t.Errorf("log size not cleared")
 	}
 }
@@ -557,15 +557,15 @@ func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
 func TestRateLimitIsUpdatedAfterMergingEntries(t *testing.T) {
 	im := newInMemory(0, server.NewRateLimiter(10000))
 	im.merge([]pb.Entry{pb.Entry{Index: 1, Cmd: make([]byte, 1024)}})
-	logsz := im.rl.GetInMemLogSize()
+	logsz := im.rl.Get()
 	ents := []pb.Entry{
 		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
 		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
 	}
 	addSz := getEntrySliceSize(ents)
 	im.merge(ents)
-	if logsz+addSz != im.rl.GetInMemLogSize() {
-		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), logsz+addSz)
+	if logsz+addSz != im.rl.Get() {
+		t.Errorf("log size %d, want %d", im.rl.Get(), logsz+addSz)
 	}
 }
 
@@ -577,12 +577,12 @@ func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 	}
 	im := newInMemory(2, server.NewRateLimiter(10000))
 	im.merge(ents)
-	if im.rl.GetInMemLogSize() != getEntrySliceSize(ents) {
+	if im.rl.Get() != getEntrySliceSize(ents) {
 		t.Errorf("unexpected log size")
 	}
 	for idx := uint64(2); idx < uint64(5); idx++ {
 		im.appliedLogTo(idx)
-		if im.rl.GetInMemLogSize() != getEntrySliceSize(im.entries) {
+		if im.rl.Get() != getEntrySliceSize(im.entries) {
 			t.Errorf("log size not updated")
 		}
 	}
@@ -601,8 +601,8 @@ func TestRateLimitCanBeResetWhenMergingEntries(t *testing.T) {
 	}
 	im.merge(ents)
 	expSz := getEntrySliceSize(ents)
-	if im.rl.GetInMemLogSize() != expSz {
-		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), expSz)
+	if im.rl.Get() != expSz {
+		t.Errorf("log size %d, want %d", im.rl.Get(), expSz)
 	}
 }
 
@@ -620,7 +620,7 @@ func TestRateLimitCanBeUpdatedAfterCutAndMergingEntries(t *testing.T) {
 	}
 	im.merge(ents)
 	expSz := getEntrySliceSize(im.entries)
-	if im.rl.GetInMemLogSize() != expSz {
-		t.Errorf("log size %d, want %d", im.rl.GetInMemLogSize(), expSz)
+	if im.rl.Get() != expSz {
+		t.Errorf("log size %d, want %d", im.rl.Get(), expSz)
 	}
 }

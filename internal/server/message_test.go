@@ -21,14 +21,14 @@ import (
 )
 
 func TestMessageQueueCanBeCreated(t *testing.T) {
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	if len(q.left) != 8 || len(q.right) != 8 {
 		t.Errorf("unexpected size")
 	}
 }
 
 func TestMessageCanBeAddedAndGet(t *testing.T) {
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 8; i++ {
 		added, stopped := q.Add(raftpb.Message{})
 		if !added || stopped {
@@ -71,12 +71,12 @@ func TestNonSnapshotMsgByCallingAddSnapshotWillPanic(t *testing.T) {
 		}
 		t.Errorf("didn't panic")
 	}()
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	q.AddSnapshot(raftpb.Message{})
 }
 
 func TestSnapshotCanAlwaysBeAdded(t *testing.T) {
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 1024; i++ {
 		if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 			t.Errorf("failed to add snapshot")
@@ -85,7 +85,7 @@ func TestSnapshotCanAlwaysBeAdded(t *testing.T) {
 }
 
 func TestAddedSnapshotWillBeReturned(t *testing.T) {
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("failed to add snapshot")
 	}
@@ -126,7 +126,7 @@ func TestAddedSnapshotWillBeReturned(t *testing.T) {
 }
 
 func TestMessageQueueCanBeStopped(t *testing.T) {
-	q := NewMessageQueue(8, false, 0)
+	q := NewMessageQueue(8, false, 0, 0)
 	q.Close()
 	for i := 0; i < 4; i++ {
 		added, stopped := q.Add(raftpb.Message{})
@@ -136,5 +136,67 @@ func TestMessageQueueCanBeStopped(t *testing.T) {
 	}
 	if q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("unexpectedly added snapshot")
+	}
+}
+
+func TestRateLimiterCanBeEnabledInMessageQueue(t *testing.T) {
+	q := NewMessageQueue(8, false, 0, 0)
+	if q.rl.Enabled() {
+		t.Errorf("rl unexpectedly enabled")
+	}
+	q = NewMessageQueue(8, false, 0, 1024)
+	if !q.rl.Enabled() {
+		t.Errorf("rl not enabled")
+	}
+}
+
+func TestAddMessageIsRateLimited(t *testing.T) {
+	q := NewMessageQueue(10000, false, 0, 1024)
+	for i := 0; i < 10000; i++ {
+		e := raftpb.Entry{Index: uint64(i + 1)}
+		m := raftpb.Message{
+			Type:    raftpb.Replicate,
+			Entries: []raftpb.Entry{e},
+		}
+		if q.rl.RateLimited() {
+			added, stopped := q.Add(m)
+			if !added && !stopped {
+				return
+			}
+		} else {
+			sz := q.rl.Get()
+			added, stopped := q.Add(m)
+			if added {
+				if q.rl.Get() != sz+uint64(e.SizeUpperLimit()) {
+					t.Errorf("failed to update rate limit")
+				}
+			}
+			if !added || stopped {
+				t.Errorf("failed to add")
+			}
+		}
+	}
+	t.Fatalf("failed to observe any rate limited message")
+}
+
+func TestGetWillResetTheRateLimiterSize(t *testing.T) {
+	q := NewMessageQueue(10000, false, 0, 1024)
+	for i := 0; i < 8; i++ {
+		e := raftpb.Entry{Index: uint64(i + 1)}
+		m := raftpb.Message{
+			Type:    raftpb.Replicate,
+			Entries: []raftpb.Entry{e},
+		}
+		added, stopped := q.Add(m)
+		if !added && stopped {
+			t.Fatalf("failed to add message")
+		}
+	}
+	if q.rl.Get() == 0 {
+		t.Errorf("rate limiter size is 0")
+	}
+	q.Get()
+	if q.rl.Get() != 0 {
+		t.Fatalf("failed to reset the rate limiter")
 	}
 }

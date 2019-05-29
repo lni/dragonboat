@@ -1345,3 +1345,101 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 		t.Fatalf("failed snapshot not reported")
 	}
 }
+
+func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
+	tt, nodes, _, req, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, serverAddress)
+	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
+	msg := raftpb.Message{
+		ClusterId: 100,
+		To:        2,
+		Type:      raftpb.Replicate,
+		Entries:   []raftpb.Entry{e},
+	}
+	req.SetBlocked(true)
+	rled := func(exp bool) {
+		_, key, err := nodes.Resolve(100, 2)
+		if err != nil {
+			t.Fatalf("failed to resolve the addr")
+		}
+		sq, ok := tt.mu.queues[key]
+		if !ok {
+			t.Fatalf("failed to get sq")
+		}
+		if sq.rateLimited() != exp {
+			t.Errorf("rate limited unexpected, exp %t", exp)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		sent := tt.ASyncSend(msg)
+		if !sent {
+			rled(true)
+			break
+		}
+		if i == 99 {
+			t.Errorf("no message rejected")
+		}
+	}
+	req.SetBlocked(false)
+	for i := 0; i < 1000; i++ {
+		sent := tt.ASyncSend(msg)
+		if sent {
+			rled(false)
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+		if i == 999 {
+			t.Errorf("no message buffered")
+		}
+	}
+}
+
+func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
+	tt, nodes, _, _, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, serverAddress)
+	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
+	msg := raftpb.Message{
+		ClusterId: 100,
+		To:        2,
+		Type:      raftpb.Replicate,
+		Entries:   []raftpb.Entry{e},
+	}
+	_, key, err := nodes.Resolve(100, 2)
+	if err != nil {
+		t.Fatalf("failed to resolve the addr")
+	}
+	if !tt.ASyncSend(msg) {
+		t.Errorf("first send failed")
+	}
+	sq, ok := tt.mu.queues[key]
+	if !ok {
+		t.Fatalf("failed to get sq")
+	}
+	for len(sq.ch) != 0 {
+	}
+	for i := 0; i < 20; i++ {
+		sent := tt.ASyncSend(msg)
+		if !sent {
+			t.Errorf("failed to send2")
+		}
+	}
+	for len(sq.ch) != 0 {
+	}
+	for i := 0; i < 1000; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if sq.rl.Get() == 0 {
+			return
+		}
+		if i == 999 {
+			t.Errorf("rate limiter failed to report correct size")
+		}
+	}
+}

@@ -88,9 +88,10 @@ type soft struct {
 	// UnknownRegionName defines the region name to use when the region
 	// is unknown.
 	UnknownRegionName string
-	// RaftNodeReceiveQueueLength is the length of the receive queue on each
-	// raftNode.
-	RaftNodeReceiveQueueLength uint64
+	// ReceiveQueueLength is the length of the receive queue on each node.
+	ReceiveQueueLength uint64
+	// ReceiveQueueSize is the size of the receive queue on each node.
+	ReceiveQueueSize uint64
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
 	// before pushing the snapshot results to raftNode.
 	SnapshotStatusPushDelayMS uint64
@@ -144,6 +145,8 @@ type soft struct {
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
 	SendQueueLength uint64
+	// SendQueueSize is the maximum size of the send queue.
+	SendQueueSize uint64
 	// MaxDrummerServerMsgSize is the max size of messages sent/received on
 	// the Drummer side.
 	MaxDrummerServerMsgSize uint64
@@ -231,7 +234,6 @@ func getDefaultSoftSettings() soft {
 		IncomingReadIndexQueueLength:   4096,
 		IncomingProposalQueueLength:    2048,
 		UnknownRegionName:              "UNKNOWN",
-		RaftNodeReceiveQueueLength:     1024,
 		SnapshotStatusPushDelayMS:      1000,
 		NodeTaskChanLength:             1024,
 		NodeHostSyncPoolSize:           8,
@@ -239,7 +241,10 @@ func getDefaultSoftSettings() soft {
 		NodeReloadMillisecond:          200,
 		StepEngineTaskWorkerCount:      16,
 		StepEngineSnapshotWorkerCount:  64,
-		SendQueueLength:                1024 * 8,
+		SendQueueLength:                1024 * 2,
+		SendQueueSize:                  256 * 1024 * 1024,
+		ReceiveQueueLength:             1024,
+		ReceiveQueueSize:               256 * 1024 * 1024,
 		MaxDrummerServerMsgSize:        256 * 1024 * 1024,
 		MaxDrummerClientMsgSize:        256 * 1024 * 1024,
 		StreamConnections:              4,

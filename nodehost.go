@@ -112,7 +112,8 @@ const (
 )
 
 var (
-	receiveQueueSize  uint64 = settings.Soft.RaftNodeReceiveQueueLength
+	receiveQueueLen   uint64 = settings.Soft.ReceiveQueueLength
+	receiveQueueSize  uint64 = settings.Soft.ReceiveQueueSize
 	delaySampleRatio  uint64 = settings.Soft.LatencySampleRatio
 	rsPoolSize        uint64 = settings.Soft.NodeHostSyncPoolSize
 	streamConnections uint64 = settings.Soft.StreamConnections
@@ -1222,7 +1223,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	}
 	plog.Infof("bootstrap for %s returned address list %v",
 		logutil.DescribeNode(clusterID, nodeID), addrs)
-	queue := server.NewMessageQueue(receiveQueueSize, false, lazyFreeCycle)
+	queue := server.NewMessageQueue(receiveQueueLen,
+		false, lazyFreeCycle, receiveQueueSize)
 	for k, v := range addrs {
 		if k != nodeID {
 			plog.Infof("AddNode called with node %s, addr %s",

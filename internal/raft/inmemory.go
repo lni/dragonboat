@@ -140,7 +140,7 @@ func (im *inMemory) appliedLogTo(index uint64) {
 	im.resizeEntrySlice()
 	im.checkMarkerIndex()
 	if im.rateLimited() {
-		im.rl.DecreaseInMemLogSize(getEntrySliceSize(applied))
+		im.rl.Decrease(getEntrySliceSize(applied))
 	}
 }
 
@@ -167,7 +167,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		checkEntriesToAppend(im.entries, ents)
 		im.entries = append(im.entries, ents...)
 		if im.rateLimited() {
-			im.rl.IncreaseInMemLogSize(getEntrySliceSize(ents))
+			im.rl.Increase(getEntrySliceSize(ents))
 		}
 	} else if firstNewIndex <= im.markerIndex {
 		im.markerIndex = firstNewIndex
@@ -175,7 +175,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.entries = newEntrySlice(ents)
 		im.savedTo = firstNewIndex - 1
 		if im.rateLimited() {
-			im.rl.SetInMemLogSize(getEntrySliceSize(ents))
+			im.rl.Set(getEntrySliceSize(ents))
 		}
 	} else {
 		existing := im.getEntries(im.markerIndex, firstNewIndex)
@@ -186,7 +186,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.savedTo = min(im.savedTo, firstNewIndex-1)
 		if im.rateLimited() {
 			sz := getEntrySliceSize(ents) + getEntrySliceSize(existing)
-			im.rl.SetInMemLogSize(sz)
+			im.rl.Set(sz)
 		}
 	}
 	im.checkMarkerIndex()
@@ -198,7 +198,7 @@ func (im *inMemory) restore(ss pb.Snapshot) {
 	im.entries = nil
 	im.savedTo = ss.Index
 	if im.rateLimited() {
-		im.rl.SetInMemLogSize(0)
+		im.rl.Set(0)
 	}
 }
 

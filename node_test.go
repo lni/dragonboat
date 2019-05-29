@@ -105,7 +105,7 @@ func newTestMessageRouter(clusterID uint64,
 	nodeIDList []uint64) *testMessageRouter {
 	chMap := make(map[uint64]*server.MessageQueue)
 	for _, nodeID := range nodeIDList {
-		ch := server.NewMessageQueue(1000, false, 0)
+		ch := server.NewMessageQueue(1000, false, 0, 1024*1024*256)
 		chMap[nodeID] = ch
 	}
 	rand.Seed(time.Now().UnixNano())
