@@ -474,10 +474,11 @@ func NodeHostSyncRead(oid uint64, timeout uint64, clusterID uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	r, err := nh.SyncRead(ctx, clusterID, query)
+	v, err := nh.SyncRead(ctx, clusterID, query)
 	if err != nil {
 		return getErrorCode(err), 0
 	}
+	r := v.([]byte)
 	if len(r) > int(resultLen) {
 		return int(C.ErrResultBufferTooSmall), 0
 	}
