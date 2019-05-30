@@ -478,13 +478,14 @@ func NodeHostSyncRead(oid uint64, timeout uint64, clusterID uint64,
 	if err != nil {
 		return getErrorCode(err), 0
 	}
-	if len(r) > int(resultLen) {
+	rv := r.([]byte)
+	if len(rv) > int(resultLen) {
 		return int(C.ErrResultBufferTooSmall), 0
 	}
-	if copy(result, r) != len(r) {
+	if copy(result, rv) != len(rv) {
 		panic("failed to copy buffer")
 	}
-	return getErrorCode(err), len(r)
+	return getErrorCode(err), len(rv)
 }
 
 // NodeHostReadIndex starts the ReadIndex protocol to get ready for a
