@@ -331,22 +331,26 @@ func (rc *node) requestLeaderTransfer(nodeID uint64) {
 	rc.node.RequestLeaderTransfer(nodeID)
 }
 
-func (rc *node) requestSnapshot(timeout time.Duration) (*SnapshotState, error) {
-	plog.Infof("request snapshot called on %s", rc.describe())
-	return rc.pendingSnapshot.request(rsm.UserRequestedSnapshot, "", timeout)
-}
-
-func (rc *node) exportSnapshot(path string,
+func (rc *node) requestSnapshot(opt SnapshotOption,
 	timeout time.Duration) (*SnapshotState, error) {
-	plog.Infof("export snapshot called on %s", rc.describe())
-	exist, err := fileutil.Exist(path)
-	if err != nil {
-		return nil, err
+	st := rsm.UserRequestedSnapshot
+	if opt.Exported {
+		plog.Infof("export snapshot called on %s", rc.describe())
+		st = rsm.ExportedSnapshot
+		exist, err := fileutil.Exist(opt.ExportPath)
+		if err != nil {
+			return nil, err
+		}
+		if !exist {
+			return nil, ErrDirNotExist
+		}
+	} else {
+		if len(opt.ExportPath) > 0 {
+			plog.Warningf("opt.ExportPath set when not exporting a snapshot")
+			opt.ExportPath = ""
+		}
 	}
-	if !exist {
-		return nil, ErrDirNotExist
-	}
-	return rc.pendingSnapshot.request(rsm.ExportedSnapshot, path, timeout)
+	return rc.pendingSnapshot.request(st, opt.ExportPath, timeout)
 }
 
 func (rc *node) reportIgnoredSnapshotRequest(key uint64) {

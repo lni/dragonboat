@@ -1989,7 +1989,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.RequestSnapshot(2, 3*time.Second)
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -2000,7 +2000,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		}
 		index = v.GetIndex()
 		plog.Infof("going to request snapshot again")
-		sr, err = nh.RequestSnapshot(2, 3*time.Second)
+		sr, err = nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
@@ -2055,7 +2055,7 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make proposal %v", err)
 	}
-	sr, err := nh.RequestSnapshot(2, 200*time.Millisecond)
+	sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 200*time.Millisecond)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -2122,7 +2122,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.RequestSnapshot(2, 3*time.Second)
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -2247,7 +2247,11 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.ExportSnapshot(2, sspath, 3*time.Second)
+		opt := SnapshotOption{
+			Exported:   true,
+			ExportPath: sspath,
+		}
+		sr, err := nh.RequestSnapshot(2, opt, 3*time.Second)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -2294,7 +2298,11 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		os.RemoveAll(sspath)
 		os.MkdirAll(sspath, 0755)
 		defer os.RemoveAll(sspath)
-		sr, err := nh.ExportSnapshot(1, sspath, 3*time.Second)
+		opt := SnapshotOption{
+			Exported:   true,
+			ExportPath: sspath,
+		}
+		sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
 		if err != nil {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
@@ -2415,7 +2423,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 	os.RemoveAll(sspath)
 	os.MkdirAll(sspath, 0755)
 	defer os.RemoveAll(sspath)
-	sr, err := nh1.ExportSnapshot(1, sspath, 3*time.Second)
+	opt := SnapshotOption{
+		Exported:   true,
+		ExportPath: sspath,
+	}
+	sr, err := nh1.RequestSnapshot(1, opt, 3*time.Second)
 	if err != nil {
 		t.Fatalf("failed to request snapshot %v", err)
 	}
