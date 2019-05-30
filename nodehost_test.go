@@ -2158,7 +2158,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if !fi.IsDir() {
 				continue
 			}
-			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+			if server.SnapshotDirNameRe.Match([]byte(fi.Name())) {
 				sscount++
 			}
 		}
@@ -2199,7 +2199,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if !fi.IsDir() {
 				continue
 			}
-			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+			if server.SnapshotDirNameRe.Match([]byte(fi.Name())) {
 				t.Fatalf("failed to delete the snapshot dir %s", fi.Name())
 			}
 		}

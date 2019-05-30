@@ -17,6 +17,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,15 +104,6 @@ func (sc *Context) Stop() {
 // GetRandomSource returns the random source associated with the Nodehost.
 func (sc *Context) GetRandomSource() random.Source {
 	return sc.randomSource
-}
-
-// RemoveSnapshotDir removes the snapshot directory belong to the specified
-// node.
-func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
-	nodeID uint64) error {
-	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	s := &raftpb.RaftDataStatus{}
-	return fileutil.MarkDirAsDeleted(dir, s)
 }
 
 // GetSnapshotDir returns the snapshot directory name.
@@ -233,6 +225,52 @@ func (sc *Context) LockNodeHostDir() error {
 		}
 	}
 	return nil
+}
+
+// RemoveSnapshotDir marks the node snapshot directory as removed and have all
+// existing snapshots deleted.
+func (sc *Context) RemoveSnapshotDir(did uint64,
+	clusterID uint64, nodeID uint64) error {
+	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	exist, err := fileutil.Exist(dir)
+	if err != nil {
+		return err
+	}
+	if exist {
+		if err := sc.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
+			return err
+		}
+		if err := removeSavedSnapshots(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sc *Context) markSnapshotDirRemoved(did uint64, clusterID uint64,
+	nodeID uint64) error {
+	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	s := &raftpb.RaftDataStatus{}
+	return fileutil.MarkDirAsDeleted(dir, s)
+}
+
+func removeSavedSnapshots(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			continue
+		}
+		if SnapshotDirNameRe.Match([]byte(fi.Name())) {
+			ssdir := filepath.Join(dir, fi.Name())
+			if err := os.RemoveAll(ssdir); err != nil {
+				return err
+			}
+		}
+	}
+	return fileutil.SyncDir(dir)
 }
 
 func (sc *Context) checkNodeHostDir(did uint64,
