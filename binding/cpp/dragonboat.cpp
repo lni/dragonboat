@@ -328,7 +328,7 @@ Status NodeHost::StartCluster(const Peers& peers,
 }
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  CPPStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  StateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
   Config config) noexcept
 {
   ::RaftConfig cfg;
