@@ -79,7 +79,7 @@ var (
 var (
 	plog                = logger.GetLogger("transport")
 	streamConnections   = settings.Soft.StreamConnections
-	sendBufSize         = settings.Soft.SendQueueLength
+	sendQueueLen        = settings.Soft.SendQueueLength
 	errChunkSendSkipped = errors.New("chunk is skipped")
 	errBatchSendSkipped = errors.New("raft request batch is skipped")
 	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
@@ -160,13 +160,44 @@ func (d *DeploymentID) getDeploymentID() uint64 {
 	return atomic.LoadUint64(&d.deploymentID)
 }
 
+type sendQueue struct {
+	ch chan pb.Message
+	rl *server.RateLimiter
+}
+
+func (sq *sendQueue) rateLimited() bool {
+	return sq.rl.RateLimited()
+}
+
+func getEntrySliceSize(ents []pb.Entry) uint64 {
+	sz := uint64(0)
+	for _, e := range ents {
+		sz += uint64(e.SizeUpperLimit())
+	}
+	return sz
+}
+
+func (sq *sendQueue) increase(msg pb.Message) {
+	if msg.Type != pb.Replicate {
+		return
+	}
+	sq.rl.Increase(getEntrySliceSize(msg.Entries))
+}
+
+func (sq *sendQueue) decrease(msg pb.Message) {
+	if msg.Type != pb.Replicate {
+		return
+	}
+	sq.rl.Decrease(getEntrySliceSize(msg.Entries))
+}
+
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
 	DeploymentID
 	mu struct {
 		sync.Mutex
 		// each (cluster id, node id) pair has its own queue and breaker
-		queues   map[string]chan pb.Message
+		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
 	lanes               uint32
@@ -215,7 +246,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		return nil, err
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
-	t.mu.queues = make(map[string]chan pb.Message)
+	t.mu.queues = make(map[string]sendQueue)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
 	return t, nil
 }
@@ -359,10 +390,13 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 	}
 	// get the channel, create it in case it is not in the queue map
 	t.mu.Lock()
-	ch, ok := t.mu.queues[key]
+	sq, ok := t.mu.queues[key]
 	if !ok {
-		ch = make(chan pb.Message, sendBufSize)
-		t.mu.queues[key] = ch
+		sq = sendQueue{
+			ch: make(chan pb.Message, sendQueueLen),
+			rl: server.NewRateLimiter(t.nhConfig.MaxSendQueueSize),
+		}
+		t.mu.queues[key] = sq
 	}
 	t.mu.Unlock()
 	if !ok {
@@ -372,13 +406,17 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 			t.mu.Unlock()
 		}
 		t.stopper.RunWorker(func() {
-			t.connectAndProcess(clusterID, toNodeID, addr, ch, from)
+			t.connectAndProcess(clusterID, toNodeID, addr, sq, from)
 			shutdownQueue()
 			t.sendUnreachableNotification(addr)
 		})
 	}
+	if sq.rateLimited() {
+		return false
+	}
 	select {
-	case ch <- req:
+	case sq.ch <- req:
+		sq.increase(req)
 		return true
 	default:
 		return false
@@ -386,7 +424,7 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 }
 
 func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
-	remoteHost string, ch <-chan pb.Message, from uint64) {
+	remoteHost string, sq sendQueue, from uint64) {
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -406,7 +444,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 				logutil.DescribeNode(clusterID, from),
 				logutil.DescribeNode(clusterID, toNodeID), remoteHost)
 		}
-		return t.processQueue(clusterID, toNodeID, ch, conn)
+		return t.processQueue(clusterID, toNodeID, sq, conn)
 	}(); err != nil {
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
 			t.sourceAddress, remoteHost, err.Error())
@@ -415,7 +453,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 }
 
 func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
-	ch <-chan pb.Message, conn raftio.IConnection) error {
+	sq sendQueue, conn raftio.IConnection) error {
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
 	sz := uint64(0)
@@ -442,7 +480,8 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 			return nil
 		case <-idleTimer.C:
 			return nil
-		case req := <-ch:
+		case req := <-sq.ch:
+			sq.decrease(req)
 			sz += uint64(req.SizeUpperLimit())
 			requests = append(requests, req)
 			// batch below allows multiple requests to be sent in a single message,
@@ -451,7 +490,8 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 			// already batched into much smaller number of messages.
 			for done := false; !done && sz < maxMsgSize; {
 				select {
-				case req = <-ch:
+				case req = <-sq.ch:
+					sq.decrease(req)
 					sz += uint64(req.Size())
 					requests = append(requests, req)
 				default:

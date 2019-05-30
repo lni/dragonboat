@@ -89,7 +89,6 @@ import (
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
@@ -112,7 +111,7 @@ const (
 )
 
 var (
-	receiveQueueSize  uint64 = settings.Soft.RaftNodeReceiveQueueLength
+	receiveQueueLen   uint64 = settings.Soft.ReceiveQueueLength
 	delaySampleRatio  uint64 = settings.Soft.LatencySampleRatio
 	rsPoolSize        uint64 = settings.Soft.NodeHostSyncPoolSize
 	streamConnections uint64 = settings.Soft.StreamConnections
@@ -952,22 +951,8 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
 		plog.Panicf("failed to remove data from Raft LogDB %v", err)
 	}
-	did := nh.deploymentID
 	// mark the snapshot dir as removed
-	dir := nh.serverCtx.GetSnapshotDir(did, clusterID, nodeID)
-	exist, err := fileutil.Exist(dir)
-	if err != nil {
-		plog.Panicf("failed to check snapshot dir %v", err)
-	}
-	if exist {
-		if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
-			plog.Panicf("failed to remove snapshot dir %v", err)
-		}
-		if err := removeSavedSnapshots(dir); err != nil {
-			plog.Panicf("failed to remove snapshot dir %v", err)
-		}
-	}
-	return nil
+	return nh.serverCtx.RemoveSnapshotDir(nh.deploymentID, clusterID, nodeID)
 }
 
 // GetNodeUser returns an INodeUser instance ready to be used to directly make
@@ -1157,7 +1142,7 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	join bool, config config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
-	// bootstrap the cluster by recording a bootstrap info rec into the LogDB
+	// bootstrap the cluster by recording a bootstrap info rec into the Log DB
 	if err == raftio.ErrNoBootstrapInfo {
 		var members map[uint64]string
 		if !join {
@@ -1171,8 +1156,7 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 		for nid, addr := range nodes {
 			bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
 		}
-		err = nh.logdb.SaveBootstrapInfo(config.ClusterID,
-			config.NodeID, bootstrap)
+		err = nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, bootstrap)
 		plog.Infof("node %s not bootstrapped, %v",
 			logutil.DescribeNode(config.ClusterID, config.NodeID), members)
 		return members, !join, err
@@ -1185,7 +1169,7 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 			binfo.Addresses, binfo.Join, nodes, join)
 		return nil, false, ErrInvalidClusterSettings
 	}
-	plog.Infof("bootstrap for %s returns %v",
+	plog.Infof("bootstrap for %s going to return %v",
 		logutil.DescribeNode(config.ClusterID, config.NodeID), binfo.Addresses)
 	return binfo.Addresses, !binfo.Join, nil
 }
@@ -1222,7 +1206,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	}
 	plog.Infof("bootstrap for %s returned address list %v",
 		logutil.DescribeNode(clusterID, nodeID), addrs)
-	queue := server.NewMessageQueue(receiveQueueSize, false, lazyFreeCycle)
+	queue := server.NewMessageQueue(receiveQueueLen,
+		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
 	for k, v := range addrs {
 		if k != nodeID {
 			plog.Infof("AddNode called with node %s, addr %s",

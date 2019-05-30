@@ -19,6 +19,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/raftio"
@@ -34,8 +35,10 @@ var (
 )
 
 type noopRequest struct {
-	mu   sync.Mutex
-	fail bool
+	mu      sync.Mutex
+	fail    bool
+	blocked bool
+	quota   uint64
 }
 
 func (r *noopRequest) SetToFail(v bool) {
@@ -48,6 +51,18 @@ func (r *noopRequest) Fail() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.fail
+}
+
+func (r *noopRequest) SetBlocked(v bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.blocked = v
+}
+
+func (r *noopRequest) Blocked() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.blocked
 }
 
 type noopConnectRequest struct {
@@ -80,6 +95,9 @@ func (c *NOOPConnection) Close() {
 func (c *NOOPConnection) SendMessageBatch(batch raftpb.MessageBatch) error {
 	if c.req.Fail() {
 		return ErrRequestedToFail
+	}
+	for c.req.Blocked() {
+		time.Sleep(50 * time.Millisecond)
 	}
 	return nil
 }

@@ -105,7 +105,7 @@ func newTestMessageRouter(clusterID uint64,
 	nodeIDList []uint64) *testMessageRouter {
 	chMap := make(map[uint64]*server.MessageQueue)
 	for _, nodeID := range nodeIDList {
-		ch := server.NewMessageQueue(1000, false, 0)
+		ch := server.NewMessageQueue(1000, false, 0, 1024*1024*256)
 		chMap[nodeID] = ch
 	}
 	rand.Seed(time.Now().UnixNano())
@@ -1390,5 +1390,35 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 	timeout := v.Nanoseconds() / 1000000
 	if timeout <= 4500 || timeout > 5000 {
 		t.Errorf("v %d, want [4500,5000]", timeout)
+	}
+}
+
+func TestPayloadTooBig(t *testing.T) {
+	tests := []struct {
+		maxInMemLogSize uint64
+		payloadSize     uint64
+		tooBig          bool
+	}{
+		{0, 1, false},
+		{0, 1024 * 1024 * 1024, false},
+		{settings.EntryNonCmdFieldsSize + 1, 1, false},
+		{settings.EntryNonCmdFieldsSize + 1, 2, true},
+		{settings.EntryNonCmdFieldsSize * 2, settings.EntryNonCmdFieldsSize, false},
+		{settings.EntryNonCmdFieldsSize * 2, settings.EntryNonCmdFieldsSize + 1, true},
+	}
+	for idx, tt := range tests {
+		cfg := config.Config{
+			NodeID:          1,
+			HeartbeatRTT:    1,
+			ElectionRTT:     10,
+			MaxInMemLogSize: tt.maxInMemLogSize,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("invalid cfg %v", err)
+		}
+		n := node{config: cfg}
+		if n.payloadTooBig(int(tt.payloadSize)) != tt.tooBig {
+			t.Errorf("%d, unexpected too big result %t", idx, tt.tooBig)
+		}
 	}
 }

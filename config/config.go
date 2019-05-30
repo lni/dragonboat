@@ -121,27 +121,26 @@ type Config struct {
 	// When MaxInMemLogSize is 0, the limit is set to math.MaxUint64 which
 	// basically means no limit. When MaxInMemLogSize is set and the limit is
 	// reached, error will be returned when clients try to make any new proposals.
-	// MaxInMemLogSize should be left as 0 or be set to be greater than
-	// 3 * MaxProposalPayloadSize, MaxProposalPayloadSize is 32Mbytes by default.
 	MaxInMemLogSize uint64
 }
 
 // Validate validates the Config instance and return an error when any member
 // field is considered as invalid.
 func (c *Config) Validate() error {
-	if c.NodeID <= 0 {
+	if c.NodeID == 0 {
 		return errors.New("invalid NodeID, it must be >= 1")
 	}
-	if c.HeartbeatRTT <= 0 {
+	if c.HeartbeatRTT == 0 {
 		return errors.New("HeartbeatRTT must be > 0")
 	}
-	if c.ElectionRTT <= 0 {
+	if c.ElectionRTT == 0 {
 		return errors.New("ElectionRTT must be > 0")
 	}
 	if c.ElectionRTT <= 2*c.HeartbeatRTT {
 		return errors.New("invalid election rtt")
 	}
-	if c.MaxInMemLogSize > 0 && c.MaxInMemLogSize < settings.Soft.ExpectedMaxInMemLogSize {
+	if c.MaxInMemLogSize > 0 &&
+		c.MaxInMemLogSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxInMemLogSize is too small")
 	}
 	return nil
@@ -209,6 +208,16 @@ type NodeHostConfig struct {
 	// KeyFile is the path of the node key file. This field is ignored when
 	// MutualTLS is false.
 	KeyFile string
+	// MaxSendQueueSize is the maximum size in bytes of each send queue.
+	// Once the maximum size is reached, further replication messages will be
+	// dropped to restrict memory usage. When set to 0, it means the send queue
+	// size is unlimited.
+	MaxSendQueueSize uint64
+	// MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
+	// Once the maximum size is reached, further replication messages will be
+	// dropped to restrict memory usage. When set to 0, it means the queue size
+	// is unlimited.
+	MaxReceiveQueueSize uint64
 	// LogDBFactory is the factory function used for creating the Log DB instance
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
@@ -243,7 +252,14 @@ func (c *NodeHostConfig) Validate() error {
 			return errors.New("key file not specified")
 		}
 	}
-
+	if c.MaxSendQueueSize > 0 &&
+		c.MaxSendQueueSize < settings.EntryNonCmdFieldsSize+1 {
+		return errors.New("MaxSendQueueSize value is too small")
+	}
+	if c.MaxReceiveQueueSize > 0 &&
+		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
+		return errors.New("MaxReceiveSize value is too small")
+	}
 	return nil
 }
 

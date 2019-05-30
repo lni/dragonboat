@@ -39,20 +39,20 @@ func TestRateLimiterCanBeEnabled(t *testing.T) {
 
 func TestInMemLogSizeIsAccessible(t *testing.T) {
 	r := NewRateLimiter(100)
-	if r.GetInMemLogSize() != 0 {
-		t.Errorf("sz %d, want 0", r.GetInMemLogSize())
+	if r.Get() != 0 {
+		t.Errorf("sz %d, want 0", r.Get())
 	}
-	r.IncreaseInMemLogSize(100)
-	if r.GetInMemLogSize() != 100 {
-		t.Errorf("sz %d, want 100", r.GetInMemLogSize())
+	r.Increase(100)
+	if r.Get() != 100 {
+		t.Errorf("sz %d, want 100", r.Get())
 	}
-	r.DecreaseInMemLogSize(10)
-	if r.GetInMemLogSize() != 90 {
-		t.Errorf("sz %d, want 90", r.GetInMemLogSize())
+	r.Decrease(10)
+	if r.Get() != 90 {
+		t.Errorf("sz %d, want 90", r.Get())
 	}
-	r.SetInMemLogSize(243)
-	if r.GetInMemLogSize() != 243 {
-		t.Errorf("sz %d, want 243", r.GetInMemLogSize())
+	r.Set(243)
+	if r.Get() != 243 {
+		t.Errorf("sz %d, want 243", r.Get())
 	}
 }
 
@@ -74,7 +74,7 @@ func TestFollowerStateCanBeSet(t *testing.T) {
 	r.HeartbeatTick()
 	r.SetFollowerState(101, 4)
 	r.SetFollowerState(102, 200)
-	if len(r.followerInMemLogSizes) != 3 {
+	if len(r.followerSizes) != 3 {
 		t.Errorf("not all state recorded")
 	}
 	tests := []struct {
@@ -87,7 +87,7 @@ func TestFollowerStateCanBeSet(t *testing.T) {
 		{102, 200, 2},
 	}
 	for idx, tt := range tests {
-		rec, ok := r.followerInMemLogSizes[tt.nodeID]
+		rec, ok := r.followerSizes[tt.nodeID]
 		if !ok {
 			t.Errorf("%d, state not found", idx)
 		}
@@ -107,33 +107,33 @@ func TestGCRemoveOutOfDateFollowerState(t *testing.T) {
 	r.SetFollowerState(102, 2)
 	r.SetFollowerState(103, 3)
 	r.gc()
-	if len(r.followerInMemLogSizes) != 3 {
-		t.Errorf("count %d, want 3", len(r.followerInMemLogSizes))
+	if len(r.followerSizes) != 3 {
+		t.Errorf("count %d, want 3", len(r.followerSizes))
 	}
 	r.HeartbeatTick()
 	r.HeartbeatTick()
 	r.gc()
-	if len(r.followerInMemLogSizes) != 2 {
-		t.Errorf("count %d, want 2", len(r.followerInMemLogSizes))
+	if len(r.followerSizes) != 2 {
+		t.Errorf("count %d, want 2", len(r.followerSizes))
 	}
-	_, ok := r.followerInMemLogSizes[101]
+	_, ok := r.followerSizes[101]
 	if ok {
 		t.Errorf("old follower state not removed")
 	}
 	r.HeartbeatTick()
 	r.gc()
-	if len(r.followerInMemLogSizes) != 0 {
-		t.Errorf("count %d, want 0", len(r.followerInMemLogSizes))
+	if len(r.followerSizes) != 0 {
+		t.Errorf("count %d, want 0", len(r.followerSizes))
 	}
 }
 
 func TestRateLimited(t *testing.T) {
 	r := NewRateLimiter(100)
-	r.IncreaseInMemLogSize(100)
+	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
-	r.IncreaseInMemLogSize(1)
+	r.Increase(1)
 	if !r.RateLimited() {
 		t.Errorf("not rate limited")
 	}
@@ -141,7 +141,7 @@ func TestRateLimited(t *testing.T) {
 
 func TestRateLimitedWhenFollowerIsRateLimited(t *testing.T) {
 	r := NewRateLimiter(100)
-	r.IncreaseInMemLogSize(100)
+	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
@@ -154,7 +154,7 @@ func TestRateLimitedWhenFollowerIsRateLimited(t *testing.T) {
 
 func TestRateNotLimitedWhenOutOfDateFollowerStateIsLimited(t *testing.T) {
 	r := NewRateLimiter(100)
-	r.IncreaseInMemLogSize(100)
+	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
@@ -167,7 +167,7 @@ func TestRateNotLimitedWhenOutOfDateFollowerStateIsLimited(t *testing.T) {
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
-	if len(r.followerInMemLogSizes) != 0 {
+	if len(r.followerSizes) != 0 {
 		t.Errorf("out of date follower state not GCed")
 	}
 }
@@ -175,7 +175,7 @@ func TestRateNotLimitedWhenOutOfDateFollowerStateIsLimited(t *testing.T) {
 func TestNotEnabledRateLimitNeverLimitRates(t *testing.T) {
 	r := NewRateLimiter(0)
 	for i := 0; i < 10000; i++ {
-		r.IncreaseInMemLogSize(math.MaxUint64 / 2)
+		r.Increase(math.MaxUint64 / 2)
 		if r.RateLimited() {
 			t.Errorf("unexpectedly rate limited")
 		}

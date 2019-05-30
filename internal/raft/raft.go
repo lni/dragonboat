@@ -567,7 +567,7 @@ func (r *raft) sendRateLimitMessage() {
 	}
 	mv := uint64(0)
 	if r.rl.RateLimited() {
-		inmemSz := r.rl.GetInMemLogSize()
+		inmemSz := r.rl.Get()
 		notCommitedSz := getEntrySliceSize(r.log.getUncommittedEntries())
 		mv = max(inmemSz-notCommitedSz, 0)
 	}

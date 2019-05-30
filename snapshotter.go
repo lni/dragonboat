@@ -20,7 +20,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
@@ -38,11 +37,8 @@ const (
 var (
 	// ErrNoSnapshot is the error used to indicate that there is no snapshot
 	// available.
-	ErrNoSnapshot         = errors.New("no snapshot available")
-	errSnapshotOutOfDate  = errors.New("snapshot being generated is out of date")
-	snapshotDirNameRe     = regexp.MustCompile(`^snapshot-[0-9A-F]+$`)
-	genSnapshotDirNameRe  = regexp.MustCompile(`^snapshot-[0-9A-F]+-[0-9A-F]+\.generating$`)
-	recvSnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+-[0-9A-F]+\.receiving$`)
+	ErrNoSnapshot        = errors.New("no snapshot available")
+	errSnapshotOutOfDate = errors.New("snapshot being generated is out of date")
 )
 
 type snapshotter struct {
@@ -260,25 +256,6 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	return nil
 }
 
-func removeSavedSnapshots(dir string) error {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, fi := range files {
-		if !fi.IsDir() {
-			continue
-		}
-		if snapshotDirNameRe.Match([]byte(fi.Name())) {
-			ssdir := filepath.Join(dir, fi.Name())
-			if err := os.RemoveAll(ssdir); err != nil {
-				return err
-			}
-		}
-	}
-	return fileutil.SyncDir(dir)
-}
-
 func (s *snapshotter) ProcessOrphans() error {
 	files, err := ioutil.ReadDir(s.dir)
 	if err != nil {
@@ -374,12 +351,12 @@ func (s *snapshotter) saveToLogDB(snapshot pb.Snapshot) error {
 }
 
 func (s *snapshotter) dirNameMatch(dir string) bool {
-	return snapshotDirNameRe.Match([]byte(dir))
+	return server.SnapshotDirNameRe.Match([]byte(dir))
 }
 
 func (s *snapshotter) isZombieDir(dir string) bool {
-	return genSnapshotDirNameRe.Match([]byte(dir)) ||
-		recvSnapshotDirNameRe.Match([]byte(dir))
+	return server.GenSnapshotDirNameRe.Match([]byte(dir)) ||
+		server.RecvSnapshotDirNameRe.Match([]byte(dir))
 }
 
 func (s *snapshotter) isOrphanDir(dir string) bool {

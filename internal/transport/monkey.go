@@ -20,8 +20,8 @@ func SetPerConnBufferSize(sz uint64) {
 	perConnBufSize = sz
 }
 
-func SetSendBufferSize(sz uint64) {
-	sendBufSize = sz
+func SetSendQueueLength(l uint64) {
+	sendQueueLen = l
 }
 
 func SetPayloadBuffserSize(sz uint64) {

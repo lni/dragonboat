@@ -958,12 +958,10 @@ class InPlaceHelloWorldStateMachine : public dragonboat::StateMachine
     int update_count_;
 };
 
-CPPStateMachine *CreateDragonboatFactoryStateMachine(uint64_t clusterID,
+dragonboat::StateMachine *CreateDragonboatFactoryStateMachine(uint64_t clusterID,
   uint64_t nodeID)
 {
-  CPPStateMachine *cds = new CPPStateMachine; 
-  cds->sm = new InPlaceHelloWorldStateMachine(clusterID, nodeID);
-  return cds;
+  return new InPlaceHelloWorldStateMachine(clusterID, nodeID);
 }
 
 TEST_F(NodeHostTest, ClusterFromCppFactoryCanBeAddedAndRemoved)

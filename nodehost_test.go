@@ -1833,6 +1833,20 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 	singleConcurrentNodeHostTest(t, tf, 10, false)
 }
 
+func TestTooBigPayloadIsRejectedWhenRateLimited(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		bigPayload := make([]byte, 1024*1024)
+		session := nh.GetNoOPSession(1)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		_, err := nh.SyncPropose(ctx, session, bigPayload)
+		cancel()
+		if err != ErrPayloadTooBig {
+			t.Errorf("failed to return ErrPayloadTooBig")
+		}
+	}
+	rateLimitedNodeHostTest(t, tf)
+}
+
 func TestRateLimitCanBeTriggered(t *testing.T) {
 	limited := uint64(0)
 	stopper := syncutil.NewStopper()
@@ -2144,7 +2158,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if !fi.IsDir() {
 				continue
 			}
-			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+			if server.SnapshotDirNameRe.Match([]byte(fi.Name())) {
 				sscount++
 			}
 		}
@@ -2185,7 +2199,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if !fi.IsDir() {
 				continue
 			}
-			if snapshotDirNameRe.Match([]byte(fi.Name())) {
+			if server.SnapshotDirNameRe.Match([]byte(fi.Name())) {
 				t.Fatalf("failed to delete the snapshot dir %s", fi.Name())
 			}
 		}
