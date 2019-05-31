@@ -40,6 +40,9 @@ var (
 )
 
 var (
+	// ErrTestKnobReturn is the error returned when returned earlier due to test
+	// knob.
+	ErrTestKnobReturn = errors.New("returned earlier due to test knob")
 	// ErrSaveSnapshot indicates there is error when trying to save a snapshot
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
@@ -595,7 +598,7 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 		return err
 	}
 	if readyToReturnTestKnob(s.node.ShouldStop(), "snapshotter.Stream") {
-		return sm.ErrSnapshotStopped
+		return ErrTestKnobReturn
 	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
@@ -613,13 +616,13 @@ func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot
 		return nil, nil, err
 	}
 	if readyToReturnTestKnob(s.node.ShouldStop(), "s.sync") {
-		return nil, nil, sm.ErrSnapshotStopped
+		return nil, nil, ErrTestKnobReturn
 	}
 	if err := s.sync(); err != nil {
 		return nil, nil, err
 	}
 	if readyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
-		return nil, nil, sm.ErrSnapshotStopped
+		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
 }
@@ -634,7 +637,7 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 		return nil, nil, err
 	}
 	if readyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
-		return nil, nil, sm.ErrSnapshotStopped
+		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
 }

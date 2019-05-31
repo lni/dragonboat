@@ -562,7 +562,7 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 			ssenv.MustRemoveTempDir()
 			plog.Infof("%s aborted SaveSnapshot", rc.describe())
 			return 0
-		} else if isSoftSnapshotError(err) {
+		} else if isSoftSnapshotError(err) || err == rsm.ErrTestKnobReturn {
 			return 0
 		}
 		panic(err)
