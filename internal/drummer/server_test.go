@@ -29,7 +29,6 @@ import (
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/utils/compression/snappy"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/random"
 )
@@ -310,12 +309,6 @@ func TestReportAvailableNodeHostWithManyLargeInput(t *testing.T) {
 	drummerNodes, _ := createTestNodeLists(dl)
 	startTestNodes(drummerNodes, dl)
 	defer stopTestNodes(drummerNodes)
-	data, err := nhi.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	encoded := snappy.Encode(nil, data)
-	plog.Infof("size: %d, encoded size : %d", len(data), len(encoded))
 	s := drummerNodes[0].drummer.server
 	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

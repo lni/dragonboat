@@ -548,15 +548,14 @@ clean-binding:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=internal/raft internal/logdb internal/transport \
-	internal/cpp internal/rsm internal/settings internal/tests \
-	internal/tests/lcm internal/utils/lang internal/utils/random \
-	internal/utils/fileutil internal/utils/syncutil \
-	internal/utils/stringutil internal/utils/logutil internal/utils/netutil \
-	internal/utils/cache internal/utils/envutil internal/utils/compression \
-	internal/server internal/drummer internal/drummer/client \
-	plugin/leveldb plugin/pebble plugin/rocksdb \
-	raftpb tools binding logger raftio config statemachine client
+CHECKED_PKGS=internal/raft internal/logdb internal/transport internal/cpp   \
+	internal/rsm internal/settings internal/tests internal/tests/lcm          \
+	internal/utils/lang internal/utils/random internal/utils/fileutil         \
+	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil  \
+	internal/utils/netutil internal/utils/cache internal/utils/envutil        \
+	internal/server internal/drummer internal/drummer/client plugin/leveldb   \
+	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config    \
+	statemachine client
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
@@ -628,7 +627,7 @@ clean: clean-binding
 	test-config test-tests static-check clean plugin-kvtest logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \
-	slow-multiraft-ioerror-test-bin all-slow-monkey-tests \
+	slow-multiraft-ioerror-test-bin all-slow-monkey-tests golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps
