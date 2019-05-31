@@ -146,10 +146,7 @@ func (cr *clusterRepair) logUnableToRestoreCluster(mnh *multiNodeHost,
 // EntityFailed returns whether the timeline indicates that the entity has
 // failed.
 func EntityFailed(lastTick uint64, currentTick uint64) bool {
-	if currentTick-lastTick > nodeHostTTL {
-		return true
-	}
-	return false
+	return currentTick-lastTick > nodeHostTTL
 }
 
 func (n *node) failed(tick uint64) bool {

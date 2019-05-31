@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/config"
@@ -46,7 +46,7 @@ var (
 )
 
 func isGRPCTempError(err error) bool {
-	return grpc.Code(err) == codes.Unavailable
+	return status.Code(err) == codes.Unavailable
 }
 
 // DrummerClient is the client used to contact drummer servers.

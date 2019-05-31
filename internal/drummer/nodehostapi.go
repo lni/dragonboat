@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
@@ -174,5 +175,5 @@ func grpcError(err error) error {
 	} else {
 		code = codes.Unknown
 	}
-	return grpc.Errorf(code, err.Error())
+	return status.Errorf(code, err.Error())
 }

@@ -229,7 +229,7 @@ func TestMultiClusterUpdateCanUpdateCluster(t *testing.T) {
 		ClusterInfo: []pb.ClusterInfo{uci},
 	}
 	mc.update(unhi)
-	v, _ := mc.Clusters[1]
+	v := mc.Clusters[1]
 	if v.ConfigChangeIndex != 2 {
 		t.Errorf("ConfigChangeIndex = %d, want 2", v.ConfigChangeIndex)
 	}

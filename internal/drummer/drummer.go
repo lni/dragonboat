@@ -36,7 +36,6 @@ import (
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/compression"
 	"github.com/lni/dragonboat/internal/utils/envutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/netutil"
@@ -295,8 +294,6 @@ func (d *Drummer) startDrummerRPCServer() {
 	}
 	opts = append(opts, grpc.MaxRecvMsgSize(maxServerMsgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(maxServerMsgSize))
-	opts = append(opts, grpc.RPCCompressor(compression.NewCompressor()))
-	opts = append(opts, grpc.RPCDecompressor(compression.NewDecompressor()))
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterDrummerServer(grpcServer, d.server)
 	d.stopper.RunWorker(func() {
