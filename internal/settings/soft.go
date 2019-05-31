@@ -91,7 +91,7 @@ type soft struct {
 	// ReceiveQueueLength is the length of the receive queue on each node.
 	ReceiveQueueLength uint64
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
-	// before pushing the snapshot results to raftNode.
+	// before pushing the snapshot results to raft node.
 	SnapshotStatusPushDelayMS uint64
 	// NodeTaskChanLength defined the length of each node's commitC channel.
 	NodeTaskChanLength uint64
