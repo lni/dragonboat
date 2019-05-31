@@ -491,23 +491,13 @@ func BenchmarkNALookup(b *testing.B) {
 	}
 }
 
-type noopNodeProxy struct {
-}
-
-func (n *noopNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
-func (n *noopNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
-func (n *noopNodeProxy) ApplyConfigChange(pb.ConfigChange)                 {}
-func (n *noopNodeProxy) ConfigChangeProcessed(uint64, bool)                {}
-func (n *noopNodeProxy) NodeID() uint64                                    { return 1 }
-func (n *noopNodeProxy) ClusterID() uint64                                 { return 1 }
-
 func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.ReportAllocs()
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
 	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
-	smo := rsm.NewStateMachine(nds, nil, false, &noopNodeProxy{})
+	smo := rsm.NewStateMachine(nds, nil, false, &testDummyNodeProxy{})
 	idx := uint64(0)
 	var s *client.Session
 	if noopSession {

@@ -167,6 +167,10 @@ func (rc *node) ClusterID() uint64 {
 	return rc.clusterID
 }
 
+func (rc *node) ShouldStop() <-chan struct{} {
+	return rc.stopc
+}
+
 func (rc *node) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	if notifyReadClient {
@@ -562,6 +566,9 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 			return 0
 		}
 		panic(err)
+	}
+	if readyToReturnTestKnob(rc.stopc, "snapshotter.Commit") {
+		return 0
 	}
 	plog.Infof("%s snapshotted, index %d, term %d, file count %d",
 		rc.describe(), ss.Index, ss.Term, len(ss.Files))

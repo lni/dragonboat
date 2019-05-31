@@ -70,6 +70,10 @@ func newTestNodeProxy() *testNodeProxy {
 	return &testNodeProxy{}
 }
 
+func (p *testNodeProxy) ShouldStop() <-chan struct{} {
+	return nil
+}
+
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	p.smResult = result

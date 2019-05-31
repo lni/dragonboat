@@ -124,6 +124,7 @@ type INodeProxy interface {
 	ConfigChangeProcessed(uint64, bool)
 	NodeID() uint64
 	ClusterID() uint64
+	ShouldStop() <-chan struct{}
 }
 
 // ISnapshotter is the interface for the snapshotter object.
@@ -593,6 +594,9 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	}(); err != nil {
 		return err
 	}
+	if readyToReturnTestKnob(s.node.ShouldStop(), "snapshotter.Stream") {
+		return sm.ErrSnapshotStopped
+	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
@@ -608,8 +612,14 @@ func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot
 	}(); err != nil {
 		return nil, nil, err
 	}
+	if readyToReturnTestKnob(s.node.ShouldStop(), "s.sync") {
+		return nil, nil, sm.ErrSnapshotStopped
+	}
 	if err := s.sync(); err != nil {
 		return nil, nil, err
+	}
+	if readyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
+		return nil, nil, sm.ErrSnapshotStopped
 	}
 	return s.doSaveSnapshot(meta)
 }
@@ -622,6 +632,9 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
 		return nil, nil, err
+	}
+	if readyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
+		return nil, nil, sm.ErrSnapshotStopped
 	}
 	return s.doSaveSnapshot(meta)
 }

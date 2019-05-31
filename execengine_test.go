@@ -202,6 +202,7 @@ func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange)                
 func (np *testDummyNodeProxy) ConfigChangeProcessed(uint64, bool)                {}
 func (np *testDummyNodeProxy) NodeID() uint64                                    { return 1 }
 func (np *testDummyNodeProxy) ClusterID() uint64                                 { return 1 }
+func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                       { return nil }
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
