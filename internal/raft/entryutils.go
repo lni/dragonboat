@@ -77,11 +77,7 @@ func max(x uint64, y uint64) uint64 {
 }
 
 func getEntrySliceSize(ents []pb.Entry) uint64 {
-	sz := uint64(0)
-	for _, e := range ents {
-		sz += uint64(e.SizeUpperLimit())
-	}
-	return sz
+	return pb.GetEntrySliceSize(ents)
 }
 
 // IsLocalMessageType returns a boolean value indicating whether the specified

@@ -18,11 +18,14 @@ package tests
 
 import (
 	"time"
+
+	"github.com/lni/dragonboat/logger"
 )
 
 var (
 	// TestMonkeyEnabled indicates whether we are in monkey test mode
 	TestMonkeyEnabled = true
+	plog              = logger.GetLogger("tests")
 )
 
 // ReadyToReturnTestKnob is a test knob that returns a boolean value indicating

@@ -24,7 +24,6 @@ import (
 
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/compression/snappy"
 	"github.com/lni/dragonboat/internal/utils/random"
 )
 
@@ -600,11 +599,5 @@ func TestLaunchRequestsForLargeNumberOfClustersCanBeDelivered(t *testing.T) {
 			sz > settings.Soft.MaxDrummerClientMsgSize {
 			t.Errorf("message is too big to be delivered")
 		}
-		data, err := rc.Marshal()
-		if err != nil {
-			panic(err)
-		}
-		encoded := snappy.Encode(nil, data)
-		plog.Infof("encoded sz: %d", len(encoded))
 	}
 }

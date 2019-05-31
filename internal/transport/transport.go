@@ -169,26 +169,18 @@ func (sq *sendQueue) rateLimited() bool {
 	return sq.rl.RateLimited()
 }
 
-func getEntrySliceSize(ents []pb.Entry) uint64 {
-	sz := uint64(0)
-	for _, e := range ents {
-		sz += uint64(e.SizeUpperLimit())
-	}
-	return sz
-}
-
 func (sq *sendQueue) increase(msg pb.Message) {
 	if msg.Type != pb.Replicate {
 		return
 	}
-	sq.rl.Increase(getEntrySliceSize(msg.Entries))
+	sq.rl.Increase(pb.GetEntrySliceSize(msg.Entries))
 }
 
 func (sq *sendQueue) decrease(msg pb.Message) {
 	if msg.Type != pb.Replicate {
 		return
 	}
-	sq.rl.Decrease(getEntrySliceSize(msg.Entries))
+	sq.rl.Decrease(pb.GetEntrySliceSize(msg.Entries))
 }
 
 // Transport is the transport layer for delivering raft messages and snapshots.

@@ -122,14 +122,6 @@ func (q *MessageQueue) AddSnapshot(msg raftpb.Message) bool {
 	return true
 }
 
-func getEntrySliceSize(ents []raftpb.Entry) uint64 {
-	sz := uint64(0)
-	for _, e := range ents {
-		sz += uint64(e.SizeUpperLimit())
-	}
-	return sz
-}
-
 func (q *MessageQueue) tryAdd(msg raftpb.Message) bool {
 	if !q.rl.Enabled() || msg.Type != raftpb.Replicate {
 		return true
@@ -138,7 +130,7 @@ func (q *MessageQueue) tryAdd(msg raftpb.Message) bool {
 		plog.Warningf("rate limited dropped a replicate msg from %d", msg.ClusterId)
 		return false
 	}
-	q.rl.Increase(getEntrySliceSize(msg.Entries))
+	q.rl.Increase(raftpb.GetEntrySliceSize(msg.Entries))
 	return true
 }
 
