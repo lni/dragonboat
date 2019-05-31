@@ -29,7 +29,9 @@ const (
 )
 
 func createTestDir() {
-	os.MkdirAll(testDir, 0755)
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		panic(err)
+	}
 }
 
 func removeTestDir() {

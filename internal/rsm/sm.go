@@ -82,6 +82,7 @@ func (s *RegularStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return s.sm.Lookup(query)
 }
 
+// NALookup queries the state machine.
 func (s *RegularStateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.na == nil {
 		return nil, sm.ErrNotImplemented
@@ -182,6 +183,7 @@ func (s *ConcurrentStateMachine) Lookup(query interface{}) (interface{}, error) 
 	return s.sm.Lookup(query)
 }
 
+// NALookup queries the state machine.
 func (s *ConcurrentStateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.na == nil {
 		return nil, sm.ErrNotImplemented
@@ -308,6 +310,7 @@ func (s *OnDiskStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return s.sm.Lookup(query)
 }
 
+// NALookup queries the state machine.
 func (s *OnDiskStateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.na == nil {
 		return nil, sm.ErrNotImplemented

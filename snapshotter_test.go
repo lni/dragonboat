@@ -42,8 +42,12 @@ const (
 func getNewTestDB(dir string, lldir string) raftio.ILogDB {
 	d := filepath.Join(rdbTestDirectory, dir)
 	lld := filepath.Join(rdbTestDirectory, lldir)
-	os.MkdirAll(d, 0777)
-	os.MkdirAll(lld, 0777)
+	if err := os.MkdirAll(d, 0777); err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(lld, 0777); err != nil {
+		panic(err)
+	}
 	db, err := logdb.NewDefaultLogDB([]string{d}, []string{lld})
 	if err != nil {
 		panic(err.Error())
@@ -57,7 +61,9 @@ func deleteTestRDB() {
 
 func getTestSnapshotter(ldb raftio.ILogDB) *snapshotter {
 	fp := filepath.Join(rdbTestDirectory, "snapshot")
-	os.MkdirAll(fp, 0777)
+	if err := os.MkdirAll(fp, 0777); err != nil {
+		panic(err)
+	}
 	f := func(cid uint64, nid uint64) string {
 		return fp
 	}

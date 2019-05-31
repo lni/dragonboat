@@ -35,7 +35,9 @@ func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {
 	logdb := getNewLogReaderTestDB(entries)
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
 	if len(entries) > 0 {
-		ls.Append(entries)
+		if err := ls.Append(entries); err != nil {
+			panic(err)
+		}
 	}
 	return ls
 }
@@ -147,7 +149,9 @@ func TestRLLTAppend(t *testing.T) {
 
 		fi, _ := stable.GetRange()
 		plog.Infof("stable first index: %d", fi)
-		raftLog.Append(tt.ents)
+		if err := raftLog.Append(tt.ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		index := raftLog.LastIndex()
 		if index != tt.windex {
 			t.Errorf("#%d: lastIndex = %d, want %d", i, index, tt.windex)
@@ -391,9 +395,13 @@ func TestRLLTHasNextEnts(t *testing.T) {
 	}
 	for i, tt := range tests {
 		stable := getTestLogReaderWithoutCache(nil)
-		stable.ApplySnapshot(snap)
+		if err := stable.ApplySnapshot(snap); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := raft.NewLog(stable)
-		raftLog.Append(ents)
+		if err := raftLog.Append(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog.TryCommit(5, 1)
 		raftLog.AppliedTo(tt.applied)
 
@@ -427,10 +435,13 @@ func TestRLLTNextEnts(t *testing.T) {
 	}
 	for i, tt := range tests {
 		stable := getTestLogReaderWithoutCache(nil)
-		stable.ApplySnapshot(snap)
+		if err := stable.ApplySnapshot(snap); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := raft.NewLog(stable)
-
-		raftLog.Append(ents)
+		if err := raftLog.Append(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog.TryCommit(5, 1)
 		raftLog.AppliedTo(tt.applied)
 
@@ -523,7 +534,9 @@ func TestRLLTLogRestore(t *testing.T) {
 	index := uint64(1000)
 	term := uint64(1000)
 	stable := getTestLogReaderWithoutCache(nil)
-	stable.ApplySnapshot(pb.Snapshot{Index: index, Term: term})
+	if err := stable.ApplySnapshot(pb.Snapshot{Index: index, Term: term}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	raftLog := raft.NewLog(stable)
 
 	if len(raftLog.AllEntries()) != 0 {
@@ -551,11 +564,15 @@ func TestRLLTIsOutOfBounds(t *testing.T) {
 	num := uint64(100)
 
 	stable := getTestLogReaderWithoutCache(nil)
-	stable.ApplySnapshot(pb.Snapshot{Index: offset})
+	if err := stable.ApplySnapshot(pb.Snapshot{Index: offset}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	l := raft.NewLog(stable)
 
 	for i := uint64(1); i <= num; i++ {
-		l.Append([]pb.Entry{{Index: i + offset}})
+		if err := l.Append([]pb.Entry{{Index: i + offset}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	first := offset + 1
@@ -638,10 +655,14 @@ func TestRLLTTerm(t *testing.T) {
 	num := uint64(100)
 
 	stable := getTestLogReaderWithoutCache(nil)
-	stable.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1})
+	if err := stable.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	l := raft.NewLog(stable)
 	for i = 1; i < num; i++ {
-		l.Append([]pb.Entry{{Index: offset + i, Term: i}})
+		if err := l.Append([]pb.Entry{{Index: offset + i, Term: i}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	tests := []struct {
@@ -681,19 +702,27 @@ func TestRLLTSlice(t *testing.T) {
 	noLimit := uint64(math.MaxUint64)
 
 	stable := getTestLogReaderWithoutCache(nil)
-	stable.ApplySnapshot(pb.Snapshot{Index: offset})
+	if err := stable.ApplySnapshot(pb.Snapshot{Index: offset}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	for i = 1; i < num/2; i++ {
-		stable.Append([]pb.Entry{{Index: offset + i, Term: offset + i}})
+		if err := stable.Append([]pb.Entry{{Index: offset + i, Term: offset + i}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		ud := pb.Update{
 			ClusterID:     LogReaderTestClusterID,
 			NodeID:        LogReaderTestNodeID,
 			EntriesToSave: []pb.Entry{{Index: offset + i, Term: offset + i}},
 		}
-		stable.logdb.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 	l := raft.NewLog(stable)
 	for i = num / 2; i < num; i++ {
-		l.Append([]pb.Entry{{Index: offset + i, Term: offset + i}})
+		if err := l.Append([]pb.Entry{{Index: offset + i, Term: offset + i}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 
 	tests := []struct {

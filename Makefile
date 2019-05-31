@@ -589,6 +589,20 @@ cpp-static-check:
     done; \
   done;
 
+GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
+	internal/server statemachine tools raftpb raftio client tools logger config  \
+	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
+	internal/utils/cache internal/utils/fileutil internal/utils/stringutil       \
+	internal/utils/netutil internal/utils/random internal/utils/logutil          \
+	internal/utils/lang
+
+golangci-lint-check:
+	@for p in $(GOLANGCI_LINT_PKGS); do \
+		golangci-lint run $$p; \
+	done;
+	@golangci-lint run --build-tags=dragonboat_language_binding binding
+	@golangci-lint run --build-tags=dragonboat_logdbtesthelper internal/logdb
+
 ###############################################################################
 # clean
 ###############################################################################

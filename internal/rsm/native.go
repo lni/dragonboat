@@ -107,8 +107,8 @@ func NewNativeStateMachine(clusterID uint64, nodeID uint64, sm IStateMachine,
 		sm:   sm,
 		done: done,
 	}
-	s.clusterID = clusterID
-	s.nodeID = nodeID
+	s.OffloadedStatus.clusterID = clusterID
+	s.OffloadedStatus.nodeID = nodeID
 	return s
 }
 

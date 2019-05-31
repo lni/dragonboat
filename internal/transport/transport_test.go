@@ -754,7 +754,9 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	chunks := newSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
@@ -863,7 +865,9 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	chunks := newSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
@@ -1077,7 +1081,9 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)

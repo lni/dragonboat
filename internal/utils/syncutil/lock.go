@@ -27,9 +27,7 @@ func NewLock() *Lock {
 
 // Lock blocks the calling thread until the lock is acquired.
 func (l *Lock) Lock() {
-	select {
-	case l.ch <- struct{}{}:
-	}
+	l.ch <- struct{}{}
 }
 
 // Unlock unlocks the lock.

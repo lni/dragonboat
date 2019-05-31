@@ -31,7 +31,6 @@ import (
 const (
 	singleNodeHostTestDir = "test_nodehost_dir_safe_to_delete"
 	testLogDBName         = "test-name"
-	testHostname          = "testhostname"
 	testBinVer            = raftio.LogDBBinVersion
 	testAddress           = "localhost:1111"
 	testDeploymentID      = 100
@@ -58,7 +57,9 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(testDeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	dirs, _ := ctx.getDataDirs()
 	testName := "test-name"
 	status := raftpb.RaftDataStatus{
@@ -87,7 +88,9 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(testDeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	dirs, _ := ctx.getDataDirs()
 	status := raftpb.RaftDataStatus{
 		Address:   addr,
@@ -142,7 +145,9 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(c.DeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(c.DeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := ctx.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
@@ -167,7 +172,9 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 
 func TestRemoveSavedSnapshots(t *testing.T) {
 	os.RemoveAll(singleNodeHostTestDir)
-	os.MkdirAll(singleNodeHostTestDir, 0755)
+	if err := os.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(singleNodeHostTestDir)
 	for i := 0; i < 16; i++ {
 		ssdir := filepath.Join(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))

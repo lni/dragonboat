@@ -29,11 +29,13 @@ func getTestEntryLog() *entryLog {
 
 func TestLogEntryLogCanBeCreated(t *testing.T) {
 	logdb := NewTestLogDB()
-	logdb.Append([]pb.Entry{
+	if err := logdb.Append([]pb.Entry{
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 1},
 		{Index: 3, Term: 2},
-	})
+	}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	first, last := logdb.GetRange()
 	if first != 1 || last != 3 {
 		t.Errorf("unexpected range")
@@ -105,7 +107,9 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 	ents[20].Cmd = make([]byte, maxEntriesToApplySize)
 	ents[30].Cmd = make([]byte, maxEntriesToApplySize*2)
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.committed = 128
 	el.processed = 0
@@ -135,11 +139,13 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 
 func TestLogReturnLastIndexInLogDBWhenNoSnapshotInMem(t *testing.T) {
 	logdb := NewTestLogDB()
-	logdb.Append([]pb.Entry{
+	if err := logdb.Append([]pb.Entry{
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 1},
 		{Index: 3, Term: 2},
-	})
+	}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.firstIndex() != 1 {
 		t.Errorf("unexpected first index, %d", el.firstIndex())
@@ -161,10 +167,12 @@ func TestLogLastIndexReturnInMemLastIndexWhenPossible(t *testing.T) {
 
 func TestLogLastIndexReturnLogDBLastIndexWhenNothingInInMem(t *testing.T) {
 	logdb := NewTestLogDB()
-	logdb.Append([]pb.Entry{
+	if err := logdb.Append([]pb.Entry{
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 1},
-	})
+	}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.lastIndex() != 2 {
 		t.Errorf("unexpected last index %d", el.lastIndex())
@@ -183,10 +191,12 @@ func TestLogLastTerm(t *testing.T) {
 		t.Errorf("unexpected last term %d", el.lastTerm())
 	}
 	logdb := NewTestLogDB()
-	logdb.Append([]pb.Entry{
+	if err := logdb.Append([]pb.Entry{
 		{Index: 1, Term: 1},
 		{Index: 2, Term: 5},
-	})
+	}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el = newEntryLog(logdb, server.NewRateLimiter(0))
 	if el.lastTerm() != 5 {
 		t.Errorf("unexpected last term %d", el.lastTerm())
@@ -215,7 +225,9 @@ func TestLogTerm(t *testing.T) {
 		{Index: 2, Term: 5},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el = newEntryLog(logdb, server.NewRateLimiter(0))
 	for idx, ent := range ents {
 		term, err := el.term(ent.Index)
@@ -290,7 +302,9 @@ func TestLogGetEntryFromLogDB(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	ents, err := el.getEntries(1, 5, math.MaxUint64)
 	if err != nil {
@@ -316,7 +330,9 @@ func TestLogGetEntryFromLogDBAndInMem(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
@@ -365,7 +381,9 @@ func TestLogSnapshot(t *testing.T) {
 	logdbSnapshot := pb.Snapshot{Index: 234, Term: 3}
 	el := getTestEntryLog()
 	el.inmem.restore(inMemSnapshot)
-	el.logdb.ApplySnapshot(logdbSnapshot)
+	if err := el.logdb.ApplySnapshot(logdbSnapshot); err != nil {
+		t.Fatalf("%v", err)
+	}
 	ss := el.snapshot()
 	if ss.Index != inMemSnapshot.Index {
 		t.Errorf("unexpected snapshot index")
@@ -385,7 +403,9 @@ func TestLogMatchTerm(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
@@ -422,7 +442,9 @@ func TestLogUpToDate(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
@@ -458,7 +480,9 @@ func TestLogGetConflictIndex(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
@@ -493,7 +517,9 @@ func TestLogCommitTo(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},
@@ -524,7 +550,9 @@ func TestLogCommitToPanicWhenCommitToUnavailableIndex(t *testing.T) {
 		{Index: 4, Term: 3},
 	}
 	logdb := NewTestLogDB()
-	logdb.Append(ents)
+	if err := logdb.Append(ents); err != nil {
+		t.Fatalf("%v", err)
+	}
 	el := newEntryLog(logdb, server.NewRateLimiter(0))
 	el.append([]pb.Entry{
 		{Index: 5, Term: 3},

@@ -496,7 +496,9 @@ func TestLeaderCommitPrecedingEntries(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(tt)
+		if err := storage.Append(tt); err != nil {
+			t.Fatalf("%v", err)
+		}
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.loadState(pb.State{Term: 2})
 		r.becomeCandidate()
@@ -594,7 +596,9 @@ func TestFollowerCheckReplicate(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(ents)
+		if err := storage.Append(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.loadState(pb.State{Commit: 1})
 		r.becomeFollower(2, 2)
@@ -650,7 +654,9 @@ func TestFollowerAppendEntries(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append([]pb.Entry{{Term: 1, Index: 1}, {Term: 2, Index: 2}})
+		if err := storage.Append([]pb.Entry{{Term: 1, Index: 1}, {Term: 2, Index: 2}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.becomeFollower(2, 2)
 
@@ -719,11 +725,15 @@ func TestLeaderSyncFollowerLog(t *testing.T) {
 	}
 	for i, tt := range tests {
 		leadStorage := NewTestLogDB()
-		leadStorage.Append(ents)
+		if err := leadStorage.Append(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		lead := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, leadStorage)
 		lead.loadState(pb.State{Commit: lead.log.lastIndex(), Term: term})
 		followerStorage := NewTestLogDB()
-		followerStorage.Append(tt)
+		if err := followerStorage.Append(tt); err != nil {
+			t.Fatalf("%v", err)
+		}
 		follower := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, followerStorage)
 		follower.loadState(pb.State{Term: term - 1})
 		// It is necessary to have a three-node cluster.
@@ -817,7 +827,9 @@ func TestVoter(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(tt.ents)
+		if err := storage.Append(tt.ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		r := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
 
 		r.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, Term: 3, LogTerm: tt.logterm, LogIndex: tt.index})
@@ -853,7 +865,9 @@ func TestLeaderOnlyCommitsLogFromCurrentTerm(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(ents)
+		if err := storage.Append(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		r := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
 		r.loadState(pb.State{Term: 2})
 		// become leader at term 3
@@ -923,7 +937,9 @@ func commitNoopEntry(r *raft, s ILogDB) {
 	}
 	// ignore further messages to refresh followers' commit index
 	r.readMessages()
-	s.Append(r.log.entriesToSave())
+	if err := s.Append(r.log.entriesToSave()); err != nil {
+		panic(err)
+	}
 	r.log.commitUpdate(pb.UpdateCommit{
 		Processed:     r.log.committed,
 		StableLogTo:   r.log.lastIndex(),

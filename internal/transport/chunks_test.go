@@ -96,7 +96,9 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	fn(t, chunks, handler)
 }
 
@@ -111,7 +113,9 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 			v++
 			c.ClusterId = v
 			snapDir := chunks.getSnapshotDir(v, c.NodeId)
-			os.MkdirAll(snapDir, 0755)
+			if err := os.MkdirAll(snapDir, 0755); err != nil {
+				t.Fatalf("%v", err)
+			}
 			if !chunks.addChunk(c) {
 				t.Errorf("failed to add chunk")
 			}

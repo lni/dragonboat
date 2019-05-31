@@ -189,15 +189,3 @@ func (ln *StoppableListener) Close() error {
 func (ln *StoppableListener) Addr() net.Addr {
 	panic("Addr not implemented")
 }
-
-type addr struct {
-	addrString string
-}
-
-func (a *addr) Network() string {
-	return "tcp"
-}
-
-func (a *addr) String() string {
-	return a.addrString
-}

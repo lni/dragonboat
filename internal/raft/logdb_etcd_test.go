@@ -84,7 +84,9 @@ func TestLogDBLastIndex(t *testing.T) {
 	}
 
 	plog.Infof("going to append")
-	s.Append([]pb.Entry{{Index: 6, Term: 5}})
+	if err := s.Append([]pb.Entry{{Index: 6, Term: 5}}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	_, last = s.GetRange()
 	if last != 6 {
 		t.Errorf("last = %d, want %d", last, 6)
@@ -104,7 +106,9 @@ func TestLogDBFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	s.Compact(4)
+	if err := s.Compact(4); err != nil {
+		t.Fatalf("%v", err)
+	}
 	first, _ = s.GetRange()
 	if first != 5 {
 		t.Errorf("first = %d, want %d", first, 5)
@@ -174,7 +178,9 @@ func TestLogDBCreateSnapshot(t *testing.T) {
 			entries:     v[1:],
 		}
 		snap, err := s.getSnapshot(tt.i, cs)
-		s.CreateSnapshot(snap)
+		if cerr := s.CreateSnapshot(snap); cerr != nil {
+			t.Fatalf("%v", err)
+		}
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}

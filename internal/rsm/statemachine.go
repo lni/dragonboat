@@ -378,7 +378,7 @@ func (s *StateMachine) Loaded(from From) {
 	s.sm.Loaded(from)
 }
 
-// Lookup performances local lookup on the data store.
+// Lookup queries the local state machine.
 func (s *StateMachine) Lookup(query interface{}) (interface{}, error) {
 	if s.sm.ConcurrentSnapshot() {
 		return s.concurrentLookup(query)
@@ -401,7 +401,7 @@ func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) 
 	return s.sm.Lookup(query)
 }
 
-// Lookup performances local lookup on the data store.
+// NALookup queries the local state machine.
 func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.sm.ConcurrentSnapshot() {
 		return s.naConcurrentLookup(query)

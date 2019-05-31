@@ -157,7 +157,9 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 		t.Fatal(err)
 	}
 	ud := rawNode.GetUpdate(true, 0)
-	s.Append(ud.EntriesToSave)
+	if err := s.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
@@ -168,7 +170,9 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 	)
 	for {
 		ud = rawNode.GetUpdate(true, 0)
-		s.Append(ud.EntriesToSave)
+		if err := s.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		// Once we are the leader, propose a command and a ConfigChange.
 		if !proposed && rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.ProposeEntries([]raftpb.Entry{{Cmd: []byte("somedata")}})
@@ -243,13 +247,17 @@ func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 		t.Fatal(err)
 	}
 	ud := rawNode.GetUpdate(true, 0)
-	s.Append(ud.EntriesToSave)
+	if err := s.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
 	for {
 		ud = rawNode.GetUpdate(true, 0)
-		s.Append(ud.EntriesToSave)
+		if err := s.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.Commit(ud)
 			break
@@ -279,13 +287,17 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	ud := rawNode.GetUpdate(true, 0)
-	s.Append(ud.EntriesToSave)
+	if err := s.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
 	for {
 		ud = rawNode.GetUpdate(true, 0)
-		s.Append(ud.EntriesToSave)
+		if err := s.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.Commit(ud)
 			break
@@ -296,11 +308,15 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	proposeConfigChangeAndApply := func(cc raftpb.ConfigChange, key uint64) {
 		rawNode.ProposeConfigChange(cc, key)
 		ud = rawNode.GetUpdate(true, 0)
-		s.Append(ud.EntriesToSave)
+		if err := s.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		for _, entry := range ud.CommittedEntries {
 			if entry.Type == raftpb.ConfigChangeEntry {
 				var cc raftpb.ConfigChange
-				cc.Unmarshal(entry.Cmd)
+				if err := cc.Unmarshal(entry.Cmd); err != nil {
+					t.Fatalf("%v", err)
+				}
 				rawNode.ApplyConfigChange(cc)
 			}
 		}
@@ -404,7 +420,9 @@ func TestRaftAPIReadIndex(t *testing.T) {
 	if !reflect.DeepEqual(ud.ReadyToReads, wrs) {
 		t.Errorf("ReadyToReads = %d, want %d", ud.ReadyToReads, wrs)
 	}
-	s.Append(ud.EntriesToSave)
+	if err := s.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 	// ensure raft.readyToRead is reset after advance
 	if len(rawNode.raft.readyToRead) > 0 {
@@ -415,13 +433,12 @@ func TestRaftAPIReadIndex(t *testing.T) {
 	rawNode.Campaign()
 	for {
 		ud = rawNode.GetUpdate(true, 0)
-		s.Append(ud.EntriesToSave)
-
+		if err := s.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if rawNode.raft.leaderID == rawNode.raft.nodeID {
 			rawNode.Commit(ud)
-
 			// Once we are the leader, issue a ReadIndex request
-
 			rawNode.raft.handle = appendStep
 			rawNode.ReadIndex(wrequestCtx)
 			break
@@ -461,7 +478,9 @@ func TestRaftAPIInvalidNodeIDCausePanicInLaunchPeer(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	cfg := &config.Config{}
-	LaunchPeer(cfg, nil, nil, true, true)
+	if _, err := LaunchPeer(cfg, nil, nil, true, true); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestRaftAPIInvalidInputToLaunchPeerCausePanic(t *testing.T) {
@@ -472,7 +491,9 @@ func TestRaftAPIInvalidInputToLaunchPeerCausePanic(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	storage := NewTestLogDB()
-	LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{}, true, true)
+	if _, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{}, true, true); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestRaftAPIDuplicatedAddressCausePanicInLaunchPeer(t *testing.T) {
@@ -483,10 +504,12 @@ func TestRaftAPIDuplicatedAddressCausePanicInLaunchPeer(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	storage := NewTestLogDB()
-	LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{
+	if _, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{
 		{NodeID: 1, Address: "111"},
 		{NodeID: 2, Address: "111"},
-	}, true, true)
+	}, true, true); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestRaftAPILaunchPeer(t *testing.T) {
@@ -527,15 +550,21 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 	if !reflect.DeepEqual(ud, wants[0]) {
 		t.Fatalf("#%d: g = %+v,\n             w   %+v", 1, ud, wants[0])
 	} else {
-		storage.Append(ud.EntriesToSave)
+		if err := storage.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		rawNode.Commit(ud)
 	}
-	storage.Append(ud.EntriesToSave)
+	if err := storage.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 
 	rawNode.Campaign()
 	ud = rawNode.GetUpdate(true, 0)
-	storage.Append(ud.EntriesToSave)
+	if err := storage.Append(ud.EntriesToSave); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode.Commit(ud)
 
 	rawNode.ProposeEntries([]raftpb.Entry{{Cmd: []byte("foo")}})
@@ -544,7 +573,9 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 	if !reflect.DeepEqual(ud, wants[1]) {
 		t.Errorf("#%d: g = %+v,\n             w   %+v", 2, ud, wants[1])
 	} else {
-		storage.Append(ud.EntriesToSave)
+		if err := storage.Append(ud.EntriesToSave); err != nil {
+			t.Fatalf("%v", err)
+		}
 		rawNode.Commit(ud)
 	}
 
@@ -570,7 +601,9 @@ func TestRaftAPIRestart(t *testing.T) {
 
 	storage := NewTestLogDB()
 	storage.SetState(st)
-	storage.Append(entries)
+	if err := storage.Append(entries); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, nil, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -608,8 +641,12 @@ func TestRaftAPIRestartFromSnapshot(t *testing.T) {
 
 	s := NewTestLogDB()
 	s.SetState(st)
-	s.ApplySnapshot(snap)
-	s.Append(entries)
+	if err := s.ApplySnapshot(snap); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := s.Append(entries); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, nil, true, false)
 	if err != nil {
 		t.Fatal(err)

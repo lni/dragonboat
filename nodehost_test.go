@@ -2237,7 +2237,9 @@ func TestSnapshotCanBeExported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		sspath := "exported_snapshot_safe_to_delete"
 		os.RemoveAll(sspath)
-		os.MkdirAll(sspath, 0755)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		defer os.RemoveAll(sspath)
 		session := nh.GetNoOPSession(2)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2296,7 +2298,9 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
 		sspath := "exported_snapshot_safe_to_delete"
 		os.RemoveAll(sspath)
-		os.MkdirAll(sspath, 0755)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		defer os.RemoveAll(sspath)
 		opt := SnapshotOption{
 			Exported:   true,
@@ -2421,7 +2425,9 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 	mkproposal(nh1)
 	sspath := "exported_snapshot_safe_to_delete"
 	os.RemoveAll(sspath)
-	os.MkdirAll(sspath, 0755)
+	if err := os.MkdirAll(sspath, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(sspath)
 	opt := SnapshotOption{
 		Exported:   true,
@@ -2558,7 +2564,9 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	enabled bool, exp uint64) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
-	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
+	if err := os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
@@ -2591,7 +2599,9 @@ func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
-	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
+	if err := os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &testSink2{receiver: cks}

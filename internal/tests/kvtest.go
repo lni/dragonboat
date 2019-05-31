@@ -85,7 +85,7 @@ type KVTest struct {
 	Count            uint64            `json:"Count"`
 	Junk             []byte            `json:"Junk"`
 	closed           bool
-	aborted          bool `json:"-"`
+	aborted          bool
 	externalFileTest bool
 	noLargeDelay     bool
 	pbkvPool         *sync.Pool
@@ -277,9 +277,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 	if err := json.Unmarshal(data, &store); err != nil {
 		return err
 	}
-	if store.aborted {
-		panic("snapshot image contains aborted==true")
-	}
+	store.aborted = false
 	s.KVStore = store.KVStore
 	s.Count = store.Count
 	s.Junk = store.Junk

@@ -144,7 +144,9 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 		panic(err)
 	}
 	e := pb.Entry{Index: 1, Cmd: data}
-	ds.Update(nil, e)
+	if _, err := ds.Update(nil, e); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestCppSnapshotWorks(t *testing.T) {

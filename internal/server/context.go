@@ -32,7 +32,9 @@ import (
 )
 
 var (
-	plog                  = logger.GetLogger("server")
+	plog = logger.GetLogger("server")
+	// ErrDirMarkedAsDeleted is the error used to indicate that the directory has
+	// been marked as deleted and can not be used again.
 	ErrDirMarkedAsDeleted = errors.New("trying to use a dir marked as deleted")
 	// ErrHostnameChanged is the error used to indicate that the hostname changed.
 	ErrHostnameChanged = errors.New("hostname changed")
