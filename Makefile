@@ -14,6 +14,9 @@
 
 OS := $(shell uname)
 
+# the location of this Makefile
+PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+
 # set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
 # LogDB implementation. 
 ifeq ($(DRAGONBOAT_LOGDB),leveldb)
@@ -50,8 +53,6 @@ endif
 
 ROCKSDB_INC_PATH ?=
 ROCKSDB_LIB_PATH ?=
-# the location of this Makefile
-PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 # figure out where is the rocksdb installation
 # supported gorocksdb version in ./build/lib?
 ifeq ($(ROCKSDB_LIB_PATH),)
