@@ -609,7 +609,9 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 
 func (rc *node) streamSnapshot(sink pb.IChunkSink) {
 	if err := rc.sm.StreamSnapshot(sink); err != nil {
-		if err != sm.ErrSnapshotStopped && err != sm.ErrSnapshotStreaming {
+		if err != sm.ErrSnapshotStopped &&
+			err != sm.ErrSnapshotStreaming &&
+			err != rsm.ErrTestKnobReturn {
 			panic(err)
 		}
 	}
