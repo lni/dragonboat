@@ -108,7 +108,9 @@ func ExampleNodeHost_StartCluster() {
 	}
 }
 
-func ExampleNodeHost_Propose(nh *NodeHost) {
+var nh *NodeHost
+
+func ExampleNodeHost_Propose() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
@@ -139,7 +141,7 @@ func ExampleNodeHost_Propose(nh *NodeHost) {
 	// using a NO-OP client session in this example.
 }
 
-func ExampleNodeHost_ReadIndex(nh *NodeHost) {
+func ExampleNodeHost_ReadIndex() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
@@ -169,7 +171,7 @@ func ExampleNodeHost_ReadIndex(nh *NodeHost) {
 	}
 }
 
-func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
+func ExampleNodeHost_RequestDeleteNode() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
@@ -198,7 +200,7 @@ func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
 	}
 }
 
-func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
+func ExampleNodeHost_RequestAddNode() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
@@ -242,7 +244,9 @@ func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
 	}
 }
 
-func ExampleNodeHost_GetNewSession(ctx context.Context, nh *NodeHost) {
+var ctx context.Context
+
+func ExampleNodeHost_GetNewSession() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.

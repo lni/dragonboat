@@ -599,6 +599,7 @@ golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \
 		golangci-lint run $$p; \
 	done;
+	@golangci-lint run .
 	@golangci-lint run --build-tags=dragonboat_language_binding binding
 	@golangci-lint run --build-tags=dragonboat_logdbtesthelper internal/logdb
 

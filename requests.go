@@ -453,10 +453,10 @@ func (p *pendingSnapshot) gc() {
 		return
 	}
 	now := p.getTick()
-	if now-p.lastGcTime < p.gcTick {
+	if now-p.logicalClock.lastGcTime < p.gcTick {
 		return
 	}
-	p.lastGcTime = now
+	p.logicalClock.lastGcTime = now
 	if p.pending.deadline < now {
 		r := SnapshotResult{code: requestTimeout}
 		p.pending.CompleteC <- r
@@ -555,10 +555,10 @@ func (p *pendingConfigChange) gc() {
 		return
 	}
 	now := p.getTick()
-	if now-p.lastGcTime < p.gcTick {
+	if now-p.logicalClock.lastGcTime < p.gcTick {
 		return
 	}
-	p.lastGcTime = now
+	p.logicalClock.lastGcTime = now
 	if p.pending.deadline < now {
 		p.pending.notify(getTimeoutResult())
 		p.pending = nil
@@ -756,11 +756,11 @@ func (p *pendingReadIndex) applied(applied uint64) {
 		delete(p.pending, v)
 		delete(p.mapping, v)
 	}
-	if now-p.lastGcTime < p.gcTick {
+	if now-p.logicalClock.lastGcTime < p.gcTick {
 		p.mu.Unlock()
 		return
 	}
-	p.lastGcTime = now
+	p.logicalClock.lastGcTime = now
 	p.gc(now)
 	p.mu.Unlock()
 }
