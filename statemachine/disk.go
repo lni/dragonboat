@@ -89,6 +89,15 @@ type IOnDiskStateMachine interface {
 	// most recent Raft entries not fully synchronized onto disks will have to be
 	// re-applied after reboot.
 	//
+	// When the Update method does not synchronize the in-core state with that on
+	// disk, the implementation must ensure that after a reboot there is no
+	// applied entry in the State Machine more recent than any entry that was
+	// lost during reboot. For example, consider a state machine with 3 applied
+	// entries, let's say their index values are 1, 2 and 3. It is okay to lose
+	// the data associated with the applied entry 3, but it is strictly forbidden
+	// to have the data associated with the applied entry 3 available in the state
+	// machine but with the one with index value 2 lost during reboot.
+	//
 	// The Update method must be deterministic, meaning given the same initial
 	// state of IOnDiskStateMachine and the same input sequence, it should reach
 	// to the same updated state and outputs the same results. The input entry
