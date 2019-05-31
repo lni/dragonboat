@@ -21,6 +21,7 @@ import (
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
@@ -625,7 +626,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	if len(nodes) == 0 {
 		return
 	}
-	if readyToReturnTestKnob(stopC, "") {
+	if tests.ReadyToReturnTestKnob(stopC, "") {
 		return
 	}
 	nodeCtx := s.ctxs[workerID-1]
@@ -656,7 +657,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	if !hasSnapshot {
 		s.applySnapshotAndUpdate(nodeUpdates, nodes)
 	}
-	if readyToReturnTestKnob(stopC, "sending append msg") {
+	if tests.ReadyToReturnTestKnob(stopC, "sending append msg") {
 		return
 	}
 	// see raft thesis section 10.2.1 on details why we send Relicate message
@@ -668,7 +669,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	}
 	p.step.end()
 	p.recordEntryCount(nodeUpdates)
-	if readyToReturnTestKnob(stopC, "saving raft state") {
+	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
 		return
 	}
 	p.save.start()
@@ -676,19 +677,19 @@ func (s *execEngine) execNodes(workerID uint64,
 		panic(err)
 	}
 	p.save.end()
-	if readyToReturnTestKnob(stopC, "saving snapshots") {
+	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {
 		return
 	}
 	if hasSnapshot {
 		if err := s.onSnapshotSaved(nodeUpdates, nodes); err != nil {
 			panic(err)
 		}
-		if readyToReturnTestKnob(stopC, "applying updates") {
+		if tests.ReadyToReturnTestKnob(stopC, "applying updates") {
 			return
 		}
 		s.applySnapshotAndUpdate(nodeUpdates, nodes)
 	}
-	if readyToReturnTestKnob(stopC, "processing raft updates") {
+	if tests.ReadyToReturnTestKnob(stopC, "processing raft updates") {
 		return
 	}
 	p.cs.start()
@@ -699,7 +700,7 @@ func (s *execEngine) execNodes(workerID uint64,
 				node.describe())
 		}
 		s.processRaftUpdate(ud)
-		if readyToReturnTestKnob(stopC, "committing updates") {
+		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
 			return
 		}
 		node.commitRaftUpdate(ud)

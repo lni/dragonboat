@@ -26,6 +26,7 @@ import (
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/internal/utils/fileutil"
 	"github.com/lni/dragonboat/internal/utils/logutil"
@@ -567,7 +568,7 @@ func (rc *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 		}
 		panic(err)
 	}
-	if readyToReturnTestKnob(rc.stopc, "snapshotter.Commit") {
+	if tests.ReadyToReturnTestKnob(rc.stopc, "snapshotter.Commit") {
 		return 0
 	}
 	plog.Infof("%s snapshotted, index %d, term %d, file count %d",

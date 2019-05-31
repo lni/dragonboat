@@ -12,11 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_slowtest
-// +build !dragonboat_monkeytest
+package tests
 
-package rsm
+import (
+	"testing"
+)
 
-func readyToReturnTestKnob(stopC <-chan struct{}, pos string) bool {
-	return false
+func TestMonkeyFlagIsNotSet(t *testing.T) {
+	if TestMonkeyEnabled {
+		t.Fatalf("test monkey unexpectedly enabled")
+	}
+}
+
+func TestReadyToReturnTestKnobAlwaysReturnFalse(t *testing.T) {
+	ch := make(chan struct{})
+	if ReadyToReturnTestKnob(ch, "") {
+		t.Fatalf("didn't return alse")
+	}
+	close(ch)
+	if ReadyToReturnTestKnob(ch, "") {
+		t.Fatalf("didn't return alse")
+	}
 }

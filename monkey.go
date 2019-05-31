@@ -190,19 +190,3 @@ func (p *testPartitionState) IsPartitioned() bool {
 func (p *testPartitionState) isPartitioned() bool {
 	return atomic.LoadUint32(&p.testPartitioned) == 1
 }
-
-// readyToReturnTestKnob is a test knob that returns a boolean value indicating
-// whether the system is being shutdown. In production, this function always
-// return false without check the stopC chan.
-func readyToReturnTestKnob(stopC chan struct{}, pos string) bool {
-	if stopC == nil {
-		return false
-	}
-	select {
-	case <-stopC:
-		plog.Infof("test knob set, returning early before %s", pos)
-		return true
-	default:
-		return false
-	}
-}

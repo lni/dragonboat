@@ -22,7 +22,3 @@ type testPartitionState struct {
 func (p *testPartitionState) isPartitioned() bool {
 	return false
 }
-
-func readyToReturnTestKnob(stopC chan struct{}, pos string) bool {
-	return false
-}
