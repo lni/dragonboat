@@ -523,7 +523,11 @@ TestEvent::TestEvent() noexcept
 void TestEvent::Wait() noexcept
 {
   std::unique_lock<std::mutex> lk(m_);
-  cv_.wait(lk, [this]() { return set_; });
+  while(!set_)
+  {
+    cv_.wait(lk, [this]() { return set_; });
+  }
+
 }
 
 void TestEvent::set() noexcept

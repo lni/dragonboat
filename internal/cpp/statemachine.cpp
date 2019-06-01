@@ -18,44 +18,46 @@
 
 namespace dragonboat {
 
-StateMachine::StateMachine(uint64_t clusterID, uint64_t nodeID) noexcept
+RegularStateMachine::RegularStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
   : cluster_id_(clusterID), node_id_(nodeID)
 {
 }
 
-StateMachine::~StateMachine()
+RegularStateMachine::~RegularStateMachine()
 {
 }
 
-uint64_t StateMachine::Update(const Byte *data, size_t size) noexcept
+uint64_t RegularStateMachine::Update(const Byte *data, size_t size) noexcept
 {
   return update(data, size);
 }
 
-LookupResult StateMachine::Lookup(const Byte *data, size_t size) const noexcept
+LookupResult RegularStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
 {
   return lookup(data, size);
 }
 
-uint64_t StateMachine::GetHash() const noexcept
+uint64_t RegularStateMachine::GetHash() const noexcept
 {
   return getHash();
 }
 
-SnapshotResult StateMachine::SaveSnapshot(SnapshotWriter *writer,
+SnapshotResult RegularStateMachine::SaveSnapshot(SnapshotWriter *writer,
   SnapshotFileCollection *collection,
   const DoneChan &done) const noexcept
 {
   return saveSnapshot(writer, collection, done);
 }
 
-int StateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+int RegularStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
   const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
 {
   return recoverFromSnapshot(reader, files, done);
 }
 
-void StateMachine::FreeLookupResult(LookupResult r) noexcept
+void RegularStateMachine::FreeLookupResult(LookupResult r) noexcept
 {
   freeLookupResult(r);
 }

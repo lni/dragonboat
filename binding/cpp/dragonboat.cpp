@@ -59,7 +59,7 @@ const char Logger::Transport[] = "transport";
 Config::Config(ClusterID clusterId, NodeID nodeId) noexcept
   : NodeId(nodeId), ClusterId(clusterId), IsObserver(false), CheckQuorum(false),
     Quiesce(false), ElectionRTT(10), HeartbeatRTT(1), SnapshotEntries(0),
-    CompactionOverhead(0), OrderedConfigChange(false)
+    CompactionOverhead(0), OrderedConfigChange(false), MaxInMemLogSize(0)
 {
 }
 
@@ -75,13 +75,13 @@ void parseConfig(const Config &config, ::RaftConfig &cfg) noexcept
   cfg.SnapshotEntries = config.SnapshotEntries;
   cfg.CompactionOverhead = config.CompactionOverhead;
   cfg.OrderedConfigChange = config.OrderedConfigChange;
+  cfg.MaxInMemLogSize = config.MaxInMemLogSize;
 }
 
 NodeHostConfig::NodeHostConfig(std::string WALDir,
   std::string NodeHostDir) noexcept
   : DeploymentID(1), WALDir(WALDir), NodeHostDir(NodeHostDir),
   RTTMillisecond(200), RaftAddress("localhost:9050"),
-  APIAddress("localhost:9060"), DrummerServers(),
   MutualTLS(false), CAFile(""), CertFile(""), KeyFile("")
 {
 }
@@ -104,6 +104,26 @@ int Status::Code() const noexcept
 bool Status::OK() const noexcept
 {
   return code_ == 0;
+}
+
+std::string Status::String() const noexcept
+{
+  switch (code_)
+  {
+  case ::StatusOK:
+    return "StatusOK";
+  case ::ErrClusterNotFound:
+    return "ErrClusterNotFound";
+  case ::ErrClusterAlreadyExist:
+    return "ErrClusterAlreadyExist";
+  case ::ErrDeadlineNotSet:
+    return "ErrDeadlineNotSet";
+  case ::ErrInvalidDeadline:
+    return "ErrInvalidDeadline";
+  // TODO
+  default:
+    return "Unknown Error Code " + std::to_string(code_);
+  }
 }
 
 const int Status::StatusOK = ::StatusOK;
@@ -293,18 +313,12 @@ NodeHost::NodeHost(const NodeHostConfig &c) noexcept
   cfg.NodeHostDir = toDBString(c.NodeHostDir);
   cfg.RTTMillisecond = c.RTTMillisecond.count();
   cfg.RaftAddress = toDBString(c.RaftAddress);
-  cfg.APIAddress = toDBString(c.APIAddress);
-  cfg.DrummerServersLen = c.DrummerServers.size();
-  cfg.DrummerServers = new DBString[c.DrummerServers.size()];
-  for (int i = 0; 0 < c.DrummerServers.size(); i++) {
-    cfg.DrummerServers[i] = toDBString(c.DrummerServers[i]);
-  }
+  cfg.ListenAddress = toDBString(c.ListenAddress);
   cfg.MutualTLS = c.MutualTLS == 1;
   cfg.CAFile = toDBString(c.CAFile);
   cfg.CertFile = toDBString(c.CertFile);
   cfg.KeyFile = toDBString(c.KeyFile);
   oid_ = CNewNodeHost(cfg);
-  delete[] cfg.DrummerServers;
 }
 
 NodeHost::~NodeHost() {}
@@ -328,7 +342,7 @@ Status NodeHost::StartCluster(const Peers& peers,
 }
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  StateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
   Config config) noexcept
 {
   ::RaftConfig cfg;

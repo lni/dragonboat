@@ -322,7 +322,7 @@ func (ds *StateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	}()
 	r := C.SaveSnapshotDBStateMachine(ds.dataStore,
 		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
-	errno := int(r.error)
+	errno := int(r.errcode)
 	err = getErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)

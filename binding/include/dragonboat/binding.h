@@ -111,11 +111,10 @@ typedef struct RaftConfig
   Bool Quiesce;
   uint64_t ElectionRTT;
   uint64_t HeartbeatRTT;
-  uint64_t MaxMessageSize;
-  int MaxInflightMessages;
   uint64_t SnapshotEntries;
   uint64_t CompactionOverhead;
   Bool OrderedConfigChange;
+  uint64_t MaxInMemLogSize;
 } RaftConfig;
 
 // NodeHostConfig is the configuration for the NodeHost instance. The
@@ -130,14 +129,18 @@ typedef struct NodeHostConfig
   DBString NodeHostDir;
   uint64_t RTTMillisecond;
   DBString RaftAddress;
-  DBString APIAddress;
-  DBString *DrummerServers;
-  int DrummerServersLen;
+  DBString ListenAddress;
   Bool MutualTLS;
   DBString CAFile;
   DBString CertFile;
   DBString KeyFile;
 } NodeHostConfig;
+
+typedef struct
+{
+  uint64_t result;
+  int errcode;
+} OpenResult;
 
 typedef struct
 {
@@ -147,8 +150,15 @@ typedef struct
 
 typedef struct
 {
+  char *result;
   size_t size;
-  int error;
+  int errcode;
+} PrepareSnapshotResult;
+
+typedef struct
+{
+  size_t size;
+  int errcode;
 } SnapshotResult;
 
 typedef struct

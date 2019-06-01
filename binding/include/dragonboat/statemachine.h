@@ -53,13 +53,13 @@ using SnapshotFile = struct SnapshotFile;
 //
 // Place this .so file in the working directory of dragonboat so it can be
 // picked up by dragonboat.
-class StateMachine
+class RegularStateMachine
 {
  public:
   // The clusterID and nodeID parameters are the cluster id and node id of
   // the node. They are provided for logging/debugging purposes.
-  StateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
-  virtual ~StateMachine();
+  RegularStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
+  virtual ~RegularStateMachine();
   uint64_t Update(const Byte *data, size_t size) noexcept;
   LookupResult Lookup(const Byte *data, size_t size) const noexcept;
   uint64_t GetHash() const noexcept;
@@ -134,13 +134,92 @@ class StateMachine
   // it back to a pool or something similiar to reuse the buffer in the future.
   virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:
-  DISALLOW_COPY_MOVE_AND_ASSIGN(StateMachine);
+  DISALLOW_COPY_MOVE_AND_ASSIGN(RegularStateMachine);
+};
+
+class ConcurrentStateMachine
+{
+ public:
+  ConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
+  virtual ~ConcurrentStateMachine();
+  // TODO
+  uint64_t Update(const Byte *data, size_t size) noexcept;
+  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
+  uint64_t GetHash() const noexcept;
+  PrepareSnapshotResult PrepareSnapshot() const noexcept;
+  // the saved snapshot should be associated with the input ctx
+  SnapshotResult SaveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, SnapshotFileCollection *collection,
+    const DoneChan &done) const noexcept;
+  int RecoverFromSnapshot(SnapshotReader *reader,
+    const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
+  void FreeLookupResult(LookupResult r) noexcept;
+ protected:
+  uint64_t cluster_id_;
+  uint64_t node_id_;
+  virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
+  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+  virtual uint64_t getHash() const noexcept = 0;
+  virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
+  virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, SnapshotFileCollection *collection,
+    const DoneChan &done) const noexcept = 0;
+  virtual int recoverFromSnapshot(SnapshotReader *reader,
+    const std::vector<SnapshotFile> &files,
+    const DoneChan &done) noexcept = 0;
+  virtual void freeLookupResult(LookupResult r) noexcept = 0;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentStateMachine);
+};
+
+class OnDiskStateMachine
+{
+ public:
+  OnDiskStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
+  virtual ~OnDiskStateMachine();
+  // TODO
+  OpenResult Open(const DoneChan &done) noexcept;
+  uint64_t Update(const Byte *data, size_t size) noexcept;
+  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
+  uint64_t GetHash() const noexcept;
+  PrepareSnapshotResult PrepareSnapshot() const noexcept;
+  SnapshotResult SaveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, SnapshotFileCollection *collection,
+    const DoneChan &done) const noexcept;
+  int RecoverFromSnapshot(uint64_t index, SnapshotReader *reader,
+    const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
+  void FreeLookupResult(LookupResult r) noexcept;
+ protected:
+  uint64_t cluster_id_;
+  uint64_t node_id_;
+  virtual OpenResult open(const DoneChan &done) noexcept = 0;
+  virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
+  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+  virtual uint64_t getHash() const noexcept = 0;
+  virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
+  virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, SnapshotFileCollection *collection,
+    const DoneChan &done) const noexcept = 0;
+  virtual int recoverFromSnapshot(uint64_t index, SnapshotReader *reader,
+    const std::vector<SnapshotFile> &files,
+    const DoneChan &done) noexcept = 0;
+  virtual void freeLookupResult(LookupResult r) noexcept = 0;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(OnDiskStateMachine);
 };
 
 }  // namespace dragonboat
 
-typedef struct CPPStateMachine {
-  dragonboat::StateMachine *sm;
-} CPPStateMachine;
+typedef struct CPPRegularStateMachine {
+  dragonboat::RegularStateMachine *sm;
+} CPPRegularStateMachine;
+
+typedef struct CPPConcurrentStateMachine {
+  dragonboat::ConcurrentStateMachine *sm;
+} CPPConcurrentStateMachine;
+
+typedef struct CPPOnDiskStateMachine {
+  dragonboat::OnDiskStateMachine *sm;
+} CPPOnDiskStateMachine;
 
 #endif  // BINDING_INCLUDE_DRAGONBOAT_STATEMACHINE_H_

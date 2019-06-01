@@ -32,8 +32,8 @@
 //   of dragonboat library, as there are obvious overheads for accessing Go
 //   features from C/C++.
 // - User applications can not specify what Raft RPC and Log DB implementation
-//   to use. The C++ binding always use the built-in TCP based Raft RPC module
-//   and the RocksDB based Log DB module.
+//   to use (either LevelDB or RocksDB). The C++ binding always use the built-in
+//   TCP based Raft RPC module and the RocksDB based Log DB module.
 // - Users can not specify custom logger to use in C++ applications.
 //
 
@@ -107,6 +107,9 @@ class Config
   // OrderedConfigChange determines whether Raft membership change is enforced
   // with ordered config change ID.
   bool OrderedConfigChange;
+  // MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored in
+  // memory.
+  uint64_t MaxInMemLogSize;
 };
 
 // NodeHostConfig is the configuration for NodeHost. The NodeHostConfig class
@@ -139,12 +142,8 @@ class NodeHostConfig
   Milliseconds RTTMillisecond;
   // RaftAddress is the address used for exchanging Raft messages.
   std::string RaftAddress;
-  // APIAddress is the address used for accessing nodehost RPC API. Empty value
-  // means nodehost API RPC server is not required.
-  std::string APIAddress;
-  // DrummerServers is a list of known drummer addresses. Empty value means
-  // there is no drummer server configured for this deployment.
-  std::vector<std::string> DrummerServers;
+  // ListenAddress is used by the Raft RPC module to listen on for Raft messages.
+  std::string ListenAddress;
   // MutualTLS defines whether to use mutual TLS for authenticating servers
   // and clients. Insecure communication is used when MutualTLS is set to
   // false.
@@ -170,6 +169,8 @@ class Status
   // OK returns a boolean value indicating whether the operation completed
   // successfully.
   bool OK() const noexcept;
+  // get string representation of the error code
+  std::string String() const noexcept;
   // Possible Code() values.
   static const int StatusOK;
   static const int ErrClusterNotFound;
@@ -357,7 +358,9 @@ class IOService
   virtual void run() noexcept = 0;
 };
 
-class StateMachine;
+class RegularStateMachine;
+class ConcurrentStateMachine;
+class OnDiskStateMachine;
 // NodeHost is the C++ wrapper of the Go NodeHost struct provided by the
 // github.com/lni/dragonboat/multiraft package.
 class NodeHost : public ManagedObject
@@ -389,7 +392,7 @@ class NodeHost : public ManagedObject
     bool join, std::string pluginFilepath, Config config) noexcept;
 
   Status StartCluster(const Peers& replicas, bool join,
-    StateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
     Config config) noexcept;
   // StopCluster removes the specified cluster node from NodeHost. Note that
   // StopCluster makes the specified node no longer managed by the NodeHost
