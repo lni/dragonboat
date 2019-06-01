@@ -53,7 +53,7 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	fn(r3)
 	r4 := &RequestState{node: &node{}}
 	r4.node.setInitialized()
-	r4.setReadyToRead()
+	r4.readyToRead.set()
 	r4.mustBeReadyForLocalRead()
 }
 
@@ -290,12 +290,44 @@ func TestRequestStateRelease(t *testing.T) {
 		node:        &node{},
 		pool:        &sync.Pool{},
 	}
-	rs.setReadyToRead()
+	rs.readyToRead.set()
+	rs.readyToRelease.set()
 	exp := RequestState{pool: rs.pool}
 	rs.Release()
 	if !reflect.DeepEqual(&exp, &rs) {
 		t.Errorf("unexpected state, got %+v, want %+v", rs, exp)
 	}
+}
+
+func TestRequestStateSetToReadyToReleaseOnceNotified(t *testing.T) {
+	rs := RequestState{
+		CompletedC: make(chan RequestResult, 1),
+	}
+	if rs.readyToRelease.ready() {
+		t.Errorf("already ready?")
+	}
+	rs.notify(RequestResult{})
+	if !rs.readyToRelease.ready() {
+		t.Errorf("failed to set ready to release to ready")
+	}
+}
+
+func TestReleasingNotReadyRequestStateWillPanic(t *testing.T) {
+	rs := RequestState{
+		key:         100,
+		clientID:    200,
+		seriesID:    300,
+		respondedTo: 400,
+		deadline:    500,
+		node:        &node{},
+		pool:        &sync.Pool{},
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("no panic")
+		}
+	}()
+	rs.Release()
 }
 
 func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
@@ -810,7 +842,13 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 		t.Errorf("not expected to be signaled")
 	default:
 	}
+	if rs.readyToRead.ready() {
+		t.Errorf("ready is already set")
+	}
 	pp.applied(500)
+	if !rs.readyToRead.ready() {
+		t.Errorf("ready not set")
+	}
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {

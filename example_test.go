@@ -100,12 +100,13 @@ func ExampleNodeHost_Propose() {
 		// failed to start the proposal
 		return
 	}
-	defer rs.Release()
 	s := <-rs.CompletedC
 	if s.Timeout() {
 		// the proposal failed to complete before the deadline, maybe retry the
 		// request
 	} else if s.Completed() {
+		// Release can only be called when the CompletedC chan has been signalled.
+		rs.Release()
 		// the proposal has been committed and applied
 		// put the request state instance back to the recycle pool
 	} else if s.Terminated() {
@@ -125,12 +126,12 @@ func ExampleNodeHost_ReadIndex() {
 		// ReadIndex failed to start
 		return
 	}
-	defer rs.Release()
 	s := <-rs.CompletedC
 	if s.Timeout() {
 		// the ReadIndex operation failed to complete before the deadline, maybe
 		// retry the request
 	} else if s.Completed() {
+		rs.Release()
 		// the ReadIndex operation completed. the local IStateMachine is ready to be
 		// queried
 		result, err := nh.ReadLocalNode(rs, data)
@@ -157,12 +158,12 @@ func ExampleNodeHost_RequestDeleteNode() {
 		// failed to start the membership change request
 		return
 	}
-	defer rs.Release()
 	s := <-rs.CompletedC
 	if s.Timeout() {
 		// the request failed to complete before the deadline, maybe retry the
 		// request
 	} else if s.Completed() {
+		rs.Release()
 		// the requested node has been removed from the raft cluster, ready to
 		// remove the node from the NodeHost running at myhostname1:5012, e.g.
 		// nh.RemoveCluster(100)
@@ -187,12 +188,12 @@ func ExampleNodeHost_RequestAddNode() {
 		// failed to start the membership change request
 		return
 	}
-	defer rs.Release()
 	s := <-rs.CompletedC
 	if s.Timeout() {
 		// the request failed to complete before the deadline, maybe retry the
 		// request
 	} else if s.Completed() {
+		rs.Release()
 		// the requested new node has been added to the raft cluster, ready to
 		// add the node to the NodeHost running at myhostname4:5012. run the
 		// following code on the NodeHost running at myhostname4:5012 -
@@ -244,7 +245,6 @@ func ExampleNodeHost_GetNewSession() {
 		// failed to start the proposal
 		return
 	}
-	defer rs.Release()
 	s := <-rs.CompletedC
 	if s.Timeout() {
 		// the proposal failed to complete before the deadline. maybe retry
@@ -255,6 +255,7 @@ func ExampleNodeHost_GetNewSession() {
 		// makes sure that the proposal is retried and it will be applied if
 		// and only if it has not been previously applied.
 	} else if s.Completed() {
+		rs.Release()
 		// the proposal has been committed and applied, call
 		// s.ProposalCompleted() to notify the client session that the previous
 		// request has been successfully completed. this makes the client

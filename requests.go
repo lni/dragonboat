@@ -248,6 +248,22 @@ type ICompleteHandler interface {
 	Release()
 }
 
+type ready struct {
+	val uint32
+}
+
+func (r *ready) ready() bool {
+	return atomic.LoadUint32(&r.val) == 1
+}
+
+func (r *ready) clear() {
+	atomic.StoreUint32(&r.val, 0)
+}
+
+func (r *ready) set() {
+	atomic.StoreUint32(&r.val, 1)
+}
+
 // RequestState is the object used to provide request result to users.
 type RequestState struct {
 	key             uint64
@@ -255,7 +271,8 @@ type RequestState struct {
 	seriesID        uint64
 	respondedTo     uint64
 	deadline        uint64
-	readyToRead     uint32
+	readyToRead     ready
+	readyToRelease  ready
 	completeHandler ICompleteHandler
 	// CompleteC is a channel for delivering request result to users.
 	CompletedC chan RequestResult
@@ -267,6 +284,7 @@ func (r *RequestState) notify(result RequestResult) {
 	if r.completeHandler == nil {
 		select {
 		case r.CompletedC <- result:
+			r.readyToRelease.set()
 		default:
 			plog.Panicf("RequestState.CompletedC is full")
 		}
@@ -277,9 +295,14 @@ func (r *RequestState) notify(result RequestResult) {
 	}
 }
 
-// Release puts the RequestState object back to the sync.Pool pool.
+// Release puts the RequestState instance back to an internal pool so it can be
+// reused. Release should only be called after RequestResult has been received
+// from the CompletedC channel.
 func (r *RequestState) Release() {
 	if r.pool != nil {
+		if !r.readyToRelease.ready() {
+			panic("RequestState released when never notified")
+		}
 		r.deadline = 0
 		r.key = 0
 		r.seriesID = 0
@@ -287,21 +310,10 @@ func (r *RequestState) Release() {
 		r.respondedTo = 0
 		r.completeHandler = nil
 		r.node = nil
-		r.clearReadyToRead()
+		r.readyToRead.clear()
+		r.readyToRelease.clear()
 		r.pool.Put(r)
 	}
-}
-
-func (r *RequestState) readyForLocalRead() bool {
-	return atomic.LoadUint32(&r.readyToRead) == 1
-}
-
-func (r *RequestState) clearReadyToRead() {
-	atomic.StoreUint32(&r.readyToRead, 0)
-}
-
-func (r *RequestState) setReadyToRead() {
-	atomic.StoreUint32(&r.readyToRead, 1)
 }
 
 func (r *RequestState) mustBeReadyForLocalRead() {
@@ -311,7 +323,7 @@ func (r *RequestState) mustBeReadyForLocalRead() {
 	if !r.node.initialized() {
 		plog.Panicf("%s not initialized", r.node.describe())
 	}
-	if !r.readyForLocalRead() {
+	if !r.readyToRead.ready() {
 		panic("not ready for local read")
 	}
 }
@@ -744,7 +756,7 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			toDelete = append(toDelete, userKey)
 			var v RequestResult
 			if req.deadline > now {
-				req.setReadyToRead()
+				req.readyToRead.set()
 				v.code = requestCompleted
 			} else {
 				v.code = requestTimeout
