@@ -100,7 +100,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		Hostname:  hostname,
 	}
 	if hardHashMismatch {
-		status.HardHash = 0
+		status.HardHash = 1
 	}
 	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
