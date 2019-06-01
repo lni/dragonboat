@@ -1,4 +1,4 @@
-![dragonboat](./doc/dragonboat.jpg)
+![dragonboat](./docs/dragonboat.jpg)
 # Dragonboat - A Multi-Group Raft library in Go / [中文版](README.CHS.md) ##
 [![license](http://img.shields.io/badge/license-Apache2-blue.svg)](https://github.com/lni/dragonboat/blob/master/LICENSE)
 ![Build status travis-ci](https://travis-ci.com/lni/dragonboat.svg?branch=master)
@@ -39,7 +39,7 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 * Disk based and memory based state machine support
 * Fully pipelined and TLS mutual authentication support, ready for high latency open environment
 * Custom Raft log storage and Raft RPC support, easy to integrate with latest I/O techs
-* [Extensively tested](/doc/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
+* [Extensively tested](/docs/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
 
 Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
 * leader election, log replication, snapshotting and log compaction
@@ -54,11 +54,11 @@ Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.
 ## Performance ##
 Dragonboat is the __fastest__ open source multi-group Raft implementation on Github. 
 
-For 3-nodes system using mid-range hardware, e.g. 22 cores Intel Xeon at 2.8Ghz and enterprise NVME SSD (details [here](doc/test.md)), Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
-![throughput](./doc/throughput.png)
+For 3-nodes system using mid-range hardware, e.g. 22 cores Intel Xeon at 2.8Ghz and enterprise NVME SSD (details [here](docs/test.md)), Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
+![throughput](./docs/throughput.png)
 
 The number of concurrent active Raft groups affects the overall throughput as requests become harder to be batched. On the other hand, having thousands of idle Raft groups has a much smaller impact on throughput.
-![nodes](./doc/nodes.png)
+![nodes](./docs/nodes.png)
 
 Table below shows write latencies in millisecond, Dragonboat has <5ms P99 write latency when handling 8 million writes per second at 16 bytes each. Read latency is lower than writes as the ReadIndex protocol employed for linearizable reads doesn't require fsync-ed disk I/O.
 
@@ -74,7 +74,7 @@ Table below shows write latencies in millisecond, Dragonboat has <5ms P99 write 
 When tested on a single Raft group, Dragonboat can sustain writes at 1.25 million per second when payload is 16 bytes each, average latency is 1.3ms and the P99 latency is 2.6ms. This is achieved when using an average of 3 cores (2.8GHz) on each server.
 
 As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millisecond on highly loaded systems. Such very short Stop-the-World pause time is further significantly reduced in Go 1.12. Golang's runtime.ReadMemStats reports that less than 1% of the available CPU time is used by GC on highly loaded system.
-![stw](./doc/stw.png)
+![stw](./docs/stw.png)
 
 ## Requirements ##
 * x86_64 Linux or MacOS, Go 1.11 or 1.12, GCC or Clang with C++11 support
@@ -87,7 +87,7 @@ To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
 ```
 $ go get -u -d github.com/lni/dragonboat
 ```
-You need to decide whether to use [RocksDB or LevelDB](https://github.com/lni/dragonboat/blob/master/doc/storage.md) to store Raft logs. RocksDB is recommended.
+You need to decide whether to use [RocksDB or LevelDB](docs/storage.md) to store Raft logs. RocksDB is recommended.
 
 ### RocksDB ###
 If RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include.
@@ -136,4 +136,4 @@ For reporting bugs, please open an [issue](https://github.com/lni/dragonboat/iss
 ## License ##
 Dragonboat is licensed under the Apache License Version 2.0. See LICENSE for details.
 
-Third party code used in Dragonboat and their licenses is summarized [here](doc/COPYRIGHT).
+Third party code used in Dragonboat and their licenses is summarized [here](docs/COPYRIGHT).
