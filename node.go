@@ -568,7 +568,7 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 		}
 		panic(err)
 	}
-	if tests.ReadyToReturnTestKnob(n.stopc, "snapshotter.Commit") {
+	if tests.ReadyToReturnTestKnob(n.stopc, true, "snapshotter.Commit") {
 		return 0
 	}
 	plog.Infof("%s snapshotted, index %d, term %d, file count %d",

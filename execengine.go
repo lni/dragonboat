@@ -626,7 +626,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	if len(nodes) == 0 {
 		return
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "") {
+	if tests.ReadyToReturnTestKnob(stopC, false, "") {
 		return
 	}
 	nodeCtx := s.ctxs[workerID-1]
@@ -657,7 +657,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	if !hasSnapshot {
 		s.applySnapshotAndUpdate(nodeUpdates, nodes)
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "sending append msg") {
+	if tests.ReadyToReturnTestKnob(stopC, false, "sending append msg") {
 		return
 	}
 	// see raft thesis section 10.2.1 on details why we send Relicate message
@@ -669,7 +669,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	}
 	p.step.end()
 	p.recordEntryCount(nodeUpdates)
-	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
+	if tests.ReadyToReturnTestKnob(stopC, false, "saving raft state") {
 		return
 	}
 	p.save.start()
@@ -677,19 +677,19 @@ func (s *execEngine) execNodes(workerID uint64,
 		panic(err)
 	}
 	p.save.end()
-	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {
+	if tests.ReadyToReturnTestKnob(stopC, false, "saving snapshots") {
 		return
 	}
 	if hasSnapshot {
 		if err := s.onSnapshotSaved(nodeUpdates, nodes); err != nil {
 			panic(err)
 		}
-		if tests.ReadyToReturnTestKnob(stopC, "applying updates") {
+		if tests.ReadyToReturnTestKnob(stopC, false, "applying updates") {
 			return
 		}
 		s.applySnapshotAndUpdate(nodeUpdates, nodes)
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "processing raft updates") {
+	if tests.ReadyToReturnTestKnob(stopC, false, "processing raft updates") {
 		return
 	}
 	p.cs.start()
@@ -700,7 +700,7 @@ func (s *execEngine) execNodes(workerID uint64,
 				node.describe())
 		}
 		s.processRaftUpdate(ud)
-		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
+		if tests.ReadyToReturnTestKnob(stopC, false, "committing updates") {
 			return
 		}
 		node.commitRaftUpdate(ud)
