@@ -281,8 +281,8 @@ type RequestState struct {
 }
 
 func (r *RequestState) notify(result RequestResult) {
+	r.readyToRelease.set()
 	if r.completeHandler == nil {
-		r.readyToRelease.set()
 		select {
 		case r.CompletedC <- result:
 		default:
