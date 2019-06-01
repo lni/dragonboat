@@ -88,10 +88,9 @@ var (
 		mtNodeID2,
 		mtNodeID3,
 	}
-
-	caFile   = "templates/tests/test-root-ca.crt"
-	certFile = "templates/tests/localhost.crt"
-	keyFile  = "templates/tests/localhost.key"
+	caFile   = "internal/drummer/testdata/test-root-ca.crt"
+	certFile = "internal/drummer/testdata/localhost.crt"
+	keyFile  = "internal/drummer/testdata/localhost.key"
 )
 
 type mtAddressList struct {
