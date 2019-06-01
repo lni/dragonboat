@@ -295,7 +295,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-multiraft test-utils test-config test-client test-server test-tools \
-	test-plugins test-tests
+	test-plugins test-tests test-drummer
 
 ###############################################################################
 # fast tests executed for every git push
@@ -620,11 +620,10 @@ clean: clean-binding
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
-  drummercmd drummer nodehost \
 	$(DRUMMER_MONKEY_TESTING_BIN) $(MULTIRAFT_MONKEY_TESTING_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
-	test-transport test-multiraft test-drummer test-session test-server test-utils \
+	test-transport test-multiraft test-drummer test-client test-server test-utils \
 	test-config test-tests static-check clean plugin-kvtest logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \
