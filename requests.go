@@ -282,9 +282,9 @@ type RequestState struct {
 
 func (r *RequestState) notify(result RequestResult) {
 	if r.completeHandler == nil {
+		r.readyToRelease.set()
 		select {
 		case r.CompletedC <- result:
-			r.readyToRelease.set()
 		default:
 			plog.Panicf("RequestState.CompletedC is full")
 		}
