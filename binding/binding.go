@@ -250,31 +250,20 @@ func StopNodeHost(oid uint64) {
 	nh.Stop()
 }
 
-// NodeHostStartCluster adds a new raft cluster node to be managed by the
-// specified NodeHost and start the node to make it ready to accept incoming
-// requests.
-//export NodeHostStartCluster
-func NodeHostStartCluster(oid uint64,
-	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, pluginFilename C.DBString, cfg C.RaftConfig) int {
-	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-		joinPeer, unsafe.Pointer(nil), pluginFilename, cfg)
-}
-
 // NodeHostStartClusterFromFactory adds a new raft cluster node to be managed by the
 // specified NodeHost and start the node to make it ready to accept incoming
 // requests.
-//export NodeHostStartClusterFromFactory
-func NodeHostStartClusterFromFactory(oid uint64,
-	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, factory unsafe.Pointer, cfg C.RaftConfig) int {
+//export NodeHostStartCluster
+func NodeHostStartCluster(oid uint64, nodeIDList *C.uint64_t,
+	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
+	factory unsafe.Pointer, smType int32, cfg C.RaftConfig) int {
 	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-		joinPeer, factory, C.DBString{}, cfg)
+		joinPeer, factory, smType, cfg)
 }
 
 func nodeHostStartCluster(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, factory unsafe.Pointer, pluginFilename C.DBString,
+	joinPeer C.char, factory unsafe.Pointer, smType int32,
 	cfg C.RaftConfig) int {
 	c := config.Config{
 		NodeID:              uint64(cfg.NodeID),
@@ -305,12 +294,7 @@ func nodeHostStartCluster(oid uint64,
 	}
 	nh := getNodeHost(oid)
 	var err error
-	if factory != unsafe.Pointer(nil) {
-		err = nh.StartClusterUsingFactory(peers, join, factory, c)
-	} else {
-		err = nh.StartClusterUsingPlugin(peers,
-			join, charArrayToString(pluginFilename.str, pluginFilename.len), c)
-	}
+	err = nh.StartClusterUsingFactory(peers, join, factory, smType, c)
 	return getErrorCode(err)
 }
 

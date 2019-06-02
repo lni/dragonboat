@@ -328,18 +328,18 @@ void NodeHost::Stop() noexcept
   CStopNodeHost(oid_);
 }
 
-Status NodeHost::StartCluster(const Peers& peers,
-  bool join, std::string pluginFilename, Config config) noexcept
-{
-  ::RaftConfig cfg;
-  parseConfig(config, cfg);
-  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
-  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
-  parsePeers(peers, strs.get(), nodeIDList.get());
-  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, toDBString(pluginFilename), cfg);
-  return Status(code);
-}
+//Status NodeHost::StartCluster(const Peers& peers,
+//  bool join, std::string pluginFilename, Config config) noexcept
+//{
+//  ::RaftConfig cfg;
+//  parseConfig(config, cfg);
+//  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+//  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+//  parsePeers(peers, strs.get(), nodeIDList.get());
+//  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+//    peers.Len(), join, toDBString(pluginFilename), cfg);
+//  return Status(code);
+//}
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
   RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
@@ -350,8 +350,39 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
   std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
-  int code = CNodeHostStartClusterFromFactory(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<void *>(factory), cfg);
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(factory),
+    REGULAR_STATEMACHINE, cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  ConcurrentStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(factory),
+    CONCURRENT_STATEMACHINE, cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  OnDiskStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(factory),
+    ONDISK_STATEMACHINE, cfg);
   return Status(code);
 }
 

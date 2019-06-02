@@ -80,20 +80,20 @@ void CStopNodeHost(uint64_t oid)
   StopNodeHost(oid);
 }
 
-int CNodeHostStartCluster(uint64_t oid, 
+//int CNodeHostStartCluster(uint64_t oid,
+//  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+//  Bool join, DBString pluginFilename, RaftConfig cfg)
+//{
+//  return NodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
+//    join, pluginFilename, cfg);
+//}
+
+int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, DBString pluginFilename, RaftConfig cfg)
+  Bool join, void *factory, int32_t smType, RaftConfig cfg)
 {
   return NodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-    join, pluginFilename, cfg);
-}
-
-int CNodeHostStartClusterFromFactory(uint64_t oid,
-  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, void *factory, RaftConfig cfg)
-{
-  return NodeHostStartClusterFromFactory(oid, nodeIDList, nodeAddressList, nodeListLen,
-    join, factory, cfg);
+    join, factory, smType, cfg);
 }
 
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID)

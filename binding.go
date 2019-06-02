@@ -24,7 +24,6 @@ import (
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/internal/cpp"
 	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
 	pb "github.com/lni/dragonboat/raftpb"
 )
 
@@ -86,28 +85,30 @@ func (nh *NodeHost) ProposeSessionCH(s *client.Session,
 // specify the factory function used for creating the IStateMachine instance,
 // StartClusterUsingPlugin requires the full path of the CPP plugin you want
 // the Raft cluster to use.
-func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
-	join bool, pluginFilename string, config config.Config) error {
-	stopc := make(chan struct{})
-	appName := fileutil.GetAppNameFromFilename(pluginFilename)
-	cf := func(clusterID uint64, nodeID uint64,
-		done <-chan struct{}) rsm.IManagedStateMachine {
-		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
-	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
-}
+// func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
+// 	join bool, pluginFilename string, config config.Config) error {
+// 	stopc := make(chan struct{})
+// 	appName := fileutil.GetAppNameFromFilename(pluginFilename)
+// 	cf := func(clusterID uint64, nodeID uint64,
+// 		done <-chan struct{}) rsm.IManagedStateMachine {
+// 		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
+// 	}
+// 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
+// }
 
 // StartClusterUsingFactory adds a new cluster node to the NodeHost and start
 // running the new node. StartClusterUsingFactory requires the pointer to CPP
 // statemachine factory function.
-func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string,
-	join bool, factory unsafe.Pointer, config config.Config) error {
+func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string, join bool,
+	factory unsafe.Pointer, smType int32, config config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		return cpp.NewStateMachineFromFactoryWrapper(clusterID, nodeID, factory, done)
+		return cpp.NewStateMachineWrapper(clusterID,
+			nodeID, factory, pb.StateMachineType(smType), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
+	return nh.startCluster(nodes,
+		join, cf, stopc, config, pb.StateMachineType(smType))
 }
 
 // ReadLocal queries the specified Raft node. To ensure the linearizability of

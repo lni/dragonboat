@@ -28,6 +28,15 @@ extern "C" {
 
 enum
 {
+  // StateMachine type, the same as the StateMachineType int raftpb/raft.pb.go
+  UNKNOWN_STATEMACHINE = 0,
+  REGULAR_STATEMACHINE = 1,
+  CONCURRENT_STATEMACHINE = 2,
+  ONDISK_STATEMACHINE = 3,
+};
+
+enum
+{
   // Save snapshot or recover from snapshot completed successfully.
   SNAPSHOT_OK = 0,
   // Failed to recover from the snapshot, e.g. the snapshot data read from the
@@ -236,12 +245,12 @@ int CSelectOnRequestStateForMembershipChange(uint64_t rsoid);
 void CSessionProposalCompleted(uint64_t csoid);
 uint64_t CNewNodeHost(NodeHostConfig cfg);
 void CStopNodeHost(uint64_t oid);
+//int CNodeHostStartCluster(uint64_t oid,
+//  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+//  Bool join, DBString pluginFilename, RaftConfig cfg);
 int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, DBString pluginFilename, RaftConfig cfg);
-int CNodeHostStartClusterFromFactory(uint64_t oid,
-  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, void *factory, RaftConfig cfg);
+  Bool join, void *factory, int32_t smType, RaftConfig cfg);
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID);
 NewSessionResult CNodeHostGetNewSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);

@@ -22,25 +22,73 @@
 extern "C" {
 #endif
 
-typedef struct CPPStateMachine CPPStateMachine;
+typedef struct CPPRegularStateMachine CPPRegularStateMachine;
+typedef struct CPPConcurrentStateMachine CPPConcurrentStateMachine;
+typedef struct CPPOnDiskStateMachine CPPOnDiskStateMachine;
 typedef struct CollectedFiles CollectedFiles;
 
-int IsValidDragonboatPlugin(char *soFilename);
-CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
-  uint64_t nodeID, char *soFilename);
-CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
+// FIXME: remove plugin based statemachine for now
+// int IsValidDragonboatPlugin(char *soFilename);
+// CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
+//   uint64_t nodeID, char *soFilename);
+CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
   uint64_t nodeID, void *factory);
-void DestroyDBStateMachine(CPPStateMachine *ds);
-uint64_t UpdateDBStateMachine(CPPStateMachine *ds,
+void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds);
+uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size);
-LookupResult LookupDBStateMachine(CPPStateMachine *ds,
+LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size);
-uint64_t GetHashDBStateMachine(CPPStateMachine *ds);
-SnapshotResult SaveSnapshotDBStateMachine(CPPStateMachine *ds,
+uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds);
+SnapshotResult SaveSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID);
-int RecoverFromSnapshotDBStateMachine(CPPStateMachine *ds,
+int RecoverFromSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
-void FreeLookupResult(CPPStateMachine *ds, LookupResult r);
+void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
+  LookupResult r);
+
+CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory);
+void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
+uint64_t UpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size);
+LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size);
+uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
+PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds);
+SnapshotResult SaveSnapshotDBConcurrentStateMachine(const unsigned char *data,
+  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
+  uint64_t collectionOID, uint64_t doneChOID);
+int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
+void FreePrepareSnapshotResultDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds, PrepareSnapshotResult r);
+void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  LookupResult r);
+
+CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory);
+void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  uint64_t doneChOID);
+uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const unsigned char *data, size_t size);
+LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const unsigned char *data, size_t size);
+int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+uint64_t GetHashDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
+  CPPOnDiskStateMachine *ds);
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(const unsigned char *data,
+  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
+  uint64_t collectionOID, uint64_t doneChOID);
+int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
+void FreePrepareSnapshotResultDBOnDiskStateMachine(
+  CPPOnDiskStateMachine *ds, PrepareSnapshotResult r);
+void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  LookupResult r);
+
 CollectedFiles *GetCollectedFile();
 void FreeCollectedFile(CollectedFiles *cf);
 void AddToCollectedFile(CollectedFiles *cf, uint64_t fileID,

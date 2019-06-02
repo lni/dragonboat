@@ -388,11 +388,18 @@ class NodeHost : public ManagedObject
   //    the intialPeers instance will be ignored by the system
   //  - joining a new node to an existing Raft cluster, set join to true and
   //    leave replicas empty
-  Status StartCluster(const Peers& replicas,
-    bool join, std::string pluginFilepath, Config config) noexcept;
+  // FIXME: remove plugin based statemachine for now
+  // Status StartCluster(const Peers& replicas,
+  //   bool join, std::string pluginFilepath, Config config) noexcept;
 
   Status StartCluster(const Peers& replicas, bool join,
     RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    Config config) noexcept;
+  Status StartCluster(const Peers& replicas, bool join,
+    ConcurrentStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    Config config) noexcept;
+  Status StartCluster(const Peers& replicas, bool join,
+    OnDiskStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
     Config config) noexcept;
   // StopCluster removes the specified cluster node from NodeHost. Note that
   // StopCluster makes the specified node no longer managed by the NodeHost

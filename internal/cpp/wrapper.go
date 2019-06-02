@@ -165,53 +165,69 @@ func getErrorFromErrNo(errno int) error {
 	return fmt.Errorf("snapshot error with errno %d", errno)
 }
 
-// StateMachineWrapper is the IManagedStateMachine managing C++ data store.
-type StateMachineWrapper struct {
+// NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
+// instance.
+// func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
+// 	dsname string, done <-chan struct{}) rsm.IManagedStateMachine {
+// 	cClusterID := C.uint64_t(clusterID)
+// 	cNodeID := C.uint64_t(nodeID)
+// 	cDSName := C.CString(getCPPSOFileName(dsname))
+// 	defer C.free(unsafe.Pointer(cDSName))
+// 	return &StateMachineWrapper{
+// 		dataStore: C.CreateDBStateMachine(cClusterID, cNodeID, cDSName),
+// 		done:      done,
+// 	}
+// }
+
+// NewStateMachineFromFactoryWrapper creates and returns the new NewStateMachineWrapper
+// instance.
+func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
+	factory unsafe.Pointer, smType pb.StateMachineType,
+	done <-chan struct{}) rsm.IManagedStateMachine {
+	cClusterID := C.uint64_t(clusterID)
+	cNodeID := C.uint64_t(nodeID)
+	cFactory := factory
+	switch smType {
+	case pb.RegularStateMachine:
+		return &RegularStateMachineWrapper{
+			dataStore: C.CreateDBRegularStateMachine(cClusterID, cNodeID, cFactory),
+			done:      done,
+		}
+	case pb.ConcurrentStateMachine:
+		return &ConcurrentStateMachineWrapper{
+			dataStore: C.CreateDBConcurrentStateMachine(cClusterID, cNodeID, cFactory),
+			done:      done,
+		}
+	case pb.OnDiskStateMachine:
+		return &OnDiskStateMachineWrapper{
+			dataStore: C.CreateDBOnDiskStateMachine(cClusterID, cNodeID, cFactory),
+			done:      done,
+		}
+	default:
+		panic("unkown statemachine type")
+	}
+}
+
+// RegularStateMachineWrapper is the IManagedStateMachine managing C++ data store.
+type RegularStateMachineWrapper struct {
 	rsm.OffloadedStatus
 	// void * points to the actual data store
-	dataStore *C.CPPStateMachine
+	dataStore *C.CPPRegularStateMachine
 	done      <-chan struct{}
 	mu        sync.RWMutex
 }
 
-// NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
-// instance.
-func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
-	dsname string, done <-chan struct{}) rsm.IManagedStateMachine {
-	cClusterID := C.uint64_t(clusterID)
-	cNodeID := C.uint64_t(nodeID)
-	cDSName := C.CString(getCPPSOFileName(dsname))
-	defer C.free(unsafe.Pointer(cDSName))
-	return &StateMachineWrapper{
-		dataStore: C.CreateDBStateMachine(cClusterID, cNodeID, cDSName),
-		done:      done,
-	}
-}
-
-// NewStateMachineFromFactoryWrapper creates and returns the new NewStateMachineWrapper
-// instance.
-func NewStateMachineFromFactoryWrapper(clusterID uint64, nodeID uint64,
-	factory unsafe.Pointer, done <-chan struct{}) rsm.IManagedStateMachine {
-	cClusterID := C.uint64_t(clusterID)
-	cNodeID := C.uint64_t(nodeID)
-	cFactory := factory
-	return &StateMachineWrapper{
-		dataStore: C.CreateDBStateMachineFromFactory(cClusterID, cNodeID, cFactory),
-		done:      done,
-	}
-}
-
-func (ds *StateMachineWrapper) destroy() {
-	C.DestroyDBStateMachine(ds.dataStore)
+func (ds *RegularStateMachineWrapper) destroy() {
+	C.DestroyDBRegularStateMachine(ds.dataStore)
 }
 
 // Open opens the state machine.
-func (ds *StateMachineWrapper) Open() (uint64, error) {
+func (ds *RegularStateMachineWrapper) Open() (uint64, error) {
 	panic("Open() called on StateMachineWrapper")
 }
 
 // Offloaded offloads the data store from the specified part of the system.
-func (ds *StateMachineWrapper) Offloaded(from rsm.From) {
+func (ds *RegularStateMachineWrapper) Offloaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
@@ -222,7 +238,7 @@ func (ds *StateMachineWrapper) Offloaded(from rsm.From) {
 }
 
 // Loaded marks the data store as loaded by the specified component.
-func (ds *StateMachineWrapper) Loaded(from rsm.From) {
+func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
@@ -230,19 +246,19 @@ func (ds *StateMachineWrapper) Loaded(from rsm.From) {
 
 // BatchedUpdate applies committed entries in a batch to hide latency. This
 // method is not supported in the C++ wrapper.
-func (ds *StateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
+func (ds *RegularStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	panic("not supported")
 }
 
 // Update updates the data store.
-func (ds *StateMachineWrapper) Update(session *rsm.Session,
+func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	v := C.UpdateDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
@@ -250,7 +266,7 @@ func (ds *StateMachineWrapper) Update(session *rsm.Session,
 }
 
 // Lookup queries the data store.
-func (ds *StateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
+func (ds *RegularStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
 		ds.mu.RUnlock()
@@ -262,44 +278,44 @@ func (ds *StateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
 	if len(data) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 	}
-	r := C.LookupDBStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	r := C.LookupDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
 	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResult(ds.dataStore, r)
+	C.FreeLookupResultDBRegularStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil
 }
 
 // NALookup queries the data store.
-func (ds *StateMachineWrapper) NALookup(query []byte) ([]byte, error) {
+func (ds *RegularStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
 	panic("not implemented")
 }
 
 // Sync synchronizes the state machine's in-core state with that on disk.
-func (ds *StateMachineWrapper) Sync() error {
+func (ds *RegularStateMachineWrapper) Sync() error {
 	panic("Sync not suppose to be called")
 }
 
 // GetHash returns an integer value representing the state of the data store.
-func (ds *StateMachineWrapper) GetHash() (uint64, error) {
+func (ds *RegularStateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
-	v := C.GetHashDBStateMachine(ds.dataStore)
+	v := C.GetHashDBRegularStateMachine(ds.dataStore)
 	return uint64(v), nil
 }
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
-func (ds *StateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+func (ds *RegularStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	panic("PrepareSnapshot not suppose to be called")
 }
 
 // StreamSnapshot streams the snapshot to the remote node.
-func (ds *StateMachineWrapper) StreamSnapshot(ssctx interface{},
+func (ds *RegularStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
 	panic("StreamSnapshot not suppose to be called")
 }
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
-func (ds *StateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	writer *rsm.SnapshotWriter,
 	session []byte,
 	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
@@ -320,7 +336,7 @@ func (ds *StateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		RemoveManagedObject(collectionOID)
 		RemoveManagedObject(doneChOID)
 	}()
-	r := C.SaveSnapshotDBStateMachine(ds.dataStore,
+	r := C.SaveSnapshotDBRegularStateMachine(ds.dataStore,
 		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
 	err = getErrorFromErrNo(errno)
@@ -335,19 +351,19 @@ func (ds *StateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
 // machine is capable of taking concurrent snapshots.
-func (ds *StateMachineWrapper) ConcurrentSnapshot() bool {
+func (ds *RegularStateMachineWrapper) ConcurrentSnapshot() bool {
 	return false
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether the state
 // machine is an on disk state machine.
-func (ds *StateMachineWrapper) OnDiskStateMachine() bool {
+func (ds *RegularStateMachineWrapper) OnDiskStateMachine() bool {
 	return false
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *StateMachineWrapper) RecoverFromSnapshot(index uint64,
+func (ds *RegularStateMachineWrapper) RecoverFromSnapshot(index uint64,
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
@@ -362,17 +378,17 @@ func (ds *StateMachineWrapper) RecoverFromSnapshot(index uint64,
 	}
 	readerOID := AddManagedObject(reader)
 	doneChOID := AddManagedObject(ds.done)
-	r := C.RecoverFromSnapshotDBStateMachine(ds.dataStore,
+	r := C.RecoverFromSnapshotDBRegularStateMachine(ds.dataStore,
 		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
 	return getErrorFromErrNo(int(r))
 }
 
 // StateMachineType returns the state machine type.
-func (ds *StateMachineWrapper) StateMachineType() pb.StateMachineType {
+func (ds *RegularStateMachineWrapper) StateMachineType() pb.StateMachineType {
 	return pb.RegularStateMachine
 }
 
-func (ds *StateMachineWrapper) ensureNotDestroyed() {
+func (ds *RegularStateMachineWrapper) ensureNotDestroyed() {
 	if ds.Destroyed() {
 		panic("using a destroyed data store instance detected")
 	}
@@ -381,4 +397,159 @@ func (ds *StateMachineWrapper) ensureNotDestroyed() {
 func getCPPSOFileName(dsname string) string {
 	d := strings.ToLower(dsname)
 	return fmt.Sprintf("./dragonboat-cpp-plugin-%s.so", d)
+}
+
+type ConcurrentStateMachineWrapper struct {
+	rsm.OffloadedStatus
+	dataStore *C.CPPConcurrentStateMachine
+	done      <-chan struct{}
+	mu        sync.RWMutex
+}
+
+func (ds *ConcurrentStateMachineWrapper) destroy() {
+	C.DestroyDBConcurrentStateMachine(ds.dataStore)
+}
+
+func (ConcurrentStateMachineWrapper) Open() (uint64, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) Update(*rsm.Session, pb.Entry) (sm.Result, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) BatchedUpdate([]sm.Entry) ([]sm.Entry, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) Lookup(interface{}) (interface{}, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) NALookup([]byte) ([]byte, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) Sync() error {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) SaveSnapshot(*rsm.SnapshotMeta,
+	*rsm.SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) RecoverFromSnapshot(uint64, *rsm.SnapshotReader, []sm.SnapshotFile) error {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) StreamSnapshot(interface{}, *rsm.ChunkWriter) error {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) Offloaded(rsm.From) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) Loaded(rsm.From) {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) ConcurrentSnapshot() bool {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) OnDiskStateMachine() bool {
+	panic("implement me")
+}
+
+func (ConcurrentStateMachineWrapper) StateMachineType() pb.StateMachineType {
+	panic("implement me")
+}
+
+type OnDiskStateMachineWrapper struct {
+	rsm.OffloadedStatus
+	dataStore    *C.CPPOnDiskStateMachine
+	done         <-chan struct{}
+	mu           sync.RWMutex
+	opened       bool
+	initialIndex uint64
+	applied      uint64
+}
+
+func (ds *OnDiskStateMachineWrapper) destroy() {
+	C.DestroyDBOnDiskStateMachine(ds.dataStore)
+}
+
+func (OnDiskStateMachineWrapper) Open() (uint64, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) Update(*rsm.Session, pb.Entry) (sm.Result, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) BatchedUpdate([]sm.Entry) ([]sm.Entry, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) Lookup(interface{}) (interface{}, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) NALookup([]byte) ([]byte, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) Sync() error {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) GetHash() (uint64, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) SaveSnapshot(*rsm.SnapshotMeta,
+	*rsm.SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) RecoverFromSnapshot(uint64, *rsm.SnapshotReader, []sm.SnapshotFile) error {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) StreamSnapshot(interface{}, *rsm.ChunkWriter) error {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) Offloaded(rsm.From) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) Loaded(rsm.From) {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) ConcurrentSnapshot() bool {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) OnDiskStateMachine() bool {
+	panic("implement me")
+}
+
+func (OnDiskStateMachineWrapper) StateMachineType() pb.StateMachineType {
+	panic("implement me")
 }

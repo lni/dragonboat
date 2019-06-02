@@ -62,4 +62,124 @@ void RegularStateMachine::FreeLookupResult(LookupResult r) noexcept
   freeLookupResult(r);
 }
 
+ConcurrentStateMachine::ConcurrentStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
+  : cluster_id_(clusterID), node_id_(nodeID)
+{
+}
+
+ConcurrentStateMachine::~ConcurrentStateMachine()
+{
+}
+
+uint64_t ConcurrentStateMachine::Update(const Byte *byte, size_t size) noexcept
+{
+  return update(byte, size);
+}
+
+LookupResult ConcurrentStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
+{
+  return lookup(data, size);
+}
+
+uint64_t ConcurrentStateMachine::GetHash() const noexcept
+{
+  return getHash();
+}
+
+PrepareSnapshotResult ConcurrentStateMachine::PrepareSnapshot() const noexcept
+{
+  return prepareSnapshot();
+}
+
+SnapshotResult ConcurrentStateMachine::SaveSnapshot(const Byte *ctx,
+  size_t size, SnapshotWriter *writer, SnapshotFileCollection *collection,
+  const DoneChan &done) const noexcept
+{
+  return saveSnapshot(ctx, size, writer, collection, done);
+}
+
+int ConcurrentStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+  const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
+{
+  return recoverFromSnapshot(reader, files, done);
+}
+
+void ConcurrentStateMachine::FreePrepareSnapshotResult(
+  PrepareSnapshotResult r) noexcept
+{
+  freePrepareSnapshotResult(r);
+}
+
+void ConcurrentStateMachine::FreeLookupResult(LookupResult r) noexcept
+{
+  freeLookupResult(r);
+}
+
+OnDiskStateMachine::OnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
+  : cluster_id_(clusterID), node_id_(nodeID)
+{
+}
+
+OnDiskStateMachine::~OnDiskStateMachine()
+{
+}
+
+OpenResult OnDiskStateMachine::Open(const DoneChan &done) noexcept
+{
+  return open(done);
+}
+
+uint64_t OnDiskStateMachine::Update(const Byte *data, size_t size) noexcept
+{
+  return update(data, size);
+}
+
+LookupResult OnDiskStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
+{
+  return lookup(data, size);
+}
+
+int OnDiskStateMachine::Sync() const noexcept
+{
+  return sync();
+}
+
+uint64_t OnDiskStateMachine::GetHash() const noexcept
+{
+  return getHash();
+}
+
+PrepareSnapshotResult OnDiskStateMachine::PrepareSnapshot() const noexcept
+{
+  return prepareSnapshot();
+}
+
+SnapshotResult OnDiskStateMachine::SaveSnapshot(const Byte *ctx, size_t size,
+  SnapshotWriter *writer, SnapshotFileCollection *collection,
+  const DoneChan &done) const noexcept
+{
+  return saveSnapshot(ctx, size, writer, collection, done);
+}
+
+int OnDiskStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+  const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
+{
+  return recoverFromSnapshot(reader, files, done);
+}
+
+void OnDiskStateMachine::FreePrepareSnapshotResult(
+  PrepareSnapshotResult r) noexcept
+{
+  freePrepareSnapshotResult(r);
+}
+
+void OnDiskStateMachine::FreeLookupResult(LookupResult r) noexcept
+{
+  freeLookupResult(r);
+}
+
 }  // namespace dragonboat
