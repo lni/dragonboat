@@ -337,7 +337,7 @@ func (n *node) requestLeaderTransfer(nodeID uint64) {
 }
 
 func (n *node) requestSnapshot(opt SnapshotOption,
-	timeout time.Duration) (*SnapshotState, error) {
+	timeout time.Duration) (*RequestState, error) {
 	st := rsm.UserRequestedSnapshot
 	if opt.Exported {
 		plog.Infof("export snapshot called on %s", n.describe())

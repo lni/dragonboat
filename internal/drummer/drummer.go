@@ -72,7 +72,7 @@ func (c *sessionUser) getSession(ctx context.Context) *client.Session {
 	if c.session == nil {
 		rctx, cancel := context.WithTimeout(ctx,
 			time.Duration(sessionTimeoutSecond)*time.Second)
-		cs, err := c.nh.GetNewSession(rctx, defaultClusterID)
+		cs, err := c.nh.SyncGetSession(rctx, defaultClusterID)
 		cancel()
 		if err != nil {
 			return nil
@@ -90,7 +90,7 @@ func (c *sessionUser) resetSession(ctx context.Context) {
 	c.session = nil
 	rctx, cancel := context.WithTimeout(ctx,
 		time.Duration(sessionTimeoutSecond)*time.Second)
-	if err := c.nh.CloseSession(rctx, cs); err != nil {
+	if err := c.nh.SyncCloseSession(rctx, cs); err != nil {
 		plog.Errorf("failed to close session %v", err)
 	}
 	cancel()

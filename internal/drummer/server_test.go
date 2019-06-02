@@ -52,7 +52,7 @@ func TestDeploymentIDCanBeSetAndGet(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		session, err = drummerNodes[0].nh.GetNewSession(ctx, defaultClusterID)
+		session, err = drummerNodes[0].nh.SyncGetSession(ctx, defaultClusterID)
 		if err == nil {
 			break
 		}
@@ -63,7 +63,7 @@ func TestDeploymentIDCanBeSetAndGet(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		drummerNodes[0].nh.CloseSession(ctx, session)
+		drummerNodes[0].nh.SyncCloseSession(ctx, session)
 	}()
 	var did uint64
 	retry := 0

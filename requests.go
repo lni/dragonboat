@@ -79,50 +79,6 @@ var (
 	ErrRejected = errors.New("request rejected")
 )
 
-// SnapshotResult is the result of a snapshot request.
-type SnapshotResult struct {
-	code  RequestResultCode
-	index uint64
-}
-
-// Timeout returns a boolean value indicating whether the request timed out.
-func (sr *SnapshotResult) Timeout() bool {
-	return sr.code == requestTimeout
-}
-
-// Completed returns a boolean value indicating the request completed
-// successfully.
-func (sr *SnapshotResult) Completed() bool {
-	return sr.code == requestCompleted
-}
-
-// Terminated returns a boolean value indicating the request terminated due to
-// the requested Raft cluster is being shut down.
-func (sr *SnapshotResult) Terminated() bool {
-	return sr.code == requestTerminated
-}
-
-// Rejected returns a boolean value indicating the request is rejected. A
-// snapshot request is rejected when a snapshot at the same raft log index
-// already exist or when the requestis received when snapshot is being created.
-func (sr *SnapshotResult) Rejected() bool {
-	return sr.code == requestRejected
-}
-
-// GetIndex returns the index value of the saved snapshot.
-func (sr *SnapshotResult) GetIndex() uint64 {
-	return sr.index
-}
-
-// SnapshotState is the returned state object used to track the outcome of the
-// requested snapshot.
-type SnapshotState struct {
-	req      rsm.SnapshotRequest
-	deadline uint64
-	// CompleteC is a channel for delivering request result to users.
-	CompleteC chan SnapshotResult
-}
-
 // IsTempError returns a boolean value indicating whether the specified error
 // is a temporary error that worth to be retried later with the exact same
 // input, potentially on a more suitable NodeHost instance.
@@ -145,7 +101,8 @@ type RequestResult struct {
 	// Result is the returned result from the Update method of the state machine
 	// instance. Result is only available when making a proposal and the Code
 	// value is RequestCompleted.
-	result sm.Result
+	result         sm.Result
+	snapshotResult bool
 }
 
 // Timeout returns a boolean value indicating whether the request timed out.
@@ -177,6 +134,16 @@ func (rr *RequestResult) Terminated() bool {
 // is out of order and thus not applied.
 func (rr *RequestResult) Rejected() bool {
 	return rr.code == requestRejected
+}
+
+// SnapshotIndex returns the index of the generated snapshot when the
+// RequestResult is from a snapshot related request. Invoking this method on
+// RequestResult instances not related to snapshots will cause panic.
+func (rr *RequestResult) SnapshotIndex() uint64 {
+	if !rr.snapshotResult {
+		panic("not a snapshot request result")
+	}
+	return rr.result.Value
 }
 
 // GetResult returns the result value of the request. When making a proposal,
@@ -274,7 +241,7 @@ type RequestState struct {
 	readyToRead     ready
 	readyToRelease  ready
 	completeHandler ICompleteHandler
-	// CompleteC is a channel for delivering request result to users.
+	// CompletedC is a channel for delivering request result to users.
 	CompletedC chan RequestResult
 	node       *node
 	pool       *sync.Pool
@@ -393,7 +360,7 @@ type pendingConfigChange struct {
 
 type pendingSnapshot struct {
 	mu        sync.Mutex
-	pending   *SnapshotState
+	pending   *RequestState
 	snapshotC chan<- rsm.SnapshotRequest
 	logicalClock
 }
@@ -414,19 +381,23 @@ func newPendingSnapshot(snapshotC chan<- rsm.SnapshotRequest,
 	}
 }
 
+func (p *pendingSnapshot) notify(r RequestResult) {
+	r.snapshotResult = true
+	p.pending.notify(r)
+}
+
 func (p *pendingSnapshot) close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.snapshotC = nil
 	if p.pending != nil {
-		r := SnapshotResult{code: requestTerminated}
-		p.pending.CompleteC <- r
+		p.notify(getTerminatedResult())
 		p.pending = nil
 	}
 }
 
 func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
-	path string, timeout time.Duration) (*SnapshotState, error) {
+	path string, timeout time.Duration) (*RequestState, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	timeoutTick := p.getTimeoutTick(timeout)
@@ -444,10 +415,10 @@ func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
 		Path: path,
 		Key:  random.LockGuardedRand.Uint64(),
 	}
-	req := &SnapshotState{
-		req:       ssreq,
-		deadline:  p.getTick() + timeoutTick,
-		CompleteC: make(chan SnapshotResult, 1),
+	req := &RequestState{
+		key:        ssreq.Key,
+		deadline:   p.getTick() + timeoutTick,
+		CompletedC: make(chan RequestResult, 1),
 	}
 	select {
 	case p.snapshotC <- ssreq:
@@ -470,8 +441,7 @@ func (p *pendingSnapshot) gc() {
 	}
 	p.logicalClock.lastGcTime = now
 	if p.pending.deadline < now {
-		r := SnapshotResult{code: requestTimeout}
-		p.pending.CompleteC <- r
+		p.notify(getTimeoutResult())
 		p.pending = nil
 	}
 }
@@ -482,15 +452,15 @@ func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
 	if p.pending == nil {
 		return
 	}
-	if p.pending.req.Key == key {
-		r := SnapshotResult{}
+	if p.pending.key == key {
+		r := RequestResult{}
 		if ignored {
 			r.code = requestRejected
 		} else {
 			r.code = requestCompleted
-			r.index = index
+			r.result.Value = index
 		}
-		p.pending.CompleteC <- r
+		p.notify(r)
 		p.pending = nil
 	}
 }

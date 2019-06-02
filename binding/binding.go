@@ -332,7 +332,7 @@ func NodeHostGetNewSession(oid uint64, timeout uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	cs, err := nh.GetNewSession(ctx, clusterID)
+	cs, err := nh.SyncGetSession(ctx, clusterID)
 	if err != nil {
 		return 0, getErrorCode(err)
 	}
@@ -348,7 +348,7 @@ func NodeHostCloseSession(oid uint64, timeout uint64, csoid uint64) int {
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	err := nh.CloseSession(ctx, cs)
+	err := nh.SyncCloseSession(ctx, cs)
 	return getErrorCode(err)
 }
 

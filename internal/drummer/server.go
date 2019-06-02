@@ -170,7 +170,7 @@ func (s *server) SubmitChange(ctx context.Context,
 	defer func() {
 		cc, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		if err = s.nh.CloseSession(cc, session); err != nil {
+		if err = s.nh.SyncCloseSession(cc, session); err != nil {
 			plog.Errorf("close session failed %v", err)
 		}
 	}()
@@ -290,7 +290,7 @@ func (s *server) getSession(ctx context.Context,
 	for i := 0; i < 3; i++ {
 		c, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		cs, err := s.nh.GetNewSession(c, clusterID)
+		cs, err := s.nh.SyncGetSession(c, clusterID)
 		if err == nil {
 			return cs, nil
 		}
@@ -362,7 +362,7 @@ func (s *server) setFinalizedKV(ctx context.Context,
 	defer func() {
 		c, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		if err = s.nh.CloseSession(c, session); err != nil {
+		if err = s.nh.SyncCloseSession(c, session); err != nil {
 			plog.Errorf("close session failed %v", err)
 		}
 	}()
@@ -431,7 +431,7 @@ func (s *server) updateNodeHostInfo(ctx context.Context,
 	defer func() {
 		c, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		if err = s.nh.CloseSession(c, session); err != nil {
+		if err = s.nh.SyncCloseSession(c, session); err != nil {
 			plog.Errorf("close session failed %v", err)
 		}
 	}()

@@ -638,7 +638,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 	nh *NodeHost, count uint64, timeoutExpected bool) {
 	for i := uint64(0); i < count; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			if err == ErrTimeout {
 				cancel()
@@ -647,7 +647,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 			t.Fatalf("unexpected error %v", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		if err := nh.CloseSession(ctx, cs); err != nil {
+		if err := nh.SyncCloseSession(ctx, cs); err != nil {
 			if err == ErrTimeout {
 				cancel()
 				return
@@ -782,7 +782,7 @@ func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			t.Errorf("failed to get client session %v", err)
 		}
@@ -803,15 +803,15 @@ func TestUnregisterNotRegisterClientSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			t.Errorf("failed to get client session %v", err)
 		}
-		err = nh.CloseSession(ctx, cs)
+		err = nh.SyncCloseSession(ctx, cs)
 		if err != nil {
 			t.Errorf("failed to unregister the client session %v", err)
 		}
-		err = nh.CloseSession(ctx, cs)
+		err = nh.SyncCloseSession(ctx, cs)
 		if err != ErrRejected {
 			t.Errorf("failed to reject the request %v", err)
 		}
@@ -977,6 +977,42 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		}
 		if err := nh.StopCluster(2); err != nil {
 			t.Errorf("failed to stop cluster 2 %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestDeleteNode(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestDeleteNode(ctx, 2, 2, 0)
+		if err != nil {
+			t.Errorf("failed to delete node %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestAddNode(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddNode(ctx, 2, 2, "localhost:25000", 0)
+		if err != nil {
+			t.Errorf("failed to add node %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestAddObserver(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddObserver(ctx, 2, 2, "localhost:25000", 0)
+		if err != nil {
+			t.Errorf("failed to add observer %v", err)
 		}
 	}
 	singleNodeHostTest(t, tf)
@@ -1197,7 +1233,7 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 			}
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err := nh.GetNewSession(ctx, 1)
+		_, err := nh.SyncGetSession(ctx, 1)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to get new session")
@@ -1733,6 +1769,47 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 	twoFakeDiskNodeHostTest(t, tf)
 }
 
+func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		cs := nh.GetNoOPSession(2)
+		rs, err := nh.Propose(cs, make([]byte, 1), 2*time.Second)
+		if err != nil {
+			t.Fatalf("propose failed %v", err)
+		}
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("no panic")
+			}
+		}()
+		v := <-rs.CompletedC
+		plog.Infof("%d", v.SnapshotIndex())
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestSnapshot(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		idx, err := nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
+		cancel()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if idx == 0 {
+			t.Errorf("unexpected index %d", idx)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestSnapshotCanBeRequested(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
@@ -1748,17 +1825,17 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		plog.Infof("going to request snapshot again")
 		sr, err = nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
-		v = <-sr.CompleteC
+		v = <-sr.CompletedC
 		if !v.Rejected() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -1814,10 +1891,24 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	plog.Infof("going to wait for snapshot request to complete")
-	v := <-sr.CompleteC
+	v := <-sr.CompletedC
 	if !v.Timeout() {
 		t.Errorf("failed to report timeout")
 	}
+}
+
+func TestSyncRemoveData(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to remove cluster %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := nh.SyncRemoveData(ctx, 2, 1); err != nil {
+			t.Fatalf("sync remove data fail %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
@@ -1880,7 +1971,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2012,11 +2103,11 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
@@ -2065,11 +2156,11 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
@@ -2192,11 +2283,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		t.Fatalf("failed to request snapshot %v", err)
 	}
 	var index uint64
-	v := <-sr.CompleteC
+	v := <-sr.CompletedC
 	if !v.Completed() {
 		t.Fatalf("failed to complete the requested snapshot")
 	}
-	index = v.GetIndex()
+	index = v.SnapshotIndex()
 	plog.Infof("exported snapshot index %d", index)
 	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 	dir := path.Join(sspath, snapshotDir)

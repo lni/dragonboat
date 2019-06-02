@@ -73,7 +73,7 @@ func mustComplete(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Fatalf("got %d, want %d", v, requestCompleted)
+			t.Fatalf("got %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Fatalf("failed to complete the proposal")
@@ -84,7 +84,7 @@ func mustReject(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Rejected() {
-			t.Errorf("got %d, want %d", v, requestRejected)
+			t.Errorf("got %v, want %d", v, requestRejected)
 		}
 	default:
 		t.Errorf("failed to complete the add node request")
@@ -479,7 +479,7 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 	select {
 	case v := <-rs.CompletedC:
 		if v.code != expectedCode {
-			t.Errorf("got %d, want %d", v, expectedCode)
+			t.Errorf("got %v, want %d", v, expectedCode)
 		}
 		if checkResult {
 			if v.GetResult().Value != expectedResult {

@@ -27,8 +27,8 @@ import (
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
-var nh *NodeHost
-var ctx context.Context
+var enh *NodeHost
+var ectx context.Context
 
 func ExampleNewNodeHost() {
 	// Let's say we want to put all LogDB's WAL data in a directory named wal,
@@ -92,10 +92,10 @@ func ExampleNodeHost_Propose() {
 	// Use NO-OP client session, cluster ID is 100
 	// Check the example on the GetNewSession method to see how to use a
 	// real client session object to make proposals.
-	cs := nh.GetNoOPSession(100)
+	cs := enh.GetNoOPSession(100)
 	// make a proposal with the proposal content "test-data", timeout is set to
 	// 2000 milliseconds.
-	rs, err := nh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
+	rs, err := enh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the proposal
 		return
@@ -121,7 +121,7 @@ func ExampleNodeHost_ReadIndex() {
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
 	data := make([]byte, 1024)
-	rs, err := nh.ReadIndex(100, 2000*time.Millisecond)
+	rs, err := enh.ReadIndex(100, 2000*time.Millisecond)
 	if err != nil {
 		// ReadIndex failed to start
 		return
@@ -134,7 +134,7 @@ func ExampleNodeHost_ReadIndex() {
 		rs.Release()
 		// the ReadIndex operation completed. the local IStateMachine is ready to be
 		// queried
-		result, err := nh.ReadLocalNode(rs, data)
+		result, err := enh.ReadLocalNode(rs, data)
 		if err != nil {
 			return
 		}
@@ -153,7 +153,7 @@ func ExampleNodeHost_RequestDeleteNode() {
 	//
 	// request node with ID 1 to be removed as a member node of raft cluster 100.
 	// the third parameter is OrderID.
-	rs, err := nh.RequestDeleteNode(100, 1, 0, 2000*time.Millisecond)
+	rs, err := enh.RequestDeleteNode(100, 1, 0, 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the membership change request
 		return
@@ -182,7 +182,7 @@ func ExampleNodeHost_RequestAddNode() {
 	//
 	// request node with ID 4 running at myhostname4:5012 to be added as a member
 	// node of raft cluster 100. the fourth parameter is OrderID.
-	rs, err := nh.RequestAddNode(100,
+	rs, err := enh.RequestAddNode(100,
 		4, "myhostname4:5012", 0, 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the membership change request
@@ -219,28 +219,28 @@ func ExampleNodeHost_RequestAddNode() {
 	}
 }
 
-func ExampleNodeHost_GetNewSession() {
+func ExampleNodeHost_SyncGetSession() {
 	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
 	// this to NodeHost.
 	// see the example on StartCluster on how to start Raft cluster.
 	//
 	// Create a client session first, cluster ID is 100
-	// Check the example on the GetNewSession method to see how to use a
+	// Check the example on the SyncGetSession method to see how to use a
 	// real client session object to make proposals.
-	cs, err := nh.GetNewSession(ctx, 100)
+	cs, err := enh.SyncGetSession(ectx, 100)
 	if err != nil {
 		// failed to get the client session, if it is a timeout error then try
 		// again later.
 		return
 	}
 	defer func() {
-		if err := nh.CloseSession(ctx, cs); err != nil {
+		if err := enh.SyncCloseSession(ectx, cs); err != nil {
 			log.Printf("close session failed %v\n", err)
 		}
 	}()
 	// make a proposal with the proposal content "test-data", timeout is set to
 	// 2000 milliseconds.
-	rs, err := nh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
+	rs, err := enh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
 	if err != nil {
 		// failed to start the proposal
 		return
