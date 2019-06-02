@@ -14,10 +14,10 @@
 
 #include "example.h"
 
-extern "C" CPPStateMachine *CreateDragonboatPluginStateMachine(uint64_t clusterID,
+extern "C" CPPRegularStateMachine *CreateDragonboatPluginStateMachine(uint64_t clusterID,
   uint64_t nodeID)
 {
-  CPPStateMachine *cds = new CPPStateMachine; 
+  CPPRegularStateMachine *cds = new CPPRegularStateMachine;
   cds->sm = new HelloWorldStateMachine(clusterID, nodeID);
   return cds;
 }

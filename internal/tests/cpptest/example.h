@@ -26,7 +26,7 @@
 // update_count_, same as the getHash method. 
 // 
 // See statemachine.h for more details about the StateMachine interface. 
-class HelloWorldStateMachine : public dragonboat::StateMachine
+class HelloWorldStateMachine : public dragonboat::RegularStateMachine
 {
   public:
     HelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;

@@ -20,7 +20,7 @@
 
 HelloWorldStateMachine::HelloWorldStateMachine(uint64_t clusterID,
   uint64_t nodeID) noexcept
-  : dragonboat::StateMachine(clusterID, nodeID), update_count_(0)
+  : dragonboat::RegularStateMachine(clusterID, nodeID), update_count_(0)
 {
 }
 
@@ -58,11 +58,11 @@ SnapshotResult HelloWorldStateMachine::saveSnapshot(dragonboat::SnapshotWriter *
 {
   SnapshotResult r;
   dragonboat::IOResult ret;
-  r.error = SNAPSHOT_OK;
+  r.errcode = SNAPSHOT_OK;
   r.size = 0;
   ret = writer->Write((dragonboat::Byte *)&update_count_, sizeof(int));
   if (ret.size != sizeof(int)) {
-    r.error = FAILED_TO_SAVE_SNAPSHOT;
+    r.errcode = FAILED_TO_SAVE_SNAPSHOT;
     return r;
   }
   r.size = sizeof(int);
