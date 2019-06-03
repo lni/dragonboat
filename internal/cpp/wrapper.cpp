@@ -239,22 +239,21 @@ PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
   return ds->sm->PrepareSnapshot();
 }
 
-SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPConcurrentStateMachine *ds,
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   const unsigned char *data, size_t size, uint64_t writerOID,
-  uint64_t collectionOID, uint64_t doneChOID)
+  uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);
   dragonboat::DoneChan done(doneChOID);
-  dragonboat::SnapshotFileCollection collection(collectionOID);
-  return ds->sm->SaveSnapshot(data, size, &writer, &collection, done);
+  return ds->sm->SaveSnapshot(data, size, &writer, done);
 }
 
 int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID)
+  uint64_t readerOID, uint64_t doneChOID)
 {
     dragonboat::ProxySnapshotReader reader(readerOID);
     dragonboat::DoneChan done(doneChOID);
-    return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
+    return ds->sm->RecoverFromSnapshot(&reader, done);
 }
 
 void FreePrepareSnapshotResultDBOnDiskStateMachine(

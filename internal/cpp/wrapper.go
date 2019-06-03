@@ -343,6 +343,9 @@ func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	if n != len(session) {
 		return false, 0, io.ErrShortWrite
 	}
+	if meta.Ctx != nil {
+		panic("ctx is not nil")
+	}
 	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	collectionOID := AddManagedObject(collection)
@@ -492,7 +495,7 @@ func (ds *ConcurrentStateMachineWrapper) Sync() error {
 
 func (ds *ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
-	v := C.GetHashDBRegularStateMachine(ds.dataStore)
+	v := C.GetHashDBConcurrentStateMachine(ds.dataStore)
 	return uint64(v), nil
 }
 
@@ -503,7 +506,7 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	r := C.PrepareSnapshotDBConcurrentStateMachine()
+	r := C.PrepareSnapshotDBConcurrentStateMachine(ds.dataStore)
 	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
 	C.FreePrepareSnapshotResultDBConcurrentStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
@@ -716,13 +719,13 @@ func (ds *OnDiskStateMachineWrapper) Sync() error {
 	}
 	ds.ensureNotDestroyed()
 	// FIXME: the returned error code is dropped for now
-	C.SyncDBOnDiskStateMachine()
+	C.SyncDBOnDiskStateMachine(ds.dataStore)
 	return nil
 }
 
 func (ds *OnDiskStateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
-	v := C.GetHashDBRegularStateMachine(ds.dataStore)
+	v := C.GetHashDBOnDiskStateMachine(ds.dataStore)
 	return uint64(v), nil
 }
 
@@ -736,7 +739,7 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	r := C.PrepareSnapshotDBOnDiskStateMachine()
+	r := C.PrepareSnapshotDBOnDiskStateMachine(ds.dataStore)
 	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
 	C.FreePrepareSnapshotResultDBOnDiskStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
@@ -748,7 +751,10 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	session []byte,
 	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
 	if !ds.opened {
-		panic("Update called when not opened")
+		panic("SaveSnapshot called when not opened")
+	}
+	if !meta.Request.IsExportedSnapshot() {
+		// TODO: ds.saveDummySnapshot(writer, session)
 	}
 	n, err := writer.Write(session)
 	if err != nil {
@@ -759,11 +765,9 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	}
 	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
-	collectionOID := AddManagedObject(collection)
 	doneChOID := AddManagedObject(ds.done)
 	defer func() {
 		RemoveManagedObject(writerOID)
-		RemoveManagedObject(collectionOID)
 		RemoveManagedObject(doneChOID)
 	}()
 	var dp *C.uchar
@@ -772,8 +776,7 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		dp = (*C.uchar)(unsafe.Pointer(&ssctx[0]))
 	}
 	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, dp,
-		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(collectionOID),
-		C.uint64_t(doneChOID))
+		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
 	err = getSnapshotErrorFromErrNo(errno)
 	if err != nil {
@@ -789,22 +792,17 @@ func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(index uint64,
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	if !ds.opened {
-		panic("Update called when not opened")
+		panic("RecoverFromSnapshot called when not opened")
 	}
 	ds.ensureNotDestroyed()
-	cf := C.GetCollectedFile()
-	defer C.FreeCollectedFile(cf)
-	for _, file := range files {
-		fpdata := []byte(file.Filepath)
-		metadata := file.Metadata
-		C.AddToCollectedFile(cf, C.uint64_t(file.FileID),
-			(*C.char)(unsafe.Pointer(&fpdata[0])), C.size_t(len(fpdata)),
-			(*C.uchar)(unsafe.Pointer(&metadata[0])), C.size_t(len(metadata)))
+	if index <= ds.applied {
+		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
+			index, ds.applied)
 	}
 	readerOID := AddManagedObject(reader)
 	doneChOID := AddManagedObject(ds.done)
-	r := C.RecoverFromSnapshotDBConcurrentStateMachine(ds.dataStore,
-		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
+	r := C.RecoverFromSnapshotDBOnDiskStateMachine(ds.dataStore,
+		C.uint64_t(readerOID), C.uint64_t(doneChOID))
 	return getSnapshotErrorFromErrNo(int(r))
 }
 

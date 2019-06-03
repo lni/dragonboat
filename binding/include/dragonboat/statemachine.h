@@ -185,10 +185,9 @@ class OnDiskStateMachine
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
   SnapshotResult SaveSnapshot(const Byte *ctx, size_t size,
-    SnapshotWriter *writer, SnapshotFileCollection *collection,
-    const DoneChan &done) const noexcept;
+    SnapshotWriter *writer, const DoneChan &done) const noexcept;
   int RecoverFromSnapshot(SnapshotReader *reader,
-    const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
+    const DoneChan &done) noexcept;
   void FreePrepareSnapshotResult(PrepareSnapshotResult r) noexcept;
   void FreeLookupResult(LookupResult r) noexcept;
  protected:
@@ -201,10 +200,9 @@ class OnDiskStateMachine
   virtual uint64_t getHash() const noexcept = 0;
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
   virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
-    SnapshotWriter *writer, SnapshotFileCollection *collection,
-    const DoneChan &done) const noexcept = 0;
+    SnapshotWriter *writer, const DoneChan &done) const noexcept = 0;
   virtual int recoverFromSnapshot(SnapshotReader *reader,
-    const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
+    const DoneChan &done) noexcept = 0;
   virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
   virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:

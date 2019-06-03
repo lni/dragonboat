@@ -159,16 +159,15 @@ PrepareSnapshotResult OnDiskStateMachine::PrepareSnapshot() const noexcept
 }
 
 SnapshotResult OnDiskStateMachine::SaveSnapshot(const Byte *ctx, size_t size,
-  SnapshotWriter *writer, SnapshotFileCollection *collection,
-  const DoneChan &done) const noexcept
+  SnapshotWriter *writer, const DoneChan &done) const noexcept
 {
-  return saveSnapshot(ctx, size, writer, collection, done);
+  return saveSnapshot(ctx, size, writer, done);
 }
 
 int OnDiskStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
-  const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
+  const DoneChan &done) noexcept
 {
-  return recoverFromSnapshot(reader, files, done);
+  return recoverFromSnapshot(reader, done);
 }
 
 void OnDiskStateMachine::FreePrepareSnapshotResult(

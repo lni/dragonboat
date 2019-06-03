@@ -79,11 +79,11 @@ int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 uint64_t GetHashDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
   CPPOnDiskStateMachine *ds);
-SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPConcurrentStateMachine *ds,
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   const unsigned char *data, size_t size, uint64_t writerOID,
-  uint64_t collectionOID, uint64_t doneChOID);
+  uint64_t doneChOID);
 int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
+  uint64_t readerOID, uint64_t doneChOID);
 void FreePrepareSnapshotResultDBOnDiskStateMachine(
   CPPOnDiskStateMachine *ds, PrepareSnapshotResult r);
 void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
