@@ -503,7 +503,7 @@ func (s *StateMachine) Handle(batch []Task,
 		if !rec.isSyncTask() {
 			batch = append(batch, rec)
 		} else {
-			if err := s.periodicSync(); err != nil {
+			if err := s.sync(); err != nil {
 				return Task{}, false, err
 			}
 		}
@@ -520,7 +520,7 @@ func (s *StateMachine) Handle(batch []Task,
 				if !rec.isSyncTask() {
 					batch = append(batch, rec)
 				} else {
-					if err := s.periodicSync(); err != nil {
+					if err := s.sync(); err != nil {
 						return Task{}, false, err
 					}
 				}
@@ -666,15 +666,6 @@ func (s *StateMachine) sync() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	plog.Infof("%s is being synchronized, index %d", s.describe(), s.index)
-	return s.sm.Sync()
-}
-
-func (s *StateMachine) periodicSync() error {
-	if !s.OnDiskStateMachine() {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}

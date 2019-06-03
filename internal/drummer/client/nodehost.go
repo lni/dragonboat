@@ -37,6 +37,9 @@ const (
 )
 
 var (
+	// HardWorkerTestClusterID is the cluster ID of the cluster targetted by the
+	// hard worker.
+	HardWorkerTestClusterID uint64 = 1
 	// DrummerClientName is the name of the default master client.
 	DrummerClientName      = settings.Soft.DrummerClientName
 	getConnectedTimeoutSec = settings.Soft.GetConnectedTimeoutSecond
@@ -412,6 +415,9 @@ func (dc *DrummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 	config.NodeID = nodeID
 	config.ClusterID = req.Change.ClusterId
 	config.OrderedConfigChange = true
+	if config.ClusterID == HardWorkerTestClusterID {
+		config.SnapshotEntries = 50
+	}
 	pd, ok := dc.mu.smFactory[req.AppName]
 	if !ok {
 		// installation or configuration issue

@@ -54,9 +54,14 @@ func generateRandomDelay() {
 	}
 }
 
-func getLargeRandomDelay() uint64 {
+func getLargeRandomDelay(clusterID uint64) uint64 {
 	// in IO error injection test, we don't want such delays
 	ioei := os.Getenv("IOEI")
+	if len(ioei) > 0 {
+		return 0
+	}
+	pcs := fmt.Sprintf("IOEI-%d", clusterID)
+	ioei = os.Getenv(pcs)
 	if len(ioei) > 0 {
 		return 0
 	}
@@ -215,7 +220,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 	if s.externalFileTest {
 		s.saveExternalFile(fileCollection)
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	if s.noLargeDelay {
 		delay = 0
 	}
@@ -253,7 +258,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 	if s.externalFileTest {
 		checkExternalFile(files, s.ClusterID)
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	if s.noLargeDelay {
 		delay = 0
 	}
