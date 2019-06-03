@@ -159,9 +159,9 @@ PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
   return ds->sm->PrepareSnapshot();
 }
 
-SnapshotResult SaveSnapshotDBConcurrentStateMachine(const unsigned char *data,
-  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
-  uint64_t collectionOID, uint64_t doneChOID)
+SnapshotResult SaveSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds, const unsigned char *data, size_t size,
+  uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);
   dragonboat::DoneChan done(doneChOID);
@@ -239,8 +239,8 @@ PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
   return ds->sm->PrepareSnapshot();
 }
 
-SnapshotResult SaveSnapshotDBOnDiskStateMachine(const unsigned char *data,
-  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size, uint64_t writerOID,
   uint64_t collectionOID, uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);

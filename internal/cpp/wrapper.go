@@ -148,7 +148,7 @@ func AddToSnapshotFileCollection(oid uint64,
 	fc.AddFile(fileID, filePath, data)
 }
 
-func getErrorFromErrNo(errno int) error {
+func getSnapshotErrorFromErrNo(errno int) error {
 	if errno == 0 {
 		return nil
 	} else if errno == 1 {
@@ -223,7 +223,7 @@ func (ds *RegularStateMachineWrapper) destroy() {
 
 // Open opens the state machine.
 func (ds *RegularStateMachineWrapper) Open() (uint64, error) {
-	panic("Open() called on StateMachineWrapper")
+	panic("Open not suppose to be called on RegularStateMachineWrapper")
 }
 
 // Offloaded offloads the data store from the specified part of the system.
@@ -287,12 +287,27 @@ func (ds *RegularStateMachineWrapper) Lookup(query interface{}) (interface{}, er
 
 // NALookup queries the data store.
 func (ds *RegularStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
-	panic("not implemented")
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	data := query
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBRegularStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
 }
 
 // Sync synchronizes the state machine's in-core state with that on disk.
 func (ds *RegularStateMachineWrapper) Sync() error {
-	panic("Sync not suppose to be called")
+	panic("Sync not suppose to be called on RegularStateMachineWrapper")
 }
 
 // GetHash returns an integer value representing the state of the data store.
@@ -304,13 +319,14 @@ func (ds *RegularStateMachineWrapper) GetHash() (uint64, error) {
 
 // PrepareSnapshot makes preparations for taking concurrent snapshot.
 func (ds *RegularStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
-	panic("PrepareSnapshot not suppose to be called")
+	panic("PrepareSnapshot not suppose to be called on RegularStateMachineWrapper")
 }
 
 // StreamSnapshot streams the snapshot to the remote node.
 func (ds *RegularStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
-	panic("StreamSnapshot not suppose to be called")
+	// TODO
+	panic("StreamSnapshot not suppose to be called on RegularStateMachineWrapper")
 }
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
@@ -339,7 +355,7 @@ func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	r := C.SaveSnapshotDBRegularStateMachine(ds.dataStore,
 		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
-	err = getErrorFromErrNo(errno)
+	err = getSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
 		return false, 0, err
@@ -380,7 +396,7 @@ func (ds *RegularStateMachineWrapper) RecoverFromSnapshot(index uint64,
 	doneChOID := AddManagedObject(ds.done)
 	r := C.RecoverFromSnapshotDBRegularStateMachine(ds.dataStore,
 		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
-	return getErrorFromErrNo(int(r))
+	return getSnapshotErrorFromErrNo(int(r))
 }
 
 // StateMachineType returns the state machine type.
@@ -410,69 +426,187 @@ func (ds *ConcurrentStateMachineWrapper) destroy() {
 	C.DestroyDBConcurrentStateMachine(ds.dataStore)
 }
 
-func (ConcurrentStateMachineWrapper) Open() (uint64, error) {
+func (ds *ConcurrentStateMachineWrapper) Open() (uint64, error) {
+	panic("Open not suppose to be called on ConcurrentStateMachineWrapper")
+}
+
+func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
+	e pb.Entry) (sm.Result, error) {
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	if len(e.Cmd) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
+	}
+	v := C.UpdateDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	if session != nil {
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
+	}
+	return sm.Result{Value: uint64(v)}, nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
+	panic("not supported")
+}
+
+func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	data := query.([]byte)
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBConcurrentStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	data := query
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBConcurrentStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) Sync() error {
+	panic("Sync not suppose to be called on ConcurrentStateMachineWrapper")
+}
+
+func (ds *ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
+	ds.ensureNotDestroyed()
+	v := C.GetHashDBRegularStateMachine(ds.dataStore)
+	return uint64(v), nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	r := C.PrepareSnapshotDBConcurrentStateMachine()
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreePrepareSnapshotResultDBConcurrentStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+	writer *rsm.SnapshotWriter,
+	session []byte,
+	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
+	n, err := writer.Write(session)
+	if err != nil {
+		return false, 0, err
+	}
+	if n != len(session) {
+		return false, 0, io.ErrShortWrite
+	}
+	smsz := uint64(len(session))
+	writerOID := AddManagedObject(writer)
+	collectionOID := AddManagedObject(collection)
+	doneChOID := AddManagedObject(ds.done)
+	defer func() {
+		RemoveManagedObject(writerOID)
+		RemoveManagedObject(collectionOID)
+		RemoveManagedObject(doneChOID)
+	}()
+	var dp *C.uchar
+	ssctx := meta.Ctx.([]byte)
+	if len(ssctx) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&ssctx[0]))
+	}
+	r := C.SaveSnapshotDBConcurrentStateMachine(ds.dataStore, dp,
+		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(collectionOID),
+		C.uint64_t(doneChOID))
+	errno := int(r.errcode)
+	err = getSnapshotErrorFromErrNo(errno)
+	if err != nil {
+		plog.Errorf("save snapshot failed, %v", err)
+		return false, 0, err
+	}
+	sz := uint64(r.size)
+	actualSz := writer.GetPayloadSize(sz + smsz)
+	return false, actualSz + rsm.SnapshotHeaderSize, nil
+}
+
+func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(index uint64,
+	reader *rsm.SnapshotReader,
+	files []sm.SnapshotFile) error {
+	ds.ensureNotDestroyed()
+	cf := C.GetCollectedFile()
+	defer C.FreeCollectedFile(cf)
+	for _, file := range files {
+		fpdata := []byte(file.Filepath)
+		metadata := file.Metadata
+		C.AddToCollectedFile(cf, C.uint64_t(file.FileID),
+			(*C.char)(unsafe.Pointer(&fpdata[0])), C.size_t(len(fpdata)),
+			(*C.uchar)(unsafe.Pointer(&metadata[0])), C.size_t(len(metadata)))
+	}
+	readerOID := AddManagedObject(reader)
+	doneChOID := AddManagedObject(ds.done)
+	r := C.RecoverFromSnapshotDBConcurrentStateMachine(ds.dataStore,
+		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
+	return getSnapshotErrorFromErrNo(int(r))
+}
+
+func (ds *ConcurrentStateMachineWrapper) StreamSnapshot(ssctx interface{},
+	writer *rsm.ChunkWriter) error {
+	// TODO
 	panic("implement me")
 }
 
-func (ConcurrentStateMachineWrapper) Update(*rsm.Session, pb.Entry) (sm.Result, error) {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.SetOffloaded(from)
+	if ds.ReadyToDestroy() && !ds.Destroyed() {
+		ds.destroy()
+		ds.SetDestroyed()
+	}
 }
 
-func (ConcurrentStateMachineWrapper) BatchedUpdate([]sm.Entry) ([]sm.Entry, error) {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) Loaded(from rsm.From) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.SetLoaded(from)
 }
 
-func (ConcurrentStateMachineWrapper) Lookup(interface{}) (interface{}, error) {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) ConcurrentSnapshot() bool {
+	return true
 }
 
-func (ConcurrentStateMachineWrapper) NALookup([]byte) ([]byte, error) {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) OnDiskStateMachine() bool {
+	return false
 }
 
-func (ConcurrentStateMachineWrapper) Sync() error {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) StateMachineType() pb.StateMachineType {
+	return pb.ConcurrentStateMachine
 }
 
-func (ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) SaveSnapshot(*rsm.SnapshotMeta,
-	*rsm.SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) RecoverFromSnapshot(uint64, *rsm.SnapshotReader, []sm.SnapshotFile) error {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) StreamSnapshot(interface{}, *rsm.ChunkWriter) error {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) Offloaded(rsm.From) {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) Loaded(rsm.From) {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) ConcurrentSnapshot() bool {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) OnDiskStateMachine() bool {
-	panic("implement me")
-}
-
-func (ConcurrentStateMachineWrapper) StateMachineType() pb.StateMachineType {
-	panic("implement me")
+func (ds *ConcurrentStateMachineWrapper) ensureNotDestroyed() {
+	if ds.Destroyed() {
+		panic("using a destroyed data store instance detected")
+	}
 }
 
 type OnDiskStateMachineWrapper struct {
@@ -489,67 +623,227 @@ func (ds *OnDiskStateMachineWrapper) destroy() {
 	C.DestroyDBOnDiskStateMachine(ds.dataStore)
 }
 
-func (OnDiskStateMachineWrapper) Open() (uint64, error) {
+func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
+	if ds.opened {
+		panic("Open called more than once on OnDiskStateMachineWrapper")
+	}
+	ds.opened = true
+	doneChOID := AddManagedObject(ds.done)
+	defer func() {
+		RemoveManagedObject(doneChOID)
+	}()
+	r := C.OpenDBOnDiskStateMachine(ds.dataStore, C.uint64_t(doneChOID))
+	applied := uint64(r.result)
+	// FIXME: the returned error code is dropped for now
+	// errno := int(r.errcode)
+	// err := getSnapshotErrorFromErrNo(errno)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	ds.initialIndex = applied
+	ds.applied = applied
+	return applied, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
+	e pb.Entry) (sm.Result, error) {
+	if !ds.opened {
+		panic("Update called when not opened")
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	if len(e.Cmd) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
+	}
+	v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	if session != nil {
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
+	}
+	return sm.Result{Value: uint64(v)}, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
+	panic("not supported")
+}
+
+func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
+	if !ds.opened {
+		panic("Lookup called when not opened")
+	}
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	data := query.([]byte)
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBOnDiskStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
+	if !ds.opened {
+		panic("NALookup called when not opened")
+	}
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	var dp *C.uchar
+	data := query
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBOnDiskStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) Sync() error {
+	if !ds.opened {
+		panic("Sync called when not opened")
+	}
+	ds.ensureNotDestroyed()
+	// FIXME: the returned error code is dropped for now
+	C.SyncDBOnDiskStateMachine()
+	return nil
+}
+
+func (ds *OnDiskStateMachineWrapper) GetHash() (uint64, error) {
+	ds.ensureNotDestroyed()
+	v := C.GetHashDBRegularStateMachine(ds.dataStore)
+	return uint64(v), nil
+}
+
+func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
+	if !ds.opened {
+		panic("PrepareSnapshot called when not opened")
+	}
+	ds.mu.RLock()
+	if ds.Destroyed() {
+		ds.mu.RUnlock()
+		return nil, rsm.ErrClusterClosed
+	}
+	ds.ensureNotDestroyed()
+	r := C.PrepareSnapshotDBOnDiskStateMachine()
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreePrepareSnapshotResultDBOnDiskStateMachine(ds.dataStore, r)
+	ds.mu.RUnlock()
+	return result, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+	writer *rsm.SnapshotWriter,
+	session []byte,
+	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
+	if !ds.opened {
+		panic("Update called when not opened")
+	}
+	n, err := writer.Write(session)
+	if err != nil {
+		return false, 0, err
+	}
+	if n != len(session) {
+		return false, 0, io.ErrShortWrite
+	}
+	smsz := uint64(len(session))
+	writerOID := AddManagedObject(writer)
+	collectionOID := AddManagedObject(collection)
+	doneChOID := AddManagedObject(ds.done)
+	defer func() {
+		RemoveManagedObject(writerOID)
+		RemoveManagedObject(collectionOID)
+		RemoveManagedObject(doneChOID)
+	}()
+	var dp *C.uchar
+	ssctx := meta.Ctx.([]byte)
+	if len(ssctx) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&ssctx[0]))
+	}
+	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, dp,
+		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(collectionOID),
+		C.uint64_t(doneChOID))
+	errno := int(r.errcode)
+	err = getSnapshotErrorFromErrNo(errno)
+	if err != nil {
+		plog.Errorf("save snapshot failed, %v", err)
+		return false, 0, err
+	}
+	sz := uint64(r.size)
+	actualSz := writer.GetPayloadSize(sz + smsz)
+	return false, actualSz + rsm.SnapshotHeaderSize, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(index uint64,
+	reader *rsm.SnapshotReader,
+	files []sm.SnapshotFile) error {
+	if !ds.opened {
+		panic("Update called when not opened")
+	}
+	ds.ensureNotDestroyed()
+	cf := C.GetCollectedFile()
+	defer C.FreeCollectedFile(cf)
+	for _, file := range files {
+		fpdata := []byte(file.Filepath)
+		metadata := file.Metadata
+		C.AddToCollectedFile(cf, C.uint64_t(file.FileID),
+			(*C.char)(unsafe.Pointer(&fpdata[0])), C.size_t(len(fpdata)),
+			(*C.uchar)(unsafe.Pointer(&metadata[0])), C.size_t(len(metadata)))
+	}
+	readerOID := AddManagedObject(reader)
+	doneChOID := AddManagedObject(ds.done)
+	r := C.RecoverFromSnapshotDBConcurrentStateMachine(ds.dataStore,
+		cf, C.uint64_t(readerOID), C.uint64_t(doneChOID))
+	return getSnapshotErrorFromErrNo(int(r))
+}
+
+func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
+	writer *rsm.ChunkWriter) error {
+	// TODO
 	panic("implement me")
 }
 
-func (OnDiskStateMachineWrapper) Update(*rsm.Session, pb.Entry) (sm.Result, error) {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.SetOffloaded(from)
+	if ds.ReadyToDestroy() && !ds.Destroyed() {
+		ds.destroy()
+		ds.SetDestroyed()
+	}
 }
 
-func (OnDiskStateMachineWrapper) BatchedUpdate([]sm.Entry) ([]sm.Entry, error) {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) Loaded(from rsm.From) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.SetLoaded(from)
 }
 
-func (OnDiskStateMachineWrapper) Lookup(interface{}) (interface{}, error) {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) ConcurrentSnapshot() bool {
+	return true
 }
 
-func (OnDiskStateMachineWrapper) NALookup([]byte) ([]byte, error) {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) OnDiskStateMachine() bool {
+	return true
 }
 
-func (OnDiskStateMachineWrapper) Sync() error {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) StateMachineType() pb.StateMachineType {
+	return pb.OnDiskStateMachine
 }
 
-func (OnDiskStateMachineWrapper) GetHash() (uint64, error) {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) SaveSnapshot(*rsm.SnapshotMeta,
-	*rsm.SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) RecoverFromSnapshot(uint64, *rsm.SnapshotReader, []sm.SnapshotFile) error {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) StreamSnapshot(interface{}, *rsm.ChunkWriter) error {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) Offloaded(rsm.From) {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) Loaded(rsm.From) {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) ConcurrentSnapshot() bool {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) OnDiskStateMachine() bool {
-	panic("implement me")
-}
-
-func (OnDiskStateMachineWrapper) StateMachineType() pb.StateMachineType {
-	panic("implement me")
+func (ds *OnDiskStateMachineWrapper) ensureNotDestroyed() {
+	if ds.Destroyed() {
+		panic("using a destroyed data store instance detected")
+	}
 }

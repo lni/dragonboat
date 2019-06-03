@@ -56,9 +56,9 @@ LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
 uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
 PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
   CPPConcurrentStateMachine *ds);
-SnapshotResult SaveSnapshotDBConcurrentStateMachine(const unsigned char *data,
-  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
-  uint64_t collectionOID, uint64_t doneChOID);
+SnapshotResult SaveSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds, const unsigned char *data, size_t size,
+  uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID);
 int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
   CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
 void FreePrepareSnapshotResultDBConcurrentStateMachine(
@@ -79,8 +79,8 @@ int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 uint64_t GetHashDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
   CPPOnDiskStateMachine *ds);
-SnapshotResult SaveSnapshotDBOnDiskStateMachine(const unsigned char *data,
-  size_t size, CPPConcurrentStateMachine *ds, uint64_t writerOID,
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size, uint64_t writerOID,
   uint64_t collectionOID, uint64_t doneChOID);
 int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
