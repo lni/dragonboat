@@ -751,7 +751,7 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
 	if err := os.MkdirAll(snapDir, 0755); err != nil {
@@ -862,7 +862,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
 	if err := os.MkdirAll(snapDir, 0755); err != nil {
@@ -1077,7 +1077,7 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)

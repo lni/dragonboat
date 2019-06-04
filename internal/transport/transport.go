@@ -226,7 +226,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		streamConnections: streamConnections,
 	}
 	sinkFactory := func() raftio.IChunkSink {
-		return newSnapshotChunks(t.handleRequest,
+		return NewSnapshotChunks(t.handleRequest,
 			t.snapshotReceived, t.getDeploymentID, t.snapshotLocator)
 	}
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, sinkFactory)
