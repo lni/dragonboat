@@ -123,7 +123,7 @@ go build -v -tags="dragonboat_no_rocksdb" pkgname
 
 首先建议您阅读项目的[综述文档](docs/overview.CHS.md)。
 
-欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)和在线[讨论组](https://gitter.im/lni/dragonboat)。
+欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)，[CHANGELOG](CHANGELOG.md)和在线[讨论组](https://gitter.im/lni/dragonboat)。
 
 C++ binding的信息可参考[这里](https://github.com/lni/dragonboat/blob/master/binding/README.md)。
 

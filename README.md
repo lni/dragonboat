@@ -120,7 +120,8 @@ To build the your application when you don't have RocksDB installed
 go build -v -tags="dragonboat_no_rocksdb" pkgname
 ```
 
-[FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example) and [online chat](https://gitter.im/lni/dragonboat) are available.
+### Documents ###
+[FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
 
 C++ Binding info can be found [here](https://github.com/lni/dragonboat/blob/master/binding/README.md).
 
