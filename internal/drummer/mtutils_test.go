@@ -597,6 +597,14 @@ func snapshotDisabledInRaftConfig() bool {
 	return cfg.SnapshotEntries == 0
 }
 
+func lessSnapshotTest() bool {
+	cfg, ok := getConfigFromDeployedJson()
+	if !ok {
+		return false
+	}
+	return cfg.SnapshotEntries > 30
+}
+
 func printEntryDetails(clusterID uint64,
 	nodeID uint64, entries []raftpb.Entry) {
 	for _, ent := range entries {
@@ -1374,7 +1382,8 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 			removeMonkeyTestDir()
 		}
 	}()
-	plog.Infof("snapshot disabled in monkey test %t", snapshotDisabledInRaftConfig())
+	plog.Infof("snapshot disabled in monkey test %t, less snapshot %t",
+		snapshotDisabledInRaftConfig(), lessSnapshotTest())
 	dl := getDrummerMonkeyTestAddrList()
 	drummerNodes, nodehostNodes := createTestNodeLists(dl)
 	startTestNodes(drummerNodes, dl)
@@ -1440,8 +1449,7 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	// to the system
 	stopper := syncutil.NewStopper()
 	startTestRequestWorkers(stopper, dl)
-	pd := random.NewProbability(330000)
-	if pd.Hit() {
+	if lessSnapshotTest() {
 		plog.Infof("going to start the hard worker")
 		disableClusterRandomDelay(client.HardWorkerTestClusterID)
 		startHardWorker(stopper, dl)

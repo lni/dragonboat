@@ -415,9 +415,6 @@ func (dc *DrummerClient) handleInstantiateRequest(req pb.NodeHostRequest) {
 	config.NodeID = nodeID
 	config.ClusterID = req.Change.ClusterId
 	config.OrderedConfigChange = true
-	if config.ClusterID == HardWorkerTestClusterID && config.SnapshotEntries > 0 {
-		config.SnapshotEntries = 50
-	}
 	pd, ok := dc.mu.smFactory[req.AppName]
 	if !ok {
 		// installation or configuration issue

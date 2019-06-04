@@ -6,7 +6,8 @@
   "CheckQuorum": true,
   "RDBDir": "rdb-%d-%d",
   "RDBWALDir": "rdb-wal-%d-%d",
-  "CompactionOverhead": 1,
-  "SnapshotEntries": 0
+  "CompactionOverhead": 10,
+  "SnapshotEntries": 50,
+  "MaxInMemLogSize": 120000000
 }
 
