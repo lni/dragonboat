@@ -575,7 +575,36 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 	return client.NewNoOPSession(clusterID, nh.serverCtx.GetRandomSource())
 }
 
-// SyncGetSession starts an synchronous proposal to create, register and return
+// GetNewSession starts a synchronous proposal to create, register and return
+// a new client session object. A client session object is used to ensure that
+// a retried proposal, e.g. proposal retried after timeout, will not be applied
+// more than once into the IStateMachine.
+//
+// Returned client session instance should not be used concurrently. Use
+// multiple client sessions when you need to concurrently start multiple
+// proposals.
+//
+// Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
+// be removed in v3.1.
+func (nh *NodeHost) GetNewSession(ctx context.Context,
+	clusterID uint64) (*client.Session, error) {
+	return nh.SyncGetSession(ctx, clusterID)
+}
+
+// CloseSession closes the specified client session by unregistering it
+// from the system. This is a synchronous method meaning it will only return
+// after its confirmed completion, failure or timeout.
+//
+// Closed client session should no longer be used in future proposals.
+//
+// Deprecated: Use NodeHost.SyncCloseSession instead. NodeHost.CloseSession will
+// be removed in v3.1.
+func (nh *NodeHost) CloseSession(ctx context.Context,
+	session *client.Session) error {
+	return nh.SyncCloseSession(ctx, session)
+}
+
+// SyncGetSession starts a synchronous proposal to create, register and return
 // a new client session object. A client session object is used to ensure that
 // a retried proposal, e.g. proposal retried after timeout, will not be applied
 // more than once into the state machine.
