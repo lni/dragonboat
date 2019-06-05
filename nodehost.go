@@ -1170,7 +1170,7 @@ func (nh *NodeHost) propose(s *client.Session,
 	req, err := v.propose(s, cmd, handler, timeout)
 	nh.execEngine.setNodeReady(s.ClusterID)
 	if sampled {
-		nh.execEngine.ProposeDelay(s.ClusterID, st)
+		nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
 	return req, err
 }
@@ -1376,6 +1376,12 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
+	getStreamConn := func(cid uint64, nid uint64) pb.IChunkSink {
+		return nh.transport.GetStreamConnection(cid, nid)
+	}
+	handleSnapshotStatus := func(cid uint64, nid uint64, failed bool) {
+		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
+	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
 		getSnapshotDirFunc, nh.logdb, stopc)
 	if err := snapshotter.ProcessOrphans(); err != nil {
@@ -1387,7 +1393,9 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
-		nh.execEngine.SetCommitReady,
+		nh.execEngine,
+		getStreamConn,
+		handleSnapshotStatus,
 		nh.sendMessage,
 		queue,
 		stopc,
@@ -1771,7 +1779,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 	req, err := nu.node.propose(s, cmd, nil, timeout)
 	nu.setNodeReady(s.ClusterID)
 	if sampled {
-		nu.nh.execEngine.ProposeDelay(s.ClusterID, st)
+		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
 	return req, err
 }

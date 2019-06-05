@@ -47,46 +47,56 @@ var (
 	lazyFreeCycle           = settings.Soft.LazyFreeCycle
 )
 
+type engine interface {
+	setNodeReady(clusterID uint64)
+	setTaskReady(clusterID uint64)
+	setStreamReady(clusterID uint64)
+	setRequestedSnapshotReady(clusterID uint64)
+	setAvailableSnapshotReady(clusterID uint64)
+}
+
 type node struct {
-	readReqCount        uint64
-	leaderID            uint64
-	instanceID          uint64
-	raftAddress         string
-	config              config.Config
-	confChangeC         <-chan configChangeRequest
-	snapshotC           <-chan rsm.SnapshotRequest
-	taskC               chan<- rsm.Task
-	mq                  *server.MessageQueue
-	smAppliedIndex      uint64
-	confirmedIndex      uint64
-	publishedIndex      uint64
-	taskReady           func(uint64)
-	sendRaftMessage     func(pb.Message)
-	sm                  *rsm.StateMachine
-	smType              pb.StateMachineType
-	incomingProposals   *entryQueue
-	incomingReadIndexes *readIndexQueue
-	pendingProposals    *pendingProposal
-	pendingReadIndexes  *pendingReadIndex
-	pendingConfigChange *pendingConfigChange
-	pendingSnapshot     *pendingSnapshot
-	raftMu              sync.Mutex
-	node                *raft.Peer
-	logreader           *logdb.LogReader
-	logdb               raftio.ILogDB
-	snapshotter         *snapshotter
-	nodeRegistry        transport.INodeRegistry
-	stopc               chan struct{}
-	clusterInfo         atomic.Value
-	tickCount           uint64
-	expireNotified      uint64
-	tickMillisecond     uint64
-	syncTask            *task
-	rateLimited         bool
-	closeOnce           sync.Once
-	ss                  *snapshotState
-	snapshotLock        *syncutil.Lock
-	initializedMu       struct {
+	readReqCount         uint64
+	leaderID             uint64
+	instanceID           uint64
+	raftAddress          string
+	config               config.Config
+	confChangeC          <-chan configChangeRequest
+	snapshotC            <-chan rsm.SnapshotRequest
+	taskC                chan<- rsm.Task
+	mq                   *server.MessageQueue
+	smAppliedIndex       uint64
+	confirmedIndex       uint64
+	publishedIndex       uint64
+	engine               engine
+	getStreamConnection  func(uint64, uint64) pb.IChunkSink
+	handleSnapshotStatus func(uint64, uint64, bool)
+	sendRaftMessage      func(pb.Message)
+	sm                   *rsm.StateMachine
+	smType               pb.StateMachineType
+	incomingProposals    *entryQueue
+	incomingReadIndexes  *readIndexQueue
+	pendingProposals     *pendingProposal
+	pendingReadIndexes   *pendingReadIndex
+	pendingConfigChange  *pendingConfigChange
+	pendingSnapshot      *pendingSnapshot
+	raftMu               sync.Mutex
+	node                 *raft.Peer
+	logreader            *logdb.LogReader
+	logdb                raftio.ILogDB
+	snapshotter          *snapshotter
+	nodeRegistry         transport.INodeRegistry
+	stopc                chan struct{}
+	clusterInfo          atomic.Value
+	tickCount            uint64
+	expireNotified       uint64
+	tickMillisecond      uint64
+	syncTask             *task
+	rateLimited          bool
+	closeOnce            sync.Once
+	ss                   *snapshotState
+	snapshotLock         *syncutil.Lock
+	initializedMu        struct {
 		sync.Mutex
 		initialized bool
 	}
@@ -101,7 +111,9 @@ func newNode(raftAddress string,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
-	taskReady func(uint64),
+	engine engine,
+	getStreamConnection func(uint64, uint64) pb.IChunkSink,
+	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
 	mq *server.MessageQueue,
 	stopc chan struct{},
@@ -121,30 +133,32 @@ func newNode(raftAddress string,
 	ps := newPendingSnapshot(snapshotC, tickMillisecond)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rn := &node{
-		instanceID:          atomic.AddUint64(&instanceID, 1),
-		tickMillisecond:     tickMillisecond,
-		config:              config,
-		raftAddress:         raftAddress,
-		incomingProposals:   proposals,
-		incomingReadIndexes: readIndexes,
-		confChangeC:         confChangeC,
-		snapshotC:           snapshotC,
-		taskReady:           taskReady,
-		stopc:               stopc,
-		pendingProposals:    pp,
-		pendingReadIndexes:  pscr,
-		pendingConfigChange: pcc,
-		pendingSnapshot:     ps,
-		nodeRegistry:        nodeRegistry,
-		snapshotter:         snapshotter,
-		logreader:           lr,
-		sendRaftMessage:     sendMessage,
-		mq:                  mq,
-		logdb:               ldb,
-		snapshotLock:        syncutil.NewLock(),
-		ss:                  &snapshotState{},
-		syncTask:            newTask(syncTaskInterval),
-		smType:              smType,
+		instanceID:           atomic.AddUint64(&instanceID, 1),
+		tickMillisecond:      tickMillisecond,
+		config:               config,
+		raftAddress:          raftAddress,
+		incomingProposals:    proposals,
+		incomingReadIndexes:  readIndexes,
+		confChangeC:          confChangeC,
+		snapshotC:            snapshotC,
+		engine:               engine,
+		getStreamConnection:  getStreamConnection,
+		handleSnapshotStatus: handleSnapshotStatus,
+		stopc:                stopc,
+		pendingProposals:     pp,
+		pendingReadIndexes:   pscr,
+		pendingConfigChange:  pcc,
+		pendingSnapshot:      ps,
+		nodeRegistry:         nodeRegistry,
+		snapshotter:          snapshotter,
+		logreader:            lr,
+		sendRaftMessage:      sendMessage,
+		mq:                   mq,
+		logdb:                ldb,
+		snapshotLock:         syncutil.NewLock(),
+		ss:                   &snapshotState{},
+		syncTask:             newTask(syncTaskInterval),
+		smType:               smType,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -170,6 +184,10 @@ func (n *node) ClusterID() uint64 {
 
 func (n *node) ShouldStop() <-chan struct{} {
 	return n.stopc
+}
+
+func (n *node) NodeReady() {
+	n.engine.setNodeReady(n.clusterID)
 }
 
 func (n *node) ApplyUpdate(entry pb.Entry,
@@ -435,7 +453,7 @@ func (n *node) pushTask(rec rsm.Task) bool {
 	}
 	select {
 	case n.taskC <- rec:
-		n.taskReady(n.clusterID)
+		n.engine.setTaskReady(n.clusterID)
 	case <-n.stopc:
 		return false
 	}
@@ -660,22 +678,22 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 
 func (n *node) streamSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, false, true, false, 0)
-	n.taskReady(n.clusterID)
+	n.engine.setTaskReady(n.clusterID)
 }
 
 func (n *node) saveSnapshotDone() {
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.taskReady(n.clusterID)
+	n.engine.setTaskReady(n.clusterID)
 }
 
 func (n *node) initialSnapshotDone(index uint64) {
 	n.ss.notifySnapshotStatus(false, true, false, true, index)
-	n.taskReady(n.clusterID)
+	n.engine.setTaskReady(n.clusterID)
 }
 
 func (n *node) recoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
-	n.taskReady(n.clusterID)
+	n.engine.setTaskReady(n.clusterID)
 }
 
 func (n *node) handleTask(batch []rsm.Task, ents []sm.Entry) (rsm.Task, bool) {
@@ -1086,6 +1104,151 @@ func (n *node) setInitialStatus(index uint64) {
 	n.ss.setSnapshotIndex(index)
 	n.publishedIndex = index
 	n.setInitialized()
+}
+
+func (n *node) handleSnapshotTask(task rsm.Task) {
+	if n.ss.recoveringFromSnapshot() {
+		plog.Panicf("recovering from snapshot again")
+	}
+	if task.SnapshotAvailable {
+		plog.Infof("check incoming snapshot, %s", n.describe())
+		n.reportAvailableSnapshot(task)
+	} else if task.SnapshotRequested {
+		plog.Infof("reportRequestedSnapshot, %s", n.describe())
+		if n.ss.takingSnapshot() {
+			plog.Infof("task.SnapshotRequested ignored on %s", n.describe())
+			n.reportIgnoredSnapshotRequest(task.SnapshotRequest.Key)
+			return
+		}
+		n.reportRequestedSnapshot(task)
+	} else if task.StreamSnapshot {
+		if !n.canStreamSnapshot() {
+			n.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
+			return
+		}
+		n.reportStreamSnapshot(task)
+	} else {
+		panic("unknown returned task rec type")
+	}
+}
+
+func (n *node) reportSnapshotStatus(clusterID uint64,
+	nodeID uint64, failed bool) {
+	n.handleSnapshotStatus(clusterID, nodeID, failed)
+}
+
+func (n *node) reportStreamSnapshot(rec rsm.Task) {
+	n.ss.setStreamingSnapshot()
+	getSinkFn := func() pb.IChunkSink {
+		conn := n.getStreamConnection(rec.ClusterID, rec.NodeID)
+		if conn == nil {
+			plog.Errorf("failed to get connection to %s",
+				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
+			return nil
+		}
+		return conn
+	}
+	n.ss.setStreamSnapshotReq(rec, getSinkFn)
+	n.engine.setStreamReady(n.clusterID)
+}
+
+func (n *node) canStreamSnapshot() bool {
+	if n.ss.streamingSnapshot() {
+		plog.Infof("task.StreamSnapshot ignored on %s", n.describe())
+		return false
+	}
+	if !n.sm.ReadyToStreamSnapshot() {
+		plog.Infof("not ready to stream snapshot %s", n.describe())
+		return false
+	}
+	return true
+}
+
+func (n *node) reportRequestedSnapshot(rec rsm.Task) {
+	n.ss.setTakingSnapshot()
+	n.ss.setSaveSnapshotReq(rec)
+	n.engine.setRequestedSnapshotReady(n.clusterID)
+}
+
+func (n *node) reportAvailableSnapshot(rec rsm.Task) {
+	n.ss.setRecoveringFromSnapshot()
+	n.ss.setRecoverFromSnapshotReq(rec)
+	n.engine.setAvailableSnapshotReady(n.clusterID)
+}
+
+func (n *node) processSnapshotStatusTransition() bool {
+	if n.processTakeSnapshotStatus() {
+		return true
+	}
+	if n.processStreamSnapshotStatus() {
+		return true
+	}
+	if n.processRecoverSnapshotStatus() {
+		return true
+	}
+	if task, ok := n.getUninitializedNodeTask(); ok {
+		n.ss.setRecoveringFromSnapshot()
+		n.reportAvailableSnapshot(task)
+		return true
+	}
+	return false
+}
+
+func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
+	if !n.initialized() {
+		plog.Infof("check initial snapshot, %s", n.describe())
+		return rsm.Task{
+			SnapshotAvailable: true,
+			InitialSnapshot:   true,
+		}, true
+	}
+	return rsm.Task{}, false
+}
+
+func (n *node) processRecoverSnapshotStatus() bool {
+	if n.ss.recoveringFromSnapshot() {
+		rec, ok := n.ss.getRecoverCompleted()
+		if !ok {
+			return true
+		}
+		plog.Infof("%s got completed snapshot rec (1) %+v", n.describe(), rec)
+		if rec.SnapshotRequested {
+			panic("got a completed.SnapshotRequested")
+		}
+		if rec.InitialSnapshot {
+			plog.Infof("%s handled initial snapshot, %d", n.describe(), rec.Index)
+			n.setInitialStatus(rec.Index)
+		}
+		n.ss.clearRecoveringFromSnapshot()
+	}
+	return false
+}
+
+func (n *node) processTakeSnapshotStatus() bool {
+	if n.ss.takingSnapshot() {
+		rec, ok := n.ss.getSaveSnapshotCompleted()
+		if !ok {
+			return !n.concurrentSnapshot()
+		}
+		plog.Infof("%s got completed snapshot rec (2) %+v", n.describe(), rec)
+		if rec.SnapshotRequested && !n.initialized() {
+			plog.Panicf("%s taking snapshot when uninitialized", n.describe())
+		}
+		n.ss.clearTakingSnapshot()
+	}
+	return false
+}
+
+func (n *node) processStreamSnapshotStatus() bool {
+	if n.ss.streamingSnapshot() {
+		rec, ok := n.ss.getStreamSnapshotCompleted()
+		if !ok {
+			return false
+		}
+		plog.Infof("%s got completed streaming rec (3) %+v", n.describe(), rec)
+		n.ss.clearStreamingSnapshot()
+	}
+	return false
 }
 
 func (n *node) batchedReadIndex() {

@@ -22,7 +22,6 @@ import (
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/tests"
-	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -369,70 +368,6 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 	return result, cci
 }
 
-func processUninitializedNode(node *node) *rsm.Task {
-	if !node.initialized() {
-		plog.Infof("check initial snapshot, %s", node.describe())
-		return &rsm.Task{
-			SnapshotAvailable: true,
-			InitialSnapshot:   true,
-		}
-	}
-	return nil
-}
-
-// Returns a boolean flag indicating whether this node should be skipped for
-// further execSMs processing.
-func processRecoveringNode(node *node) bool {
-	if node.ss.recoveringFromSnapshot() {
-		rec, ok := node.ss.getRecoverCompleted()
-		if !ok {
-			return true
-		}
-		plog.Infof("%s received completed snapshot rec (1) %+v",
-			node.describe(), rec)
-		if rec.SnapshotRequested {
-			panic("got a completed.SnapshotRequested")
-		}
-		if rec.InitialSnapshot {
-			plog.Infof("%s handled initial snapshot, index %d",
-				node.describe(), rec.Index)
-			node.setInitialStatus(rec.Index)
-		}
-		node.ss.clearRecoveringFromSnapshot()
-	}
-	return false
-}
-
-func processTakingSnapshotNode(node *node) bool {
-	if node.ss.takingSnapshot() {
-		rec, ok := node.ss.getSaveSnapshotCompleted()
-		if !ok {
-			return !node.concurrentSnapshot()
-		}
-		plog.Infof("%s received completed snapshot rec (2) %+v",
-			node.describe(), rec)
-		if rec.SnapshotRequested && !node.initialized() {
-			plog.Panicf("%s taking a snapshot on uninitialized node",
-				node.describe())
-		}
-		node.ss.clearTakingSnapshot()
-	}
-	return false
-}
-
-func processStreamingSnapshotNode(node *node) bool {
-	if node.ss.streamingSnapshot() {
-		rec, ok := node.ss.getStreamSnapshotCompleted()
-		if !ok {
-			return false
-		}
-		plog.Infof("%s received completed streaming rec (3) %+v",
-			node.describe(), rec)
-		node.ss.clearStreamingSnapshot()
-	}
-	return false
-}
-
 // T: take snapshot
 // R: recover from snapshot
 // existing op, new op, action
@@ -460,102 +395,17 @@ func (s *execEngine) execSMs(workerID uint64,
 		if !ok || node.stopped() {
 			continue
 		}
-		if processTakingSnapshotNode(node) {
-			continue
-		}
-		if processStreamingSnapshotNode(node) {
-			continue
-		}
-		if processRecoveringNode(node) {
-			continue
-		}
-		if rec := processUninitializedNode(node); rec != nil {
-			node.ss.setRecoveringFromSnapshot()
-			s.reportAvailableSnapshot(node, *rec)
+		if node.processSnapshotStatusTransition() {
 			continue
 		}
 		task, snapshotRequired := node.handleTask(batch, entries)
-		// batched last applied value probably updated, give the node worker a
-		// chance to run
-		s.setNodeReady(node.clusterID)
 		if snapshotRequired {
-			if node.ss.recoveringFromSnapshot() {
-				plog.Panicf("recovering from snapshot again")
-			}
-			if task.SnapshotAvailable {
-				plog.Infof("check incoming snapshot, %s", node.describe())
-				s.reportAvailableSnapshot(node, task)
-			} else if task.SnapshotRequested {
-				plog.Infof("reportRequestedSnapshot, %s", node.describe())
-				if node.ss.takingSnapshot() {
-					plog.Infof("task.SnapshotRequested ignored on %s", node.describe())
-					node.reportIgnoredSnapshotRequest(task.SnapshotRequest.Key)
-					continue
-				}
-				s.reportRequestedSnapshot(node, task)
-			} else if task.StreamSnapshot {
-				ignored := false
-				if node.ss.streamingSnapshot() {
-					plog.Infof("task.StreamSnapshot ignored on %s", node.describe())
-					ignored = true
-				}
-				if !node.sm.ReadyToStreamSnapshot() {
-					plog.Infof("not ready to stream snapshot %s", node.describe())
-					ignored = true
-				}
-				if ignored {
-					s.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
-					continue
-				}
-				s.reportStreamSnapshot(node, task)
-			} else {
-				panic("unknown returned task rec type")
-			}
+			node.handleSnapshotTask(task)
 		}
 	}
 	if p != nil {
 		p.exec.end()
 	}
-}
-
-func (s *execEngine) reportSnapshotStatus(clusterID uint64,
-	nodeID uint64, failed bool) {
-	nh, ok := s.nh.(*NodeHost)
-	if !ok {
-		panic("failed to get nh")
-	}
-	nh.msgHandler.HandleSnapshotStatus(clusterID, nodeID, failed)
-}
-
-func (s *execEngine) reportStreamSnapshot(node *node, rec rsm.Task) {
-	nh, ok := s.nh.(*NodeHost)
-	if !ok {
-		panic("failed to get nh")
-	}
-	node.ss.setStreamingSnapshot()
-	getSinkFn := func() pb.IChunkSink {
-		conn := nh.transport.GetStreamConnection(rec.ClusterID, rec.NodeID)
-		if conn == nil {
-			plog.Errorf("failed to get connection to %s",
-				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
-			return nil
-		}
-		return conn
-	}
-	node.ss.setStreamSnapshotReq(rec, getSinkFn)
-	s.streamSnapshotWorkReady.clusterReady(node.clusterID)
-}
-
-func (s *execEngine) reportRequestedSnapshot(node *node, rec rsm.Task) {
-	node.ss.setTakingSnapshot()
-	node.ss.setSaveSnapshotReq(rec)
-	s.requestedSnapshotWorkReady.clusterReady(node.clusterID)
-}
-
-func (s *execEngine) reportAvailableSnapshot(node *node, rec rsm.Task) {
-	node.ss.setRecoveringFromSnapshot()
-	node.ss.setRecoverFromSnapshotReq(rec)
-	s.snapshotWorkReady.clusterReady(node.clusterID)
 }
 
 func (s *execEngine) nodeWorkerMain(workerID uint64) {
@@ -758,15 +608,27 @@ func (s *execEngine) setNodeReady(clusterID uint64) {
 	s.nodeWorkReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) ProposeDelay(clusterID uint64, startTime time.Time) {
+func (s *execEngine) setTaskReady(clusterID uint64) {
+	s.taskWorkReady.clusterReady(clusterID)
+}
+
+func (s *execEngine) setStreamReady(clusterID uint64) {
+	s.streamSnapshotWorkReady.clusterReady(clusterID)
+}
+
+func (s *execEngine) setRequestedSnapshotReady(clusterID uint64) {
+	s.requestedSnapshotWorkReady.clusterReady(clusterID)
+}
+
+func (s *execEngine) setAvailableSnapshotReady(clusterID uint64) {
+	s.snapshotWorkReady.clusterReady(clusterID)
+}
+
+func (s *execEngine) proposeDelay(clusterID uint64, startTime time.Time) {
 	p := s.nodeWorkReady.getPartitioner()
 	idx := p.GetPartitionID(clusterID)
 	profiler := s.profilers[idx]
 	profiler.propose.record(startTime)
-}
-
-func (s *execEngine) SetCommitReady(clusterID uint64) {
-	s.taskWorkReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) offloadNodeMap(nodes map[uint64]*node,

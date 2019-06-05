@@ -122,6 +122,7 @@ type SMFactoryFunc func(clusterID uint64,
 
 // INodeProxy is the interface used as proxy to a nodehost.
 type INodeProxy interface {
+	NodeReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
 	ApplyConfigChange(pb.ConfigChange)
@@ -371,6 +372,7 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedLastApplied.Lock()
 	s.batchedLastApplied.index = index
 	s.batchedLastApplied.Unlock()
+	s.node.NodeReady()
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
