@@ -148,6 +148,12 @@ typedef struct NodeHostConfig
 
 typedef struct
 {
+  Bool Exported;
+  DBString ExportedPath;
+} SnapshotOption;
+
+typedef struct
+{
   uint64_t result;
   int errcode;
 } OpenResult;
@@ -170,6 +176,12 @@ typedef struct
   size_t size;
   int errcode;
 } SnapshotResult;
+
+typedef struct
+{
+  uint64_t result;
+  int errcode;
+} RequestSnapshotResult;
 
 typedef struct
 {
@@ -254,9 +266,9 @@ int CNodeHostStartCluster(uint64_t oid,
   Bool join, void *factory, int32_t smType, RaftConfig cfg);
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID);
 int CNodeHostStopNode(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
-NewSessionResult CNodeHostGetNewSession(uint64_t oid,
+NewSessionResult CNodeHostSyncGetSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);
-int CNodeHostCloseSession(uint64_t oid,
+int CNodeHostSyncCloseSession(uint64_t oid,
   uint64_t timeout, uint64_t csoid);
 SyncProposeResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   uint64_t csoid, Bool csupdate, const unsigned char *buf, size_t len);
@@ -264,11 +276,13 @@ int CNodeHostSyncRead(uint64_t oid,
   uint64_t timeout, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
-AddNodeResult CNodeHostRequestAddNode(uint64_t oid, uint64_t timeout,
+RequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+  uint64_t clusterID, SnapshotOption opt, uint64_t timeout);
+int CNodeHostSyncRequestAddNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
-DeleteNodeResult CNodeHostRequestDeleteNode(uint64_t oid, uint64_t timeout,
+int CNodeHostSyncRequestDeleteNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID);
-AddObserverResult CNodeHostRequestAddObserver(uint64_t oid, uint64_t timeout,
+int CNodeHostSyncRequestAddObserver(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
 int CRequestLeaderTransfer(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 GetMembershipResult CNodeHostGetClusterMembership(uint64_t oid,
@@ -285,7 +299,8 @@ ReadIndexResult CNodeHostReadIndex(uint64_t oid, uint64_t timeout,
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
-int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
+int CNodeHostSyncRemoveData(uint64_t oid,
+  uint64_t clusterID, uint64_t nodeID, uint64_t timeout);
 
 #ifdef __cplusplus
 }

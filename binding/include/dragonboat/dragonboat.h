@@ -159,6 +159,24 @@ class NodeHostConfig
   std::string KeyFile;
 };
 
+// SnapshotOption is the options users can specify when requesting a snapshot
+// to be generated.
+class SnapshotOption
+{
+  public:
+  SnapshotOption(bool Exported = false, std::string ExportedPath = "") noexcept;
+  // Exported is a boolean flag indicating whether the snapshot requested to
+  // be generated should be exported. For an exported snapshot, it is users'
+  // responsibility to manage the snapshot files. By default, a requested
+  // snapshot is not considered as exported, such a regular snapshot is managed
+  // the system.
+  bool Exported;
+  // ExportPath is the path where the exported snapshot should be stored, it
+  // must point to an existing directory for which the current user has write
+  // permission to it.
+  std::string ExportedPath;
+};
+
 // Status is the status returned by various methods for indicating operation
 // results.
 class Status
@@ -420,17 +438,17 @@ class NodeHost : public ManagedObject
   // will not be enforced. The returned client Session instance is owned by the
   // caller. The NoOP client session is not required to be closed.
   Session *GetNoOPSession(ClusterID clusterID) noexcept;
-  // GetNewSession returns a new client Session instance for the specified
+  // SyncGetSession returns a new client Session instance for the specified
   // cluster and the returned client Session instance is owned by the caller.
   // On success, status::OK() will be true and a new Session instance is
   // returned. On failure, status::Code() carries the error code and nullptr is
   // returned.
-  Session *GetNewSession(ClusterID clusterID,
+  Session *SyncGetSession(ClusterID clusterID,
     Milliseconds timeout, Status *status) noexcept;
   // CloseSession closes a previously created client Session instance.
   // NoOP client session obtained from the GetNoOPSession method can not
   // be closed.
-  Status CloseSession(const Session &session,
+  Status SyncCloseSession(const Session &session,
     Milliseconds timeout) noexcept;
   // SyncPropose makes a synchronous proposal on the cluster specified by the
   // input client session object. Once the proposal is committed and
@@ -493,15 +511,10 @@ class NodeHost : public ManagedObject
     const Byte *query, size_t queryLen,
     Byte *result, size_t resultLen, size_t *written) noexcept;
   // TODO: implement RequestSnapshot sync&async
-  Status SyncRequestSnapshot(ClusterID clusterID, SnapshotResultIndex *result,
-    Milliseconds timeout) noexcept;
-  Status RequestSnapshot(ClusterID clusterID, Event *event,
-    Milliseconds timeout) noexcept;
-  // TODO: implement ExportSnapshot sync&async
-  Status SyncExportSnapshot(ClusterID clusterID, SnapshotResultIndex *result,
-    std::string path, Milliseconds timeout) noexcept;
-  Status ExportSnapshot(ClusterID clusterID, Event *event,
-    std::string path, Milliseconds timeout) noexcept;
+  Status SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+    Milliseconds timeout, SnapshotResultIndex *result) noexcept;
+  Status RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+    Milliseconds timeout, Event *event) noexcept;
   // ProposeSession makes a asynchronous proposal on the specified cluster
   // for client session related operation. Depending on the state of the client
   // session object, the supported operations are for registering or
@@ -518,7 +531,7 @@ class NodeHost : public ManagedObject
   // the Raft cluster, it is application's responsibility to call StartCluster
   // on the right NodeHost instance to actually start the cluster node.
   // TODO: implement async
-  Status AddNode(ClusterID clusterID, NodeID nodeID,
+  Status SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // RemoveNode makes a synchronous proposal to make a raft membership change
   // to remove the specified node or observer from the requested cluster. It is
@@ -527,7 +540,7 @@ class NodeHost : public ManagedObject
   // responsibility to call StopCluster on the right nodehost instance to
   // actually have the cluster node removed from the managing nodehost.
   // TODO: implement async
-  Status RemoveNode(ClusterID clusterID, NodeID nodeID,
+  Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
   // AddObserver makes a synchronous proposal to make a raft membership change
   // to add a new observer to the specified raft cluster. An observer is able
@@ -539,7 +552,7 @@ class NodeHost : public ManagedObject
   // be promoted to a regular node with voting power by calling AddNode on the
   // same NodeID.
   // TODO: implement async
-  Status AddObserver(ClusterID clusterID, NodeID nodeID,
+  Status SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node
   // on the specified cluster. When returned Status instance has its OK() method
@@ -555,6 +568,8 @@ class NodeHost : public ManagedObject
   // GetLeaderID gets the leader ID of the specified cluster based on local
   // node's current knowledge.
   Status GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept;
+  Status SyncRemoveData(ClusterID clusterID, NodeID nodeID,
+    Milliseconds timeout) noexcept;
   Status RemoveData(ClusterID clusterID, NodeID nodeID) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(NodeHost);

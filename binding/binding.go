@@ -332,10 +332,10 @@ func NodeHostStopNode(oid uint64, clusterID uint64, nodeID uint64) int {
 	return getErrorCode(err)
 }
 
-// NodeHostGetNewSession creates a new client session instance ready to
+// NodeHostSyncGetSession creates a new client session instance ready to
 // be used for making proposals.
-//export NodeHostGetNewSession
-func NodeHostGetNewSession(oid uint64, timeout uint64,
+//export NodeHostSyncGetSession
+func NodeHostSyncGetSession(oid uint64, timeout uint64,
 	clusterID uint64) (uint64, int) {
 	nh := getNodeHost(oid)
 	ctx, cancel := context.WithTimeout(context.Background(),
@@ -350,8 +350,8 @@ func NodeHostGetNewSession(oid uint64, timeout uint64,
 }
 
 // NodeHostCloseSession closes the specified client session instance.
-//export NodeHostCloseSession
-func NodeHostCloseSession(oid uint64, timeout uint64, csoid uint64) int {
+//export NodeHostSyncCloseSession
+func NodeHostSyncCloseSession(oid uint64, timeout uint64, csoid uint64) int {
 	nh := getNodeHost(oid)
 	cs := getSession(csoid)
 	ctx, cancel := context.WithTimeout(context.Background(),
@@ -554,11 +554,19 @@ func NodeHostStaleRead(oid uint64,
 	return 0, 0
 }
 
-// TODO: SyncRequestSnapshot, return ManagedObject
 //export NodeHostSyncRequestSnapshot
 func NodeHostSyncRequestSnapshot(oid uint64,
-	clusterID uint64, timeout uint64) (uint64, int) {
-	return 0, 0
+	clusterID uint64, opt C.SnapshotOption, timeout uint64) (uint64, int) {
+	nh := getNodeHost(oid)
+	option := dragonboat.SnapshotOption{
+		Exported:   cboolToBool(opt.Exported),
+		ExportPath: charArrayToString(opt.ExportedPath.str, opt.ExportedPath.len),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	v, err := nh.SyncRequestSnapshot(ctx, clusterID, option)
+	return v, getErrorCode(err)
 }
 
 // TODO: RequestSnapshot, return ManagedObject
@@ -570,47 +578,45 @@ func NodeHostRequestSnapshot(oid uint64,
 
 // NodeHostRequestAddNode requests the specified new node to be added to the
 // specified raft cluster.
-//export NodeHostRequestAddNode
-func NodeHostRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
-	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
+//export NodeHostSyncRequestAddNode
+func NodeHostSyncRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
+	nodeID uint64, url C.DBString, orderID uint64) int {
 	nh := getNodeHost(oid)
 	nodeURL := charArrayToString(url.str, url.len)
-	rs, err := nh.RequestAddNode(clusterID,
-		nodeID, nodeURL, orderID, time.Duration(timeout)*time.Millisecond)
-	if err != nil {
-		return 0, getErrorCode(err)
-	}
-	return addManagedObject(rs), getErrorCode(err)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	err := nh.SyncRequestAddNode(ctx, clusterID, nodeID, nodeURL, orderID)
+	return getErrorCode(err)
 }
 
 // NodeHostRequestDeleteNode requests the specified node to be removed from the
 // specified raft cluster.
-//export NodeHostRequestDeleteNode
-func NodeHostRequestDeleteNode(oid uint64,
+//export NodeHostSyncRequestDeleteNode
+func NodeHostSyncRequestDeleteNode(oid uint64,
 	timeout uint64, clusterID uint64,
-	nodeID uint64, orderID uint64) (uint64, int) {
+	nodeID uint64, orderID uint64) int {
 	nh := getNodeHost(oid)
-	rs, err := nh.RequestDeleteNode(clusterID,
-		nodeID, orderID, time.Duration(timeout)*time.Millisecond)
-	if err != nil {
-		return 0, getErrorCode(err)
-	}
-	return addManagedObject(rs), getErrorCode(err)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	err := nh.SyncRequestDeleteNode(ctx, clusterID, nodeID, orderID)
+	return getErrorCode(err)
 }
 
 // NodeHostRequestAddObserver requests the specified new node to be added to
 // the specified cluster as observer.
-//export NodeHostRequestAddObserver
-func NodeHostRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
-	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
+//export NodeHostSyncRequestAddObserver
+func NodeHostSyncRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
+	nodeID uint64, url C.DBString, orderID uint64) int {
 	nh := getNodeHost(oid)
 	nodeURL := charArrayToString(url.str, url.len)
-	rs, err := nh.RequestAddObserver(clusterID,
-		nodeID, nodeURL, orderID, time.Duration(timeout)*time.Millisecond)
-	if err != nil {
-		return 0, getErrorCode(err)
-	}
-	return addManagedObject(rs), getErrorCode(err)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	err := nh.SyncRequestAddObserver(ctx, clusterID,
+		nodeID, nodeURL, orderID)
+	return getErrorCode(err)
 }
 
 // NodeHostRequestLeaderTransfer request to transfer leadership to the
@@ -657,9 +663,13 @@ func NodeHostGetLeaderID(oid uint64, clusterID uint64) (uint64, bool, int) {
 
 // NodeHostRemoveData removes the data of the specified cluster.
 // should be called after remove node
-//export NodeHostRemoveData
-func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
+//export NodeHostSyncRemoveData
+func NodeHostSyncRemoveData(oid uint64, clusterID uint64, nodeID uint64,
+	timeout uint64) int {
 	nh := getNodeHost(oid)
-	err := nh.RemoveData(clusterID, nodeID)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	err := nh.SyncRemoveData(ctx, clusterID, nodeID)
 	return getErrorCode(err)
 }

@@ -86,6 +86,11 @@ NodeHostConfig::NodeHostConfig(std::string WALDir,
 {
 }
 
+SnapshotOption::SnapshotOption(bool Exported, std::string ExportedPath) noexcept
+  :  Exported(Exported), ExportedPath(ExportedPath)
+{
+}
+
 Status::Status() noexcept
   : code_(StatusOK)
 {
@@ -408,12 +413,12 @@ Session *NodeHost::GetNoOPSession(ClusterID clusterID) noexcept
   return new Session(oid);
 }
 
-Session *NodeHost::GetNewSession(ClusterID clusterID,
+Session *NodeHost::SyncGetSession(ClusterID clusterID,
   Milliseconds timeout, Status *status) noexcept
 {
   auto ts = timeout.count();
   ::NewSessionResult result;
-  result = CNodeHostGetNewSession(oid_, ts, clusterID);
+  result = CNodeHostSyncGetSession(oid_, ts, clusterID);
   *status = Status(result.errcode);
   if (result.csoid == 0) {
     return nullptr;
@@ -421,11 +426,11 @@ Session *NodeHost::GetNewSession(ClusterID clusterID,
   return new Session(result.csoid);
 }
 
-Status NodeHost::CloseSession(const Session &session,
+Status NodeHost::SyncCloseSession(const Session &session,
   Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  int code = CNodeHostCloseSession(oid_, ts, session.OID());
+  int code = CNodeHostSyncCloseSession(oid_, ts, session.OID());
   return Status(code);
 }
 
@@ -543,26 +548,21 @@ Status NodeHost::StaleRead(ClusterID clusterID,
   return Status(-1);
 }
 
-Status NodeHost::SyncRequestSnapshot(ClusterID clusterID,
-  SnapshotResultIndex *result, Milliseconds timeout) noexcept
+Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+  Milliseconds timeout, SnapshotResultIndex *result) noexcept
 {
-  return Status(-1);
+  auto ts = timeout.count();
+  ::SnapshotOption option;
+  option.Exported = opt.Exported;
+  option.ExportedPath = toDBString(opt.ExportedPath);
+  ::RequestSnapshotResult ret;
+  ret = CNodeHostSyncRequestSnapshot(oid_, clusterID, option, ts);
+  *result = ret.result;
+  return Status(ret.errcode);
 }
 
-Status NodeHost::RequestSnapshot(ClusterID clusterID,
-  Event *event, Milliseconds timeout) noexcept
-{
-  return Status(-1);
-}
-
-Status NodeHost::SyncExportSnapshot(ClusterID clusterID,
-  SnapshotResultIndex *result, std::string path, Milliseconds timeout) noexcept
-{
-  return Status(-1);
-}
-
-Status NodeHost::ExportSnapshot(ClusterID clusterID,
-  Event *event, std::string path, Milliseconds timeout) noexcept
+Status NodeHost::RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+  Milliseconds timeout, Event *event) noexcept
 {
   return Status(-1);
 }
@@ -582,48 +582,27 @@ Status NodeHost::ProposeSession(Session *cs,
   return Status(result.errcode);
 }
 
-Status NodeHost::AddNode(ClusterID clusterID, NodeID nodeID,
+Status NodeHost::SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
   std::string url, Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  ::AddNodeResult result;
-  result = CNodeHostRequestAddNode(oid_,
-    ts, clusterID, nodeID, toDBString(url));
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
-  }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return Status(CNodeHostSyncRequestAddNode(oid_,
+    ts, clusterID, nodeID, toDBString(url)));
 }
 
-Status NodeHost::AddObserver(ClusterID clusterID, NodeID nodeID,
+Status NodeHost::SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
   std::string url, Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  ::AddObserverResult result;
-  result = CNodeHostRequestAddObserver(oid_,
-    ts, clusterID, nodeID, toDBString(url));
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
-  }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return Status(CNodeHostSyncRequestAddObserver(oid_,
+    ts, clusterID, nodeID, toDBString(url)));
 }
 
-Status NodeHost::RemoveNode(ClusterID clusterID, NodeID nodeID,
+Status NodeHost::SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
   Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  ::DeleteNodeResult result;
-  result = CNodeHostRequestDeleteNode(oid_, ts, clusterID, nodeID);
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
-  }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return Status(CNodeHostSyncRequestDeleteNode(oid_, ts, clusterID, nodeID));
 }
 
 Status NodeHost::RequestLeaderTransfer(ClusterID clusterID,
@@ -661,9 +640,11 @@ Status NodeHost::GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept
   return Status(r.errcode);
 }
 
-Status NodeHost::RemoveData(ClusterID clusterID, NodeID nodeID) noexcept
+Status NodeHost::SyncRemoveData(ClusterID clusterID, NodeID nodeID,
+  Milliseconds timeout) noexcept
 {
-  return Status(CNodeHostRemoveData(oid_, clusterID, nodeID));
+  auto ts = timeout.count();
+  return Status(CNodeHostSyncRemoveData(oid_, clusterID, nodeID, ts));
 }
 
 IOServiceHandler *RunIOServiceInGoRuntime(IOService* iosp,

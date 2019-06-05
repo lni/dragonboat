@@ -106,21 +106,21 @@ int CNodeHostStopNode(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
   return NodeHostStopNode(oid, clusterID, nodeID);
 }
 
-NewSessionResult CNodeHostGetNewSession(uint64_t oid,
+NewSessionResult CNodeHostSyncGetSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID)
 {
-  struct NodeHostGetNewSession_return r;
+  struct NodeHostSyncGetSession_return r;
   NewSessionResult result;
-  r = NodeHostGetNewSession(oid, timeout, clusterID);
+  r = NodeHostSyncGetSession(oid, timeout, clusterID);
   result.csoid = r.r0;
   result.errcode = r.r1;
   return result;
 }
 
-int CNodeHostCloseSession(uint64_t oid,
+int CNodeHostSyncCloseSession(uint64_t oid,
   uint64_t timeout, uint64_t csoid)
 {
-  return NodeHostCloseSession(oid, timeout, csoid);
+  return NodeHostSyncCloseSession(oid, timeout, csoid);
 }
 
 SyncProposeResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
@@ -158,37 +158,33 @@ int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   return r.r0;
 }
 
-AddNodeResult CNodeHostRequestAddNode(uint64_t oid, uint64_t timeout,
-  uint64_t clusterID, uint64_t nodeID, DBString url)
+RequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+  uint64_t clusterID, SnapshotOption opt, uint64_t timeout)
 {
-  AddNodeResult result;
-  struct NodeHostRequestAddNode_return r;
-  r = NodeHostRequestAddNode(oid, timeout, clusterID, nodeID, url, 0); 
-  result.rsoid = r.r0;
+  RequestSnapshotResult result;
+  struct NodeHostSyncRequestSnapshot_return r;
+  r = NodeHostSyncRequestSnapshot(oid, clusterID, opt, timeout);
+  result.result = r.r0;
   result.errcode = r.r1;
   return result;
 }
 
-AddObserverResult CNodeHostRequestAddObserver(uint64_t oid, uint64_t timeout,
+int CNodeHostSyncRequestAddNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url)
 {
-  AddObserverResult result;
-  struct NodeHostRequestAddObserver_return r;
-  r = NodeHostRequestAddObserver(oid, timeout, clusterID, nodeID, url, 0); 
-  result.rsoid = r.r0;
-  result.errcode = r.r1;
-  return result;
+  return NodeHostSyncRequestAddNode(oid, timeout, clusterID, nodeID, url, 0);
 }
 
-DeleteNodeResult CNodeHostRequestDeleteNode(uint64_t oid, uint64_t timeout,
+int CNodeHostSyncRequestAddObserver(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID, DBString url)
+{
+  return NodeHostSyncRequestAddObserver(oid, timeout, clusterID, nodeID, url, 0);
+}
+
+int CNodeHostSyncRequestDeleteNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID)
 {
-  DeleteNodeResult result;
-  struct NodeHostRequestDeleteNode_return r;
-  r = NodeHostRequestDeleteNode(oid, timeout, clusterID, nodeID, 0);
-  result.rsoid = r.r0;
-  result.errcode = r.r1;
-  return result;
+  return NodeHostSyncRequestDeleteNode(oid, timeout, clusterID, nodeID, 0);
 }
 
 int CRequestLeaderTransfer(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
@@ -219,9 +215,10 @@ GetLeaderIDResult CNodeHostGetLeaderID(uint64_t oid, uint64_t clusterID)
   return result;
 }
 
-int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
+int CNodeHostSyncRemoveData(uint64_t oid,
+  uint64_t clusterID, uint64_t nodeID, uint64_t timeout)
 {
-  return NodeHostRemoveData(oid, clusterID, nodeID);
+  return NodeHostSyncRemoveData(oid, clusterID, nodeID, timeout);
 }
 
 ProposeResult CNodeHostProposeSession(uint64_t oid, uint64_t timeout,

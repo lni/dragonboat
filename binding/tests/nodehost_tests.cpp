@@ -350,9 +350,9 @@ TEST_F(NodeHostTest, SessionCanBeCreatedAndClosed)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
-  s = nh_->CloseSession(*(cs.get()), timeout);
+  s = nh_->SyncCloseSession(*(cs.get()), timeout);
   EXPECT_TRUE(s.OK());
 }
 
@@ -366,7 +366,7 @@ TEST_F(NodeHostTest, ProposalAndReadCanBeMade)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for(int i = 0; i < 16; i++) {
@@ -392,7 +392,7 @@ TEST_F(NodeHostTest, ProposalAndReadCanBeMadeUsingOverloads)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Byte buf[128];
   for(int i = 0; i < 16; i++) {
@@ -422,7 +422,7 @@ TEST_F(NodeHostTest, TooSmallTimeoutIsReported)
   bool done = false;
   while(retry > 0) {
     auto timeout = dragonboat::Milliseconds(5);
-    std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));
+    std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
     if (s.Code() == dragonboat::Status::ErrInvalidDeadline) {
       retry--;
       continue;
@@ -446,7 +446,7 @@ TEST_F(NodeHostTest, TooBigPayloadIsReported)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::UpdateResult code;
   int sz = 1024*1024*128;
@@ -483,7 +483,7 @@ TEST_F(NodeHostTest, SnapshotCanBeCapturedAndRestored)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for(int i = 0; i < 64; i++) {
@@ -519,7 +519,7 @@ TEST_F(NodeHostTest, NodeCanBeAdded)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for(int i = 0; i < 16; i++) {
@@ -528,7 +528,7 @@ TEST_F(NodeHostTest, NodeCanBeAdded)
     EXPECT_TRUE(s.OK());
     cs->ProposalCompleted();
   }
-  s = nh_->AddNode(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddNode(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   for(int i = 0; i < 4; i++) {
     dragonboat::UpdateResult code;
@@ -642,7 +642,7 @@ TEST_F(NodeHostTest, ASyncPropose)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for (uint64_t i = 1; i < 16; i++)
@@ -668,7 +668,7 @@ TEST_F(NodeHostTest, ASyncProposeOverload)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Byte buf[128];
   for (uint64_t i = 1; i < 16; i++)
@@ -694,7 +694,7 @@ TEST_F(NodeHostTest, ASyncReadIndex)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for (uint64_t i = 1; i < 16; i++)
@@ -732,7 +732,7 @@ TEST_F(NodeHostTest, ASyncReadIndexUsingOverload)
   EXPECT_TRUE(s.OK());
   auto timeout = dragonboat::Milliseconds(5000);
   waitForElectionToComplete();
-  std::unique_ptr<dragonboat::Session> cs(nh_->GetNewSession(1, timeout, &s));	
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::Buffer buf(128);
   for (uint64_t i = 1; i < 16; i++)
@@ -881,7 +881,7 @@ TEST_F(NodeHostTest, ObserverCanBeAdded)
     config);
   EXPECT_TRUE(s.OK());
   waitForElectionToComplete();
-  s = nh_->AddObserver(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   std::unique_ptr<dragonboat::Session> cs(nh_->GetNoOPSession(1));
   dragonboat::UpdateResult code;
@@ -901,9 +901,9 @@ TEST_F(NodeHostTest, ObserverCanBeRemoved)
     config);
   EXPECT_TRUE(s.OK());
   waitForElectionToComplete();
-  s = nh_->AddObserver(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
-  s = nh_->RemoveNode(1, 2, timeout);
+  s = nh_->SyncRequestDeleteNode(1, 2, timeout);
   EXPECT_TRUE(s.OK());
 }
 
@@ -917,7 +917,7 @@ TEST_F(NodeHostTest, ObserverCanBePromoted)
     config);
   EXPECT_TRUE(s.OK());
   waitForElectionToComplete();
-  s = nh_->AddObserver(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   std::unique_ptr<dragonboat::Session> cs(nh_->GetNoOPSession(1));
   dragonboat::UpdateResult code;
@@ -926,7 +926,7 @@ TEST_F(NodeHostTest, ObserverCanBePromoted)
   EXPECT_EQ(code, uint64_t(1));
   EXPECT_TRUE(s.OK());
   std::cout << "going to add node" << std::endl;
-  s = nh_->AddNode(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddNode(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
   EXPECT_FALSE(s.OK());
@@ -942,7 +942,7 @@ TEST_F(NodeHostTest, ObserverCanSyncPropose)
     config);
   EXPECT_TRUE(s.OK());
   waitForElectionToComplete();
-  s = nh_->AddObserver(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   dragonboat::Peers p2;
   auto config2 = getTestConfig();
@@ -971,7 +971,7 @@ TEST_F(NodeHostTest, ObserverCanReadIndex)
     config);
   EXPECT_TRUE(s.OK());
   waitForElectionToComplete();
-  s = nh_->AddObserver(1, 2, "localhost:9051", timeout);
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
   EXPECT_TRUE(s.OK());
   dragonboat::Peers p2;
   auto config2 = getTestConfig();
