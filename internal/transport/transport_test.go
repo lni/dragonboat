@@ -288,8 +288,9 @@ func newNOOPTestTransport() (*Transport,
 	t := &testSnapshotDir{}
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	c := config.NodeHostConfig{
-		RaftAddress:    "localhost:9876",
-		RaftRPCFactory: NewNOOPTransport,
+		MaxSendQueueSize: 256 * 1024 * 1024,
+		RaftAddress:      "localhost:9876",
+		RaftRPCFactory:   NewNOOPTransport,
 	}
 	ctx, err := server.NewContext(c)
 	if err != nil {
@@ -750,10 +751,12 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
@@ -859,10 +862,12 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
@@ -1072,11 +1077,13 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
@@ -1343,5 +1350,105 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	}
 	if !failedSnapshotReported {
 		t.Fatalf("failed snapshot not reported")
+	}
+}
+
+func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
+	tt, nodes, _, req, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, serverAddress)
+	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
+	msg := raftpb.Message{
+		ClusterId: 100,
+		To:        2,
+		Type:      raftpb.Replicate,
+		Entries:   []raftpb.Entry{e},
+	}
+	req.SetBlocked(true)
+	rled := func(exp bool) {
+		_, key, err := nodes.Resolve(100, 2)
+		if err != nil {
+			t.Fatalf("failed to resolve the addr")
+		}
+		sq, ok := tt.mu.queues[key]
+		if !ok {
+			t.Fatalf("failed to get sq")
+		}
+		if sq.rateLimited() != exp {
+			t.Errorf("rate limited unexpected, exp %t", exp)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		sent := tt.ASyncSend(msg)
+		if !sent {
+			rled(true)
+			break
+		}
+		if i == 99 {
+			t.Errorf("no message rejected")
+		}
+	}
+	req.SetBlocked(false)
+	for i := 0; i < 1000; i++ {
+		sent := tt.ASyncSend(msg)
+		if sent {
+			rled(false)
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+		if i == 999 {
+			t.Errorf("no message buffered")
+		}
+	}
+}
+
+func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
+	tt, nodes, _, _, _ := newNOOPTestTransport()
+	defer tt.Stop()
+	tt.SetDeploymentID(12345)
+	handler := newTestMessageHandler()
+	tt.SetMessageHandler(handler)
+	nodes.AddNode(100, 2, serverAddress)
+	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
+	msg := raftpb.Message{
+		ClusterId: 100,
+		To:        2,
+		Type:      raftpb.Replicate,
+		Entries:   []raftpb.Entry{e},
+	}
+	_, key, err := nodes.Resolve(100, 2)
+	if err != nil {
+		t.Fatalf("failed to resolve the addr")
+	}
+	if !tt.ASyncSend(msg) {
+		t.Errorf("first send failed")
+	}
+	sq, ok := tt.mu.queues[key]
+	if !ok {
+		t.Fatalf("failed to get sq")
+	}
+	for len(sq.ch) != 0 {
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < 20; i++ {
+		sent := tt.ASyncSend(msg)
+		if !sent {
+			t.Errorf("failed to send2")
+		}
+	}
+	for len(sq.ch) != 0 {
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < 1000; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if sq.rl.Get() == 0 {
+			return
+		}
+		if i == 999 {
+			t.Errorf("rate limiter failed to report correct size")
+		}
 	}
 }

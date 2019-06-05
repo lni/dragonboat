@@ -100,14 +100,6 @@ func getRequestState(oid uint64) *dragonboat.RequestState {
 	return v.(*dragonboat.RequestState)
 }
 
-func getSnapshotState(oid uint64) *dragonboat.SnapshotState {
-	v, ok := getManagedObject(oid)
-	if !ok {
-		panic("snapshot state not found")
-	}
-	return v.(*dragonboat.SnapshotState)
-}
-
 // GetManagedObjectCount returns the count of the managed object.
 //export GetManagedObjectCount
 func GetManagedObjectCount() uint64 {
@@ -349,7 +341,7 @@ func NodeHostGetNewSession(oid uint64, timeout uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	cs, err := nh.GetNewSession(ctx, clusterID)
+	cs, err := nh.SyncGetSession(ctx, clusterID)
 	if err != nil {
 		return 0, getErrorCode(err)
 	}
@@ -365,7 +357,7 @@ func NodeHostCloseSession(oid uint64, timeout uint64, csoid uint64) int {
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	err := nh.CloseSession(ctx, cs)
+	err := nh.SyncCloseSession(ctx, cs)
 	return getErrorCode(err)
 }
 
@@ -491,18 +483,18 @@ func NodeHostSyncRead(oid uint64, timeout uint64, clusterID uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	v, err := nh.SyncRead(ctx, clusterID, query)
+	r, err := nh.SyncRead(ctx, clusterID, query)
 	if err != nil {
 		return getErrorCode(err), 0
 	}
-	r := v.([]byte)
-	if len(r) > int(resultLen) {
+	rv := r.([]byte)
+	if len(rv) > int(resultLen) {
 		return int(C.ErrResultBufferTooSmall), 0
 	}
-	if copy(result, r) != len(r) {
+	if copy(result, rv) != len(rv) {
 		panic("failed to copy buffer")
 	}
-	return getErrorCode(err), len(r)
+	return getErrorCode(err), len(rv)
 }
 
 // NodeHostReadIndex starts the ReadIndex protocol to get ready for a

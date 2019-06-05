@@ -49,8 +49,8 @@ func SetIncomingReadIndexMaxLen(sz uint64) {
 	incomingReadIndexMaxLen = sz
 }
 
-func SetReceiveQueueSize(sz uint64) {
-	receiveQueueSize = sz
+func SetReceiveQueueLen(v uint64) {
+	receiveQueueLen = v
 }
 
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {
@@ -65,73 +65,73 @@ func (nh *NodeHost) GetLogDB() raftio.ILogDB {
 	return nh.logdb
 }
 
-func (rn *node) GetLastApplied() uint64 {
-	return rn.sm.GetLastApplied()
+func (n *node) GetLastApplied() uint64 {
+	return n.sm.GetLastApplied()
 }
 
-func (rn *node) DumpRaftInfoToLog() {
-	rn.dumpRaftInfoToLog()
+func (n *node) DumpRaftInfoToLog() {
+	n.dumpRaftInfoToLog()
 }
 
-func (rn *node) IsLeader() bool {
-	return rn.isLeader()
+func (n *node) IsLeader() bool {
+	return n.isLeader()
 }
 
-func (rn *node) IsFollower() bool {
-	return rn.isFollower()
+func (n *node) IsFollower() bool {
+	return n.isFollower()
 }
 
-func (rn *node) GetStateMachineHash() uint64 {
-	return rn.getStateMachineHash()
+func (n *node) GetStateMachineHash() uint64 {
+	return n.getStateMachineHash()
 }
 
-func (rn *node) GetSessionHash() uint64 {
-	return rn.getSessionHash()
+func (n *node) GetSessionHash() uint64 {
+	return n.getSessionHash()
 }
 
-func (rn *node) GetMembershipHash() uint64 {
-	return rn.getMembershipHash()
+func (n *node) GetMembershipHash() uint64 {
+	return n.getMembershipHash()
 }
 
-func (rn *node) GetRateLimiter() *server.RateLimiter {
-	return rn.node.GetRateLimiter()
+func (n *node) GetRateLimiter() *server.RateLimiter {
+	return n.node.GetRateLimiter()
 }
 
-func (rn *node) GetInMemLogSize() uint64 {
-	return rn.node.GetInMemLogSize()
+func (n *node) GetInMemLogSize() uint64 {
+	return n.node.GetInMemLogSize()
 }
 
-func (rc *node) getStateMachineHash() uint64 {
-	if v, err := rc.sm.GetHash(); err != nil {
+func (n *node) getStateMachineHash() uint64 {
+	if v, err := n.sm.GetHash(); err != nil {
 		panic(err)
 	} else {
 		return v
 	}
 }
 
-func (rc *node) getSessionHash() uint64 {
-	return rc.sm.GetSessionHash()
+func (n *node) getSessionHash() uint64 {
+	return n.sm.GetSessionHash()
 }
 
-func (rc *node) getMembershipHash() uint64 {
-	return rc.sm.GetMembershipHash()
+func (n *node) getMembershipHash() uint64 {
+	return n.sm.GetMembershipHash()
 }
 
-func (rc *node) dumpRaftInfoToLog() {
-	if rc.node != nil {
+func (n *node) dumpRaftInfoToLog() {
+	if n.node != nil {
 		addrMap := make(map[uint64]string)
-		nodes, _, _, _ := rc.sm.GetMembership()
+		nodes, _, _, _ := n.sm.GetMembership()
 		for nodeID := range nodes {
-			if nodeID == rc.nodeID {
-				addrMap[nodeID] = rc.raftAddress
+			if nodeID == n.nodeID {
+				addrMap[nodeID] = n.raftAddress
 			} else {
-				v, _, err := rc.nodeRegistry.Resolve(rc.clusterID, nodeID)
+				v, _, err := n.nodeRegistry.Resolve(n.clusterID, nodeID)
 				if err == nil {
 					addrMap[nodeID] = v
 				}
 			}
 		}
-		rc.node.DumpRaftInfoToLog(addrMap)
+		n.node.DumpRaftInfoToLog(addrMap)
 	}
 }
 
@@ -189,20 +189,4 @@ func (p *testPartitionState) IsPartitioned() bool {
 // IsPartitioned indicates whether the local node is in partitioned mode.
 func (p *testPartitionState) isPartitioned() bool {
 	return atomic.LoadUint32(&p.testPartitioned) == 1
-}
-
-// readyToReturnTestKnob is a test knob that returns a boolean value indicating
-// whether the system is being shutdown. In production, this function always
-// return false without check the stopC chan.
-func readyToReturnTestKnob(stopC chan struct{}, pos string) bool {
-	if stopC == nil {
-		return false
-	}
-	select {
-	case <-stopC:
-		plog.Infof("test knob set, returning early before %s", pos)
-		return true
-	default:
-		return false
-	}
 }

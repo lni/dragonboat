@@ -43,6 +43,7 @@ import (
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
+	sm "github.com/lni/dragonboat/statemachine"
 )
 
 const (
@@ -73,7 +74,7 @@ func mustComplete(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Fatalf("got %d, want %d", v, requestCompleted)
+			t.Fatalf("got %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Fatalf("failed to complete the proposal")
@@ -84,7 +85,7 @@ func mustReject(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Rejected() {
-			t.Errorf("got %d, want %d", v, requestRejected)
+			t.Errorf("got %v, want %d", v, requestRejected)
 		}
 	default:
 		t.Errorf("failed to complete the add node request")
@@ -105,7 +106,7 @@ func newTestMessageRouter(clusterID uint64,
 	nodeIDList []uint64) *testMessageRouter {
 	chMap := make(map[uint64]*server.MessageQueue)
 	for _, nodeID := range nodeIDList {
-		ch := server.NewMessageQueue(1000, false, 0)
+		ch := server.NewMessageQueue(1000, false, 0, 1024*1024*256)
 		chMap[nodeID] = ch
 	}
 	rand.Seed(time.Now().UnixNano())
@@ -161,6 +162,15 @@ func getTestRaftNodes(count int) ([]*node, []*rsm.StateMachine,
 	*testMessageRouter, raftio.ILogDB) {
 	return doGetTestRaftNodes(1, count, false, nil)
 }
+
+type dummyEngine struct {
+}
+
+func (d *dummyEngine) setNodeReady(clusterID uint64)              {}
+func (d *dummyEngine) setTaskReady(clusterID uint64)              {}
+func (d *dummyEngine) setStreamReady(clusterID uint64)            {}
+func (d *dummyEngine) setRequestedSnapshotReady(clusterID uint64) {}
+func (d *dummyEngine) setAvailableSnapshotReady(clusterID uint64) {}
 
 func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	ldb raftio.ILogDB) ([]*node, []*rsm.StateMachine,
@@ -235,7 +245,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			snapshotter,
 			ds,
 			pb.RegularStateMachine,
-			func(uint64) {},
+			&dummyEngine{},
+			nil,
+			nil,
 			router.sendMessage,
 			ch,
 			make(chan struct{}),
@@ -479,7 +491,7 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 	select {
 	case v := <-rs.CompletedC:
 		if v.code != expectedCode {
-			t.Errorf("got %d, want %d", v, expectedCode)
+			t.Errorf("got %v, want %d", v, expectedCode)
 		}
 		if checkResult {
 			if v.GetResult().Value != expectedResult {
@@ -1390,5 +1402,157 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 	timeout := v.Nanoseconds() / 1000000
 	if timeout <= 4500 || timeout > 5000 {
 		t.Errorf("v %d, want [4500,5000]", timeout)
+	}
+}
+
+func TestPayloadTooBig(t *testing.T) {
+	tests := []struct {
+		maxInMemLogSize uint64
+		payloadSize     uint64
+		tooBig          bool
+	}{
+		{0, 1, false},
+		{0, 1024 * 1024 * 1024, false},
+		{settings.EntryNonCmdFieldsSize + 1, 1, false},
+		{settings.EntryNonCmdFieldsSize + 1, 2, true},
+		{settings.EntryNonCmdFieldsSize * 2, settings.EntryNonCmdFieldsSize, false},
+		{settings.EntryNonCmdFieldsSize * 2, settings.EntryNonCmdFieldsSize + 1, true},
+	}
+	for idx, tt := range tests {
+		cfg := config.Config{
+			NodeID:          1,
+			HeartbeatRTT:    1,
+			ElectionRTT:     10,
+			MaxInMemLogSize: tt.maxInMemLogSize,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("invalid cfg %v", err)
+		}
+		n := node{config: cfg}
+		if n.payloadTooBig(int(tt.payloadSize)) != tt.tooBig {
+			t.Errorf("%d, unexpected too big result %t", idx, tt.tooBig)
+		}
+	}
+}
+
+//
+// node states
+//
+
+func TestProcessUninitilizedNode(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	_, ok := n.getUninitializedNodeTask()
+	if !ok {
+		t.Errorf("failed to returned the recover request")
+	}
+	n2 := &node{ss: &snapshotState{}}
+	n2.initializedMu.initialized = true
+	_, ok = n2.getUninitializedNodeTask()
+	if ok {
+		t.Errorf("unexpected recover from snapshot request")
+	}
+}
+
+func TestProcessRecoveringNodeCanBeSkipped(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	if n.processRecoverSnapshotStatus() {
+		t.Errorf("processRecoveringNode not skipped")
+	}
+}
+
+func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	if n.processTakeSnapshotStatus() {
+		t.Errorf("processTakingSnapshotNode not skipped")
+	}
+}
+
+func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	n.ss.setRecoveringFromSnapshot()
+	n.ss.notifySnapshotStatus(false, true, false, true, 100)
+	if n.processRecoverSnapshotStatus() {
+		t.Errorf("node unexpectedly skipped")
+	}
+	if n.ss.recoveringFromSnapshot() {
+		t.Errorf("still recovering")
+	}
+	if !n.initialized() {
+		t.Errorf("not marked as initialized")
+	}
+	if n.ss.snapshotIndex != 100 {
+		t.Errorf("unexpected snapshot index %d, want 100", n.ss.snapshotIndex)
+	}
+}
+
+func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	n.ss.setRecoveringFromSnapshot()
+	if !n.processRecoverSnapshotStatus() {
+		t.Errorf("not skipped")
+	}
+}
+
+func TestTakingSnapshotNodeCanComplete(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	n.ss.setTakingSnapshot()
+	n.ss.notifySnapshotStatus(true, false, false, false, 0)
+	n.initializedMu.initialized = true
+	if n.processTakeSnapshotStatus() {
+		t.Errorf("node unexpectedly skipped")
+	}
+	if n.ss.takingSnapshot() {
+		t.Errorf("still taking snapshot")
+	}
+}
+
+func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("panic not triggered")
+		}
+	}()
+	n := &node{ss: &snapshotState{}}
+	n.ss.setTakingSnapshot()
+	n.ss.notifySnapshotStatus(true, false, false, false, 0)
+	n.processTakeSnapshotStatus()
+}
+
+type testDummyNodeProxy struct{}
+
+func (np *testDummyNodeProxy) NodeReady()                                        {}
+func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
+func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
+func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange)                 {}
+func (np *testDummyNodeProxy) ConfigChangeProcessed(uint64, bool)                {}
+func (np *testDummyNodeProxy) NodeID() uint64                                    { return 1 }
+func (np *testDummyNodeProxy) ClusterID() uint64                                 { return 1 }
+func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                       { return nil }
+
+func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	n.sm = rsm.NewStateMachine(
+		rsm.NewNativeStateMachine(1, 1, &rsm.RegularStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
+	if n.concurrentSnapshot() {
+		t.Errorf("concurrency not suppose to be supported")
+	}
+	n.ss.setTakingSnapshot()
+	n.initializedMu.initialized = true
+	if !n.processTakeSnapshotStatus() {
+		t.Fatalf("node not skipped")
+	}
+}
+
+func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *testing.T) {
+	n := &node{ss: &snapshotState{}}
+	n.sm = rsm.NewStateMachine(
+		rsm.NewNativeStateMachine(1, 1, &rsm.ConcurrentStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
+	if !n.concurrentSnapshot() {
+		t.Errorf("concurrency not supported")
+	}
+	n.ss.setTakingSnapshot()
+	n.initializedMu.initialized = true
+	if n.processTakeSnapshotStatus() {
+		t.Fatalf("node unexpectedly skipped")
 	}
 }

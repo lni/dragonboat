@@ -24,6 +24,7 @@ import (
 type MessageQueue struct {
 	size          uint64
 	ch            chan struct{}
+	rl            *RateLimiter
 	left          []raftpb.Message
 	right         []raftpb.Message
 	snapshot      []raftpb.Message
@@ -37,8 +38,10 @@ type MessageQueue struct {
 }
 
 // NewMessageQueue creates a new MessageQueue instance.
-func NewMessageQueue(size uint64, ch bool, lazyFreeCycle uint64) *MessageQueue {
+func NewMessageQueue(size uint64,
+	ch bool, lazyFreeCycle uint64, maxMemorySize uint64) *MessageQueue {
 	q := &MessageQueue{
+		rl:            NewRateLimiter(maxMemorySize),
 		size:          size,
 		lazyFreeCycle: lazyFreeCycle,
 		left:          make([]raftpb.Message, size),
@@ -95,6 +98,9 @@ func (q *MessageQueue) Add(msg raftpb.Message) (bool, bool) {
 		q.mu.Unlock()
 		return false, true
 	}
+	if !q.tryAdd(msg) {
+		return false, false
+	}
 	w := q.targetQueue()
 	w[q.idx] = msg
 	q.idx++
@@ -113,6 +119,18 @@ func (q *MessageQueue) AddSnapshot(msg raftpb.Message) bool {
 		return false
 	}
 	q.snapshot = append(q.snapshot, msg)
+	return true
+}
+
+func (q *MessageQueue) tryAdd(msg raftpb.Message) bool {
+	if !q.rl.Enabled() || msg.Type != raftpb.Replicate {
+		return true
+	}
+	if q.rl.RateLimited() {
+		plog.Warningf("rate limited dropped a replicate msg from %d", msg.ClusterId)
+		return false
+	}
+	q.rl.Increase(raftpb.GetEntrySliceSize(msg.Entries))
 	return true
 }
 
@@ -142,6 +160,9 @@ func (q *MessageQueue) Get() []raftpb.Message {
 	q.leftInWrite = !q.leftInWrite
 	q.gc()
 	q.oldIdx = sz
+	if q.rl.Enabled() {
+		q.rl.Set(0)
+	}
 	if len(q.snapshot) == 0 {
 		return t[:sz]
 	}

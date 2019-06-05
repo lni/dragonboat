@@ -20,7 +20,6 @@ package dragonboat
 import (
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -43,8 +42,12 @@ const (
 func getNewTestDB(dir string, lldir string) raftio.ILogDB {
 	d := filepath.Join(rdbTestDirectory, dir)
 	lld := filepath.Join(rdbTestDirectory, lldir)
-	os.MkdirAll(d, 0777)
-	os.MkdirAll(lld, 0777)
+	if err := os.MkdirAll(d, 0777); err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(lld, 0777); err != nil {
+		panic(err)
+	}
 	db, err := logdb.NewDefaultLogDB([]string{d}, []string{lld})
 	if err != nil {
 		panic(err.Error())
@@ -58,7 +61,9 @@ func deleteTestRDB() {
 
 func getTestSnapshotter(ldb raftio.ILogDB) *snapshotter {
 	fp := filepath.Join(rdbTestDirectory, "snapshot")
-	os.MkdirAll(fp, 0777)
+	if err := os.MkdirAll(fp, 0777); err != nil {
+		panic(err)
+	}
 	f := func(cid uint64, nid uint64) string {
 		return fp
 	}
@@ -529,37 +534,4 @@ func TestZombieSnapshotDirNameMatchWorks(t *testing.T) {
 		}
 	}
 	runSnapshotterTest(t, fn)
-}
-
-func TestRemoveSavedSnapshots(t *testing.T) {
-	os.RemoveAll(rdbTestDirectory)
-	os.MkdirAll(rdbTestDirectory, 0755)
-	defer os.RemoveAll(rdbTestDirectory)
-	for i := 0; i < 16; i++ {
-		ssdir := filepath.Join(rdbTestDirectory, fmt.Sprintf("snapshot-%X", i))
-		if err := os.MkdirAll(ssdir, 0755); err != nil {
-			t.Fatalf("failed to mkdir %v", err)
-		}
-	}
-	for i := 1; i <= 2; i++ {
-		ssdir := filepath.Join(rdbTestDirectory, fmt.Sprintf("mydata-%X", i))
-		if err := os.MkdirAll(ssdir, 0755); err != nil {
-			t.Fatalf("failed to mkdir %v", err)
-		}
-	}
-	if err := removeSavedSnapshots(rdbTestDirectory); err != nil {
-		t.Fatalf("failed to remove saved snapshots %v", err)
-	}
-	files, err := ioutil.ReadDir(rdbTestDirectory)
-	if err != nil {
-		t.Fatalf("failed to read dir %v", err)
-	}
-	for _, fi := range files {
-		if !fi.IsDir() {
-			t.Errorf("found unexpected file %v", fi)
-		}
-		if fi.Name() != "mydata-1" && fi.Name() != "mydata-2" {
-			t.Errorf("unexpected dir found %s", fi.Name())
-		}
-	}
 }

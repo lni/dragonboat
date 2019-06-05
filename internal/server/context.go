@@ -17,6 +17,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,12 @@ import (
 )
 
 var (
-	plog                  = logger.GetLogger("server")
+	plog = logger.GetLogger("server")
+	// ErrHardSettingChanged indicates that one or more of the hard settings
+	// changed.
+	ErrHardSettingChanged = errors.New("hard setting changed")
+	// ErrDirMarkedAsDeleted is the error used to indicate that the directory has
+	// been marked as deleted and can not be used again.
 	ErrDirMarkedAsDeleted = errors.New("trying to use a dir marked as deleted")
 	// ErrHostnameChanged is the error used to indicate that the hostname changed.
 	ErrHostnameChanged = errors.New("hostname changed")
@@ -103,15 +109,6 @@ func (sc *Context) Stop() {
 // GetRandomSource returns the random source associated with the Nodehost.
 func (sc *Context) GetRandomSource() random.Source {
 	return sc.randomSource
-}
-
-// RemoveSnapshotDir removes the snapshot directory belong to the specified
-// node.
-func (sc *Context) RemoveSnapshotDir(did uint64, clusterID uint64,
-	nodeID uint64) error {
-	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	s := &raftpb.RaftDataStatus{}
-	return fileutil.MarkDirAsDeleted(dir, s)
 }
 
 // GetSnapshotDir returns the snapshot directory name.
@@ -235,6 +232,52 @@ func (sc *Context) LockNodeHostDir() error {
 	return nil
 }
 
+// RemoveSnapshotDir marks the node snapshot directory as removed and have all
+// existing snapshots deleted.
+func (sc *Context) RemoveSnapshotDir(did uint64,
+	clusterID uint64, nodeID uint64) error {
+	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	exist, err := fileutil.Exist(dir)
+	if err != nil {
+		return err
+	}
+	if exist {
+		if err := sc.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
+			return err
+		}
+		if err := removeSavedSnapshots(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sc *Context) markSnapshotDirRemoved(did uint64, clusterID uint64,
+	nodeID uint64) error {
+	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	s := &raftpb.RaftDataStatus{}
+	return fileutil.MarkDirAsDeleted(dir, s)
+}
+
+func removeSavedSnapshots(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			continue
+		}
+		if SnapshotDirNameRe.Match([]byte(fi.Name())) {
+			ssdir := filepath.Join(dir, fi.Name())
+			if err := os.RemoveAll(ssdir); err != nil {
+				return err
+			}
+		}
+	}
+	return fileutil.SyncDir(dir)
+}
+
 func (sc *Context) checkNodeHostDir(did uint64,
 	addr string, hostname string, binVer uint32, name string, dbto bool) error {
 	dirs, lldirs := sc.getDataDirs()
@@ -303,12 +346,16 @@ func (sc *Context) compatible(dir string,
 			return nil
 		}
 		status := raftpb.RaftDataStatus{
-			Address:      addr,
-			BinVer:       ldbBinVer,
-			HardHash:     settings.Hard.Hash(),
-			LogdbType:    name,
-			Hostname:     hostname,
-			DeploymentId: did,
+			Address:         addr,
+			BinVer:          ldbBinVer,
+			HardHash:        0,
+			LogdbType:       name,
+			Hostname:        hostname,
+			DeploymentId:    did,
+			StepWorkerCount: settings.Hard.StepEngineWorkerCount,
+			LogdbShardCount: settings.Hard.LogDBPoolSize,
+			MaxSessionCount: settings.Hard.LRUMaxSessionCount,
+			EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 		}
 		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
 		if err != nil {
@@ -342,8 +389,17 @@ func (sc *Context) compatible(dir string,
 					status.BinVer, ldbBinVer)
 				return ErrIncompatibleData
 			}
-			if status.HardHash != settings.Hard.Hash() {
-				return ErrHardSettingsChanged
+			if status.HardHash != 0 {
+				if status.HardHash != settings.Hard.Hash() {
+					return ErrHardSettingsChanged
+				}
+			} else {
+				if status.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
+					status.LogdbShardCount != settings.Hard.LogDBPoolSize ||
+					status.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
+					status.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
+					return ErrHardSettingChanged
+				}
 			}
 		}
 	}

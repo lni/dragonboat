@@ -36,9 +36,7 @@ func (spec *nodeHostSpec) deepCopy() *nodeHostSpec {
 		Tick:    spec.Tick,
 	}
 	ns.PersistentLog = make([]pb.LogInfo, 0)
-	for _, v := range spec.PersistentLog {
-		ns.PersistentLog = append(ns.PersistentLog, v)
-	}
+	ns.PersistentLog = append(ns.PersistentLog, spec.PersistentLog...)
 	ns.Clusters = make(map[uint64]struct{})
 	for k, v := range spec.Clusters {
 		ns.Clusters[k] = v
@@ -137,9 +135,7 @@ func (m *multiNodeHost) toNodeHostSpec(nhi pb.NodeHostInfo) *nodeHostSpec {
 	n.PersistentLog = make([]pb.LogInfo, 0)
 	n.Clusters = make(map[uint64]struct{})
 	if nhi.PlogInfoIncluded {
-		for _, v := range nhi.PlogInfo {
-			n.PersistentLog = append(n.PersistentLog, v)
-		}
+		n.PersistentLog = append(n.PersistentLog, nhi.PlogInfo...)
 	}
 	for _, cid := range nhi.ClusterIdList {
 		n.Clusters[cid] = struct{}{}
@@ -162,9 +158,7 @@ func (m *multiNodeHost) syncNodeHostSpec(nhi pb.NodeHostInfo) {
 			}
 		}
 		spec.PersistentLog = make([]pb.LogInfo, 0)
-		for _, plv := range nhi.PlogInfo {
-			spec.PersistentLog = append(spec.PersistentLog, plv)
-		}
+		spec.PersistentLog = append(spec.PersistentLog, nhi.PlogInfo...)
 		spec.persistentLogMap = nil
 	}
 	cm := make(map[uint64]struct{})

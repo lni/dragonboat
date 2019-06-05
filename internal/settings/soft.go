@@ -88,17 +88,13 @@ type soft struct {
 	// UnknownRegionName defines the region name to use when the region
 	// is unknown.
 	UnknownRegionName string
-	// RaftNodeReceiveQueueLength is the length of the receive queue on each
-	// raftNode.
-	RaftNodeReceiveQueueLength uint64
+	// ReceiveQueueLength is the length of the receive queue on each node.
+	ReceiveQueueLength uint64
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
-	// before pushing the snapshot results to raftNode.
+	// before pushing the snapshot results to raft node.
 	SnapshotStatusPushDelayMS uint64
 	// NodeTaskChanLength defined the length of each node's commitC channel.
 	NodeTaskChanLength uint64
-	// SetDeploymentIDTimeoutSecond defines the number of seconds allowed to
-	// wait for setting deployment ID.
-	SetDeploymentIDTimeoutSecond uint64
 	// NodeHostSyncPoolSize defines the number of sync pools.
 	NodeHostSyncPoolSize uint64
 	// LatencySampleRatio defines the ratio how often latency is sampled.
@@ -132,16 +128,6 @@ type soft struct {
 	// StepEngineSnapshotWorkerCount is the number of workers to take and
 	// apply application state machine snapshots.
 	StepEngineSnapshotWorkerCount uint64
-	// StepEngineNodeReadyChanBufferSize is the size of buffered channels
-	// used to notify step engine workers about ready nodes.
-	StepEngineNodeReadyChanBufferSize uint64
-	// StepEngineTaskReadyChanBufferSize is the size of buffered channels
-	// used to notify step engine commit workers about pending committed
-	// proposals that can be processed.
-	StepEngineTaskReadyChanBufferSize uint64
-	// StepEngineLocalKeySize defines how many local keys should be kept
-	// by each step engine node worker
-	StepEngineLocalKeySize uint64
 
 	//
 	// transport
@@ -157,9 +143,6 @@ type soft struct {
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
 	SendQueueLength uint64
-	// MaxTransportStreamCount is the max number of streams to be handled on
-	// each nodehost. Each remote nodehost in the system requires 2 streams.
-	MaxTransportStreamCount uint64
 	// MaxDrummerServerMsgSize is the max size of messages sent/received on
 	// the Drummer side.
 	MaxDrummerServerMsgSize uint64
@@ -169,11 +152,6 @@ type soft struct {
 	// StreamConnections defines how many connections to use for each remote
 	// nodehost whene exchanging raft messages
 	StreamConnections uint64
-	// InitialWindowSize is the initial window size for tranport.
-	InitialWindowSize uint64
-	// InitialConnWindowSize is the initial connection window size for
-	// transport.
-	InitialConnWindowSize uint64
 	// PerConnBufSize is the size of the per connection buffer used for
 	// receiving incoming messages.
 	PerConnectionBufferSize uint64
@@ -212,9 +190,6 @@ type soft struct {
 	// a cycle. PersisentLogReportCycle defines how often each nodehost need to
 	// update Drummer servers in terms of NodeHostInfoReportSecond cycles.
 	PersisentLogReportCycle uint64
-	// LogDBCacheSizePerWorker is the size of each entry cache, there will be
-	// a total of StepEngineWorkerCount workers.
-	LogDBCacheSizePerWorker uint64
 
 	//
 	// LogDB
@@ -239,54 +214,46 @@ func getSoftSettings() soft {
 func getDefaultSoftSettings() soft {
 	NodeHostInfoReportSecond := uint64(20)
 	return soft{
-		MaxConcurrentStreamingSnapshot:    128,
-		MaxSnapshotConnections:            64,
-		SyncTaskInterval:                  180000,
-		PanicOnSizeMismatch:               1,
-		LazyFreeCycle:                     1,
-		LatencySampleRatio:                0,
-		BatchedEntryApply:                 true,
-		LocalRaftRequestTimeoutMs:         10000,
-		GetConnectedTimeoutSecond:         5,
-		MaxEntrySize:                      2 * MaxProposalPayloadSize,
-		InMemEntrySliceSize:               512,
-		MinEntrySliceFreeSize:             96,
-		ExpectedMaxInMemLogSize:           2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
-		IncomingReadIndexQueueLength:      4096,
-		IncomingProposalQueueLength:       2048,
-		UnknownRegionName:                 "UNKNOWN",
-		RaftNodeReceiveQueueLength:        1024,
-		SnapshotStatusPushDelayMS:         1000,
-		NodeTaskChanLength:                1024,
-		SetDeploymentIDTimeoutSecond:      5,
-		NodeHostSyncPoolSize:              8,
-		TaskBatchSize:                     512,
-		NodeReloadMillisecond:             200,
-		StepEngineTaskWorkerCount:         16,
-		StepEngineSnapshotWorkerCount:     64,
-		StepEngineNodeReadyChanBufferSize: 8192,
-		StepEngineTaskReadyChanBufferSize: 8192,
-		StepEngineLocalKeySize:            1024,
-		SendQueueLength:                   1024 * 8,
-		MaxTransportStreamCount:           256,
-		MaxDrummerServerMsgSize:           256 * 1024 * 1024,
-		MaxDrummerClientMsgSize:           256 * 1024 * 1024,
-		StreamConnections:                 4,
-		InitialWindowSize:                 64 * 1024 * 1024,
-		InitialConnWindowSize:             16 * 1024 * 1024,
-		PerConnectionBufferSize:           64 * 1024 * 1024,
-		PerCpnnectionRecvBufSize:          64 * 1024,
-		SnapshotGCTick:                    30,
-		SnapshotChunkTimeoutTick:          900,
-		DrummerClientName:                 "drummer-client",
-		NodeHostInfoReportSecond:          NodeHostInfoReportSecond,
-		NodeHostTTL:                       NodeHostInfoReportSecond * 3,
-		NodeToStartMaxWait:                NodeHostInfoReportSecond * 12,
-		DrummerLoopIntervalFactor:         1,
-		PersisentLogReportCycle:           3,
-		LogDBCacheSizePerWorker:           1024 * 1024 * 256,
-		RDBMaxBackgroundCompactions:       2,
-		RDBMaxBackgroundFlushes:           2,
-		RDBLRUCacheSize:                   0,
+		MaxConcurrentStreamingSnapshot: 128,
+		MaxSnapshotConnections:         64,
+		SyncTaskInterval:               180000,
+		PanicOnSizeMismatch:            1,
+		LazyFreeCycle:                  1,
+		LatencySampleRatio:             0,
+		BatchedEntryApply:              true,
+		LocalRaftRequestTimeoutMs:      10000,
+		GetConnectedTimeoutSecond:      5,
+		MaxEntrySize:                   2 * MaxProposalPayloadSize,
+		InMemEntrySliceSize:            512,
+		MinEntrySliceFreeSize:          96,
+		ExpectedMaxInMemLogSize:        2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
+		IncomingReadIndexQueueLength:   4096,
+		IncomingProposalQueueLength:    2048,
+		UnknownRegionName:              "UNKNOWN",
+		SnapshotStatusPushDelayMS:      1000,
+		NodeTaskChanLength:             1024,
+		NodeHostSyncPoolSize:           8,
+		TaskBatchSize:                  512,
+		NodeReloadMillisecond:          200,
+		StepEngineTaskWorkerCount:      16,
+		StepEngineSnapshotWorkerCount:  64,
+		SendQueueLength:                1024 * 2,
+		ReceiveQueueLength:             1024,
+		MaxDrummerServerMsgSize:        256 * 1024 * 1024,
+		MaxDrummerClientMsgSize:        256 * 1024 * 1024,
+		StreamConnections:              4,
+		PerConnectionBufferSize:        64 * 1024 * 1024,
+		PerCpnnectionRecvBufSize:       64 * 1024,
+		SnapshotGCTick:                 30,
+		SnapshotChunkTimeoutTick:       900,
+		DrummerClientName:              "drummer-client",
+		NodeHostInfoReportSecond:       NodeHostInfoReportSecond,
+		NodeHostTTL:                    NodeHostInfoReportSecond * 3,
+		NodeToStartMaxWait:             NodeHostInfoReportSecond * 12,
+		DrummerLoopIntervalFactor:      1,
+		PersisentLogReportCycle:        3,
+		RDBMaxBackgroundCompactions:    2,
+		RDBMaxBackgroundFlushes:        2,
+		RDBLRUCacheSize:                0,
 	}
 }

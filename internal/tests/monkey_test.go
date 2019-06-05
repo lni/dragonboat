@@ -12,24 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_monkeytest
+package tests
 
-package transport
+import (
+	"testing"
+)
 
-func SetPerConnBufferSize(sz uint64) {
-	perConnBufSize = sz
+func TestMonkeyFlagIsNotSet(t *testing.T) {
+	if TestMonkeyEnabled {
+		t.Fatalf("test monkey unexpectedly enabled")
+	}
 }
 
-func SetSendQueueLength(l uint64) {
-	sendQueueLen = l
-}
-
-func SetPayloadBuffserSize(sz uint64) {
-	payloadBufferSize = sz
-}
-
-// Set the size of snapshot chunk. This function is only available in
-// monekytest.
-func SetSnapshotChunkSize(sz uint64) {
-	snapshotChunkSize = sz
+func TestReadyToReturnTestKnobAlwaysReturnFalse(t *testing.T) {
+	ch := make(chan struct{})
+	if ReadyToReturnTestKnob(ch, false, "") {
+		t.Fatalf("didn't return alse")
+	}
+	close(ch)
+	if ReadyToReturnTestKnob(ch, false, "") {
+		t.Fatalf("didn't return alse")
+	}
 }

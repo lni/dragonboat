@@ -107,8 +107,8 @@ func NewNativeStateMachine(clusterID uint64, nodeID uint64, sm IStateMachine,
 		sm:   sm,
 		done: done,
 	}
-	s.clusterID = clusterID
-	s.nodeID = nodeID
+	s.OffloadedStatus.clusterID = clusterID
+	s.OffloadedStatus.nodeID = nodeID
 	return s
 }
 
@@ -163,7 +163,7 @@ func (ds *NativeStateMachine) Update(session *Session,
 			panic("already has response in session")
 		}
 	}
-	entries := []sm.Entry{sm.Entry{Index: e.Index, Cmd: e.Cmd}}
+	entries := []sm.Entry{{Index: e.Index, Cmd: e.Cmd}}
 	results, err := ds.sm.Update(entries)
 	if err != nil {
 		return sm.Result{}, err

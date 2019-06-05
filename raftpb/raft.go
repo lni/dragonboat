@@ -272,6 +272,15 @@ func (f *SnapshotFile) Filename() string {
 	return fmt.Sprintf("external-file-%d", f.FileId)
 }
 
+// GetEntrySliceSize returns the upper limit of the entry slice size.
+func GetEntrySliceSize(ents []Entry) uint64 {
+	sz := uint64(0)
+	for _, e := range ents {
+		sz += uint64(e.SizeUpperLimit())
+	}
+	return sz
+}
+
 // IChunkSink is the snapshot chunk sink for handling snapshot chunks being
 // streamed.
 type IChunkSink interface {

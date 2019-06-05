@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/compression"
 	"github.com/lni/dragonboat/internal/utils/netutil"
 	"github.com/lni/dragonboat/logger"
 )
@@ -89,11 +88,7 @@ func NewDrummerConnectionPool() *Pool {
 func drummerExtraDialOptions(opts []grpc.DialOption) []grpc.DialOption {
 	co1 := grpc.MaxCallRecvMsgSize(int(settings.Soft.MaxDrummerClientMsgSize))
 	co2 := grpc.MaxCallSendMsgSize(int(settings.Soft.MaxDrummerClientMsgSize))
-	co3 := grpc.WithCompressor(compression.NewCompressor())
-	co4 := grpc.WithDecompressor(compression.NewDecompressor())
 	opts = append(opts, grpc.WithDefaultCallOptions(co1, co2))
-	opts = append(opts, co3)
-	opts = append(opts, co4)
 	return opts
 }
 

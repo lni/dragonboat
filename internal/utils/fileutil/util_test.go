@@ -28,7 +28,9 @@ var (
 
 func TestMarkDirAsDeleted(t *testing.T) {
 	os.RemoveAll(testDirName)
-	MkdirAll(testDirName)
+	if err := MkdirAll(testDirName); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDirName)
 	s := &pb.Message{}
 	if err := MarkDirAsDeleted(testDirName, s); err != nil {
@@ -46,7 +48,9 @@ func TestMarkDirAsDeleted(t *testing.T) {
 
 func TestIsDirMarkedAsDeleted(t *testing.T) {
 	os.RemoveAll(testDirName)
-	MkdirAll(testDirName)
+	if err := MkdirAll(testDirName); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDirName)
 	marked, err := IsDirMarkedAsDeleted(testDirName)
 	if err != nil {

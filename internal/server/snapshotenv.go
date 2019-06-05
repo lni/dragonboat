@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -35,9 +36,20 @@ var (
 	SnapshotMetadataFilename = "snapshot.metadata"
 	// SnapshotFileSuffix is the filename suffix of a snapshot file.
 	SnapshotFileSuffix = "gbsnap"
-	genTmpDirSuffix    = "generating"
-	recvTmpDirSuffix   = "receiving"
-	shrinkedSuffix     = "shrinked"
+	// SnapshotDirNameRe is the regex of snapshot names.
+	SnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+$`)
+	// GenSnapshotDirNameRe is the regex of temp snapshot directory name used when
+	// generating snapshots.
+	GenSnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+-[0-9A-F]+\.generating$`)
+	// RecvSnapshotDirNameRe is the regex of temp snapshot directory name used when
+	// receiving snapshots from remote NodeHosts.
+	RecvSnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+-[0-9A-F]+\.receiving$`)
+)
+
+var (
+	genTmpDirSuffix  = "generating"
+	recvTmpDirSuffix = "receiving"
+	shrinkedSuffix   = "shrinked"
 )
 
 var finalizeLock sync.Mutex
@@ -67,7 +79,7 @@ func GetSnapshotFilename(index uint64) string {
 	return getSnapshotFilename(index)
 }
 
-func mustBeChild(parent string, child string) error {
+func mustBeChild(parent string, child string) {
 	if v, err := filepath.Rel(parent, child); err != nil {
 		plog.Panicf("%v", err)
 	} else {
@@ -76,7 +88,6 @@ func mustBeChild(parent string, child string) error {
 			plog.Panicf("not a direct child, %s", v)
 		}
 	}
-	return nil
 }
 
 func getSnapshotDirName(index uint64) string {
@@ -241,16 +252,12 @@ func (se *SnapshotEnv) GetTempFilepath() string {
 }
 
 func (se *SnapshotEnv) createDir(dir string) error {
-	if err := mustBeChild(se.rootDir, dir); err != nil {
-		return err
-	}
+	mustBeChild(se.rootDir, dir)
 	return fileutil.Mkdir(dir)
 }
 
 func (se *SnapshotEnv) removeDir(dir string) error {
-	if err := mustBeChild(se.rootDir, dir); err != nil {
-		return err
-	}
+	mustBeChild(se.rootDir, dir)
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}

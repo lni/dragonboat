@@ -51,7 +51,9 @@ func TestRocksDBCanBeCreatedAndUsed(t *testing.T) {
 func TestIsNewRun(t *testing.T) {
 	dbdir := "rocksdb_db_test_safe_to_delete"
 	defer os.RemoveAll(dbdir)
-	os.MkdirAll(dbdir, 0755)
+	if err := os.MkdirAll(dbdir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if !isNewRun(dbdir) {
 		t.Errorf("not a new run")
 	}
@@ -94,7 +96,9 @@ func TestGetNewRandomDBDirName(t *testing.T) {
 
 func TestCorruptedDBDirFileIsReported(t *testing.T) {
 	dbdir := "rocksdb_db_test_safe_to_delete"
-	os.MkdirAll(dbdir, 0755)
+	if err := os.MkdirAll(dbdir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(dbdir)
 	content := "content"
 	if err := saveCurrentDBDirName(dbdir, content); err != nil {
@@ -126,12 +130,16 @@ func TestCorruptedDBDirFileIsReported(t *testing.T) {
 			t.Fatalf("no panic")
 		}
 	}()
-	getCurrentDBDirName(dbdir)
+	if _, err := getCurrentDBDirName(dbdir); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestSaveCurrentDBDirName(t *testing.T) {
 	dbdir := "rocksdb_db_test_safe_to_delete"
-	os.MkdirAll(dbdir, 0755)
+	if err := os.MkdirAll(dbdir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(dbdir)
 	content := "content"
 	if err := saveCurrentDBDirName(dbdir, content); err != nil {
@@ -160,7 +168,9 @@ func TestSaveCurrentDBDirName(t *testing.T) {
 
 func TestCleanupNodeDataDir(t *testing.T) {
 	dbdir := "rocksdb_db_test_safe_to_delete"
-	os.MkdirAll(dbdir, 0755)
+	if err := os.MkdirAll(dbdir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(dbdir)
 	toKeep := "dir_to_keep"
 	if err := os.MkdirAll(path.Join(dbdir, toKeep), 0755); err != nil {
@@ -259,7 +269,9 @@ func TestDiskKVCanBeUpdated(t *testing.T) {
 			{Index: 1, Cmd: data1},
 			{Index: 2, Cmd: data2},
 		}
-		odsm.Update(ents)
+		if _, err := odsm.Update(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := odsm.Sync(); err != nil {
 			t.Fatalf("sync failed %v", err)
 		}
@@ -323,7 +335,9 @@ func TestDiskKVSnapshot(t *testing.T) {
 			{Index: 1, Cmd: data1},
 			{Index: 2, Cmd: data2},
 		}
-		odsm.Update(ents)
+		if _, err := odsm.Update(ents); err != nil {
+			t.Fatalf("%v", err)
+		}
 		hash1, err := odsm.(sm.IHash).GetHash()
 		if err != nil {
 			t.Fatalf("failed to get hash %v", err)
@@ -337,7 +351,9 @@ func TestDiskKVSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create snapshot failed %v", err)
 		}
-		odsm.Update([]sm.Entry{{Index: 3, Cmd: data3}})
+		if _, err := odsm.Update([]sm.Entry{{Index: 3, Cmd: data3}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		result, err := odsm.Lookup([]byte("test-key3"))
 		if err != nil {
 			t.Fatalf("lookup failed %v", err)

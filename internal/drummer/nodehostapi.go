@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
@@ -109,7 +110,7 @@ func (api *NodehostAPI) GetSession(ctx context.Context,
 		return nil, err
 	}
 	if s {
-		cs, err := api.nh.GetNewSession(ctx, req.ClusterId)
+		cs, err := api.nh.SyncGetSession(ctx, req.ClusterId)
 		return cs, grpcError(err)
 	}
 	return api.nh.GetNoOPSession(req.ClusterId), nil
@@ -121,7 +122,7 @@ func (api *NodehostAPI) CloseSession(ctx context.Context,
 	if cs.IsNoOPSession() {
 		return &pb.SessionResponse{Completed: true}, nil
 	}
-	if err := api.nh.CloseSession(ctx, cs); err != nil {
+	if err := api.nh.SyncCloseSession(ctx, cs); err != nil {
 		e := grpcError(err)
 		return &pb.SessionResponse{Completed: false}, e
 	}
@@ -174,5 +175,5 @@ func grpcError(err error) error {
 	} else {
 		code = codes.Unknown
 	}
-	return grpc.Errorf(code, err.Error())
+	return status.Errorf(code, err.Error())
 }

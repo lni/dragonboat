@@ -15,6 +15,8 @@
 package server
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,7 +31,6 @@ import (
 const (
 	singleNodeHostTestDir = "test_nodehost_dir_safe_to_delete"
 	testLogDBName         = "test-name"
-	testHostname          = "testhostname"
 	testBinVer            = raftio.LogDBBinVersion
 	testAddress           = "localhost:1111"
 	testDeploymentID      = 100
@@ -56,7 +57,9 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(testDeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	dirs, _ := ctx.getDataDirs()
 	testName := "test-name"
 	status := raftpb.RaftDataStatus{
@@ -85,7 +88,9 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(testDeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	dirs, _ := ctx.getDataDirs()
 	status := raftpb.RaftDataStatus{
 		Address:   addr,
@@ -95,7 +100,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		Hostname:  hostname,
 	}
 	if hardHashMismatch {
-		status.HardHash = 0
+		status.HardHash = 1
 	}
 	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
 	if err != nil {
@@ -140,7 +145,9 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
-	ctx.CreateNodeHostDir(c.DeploymentID)
+	if _, _, err := ctx.CreateNodeHostDir(c.DeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := ctx.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
@@ -160,5 +167,40 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	ctx.Stop()
 	if err := ctx.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
+	}
+}
+
+func TestRemoveSavedSnapshots(t *testing.T) {
+	os.RemoveAll(singleNodeHostTestDir)
+	if err := os.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	for i := 0; i < 16; i++ {
+		ssdir := filepath.Join(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))
+		if err := os.MkdirAll(ssdir, 0755); err != nil {
+			t.Fatalf("failed to mkdir %v", err)
+		}
+	}
+	for i := 1; i <= 2; i++ {
+		ssdir := filepath.Join(singleNodeHostTestDir, fmt.Sprintf("mydata-%X", i))
+		if err := os.MkdirAll(ssdir, 0755); err != nil {
+			t.Fatalf("failed to mkdir %v", err)
+		}
+	}
+	if err := removeSavedSnapshots(singleNodeHostTestDir); err != nil {
+		t.Fatalf("failed to remove saved snapshots %v", err)
+	}
+	files, err := ioutil.ReadDir(singleNodeHostTestDir)
+	if err != nil {
+		t.Fatalf("failed to read dir %v", err)
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			t.Errorf("found unexpected file %v", fi)
+		}
+		if fi.Name() != "mydata-1" && fi.Name() != "mydata-2" {
+			t.Errorf("unexpected dir found %s", fi.Name())
+		}
 	}
 }

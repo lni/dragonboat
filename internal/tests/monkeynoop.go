@@ -12,24 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_monkeytest
+// +build !dragonboat_slowtest
+// +build !dragonboat_monkeytest
 
-package transport
+package tests
 
-func SetPerConnBufferSize(sz uint64) {
-	perConnBufSize = sz
-}
+var (
+	// TestMonkeyEnabled indicates whether we are in monkey test mode
+	TestMonkeyEnabled = false
+)
 
-func SetSendQueueLength(l uint64) {
-	sendQueueLen = l
-}
-
-func SetPayloadBuffserSize(sz uint64) {
-	payloadBufferSize = sz
-}
-
-// Set the size of snapshot chunk. This function is only available in
-// monekytest.
-func SetSnapshotChunkSize(sz uint64) {
-	snapshotChunkSize = sz
+// ReadyToReturnTestKnob is a test knob that returns a boolean value indicating
+// whether the system is being shutdown. In production, this function always
+// return false without check the stopC chan.
+func ReadyToReturnTestKnob(stopC <-chan struct{}, delay bool, pos string) bool {
+	return false
 }

@@ -36,7 +36,6 @@ import (
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/compression"
 	"github.com/lni/dragonboat/internal/utils/envutil"
 	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/netutil"
@@ -73,7 +72,7 @@ func (c *sessionUser) getSession(ctx context.Context) *client.Session {
 	if c.session == nil {
 		rctx, cancel := context.WithTimeout(ctx,
 			time.Duration(sessionTimeoutSecond)*time.Second)
-		cs, err := c.nh.GetNewSession(rctx, defaultClusterID)
+		cs, err := c.nh.SyncGetSession(rctx, defaultClusterID)
 		cancel()
 		if err != nil {
 			return nil
@@ -91,7 +90,7 @@ func (c *sessionUser) resetSession(ctx context.Context) {
 	c.session = nil
 	rctx, cancel := context.WithTimeout(ctx,
 		time.Duration(sessionTimeoutSecond)*time.Second)
-	if err := c.nh.CloseSession(rctx, cs); err != nil {
+	if err := c.nh.SyncCloseSession(rctx, cs); err != nil {
 		plog.Errorf("failed to close session %v", err)
 	}
 	cancel()
@@ -295,8 +294,6 @@ func (d *Drummer) startDrummerRPCServer() {
 	}
 	opts = append(opts, grpc.MaxRecvMsgSize(maxServerMsgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(maxServerMsgSize))
-	opts = append(opts, grpc.RPCCompressor(compression.NewCompressor()))
-	opts = append(opts, grpc.RPCDecompressor(compression.NewDecompressor()))
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterDrummerServer(grpcServer, d.server)
 	d.stopper.RunWorker(func() {

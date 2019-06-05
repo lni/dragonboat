@@ -150,7 +150,9 @@ func testLogReaderLastIndex(t *testing.T) {
 	if last != 5 {
 		t.Errorf("term = %d, want %d", last, 5)
 	}
-	s.Append([]pb.Entry{{Index: 6, Term: 5}})
+	if err := s.Append([]pb.Entry{{Index: 6, Term: 5}}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	_, last = s.GetRange()
 	if last != 6 {
 		t.Errorf("last = %d, want %d", last, 5)
@@ -175,7 +177,9 @@ func testLogReaderFirstIndex(t *testing.T) {
 	if li != 5 {
 		t.Errorf("last index = %d, want 5", li)
 	}
-	s.Compact(4)
+	if err := s.Compact(4); err != nil {
+		t.Fatalf("%v", err)
+	}
 	first, _ = s.GetRange()
 	if first != 5 {
 		t.Errorf("first = %d, want %d", first, 5)
@@ -236,14 +240,18 @@ func testLogReaderAppend(t *testing.T) {
 	}
 	for i, tt := range tests {
 		s := getTestLogReader(ents)
-		s.Append(tt.entries)
+		if err := s.Append(tt.entries); err != nil {
+			t.Fatalf("%v", err)
+		}
 		// put tt.entries to logdb
 		ud := pb.Update{
 			EntriesToSave: tt.entries,
 			ClusterID:     LogReaderTestClusterID,
 			NodeID:        LogReaderTestNodeID,
 		}
-		s.logdb.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err := s.logdb.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+			t.Fatalf("%v", err)
+		}
 		bfi := tt.wentries[0].Index - 1
 		_, err := s.Term(bfi)
 		if err == nil {

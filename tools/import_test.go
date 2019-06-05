@@ -52,7 +52,9 @@ func TestCheckImportSettings(t *testing.T) {
 
 func TestGetSnapshotFilenames(t *testing.T) {
 	os.RemoveAll(testDataDir)
-	os.MkdirAll(testDataDir, 0755)
+	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDataDir)
 	for i := 0; i < 16; i++ {
 		fn := fmt.Sprintf("%d.%s", i, server.SnapshotFileSuffix)
@@ -87,7 +89,9 @@ func TestGetSnapshotFilenames(t *testing.T) {
 
 func TestSnapshotFilepath(t *testing.T) {
 	os.RemoveAll(testDataDir)
-	os.MkdirAll(testDataDir, 0755)
+	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDataDir)
 	fn := fmt.Sprintf("testdata.%s", server.SnapshotFileSuffix)
 	dst := filepath.Join(testDataDir, fn)
@@ -148,8 +152,12 @@ func createTestDataFile(path string, sz uint64) error {
 func TestCopySnapshot(t *testing.T) {
 	os.RemoveAll(testDataDir)
 	os.RemoveAll(testDstDataDir)
-	os.MkdirAll(testDataDir, 0755)
-	os.MkdirAll(testDstDataDir, 0755)
+	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := os.MkdirAll(testDstDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDataDir)
 	defer os.RemoveAll(testDstDataDir)
 	src := filepath.Join(testDataDir, "test.gbsnap")
@@ -162,7 +170,7 @@ func TestCopySnapshot(t *testing.T) {
 	}
 	ss := pb.Snapshot{
 		Filepath: src,
-		Files:    []*pb.SnapshotFile{&pb.SnapshotFile{Filepath: extsrc}},
+		Files:    []*pb.SnapshotFile{{Filepath: extsrc}},
 	}
 	if err := copySnapshot(ss, testDataDir, testDstDataDir); err != nil {
 		t.Fatalf("failed to copy snapshot files %v", err)
@@ -187,7 +195,9 @@ func TestCopySnapshot(t *testing.T) {
 
 func TestCopySnapshotFile(t *testing.T) {
 	os.RemoveAll(testDataDir)
-	os.MkdirAll(testDataDir, 0755)
+	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDataDir)
 	src := filepath.Join(testDataDir, "test.data")
 	dst := filepath.Join(testDataDir, "test.data.copied")
@@ -218,7 +228,9 @@ func TestCopySnapshotFile(t *testing.T) {
 
 func TestMissingMetadataFileIsReported(t *testing.T) {
 	os.RemoveAll(testDataDir)
-	os.MkdirAll(testDataDir, 0755)
+	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(testDataDir)
 	_, err := getSnapshotRecord(testDataDir, "test.data")
 	if err == nil {

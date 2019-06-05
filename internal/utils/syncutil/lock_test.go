@@ -21,6 +21,7 @@ import (
 func TestLockCanBeLockedAndUnlocked(t *testing.T) {
 	l := NewLock()
 	l.Lock()
+	_ = t
 	l.Unlock()
 }
 

@@ -91,9 +91,18 @@ func testTickCanBeIncreased(t *testing.T, db statemachine.IStateMachine) {
 	if err != nil {
 		panic(err)
 	}
-	v1, _ := db.Update(data)
-	v2, _ := db.Update(data)
-	v3, _ := db.Update(data)
+	v1, err := db.Update(data)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	v2, err := db.Update(data)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	v3, err := db.Update(data)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	if v2.Value != v1.Value+tickIntervalSecond ||
 		v3.Value != v2.Value+tickIntervalSecond ||
 		v3.Value != 3*tickIntervalSecond {
@@ -146,9 +155,15 @@ func testNodeHostInfoUpdateUpdatesClusterAndNodeHostImage(t *testing.T,
 	if err != nil {
 		panic(err)
 	}
-	db.Update(tickData)
-	db.Update(tickData)
-	db.Update(data)
+	if _, err := db.Update(tickData); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if _, err := db.Update(tickData); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if _, err := db.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	clusterInfo := db.(*DB).ClusterImage
 	nodehostInfo := db.(*DB).NodeHostImage
 	if len(clusterInfo.Clusters) != 2 {
@@ -239,17 +254,27 @@ func TestTickUpdatedAsExpected(t *testing.T) {
 		panic(err)
 	}
 	for i := uint64(0); i < 10; i++ {
-		db.Update(tickData)
-		db.Update(nhiData)
+		if _, err := db.Update(tickData); err != nil {
+			t.Fatalf("%v", err)
+		}
+		if _, err := db.Update(nhiData); err != nil {
+			t.Fatalf("%v", err)
+		}
 		testTickValue(t, db, "a2", 1, 2, i+1)
 	}
 	for i := uint64(0); i < 10; i++ {
-		db.Update(nhiData)
+		if _, err := db.Update(nhiData); err != nil {
+			t.Fatalf("%v", err)
+		}
 		testTickValue(t, db, "a2", 1, 2, 10)
 	}
 	for i := uint64(0); i < 10; i++ {
-		db.Update(tickData)
-		db.Update(nhiData)
+		if _, err := db.Update(tickData); err != nil {
+			t.Fatalf("%v", err)
+		}
+		if _, err := db.Update(nhiData); err != nil {
+			t.Fatalf("%v", err)
+		}
 		testTickValue(t, db, "a2", 1, 2, 11+i)
 	}
 }
@@ -490,7 +515,9 @@ func TestClusterCanBeUpdatedAndLookedUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if !d.(*DB).bootstrapped() {
 		t.Errorf("not bootstrapped")
 	}
@@ -556,12 +583,18 @@ func TestKVMapCanBeUpdatedAndLookedUpForFinalizedValue(t *testing.T) {
 		t.Fatalf("failed to marshal")
 	}
 	d := NewDB(0, 0)
-	code, _ := d.Update(data)
+	code, err := d.Update(data)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	if code.Value != DBKVUpdated {
 		t.Errorf("code %d, want %d", code, DBKVUpdated)
 	}
 	// apply the same update again, suppose to be rejected
-	code, _ = d.Update(data)
+	code, err = d.Update(data)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	if code.Value != DBKVFinalized {
 		t.Errorf("code %d, want %d", code, DBKVFinalized)
 	}
@@ -574,7 +607,9 @@ func TestKVMapCanBeUpdatedAndLookedUpForFinalizedValue(t *testing.T) {
 	}
 	// v is the marshaled how KV rec
 	var kvrec pb.KV
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -584,13 +619,17 @@ func TestKVMapCanBeUpdatedAndLookedUpForFinalizedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	v, ok = d.(*DB).KVMap["test-key"]
 	if !ok {
 		t.Errorf("kv map value not expected")
 	}
 	// finalized value not changed
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -611,7 +650,9 @@ func TestKVMapCanBeUpdatedAndLookedUpForNotFinalizedValue(t *testing.T) {
 		t.Fatalf("failed to marshal")
 	}
 	d := NewDB(0, 0)
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if len(d.(*DB).KVMap) != 1 {
 		t.Errorf("kv map not updated")
 	}
@@ -626,14 +667,18 @@ func TestKVMapCanBeUpdatedAndLookedUpForNotFinalizedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	v, ok := d.(*DB).KVMap["test-key"]
 	if !ok {
 		t.Errorf("kv map value not expected")
 	}
 	// finalized value not changed
 	var kvrec pb.KV
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -643,13 +688,17 @@ func TestKVMapCanBeUpdatedAndLookedUpForNotFinalizedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	v, ok = d.(*DB).KVMap["test-key"]
 	if !ok {
 		t.Errorf("kv map value not expected")
 	}
 	// finalized value not changed
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data-2" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -662,13 +711,17 @@ func TestKVMapCanBeUpdatedAndLookedUpForNotFinalizedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	v, ok = d.(*DB).KVMap["test-key"]
 	if !ok {
 		t.Errorf("kv map value not expected")
 	}
 	// finalized value not changed
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data-2" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -681,13 +734,17 @@ func TestKVMapCanBeUpdatedAndLookedUpForNotFinalizedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal")
 	}
-	d.Update(data)
+	if _, err := d.Update(data); err != nil {
+		t.Fatalf("%v", err)
+	}
 	v, ok = d.(*DB).KVMap["test-key"]
 	if !ok {
 		t.Errorf("kv map value not expected")
 	}
 	// finalized value not changed
-	kvrec.Unmarshal([]byte(v))
+	if err := kvrec.Unmarshal([]byte(v)); err != nil {
+		panic(err)
+	}
 	if kvrec.Value != "test-data-3" {
 		t.Errorf("value %s, want test-data", kvrec.Value)
 	}
@@ -703,7 +760,9 @@ func TestDBCanBeMarkedAsFailed(t *testing.T) {
 	db := NewDB(0, 1)
 	db.(*DB).Failed = true
 	defer expectPanic(t)
-	db.Update(nil)
+	if _, err := db.Update(nil); err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestLaunchDeadlineIsChecked(t *testing.T) {
@@ -797,7 +856,9 @@ func TestLaunchDeadlineIsClearedOnceAllNodesAreLaunched(t *testing.T) {
 		panic(err)
 	}
 	db.(*DB).applyTickUpdate()
-	db.Update(data1)
+	if _, err := db.Update(data1); err != nil {
+		t.Fatalf("%v", err)
+	}
 	m := db.(*DB).getLaunchedClusters()
 	if len(m) != 0 {
 		t.Fatalf("launched cluster is not 0")
@@ -805,7 +866,9 @@ func TestLaunchDeadlineIsClearedOnceAllNodesAreLaunched(t *testing.T) {
 	if db.(*DB).LaunchDeadline != 100 {
 		t.Errorf("deadline is not cleared")
 	}
-	db.Update(data2)
+	if _, err := db.Update(data2); err != nil {
+		t.Fatalf("%v", err)
+	}
 	m = db.(*DB).getLaunchedClusters()
 	if len(m) != 1 {
 		t.Fatalf("launched cluster is not 1")

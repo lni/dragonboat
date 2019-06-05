@@ -16,6 +16,7 @@ package server
 
 import (
 	"math"
+	"sync/atomic"
 )
 
 const (
@@ -29,17 +30,17 @@ type followerState struct {
 
 // RateLimiter is the struct used to keep tracking the in memory rate log size.
 type RateLimiter struct {
-	tick                  uint64
-	inMemLogSize          uint64
-	maxSize               uint64
-	followerInMemLogSizes map[uint64]followerState
+	size          uint64
+	tick          uint64
+	maxSize       uint64
+	followerSizes map[uint64]followerState
 }
 
 // NewRateLimiter creates and returns a rate limiter instance.
 func NewRateLimiter(maxSize uint64) *RateLimiter {
 	return &RateLimiter{
-		maxSize:               maxSize,
-		followerInMemLogSizes: make(map[uint64]followerState),
+		maxSize:       maxSize,
+		followerSizes: make(map[uint64]followerState),
 	}
 }
 
@@ -59,29 +60,29 @@ func (r *RateLimiter) GetHeartbeatTick() uint64 {
 	return r.tick
 }
 
-// IncreaseInMemLogSize increases the recorded in memory log size by sz bytes.
-func (r *RateLimiter) IncreaseInMemLogSize(sz uint64) {
-	r.inMemLogSize += sz
+// Increase increases the recorded in memory log size by sz bytes.
+func (r *RateLimiter) Increase(sz uint64) {
+	atomic.AddUint64(&r.size, sz)
 }
 
-// DecreaseInMemLogSize decreases the recorded in memory log size by sz bytes.
-func (r *RateLimiter) DecreaseInMemLogSize(sz uint64) {
-	r.inMemLogSize -= sz
+// Decrease decreases the recorded in memory log size by sz bytes.
+func (r *RateLimiter) Decrease(sz uint64) {
+	atomic.AddUint64(&r.size, ^uint64(sz-1))
 }
 
-// SetInMemLogSize sets the recorded in memory log size to sz bytes.
-func (r *RateLimiter) SetInMemLogSize(sz uint64) {
-	r.inMemLogSize = sz
+// Set sets the recorded in memory log size to sz bytes.
+func (r *RateLimiter) Set(sz uint64) {
+	atomic.StoreUint64(&r.size, sz)
 }
 
-// GetInMemLogSize returns the recorded in memory log size.
-func (r *RateLimiter) GetInMemLogSize() uint64 {
-	return r.inMemLogSize
+// Get returns the recorded in memory log size.
+func (r *RateLimiter) Get() uint64 {
+	return atomic.LoadUint64(&r.size)
 }
 
 // ResetFollowerState clears all recorded follower states.
 func (r *RateLimiter) ResetFollowerState() {
-	r.followerInMemLogSizes = make(map[uint64]followerState)
+	r.followerSizes = make(map[uint64]followerState)
 }
 
 // SetFollowerState sets the follower rate identiified by nodeID to sz bytes.
@@ -90,7 +91,7 @@ func (r *RateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
 		tick:         r.tick,
 		inMemLogSize: sz,
 	}
-	r.followerInMemLogSizes[nodeID] = state
+	r.followerSizes[nodeID] = state
 }
 
 // RateLimited returns a boolean flag indicating whether the node is rate
@@ -105,7 +106,7 @@ func (r *RateLimiter) limitedByInMemSize() bool {
 	}
 	maxInMemSize := uint64(0)
 	gc := false
-	for _, v := range r.followerInMemLogSizes {
+	for _, v := range r.followerSizes {
 		if r.tick-v.tick > gcTick {
 			gc = true
 			continue
@@ -114,10 +115,9 @@ func (r *RateLimiter) limitedByInMemSize() bool {
 			maxInMemSize = v.inMemLogSize
 		}
 	}
-	//plog.Infof("inMemLogSize %d, limit %d, max size %d",
-	//	r.inMemLogSize, r.maxSize, maxInMemSize)
-	if r.inMemLogSize > maxInMemSize {
-		maxInMemSize = r.inMemLogSize
+	sz := r.Get()
+	if sz > maxInMemSize {
+		maxInMemSize = sz
 	}
 	if gc {
 		r.gc()
@@ -127,11 +127,11 @@ func (r *RateLimiter) limitedByInMemSize() bool {
 
 func (r *RateLimiter) gc() {
 	followerStates := make(map[uint64]followerState)
-	for nid, v := range r.followerInMemLogSizes {
+	for nid, v := range r.followerSizes {
 		if r.tick-v.tick > gcTick {
 			continue
 		}
 		followerStates[nid] = v
 	}
-	r.followerInMemLogSizes = followerStates
+	r.followerSizes = followerStates
 }

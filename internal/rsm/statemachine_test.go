@@ -64,10 +64,17 @@ type testNodeProxy struct {
 	addPeerCount       uint64
 	addObserver        bool
 	addObserverCount   uint64
+	nodeReady          uint64
 }
 
 func newTestNodeProxy() *testNodeProxy {
 	return &testNodeProxy{}
+}
+
+func (p *testNodeProxy) NodeReady() { p.nodeReady++ }
+
+func (p *testNodeProxy) ShouldStop() <-chan struct{} {
+	return nil
 }
 
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
@@ -255,6 +262,20 @@ func runSMTest2(t *testing.T,
 	snapshotter := newTestSnapshotter()
 	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
+}
+
+func TestNodeReadyIsSetWhenBatchedIndexedValueIsSet(t *testing.T) {
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		if nodeProxy.nodeReady != 0 {
+			t.Errorf("node ready count is not 0")
+		}
+		sm.setBatchedLastApplied(100)
+		if nodeProxy.nodeReady != 1 {
+			t.Errorf("node ready is not invoked")
+		}
+	}
+	runSMTest2(t, tf)
 }
 
 func TestUpdatesCanBeBatched(t *testing.T) {
@@ -1420,7 +1441,7 @@ func TestGetSnapshotFilesReturnFiles(t *testing.T) {
 }
 
 func TestNoOPEntryIsNotBatched(t *testing.T) {
-	updates, _ := getEntryTypes([]pb.Entry{pb.Entry{}})
+	updates, _ := getEntryTypes([]pb.Entry{{}})
 	if updates {
 		t.Errorf("NoOP entry is considered as regular update entry")
 	}
@@ -1431,7 +1452,7 @@ func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
 		ClientID: client.NotSessionManagedClientID + 1,
 		SeriesID: client.NoOPSeriesID + 1,
 	}
-	_, allNoOP := getEntryTypes([]pb.Entry{pb.Entry{}, e})
+	_, allNoOP := getEntryTypes([]pb.Entry{{}, e})
 	if allNoOP {
 		t.Errorf("regular sessioned entry not detected")
 	}
