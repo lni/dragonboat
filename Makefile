@@ -353,12 +353,12 @@ test-slow-multiraft:
 	$(GOTEST) $(PKGNAME)
 
 test-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-test-slow-drummer: plugin-kvtest
+test-slow-drummer:
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
 test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-test-monkey-drummer: plugin-kvtest plugin-concurrentkv
+test-monkey-drummer:
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
@@ -381,11 +381,11 @@ slow-multiraft:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)
 
 slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-slow-drummer: plugin-kvtest
+slow-drummer:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-monkey-drummer: plugin-kvtest
+monkey-drummer:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 all-slow-monkey-tests: slow-multiraft slow-drummer monkey-drummer
@@ -624,7 +624,7 @@ clean: clean-binding
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
 	test-transport test-multiraft test-drummer test-client test-server test-utils \
-	test-config test-tests static-check clean plugin-kvtest logdb-checker \
+	test-config test-tests static-check clean logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \
 	slow-multiraft-ioerror-test-bin all-slow-monkey-tests golangci-lint-check \
