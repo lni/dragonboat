@@ -125,7 +125,7 @@ func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 	if s.isClosed() {
 		panic("save snapshot called after Close()")
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10
@@ -169,7 +169,7 @@ func (s *ConcurrentKVTest) RecoverFromSnapshot(r io.Reader,
 	if s.isClosed() {
 		panic("recover from snapshot called after Close()")
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10

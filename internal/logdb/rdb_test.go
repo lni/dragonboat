@@ -32,8 +32,12 @@ const (
 func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	d := filepath.Join(RDBTestDirectory, dir)
 	lld := filepath.Join(RDBTestDirectory, lldir)
-	os.MkdirAll(d, 0777)
-	os.MkdirAll(lld, 0777)
+	if err := os.MkdirAll(d, 0777); err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(lld, 0777); err != nil {
+		panic(err)
+	}
 	db, err := newLogDB([]string{d}, []string{lld}, batched, false, newDefaultKVStore)
 	if err != nil {
 		panic(err)

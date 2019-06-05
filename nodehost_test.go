@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -53,251 +52,6 @@ import (
 	sm "github.com/lni/dragonboat/statemachine"
 	"github.com/lni/dragonboat/tools"
 )
-
-func ExampleNewNodeHost() {
-	// Let's say we want to put all LogDB's WAL data in a directory named wal,
-	// everything else is stored in a directory named dragonboat. Assume the
-	// RTT between nodes is 200 milliseconds, and the nodehost address is
-	// myhostname:5012
-	nhc := config.NodeHostConfig{
-		WALDir:         "wal",
-		NodeHostDir:    "dragonboat",
-		RTTMillisecond: 200,
-		RaftAddress:    "myhostname:5012",
-	}
-	// Creates a nodehost instance using the above NodeHostConfig instnace.
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("nodehost created, running on %s", nh.RaftAddress())
-}
-
-func ExampleNodeHost_StartCluster() {
-	nhc := config.NodeHostConfig{
-		WALDir:         "wal",
-		NodeHostDir:    "dragonboat",
-		RTTMillisecond: 200,
-		RaftAddress:    "myhostname:5012",
-	}
-	// Creates a nodehost instance using the above NodeHostConfig instnace.
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		panic(err)
-	}
-	// config for raft
-	rc := config.Config{
-		NodeID:             1,
-		ClusterID:          100,
-		ElectionRTT:        5,
-		HeartbeatRTT:       1,
-		CheckQuorum:        true,
-		SnapshotEntries:    10000,
-		CompactionOverhead: 5000,
-	}
-	peers := make(map[uint64]string)
-	peers[100] = "myhostname1:5012"
-	peers[200] = "myhostname2:5012"
-	peers[300] = "myhostname3:5012"
-	// Use this NO-OP data store in this example
-	NewStateMachine := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-		return &tests.NoOP{}
-	}
-	if err := nh.StartCluster(peers, false, NewStateMachine, rc); err != nil {
-		log.Fatalf("failed to add cluster, %v\n", err)
-	}
-}
-
-func ExampleNodeHost_Propose(nh *NodeHost) {
-	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
-	// this to NodeHost.
-	// see the example on StartCluster on how to start Raft cluster.
-	//
-	// Use NO-OP client session, cluster ID is 100
-	// Check the example on the GetNewSession method to see how to use a
-	// real client session object to make proposals.
-	cs := nh.GetNoOPSession(100)
-	// make a proposal with the proposal content "test-data", timeout is set to
-	// 2000 milliseconds.
-	rs, err := nh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
-	if err != nil {
-		// failed to start the proposal
-		return
-	}
-	defer rs.Release()
-	s := <-rs.CompletedC
-	if s.Timeout() {
-		// the proposal failed to complete before the deadline, maybe retry the
-		// request
-	} else if s.Completed() {
-		// the proposal has been committed and applied
-		// put the request state instance back to the recycle pool
-	} else if s.Terminated() {
-		// proposal terminated as the system is being shut down, time to exit
-	}
-	// note that s.Code == RequestRejected is not suppose to happen as we are
-	// using a NO-OP client session in this example.
-}
-
-func ExampleNodeHost_ReadIndex(nh *NodeHost) {
-	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
-	// this to NodeHost.
-	// see the example on StartCluster on how to start Raft cluster.
-	data := make([]byte, 1024)
-	rs, err := nh.ReadIndex(100, 2000*time.Millisecond)
-	if err != nil {
-		// ReadIndex failed to start
-		return
-	}
-	defer rs.Release()
-	s := <-rs.CompletedC
-	if s.Timeout() {
-		// the ReadIndex operation failed to complete before the deadline, maybe
-		// retry the request
-	} else if s.Completed() {
-		// the ReadIndex operation completed. the local IStateMachine is ready to be
-		// queried
-		result, err := nh.ReadLocalNode(rs, data)
-		if err != nil {
-			return
-		}
-		// use query result here
-		_ = result
-	} else if s.Terminated() {
-		// the ReadIndex operation terminated as the system is being shut down,
-		// time to exit
-	}
-}
-
-func ExampleNodeHost_RequestDeleteNode(nh *NodeHost) {
-	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
-	// this to NodeHost.
-	// see the example on StartCluster on how to start Raft cluster.
-	//
-	// request node with ID 1 to be removed as a member node of raft cluster 100.
-	// the third parameter is OrderID.
-	rs, err := nh.RequestDeleteNode(100, 1, 0, 2000*time.Millisecond)
-	if err != nil {
-		// failed to start the membership change request
-		return
-	}
-	defer rs.Release()
-	s := <-rs.CompletedC
-	if s.Timeout() {
-		// the request failed to complete before the deadline, maybe retry the
-		// request
-	} else if s.Completed() {
-		// the requested node has been removed from the raft cluster, ready to
-		// remove the node from the NodeHost running at myhostname1:5012, e.g.
-		// nh.RemoveCluster(100)
-	} else if s.Terminated() {
-		// request terminated as the system is being shut down, time to exit
-	} else if s.Rejected() {
-		// request rejected as it is out of order. try again with the latest order
-		// id value returned by NodeHost's GetClusterMembership() method.
-	}
-}
-
-func ExampleNodeHost_RequestAddNode(nh *NodeHost) {
-	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
-	// this to NodeHost.
-	// see the example on StartCluster on how to start Raft cluster.
-	//
-	// request node with ID 4 running at myhostname4:5012 to be added as a member
-	// node of raft cluster 100. the fourth parameter is OrderID.
-	rs, err := nh.RequestAddNode(100,
-		4, "myhostname4:5012", 0, 2000*time.Millisecond)
-	if err != nil {
-		// failed to start the membership change request
-		return
-	}
-	defer rs.Release()
-	s := <-rs.CompletedC
-	if s.Timeout() {
-		// the request failed to complete before the deadline, maybe retry the
-		// request
-	} else if s.Completed() {
-		// the requested new node has been added to the raft cluster, ready to
-		// add the node to the NodeHost running at myhostname4:5012. run the
-		// following code on the NodeHost running at myhostname4:5012 -
-		//
-		// NewStateMachine := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-		// 	 return &tests.NoOP{}
-		// }
-		// rc := config.Config{
-		//	 NodeID:             4,
-		//	 ClusterID:          100,
-		//	 ElectionRTT:        5,
-		//	 HeartbeatRTT:       1,
-		//	 CheckQuorum:        true,
-		//	 SnapshotEntries:    10000,
-		//	 CompactionOverhead: 5000,
-		// }
-		// nh.StartCluster(nil, true, NewStateMachine, rc)
-	} else if s.Terminated() {
-		// request terminated as the system is being shut down, time to exit
-	} else if s.Rejected() {
-		// request rejected as it is out of order. try again with the latest order
-		// id value returned by NodeHost's GetClusterMembership() method.
-	}
-}
-
-func ExampleNodeHost_GetNewSession(ctx context.Context, nh *NodeHost) {
-	// nh is a NodeHost instance, a Raft cluster with ID 100 has already been added
-	// this to NodeHost.
-	// see the example on StartCluster on how to start Raft cluster.
-	//
-	// Create a client session first, cluster ID is 100
-	// Check the example on the GetNewSession method to see how to use a
-	// real client session object to make proposals.
-	cs, err := nh.GetNewSession(ctx, 100)
-	if err != nil {
-		// failed to get the client session, if it is a timeout error then try
-		// again later.
-		return
-	}
-	defer func() {
-		if err := nh.CloseSession(ctx, cs); err != nil {
-			log.Printf("close session failed %v\n", err)
-		}
-	}()
-	// make a proposal with the proposal content "test-data", timeout is set to
-	// 2000 milliseconds.
-	rs, err := nh.Propose(cs, []byte("test-data"), 2000*time.Millisecond)
-	if err != nil {
-		// failed to start the proposal
-		return
-	}
-	defer rs.Release()
-	s := <-rs.CompletedC
-	if s.Timeout() {
-		// the proposal failed to complete before the deadline. maybe retry
-		// the request with the same client session instance s.
-		// on timeout, there is actually no guarantee on whether the proposed
-		// entry has been applied or not, the idea is that when retrying with
-		// the same proposal using the same client session instance, dragonboat
-		// makes sure that the proposal is retried and it will be applied if
-		// and only if it has not been previously applied.
-	} else if s.Completed() {
-		// the proposal has been committed and applied, call
-		// s.ProposalCompleted() to notify the client session that the previous
-		// request has been successfully completed. this makes the client
-		// session ready to be used when you make the next proposal.
-		cs.ProposalCompleted()
-	} else if s.Terminated() {
-		// proposal terminated as the system is being shut down, time to exit
-	} else if s.Rejected() {
-		// client session s is not evicted from the server side, probably because
-		// there are too many concurrent client sessions. in case you want to
-		// strictly ensure that each proposal will never be applied twice, we
-		// recommend to fail the client program. Note that this is highly unlikely
-		// to happen.
-		panic("client session already evicted")
-	}
-	//
-	// now you can use the same client session instance s to make more proposals
-	//
-}
 
 func getTestNodeHostConfig() *config.NodeHostConfig {
 	return &config.NodeHostConfig{
@@ -884,7 +638,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 	nh *NodeHost, count uint64, timeoutExpected bool) {
 	for i := uint64(0); i < count; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			if err == ErrTimeout {
 				cancel()
@@ -893,7 +647,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 			t.Fatalf("unexpected error %v", err)
 		}
 		time.Sleep(100 * time.Millisecond)
-		if err := nh.CloseSession(ctx, cs); err != nil {
+		if err := nh.SyncCloseSession(ctx, cs); err != nil {
 			if err == ErrTimeout {
 				cancel()
 				return
@@ -1028,7 +782,7 @@ func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			t.Errorf("failed to get client session %v", err)
 		}
@@ -1049,15 +803,15 @@ func TestUnregisterNotRegisterClientSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cs, err := nh.GetNewSession(ctx, 2)
+		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			t.Errorf("failed to get client session %v", err)
 		}
-		err = nh.CloseSession(ctx, cs)
+		err = nh.SyncCloseSession(ctx, cs)
 		if err != nil {
 			t.Errorf("failed to unregister the client session %v", err)
 		}
-		err = nh.CloseSession(ctx, cs)
+		err = nh.SyncCloseSession(ctx, cs)
 		if err != ErrRejected {
 			t.Errorf("failed to reject the request %v", err)
 		}
@@ -1223,6 +977,42 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		}
 		if err := nh.StopCluster(2); err != nil {
 			t.Errorf("failed to stop cluster 2 %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestDeleteNode(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestDeleteNode(ctx, 2, 2, 0)
+		if err != nil {
+			t.Errorf("failed to delete node %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestAddNode(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddNode(ctx, 2, 2, "localhost:25000", 0)
+		if err != nil {
+			t.Errorf("failed to add node %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestAddObserver(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddObserver(ctx, 2, 2, "localhost:25000", 0)
+		if err != nil {
+			t.Errorf("failed to add observer %v", err)
 		}
 	}
 	singleNodeHostTest(t, tf)
@@ -1443,7 +1233,7 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 			}
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err := nh.GetNewSession(ctx, 1)
+		_, err := nh.SyncGetSession(ctx, 1)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to get new session")
@@ -1781,7 +1571,7 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				session := nh.GetNoOPSession(1)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
 				if err != nil {
-					log.Printf("failed to make proposal %v\n", err)
+					plog.Infof("failed to make proposal %v\n", err)
 				}
 				cancel()
 				if atomic.LoadUint32(&failed) == 1 {
@@ -1979,6 +1769,47 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 	twoFakeDiskNodeHostTest(t, tf)
 }
 
+func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		cs := nh.GetNoOPSession(2)
+		rs, err := nh.Propose(cs, make([]byte, 1), 2*time.Second)
+		if err != nil {
+			t.Fatalf("propose failed %v", err)
+		}
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("no panic")
+			}
+		}()
+		v := <-rs.CompletedC
+		plog.Infof("%d", v.SnapshotIndex())
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSyncRequestSnapshot(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		idx, err := nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
+		cancel()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if idx == 0 {
+			t.Errorf("unexpected index %d", idx)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestSnapshotCanBeRequested(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
@@ -1994,17 +1825,17 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		plog.Infof("going to request snapshot again")
 		sr, err = nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
-		v = <-sr.CompleteC
+		v = <-sr.CompletedC
 		if !v.Rejected() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2060,10 +1891,24 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	plog.Infof("going to wait for snapshot request to complete")
-	v := <-sr.CompleteC
+	v := <-sr.CompletedC
 	if !v.Timeout() {
 		t.Errorf("failed to report timeout")
 	}
+}
+
+func TestSyncRemoveData(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to remove cluster %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := nh.SyncRemoveData(ctx, 2, 1); err != nil {
+			t.Fatalf("sync remove data fail %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestRemoveNodeDataWillFailWhenNodeIsStillRunning(t *testing.T) {
@@ -2126,7 +1971,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2237,7 +2082,9 @@ func TestSnapshotCanBeExported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		sspath := "exported_snapshot_safe_to_delete"
 		os.RemoveAll(sspath)
-		os.MkdirAll(sspath, 0755)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		defer os.RemoveAll(sspath)
 		session := nh.GetNoOPSession(2)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2256,11 +2103,11 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
 		if err != nil {
@@ -2296,7 +2143,9 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
 		sspath := "exported_snapshot_safe_to_delete"
 		os.RemoveAll(sspath)
-		os.MkdirAll(sspath, 0755)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		defer os.RemoveAll(sspath)
 		opt := SnapshotOption{
 			Exported:   true,
@@ -2307,11 +2156,11 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
 		var index uint64
-		v := <-sr.CompleteC
+		v := <-sr.CompletedC
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
-		index = v.GetIndex()
+		index = v.SnapshotIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
@@ -2421,7 +2270,9 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 	mkproposal(nh1)
 	sspath := "exported_snapshot_safe_to_delete"
 	os.RemoveAll(sspath)
-	os.MkdirAll(sspath, 0755)
+	if err := os.MkdirAll(sspath, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	defer os.RemoveAll(sspath)
 	opt := SnapshotOption{
 		Exported:   true,
@@ -2432,11 +2283,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		t.Fatalf("failed to request snapshot %v", err)
 	}
 	var index uint64
-	v := <-sr.CompleteC
+	v := <-sr.CompletedC
 	if !v.Completed() {
 		t.Fatalf("failed to complete the requested snapshot")
 	}
-	index = v.GetIndex()
+	index = v.SnapshotIndex()
 	plog.Infof("exported snapshot index %d", index)
 	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 	dir := path.Join(sspath, snapshotDir)
@@ -2558,7 +2409,9 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	enabled bool, exp uint64) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
-	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
+	if err := os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
@@ -2591,7 +2444,9 @@ func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	os.RemoveAll(testSnapshotDir)
 	c := &chunks{}
-	os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755)
+	if err := os.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	cks := transport.NewSnapshotChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc)
 	sink := &testSink2{receiver: cks}

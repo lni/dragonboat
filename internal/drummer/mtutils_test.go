@@ -88,10 +88,9 @@ var (
 		mtNodeID2,
 		mtNodeID3,
 	}
-
-	caFile   = "templates/tests/test-root-ca.crt"
-	certFile = "templates/tests/localhost.crt"
-	keyFile  = "templates/tests/localhost.key"
+	caFile   = "internal/drummer/testdata/test-root-ca.crt"
+	certFile = "internal/drummer/testdata/localhost.crt"
+	keyFile  = "internal/drummer/testdata/localhost.key"
 )
 
 type mtAddressList struct {
@@ -598,6 +597,14 @@ func snapshotDisabledInRaftConfig() bool {
 	return cfg.SnapshotEntries == 0
 }
 
+func lessSnapshotTest() bool {
+	cfg, ok := getConfigFromDeployedJson()
+	if !ok {
+		return false
+	}
+	return cfg.SnapshotEntries > 30
+}
+
 func printEntryDetails(clusterID uint64,
 	nodeID uint64, entries []raftpb.Entry) {
 	for _, ent := range entries {
@@ -1062,7 +1069,7 @@ func checkClustersAreAccessible(t *testing.T,
 			clusterOk := false
 			plog.Infof("checking cluster availability for %d", clusterID)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			if !makeMonkeyTestRequests(ctx, clusterID, dl, true) {
+			if !makeMonkeyTestRequests(ctx, clusterID, dl, false) {
 				notSync[clusterID] = true
 			} else {
 				clusterOk = true
@@ -1237,12 +1244,14 @@ func makeMonkeyTestRequests(ctx context.Context,
 			Key: key,
 			Val: val,
 		}
-		cctx, cancel := context.WithTimeout(ctx, defaultTestTimeout)
+		cctx, cancel := context.WithTimeout(ctx, 2*defaultTestTimeout)
 		if makeWriteRequest(cctx, writeClient, clusterID, kv) {
 			if !makeReadRequest(cctx, readClient, clusterID, kv) {
+				cancel()
 				return false
 			}
 		} else {
+			cancel()
 			return false
 		}
 		cancel()
@@ -1258,19 +1267,22 @@ func startHardWorker(stopper *syncutil.Stopper, dl *mtAddressList) {
 	stopper.RunWorker(func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		select {
-		case <-stopper.ShouldStop():
-		case <-ticker.C:
-			for {
-				if cont := func() bool {
-					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-					defer cancel()
-					if !makeMonkeyTestRequests(ctx, 1, dl, false) {
-						return false
+		for {
+			select {
+			case <-stopper.ShouldStop():
+				return
+			case <-ticker.C:
+				for i := 0; i < 100; i++ {
+					if cont := func() bool {
+						ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+						defer cancel()
+						if !makeMonkeyTestRequests(ctx, client.HardWorkerTestClusterID, dl, false) {
+							return false
+						}
+						return true
+					}(); !cont {
+						break
 					}
-					return true
-				}(); !cont {
-					break
 				}
 			}
 		}
@@ -1348,6 +1360,19 @@ func setRandomPacketDropHook(nodes []*testNode, threshold uint64) {
 	}
 }
 
+func disableRandomDelay() {
+	if err := os.Setenv("IOEI", "disabled"); err != nil {
+		panic(err)
+	}
+}
+
+func disableClusterRandomDelay(clusterID uint64) {
+	pcs := fmt.Sprintf("IOEI-%d", clusterID)
+	if err := os.Setenv(pcs, "disabled"); err != nil {
+		panic(err)
+	}
+}
+
 func drummerMonkeyTesting(t *testing.T, appname string) {
 	defer func() {
 		if t.Failed() {
@@ -1357,7 +1382,8 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 			removeMonkeyTestDir()
 		}
 	}()
-	plog.Infof("snapshot disabled in monkey test %t", snapshotDisabledInRaftConfig())
+	plog.Infof("snapshot disabled in monkey test %t, less snapshot %t",
+		snapshotDisabledInRaftConfig(), lessSnapshotTest())
 	dl := getDrummerMonkeyTestAddrList()
 	drummerNodes, nodehostNodes := createTestNodeLists(dl)
 	startTestNodes(drummerNodes, dl)
@@ -1423,9 +1449,9 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	// to the system
 	stopper := syncutil.NewStopper()
 	startTestRequestWorkers(stopper, dl)
-	pd := random.NewProbability(50000)
-	if pd.Hit() {
+	if lessSnapshotTest() {
 		plog.Infof("going to start the hard worker")
+		disableClusterRandomDelay(client.HardWorkerTestClusterID)
 		startHardWorker(stopper, dl)
 	}
 	// start the linearizability checker manager
@@ -1474,6 +1500,8 @@ func drummerMonkeyTesting(t *testing.T, appname string) {
 	// stop all client workers
 	stopper.Stop()
 	plog.Infof("test clients stopped")
+	disableRandomDelay()
+	plog.Infof("random large delay disabled")
 	// restore all nodehost instances and wait for long enough
 	startTestNodes(nodehostNodes, dl)
 	startTestNodes(drummerNodes, dl)

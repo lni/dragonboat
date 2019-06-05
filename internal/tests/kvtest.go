@@ -54,9 +54,14 @@ func generateRandomDelay() {
 	}
 }
 
-func getLargeRandomDelay() uint64 {
+func getLargeRandomDelay(clusterID uint64) uint64 {
 	// in IO error injection test, we don't want such delays
 	ioei := os.Getenv("IOEI")
+	if len(ioei) > 0 {
+		return 0
+	}
+	pcs := fmt.Sprintf("IOEI-%d", clusterID)
+	ioei = os.Getenv(pcs)
 	if len(ioei) > 0 {
 		return 0
 	}
@@ -85,7 +90,7 @@ type KVTest struct {
 	Count            uint64            `json:"Count"`
 	Junk             []byte            `json:"Junk"`
 	closed           bool
-	aborted          bool `json:"-"`
+	aborted          bool
 	externalFileTest bool
 	noLargeDelay     bool
 	pbkvPool         *sync.Pool
@@ -215,7 +220,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 	if s.externalFileTest {
 		s.saveExternalFile(fileCollection)
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	if s.noLargeDelay {
 		delay = 0
 	}
@@ -253,7 +258,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 	if s.externalFileTest {
 		checkExternalFile(files, s.ClusterID)
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(s.ClusterID)
 	if s.noLargeDelay {
 		delay = 0
 	}
@@ -277,9 +282,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 	if err := json.Unmarshal(data, &store); err != nil {
 		return err
 	}
-	if store.aborted {
-		panic("snapshot image contains aborted==true")
-	}
+	store.aborted = false
 	s.KVStore = store.KVStore
 	s.Count = store.Count
 	s.Junk = store.Junk

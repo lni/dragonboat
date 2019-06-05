@@ -46,7 +46,9 @@ func TestInitialState(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	lr.CreateSnapshot(ss)
+	if err := lr.CreateSnapshot(ss); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rps, m := lr.NodeState()
 	if !reflect.DeepEqual(&ss.Membership, &m) ||
 		!reflect.DeepEqual(&rps, &ps) {
@@ -66,7 +68,9 @@ func TestApplySnapshotUpdateMarkerIndexTerm(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	lr.ApplySnapshot(ss)
+	if err := lr.ApplySnapshot(ss); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if lr.markerIndex != 123 || lr.markerTerm != 124 {
 		t.Errorf("unexpected marker index/term, %d/%d",
 			lr.markerIndex, lr.markerTerm)
@@ -95,7 +99,9 @@ func TestLogReaderIndexRange(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	lr.ApplySnapshot(ss)
+	if err := lr.ApplySnapshot(ss); err != nil {
+		t.Fatalf("%v", err)
+	}
 	first := lr.firstIndex()
 	if first != 124 {
 		t.Errorf("unexpected first index %d", first)

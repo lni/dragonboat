@@ -143,7 +143,9 @@ func TestAppend(t *testing.T) {
 
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(previousEnts)
+		if err := storage.Append(previousEnts); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 
 		raftLog.append(tt.ents)
@@ -319,7 +321,9 @@ func TestHasNextEnts(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.ApplySnapshot(snap)
+		if err := storage.ApplySnapshot(snap); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 		raftLog.append(ents)
 		raftLog.tryCommit(5, 1)
@@ -352,7 +356,9 @@ func TestNextEnts(t *testing.T) {
 	}
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.ApplySnapshot(snap)
+		if err := storage.ApplySnapshot(snap); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 		raftLog.append(ents)
 		raftLog.tryCommit(5, 1)
@@ -424,7 +430,9 @@ func TestCompaction(t *testing.T) {
 
 			storage := NewTestLogDB()
 			for i := uint64(1); i <= tt.lastIndex; i++ {
-				storage.Append([]pb.Entry{{Index: i}})
+				if err := storage.Append([]pb.Entry{{Index: i}}); err != nil {
+					t.Fatalf("%v", err)
+				}
 			}
 			raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 			raftLog.tryCommit(tt.lastIndex, 0)
@@ -450,7 +458,9 @@ func TestLogRestore(t *testing.T) {
 	index := uint64(1000)
 	term := uint64(1000)
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(pb.Snapshot{Index: index, Term: term})
+	if err := storage.ApplySnapshot(pb.Snapshot{Index: index, Term: term}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 
 	if len(getAllEntries(raftLog)) != 0 {
@@ -474,7 +484,9 @@ func TestIsOutOfBounds(t *testing.T) {
 	offset := uint64(100)
 	num := uint64(100)
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(pb.Snapshot{Index: offset})
+	if err := storage.ApplySnapshot(pb.Snapshot{Index: offset}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	l := newEntryLog(storage, server.NewRateLimiter(0))
 	for i := uint64(1); i <= num; i++ {
 		l.append([]pb.Entry{{Index: i + offset}})
@@ -557,7 +569,9 @@ func TestTerm(t *testing.T) {
 	num := uint64(100)
 
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1})
+	if err := storage.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	l := newEntryLog(storage, server.NewRateLimiter(0))
 	for i = 1; i < num; i++ {
 		l.append([]pb.Entry{{Index: offset + i, Term: i}})
@@ -587,7 +601,9 @@ func TestTermWithUnstableSnapshot(t *testing.T) {
 	unstablesnapi := storagesnapi + 5
 
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(pb.Snapshot{Index: storagesnapi, Term: 1})
+	if err := storage.ApplySnapshot(pb.Snapshot{Index: storagesnapi, Term: 1}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	l := newEntryLog(storage, server.NewRateLimiter(0))
 	l.restore(pb.Snapshot{Index: unstablesnapi, Term: 1})
 
@@ -621,9 +637,13 @@ func TestSlice(t *testing.T) {
 	halfe := pb.Entry{Index: half, Term: half}
 
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(pb.Snapshot{Index: offset})
+	if err := storage.ApplySnapshot(pb.Snapshot{Index: offset}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	for i = 1; i < num/2; i++ {
-		storage.Append([]pb.Entry{{Index: offset + i, Term: offset + i}})
+		if err := storage.Append([]pb.Entry{{Index: offset + i, Term: offset + i}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 	l := newEntryLog(storage, server.NewRateLimiter(0))
 	for i = num / 2; i < num; i++ {
@@ -696,7 +716,9 @@ func TestCompactionSideEffects(t *testing.T) {
 	lastTerm := lastIndex
 	storage := NewTestLogDB()
 	for i = 1; i <= unstableIndex; i++ {
-		storage.Append([]pb.Entry{{Term: uint64(i), Index: uint64(i)}})
+		if err := storage.Append([]pb.Entry{{Term: uint64(i), Index: uint64(i)}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 	raftLog := newEntryLog(storage, server.NewRateLimiter(0))
 	for i = unstableIndex; i < lastIndex; i++ {
@@ -708,7 +730,9 @@ func TestCompactionSideEffects(t *testing.T) {
 		t.Fatalf("maybeCommit returned false")
 	}
 	offset := uint64(500)
-	storage.Compact(offset)
+	if err := storage.Compact(offset); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if raftLog.lastIndex() != lastIndex {
 		t.Errorf("lastIndex = %d, want %d", raftLog.lastIndex(), lastIndex)
 	}
@@ -766,7 +790,9 @@ func TestUnstableEnts(t *testing.T) {
 	for i, tt := range tests {
 		// append stable entries to storage
 		storage := NewTestLogDB()
-		storage.Append(previousEnts[:tt.unstable-1])
+		if err := storage.Append(previousEnts[:tt.unstable-1]); err != nil {
+			t.Fatalf("%v", err)
+		}
 
 		// append unstable entries to raftlog
 		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
@@ -852,7 +878,9 @@ func TestStableToWithSnap(t *testing.T) {
 	}
 	for i, tt := range tests {
 		s := NewTestLogDB()
-		s.ApplySnapshot(pb.Snapshot{Index: snapi, Term: snapt})
+		if err := s.ApplySnapshot(pb.Snapshot{Index: snapi, Term: snapt}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		raftLog := newEntryLog(s, server.NewRateLimiter(0))
 		raftLog.append(tt.newEnts)
 		cu := pb.UpdateCommit{

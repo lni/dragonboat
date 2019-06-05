@@ -295,7 +295,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-multiraft test-utils test-config test-client test-server test-tools \
-	test-plugins test-tests
+	test-plugins test-tests test-drummer
 
 ###############################################################################
 # fast tests executed for every git push
@@ -353,12 +353,12 @@ test-slow-multiraft:
 	$(GOTEST) $(PKGNAME)
 
 test-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-test-slow-drummer: plugin-kvtest
+test-slow-drummer:
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
 test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-test-monkey-drummer: plugin-kvtest plugin-concurrentkv
+test-monkey-drummer:
 	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
 	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
 
@@ -381,11 +381,11 @@ slow-multiraft:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)
 
 slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-slow-drummer: plugin-kvtest
+slow-drummer:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-monkey-drummer: plugin-kvtest
+monkey-drummer:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
 
 all-slow-monkey-tests: slow-multiraft slow-drummer monkey-drummer
@@ -548,15 +548,14 @@ clean-binding:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=internal/raft internal/logdb internal/transport \
-	internal/cpp internal/rsm internal/settings internal/tests \
-	internal/tests/lcm internal/utils/lang internal/utils/random \
-	internal/utils/fileutil internal/utils/syncutil \
-	internal/utils/stringutil internal/utils/logutil internal/utils/netutil \
-	internal/utils/cache internal/utils/envutil internal/utils/compression \
-	internal/server internal/drummer internal/drummer/client \
-	plugin/leveldb plugin/pebble plugin/rocksdb \
-	raftpb tools binding logger raftio config statemachine client
+CHECKED_PKGS=internal/raft internal/logdb internal/transport internal/cpp   \
+	internal/rsm internal/settings internal/tests internal/tests/lcm          \
+	internal/utils/lang internal/utils/random internal/utils/fileutil         \
+	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil  \
+	internal/utils/netutil internal/utils/cache internal/utils/envutil        \
+	internal/server internal/drummer internal/drummer/client plugin/leveldb   \
+	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config    \
+	statemachine client
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
@@ -589,6 +588,21 @@ cpp-static-check:
     done; \
   done;
 
+GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
+	internal/server statemachine tools raftpb raftio client tools logger config  \
+	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
+	internal/utils/cache internal/utils/fileutil internal/utils/stringutil       \
+	internal/utils/netutil internal/utils/random internal/utils/logutil          \
+	internal/utils/lang
+
+golangci-lint-check:
+	@for p in $(GOLANGCI_LINT_PKGS); do \
+		golangci-lint run $$p; \
+	done;
+	@golangci-lint run .
+	@golangci-lint run --build-tags=dragonboat_language_binding binding
+	@golangci-lint run --build-tags=dragonboat_logdbtesthelper internal/logdb
+
 ###############################################################################
 # clean
 ###############################################################################
@@ -606,15 +620,14 @@ clean: clean-binding
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
-  drummercmd drummer nodehost \
 	$(DRUMMER_MONKEY_TESTING_BIN) $(MULTIRAFT_MONKEY_TESTING_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
-	test-transport test-multiraft test-drummer test-session test-server test-utils \
-	test-config test-tests static-check clean plugin-kvtest logdb-checker \
+	test-transport test-multiraft test-drummer test-client test-server test-utils \
+	test-config test-tests static-check clean logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \
-	slow-multiraft-ioerror-test-bin all-slow-monkey-tests \
+	slow-multiraft-ioerror-test-bin all-slow-monkey-tests golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps

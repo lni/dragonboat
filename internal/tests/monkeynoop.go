@@ -12,35 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncutil
+// +build !dragonboat_slowtest
+// +build !dragonboat_monkeytest
 
-import (
-	"testing"
+package tests
+
+var (
+	// TestMonkeyEnabled indicates whether we are in monkey test mode
+	TestMonkeyEnabled = false
 )
 
-func TestLockCanBeLockedAndUnlocked(t *testing.T) {
-	l := NewLock()
-	l.Lock()
-	_ = t
-	l.Unlock()
-}
-
-func TestTryLockCanBeUnlocked(t *testing.T) {
-	l := NewLock()
-	if !l.TryLock() {
-		t.Errorf("TryLock failed")
-	}
-	l.Unlock()
-}
-
-func TestTryLockFailsWhenLocked(t *testing.T) {
-	l := NewLock()
-	l.Lock()
-	if l.TryLock() {
-		t.Errorf("try lock not suppose to success")
-	}
-	l.Unlock()
-	if !l.TryLock() {
-		t.Errorf("try lock not suppose to fail")
-	}
+// ReadyToReturnTestKnob is a test knob that returns a boolean value indicating
+// whether the system is being shutdown. In production, this function always
+// return false without check the stopC chan.
+func ReadyToReturnTestKnob(stopC <-chan struct{}, delay bool, pos string) bool {
+	return false
 }

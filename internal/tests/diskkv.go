@@ -582,7 +582,7 @@ func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 	if d.aborted {
 		panic("prepare snapshot called after abort")
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(d.clusterID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10
@@ -613,7 +613,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if d.closed {
 		panic("recover from snapshot called after Close()")
 	}
-	delay := getLargeRandomDelay()
+	delay := getLargeRandomDelay(d.clusterID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10

@@ -12,35 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncutil
+package tests
 
 import (
 	"testing"
 )
 
-func TestLockCanBeLockedAndUnlocked(t *testing.T) {
-	l := NewLock()
-	l.Lock()
-	_ = t
-	l.Unlock()
+func TestMonkeyFlagIsNotSet(t *testing.T) {
+	if TestMonkeyEnabled {
+		t.Fatalf("test monkey unexpectedly enabled")
+	}
 }
 
-func TestTryLockCanBeUnlocked(t *testing.T) {
-	l := NewLock()
-	if !l.TryLock() {
-		t.Errorf("TryLock failed")
+func TestReadyToReturnTestKnobAlwaysReturnFalse(t *testing.T) {
+	ch := make(chan struct{})
+	if ReadyToReturnTestKnob(ch, false, "") {
+		t.Fatalf("didn't return alse")
 	}
-	l.Unlock()
-}
-
-func TestTryLockFailsWhenLocked(t *testing.T) {
-	l := NewLock()
-	l.Lock()
-	if l.TryLock() {
-		t.Errorf("try lock not suppose to success")
-	}
-	l.Unlock()
-	if !l.TryLock() {
-		t.Errorf("try lock not suppose to fail")
+	close(ch)
+	if ReadyToReturnTestKnob(ch, false, "") {
+		t.Fatalf("didn't return alse")
 	}
 }

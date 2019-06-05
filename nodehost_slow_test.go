@@ -333,7 +333,7 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 			clusterID := rand.Uint64()%mtNumOfClusters + 1
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			session, err := nhList[idx].nh.GetNewSession(ctx, clusterID)
+			session, err := nhList[idx].nh.SyncGetSession(ctx, clusterID)
 			if err != nil {
 				plog.Errorf("couldn't get a proposal client for %d", clusterID)
 				continue
@@ -368,7 +368,7 @@ func makeRandomProposal(nhList []*mtNodeHost, count int) {
 				f := func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-					nhList[idx].nh.CloseSession(ctx, session)
+					nhList[idx].nh.SyncCloseSession(ctx, session)
 				}
 				f()
 			}
@@ -463,7 +463,7 @@ func testProposalCanBeMade(t *testing.T, node *mtNodeHost, data []byte) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		node.nh.CloseSession(ctx, session)
+		node.nh.SyncCloseSession(ctx, session)
 	}()
 	retry := 0
 	for retry < 5 {
@@ -509,7 +509,7 @@ func tryGetSession(nh *NodeHost, clusterID uint64) *client.Session {
 	for i := 0; i < 5; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		session, err = nh.GetNewSession(ctx, clusterID)
+		session, err = nh.SyncGetSession(ctx, clusterID)
 		if err == nil {
 			return session
 		}
@@ -629,7 +629,7 @@ func TestNodeHostRemovedClusterCanBeAddedBack(t *testing.T) {
 			select {
 			case v := <-rs.CompletedC:
 				if !v.Completed() {
-					t.Errorf("i = %d, for RequestAddNode, got %d want %d",
+					t.Errorf("i = %d, for RequestAddNode, got %v want %d",
 						i, v, requestCompleted)
 				} else {
 					done = true

@@ -29,6 +29,7 @@ import (
 	"github.com/lni/dragonboat/internal/raft"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/internal/tests"
 	"github.com/lni/dragonboat/internal/utils/logutil"
 	"github.com/lni/dragonboat/logger"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -40,6 +41,9 @@ var (
 )
 
 var (
+	// ErrTestKnobReturn is the error returned when returned earlier due to test
+	// knob.
+	ErrTestKnobReturn = errors.New("returned earlier due to test knob")
 	// ErrSaveSnapshot indicates there is error when trying to save a snapshot
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
@@ -118,12 +122,14 @@ type SMFactoryFunc func(clusterID uint64,
 
 // INodeProxy is the interface used as proxy to a nodehost.
 type INodeProxy interface {
+	NodeReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
 	ApplyConfigChange(pb.ConfigChange)
 	ConfigChangeProcessed(uint64, bool)
 	NodeID() uint64
 	ClusterID() uint64
+	ShouldStop() <-chan struct{}
 }
 
 // ISnapshotter is the interface for the snapshotter object.
@@ -366,6 +372,7 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedLastApplied.Lock()
 	s.batchedLastApplied.index = index
 	s.batchedLastApplied.Unlock()
+	s.node.NodeReady()
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
@@ -378,7 +385,7 @@ func (s *StateMachine) Loaded(from From) {
 	s.sm.Loaded(from)
 }
 
-// Lookup performances local lookup on the data store.
+// Lookup queries the local state machine.
 func (s *StateMachine) Lookup(query interface{}) (interface{}, error) {
 	if s.sm.ConcurrentSnapshot() {
 		return s.concurrentLookup(query)
@@ -401,7 +408,7 @@ func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) 
 	return s.sm.Lookup(query)
 }
 
-// Lookup performances local lookup on the data store.
+// NALookup queries the local state machine.
 func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.sm.ConcurrentSnapshot() {
 		return s.naConcurrentLookup(query)
@@ -498,7 +505,7 @@ func (s *StateMachine) Handle(batch []Task,
 		if !rec.isSyncTask() {
 			batch = append(batch, rec)
 		} else {
-			if err := s.periodicSync(); err != nil {
+			if err := s.sync(); err != nil {
 				return Task{}, false, err
 			}
 		}
@@ -515,7 +522,7 @@ func (s *StateMachine) Handle(batch []Task,
 				if !rec.isSyncTask() {
 					batch = append(batch, rec)
 				} else {
-					if err := s.periodicSync(); err != nil {
+					if err := s.sync(); err != nil {
 						return Task{}, false, err
 					}
 				}
@@ -593,6 +600,9 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	}(); err != nil {
 		return err
 	}
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "snapshotter.Stream") {
+		return ErrTestKnobReturn
+	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
@@ -608,8 +618,14 @@ func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot
 	}(); err != nil {
 		return nil, nil, err
 	}
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.sync") {
+		return nil, nil, ErrTestKnobReturn
+	}
 	if err := s.sync(); err != nil {
 		return nil, nil, err
+	}
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.doSaveSnapshot") {
+		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
 }
@@ -622,6 +638,9 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
 		return nil, nil, err
+	}
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.doSaveSnapshot") {
+		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
 }
@@ -649,15 +668,6 @@ func (s *StateMachine) sync() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	plog.Infof("%s is being synchronized, index %d", s.describe(), s.index)
-	return s.sm.Sync()
-}
-
-func (s *StateMachine) periodicSync() error {
-	if !s.OnDiskStateMachine() {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}

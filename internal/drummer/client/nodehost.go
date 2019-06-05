@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/config"
@@ -37,6 +37,9 @@ const (
 )
 
 var (
+	// HardWorkerTestClusterID is the cluster ID of the cluster targetted by the
+	// hard worker.
+	HardWorkerTestClusterID uint64 = 1
 	// DrummerClientName is the name of the default master client.
 	DrummerClientName      = settings.Soft.DrummerClientName
 	getConnectedTimeoutSec = settings.Soft.GetConnectedTimeoutSecond
@@ -46,7 +49,7 @@ var (
 )
 
 func isGRPCTempError(err error) bool {
-	return grpc.Code(err) == codes.Unavailable
+	return status.Code(err) == codes.Unavailable
 }
 
 // DrummerClient is the client used to contact drummer servers.

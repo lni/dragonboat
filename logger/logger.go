@@ -65,7 +65,7 @@ func SetLoggerFactory(f Factory) {
 
 // GetLogger returns the logger for the specified package name. The most common
 // use case for the returned logger is to set its log verbosity level.
-func GetLogger(pkgName string) *dragonboatLogger {
+func GetLogger(pkgName string) ILogger {
 	_loggers.mu.Lock()
 	defer _loggers.mu.Unlock()
 	l, ok := _loggers.loggers[pkgName]

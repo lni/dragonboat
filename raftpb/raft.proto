@@ -83,6 +83,10 @@ message RaftDataStatus {
   optional string logdb_type    = 4 [(gogoproto.nullable) = false];
   optional string hostname      = 5 [(gogoproto.nullable) = false];
   optional uint64 deployment_id = 6 [(gogoproto.nullable) = false]; 
+  optional uint64 step_worker_count = 7 [(gogoproto.nullable) = false];
+  optional uint64 logdb_shard_count = 8 [(gogoproto.nullable) = false];
+  optional uint64 max_session_count = 9 [(gogoproto.nullable) = false];
+  optional uint64 entry_batch_size = 10 [(gogoproto.nullable) = false];
 }
 
 message State {

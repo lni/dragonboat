@@ -112,14 +112,18 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SnapshotEnv)) {
 	}()
 	env := NewSnapshotEnv(ff, 1, 1, 1, 2, SnapshottingMode)
 	tmpDir := env.GetTempDir()
-	os.MkdirAll(tmpDir, 0755)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	f(t, env)
 }
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
 	tf := func(t *testing.T, env *SnapshotEnv) {
 		finalDir := env.GetFinalDir()
-		os.MkdirAll(finalDir, 0755)
+		if err := os.MkdirAll(finalDir, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		err := env.renameTempDirToFinalDir()
 		if err != ErrSnapshotOutOfDate {
 			t.Errorf("err is nil")
@@ -189,7 +193,9 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
 	tf := func(t *testing.T, env *SnapshotEnv) {
 		finalDir := env.GetFinalDir()
-		os.MkdirAll(finalDir, 0755)
+		if err := os.MkdirAll(finalDir, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
 		m := &pb.Message{}
 		if err := env.FinalizeSnapshot(m); err != ErrSnapshotOutOfDate {
 			t.Errorf("didn't return ErrSnapshotOutOfDate %v", err)

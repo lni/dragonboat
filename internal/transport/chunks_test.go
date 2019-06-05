@@ -59,7 +59,7 @@ func getTestChunks() []pb.SnapshotChunk {
 	return result
 }
 
-func hasSnapshotTempFile(cs *chunks, c pb.SnapshotChunk) bool {
+func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
 	env := cs.getSnapshotEnv(c)
 	fp := env.GetTempFilepath()
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
@@ -68,7 +68,7 @@ func hasSnapshotTempFile(cs *chunks, c pb.SnapshotChunk) bool {
 	return true
 }
 
-func hasExternalFile(cs *chunks, c pb.SnapshotChunk, fn string, sz uint64) bool {
+func hasExternalFile(cs *Chunks, c pb.SnapshotChunk, fn string, sz uint64) bool {
 	env := cs.getSnapshotEnv(c)
 	efp := filepath.Join(env.GetFinalDir(), fn)
 	fs, err := os.Stat(efp)
@@ -82,7 +82,7 @@ func getTestDeploymentID() uint64 {
 	return testDeploymentID
 }
 
-func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler)) {
+func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler)) {
 	defer os.RemoveAll(snapshotDir)
 	defer leaktest.AfterTest(t)()
 	trans, _, stopper, tt := newTestTransport(false)
@@ -92,16 +92,18 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *chunks, *testMessageHandler
 	defer tt.cleanup()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	fn(t, chunks, handler)
 }
 
 func TestMaxSlotIsEnforced(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		defer os.RemoveAll(snapshotDir)
 		inputs := getTestChunks()
 		chunks.validate = false
@@ -111,7 +113,9 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 			v++
 			c.ClusterId = v
 			snapDir := chunks.getSnapshotDir(v, c.NodeId)
-			os.MkdirAll(snapDir, 0755)
+			if err := os.MkdirAll(snapDir, 0755); err != nil {
+				t.Fatalf("%v", err)
+			}
 			if !chunks.addChunk(c) {
 				t.Errorf("failed to add chunk")
 			}
@@ -132,7 +136,7 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 }
 
 func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -152,7 +156,7 @@ func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 }
 
 func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -172,7 +176,7 @@ func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
 }
 
 func TestNotTrackedChunkWillBeIgnored(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		if chunks.onNewChunk(inputs[1]) != nil {
 			t.Errorf("not tracked chunk not rejected")
@@ -182,7 +186,7 @@ func TestNotTrackedChunkWillBeIgnored(t *testing.T) {
 }
 
 func TestGetOrCreateSnapshotLock(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		l := chunks.getOrCreateSnapshotLock("k1")
 		l1, ok := chunks.locks["k1"]
 		if !ok || l != l1 {
@@ -221,7 +225,7 @@ func TestShouldUpdateValidator(t *testing.T) {
 		{false, false, 1, false},
 	}
 	for idx, tt := range tests {
-		c := &chunks{validate: tt.validate}
+		c := &Chunks{validate: tt.validate}
 		input := pb.SnapshotChunk{ChunkId: tt.chunkID, HasFileInfo: tt.hasFileInfo}
 		if result := c.shouldUpdateValidator(input); result != tt.result {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.result)
@@ -230,7 +234,7 @@ func TestShouldUpdateValidator(t *testing.T) {
 }
 
 func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -258,7 +262,7 @@ func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
 }
 
 func TestGcRemovesRecordAndTempFile(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -284,7 +288,7 @@ func TestGcRemovesRecordAndTempFile(t *testing.T) {
 }
 
 func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		for _, c := range inputs {
@@ -307,7 +311,7 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 }
 
 func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		env := chunks.getSnapshotEnv(inputs[0])
 		chunks.validate = false
@@ -339,7 +343,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 
 // when there is no flag file
 func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		env := chunks.getSnapshotEnv(inputs[0])
 		snapDir := env.GetFinalDir()
@@ -365,7 +369,7 @@ func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
 }
 
 func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -403,7 +407,7 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 	runChunkTest(t, fn)
 }
 
-func checkTestSnapshotFile(chunks *chunks,
+func checkTestSnapshotFile(chunks *Chunks,
 	chunk pb.SnapshotChunk, size uint64) bool {
 	env := chunks.getSnapshotEnv(chunk)
 	finalFp := env.GetFilepath()
@@ -422,7 +426,7 @@ func checkTestSnapshotFile(chunks *chunks,
 }
 
 func TestAddingFirstChunkAgainResetsTempFile(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addChunk(inputs[0])
@@ -454,7 +458,7 @@ func TestAddingFirstChunkAgainResetsTempFile(t *testing.T) {
 
 func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 	validate bool, snapshotCount uint64) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		chunks.validate = validate
 		sf1 := &pb.SnapshotFile{
 			Filepath: "/data/external1.data",
@@ -652,7 +656,7 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 }
 
 func TestGetMessageFromChunk(t *testing.T) {
-	fn := func(t *testing.T, chunks *chunks, handler *testMessageHandler) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		sf1 := &pb.SnapshotFile{
 			Filepath: "/data/external1.data",
 			FileSize: 100,

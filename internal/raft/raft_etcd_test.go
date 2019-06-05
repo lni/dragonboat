@@ -97,7 +97,9 @@ func ltoa(l *entryLog) string {
 // nextEnts returns the appliable entries and updates the applied index
 func nextEnts(r *raft, s ILogDB) (ents []pb.Entry) {
 	// Transfer all unstable entries to "stable" storage.
-	s.Append(r.log.entriesToSave())
+	if err := s.Append(r.log.entriesToSave()); err != nil {
+		panic(err)
+	}
 	r.log.commitUpdate(pb.UpdateCommit{
 		StableLogTo:   r.log.lastIndex(),
 		StableLogTerm: r.log.lastTerm(),
@@ -237,8 +239,12 @@ func TestLeaderTransferAfterSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}
-	nt.storage[1].CreateSnapshot(ss)
-	nt.storage[1].Compact(lead.log.processed)
+	if err := nt.storage[1].CreateSnapshot(ss); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := nt.storage[1].Compact(lead.log.processed); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nt.recover()
 	if lead.remotes[3].match != 1 {
 		t.Fatalf("node 1 has match %x for node 3, want %x", lead.remotes[3].match, 1)
@@ -1136,7 +1142,9 @@ func TestCommit(t *testing.T) {
 
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append(tt.logs)
+		if err := storage.Append(tt.logs); err != nil {
+			t.Fatalf("%v", err)
+		}
 		storage.(*TestLogDB).state = pb.State{Term: tt.smTerm}
 
 		sm := newTestRaft(1, []uint64{1}, 5, 1, storage)
@@ -1246,7 +1254,9 @@ func TestHandleMTReplicate(t *testing.T) {
 
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}})
+		if err := storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		sm := newTestRaft(1, []uint64{1}, 10, 1, storage)
 		sm.becomeFollower(2, NoLeader)
 
@@ -1282,7 +1292,9 @@ func TestHandleHeartbeat(t *testing.T) {
 	// other than boundary checkings, nothing else got checked.
 	for i, tt := range tests {
 		storage := NewTestLogDB()
-		storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}})
+		if err := storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}); err != nil {
+			t.Fatalf("%v", err)
+		}
 		sm := newTestRaft(1, []uint64{1, 2}, 5, 1, storage)
 		sm.becomeFollower(2, 2)
 		sm.log.commitTo(commit)
@@ -1303,7 +1315,9 @@ func TestHandleHeartbeat(t *testing.T) {
 // TestHandleHeartbeatResp ensures that we re-send log entries when we get a heartbeat response.
 func TestHandleHeartbeatResp(t *testing.T) {
 	storage := NewTestLogDB()
-	storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}})
+	if err := storage.Append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}); err != nil {
+		t.Fatalf("%v", err)
+	}
 	sm := newTestRaft(1, []uint64{1, 2}, 5, 1, storage)
 	sm.becomeCandidate()
 	sm.becomeLeader()
@@ -1956,7 +1970,9 @@ func TestBcastBeat(t *testing.T) {
 		Membership: getTestMembership([]uint64{1, 2, 3}),
 	}
 	storage := NewTestLogDB()
-	storage.ApplySnapshot(s)
+	if err := storage.ApplySnapshot(s); err != nil {
+		t.Fatalf("%v", err)
+	}
 	sm := newTestRaft(1, nil, 10, 1, storage)
 	sm.term = 1
 
@@ -2174,7 +2190,9 @@ func TestSendAppendForRemoteSnapshot(t *testing.T) {
 func TestRecvMsgUnreachable(t *testing.T) {
 	previousEnts := []pb.Entry{{Term: 1, Index: 1}, {Term: 1, Index: 2}, {Term: 1, Index: 3}}
 	s := NewTestLogDB()
-	s.Append(previousEnts)
+	if err := s.Append(previousEnts); err != nil {
+		t.Fatalf("%v", err)
+	}
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, s)
 	r.becomeCandidate()
 	r.becomeLeader()
@@ -2378,8 +2396,12 @@ func TestSlowNodeRestore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
 	}
-	nt.storage[1].CreateSnapshot(ss)
-	nt.storage[1].Compact(lead.log.processed)
+	if err := nt.storage[1].CreateSnapshot(ss); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := nt.storage[1].Compact(lead.log.processed); err != nil {
+		t.Fatalf("%v", err)
+	}
 	follower := nt.peers[3].(*raft)
 	nt.recover()
 	// send heartbeats so that the leader can learn everyone is active.
@@ -2773,7 +2795,9 @@ func TestSnapshotAbort(t *testing.T) {
 func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
 	storage := NewTestLogDB()
 	for i, term := range terms {
-		storage.Append([]pb.Entry{{Index: uint64(i + 1), Term: term}})
+		if err := storage.Append([]pb.Entry{{Index: uint64(i + 1), Term: term}}); err != nil {
+			panic(err)
+		}
 	}
 	cfg := newTestConfig(1, 5, 1, storage)
 	if configFunc != nil {

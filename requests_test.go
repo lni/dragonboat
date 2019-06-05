@@ -53,7 +53,7 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	fn(r3)
 	r4 := &RequestState{node: &node{}}
 	r4.node.setInitialized()
-	r4.setReadyToRead()
+	r4.readyToRead.set()
 	r4.mustBeReadyForLocalRead()
 }
 
@@ -66,8 +66,8 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 	if ps.pending != nil {
 		t.Errorf("pending not nil")
 	}
-	pending := &SnapshotState{
-		CompleteC: make(chan SnapshotResult, 1),
+	pending := &RequestState{
+		CompletedC: make(chan RequestResult, 1),
 	}
 	ps.pending = pending
 	ps.close()
@@ -75,7 +75,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 		t.Errorf("pending not cleared")
 	}
 	select {
-	case v := <-pending.CompleteC:
+	case v := <-pending.CompletedC:
 		if !v.Terminated() {
 			t.Errorf("unexpected code")
 		}
@@ -164,7 +164,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 		t.Errorf("pending is not cleared")
 	}
 	select {
-	case v := <-ss.CompleteC:
+	case v := <-ss.CompletedC:
 		if !v.Timeout() {
 			t.Errorf("not timeout")
 		}
@@ -183,10 +183,10 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.req.Key, false, 123)
+	ps.apply(ss.key, false, 123)
 	select {
-	case v := <-ss.CompleteC:
-		if v.GetIndex() != 123 {
+	case v := <-ss.CompletedC:
+		if v.SnapshotIndex() != 123 {
 			t.Errorf("index value not returned")
 		}
 		if !v.Completed() {
@@ -207,10 +207,10 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.req.Key, true, 123)
+	ps.apply(ss.key, true, 123)
 	select {
-	case v := <-ss.CompleteC:
-		if v.GetIndex() != 0 {
+	case v := <-ss.CompletedC:
+		if v.SnapshotIndex() != 0 {
 			t.Errorf("index value incorrectly set")
 		}
 		if !v.Rejected() {
@@ -234,31 +234,14 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	if ps.pending == nil {
 		t.Errorf("pending not set")
 	}
-	ps.apply(ss.req.Key+1, false, 123)
+	ps.apply(ss.key+1, false, 123)
 	if ps.pending == nil {
 		t.Errorf("pending unexpectedly cleared")
 	}
 	select {
-	case <-ss.CompleteC:
+	case <-ss.CompletedC:
 		t.Fatalf("unexpectedly notified")
 	default:
-	}
-}
-
-func TestRequestedSnapshotDetailsAreKept(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	path := "/test-data"
-	st := rsm.ExportedSnapshot
-	ss, err := ps.request(st, path, time.Second)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-	}
-	if ss.req.Type != st || ss.req.Path != path {
-		t.Errorf("snapshot details not kept")
 	}
 }
 
@@ -290,12 +273,44 @@ func TestRequestStateRelease(t *testing.T) {
 		node:        &node{},
 		pool:        &sync.Pool{},
 	}
-	rs.setReadyToRead()
+	rs.readyToRead.set()
+	rs.readyToRelease.set()
 	exp := RequestState{pool: rs.pool}
 	rs.Release()
 	if !reflect.DeepEqual(&exp, &rs) {
 		t.Errorf("unexpected state, got %+v, want %+v", rs, exp)
 	}
+}
+
+func TestRequestStateSetToReadyToReleaseOnceNotified(t *testing.T) {
+	rs := RequestState{
+		CompletedC: make(chan RequestResult, 1),
+	}
+	if rs.readyToRelease.ready() {
+		t.Errorf("already ready?")
+	}
+	rs.notify(RequestResult{})
+	if !rs.readyToRelease.ready() {
+		t.Errorf("failed to set ready to release to ready")
+	}
+}
+
+func TestReleasingNotReadyRequestStateWillPanic(t *testing.T) {
+	rs := RequestState{
+		key:         100,
+		clientID:    200,
+		seriesID:    300,
+		respondedTo: 400,
+		deadline:    500,
+		node:        &node{},
+		pool:        &sync.Pool{},
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("no panic")
+		}
+	}()
+	rs.Release()
 }
 
 func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
@@ -343,7 +358,7 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Terminated() {
-			t.Errorf("returned %d, want %d", v, requestTerminated)
+			t.Errorf("returned %v, want %d", v, requestTerminated)
 		}
 	default:
 		t.Errorf("expect to return something")
@@ -376,7 +391,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 	case v, ok := <-rs.CompletedC:
 		if ok {
 			if !v.Timeout() {
-				t.Errorf("v: %d, expect %d", v, requestTimeout)
+				t.Errorf("v: %v, expect %d", v, requestTimeout)
 			}
 		}
 	default:
@@ -400,7 +415,7 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("returned %d, want %d", v, requestCompleted)
+			t.Errorf("returned %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Errorf("suppose to return something")
@@ -489,7 +504,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Terminated() {
-			t.Errorf("get %d, want %d", v, requestTerminated)
+			t.Errorf("get %v, want %d", v, requestTerminated)
 		}
 	default:
 		t.Errorf("suppose to return terminated")
@@ -524,7 +539,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("get %d, want %d", v, requestCompleted)
+			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Errorf("expect to get complete signal")
@@ -549,7 +564,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("get %d, want %d", v, requestCompleted)
+			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
 		r := v.GetResult()
 		if !reflect.DeepEqual(&r, &result) {
@@ -579,7 +594,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("get %d, want %d", v, requestCompleted)
+			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Errorf("expect to get complete signal")
@@ -608,7 +623,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("get %d, want %d", v, requestCompleted)
+			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Errorf("expect to get complete signal")
@@ -642,7 +657,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Timeout() {
-			t.Errorf("got %d, want %d", v, requestTimeout)
+			t.Errorf("got %v, want %d", v, requestTimeout)
 		}
 	default:
 	}
@@ -787,7 +802,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Terminated() {
-			t.Errorf("got %d, want %d", v, requestTerminated)
+			t.Errorf("got %v, want %d", v, requestTerminated)
 		}
 	default:
 		t.Errorf("not expected to be signaled")
@@ -810,11 +825,17 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 		t.Errorf("not expected to be signaled")
 	default:
 	}
+	if rs.readyToRead.ready() {
+		t.Errorf("ready is already set")
+	}
 	pp.applied(500)
+	if !rs.readyToRead.ready() {
+		t.Errorf("ready not set")
+	}
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
-			t.Errorf("got %d, want %d", v, requestCompleted)
+			t.Errorf("got %v, want %d", v, requestCompleted)
 		}
 	default:
 		t.Errorf("expect to complete")
@@ -846,7 +867,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Timeout() {
-			t.Errorf("got %d, want %d", v, requestTimeout)
+			t.Errorf("got %v, want %d", v, requestTimeout)
 		}
 	default:
 		t.Errorf("expect to complete")
@@ -873,7 +894,7 @@ func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	select {
 	case v := <-rs.CompletedC:
 		if !v.Timeout() {
-			t.Errorf("got %d, want %d", v, requestTimeout)
+			t.Errorf("got %v, want %d", v, requestTimeout)
 		}
 	default:
 		t.Errorf("expect to complete")

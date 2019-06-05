@@ -32,7 +32,12 @@ import (
 )
 
 var (
-	plog                  = logger.GetLogger("server")
+	plog = logger.GetLogger("server")
+	// ErrHardSettingChanged indicates that one or more of the hard settings
+	// changed.
+	ErrHardSettingChanged = errors.New("hard setting changed")
+	// ErrDirMarkedAsDeleted is the error used to indicate that the directory has
+	// been marked as deleted and can not be used again.
 	ErrDirMarkedAsDeleted = errors.New("trying to use a dir marked as deleted")
 	// ErrHostnameChanged is the error used to indicate that the hostname changed.
 	ErrHostnameChanged = errors.New("hostname changed")
@@ -341,12 +346,16 @@ func (sc *Context) compatible(dir string,
 			return nil
 		}
 		status := raftpb.RaftDataStatus{
-			Address:      addr,
-			BinVer:       ldbBinVer,
-			HardHash:     settings.Hard.Hash(),
-			LogdbType:    name,
-			Hostname:     hostname,
-			DeploymentId: did,
+			Address:         addr,
+			BinVer:          ldbBinVer,
+			HardHash:        0,
+			LogdbType:       name,
+			Hostname:        hostname,
+			DeploymentId:    did,
+			StepWorkerCount: settings.Hard.StepEngineWorkerCount,
+			LogdbShardCount: settings.Hard.LogDBPoolSize,
+			MaxSessionCount: settings.Hard.LRUMaxSessionCount,
+			EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 		}
 		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
 		if err != nil {
@@ -380,8 +389,17 @@ func (sc *Context) compatible(dir string,
 					status.BinVer, ldbBinVer)
 				return ErrIncompatibleData
 			}
-			if status.HardHash != settings.Hard.Hash() {
-				return ErrHardSettingsChanged
+			if status.HardHash != 0 {
+				if status.HardHash != settings.Hard.Hash() {
+					return ErrHardSettingsChanged
+				}
+			} else {
+				if status.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
+					status.LogdbShardCount != settings.Hard.LogDBPoolSize ||
+					status.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
+					status.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
+					return ErrHardSettingChanged
+				}
 			}
 		}
 	}

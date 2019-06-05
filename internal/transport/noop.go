@@ -38,7 +38,6 @@ type noopRequest struct {
 	mu      sync.Mutex
 	fail    bool
 	blocked bool
-	quota   uint64
 }
 
 func (r *noopRequest) SetToFail(v bool) {

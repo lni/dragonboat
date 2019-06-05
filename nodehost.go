@@ -56,9 +56,20 @@ reads should return the same value or the result of a later write.
 To strictly provide such guarantee, we need to implement the at-most-once
 semantic required by linearizability. For a client, when it retries the proposal
 that failed to complete before its deadline during the previous attempt, it has
-the risk to have the same proposal committed and applied twice into the
-IStateMachine. Dragonboat prevents this by implementing the client session
+the risk to have the same proposal committed and applied twice into the user
+state machine. Dragonboat prevents this by implementing the client session
 concept described in Diego Ongaro's PhD thesis.
+
+NodeHost APIs for making the above mentioned application requests can be loosely
+classified into two categories, synchronous and asynchronous APIs. Synchronous
+APIs which will not return until the completion of the requested operation.
+Their method names all start with Sync*. The asynchronous counterpart of those
+asynchronous APIs, on the other hand, usually return immediately without waiting
+on any signficant delays caused by networking or disk IO. This allows users to
+concurrently initiate multiple such asynchronous operations to save the total
+amount of time required to complete them. Users are free to choose whether they
+prefer to use the synchronous APIs for its simplicity or their asynchronous
+variants for better performance and flexibility.
 
 Dragonboat is a feature complete Multi-Group Raft implementation - snapshotting,
 membership change, leadership transfer, non-voting members and disk based state
@@ -462,27 +473,12 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 	if err != nil {
 		return sm.Result{}, err
 	}
-	select {
-	case s := <-rs.CompletedC:
-		if s.Timeout() {
-			return sm.Result{}, ErrTimeout
-		} else if s.Completed() {
-			rs.Release()
-			return s.GetResult(), nil
-		} else if s.Terminated() {
-			return sm.Result{}, ErrClusterClosed
-		} else if s.Rejected() {
-			return sm.Result{}, ErrInvalidSession
-		}
-		panic("unknown CompletedC value")
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			return sm.Result{}, ErrCanceled
-		} else if ctx.Err() == context.DeadlineExceeded {
-			return sm.Result{}, ErrTimeout
-		}
-		panic("unknown ctx error")
+	result, err := checkRequestState(ctx, rs)
+	if err != nil {
+		return sm.Result{}, err
 	}
+	rs.Release()
+	return result, nil
 }
 
 // SyncRead performs a synchronous linearizable read on the specified Raft
@@ -579,7 +575,7 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 	return client.NewNoOPSession(clusterID, nh.serverCtx.GetRandomSource())
 }
 
-// GetNewSession starts an synchronous proposal to create, register and return
+// GetNewSession starts a synchronous proposal to create, register and return
 // a new client session object. A client session object is used to ensure that
 // a retried proposal, e.g. proposal retried after timeout, will not be applied
 // more than once into the IStateMachine.
@@ -588,10 +584,39 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 // multiple client sessions when you need to concurrently start multiple
 // proposals.
 //
+// Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
+// be removed in v3.1.
+func (nh *NodeHost) GetNewSession(ctx context.Context,
+	clusterID uint64) (*client.Session, error) {
+	return nh.SyncGetSession(ctx, clusterID)
+}
+
+// CloseSession closes the specified client session by unregistering it
+// from the system. This is a synchronous method meaning it will only return
+// after its confirmed completion, failure or timeout.
+//
+// Closed client session should no longer be used in future proposals.
+//
+// Deprecated: Use NodeHost.SyncCloseSession instead. NodeHost.CloseSession will
+// be removed in v3.1.
+func (nh *NodeHost) CloseSession(ctx context.Context,
+	session *client.Session) error {
+	return nh.SyncCloseSession(ctx, session)
+}
+
+// SyncGetSession starts a synchronous proposal to create, register and return
+// a new client session object. A client session object is used to ensure that
+// a retried proposal, e.g. proposal retried after timeout, will not be applied
+// more than once into the state machine.
+//
+// Returned client session instance should not be used concurrently. Use
+// multiple client sessions when you need to concurrently start multiple
+// proposals.
+//
 // Client session is not supported by IOnDiskStateMachine based state machine.
 // NO-OP client session must be used for making proposals on IOnDiskStateMachine
 // based state machine.
-func (nh *NodeHost) GetNewSession(ctx context.Context,
+func (nh *NodeHost) SyncGetSession(ctx context.Context,
 	clusterID uint64) (*client.Session, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
@@ -603,75 +628,49 @@ func (nh *NodeHost) GetNewSession(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	select {
-	case r := <-rs.CompletedC:
-		if r.Completed() && r.GetResult().Value == cs.ClientID {
-			cs.PrepareForPropose()
-			return cs, nil
-		} else if r.Rejected() {
-			return nil, ErrRejected
-		} else if r.Timeout() {
-			return nil, ErrTimeout
-		} else if r.Terminated() {
-			return nil, ErrClusterClosed
-		}
-		plog.Panicf("unknown code value %v, result %d, client id %d",
-			r, r.GetResult(), cs.ClientID)
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			return nil, ErrCanceled
-		} else if ctx.Err() == context.DeadlineExceeded {
-			return nil, ErrTimeout
-		}
+	result, err := checkRequestState(ctx, rs)
+	if err != nil {
+		return nil, err
 	}
-	panic("should never reach here")
+	if result.Value != cs.ClientID {
+		plog.Panicf("unexpected result %d, want %d", result.Value, cs.ClientID)
+	}
+	cs.PrepareForPropose()
+	return cs, nil
 }
 
-// CloseSession closes the specified client session by unregistering it
+// SyncCloseSession closes the specified client session by unregistering it
 // from the system. This is a synchronous method meaning it will only return
 // after its confirmed completion, failure or timeout.
 //
 // Closed client session should no longer be used in future proposals.
-func (nh *NodeHost) CloseSession(ctx context.Context,
-	session *client.Session) error {
+func (nh *NodeHost) SyncCloseSession(ctx context.Context,
+	cs *client.Session) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	session.PrepareForUnregister()
-	rs, err := nh.ProposeSession(session, timeout)
+	cs.PrepareForUnregister()
+	rs, err := nh.ProposeSession(cs, timeout)
 	if err != nil {
 		return err
 	}
-	select {
-	case r := <-rs.CompletedC:
-		if r.Completed() && r.GetResult().Value == session.ClientID {
-			return nil
-		} else if r.Rejected() {
-			return ErrRejected
-		} else if r.Timeout() {
-			return ErrTimeout
-		} else if r.Terminated() {
-			return ErrClusterClosed
-		}
-		plog.Panicf("unknown v code %v, client id %d",
-			r, session.ClientID)
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			return ErrCanceled
-		} else if ctx.Err() == context.DeadlineExceeded {
-			return ErrTimeout
-		}
+	result, err := checkRequestState(ctx, rs)
+	if err != nil {
+		return err
 	}
-	panic("should never reach here")
+	if result.Value != cs.ClientID {
+		plog.Panicf("unexpected result %d, want %d", result.Value, cs.ClientID)
+	}
+	return nil
 }
 
-// Propose starts an asynchronous proposal on the Raft cluster specified in the
+// Propose starts an asynchronous proposal on the Raft cluster specified by the
 // Session object. The input byte slice can be reused for other purposes
 // immediate after the return of this method.
 //
 // This method returns a RequestState instance or an error immediately.
-// Application can wait on the CompleteC member channel of the returned
+// Application can wait on the CompletedC member channel of the returned
 // RequestState instance to get notified for the outcome of the proposal and
 // access to the result of the proposal.
 //
@@ -692,11 +691,11 @@ func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 }
 
 // ProposeSession starts an asynchronous proposal on the specified cluster
-// for client session related operations. Depending on the state of the client
-// session object, the supported operations are for registering or unregistering
-// a client session. Application can select on the CompleteC member channel of
-// the returned RequestState instance to get notified for the completion and
-// result of the proposal.
+// for client session related operations. Depending on the state of the specified
+// client session object, the supported operations are for registering or
+// unregistering a client session. Application can select on the CompletedC
+// member channel of the returned RequestState instance to get notified for the
+// outcome of the operation.
 func (nh *NodeHost) ProposeSession(session *client.Session,
 	timeout time.Duration) (*RequestState, error) {
 	v, ok := nh.getCluster(session.ClusterID)
@@ -713,7 +712,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 
 // ReadIndex starts the asynchronous ReadIndex protocol used for linearizable
 // read on the specified cluster. This method returns a RequestState instance
-// or an error immediately. Application should wait on the CompleteC channel
+// or an error immediately. Application should wait on the CompletedC channel
 // of the returned RequestState object to get notified on the outcome of the
 // ReadIndex operation. On a successful completion, the ReadLocal method can
 // then be invoked to query the state of the IStateMachine or
@@ -788,9 +787,48 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 	return data, err
 }
 
-// RequestSnapshot requests a snapshot to be created for the specified cluster
-// node. For each node, only one pending requested snapshot operation is
-// allowed.
+// SyncRequestSnapshot is the synchronous variant of the RequestSnapshot
+// method. See RequestSnapshot for more details.
+//
+// The input ctx must has deadline set.
+//
+// SyncRequestSnapshot returns the index of the created snapshot or the error
+// encountered.
+func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
+	clusterID uint64, opt SnapshotOption) (uint64, error) {
+	timeout, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rs, err := nh.RequestSnapshot(clusterID, opt, timeout)
+	if err != nil {
+		return 0, err
+	}
+	select {
+	case r := <-rs.CompletedC:
+		if r.Completed() {
+			return r.GetResult().Value, nil
+		} else if r.Rejected() {
+			return 0, ErrRejected
+		} else if r.Timeout() {
+			return 0, ErrTimeout
+		} else if r.Terminated() {
+			return 0, ErrClusterClosed
+		}
+		plog.Panicf("unknown v code %v", r)
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			return 0, ErrCanceled
+		} else if ctx.Err() == context.DeadlineExceeded {
+			return 0, ErrTimeout
+		}
+	}
+	panic("unknown state")
+}
+
+// RequestSnapshot requests a snapshot to be created asynchronously for the
+// specified cluster node. For each node, only one pending requested snapshot
+// operation is allowed.
 //
 // Users can use an option parameter to specify details of the requested
 // snapshot. For example, when the input SnapshotOption's Exported field is
@@ -800,19 +838,22 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 // permanently lose its majority quorum. See the ImportSnapshot method in the
 // tools package for more details.
 //
-// RequestSnapshot returns a SnapshotState instance or an error immediately.
-// Application can wait on the CompleteC member channel of the returned
-// SnapshotState instance to get notified for the outcome of the create snasphot
-// operation and access to the result of the operation.
+// RequestSnapshot returns a RequestState instance or an error immediately.
+// Applications can wait on the CompletedC member channel of the returned
+// RequestState instance to get notified for the outcome of the create snasphot
+// operation. The RequestResult instance returned by the CompletedC channel
+// tells the outcome of the snapshot operation, when successful, the
+// SnapshotIndex method of the returned RequestResult instance reports the index
+// of the created snapshot.
 //
-// Requested create snapshot operation will be rejected if there is already an
-// existing snapshot in the system at the same Raft log index.
+// Requested snapshot operation will be rejected if there is already an existing
+// snapshot in the system at the same Raft log index.
 //
 // When the Exported field of the input SnapshotOption instance is set to false,
 // snapshots created as the result of RequestSnapshot are managed by Dragonboat.
 // Users are not suppose to move, copy, modify or delete the generated snapshot.
 func (nh *NodeHost) RequestSnapshot(clusterID uint64,
-	opt SnapshotOption, timeout time.Duration) (*SnapshotState, error) {
+	opt SnapshotOption, timeout time.Duration) (*RequestState, error) {
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -822,10 +863,68 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	return req, err
 }
 
+// SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode
+// method. See RequestDeleteNode for more details.
+//
+// The input ctx must have its deadline set.
+func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
+	clusterID uint64, nodeID uint64, configChangeIndex uint64) error {
+	timeout, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	rs, err := nh.RequestDeleteNode(clusterID, nodeID, configChangeIndex, timeout)
+	if err != nil {
+		return err
+	}
+	_, err = checkRequestState(ctx, rs)
+	return err
+}
+
+// SyncRequestAddNode is the synchronous variant of the RequestAddNode method.
+// See RequestAddNode for more details.
+//
+// The input ctx must have its deadline set.
+func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
+	clusterID uint64, nodeID uint64,
+	address string, configChangeIndex uint64) error {
+	timeout, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	rs, err := nh.RequestAddNode(clusterID,
+		nodeID, address, configChangeIndex, timeout)
+	if err != nil {
+		return err
+	}
+	_, err = checkRequestState(ctx, rs)
+	return err
+}
+
+// SyncRequestAddObserver is the synchronous variant of the RequestAddObserver
+// method. See RequestAddObserver for more details.
+//
+// The input ctx must have its deadline set.
+func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
+	clusterID uint64, nodeID uint64,
+	address string, configChangeIndex uint64) error {
+	timeout, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	rs, err := nh.RequestAddObserver(clusterID,
+		nodeID, address, configChangeIndex, timeout)
+	if err != nil {
+		return err
+	}
+	_, err = checkRequestState(ctx, rs)
+	return err
+}
+
 // RequestDeleteNode is a Raft cluster membership change method for requesting
 // the specified node to be removed from the specified Raft cluster. It starts
 // an asynchronous request to remove the node from the Raft cluster membership
-// list. Application can wait on the CompleteC member of the returned
+// list. Application can wait on the CompletedC member of the returned
 // RequestState instance to get notified for the outcome.
 //
 // It is not guaranteed that deleted node will automatically close itself and
@@ -854,7 +953,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // RequestAddNode is a Raft cluster membership change method for requesting the
 // specified node to be added to the specified Raft cluster. It starts an
 // asynchronous request to add the node to the Raft cluster membership list.
-// Application can wait on the CompleteC member of the returned RequestState
+// Application can wait on the CompletedC member of the returned RequestState
 // instance to get notified for the outcome.
 //
 // If there is already an observer with the same nodeID in the cluster, it will
@@ -937,12 +1036,50 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	return nil
 }
 
-// RemoveData removes all data associated with the specified node. This method
-// should only be used after the node has been deleted from its Raft cluster.
-// Calling RemoveData on a node that is still a Raft cluster member will corrupt
-// the Raft cluster.
+// SyncRemoveData is the synchronous variant of the RemoveData. It waits for
+// the specified node to be fully unloaded or until the ctx instance is
+// cancelled or timeout.
+//
+// Similar to RemoveData, calling SyncRemoveData on a node that is still a Raft
+// cluster member will corrupt the Raft cluster.
+func (nh *NodeHost) SyncRemoveData(ctx context.Context,
+	clusterID uint64, nodeID uint64) error {
+	n, ok := nh.getCluster(clusterID)
+	if ok && n.nodeID == nodeID {
+		return ErrClusterNotStopped
+	}
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			// TODO (lni):
+			// polling below is not cool
+			if err := nh.RemoveData(clusterID, nodeID); err != nil {
+				if err == ErrClusterNotStopped {
+					continue
+				}
+				panic(err)
+			}
+			return nil
+		case <-ctx.Done():
+			if ctx.Err() == context.Canceled {
+				return ErrCanceled
+			} else if ctx.Err() == context.DeadlineExceeded {
+				return ErrTimeout
+			}
+		}
+	}
+}
+
+// RemoveData tries to remove all data associated with the specified node. This
+// method should only be used after the node has been deleted from its Raft
+// cluster. Calling RemoveData on a node that is still a Raft cluster member
+// will corrupt the Raft cluster.
+//
+// RemoveData returns ErrClusterNotStopped when the specified node has not been
+// fully unloaded from the NodeHost instance.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
-	plog.Infof("RemoveData called on %s", logutil.DescribeNode(clusterID, nodeID))
 	n, ok := nh.getCluster(clusterID)
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
@@ -954,11 +1091,19 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	}
 	plog.Infof("going to remove data that belong to %s",
 		logutil.DescribeNode(clusterID, nodeID))
+	return nh.removeData(clusterID, nodeID)
+}
+
+func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
-		plog.Panicf("failed to remove data from Raft LogDB %v", err)
+		panic(err)
 	}
 	// mark the snapshot dir as removed
-	return nh.serverCtx.RemoveSnapshotDir(nh.deploymentID, clusterID, nodeID)
+	did := nh.deploymentID
+	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+		panic(err)
+	}
+	return nil
 }
 
 // GetNodeUser returns an INodeUser instance ready to be used to directly make
@@ -1025,7 +1170,7 @@ func (nh *NodeHost) propose(s *client.Session,
 	req, err := v.propose(s, cmd, handler, timeout)
 	nh.execEngine.setNodeReady(s.ClusterID)
 	if sampled {
-		nh.execEngine.ProposeDelay(s.ClusterID, st)
+		nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
 	return req, err
 }
@@ -1231,6 +1376,16 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
+	getStreamConn := func(cid uint64, nid uint64) pb.IChunkSink {
+		conn := nh.transport.GetStreamConnection(cid, nid)
+		if conn == nil {
+			return nil
+		}
+		return conn
+	}
+	handleSnapshotStatus := func(cid uint64, nid uint64, failed bool) {
+		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
+	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
 		getSnapshotDirFunc, nh.logdb, stopc)
 	if err := snapshotter.ProcessOrphans(); err != nil {
@@ -1242,7 +1397,9 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
-		nh.execEngine.SetCommitReady,
+		nh.execEngine,
+		getStreamConn,
+		handleSnapshotStatus,
 		nh.sendMessage,
 		queue,
 		stopc,
@@ -1563,6 +1720,30 @@ func (nh *NodeHost) logTransportLatency() {
 		nh.transportLatency.median(), len(nh.transportLatency.samples))
 }
 
+func checkRequestState(ctx context.Context,
+	rs *RequestState) (sm.Result, error) {
+	select {
+	case r := <-rs.CompletedC:
+		if r.Completed() {
+			return r.GetResult(), nil
+		} else if r.Rejected() {
+			return sm.Result{}, ErrRejected
+		} else if r.Timeout() {
+			return sm.Result{}, ErrTimeout
+		} else if r.Terminated() {
+			return sm.Result{}, ErrClusterClosed
+		}
+		plog.Panicf("unknown v code %v", r)
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			return sm.Result{}, ErrCanceled
+		} else if ctx.Err() == context.DeadlineExceeded {
+			return sm.Result{}, ErrTimeout
+		}
+	}
+	panic("should never reach here")
+}
+
 // INodeUser is the interface implemented by a Raft node user type. A Raft node
 // user can be used to directly initiate proposals or read index operations
 // without locating the Raft node in NodeHost's node list first. It is useful
@@ -1602,7 +1783,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 	req, err := nu.node.propose(s, cmd, nil, timeout)
 	nu.setNodeReady(s.ClusterID)
 	if sampled {
-		nu.nh.execEngine.ProposeDelay(s.ClusterID, st)
+		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
 	return req, err
 }

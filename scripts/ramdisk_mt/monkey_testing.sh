@@ -65,10 +65,12 @@ deploy()
     DIR="${TARGETDIR}/test${i}"
     mkdir -p $DIR
     mod=$(($i%10))
-    if [ $mod -ne 0 ]; then
-      cp dragonboat-drummer.json $DIR
-    else
+    if [ $mod -eq 0 ]; then
       cp dragonboat-drummer-no-snapshot.json $DIR/dragonboat-drummer.json
+    elif [ $mod -eq 1 ]; then
+      cp dragonboat-drummer-less-snapshot.json $DIR/dragonboat-drummer.json
+    else
+      cp dragonboat-drummer.json $DIR
     fi
     ln -s $TARGETDIR/bin/porcupine-checker-bin $DIR/porcupine-checker-bin
     ln -s $TARGETDIR/bin/$EXECNAME $DIR/$EXECNAME

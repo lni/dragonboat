@@ -751,10 +751,12 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	m.Snapshot.Filepath = filepath.Join(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
@@ -860,10 +862,12 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
@@ -1073,11 +1077,13 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := newSnapshotChunks(trans.handleRequest,
+	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	os.MkdirAll(snapDir, 0755)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
 	nodes.AddNode(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
