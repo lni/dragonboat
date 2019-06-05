@@ -1377,7 +1377,11 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
 	getStreamConn := func(cid uint64, nid uint64) pb.IChunkSink {
-		return nh.transport.GetStreamConnection(cid, nid)
+		conn := nh.transport.GetStreamConnection(cid, nid)
+		if conn == nil {
+			return nil
+		}
+		return conn
 	}
 	handleSnapshotStatus := func(cid uint64, nid uint64, failed bool) {
 		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
