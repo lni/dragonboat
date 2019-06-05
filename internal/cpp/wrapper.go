@@ -339,9 +339,6 @@ func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	if n != len(session) {
 		return false, 0, io.ErrShortWrite
 	}
-	if meta.Ctx != nil {
-		panic("ctx is not nil")
-	}
 	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	collectionOID := AddManagedObject(collection)

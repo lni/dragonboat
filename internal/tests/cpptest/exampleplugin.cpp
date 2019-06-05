@@ -14,10 +14,8 @@
 
 #include "example.h"
 
-extern "C" CPPRegularStateMachine *CreateDragonboatPluginStateMachine(uint64_t clusterID,
-  uint64_t nodeID)
+extern "C" dragonboat::RegularStateMachine *CreateDragonboatPluginStateMachine(
+  uint64_t clusterID, uint64_t nodeID)
 {
-  CPPRegularStateMachine *cds = new CPPRegularStateMachine;
-  cds->sm = new HelloWorldStateMachine(clusterID, nodeID);
-  return cds;
+  return new HelloWorldStateMachine(clusterID, nodeID);
 }

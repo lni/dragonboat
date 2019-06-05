@@ -28,7 +28,7 @@ import (
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if GetManagedObjectCount() != 0 {
 		t.Errorf("object count not 0")
 	}
@@ -56,7 +56,7 @@ func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
 func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -73,7 +73,7 @@ func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
 func TestOffloadedWorksAsExpected(t *testing.T) {
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -99,7 +99,7 @@ func TestCppStateMachineCanBeUpdated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -110,7 +110,7 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -138,7 +138,7 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -165,7 +165,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 	defer os.Remove(fp)
 	ds := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -205,7 +205,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 	}
 	ds2 := NewStateMachineWrapperFromPlugin(
 		1, 1,
-		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
+		"./dragonboat-cpp-plugin-example.so", pb.RegularStateMachine, nil)
 	if ds2 == nil {
 		t.Errorf("failed to return the data store object")
 	}
