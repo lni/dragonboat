@@ -709,7 +709,7 @@ func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)
 		if batchSupport && allUpdate && allNoOP {
-			if err := s.handleBatchedEntries(input, toApply); err != nil {
+			if err := s.handleBatch(input, toApply); err != nil {
 				return err
 			}
 		} else {
@@ -788,15 +788,18 @@ func (s *StateMachine) onUpdateApplied(ent pb.Entry,
 	}
 }
 
-func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) error {
+func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	if len(ents) != 0 {
 		panic("ents is not empty")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	skipped := 0
 	for _, ent := range input {
 		if !s.entryAppliedInDiskSM(ent.Index) {
 			ents = append(ents, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+		} else {
+			skipped++
 		}
 		s.updateLastApplied(ent.Index, ent.Term)
 	}
@@ -806,8 +809,12 @@ func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) e
 			return err
 		}
 		for idx, ent := range results {
-			last := idx == len(input)-1
-			s.onUpdateApplied(input[idx], ent.Result, false, false, last)
+			ce := input[skipped+idx]
+			if ce.Index != ent.Index {
+				plog.Panicf("alignment error, %d, %d, %d", ce.Index, ent.Index, skipped)
+			}
+			last := ce.Index == input[len(input)-1].Index
+			s.onUpdateApplied(ce, ent.Result, false, false, last)
 		}
 	}
 	if len(input) > 0 {

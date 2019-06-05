@@ -1715,7 +1715,7 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 			sm:          msm,
 			node:        newTestNodeProxy(),
 		}
-		if err := sm.handleBatchedEntries(input, ents); err != nil {
+		if err := sm.handleBatch(input, ents); err != nil {
 			t.Fatalf("handle batched entries failed %v", err)
 		}
 		if msm.first != tt.firstApplied {
