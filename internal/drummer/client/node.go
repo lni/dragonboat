@@ -137,7 +137,7 @@ func (dnh *NodeHostClient) reportWorker(ctx context.Context) {
 
 func (dnh *NodeHostClient) reportNodeHostInfo(ctx context.Context,
 	plogIncluded bool) error {
-	nhi := dnh.nh.GetNodeHostInfo()
+	nhi := dnh.nh.GetNodeHostInfo(dragonboat.DefaultNodeHostInfoOption)
 	if !plogIncluded {
 		nhi.LogInfo = []raftio.NodeInfo{}
 	}
