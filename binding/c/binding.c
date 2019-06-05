@@ -80,13 +80,13 @@ void CStopNodeHost(uint64_t oid)
   StopNodeHost(oid);
 }
 
-//int CNodeHostStartCluster(uint64_t oid,
-//  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-//  Bool join, DBString pluginFilename, RaftConfig cfg)
-//{
-//  return NodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-//    join, pluginFilename, cfg);
-//}
+int CNodeHostStartClusterFromPlugin(uint64_t oid,
+  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+  Bool join, DBString pluginFile, int32_t smType, RaftConfig cfg)
+{
+  return NodeHostStartClusterFromPlugin(oid, nodeIDList, nodeAddressList,
+    nodeListLen, join, pluginFile, smType, cfg);
+}
 
 int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
@@ -99,6 +99,11 @@ int CNodeHostStartCluster(uint64_t oid,
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID)
 {
   return NodeHostStopCluster(oid, clusterID);
+}
+
+int CNodeHostStopNode(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
+{
+  return NodeHostStopNode(oid, clusterID, nodeID);
 }
 
 NewSessionResult CNodeHostGetNewSession(uint64_t oid,
@@ -212,6 +217,11 @@ GetLeaderIDResult CNodeHostGetLeaderID(uint64_t oid, uint64_t clusterID)
   result.valid = r.r1;
   result.errcode = r.r2;
   return result;
+}
+
+int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
+{
+  return NodeHostRemoveData(oid, clusterID, nodeID);
 }
 
 ProposeResult CNodeHostProposeSession(uint64_t oid, uint64_t timeout,

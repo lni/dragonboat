@@ -47,6 +47,9 @@ using ClusterID = uint64_t;
 // UpdateResult is the result code returned by the Update method of the
 // replicated state machine.
 using UpdateResult = uint64_t;
+// SnapshotResultIndex is the result index of the SnapshotResult included in
+// SnapshotState
+using SnapshotResultIndex = uint64_t;
 // Milliseconds is the number of milliseconds usually used for timeout settings
 using Milliseconds = std::chrono::milliseconds;
 
@@ -315,6 +318,7 @@ struct RWResult
   ResultCode code;
   // for proposals, this is the result value returned by the Update method of
   // your data store.
+  // for snapshots, this is the result index value of the saved snapshot
   uint64_t result;
 };
 
@@ -368,6 +372,8 @@ class NodeHost : public ManagedObject
  public:
   explicit NodeHost(const NodeHostConfig &config) noexcept;
   ~NodeHost();
+
+  NodeHostConfig GetNodeHostConfig() const noexcept;
   // Stop stops this NodeHost instance including all its managed clusters.
   void Stop() noexcept;
   // StartCluster adds the specified Raft cluster node to the NodeHost and
@@ -388,9 +394,9 @@ class NodeHost : public ManagedObject
   //    the intialPeers instance will be ignored by the system
   //  - joining a new node to an existing Raft cluster, set join to true and
   //    leave replicas empty
-  // FIXME: remove plugin based statemachine for now
-  // Status StartCluster(const Peers& replicas,
-  //   bool join, std::string pluginFilepath, Config config) noexcept;
+  Status StartCluster(const Peers& replicas,
+    bool join, std::string pluginFile, StateMachineType smType,
+    Config config) noexcept;
 
   Status StartCluster(const Peers& replicas, bool join,
     RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
@@ -405,6 +411,10 @@ class NodeHost : public ManagedObject
   // StopCluster makes the specified node no longer managed by the NodeHost
   // instance, it won't do any membership change to the raft cluster itself.
   Status StopCluster(ClusterID clusterID) noexcept;
+  // StopNode removes the specified cluster node from NodeHost. Note that
+  // StopNode makes the specified node no longer managed by the NodeHost
+  // instance, it won't do any membership change to the raft cluster itself.
+  Status StopNode(ClusterID clusterID, NodeID nodeID) noexcept;
   // GetNoOPSession returns a NOOP client session ready to be used for
   // making proposals. The NOOP client session is a dummy client session that
   // will not be enforced. The returned client Session instance is owned by the
@@ -476,6 +486,22 @@ class NodeHost : public ManagedObject
   Status ReadLocal(ClusterID clusterID,
     const Byte *query, size_t queryLen,
     Byte *result, size_t resultLen, size_t *written) noexcept;
+  // TODO: implemnt StaleRead sync
+  Status StaleRead(ClusterID clusterID, const Buffer &query,
+    Buffer *result) noexcept;
+  Status StaleRead(ClusterID clusterID,
+    const Byte *query, size_t queryLen,
+    Byte *result, size_t resultLen, size_t *written) noexcept;
+  // TODO: implement RequestSnapshot sync&async
+  Status SyncRequestSnapshot(ClusterID clusterID, SnapshotResultIndex *result,
+    Milliseconds timeout) noexcept;
+  Status RequestSnapshot(ClusterID clusterID, Event *event,
+    Milliseconds timeout) noexcept;
+  // TODO: implement ExportSnapshot sync&async
+  Status SyncExportSnapshot(ClusterID clusterID, SnapshotResultIndex *result,
+    std::string path, Milliseconds timeout) noexcept;
+  Status ExportSnapshot(ClusterID clusterID, Event *event,
+    std::string path, Milliseconds timeout) noexcept;
   // ProposeSession makes a asynchronous proposal on the specified cluster
   // for client session related operation. Depending on the state of the client
   // session object, the supported operations are for registering or
@@ -491,6 +517,7 @@ class NodeHost : public ManagedObject
   // regular node with voting power. After the node is successfully added to
   // the Raft cluster, it is application's responsibility to call StartCluster
   // on the right NodeHost instance to actually start the cluster node.
+  // TODO: implement async
   Status AddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // RemoveNode makes a synchronous proposal to make a raft membership change
@@ -499,6 +526,7 @@ class NodeHost : public ManagedObject
   // removed from its managing NodeHost instance. It is application's
   // responsibility to call StopCluster on the right nodehost instance to
   // actually have the cluster node removed from the managing nodehost.
+  // TODO: implement async
   Status RemoveNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
   // AddObserver makes a synchronous proposal to make a raft membership change
@@ -510,6 +538,7 @@ class NodeHost : public ManagedObject
   // NodeHost instance to actually start the observer instance. An observer can
   // be promoted to a regular node with voting power by calling AddNode on the
   // same NodeID.
+  // TODO: implement async
   Status AddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node
@@ -526,8 +555,10 @@ class NodeHost : public ManagedObject
   // GetLeaderID gets the leader ID of the specified cluster based on local
   // node's current knowledge.
   Status GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept;
+  Status RemoveData(ClusterID clusterID, NodeID nodeID) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(NodeHost);
+  const NodeHostConfig &config_;
 };
 
 class IOServiceHandler;

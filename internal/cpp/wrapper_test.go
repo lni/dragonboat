@@ -17,17 +17,18 @@ package cpp
 import (
 	"bytes"
 	"encoding/binary"
-	"os"
-	"testing"
-
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/tests/kvpb"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	pb "github.com/lni/dragonboat/raftpb"
+	"os"
+	"testing"
 )
 
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if GetManagedObjectCount() != 0 {
 		t.Errorf("object count not 0")
 	}
@@ -53,23 +54,26 @@ func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
 }
 
 func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	ds.(*StateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
-	ds.(*StateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
-	ds.(*StateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
-	ds.(*StateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
-	ds.(*StateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
-	if !ds.(*StateMachineWrapper).ReadyToDestroy() {
-		t.Errorf("destroyed: %t, want true", ds.(*StateMachineWrapper).ReadyToDestroy())
+	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
+	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
+	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
+	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	if !ds.(*RegularStateMachineWrapper).ReadyToDestroy() {
+		t.Errorf("destroyed: %t, want true", ds.(*RegularStateMachineWrapper).ReadyToDestroy())
 	}
 }
 
 func TestOffloadedWorksAsExpected(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -84,29 +88,33 @@ func TestOffloadedWorksAsExpected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		ds.Offloaded(tt.val)
-		if ds.(*StateMachineWrapper).Destroyed() != tt.destroyed {
+		if ds.(*RegularStateMachineWrapper).Destroyed() != tt.destroyed {
 			t.Errorf("ds.destroyed %t, want %t",
-				ds.(*StateMachineWrapper).Destroyed(), tt.destroyed)
+				ds.(*RegularStateMachineWrapper).Destroyed(), tt.destroyed)
 		}
 	}
 }
 
 func TestCppStateMachineCanBeUpdated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds.(*StateMachineWrapper).destroy()
+	defer ds.(*RegularStateMachineWrapper).destroy()
 }
 
 func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds.(*StateMachineWrapper).destroy()
+	defer ds.(*RegularStateMachineWrapper).destroy()
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
@@ -128,11 +136,13 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 
 func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds.(*StateMachineWrapper).destroy()
+	defer ds.(*RegularStateMachineWrapper).destroy()
 	k := "test-key"
 	d := "test-value"
 	kv := kvpb.PBKV{
@@ -151,11 +161,13 @@ func TestCppSnapshotWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
 	defer os.Remove(fp)
-	ds := NewStateMachineWrapper(1, 1, "example", nil)
+	ds := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds.(*StateMachineWrapper).destroy()
+	defer ds.(*RegularStateMachineWrapper).destroy()
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
@@ -189,11 +201,13 @@ func TestCppSnapshotWorks(t *testing.T) {
 	if uint64(fi.Size()) != sz {
 		t.Errorf("sz %d, want %d", fi.Size(), sz)
 	}
-	ds2 := NewStateMachineWrapper(1, 1, "example", nil)
+	ds2 := NewStateMachineWrapperFromPlugin(
+		1, 1,
+		"dragonboat-cpp-regular", pb.RegularStateMachine, nil)
 	if ds2 == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds2.(*StateMachineWrapper).destroy()
+	defer ds2.(*RegularStateMachineWrapper).destroy()
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
 		t.Fatalf("%v", err)

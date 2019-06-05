@@ -27,10 +27,15 @@ typedef struct CPPConcurrentStateMachine CPPConcurrentStateMachine;
 typedef struct CPPOnDiskStateMachine CPPOnDiskStateMachine;
 typedef struct CollectedFiles CollectedFiles;
 
-// FIXME: remove plugin based statemachine for now
-// int IsValidDragonboatPlugin(char *soFilename);
-// CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
-//   uint64_t nodeID, char *soFilename);
+// for wrapper_test.go use only
+void *LoadFactoryFromPlugin(char *soFilename);
+CPPRegularStateMachine *CreateDBRegularStateMachineFromPlugin(
+  uint64_t clusterID, uint64_t nodeID, char *soFilename);
+CPPConcurrentStateMachine *CreateDBConcurrentStateMachineFromPlugin(
+  uint64_t clusterID, uint64_t nodeID, char *soFilename);
+CPPOnDiskStateMachine *CreateDBOnDiskStateMachineFromPlugin(
+  uint64_t clusterID, uint64_t nodeID, char *soFilename);
+
 CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
   uint64_t nodeID, void *factory);
 void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds);

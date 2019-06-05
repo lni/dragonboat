@@ -27,7 +27,7 @@ class InPlaceHelloWorldStateMachine : public dragonboat::RegularStateMachine
 {
   public:
     InPlaceHelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept
-    : dragonboat::RegularStateMachine(clusterID, nodeID), update_count_(0) {}
+      : dragonboat::RegularStateMachine(clusterID, nodeID), update_count_(0) {}
 
     ~InPlaceHelloWorldStateMachine() {}
   protected:
@@ -994,3 +994,107 @@ TEST_F(NodeHostTest, ObserverCanReadIndex)
   s = nh2_->SyncRead(1, query, &result, timeout);
   EXPECT_TRUE(s.OK());
 }
+#if 0
+class FakeConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
+{
+ public:
+  FakeConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept
+    : dragonboat::ConcurrentStateMachine(clusterID, nodeID) {}
+
+  ~FakeConcurrentStateMachine() {}
+ protected:
+  uint64_t update(const Byte *data, size_t size) noexcept
+  {
+  }
+
+  LookupResult lookup(const Byte *data, size_t size) const noexcept
+  {
+  }
+
+  uint64_t getHash() const noexcept
+  {
+  }
+
+  PrepareSnapshotResult prepareSnapshot() const noexcept
+  {
+  }
+
+  SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, SnapshotFileCollection *collection,
+    const DoneChan &done) const noexcept
+  {
+  }
+
+  int recoverFromSnapshot(SnapshotReader *reader,
+    const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
+  {
+  }
+
+  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept
+  {
+  }
+
+  void freeLookupResult(LookupResult r) noexcept
+  {
+  }
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(FakeConcurrentStateMachine);
+}
+
+// TODO: add ConcurrentStateMachine tests
+
+class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine
+{
+ public:
+  FakeOnDiskStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept
+    : dragonboat::OnDiskStateMachine(clusterID, nodeID) {}
+
+  ~FakeOnDiskStateMachine() {}
+ protected:
+  OpenResult open(const DoneChan &done) noexcept
+  {
+  }
+
+  uint64_t update(const Byte *data, size_t size) noexcept
+  {
+  }
+
+  LookupResult lookup(const Byte *data, size_t size) const noexcept
+  {
+  }
+
+  int sync() const noexcept
+  {
+  }
+
+  uint64_t getHash() const noexcept
+  {
+  }
+
+  PrepareSnapshotResult prepareSnapshot() const noexcept
+  {
+  }
+
+  SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+    SnapshotWriter *writer, const DoneChan &done) const noexcept
+  {
+  }
+
+  int recoverFromSnapshot(SnapshotReader *reader,
+    const DoneChan &done) noexcept
+  {
+  }
+
+  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept
+  {
+  }
+
+  void freeLookupResult(LookupResult r) noexcept
+  {
+  }
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(FakeOnDiskStateMachine);
+}
+
+// TODO: add OnDiskStateMachine tests
+#endif

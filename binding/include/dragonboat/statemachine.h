@@ -44,7 +44,6 @@ using SnapshotFile = struct SnapshotFile;
 // for creating your state machine instance, your state machine implementation
 // should be linked as a .so dynamic library.
 //
-// FIXME: remove plugin based statemachine for now
 // extern "C" CPPStateMachine *CreateDragonboatPluginStateMachine()
 //
 // Generated .so file should following the following naming convention where

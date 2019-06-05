@@ -100,6 +100,14 @@ func getRequestState(oid uint64) *dragonboat.RequestState {
 	return v.(*dragonboat.RequestState)
 }
 
+func getSnapshotState(oid uint64) *dragonboat.SnapshotState {
+	v, ok := getManagedObject(oid)
+	if !ok {
+		panic("snapshot state not found")
+	}
+	return v.(*dragonboat.SnapshotState)
+}
+
 // GetManagedObjectCount returns the count of the managed object.
 //export GetManagedObjectCount
 func GetManagedObjectCount() uint64 {
@@ -250,7 +258,7 @@ func StopNodeHost(oid uint64) {
 	nh.Stop()
 }
 
-// NodeHostStartClusterFromFactory adds a new raft cluster node to be managed by the
+// NodeHostStartCluster adds a new raft cluster node to be managed by the
 // specified NodeHost and start the node to make it ready to accept incoming
 // requests.
 //export NodeHostStartCluster
@@ -258,12 +266,21 @@ func NodeHostStartCluster(oid uint64, nodeIDList *C.uint64_t,
 	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
 	factory unsafe.Pointer, smType int32, cfg C.RaftConfig) int {
 	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-		joinPeer, factory, smType, cfg)
+		joinPeer, factory, C.DBString{}, smType, cfg)
+}
+
+// NodeHostStartClusterFromPlugin
+//export NodeHostStartClusterFromPlugin
+func NodeHostStartClusterFromPlugin(oid uint64, nodeIDList *C.uint64_t,
+	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
+	pluginFile C.DBString, smType int32, cfg C.RaftConfig) int {
+	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList,
+		nodeListLen, joinPeer, unsafe.Pointer(nil), pluginFile, smType, cfg)
 }
 
 func nodeHostStartCluster(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, factory unsafe.Pointer, smType int32,
+	joinPeer C.char, factory unsafe.Pointer, pluginFile C.DBString, smType int32,
 	cfg C.RaftConfig) int {
 	c := config.Config{
 		NodeID:              uint64(cfg.NodeID),
@@ -294,7 +311,14 @@ func nodeHostStartCluster(oid uint64,
 	}
 	nh := getNodeHost(oid)
 	var err error
-	err = nh.StartClusterUsingFactory(peers, join, factory, smType, c)
+	if factory != unsafe.Pointer(nil) {
+		err = nh.StartClusterUsingFactory(peers, join, factory, smType, c)
+	} else if (pluginFile != C.DBString{}) {
+		err = nh.StartClusterUsingPlugin(peers, join,
+			charArrayToString(pluginFile.str, pluginFile.len), smType, c)
+	} else {
+		panic("both factory and pluginFile are nil")
+	}
 	return getErrorCode(err)
 }
 
@@ -304,6 +328,15 @@ func nodeHostStartCluster(oid uint64,
 func NodeHostStopCluster(oid uint64, clusterID uint64) int {
 	nh := getNodeHost(oid)
 	err := nh.StopCluster(clusterID)
+	return getErrorCode(err)
+}
+
+// NodeHostStopNode removes the specified raft cluster node from the
+// NodeHost and stops the running node.
+//export NodeHostStopNode
+func NodeHostStopNode(oid uint64, clusterID uint64, nodeID uint64) int {
+	nh := getNodeHost(oid)
+	err := nh.StopNode(clusterID, nodeID)
 	return getErrorCode(err)
 }
 
@@ -521,6 +554,28 @@ func NodeHostReadLocal(oid uint64,
 	return getErrorCode(err), len(r)
 }
 
+// TODO: NodeHostStaleRead
+//export NodeHostStaleRead
+func NodeHostStaleRead(oid uint64,
+	clusterID uint64, queryBuf *C.uchar, queryLen C.size_t,
+	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
+	return 0, 0
+}
+
+// TODO: SyncRequestSnapshot, return ManagedObject
+//export NodeHostSyncRequestSnapshot
+func NodeHostSyncRequestSnapshot(oid uint64,
+	clusterID uint64, timeout uint64) (uint64, int) {
+	return 0, 0
+}
+
+// TODO: RequestSnapshot, return ManagedObject
+//export NodeHostRequestSnapshot
+func NodeHostRequestSnapshot(oid uint64,
+	clusterID uint64, timeout uint64) (uint64, int) {
+	return 0, 0
+}
+
 // NodeHostRequestAddNode requests the specified new node to be added to the
 // specified raft cluster.
 //export NodeHostRequestAddNode
@@ -606,4 +661,13 @@ func NodeHostGetLeaderID(oid uint64, clusterID uint64) (uint64, bool, int) {
 	nh := getNodeHost(oid)
 	leaderID, valid, err := nh.GetLeaderID(clusterID)
 	return leaderID, valid, getErrorCode(err)
+}
+
+// NodeHostRemoveData removes the data of the specified cluster.
+// should be called after remove node
+//export NodeHostRemoveData
+func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
+	nh := getNodeHost(oid)
+	err := nh.RemoveData(clusterID, nodeID)
+	return getErrorCode(err)
 }

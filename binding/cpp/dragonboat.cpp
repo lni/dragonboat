@@ -305,7 +305,7 @@ void Session::ClearPrepareForProposal() noexcept
 }
 
 NodeHost::NodeHost(const NodeHostConfig &c) noexcept
-  : ManagedObject(0)
+  : ManagedObject(0), config_(c)
 {
   ::NodeHostConfig cfg;
   cfg.DeploymentID = c.DeploymentID;
@@ -323,23 +323,29 @@ NodeHost::NodeHost(const NodeHostConfig &c) noexcept
 
 NodeHost::~NodeHost() {}
 
+NodeHostConfig NodeHost::GetNodeHostConfig() const noexcept
+{
+  return config_;
+}
+
 void NodeHost::Stop() noexcept
 {
   CStopNodeHost(oid_);
 }
 
-//Status NodeHost::StartCluster(const Peers& peers,
-//  bool join, std::string pluginFilename, Config config) noexcept
-//{
-//  ::RaftConfig cfg;
-//  parseConfig(config, cfg);
-//  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
-//  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
-//  parsePeers(peers, strs.get(), nodeIDList.get());
-//  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-//    peers.Len(), join, toDBString(pluginFilename), cfg);
-//  return Status(code);
-//}
+Status NodeHost::StartCluster(const Peers& peers,
+  bool join, std::string pluginFile, StateMachineType smType,
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartClusterFromPlugin(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, toDBString(pluginFile), smType, cfg);
+  return Status(code);
+}
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
   RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
@@ -389,6 +395,11 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
 Status NodeHost::StopCluster(ClusterID clusterID) noexcept
 {
   return Status(CNodeHostStopCluster(oid_, clusterID));
+}
+
+Status NodeHost::StopNode(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return Status(CNodeHostStopNode(oid_, clusterID, nodeID));
 }
 
 Session *NodeHost::GetNoOPSession(ClusterID clusterID) noexcept
@@ -519,6 +530,43 @@ Status NodeHost::ReadLocal(ClusterID clusterID,
   return Status(code);
 }
 
+Status NodeHost::StaleRead(ClusterID clusterID, const Buffer &query,
+  Buffer *result) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::StaleRead(ClusterID clusterID,
+  const Byte *query, size_t queryLen,
+  Byte *result, size_t resultLen, size_t *written) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::SyncRequestSnapshot(ClusterID clusterID,
+  SnapshotResultIndex *result, Milliseconds timeout) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::RequestSnapshot(ClusterID clusterID,
+  Event *event, Milliseconds timeout) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::SyncExportSnapshot(ClusterID clusterID,
+  SnapshotResultIndex *result, std::string path, Milliseconds timeout) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::ExportSnapshot(ClusterID clusterID,
+  Event *event, std::string path, Milliseconds timeout) noexcept
+{
+  return Status(-1);
+}
+
 Status NodeHost::ProposeSession(Session *cs,
   Milliseconds timeout, Event *event) noexcept
 {
@@ -611,6 +659,11 @@ Status NodeHost::GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept
   GetLeaderIDResult r = CNodeHostGetLeaderID(oid_, clusterID);
   leaderID->SetLeaderID(r.nodeID, r.valid);
   return Status(r.errcode);
+}
+
+Status NodeHost::RemoveData(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return Status(CNodeHostRemoveData(oid_, clusterID, nodeID));
 }
 
 IOServiceHandler *RunIOServiceInGoRuntime(IOService* iosp,

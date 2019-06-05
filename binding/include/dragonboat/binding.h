@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-enum
+enum StateMachineType
 {
   // StateMachine type, the same as the StateMachineType int raftpb/raft.pb.go
   UNKNOWN_STATEMACHINE = 0,
@@ -95,6 +95,7 @@ enum ErrorCode
   ErrResultBufferTooSmall = -15,
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
+  ErrClusterNotStopped = -18,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is
@@ -245,13 +246,14 @@ int CSelectOnRequestStateForMembershipChange(uint64_t rsoid);
 void CSessionProposalCompleted(uint64_t csoid);
 uint64_t CNewNodeHost(NodeHostConfig cfg);
 void CStopNodeHost(uint64_t oid);
-//int CNodeHostStartCluster(uint64_t oid,
-//  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-//  Bool join, DBString pluginFilename, RaftConfig cfg);
+int CNodeHostStartClusterFromPlugin(uint64_t oid,
+  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+  Bool join, DBString pluginFile, int32_t smType, RaftConfig cfg);
 int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
   Bool join, void *factory, int32_t smType, RaftConfig cfg);
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID);
+int CNodeHostStopNode(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 NewSessionResult CNodeHostGetNewSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);
 int CNodeHostCloseSession(uint64_t oid,
@@ -283,6 +285,7 @@ ReadIndexResult CNodeHostReadIndex(uint64_t oid, uint64_t timeout,
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
+int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 
 #ifdef __cplusplus
 }

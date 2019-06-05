@@ -165,21 +165,18 @@ func getSnapshotErrorFromErrNo(errno int) error {
 	return fmt.Errorf("snapshot error with errno %d", errno)
 }
 
-// NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
-// instance.
-// func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
-// 	dsname string, done <-chan struct{}) rsm.IManagedStateMachine {
-// 	cClusterID := C.uint64_t(clusterID)
-// 	cNodeID := C.uint64_t(nodeID)
-// 	cDSName := C.CString(getCPPSOFileName(dsname))
-// 	defer C.free(unsafe.Pointer(cDSName))
-// 	return &StateMachineWrapper{
-// 		dataStore: C.CreateDBStateMachine(cClusterID, cNodeID, cDSName),
-// 		done:      done,
-// 	}
-// }
+// NewStateMachineWrapperFromPlugin creates and returns the new plugin based
+// NewStateMachineWrapper instance.
+func NewStateMachineWrapperFromPlugin(clusterID uint64, nodeID uint64,
+	dsname string, smType pb.StateMachineType,
+	done <-chan struct{}) rsm.IManagedStateMachine {
+	cDSName := C.CString(dsname)
+	defer C.free(unsafe.Pointer(cDSName))
+	factory := unsafe.Pointer(C.LoadFactoryFromPlugin(cDSName))
+	return NewStateMachineWrapper(clusterID, nodeID, factory, smType, done)
+}
 
-// NewStateMachineFromFactoryWrapper creates and returns the new NewStateMachineWrapper
+// NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
 // instance.
 func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
 	factory unsafe.Pointer, smType pb.StateMachineType,
@@ -325,7 +322,6 @@ func (ds *RegularStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 // StreamSnapshot streams the snapshot to the remote node.
 func (ds *RegularStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
-	// TODO
 	panic("StreamSnapshot not suppose to be called on RegularStateMachineWrapper")
 }
 
@@ -574,8 +570,7 @@ func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(index uint64,
 
 func (ds *ConcurrentStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
-	// TODO
-	panic("implement me")
+	panic("StreamSnapshot not suppose to be called on ConcurrentStateMachineWrapper")
 }
 
 func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) {
@@ -808,8 +803,30 @@ func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(index uint64,
 
 func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
-	// TODO
-	panic("implement me")
+	if !ds.opened {
+		panic("StreamSnapshot called when not opened")
+	}
+	ds.ensureNotDestroyed()
+	writerOID := AddManagedObject(writer)
+	doneChOID := AddManagedObject(ds.done)
+	defer func() {
+		RemoveManagedGoObject(writerOID)
+		RemoveManagedGoObject(doneChOID)
+	}()
+	var dp *C.uchar
+	ssctxb := ssctx.([]byte)
+	if len(ssctxb) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&ssctxb[0]))
+	}
+	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, dp,
+		C.size_t(len(ssctxb)), C.uint64_t(writerOID), C.uint64_t(doneChOID))
+	errno := int(r.errcode)
+	err := getSnapshotErrorFromErrNo(errno)
+	if err != nil {
+		plog.Errorf("stream snapshot failed, %v", err)
+		// FIXME: writer.failed = true
+	}
+	return err
 }
 
 func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) {

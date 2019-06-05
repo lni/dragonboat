@@ -85,16 +85,18 @@ func (nh *NodeHost) ProposeSessionCH(s *client.Session,
 // specify the factory function used for creating the IStateMachine instance,
 // StartClusterUsingPlugin requires the full path of the CPP plugin you want
 // the Raft cluster to use.
-// func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
-// 	join bool, pluginFilename string, config config.Config) error {
-// 	stopc := make(chan struct{})
-// 	appName := fileutil.GetAppNameFromFilename(pluginFilename)
-// 	cf := func(clusterID uint64, nodeID uint64,
-// 		done <-chan struct{}) rsm.IManagedStateMachine {
-// 		return cpp.NewStateMachineWrapper(clusterID, nodeID, appName, done)
-// 	}
-// 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
-// }
+func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
+	join bool, pluginFile string, smType int32, config config.Config) error {
+	stopc := make(chan struct{})
+	// appName := fileutil.GetAppNameFromFilename(pluginFile)
+	cf := func(clusterID uint64, nodeID uint64,
+		done <-chan struct{}) rsm.IManagedStateMachine {
+		return cpp.NewStateMachineWrapperFromPlugin(clusterID, nodeID,
+			pluginFile, pb.StateMachineType(smType), done)
+	}
+	return nh.startCluster(nodes,
+		join, cf, stopc, config, pb.StateMachineType(smType))
+}
 
 // StartClusterUsingFactory adds a new cluster node to the NodeHost and start
 // running the new node. StartClusterUsingFactory requires the pointer to CPP
@@ -104,8 +106,8 @@ func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string, join bool,
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		return cpp.NewStateMachineWrapper(clusterID,
-			nodeID, factory, pb.StateMachineType(smType), done)
+		return cpp.NewStateMachineWrapper(clusterID, nodeID,
+			factory, pb.StateMachineType(smType), done)
 	}
 	return nh.startCluster(nodes,
 		join, cf, stopc, config, pb.StateMachineType(smType))
