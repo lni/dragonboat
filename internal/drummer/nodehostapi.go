@@ -91,7 +91,7 @@ func (api *NodehostAPI) supportRegularSession(clusterID uint64) (bool, error) {
 	if ok {
 		return v, nil
 	}
-	nhi := api.nh.GetNodeHostInfo()
+	nhi := api.nh.GetNodeHostInfo(dragonboat.DefaultNodeHostInfoOption)
 	for _, ci := range nhi.ClusterInfoList {
 		api.supportCS[clusterID] = ci.StateMachineType != sm.OnDiskStateMachine
 	}

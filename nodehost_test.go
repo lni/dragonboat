@@ -1279,7 +1279,7 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 
 func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
-		nhi := nh.GetNodeHostInfo()
+		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
 			if ci.ClusterID == 1 {
 				if ci.StateMachineType != sm.OnDiskStateMachine {
@@ -1504,7 +1504,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 	clusterID := 1 + taskWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
-		nhi := nh.GetNodeHostInfo()
+		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
 			if ci.ClusterID == clusterID {
 				if ci.StateMachineType != sm.ConcurrentStateMachine {
@@ -1553,7 +1553,7 @@ func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 	failed := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
-		nhi := nh.GetNodeHostInfo()
+		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
 			if ci.ClusterID == 1 {
 				if ci.StateMachineType != sm.RegularStateMachine {
@@ -1753,7 +1753,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			t.Errorf("failed to start observer %v", err)
 		}
 		for i := 0; i < 10000; i++ {
-			nhi := nh2.GetNodeHostInfo()
+			nhi := nh2.GetNodeHostInfo(DefaultNodeHostInfoOption)
 			for _, ci := range nhi.ClusterInfoList {
 				if ci.Pending {
 					continue
@@ -2712,4 +2712,37 @@ func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
 	defer nh.Stop()
+}
+
+func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
+	tf := func(t *testing.T, nh1 *NodeHost) {
+		nhi := nh1.GetNodeHostInfo(DefaultNodeHostInfoOption)
+		if len(nhi.ClusterInfoList) != 1 {
+			t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
+		}
+		if nhi.ClusterInfoList[0].ClusterID != 2 {
+			t.Fatalf("unexpected cluster id")
+		}
+		if !nhi.ClusterInfoList[0].IsLeader {
+			t.Errorf("not leader")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := nh1.SyncRequestAddNode(ctx, 2, 2, "noidea:8080", 0); err != nil {
+			t.Fatalf("failed to add node %v", err)
+		}
+		for i := 0; i < 500; i++ {
+			nhi := nh1.GetNodeHostInfo(DefaultNodeHostInfoOption)
+			if len(nhi.ClusterInfoList) != 1 {
+				t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
+			}
+			if nhi.ClusterInfoList[0].IsLeader {
+				time.Sleep(20 * time.Millisecond)
+			} else {
+				return
+			}
+		}
+		t.Fatalf("no leader info change")
+	}
+	singleNodeHostTest(t, tf)
 }

@@ -189,6 +189,17 @@ type NodeHostInfo struct {
 	LogInfo []raftio.NodeInfo
 }
 
+// NodeHostInfoOption is the option type used when querying NodeHostInfo.
+type NodeHostInfoOption struct {
+	// SkipLogInfo is the boolean flag indicating whether Raft Log info should be
+	// skipped when querying NodeHostInfo.
+	SkipLogInfo bool
+}
+
+// DefaultNodeHostInfoOption is the default NodeHostInfoOption value. It
+// requests the GetNodeHostInfo method to return all supported info.
+var DefaultNodeHostInfoOption NodeHostInfoOption
+
 // SnapshotOption is the options users can specify when requesting a snapshot
 // to be generated.
 type SnapshotOption struct {
@@ -1139,17 +1150,19 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 // GetNodeHostInfo returns a NodeHostInfo instance that contains all details
 // of the NodeHost, this includes details of all Raft clusters managed by the
 // the NodeHost instance.
-func (nh *NodeHost) GetNodeHostInfo() *NodeHostInfo {
-	clusterInfoList := nh.getClusterInfo()
-	plogInfo, err := nh.logdb.ListNodeInfo()
-	if err != nil {
-		plog.Panicf("failed to list all logs on logdb %v", err)
-	}
-	return &NodeHostInfo{
+func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
+	nhi := &NodeHostInfo{
 		RaftAddress:     nh.RaftAddress(),
-		ClusterInfoList: clusterInfoList,
-		LogInfo:         plogInfo,
+		ClusterInfoList: nh.getClusterInfo(),
 	}
+	if !opt.SkipLogInfo {
+		logInfo, err := nh.logdb.ListNodeInfo()
+		if err != nil {
+			plog.Panicf("failed to list all logs %v", err)
+		}
+		nhi.LogInfo = logInfo
+	}
+	return nhi
 }
 
 func (nh *NodeHost) propose(s *client.Session,
