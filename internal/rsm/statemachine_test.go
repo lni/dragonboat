@@ -65,6 +65,8 @@ type testNodeProxy struct {
 	addObserver        bool
 	addObserverCount   uint64
 	nodeReady          uint64
+	applyUpdateCalled  bool
+	firstIndex         uint64
 }
 
 func newTestNodeProxy() *testNodeProxy {
@@ -79,6 +81,10 @@ func (p *testNodeProxy) ShouldStop() <-chan struct{} {
 
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	if !p.applyUpdateCalled {
+		p.applyUpdateCalled = true
+		p.firstIndex = entry.Index
+	}
 	p.smResult = result
 	p.index = entry.Index
 	p.rejected = rejected
@@ -1699,6 +1705,8 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		{100, 50, 51, 60, 0, 0},
 		{100, 50, 51, 100, 0, 0},
 		{100, 50, 51, 110, 101, 110},
+		{100, 100, 101, 120, 101, 120},
+		{100, 110, 111, 125, 111, 125},
 	}
 	for idx, tt := range tests {
 		input := make([]pb.Entry, 0)
@@ -1707,13 +1715,14 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		}
 		ents := make([]sm.Entry, 0)
 		msm := &testManagedStateMachine{}
+		np := newTestNodeProxy()
 		sm := &StateMachine{
 			onDiskSM:    true,
 			diskSMIndex: tt.diskSMIndex,
 			index:       tt.index,
 			term:        100,
 			sm:          msm,
-			node:        newTestNodeProxy(),
+			node:        np,
 		}
 		if err := sm.handleBatch(input, ents); err != nil {
 			t.Fatalf("handle batched entries failed %v", err)
@@ -1726,6 +1735,15 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		}
 		if sm.batchedLastApplied.index != tt.last {
 			t.Errorf("%d, index %d, last %d", idx, sm.batchedLastApplied.index, tt.last)
+		}
+		if np.firstIndex != tt.firstApplied {
+			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
+		}
+		if np.index != tt.lastApplied {
+			t.Errorf("%d, unexpected first value, %d, %d", idx, np.index, tt.lastApplied)
+		}
+		if sm.index != tt.last {
+			t.Errorf("unexpected last applied index %d, want %d", sm.index, tt.last)
 		}
 	}
 }
