@@ -165,14 +165,25 @@ func getSnapshotErrorFromErrNo(errno int) error {
 	return fmt.Errorf("snapshot error with errno %d", errno)
 }
 
+func getOpenErrorFromErrNo(errno int) error {
+	if errno == 0 {
+		return nil
+	} else if errno == 100 {
+		return errors.New("other open error")
+	}
+	return fmt.Errorf("open error with errno %d", errno)
+}
+
 // NewStateMachineWrapperFromPlugin creates and returns the new plugin based
 // NewStateMachineWrapper instance.
 func NewStateMachineWrapperFromPlugin(clusterID uint64, nodeID uint64,
-	dsname string, smType pb.StateMachineType,
+	dsname string, fname string, smType pb.StateMachineType,
 	done <-chan struct{}) rsm.IManagedStateMachine {
 	cDSName := C.CString(dsname)
+	cFName := C.CString(fname)
 	defer C.free(unsafe.Pointer(cDSName))
-	factory := unsafe.Pointer(C.LoadFactoryFromPlugin(cDSName))
+	defer C.free(unsafe.Pointer(cFName))
+	factory := unsafe.Pointer(C.LoadFactoryFromPlugin(cDSName, cFName))
 	return NewStateMachineWrapper(clusterID, nodeID, factory, smType, done)
 }
 
@@ -629,12 +640,11 @@ func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 	}()
 	r := C.OpenDBOnDiskStateMachine(ds.dataStore, C.uint64_t(doneChOID))
 	applied := uint64(r.result)
-	// FIXME: the returned error code is dropped for now
-	// errno := int(r.errcode)
-	// err := getSnapshotErrorFromErrNo(errno)
-	// if err != nil {
-	// 	return 0, err
-	// }
+	errno := int(r.errcode)
+	err := getOpenErrorFromErrNo(errno)
+	if err != nil {
+		return 0, err
+	}
 	ds.initialIndex = applied
 	ds.applied = applied
 	return applied, nil
@@ -710,8 +720,10 @@ func (ds *OnDiskStateMachineWrapper) Sync() error {
 		panic("Sync called when not opened")
 	}
 	ds.ensureNotDestroyed()
-	// FIXME: the returned error code is dropped for now
-	C.SyncDBOnDiskStateMachine(ds.dataStore)
+	errno := C.SyncDBOnDiskStateMachine(ds.dataStore)
+	if errno != 0 {
+		return fmt.Errorf("sync error with errno %d", errno)
+	}
 	return nil
 }
 
@@ -746,7 +758,8 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		panic("SaveSnapshot called when not opened")
 	}
 	if !meta.Request.IsExportedSnapshot() {
-		// TODO: ds.saveDummySnapshot(writer, session)
+		sz, err := ds.saveDummySnapshot(writer, session)
+		return true, sz, err
 	}
 	n, err := writer.Write(session)
 	if err != nil {
@@ -778,6 +791,16 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	sz := uint64(r.size)
 	actualSz := writer.GetPayloadSize(sz + smsz)
 	return false, actualSz + rsm.SnapshotHeaderSize, nil
+}
+
+func (ds *OnDiskStateMachineWrapper) saveDummySnapshot(
+	writer *rsm.SnapshotWriter, session []byte) (uint64, error) {
+	_, err := writer.Write(session)
+	if err != nil {
+		return 0, err
+	}
+	sz := rsm.EmptyClientSessionLength
+	return writer.GetPayloadSize(sz) + rsm.SnapshotHeaderSize, nil
 }
 
 func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(index uint64,

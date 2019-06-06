@@ -32,7 +32,7 @@
 //   of dragonboat library, as there are obvious overheads for accessing Go
 //   features from C/C++.
 // - User applications can not specify what Raft RPC and Log DB implementation
-//   to use (either LevelDB or RocksDB). The C++ binding always use the built-in
+//   to use. The C++ binding always use the built-in
 //   TCP based Raft RPC module and the RocksDB based Log DB module.
 // - Users can not specify custom logger to use in C++ applications.
 //
@@ -412,8 +412,8 @@ class NodeHost : public ManagedObject
   //    the intialPeers instance will be ignored by the system
   //  - joining a new node to an existing Raft cluster, set join to true and
   //    leave replicas empty
-  Status StartCluster(const Peers& replicas,
-    bool join, std::string pluginFile, StateMachineType smType,
+  Status StartCluster(const Peers& replicas, bool join,
+    std::string pluginFile, std::string factoryName, StateMachineType smType,
     Config config) noexcept;
 
   Status StartCluster(const Peers& replicas, bool join,
@@ -510,9 +510,9 @@ class NodeHost : public ManagedObject
   Status StaleRead(ClusterID clusterID,
     const Byte *query, size_t queryLen,
     Byte *result, size_t resultLen, size_t *written) noexcept;
-  // TODO: implement RequestSnapshot sync&async
   Status SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
     Milliseconds timeout, SnapshotResultIndex *result) noexcept;
+  // TODO: implement async
   Status RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
     Milliseconds timeout, Event *event) noexcept;
   // ProposeSession makes a asynchronous proposal on the specified cluster
@@ -530,9 +530,11 @@ class NodeHost : public ManagedObject
   // regular node with voting power. After the node is successfully added to
   // the Raft cluster, it is application's responsibility to call StartCluster
   // on the right NodeHost instance to actually start the cluster node.
-  // TODO: implement async
   Status SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
+  // TODO: implement async
+  Status RequestAddNode(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Event *event) noexcept;
   // RemoveNode makes a synchronous proposal to make a raft membership change
   // to remove the specified node or observer from the requested cluster. It is
   // not guaranteed that removed nodes will automatically close itself and be
@@ -542,6 +544,8 @@ class NodeHost : public ManagedObject
   // TODO: implement async
   Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
+  Status RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+    Milliseconds timeout, Event *event) noexcept;
   // AddObserver makes a synchronous proposal to make a raft membership change
   // to add a new observer to the specified raft cluster. An observer is able
   // to get replicated entries from the leader, but it is not allowed to vote
@@ -551,9 +555,11 @@ class NodeHost : public ManagedObject
   // NodeHost instance to actually start the observer instance. An observer can
   // be promoted to a regular node with voting power by calling AddNode on the
   // same NodeID.
-  // TODO: implement async
   Status SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
+  // TODO: implement async
+  Status RequestAddObserver(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Event *event) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node
   // on the specified cluster. When returned Status instance has its OK() method
   // equals to true, it indicates that the request is successfully submitted but

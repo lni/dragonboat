@@ -82,10 +82,11 @@ void CStopNodeHost(uint64_t oid)
 
 int CNodeHostStartClusterFromPlugin(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, DBString pluginFile, int32_t smType, RaftConfig cfg)
+  Bool join, DBString pluginFile, DBString factoryName,
+  int32_t smType, RaftConfig cfg)
 {
   return NodeHostStartClusterFromPlugin(oid, nodeIDList, nodeAddressList,
-    nodeListLen, join, pluginFile, smType, cfg);
+    nodeListLen, join, pluginFile, factoryName, smType, cfg);
 }
 
 int CNodeHostStartCluster(uint64_t oid,
@@ -158,13 +159,24 @@ int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   return r.r0;
 }
 
-RequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+SyncRequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
   uint64_t clusterID, SnapshotOption opt, uint64_t timeout)
 {
-  RequestSnapshotResult result;
+  SyncRequestSnapshotResult result;
   struct NodeHostSyncRequestSnapshot_return r;
   r = NodeHostSyncRequestSnapshot(oid, clusterID, opt, timeout);
   result.result = r.r0;
+  result.errcode = r.r1;
+  return result;
+}
+
+RequestSnapshotResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
+  SnapshotOption opt, uint64_t timeout, void *handler, int t)
+{
+  RequestSnapshotResult result;
+  struct NodeHostRequestSnapshot_return r;
+  r = NodeHostRequestSnapshot(oid, clusterID, opt, timeout, handler, t);
+  result.oid = r.r0;
   result.errcode = r.r1;
   return result;
 }
@@ -219,6 +231,11 @@ int CNodeHostSyncRemoveData(uint64_t oid,
   uint64_t clusterID, uint64_t nodeID, uint64_t timeout)
 {
   return NodeHostSyncRemoveData(oid, clusterID, nodeID, timeout);
+}
+
+int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
+{
+  return NodeHostRemoveData(oid, clusterID, nodeID);
 }
 
 ProposeResult CNodeHostProposeSession(uint64_t oid, uint64_t timeout,

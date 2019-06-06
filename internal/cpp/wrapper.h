@@ -28,13 +28,7 @@ typedef struct CPPOnDiskStateMachine CPPOnDiskStateMachine;
 typedef struct CollectedFiles CollectedFiles;
 
 // for wrapper_test.go use only
-void *LoadFactoryFromPlugin(char *soFilename);
-CPPRegularStateMachine *CreateDBRegularStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename);
-CPPConcurrentStateMachine *CreateDBConcurrentStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename);
-CPPOnDiskStateMachine *CreateDBOnDiskStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename);
+void *LoadFactoryFromPlugin(char *soFilename, char *factoryName);
 
 CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
   uint64_t nodeID, void *factory);

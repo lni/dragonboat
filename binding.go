@@ -86,13 +86,14 @@ func (nh *NodeHost) ProposeSessionCH(s *client.Session,
 // StartClusterUsingPlugin requires the full path of the CPP plugin you want
 // the Raft cluster to use.
 func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
-	join bool, pluginFile string, smType int32, config config.Config) error {
+	join bool, pluginFile string, factoryName string,
+	smType int32, config config.Config) error {
 	stopc := make(chan struct{})
 	// appName := fileutil.GetAppNameFromFilename(pluginFile)
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		return cpp.NewStateMachineWrapperFromPlugin(clusterID, nodeID,
-			pluginFile, pb.StateMachineType(smType), done)
+			pluginFile, factoryName, pb.StateMachineType(smType), done)
 	}
 	return nh.startCluster(nodes,
 		join, cf, stopc, config, pb.StateMachineType(smType))

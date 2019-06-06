@@ -21,9 +21,6 @@
 #include "dragonboat/statemachine.h"
 #include "dragonboat/snapshotio.h"
 
-const char createStateMachineFuncName[] = "CreateDragonboatPluginStateMachine";
-
-
 typedef struct CollectedFiles {
     dragonboat::CollectedFiles *cf;
 } CollectedFiles;
@@ -48,7 +45,7 @@ typedef struct CollectedFiles {
 
 // for wrapper_test.go only
 
-void *LoadFactoryFromPlugin(char *soFilename)
+void *LoadFactoryFromPlugin(char *soFilename, char *factoryName)
 {
   void *handle;
   handle = ::dlopen(soFilename, RTLD_LAZY);
@@ -56,39 +53,12 @@ void *LoadFactoryFromPlugin(char *soFilename)
     fputs(dlerror(), stderr);
     exit(1);
   }
-  void *fn = ::dlsym(handle, createStateMachineFuncName);
+  void *fn = ::dlsym(handle, factoryName);
   if(!fn) {
     fputs(dlerror(), stderr);
     exit(1);
   }
   return fn;
-}
-
-CPPRegularStateMachine *CreateDBRegularStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename)
-{
-  auto fn = reinterpret_cast<CPPRegularStateMachine *(*)(uint64_t, uint64_t)>(
-    LoadFactoryFromPlugin(soFilename));
-  CPPRegularStateMachine *ds = (*fn)(clusterID, nodeID);
-  return ds;
-}
-
-CPPConcurrentStateMachine *CreateDBConcurrentStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename)
-{
-  auto fn = reinterpret_cast<CPPConcurrentStateMachine *(*)(uint64_t, uint64_t)>(
-    LoadFactoryFromPlugin(soFilename));
-  CPPConcurrentStateMachine *ds = (*fn)(clusterID, nodeID);
-  return ds;
-}
-
-CPPOnDiskStateMachine *CreateDBOnDiskStateMachineFromPlugin(
-  uint64_t clusterID, uint64_t nodeID, char *soFilename)
-{
-  auto fn = reinterpret_cast<CPPOnDiskStateMachine *(*)(uint64_t, uint64_t)>(
-    LoadFactoryFromPlugin(soFilename));
-  CPPOnDiskStateMachine *ds = (*fn)(clusterID, nodeID);
-  return ds;
 }
 
 CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,

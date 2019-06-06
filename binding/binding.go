@@ -258,22 +258,24 @@ func NodeHostStartCluster(oid uint64, nodeIDList *C.uint64_t,
 	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
 	factory unsafe.Pointer, smType int32, cfg C.RaftConfig) int {
 	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList, nodeListLen,
-		joinPeer, factory, C.DBString{}, smType, cfg)
+		joinPeer, factory, C.DBString{}, C.DBString{}, smType, cfg)
 }
 
 // NodeHostStartClusterFromPlugin
 //export NodeHostStartClusterFromPlugin
 func NodeHostStartClusterFromPlugin(oid uint64, nodeIDList *C.uint64_t,
 	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
-	pluginFile C.DBString, smType int32, cfg C.RaftConfig) int {
+	pluginFile C.DBString, factoryName C.DBString,
+	smType int32, cfg C.RaftConfig) int {
 	return nodeHostStartCluster(oid, nodeIDList, nodeAddressList,
-		nodeListLen, joinPeer, unsafe.Pointer(nil), pluginFile, smType, cfg)
+		nodeListLen, joinPeer, unsafe.Pointer(nil), pluginFile, factoryName,
+		smType, cfg)
 }
 
 func nodeHostStartCluster(oid uint64,
 	nodeIDList *C.uint64_t, nodeAddressList *C.DBString, nodeListLen C.size_t,
-	joinPeer C.char, factory unsafe.Pointer, pluginFile C.DBString, smType int32,
-	cfg C.RaftConfig) int {
+	joinPeer C.char, factory unsafe.Pointer, pluginFile C.DBString,
+	factoryName C.DBString, smType int32, cfg C.RaftConfig) int {
 	c := config.Config{
 		NodeID:              uint64(cfg.NodeID),
 		ClusterID:           uint64(cfg.ClusterID),
@@ -307,7 +309,8 @@ func nodeHostStartCluster(oid uint64,
 		err = nh.StartClusterUsingFactory(peers, join, factory, smType, c)
 	} else if (pluginFile != C.DBString{}) {
 		err = nh.StartClusterUsingPlugin(peers, join,
-			charArrayToString(pluginFile.str, pluginFile.len), smType, c)
+			charArrayToString(pluginFile.str, pluginFile.len),
+			charArrayToString(factoryName.str, factoryName.len), smType, c)
 	} else {
 		panic("both factory and pluginFile are nil")
 	}
@@ -555,8 +558,8 @@ func NodeHostStaleRead(oid uint64,
 }
 
 //export NodeHostSyncRequestSnapshot
-func NodeHostSyncRequestSnapshot(oid uint64,
-	clusterID uint64, opt C.SnapshotOption, timeout uint64) (uint64, int) {
+func NodeHostSyncRequestSnapshot(oid uint64, clusterID uint64,
+	opt C.SnapshotOption, timeout uint64) (uint64, int) {
 	nh := getNodeHost(oid)
 	option := dragonboat.SnapshotOption{
 		Exported:   cboolToBool(opt.Exported),
@@ -569,10 +572,24 @@ func NodeHostSyncRequestSnapshot(oid uint64,
 	return v, getErrorCode(err)
 }
 
-// TODO: RequestSnapshot, return ManagedObject
+// TODO: RequestSnapshot
 //export NodeHostRequestSnapshot
-func NodeHostRequestSnapshot(oid uint64,
-	clusterID uint64, timeout uint64) (uint64, int) {
+func NodeHostRequestSnapshot(oid uint64, clusterID uint64,
+	opt C.SnapshotOption, timeout uint64, waitable unsafe.Pointer,
+	handlerType CompleteHandlerType) (uint64, int) {
+	// nh := getNodeHost(oid)
+	// option := dragonboat.SnapshotOption{
+	// 	Exported:	cboolToBool(opt.Exported),
+	// 	ExportPath:	charArrayToString(opt.ExportedPath.str, opt.ExportedPath.len),
+	// }
+
+	var handler *cppCompleteHandler
+	if handlerType == CompleteHandlerCPP {
+		handler = completeHandlerPool.Get().(*cppCompleteHandler)
+		handler.waitable = waitable
+	} else {
+		panic("not supported type")
+	}
 	return 0, 0
 }
 
@@ -661,7 +678,7 @@ func NodeHostGetLeaderID(oid uint64, clusterID uint64) (uint64, bool, int) {
 	return leaderID, valid, getErrorCode(err)
 }
 
-// NodeHostRemoveData removes the data of the specified cluster.
+// NodeHostSyncRemoveData removes the data of the specified cluster.
 // should be called after remove node
 //export NodeHostSyncRemoveData
 func NodeHostSyncRemoveData(oid uint64, clusterID uint64, nodeID uint64,
@@ -672,4 +689,12 @@ func NodeHostSyncRemoveData(oid uint64, clusterID uint64, nodeID uint64,
 	defer cancel()
 	err := nh.SyncRemoveData(ctx, clusterID, nodeID)
 	return getErrorCode(err)
+}
+
+// NodeHostRemoveData removes the data of the specified cluster.
+// should be called after remove node
+//export NodeHostRemoveData
+func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
+	nh := getNodeHost(oid)
+	return getErrorCode(nh.RemoveData(clusterID, nodeID))
 }

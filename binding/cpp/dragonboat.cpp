@@ -338,8 +338,8 @@ void NodeHost::Stop() noexcept
   CStopNodeHost(oid_);
 }
 
-Status NodeHost::StartCluster(const Peers& peers,
-  bool join, std::string pluginFile, StateMachineType smType,
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  std::string pluginFile, std::string factoryName, StateMachineType smType,
   Config config) noexcept
 {
   ::RaftConfig cfg;
@@ -347,8 +347,9 @@ Status NodeHost::StartCluster(const Peers& peers,
   std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
-  int code = CNodeHostStartClusterFromPlugin(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, toDBString(pluginFile), smType, cfg);
+  int code = CNodeHostStartClusterFromPlugin(oid_,
+    nodeIDList.get(), strs.get(), peers.Len(), join,
+    toDBString(pluginFile), toDBString(factoryName), smType, cfg);
   return Status(code);
 }
 
@@ -555,7 +556,7 @@ Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
   ::SnapshotOption option;
   option.Exported = opt.Exported;
   option.ExportedPath = toDBString(opt.ExportedPath);
-  ::RequestSnapshotResult ret;
+  ::SyncRequestSnapshotResult ret;
   ret = CNodeHostSyncRequestSnapshot(oid_, clusterID, option, ts);
   *result = ret.result;
   return Status(ret.errcode);
@@ -564,7 +565,14 @@ Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
 Status NodeHost::RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
   Milliseconds timeout, Event *event) noexcept
 {
-  return Status(-1);
+  auto ts = timeout.count();
+  ::SnapshotOption option;
+  option.Exported = opt.Exported;
+  option.ExportedPath = toDBString(opt.ExportedPath);
+  ::RequestSnapshotResult ret;
+  ret = CNodeHostRequestSnapshot(oid_, clusterID, option, ts,
+    reinterpret_cast<void *>(event), CompleteHandlerCPP);
+  return Status(ret.errcode);
 }
 
 Status NodeHost::ProposeSession(Session *cs,
@@ -590,6 +598,25 @@ Status NodeHost::SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     ts, clusterID, nodeID, toDBString(url)));
 }
 
+Status RequestAddNode(ClusterID clusterID, NodeID nodeID,
+  std::string address, Milliseconds timeout, Event *event) noexcept
+{
+  return Status(-1);
+}
+
+Status NodeHost::SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+  Milliseconds timeout) noexcept
+{
+  auto ts = timeout.count();
+  return Status(CNodeHostSyncRequestDeleteNode(oid_, ts, clusterID, nodeID));
+}
+
+Status RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+  Milliseconds timeout, Event *event) noexcept
+{
+  return Status(-1);
+}
+
 Status NodeHost::SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
   std::string url, Milliseconds timeout) noexcept
 {
@@ -598,11 +625,10 @@ Status NodeHost::SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     ts, clusterID, nodeID, toDBString(url)));
 }
 
-Status NodeHost::SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
-  Milliseconds timeout) noexcept
+Status RequestAddObserver(ClusterID clusterID, NodeID nodeID,
+  std::string address, Milliseconds timeout, Event *event) noexcept
 {
-  auto ts = timeout.count();
-  return Status(CNodeHostSyncRequestDeleteNode(oid_, ts, clusterID, nodeID));
+  return Status(-1);
 }
 
 Status NodeHost::RequestLeaderTransfer(ClusterID clusterID,
@@ -645,6 +671,11 @@ Status NodeHost::SyncRemoveData(ClusterID clusterID, NodeID nodeID,
 {
   auto ts = timeout.count();
   return Status(CNodeHostSyncRemoveData(oid_, clusterID, nodeID, ts));
+}
+
+Status NodeHost::RemoveData(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return Status(CNodeHostRemoveData(oid_, clusterID, nodeID));
 }
 
 IOServiceHandler *RunIOServiceInGoRuntime(IOService* iosp,

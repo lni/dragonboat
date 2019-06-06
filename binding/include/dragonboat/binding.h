@@ -181,6 +181,12 @@ typedef struct
 {
   uint64_t result;
   int errcode;
+} SyncRequestSnapshotResult;
+
+typedef struct
+{
+  uint64_t oid;
+  int errcode;
 } RequestSnapshotResult;
 
 typedef struct
@@ -260,7 +266,8 @@ uint64_t CNewNodeHost(NodeHostConfig cfg);
 void CStopNodeHost(uint64_t oid);
 int CNodeHostStartClusterFromPlugin(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, DBString pluginFile, int32_t smType, RaftConfig cfg);
+  Bool join, DBString pluginFile, DBString factoryName,
+  int32_t smType, RaftConfig cfg);
 int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
   Bool join, void *factory, int32_t smType, RaftConfig cfg);
@@ -276,8 +283,10 @@ int CNodeHostSyncRead(uint64_t oid,
   uint64_t timeout, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
-RequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+SyncRequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
   uint64_t clusterID, SnapshotOption opt, uint64_t timeout);
+RequestSnapshotResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
+  SnapshotOption opt, uint64_t timeout, void *handler, int t);
 int CNodeHostSyncRequestAddNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
 int CNodeHostSyncRequestDeleteNode(uint64_t oid, uint64_t timeout,
@@ -301,6 +310,7 @@ int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
 int CNodeHostSyncRemoveData(uint64_t oid,
   uint64_t clusterID, uint64_t nodeID, uint64_t timeout);
+int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 
 #ifdef __cplusplus
 }
