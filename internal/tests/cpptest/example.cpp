@@ -87,3 +87,102 @@ void HelloWorldStateMachine::freeLookupResult(LookupResult r) noexcept
 {
   delete[] r.result;
 }
+
+FakeOnDiskStateMachine::FakeOnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID, uint64_t initialApplied) noexcept
+  : dragonboat::OnDiskStateMachine(clusterID, nodeID),
+    initialApplied_(initialApplied)
+{
+}
+
+FakeOnDiskStateMachine::~FakeOnDiskStateMachine()
+{
+}
+
+OpenResult FakeOnDiskStateMachine::open(
+  const dragonboat::DoneChan &done) noexcept
+{
+  OpenResult r;
+  r.result = initialApplied_;
+  r.errcode = 0;
+  return r;
+}
+
+uint64_t FakeOnDiskStateMachine::update(
+  const dragonboat::Byte *data, size_t size) noexcept
+{
+  count_++;
+  return count_;
+}
+
+LookupResult FakeOnDiskStateMachine::lookup(
+  const dragonboat::Byte *data, size_t size) const noexcept
+{
+  LookupResult r;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *) r.result) = count_;
+  return r;
+}
+
+int FakeOnDiskStateMachine::sync() const noexcept
+{
+  return 0;
+}
+
+uint64_t FakeOnDiskStateMachine::getHash() const noexcept
+{
+  return count_;
+}
+
+PrepareSnapshotResult FakeOnDiskStateMachine::prepareSnapshot() const noexcept
+{
+  PrepareSnapshotResult r;
+  r.result = new char[2*sizeof(uint64_t)];
+  r.size = 2*sizeof(uint64_t);
+  r.errcode = 0;
+  std::memcpy(r.result, &initialApplied_, sizeof(uint64_t));
+  std::memcpy(r.result + sizeof(uint64_t), &count_, sizeof(uint64_t));
+  return r;
+}
+
+SnapshotResult FakeOnDiskStateMachine::saveSnapshot(
+  const dragonboat::Byte *ctx, size_t size,
+  dragonboat::SnapshotWriter *writer,
+  const dragonboat::DoneChan &done) const noexcept
+{
+  auto ret = writer->Write(ctx, size);
+  SnapshotResult r;
+  r.errcode = SNAPSHOT_OK;
+  r.size = ret.size;
+  if(ret.size != size || ret.error != 0) {
+    r.errcode = FAILED_TO_SAVE_SNAPSHOT;
+  }
+  return r;
+}
+
+int FakeOnDiskStateMachine::recoverFromSnapshot(
+  dragonboat::SnapshotReader *reader,
+  const dragonboat::DoneChan &done) noexcept
+{
+  dragonboat::IOResult ret;
+  dragonboat::Byte data[2*sizeof(uint64_t)];
+  ret = reader->Read(data, 2*sizeof(uint64_t));
+  if (ret.size != 2*sizeof(uint64_t)) {
+    return FAILED_TO_RECOVER_FROM_SNAPSHOT;
+  }
+  initialApplied_ = *(uint64_t*)data;
+  count_ = *(uint64_t*)(data + sizeof(uint64_t));
+  return SNAPSHOT_OK;
+}
+
+void FakeOnDiskStateMachine::freePrepareSnapshotResult(
+  PrepareSnapshotResult r) noexcept
+{
+  delete[] r.result;
+}
+
+void FakeOnDiskStateMachine::freeLookupResult(LookupResult r) noexcept
+{
+  delete[] r.result;
+}

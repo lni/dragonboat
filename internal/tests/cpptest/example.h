@@ -28,25 +28,61 @@
 // See statemachine.h for more details about the StateMachine interface. 
 class HelloWorldStateMachine : public dragonboat::RegularStateMachine
 {
-  public:
-    HelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
-    ~HelloWorldStateMachine();
-  protected:
-    uint64_t update(const dragonboat::Byte *data,
-      size_t size) noexcept override;
-    LookupResult lookup(const dragonboat::Byte *data,
-      size_t size) const noexcept override;
-    uint64_t getHash() const noexcept override;
-    SnapshotResult saveSnapshot(dragonboat::SnapshotWriter *writer,
-      dragonboat::SnapshotFileCollection *collection,
-      const dragonboat::DoneChan &done) const noexcept override;
-    int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
-      const std::vector<dragonboat::SnapshotFile> &files,
-      const dragonboat::DoneChan &done) noexcept override;
-    void freeLookupResult(LookupResult r) noexcept override;
-  private:
-    DISALLOW_COPY_MOVE_AND_ASSIGN(HelloWorldStateMachine);
-    int update_count_;
+ public:
+  HelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
+  ~HelloWorldStateMachine();
+ protected:
+  uint64_t update(const dragonboat::Byte *data,
+    size_t size) noexcept override;
+  LookupResult lookup(const dragonboat::Byte *data,
+    size_t size) const noexcept override;
+  uint64_t getHash() const noexcept override;
+  SnapshotResult saveSnapshot(dragonboat::SnapshotWriter *writer,
+    dragonboat::SnapshotFileCollection *collection,
+    const dragonboat::DoneChan &done) const noexcept override;
+  int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
+    const std::vector<dragonboat::SnapshotFile> &files,
+    const dragonboat::DoneChan &done) noexcept override;
+  void freeLookupResult(LookupResult r) noexcept override;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(HelloWorldStateMachine);
+  int update_count_;
+};
+
+//TODO
+//class ConcurrentLogStateMachine : public dragonboat::ConcurrentStateMachine
+//{
+// public:
+// protected:
+// private:
+//  DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentLogStateMachine);
+//};
+
+class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
+ public:
+  FakeOnDiskStateMachine(uint64_t clusterID, uint64_t nodeID,
+    uint64_t initialApplied = 123) noexcept;
+  ~FakeOnDiskStateMachine();
+ protected:
+  OpenResult open(const dragonboat::DoneChan &done) noexcept override;
+  uint64_t update(const dragonboat::Byte *data, size_t size) noexcept override;
+  LookupResult lookup(const dragonboat::Byte *data,
+    size_t size) const noexcept override;
+  int sync() const noexcept override;
+  uint64_t getHash() const noexcept override;
+  PrepareSnapshotResult prepareSnapshot() const noexcept override;
+  SnapshotResult saveSnapshot(const dragonboat::Byte *ctx, size_t size,
+    dragonboat::SnapshotWriter *writer,
+    const dragonboat::DoneChan &done) const noexcept override;
+  int recoverFromSnapshot(
+    dragonboat::SnapshotReader *reader,
+    const dragonboat::DoneChan &done) noexcept override;
+  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override;
+  void freeLookupResult(LookupResult r) noexcept;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(FakeOnDiskStateMachine);
+  uint64_t initialApplied_;
+  uint64_t count_;
 };
 
 #endif // DRAGONBOAT_EXAMPLE_STATEMACHINE_H
