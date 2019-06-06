@@ -101,6 +101,7 @@ type Task struct {
 	SnapshotRequested bool
 	StreamSnapshot    bool
 	PeriodicSync      bool
+	NewNode           bool
 	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
 }

@@ -467,7 +467,7 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		return nil, nil, err
 	}
 	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-		return tests.NewFakeDiskSM(3)
+		return tests.NewFakeDiskSM(0)
 	}
 	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
 		return nil, nil, err
@@ -1239,14 +1239,14 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 			t.Fatalf("failed to get new session")
 		}
 	}
-	singleFakeDiskNodeHostTest(t, tf, 5)
+	singleFakeDiskNodeHostTest(t, tf, 0)
 }
 
 func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
 	nh, fakeDiskSM, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, 1, true)
+		singleNodeHostTestDir, 0, true)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
@@ -1275,41 +1275,6 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 	if len(v.([]byte)) != 8 {
 		t.Fatalf("unexpected result %v", v)
 	}
-}
-
-func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
-	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
-		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
-		for _, ci := range nhi.ClusterInfoList {
-			if ci.ClusterID == 1 {
-				if ci.StateMachineType != sm.OnDiskStateMachine {
-					t.Errorf("unexpected state machine type")
-				}
-			}
-			if ci.IsObserver {
-				t.Errorf("invalid IsObserver value")
-			}
-		}
-		session := nh.GetNoOPSession(1)
-		for i := uint64(2); i < initialApplied*2; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
-			cancel()
-			if err != nil && i > 4 {
-				t.Errorf("SyncPropose iter %d returned err %v", i, err)
-			}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		count, err := nh.SyncRead(ctx, 1, nil)
-		cancel()
-		if err != nil {
-			t.Errorf("SyncRead returned err %v", err)
-		}
-		if binary.LittleEndian.Uint64(count.([]byte)) != initialApplied {
-			t.Errorf("got %d, want %d", binary.LittleEndian.Uint64(count.([]byte)), initialApplied)
-		}
-	}
-	singleFakeDiskNodeHostTest(t, tf, 5)
 }
 
 func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
@@ -1370,7 +1335,7 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 			t.Errorf("not a dummy snapshot")
 		}
 	}
-	singleFakeDiskNodeHostTest(t, tf, 3)
+	singleFakeDiskNodeHostTest(t, tf, 0)
 }
 
 func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
@@ -1415,7 +1380,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			CompactionOverhead: 2,
 		}
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-			return tests.NewFakeDiskSM(3)
+			return tests.NewFakeDiskSM(0)
 		}
 		peers := make(map[uint64]string)
 		if err := nh2.StartOnDiskCluster(peers, true, newSM, rc); err != nil {
@@ -1742,7 +1707,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			CompactionOverhead: 2,
 		}
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-			return tests.NewFakeDiskSM(3)
+			return tests.NewFakeDiskSM(0)
 		}
 		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, 2000*time.Millisecond)
 		if err != nil {
@@ -2196,7 +2161,7 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			t.Errorf("exported snapshot is considered as shrinked")
 		}
 	}
-	singleFakeDiskNodeHostTest(t, tf, 3)
+	singleFakeDiskNodeHostTest(t, tf, 0)
 }
 
 func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
@@ -2240,7 +2205,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		t.Fatalf("failed to create node host %v", err)
 	}
 	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-		return tests.NewFakeDiskSM(3)
+		return tests.NewFakeDiskSM(0)
 	}
 	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
 		t.Fatalf("failed to start cluster %v", err)

@@ -93,6 +93,7 @@ type node struct {
 	tickMillisecond      uint64
 	syncTask             *task
 	rateLimited          bool
+	new                  bool
 	closeOnce            sync.Once
 	ss                   *snapshotState
 	snapshotLock         *syncutil.Lock
@@ -108,6 +109,7 @@ var instanceID uint64
 func newNode(raftAddress string,
 	peers map[uint64]string,
 	initialMember bool,
+	new bool,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
@@ -159,6 +161,7 @@ func newNode(raftAddress string,
 		ss:                   &snapshotState{},
 		syncTask:             newTask(syncTaskInterval),
 		smType:               smType,
+		new:                  new,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -643,13 +646,17 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	var err error
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
 		plog.Infof("all disk SM %s beng initialized", n.describe())
-		_, err = n.sm.OpenOnDiskStateMachine()
+		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
 			plog.Infof("%s aborted OpenOnDiskStateMachine", n.describe())
 			return 0, true
 		}
 		if err != nil {
 			panic(err)
+		}
+		if idx > 0 && rec.NewNode {
+			plog.Panicf("Open returned index %d (>0) on new node %s",
+				idx, n.describe())
 		}
 	}
 	index, err = n.sm.RecoverFromSnapshot(rec)
@@ -1200,6 +1207,7 @@ func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
 		return rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
+			NewNode:           n.new,
 		}, true
 	}
 	return rsm.Task{}, false
