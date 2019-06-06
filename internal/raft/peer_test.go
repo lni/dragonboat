@@ -60,10 +60,7 @@ func getTestMembership(nodes []uint64) raftpb.Membership {
 func TestRaftAPINodeStep(t *testing.T) {
 	for i := range raftpb.MessageType_name {
 		s := NewTestLogDB()
-		rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
-		if err != nil {
-			t.Fatal(err)
-		}
+		rawNode := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 		rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 
 		msgt := raftpb.MessageType(i)
@@ -77,11 +74,7 @@ func TestRaftAPINodeStep(t *testing.T) {
 
 func TestLeaderIDCanBeReportedBackToPeer(t *testing.T) {
 	s := NewTestLogDB()
-	var err error
-	p, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	p.raft.hasNotAppliedConfigChange = p.raft.testOnlyHasConfigChangeToApply
 	p.raft.becomeFollower(1, 12)
 	if p.GetLeaderID() != 12 {
@@ -96,13 +89,13 @@ func TestLeaderIDCanBeReportedBackToPeer(t *testing.T) {
 
 func TestRaftAPIRequestLeaderTransfer(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	p.RequestLeaderTransfer(1)
 }
 
 func TestRaftAPIRTT(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	tick := p.raft.electionTick
 	p.Tick()
 	if p.raft.electionTick != tick+1 {
@@ -116,7 +109,7 @@ func TestRaftAPIRTT(t *testing.T) {
 
 func TestRaftAPIReportUnreachable(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{
 		{NodeID: 1, Address: "1"},
 		{NodeID: 2, Address: "2"},
 	}, true, true)
@@ -133,7 +126,7 @@ func TestRaftAPIReportUnreachable(t *testing.T) {
 
 func TestRaftAPIReportSnapshotStatus(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{
 		{NodeID: 1, Address: "1"},
 		{NodeID: 2, Address: "2"},
 	}, true, true)
@@ -151,11 +144,8 @@ func TestRaftAPIReportSnapshotStatus(t *testing.T) {
 func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, t *testing.T) {
 	s := NewTestLogDB()
 	var err error
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	rawNode := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	if err != nil {
-		t.Fatal(err)
-	}
 	ud := rawNode.GetUpdate(true, 0)
 	if err := s.Append(ud.EntriesToSave); err != nil {
 		t.Fatalf("%v", err)
@@ -225,10 +215,7 @@ func TestRaftAPIProposeAndConfigChange(t *testing.T) {
 
 func TestGetUpdateIncludeLastAppliedValue(t *testing.T) {
 	s := NewTestLogDB()
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
-	if err != nil {
-		t.Fatalf("failed to launch peer %v", err)
-	}
+	rawNode := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	ud := rawNode.GetUpdate(true, 1232)
 	if ud.LastApplied != 1232 {
 		t.Errorf("unexpected last applied value %d, want 1232", ud.LastApplied)
@@ -241,11 +228,8 @@ func TestGetUpdateIncludeLastAppliedValue(t *testing.T) {
 
 func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 	s := NewTestLogDB()
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	rawNode := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	if err != nil {
-		t.Fatal(err)
-	}
 	ud := rawNode.GetUpdate(true, 0)
 	if err := s.Append(ud.EntriesToSave); err != nil {
 		t.Fatalf("%v", err)
@@ -281,11 +265,8 @@ func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 
 func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	s := NewTestLogDB()
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	rawNode := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	if err != nil {
-		t.Fatal(err)
-	}
 	ud := rawNode.GetUpdate(true, 0)
 	if err := s.Append(ud.EntriesToSave); err != nil {
 		t.Fatalf("%v", err)
@@ -367,7 +348,7 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 
 func TestRaftAPIRejectConfigChange(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	p.raft.setPendingConfigChange()
 	if !p.raft.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not set")
@@ -380,7 +361,7 @@ func TestRaftAPIRejectConfigChange(t *testing.T) {
 
 func TestRaftAPINotifyRaftLastApplied(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
+	p := Launch(newTestConfig(1, 10, 1, s), s, []PeerAddress{{NodeID: 1}}, true, true)
 	p.NotifyRaftLastApplied(123)
 	if p.raft.getApplied() != 123 {
 		t.Errorf("applied not set")
@@ -389,7 +370,7 @@ func TestRaftAPINotifyRaftLastApplied(t *testing.T) {
 
 func TestRaftAPIDumpRaftInfoToLog(t *testing.T) {
 	s := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, s),
+	p := Launch(newTestConfig(1, 10, 1, s),
 		s, []PeerAddress{{NodeID: 1, Address: "1"}}, true, true)
 	m := make(map[uint64]string)
 	m[1] = "1"
@@ -405,11 +386,8 @@ func TestRaftAPIReadIndex(t *testing.T) {
 
 	s := NewTestLogDB()
 	c := newTestConfig(1, 10, 1, s)
-	rawNode, err := LaunchPeer(c, s, []PeerAddress{{NodeID: 1}}, true, true)
+	rawNode := Launch(c, s, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	if err != nil {
-		t.Fatal(err)
-	}
 	rawNode.raft.readyToRead = wrs
 	// ensure the ReadyToReads can be read out
 	hasReady := rawNode.HasUpdate(true)
@@ -459,10 +437,7 @@ func TestRaftAPIReadIndex(t *testing.T) {
 
 func TestRaftAPIStatus(t *testing.T) {
 	storage := NewTestLogDB()
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawNode := Launch(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 	status := rawNode.LocalStatus()
 	if status.NodeID != 1 {
@@ -470,7 +445,7 @@ func TestRaftAPIStatus(t *testing.T) {
 	}
 }
 
-func TestRaftAPIInvalidNodeIDCausePanicInLaunchPeer(t *testing.T) {
+func TestRaftAPIInvalidNodeIDCausePanicInLaunch(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			return
@@ -478,12 +453,10 @@ func TestRaftAPIInvalidNodeIDCausePanicInLaunchPeer(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	cfg := &config.Config{}
-	if _, err := LaunchPeer(cfg, nil, nil, true, true); err != nil {
-		t.Fatalf("%v", err)
-	}
+	Launch(cfg, nil, nil, true, true)
 }
 
-func TestRaftAPIInvalidInputToLaunchPeerCausePanic(t *testing.T) {
+func TestRaftAPIInvalidInputToLaunchCausePanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			return
@@ -491,12 +464,10 @@ func TestRaftAPIInvalidInputToLaunchPeerCausePanic(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	storage := NewTestLogDB()
-	if _, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{}, true, true); err != nil {
-		t.Fatalf("%v", err)
-	}
+	Launch(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{}, true, true)
 }
 
-func TestRaftAPIDuplicatedAddressCausePanicInLaunchPeer(t *testing.T) {
+func TestRaftAPIDuplicatedAddressCausePanicInLaunch(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			return
@@ -504,15 +475,13 @@ func TestRaftAPIDuplicatedAddressCausePanicInLaunchPeer(t *testing.T) {
 		t.Errorf("panic not called")
 	}()
 	storage := NewTestLogDB()
-	if _, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{
+	Launch(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{
 		{NodeID: 1, Address: "111"},
 		{NodeID: 2, Address: "111"},
-	}, true, true); err != nil {
-		t.Fatalf("%v", err)
-	}
+	}, true, true)
 }
 
-func TestRaftAPILaunchPeer(t *testing.T) {
+func TestRaftAPILaunch(t *testing.T) {
 	cc := raftpb.ConfigChange{Type: raftpb.AddNode, NodeID: 1, Initialize: true}
 	ccdata, err := cc.Marshal()
 	if err != nil {
@@ -540,10 +509,7 @@ func TestRaftAPILaunchPeer(t *testing.T) {
 	}
 
 	storage := NewTestLogDB()
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawNode := Launch(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
@@ -604,10 +570,7 @@ func TestRaftAPIRestart(t *testing.T) {
 	if err := storage.Append(entries); err != nil {
 		t.Fatalf("%v", err)
 	}
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, nil, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawNode := Launch(newTestConfig(1, 10, 1, storage), storage, nil, true, false)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
@@ -647,10 +610,7 @@ func TestRaftAPIRestartFromSnapshot(t *testing.T) {
 	if err := s.Append(entries); err != nil {
 		t.Fatalf("%v", err)
 	}
-	rawNode, err := LaunchPeer(newTestConfig(1, 10, 1, s), s, nil, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawNode := Launch(newTestConfig(1, 10, 1, s), s, nil, true, false)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 	ud := rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
@@ -672,7 +632,7 @@ func TestRaftAPIStepOnLocalMessageWillPanic(t *testing.T) {
 		t.Errorf("panic not triggered")
 	}()
 	storage := NewTestLogDB()
-	p, _ := LaunchPeer(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
+	p := Launch(newTestConfig(1, 10, 1, storage), storage, []PeerAddress{{NodeID: 1}}, true, true)
 	p.Handle(raftpb.Message{Type: raftpb.LocalTick})
 }
 

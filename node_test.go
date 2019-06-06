@@ -239,7 +239,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		}
 		addr := fmt.Sprintf("a%d", i)
 		ch := router.getMessageReceiveChannel(testClusterID, uint64(i))
-		node := newNode(addr,
+		node, err := newNode(addr,
 			peers,
 			true,
 			true,
@@ -257,6 +257,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			config,
 			tickMillisecond,
 			ldb)
+		if err != nil {
+			panic(err)
+		}
 		nodes = append(nodes, node)
 		smList = append(smList, node.sm)
 	}
@@ -316,7 +319,10 @@ func step(nodes []*node) bool {
 	}
 	for idx, ud := range nodeUpdates {
 		node := activeNodes[idx]
-		running := node.processRaftUpdate(ud)
+		running, err := node.processRaftUpdate(ud)
+		if err != nil {
+			panic(err)
+		}
 		node.commitRaftUpdate(ud)
 		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
 			node.saveSnapshot(rsm.Task{})

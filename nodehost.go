@@ -1405,7 +1405,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	if err := snapshotter.ProcessOrphans(); err != nil {
 		panic(err)
 	}
-	rn := newNode(nh.nhConfig.RaftAddress,
+	rn, err := newNode(nh.nhConfig.RaftAddress,
 		addrs,
 		members,
 		new,
@@ -1423,6 +1423,9 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		config,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb)
+	if err != nil {
+		panic(err)
+	}
 	nh.clusterMu.clusters.Store(clusterID, rn)
 	nh.clusterMu.requests[clusterID] = queue
 	nh.clusterMu.csi++

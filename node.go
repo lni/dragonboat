@@ -123,7 +123,7 @@ func newNode(raftAddress string,
 	requestStatePool *sync.Pool,
 	config config.Config,
 	tickMillisecond uint64,
-	ldb raftio.ILogDB) *node {
+	ldb raftio.ILogDB) (*node, error) {
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
@@ -173,8 +173,10 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rn)
 	rn.taskC = sm.TaskC()
 	rn.sm = sm
-	rn.startRaft(config, lr, peers, initialMember)
-	return rn
+	if err := rn.startRaft(config, lr, peers, initialMember); err != nil {
+		return nil, err
+	}
+	return rn, nil
 }
 
 func (n *node) NodeID() uint64 {
@@ -200,7 +202,7 @@ func (n *node) ApplyUpdate(entry pb.Entry,
 	}
 	if !ignored {
 		if entry.Key == 0 {
-			plog.Panicf("key is 0")
+			panic("key is 0")
 		}
 		n.pendingProposals.applied(entry.ClientID,
 			entry.SeriesID, entry.Key, result, rejected)
@@ -263,18 +265,18 @@ func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
 }
 
 func (n *node) startRaft(cc config.Config,
-	logdb raft.ILogDB, peers map[uint64]string, initial bool) {
+	logdb raft.ILogDB, peers map[uint64]string, initial bool) error {
 	// replay the log when restarting a peer,
-	newNode := n.replayLog(cc.ClusterID, cc.NodeID)
+	newNode, err := n.replayLog(cc.ClusterID, cc.NodeID)
+	if err != nil {
+		return err
+	}
 	pas := make([]raft.PeerAddress, 0)
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	node, err := raft.LaunchPeer(&cc, logdb, pas, initial, newNode)
-	if err != nil {
-		panic(err)
-	}
-	n.node = node
+	n.node = raft.Launch(&cc, logdb, pas, initial, newNode)
+	return nil
 }
 
 func (n *node) close() {
@@ -512,23 +514,24 @@ func (n *node) publishSnapshot(snapshot pb.Snapshot,
 	return true
 }
 
-func (n *node) replayLog(clusterID uint64, nodeID uint64) bool {
+func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	plog.Infof("%s is replaying logs", n.describe())
 	snapshot, err := n.snapshotter.GetMostRecentSnapshot()
 	if err != nil && err != ErrNoSnapshot {
-		panic(err)
+		return false, err
 	}
 	if snapshot.Index > 0 {
 		if err = n.logreader.ApplySnapshot(snapshot); err != nil {
-			plog.Panicf("failed to apply snapshot %v", err)
+			plog.Errorf("failed to apply snapshot %v", err)
+			return false, err
 		}
 	}
 	rs, err := n.logdb.ReadRaftState(clusterID, nodeID, snapshot.Index)
 	if err == raftio.ErrNoSavedLog {
-		return true
+		return true, nil
 	}
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	if rs.State != nil {
 		plog.Infof("%s logdb entries size %d commit %d term %d",
@@ -540,7 +543,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) bool {
 	if snapshot.Index > 0 || rs.EntryCount > 0 || rs.State != nil {
 		newNode = false
 	}
-	return newNode
+	return newNode, nil
 }
 
 func (n *node) saveSnapshotRequired(lastApplied uint64) bool {
@@ -562,12 +565,16 @@ func isSoftSnapshotError(err error) bool {
 	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
 }
 
-func (n *node) saveSnapshot(rec rsm.Task) {
-	index := n.doSaveSnapshot(rec.SnapshotRequest)
+func (n *node) saveSnapshot(rec rsm.Task) error {
+	index, err := n.doSaveSnapshot(rec.SnapshotRequest)
+	if err != nil {
+		return err
+	}
 	n.pendingSnapshot.apply(rec.SnapshotRequest.Key, index == 0, index)
+	return nil
 }
 
-func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
+func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	// this is suppose to be called in snapshot worker thread.
@@ -575,7 +582,7 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 	if n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
 		// a snapshot has been published to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
-		return 0
+		return 0, nil
 	}
 	exported := req.IsExportedSnapshot()
 	ss, ssenv, err := n.sm.SaveSnapshot(req)
@@ -583,63 +590,87 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) uint64 {
 		if err == sm.ErrSnapshotStopped {
 			ssenv.MustRemoveTempDir()
 			plog.Infof("%s aborted SaveSnapshot", n.describe())
-			return 0
+			return 0, nil
 		} else if isSoftSnapshotError(err) || err == rsm.ErrTestKnobReturn {
-			return 0
+			return 0, nil
 		}
-		panic(err)
+		plog.Errorf("sm.SaveSnapshot failed %v", err)
+		return 0, err
 	}
 	if tests.ReadyToReturnTestKnob(n.stopc, true, "snapshotter.Commit") {
-		return 0
+		return 0, nil
 	}
 	plog.Infof("%s snapshotted, index %d, term %d, file count %d",
 		n.describe(), ss.Index, ss.Term, len(ss.Files))
 	if err := n.snapshotter.Commit(*ss, req); err != nil {
+		plog.Errorf("Commit returned %v on %s", err, n.describe())
 		if err == errSnapshotOutOfDate {
-			plog.Warningf("snapshot aborted on %s, idx %d", n.describe(), ss.Index)
 			ssenv.MustRemoveTempDir()
-			return 0
+			return 0, nil
 		}
 		// this can only happen in monkey test
 		if err == sm.ErrSnapshotStopped {
-			return 0
+			return 0, nil
 		}
-		panic(err)
+		return 0, err
 	}
 	if exported {
-		return ss.Index
+		return ss.Index, nil
 	}
 	if !ss.Validate() {
 		plog.Panicf("invalid snapshot %v", ss)
 	}
 	if err = n.logreader.CreateSnapshot(*ss); err != nil {
+		plog.Errorf("CreateSnapshot failed %v", err)
 		if !isSoftSnapshotError(err) {
-			panic(err)
+			return 0, err
 		} else {
-			return 0
+			return 0, nil
 		}
 	}
 	if ss.Index > n.config.CompactionOverhead {
 		n.ss.setCompactLogTo(ss.Index - n.config.CompactionOverhead)
 		if err := n.snapshotter.Compact(ss.Index); err != nil {
-			panic(err)
+			plog.Errorf("snapshotter.Compact failed %v", err)
+			return 0, err
 		}
 	}
 	n.ss.setSnapshotIndex(ss.Index)
-	return ss.Index
+	return ss.Index, nil
 }
 
-func (n *node) streamSnapshot(sink pb.IChunkSink) {
+func (n *node) streamSnapshot(sink pb.IChunkSink) error {
+	if sink != nil {
+		target := sink.ToNodeID
+		plog.Infof("%s called streamSnapshot to node %d", n.describe(), target)
+		if err := n.doStreamSnapshot(sink); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 	if err := n.sm.StreamSnapshot(sink); err != nil {
+		plog.Errorf("StreamSnapshot failed %v, %s", err, n.describe())
 		if err != sm.ErrSnapshotStopped &&
 			err != sm.ErrSnapshotStreaming &&
 			err != rsm.ErrTestKnobReturn {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
-func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
+func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool, error) {
+	index, stopped, err := n.doRecoverFromSnapshot(rec)
+	if err != nil {
+		return 0, false, err
+	}
+	return index, stopped, nil
+}
+
+func (n *node) doRecoverFromSnapshot(rec rsm.Task) (uint64, bool, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	var index uint64
@@ -649,10 +680,11 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
 			plog.Infof("%s aborted OpenOnDiskStateMachine", n.describe())
-			return 0, true
+			return 0, true, nil
 		}
 		if err != nil {
-			panic(err)
+			plog.Errorf("OpenOnDiskStateMachine failed %v, %s", err, n.describe())
+			return 0, false, err
 		}
 		if idx > 0 && rec.NewNode {
 			plog.Panicf("Open returned index %d (>0) on new node %s",
@@ -662,25 +694,29 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, bool) {
 	index, err = n.sm.RecoverFromSnapshot(rec)
 	if err == sm.ErrSnapshotStopped {
 		plog.Infof("%s aborted its RecoverFromSnapshot", n.describe())
-		return 0, true
+		return 0, true, nil
 	}
 	if err != nil {
-		panic(err)
+		plog.Errorf("RecoverFromSnapshot failed %v, %s", err, n.describe())
+		return 0, false, err
 	}
 	if index > 0 {
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
-				panic(err)
+				plog.Errorf("sm.Sync failed %v", err)
+				return 0, false, err
 			}
 			if err := n.snapshotter.Shrink(index); err != nil {
-				panic(err)
+				plog.Errorf("snapshotter.Shrink snapshot failed %v", err)
+				return 0, false, err
 			}
 		}
 		if err := n.snapshotter.Compact(index); err != nil {
-			panic(err)
+			plog.Errorf("snapshotter.Compact failed %v", err)
+			return 0, false, err
 		}
 	}
-	return index, false
+	return index, false, nil
 }
 
 func (n *node) streamSnapshotDone() {
@@ -693,22 +729,27 @@ func (n *node) saveSnapshotDone() {
 	n.engine.setTaskReady(n.clusterID)
 }
 
+func (n *node) recoverFromSnapshotDone(index uint64) {
+	if !n.initialized() {
+		n.initialSnapshotDone(index)
+	} else {
+		n.doRecoverFromSnapshotDone()
+	}
+}
+
 func (n *node) initialSnapshotDone(index uint64) {
 	n.ss.notifySnapshotStatus(false, true, false, true, index)
 	n.engine.setTaskReady(n.clusterID)
 }
 
-func (n *node) recoverFromSnapshotDone() {
+func (n *node) doRecoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
 	n.engine.setTaskReady(n.clusterID)
 }
 
-func (n *node) handleTask(batch []rsm.Task, ents []sm.Entry) (rsm.Task, bool) {
-	t, sr, err := n.sm.Handle(batch, ents)
-	if err != nil {
-		panic(err)
-	}
-	return t, sr
+func (n *node) handleTask(ts []rsm.Task,
+	es []sm.Entry) (rsm.Task, bool, error) {
+	return n.sm.Handle(ts, es)
 }
 
 func (n *node) removeSnapshotFlagFile(index uint64) error {
@@ -841,22 +882,22 @@ func (n *node) processReadyToRead(ud pb.Update) {
 	}
 }
 
-func (n *node) processSnapshot(ud pb.Update) bool {
+func (n *node) processSnapshot(ud pb.Update) (bool, error) {
 	if !pb.IsEmptySnapshot(ud.Snapshot) {
 		if n.stopped() {
-			return false
+			return false, nil
 		}
 		err := n.logreader.ApplySnapshot(ud.Snapshot)
 		if err != nil && !isSoftSnapshotError(err) {
-			panic(err)
+			return false, err
 		}
 		plog.Infof("%s, snapshot %d is ready to be published", n.describe(),
 			ud.Snapshot.Index)
 		if !n.publishSnapshot(ud.Snapshot, ud.LastApplied) {
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 func (n *node) applyRaftUpdates(ud pb.Update) bool {
@@ -867,25 +908,25 @@ func (n *node) applyRaftUpdates(ud pb.Update) bool {
 	return true
 }
 
-func (n *node) processRaftUpdate(ud pb.Update) bool {
+func (n *node) processRaftUpdate(ud pb.Update) (bool, error) {
 	if err := n.logreader.Append(ud.EntriesToSave); err != nil {
-		panic(err)
+		return false, err
 	}
 	n.sendMessages(ud.Messages)
 	if err := n.compactLog(); err != nil {
-		panic(err)
+		return false, err
 	}
 	cont, err := n.runSyncTask()
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	if !cont {
-		return false
+		return false, nil
 	}
 	if n.saveSnapshotRequired(ud.LastApplied) {
-		return n.publishTakeSnapshotRequest(rsm.SnapshotRequest{})
+		return n.publishTakeSnapshotRequest(rsm.SnapshotRequest{}), nil
 	}
-	return true
+	return true, nil
 }
 
 func (n *node) commitRaftUpdate(ud pb.Update) {

@@ -61,9 +61,9 @@ type Peer struct {
 	prevState pb.State
 }
 
-// LaunchPeer starts or restarts a Raft node.
-func LaunchPeer(config *config.Config, logdb ILogDB,
-	addresses []PeerAddress, initial bool, newNode bool) (*Peer, error) {
+// Launch starts or restarts a Raft node.
+func Launch(config *config.Config, logdb ILogDB,
+	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	r := newRaft(config, logdb)
 	rc := &Peer{raft: r}
@@ -82,7 +82,7 @@ func LaunchPeer(config *config.Config, logdb ILogDB,
 	} else {
 		rc.prevState = r.raftState()
 	}
-	return rc, nil
+	return rc
 }
 
 // Tick moves the logical clock forward by one tick.

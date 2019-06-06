@@ -291,8 +291,11 @@ func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
 		return
 	}
 	plog.Infof("%s called saveSnapshot", node.describe())
-	node.saveSnapshot(rec)
-	node.saveSnapshotDone()
+	if err := node.saveSnapshot(rec); err != nil {
+		panic(err)
+	} else {
+		node.saveSnapshotDone()
+	}
 }
 
 func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
@@ -304,12 +307,12 @@ func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	if !ok {
 		return
 	}
-	if sink := getSinkFn(); sink != nil {
-		plog.Infof("%s called streamSnapshot to node %d",
-			node.describe(), sink.ToNodeID())
-		node.streamSnapshot(sink)
+	sink := getSinkFn()
+	if err := node.streamSnapshot(sink); err != nil {
+		panic(err)
+	} else {
+		node.streamSnapshotDone()
 	}
-	node.streamSnapshotDone()
 }
 
 func (s *execEngine) recoverFromSnapshot(clusterID uint64,
@@ -323,16 +326,12 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 		return
 	}
 	plog.Infof("%s called recoverFromSnapshot", node.describe())
-	index, stopped := node.recoverFromSnapshot(rec)
-	if stopped {
-		// keep the paused for snapshot flag to make sure it won't be touched
-		// by task worker
-		return
-	}
-	if !node.initialized() {
-		node.initialSnapshotDone(index)
+	if index, stopped, err := node.recoverFromSnapshot(rec); err != nil {
+		panic(err)
 	} else {
-		node.recoverFromSnapshotDone()
+		if !stopped {
+			node.recoverFromSnapshotDone(index)
+		}
 	}
 }
 
@@ -398,8 +397,11 @@ func (s *execEngine) execSMs(workerID uint64,
 		if node.processSnapshotStatusTransition() {
 			continue
 		}
-		task, snapshotRequired := node.handleTask(batch, entries)
-		if snapshotRequired {
+		task, ssreq, err := node.handleTask(batch, entries)
+		if err != nil {
+			panic(err)
+		}
+		if ssreq {
 			node.handleSnapshotTask(task)
 		}
 	}
@@ -545,7 +547,11 @@ func (s *execEngine) execNodes(workerID uint64,
 	p.cs.start()
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
-		if !node.processRaftUpdate(ud) {
+		cont, err := node.processRaftUpdate(ud)
+		if err != nil {
+			panic(err)
+		}
+		if !cont {
 			plog.Infof("process update failed, %s is ready to exit",
 				node.describe())
 		}
@@ -581,7 +587,11 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 	nodes map[uint64]*node) {
 	for _, ud := range updates {
 		node := nodes[ud.ClusterID]
-		if !node.processSnapshot(ud) || !node.applyRaftUpdates(ud) {
+		cont, err := node.processSnapshot(ud)
+		if err != nil {
+			panic(err)
+		}
+		if !cont || !node.applyRaftUpdates(ud) {
 			plog.Infof("raft update and snapshot not published, %s stopped",
 				node.describe())
 		}
