@@ -21,6 +21,7 @@
 #include <memory>
 #include <cstdint>
 #include <chrono>
+#include <functional>
 #include "dragonboat/binding.h"
 #include "dragonboat/types.h"
 #include "dragonboat/managed.h"
@@ -417,13 +418,13 @@ class NodeHost : public ManagedObject
     Config config) noexcept;
 
   Status StartCluster(const Peers& replicas, bool join,
-    RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    std::function<RegularStateMachine*(uint64_t, uint64_t)> factory,
     Config config) noexcept;
   Status StartCluster(const Peers& replicas, bool join,
-    ConcurrentStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    std::function<ConcurrentStateMachine*(uint64_t, uint64_t)> factory,
     Config config) noexcept;
   Status StartCluster(const Peers& replicas, bool join,
-    OnDiskStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    std::function<OnDiskStateMachine*(uint64_t, uint64_t)> factory,
     Config config) noexcept;
   // StopCluster removes the specified cluster node from NodeHost. Note that
   // StopCluster makes the specified node no longer managed by the NodeHost

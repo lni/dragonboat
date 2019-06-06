@@ -245,6 +245,23 @@ bool NodeHostTest::TwoNodeHostRequired()
   return false;
 }
 
+TEST_F(NodeHostTest, FunctionalInterfaceCanStartCluster)
+{
+	dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  auto closure = 1;
+  dragonboat::Status s = nh_->StartCluster(p, false,
+    [&closure](uint64_t clusterID, uint64_t nodeID) {
+    EXPECT_EQ(closure, nodeID);
+      return CreateRegularStateMachine(clusterID, closure);
+    },
+    config);
+	EXPECT_TRUE(s.OK());
+  s = nh_->StopCluster(1);
+  EXPECT_TRUE(s.OK());
+}
+
 TEST_F(NodeHostTest, ClusterCanBeAddedAndRemoved)
 { 
 	dragonboat::Peers p;

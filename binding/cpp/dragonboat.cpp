@@ -354,7 +354,7 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
 }
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  RegularStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  std::function<RegularStateMachine*(uint64_t, uint64_t)> factory,
   Config config) noexcept
 {
   ::RaftConfig cfg;
@@ -363,13 +363,13 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
   int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<void *>(factory),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
     REGULAR_STATEMACHINE, cfg);
   return Status(code);
 }
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  ConcurrentStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  std::function<ConcurrentStateMachine*(uint64_t, uint64_t)> factory,
   Config config) noexcept
 {
   ::RaftConfig cfg;
@@ -378,13 +378,13 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
   int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<void *>(factory),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
     CONCURRENT_STATEMACHINE, cfg);
   return Status(code);
 }
 
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  OnDiskStateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  std::function<OnDiskStateMachine*(uint64_t, uint64_t)> factory,
   Config config) noexcept
 {
   ::RaftConfig cfg;
@@ -393,7 +393,7 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
   int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<void *>(factory),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
     ONDISK_STATEMACHINE, cfg);
   return Status(code);
 }
