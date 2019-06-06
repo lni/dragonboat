@@ -184,31 +184,32 @@ func NewStateMachineWrapperFromPlugin(clusterID uint64, nodeID uint64,
 	defer C.free(unsafe.Pointer(cDSName))
 	defer C.free(unsafe.Pointer(cFName))
 	factory := unsafe.Pointer(C.LoadFactoryFromPlugin(cDSName, cFName))
-	return NewStateMachineWrapper(clusterID, nodeID, factory, smType, done)
+	return NewStateMachineWrapper(clusterID, nodeID, factory, 1, smType, done)
 }
 
 // NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
 // instance.
 func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
-	factory unsafe.Pointer, smType pb.StateMachineType,
+	factory unsafe.Pointer, style uint64, smType pb.StateMachineType,
 	done <-chan struct{}) rsm.IManagedStateMachine {
 	cClusterID := C.uint64_t(clusterID)
 	cNodeID := C.uint64_t(nodeID)
 	cFactory := factory
+	cStyle := C.uint64_t(style)
 	switch smType {
 	case pb.RegularStateMachine:
 		return &RegularStateMachineWrapper{
-			dataStore: C.CreateDBRegularStateMachine(cClusterID, cNodeID, cFactory),
+			dataStore: C.CreateDBRegularStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
 	case pb.ConcurrentStateMachine:
 		return &ConcurrentStateMachineWrapper{
-			dataStore: C.CreateDBConcurrentStateMachine(cClusterID, cNodeID, cFactory),
+			dataStore: C.CreateDBConcurrentStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
 	case pb.OnDiskStateMachine:
 		return &OnDiskStateMachineWrapper{
-			dataStore: C.CreateDBOnDiskStateMachine(cClusterID, cNodeID, cFactory),
+			dataStore: C.CreateDBOnDiskStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
 	default:
@@ -656,6 +657,15 @@ func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 		panic("Update called when not opened")
 	}
 	ds.ensureNotDestroyed()
+	if e.Index <= ds.initialIndex {
+		plog.Panicf("last entry index to apply %d, initial index %d",
+			e.Index, ds.initialIndex)
+	}
+	if e.Index <= ds.applied {
+		plog.Panicf("last entry index to apply %d, applied %d",
+			e.Index, ds.applied)
+	}
+	ds.applied = e.Index
 	var dp *C.uchar
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))

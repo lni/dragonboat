@@ -108,7 +108,7 @@ func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string, join bool,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		return cpp.NewStateMachineWrapper(clusterID, nodeID,
-			factory, pb.StateMachineType(smType), done)
+			factory, 0, pb.StateMachineType(smType), done)
 	}
 	return nh.startCluster(nodes,
 		join, cf, stopc, config, pb.StateMachineType(smType))

@@ -62,13 +62,21 @@ void *LoadFactoryFromPlugin(char *soFilename, char *factoryName)
 }
 
 CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory)
+  uint64_t nodeID, void *factory, uint64_t cStyle)
 {
-  auto fn = reinterpret_cast<std::function<
-    dragonboat::RegularStateMachine*(uint64_t, uint64_t)>*>(factory);
-  CPPRegularStateMachine *ds = new CPPRegularStateMachine;
-  ds->sm = (*fn)(clusterID, nodeID);
-  return ds;
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::RegularStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPRegularStateMachine *ds = new CPPRegularStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::RegularStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPRegularStateMachine *ds = new CPPRegularStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
 }
 
 void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds)
@@ -118,13 +126,21 @@ void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
 }
 
 CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory)
+  uint64_t nodeID, void *factory, uint64_t cStyle)
 {
-  auto fn = reinterpret_cast<std::function<
-    dragonboat::ConcurrentStateMachine*(uint64_t, uint64_t)>*>(factory);
-  CPPConcurrentStateMachine *ds = new CPPConcurrentStateMachine;
-  ds->sm = (*fn)(clusterID, nodeID);
-  return ds;
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::ConcurrentStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPConcurrentStateMachine *ds = new CPPConcurrentStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::ConcurrentStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPConcurrentStateMachine *ds = new CPPConcurrentStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
 }
 
 void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
@@ -187,13 +203,21 @@ void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
 }
 
 CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory)
+  uint64_t nodeID, void *factory, uint64_t cStyle)
 {
-  auto fn = reinterpret_cast<std::function<
-    dragonboat::OnDiskStateMachine*(uint64_t, uint64_t)>*>(factory);
-  CPPOnDiskStateMachine *ds = new CPPOnDiskStateMachine;
-  ds->sm = (*fn)(clusterID, nodeID);
-  return ds;
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::OnDiskStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPOnDiskStateMachine *ds = new CPPOnDiskStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::OnDiskStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPOnDiskStateMachine *ds = new CPPOnDiskStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
 }
 
 void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)

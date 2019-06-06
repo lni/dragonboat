@@ -31,7 +31,7 @@ typedef struct CollectedFiles CollectedFiles;
 void *LoadFactoryFromPlugin(char *soFilename, char *factoryName);
 
 CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory);
+  uint64_t nodeID, void *factory, uint64_t cStyle);
 void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds);
 uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size);
@@ -46,7 +46,7 @@ void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
   LookupResult r);
 
 CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory);
+  uint64_t nodeID, void *factory, uint64_t cStyle);
 void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
 uint64_t UpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
   const unsigned char *data, size_t size);
@@ -66,7 +66,7 @@ void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
   LookupResult r);
 
 CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
-  uint64_t nodeID, void *factory);
+  uint64_t nodeID, void *factory, uint64_t cStyle);
 void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   uint64_t doneChOID);

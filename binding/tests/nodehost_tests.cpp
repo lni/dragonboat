@@ -17,6 +17,7 @@
 #include <memory>
 #include <thread>
 #include <condition_variable>
+#include <functional>
 
 #include "zupply.h"
 #include "dragonboat/dragonboat.h"
@@ -97,6 +98,12 @@ class InPlaceHelloWorldStateMachine : public dragonboat::RegularStateMachine
 
 dragonboat::RegularStateMachine *CreateRegularStateMachine(uint64_t clusterID,
   uint64_t nodeID)
+{
+  return new InPlaceHelloWorldStateMachine(clusterID, nodeID);
+}
+
+dragonboat::RegularStateMachine *ExtraCreateRegularStateMachine(uint64_t clusterID,
+  uint64_t nodeID, uint64_t placeHolder)
 {
   return new InPlaceHelloWorldStateMachine(clusterID, nodeID);
 }
@@ -245,7 +252,7 @@ bool NodeHostTest::TwoNodeHostRequired()
   return false;
 }
 
-TEST_F(NodeHostTest, FunctionalInterfaceCanStartCluster)
+TEST_F(NodeHostTest, CanStartClusterUsingLambda)
 {
 	dragonboat::Peers p;
   p.AddMember("localhost:9050", 1);
@@ -253,9 +260,24 @@ TEST_F(NodeHostTest, FunctionalInterfaceCanStartCluster)
   auto closure = 1;
   dragonboat::Status s = nh_->StartCluster(p, false,
     [&closure](uint64_t clusterID, uint64_t nodeID) {
-    EXPECT_EQ(closure, nodeID);
+      EXPECT_EQ(nodeID, closure);
       return CreateRegularStateMachine(clusterID, closure);
     },
+    config);
+	EXPECT_TRUE(s.OK());
+  s = nh_->StopCluster(1);
+  EXPECT_TRUE(s.OK());
+}
+
+TEST_F(NodeHostTest, CanStartClusterUsingStdFunction)
+{
+	dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  auto closure = 1;
+  dragonboat::Status s = nh_->StartCluster(p, false,
+    std::bind(ExtraCreateRegularStateMachine,
+      std::placeholders::_1, std::placeholders::_2, closure),
     config);
 	EXPECT_TRUE(s.OK());
   s = nh_->StopCluster(1);
