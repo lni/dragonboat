@@ -55,31 +55,65 @@ func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
 }
 
 func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
-	ds := NewStateMachineWrapperFromPlugin(1, 1,
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	if ds == nil {
-		t.Errorf("failed to return the data store object")
+	// TODO
+	// ds2 := NewStateMachineWrapperFromPlugin(2,1,
+	// 	"./dragonboat-cpp-plugin-example.so",
+	// 	"CreateConcurrentStateMachine",
+	// 	pb.ConcurrentStateMachine, nil)
+	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds1 == nil {
+		t.Errorf("failed to return the regular data store object")
 	}
-	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
-	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
-	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
-	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
-	ds.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
-	if !ds.(*RegularStateMachineWrapper).ReadyToDestroy() {
-		t.Errorf("destroyed: %t, want true", ds.(*RegularStateMachineWrapper).ReadyToDestroy())
+	if ds3 == nil {
+		t.Errorf("failed to return the on-disk data store object")
+	}
+	ds3.Open()
+	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
+	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
+	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
+	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	if !ds1.(*RegularStateMachineWrapper).ReadyToDestroy() {
+		t.Errorf("ds1.destroyed: %t, want true", ds1.(*RegularStateMachineWrapper).ReadyToDestroy())
+	}
+	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
+	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
+	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
+	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	if !ds3.(*OnDiskStateMachineWrapper).ReadyToDestroy() {
+		t.Errorf("ds3.destroyed: %t, want true", ds3.(*OnDiskStateMachineWrapper).ReadyToDestroy())
 	}
 }
 
 func TestOffloadedWorksAsExpected(t *testing.T) {
-	ds := NewStateMachineWrapperFromPlugin(1, 1,
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	if ds == nil {
-		t.Errorf("failed to return the data store object")
+	// TODO
+	// ds2 := NewStateMachineWrapperFromPlugin(2, 1,
+	// 	"./dragonboat-cpp-plugin-example.so",
+	// 	"CreateConcurrentStateMachine",
+	// 	pb.ConcurrentStateMachine, nil)
+	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds1 == nil {
+		t.Errorf("failed to return the regular data store object")
 	}
+	if ds3 == nil {
+		t.Errorf("failed to return the on-disk data store object")
+	}
+	ds3.Open()
 	tests := []struct {
 		val       rsm.From
 		destroyed bool
@@ -90,52 +124,77 @@ func TestOffloadedWorksAsExpected(t *testing.T) {
 		{rsm.FromNodeHost, true},
 	}
 	for _, tt := range tests {
-		ds.Offloaded(tt.val)
-		if ds.(*RegularStateMachineWrapper).Destroyed() != tt.destroyed {
-			t.Errorf("ds.destroyed %t, want %t",
-				ds.(*RegularStateMachineWrapper).Destroyed(), tt.destroyed)
+		ds1.Offloaded(tt.val)
+		ds3.Offloaded(tt.val)
+		if ds1.(*RegularStateMachineWrapper).Destroyed() != tt.destroyed {
+			t.Errorf("ds1.destroyed %t, want %t",
+				ds1.(*RegularStateMachineWrapper).Destroyed(), tt.destroyed)
+		}
+		if ds3.(*OnDiskStateMachineWrapper).Destroyed() != tt.destroyed {
+			t.Errorf("ds3.destroyed %t, want %t",
+				ds1.(*OnDiskStateMachineWrapper).Destroyed(), tt.destroyed)
 		}
 	}
 }
 
-func TestCppStateMachineCanBeUpdated(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapperFromPlugin(1, 1,
-		"./dragonboat-cpp-plugin-example.so",
-		"CreateRegularStateMachine",
-		pb.RegularStateMachine, nil)
-	if ds == nil {
-		t.Errorf("failed to return the data store object")
-	}
-	defer ds.(*RegularStateMachineWrapper).destroy()
-}
-
 func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	ds := NewStateMachineWrapperFromPlugin(1, 1,
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	if ds == nil {
+	// TODO
+	// ds2 := NewStateMachineWrapperFromPlugin(2, 1,
+	// 	"./dragonboat-cpp-plugin-example.so",
+	// 	"CreateConcurrentStateMachine",
+	// 	pb.ConcurrentStateMachine, nil)
+	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	initialApplied := uint64(123)
+	ds3.Open()
+	if ds1 == nil {
 		t.Errorf("failed to return the data store object")
 	}
-	defer ds.(*RegularStateMachineWrapper).destroy()
+	if ds3 == nil {
+		t.Errorf("failed to return the on-disk data store object")
+	}
+	defer ds1.(*RegularStateMachineWrapper).destroy()
+	defer ds3.(*OnDiskStateMachineWrapper).destroy()
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v1, _ := ds.Update(nil, e1)
-	v2, _ := ds.Update(nil, e2)
-	v3, _ := ds.Update(nil, e3)
+	v1, _ := ds1.Update(nil, e1)
+	v2, _ := ds1.Update(nil, e2)
+	v3, _ := ds1.Update(nil, e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
-		t.Errorf("Unexpected update result")
+		t.Errorf("Unexpected update result from regular data store")
 	}
-	result, err := ds.Lookup([]byte("test-lookup-data"))
+	result, err := ds1.Lookup([]byte("test-lookup-data"))
 	if err != nil {
-		t.Errorf("failed to lookup")
+		t.Errorf("failed to lookup regular data store")
 	}
-	v4 := binary.LittleEndian.Uint32(result.([]byte))
-	if uint64(v4) != v3.Value {
-		t.Errorf("returned %d, want %d", v4, v3)
+	v4 := binary.LittleEndian.Uint64(result.([]byte))
+	if v4 != v3.Value {
+		t.Errorf("regular data store returned %d, want %d", v4, v3)
+	}
+	e1.Index = initialApplied + 1
+	e2.Index = initialApplied + 2
+	e3.Index = initialApplied + 3
+	v1, _ = ds3.Update(nil, e1)
+	v2, _ = ds3.Update(nil, e2)
+	v3, _ = ds3.Update(nil, e3)
+	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
+		t.Errorf("Unexpected update result from on-disk data store")
+	}
+	result, err = ds3.Lookup([]byte("test-lookup-data"))
+	if err != nil {
+		t.Errorf("failed to lookup on-disk data store")
+	}
+	v4 = binary.LittleEndian.Uint64(result.([]byte))
+	if v4 != 3 {
+		t.Errorf("on-disk data store returned %d, want %d", v4, 3)
 	}
 }
 
@@ -165,7 +224,7 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	}
 }
 
-func TestCppSnapshotWorks(t *testing.T) {
+func TestCppWrapperSnapshotWorks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
 	defer os.Remove(fp)
@@ -242,14 +301,112 @@ func TestCppSnapshotWorks(t *testing.T) {
 	}
 }
 
-func TestCppOnDiskSMCanBeOpened(t *testing.T) {
+func TestOnDiskSMCanBeOpened(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	applied := uint64(123)
+	initialApplied := uint64(123)
 	// initialApplied = 123 is hard coded in the testing on-disk statemachine
 	ds := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	idx, err := ds.Open()
+	if err != nil {
+		t.Fatalf("failed to open %v", err)
+	}
+	if idx != initialApplied {
+		t.Errorf("unexpected idx %d", idx)
+	}
+	if ds.(*OnDiskStateMachineWrapper).initialIndex != initialApplied {
+		t.Errorf("initial index not recorded %d, want %d",
+			ds.(*OnDiskStateMachineWrapper).initialIndex, initialApplied)
+	}
+	if ds.(*OnDiskStateMachineWrapper).applied != initialApplied {
+		t.Errorf("applied not recorded %d, want %d",
+			ds.(*OnDiskStateMachineWrapper).applied, initialApplied)
+	}
+}
+
+func TestOnDiskSMCanNotOpenedMoreThanOnce(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	initialApplied := uint64(123)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	idx, err := ds.Open()
+	if err != nil {
+		t.Fatalf("failed to open %v", err)
+	}
+	if idx != initialApplied {
+		t.Errorf("unexpected idx %d", idx)
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	if _, err := ds.Open(); err != nil {
+		t.Fatalf("open failed %v", err)
+	}
+}
+
+func TestOnDiskSMRecordAppliedIndex(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	initialApplied := uint64(123)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	idx, err := ds.Open()
+	if err != nil {
+		t.Fatalf("failed to open %v", err)
+	}
+	if idx != initialApplied {
+		t.Errorf("unexpected idx %d", idx)
+	}
+	if ds.(*OnDiskStateMachineWrapper).applied != initialApplied {
+		t.Errorf("applied not recorded %d, want %d",
+			ds.(*OnDiskStateMachineWrapper).applied, initialApplied)
+	}
+	entry := pb.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
+	if _, err := ds.Update(nil, entry); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+	if ds.(*OnDiskStateMachineWrapper).applied != initialApplied+1 {
+		t.Errorf("applied value not recorded")
+	}
+}
+
+func TestUpdateAnUnopenedOnDiskSMWillPanic(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	applied := uint64(123)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	entry := pb.Entry{Index: applied + 1, Cmd: []byte("test-data-1")}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	if _, err := ds.Update(nil, entry); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+}
+
+func TestUpdateOnDiskSMWithAppliedIndexWillPanic(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	applied := uint64(123)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
 	idx, err := ds.Open()
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
@@ -257,12 +414,307 @@ func TestCppOnDiskSMCanBeOpened(t *testing.T) {
 	if idx != applied {
 		t.Errorf("unexpected idx %d", idx)
 	}
-	if ds.(*OnDiskStateMachineWrapper).initialIndex != applied {
-		t.Errorf("initial index not recorded %d, want %d",
-			ds.(*OnDiskStateMachineWrapper).initialIndex, applied)
+	entry := pb.Entry{Index: applied + 1, Cmd: []byte("test-data-1")}
+	count, err := ds.Update(nil, entry)
+	if err != nil {
+		t.Fatalf("update failed %v", err)
 	}
-	if ds.(*OnDiskStateMachineWrapper).applied != applied {
-		t.Errorf("applied not recorded %d, want %d",
-			ds.(*OnDiskStateMachineWrapper).applied, applied)
+	if count.Value != 1 {
+		t.Fatalf("initial update returned %v, want 1", count.Value)
 	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	if _, err := ds.Update(nil, entry); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+}
+
+func TestUpdateOnDiskSMWithIndexLessThanInitialIndexWillPanic(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	applied := uint64(123)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	idx, err := ds.Open()
+	if err != nil {
+		t.Fatalf("failed to open %v", err)
+	}
+	if idx != applied {
+		t.Errorf("unexpected idx %d", idx)
+	}
+	entry := pb.Entry{Index: applied - 1, Cmd: []byte("test-data-1")}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	if _, err := ds.Update(nil, entry); err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+}
+
+func TestLookupAnUnopenedOnDiskSMWillPanic(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	if _, err := ds.Lookup(nil); err != nil {
+		t.Fatalf("lookup failed %v", err)
+	}
+}
+
+func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	ds := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds.(*OnDiskStateMachineWrapper).destroy()
+	_, err := ds.Open()
+	if err != nil {
+		t.Fatalf("failed to open %v", err)
+	}
+	count, err := ds.Lookup([]byte{0})
+	if err != nil {
+		t.Errorf("lookup failed %v", err)
+	}
+	if v := binary.LittleEndian.Uint64(count.([]byte)); v != 0 {
+		t.Errorf("initial lookup returned %v, want 0", v)
+	}
+}
+
+func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	initialApplied := uint64(123)
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds1.(*OnDiskStateMachineWrapper).destroy()
+	_, err := ds1.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds1 %v", err)
+	}
+	entry := pb.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(nil, entry)
+	if err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+	if count.Value != 1 {
+		t.Fatalf("initial update returned %v, want 1", count.Value)
+	}
+	ctx, _ := ds1.PrepareSnapshot()
+	if len(ctx.([]byte)) != 16 {
+		t.Fatalf("failed to prepare snapshot")
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.ExportedSnapshot,
+		},
+		Type:    pb.OnDiskStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+		Ctx:     ctx,
+	}
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to new snapshot writer %v", err)
+	}
+	_, sz, err := ds1.SaveSnapshot(&meta, writer, meta.Session.Bytes(), nil)
+	if err != nil {
+		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writter %v", err)
+	}
+	f, err := os.Open(fp)
+	if err != nil {
+		t.Errorf("failed to open file %v", err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		t.Errorf("failed to get file stat")
+	}
+	if uint64(fi.Size()) != sz {
+		t.Errorf("sz %d, want %d", fi.Size(), sz)
+	}
+	ds2 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds2 == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds2.(*OnDiskStateMachineWrapper).destroy()
+	_, err = ds2.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds2 %v", err)
+	}
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
+	err = ds2.RecoverFromSnapshot(initialApplied+1, reader, nil)
+	if err != nil {
+		t.Fatalf("failed to recover from snapshot %v", err)
+	}
+	yacount, err := ds2.Lookup([]byte{0})
+	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+		t.Fatalf("lookup recovered data store returned %v, want 1", v)
+	}
+	h, _ := ds1.GetHash()
+	h2, _ := ds2.GetHash()
+	if h != h2 {
+		t.Fatalf("hash does not match")
+	}
+}
+
+func TestOnDiskSMRecoverFromBackwardSnapshotWillPanic(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	initialApplied := uint64(123)
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds1.(*OnDiskStateMachineWrapper).destroy()
+	_, err := ds1.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds1 %v", err)
+	}
+	ctx, _ := ds1.PrepareSnapshot()
+	if len(ctx.([]byte)) != 16 {
+		t.Fatalf("failed to prepare snapshot")
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.ExportedSnapshot,
+		},
+		Type:    pb.OnDiskStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+		Ctx:     ctx,
+	}
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to new snapshot writer %v", err)
+	}
+	_, sz, err := ds1.SaveSnapshot(&meta, writer, meta.Session.Bytes(), nil)
+	if err != nil {
+		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writter %v", err)
+	}
+	f, err := os.Open(fp)
+	if err != nil {
+		t.Errorf("failed to open file %v", err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		t.Errorf("failed to get file stat")
+	}
+	if uint64(fi.Size()) != sz {
+		t.Errorf("sz %d, want %d", fi.Size(), sz)
+	}
+	ds2 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds2 == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds2.(*OnDiskStateMachineWrapper).destroy()
+	_, err = ds2.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds2 %v", err)
+	}
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("no panic")
+		}
+	}()
+	err = ds2.RecoverFromSnapshot(initialApplied-1, reader, nil)
+	if err != nil {
+		t.Fatalf("recover from snapshot failed %v", err)
+	}
+}
+
+func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds1.(*OnDiskStateMachineWrapper).destroy()
+	_, err := ds1.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds1 %v", err)
+	}
+	ctx, _ := ds1.PrepareSnapshot()
+	if len(ctx.([]byte)) != 16 {
+		t.Fatalf("failed to prepare snapshot")
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.UserRequestedSnapshot,
+		},
+		Type:    pb.OnDiskStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+		Ctx:     ctx,
+	}
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to new snapshot writer %v", err)
+	}
+	_, _, err = ds1.SaveSnapshot(&meta, writer, meta.Session.Bytes(), nil)
+	if err != nil {
+		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writter %v", err)
+	}
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
 }

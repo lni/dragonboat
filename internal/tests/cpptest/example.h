@@ -46,7 +46,7 @@ class HelloWorldStateMachine : public dragonboat::RegularStateMachine
   void freeLookupResult(LookupResult r) noexcept override;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(HelloWorldStateMachine);
-  int update_count_;
+  uint64_t count_;
 };
 
 //TODO

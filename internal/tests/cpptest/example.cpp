@@ -20,7 +20,7 @@
 
 HelloWorldStateMachine::HelloWorldStateMachine(uint64_t clusterID,
   uint64_t nodeID) noexcept
-  : dragonboat::RegularStateMachine(clusterID, nodeID), update_count_(0)
+  : dragonboat::RegularStateMachine(clusterID, nodeID), count_(0)
 {
 }
 
@@ -31,25 +31,23 @@ HelloWorldStateMachine::~HelloWorldStateMachine()
 uint64_t HelloWorldStateMachine::update(const dragonboat::Byte *data,
   size_t sz) noexcept
 {
-  // increase the update_count_ value
-  update_count_++;
-  return update_count_;
+  count_++;
+  return count_;
 }
 
 LookupResult HelloWorldStateMachine::lookup(const dragonboat::Byte *data,
   size_t sz) const noexcept
 {
-  // return the update_count_ value
   LookupResult r;
-  r.result = new char[sizeof(int)];
-  r.size = sizeof(int);
-  *((int *)r.result) = update_count_;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *)r.result) = count_;
   return r;
 }
 
 uint64_t HelloWorldStateMachine::getHash() const noexcept
 {
-  return (uint64_t)update_count_;
+  return count_;
 }
 
 SnapshotResult HelloWorldStateMachine::saveSnapshot(dragonboat::SnapshotWriter *writer,
@@ -60,12 +58,12 @@ SnapshotResult HelloWorldStateMachine::saveSnapshot(dragonboat::SnapshotWriter *
   dragonboat::IOResult ret;
   r.errcode = SNAPSHOT_OK;
   r.size = 0;
-  ret = writer->Write((dragonboat::Byte *)&update_count_, sizeof(int));
-  if (ret.size != sizeof(int)) {
+  ret = writer->Write((dragonboat::Byte *)&count_, sizeof(uint64_t));
+  if (ret.size != sizeof(uint64_t)) {
     r.errcode = FAILED_TO_SAVE_SNAPSHOT;
     return r;
   }
-  r.size = sizeof(int);
+  r.size = sizeof(uint64_t);
   return r;
 }
 
@@ -74,12 +72,12 @@ int HelloWorldStateMachine::recoverFromSnapshot(dragonboat::SnapshotReader *read
   const dragonboat::DoneChan &done) noexcept
 {
   dragonboat::IOResult ret;
-  dragonboat::Byte data[sizeof(int)];
-  ret = reader->Read(data, sizeof(int));
-  if (ret.size != sizeof(int)) {
+  dragonboat::Byte data[sizeof(uint64_t)];
+  ret = reader->Read(data, sizeof(uint64_t));
+  if (ret.size != sizeof(uint64_t)) {
     return FAILED_TO_RECOVER_FROM_SNAPSHOT;
   }
-  update_count_ = (int)(*data);
+  count_ = (uint64_t)(*data);
   return SNAPSHOT_OK;
 }
 
@@ -91,7 +89,8 @@ void HelloWorldStateMachine::freeLookupResult(LookupResult r) noexcept
 FakeOnDiskStateMachine::FakeOnDiskStateMachine(uint64_t clusterID,
   uint64_t nodeID, uint64_t initialApplied) noexcept
   : dragonboat::OnDiskStateMachine(clusterID, nodeID),
-    initialApplied_(initialApplied)
+    initialApplied_(initialApplied),
+    count_(0)
 {
 }
 
