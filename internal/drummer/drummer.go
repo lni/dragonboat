@@ -35,9 +35,9 @@ import (
 	"github.com/lni/dragonboat"
 	"github.com/lni/dragonboat/client"
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
+	serverPkg "github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/utils/envutil"
-	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/netutil"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/internal/utils/stringutil"
@@ -419,7 +419,7 @@ func (d *Drummer) drummerMain() {
 		cancel()
 		return false
 	}
-	lang.RunTicker(td, tf, d.stopper.ShouldStop(), nil)
+	serverPkg.RunTicker(td, tf, d.stopper.ShouldStop(), nil)
 	plog.Debugf("drummer's main loop stopped, nh addr: %s", d.nh.RaftAddress())
 }
 

@@ -95,14 +95,11 @@ import (
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/raft"
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/stringutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -192,7 +189,7 @@ type NodeHostInfo struct {
 // NodeHostInfoOption is the option type used when querying NodeHostInfo.
 type NodeHostInfoOption struct {
 	// SkipLogInfo is the boolean flag indicating whether Raft Log info should be
-	// skipped when querying NodeHostInfo.
+	// skipped when querying the NodeHostInfo.
 	SkipLogInfo bool
 }
 
@@ -1313,26 +1310,22 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 		if !join {
 			members = nodes
 		}
-		bootstrap := pb.Bootstrap{
-			Join:      join,
-			Addresses: make(map[uint64]string),
-			Type:      smType,
+		bs := pb.NewBootstrapInfo(join, smType, nodes)
+		err := nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, *bs)
+		if err != nil {
+			return nil, false, false, err
 		}
-		for nid, addr := range nodes {
-			bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
-		}
-		err = nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, bootstrap)
-		plog.Infof("node %s not bootstrapped, %v",
+		plog.Infof("node %s bootstrapped, %v",
 			logutil.DescribeNode(config.ClusterID, config.NodeID), members)
-		return members, !join, new, err
+		return members, !join, new, nil
 	} else if err != nil {
-		return nil, false, new, err
+		return nil, false, false, err
 	}
 	if !binfo.Validate(nodes, join, smType) {
-		plog.Errorf("bootstrap validation failed for %s, %v, %t, %v, %t",
+		plog.Errorf("bootstrap validation failed, %s, %v, %t, %v, %t",
 			logutil.DescribeNode(config.ClusterID, config.NodeID),
 			binfo.Addresses, binfo.Join, nodes, join)
-		return nil, false, new, ErrInvalidClusterSettings
+		return nil, false, false, ErrInvalidClusterSettings
 	}
 	plog.Infof("bootstrap for %s going to return %v",
 		logutil.DescribeNode(config.ClusterID, config.NodeID), binfo.Addresses)
@@ -1553,7 +1546,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		return false
 	}
-	lang.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
+	server.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
 }
 
 func (nh *NodeHost) getCurrentClusters(index uint64,
@@ -1666,7 +1659,7 @@ func (nh *NodeHost) nodeMonitorMain(nhConfig config.NodeHostConfig) {
 		nh.closeStoppedClusters()
 		return false
 	}
-	lang.RunTicker(monitorInterval, tf, nh.stopper.ShouldStop(), nil)
+	server.RunTicker(monitorInterval, tf, nh.stopper.ShouldStop(), nil)
 }
 
 func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
@@ -1945,8 +1938,8 @@ func logBuildTagsAndVersion() {
 		devstr = "Dev"
 	}
 	plog.Infof("go version: %s", runtime.Version())
-	plog.Infof("dragonboat version: %d.%d.%d (%s), raftlog type: %s",
-		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr, raft.RaftLogTypeName)
+	plog.Infof("dragonboat version: %d.%d.%d (%s)",
+		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
 	if runtime.GOOS == "darwin" {
 		plog.Warningf("Running on darwin, don't use for production purposes")

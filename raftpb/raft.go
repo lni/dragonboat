@@ -187,6 +187,20 @@ func (e *Entry) IsUpdateEntry() bool {
 		!e.IsNewSessionRequest() && !e.IsEndOfSessionRequest()
 }
 
+// NewBootstrapInfo creates and returns a new bootstrap record.
+func NewBootstrapInfo(join bool,
+	smType StateMachineType, nodes map[uint64]string) *Bootstrap {
+	bootstrap := &Bootstrap{
+		Join:      join,
+		Addresses: make(map[uint64]string),
+		Type:      smType,
+	}
+	for nid, addr := range nodes {
+		bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
+	}
+	return bootstrap
+}
+
 // Validate checks whether the incoming nodes parameter and the join flag is
 // valid given the recorded bootstrap infomration in Log DB.
 func (b *Bootstrap) Validate(nodes map[uint64]string,
