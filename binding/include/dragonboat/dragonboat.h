@@ -505,7 +505,6 @@ class NodeHost : public ManagedObject
   Status ReadLocal(ClusterID clusterID,
     const Byte *query, size_t queryLen,
     Byte *result, size_t resultLen, size_t *written) noexcept;
-  // TODO: implemnt StaleRead sync
   Status StaleRead(ClusterID clusterID, const Buffer &query,
     Buffer *result) noexcept;
   Status StaleRead(ClusterID clusterID,

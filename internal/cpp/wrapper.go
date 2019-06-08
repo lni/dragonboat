@@ -677,8 +677,30 @@ func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	return sm.Result{Value: uint64(v)}, nil
 }
 
-func (ds *OnDiskStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	panic("not supported")
+func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
+	if !ds.opened {
+		panic("BatchedUpdate called when not opened")
+	}
+	ds.ensureNotDestroyed()
+	if entries[0].Index <= ds.initialIndex {
+		plog.Panicf("first entry index to apply %d, initial index %d",
+			entries[0].Index, ds.initialIndex)
+	}
+	if entries[0].Index <= ds.applied {
+		plog.Panicf("first entry index to apply %d, applied %d",
+			entries[0].Index, ds.applied)
+	}
+	for idx, ent := range entries {
+		var dp *C.uchar
+		data := ent.Cmd
+		if len(data) > 0 {
+			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+		}
+		v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+		entries[idx].Result = sm.Result{Value: uint64(v)}
+	}
+	ds.applied = entries[len(entries)-1].Index
+	return entries, nil
 }
 
 func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
