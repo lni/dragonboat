@@ -116,6 +116,7 @@ func benchmarkProposeN(b *testing.B, sz int) {
 				q.get(false)
 			}
 			pp.applied(rs.key, rs.clientID, rs.seriesID, sm.Result{Value: 1}, false)
+			rs.readyToRelease.set()
 			rs.Release()
 		}
 	})
@@ -175,6 +176,7 @@ func BenchmarkReadIndexRead(b *testing.B) {
 				atomic.StoreUint64(&total, 0)
 				q.get()
 			}
+			rs.readyToRelease.set()
 			rs.Release()
 		}
 	})
