@@ -592,7 +592,7 @@ func NodeHostRequestLeaderTransfer(oid uint64,
 	return getErrorCode(err)
 }
 
-// NodeHostGetClusterMembership returns the membership of the specified cluster.
+// NodeHostSyncGetClusterMembership returns the membership of the specified cluster.
 //export NodeHostGetClusterMembership
 func NodeHostGetClusterMembership(oid uint64, clusterID uint64,
 	timeout uint64) (*C.Membership, uint64, int) {
@@ -600,7 +600,7 @@ func NodeHostGetClusterMembership(oid uint64, clusterID uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	membership, err := nh.GetClusterMembership(ctx, clusterID)
+	membership, err := nh.SyncGetClusterMembership(ctx, clusterID)
 	if err != nil {
 		return nil, 0, getErrorCode(err)
 	}

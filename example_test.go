@@ -171,7 +171,7 @@ func ExampleNodeHost_RequestDeleteNode() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
 		// request rejected as it is out of order. try again with the latest order
-		// id value returned by NodeHost's GetClusterMembership() method.
+		// id value returned by NodeHost's SyncGetClusterMembership() method.
 	}
 }
 
@@ -215,7 +215,7 @@ func ExampleNodeHost_RequestAddNode() {
 		// request terminated as the system is being shut down, time to exit
 	} else if s.Rejected() {
 		// request rejected as it is out of order. try again with the latest order
-		// id value returned by NodeHost's GetClusterMembership() method.
+		// id value returned by NodeHost's SyncGetClusterMembership() method.
 	}
 }
 

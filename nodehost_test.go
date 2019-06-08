@@ -1101,7 +1101,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		membership, err := nh.GetClusterMembership(ctx, 2)
+		membership, err := nh.SyncGetClusterMembership(ctx, 2)
 		if err != nil {
 			t.Fatalf("failed to get cluster membership %v", err)
 		}
@@ -1126,7 +1126,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		membership, err = nh.GetClusterMembership(ctx, 2)
+		membership, err = nh.SyncGetClusterMembership(ctx, 2)
 		if err != nil {
 			t.Fatalf("failed to get cluster membership %v", err)
 		}
