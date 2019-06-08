@@ -67,6 +67,8 @@ func (s *Stopper) RunWorker(f func()) {
 	s.runWorker(f, "")
 }
 
+// RunPWorker creates a new goroutine and invoke the f func with the specified
+// parameter p in that new worker goroutine.
 func (s *Stopper) RunPWorker(f func(arg interface{}), p interface{}) {
 	s.runPWorker(f, p)
 }

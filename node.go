@@ -624,9 +624,8 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 		plog.Errorf("CreateSnapshot failed %v", err)
 		if !isSoftSnapshotError(err) {
 			return 0, err
-		} else {
-			return 0, nil
 		}
+		return 0, nil
 	}
 	if ss.Index > n.config.CompactionOverhead {
 		n.ss.setCompactLogTo(ss.Index - n.config.CompactionOverhead)
