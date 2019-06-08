@@ -125,7 +125,36 @@ std::string Status::String() const noexcept
     return "ErrDeadlineNotSet";
   case ::ErrInvalidDeadline:
     return "ErrInvalidDeadline";
-  // TODO
+  case ::ErrInvalidSession:
+    return "ErrInvalidSession";
+  case ::ErrTimeoutTooSmall:
+    return "ErrTimeoutTooSmall";
+  case ::ErrPayloadTooBig:
+    return "ErrPayloadTooBig";
+  case ::ErrSystemBusy:
+    return "ErrSystemBusy";
+  case ::ErrClusterClosed:
+    return "ErrClusterClosed";
+  case ::ErrBadKey:
+    return "ErrBadKey";
+  case ::ErrPendingConfigChangeExist:
+    return "ErrPendingConfigChangeExist";
+  case ::ErrTimeout:
+    return "ErrTimeout";
+  case ::ErrSystemStopped:
+    return "ErrSystemStopped";
+  case ::ErrCanceled:
+    return "ErrCanceled";
+  case ::ErrResultBufferTooSmall:
+    return "ErrResultBufferTooSmall";
+  case ::ErrRejected:
+    return "ErrRejected";
+  case ::ErrInvalidClusterSettings:
+    return "ErrInvalidClusterSettings";
+  case ::ErrClusterNotStopped:
+    return "ErrClusterNotStopped";
+  case ::ErrClusterNotInitialized:
+    return "ErrClusterNotInitialized";
   default:
     return "Unknown Error Code " + std::to_string(code_);
   }
@@ -149,6 +178,8 @@ const int Status::ErrCanceled = ::ErrCanceled;
 const int Status::ErrResultBufferTooSmall = ::ErrResultBufferTooSmall;
 const int Status::ErrRejected = ::ErrRejected;
 const int Status::ErrInvalidClusterSettings = ::ErrInvalidClusterSettings;
+const int Status::ErrClusterNotStopped = ::ErrClusterNotStopped;
+const int Status::ErrClusterNotInitialized = ::ErrClusterNotInitialized;
 
 Buffer::Buffer(size_t n) noexcept
   : data_(), len_(n)

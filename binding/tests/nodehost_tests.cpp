@@ -248,7 +248,7 @@ bool NodeHostTest::TwoNodeHostRequired()
   }
   return false;
 }
-#if 0/////////////////////////////////////////////////////////
+
 TEST_F(NodeHostTest, CanStartClusterUsingLambda)
 {
   dragonboat::Peers p;
@@ -1107,7 +1107,7 @@ class FakeConcurrentStateMachine : public dragonboat::ConcurrentStateMachine {
 };
 
 // TODO: add ConcurrentStateMachine tests
-#endif
+
 class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
  public:
   FakeOnDiskStateMachine(uint64_t clusterID, uint64_t nodeID,

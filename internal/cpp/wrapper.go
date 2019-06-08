@@ -253,10 +253,18 @@ func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 	ds.SetLoaded(from)
 }
 
-// BatchedUpdate applies committed entries in a batch to hide latency. This
-// method is not supported in the C++ wrapper.
-func (ds *RegularStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	panic("not supported")
+func (ds *RegularStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
+	ds.ensureNotDestroyed()
+	for idx, ent := range entries {
+		var dp *C.uchar
+		data := ent.Cmd
+		if len(data) > 0 {
+			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+		}
+		v := C.UpdateDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+		entries[idx].Result = sm.Result{Value: uint64(v)}
+	}
+	return entries, nil
 }
 
 // Update updates the data store.
@@ -452,8 +460,18 @@ func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 	return sm.Result{Value: uint64(v)}, nil
 }
 
-func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	panic("not supported")
+func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
+	ds.ensureNotDestroyed()
+	for idx, ent := range entries {
+		var dp *C.uchar
+		data := ent.Cmd
+		if len(data) > 0 {
+			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+		}
+		v := C.UpdateDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+		entries[idx].Result = sm.Result{Value: uint64(v)}
+	}
+	return entries, nil
 }
 
 func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
