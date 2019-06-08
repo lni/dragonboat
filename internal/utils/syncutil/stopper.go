@@ -67,11 +67,29 @@ func (s *Stopper) RunWorker(f func()) {
 	s.runWorker(f, "")
 }
 
+func (s *Stopper) RunPWorker(f func(arg interface{}), p interface{}) {
+	s.runPWorker(f, p)
+}
+
 // RunNamedWorker creates a new gorotuine and invoke the f func in that
 // new worker goroutine. The specified name is to identify the worker,
 // it is typically used for debugging purposes.
 func (s *Stopper) RunNamedWorker(f func(), name string) {
 	s.runWorker(f, name)
+}
+
+func (s *Stopper) runPWorker(f func(arg interface{}), p interface{}) {
+	s.wg.Add(1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				plog.Errorf("worker is panicing, %v", r)
+				panic(r)
+			}
+		}()
+		f(p)
+		s.wg.Done()
+	}()
 }
 
 func (s *Stopper) runWorker(f func(), name string) {
