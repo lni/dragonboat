@@ -463,8 +463,7 @@ Status NodeHost::SyncRead(ClusterID clusterID,
   int code = CNodeHostSyncRead(oid_, ts, clusterID,
     const_cast<Byte*>(query.Data()), query.Len(),
     const_cast<Byte*>(result->Data()), result->Capacity(), &written);
-  if (code == 0)
-  {
+  if (code == 0) {
     result->SetLen(written);
   }
   return Status(code);
@@ -518,7 +517,7 @@ Status NodeHost::ReadLocal(ClusterID clusterID,
 {
   size_t written;
   int code = CNodeHostReadLocal(oid_, clusterID,
-    const_cast<Byte*>(query.Data()), query.Len(),
+    query.Data(), query.Len(),
     const_cast<Byte*>(result->Data()), result->Capacity(), &written);
   if (code == 0)
   {
@@ -539,14 +538,23 @@ Status NodeHost::ReadLocal(ClusterID clusterID,
 Status NodeHost::StaleRead(ClusterID clusterID, const Buffer &query,
   Buffer *result) noexcept
 {
-  return Status(-1);
+  size_t written;
+  int code = CNodeHostStaleRead(oid_, clusterID,
+    query.Data(), query.Len(),
+    const_cast<Byte*>(result->Data()), result->Capacity(), &written);
+  if (code == 0) {
+    result->SetLen(written);
+  }
+  return Status(code);
 }
 
 Status NodeHost::StaleRead(ClusterID clusterID,
   const Byte *query, size_t queryLen,
   Byte *result, size_t resultLen, size_t *written) noexcept
 {
-  return Status(-1);
+  int code = CNodeHostStaleRead(oid_, clusterID,
+    query, queryLen, result, resultLen, written);
+  return Status(code);
 }
 
 Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,

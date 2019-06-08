@@ -89,6 +89,8 @@ func getErrorCode(err error) int {
 		return int(C.ErrRejected)
 	} else if err == dragonboat.ErrClusterNotStopped {
 		return int(C.ErrClusterNotStopped)
+	} else if err == dragonboat.ErrClusterNotInitialized {
+		return int(C.ErrClusterNotInitialized)
 	}
 	panic(fmt.Sprintf("unknown error %v", err))
 }

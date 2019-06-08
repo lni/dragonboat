@@ -549,12 +549,26 @@ func NodeHostReadLocal(oid uint64,
 	return getErrorCode(err), len(r)
 }
 
-// TODO: NodeHostStaleRead
+// NodeHostStaleRead
 //export NodeHostStaleRead
-func NodeHostStaleRead(oid uint64,
-	clusterID uint64, queryBuf *C.uchar, queryLen C.size_t,
+func NodeHostStaleRead(oid uint64, clusterID uint64,
+	queryBuf *C.uchar, queryLen C.size_t,
 	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
-	return 0, 0
+	nh := getNodeHost(oid)
+	query := ucharToByte(queryBuf, queryLen)
+	result := ucharToByte(resultBuf, resultLen)
+	r, err := nh.StaleRead(clusterID, query)
+	if err != nil {
+		return getErrorCode(err), 0
+	}
+	rv := r.([]byte)
+	if len(rv) > int(resultLen) {
+		return int(C.ErrResultBufferTooSmall), 0
+	}
+	if copy(result, rv) != len(rv) {
+		panic("failed to copy buffer")
+	}
+	return getErrorCode(err), len(rv)
 }
 
 //export NodeHostSyncRequestSnapshot

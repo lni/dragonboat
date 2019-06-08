@@ -96,6 +96,7 @@ enum ErrorCode
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
   ErrClusterNotStopped = -18,
+  ErrClusterNotInitialized = -19,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is
@@ -281,6 +282,9 @@ SyncProposeResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   uint64_t csoid, Bool csupdate, const unsigned char *buf, size_t len);
 int CNodeHostSyncRead(uint64_t oid,
   uint64_t timeout, uint64_t clusterID,
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written);
+int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
 SyncRequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,

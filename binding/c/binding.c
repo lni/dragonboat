@@ -148,6 +148,17 @@ int CNodeHostSyncRead(uint64_t oid,
   return r.r0;
 }
 
+int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written)
+{
+  struct NodeHostStaleRead_return r;
+  r = NodeHostStaleRead(oid, clusterID,
+    (unsigned char *)queryBuf, queryBufLen, resultBuf, resultBufLen);
+  *written = r.r1;
+  return r.r0;
+}
+
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written)

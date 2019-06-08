@@ -255,7 +255,7 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to save snapshot, %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close the snapshot writter %v", err)
+		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	f, err := os.Open(fp)
 	if err != nil {
@@ -540,7 +540,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		t.Errorf("failed to save snapshot, %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close the snapshot writter %v", err)
+		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	f, err := os.Open(fp)
 	if err != nil {
@@ -625,7 +625,7 @@ func TestOnDiskSMRecoverFromBackwardSnapshotWillPanic(t *testing.T) {
 		t.Errorf("failed to save snapshot, %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close the snapshot writter %v", err)
+		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	f, err := os.Open(fp)
 	if err != nil {
@@ -705,7 +705,7 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 		t.Errorf("failed to save snapshot, %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close the snapshot writter %v", err)
+		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
@@ -717,4 +717,128 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 		t.Fatalf("failed to get snapshot header")
 	}
 	reader.ValidateHeader(header)
+}
+
+type testSink struct {
+	chunks     []pb.SnapshotChunk
+	sendFailed bool
+	stopped    bool
+}
+
+func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+	if s.sendFailed || s.stopped {
+		return !s.sendFailed, s.stopped
+	}
+	s.chunks = append(s.chunks, chunk)
+	return true, false
+}
+
+func (s *testSink) ClusterID() uint64 {
+	return 1
+}
+
+func (s *testSink) ToNodeID() uint64 {
+	return 1
+}
+
+func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	initialApplied := uint64(123)
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	defer ds1.(*OnDiskStateMachineWrapper).destroy()
+	_, err := ds1.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds1 %v", err)
+	}
+	entry := pb.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(nil, entry)
+	if err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+	if count.Value != 1 {
+		t.Fatalf("initial update returned %v, want 1", count.Value)
+	}
+	ctx, _ := ds1.PrepareSnapshot()
+	if len(ctx.([]byte)) != 16 {
+		t.Fatalf("failed to prepare snapshot")
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.ExportedSnapshot,
+		},
+		Type:    pb.OnDiskStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+		Ctx:     ctx,
+	}
+	sink := testSink{
+		chunks:     make([]pb.SnapshotChunk, 0),
+		sendFailed: false,
+		stopped:    false,
+	}
+	writer := rsm.NewChunkWriter(&sink, &meta)
+	err = ds1.StreamSnapshot(ctx, writer)
+	if err != nil {
+		t.Errorf("failed to stream snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writer %v", err)
+	}
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	f, err := os.Create(fp)
+	if err != nil {
+		t.Errorf("failed to create temp snapshot file")
+	}
+	for _, chunk := range sink.chunks {
+		f.Write(chunk.Data)
+	}
+	f.Close()
+	f, err = os.Open(fp)
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
+	buf := make([]byte, 16)
+	// the snapshot header is followed by extra 16 bytes for sessions
+	// the first 8 bytes indicate that there are at most 4096 struct session
+	// the next 8 bytes indicate the actual number of struct session
+	// because on-disk-sm does not support sessions, the 16 extra bytes
+	// in streamed snapshot are just used as place holders
+	reader.Read(buf)
+	if binary.LittleEndian.Uint64(buf[0:8]) != 4096 || binary.LittleEndian.Uint64(buf[8:]) != 0 {
+		t.Errorf("sessions not empty")
+	}
+	ds2 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateOnDiskStateMachine",
+		pb.OnDiskStateMachine, nil)
+	if ds2 == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds2.(*OnDiskStateMachineWrapper).destroy()
+	_, err = ds2.Open()
+	if err != nil {
+		t.Fatalf("failed to open ds2 %v", err)
+	}
+	err = ds2.RecoverFromSnapshot(initialApplied+1, reader, nil)
+	if err != nil {
+		t.Fatalf("failed to recover from snapshot %v", err)
+	}
+	yacount, err := ds2.Lookup([]byte{0})
+	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+		t.Fatalf("lookup recovered data store returned %v, want 1", v)
+	}
+	h, _ := ds1.GetHash()
+	h2, _ := ds2.GetHash()
+	if h != h2 {
+		t.Fatalf("hash does not match")
+	}
 }
