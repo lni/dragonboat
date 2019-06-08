@@ -19,6 +19,8 @@ package dragonboat
 
 import (
 	"testing"
+
+	"github.com/lni/dragonboat/internal/rsm"
 )
 
 func TestWorkReadyCanBeCreated(t *testing.T) {
@@ -109,4 +111,32 @@ func TestReturnedReadyMapContainsReadyClusterID(t *testing.T) {
 	if len(ready) != 0 {
 		t.Errorf("unexpected ready map size")
 	}
+}
+
+func TestLoadedNodes(t *testing.T) {
+	lns := newLoadedNodes()
+	if lns.loaded(2, 3) {
+		t.Errorf("unexpectedly returned true")
+	}
+	nodes := make(map[uint64]*node)
+	n := &node{}
+	n.nodeID = 3
+	nodes[2] = n
+	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	if !lns.loaded(2, 3) {
+		t.Errorf("unexpectedly returned false")
+	}
+	n.nodeID = 4
+	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	if lns.loaded(2, 3) {
+		t.Errorf("unexpectedly returned true")
+	}
+	nodes = make(map[uint64]*node)
+	nodes[5] = n
+	n.nodeID = 3
+	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	if lns.loaded(2, 3) {
+		t.Errorf("unexpectedly returned true")
+	}
+
 }

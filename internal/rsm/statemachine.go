@@ -812,6 +812,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		for idx, ent := range results {
 			ce := input[skipped+idx]
 			if ce.Index != ent.Index {
+				// probably because user modified the Index value in results
 				plog.Panicf("alignment error, %d, %d, %d", ce.Index, ent.Index, skipped)
 			}
 			last := ce.Index == input[len(input)-1].Index

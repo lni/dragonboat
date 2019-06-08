@@ -32,7 +32,8 @@ var (
 	workerCount         = settings.Hard.StepEngineWorkerCount
 	taskWorkerCount     = settings.Soft.StepEngineTaskWorkerCount
 	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
-	nodeReloadInterval  = time.Millisecond * time.Duration(settings.Soft.NodeReloadMillisecond)
+	reloadTime          = settings.Soft.NodeReloadMillisecond
+	nodeReloadInterval  = time.Millisecond * time.Duration(reloadTime)
 	taskBatchSize       = settings.Soft.TaskBatchSize
 )
 
@@ -555,7 +556,7 @@ func (s *execEngine) execNodes(workerID uint64,
 			plog.Infof("process update failed, %s is ready to exit",
 				node.describe())
 		}
-		s.processRaftUpdate(ud)
+		s.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, false, "committing updates") {
 			return
 		}
@@ -577,7 +578,7 @@ func resetNodeUpdate(nodeUpdates []pb.Update) {
 	}
 }
 
-func (s *execEngine) processRaftUpdate(ud pb.Update) {
+func (s *execEngine) processMoreCommittedEntries(ud pb.Update) {
 	if ud.MoreCommittedEntries {
 		s.setNodeReady(ud.ClusterID)
 	}
