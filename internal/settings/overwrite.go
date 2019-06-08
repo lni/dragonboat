@@ -55,8 +55,10 @@ func overwriteSettings(cfg map[string]interface{}, rd reflect.Value) {
 		if field.IsValid() {
 			switch field.Type().String() {
 			case "uint64":
-				plog.Infof("Setting %s to uint64 value %d", key, uint64(val.(float64)))
-				field.SetUint(uint64(val.(float64)))
+				nv := uint64(val.(float64))
+				plog.Infof("Setting %s to uint64 value %d", key, nv)
+				logHardChange(key, nv)
+				field.SetUint(nv)
 			case "bool":
 				plog.Infof("Setting %s to bool value %t", key, val.(bool))
 				field.SetBool(val.(bool))
@@ -65,6 +67,21 @@ func overwriteSettings(cfg map[string]interface{}, rd reflect.Value) {
 				field.SetString(val.(string))
 			default:
 			}
+		}
+	}
+}
+
+func logHardChange(key string, newVal uint64) {
+	if key == "StepEngineWorkerCount" || key == "LogDBPoolSize" {
+		plog.Warningf("StepEngineWorkerCount or LogDBPoolSize changed, " +
+			"see comments in the internal/settings package")
+		if key == "LogDBPoolSize" && newVal < defaultLogDBPoolSize/2 {
+			plog.Warningf("Using a very small LogDBPoolSize value, " +
+				"see comments in the internal/settings package")
+		}
+		if key == "StepEngineWorkerCount" && newVal < defaultStepEngineWorkerCount/2 {
+			plog.Warningf("Using a very small StepEngineWorkerCount value, " +
+				"see comments in the internal/settings package")
 		}
 	}
 }

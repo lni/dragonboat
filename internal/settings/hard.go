@@ -31,6 +31,11 @@ var (
 	plog = logger.GetLogger("settings")
 )
 
+const (
+	defaultStepEngineWorkerCount uint64 = 16
+	defaultLogDBPoolSize         uint64 = 16
+)
+
 //
 // Parameters in both hard.go and soft.go are _NOT_ a part of the public API.
 // There is no guarantee that any of these parameters are going to be available
@@ -64,13 +69,15 @@ var (
 var Hard = getHardSettings()
 
 type hard struct {
-	// StepEngineWorkerCount defines number of workers to use to step raft node
-	// changes, typically each in its own goroutine. This turn determines how
-	// nodes are partitioned to different entry cache and rdb instances.
+	// StepEngineWorkerCount defines number of workers to use to process raft node
+	// changes. Together with the LogDBPoolSize parameters below, they determine
+	// the content of each logdb shards. You will have to build your own tools to
+	// move logdb data around to be able to change StepEngineWorkerCount and
+	// LogDBPoolSize after your system is deployed.
 	StepEngineWorkerCount uint64
-	// LogDBPoolSize defines how many rdb instances to use. We use multiple rdb
-	// instance so different disks can be used together to get better combined IO
-	// performance.
+	// LogDBPoolSize defines the number of logdb shards to use. When you get slow
+	// performance when using the default LogDBPoolSize value, it typically means
+	// your disk is not good enough for concurrent write acdesses.
 	LogDBPoolSize uint64
 	// LRUMaxSessionCount is the max number of client sessions that can be
 	// concurrently held and managed by each raft cluster.
@@ -136,8 +143,8 @@ func getHardSettings() hard {
 
 func getDefaultHardSettings() hard {
 	return hard{
-		StepEngineWorkerCount: 16,
-		LogDBPoolSize:         16,
+		StepEngineWorkerCount: defaultStepEngineWorkerCount,
+		LogDBPoolSize:         defaultLogDBPoolSize,
 		LRUMaxSessionCount:    4096,
 		LogDBEntryBatchSize:   48,
 	}
