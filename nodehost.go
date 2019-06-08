@@ -1301,35 +1301,33 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
 //    implementation
 func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	join bool, config config.Config,
-	smType pb.StateMachineType) (map[uint64]string, bool, bool, error) {
+	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
-	new := false
 	if err == raftio.ErrNoBootstrapInfo {
 		var members map[uint64]string
-		new = true
 		if !join {
 			members = nodes
 		}
 		bs := pb.NewBootstrapInfo(join, smType, nodes)
 		err := nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, *bs)
 		if err != nil {
-			return nil, false, false, err
+			return nil, false, err
 		}
 		plog.Infof("node %s bootstrapped, %v",
 			logutil.DescribeNode(config.ClusterID, config.NodeID), members)
-		return members, !join, new, nil
+		return members, !join, nil
 	} else if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 	if !binfo.Validate(nodes, join, smType) {
 		plog.Errorf("bootstrap validation failed, %s, %v, %t, %v, %t",
 			logutil.DescribeNode(config.ClusterID, config.NodeID),
 			binfo.Addresses, binfo.Join, nodes, join)
-		return nil, false, false, ErrInvalidClusterSettings
+		return nil, false, ErrInvalidClusterSettings
 	}
 	plog.Infof("bootstrap for %s going to return %v",
 		logutil.DescribeNode(config.ClusterID, config.NodeID), binfo.Addresses)
-	return binfo.Addresses, !binfo.Join, new, nil
+	return binfo.Addresses, !binfo.Join, nil
 }
 
 func (nh *NodeHost) startCluster(nodes map[uint64]string,
@@ -1355,7 +1353,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 			logutil.DescribeNode(clusterID, nodeID), nodes)
 		return ErrInvalidClusterSettings
 	}
-	addrs, members, new, err := nh.bootstrapCluster(nodes, join, config, smType)
+	addrs, members, err := nh.bootstrapCluster(nodes, join, config, smType)
 	if err == ErrInvalidClusterSettings {
 		return ErrInvalidClusterSettings
 	}
@@ -1401,7 +1399,6 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	rn, err := newNode(nh.nhConfig.RaftAddress,
 		addrs,
 		members,
-		new,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,

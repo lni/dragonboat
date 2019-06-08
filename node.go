@@ -109,7 +109,6 @@ var instanceID uint64
 func newNode(raftAddress string,
 	peers map[uint64]string,
 	initialMember bool,
-	new bool,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
@@ -161,7 +160,6 @@ func newNode(raftAddress string,
 		ss:                   &snapshotState{},
 		syncTask:             newTask(syncTaskInterval),
 		smType:               smType,
-		new:                  new,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -173,9 +171,11 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rn)
 	rn.taskC = sm.TaskC()
 	rn.sm = sm
-	if err := rn.startRaft(config, lr, peers, initialMember); err != nil {
+	new, err := rn.startRaft(config, lr, peers, initialMember)
+	if err != nil {
 		return nil, err
 	}
+	rn.new = new
 	return rn, nil
 }
 
@@ -265,18 +265,17 @@ func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
 }
 
 func (n *node) startRaft(cc config.Config,
-	logdb raft.ILogDB, peers map[uint64]string, initial bool) error {
-	// replay the log when restarting a peer,
+	logdb raft.ILogDB, peers map[uint64]string, initial bool) (bool, error) {
 	newNode, err := n.replayLog(cc.ClusterID, cc.NodeID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	pas := make([]raft.PeerAddress, 0)
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
 	n.node = raft.Launch(&cc, logdb, pas, initial, newNode)
-	return nil
+	return newNode, nil
 }
 
 func (n *node) close() {
