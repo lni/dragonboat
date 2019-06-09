@@ -66,7 +66,7 @@ const (
 	ExportedSnapshot
 )
 
-// SnapshotRequest is the type for decribing the details of a snapshot request.
+// SnapshotRequest is the type for describing the details of a snapshot request.
 type SnapshotRequest struct {
 	Type SnapshotRequestType
 	Key  uint64
@@ -101,6 +101,7 @@ type Task struct {
 	SnapshotRequested bool
 	StreamSnapshot    bool
 	PeriodicSync      bool
+	NewNode           bool
 	SnapshotRequest   SnapshotRequest
 	Entries           []pb.Entry
 }
@@ -461,7 +462,7 @@ func (s *StateMachine) SaveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 }
 
 // StreamSnapshot starts to stream snapshot from the current SM to a remote
-// node targetted by the provided sink.
+// node targeted by the provided sink.
 func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
 	return s.streamSnapshot(sink)
 }
@@ -709,7 +710,7 @@ func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)
 		if batchSupport && allUpdate && allNoOP {
-			if err := s.handleBatchedEntries(input, toApply); err != nil {
+			if err := s.handleBatch(input, toApply); err != nil {
 				return err
 			}
 		} else {
@@ -788,15 +789,18 @@ func (s *StateMachine) onUpdateApplied(ent pb.Entry,
 	}
 }
 
-func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) error {
+func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	if len(ents) != 0 {
 		panic("ents is not empty")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	skipped := 0
 	for _, ent := range input {
 		if !s.entryAppliedInDiskSM(ent.Index) {
 			ents = append(ents, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+		} else {
+			skipped++
 		}
 		s.updateLastApplied(ent.Index, ent.Term)
 	}
@@ -806,8 +810,13 @@ func (s *StateMachine) handleBatchedEntries(input []pb.Entry, ents []sm.Entry) e
 			return err
 		}
 		for idx, ent := range results {
-			last := idx == len(input)-1
-			s.onUpdateApplied(input[idx], ent.Result, false, false, last)
+			ce := input[skipped+idx]
+			if ce.Index != ent.Index {
+				// probably because user modified the Index value in results
+				plog.Panicf("alignment error, %d, %d, %d", ce.Index, ent.Index, skipped)
+			}
+			last := ce.Index == input[len(input)-1].Index
+			s.onUpdateApplied(ce, ent.Result, false, false, last)
 		}
 	}
 	if len(input) > 0 {

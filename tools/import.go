@@ -66,7 +66,7 @@ var (
 // the node owns the imported snapshot and the membership of the Raft cluster
 // is rewritten to the details specified in memberNodes.
 //
-// ImportSnapshot is typically invoked by a DevOps tool seperated from the
+// ImportSnapshot is typically invoked by a DevOps tool separated from the
 // Dragonboat based application. The NodeHost instance must be stopped on that
 // host when invoking the function ImportSnapshot.
 //
@@ -74,7 +74,7 @@ var (
 // values being 1, 2 and 3, they run on three distributed hostss each with a
 // running NodeHost instance and the RaftAddress values are m1, m2 and
 // m3. The ClusterID value of the Raft cluster is 100. Let's say hosts
-// identified by m2 and m3 suddenly become permenantly gone and thus cause the
+// identified by m2 and m3 suddenly become permanently gone and thus cause the
 // Raft cluster to lose its quorum nodes. To repair the cluster, we can use the
 // ImportSnapshot function to overwrite the state and membership of the Raft
 // cluster.

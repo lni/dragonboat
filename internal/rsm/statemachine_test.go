@@ -65,6 +65,8 @@ type testNodeProxy struct {
 	addObserver        bool
 	addObserverCount   uint64
 	nodeReady          uint64
+	applyUpdateCalled  bool
+	firstIndex         uint64
 }
 
 func newTestNodeProxy() *testNodeProxy {
@@ -79,6 +81,10 @@ func (p *testNodeProxy) ShouldStop() <-chan struct{} {
 
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	if !p.applyUpdateCalled {
+		p.applyUpdateCalled = true
+		p.firstIndex = entry.Index
+	}
 	p.smResult = result
 	p.index = entry.Index
 	p.rejected = rejected
@@ -1504,7 +1510,7 @@ func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
 		onDisk      bool
 		dummy       bool
-		shrinked    bool
+		shrunk      bool
 		init        bool
 		index       uint64
 		diskSMIndex uint64
@@ -1550,7 +1556,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				diskSMIndex: tt.diskSMIndex,
 			}
 			fp := snapshotter.GetFilePath(tt.index)
-			if tt.shrinked {
+			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
 			w, err := NewSnapshotWriter(fp, CurrentSnapshotVersion)
@@ -1572,7 +1578,7 @@ func TestRecoverSMRequired(t *testing.T) {
 			if err := w.Close(); err != nil {
 				t.Fatalf("%v", err)
 			}
-			if tt.shrinked {
+			if tt.shrunk {
 				if err := ShrinkSnapshot(fp, snapshotter.GetFilePath(tt.index)); err != nil {
 					t.Fatalf("failed to shrink %v", err)
 				}
@@ -1582,7 +1588,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				Index: tt.index,
 			}
 			defer func() {
-				if tt.onDisk && !tt.dummy && !tt.init && tt.shrinked {
+				if tt.onDisk && !tt.dummy && !tt.init && tt.shrunk {
 					if r := recover(); r == nil {
 						t.Fatalf("not panic")
 					}
@@ -1655,8 +1661,9 @@ func TestUpdateLastApplied(t *testing.T) {
 }
 
 type testManagedStateMachine struct {
-	first uint64
-	last  uint64
+	first        uint64
+	last         uint64
+	corruptIndex bool
 }
 
 func (t *testManagedStateMachine) Open() (uint64, error) { return 0, nil }
@@ -1682,8 +1689,15 @@ func (t *testManagedStateMachine) ConcurrentSnapshot() bool                     
 func (t *testManagedStateMachine) OnDiskStateMachine() bool                       { return false }
 func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType          { return 0 }
 func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	t.first = ents[0].Index
-	t.last = ents[len(ents)-1].Index
+	if !t.corruptIndex {
+		t.first = ents[0].Index
+		t.last = ents[len(ents)-1].Index
+	} else {
+		for idx := range ents {
+			ents[idx].Index = ents[idx].Index + 1
+		}
+	}
+
 	return ents, nil
 }
 
@@ -1699,6 +1713,8 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		{100, 50, 51, 60, 0, 0},
 		{100, 50, 51, 100, 0, 0},
 		{100, 50, 51, 110, 101, 110},
+		{100, 100, 101, 120, 101, 120},
+		{100, 110, 111, 125, 111, 125},
 	}
 	for idx, tt := range tests {
 		input := make([]pb.Entry, 0)
@@ -1707,15 +1723,16 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		}
 		ents := make([]sm.Entry, 0)
 		msm := &testManagedStateMachine{}
+		np := newTestNodeProxy()
 		sm := &StateMachine{
 			onDiskSM:    true,
 			diskSMIndex: tt.diskSMIndex,
 			index:       tt.index,
 			term:        100,
 			sm:          msm,
-			node:        newTestNodeProxy(),
+			node:        np,
 		}
-		if err := sm.handleBatchedEntries(input, ents); err != nil {
+		if err := sm.handleBatch(input, ents); err != nil {
 			t.Fatalf("handle batched entries failed %v", err)
 		}
 		if msm.first != tt.firstApplied {
@@ -1727,5 +1744,40 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if sm.batchedLastApplied.index != tt.last {
 			t.Errorf("%d, index %d, last %d", idx, sm.batchedLastApplied.index, tt.last)
 		}
+		if np.firstIndex != tt.firstApplied {
+			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
+		}
+		if np.index != tt.lastApplied {
+			t.Errorf("%d, unexpected first value, %d, %d", idx, np.index, tt.lastApplied)
+		}
+		if sm.index != tt.last {
+			t.Errorf("unexpected last applied index %d, want %d", sm.index, tt.last)
+		}
+	}
+}
+
+func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
+	ents := make([]sm.Entry, 0)
+	msm := &testManagedStateMachine{corruptIndex: true}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		diskSMIndex: 0,
+		index:       0,
+		term:        100,
+		sm:          msm,
+		node:        np,
+	}
+	input := make([]pb.Entry, 0)
+	for i := uint64(1); i <= 10; i++ {
+		input = append(input, pb.Entry{Index: i, Term: 100})
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("failed to trigger panic")
+		}
+	}()
+	if err := sm.handleBatch(input, ents); err != nil {
+		t.Fatalf("handle batched entries failed %v", err)
 	}
 }

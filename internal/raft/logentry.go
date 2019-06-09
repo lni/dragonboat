@@ -23,8 +23,6 @@ import (
 )
 
 const (
-	// RaftLogTypeName is the type name of the raft log
-	RaftLogTypeName       = "three-stage"
 	maxEntriesToApplySize = settings.MaxProposalPayloadSize * 2
 )
 

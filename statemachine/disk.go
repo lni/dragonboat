@@ -55,7 +55,7 @@ var (
 // Applications that implement IOnDiskStateMachine are still recommended to
 // setup periodic snapshotting, that only triggers the state machine's
 // metadata to be periodically snapshotted and thus adds negligible overheads
-// to the system. It also provides an opportunites for the system to signal
+// to the system. It also provides an opportunities for the system to signal
 // Raft Log compaction to free up disk spaces.
 type IOnDiskStateMachine interface {
 	// Open opens the existing on disk state machine to be used or it creates a
@@ -77,9 +77,10 @@ type IOnDiskStateMachine interface {
 	// can choose to batch them and apply together to hide latency. Update returns
 	// the input entry slice with the Result field of all its members set.
 	//
-	// The Index field of each input Entry instance is the Raft log index of each
-	// entry, it is IOnDiskStateMachine's responsibility to atomically persist the
-	// Index value together with the corresponding Entry update.
+	// The read only Index field of each input Entry instance is the Raft log
+	// index of each entry, it is IOnDiskStateMachine's responsibility to
+	// atomically persist the Index value together with the corresponding state
+	// update.
 	//
 	// The Update method can choose to synchronize all of its in-core state with
 	// that on disk. This can minimize the number of committed Raft entries that

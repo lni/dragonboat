@@ -239,7 +239,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		}
 		addr := fmt.Sprintf("a%d", i)
 		ch := router.getMessageReceiveChannel(testClusterID, uint64(i))
-		node := newNode(addr,
+		node, err := newNode(addr,
 			peers,
 			true,
 			snapshotter,
@@ -256,6 +256,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			config,
 			tickMillisecond,
 			ldb)
+		if err != nil {
+			panic(err)
+		}
 		nodes = append(nodes, node)
 		smList = append(smList, node.sm)
 	}
@@ -298,7 +301,9 @@ func step(nodes []*node) bool {
 	}
 	for idx, ud := range nodeUpdates {
 		node := activeNodes[idx]
-		node.processSnapshot(ud)
+		if _, err := node.processSnapshot(ud); err != nil {
+			panic(err)
+		}
 		node.applyRaftUpdates(ud)
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
@@ -315,10 +320,15 @@ func step(nodes []*node) bool {
 	}
 	for idx, ud := range nodeUpdates {
 		node := activeNodes[idx]
-		running := node.processRaftUpdate(ud)
+		running, err := node.processRaftUpdate(ud)
+		if err != nil {
+			panic(err)
+		}
 		node.commitRaftUpdate(ud)
 		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
-			node.saveSnapshot(rsm.Task{})
+			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+				panic(err)
+			}
 		}
 		if running {
 			rec, snapshotRequired, err := node.sm.Handle(make([]rsm.Task, 0), nil)
@@ -331,7 +341,9 @@ func step(nodes []*node) bool {
 						panic(err)
 					}
 				} else if rec.SnapshotRequested {
-					node.saveSnapshot(rsm.Task{})
+					if err := node.saveSnapshot(rsm.Task{}); err != nil {
+						panic(err)
+					}
 				}
 			}
 		}
@@ -1313,8 +1325,12 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			node.saveSnapshot(rsm.Task{})
-			node.saveSnapshot(rsm.Task{})
+			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+				t.Fatalf("%v", err)
+			}
+			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+				t.Fatalf("%v", err)
+			}
 		}
 	}
 	runRaftNodeTest(t, false, tf)

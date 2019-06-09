@@ -28,7 +28,7 @@ state machines. Read only queries will eventually hit the Lookup method to query
 the state of the state machine. The PrepareSnapshot, SaveSnapshot and
 RecoverFromSnapshot methods are for generating and restoring from snapshots,
 snapshots are the mechanism to apply the entire state of a state machine without
-applying an arbitarily large number of Raft Log entries.
+applying an arbitrarily large number of Raft Log entries.
 
 Dragonboat users should first determine whether the application state machine
 should implement the IStateMachine or IOnDiskStateMachine interface -
@@ -166,7 +166,7 @@ type Entry struct {
 //
 // Dragonboat uses a sync.RWMutex as its reader/writer mutual exclusion lock to
 // guard the IStateMachine instance when invoking IStateMachine's member methods.
-// Tghe Update, RecoverFromSnapshot and Close methods are invoked when the write
+// The Update, RecoverFromSnapshot and Close methods are invoked when the write
 // lock is acquired, other methods are invoked when the shared read lock is
 // acquired.
 //

@@ -22,39 +22,41 @@ import (
 	"github.com/lni/dragonboat/raftio"
 )
 
-type LevelDBWriteBatch struct {
+type levelDBWriteBatch struct {
 	wb    *levigo.WriteBatch
 	count int
 }
 
-func (w *LevelDBWriteBatch) Destroy() {
+func (w *levelDBWriteBatch) Destroy() {
 	w.wb.Close()
 }
 
-func (w *LevelDBWriteBatch) Put(key []byte, val []byte) {
+func (w *levelDBWriteBatch) Put(key []byte, val []byte) {
 	w.wb.Put(key, val)
 	w.count++
 }
 
-func (w *LevelDBWriteBatch) Delete(key []byte) {
+func (w *levelDBWriteBatch) Delete(key []byte) {
 	w.wb.Delete(key)
 	w.count++
 }
 
-func (w *LevelDBWriteBatch) Clear() {
+func (w *levelDBWriteBatch) Clear() {
 	w.wb.Clear()
 	w.count = 0
 }
 
-func (w *LevelDBWriteBatch) Count() int {
+func (w *levelDBWriteBatch) Count() int {
 	return w.count
 }
 
+// NewKVStore returns a new leveldb based IKVStore instance.
 func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return openLevelDB(dir, wal)
 }
 
-type LevelDBKV struct {
+// KV is a leveldb based IKVStore type.
+type KV struct {
 	db   *levigo.DB
 	opts *levigo.Options
 	ro   *levigo.ReadOptions
@@ -62,7 +64,7 @@ type LevelDBKV struct {
 	fp   *levigo.FilterPolicy
 }
 
-func openLevelDB(dir string, wal string) (*LevelDBKV, error) {
+func openLevelDB(dir string, wal string) (*KV, error) {
 	opts := levigo.NewOptions()
 	opts.SetCreateIfMissing(true)
 	filter := levigo.NewBloomFilter(10)
@@ -76,7 +78,7 @@ func openLevelDB(dir string, wal string) (*LevelDBKV, error) {
 	ro.SetFillCache(false)
 	ro.SetVerifyChecksums(true)
 	wo.SetSync(true)
-	return &LevelDBKV{
+	return &KV{
 		db:   db,
 		ro:   ro,
 		wo:   wo,
@@ -85,12 +87,13 @@ func openLevelDB(dir string, wal string) (*LevelDBKV, error) {
 	}, nil
 }
 
-func (r *LevelDBKV) Name() string {
+// Name returns the IKVStore type name.
+func (r *KV) Name() string {
 	return "leveldb"
 }
 
 // Close closes the RDB object.
-func (r *LevelDBKV) Close() error {
+func (r *KV) Close() error {
 	if r.db != nil {
 		r.db.Close()
 	}
@@ -110,15 +113,8 @@ func (r *LevelDBKV) Close() error {
 	return nil
 }
 
-func iteratorIsValid(iter *levigo.Iterator) bool {
-	v := iter.Valid()
-	if err := iter.GetError(); err != nil {
-		panic(err)
-	}
-	return v
-}
-
-func (r *LevelDBKV) IterateValue(fk []byte, lk []byte, inc bool,
+// IterateValue ...
+func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
@@ -151,7 +147,8 @@ func (r *LevelDBKV) IterateValue(fk []byte, lk []byte, inc bool,
 	return nil
 }
 
-func (r *LevelDBKV) GetValue(key []byte,
+// GetValue ...
+func (r *KV) GetValue(key []byte,
 	op func([]byte) error) error {
 	val, err := r.db.Get(r.ro, key)
 	if err != nil {
@@ -160,47 +157,53 @@ func (r *LevelDBKV) GetValue(key []byte,
 	return op(val)
 }
 
-func (r *LevelDBKV) SaveValue(key []byte, value []byte) error {
+// SaveValue ...
+func (r *KV) SaveValue(key []byte, value []byte) error {
 	wb := levigo.NewWriteBatch()
 	defer wb.Close()
 	wb.Put(key, value)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *LevelDBKV) DeleteValue(key []byte) error {
+// DeleteValue ...
+func (r *KV) DeleteValue(key []byte) error {
 	wb := levigo.NewWriteBatch()
 	defer wb.Close()
 	wb.Delete(key)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *LevelDBKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
+// GetWriteBatch ...
+func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb != nil {
-			return ctx.GetWriteBatch().(*LevelDBWriteBatch)
+			return ctx.GetWriteBatch().(*levelDBWriteBatch)
 		}
 	}
-	return &LevelDBWriteBatch{wb: levigo.NewWriteBatch()}
+	return &levelDBWriteBatch{wb: levigo.NewWriteBatch()}
 }
 
-func (r *LevelDBKV) CommitWriteBatch(wb kv.IWriteBatch) error {
-	lwb, ok := wb.(*LevelDBWriteBatch)
+// CommitWriteBatch ...
+func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
+	lwb, ok := wb.(*levelDBWriteBatch)
 	if !ok {
 		panic("unknown type")
 	}
 	return r.db.Write(r.wo, lwb.wb)
 }
 
-func (r *LevelDBKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
+// CommitDeleteBatch ...
+func (r *KV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *LevelDBKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+// BulkRemoveEntries ...
+func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *LevelDBKV) deleteRange(fk []byte, lk []byte) error {
+func (r *KV) deleteRange(fk []byte, lk []byte) error {
 	wb := levigo.NewWriteBatch()
 	it := r.db.NewIterator(r.ro)
 	defer it.Close()
@@ -215,7 +218,8 @@ func (r *LevelDBKV) deleteRange(fk []byte, lk []byte) error {
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *LevelDBKV) CompactEntries(fk []byte, lk []byte) error {
+// CompactEntries ...
+func (r *KV) CompactEntries(fk []byte, lk []byte) error {
 	if err := r.deleteRange(fk, lk); err != nil {
 		return err
 	}
@@ -223,7 +227,8 @@ func (r *LevelDBKV) CompactEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *LevelDBKV) FullCompaction() error {
+// FullCompaction ...
+func (r *KV) FullCompaction() error {
 	fk := make([]byte, kv.MaxKeyLength)
 	lk := make([]byte, kv.MaxKeyLength)
 	for i := uint64(0); i < kv.MaxKeyLength; i++ {

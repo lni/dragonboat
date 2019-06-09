@@ -6,24 +6,9 @@
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-## v3.0 测试版 ##
-
-本branch是dragonboat v3.0的测试版，用以提供给社区试用并测试新功能与改进，本branch不应该被用在任何生产环境。本branch的一些主要改进有：
-
-* 增加了对基于磁盘的状态机的支持
-* 支持发起请求以创建或导出指定节点的snapshot快照
-* 支持对已经移除的Raft节点的数据进行清理以释放空间
-* 支持通过使用已导出的snapshot快照对已经永久失去多数节点的Raft组进行修复
-* 增加了一个不使用batch批量存储Raft Log记录的LogDB类型，它较慢但使用极少内存
-* 增加了可设置的内存用量限制以控制内存中Raft Log entries的最大内存占用量
-* 状态机的Update()方法现在可以选择返回[]byte的结果
-* 状态机的SaveSnapshot()方法不再需要返回已写字节数
-* NewNodeHost()开始在出错无法创建NodeHost实例后返回error
-* drummer组件被移动到了internal包中，不再对外可见
-* dragonboat库的很多部分进行了重构
-
-[例程](https://github.com/lni/dragonboat-example/tree/on-disk-state-machine)已根据上述改进而更新，同时增加了一个基于磁盘状态机的例子。
-请阅读代码并欢迎对任何问题提出issues讨论。
+## 项目新闻 ##
+* 2019-06-09 Dragonboat v3.0 测试版([CHANGELOG](CHANGELOG.md))被合并到了Master branch中。
+* 2019-02-20 Dragonboat v2.0 已发布。
 
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。

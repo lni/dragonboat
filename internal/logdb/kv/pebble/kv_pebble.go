@@ -37,12 +37,16 @@ func (w *pebbleWriteBatch) Destroy() {
 }
 
 func (w *pebbleWriteBatch) Put(key []byte, val []byte) {
-	w.wb.Set(key, val, w.wo)
+	if err := w.wb.Set(key, val, w.wo); err != nil {
+		panic(err)
+	}
 	w.count++
 }
 
 func (w *pebbleWriteBatch) Delete(key []byte) {
-	w.wb.Delete(key, w.wo)
+	if err := w.wb.Delete(key, w.wo); err != nil {
+		panic(err)
+	}
 	w.count++
 }
 
@@ -55,18 +59,20 @@ func (w *pebbleWriteBatch) Count() int {
 	return w.count
 }
 
+// NewKVStore returns a pebble based IKVStore instance.
 func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return openPebbleDB(dir, wal)
 }
 
-type PebbleKV struct {
+// KV is a pebble based IKVStore type.
+type KV struct {
 	db   *pebble.DB
 	opts *pebble.Options
 	ro   *pebble.IterOptions
 	wo   *pebble.WriteOptions
 }
 
-func openPebbleDB(dir string, walDir string) (*PebbleKV, error) {
+func openPebbleDB(dir string, walDir string) (*KV, error) {
 	fmt.Printf("pebble support is experimental, DO NOT USE IN PRODUCTION\n")
 	lopts := pebble.LevelOptions{Compression: pebble.NoCompression}
 	opts := &pebble.Options{
@@ -81,7 +87,7 @@ func openPebbleDB(dir string, walDir string) (*PebbleKV, error) {
 	}
 	ro := &pebble.IterOptions{}
 	wo := &pebble.WriteOptions{Sync: true}
-	return &PebbleKV{
+	return &KV{
 		db:   pdb,
 		ro:   ro,
 		wo:   wo,
@@ -89,12 +95,13 @@ func openPebbleDB(dir string, walDir string) (*PebbleKV, error) {
 	}, nil
 }
 
-func (r *PebbleKV) Name() string {
+// Name returns the IKVStore type name.
+func (r *KV) Name() string {
 	return "pebble"
 }
 
 // Close closes the RDB object.
-func (r *PebbleKV) Close() error {
+func (r *KV) Close() error {
 	if r.db != nil {
 		r.db.Close()
 	}
@@ -110,7 +117,8 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 	return v
 }
 
-func (r *PebbleKV) IterateValue(fk []byte, lk []byte, inc bool,
+// IterateValue ...
+func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIter(r.ro)
 	defer iter.Close()
@@ -137,7 +145,8 @@ func (r *PebbleKV) IterateValue(fk []byte, lk []byte, inc bool,
 	return nil
 }
 
-func (r *PebbleKV) GetValue(key []byte,
+// GetValue ...
+func (r *KV) GetValue(key []byte,
 	op func([]byte) error) error {
 	val, err := r.db.Get(key)
 	if err != nil && err != pebble.ErrNotFound {
@@ -146,15 +155,18 @@ func (r *PebbleKV) GetValue(key []byte,
 	return op(val)
 }
 
-func (r *PebbleKV) SaveValue(key []byte, value []byte) error {
+// SaveValue ...
+func (r *KV) SaveValue(key []byte, value []byte) error {
 	return r.db.Set(key, value, r.wo)
 }
 
-func (r *PebbleKV) DeleteValue(key []byte) error {
+// DeleteValue ...
+func (r *KV) DeleteValue(key []byte) error {
 	return r.db.Delete(key, r.wo)
 }
 
-func (r *PebbleKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
+// GetWriteBatch ...
+func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb != nil {
@@ -164,7 +176,8 @@ func (r *PebbleKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	return &pebbleWriteBatch{wb: r.db.NewBatch(), db: r.db, wo: r.wo}
 }
 
-func (r *PebbleKV) CommitWriteBatch(wb kv.IWriteBatch) error {
+// CommitWriteBatch ...
+func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	pwb, ok := wb.(*pebbleWriteBatch)
 	if !ok {
 		panic("unknown type")
@@ -172,15 +185,17 @@ func (r *PebbleKV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	return r.db.Apply(pwb.wb, r.wo)
 }
 
-func (r *PebbleKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
+// CommitDeleteBatch ...
+func (r *KV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *PebbleKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+// BulkRemoveEntries ...
+func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *PebbleKV) deleteRange(fk []byte, lk []byte) error {
+func (r *KV) deleteRange(fk []byte, lk []byte) error {
 	iter := r.db.NewIter(r.ro)
 	defer iter.Close()
 	wb := r.GetWriteBatch(nil)
@@ -196,14 +211,16 @@ func (r *PebbleKV) deleteRange(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *PebbleKV) CompactEntries(fk []byte, lk []byte) error {
+// CompactEntries ...
+func (r *KV) CompactEntries(fk []byte, lk []byte) error {
 	if err := r.deleteRange(fk, lk); err != nil {
 		return err
 	}
 	return r.db.Compact(fk, lk)
 }
 
-func (r *PebbleKV) FullCompaction() error {
+// FullCompaction ...
+func (r *KV) FullCompaction() error {
 	fk := make([]byte, kv.MaxKeyLength)
 	lk := make([]byte, kv.MaxKeyLength)
 	for i := uint64(0); i < kv.MaxKeyLength; i++ {

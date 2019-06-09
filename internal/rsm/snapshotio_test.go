@@ -362,7 +362,7 @@ func TestMustInSameDir(t *testing.T) {
 
 func TestShrinkSnapshot(t *testing.T) {
 	snapshotFilename := "test_snapshot_safe_to_delete.data"
-	shrinkedFilename := "test_snapshot_safe_to_delete.shrinked"
+	shrunkFilename := "test_snapshot_safe_to_delete.shrunk"
 	writer, err := NewSnapshotWriter(snapshotFilename, V2SnapshotVersion)
 	if err != nil {
 		t.Fatalf("failed to get writer %v", err)
@@ -385,41 +385,41 @@ func TestShrinkSnapshot(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatalf("close failed %v", err)
 	}
-	shrinked, err := IsShrinkedSnapshotFile(snapshotFilename)
+	shrunk, err := IsShrinkedSnapshotFile(snapshotFilename)
 	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
 	}
-	if shrinked {
-		t.Errorf("incorrectly reported as shrinked")
+	if shrunk {
+		t.Errorf("incorrectly reported as shrunk")
 	}
-	if err := ShrinkSnapshot(snapshotFilename, shrinkedFilename); err != nil {
+	if err := ShrinkSnapshot(snapshotFilename, shrunkFilename); err != nil {
 		t.Errorf("failed to shrink snapshot %v", err)
 	}
 	defer func() {
-		os.RemoveAll(shrinkedFilename)
+		os.RemoveAll(shrunkFilename)
 	}()
-	shrinked, err = IsShrinkedSnapshotFile(snapshotFilename)
+	shrunk, err = IsShrinkedSnapshotFile(snapshotFilename)
 	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
 	}
-	if shrinked {
-		t.Errorf("incorrectly reported as shrinked")
+	if shrunk {
+		t.Errorf("incorrectly reported as shrunk")
 	}
-	shrinked, err = IsShrinkedSnapshotFile(shrinkedFilename)
+	shrunk, err = IsShrinkedSnapshotFile(shrunkFilename)
 	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
+		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
 	}
-	if !shrinked {
-		t.Errorf("not shrinked")
+	if !shrunk {
+		t.Errorf("not shrunk")
 	}
-	fi, err := os.Stat(shrinkedFilename)
+	fi, err := os.Stat(shrunkFilename)
 	if err != nil {
 		t.Fatalf("failed to get file stat")
 	}
 	if fi.Size() != 1060 {
-		t.Errorf("not shrinked according to file size")
+		t.Errorf("not shrunk according to file size")
 	}
-	reader, err := NewSnapshotReader(shrinkedFilename)
+	reader, err := NewSnapshotReader(shrunkFilename)
 	if err != nil {
 		t.Fatalf("failed to create snapshot reader %v", err)
 	}

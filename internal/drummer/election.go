@@ -21,7 +21,7 @@ import (
 	"time"
 
 	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/utils/lang"
+	serverPkg "github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/utils/random"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 )
@@ -152,7 +152,7 @@ func (d *electionManager) workerMain(ctx context.Context) {
 		}
 		return false
 	}
-	lang.RunTicker(td, tf, ctx.Done(), d.stopper.ShouldStop())
+	serverPkg.RunTicker(td, tf, ctx.Done(), d.stopper.ShouldStop())
 }
 
 func (d *electionManager) leaderMain(ctx context.Context, tick uint64) {

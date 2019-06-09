@@ -65,7 +65,7 @@ classified into two categories, synchronous and asynchronous APIs. Synchronous
 APIs which will not return until the completion of the requested operation.
 Their method names all start with Sync*. The asynchronous counterpart of those
 asynchronous APIs, on the other hand, usually return immediately without waiting
-on any signficant delays caused by networking or disk IO. This allows users to
+on any significant delays caused by networking or disk IO. This allows users to
 concurrently initiate multiple such asynchronous operations to save the total
 amount of time required to complete them. Users are free to choose whether they
 prefer to use the synchronous APIs for its simplicity or their asynchronous
@@ -95,14 +95,11 @@ import (
 	"github.com/lni/dragonboat/client"
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/raft"
 	"github.com/lni/dragonboat/internal/rsm"
 	"github.com/lni/dragonboat/internal/server"
 	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/lang"
 	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/stringutil"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
@@ -188,6 +185,17 @@ type NodeHostInfo struct {
 	// stored on the NodeHost.
 	LogInfo []raftio.NodeInfo
 }
+
+// NodeHostInfoOption is the option type used when querying NodeHostInfo.
+type NodeHostInfoOption struct {
+	// SkipLogInfo is the boolean flag indicating whether Raft Log info should be
+	// skipped when querying the NodeHostInfo.
+	SkipLogInfo bool
+}
+
+// DefaultNodeHostInfoOption is the default NodeHostInfoOption value. It
+// requests the GetNodeHostInfo method to return all supported info.
+var DefaultNodeHostInfoOption NodeHostInfoOption
 
 // SnapshotOption is the options users can specify when requesting a snapshot
 // to be generated.
@@ -449,10 +457,13 @@ func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
 }
 
 // SyncPropose makes a synchronous proposal on the Raft cluster specified by
-// the input client session object. It returns the result code returned by
-// IStateMachine or IOnDiskStateMachine's Update method, or the error
-// encountered. The input byte slice can be reused for other purposes immediate
-// after the return of this method.
+// the input client session object. The specified context parameter must has
+// the timeout value set.
+//
+// SyncPropose returns the result returned by IStateMachine or
+// IOnDiskStateMachine's Update method, or the error encountered. The input
+// byte slice can be reused for other purposes immediate after the return of
+// this method.
 //
 // After calling SyncPropose, unless NO-OP client session is used, it is
 // caller's responsibility to update the client session instance accordingly
@@ -482,10 +493,11 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 }
 
 // SyncRead performs a synchronous linearizable read on the specified Raft
-// cluster. The query byte slice specifies what to query, it will be passed to
-// the Lookup method of the IStateMachine or IOnDiskStateMachine after the
-// system determines that it is safe to perform the local read on IStateMachine
-// or IOnDiskStateMachine. It returns the query result from the Lookup method or
+// cluster. The specified context parameter must has the timeout value set. The
+// query byte slice specifies what to query, it will be passed to the Lookup
+// method of the IStateMachine or IOnDiskStateMachine after the system
+// determines that it is safe to perform the local read on IStateMachine or
+// IOnDiskStateMachine. It returns the query result from the Lookup method or
 // the error encountered.
 func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	query interface{}) (interface{}, error) {
@@ -520,11 +532,13 @@ type Membership struct {
 	Removed map[uint64]struct{}
 }
 
-// GetClusterMembership returns the membership information from the specified
-// Raft cluster. This method guarantees that the returned membership
-// information is linearizable. This is a synchronous method meaning it will
-// only return after its confirmed completion, failure or timeout.
-func (nh *NodeHost) GetClusterMembership(ctx context.Context,
+// SyncGetClusterMembership is a rsynchronous method that queries the membership
+// information from the specified Raft cluster. The specified context parameter
+// must has the timeout value set.
+//
+// SyncGetClusterMembership guarantees that the returned membership information
+// is linearizable.
+func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
 		func(node *node) (interface{}, error) {
@@ -542,6 +556,21 @@ func (nh *NodeHost) GetClusterMembership(ctx context.Context,
 	}
 	r := v.(*Membership)
 	return r, nil
+}
+
+// GetClusterMembership returns the membership information from the specified
+// Raft cluster. The specified context parameter must has the timeout value
+// set.
+//
+// GetClusterMembership guarantees that the returned membership information is
+// linearizable. This is a synchronous method meaning it will only return after
+// its confirmed completion, failure or timeout.
+//
+// Deprecated: Use NodeHost.SyncGetClusterMembership instead.
+// NodeHost.GetClusterMembership will be removed in v3.1.
+func (nh *NodeHost) GetClusterMembership(ctx context.Context,
+	clusterID uint64) (*Membership, error) {
+	return nh.SyncGetClusterMembership(ctx, clusterID)
 }
 
 // GetLeaderID returns the leader node ID of the specified Raft cluster based
@@ -576,13 +605,15 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 }
 
 // GetNewSession starts a synchronous proposal to create, register and return
-// a new client session object. A client session object is used to ensure that
-// a retried proposal, e.g. proposal retried after timeout, will not be applied
-// more than once into the IStateMachine.
+// a new client session object for the specified Raft cluster. The specified
+// context parameter must has the timeout value set.
+//
+// A client session object is used to ensure that a retried proposal, e.g.
+// proposal retried after timeout, will not be applied more than once into the
+// IStateMachine.
 //
 // Returned client session instance should not be used concurrently. Use
-// multiple client sessions when you need to concurrently start multiple
-// proposals.
+// multiple client sessions when making concurrent proposals.
 //
 // Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
 // be removed in v3.1.
@@ -592,8 +623,9 @@ func (nh *NodeHost) GetNewSession(ctx context.Context,
 }
 
 // CloseSession closes the specified client session by unregistering it
-// from the system. This is a synchronous method meaning it will only return
-// after its confirmed completion, failure or timeout.
+// from the system. The specified context parameter must has the timeout value
+// set. This is a synchronous method meaning it will only return after its
+// confirmed completion, failure or timeout.
 //
 // Closed client session should no longer be used in future proposals.
 //
@@ -605,9 +637,12 @@ func (nh *NodeHost) CloseSession(ctx context.Context,
 }
 
 // SyncGetSession starts a synchronous proposal to create, register and return
-// a new client session object. A client session object is used to ensure that
-// a retried proposal, e.g. proposal retried after timeout, will not be applied
-// more than once into the state machine.
+// a new client session object for the specified Raft cluster. The specified
+// context parameter must has the timeout value set.
+//
+// A client session object is used to ensure that a retried proposal, e.g.
+// proposal retried after timeout, will not be applied more than once into the
+// state machine.
 //
 // Returned client session instance should not be used concurrently. Use
 // multiple client sessions when you need to concurrently start multiple
@@ -640,8 +675,9 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 }
 
 // SyncCloseSession closes the specified client session by unregistering it
-// from the system. This is a synchronous method meaning it will only return
-// after its confirmed completion, failure or timeout.
+// from the system. The specified context parameter must has the timeout value
+// set. This is a synchronous method meaning it will only return after its
+// confirmed completion, failure or timeout.
 //
 // Closed client session should no longer be used in future proposals.
 func (nh *NodeHost) SyncCloseSession(ctx context.Context,
@@ -935,9 +971,9 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 // When the raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
 // should be set to the most recent Config Change Index value returned by the
-// GetClusterMembership method. The requested delete node operation will be
+// SyncGetClusterMembership method. The requested delete node operation will be
 // rejected if other membership change has been applied since the call to
-// the GetClusterMembership method.
+// the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	nodeID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
@@ -968,9 +1004,9 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // Raft node being added will be running. When the raft cluster is created with
 // the OrderedConfigChange config flag set as false, the configChangeIndex
 // parameter is ignored. Otherwise, it should be set to the most recent Config
-// Change Index value returned by the GetClusterMembership method. The requested
-// add node operation will be rejected if other membership change has been
-// applied since the call to the GetClusterMembership method.
+// Change Index value returned by the SyncGetClusterMembership method. The
+// requested add node operation will be rejected if other membership change has
+// been applied since the call to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1003,9 +1039,9 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // observer being added will be running. When the raft cluster is created with
 // the OrderedConfigChange config flag set as false, the configChangeIndex
 // parameter is ignored. Otherwise, it should be set to the most recent Config
-// Change Index value returned by the GetClusterMembership method. The requested
-// add observer operation will be rejected if other membership change has been
-// applied since the call to the GetClusterMembership method.
+// Change Index value returned by the SyncGetClusterMembership method. The
+// requested add observer operation will be rejected if other membership change
+// has been applied since the call to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1037,7 +1073,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for
-// the specified node to be fully unloaded or until the ctx instance is
+// the specified node to be fully offloaded or until the ctx instance is
 // cancelled or timeout.
 //
 // Similar to RemoveData, calling SyncRemoveData on a node that is still a Raft
@@ -1078,7 +1114,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 // will corrupt the Raft cluster.
 //
 // RemoveData returns ErrClusterNotStopped when the specified node has not been
-// fully unloaded from the NodeHost instance.
+// fully offloaded from the NodeHost instance.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	n, ok := nh.getCluster(clusterID)
 	if ok && n.nodeID == nodeID {
@@ -1139,17 +1175,19 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 // GetNodeHostInfo returns a NodeHostInfo instance that contains all details
 // of the NodeHost, this includes details of all Raft clusters managed by the
 // the NodeHost instance.
-func (nh *NodeHost) GetNodeHostInfo() *NodeHostInfo {
-	clusterInfoList := nh.getClusterInfo()
-	plogInfo, err := nh.logdb.ListNodeInfo()
-	if err != nil {
-		plog.Panicf("failed to list all logs on logdb %v", err)
-	}
-	return &NodeHostInfo{
+func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
+	nhi := &NodeHostInfo{
 		RaftAddress:     nh.RaftAddress(),
-		ClusterInfoList: clusterInfoList,
-		LogInfo:         plogInfo,
+		ClusterInfoList: nh.getClusterInfo(),
 	}
+	if !opt.SkipLogInfo {
+		logInfo, err := nh.logdb.ListNodeInfo()
+		if err != nil {
+			plog.Panicf("failed to list all logs %v", err)
+		}
+		nhi.LogInfo = logInfo
+	}
+	return nhi
 }
 
 func (nh *NodeHost) propose(s *client.Session,
@@ -1293,29 +1331,24 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 	join bool, config config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
-	// bootstrap the cluster by recording a bootstrap info rec into the Log DB
 	if err == raftio.ErrNoBootstrapInfo {
 		var members map[uint64]string
 		if !join {
 			members = nodes
 		}
-		bootstrap := pb.Bootstrap{
-			Join:      join,
-			Addresses: make(map[uint64]string),
-			Type:      smType,
+		bs := pb.NewBootstrapInfo(join, smType, nodes)
+		err := nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, *bs)
+		if err != nil {
+			return nil, false, err
 		}
-		for nid, addr := range nodes {
-			bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
-		}
-		err = nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, bootstrap)
-		plog.Infof("node %s not bootstrapped, %v",
+		plog.Infof("node %s bootstrapped, %v",
 			logutil.DescribeNode(config.ClusterID, config.NodeID), members)
-		return members, !join, err
+		return members, !join, nil
 	} else if err != nil {
 		return nil, false, err
 	}
 	if !binfo.Validate(nodes, join, smType) {
-		plog.Errorf("bootstrap validation failed for %s, %v, %t, %v, %t",
+		plog.Errorf("bootstrap validation failed, %s, %v, %t, %v, %t",
 			logutil.DescribeNode(config.ClusterID, config.NodeID),
 			binfo.Addresses, binfo.Join, nodes, join)
 		return nil, false, ErrInvalidClusterSettings
@@ -1391,7 +1424,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	if err := snapshotter.ProcessOrphans(); err != nil {
 		panic(err)
 	}
-	rn := newNode(nh.nhConfig.RaftAddress,
+	rn, err := newNode(nh.nhConfig.RaftAddress,
 		addrs,
 		members,
 		snapshotter,
@@ -1408,6 +1441,9 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		config,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb)
+	if err != nil {
+		panic(err)
+	}
 	nh.clusterMu.clusters.Store(clusterID, rn)
 	nh.clusterMu.requests[clusterID] = queue
 	nh.clusterMu.csi++
@@ -1535,7 +1571,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		return false
 	}
-	lang.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
+	server.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
 }
 
 func (nh *NodeHost) getCurrentClusters(index uint64,
@@ -1648,7 +1684,7 @@ func (nh *NodeHost) nodeMonitorMain(nhConfig config.NodeHostConfig) {
 		nh.closeStoppedClusters()
 		return false
 	}
-	lang.RunTicker(monitorInterval, tf, nh.stopper.ShouldStop(), nil)
+	server.RunTicker(monitorInterval, tf, nh.stopper.ShouldStop(), nil)
 }
 
 func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
@@ -1927,8 +1963,8 @@ func logBuildTagsAndVersion() {
 		devstr = "Dev"
 	}
 	plog.Infof("go version: %s", runtime.Version())
-	plog.Infof("dragonboat version: %d.%d.%d (%s), raftlog type: %s",
-		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr, raft.RaftLogTypeName)
+	plog.Infof("dragonboat version: %d.%d.%d (%s)",
+		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
 	if runtime.GOOS == "darwin" {
 		plog.Warningf("Running on darwin, don't use for production purposes")

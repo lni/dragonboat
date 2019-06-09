@@ -668,7 +668,7 @@ func NodeHostGetClusterMembership(oid uint64, clusterID uint64,
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	membership, err := nh.GetClusterMembership(ctx, clusterID)
+	membership, err := nh.SyncGetClusterMembership(ctx, clusterID)
 	if err != nil {
 		return nil, 0, getErrorCode(err)
 	}
