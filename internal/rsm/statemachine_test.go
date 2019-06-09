@@ -1661,8 +1661,9 @@ func TestUpdateLastApplied(t *testing.T) {
 }
 
 type testManagedStateMachine struct {
-	first uint64
-	last  uint64
+	first        uint64
+	last         uint64
+	corruptIndex bool
 }
 
 func (t *testManagedStateMachine) Open() (uint64, error) { return 0, nil }
@@ -1688,8 +1689,15 @@ func (t *testManagedStateMachine) ConcurrentSnapshot() bool                     
 func (t *testManagedStateMachine) OnDiskStateMachine() bool                       { return false }
 func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType          { return 0 }
 func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	t.first = ents[0].Index
-	t.last = ents[len(ents)-1].Index
+	if !t.corruptIndex {
+		t.first = ents[0].Index
+		t.last = ents[len(ents)-1].Index
+	} else {
+		for idx := range ents {
+			ents[idx].Index = ents[idx].Index + 1
+		}
+	}
+
 	return ents, nil
 }
 
@@ -1745,5 +1753,31 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if sm.index != tt.last {
 			t.Errorf("unexpected last applied index %d, want %d", sm.index, tt.last)
 		}
+	}
+}
+
+func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
+	ents := make([]sm.Entry, 0)
+	msm := &testManagedStateMachine{corruptIndex: true}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		diskSMIndex: 0,
+		index:       0,
+		term:        100,
+		sm:          msm,
+		node:        np,
+	}
+	input := make([]pb.Entry, 0)
+	for i := uint64(1); i <= 10; i++ {
+		input = append(input, pb.Entry{Index: i, Term: 100})
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("failed to trigger panic")
+		}
+	}()
+	if err := sm.handleBatch(input, ents); err != nil {
+		t.Fatalf("handle batched entries failed %v", err)
 	}
 }

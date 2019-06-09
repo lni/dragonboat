@@ -77,9 +77,10 @@ type IOnDiskStateMachine interface {
 	// can choose to batch them and apply together to hide latency. Update returns
 	// the input entry slice with the Result field of all its members set.
 	//
-	// The Index field of each input Entry instance is the Raft log index of each
-	// entry, it is IOnDiskStateMachine's responsibility to atomically persist the
-	// Index value together with the corresponding Entry update.
+	// The read only Index field of each input Entry instance is the Raft log
+	// index of each entry, it is IOnDiskStateMachine's responsibility to
+	// atomically persist the Index value together with the corresponding state
+	// update.
 	//
 	// The Update method can choose to synchronize all of its in-core state with
 	// that on disk. This can minimize the number of committed Raft entries that
