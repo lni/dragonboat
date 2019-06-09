@@ -65,7 +65,7 @@ classified into two categories, synchronous and asynchronous APIs. Synchronous
 APIs which will not return until the completion of the requested operation.
 Their method names all start with Sync*. The asynchronous counterpart of those
 asynchronous APIs, on the other hand, usually return immediately without waiting
-on any signficant delays caused by networking or disk IO. This allows users to
+on any significant delays caused by networking or disk IO. This allows users to
 concurrently initiate multiple such asynchronous operations to save the total
 amount of time required to complete them. Users are free to choose whether they
 prefer to use the synchronous APIs for its simplicity or their asynchronous

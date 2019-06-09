@@ -381,8 +381,8 @@ func (v *SnapshotValidator) Validate() bool {
 }
 
 // IsShrinkedSnapshotFile returns a boolean flag indicating whether the
-// specified snapshot file is already shrinked.
-func IsShrinkedSnapshotFile(fp string) (shrinked bool, err error) {
+// specified snapshot file is already shrunk.
+func IsShrinkedSnapshotFile(fp string) (shrunk bool, err error) {
 	reader, err := NewSnapshotReader(fp)
 	if err != nil {
 		return false, err
@@ -423,7 +423,7 @@ func mustInSameDir(fp string, newFp string) {
 }
 
 // ShrinkSnapshot shrinks the specified snapshot file and save the generated
-// shrinked version to the path specified by newFp.
+// shrunk version to the path specified by newFp.
 func ShrinkSnapshot(fp string, newFp string) (err error) {
 	mustInSameDir(fp, newFp)
 	reader, err := NewSnapshotReader(fp)
@@ -453,7 +453,7 @@ func ShrinkSnapshot(fp string, newFp string) (err error) {
 	return nil
 }
 
-// ReplaceSnapshotFile replace the specified snapshot file with the shrinked
+// ReplaceSnapshotFile replace the specified snapshot file with the shrunk
 // version atomically.
 func ReplaceSnapshotFile(newFp string, fp string) error {
 	mustInSameDir(fp, newFp)

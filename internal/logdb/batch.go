@@ -31,8 +31,8 @@ import (
 //  * entries are usually read and consumed together
 // This idea helped to achieve better latency and throughput performance.
 //
-// We also compact redundent index/term values whenever possible. In such
-// approach, rather than repeatedly storing the continously increamental
+// We also compact redundant index/term values whenever possible. In such
+// approach, rather than repeatedly storing the continuously increamental
 // index values and the identifical term values, we represent them in the
 // way implemented in the compactBatchFields function below.
 //

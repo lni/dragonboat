@@ -246,7 +246,7 @@ func TestApplyAddNode(t *testing.T) {
 	}
 	o.applyConfigChange(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
-		t.Errorf("ccid not udpated")
+		t.Errorf("ccid not updated")
 	}
 	v, ok := o.members.Addresses[100]
 	if !ok || v != "a1" || len(o.members.Addresses) != 1 {
@@ -282,7 +282,7 @@ func TestApplyAddObserver(t *testing.T) {
 	}
 	o.applyConfigChange(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
-		t.Errorf("ccid not udpated")
+		t.Errorf("ccid not updated")
 	}
 	v, ok := o.members.Observers[100]
 	if !ok || v != "a1" || len(o.members.Observers) != 1 {

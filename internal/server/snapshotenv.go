@@ -49,7 +49,7 @@ var (
 var (
 	genTmpDirSuffix  = "generating"
 	recvTmpDirSuffix = "receiving"
-	shrinkedSuffix   = "shrinked"
+	shrunkSuffix     = "shrunk"
 )
 
 var finalizeLock sync.Mutex
@@ -99,7 +99,7 @@ func getSnapshotFilename(index uint64) string {
 }
 
 func getShrinkedSnapshotFilename(index uint64) string {
-	return fmt.Sprintf("snapshot-%016X.%s", index, shrinkedSuffix)
+	return fmt.Sprintf("snapshot-%016X.%s", index, shrunkSuffix)
 }
 
 func getTempSnapshotDirName(rootDir string,
@@ -241,7 +241,7 @@ func (se *SnapshotEnv) GetFilepath() string {
 	return filepath.Join(se.finalDir, getSnapshotFilename(se.index))
 }
 
-// GetShrinkedFilepath returns the file path of the shrinked snapshot.
+// GetShrinkedFilepath returns the file path of the shrunk snapshot.
 func (se *SnapshotEnv) GetShrinkedFilepath() string {
 	return filepath.Join(se.finalDir, getShrinkedSnapshotFilename(se.index))
 }

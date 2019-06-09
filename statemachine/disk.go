@@ -55,7 +55,7 @@ var (
 // Applications that implement IOnDiskStateMachine are still recommended to
 // setup periodic snapshotting, that only triggers the state machine's
 // metadata to be periodically snapshotted and thus adds negligible overheads
-// to the system. It also provides an opportunites for the system to signal
+// to the system. It also provides an opportunities for the system to signal
 // Raft Log compaction to free up disk spaces.
 type IOnDiskStateMachine interface {
 	// Open opens the existing on disk state machine to be used or it creates a

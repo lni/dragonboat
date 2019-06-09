@@ -66,7 +66,7 @@ const (
 	ExportedSnapshot
 )
 
-// SnapshotRequest is the type for decribing the details of a snapshot request.
+// SnapshotRequest is the type for describing the details of a snapshot request.
 type SnapshotRequest struct {
 	Type SnapshotRequestType
 	Key  uint64
@@ -462,7 +462,7 @@ func (s *StateMachine) SaveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 }
 
 // StreamSnapshot starts to stream snapshot from the current SM to a remote
-// node targetted by the provided sink.
+// node targeted by the provided sink.
 func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
 	return s.streamSnapshot(sink)
 }

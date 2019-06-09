@@ -37,7 +37,7 @@ const (
 )
 
 var (
-	// HardWorkerTestClusterID is the cluster ID of the cluster targetted by the
+	// HardWorkerTestClusterID is the cluster ID of the cluster targeted by the
 	// hard worker.
 	HardWorkerTestClusterID uint64 = 1
 	// DrummerClientName is the name of the default master client.
