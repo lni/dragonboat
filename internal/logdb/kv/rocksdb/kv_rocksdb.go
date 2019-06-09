@@ -35,11 +35,13 @@ var (
 	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
 )
 
+// NewKVStore returns a RocksDB based IKVStore instance.
 func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return openRocksDB(dir, wal)
 }
 
-type RocksDBKV struct {
+// KV is a RocksDB based IKVStore type.
+type KV struct {
 	directory string
 	bbto      *gorocksdb.BlockBasedTableOptions
 	cache     *gorocksdb.Cache
@@ -119,7 +121,7 @@ func getRocksDBOptions(directory string,
 	return opts, bbto, cache
 }
 
-func openRocksDB(dir string, wal string) (*RocksDBKV, error) {
+func openRocksDB(dir string, wal string) (*KV, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
 	walExist, err := fileutil.Exist(wal)
@@ -150,7 +152,7 @@ func openRocksDB(dir string, wal string) (*RocksDBKV, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	ro.SetTotalOrderSeek(true)
-	return &RocksDBKV{
+	return &KV{
 		directory: dir,
 		bbto:      bbto,
 		cache:     cache,
@@ -161,12 +163,13 @@ func openRocksDB(dir string, wal string) (*RocksDBKV, error) {
 	}, nil
 }
 
-func (r *RocksDBKV) Name() string {
+// Name returns the IKVStore type name.
+func (r *KV) Name() string {
 	return "rocksdb"
 }
 
 // Close closes the RDB object.
-func (r *RocksDBKV) Close() error {
+func (r *KV) Close() error {
 	if r.db != nil {
 		r.db.Close()
 	}
@@ -189,7 +192,8 @@ func (r *RocksDBKV) Close() error {
 	return nil
 }
 
-func (r *RocksDBKV) IterateValue(fk []byte, lk []byte, inc bool,
+// IterateValue iterates the key value pairs.
+func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) error {
 	iter := r.db.NewIterator(r.ro)
 	defer func() {
@@ -236,7 +240,8 @@ func (r *RocksDBKV) IterateValue(fk []byte, lk []byte, inc bool,
 	return nil
 }
 
-func (r *RocksDBKV) GetValue(key []byte,
+// GetValue returns the value associated with the specified key.
+func (r *KV) GetValue(key []byte,
 	op func([]byte) error) error {
 	val, err := r.db.Get(r.ro, key)
 	if err != nil {
@@ -246,21 +251,24 @@ func (r *RocksDBKV) GetValue(key []byte,
 	return op(val.Data())
 }
 
-func (r *RocksDBKV) SaveValue(key []byte, value []byte) error {
+// SaveValue saves the specified key value pair.
+func (r *KV) SaveValue(key []byte, value []byte) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	wb.Put(key, value)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *RocksDBKV) DeleteValue(key []byte) error {
+// DeleteValue deletes the specified key value pair.
+func (r *KV) DeleteValue(key []byte) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	wb.Delete(key)
 	return r.db.Write(r.wo, wb)
 }
 
-func (r *RocksDBKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
+// GetWriteBatch returns a write batch instance.
+func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb != nil {
@@ -270,7 +278,8 @@ func (r *RocksDBKV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	return gorocksdb.NewWriteBatch()
 }
 
-func (r *RocksDBKV) CommitWriteBatch(wb kv.IWriteBatch) error {
+// CommitWriteBatch commits the write batch.
+func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	rocksdbwb, ok := wb.(*gorocksdb.WriteBatch)
 	if !ok {
 		panic("unknown type")
@@ -278,15 +287,18 @@ func (r *RocksDBKV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	return r.db.Write(r.wo, rocksdbwb)
 }
 
-func (r *RocksDBKV) CommitDeleteBatch(wb kv.IWriteBatch) error {
+// CommitDeleteBatch commits the write batch for deletes.
+func (r *KV) CommitDeleteBatch(wb kv.IWriteBatch) error {
 	return r.CommitWriteBatch(wb)
 }
 
-func (r *RocksDBKV) BulkRemoveEntries(fk []byte, lk []byte) error {
+// BulkRemoveEntries returns the keys specified by the input range.
+func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *RocksDBKV) CompactEntries(fk []byte, lk []byte) error {
+// CompactEntries compacts the specified key range.
+func (r *KV) CompactEntries(fk []byte, lk []byte) error {
 	if err := r.deleteRange(fk, lk); err != nil {
 		return err
 	}
@@ -303,7 +315,8 @@ func (r *RocksDBKV) CompactEntries(fk []byte, lk []byte) error {
 	return nil
 }
 
-func (r *RocksDBKV) FullCompaction() error {
+// FullCompaction compacts the whole key space.
+func (r *KV) FullCompaction() error {
 	fk := make([]byte, kv.MaxKeyLength)
 	lk := make([]byte, kv.MaxKeyLength)
 	for i := uint64(0); i < kv.MaxKeyLength; i++ {
@@ -323,7 +336,7 @@ func (r *RocksDBKV) FullCompaction() error {
 	return nil
 }
 
-func (r *RocksDBKV) deleteRange(fk []byte, lk []byte) error {
+func (r *KV) deleteRange(fk []byte, lk []byte) error {
 	iter := r.db.NewIterator(r.ro)
 	defer iter.Close()
 	wb := gorocksdb.NewWriteBatch()

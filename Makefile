@@ -548,13 +548,14 @@ clean-binding:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=internal/raft internal/logdb internal/transport internal/cpp   \
-	internal/rsm internal/settings internal/tests internal/tests/lcm          \
-	internal/utils/lang internal/utils/random internal/utils/fileutil         \
-	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil  \
-	internal/utils/netutil internal/utils/cache internal/utils/envutil        \
-	internal/server internal/drummer internal/drummer/client plugin/leveldb   \
-	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config    \
+CHECKED_PKGS=internal/raft internal/logdb internal/transport internal/cpp      \
+	internal/rsm internal/settings internal/tests internal/tests/lcm             \
+	internal/utils/lang internal/utils/random internal/utils/fileutil            \
+	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil     \
+	internal/utils/netutil internal/utils/cache internal/utils/envutil           \
+	internal/server internal/drummer internal/drummer/client plugin/leveldb      \
+	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
+	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config       \
 	statemachine client
 
 static-check:
@@ -590,6 +591,7 @@ cpp-static-check:
 
 GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
+	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
 	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
 	internal/utils/cache internal/utils/fileutil internal/utils/stringutil       \
 	internal/utils/netutil internal/utils/random internal/utils/logutil          \

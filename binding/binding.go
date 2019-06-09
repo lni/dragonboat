@@ -592,7 +592,7 @@ func NodeHostRequestLeaderTransfer(oid uint64,
 	return getErrorCode(err)
 }
 
-// NodeHostSyncGetClusterMembership returns the membership of the specified cluster.
+// NodeHostGetClusterMembership returns the membership of the specified cluster.
 //export NodeHostGetClusterMembership
 func NodeHostGetClusterMembership(oid uint64, clusterID uint64,
 	timeout uint64) (*C.Membership, uint64, int) {
