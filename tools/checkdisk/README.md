@@ -23,5 +23,6 @@ Results below were observed on a single socket E5-2696v4 server with 22 cores.
 |Intel|P3700 1.6T|NVME|6896307|
 |Intel|P3520 1.2T|NVME|6465987|
 |Intel|S3710 800G|SATA|3094821|
-|Intel|S4510 960G|SATA|0|
+|Intel|S4510 960G|SATA|3082143|
 |Samsung|860EVO 500G|SATA|922439|
+|Samsung|850EVO 500G|SATA|916712|
