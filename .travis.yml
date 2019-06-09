@@ -2,7 +2,7 @@ language: go
 sudo: required
 
 go:
-  - 1.10.7
+  - 1.12.5
   - 1.11.4
 
 notifications:
