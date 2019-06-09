@@ -7,7 +7,7 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
-* 2019-06-09 Dragonboat v3.0 测试版被合并到了Master branch中。
+* 2019-06-09 Dragonboat v3.0 测试版([CHANGELOG](CHANGELOG.md))被合并到了Master branch中。
 * 2019-02-20 Dragonboat v2.0 已发布。
 
 ## 关于 ##
