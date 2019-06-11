@@ -59,17 +59,19 @@ func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	// TODO
-	// ds2 := NewStateMachineWrapperFromPlugin(2,1,
-	// 	"./dragonboat-cpp-plugin-example.so",
-	// 	"CreateConcurrentStateMachine",
-	// 	pb.ConcurrentStateMachine, nil)
+	ds2 := NewStateMachineWrapperFromPlugin(2, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateConcurrentStateMachine",
+		pb.ConcurrentStateMachine, nil)
 	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
 	if ds1 == nil {
 		t.Errorf("failed to return the regular data store object")
+	}
+	if ds2 == nil {
+		t.Errorf("failed to return the concurrent data store object")
 	}
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
@@ -82,6 +84,14 @@ func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
 	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
 	if !ds1.(*RegularStateMachineWrapper).ReadyToDestroy() {
 		t.Errorf("ds1.destroyed: %t, want true", ds1.(*RegularStateMachineWrapper).ReadyToDestroy())
+	}
+	ds2.(*ConcurrentStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	ds2.(*ConcurrentStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
+	ds2.(*ConcurrentStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
+	ds2.(*ConcurrentStateMachineWrapper).SetOffloaded(rsm.FromSnapshotWorker)
+	ds2.(*ConcurrentStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
+	if !ds2.(*ConcurrentStateMachineWrapper).ReadyToDestroy() {
+		t.Errorf("ds2.destroyed: %t, want true", ds2.(*ConcurrentStateMachineWrapper).ReadyToDestroy())
 	}
 	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
 	ds3.(*OnDiskStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
@@ -98,17 +108,19 @@ func TestOffloadedWorksAsExpected(t *testing.T) {
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	// TODO
-	// ds2 := NewStateMachineWrapperFromPlugin(2, 1,
-	// 	"./dragonboat-cpp-plugin-example.so",
-	// 	"CreateConcurrentStateMachine",
-	// 	pb.ConcurrentStateMachine, nil)
+	ds2 := NewStateMachineWrapperFromPlugin(2, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateConcurrentStateMachine",
+		pb.ConcurrentStateMachine, nil)
 	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
 	if ds1 == nil {
 		t.Errorf("failed to return the regular data store object")
+	}
+	if ds2 == nil {
+		t.Errorf("failed to return the concurrent data store object")
 	}
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
@@ -125,10 +137,15 @@ func TestOffloadedWorksAsExpected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		ds1.Offloaded(tt.val)
+		ds2.Offloaded(tt.val)
 		ds3.Offloaded(tt.val)
 		if ds1.(*RegularStateMachineWrapper).Destroyed() != tt.destroyed {
 			t.Errorf("ds1.destroyed %t, want %t",
 				ds1.(*RegularStateMachineWrapper).Destroyed(), tt.destroyed)
+		}
+		if ds2.(*ConcurrentStateMachineWrapper).Destroyed() != tt.destroyed {
+			t.Errorf("ds2.destroyed %t, want %t",
+				ds2.(*ConcurrentStateMachineWrapper).Destroyed(), tt.destroyed)
 		}
 		if ds3.(*OnDiskStateMachineWrapper).Destroyed() != tt.destroyed {
 			t.Errorf("ds3.destroyed %t, want %t",
@@ -143,11 +160,10 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
 		pb.RegularStateMachine, nil)
-	// TODO
-	// ds2 := NewStateMachineWrapperFromPlugin(2, 1,
-	// 	"./dragonboat-cpp-plugin-example.so",
-	// 	"CreateConcurrentStateMachine",
-	// 	pb.ConcurrentStateMachine, nil)
+	ds2 := NewStateMachineWrapperFromPlugin(2, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateConcurrentStateMachine",
+		pb.ConcurrentStateMachine, nil)
 	ds3 := NewStateMachineWrapperFromPlugin(3, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
@@ -157,10 +173,14 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if ds1 == nil {
 		t.Errorf("failed to return the data store object")
 	}
+	if ds2 == nil {
+		t.Errorf("failed to return the concurrent data store object")
+	}
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
 	}
 	defer ds1.(*RegularStateMachineWrapper).destroy()
+	defer ds2.(*ConcurrentStateMachineWrapper).destroy()
 	defer ds3.(*OnDiskStateMachineWrapper).destroy()
 	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
@@ -178,6 +198,20 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	v4 := binary.LittleEndian.Uint64(result.([]byte))
 	if v4 != v3.Value {
 		t.Errorf("regular data store returned %d, want %d", v4, v3)
+	}
+	v1, _ = ds2.Update(nil, e1)
+	v2, _ = ds2.Update(nil, e2)
+	v3, _ = ds2.Update(nil, e3)
+	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
+		t.Errorf("Unexpected update result from concurrent data store")
+	}
+	result, err = ds2.Lookup([]byte("test-lookup-data"))
+	if err != nil {
+		t.Errorf("failed to lookup concurrent data store")
+	}
+	v4 = binary.LittleEndian.Uint64(result.([]byte))
+	if v4 != v3.Value {
+		t.Errorf("concurrent data store returned %d, want %d", v4, v3)
 	}
 	e1.Index = initialApplied + 1
 	e2.Index = initialApplied + 2
@@ -298,6 +332,171 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 	h2, _ := ds.GetHash()
 	if h != h2 {
 		t.Errorf("hash does not match")
+	}
+}
+
+func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateRegularStateMachine",
+		pb.RegularStateMachine, nil)
+	defer ds1.(*RegularStateMachineWrapper).destroy()
+
+	entry := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(nil, entry)
+	if err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+	if count.Value != 1 {
+		t.Fatalf("initial update returned %v, want 1", count.Value)
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.ExportedSnapshot,
+		},
+		Type:    pb.RegularStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+	}
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to new snapshot writer %v", err)
+	}
+	_, sz, err := ds1.SaveSnapshot(&meta, writer, meta.Session.Bytes(), nil)
+	if err != nil {
+		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writer %v", err)
+	}
+	f, err := os.Open(fp)
+	if err != nil {
+		t.Errorf("failed to open file %v", err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		t.Errorf("failed to get file stat")
+	}
+	if uint64(fi.Size()) != sz {
+		t.Errorf("sz %d, want %d", fi.Size(), sz)
+	}
+	ds2 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateRegularStateMachine",
+		pb.RegularStateMachine, nil)
+	if ds2 == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds2.(*RegularStateMachineWrapper).destroy()
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
+	err = ds2.RecoverFromSnapshot(0, reader, nil)
+	if err != nil {
+		t.Fatalf("failed to recover from snapshot %v", err)
+	}
+	yacount, err := ds2.Lookup([]byte{0})
+	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+		t.Fatalf("lookup recovered data store returned %v, want 1", v)
+	}
+	h, _ := ds1.GetHash()
+	h2, _ := ds2.GetHash()
+	if h != h2 {
+		t.Fatalf("hash does not match")
+	}
+}
+
+func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
+	defer leaktest.AfterTest(t)
+	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateConcurrentStateMachine",
+		pb.ConcurrentStateMachine, nil)
+	defer ds1.(*ConcurrentStateMachineWrapper).destroy()
+
+	entry := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(nil, entry)
+	if err != nil {
+		t.Fatalf("update failed %v", err)
+	}
+	if count.Value != 1 {
+		t.Fatalf("initial update returned %v, want 1", count.Value)
+	}
+	ctx, _ := ds1.PrepareSnapshot()
+	if len(ctx.([]byte)) != 8 {
+		t.Fatalf("failed to prepare snapshot")
+	}
+	meta := rsm.SnapshotMeta{
+		Request: rsm.SnapshotRequest{
+			Type: rsm.ExportedSnapshot,
+		},
+		Type:    pb.ConcurrentStateMachine,
+		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
+		Ctx:     ctx,
+	}
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.CurrentSnapshotVersion)
+	if err != nil {
+		t.Fatalf("failed to new snapshot writer %v", err)
+	}
+	_, sz, err := ds1.SaveSnapshot(&meta, writer, meta.Session.Bytes(), nil)
+	if err != nil {
+		t.Errorf("failed to save snapshot, %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close the snapshot writer %v", err)
+	}
+	f, err := os.Open(fp)
+	if err != nil {
+		t.Errorf("failed to open file %v", err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		t.Errorf("failed to get file stat")
+	}
+	if uint64(fi.Size()) != sz {
+		t.Errorf("sz %d, want %d", fi.Size(), sz)
+	}
+	ds2 := NewStateMachineWrapperFromPlugin(1, 1,
+		"./dragonboat-cpp-plugin-example.so",
+		"CreateConcurrentStateMachine",
+		pb.ConcurrentStateMachine, nil)
+	if ds2 == nil {
+		t.Errorf("failed to return the data store object")
+	}
+	defer ds2.(*ConcurrentStateMachineWrapper).destroy()
+	reader, err := rsm.NewSnapshotReader(fp)
+	if err != nil {
+		t.Fatalf("failed to new snapshot reader %v", err)
+	}
+	defer reader.Close()
+	header, err := reader.GetHeader()
+	if err != nil {
+		t.Fatalf("failed to get snapshot header")
+	}
+	reader.ValidateHeader(header)
+	err = ds2.RecoverFromSnapshot(0, reader, nil)
+	if err != nil {
+		t.Fatalf("failed to recover from snapshot %v", err)
+	}
+	yacount, err := ds2.Lookup([]byte{0})
+	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+		t.Fatalf("lookup recovered data store returned %v, want 1", v)
+	}
+	h, _ := ds1.GetHash()
+	h2, _ := ds2.GetHash()
+	if h != h2 {
+		t.Fatalf("hash does not match")
 	}
 }
 

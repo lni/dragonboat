@@ -97,6 +97,8 @@ enum ErrorCode
   ErrInvalidClusterSettings = -17,
   ErrClusterNotStopped = -18,
   ErrClusterNotInitialized = -19,
+  ErrNodeRemoved = -20,
+  ErrDirNotExist = -21,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is

@@ -214,6 +214,8 @@ class Status
   static const int ErrInvalidClusterSettings;
   static const int ErrClusterNotStopped;
   static const int ErrClusterNotInitialized;
+  static const int ErrNodeRemoved;
+  static const int ErrDirNotExist;
  private:
   int code_;
 };

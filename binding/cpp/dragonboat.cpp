@@ -155,6 +155,10 @@ std::string Status::String() const noexcept
     return "ErrClusterNotStopped";
   case ::ErrClusterNotInitialized:
     return "ErrClusterNotInitialized";
+  case ::ErrNodeRemoved:
+    return "ErrNodeRemoved";
+  case ::ErrDirNotExist:
+    return "ErrDirNotExist";
   default:
     return "Unknown Error Code " + std::to_string(code_);
   }
@@ -180,6 +184,8 @@ const int Status::ErrRejected = ::ErrRejected;
 const int Status::ErrInvalidClusterSettings = ::ErrInvalidClusterSettings;
 const int Status::ErrClusterNotStopped = ::ErrClusterNotStopped;
 const int Status::ErrClusterNotInitialized = ::ErrClusterNotInitialized;
+const int Status::ErrNodeRemoved = ::ErrNodeRemoved;
+const int Status::ErrDirNotExist = ::ErrDirNotExist;
 
 Buffer::Buffer(size_t n) noexcept
   : data_(), len_(n)
