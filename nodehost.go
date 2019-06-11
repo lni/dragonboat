@@ -340,20 +340,20 @@ func (nh *NodeHost) Stop() {
 				logutil.ClusterID(node.ClusterID))
 		}
 	}
-	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
+	plog.Debugf("%s is going to stop the nh stopper", nh.id())
 	if nh.duStopper != nil {
 		nh.duStopper.Stop()
 	}
 	nh.stopper.Stop()
-	plog.Debugf("%s is going to stop the exec engine", nh.describe())
+	plog.Debugf("%s is going to stop the exec engine", nh.id())
 	if nh.execEngine != nil {
 		nh.execEngine.stop()
 	}
-	plog.Debugf("%s is going to stop the tranport module", nh.describe())
+	plog.Debugf("%s is going to stop the tranport module", nh.id())
 	if nh.transport != nil {
 		nh.transport.Stop()
 	}
-	plog.Debugf("%s transport module stopped", nh.describe())
+	plog.Debugf("%s transport module stopped", nh.id())
 	if nh.logdb != nil {
 		nh.logdb.Close()
 	} else {
@@ -361,9 +361,9 @@ func (nh *NodeHost) Stop() {
 		// NewNodeHost, is nh.longdb == nil above is not going to happen
 		plog.Warningf("logdb is nil")
 	}
-	plog.Debugf("logdb closed, %s is now stopped", nh.describe())
+	plog.Debugf("logdb closed, %s is now stopped", nh.id())
 	nh.serverCtx.Stop()
-	plog.Debugf("serverCtx stopped on %s", nh.describe())
+	plog.Debugf("serverCtx stopped on %s", nh.id())
 	if delaySampleRatio > 0 {
 		nh.logTransportLatency()
 	}
@@ -874,6 +874,15 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // permanently lose its majority quorum. See the ImportSnapshot method in the
 // tools package for more details.
 //
+// When the Exported field of the input SnapshotOption instance is set to false,
+// snapshots created as the result of RequestSnapshot are managed by Dragonboat.
+// Users are not suppose to move, copy, modify or delete the generated snapshot.
+// Such requested snapshot will also trigger Raft log and snapshot compactions.
+// Similar to automatic snapshots, when a snapshot is requested on a node backed
+// by an IOnDiskStateMachine, only the metadata portion of the state machine
+// will be captured and saved. Requesting snapshots on IOnDiskStateMachine based
+// nodes are typically used to trigger Raft log and snapshot compactions.
+//
 // RequestSnapshot returns a RequestState instance or an error immediately.
 // Applications can wait on the CompletedC member channel of the returned
 // RequestState instance to get notified for the outcome of the create snasphot
@@ -884,10 +893,6 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 //
 // Requested snapshot operation will be rejected if there is already an existing
 // snapshot in the system at the same Raft log index.
-//
-// When the Exported field of the input SnapshotOption instance is set to false,
-// snapshots created as the result of RequestSnapshot are managed by Dragonboat.
-// Users are not suppose to move, copy, modify or delete the generated snapshot.
 func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	opt SnapshotOption, timeout time.Duration) (*RequestState, error) {
 	v, ok := nh.getCluster(clusterID)
@@ -1611,7 +1616,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 			if !n.OnDiskStateMachine() {
 				nh.transport.ASyncSendSnapshot(msg)
 			} else {
-				n.publishStreamSnapshotRequest(msg.ClusterId, msg.To)
+				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
 			}
 		}
 	}
@@ -1735,7 +1740,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 	return v
 }
 
-func (nh *NodeHost) describe() string {
+func (nh *NodeHost) id() string {
 	return nh.RaftAddress()
 }
 

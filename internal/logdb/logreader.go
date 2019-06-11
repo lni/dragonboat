@@ -71,7 +71,7 @@ func NewLogReader(clusterID uint64,
 	return l
 }
 
-func (lr *LogReader) describe() string {
+func (lr *LogReader) id() string {
 	return fmt.Sprintf("logreader %s index %d term %d length %d",
 		logutil.DescribeNode(lr.clusterID, lr.nodeID),
 		lr.markerIndex, lr.markerTerm, lr.length)
@@ -117,7 +117,7 @@ func (lr *LogReader) entriesLocked(low uint64,
 	}
 	if high > lr.lastIndex()+1 {
 		plog.Errorf("%s, low %d high %d, lastIndex %d",
-			lr.describe(), low, high, lr.lastIndex())
+			lr.id(), low, high, lr.lastIndex())
 		return nil, 0, raft.ErrUnavailable
 	}
 	ents := make([]pb.Entry, 0, high-low)
@@ -138,13 +138,13 @@ func (lr *LogReader) entriesLocked(low uint64,
 		expected := ents[len(ents)-1].Index + 1
 		if lr.lastIndex() <= expected {
 			plog.Errorf("%s, %v, low %d high %d, expected %d, lastIndex %d",
-				lr.describe(), raft.ErrUnavailable, low, high, expected, lr.lastIndex())
+				lr.id(), raft.ErrUnavailable, low, high, expected, lr.lastIndex())
 			return nil, 0, raft.ErrUnavailable
 		}
 		return nil, 0, fmt.Errorf("gap found between [%d:%d) at %d",
 			low, high, expected)
 	}
-	plog.Warningf("%s failed to get anything from logreader", lr.describe())
+	plog.Warningf("%s failed to get anything from logreader", lr.id())
 	return nil, 0, raft.ErrUnavailable
 }
 

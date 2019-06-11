@@ -320,11 +320,11 @@ func NewDiskKVTest(clusterID uint64, nodeID uint64) sm.IOnDiskStateMachine {
 		clusterID: clusterID,
 		nodeID:    nodeID,
 	}
-	fmt.Printf("[DKVE] %s is being created\n", d.describe())
+	fmt.Printf("[DKVE] %s is being created\n", d.id())
 	return d
 }
 
-func (d *DiskKVTest) describe() string {
+func (d *DiskKVTest) id() string {
 	id := logutil.DescribeNode(d.clusterID, d.nodeID)
 	return fmt.Sprintf("%s %s", time.Now().Format("2006-01-02 15:04:05.000000"), id)
 }
@@ -336,13 +336,13 @@ func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
 	}
 	val, err := db.db.Get(db.ro, []byte(appliedIndexKey))
 	if err != nil {
-		fmt.Printf("[DKVE] %s failed to query applied index\n", d.describe())
+		fmt.Printf("[DKVE] %s failed to query applied index\n", d.id())
 		return 0, err
 	}
 	defer val.Free()
 	data := val.Data()
 	if len(data) == 0 {
-		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.describe())
+		fmt.Printf("[DKVE] %s does not have applied index stored yet\n", d.id())
 		return 0, nil
 	}
 	return strconv.ParseUint(string(data), 10, 64)
@@ -350,7 +350,7 @@ func (d *DiskKVTest) queryAppliedIndex(db *rocksdb) (uint64, error) {
 
 // Open opens the state machine.
 func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
-	fmt.Printf("[DKVE] %s is being opened\n", d.describe())
+	fmt.Printf("[DKVE] %s is being opened\n", d.id())
 	generateRandomDelay()
 	dir := getNodeDBDirName(d.clusterID, d.nodeID)
 	if err := createNodeDataDir(dir); err != nil {
@@ -371,9 +371,9 @@ func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 				panic("db dir unexpectedly deleted")
 			}
 		}
-		fmt.Printf("[DKVE] %s being re-opened at %s\n", d.describe(), dbdir)
+		fmt.Printf("[DKVE] %s being re-opened at %s\n", d.id(), dbdir)
 	} else {
-		fmt.Printf("[DKVE] %s doing a new run\n", d.describe())
+		fmt.Printf("[DKVE] %s doing a new run\n", d.id())
 		dbdir = getNewRandomDBDirName(dir)
 		if err := saveCurrentDBDirName(dir, dbdir); err != nil {
 			return 0, err
@@ -382,20 +382,20 @@ func (d *DiskKVTest) Open(stopc <-chan struct{}) (uint64, error) {
 			return 0, err
 		}
 	}
-	fmt.Printf("[DKVE] %s going to create db at %s\n", d.describe(), dbdir)
+	fmt.Printf("[DKVE] %s going to create db at %s\n", d.id(), dbdir)
 	db, err := createDB(dbdir)
 	if err != nil {
-		fmt.Printf("[DKVE] %s failed to create db\n", d.describe())
+		fmt.Printf("[DKVE] %s failed to create db\n", d.id())
 		return 0, err
 	}
-	fmt.Printf("[DKVE] %s returned from create db\n", d.describe())
+	fmt.Printf("[DKVE] %s returned from create db\n", d.id())
 	atomic.SwapPointer(&d.db, unsafe.Pointer(db))
 	appliedIndex, err := d.queryAppliedIndex(db)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("[DKVE] %s opened its disk sm, index %d\n",
-		d.describe(), appliedIndex)
+		d.id(), appliedIndex)
 	d.lastApplied = appliedIndex
 	return appliedIndex, nil
 }
@@ -436,10 +436,10 @@ func (d *DiskKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	// idx := make([]byte, 8)
 	// binary.LittleEndian.PutUint64(idx, ents[len(ents)-1].Index)
 	// wb.Put([]byte(appliedIndexKey), idx)
-	fmt.Printf("[DKVE] %s applied index recorded as %d\n", d.describe(), ents[len(ents)-1].Index)
+	fmt.Printf("[DKVE] %s applied index recorded as %d\n", d.id(), ents[len(ents)-1].Index)
 	if d.lastApplied >= ents[len(ents)-1].Index {
 		fmt.Printf("[DKVE] %s last applied not moving forward %d,%d\n",
-			d.describe(), ents[len(ents)-1].Index, d.lastApplied)
+			d.id(), ents[len(ents)-1].Index, d.lastApplied)
 		panic("lastApplied not moving forward")
 	}
 	d.lastApplied = ents[len(ents)-1].Index
@@ -544,7 +544,7 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 		return strings.Compare(values[i].Key, values[j].Key) < 0
 	})
 	count := uint64(len(values))
-	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.describe(), count)
+	fmt.Printf("[DKVE] %s have %d pairs of KV\n", d.id(), count)
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, count)
 	if _, err := w.Write(sz); err != nil {
@@ -556,7 +556,7 @@ func (d *DiskKVTest) saveToWriter(db *rocksdb,
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("[DKVE] %s saving appliedIndexKey as %d\n", d.describe(), v)
+			fmt.Printf("[DKVE] %s saving appliedIndexKey as %d\n", d.id(), v)
 		}
 		data, err := dataKv.Marshal()
 		if err != nil {
@@ -635,7 +635,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[DKVE] %s is creating a tmp db at %s\n", d.describe(), dbdir)
+	fmt.Printf("[DKVE] %s is creating a tmp db at %s\n", d.id(), dbdir)
 	db, err := createDB(dbdir)
 	if err != nil {
 		return err
@@ -645,7 +645,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 		return err
 	}
 	total := binary.LittleEndian.Uint64(sz)
-	fmt.Printf("[DKVE] %s recovering from a snapshot with %d pairs of KV\n", d.describe(), total)
+	fmt.Printf("[DKVE] %s recovering from a snapshot with %d pairs of KV\n", d.id(), total)
 	wb := gorocksdb.NewWriteBatch()
 	for i := uint64(0); i < total; i++ {
 		if _, err := io.ReadFull(r, sz); err != nil {
@@ -665,7 +665,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("[DKVE] %s recovering appliedIndexKey to %d\n", d.describe(), v)
+			fmt.Printf("[DKVE] %s recovering appliedIndexKey to %d\n", d.id(), v)
 		}
 		wb.Put([]byte(dataKv.Key), []byte(dataKv.Val))
 	}
@@ -678,7 +678,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if err := replaceCurrentDBFile(dir); err != nil {
 		return err
 	}
-	fmt.Printf("[DKVE] %s replaced db %s with %s\n", d.describe(), oldDirName, dbdir)
+	fmt.Printf("[DKVE] %s replaced db %s with %s\n", d.id(), oldDirName, dbdir)
 	newLastApplied, err := d.queryAppliedIndex(db)
 	if err != nil {
 		panic(err)
@@ -689,7 +689,7 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	// in the SM snapshot.
 	if d.lastApplied > newLastApplied {
 		fmt.Printf("[DKVE] %s last applied in snapshot not moving forward %d,%d\n",
-			d.describe(), d.lastApplied, newLastApplied)
+			d.id(), d.lastApplied, newLastApplied)
 		panic("last applied not moving forward")
 	}
 	d.lastApplied = newLastApplied
@@ -697,13 +697,13 @@ func (d *DiskKVTest) RecoverFromSnapshot(r io.Reader,
 	if old != nil {
 		old.close()
 	}
-	fmt.Printf("[DKVE] %s to delete olddb at %s\n", d.describe(), oldDirName)
+	fmt.Printf("[DKVE] %s to delete olddb at %s\n", d.id(), oldDirName)
 	return os.RemoveAll(oldDirName)
 }
 
 // Close closes the state machine.
 func (d *DiskKVTest) Close() error {
-	fmt.Printf("[DKVE] %s called close\n", d.describe())
+	fmt.Printf("[DKVE] %s called close\n", d.id())
 	db := (*rocksdb)(atomic.SwapPointer(&d.db, unsafe.Pointer(nil)))
 	if db != nil {
 		d.closed = true
@@ -718,7 +718,7 @@ func (d *DiskKVTest) Close() error {
 
 // GetHash returns a hash value representing the state of the state machine.
 func (d *DiskKVTest) GetHash() (uint64, error) {
-	fmt.Printf("[DKVE] %s called GetHash\n", d.describe())
+	fmt.Printf("[DKVE] %s called GetHash\n", d.id())
 	h := md5.New()
 	db := (*rocksdb)(atomic.LoadPointer(&d.db))
 	ss := db.db.NewSnapshot()

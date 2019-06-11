@@ -62,7 +62,7 @@ type nodeToKill struct {
 	Address   string
 }
 
-func (cr *clusterRepair) describe() string {
+func (cr *clusterRepair) id() string {
 	return logutil.ClusterID(cr.clusterID)
 }
 
@@ -156,7 +156,7 @@ func (n *node) failed(tick uint64) bool {
 	return EntityFailed(n.Tick, tick)
 }
 
-func (n *node) describe() string {
+func (n *node) id() string {
 	return logutil.DescribeNode(n.ClusterID, n.NodeID)
 }
 
@@ -164,7 +164,7 @@ func (n *node) waitingToBeStarted(tick uint64) bool {
 	return n.Tick == 0 && !n.failed(tick)
 }
 
-func (c *cluster) describe() string {
+func (c *cluster) id() string {
 	return logutil.ClusterID(c.ClusterID)
 }
 
@@ -466,7 +466,7 @@ func (c *cluster) syncCluster(ci pb.ClusterInfo, lastTick uint64) bool {
 	}
 	if c.ConfigChangeIndex < ci.ConfigChangeIndex {
 		plog.Debugf("cluster %s is being updated, %v, %v",
-			c.describe(), c.Nodes, ci)
+			c.id(), c.Nodes, ci)
 	}
 	// we don't just re-create and populate the Nodes map because the
 	// FirstObserved value need to be kept after the sync.
@@ -480,7 +480,7 @@ func (c *cluster) syncCluster(ci pb.ClusterInfo, lastTick uint64) bool {
 	}
 	for _, nid := range toRemove {
 		plog.Debugf("cluster %s is removing node %d due to config change %d",
-			c.describe(), nid, ci.ConfigChangeIndex)
+			c.id(), nid, ci.ConfigChangeIndex)
 		delete(c.Nodes, nid)
 	}
 	for nodeID, address := range ci.Nodes {
@@ -493,7 +493,7 @@ func (c *cluster) syncCluster(ci pb.ClusterInfo, lastTick uint64) bool {
 			}
 			c.Nodes[nodeID] = n
 			plog.Debugf("cluster %s is adding node %d:%s due to config change %d",
-				c.describe(), nodeID, address, ci.ConfigChangeIndex)
+				c.id(), nodeID, address, ci.ConfigChangeIndex)
 		} else {
 			n := c.Nodes[nodeID]
 			if n.Address != address {

@@ -2078,6 +2078,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
+		// exported snapshot is not managed by the system
 		if len(snapshots) != 0 {
 			t.Fatalf("snapshot record unexpectedly inserted into the system")
 		}

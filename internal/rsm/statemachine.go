@@ -207,14 +207,14 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.describe(), ss)
-	if r, idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); !r {
+	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.id(), ss)
+	if ok, idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); !ok {
 		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
 	plog.Infof("%s snapshot %d restored, members %v",
-		s.describe(), ss.Index, ss.Membership.Addresses)
+		s.id(), ss.Index, ss.Membership.Addresses)
 	return ss.Index, nil
 }
 
@@ -222,18 +222,18 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	if !t.InitialSnapshot {
 		snapshot, err := s.snapshotter.GetSnapshot(t.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, get snapshot failed: %v", s.describe(), err)
+			plog.Errorf("%s, get snapshot failed: %v", s.id(), err)
 			return pb.Snapshot{}, ErrRestoreSnapshot
 		}
 		if s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, no snapshot", s.describe())
+			plog.Errorf("%s, no snapshot", s.id())
 			return pb.Snapshot{}, err
 		}
 		return snapshot, nil
 	}
 	snapshot, err := s.snapshotter.GetMostRecentSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
-		plog.Infof("%s no snapshot available during start up", s.describe())
+		plog.Infof("%s no snapshot available during start up", s.id())
 		return pb.Snapshot{}, nil
 	}
 	return snapshot, nil
@@ -278,11 +278,11 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 	}
 	if s.recoverSMRequired(ss, initial) {
 		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
-			s.describe(), ss.Term, index, snapshotInfo(ss), initial)
+			s.id(), ss.Term, index, snapshotInfo(ss), initial)
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
 		if err := s.snapshotter.Load(index, s.sessions, s.sm, fn, fs); err != nil {
-			plog.Errorf("failed to load snapshot, %s, %v", s.describe(), err)
+			plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
@@ -292,7 +292,7 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 		}
 	} else {
 		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
-			s.describe(), index, s.diskSMIndex)
+			s.id(), index, s.diskSMIndex)
 	}
 	s.index = index
 	s.term = ss.Term
@@ -319,7 +319,7 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
 	plog.Infof("%s opened disk state machine, index %d, err %v",
-		s.describe(), index, err)
+		s.id(), index, err)
 	if err != nil {
 		if err == sm.ErrOpenStopped {
 			s.aborted = true
@@ -539,7 +539,7 @@ func (s *StateMachine) Handle(batch []Task,
 func (s *StateMachine) getSnapshotMeta(ctx interface{},
 	req SnapshotRequest) *SnapshotMeta {
 	if s.members.isEmpty() {
-		plog.Panicf("%s has empty membership", s.describe())
+		plog.Panicf("%s has empty membership", s.id())
 	}
 	meta := &SnapshotMeta{
 		From:       s.node.NodeID(),
@@ -552,7 +552,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		Type:       s.sm.StateMachineType(),
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
-		s.describe(), meta.Index, meta.Membership.Addresses)
+		s.id(), meta.Index, meta.Membership.Addresses)
 	if _, err := s.sessions.SaveSessions(meta.Session); err != nil {
 		plog.Panicf("failed to save sessions %v", err)
 	}
@@ -562,7 +562,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
 	if s.index+1 != index {
 		plog.Panicf("%s, not sequential update, last applied %d, applying %d",
-			s.describe(), s.index, index)
+			s.id(), s.index, index)
 	}
 	if index == 0 || term == 0 {
 		plog.Panicf("invalid last index %d or term %d", index, term)
@@ -668,7 +668,7 @@ func (s *StateMachine) sync() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	plog.Infof("%s is being synchronized, index %d", s.describe(), s.index)
+	plog.Infof("%s is being synchronized, index %d", s.id(), s.index)
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}
@@ -680,7 +680,7 @@ func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
-		plog.Errorf("save snapshot failed %v", err)
+		plog.Errorf("%s snapshotter.Save failed %v", s.id(), err)
 		return nil, env, err
 	}
 	s.snapshotIndex = meta.Index
@@ -705,7 +705,7 @@ func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
 		if batch[b].isSnapshotTask() || batch[b].isSyncTask() {
-			panic("trying to handle a snapshot/sync request")
+			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())
 		}
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)
@@ -813,7 +813,8 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 			ce := input[skipped+idx]
 			if ce.Index != ent.Index {
 				// probably because user modified the Index value in results
-				plog.Panicf("alignment error, %d, %d, %d", ce.Index, ent.Index, skipped)
+				plog.Panicf("%s alignment error, %d, %d, %d",
+					s.id(), ce.Index, ent.Index, skipped)
 			}
 			last := ce.Index == input[len(input)-1].Index
 			s.onUpdateApplied(ce, ent.Result, false, false, last)
@@ -848,7 +849,7 @@ func (s *StateMachine) handleRegisterSession(ent pb.Entry) sm.Result {
 	defer s.mu.Unlock()
 	smResult := s.sessions.RegisterClientID(ent.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("on %s register client failed, %v", s.describe(), ent)
+		plog.Errorf("%s register client failed %v", s.id(), ent)
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
 	return smResult
@@ -859,7 +860,7 @@ func (s *StateMachine) handleUnregisterSession(ent pb.Entry) sm.Result {
 	defer s.mu.Unlock()
 	smResult := s.sessions.UnregisterClientID(ent.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("%s unregister %d failed, %v", s.describe(), ent.ClientID, ent)
+		plog.Errorf("%s unregister %d failed %v", s.id(), ent.ClientID, ent)
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
 	return smResult
@@ -911,7 +912,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 	return result, false, false, nil
 }
 
-func (s *StateMachine) describe() string {
+func (s *StateMachine) id() string {
 	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
 }
 

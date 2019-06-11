@@ -63,7 +63,7 @@ func newSnapshotter(clusterID uint64,
 	}
 }
 
-func (s *snapshotter) describe() string {
+func (s *snapshotter) id() string {
 	return logutil.DescribeNode(s.clusterID, s.nodeID)
 }
 
@@ -165,7 +165,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot,
 		}
 		return err
 	}
-	if !meta.Request.IsExportedSnapshot() {
+	if !req.IsExportedSnapshot() {
 		if err := s.saveToLogDB(snapshot); err != nil {
 			return err
 		}
@@ -211,7 +211,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 	if err != nil {
 		return err
 	}
-	plog.Infof("%s has %d snapshots to shrink", s.describe(), len(snapshots))
+	plog.Infof("%s has %d snapshots to shrink", s.id(), len(snapshots))
 	for idx, ss := range snapshots {
 		if ss.Index > shrinkTo {
 			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
@@ -220,7 +220,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 			env := s.getSnapshotEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
-			plog.Infof("%s shrinking snapshot %d, %d", s.describe(), ss.Index, idx)
+			plog.Infof("%s shrinking snapshot %d, %d", s.id(), ss.Index, idx)
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp); err != nil {
 				return err
 			}
@@ -241,9 +241,9 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 		return nil
 	}
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
-	plog.Infof("%s has %d snapshots to compact", s.describe(), len(selected))
+	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
 	for idx, ss := range selected {
-		plog.Infof("%s compacting snapshot %d, %d", s.describe(), ss.Index, idx)
+		plog.Infof("%s compacting snapshot %d, %d", s.id(), ss.Index, idx)
 		if err := s.logdb.DeleteSnapshot(s.clusterID,
 			s.nodeID, ss.Index); err != nil {
 			return err

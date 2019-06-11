@@ -291,7 +291,7 @@ func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	if !ok {
 		return
 	}
-	plog.Infof("%s called saveSnapshot", node.describe())
+	plog.Infof("%s called saveSnapshot", node.id())
 	if err := node.saveSnapshot(rec); err != nil {
 		panic(err)
 	} else {
@@ -326,13 +326,13 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	if !ok {
 		return
 	}
-	plog.Infof("%s called recoverFromSnapshot", node.describe())
-	if index, stopped, err := node.recoverFromSnapshot(rec); err != nil {
-		panic(err)
-	} else {
-		if !stopped {
-			node.recoverFromSnapshotDone(index)
+	plog.Infof("%s called recoverFromSnapshot", node.id())
+	if index, err := node.recoverFromSnapshot(rec); err != nil {
+		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
+			panic(err)
 		}
+	} else {
+		node.recoverFromSnapshotDone(index)
 	}
 }
 
@@ -553,8 +553,7 @@ func (s *execEngine) execNodes(workerID uint64,
 			panic(err)
 		}
 		if !cont {
-			plog.Infof("process update failed, %s is ready to exit",
-				node.describe())
+			plog.Infof("process update failed, %s is ready to exit", node.id())
 		}
 		s.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, false, "committing updates") {
@@ -594,7 +593,7 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 		}
 		if !cont || !node.applyRaftUpdates(ud) {
 			plog.Infof("raft update and snapshot not published, %s stopped",
-				node.describe())
+				node.id())
 		}
 	}
 }

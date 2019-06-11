@@ -68,7 +68,7 @@ func newMembership(clusterID uint64, nodeID uint64, ordered bool) *membership {
 	}
 }
 
-func (m *membership) describe() string {
+func (m *membership) id() string {
 	return logutil.DescribeSM(m.clusterID, m.nodeID)
 }
 
@@ -142,7 +142,7 @@ func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
 func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver {
 		plog.Infof("%s adding node %d:%s, existing members: %v",
-			m.describe(), cc.NodeID, string(cc.Address), m.members.Addresses)
+			m.id(), cc.NodeID, string(cc.Address), m.members.Addresses)
 		for _, addr := range m.members.Addresses {
 			if addressEqual(addr, string(cc.Address)) {
 				return true
@@ -151,7 +151,7 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 	}
 	if cc.Type == pb.AddObserver {
 		plog.Infof("%s adding observer %d:%s, existing members: %v",
-			m.describe(), cc.NodeID, string(cc.Address), m.members.Addresses)
+			m.id(), cc.NodeID, string(cc.Address), m.members.Addresses)
 		for _, addr := range m.members.Observers {
 			if addressEqual(addr, string(cc.Address)) {
 				return true
@@ -210,13 +210,13 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
 			plog.Infof("%s applied ConfChange Add ccid %d, node %s index %d address %s",
-				m.describe(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
 		} else if cc.Type == pb.RemoveNode {
 			plog.Infof("%s applied ConfChange Remove ccid %d, node %s, index %d",
-				m.describe(), ccid, logutil.NodeID(cc.NodeID), index)
+				m.id(), ccid, logutil.NodeID(cc.NodeID), index)
 		} else if cc.Type == pb.AddObserver {
 			plog.Infof("%s applied ConfChange Add Observer ccid %d, node %s index %d address %s",
-				m.describe(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
 		} else {
 			plog.Panicf("unknown cc.Type value")
 		}
@@ -224,18 +224,18 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	} else {
 		if !upToDateCC {
 			plog.Warningf("%s rejected out-of-order ConfChange ccid %d, type %s, index %d",
-				m.describe(), ccid, cc.Type, index)
+				m.id(), ccid, cc.Type, index)
 		} else if addRemovedNode {
 			plog.Warningf("%s rejected adding removed node ccid %d, node id %d, index %d",
-				m.describe(), ccid, cc.NodeID, index)
+				m.id(), ccid, cc.NodeID, index)
 		} else if alreadyMember {
 			plog.Warningf("%s rejected adding existing member to raft cluster ccid %d "+
 				"node id %d, index %d, address %s",
-				m.describe(), ccid, cc.NodeID, index, cc.Address)
+				m.id(), ccid, cc.NodeID, index, cc.Address)
 		} else if nodeBecomingObserver {
 			plog.Warningf("%s rejected adding existing member as observer ccid %d "+
 				"node id %d, index %d, address %s",
-				m.describe(), ccid, cc.NodeID, index, cc.Address)
+				m.id(), ccid, cc.NodeID, index, cc.Address)
 		} else {
 			plog.Panicf("config change rejected for unknown reasons")
 		}
