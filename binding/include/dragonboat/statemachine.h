@@ -178,7 +178,7 @@ class OnDiskStateMachine
   OnDiskStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~OnDiskStateMachine();
   OpenResult Open(const DoneChan &done) noexcept;
-  uint64_t Update(const Byte *data, size_t size) noexcept;
+  uint64_t Update(const Byte *data, size_t size, uint64_t index) noexcept;
   LookupResult Lookup(const Byte *data, size_t size) const noexcept;
   int Sync() const noexcept;
   uint64_t GetHash() const noexcept;
@@ -193,7 +193,8 @@ class OnDiskStateMachine
   uint64_t cluster_id_;
   uint64_t node_id_;
   virtual OpenResult open(const DoneChan &done) noexcept = 0;
-  virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
+  virtual uint64_t update(const Byte *data, size_t size,
+    uint64_t index) noexcept = 0;
   virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
   virtual int sync() const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;

@@ -688,7 +688,7 @@ func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)), C.uint64_t(e.Index))
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
@@ -714,7 +714,7 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 		if len(data) > 0 {
 			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
 		}
-		v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+		v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)), C.uint64_t(ent.Index))
 		entries[idx].Result = sm.Result{Value: uint64(v)}
 	}
 	ds.applied = entries[len(entries)-1].Index

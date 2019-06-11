@@ -71,7 +71,7 @@ void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   uint64_t doneChOID);
 uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  const unsigned char *data, size_t size);
+  const unsigned char *data, size_t size, uint64_t index);
 LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   const unsigned char *data, size_t size);
 int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);

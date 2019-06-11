@@ -132,9 +132,10 @@ OpenResult OnDiskStateMachine::Open(const DoneChan &done) noexcept
   return open(done);
 }
 
-uint64_t OnDiskStateMachine::Update(const Byte *data, size_t size) noexcept
+uint64_t OnDiskStateMachine::Update(const Byte *data, size_t size,
+  uint64_t index) noexcept
 {
-  return update(data, size);
+  return update(data, size, index);
 }
 
 LookupResult OnDiskStateMachine::Lookup(const Byte *data,

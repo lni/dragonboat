@@ -234,9 +234,9 @@ OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
 }
 
 uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  const unsigned char *data, size_t size)
+  const unsigned char *data, size_t size, uint64_t index)
 {
-  return ds->sm->Update(data, size);
+  return ds->sm->Update(data, size, index);
 }
 
 LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
