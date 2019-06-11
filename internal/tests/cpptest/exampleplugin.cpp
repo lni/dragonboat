@@ -20,12 +20,11 @@ extern "C" dragonboat::RegularStateMachine *CreateRegularStateMachine(
   return new HelloWorldStateMachine(clusterID, nodeID);
 }
 
-// TODO
-//extern "C" dragonboat::ConcurrentStateMachine *CreateConcurrentStateMachine(
-//  uint64_t clusterID, uint64_t nodeID)
-//{
-//  return new ConcurrentLogStateMachine(clusterID, nodeID);
-//}
+extern "C" dragonboat::ConcurrentStateMachine *CreateConcurrentStateMachine(
+  uint64_t clusterID, uint64_t nodeID)
+{
+  return new TestConcurrentStateMachine(clusterID, nodeID);
+}
 
 extern "C" dragonboat::OnDiskStateMachine *CreateOnDiskStateMachine(
   uint64_t clusterID, uint64_t nodeID)

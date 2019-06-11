@@ -86,6 +86,93 @@ void HelloWorldStateMachine::freeLookupResult(LookupResult r) noexcept
   delete[] r.result;
 }
 
+TestConcurrentStateMachine::TestConcurrentStateMachine(
+  uint64_t clusterID, uint64_t nodeID) noexcept
+  : dragonboat::ConcurrentStateMachine(clusterID, nodeID),
+    count_(0)
+{
+}
+
+TestConcurrentStateMachine::~TestConcurrentStateMachine()
+{
+}
+
+uint64_t TestConcurrentStateMachine::update(
+  const dragonboat::Byte *data, size_t size) noexcept
+{
+  count_++;
+  return count_;
+}
+
+LookupResult TestConcurrentStateMachine::lookup(const dragonboat::Byte *data,
+  size_t size) const noexcept
+{
+  LookupResult r;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *) r.result) = count_;
+  return r;
+}
+
+uint64_t TestConcurrentStateMachine::getHash() const noexcept
+{
+  return count_;
+}
+
+PrepareSnapshotResult TestConcurrentStateMachine::prepareSnapshot() const noexcept
+{
+  PrepareSnapshotResult r;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  r.errcode = 0;
+  memcpy(r.result, &count_, sizeof(uint64_t));
+  return r;
+}
+
+SnapshotResult TestConcurrentStateMachine::saveSnapshot(
+  const dragonboat::Byte *ctx,
+  size_t size,
+  dragonboat::SnapshotWriter *writer,
+  dragonboat::SnapshotFileCollection *collection,
+  const dragonboat::DoneChan &done) const noexcept
+{
+  auto ret = writer->Write(ctx, size);
+  SnapshotResult r;
+  r.errcode = SNAPSHOT_OK;
+  r.size = ret.size;
+  if(ret.size != size || ret.error != 0) {
+    r.errcode = FAILED_TO_SAVE_SNAPSHOT;
+  }
+  return r;
+}
+
+int TestConcurrentStateMachine::recoverFromSnapshot(
+  dragonboat::SnapshotReader *reader,
+  const std::vector<dragonboat::SnapshotFile> &files,
+  const dragonboat::DoneChan &done) noexcept
+{
+  dragonboat::IOResult ret;
+  dragonboat::Byte data[sizeof(uint64_t)];
+  ret = reader->Read(data, sizeof(uint64_t));
+  if (ret.size != sizeof(uint64_t)) {
+    return FAILED_TO_RECOVER_FROM_SNAPSHOT;
+  }
+  count_ = *(uint64_t*)data;
+  return SNAPSHOT_OK;
+}
+
+void TestConcurrentStateMachine::freePrepareSnapshotResult(
+  PrepareSnapshotResult r) noexcept
+{
+  delete[] r.result;
+}
+
+void TestConcurrentStateMachine::freeLookupResult(
+  LookupResult r) noexcept
+{
+  delete[] r.result;
+}
+
 FakeOnDiskStateMachine::FakeOnDiskStateMachine(uint64_t clusterID,
   uint64_t nodeID, uint64_t initialApplied) noexcept
   : dragonboat::OnDiskStateMachine(clusterID, nodeID),
@@ -108,7 +195,7 @@ OpenResult FakeOnDiskStateMachine::open(
 }
 
 uint64_t FakeOnDiskStateMachine::update(
-  const dragonboat::Byte *data, size_t size) noexcept
+  const dragonboat::Byte *data, size_t size, uint64_t index) noexcept
 {
   count_++;
   return count_;

@@ -49,14 +49,30 @@ class HelloWorldStateMachine : public dragonboat::RegularStateMachine
   uint64_t count_;
 };
 
-//TODO
-//class ConcurrentLogStateMachine : public dragonboat::ConcurrentStateMachine
-//{
-// public:
-// protected:
-// private:
-//  DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentLogStateMachine);
-//};
+class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
+{
+ public:
+  TestConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
+  ~TestConcurrentStateMachine();
+ protected:
+  uint64_t update(const dragonboat::Byte *data, size_t size) noexcept override;
+  LookupResult lookup(const dragonboat::Byte *data,
+    size_t size) const noexcept override;
+  uint64_t getHash() const noexcept override;
+  PrepareSnapshotResult prepareSnapshot() const noexcept override;
+  SnapshotResult saveSnapshot(const dragonboat::Byte *ctx, size_t size,
+    dragonboat::SnapshotWriter *writer,
+    dragonboat::SnapshotFileCollection *collection,
+    const dragonboat::DoneChan &done) const noexcept override;
+  int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
+    const std::vector<dragonboat::SnapshotFile> &files,
+    const dragonboat::DoneChan &done) noexcept override;
+  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override;
+  void freeLookupResult(LookupResult r) noexcept;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(TestConcurrentStateMachine);
+  uint64_t count_;
+};
 
 class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
  public:
@@ -65,7 +81,8 @@ class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   ~FakeOnDiskStateMachine();
  protected:
   OpenResult open(const dragonboat::DoneChan &done) noexcept override;
-  uint64_t update(const dragonboat::Byte *data, size_t size) noexcept override;
+  uint64_t update(const dragonboat::Byte *data, size_t size,
+    uint64_t index) noexcept override;
   LookupResult lookup(const dragonboat::Byte *data,
     size_t size) const noexcept override;
   int sync() const noexcept override;
