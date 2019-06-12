@@ -5,6 +5,7 @@
 /raftkv
 /raftkvbench
 /checker
+/checkdisk
 /multiraft-ioei-testing
 /multiraft-monkey-testing
 /drummer-monkey-testing
@@ -13,6 +14,7 @@
 **/porcupine-checker-bin
 **/logdb-checker-bin
 *safe_to_delete*
+*safe-to-delete*
 drummer-mt-out.txt
 out.txt
 *.pprof

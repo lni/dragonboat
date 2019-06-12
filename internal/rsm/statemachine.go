@@ -48,10 +48,8 @@ var (
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
-	ErrRestoreSnapshot           = errors.New("failed to restore from snapshot")
-	taskChanLength        uint64 = settings.Soft.NodeTaskChanLength
-	taskChanBusyThreshold uint64 = settings.Soft.NodeTaskChanLength / 2
-	batchedEntryApply     bool   = settings.Soft.BatchedEntryApply
+	ErrRestoreSnapshot      = errors.New("failed to restore from snapshot")
+	batchedEntryApply  bool = settings.Soft.BatchedEntryApply
 )
 
 // SnapshotRequestType is the type of a snapshot request.
@@ -157,7 +155,7 @@ type StateMachine struct {
 	term          uint64
 	snapshotIndex uint64
 	diskSMIndex   uint64
-	taskC         chan Task
+	taskQ         *TaskQueue
 	onDiskSM      bool
 	aborted       bool
 	syncedIndex   struct {
@@ -178,7 +176,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		snapshotter: snapshotter,
 		sm:          sm,
 		onDiskSM:    sm.OnDiskStateMachine(),
-		taskC:       make(chan Task, taskChanLength),
+		taskQ:       NewTaskQueue(),
 		node:        proxy,
 		sessions:    NewSessionManager(),
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
@@ -186,15 +184,16 @@ func NewStateMachine(sm IManagedStateMachine,
 	return a
 }
 
-// TaskC returns the task channel.
-func (s *StateMachine) TaskC() chan Task {
-	return s.taskC
+// TaskQ returns the task queue.
+func (s *StateMachine) TaskQ() *TaskQueue {
+	return s.taskQ
 }
 
 // TaskChanBusy returns whether the TaskC chan is busy. Busy is defined as
 // having more than half of its buffer occupied.
 func (s *StateMachine) TaskChanBusy() bool {
-	return uint64(len(s.taskC)) > taskChanBusyThreshold
+	sz := s.taskQ.Size()
+	return sz*2 > taskQueueBusyCap
 }
 
 // RecoverFromSnapshot applies the snapshot.
@@ -373,7 +372,6 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedLastApplied.Lock()
 	s.batchedLastApplied.index = index
 	s.batchedLastApplied.Unlock()
-	s.node.NodeReady()
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
@@ -498,8 +496,18 @@ func (s *StateMachine) Handle(batch []Task,
 	toApply []sm.Entry) (Task, bool, error) {
 	batch = batch[:0]
 	toApply = toApply[:0]
-	select {
-	case rec := <-s.taskC:
+	processed := false
+	defer func() {
+		// give the node worker a chance to run when
+		//  - batched applied value has been updated
+		//  - taskC has been poped
+		if processed {
+			s.node.NodeReady()
+		}
+	}()
+	rec, ok := s.taskQ.Get()
+	if ok {
+		processed = true
 		if rec.isSnapshotTask() {
 			return rec, true, nil
 		}
@@ -512,8 +520,8 @@ func (s *StateMachine) Handle(batch []Task,
 		}
 		done := false
 		for !done {
-			select {
-			case rec := <-s.taskC:
+			rec, ok := s.taskQ.Get()
+			if ok {
 				if rec.isSnapshotTask() {
 					if err := s.handle(batch, toApply); err != nil {
 						return Task{}, false, err
@@ -527,11 +535,10 @@ func (s *StateMachine) Handle(batch []Task,
 						return Task{}, false, err
 					}
 				}
-			default:
+			} else {
 				done = true
 			}
 		}
-	default:
 	}
 	return Task{}, false, s.handle(batch, toApply)
 }

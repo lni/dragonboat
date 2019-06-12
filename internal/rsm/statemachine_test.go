@@ -270,20 +270,6 @@ func runSMTest2(t *testing.T,
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
-func TestNodeReadyIsSetWhenBatchedIndexedValueIsSet(t *testing.T) {
-	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		if nodeProxy.nodeReady != 0 {
-			t.Errorf("node ready count is not 0")
-		}
-		sm.setBatchedLastApplied(100)
-		if nodeProxy.nodeReady != 1 {
-			t.Errorf("node ready is not invoked")
-		}
-	}
-	runSMTest2(t, tf)
-}
-
 func TestUpdatesCanBeBatched(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	createTestDir()
@@ -315,7 +301,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
 	if _, _, err := sm.Handle(batch, nil); err != nil {
@@ -361,7 +347,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
 	if _, _, err := sm.Handle(batch, nil); err != nil {
@@ -406,7 +392,7 @@ func applyConfigChangeEntry(sm *StateMachine,
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 }
 
 func TestBatchedLastAppliedValue(t *testing.T) {
@@ -909,7 +895,7 @@ func TestHandleEmptyEvent(t *testing.T) {
 			Entries: []pb.Entry{e},
 		}
 		sm.index = 233
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		batch := make([]Task, 0, 8)
 		if _, _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
@@ -956,7 +942,7 @@ func TestHandleUpate(t *testing.T) {
 			Entries: []pb.Entry{e1, e2},
 		}
 		sm.index = 234
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		// two commits to handle
 		batch := make([]Task, 0, 8)
 		if _, _, err := sm.Handle(batch, nil); err != nil {
@@ -1106,7 +1092,7 @@ func applySessionRegisterEntry(sm *StateMachine,
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1121,7 +1107,7 @@ func applySessionUnregisterEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1139,7 +1125,7 @@ func applyTestEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1208,7 +1194,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		commit := Task{
 			Entries: []pb.Entry{e},
 		}
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		if nodeProxy.rejected {
 			t.Errorf("rejected flag set too early")
 		}

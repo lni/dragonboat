@@ -36,10 +36,6 @@ import (
 	sm "github.com/lni/dragonboat/statemachine"
 )
 
-const (
-	snapshotTaskCSlots = uint64(3)
-)
-
 var (
 	incomingProposalsMaxLen = settings.Soft.IncomingProposalQueueLength
 	incomingReadIndexMaxLen = settings.Soft.IncomingReadIndexQueueLength
@@ -63,7 +59,7 @@ type node struct {
 	config               config.Config
 	confChangeC          <-chan configChangeRequest
 	snapshotC            <-chan rsm.SnapshotRequest
-	taskC                chan<- rsm.Task
+	taskQ                *rsm.TaskQueue
 	mq                   *server.MessageQueue
 	smAppliedIndex       uint64
 	confirmedIndex       uint64
@@ -169,7 +165,7 @@ func newNode(raftAddress string,
 	}
 	ordered := config.OrderedConfigChange
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rn)
-	rn.taskC = sm.TaskC()
+	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
 	new, err := rn.startRaft(config, lr, peers, initialMember)
 	if err != nil {
@@ -451,16 +447,9 @@ func (n *node) entriesToApply(ents []pb.Entry) (newents []pb.Entry) {
 }
 
 func (n *node) pushTask(rec rsm.Task) bool {
-	if n.stopped() {
-		return false
-	}
-	select {
-	case n.taskC <- rec:
-		n.engine.setTaskReady(n.clusterID)
-	case <-n.stopc:
-		return false
-	}
-	return true
+	n.taskQ.Add(rec)
+	n.engine.setTaskReady(n.clusterID)
+	return !n.stopped()
 }
 
 func (n *node) pushEntries(ents []pb.Entry) bool {
@@ -551,6 +540,9 @@ func (n *node) saveSnapshotRequired(lastApplied uint64) bool {
 	if n.pushedIndex <= n.config.SnapshotEntries+si ||
 		lastApplied <= n.config.SnapshotEntries+si ||
 		lastApplied <= n.config.SnapshotEntries+n.ss.getReqSnapshotIndex() {
+		return false
+	}
+	if n.isBusySnapshotting() {
 		return false
 	}
 	plog.Infof("snapshot at index %d requested on %s", lastApplied, n.id())
@@ -749,9 +741,11 @@ func (n *node) runSyncTask() (bool, error) {
 		return true, nil
 	}
 	plog.Infof("%s is running sync task", n.id())
-	task := rsm.Task{PeriodicSync: true}
-	if !n.pushTask(task) {
-		return false, nil
+	if !n.sm.TaskChanBusy() {
+		task := rsm.Task{PeriodicSync: true}
+		if !n.pushTask(task) {
+			return false, nil
+		}
 	}
 	syncedIndex := n.sm.GetSyncedIndex()
 	if err := n.shrinkSnapshots(syncedIndex); err != nil {
@@ -921,7 +915,7 @@ func (n *node) commitRaftUpdate(ud pb.Update) {
 }
 
 func (n *node) canHaveMoreEntriesToApply() bool {
-	return uint64(cap(n.taskC)-len(n.taskC)) > snapshotTaskCSlots
+	return n.taskQ.MoreEntryToApply()
 }
 
 func (n *node) hasEntryToApply() bool {
@@ -1052,7 +1046,10 @@ func (n *node) handleConfigChangeMessage() bool {
 }
 
 func (n *node) isBusySnapshotting() bool {
-	snapshotting := n.ss.takingSnapshot() || n.ss.recoveringFromSnapshot()
+	snapshotting := n.ss.recoveringFromSnapshot()
+	if !n.concurrentSnapshot() {
+		snapshotting = snapshotting || n.ss.takingSnapshot()
+	}
 	return snapshotting && n.sm.TaskChanBusy()
 }
 
@@ -1275,6 +1272,9 @@ func (n *node) processTakeSnapshotStatus() bool {
 
 func (n *node) processStreamSnapshotStatus() bool {
 	if n.ss.streamingSnapshot() {
+		if !n.OnDiskStateMachine() {
+			panic("non-on disk sm is streaming snapshot")
+		}
 		rec, ok := n.ss.getStreamSnapshotCompleted()
 		if !ok {
 			return false
