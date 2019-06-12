@@ -185,11 +185,6 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	return r.db.Apply(pwb.wb, r.wo)
 }
 
-// CommitDeleteBatch ...
-func (r *KV) CommitDeleteBatch(wb kv.IWriteBatch) error {
-	return r.CommitWriteBatch(wb)
-}
-
 // BulkRemoveEntries ...
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 	return nil
@@ -206,7 +201,7 @@ func (r *KV) deleteRange(fk []byte, lk []byte) error {
 		wb.Delete(iter.Key())
 	}
 	if wb.Count() > 0 {
-		return r.CommitDeleteBatch(wb)
+		return r.CommitWriteBatch(wb)
 	}
 	return nil
 }
