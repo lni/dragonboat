@@ -672,8 +672,8 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 		plog.Infof("%s aborted its RecoverFromSnapshot", n.id())
 		return 0, err
 	}
-	if err != nil {
-		plog.Errorf("RecoverFromSnapshot failed %v, %s", err, n.id())
+	if err != nil && err != raft.ErrSnapshotOutOfDate {
+		plog.Errorf("%s RecoverFromSnapshot failed %v", n.id(), err)
 		return 0, err
 	}
 	if index > 0 {
@@ -723,8 +723,7 @@ func (n *node) doRecoverFromSnapshotDone() {
 	n.engine.setTaskReady(n.clusterID)
 }
 
-func (n *node) handleTask(ts []rsm.Task,
-	es []sm.Entry) (rsm.Task, bool, error) {
+func (n *node) handleTask(ts []rsm.Task, es []sm.Entry) (rsm.Task, error) {
 	return n.sm.Handle(ts, es)
 }
 

@@ -48,8 +48,9 @@ var (
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
-	ErrRestoreSnapshot      = errors.New("failed to restore from snapshot")
-	batchedEntryApply  bool = settings.Soft.BatchedEntryApply
+	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
+	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
+	sessionBufferInitialCap uint64 = 128 * 1024
 )
 
 // SnapshotRequestType is the type of a snapshot request.
@@ -104,15 +105,17 @@ type Task struct {
 	Entries           []pb.Entry
 }
 
+// IsSnapshotTask returns a boolean flag indicating whether it is a snapshot
+// task.
+func (t *Task) IsSnapshotTask() bool {
+	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
+}
+
 func (t *Task) isSyncTask() bool {
-	if t.PeriodicSync && t.isSnapshotTask() {
+	if t.PeriodicSync && t.IsSnapshotTask() {
 		panic("invalid task")
 	}
 	return t.PeriodicSync
-}
-
-func (t *Task) isSnapshotTask() bool {
-	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
 }
 
 // SMFactoryFunc is the function type for creating an IStateMachine instance
@@ -207,7 +210,7 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	}
 	ss.Validate()
 	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.id(), ss)
-	if ok, idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); !ok {
+	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
 		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
@@ -265,15 +268,15 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 }
 
 func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
-	initial bool) (bool, uint64, error) {
+	initial bool) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index := ss.Index
 	if s.index >= index {
-		return false, s.index, nil
+		return s.index, raft.ErrSnapshotOutOfDate
 	}
 	if s.aborted {
-		return false, 0, sm.ErrSnapshotStopped
+		return 0, sm.ErrSnapshotStopped
 	}
 	if s.recoverSMRequired(ss, initial) {
 		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
@@ -285,9 +288,9 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
-				return false, 0, err
+				return 0, err
 			}
-			return false, 0, ErrRestoreSnapshot
+			return 0, ErrRestoreSnapshot
 		}
 	} else {
 		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
@@ -296,7 +299,7 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 	s.index = index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
-	return true, 0, nil
+	return 0, nil
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
@@ -492,10 +495,9 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 }
 
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Task,
-	toApply []sm.Entry) (Task, bool, error) {
+func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	batch = batch[:0]
-	toApply = toApply[:0]
+	apply = apply[:0]
 	processed := false
 	defer func() {
 		// give the node worker a chance to run when
@@ -508,31 +510,31 @@ func (s *StateMachine) Handle(batch []Task,
 	rec, ok := s.taskQ.Get()
 	if ok {
 		processed = true
-		if rec.isSnapshotTask() {
-			return rec, true, nil
+		if rec.IsSnapshotTask() {
+			return rec, nil
 		}
 		if !rec.isSyncTask() {
 			batch = append(batch, rec)
 		} else {
 			if err := s.sync(); err != nil {
-				return Task{}, false, err
+				return Task{}, err
 			}
 		}
 		done := false
 		for !done {
 			rec, ok := s.taskQ.Get()
 			if ok {
-				if rec.isSnapshotTask() {
-					if err := s.handle(batch, toApply); err != nil {
-						return Task{}, false, err
+				if rec.IsSnapshotTask() {
+					if err := s.handle(batch, apply); err != nil {
+						return Task{}, err
 					}
-					return rec, true, nil
+					return rec, nil
 				}
 				if !rec.isSyncTask() {
 					batch = append(batch, rec)
 				} else {
 					if err := s.sync(); err != nil {
-						return Task{}, false, err
+						return Task{}, err
 					}
 				}
 			} else {
@@ -540,7 +542,7 @@ func (s *StateMachine) Handle(batch []Task,
 			}
 		}
 	}
-	return Task{}, false, s.handle(batch, toApply)
+	return Task{}, s.handle(batch, apply)
 }
 
 func (s *StateMachine) getSnapshotMeta(ctx interface{},
@@ -554,7 +556,7 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		Index:      s.index,
 		Term:       s.term,
 		Request:    req,
-		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
+		Session:    bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap)),
 		Membership: s.members.getMembership(),
 		Type:       s.sm.StateMachineType(),
 	}
@@ -572,11 +574,11 @@ func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
 			s.id(), s.index, index)
 	}
 	if index == 0 || term == 0 {
-		plog.Panicf("invalid last index %d or term %d", index, term)
+		plog.Panicf("%s invalid last index %d or term %d", s.id(), index, term)
 	}
 	if term < s.term {
-		plog.Panicf("term is moving backward, term %d, new term %d",
-			s.term, term)
+		plog.Panicf("%s term is moving backward, term %d, new term %d",
+			s.id(), s.term, term)
 	}
 	s.index = index
 	s.term = term
@@ -711,7 +713,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
-		if batch[b].isSnapshotTask() || batch[b].isSyncTask() {
+		if batch[b].IsSnapshotTask() || batch[b].isSyncTask() {
 			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())
 		}
 		input := batch[b].Entries

@@ -101,11 +101,10 @@ func (p *snapshotFeedback) addStatus(clusterID uint64,
 	p.pendings[cn] = s
 }
 
-func (p *snapshotFeedback) addRetry(notDelivered []snapshotStatus,
-	tick uint64) {
+func (p *snapshotFeedback) addRetry(skipped []snapshotStatus, tick uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, st := range notDelivered {
+	for _, st := range skipped {
 		s := snapshotStatus{
 			clusterID:   st.clusterID,
 			nodeID:      st.nodeID,

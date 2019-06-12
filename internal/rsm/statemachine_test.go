@@ -270,6 +270,13 @@ func runSMTest2(t *testing.T,
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
+func TestDefaultTaskIsNotSnapshotTask(t *testing.T) {
+	task := Task{}
+	if task.IsSnapshotTask() {
+		t.Errorf("default task is a snapshot task")
+	}
+}
+
 func TestUpdatesCanBeBatched(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	createTestDir()
@@ -304,7 +311,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, _, err := sm.Handle(batch, nil); err != nil {
+	if _, err := sm.Handle(batch, nil); err != nil {
 		t.Fatalf("handle failed %v", err)
 	}
 	if sm.GetLastApplied() != 237 {
@@ -350,7 +357,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, _, err := sm.Handle(batch, nil); err != nil {
+	if _, err := sm.Handle(batch, nil); err != nil {
 		t.Fatalf("handle failed %v", err)
 	}
 	if sm.GetLastApplied() != 237 {
@@ -551,7 +558,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -584,7 +591,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("Handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -596,7 +603,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			4,
 			"localhost:1010",
 			124)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -617,7 +624,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -647,7 +654,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -669,7 +676,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			"localhost:1010",
 			124)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 124 {
@@ -699,7 +706,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -721,7 +728,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			"localhost:1011",
 			124)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		v, ok := sm.members.members.Addresses[4]
@@ -751,7 +758,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 			t.Errorf("node 1 not in members")
 		}
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -786,7 +793,7 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 			"",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if nodeProxy.reject {
@@ -817,7 +824,7 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 			"test.nodehost",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -845,7 +852,7 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 			"a1",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -870,7 +877,7 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 			"",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -897,7 +904,7 @@ func TestHandleEmptyEvent(t *testing.T) {
 		sm.index = 233
 		sm.taskQ.Add(commit)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 234 {
@@ -945,7 +952,7 @@ func TestHandleUpate(t *testing.T) {
 		sm.taskQ.Add(commit)
 		// two commits to handle
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 236 {
@@ -1056,12 +1063,12 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 1, 0, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1135,7 +1142,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		clientID := uint64(12345)
 		applySessionRegisterEntry(sm, clientID, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 789 {
@@ -1152,7 +1159,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		index := uint64(790)
 		applySessionUnregisterEntry(sm, 12345, index)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != index {
@@ -1175,7 +1182,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		e := applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1198,7 +1205,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		if nodeProxy.rejected {
 			t.Errorf("rejected flag set too early")
 		}
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1221,7 +1228,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 		sm.index = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1250,7 +1257,7 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		sm.index = 789
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1277,13 +1284,13 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1304,7 +1311,7 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		}
 		e = applyTestEntry(sm, 12345, 1, 791, 0, data)
 		plog.Infof("going to handle the second commit rec")
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1326,13 +1333,13 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1342,7 +1349,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		storeCount := store.(*tests.KVTest).Count
 		// update the respondedto value
 		e = applyTestEntry(sm, 12345, 1, 791, 1, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		sessionManager := sm.sessions.sessions
@@ -1353,7 +1360,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy.applyUpdateInvoked = false
 		// submit the same stuff again with a different index value
 		e = applyTestEntry(sm, 12345, 1, 792, 1, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1375,13 +1382,13 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1392,7 +1399,7 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 		// different index as the same entry is proposed again
 		e = applyTestEntry(sm, 12345, client.NoOPSeriesID, 791, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1782,8 +1789,8 @@ func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
 		taskQ:       NewTaskQueue(),
 		node:        np,
 	}
-	_, snapshot, err := sm.Handle(batch, ents)
-	if snapshot {
+	rec, err := sm.Handle(batch, ents)
+	if rec.IsSnapshotTask() {
 		t.Errorf("why snapshot?")
 	}
 	if err != nil {
@@ -1793,8 +1800,8 @@ func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
 		t.Errorf("nodeReady unexpectedly updated")
 	}
 	sm.taskQ.Add(Task{})
-	_, snapshot, err = sm.Handle(batch, ents)
-	if snapshot {
+	rec, err = sm.Handle(batch, ents)
+	if rec.IsSnapshotTask() {
 		t.Errorf("why snapshot?")
 	}
 	if err != nil {

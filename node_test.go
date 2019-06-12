@@ -332,11 +332,11 @@ func step(nodes []*node) bool {
 			}
 		}
 		if running {
-			rec, snapshotRequired, err := node.sm.Handle(make([]rsm.Task, 0), nil)
+			rec, err := node.sm.Handle(make([]rsm.Task, 0), nil)
 			if err != nil {
 				panic(err)
 			}
-			if snapshotRequired {
+			if rec.IsSnapshotTask() {
 				if rec.SnapshotAvailable || rec.InitialSnapshot {
 					if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
 						panic(err)

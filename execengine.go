@@ -398,11 +398,11 @@ func (s *execEngine) execSMs(workerID uint64,
 		if node.processSnapshotStatusTransition() {
 			continue
 		}
-		task, ssreq, err := node.handleTask(batch, entries)
+		task, err := node.handleTask(batch, entries)
 		if err != nil {
 			panic(err)
 		}
-		if ssreq {
+		if task.IsSnapshotTask() {
 			node.handleSnapshotTask(task)
 		}
 	}
