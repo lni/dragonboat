@@ -423,7 +423,6 @@ class NodeHost : public ManagedObject
   Status StartCluster(const Peers& replicas, bool join,
     std::string pluginFile, std::string factoryName, StateMachineType smType,
     Config config) noexcept;
-
   Status StartCluster(const Peers& replicas, bool join,
     std::function<RegularStateMachine*(uint64_t, uint64_t)> factory,
     Config config) noexcept;
@@ -519,7 +518,6 @@ class NodeHost : public ManagedObject
     Byte *result, size_t resultLen, size_t *written) noexcept;
   Status SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
     Milliseconds timeout, SnapshotResultIndex *result) noexcept;
-  // TODO: implement async
   RequestState *RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
     Milliseconds timeout, Status *status) noexcept;
   // ProposeSession makes a asynchronous proposal on the specified cluster
@@ -539,7 +537,6 @@ class NodeHost : public ManagedObject
   // on the right NodeHost instance to actually start the cluster node.
   Status SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
-  // TODO: implement async
   RequestState *RequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout, Status *status) noexcept;
   // RemoveNode makes a synchronous proposal to make a raft membership change
@@ -548,7 +545,6 @@ class NodeHost : public ManagedObject
   // removed from its managing NodeHost instance. It is application's
   // responsibility to call StopCluster on the right nodehost instance to
   // actually have the cluster node removed from the managing nodehost.
-  // TODO: implement async
   Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
   RequestState *RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
@@ -564,7 +560,6 @@ class NodeHost : public ManagedObject
   // same NodeID.
   Status SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
-  // TODO: implement async
   RequestState *RequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout, Status *status) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node

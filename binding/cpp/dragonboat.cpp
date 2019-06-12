@@ -626,7 +626,6 @@ Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
   return Status(ret.errcode);
 }
 
-// TODO
 RequestState *NodeHost::RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
   Milliseconds timeout, Status *status) noexcept
 {
