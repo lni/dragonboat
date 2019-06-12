@@ -1767,3 +1767,40 @@ func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
 		t.Fatalf("handle batched entries failed %v", err)
 	}
 }
+
+func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
+	ents := make([]sm.Entry, 0)
+	batch := make([]Task, 0)
+	msm := &testManagedStateMachine{}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		diskSMIndex: 0,
+		index:       0,
+		term:        0,
+		sm:          msm,
+		taskQ:       NewTaskQueue(),
+		node:        np,
+	}
+	_, snapshot, err := sm.Handle(batch, ents)
+	if snapshot {
+		t.Errorf("why snapshot?")
+	}
+	if err != nil {
+		t.Fatalf("handle failed")
+	}
+	if np.nodeReady != 0 {
+		t.Errorf("nodeReady unexpectedly updated")
+	}
+	sm.taskQ.Add(Task{})
+	_, snapshot, err = sm.Handle(batch, ents)
+	if snapshot {
+		t.Errorf("why snapshot?")
+	}
+	if err != nil {
+		t.Fatalf("handle failed")
+	}
+	if np.nodeReady != 1 {
+		t.Errorf("unexpected nodeReady count %d", np.nodeReady)
+	}
+}
