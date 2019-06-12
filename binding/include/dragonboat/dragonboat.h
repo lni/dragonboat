@@ -322,20 +322,9 @@ class Session : public ManagedObject
   friend class NodeHost;
 };
 
-// ResultCode is the code returned to the client to indicate the completion
-// state of the request. Please see request.go in the dragonboat package for
-// detailed definitions.
-enum class ResultCode : int
-{
-  RequestTimeout = 0,
-  RequestCompleted = 1,
-  RequestTerminated = 2,
-  RequestRejected = 3,
-};
-
-// RWResult is the result returned to client to indicate the complete state
+// RequestResult is the result returned to client to indicate the complete state
 // and actual result of the request.
-struct RWResult
+struct RequestResult
 {
   // the ResultCode used to indicate the complete state.
   ResultCode code;
@@ -345,7 +334,7 @@ struct RWResult
   uint64_t result;
 };
 
-using RWResult = struct RWResult;
+using RequestResult = struct RequestResult;
 
 // Event is the base class used for passing complete notification from
 // dragonboat library to client applications. Dragonboat invokes the Set method
@@ -365,13 +354,27 @@ class Event
     result_.result = result;
     set();
   };
-  RWResult Get() const noexcept { return result_; };
+  RequestResult Get() const noexcept { return result_; };
  protected:
   virtual void set() noexcept = 0;
  private:
-  RWResult result_;
+  RequestResult result_;
   DISALLOW_COPY_MOVE_AND_ASSIGN(Event);
 };
+
+class RequestState : public ManagedObject
+{
+ public:
+  ~RequestState();
+  RequestResult Get() noexcept;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(RequestState);
+  explicit RequestState(oid_t oid) noexcept;
+  bool hasResult_;
+  RequestResult result_;
+  friend class NodeHost;
+};
+
 
 // IOService is a wrapper of the IO service class typically seen in async
 // frameworks, e.g. io_service in boost's asio.
@@ -517,8 +520,8 @@ class NodeHost : public ManagedObject
   Status SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
     Milliseconds timeout, SnapshotResultIndex *result) noexcept;
   // TODO: implement async
-  Status RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
-    Milliseconds timeout, Event *event) noexcept;
+  RequestState *RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+    Milliseconds timeout, Status *status) noexcept;
   // ProposeSession makes a asynchronous proposal on the specified cluster
   // for client session related operation. Depending on the state of the client
   // session object, the supported operations are for registering or
@@ -537,8 +540,8 @@ class NodeHost : public ManagedObject
   Status SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // TODO: implement async
-  Status RequestAddNode(ClusterID clusterID, NodeID nodeID,
-    std::string address, Milliseconds timeout, Event *event) noexcept;
+  RequestState *RequestAddNode(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Status *status) noexcept;
   // RemoveNode makes a synchronous proposal to make a raft membership change
   // to remove the specified node or observer from the requested cluster. It is
   // not guaranteed that removed nodes will automatically close itself and be
@@ -548,8 +551,8 @@ class NodeHost : public ManagedObject
   // TODO: implement async
   Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
-  Status RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
-    Milliseconds timeout, Event *event) noexcept;
+  RequestState *RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+    Milliseconds timeout, Status *status) noexcept;
   // AddObserver makes a synchronous proposal to make a raft membership change
   // to add a new observer to the specified raft cluster. An observer is able
   // to get replicated entries from the leader, but it is not allowed to vote
@@ -562,8 +565,8 @@ class NodeHost : public ManagedObject
   Status SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
   // TODO: implement async
-  Status RequestAddObserver(ClusterID clusterID, NodeID nodeID,
-    std::string address, Milliseconds timeout, Event *event) noexcept;
+  RequestState *RequestAddObserver(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Status *status) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node
   // on the specified cluster. When returned Status instance has its OK() method
   // equals to true, it indicates that the request is successfully submitted but

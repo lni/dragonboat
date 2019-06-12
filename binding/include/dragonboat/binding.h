@@ -101,6 +101,17 @@ enum ErrorCode
   ErrDirNotExist = -21,
 };
 
+// ResultCode is the code returned to the client to indicate the completion
+// state of the request. Please see request.go in the dragonboat package for
+// detailed definitions.
+enum ResultCode
+{
+  RequestTimeout = 0,
+  RequestCompleted = 1,
+  RequestTerminated = 2,
+  RequestRejected = 3,
+};
+
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is
 // the only type currently supported.
 enum CompleteHandlerType
@@ -182,45 +193,21 @@ typedef struct
 
 typedef struct
 {
-  uint64_t result;
-  int errcode;
-} SyncRequestSnapshotResult;
-
-typedef struct
-{
-  uint64_t oid;
-  int errcode;
-} RequestSnapshotResult;
-
-typedef struct
-{
   uint64_t csoid;
   int errcode;
 } NewSessionResult;
 
 typedef struct
 {
+  uint64_t rsoid;
+  int errcode;
+} RequestStateResult;
+
+typedef struct
+{
   uint64_t result;
   int errcode;
-} SyncProposeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} AddNodeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} DeleteNodeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} AddObserverResult;
+} RequestResult;
 
 typedef struct
 {
@@ -263,7 +250,7 @@ uint64_t CGetSession(uint64_t clusterID);
 uint64_t CGetNoOPSession(uint64_t clusterID);
 void CRemoveManagedObject(uint64_t csoid);
 int CSetLogLevel(DBString package, int level);
-int CSelectOnRequestStateForMembershipChange(uint64_t rsoid);
+RequestResult CSelectOnRequestState(uint64_t rsoid);
 void CSessionProposalCompleted(uint64_t csoid);
 uint64_t CNewNodeHost(NodeHostConfig cfg);
 void CStopNodeHost(uint64_t oid);
@@ -280,7 +267,7 @@ NewSessionResult CNodeHostSyncGetSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);
 int CNodeHostSyncCloseSession(uint64_t oid,
   uint64_t timeout, uint64_t csoid);
-SyncProposeResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
+RequestResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   uint64_t csoid, Bool csupdate, const unsigned char *buf, size_t len);
 int CNodeHostSyncRead(uint64_t oid,
   uint64_t timeout, uint64_t clusterID,
@@ -289,15 +276,21 @@ int CNodeHostSyncRead(uint64_t oid,
 int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
-SyncRequestSnapshotResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+RequestResult CNodeHostSyncRequestSnapshot(uint64_t oid,
   uint64_t clusterID, SnapshotOption opt, uint64_t timeout);
-RequestSnapshotResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
-  SnapshotOption opt, uint64_t timeout, void *handler, int t);
+RequestStateResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
+  SnapshotOption opt, uint64_t timeout);
 int CNodeHostSyncRequestAddNode(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID, DBString url);
+RequestStateResult CNodeHostRequestAddNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
 int CNodeHostSyncRequestDeleteNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID);
+RequestStateResult CNodeHostRequestDeleteNode(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID);
 int CNodeHostSyncRequestAddObserver(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID, DBString url);
+RequestStateResult CNodeHostRequestAddObserver(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
 int CRequestLeaderTransfer(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 GetMembershipResult CNodeHostGetClusterMembership(uint64_t oid,

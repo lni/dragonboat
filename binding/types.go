@@ -91,6 +91,10 @@ func getErrorCode(err error) int {
 		return int(C.ErrClusterNotStopped)
 	} else if err == dragonboat.ErrClusterNotInitialized {
 		return int(C.ErrClusterNotInitialized)
+	} else if err == dragonboat.ErrNodeRemoved {
+		return int(C.ErrNodeRemoved)
+	} else if err == dragonboat.ErrDirNotExist {
+		return int(C.ErrDirNotExist)
 	}
 	panic(fmt.Sprintf("unknown error %v", err))
 }

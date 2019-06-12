@@ -169,25 +169,25 @@ func SetLogLevel(packageName C.DBString, level int) int {
 	return 0
 }
 
-// SelectOnRequestStateForMembershipChange selects on the RequestState and
+// SelectOnRequestState selects on the RequestState and
 // wait until the CompleteC channel to be signaled.
-//export SelectOnRequestStateForMembershipChange
-func SelectOnRequestStateForMembershipChange(rsoid uint64) int {
+//export SelectOnRequestState
+func SelectOnRequestState(rsoid uint64) (uint64, int) {
 	rs := getRequestState(rsoid)
-	var err error
+	var code int
 	r := <-rs.CompletedC
 	if r.Completed() {
-		err = nil
+		code = int(C.RequestCompleted)
 	} else if r.Timeout() {
-		err = dragonboat.ErrTimeout
+		code = int(C.RequestTimeout)
 	} else if r.Terminated() {
-		err = dragonboat.ErrClusterClosed
+		code = int(C.RequestTerminated)
 	} else if r.Rejected() {
-		err = dragonboat.ErrRejected
+		code = int(C.RequestRejected)
 	} else {
 		panic("unknown code")
 	}
-	return getErrorCode(err)
+	return r.GetResult().Value, code
 }
 
 // SessionProposalCompleted marks the client session instance specified
@@ -586,25 +586,17 @@ func NodeHostSyncRequestSnapshot(oid uint64, clusterID uint64,
 	return v, getErrorCode(err)
 }
 
-// TODO: RequestSnapshot
 //export NodeHostRequestSnapshot
 func NodeHostRequestSnapshot(oid uint64, clusterID uint64,
-	opt C.SnapshotOption, timeout uint64, waitable unsafe.Pointer,
-	handlerType CompleteHandlerType) (uint64, int) {
-	// nh := getNodeHost(oid)
-	// option := dragonboat.SnapshotOption{
-	// 	Exported:	cboolToBool(opt.Exported),
-	// 	ExportPath:	charArrayToString(opt.ExportedPath.str, opt.ExportedPath.len),
-	// }
-
-	var handler *cppCompleteHandler
-	if handlerType == CompleteHandlerCPP {
-		handler = completeHandlerPool.Get().(*cppCompleteHandler)
-		handler.waitable = waitable
-	} else {
-		panic("not supported type")
+	opt C.SnapshotOption, timeout uint64) (uint64, int) {
+	nh := getNodeHost(oid)
+	option := dragonboat.SnapshotOption{
+		Exported:   cboolToBool(opt.Exported),
+		ExportPath: charArrayToString(opt.ExportedPath.str, opt.ExportedPath.len),
 	}
-	return 0, 0
+	rs, err := nh.RequestSnapshot(clusterID, option,
+		time.Duration(timeout)*time.Millisecond)
+	return addManagedObject(rs), getErrorCode(err)
 }
 
 // NodeHostRequestAddNode requests the specified new node to be added to the
@@ -621,6 +613,16 @@ func NodeHostSyncRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
 	return getErrorCode(err)
 }
 
+//export NodeHostRequestAddNode
+func NodeHostRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
+	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
+	nh := getNodeHost(oid)
+	nodeURL := charArrayToString(url.str, url.len)
+	rs, err := nh.RequestAddNode(clusterID, nodeID, nodeURL, orderID,
+		time.Duration(timeout)*time.Millisecond)
+	return addManagedObject(rs), getErrorCode(err)
+}
+
 // NodeHostRequestDeleteNode requests the specified node to be removed from the
 // specified raft cluster.
 //export NodeHostSyncRequestDeleteNode
@@ -633,6 +635,16 @@ func NodeHostSyncRequestDeleteNode(oid uint64,
 	defer cancel()
 	err := nh.SyncRequestDeleteNode(ctx, clusterID, nodeID, orderID)
 	return getErrorCode(err)
+}
+
+//export NodeHostRequestDeleteNode
+func NodeHostRequestDeleteNode(oid uint64,
+	timeout uint64, clusterID uint64,
+	nodeID uint64, orderID uint64) (uint64, int) {
+	nh := getNodeHost(oid)
+	rs, err := nh.RequestDeleteNode(clusterID, nodeID, orderID,
+		time.Duration(timeout)*time.Millisecond)
+	return addManagedObject(rs), getErrorCode(err)
 }
 
 // NodeHostRequestAddObserver requests the specified new node to be added to
@@ -648,6 +660,16 @@ func NodeHostSyncRequestAddObserver(oid uint64, timeout uint64, clusterID uint64
 	err := nh.SyncRequestAddObserver(ctx, clusterID,
 		nodeID, nodeURL, orderID)
 	return getErrorCode(err)
+}
+
+//export NodeHostRequestAddObserver
+func NodeHostRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
+	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
+	nh := getNodeHost(oid)
+	nodeURL := charArrayToString(url.str, url.len)
+	rs, err := nh.RequestAddObserver(clusterID, nodeID, nodeURL, orderID,
+		time.Duration(timeout)*time.Millisecond)
+	return addManagedObject(rs), getErrorCode(err)
 }
 
 // NodeHostRequestLeaderTransfer request to transfer leadership to the

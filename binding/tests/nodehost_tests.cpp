@@ -882,6 +882,42 @@ TEST_F(NodeHostTest, NodeCanBeAdded)
   }
 }
 
+TEST_F(NodeHostTest, NodeCanBeAsyncAdded)
+{
+  auto config = getTestConfig();
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status
+    s = nh_->StartCluster(p, false, CreateRegularStateMachine, config);
+  EXPECT_TRUE(s.OK());
+  auto timeout = dragonboat::Milliseconds(5000);
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::Buffer buf(128);
+  for (uint64_t i = 0; i < 16; i++) {
+    dragonboat::UpdateResult code;
+    dragonboat::Status s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
+    EXPECT_TRUE(s.OK());
+    cs->ProposalCompleted();
+  }
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestAddNode(1, 2, "localhost:9051", timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::RequestResult result = state->Get();
+  EXPECT_EQ(result.code, RequestCompleted);
+  dragonboat::RequestResult resultAgain = state->Get();
+  EXPECT_EQ(resultAgain.code, RequestCompleted);
+  for (uint64_t i = 0; i < 4; i++) {
+    dragonboat::UpdateResult code;
+    auto shortTimeout = dragonboat::Milliseconds(1000);
+    s = nh_->SyncPropose(cs.get(), buf, shortTimeout, &code);
+    EXPECT_FALSE(s.OK());
+    EXPECT_EQ(s.Code(), dragonboat::Status::ErrTimeout);
+    cs->ProposalCompleted();
+  }
+}
+
 TEST_F(NodeHostTest, RemoveData)
 {
   auto config = getTestConfig();
@@ -928,8 +964,8 @@ TEST_F(NodeHostTest, AsyncPropose)
     s = nh_->Propose(cs.get(), buf, timeout, &e);
     EXPECT_TRUE(s.OK());
     e.Wait();
-    dragonboat::RWResult r = e.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    dragonboat::RequestResult r = e.Get();
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     cs->ProposalCompleted();
   }
@@ -954,8 +990,8 @@ TEST_F(NodeHostTest, OverloadedAsyncPropose)
     s = nh_->Propose(cs.get(), buf, 128, timeout, &e);
     EXPECT_TRUE(s.OK());
     e.Wait();
-    dragonboat::RWResult r = e.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    dragonboat::RequestResult r = e.Get();
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     cs->ProposalCompleted();
   }
@@ -980,8 +1016,8 @@ TEST_F(NodeHostTest, AsyncReadIndex)
     s = nh_->Propose(cs.get(), buf, timeout, &e);
     EXPECT_TRUE(s.OK());
     e.Wait();
-    dragonboat::RWResult r = e.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    dragonboat::RequestResult r = e.Get();
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     cs->ProposalCompleted();
     TestEvent e2;
@@ -989,7 +1025,7 @@ TEST_F(NodeHostTest, AsyncReadIndex)
     EXPECT_TRUE(s.OK());
     e2.Wait();
     r = e2.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    EXPECT_EQ(r.code, RequestCompleted);
     dragonboat::Buffer query(128);
     dragonboat::Buffer result(128);
     s = nh_->ReadLocal(1, query, &result);
@@ -1018,8 +1054,8 @@ TEST_F(NodeHostTest, OverloadedAsyncReadIndex)
     s = nh_->Propose(cs.get(), buf, timeout, &e);
     EXPECT_TRUE(s.OK());
     e.Wait();
-    dragonboat::RWResult r = e.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    dragonboat::RequestResult r = e.Get();
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     cs->ProposalCompleted();
     TestEvent e2;
@@ -1027,7 +1063,7 @@ TEST_F(NodeHostTest, OverloadedAsyncReadIndex)
     EXPECT_TRUE(s.OK());
     e2.Wait();
     r = e2.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    EXPECT_EQ(r.code, RequestCompleted);
     dragonboat::Byte query[16];
     dragonboat::Byte result[16];
     size_t written;
@@ -1134,8 +1170,8 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
   s = nh_->ProposeSession(cs.get(), timeout, &e);
   EXPECT_TRUE(s.OK());
   e.Wait();
-  dragonboat::RWResult r = e.Get();
-  EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+  dragonboat::RequestResult r = e.Get();
+  EXPECT_EQ(r.code, RequestCompleted);
   cs->PrepareForProposal();
   dragonboat::Buffer buf(128);
   for (uint64_t i = 1; i < 16; i++) {
@@ -1144,7 +1180,7 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
     EXPECT_TRUE(s.OK());
     e2.Wait();
     r = e2.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     cs->ProposalCompleted();
     TestEvent e3;
@@ -1152,7 +1188,7 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
     EXPECT_TRUE(s.OK());
     e3.Wait();
     r = e3.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    EXPECT_EQ(r.code, RequestCompleted);
     dragonboat::Buffer query(128);
     dragonboat::Buffer result(128);
     s = nh_->ReadLocal(1, query, &result);
@@ -1166,7 +1202,7 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
   EXPECT_TRUE(s.OK());
   e1.Wait();
   r = e1.Get();
-  EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+  EXPECT_EQ(r.code, RequestCompleted);
 }
 
 TEST_F(NodeHostTest, NoOPSession)
@@ -1187,15 +1223,15 @@ TEST_F(NodeHostTest, NoOPSession)
     s = nh_->Propose(cs.get(), buf, timeout, &e2);
     EXPECT_TRUE(s.OK());
     e2.Wait();
-    dragonboat::RWResult r = e2.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    dragonboat::RequestResult r = e2.Get();
+    EXPECT_EQ(r.code, RequestCompleted);
     EXPECT_EQ(r.result, i);
     TestEvent e3;
     s = nh_->ReadIndex(1, timeout, &e3);
     EXPECT_TRUE(s.OK());
     e3.Wait();
     r = e3.Get();
-    EXPECT_EQ(r.code, dragonboat::ResultCode::RequestCompleted);
+    EXPECT_EQ(r.code, RequestCompleted);
     dragonboat::Buffer query(128);
     dragonboat::Buffer result(128);
     s = nh_->ReadLocal(1, query, &result);
@@ -1221,7 +1257,29 @@ TEST_F(NodeHostTest, RequestSnapshot)
   option.Exported = false;
   dragonboat::Status status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
   EXPECT_TRUE(status.OK());
-  EXPECT_GT(result, 0);
+  EXPECT_EQ(result, 2);
+}
+
+TEST_F(NodeHostTest, AsyncRequestSnapshot)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  dragonboat::Status s = nh_->StartCluster(p, false,
+    CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  auto timeout = dragonboat::Milliseconds(5000);
+  dragonboat::SnapshotOption option;
+  dragonboat::Status status;
+  option.Exported = false;
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestSnapshot(1, option, timeout, &status));
+  EXPECT_TRUE(status.OK());
+  dragonboat::RequestResult result = state->Get();
+  EXPECT_EQ(result.code, RequestCompleted);
+  EXPECT_EQ(result.result, 2);
 }
 
 TEST_F(NodeHostTest, ExportSnapshot)
@@ -1241,7 +1299,30 @@ TEST_F(NodeHostTest, ExportSnapshot)
   option.ExportedPath = NodeHostTest::NodeHostTestDir;
   dragonboat::Status status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
   EXPECT_TRUE(status.OK());
-  EXPECT_GT(result, 0);
+  EXPECT_EQ(result, 2);
+}
+
+TEST_F(NodeHostTest, AsyncExportSnapshot)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  dragonboat::Status s = nh_->StartCluster(p, false,
+    CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  auto timeout = dragonboat::Milliseconds(5000);
+  dragonboat::SnapshotOption option;
+  dragonboat::Status status;
+  option.Exported = true;
+  option.ExportedPath = NodeHostTest::NodeHostTestDir;
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestSnapshot(1, option, timeout, &status));
+  EXPECT_TRUE(status.OK());
+  dragonboat::RequestResult result = state->Get();
+  EXPECT_EQ(result.code, RequestCompleted);
+  EXPECT_EQ(result.result, 2);
 }
 
 TEST_F(NodeHostTest, RegularSMSnapshotCanBeCapturedAndRestored)
@@ -1396,6 +1477,30 @@ TEST_F(NodeHostTest, ObserverCanBeAdded)
   EXPECT_TRUE(s.OK());
 }
 
+TEST_F(NodeHostTest, ObserverCanBeAsyncAdded)
+{
+  auto config = getTestConfig();
+  auto timeout = dragonboat::Milliseconds(2000);
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestAddObserver(1, 2, "localhost:9051", timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::RequestResult result = state->Get();
+  EXPECT_EQ(result.code, RequestCompleted);
+  std::unique_ptr<dragonboat::Session> cs(nh_->GetNoOPSession(1));
+  dragonboat::UpdateResult code;
+  dragonboat::Buffer buf(128);
+  s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
+  EXPECT_EQ(code, uint64_t(1));
+  EXPECT_TRUE(s.OK());
+}
+
 TEST_F(NodeHostTest, ObserverCanBeRemoved)
 {
   auto config = getTestConfig();
@@ -1411,6 +1516,26 @@ TEST_F(NodeHostTest, ObserverCanBeRemoved)
   EXPECT_TRUE(s.OK());
   s = nh_->SyncRequestDeleteNode(1, 2, timeout);
   EXPECT_TRUE(s.OK());
+}
+
+TEST_F(NodeHostTest, ObserverCanBeAsyncRemoved)
+{
+  auto config = getTestConfig();
+  auto timeout = dragonboat::Milliseconds(2000);
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  s = nh_->SyncRequestAddObserver(1, 2, "localhost:9051", timeout);
+  EXPECT_TRUE(s.OK());
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestDeleteNode(1, 2, timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::RequestResult result = state->Get();
+  EXPECT_EQ(result.code, RequestCompleted);
 }
 
 TEST_F(NodeHostTest, ObserverCanBePromoted)
