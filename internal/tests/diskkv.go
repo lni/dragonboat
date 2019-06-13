@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !dragonboat_no_rocksdb
+// +build !dragonboat_pebble_test
+// +build !dragonboat_leveldb_test
+
 package tests
 
 import (

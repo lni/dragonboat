@@ -324,7 +324,6 @@ test-raft:
 	$(GOTEST) $(PKGNAME)/internal/raft
 test-raftpb:
 	$(GOTEST) $(PKGNAME)/raftpb
-test-rsm: TESTTAGS=""
 test-rsm:
 	$(GOTEST) $(PKGNAME)/internal/rsm
 test-logdb:
