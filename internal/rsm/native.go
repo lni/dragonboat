@@ -96,16 +96,18 @@ type ManagedStateMachineFactory func(clusterID uint64,
 type NativeStateMachine struct {
 	sm   IStateMachine
 	done <-chan struct{}
+	ue   []sm.Entry
 	mu   sync.RWMutex
 	OffloadedStatus
 }
 
 // NewNativeStateMachine creates and returns a new NativeStateMachine object.
-func NewNativeStateMachine(clusterID uint64, nodeID uint64, sm IStateMachine,
+func NewNativeStateMachine(clusterID uint64, nodeID uint64, ism IStateMachine,
 	done <-chan struct{}) IManagedStateMachine {
 	s := &NativeStateMachine{
-		sm:   sm,
+		sm:   ism,
 		done: done,
+		ue:   make([]sm.Entry, 1),
 	}
 	s.OffloadedStatus.clusterID = clusterID
 	s.OffloadedStatus.nodeID = nodeID
@@ -163,8 +165,9 @@ func (ds *NativeStateMachine) Update(session *Session,
 			panic("already has response in session")
 		}
 	}
-	entries := []sm.Entry{sm.Entry{Index: e.Index, Cmd: e.Cmd}}
-	results, err := ds.sm.Update(entries)
+	ds.ue[0] = sm.Entry{Index: e.Index, Cmd: e.Cmd}
+	results, err := ds.sm.Update(ds.ue)
+	ds.ue[0].Cmd = nil
 	if err != nil {
 		return sm.Result{}, err
 	}
