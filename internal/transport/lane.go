@@ -162,7 +162,7 @@ func (l *lane) streamSnapshot() error {
 			return ErrStopped
 		case chunk := <-l.ch:
 			chunk.DeploymentId = l.deploymentID
-			if chunk.ChunkCount == pb.PoisonChunkCount {
+			if chunk.IsPoisonChunk() {
 				return ErrStreamSnapshot
 			}
 			if err := l.sendChunk(chunk, l.conn); err != nil {

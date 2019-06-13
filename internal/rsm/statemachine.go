@@ -48,10 +48,9 @@ var (
 	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
-	ErrRestoreSnapshot    = errors.New("failed to restore from snapshot")
-	taskChanLength        = settings.Soft.NodeTaskChanLength
-	taskChanBusyThreshold = settings.Soft.NodeTaskChanLength / 2
-	batchedEntryApply     = settings.Soft.BatchedEntryApply
+	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
+	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
+	sessionBufferInitialCap uint64 = 128 * 1024
 )
 
 // SnapshotRequestType is the type of a snapshot request.
@@ -106,15 +105,17 @@ type Task struct {
 	Entries           []pb.Entry
 }
 
+// IsSnapshotTask returns a boolean flag indicating whether it is a snapshot
+// task.
+func (t *Task) IsSnapshotTask() bool {
+	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
+}
+
 func (t *Task) isSyncTask() bool {
-	if t.PeriodicSync && t.isSnapshotTask() {
+	if t.PeriodicSync && t.IsSnapshotTask() {
 		panic("invalid task")
 	}
 	return t.PeriodicSync
-}
-
-func (t *Task) isSnapshotTask() bool {
-	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
 }
 
 // SMFactoryFunc is the function type for creating an IStateMachine instance
@@ -157,7 +158,7 @@ type StateMachine struct {
 	term          uint64
 	snapshotIndex uint64
 	diskSMIndex   uint64
-	taskC         chan Task
+	taskQ         *TaskQueue
 	onDiskSM      bool
 	aborted       bool
 	syncedIndex   struct {
@@ -178,7 +179,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		snapshotter: snapshotter,
 		sm:          sm,
 		onDiskSM:    sm.OnDiskStateMachine(),
-		taskC:       make(chan Task, taskChanLength),
+		taskQ:       NewTaskQueue(),
 		node:        proxy,
 		sessions:    NewSessionManager(),
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
@@ -186,15 +187,16 @@ func NewStateMachine(sm IManagedStateMachine,
 	return a
 }
 
-// TaskC returns the task channel.
-func (s *StateMachine) TaskC() chan Task {
-	return s.taskC
+// TaskQ returns the task queue.
+func (s *StateMachine) TaskQ() *TaskQueue {
+	return s.taskQ
 }
 
 // TaskChanBusy returns whether the TaskC chan is busy. Busy is defined as
 // having more than half of its buffer occupied.
 func (s *StateMachine) TaskChanBusy() bool {
-	return uint64(len(s.taskC)) > taskChanBusyThreshold
+	sz := s.taskQ.Size()
+	return sz*2 > taskQueueBusyCap
 }
 
 // RecoverFromSnapshot applies the snapshot.
@@ -207,14 +209,14 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.describe(), ss)
-	if r, idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); !r {
+	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.id(), ss)
+	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
 		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
 	plog.Infof("%s snapshot %d restored, members %v",
-		s.describe(), ss.Index, ss.Membership.Addresses)
+		s.id(), ss.Index, ss.Membership.Addresses)
 	return ss.Index, nil
 }
 
@@ -222,18 +224,18 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	if !t.InitialSnapshot {
 		snapshot, err := s.snapshotter.GetSnapshot(t.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, get snapshot failed: %v", s.describe(), err)
+			plog.Errorf("%s, get snapshot failed: %v", s.id(), err)
 			return pb.Snapshot{}, ErrRestoreSnapshot
 		}
 		if s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, no snapshot", s.describe())
+			plog.Errorf("%s, no snapshot", s.id())
 			return pb.Snapshot{}, err
 		}
 		return snapshot, nil
 	}
 	snapshot, err := s.snapshotter.GetMostRecentSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
-		plog.Infof("%s no snapshot available during start up", s.describe())
+		plog.Infof("%s no snapshot available during start up", s.id())
 		return pb.Snapshot{}, nil
 	}
 	return snapshot, nil
@@ -266,38 +268,38 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 }
 
 func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
-	initial bool) (bool, uint64, error) {
+	initial bool) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index := ss.Index
 	if s.index >= index {
-		return false, s.index, nil
+		return s.index, raft.ErrSnapshotOutOfDate
 	}
 	if s.aborted {
-		return false, 0, sm.ErrSnapshotStopped
+		return 0, sm.ErrSnapshotStopped
 	}
 	if s.recoverSMRequired(ss, initial) {
 		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
-			s.describe(), ss.Term, index, snapshotInfo(ss), initial)
+			s.id(), ss.Term, index, snapshotInfo(ss), initial)
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
 		if err := s.snapshotter.Load(index, s.sessions, s.sm, fn, fs); err != nil {
-			plog.Errorf("failed to load snapshot, %s, %v", s.describe(), err)
+			plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
-				return false, 0, err
+				return 0, err
 			}
-			return false, 0, ErrRestoreSnapshot
+			return 0, ErrRestoreSnapshot
 		}
 	} else {
 		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
-			s.describe(), index, s.diskSMIndex)
+			s.id(), index, s.diskSMIndex)
 	}
 	s.index = index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
-	return true, 0, nil
+	return 0, nil
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
@@ -319,7 +321,7 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
 	plog.Infof("%s opened disk state machine, index %d, err %v",
-		s.describe(), index, err)
+		s.id(), index, err)
 	if err != nil {
 		if err == sm.ErrOpenStopped {
 			s.aborted = true
@@ -373,7 +375,6 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedLastApplied.Lock()
 	s.batchedLastApplied.index = index
 	s.batchedLastApplied.Unlock()
-	s.node.NodeReady()
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
@@ -494,52 +495,60 @@ func (s *StateMachine) GetMembershipHash() uint64 {
 }
 
 // Handle pulls the committed record and apply it if there is any available.
-func (s *StateMachine) Handle(batch []Task,
-	toApply []sm.Entry) (Task, bool, error) {
+func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	batch = batch[:0]
-	toApply = toApply[:0]
-	select {
-	case rec := <-s.taskC:
-		if rec.isSnapshotTask() {
-			return rec, true, nil
+	apply = apply[:0]
+	processed := false
+	defer func() {
+		// give the node worker a chance to run when
+		//  - batched applied value has been updated
+		//  - taskC has been poped
+		if processed {
+			s.node.NodeReady()
+		}
+	}()
+	rec, ok := s.taskQ.Get()
+	if ok {
+		processed = true
+		if rec.IsSnapshotTask() {
+			return rec, nil
 		}
 		if !rec.isSyncTask() {
 			batch = append(batch, rec)
 		} else {
 			if err := s.sync(); err != nil {
-				return Task{}, false, err
+				return Task{}, err
 			}
 		}
 		done := false
 		for !done {
-			select {
-			case rec := <-s.taskC:
-				if rec.isSnapshotTask() {
-					if err := s.handle(batch, toApply); err != nil {
-						return Task{}, false, err
+			rec, ok := s.taskQ.Get()
+			if ok {
+				if rec.IsSnapshotTask() {
+					if err := s.handle(batch, apply); err != nil {
+						return Task{}, err
 					}
-					return rec, true, nil
+					return rec, nil
 				}
 				if !rec.isSyncTask() {
 					batch = append(batch, rec)
 				} else {
 					if err := s.sync(); err != nil {
-						return Task{}, false, err
+						return Task{}, err
 					}
 				}
-			default:
+			} else {
 				done = true
 			}
 		}
-	default:
 	}
-	return Task{}, false, s.handle(batch, toApply)
+	return Task{}, s.handle(batch, apply)
 }
 
 func (s *StateMachine) getSnapshotMeta(ctx interface{},
 	req SnapshotRequest) *SnapshotMeta {
 	if s.members.isEmpty() {
-		plog.Panicf("%s has empty membership", s.describe())
+		plog.Panicf("%s has empty membership", s.id())
 	}
 	meta := &SnapshotMeta{
 		From:       s.node.NodeID(),
@@ -547,12 +556,12 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		Index:      s.index,
 		Term:       s.term,
 		Request:    req,
-		Session:    bytes.NewBuffer(make([]byte, 0, 128*1024)),
+		Session:    bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap)),
 		Membership: s.members.getMembership(),
 		Type:       s.sm.StateMachineType(),
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
-		s.describe(), meta.Index, meta.Membership.Addresses)
+		s.id(), meta.Index, meta.Membership.Addresses)
 	if _, err := s.sessions.SaveSessions(meta.Session); err != nil {
 		plog.Panicf("failed to save sessions %v", err)
 	}
@@ -562,14 +571,14 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
 	if s.index+1 != index {
 		plog.Panicf("%s, not sequential update, last applied %d, applying %d",
-			s.describe(), s.index, index)
+			s.id(), s.index, index)
 	}
 	if index == 0 || term == 0 {
-		plog.Panicf("invalid last index %d or term %d", index, term)
+		plog.Panicf("%s invalid last index %d or term %d", s.id(), index, term)
 	}
 	if term < s.term {
-		plog.Panicf("term is moving backward, term %d, new term %d",
-			s.term, term)
+		plog.Panicf("%s term is moving backward, term %d, new term %d",
+			s.id(), s.term, term)
 	}
 	s.index = index
 	s.term = term
@@ -646,8 +655,7 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	return s.doSaveSnapshot(meta)
 }
 
-func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta,
-	error) {
+func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta, error) {
 	if err := s.checkSnapshotStatus(); err != nil {
 		return nil, err
 	}
@@ -668,7 +676,7 @@ func (s *StateMachine) sync() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	plog.Infof("%s is being synchronized, index %d", s.describe(), s.index)
+	plog.Infof("%s is being synchronized, index %d", s.id(), s.index)
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}
@@ -680,7 +688,7 @@ func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,
 	*server.SnapshotEnv, error) {
 	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
-		plog.Errorf("save snapshot failed %v", err)
+		plog.Errorf("%s snapshotter.Save failed %v", s.id(), err)
 		return nil, env, err
 	}
 	s.snapshotIndex = meta.Index
@@ -704,8 +712,8 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
 	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
 	for b := range batch {
-		if batch[b].isSnapshotTask() || batch[b].isSyncTask() {
-			panic("trying to handle a snapshot/sync request")
+		if batch[b].IsSnapshotTask() || batch[b].isSyncTask() {
+			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())
 		}
 		input := batch[b].Entries
 		allUpdate, allNoOP := getEntryTypes(input)
@@ -813,7 +821,8 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 			ce := input[skipped+idx]
 			if ce.Index != ent.Index {
 				// probably because user modified the Index value in results
-				plog.Panicf("alignment error, %d, %d, %d", ce.Index, ent.Index, skipped)
+				plog.Panicf("%s alignment error, %d, %d, %d",
+					s.id(), ce.Index, ent.Index, skipped)
 			}
 			last := ce.Index == input[len(input)-1].Index
 			s.onUpdateApplied(ce, ent.Result, false, false, last)
@@ -848,7 +857,7 @@ func (s *StateMachine) handleRegisterSession(ent pb.Entry) sm.Result {
 	defer s.mu.Unlock()
 	smResult := s.sessions.RegisterClientID(ent.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("on %s register client failed, %v", s.describe(), ent)
+		plog.Errorf("%s register client failed %v", s.id(), ent)
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
 	return smResult
@@ -859,7 +868,7 @@ func (s *StateMachine) handleUnregisterSession(ent pb.Entry) sm.Result {
 	defer s.mu.Unlock()
 	smResult := s.sessions.UnregisterClientID(ent.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("%s unregister %d failed, %v", s.describe(), ent.ClientID, ent)
+		plog.Errorf("%s unregister %d failed %v", s.id(), ent.ClientID, ent)
 	}
 	s.updateLastApplied(ent.Index, ent.Term)
 	return smResult
@@ -911,7 +920,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 	return result, false, false, nil
 }
 
-func (s *StateMachine) describe() string {
+func (s *StateMachine) id() string {
 	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
 }
 

@@ -424,7 +424,7 @@ func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 		return err
 	}
 	r.recordRemoveNodeData(wb, snapshots, clusterID, nodeID)
-	if err := r.kvs.CommitDeleteBatch(wb); err != nil {
+	if err := r.kvs.CommitWriteBatch(wb); err != nil {
 		return err
 	}
 	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {

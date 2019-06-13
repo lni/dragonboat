@@ -18,7 +18,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/raftio"
@@ -29,6 +32,17 @@ const (
 	RDBTestDirectory = "rdb_test_dir_safe_to_delete"
 )
 
+func getDirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size, err
+}
+
 func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	d := filepath.Join(RDBTestDirectory, dir)
 	lld := filepath.Join(RDBTestDirectory, lldir)
@@ -38,7 +52,7 @@ func getNewTestDB(dir string, lldir string, batched bool) raftio.ILogDB {
 	if err := os.MkdirAll(lld, 0777); err != nil {
 		panic(err)
 	}
-	db, err := newLogDB([]string{d}, []string{lld}, batched, false, newDefaultKVStore)
+	db, err := NewLogDB([]string{d}, []string{lld}, batched, false, newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}
@@ -973,6 +987,90 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 		}
 	}
 	runLogDBTest(t, tf)
+}
+
+func TestRemoveEntriesTo(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	dir := "db-dir"
+	lldir := "wal-db-dir"
+	d := filepath.Join(RDBTestDirectory, dir)
+	lld := filepath.Join(RDBTestDirectory, lldir)
+	os.RemoveAll(d)
+	os.RemoveAll(lld)
+	defer os.RemoveAll(RDBTestDirectory)
+	clusterID := uint64(0)
+	nodeID := uint64(4)
+	ents := make([]pb.Entry, 0)
+	maxIndex := uint64(1024)
+	skipSizeCheck := false
+	func() {
+		db := getNewTestDB(dir, lldir, false)
+		sdb, ok := db.(*ShardedRDB)
+		if !ok {
+			t.Fatalf("failed to get sdb")
+		}
+		name := sdb.Name()
+		plog.Infof("name: %s", name)
+		skipSizeCheck = strings.Contains(name, "leveldb")
+		failed, err := sdb.SelfCheckFailed()
+		if err != nil || failed {
+			t.Fatalf("self check failed")
+		}
+		defer db.Close()
+		for i := uint64(0); i < maxIndex; i++ {
+			e := pb.Entry{
+				Term:  1,
+				Index: i,
+				Type:  pb.ApplicationEntry,
+				Cmd:   make([]byte, 1024*4),
+			}
+			ents = append(ents, e)
+		}
+		ud := pb.Update{
+			EntriesToSave: ents,
+			State:         pb.State{Commit: 1},
+			ClusterID:     clusterID,
+			NodeID:        nodeID,
+		}
+		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err != nil {
+			t.Fatalf("failed to save recs")
+		}
+		if err := db.RemoveEntriesTo(clusterID, nodeID, maxIndex); err != nil {
+			t.Fatalf("failed to remove entries to, %v", err)
+		}
+		for i := 0; i < 1000; i++ {
+			if atomic.LoadUint64(&(sdb.completedCompactions)) == 0 {
+				time.Sleep(10 * time.Millisecond)
+			} else {
+				break
+			}
+			if i == 999 {
+				t.Fatalf("failed to trigger compaction")
+			}
+		}
+		results, _, err := db.IterateEntries(nil,
+			0, clusterID, nodeID, 1, 100, math.MaxUint64)
+		if err != nil {
+			t.Errorf("iterate entries failed %v", err)
+		}
+		if len(results) > 0 {
+			t.Errorf("entries not deleted")
+		}
+	}()
+	// leveldb has the leftover ldb file
+	// https://github.com/google/leveldb/issues/573
+	// https://github.com/google/leveldb/issues/593
+	if !skipSizeCheck {
+		sz, err := getDirSize(RDBTestDirectory)
+		if err != nil {
+			t.Fatalf("failed to get sz %v", err)
+		}
+		plog.Infof("sz: %d", sz)
+		if sz > 1024*1024 {
+			t.Errorf("unexpected size, %d", sz)
+		}
+	}
 }
 
 func TestAllWantedEntriesAreAccessible(t *testing.T) {

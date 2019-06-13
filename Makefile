@@ -13,10 +13,8 @@
 # limitations under the License.
 
 OS := $(shell uname)
-
 # the location of this Makefile
 PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-
 # set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
 # LogDB implementation. 
 ifeq ($(DRAGONBOAT_LOGDB),leveldb)
@@ -325,7 +323,6 @@ test-raft:
 	$(GOTEST) $(PKGNAME)/internal/raft
 test-raftpb:
 	$(GOTEST) $(PKGNAME)/raftpb
-test-rsm: TESTTAGS=""
 test-rsm:
 	$(GOTEST) $(PKGNAME)/internal/rsm
 test-logdb:

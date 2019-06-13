@@ -15,6 +15,7 @@
 package rsm
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -180,7 +181,13 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 
 func (s *testSnapshotter) Stream(streamable IStreamable,
 	meta *SnapshotMeta, sink pb.IChunkSink) error {
-	panic("not implemented")
+	writer := NewChunkWriter(sink, meta)
+	defer func() {
+		if err := writer.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	return streamable.StreamSnapshot(meta.Ctx, writer)
 }
 
 func (s *testSnapshotter) Save(savable ISavable,
@@ -270,18 +277,11 @@ func runSMTest2(t *testing.T,
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
-func TestNodeReadyIsSetWhenBatchedIndexedValueIsSet(t *testing.T) {
-	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		if nodeProxy.nodeReady != 0 {
-			t.Errorf("node ready count is not 0")
-		}
-		sm.setBatchedLastApplied(100)
-		if nodeProxy.nodeReady != 1 {
-			t.Errorf("node ready is not invoked")
-		}
+func TestDefaultTaskIsNotSnapshotTask(t *testing.T) {
+	task := Task{}
+	if task.IsSnapshotTask() {
+		t.Errorf("default task is a snapshot task")
 	}
-	runSMTest2(t, tf)
 }
 
 func TestUpdatesCanBeBatched(t *testing.T) {
@@ -315,10 +315,10 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, _, err := sm.Handle(batch, nil); err != nil {
+	if _, err := sm.Handle(batch, nil); err != nil {
 		t.Fatalf("handle failed %v", err)
 	}
 	if sm.GetLastApplied() != 237 {
@@ -361,10 +361,10 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 		Entries: []pb.Entry{e1, e2, e3},
 	}
 	sm.index = 234
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, _, err := sm.Handle(batch, nil); err != nil {
+	if _, err := sm.Handle(batch, nil); err != nil {
 		t.Fatalf("handle failed %v", err)
 	}
 	if sm.GetLastApplied() != 237 {
@@ -406,7 +406,7 @@ func applyConfigChangeEntry(sm *StateMachine,
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 }
 
 func TestBatchedLastAppliedValue(t *testing.T) {
@@ -565,7 +565,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -598,7 +598,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			"localhost:1010",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("Handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -610,7 +610,7 @@ func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
 			4,
 			"localhost:1010",
 			124)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -631,7 +631,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -661,7 +661,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -683,7 +683,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 			"localhost:1010",
 			124)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 124 {
@@ -713,7 +713,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			123)
 
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -735,7 +735,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 			"localhost:1011",
 			124)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		v, ok := sm.members.members.Addresses[4]
@@ -765,7 +765,7 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 			t.Errorf("node 1 not in members")
 		}
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 123 {
@@ -800,7 +800,7 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 			"",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if nodeProxy.reject {
@@ -831,7 +831,7 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 			"test.nodehost",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -859,7 +859,7 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 			"a1",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -884,7 +884,7 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 			"",
 			123)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if !nodeProxy.reject {
@@ -892,6 +892,28 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 		}
 		if nodeProxy.removePeer {
 			t.Errorf("remove peer unexpectedly called")
+		}
+	}
+	runSMTest2(t, tf)
+}
+
+func TestHandleSyncTask(t *testing.T) {
+	tf := func(t *testing.T, tsm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		task1 := Task{
+			PeriodicSync: true,
+		}
+		task2 := Task{
+			PeriodicSync: true,
+		}
+		tsm.index = 100
+		tsm.taskQ.Add(task1)
+		tsm.taskQ.Add(task2)
+		if _, err := tsm.Handle(make([]Task, 0), make([]sm.Entry, 0)); err != nil {
+			t.Fatalf("%v", err)
+		}
+		if tsm.index != 100 {
+			t.Errorf("index unexpected moved")
 		}
 	}
 	runSMTest2(t, tf)
@@ -909,9 +931,9 @@ func TestHandleEmptyEvent(t *testing.T) {
 			Entries: []pb.Entry{e},
 		}
 		sm.index = 233
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 234 {
@@ -956,10 +978,10 @@ func TestHandleUpate(t *testing.T) {
 			Entries: []pb.Entry{e1, e2},
 		}
 		sm.index = 234
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		// two commits to handle
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 236 {
@@ -1070,12 +1092,12 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 1, 0, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1106,7 +1128,7 @@ func applySessionRegisterEntry(sm *StateMachine,
 		Entries: []pb.Entry{e},
 	}
 	sm.index = index - 1
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1121,7 +1143,7 @@ func applySessionUnregisterEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1139,7 +1161,7 @@ func applyTestEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
-	sm.TaskC() <- commit
+	sm.taskQ.Add(commit)
 	return e
 }
 
@@ -1149,7 +1171,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		clientID := uint64(12345)
 		applySessionRegisterEntry(sm, clientID, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != 789 {
@@ -1166,7 +1188,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		index := uint64(790)
 		applySessionUnregisterEntry(sm, 12345, index)
 
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != index {
@@ -1189,7 +1211,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		e := applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1208,11 +1230,11 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 		commit := Task{
 			Entries: []pb.Entry{e},
 		}
-		sm.TaskC() <- commit
+		sm.taskQ.Add(commit)
 		if nodeProxy.rejected {
 			t.Errorf("rejected flag set too early")
 		}
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1235,7 +1257,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 		sm.index = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1264,7 +1286,7 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		sm.index = 789
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1291,13 +1313,13 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1318,7 +1340,7 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		}
 		e = applyTestEntry(sm, 12345, 1, 791, 0, data)
 		plog.Infof("going to handle the second commit rec")
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1340,13 +1362,13 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1356,7 +1378,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		storeCount := store.(*tests.KVTest).Count
 		// update the respondedto value
 		e = applyTestEntry(sm, 12345, 1, 791, 1, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		sessionManager := sm.sessions.sessions
@@ -1367,7 +1389,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		nodeProxy.applyUpdateInvoked = false
 		// submit the same stuff again with a different index value
 		e = applyTestEntry(sm, 12345, 1, 792, 1, data)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1389,13 +1411,13 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 790, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1406,7 +1428,7 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 		// different index as the same entry is proposed again
 		e = applyTestEntry(sm, 12345, client.NoOPSeriesID, 791, 0, data)
 		// check normal update is accepted and handleped
-		if _, _, err := sm.Handle(batch, nil); err != nil {
+		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
 		if sm.GetLastApplied() != e.Index {
@@ -1640,41 +1662,76 @@ func TestUpdateLastApplied(t *testing.T) {
 		{100, 90, true},
 		{100, 101, true},
 		{100, 110, true},
+		{101, 0, true},
+		{101, 99, true},
 	}
 	for idx, tt := range tests {
-		sm := &StateMachine{index: 100, term: 100}
-		if tt.crash {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("no panic")
-				}
-			}()
-		}
-		sm.updateLastApplied(tt.index, tt.term)
-		if sm.index != tt.index {
-			t.Errorf("%d, index not updated", idx)
-		}
-		if sm.term != tt.term {
-			t.Errorf("%d, term not updated", idx)
-		}
+		func() {
+			sm := &StateMachine{index: 100, term: 100}
+			if tt.crash {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("no panic")
+					}
+				}()
+			}
+			sm.updateLastApplied(tt.index, tt.term)
+			if sm.index != tt.index {
+				t.Errorf("%d, index not updated", idx)
+			}
+			if sm.term != tt.term {
+				t.Errorf("%d, term not updated", idx)
+			}
+		}()
+	}
+}
+
+func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
+	sm := &StateMachine{
+		onDiskSM:    true,
+		diskSMIndex: 100,
+		index:       90,
+		term:        5,
+	}
+	ent := pb.Entry{
+		ClientID: 100,
+		Index:    91,
+		Term:     6,
+	}
+	if err := sm.handleEntry(ent, false); err != nil {
+		t.Fatalf("handle entry failed %v", err)
+	}
+	if sm.index != 91 {
+		t.Errorf("index not moved")
+	}
+	if sm.term != 6 {
+		t.Errorf("term not moved")
 	}
 }
 
 type testManagedStateMachine struct {
 	first        uint64
 	last         uint64
+	synced       bool
+	nalookup     bool
 	corruptIndex bool
 }
 
-func (t *testManagedStateMachine) Open() (uint64, error) { return 0, nil }
+func (t *testManagedStateMachine) Open() (uint64, error) { return 10, nil }
 func (t *testManagedStateMachine) Update(*Session, pb.Entry) (sm.Result, error) {
 	return sm.Result{}, nil
 }
 func (t *testManagedStateMachine) Lookup(interface{}) (interface{}, error) { return nil, nil }
-func (t *testManagedStateMachine) NALookup([]byte) ([]byte, error)         { return nil, nil }
-func (t *testManagedStateMachine) Sync() error                             { return nil }
-func (t *testManagedStateMachine) GetHash() (uint64, error)                { return 0, nil }
-func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error)   { return nil, nil }
+func (t *testManagedStateMachine) NALookup(input []byte) ([]byte, error) {
+	t.nalookup = true
+	return input, nil
+}
+func (t *testManagedStateMachine) Sync() error {
+	t.synced = true
+	return nil
+}
+func (t *testManagedStateMachine) GetHash() (uint64, error)              { return 0, nil }
+func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
 func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
 	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
 	return false, 0, nil
@@ -1699,6 +1756,85 @@ func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, er
 	}
 
 	return ents, nil
+}
+
+func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
+	msm := &testManagedStateMachine{}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM: true,
+		sm:       msm,
+		node:     np,
+	}
+	index, err := sm.OpenOnDiskStateMachine()
+	if err != nil {
+		t.Errorf("open sm failed %v", err)
+	}
+	if index != 10 {
+		t.Errorf("unexpectedly index %d", index)
+	}
+	if sm.diskSMIndex != 10 {
+		t.Errorf("disk sm index not recorded")
+	}
+}
+
+func TestSaveConcurrentSnapshot(t *testing.T) {
+	msm := &testManagedStateMachine{}
+	np := newTestNodeProxy()
+	createTestDir()
+	defer removeTestDir()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		sm:          msm,
+		node:        np,
+		index:       100,
+		term:        5,
+		snapshotter: newTestSnapshotter(),
+		sessions:    NewSessionManager(),
+		members:     newMembership(1, 1, false),
+	}
+	sm.members.members.Addresses[1] = "a1"
+	ss, _, err := sm.saveConcurrentSnapshot(SnapshotRequest{})
+	if err != nil {
+		t.Fatalf("concurrent snapshot failed %v", err)
+	}
+	if ss.Index != 100 {
+		t.Errorf("unexpected index")
+	}
+	if !msm.synced {
+		t.Errorf("not synced")
+	}
+}
+
+func TestStreamSnapshot(t *testing.T) {
+	msm := &testManagedStateMachine{}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		sm:          msm,
+		node:        np,
+		index:       100,
+		term:        5,
+		snapshotter: newTestSnapshotter(),
+		sessions:    NewSessionManager(),
+		members:     newMembership(1, 1, false),
+	}
+	sm.members.members.Addresses[1] = "a1"
+	ts := &testSink{
+		chunks: make([]pb.SnapshotChunk, 0),
+	}
+	if err := sm.StreamSnapshot(ts); err != nil {
+		t.Errorf("stream snapshot failed %v", err)
+	}
+	if len(ts.chunks) != 3 {
+		t.Fatalf("unexpected chunk count")
+	}
+	if !ts.chunks[1].IsLastChunk() {
+		t.Errorf("failed to get tail chunk")
+	}
+	if !ts.chunks[2].IsPoisonChunk() {
+		t.Errorf("failed to get the poison chunk")
+	}
 }
 
 func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
@@ -1779,5 +1915,79 @@ func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
 	}()
 	if err := sm.handleBatch(input, ents); err != nil {
 		t.Fatalf("handle batched entries failed %v", err)
+	}
+}
+
+func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
+	ents := make([]sm.Entry, 0)
+	batch := make([]Task, 0)
+	msm := &testManagedStateMachine{}
+	np := newTestNodeProxy()
+	sm := &StateMachine{
+		onDiskSM:    true,
+		diskSMIndex: 0,
+		index:       0,
+		term:        0,
+		sm:          msm,
+		taskQ:       NewTaskQueue(),
+		node:        np,
+	}
+	rec, err := sm.Handle(batch, ents)
+	if rec.IsSnapshotTask() {
+		t.Errorf("why snapshot?")
+	}
+	if err != nil {
+		t.Fatalf("handle failed")
+	}
+	if np.nodeReady != 0 {
+		t.Errorf("nodeReady unexpectedly updated")
+	}
+	sm.taskQ.Add(Task{})
+	rec, err = sm.Handle(batch, ents)
+	if rec.IsSnapshotTask() {
+		t.Errorf("why snapshot?")
+	}
+	if err != nil {
+		t.Fatalf("handle failed")
+	}
+	if np.nodeReady != 1 {
+		t.Errorf("unexpected nodeReady count %d", np.nodeReady)
+	}
+}
+
+func TestSyncedIndex(t *testing.T) {
+	sm := &StateMachine{}
+	sm.setSyncedIndex(100)
+	if sm.GetSyncedIndex() != 100 {
+		t.Errorf("failed to get synced index")
+	}
+	sm.setSyncedIndex(100)
+	if sm.GetSyncedIndex() != 100 {
+		t.Errorf("failed to get synced index")
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("failed to trigger panic")
+		}
+	}()
+	sm.setSyncedIndex(99)
+}
+
+func TestNALookup(t *testing.T) {
+	msm := &testManagedStateMachine{}
+	sm := &StateMachine{
+		sm: msm,
+	}
+	input := make([]byte, 128)
+	rand.Read(input)
+	result, err := sm.NALookup(input)
+	if err != nil {
+		t.Errorf("NALookup failed %v", err)
+	}
+	if !bytes.Equal(input, result) {
+		t.Errorf("result changed")
+	}
+	if !msm.nalookup {
+		t.Errorf("NALookup not called")
 	}
 }

@@ -301,41 +301,45 @@ func TestBlockReaderCanReadData(t *testing.T) {
 		blockSize*128 - 4,
 	}
 	for idx, sz := range testSz {
-		buf := bytes.NewBuffer(make([]byte, 0, 128*1024))
-		onBlock := func(data []byte, crc []byte) error {
-			toWrite := append(data, crc...)
-			n, err := buf.Write(toWrite)
-			if n != len(toWrite) {
-				t.Fatalf("failed to write all data")
+		readBufSz := []uint64{3, 1,
+			blockSize - 1, blockSize, blockSize + 1,
+			blockSize * 3, blockSize*3 - 1, blockSize*3 + 1,
+			sz, sz - 1, sz + 1}
+		for _, bufSz := range readBufSz {
+			buf := bytes.NewBuffer(make([]byte, 0, 128*1024))
+			onBlock := func(data []byte, crc []byte) error {
+				toWrite := append(data, crc...)
+				n, err := buf.Write(toWrite)
+				if n != len(toWrite) {
+					t.Fatalf("failed to write all data")
+				}
+				if err != nil {
+					t.Fatalf("failed to write %v", err)
+				}
+				return nil
+			}
+			writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
+			input := make([]byte, sz)
+			v := 0
+			for i := range input {
+				input[i] = byte(v % 256)
+				v++
+			}
+			n, err := writer.Write(input)
+			if uint64(n) != sz {
+				t.Errorf("failed to write all data")
 			}
 			if err != nil {
-				t.Fatalf("failed to write %v", err)
+				t.Errorf("write failed %v", err)
 			}
-			return nil
-		}
-		writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
-		input := make([]byte, sz)
-		v := 0
-		for i := range input {
-			input[i] = byte(v % 256)
-			v++
-		}
-		n, err := writer.Write(input)
-		if uint64(n) != sz {
-			t.Errorf("failed to write all data")
-		}
-		if err != nil {
-			t.Errorf("write failed %v", err)
-		}
-		writer.Flush()
-		written := buf.Bytes()
-		expSz := getChecksumedBlockSize(sz, blockSize) + 16
-		if expSz != uint64(len(written)) {
-			t.Errorf("exp %d, written %d", expSz, len(written))
-		}
-		allRead := make([]byte, 0)
-		readBufSz := []uint64{1, 3, blockSize - 1, blockSize, blockSize + 1, sz, sz - 1, sz + 1}
-		for _, bufSz := range readBufSz {
+			writer.Flush()
+			written := buf.Bytes()
+			expSz := getChecksumedBlockSize(sz, blockSize) + 16
+			if expSz != uint64(len(written)) {
+				t.Errorf("exp %d, written %d", expSz, len(written))
+			}
+
+			allRead := make([]byte, 0)
 			if bufSz == 0 {
 				continue
 			}
@@ -353,8 +357,8 @@ func TestBlockReaderCanReadData(t *testing.T) {
 				}
 			}
 			if !bytes.Equal(allRead, input) {
-				t.Errorf("%d, returned data changed, input sz %d, returned sz %d",
-					idx, len(input), len(allRead))
+				t.Errorf("%d, %d, %d, returned data changed, input sz %d, returned sz %d",
+					idx, sz, bufSz, len(input), len(allRead))
 			}
 		}
 	}

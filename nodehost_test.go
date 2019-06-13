@@ -46,7 +46,6 @@ import (
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/syncutil"
 	"github.com/lni/dragonboat/plugin/leveldb"
-	"github.com/lni/dragonboat/plugin/rocksdb"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -1165,54 +1164,6 @@ func TestNodeHostHasNodeInfo(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
-func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		WALDir:         singleNodeHostTestDir,
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 100,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   rocksdb.NewBatchedLogDB,
-	}
-	plog.Infof("going to create nh using batched logdb")
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	bf := nh.logdb.BinaryFormat()
-	if bf != raftio.LogDBBinVersion {
-		t.Errorf("unexpected logdb bin ver %d", bf)
-	}
-	nh.Stop()
-	plog.Infof("node host 1 stopped")
-	nhc.LogDBFactory = nil
-	func() {
-		plog.Infof("going to create nh using plain logdb")
-		nh, err := NewNodeHost(nhc)
-		plog.Infof("err : %v", err)
-		if err != server.ErrLogDBBrokenChange {
-			if err == nil && nh != nil {
-				plog.Infof("going to stop nh")
-				nh.Stop()
-			}
-			t.Fatalf("didn't return the expected error")
-		}
-	}()
-	os.RemoveAll(singleNodeHostTestDir)
-	plog.Infof("going to create nh using plain logdb with existing data deleted")
-	nh, err = NewNodeHost(nhc)
-	plog.Infof("err2 : %v", err)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	defer nh.Stop()
-	bf = nh.logdb.BinaryFormat()
-	if bf != raftio.PlainLogDBBinVersion {
-		t.Errorf("unexpected logdb bin ver %d", bf)
-	}
-}
-
 func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		if !nh.pushSnapshotStatus(123, 123, true) {
@@ -2078,6 +2029,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
+		// exported snapshot is not managed by the system
 		if len(snapshots) != 0 {
 			t.Fatalf("snapshot record unexpectedly inserted into the system")
 		}
@@ -2476,144 +2428,6 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	}
 }
 
-func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
-		RaftAddress:    nodeHostTestAddr1,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-		nhc.RaftAddress = nodeHostTestAddr2
-		_, err = NewNodeHost(nhc)
-		if err != server.ErrLockDirectory {
-			t.Fatalf("failed to return ErrLockDirectory")
-		}
-	}()
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrNotOwner {
-		t.Fatalf("failed to return ErrNotOwner")
-	}
-	nhc.RaftAddress = nodeHostTestAddr1
-	nhc.LogDBFactory = rocksdb.NewBatchedLogDB
-	_, err = NewNodeHost(nhc)
-	if err != server.ErrIncompatibleData {
-		t.Fatalf("failed to return ErrIncompatibleData")
-	}
-}
-
-func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   rocksdb.NewBatchedLogDB,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-	}()
-	nhc.LogDBFactory = nil
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrLogDBBrokenChange {
-		t.Fatalf("failed to return ErrIncompatibleData")
-	}
-}
-
-func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-		rc := config.Config{
-			NodeID:       1,
-			ClusterID:    1,
-			ElectionRTT:  3,
-			HeartbeatRTT: 1,
-		}
-		peers := make(map[uint64]string)
-		peers[1] = nodeHostTestAddr1
-		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-			return &PST{}
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, nh, 1)
-		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
-	}()
-	nhc.LogDBFactory = rocksdb.NewBatchedLogDB
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrIncompatibleData {
-		t.Fatalf("failed to return server.ErrIncompatibleData")
-	}
-}
-
-func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   rocksdb.NewBatchedLogDB,
-	}
-	tf := func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-		rc := config.Config{
-			NodeID:       1,
-			ClusterID:    1,
-			ElectionRTT:  3,
-			HeartbeatRTT: 1,
-		}
-		peers := make(map[uint64]string)
-		peers[1] = nodeHostTestAddr1
-		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-			return &PST{}
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, nh, 1)
-		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
-	}
-	tf()
-	nhc.LogDBFactory = nil
-	tf()
-}
-
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	f := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
@@ -2636,6 +2450,38 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 	_, err := NewNodeHost(nhc)
 	if err != server.ErrLogDBType {
 		t.Fatalf("didn't report logdb type error %v", err)
+	}
+}
+
+func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   leveldb.NewLogDB,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		nhc.RaftAddress = nodeHostTestAddr2
+		_, err = NewNodeHost(nhc)
+		if err != server.ErrLockDirectory {
+			t.Fatalf("failed to return ErrLockDirectory")
+		}
+	}()
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrNotOwner {
+		t.Fatalf("failed to return ErrNotOwner")
+	}
+	nhc.RaftAddress = nodeHostTestAddr1
+	nhc.LogDBFactory = leveldb.NewBatchedLogDB
+	_, err = NewNodeHost(nhc)
+	if err != server.ErrIncompatibleData {
+		t.Fatalf("failed to return ErrIncompatibleData")
 	}
 }
 

@@ -410,7 +410,7 @@ func waitLastAppliedToSync(t *testing.T, smList []*mtNodeHost) {
 				nh := n.nh
 				nh.forEachCluster(func(clusterID uint64, rn *node) bool {
 					if lang.ContainsUint64(clusterID, notSynced) {
-						plog.Infof("%s rn.lastApplied %d", rn.describe(), rn.sm.GetLastApplied())
+						plog.Infof("%s rn.lastApplied %d", rn.id(), rn.sm.GetLastApplied())
 						rn.dumpRaftInfoToLog()
 					}
 					return true

@@ -288,7 +288,7 @@ func (r *RequestState) mustBeReadyForLocalRead() {
 		panic("invalid rs")
 	}
 	if !r.node.initialized() {
-		plog.Panicf("%s not initialized", r.node.describe())
+		plog.Panicf("%s not initialized", r.node.id())
 	}
 	if !r.readyToRead.ready() {
 		panic("not ready for local read")

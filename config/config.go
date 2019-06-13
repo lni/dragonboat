@@ -96,6 +96,10 @@ type Config struct {
 	//
 	// NodeHost.RequestSnapshot can be called to manually request a snapshot to
 	// be created to capture current node state.
+	//
+	// Once automatic snapshotting is disabled by setting the SnapshotEntries
+	// field to 0, users can still use NodeHost's RequestSnapshot or
+	// SyncRequestSnapshot methods to manually request snapshots.
 	SnapshotEntries uint64
 	// CompactionOverhead defines the number of most recent entries to keep after
 	// each Raft log compaction. Raft log compaction is performance automatically

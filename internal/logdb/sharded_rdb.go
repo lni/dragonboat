@@ -44,13 +44,12 @@ type ShardedRDB struct {
 	stopper              *syncutil.Stopper
 }
 
-func checkAllShards(dirs []string,
-	lldirs []string, kvf kvFactory) (bool, error) {
+func checkAllShards(dirs []string, lls []string, kvf kvFactory) (bool, error) {
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
-		if len(lldirs) > 0 {
-			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
+		if len(lls) > 0 {
+			lldir = filepath.Join(lls[i], fmt.Sprintf("logdb-%d", i))
 		}
 		batched, err := hasBatchedRecord(dir, lldir, kvf)
 		if err != nil {

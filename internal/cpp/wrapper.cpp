@@ -25,26 +25,6 @@ typedef struct CollectedFiles {
     dragonboat::CollectedFiles *cf;
 } CollectedFiles;
 
-//int IsValidDragonboatPlugin(char *soFilename)
-//{
-//  void *handle;
-//  CPPStateMachine *(*fn)(uint64_t, uint64_t);
-//  handle = ::dlopen(soFilename, RTLD_LAZY);
-//  if (!handle) {
-//    return 1;
-//  }
-//  fn = (CPPStateMachine *(*)(uint64_t, uint64_t))::dlsym(handle,
-//    createStateMachineFuncName);
-//  if (!fn) {
-//    dlclose(handle);
-//    return 1;
-//  }
-//  dlclose(handle);
-//  return 0;
-//}
-
-// for wrapper_test.go only
-
 void *LoadFactoryFromPlugin(char *soFilename, char *factoryName)
 {
   void *handle;

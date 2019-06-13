@@ -59,8 +59,7 @@ var (
 	ErrIncompatibleData = errors.New("Incompatible LogDB data format")
 	// ErrLogDBBrokenChange indicates that you NodeHost failed to be created as
 	// your code is hit by the LogDB broken change introduced in v3.0. Set your
-	// onfig.NodeHostConfig.LogDBFactory to dragonboat.OpenBatchedLogDB to
-	// continue.
+	// NodeHostConfig.LogDBFactory to rocksdb.OpenBatchedLogDB to continue.
 	ErrLogDBBrokenChange = errors.New("Using new LogDB implementation on existing Raft Log")
 )
 

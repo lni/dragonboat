@@ -179,11 +179,11 @@ func (s *scheduler) repairClusters(restored map[uint64]struct{}) ([]pb.NodeHostR
 		_, ok := restored[cc.clusterID]
 		if ok {
 			plog.Infof("cluster %s is being restored, skipping repair task",
-				cc.describe())
+				cc.id())
 			continue
 		}
 		plog.Infof("drummer cluster status %s, ok %d failed %d waiting %d",
-			cc.describe(), len(cc.okNodes),
+			cc.id(), len(cc.okNodes),
 			len(cc.failedNodes), len(cc.nodesToStart))
 		expectedClusterSize := s.getClusterSize(cc.clusterID)
 		plog.Infof("delete required %t, create required %t, add required %t",
@@ -196,7 +196,7 @@ func (s *scheduler) repairClusters(restored map[uint64]struct{}) ([]pb.NodeHostR
 				return nil, err
 			}
 			plog.Infof("scheduler generated a delete request for %s on %s",
-				toDeleteNode.describe(), toDeleteNode.Address)
+				toDeleteNode.id(), toDeleteNode.Address)
 			result = append(result, reqs...)
 		} else if cc.createRequired() {
 			toCreateNode := cc.nodesToStart[0]
@@ -206,7 +206,7 @@ func (s *scheduler) repairClusters(restored map[uint64]struct{}) ([]pb.NodeHostR
 				return nil, err
 			}
 			plog.Infof("scheduler generated a create request for %s on %s",
-				toCreateNode.describe(), toCreateNode.Address)
+				toCreateNode.id(), toCreateNode.Address)
 			result = append(result, reqs...)
 		} else if cc.addRequired() {
 			failedNode := cc.failedNodes[0]
@@ -216,7 +216,7 @@ func (s *scheduler) repairClusters(restored map[uint64]struct{}) ([]pb.NodeHostR
 			}
 			plog.Infof("scheduler generated a add request for failed node %s on %s,"+
 				"new node id %d, new node address %s, target nodehost %s",
-				failedNode.describe(),
+				failedNode.id(),
 				failedNode.Address,
 				reqs[0].Change.Members[0],
 				reqs[0].AddressList[0],
@@ -233,7 +233,7 @@ func (s *scheduler) getRepairAddRequest(failedNode node,
 	selected := s.getReplacementNode(failedNode)
 	if len(selected) != 1 {
 		plog.Warningf("failed to find a replacement node for the failed node %s",
-			failedNode.describe())
+			failedNode.id())
 		return nil, errNotEnoughNodeHost
 	}
 	selectedNode := selected[0]
@@ -394,7 +394,7 @@ func (s *scheduler) restoreUnavailableClusters() ([]pb.NodeHostRequest,
 		nodesToRestore, ok := cc.readyToBeRestored(s.multiNodeHost, s.tick)
 		if ok {
 			plog.Infof("cluster %s is unavailable but can be restored (%d)",
-				cc.describe(), len(nodesToRestore))
+				cc.id(), len(nodesToRestore))
 			for _, toRestoreNode := range nodesToRestore {
 				appName := s.getAppName(cc.clusterID)
 				reqs, err := s.getRestoreCreateRequest(toRestoreNode,
@@ -404,13 +404,13 @@ func (s *scheduler) restoreUnavailableClusters() ([]pb.NodeHostRequest,
 					return nil, nil, err
 				}
 				plog.Infof("scheduler created a restore requeset for %s on %s",
-					toRestoreNode.describe(), toRestoreNode.Address)
+					toRestoreNode.id(), toRestoreNode.Address)
 				result = append(result, reqs...)
 				idMap[cc.clusterID] = struct{}{}
 			}
 		} else {
 			plog.Warningf("cluster %s is unavailable and can not be restored",
-				cc.describe())
+				cc.id())
 			cc.logUnableToRestoreCluster(s.multiNodeHost, s.tick)
 		}
 	}
@@ -427,7 +427,7 @@ func (s *scheduler) restoreFailed(done map[uint64]struct{}) ([]pb.NodeHostReques
 		}
 		nodesToRestore := cc.canBeRestored(s.multiNodeHost, s.tick)
 		plog.Infof("cluster %s is unavailable but can be restored (%d)",
-			cc.describe(), len(nodesToRestore))
+			cc.id(), len(nodesToRestore))
 		for _, toRestoreNode := range nodesToRestore {
 			appName := s.getAppName(cc.clusterID)
 			reqs, err := s.getRestoreCreateRequest(toRestoreNode,
@@ -436,7 +436,7 @@ func (s *scheduler) restoreFailed(done map[uint64]struct{}) ([]pb.NodeHostReques
 				return nil, err
 			}
 			plog.Infof("scheduler created a restore requeset for %s on %s",
-				toRestoreNode.describe(), toRestoreNode.Address)
+				toRestoreNode.id(), toRestoreNode.Address)
 			result = append(result, reqs...)
 		}
 	}

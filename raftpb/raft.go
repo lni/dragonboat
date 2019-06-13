@@ -312,3 +312,21 @@ var (
 	// the processing goroutine should return.
 	PoisonChunkCount uint64 = math.MaxUint64 - 1
 )
+
+// IsLastChunk returns a boolean value indicating whether the chunk is the last
+// chunk of a snapshot.
+func (c SnapshotChunk) IsLastChunk() bool {
+	return c.ChunkCount == LastChunkCount || c.ChunkCount == c.ChunkId+1
+}
+
+// IsLastFileChunk returns a boolean value indicating whether the chunk is the
+// last chunk of a snapshot file.
+func (c SnapshotChunk) IsLastFileChunk() bool {
+	return c.FileChunkId+1 == c.FileChunkCount
+}
+
+// IsPoisonChunk returns a boolean value indicating whether the chunk is a
+// special poison chunk.
+func (c SnapshotChunk) IsPoisonChunk() bool {
+	return c.ChunkCount == PoisonChunkCount
+}

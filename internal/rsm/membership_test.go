@@ -290,6 +290,19 @@ func TestApplyAddObserver(t *testing.T) {
 	}
 }
 
+func TestAddingExistingNodeAsObserverIsNotAllowed(t *testing.T) {
+	o := newMembership(1, 2, true)
+	o.members.Addresses[100] = "a1"
+	cc := pb.ConfigChange{
+		Type:    pb.AddObserver,
+		Address: "a1",
+		NodeID:  100,
+	}
+	if o.handleConfigChange(cc, 0) {
+		t.Errorf("ading existing node as observer is not rejected")
+	}
+}
+
 func TestAddingExistingNodeAsObserverWillPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {

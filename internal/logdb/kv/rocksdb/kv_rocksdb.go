@@ -287,11 +287,6 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	return r.db.Write(r.wo, rocksdbwb)
 }
 
-// CommitDeleteBatch commits the write batch for deletes.
-func (r *KV) CommitDeleteBatch(wb kv.IWriteBatch) error {
-	return r.CommitWriteBatch(wb)
-}
-
 // BulkRemoveEntries returns the keys specified by the input range.
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 	return nil

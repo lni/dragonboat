@@ -41,6 +41,7 @@ import (
 	"github.com/lni/dragonboat/internal/transport"
 	"github.com/lni/dragonboat/internal/utils/leaktest"
 	"github.com/lni/dragonboat/internal/utils/random"
+	"github.com/lni/dragonboat/logger"
 	"github.com/lni/dragonboat/raftio"
 	pb "github.com/lni/dragonboat/raftpb"
 	sm "github.com/lni/dragonboat/statemachine"
@@ -331,11 +332,11 @@ func step(nodes []*node) bool {
 			}
 		}
 		if running {
-			rec, snapshotRequired, err := node.sm.Handle(make([]rsm.Task, 0), nil)
+			rec, err := node.sm.Handle(make([]rsm.Task, 0), nil)
 			if err != nil {
 				panic(err)
 			}
-			if snapshotRequired {
+			if rec.IsSnapshotTask() {
 				if rec.SnapshotAvailable || rec.InitialSnapshot {
 					if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
 						panic(err)
@@ -414,6 +415,7 @@ func stopNodes(nodes []*node) {
 }
 
 func TestNodeCanBeCreatedAndStarted(t *testing.T) {
+	logger.GetLogger("raft").SetLevel(logger.ERROR)
 	defer leaktest.AfterTest(t)()
 	defer cleanupTestDir()
 	nodes, smList, router, ldb := getTestRaftNodes(3)
