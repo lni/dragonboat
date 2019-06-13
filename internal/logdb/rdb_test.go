@@ -1051,6 +1051,9 @@ func TestRemoveEntriesTo(t *testing.T) {
 		}
 		results, _, err := db.IterateEntries(nil,
 			0, clusterID, nodeID, 1, 100, math.MaxUint64)
+		if err != nil {
+			t.Errorf("iterate entries failed %v", err)
+		}
 		if len(results) > 0 {
 			t.Errorf("entries not deleted")
 		}

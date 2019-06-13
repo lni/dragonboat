@@ -253,7 +253,7 @@ func (ds *NativeStateMachine) SaveSnapshot(meta *SnapshotMeta,
 
 func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
 	session []byte) (uint64, error) {
-	if ds.sm.StateMachineType() != pb.OnDiskStateMachine {
+	if !ds.sm.OnDiskStateMachine() {
 		panic("saveDummySnapshot called on non OnDiskStateMachine")
 	}
 	_, err := writer.Write(session)

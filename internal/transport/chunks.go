@@ -253,7 +253,7 @@ func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
 		c.deleteTempChunkDir(chunk)
 		panic(err)
 	}
-	if isLastChunk(chunk) {
+	if chunk.IsLastChunk() {
 		plog.Infof("last chunk %s received", key)
 		defer c.resetSnapshot(key)
 		if c.validate {
@@ -313,7 +313,7 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
 	if len(chunk.Data) != n {
 		return io.ErrShortWrite
 	}
-	if isLastChunk(chunk) || isLastFileChunk(chunk) {
+	if chunk.IsLastChunk() || chunk.IsLastFileChunk() {
 		if err := f.Sync(); err != nil {
 			return err
 		}
@@ -376,13 +376,4 @@ func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
 		DeploymentId: chunk.DeploymentId,
 		Requests:     []pb.Message{m},
 	}
-}
-
-func isLastFileChunk(chunk pb.SnapshotChunk) bool {
-	return chunk.FileChunkId+1 == chunk.FileChunkCount
-}
-
-func isLastChunk(chunk pb.SnapshotChunk) bool {
-	return chunk.ChunkCount == pb.LastChunkCount ||
-		chunk.ChunkCount == chunk.ChunkId+1
 }

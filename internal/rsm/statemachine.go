@@ -655,8 +655,7 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	return s.doSaveSnapshot(meta)
 }
 
-func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta,
-	error) {
+func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta, error) {
 	if err := s.checkSnapshotStatus(); err != nil {
 		return nil, err
 	}
