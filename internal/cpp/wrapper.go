@@ -168,6 +168,10 @@ func getSnapshotErrorFromErrNo(errno int) error {
 func getOpenErrorFromErrNo(errno int) error {
 	if errno == 0 {
 		return nil
+	} else if errno == 1 {
+		return errors.New("failed to open on-disk state machine")
+	} else if errno == 2 {
+		return sm.ErrOpenStopped
 	} else if errno == 100 {
 		return errors.New("other open error")
 	}

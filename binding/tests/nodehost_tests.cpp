@@ -212,7 +212,7 @@ class TestOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   {
     OpenResult r;
     r.result = initialApplied_;
-    r.errcode = 0;
+    r.errcode = OPEN_OK;
     return r;
   }
 
@@ -237,7 +237,7 @@ class TestOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
 
   int sync() const noexcept override
   {
-    return 0;
+    return SYNC_OK;
   }
 
   uint64_t getHash() const noexcept override

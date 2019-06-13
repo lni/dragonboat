@@ -48,6 +48,21 @@ enum
   SNAPSHOT_STOPPED = 4,
 };
 
+enum
+{
+  // Open on-disk state machine successfully
+  OPEN_OK = 0,
+  // Failed to open on-disk state machine, e.g. the state machine is corrupted
+  FAILED_TO_OPEN = 1,
+  // Open operation has been stopped by request
+  OPEN_STOPPED = 2,
+}
+
+enum
+{
+  SYNC_OK = 0,
+}
+
 typedef struct DBString
 {
   char *str;

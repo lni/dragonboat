@@ -190,7 +190,7 @@ OpenResult FakeOnDiskStateMachine::open(
 {
   OpenResult r;
   r.result = initialApplied_;
-  r.errcode = 0;
+  r.errcode = OPEN_OK;
   return r;
 }
 
@@ -213,7 +213,7 @@ LookupResult FakeOnDiskStateMachine::lookup(
 
 int FakeOnDiskStateMachine::sync() const noexcept
 {
-  return 0;
+  return SYNC_OK;
 }
 
 uint64_t FakeOnDiskStateMachine::getHash() const noexcept
