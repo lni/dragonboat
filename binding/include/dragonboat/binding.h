@@ -56,12 +56,12 @@ enum
   FAILED_TO_OPEN = 1,
   // Open operation has been stopped by request
   OPEN_STOPPED = 2,
-}
+};
 
 enum
 {
   SYNC_OK = 0,
-}
+};
 
 typedef struct DBString
 {
