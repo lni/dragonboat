@@ -199,7 +199,7 @@ func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
 }
 
 func (r *KV) deleteRange(fk []byte, lk []byte) error {
-	wb := levigo.NewWriteBatch()
+	wb := r.GetWriteBatch(nil)
 	it := r.db.NewIterator(r.ro)
 	defer it.Close()
 	for it.Seek(fk); it.Valid(); it.Next() {
@@ -210,7 +210,7 @@ func (r *KV) deleteRange(fk []byte, lk []byte) error {
 	if err := it.GetError(); err != nil {
 		return err
 	}
-	return r.db.Write(r.wo, wb)
+	return r.CommitWriteBatch(wb)
 }
 
 // CompactEntries ...

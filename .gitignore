@@ -17,6 +17,7 @@
 *safe-to-delete*
 drummer-mt-out.txt
 out.txt
+coverage.out
 *.pprof
 *.swp
 *.tmp
