@@ -2453,6 +2453,38 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 	}
 }
 
+func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
+	defer os.RemoveAll(singleNodeHostTestDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    singleNodeHostTestDir,
+		RTTMillisecond: 200,
+		RaftAddress:    nodeHostTestAddr1,
+		LogDBFactory:   leveldb.NewLogDB,
+	}
+	func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		nhc.RaftAddress = nodeHostTestAddr2
+		_, err = NewNodeHost(nhc)
+		if err != server.ErrLockDirectory {
+			t.Fatalf("failed to return ErrLockDirectory")
+		}
+	}()
+	_, err := NewNodeHost(nhc)
+	if err != server.ErrNotOwner {
+		t.Fatalf("failed to return ErrNotOwner")
+	}
+	nhc.RaftAddress = nodeHostTestAddr1
+	nhc.LogDBFactory = leveldb.NewBatchedLogDB
+	_, err = NewNodeHost(nhc)
+	if err != server.ErrIncompatibleData {
+		t.Fatalf("failed to return ErrIncompatibleData")
+	}
+}
+
 func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
