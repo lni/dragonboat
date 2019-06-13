@@ -44,30 +44,13 @@ type kvFactory func(string, string) (kv.IKVStore, error)
 // plain format but it switches to the batched mode if there is already
 // batched entries saved in the existing DB.
 func NewDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return newLogDB(dirs, lldirs, false, true, newDefaultKVStore)
-}
-
-// NewBatchedDefaultLogDB creates a batched Log DB instance using the default
-// KV store implementation.
-func NewBatchedDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return newLogDB(dirs, lldirs, true, false, newDefaultKVStore)
-}
-
-// NewPlainDefaultLogDB creates a plain Log DB instance using the default
-// KV store implementation.
-func NewPlainDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return newLogDB(dirs, lldirs, false, false, newDefaultKVStore)
+	return NewLogDB(dirs, lldirs, false, true, newDefaultKVStore)
 }
 
 // NewLogDB creates a Log DB instance based on provided configuration
 // parameters. The underlying KV store used by the Log DB instance is created
 // by the provided factory function.
 func NewLogDB(dirs []string, lldirs []string,
-	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
-	return newLogDB(dirs, lldirs, batched, check, f)
-}
-
-func newLogDB(dirs []string, lldirs []string,
 	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
 	checkDirs(dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
