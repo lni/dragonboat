@@ -40,19 +40,17 @@ using SnapshotFile = struct SnapshotFile;
 // Your state machine implementation in C++ should inherit from the StateMachine
 // class.
 //
-// Together with the following factory function defined in the global scope
-// for creating your state machine instance, your state machine implementation
-// should be linked as a .so dynamic library.
+// There are two ways to apply cpp state machine in dragonboat:
 //
-// extern "C" CPPStateMachine *CreateDragonboatPluginStateMachine()
+//  1. Link your state machine implementation as a .so dynamic library together
+//     with a factory function defined in the global scope for creating the
+//     state machine. See github.com/lni/dragonboat/internal/tests/cpptest
+//     Specify the .so file name and the corresponding factory name in
+//     NodeHost::StartCluster so it can be picked up by dragonboat
 //
-// Generated .so file should following the following naming convention where
-// xxxxx is the name of your state machine.
-//
-// dragonboat-cpp-plugin-xxxxx.so
-//
-// Place this .so file in the working directory of dragonboat so it can be
-// picked up by dragonboat.
+//  2. Directly parse the factory function to NodeHost::StartCluster.
+//     See github.com/lni/dragonboat/binding/tests/dragonboat_tests.cpp
+
 class RegularStateMachine
 {
  public:
@@ -160,10 +158,33 @@ class ConcurrentStateMachine
   virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
   virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;
+  // prepareSnapshot prepares the snapshot to be concurrently captured and saved.
+  // prepareSnapshot is invoked before saveSnapshot is called and it is invoked
+  // with mutual exclusion protection from the update method.
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
+	// saveSnapshot saves the point in time state of the ConcurrentStateMachine
+	// identified by the input state identifier to the provided SnapshotWriter backed
+	// by a file on disk and the provided SnapshotFileCollection instance. This
+	// is a read only method that should never change the state of the
+	// ConcurrentStateMachine instance.
+	//
+	// It is important to understand that saveSnapshot should never save the
+	// current latest state. The point in time state identified by the input state
+	// identifier is what suppose to be saved, the latest state might be different
+	// from such specified point in time state as the state machine might have
+	// already been updated by the update() method after the completion of
+	// the call to prepareSnapshot.
   virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
     SnapshotWriter *writer, SnapshotFileCollection *collection,
     const DoneChan &done) const noexcept = 0;
+	// recoverFromSnapshot recovers the state of the ConcurrentStateMachine
+	// instance from a previously saved snapshot captured by the saveSnapshot()
+	// method. The saved snapshot is provided as an SnapshotReader backed by a file
+	// on disk together with a list of files previously recorded into the
+	// SnapshotFileCollection in saveSnapshot().
+	//
+	// Dragonboat ensures that update() will not be invoked when
+	// recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
   virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
@@ -196,11 +217,34 @@ class OnDiskStateMachine
   virtual uint64_t update(const Byte *data, size_t size,
     uint64_t index) noexcept = 0;
   virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+	// sync synchronizes all in-core state of the state machine to permanent
+	// storage so the state machine can continue from its latest state after
+	// reboot.
+	// sync is always invoked with mutual exclusion protection from the update,
+	// prepareSnapshot and recoverFromSnapshot methods.
   virtual int sync() const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;
+	// prepareSnapshot prepares the snapshot to be concurrently captured and
+	// streamed. prepareSnapshot is invoked before saveSnapshot is called and it
+	// is always invoked with mutual exclusion protection from the update, sync and
+	// recoverFromSnapshot methods.
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
+	// saveSnapshot saves the point in time state of the OnDiskStateMachine
+	// instance identified by the input state identifier to the provided
+	// SnapshotWriter. The SnapshotWriter is a connection to a remote node usually
+	// significantly behind in terms of Raft log progress.
+	// It is important to understand that saveSnapshot should never be implemented
+	// to save the current latest state of the state machine when it is invoked.
+	// saveSnapshot must be implemented to save the point in time state identified
+	// by the input state identifier.
   virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
     SnapshotWriter *writer, const DoneChan &done) const noexcept = 0;
+	// recoverFromSnapshot recovers the state of the OnDiskStateMachine instance
+	// from a snapshot captured by the saveSnapshot() method on a remote node. The
+	// saved snapshot is provided as an SnapshotReader backed by a file already fully
+	// available on disk.
+	// Dragonboat ensures that the update, sync, prepareSnapshot and saveSnapshot
+	// methods will not be invoked when recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const DoneChan &done) noexcept = 0;
   virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
