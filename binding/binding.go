@@ -261,7 +261,9 @@ func NodeHostStartCluster(oid uint64, nodeIDList *C.uint64_t,
 		joinPeer, factory, C.DBString{}, C.DBString{}, smType, cfg)
 }
 
-// NodeHostStartClusterFromPlugin
+// NodeHostStartClusterFromPlugin adds a new raft cluster node to be managed by
+// the specified NodeHost and start the node to make it ready to accept incoming
+// requests.
 //export NodeHostStartClusterFromPlugin
 func NodeHostStartClusterFromPlugin(oid uint64, nodeIDList *C.uint64_t,
 	nodeAddressList *C.DBString, nodeListLen C.size_t, joinPeer C.char,
@@ -549,7 +551,8 @@ func NodeHostReadLocal(oid uint64,
 	return getErrorCode(err), len(r)
 }
 
-// NodeHostStaleRead
+// NodeHostStaleRead queries the specified Statemachine directly without any
+// linearizability guarantee.
 //export NodeHostStaleRead
 func NodeHostStaleRead(oid uint64, clusterID uint64,
 	queryBuf *C.uchar, queryLen C.size_t,
@@ -571,6 +574,8 @@ func NodeHostStaleRead(oid uint64, clusterID uint64,
 	return getErrorCode(err), len(rv)
 }
 
+// NodeHostSyncRequestSnapshot requests a snapshot to be created for the
+// specified raft cluster.
 //export NodeHostSyncRequestSnapshot
 func NodeHostSyncRequestSnapshot(oid uint64, clusterID uint64,
 	opt C.SnapshotOption, timeout uint64) (uint64, int) {
@@ -586,6 +591,8 @@ func NodeHostSyncRequestSnapshot(oid uint64, clusterID uint64,
 	return v, getErrorCode(err)
 }
 
+// NodeHostRequestSnapshot requests a snapshot to be created for the
+// specified raft cluster.
 //export NodeHostRequestSnapshot
 func NodeHostRequestSnapshot(oid uint64, clusterID uint64,
 	opt C.SnapshotOption, timeout uint64) (uint64, int) {
@@ -596,10 +603,13 @@ func NodeHostRequestSnapshot(oid uint64, clusterID uint64,
 	}
 	rs, err := nh.RequestSnapshot(clusterID, option,
 		time.Duration(timeout)*time.Millisecond)
+	if err != nil {
+		return 0, getErrorCode(err)
+	}
 	return addManagedObject(rs), getErrorCode(err)
 }
 
-// NodeHostRequestAddNode requests the specified new node to be added to the
+// NodeHostSyncRequestAddNode requests the specified new node to be added to the
 // specified raft cluster.
 //export NodeHostSyncRequestAddNode
 func NodeHostSyncRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
@@ -613,6 +623,8 @@ func NodeHostSyncRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
 	return getErrorCode(err)
 }
 
+// NodeHostRequestAddNode requests the specified new node to be added to the
+// specified raft cluster.
 //export NodeHostRequestAddNode
 func NodeHostRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
 	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
@@ -620,10 +632,13 @@ func NodeHostRequestAddNode(oid uint64, timeout uint64, clusterID uint64,
 	nodeURL := charArrayToString(url.str, url.len)
 	rs, err := nh.RequestAddNode(clusterID, nodeID, nodeURL, orderID,
 		time.Duration(timeout)*time.Millisecond)
+	if err != nil {
+		return 0, getErrorCode(err)
+	}
 	return addManagedObject(rs), getErrorCode(err)
 }
 
-// NodeHostRequestDeleteNode requests the specified node to be removed from the
+// NodeHostSyncRequestDeleteNode requests the specified node to be removed from the
 // specified raft cluster.
 //export NodeHostSyncRequestDeleteNode
 func NodeHostSyncRequestDeleteNode(oid uint64,
@@ -637,6 +652,8 @@ func NodeHostSyncRequestDeleteNode(oid uint64,
 	return getErrorCode(err)
 }
 
+// NodeHostRequestDeleteNode requests the specified node to be removed from the
+// specified raft cluster.
 //export NodeHostRequestDeleteNode
 func NodeHostRequestDeleteNode(oid uint64,
 	timeout uint64, clusterID uint64,
@@ -644,10 +661,13 @@ func NodeHostRequestDeleteNode(oid uint64,
 	nh := getNodeHost(oid)
 	rs, err := nh.RequestDeleteNode(clusterID, nodeID, orderID,
 		time.Duration(timeout)*time.Millisecond)
+	if err != nil {
+		return 0, getErrorCode(err)
+	}
 	return addManagedObject(rs), getErrorCode(err)
 }
 
-// NodeHostRequestAddObserver requests the specified new node to be added to
+// NodeHostSyncRequestAddObserver requests the specified new node to be added to
 // the specified cluster as observer.
 //export NodeHostSyncRequestAddObserver
 func NodeHostSyncRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
@@ -662,6 +682,8 @@ func NodeHostSyncRequestAddObserver(oid uint64, timeout uint64, clusterID uint64
 	return getErrorCode(err)
 }
 
+// NodeHostRequestAddObserver requests the specified new node to be added to
+// the specified cluster as observer.
 //export NodeHostRequestAddObserver
 func NodeHostRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
 	nodeID uint64, url C.DBString, orderID uint64) (uint64, int) {
@@ -669,6 +691,9 @@ func NodeHostRequestAddObserver(oid uint64, timeout uint64, clusterID uint64,
 	nodeURL := charArrayToString(url.str, url.len)
 	rs, err := nh.RequestAddObserver(clusterID, nodeID, nodeURL, orderID,
 		time.Duration(timeout)*time.Millisecond)
+	if err != nil {
+		return 0, getErrorCode(err)
+	}
 	return addManagedObject(rs), getErrorCode(err)
 }
 
@@ -715,7 +740,7 @@ func NodeHostGetLeaderID(oid uint64, clusterID uint64) (uint64, bool, int) {
 }
 
 // NodeHostSyncRemoveData removes the data of the specified cluster.
-// should be called after remove node
+// should be called after remove node.
 //export NodeHostSyncRemoveData
 func NodeHostSyncRemoveData(oid uint64, clusterID uint64, nodeID uint64,
 	timeout uint64) int {
@@ -728,7 +753,7 @@ func NodeHostSyncRemoveData(oid uint64, clusterID uint64, nodeID uint64,
 }
 
 // NodeHostRemoveData removes the data of the specified cluster.
-// should be called after remove node
+// should be called after remove node.
 //export NodeHostRemoveData
 func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
 	nh := getNodeHost(oid)
