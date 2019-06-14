@@ -248,18 +248,18 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	if ss.Dummy {
 		return false
 	}
-	// just a self test to see whether it is trying to recover from a shrinked
+	// just a self test to see whether it is trying to recover from a shrunk
 	// snapshot
 	fn := s.snapshotter.GetFilePath(ss.Index)
-	shrinked, err := IsShrinkedSnapshotFile(fn)
+	shrunk, err := IsShrinkedSnapshotFile(fn)
 	if err != nil {
 		panic(err)
 	}
-	if !init && shrinked {
-		panic("not initial recovery but snapshot shrinked")
+	if !init && shrunk {
+		panic("not initial recovery but snapshot shrunk")
 	}
 	if init {
-		if shrinked {
+		if shrunk {
 			return false
 		}
 		return ss.Index > s.diskSMIndex

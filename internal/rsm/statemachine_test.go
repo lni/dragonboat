@@ -1469,7 +1469,7 @@ func TestGetSnapshotFilesReturnFiles(t *testing.T) {
 }
 
 func TestNoOPEntryIsNotBatched(t *testing.T) {
-	updates, _ := getEntryTypes([]pb.Entry{pb.Entry{}})
+	updates, _ := getEntryTypes([]pb.Entry{{}})
 	if updates {
 		t.Errorf("NoOP entry is considered as regular update entry")
 	}
@@ -1480,7 +1480,7 @@ func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
 		ClientID: client.NotSessionManagedClientID + 1,
 		SeriesID: client.NoOPSeriesID + 1,
 	}
-	_, allNoOP := getEntryTypes([]pb.Entry{pb.Entry{}, e})
+	_, allNoOP := getEntryTypes([]pb.Entry{{}, e})
 	if allNoOP {
 		t.Errorf("regular sessioned entry not detected")
 	}

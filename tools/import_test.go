@@ -170,7 +170,7 @@ func TestCopySnapshot(t *testing.T) {
 	}
 	ss := pb.Snapshot{
 		Filepath: src,
-		Files:    []*pb.SnapshotFile{&pb.SnapshotFile{Filepath: extsrc}},
+		Files:    []*pb.SnapshotFile{{Filepath: extsrc}},
 	}
 	if err := copySnapshot(ss, testDataDir, testDstDataDir); err != nil {
 		t.Fatalf("failed to copy snapshot files %v", err)

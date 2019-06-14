@@ -1278,11 +1278,11 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 		}
 		reader.ValidateHeader(h)
 		reader.Close()
-		shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
+		shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
 		if err != nil {
-			t.Fatalf("failed to check shrinked %v", err)
+			t.Fatalf("failed to check shrunk %v", err)
 		}
-		if !shrinked {
+		if !shrunk {
 			t.Errorf("not a dummy snapshot")
 		}
 	}
@@ -1353,11 +1353,11 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				for _, ss := range snapshots {
-					shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
+					shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
 					if err != nil {
-						t.Errorf("failed to check whether snapshot is shrinked %v", err)
+						t.Errorf("failed to check whether snapshot is shrunk %v", err)
 					}
-					if !shrinked {
+					if !shrunk {
 						t.Errorf("failed to shrink snapshot")
 					}
 				}
@@ -2105,12 +2105,12 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		if !exist {
 			t.Errorf("snapshot metadata not saved")
 		}
-		shrinked, err := rsm.IsShrinkedSnapshotFile(fp)
+		shrunk, err := rsm.IsShrinkedSnapshotFile(fp)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		if shrinked {
-			t.Errorf("exported snapshot is considered as shrinked")
+		if shrunk {
+			t.Errorf("exported snapshot is considered as shrunk")
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 0)

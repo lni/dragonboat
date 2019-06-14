@@ -546,8 +546,8 @@ clean-binding:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=internal/raft internal/logdb internal/transport internal/cpp      \
-	internal/rsm internal/settings internal/tests internal/tests/lcm             \
+CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
+	internal/cpp internal/rsm internal/settings internal/tests internal/tests/lcm\
 	internal/utils/lang internal/utils/random internal/utils/fileutil            \
 	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil     \
 	internal/utils/netutil internal/utils/cache internal/utils/envutil           \
@@ -593,7 +593,7 @@ GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
 	internal/utils/cache internal/utils/fileutil internal/utils/stringutil       \
 	internal/utils/netutil internal/utils/random internal/utils/logutil          \
-	internal/utils/lang
+	internal/utils/lang internal/logdb/kv
 
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \

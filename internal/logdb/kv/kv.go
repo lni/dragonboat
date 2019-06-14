@@ -79,18 +79,22 @@ type kvpair struct {
 	val    []byte
 }
 
+// SimpleWriteBatch is a write batch used in tests.
 type SimpleWriteBatch struct {
 	vals []kvpair
 }
 
+// NewSimpleWriteBatch ...
 func NewSimpleWriteBatch() *SimpleWriteBatch {
 	return &SimpleWriteBatch{vals: make([]kvpair, 0)}
 }
 
+// Destroy ...
 func (wb *SimpleWriteBatch) Destroy() {
 	wb.vals = nil
 }
 
+// Put ...
 func (wb *SimpleWriteBatch) Put(key []byte, val []byte) {
 	k := make([]byte, len(key))
 	v := make([]byte, len(val))
@@ -99,16 +103,19 @@ func (wb *SimpleWriteBatch) Put(key []byte, val []byte) {
 	wb.vals = append(wb.vals, kvpair{key: k, val: v})
 }
 
+// Delete ...
 func (wb *SimpleWriteBatch) Delete(key []byte) {
 	k := make([]byte, len(key))
 	copy(k, key)
 	wb.vals = append(wb.vals, kvpair{key: k, val: nil, delete: true})
 }
 
+// Clear ...
 func (wb *SimpleWriteBatch) Clear() {
 	wb.vals = make([]kvpair, 0)
 }
 
+// Count ...
 func (wb *SimpleWriteBatch) Count() int {
 	return len(wb.vals)
 }

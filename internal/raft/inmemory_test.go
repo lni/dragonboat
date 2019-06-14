@@ -544,7 +544,7 @@ func TestRateLimited(t *testing.T) {
 
 func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
 	im := newInMemory(0, server.NewRateLimiter(10000))
-	im.merge([]pb.Entry{pb.Entry{Cmd: make([]byte, 1024)}})
+	im.merge([]pb.Entry{{Cmd: make([]byte, 1024)}})
 	if im.rl.Get() == 0 {
 		t.Errorf("log size not updated")
 	}
@@ -556,11 +556,11 @@ func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
 
 func TestRateLimitIsUpdatedAfterMergingEntries(t *testing.T) {
 	im := newInMemory(0, server.NewRateLimiter(10000))
-	im.merge([]pb.Entry{pb.Entry{Index: 1, Cmd: make([]byte, 1024)}})
+	im.merge([]pb.Entry{{Index: 1, Cmd: make([]byte, 1024)}})
 	logsz := im.rl.Get()
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
+		{Index: 2, Cmd: make([]byte, 16)},
+		{Index: 3, Cmd: make([]byte, 64)},
 	}
 	addSz := getEntrySliceSize(ents)
 	im.merge(ents)
@@ -571,9 +571,9 @@ func TestRateLimitIsUpdatedAfterMergingEntries(t *testing.T) {
 
 func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
-		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+		{Index: 2, Cmd: make([]byte, 16)},
+		{Index: 3, Cmd: make([]byte, 64)},
+		{Index: 4, Cmd: make([]byte, 128)},
 	}
 	im := newInMemory(2, server.NewRateLimiter(10000))
 	im.merge(ents)
@@ -590,14 +590,14 @@ func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 
 func TestRateLimitCanBeResetWhenMergingEntries(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
-		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+		{Index: 2, Cmd: make([]byte, 16)},
+		{Index: 3, Cmd: make([]byte, 64)},
+		{Index: 4, Cmd: make([]byte, 128)},
 	}
 	im := newInMemory(2, server.NewRateLimiter(10000))
 	im.merge(ents)
 	ents = []pb.Entry{
-		pb.Entry{Index: 1, Cmd: make([]byte, 16)},
+		{Index: 1, Cmd: make([]byte, 16)},
 	}
 	im.merge(ents)
 	expSz := getEntrySliceSize(ents)
@@ -608,15 +608,15 @@ func TestRateLimitCanBeResetWhenMergingEntries(t *testing.T) {
 
 func TestRateLimitCanBeUpdatedAfterCutAndMergingEntries(t *testing.T) {
 	ents := []pb.Entry{
-		pb.Entry{Index: 2, Cmd: make([]byte, 16)},
-		pb.Entry{Index: 3, Cmd: make([]byte, 64)},
-		pb.Entry{Index: 4, Cmd: make([]byte, 128)},
+		{Index: 2, Cmd: make([]byte, 16)},
+		{Index: 3, Cmd: make([]byte, 64)},
+		{Index: 4, Cmd: make([]byte, 128)},
 	}
 	im := newInMemory(2, server.NewRateLimiter(10000))
 	im.merge(ents)
 	ents = []pb.Entry{
-		pb.Entry{Index: 3, Cmd: make([]byte, 1024)},
-		pb.Entry{Index: 4, Cmd: make([]byte, 1024)},
+		{Index: 3, Cmd: make([]byte, 1024)},
+		{Index: 4, Cmd: make([]byte, 1024)},
 	}
 	im.merge(ents)
 	expSz := getEntrySliceSize(im.entries)
