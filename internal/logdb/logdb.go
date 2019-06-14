@@ -47,6 +47,13 @@ func NewDefaultLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return NewLogDB(dirs, lldirs, false, true, newDefaultKVStore)
 }
 
+// NewDefaultBatchedLogDB creates a Log DB instance using the default KV store
+// implementation with batched entry support.
+func NewDefaultBatchedLogDB(dirs []string,
+	lldirs []string) (raftio.ILogDB, error) {
+	return NewLogDB(dirs, lldirs, true, false, newDefaultKVStore)
+}
+
 // NewLogDB creates a Log DB instance based on provided configuration
 // parameters. The underlying KV store used by the Log DB instance is created
 // by the provided factory function.

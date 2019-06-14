@@ -135,9 +135,9 @@ func TestNoOPEntryIsNotSessionManaged(t *testing.T) {
 
 func TestIsEmpty(t *testing.T) {
 	entries := []Entry{
-		Entry{Type: ConfigChangeEntry},
-		Entry{ClientID: 12345},
-		Entry{Cmd: make([]byte, 1)},
+		{Type: ConfigChangeEntry},
+		{ClientID: 12345},
+		{Cmd: make([]byte, 1)},
 	}
 	for idx, ent := range entries {
 		if ent.IsEmpty() {
@@ -145,11 +145,11 @@ func TestIsEmpty(t *testing.T) {
 		}
 	}
 	entries = []Entry{
-		Entry{
+		{
 			Type:     ApplicationEntry,
 			ClientID: client.NotSessionManagedClientID,
 		},
-		Entry{},
+		{},
 	}
 	for idx, ent := range entries {
 		if !ent.IsEmpty() {
@@ -194,11 +194,11 @@ func TestIsNoOPSession(t *testing.T) {
 
 func TestIsNewSessionRequest(t *testing.T) {
 	entries := []Entry{
-		Entry{Type: ConfigChangeEntry},
-		Entry{Cmd: make([]byte, 1)},
-		Entry{ClientID: client.NotSessionManagedClientID},
-		Entry{SeriesID: client.SeriesIDForRegister + 1},
-		Entry{},
+		{Type: ConfigChangeEntry},
+		{Cmd: make([]byte, 1)},
+		{ClientID: client.NotSessionManagedClientID},
+		{SeriesID: client.SeriesIDForRegister + 1},
+		{},
 	}
 	for idx, ent := range entries {
 		if ent.IsNewSessionRequest() {
@@ -217,11 +217,11 @@ func TestIsNewSessionRequest(t *testing.T) {
 
 func TestIsEndOfSessionRequest(t *testing.T) {
 	entries := []Entry{
-		Entry{Type: ConfigChangeEntry},
-		Entry{Cmd: make([]byte, 1)},
-		Entry{ClientID: client.NotSessionManagedClientID},
-		Entry{SeriesID: client.SeriesIDForUnregister - 1},
-		Entry{},
+		{Type: ConfigChangeEntry},
+		{Cmd: make([]byte, 1)},
+		{ClientID: client.NotSessionManagedClientID},
+		{SeriesID: client.SeriesIDForUnregister - 1},
+		{},
 	}
 	for idx, ent := range entries {
 		if ent.IsEndOfSessionRequest() {

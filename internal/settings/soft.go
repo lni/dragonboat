@@ -93,8 +93,12 @@ type soft struct {
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
 	// before pushing the snapshot results to raft node.
 	SnapshotStatusPushDelayMS uint64
-	// NodeTaskChanLength defined the length of each node's commitC channel.
-	NodeTaskChanLength uint64
+	// TaskQueueTargetLength defined the target length of each node's taskQ.
+	// Dragonboat tries to make sure the queue is no longer than this target
+	// length.
+	TaskQueueTargetLength uint64
+	// TaskQueueInitialCap defines the initial capcity of a task queue.
+	TaskQueueInitialCap uint64
 	// NodeHostSyncPoolSize defines the number of sync pools.
 	NodeHostSyncPoolSize uint64
 	// LatencySampleRatio defines the ratio how often latency is sampled.
@@ -231,7 +235,8 @@ func getDefaultSoftSettings() soft {
 		IncomingProposalQueueLength:    2048,
 		UnknownRegionName:              "UNKNOWN",
 		SnapshotStatusPushDelayMS:      1000,
-		NodeTaskChanLength:             1024,
+		TaskQueueInitialCap:            64,
+		TaskQueueTargetLength:          1024,
 		NodeHostSyncPoolSize:           8,
 		TaskBatchSize:                  512,
 		NodeReloadMillisecond:          200,
