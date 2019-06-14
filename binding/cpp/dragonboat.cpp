@@ -271,8 +271,8 @@ NodeID LeaderID::GetLeaderID() const noexcept {
 Session::Session(oid_t oid) noexcept
   : ManagedObject(oid),
     proposalCompleted_(false),
-    readyForRegisteration_(false),
-    readyForUnregisteration_(false),
+    readyForRegistration_(false),
+    readyForUnregistration_(false),
     prepareForProposal_(false)
 {
 }
@@ -291,14 +291,14 @@ void Session::PrepareForProposal() noexcept
   prepareForProposal_ = true;
 }
 
-void Session::PrepareForRegisteration() noexcept
+void Session::PrepareForRegistration() noexcept
 {
-  readyForRegisteration_ = true;
+  readyForRegistration_ = true;
 }
 
-void Session::PrepareForUnregisteration() noexcept
+void Session::PrepareForUnregistration() noexcept
 {
-  readyForUnregisteration_ = true;
+  readyForUnregistration_ = true;
 }
 
 Session *Session::GetNewSession(ClusterID clusterID) noexcept
@@ -311,14 +311,14 @@ bool Session::GetProposalCompleted() const noexcept
   return proposalCompleted_;
 }
 
-bool Session::GetReadyForRegisteration() const noexcept
+bool Session::GetReadyForRegistration() const noexcept
 {
-  return readyForRegisteration_;
+  return readyForRegistration_;
 }
 
-bool Session::GetReadyForUnregisteration() const noexcept
+bool Session::GetReadyForUnregistration() const noexcept
 {
-  return readyForUnregisteration_;
+  return readyForUnregistration_;
 }
 
 bool Session::GetPreparedForProposal() const noexcept
@@ -331,14 +331,14 @@ void Session::ClearProposalCompleted() noexcept
   proposalCompleted_ = false;
 }
 
-void Session::ClearReadyForRegisteration() noexcept
+void Session::ClearReadyForRegistration() noexcept
 {
-  readyForRegisteration_ = false;
+  readyForRegistration_ = false;
 }
 
-void Session::ClearReadyForUnregisteration() noexcept
+void Session::ClearReadyForUnregistration() noexcept
 {
-  readyForUnregisteration_ = false;
+  readyForUnregistration_ = false;
 }
 
 void Session::ClearPrepareForProposal() noexcept
@@ -647,10 +647,10 @@ Status NodeHost::ProposeSession(Session *cs,
 {
   auto ts = timeout.count();
   ::ProposeResult result;
-  bool readyForRegisteration = cs->GetReadyForRegisteration();
-  bool readyForUnregisteration = cs->GetReadyForUnregisteration();
-  cs->ClearReadyForRegisteration();
-  cs->ClearReadyForUnregisteration();
+  bool readyForRegisteration = cs->GetReadyForRegistration();
+  bool readyForUnregisteration = cs->GetReadyForUnregistration();
+  cs->ClearReadyForRegistration();
+  cs->ClearReadyForUnregistration();
   result = CNodeHostProposeSession(oid_, ts, cs->OID(),
     readyForRegisteration, readyForUnregisteration,
     reinterpret_cast<void *>(event), CompleteHandlerCPP);
