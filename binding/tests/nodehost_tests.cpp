@@ -918,6 +918,32 @@ TEST_F(NodeHostTest, NodeCanBeAsyncAdded)
   }
 }
 
+TEST_F(NodeHostTest, FailedToLaunchAsyncAddNode)
+{
+  auto config = getTestConfig();
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status
+    s = nh_->StartCluster(p, false, CreateRegularStateMachine, config);
+  EXPECT_TRUE(s.OK());
+  auto timeout = dragonboat::Milliseconds(5000);
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::Buffer buf(128);
+  for (uint64_t i = 0; i < 16; i++) {
+    dragonboat::UpdateResult code;
+    dragonboat::Status s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
+    EXPECT_TRUE(s.OK());
+    cs->ProposalCompleted();
+  }
+  timeout = dragonboat::Milliseconds(1);
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestAddNode(1, 2, "localhost:9051", timeout, &s));
+  EXPECT_EQ(s.Code(), dragonboat::Status::ErrTimeoutTooSmall);
+  EXPECT_FALSE(state);
+}
+
 TEST_F(NodeHostTest, RemoveData)
 {
   auto config = getTestConfig();
@@ -1165,7 +1191,7 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
   waitForElectionToComplete();
   std::unique_ptr<dragonboat::Session>
     cs(dragonboat::Session::GetNewSession(1));
-  cs->PrepareForRegisteration();
+  cs->PrepareForRegistration();
   TestEvent e;
   s = nh_->ProposeSession(cs.get(), timeout, &e);
   EXPECT_TRUE(s.OK());
@@ -1196,7 +1222,7 @@ TEST_F(NodeHostTest, AsyncSessionProposal)
     uint64_t *count = (uint64_t *) (result.Data());
     EXPECT_EQ(*count, i);
   }
-  cs->PrepareForUnregisteration();
+  cs->PrepareForUnregistration();
   TestEvent e1;
   s = nh_->ProposeSession(cs.get(), timeout, &e1);
   EXPECT_TRUE(s.OK());
@@ -1323,6 +1349,26 @@ TEST_F(NodeHostTest, AsyncExportSnapshot)
   dragonboat::RequestResult result = state->Get();
   EXPECT_EQ(result.code, RequestCompleted);
   EXPECT_GE(result.result, 1);
+}
+
+TEST_F(NodeHostTest, FailedToLaunchAsyncSnapshot)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  dragonboat::Status s = nh_->StartCluster(p, false,
+    CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  auto timeout = dragonboat::Milliseconds(1);
+  dragonboat::SnapshotOption option;
+  dragonboat::Status status;
+  option.Exported = false;
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestSnapshot(1, option, timeout, &status));
+  EXPECT_EQ(status.Code(), dragonboat::Status::ErrTimeoutTooSmall);
+  EXPECT_FALSE(state);
 }
 
 TEST_F(NodeHostTest, RegularSMSnapshotCanBeCapturedAndRestored)
@@ -1499,6 +1545,23 @@ TEST_F(NodeHostTest, ObserverCanBeAsyncAdded)
   s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
   EXPECT_EQ(code, uint64_t(1));
   EXPECT_TRUE(s.OK());
+}
+
+TEST_F(NodeHostTest, FailedToLaunchAsyncAddObserver)
+{
+  auto config = getTestConfig();
+  auto timeout = dragonboat::Milliseconds(1);
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestAddObserver(1, 2, "localhost:9051", timeout, &s));
+  EXPECT_EQ(s.Code(), dragonboat::Status::ErrTimeoutTooSmall);
+  EXPECT_FALSE(state);
 }
 
 TEST_F(NodeHostTest, ObserverCanBeRemoved)
