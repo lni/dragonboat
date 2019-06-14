@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	initialTaskQueueCap uint64 = 64
-	taskQueueBusyCap    uint64 = settings.Soft.NodeTaskChanLength
+	initialTaskQueueCap uint64 = settings.Soft.TaskQueueInitialCap
+	taskQueueBusyCap    uint64 = settings.Soft.TaskQueueTargetLength
 	snapshotTaskCSlots  uint64 = 4
 	emptyTask                  = Task{}
 )
