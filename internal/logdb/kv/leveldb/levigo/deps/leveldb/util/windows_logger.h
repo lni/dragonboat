@@ -1,14 +1,11 @@
-// Copyright (c) 2011 The LevelDB Authors. All rights reserved.
+// Copyright (c) 2018 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
-// Logger implementation that can be shared by all environments
-// where enough posix functionality is available.
+// Logger implementation for the Windows platform.
 
-#ifndef STORAGE_LEVELDB_UTIL_POSIX_LOGGER_H_
-#define STORAGE_LEVELDB_UTIL_POSIX_LOGGER_H_
-
-#include <sys/time.h>
+#ifndef STORAGE_LEVELDB_UTIL_WINDOWS_LOGGER_H_
+#define STORAGE_LEVELDB_UTIL_WINDOWS_LOGGER_H_
 
 #include <cassert>
 #include <cstdarg>
@@ -21,22 +18,19 @@
 
 namespace leveldb {
 
-class PosixLogger final : public Logger {
+class WindowsLogger final : public Logger {
  public:
   // Creates a logger that writes to the given file.
   //
   // The PosixLogger instance takes ownership of the file handle.
-  explicit PosixLogger(std::FILE* fp) : fp_(fp) { assert(fp != nullptr); }
+  explicit WindowsLogger(std::FILE* fp) : fp_(fp) { assert(fp != nullptr); }
 
-  ~PosixLogger() override { std::fclose(fp_); }
+  ~WindowsLogger() override { std::fclose(fp_); }
 
   void Logv(const char* format, va_list arguments) override {
     // Record the time as close to the Logv() call as possible.
-    struct ::timeval now_timeval;
-    ::gettimeofday(&now_timeval, nullptr);
-    const std::time_t now_seconds = now_timeval.tv_sec;
-    struct std::tm now_components;
-    ::localtime_r(&now_seconds, &now_components);
+    SYSTEMTIME now_components;
+    ::GetLocalTime(&now_components);
 
     // Record the thread ID.
     constexpr const int kMaxThreadIdSize = 32;
@@ -64,9 +58,9 @@ class PosixLogger final : public Logger {
       // Print the header into the buffer.
       int buffer_offset = snprintf(
           buffer, buffer_size, "%04d/%02d/%02d-%02d:%02d:%02d.%06d %s ",
-          now_components.tm_year + 1900, now_components.tm_mon + 1,
-          now_components.tm_mday, now_components.tm_hour, now_components.tm_min,
-          now_components.tm_sec, static_cast<int>(now_timeval.tv_usec),
+          now_components.wYear, now_components.wMonth, now_components.wDay,
+          now_components.wHour, now_components.wMinute, now_components.wSecond,
+          static_cast<int>(now_components.wMilliseconds * 1000),
           thread_id.c_str());
 
       // The header can be at most 28 characters (10 date + 15 time +
@@ -127,4 +121,4 @@ class PosixLogger final : public Logger {
 
 }  // namespace leveldb
 
-#endif  // STORAGE_LEVELDB_UTIL_POSIX_LOGGER_H_
+#endif  // STORAGE_LEVELDB_UTIL_WINDOWS_LOGGER_H_

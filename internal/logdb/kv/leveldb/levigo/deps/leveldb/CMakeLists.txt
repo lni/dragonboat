@@ -3,7 +3,8 @@
 # found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 cmake_minimum_required(VERSION 3.9)
-project(leveldb VERSION 1.21.0 LANGUAGES C CXX)
+# Keep the version below in sync with the one in db.h
+project(leveldb VERSION 1.22.0 LANGUAGES C CXX)
 
 # This project can use C11, but will gracefully decay down to C89.
 set(CMAKE_C_STANDARD 11)
@@ -14,6 +15,14 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if (WIN32)
+  set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)
+  # TODO(cmumford): Make UNICODE configurable for Windows.
+  add_definitions(-D_UNICODE -DUNICODE)
+else (WIN32)
+  set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_POSIX)
+endif (WIN32)
 
 option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
 option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" ON)
@@ -119,7 +128,6 @@ target_sources(leveldb
     "${PROJECT_SOURCE_DIR}/db/version_set.h"
     "${PROJECT_SOURCE_DIR}/db/write_batch_internal.h"
     "${PROJECT_SOURCE_DIR}/db/write_batch.cc"
-    "${PROJECT_SOURCE_DIR}/port/atomic_pointer.h"
     "${PROJECT_SOURCE_DIR}/port/port_stdcxx.h"
     "${PROJECT_SOURCE_DIR}/port/port.h"
     "${PROJECT_SOURCE_DIR}/port/thread_annotations.h"
@@ -179,12 +187,19 @@ target_sources(leveldb
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/write_batch.h"
 )
 
-# POSIX code is specified separately so we can leave it out in the future.
-target_sources(leveldb
-  PRIVATE
-    "${PROJECT_SOURCE_DIR}/util/env_posix.cc"
-    "${PROJECT_SOURCE_DIR}/util/posix_logger.h"
-)
+if (WIN32)
+  target_sources(leveldb
+    PRIVATE
+      "${PROJECT_SOURCE_DIR}/util/env_windows.cc"
+      "${PROJECT_SOURCE_DIR}/util/windows_logger.h"
+  )
+else (WIN32)
+  target_sources(leveldb
+    PRIVATE
+      "${PROJECT_SOURCE_DIR}/util/env_posix.cc"
+      "${PROJECT_SOURCE_DIR}/util/posix_logger.h"
+  )
+endif (WIN32)
 
 # MemEnv is not part of the interface and could be pulled to a separate library.
 target_sources(leveldb
@@ -198,12 +213,16 @@ target_include_directories(leveldb
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+set_target_properties(leveldb
+  PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+
 target_compile_definitions(leveldb
   PRIVATE
     # Used by include/export.h when building shared libraries.
     LEVELDB_COMPILE_LIBRARY
     # Used by port/port.h.
-    LEVELDB_PLATFORM_POSIX=1
+    ${LEVELDB_PLATFORM_NAME}=1
 )
 if (NOT HAVE_CXX17_HAS_INCLUDE)
   target_compile_definitions(leveldb
@@ -265,7 +284,7 @@ if(LEVELDB_BUILD_TESTS)
     target_link_libraries("${test_target_name}" leveldb)
     target_compile_definitions("${test_target_name}"
       PRIVATE
-        LEVELDB_PLATFORM_POSIX=1
+        ${LEVELDB_PLATFORM_NAME}=1
     )
     if (NOT HAVE_CXX17_HAS_INCLUDE)
       target_compile_definitions("${test_target_name}"
@@ -282,6 +301,7 @@ if(LEVELDB_BUILD_TESTS)
 
   leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue178_test.cc")
   leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue200_test.cc")
+  leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue320_test.cc")
 
   leveldb_test("${PROJECT_SOURCE_DIR}/util/env_test.cc")
   leveldb_test("${PROJECT_SOURCE_DIR}/util/status_test.cc")
@@ -314,8 +334,12 @@ if(LEVELDB_BUILD_TESTS)
     leveldb_test("${PROJECT_SOURCE_DIR}/util/logging_test.cc")
 
     # TODO(costan): This test also uses
-    #               "${PROJECT_SOURCE_DIR}/util/env_posix_test_helper.h"
-    leveldb_test("${PROJECT_SOURCE_DIR}/util/env_posix_test.cc")
+    #               "${PROJECT_SOURCE_DIR}/util/env_{posix|windows}_test_helper.h"
+    if (WIN32)
+      leveldb_test("${PROJECT_SOURCE_DIR}/util/env_windows_test.cc")
+    else (WIN32)
+      leveldb_test("${PROJECT_SOURCE_DIR}/util/env_posix_test.cc")
+    endif (WIN32)
   endif(NOT BUILD_SHARED_LIBS)
 endif(LEVELDB_BUILD_TESTS)
 
@@ -339,7 +363,7 @@ if(LEVELDB_BUILD_BENCHMARKS)
     target_link_libraries("${bench_target_name}" leveldb)
     target_compile_definitions("${bench_target_name}"
       PRIVATE
-        LEVELDB_PLATFORM_POSIX=1
+        ${LEVELDB_PLATFORM_NAME}=1
     )
     if (NOT HAVE_CXX17_HAS_INCLUDE)
       target_compile_definitions("${bench_target_name}"
