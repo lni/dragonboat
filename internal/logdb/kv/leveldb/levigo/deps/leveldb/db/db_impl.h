@@ -5,8 +5,11 @@
 #ifndef STORAGE_LEVELDB_DB_DB_IMPL_H_
 #define STORAGE_LEVELDB_DB_DB_IMPL_H_
 
+#include <atomic>
 #include <deque>
 #include <set>
+#include <string>
+
 #include "db/dbformat.h"
 #include "db/log_writer.h"
 #include "db/snapshot.h"
@@ -26,14 +29,17 @@ class VersionSet;
 class DBImpl : public DB {
  public:
   DBImpl(const Options& options, const std::string& dbname);
+
+  DBImpl(const DBImpl&) = delete;
+  DBImpl& operator=(const DBImpl&) = delete;
+
   virtual ~DBImpl();
 
   // Implementations of the DB interface
   virtual Status Put(const WriteOptions&, const Slice& key, const Slice& value);
   virtual Status Delete(const WriteOptions&, const Slice& key);
   virtual Status Write(const WriteOptions& options, WriteBatch* updates);
-  virtual Status Get(const ReadOptions& options,
-                     const Slice& key,
+  virtual Status Get(const ReadOptions& options, const Slice& key,
                      std::string* value);
   virtual Iterator* NewIterator(const ReadOptions&);
   virtual const Snapshot* GetSnapshot();
@@ -68,6 +74,31 @@ class DBImpl : public DB {
   friend class DB;
   struct CompactionState;
   struct Writer;
+
+  // Information for a manual compaction
+  struct ManualCompaction {
+    int level;
+    bool done;
+    const InternalKey* begin;  // null means beginning of key range
+    const InternalKey* end;    // null means end of key range
+    InternalKey tmp_storage;   // Used to keep track of compaction progress
+  };
+
+  // Per level compaction stats.  stats_[level] stores the stats for
+  // compactions that produced data for the specified "level".
+  struct CompactionStats {
+    CompactionStats() : micros(0), bytes_read(0), bytes_written(0) {}
+
+    void Add(const CompactionStats& c) {
+      this->micros += c.micros;
+      this->bytes_read += c.bytes_read;
+      this->bytes_written += c.bytes_written;
+    }
+
+    int64_t micros;
+    int64_t bytes_read;
+    int64_t bytes_written;
+  };
 
   Iterator* NewInternalIterator(const ReadOptions&,
                                 SequenceNumber* latest_snapshot,
@@ -119,6 +150,10 @@ class DBImpl : public DB {
   Status InstallCompactionResults(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  const Comparator* user_comparator() const {
+    return internal_comparator_.user_comparator();
+  }
+
   // Constant after construction
   Env* const env_;
   const InternalKeyComparator internal_comparator_;
@@ -136,11 +171,11 @@ class DBImpl : public DB {
 
   // State below is protected by mutex_
   port::Mutex mutex_;
-  port::AtomicPointer shutting_down_;
+  std::atomic<bool> shutting_down_;
   port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_);
   MemTable* mem_;
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
-  port::AtomicPointer has_imm_;       // So bg thread can detect non-null imm_
+  std::atomic<bool> has_imm_;         // So bg thread can detect non-null imm_
   WritableFile* logfile_;
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   log::Writer* log_;
@@ -159,14 +194,6 @@ class DBImpl : public DB {
   // Has a background compaction been scheduled or is running?
   bool background_compaction_scheduled_ GUARDED_BY(mutex_);
 
-  // Information for a manual compaction
-  struct ManualCompaction {
-    int level;
-    bool done;
-    const InternalKey* begin;   // null means beginning of key range
-    const InternalKey* end;     // null means end of key range
-    InternalKey tmp_storage;    // Used to keep track of compaction progress
-  };
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
 
   VersionSet* const versions_;
@@ -174,30 +201,7 @@ class DBImpl : public DB {
   // Have we encountered a background error in paranoid mode?
   Status bg_error_ GUARDED_BY(mutex_);
 
-  // Per level compaction stats.  stats_[level] stores the stats for
-  // compactions that produced data for the specified "level".
-  struct CompactionStats {
-    int64_t micros;
-    int64_t bytes_read;
-    int64_t bytes_written;
-
-    CompactionStats() : micros(0), bytes_read(0), bytes_written(0) { }
-
-    void Add(const CompactionStats& c) {
-      this->micros += c.micros;
-      this->bytes_read += c.bytes_read;
-      this->bytes_written += c.bytes_written;
-    }
-  };
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
-
-  // No copying allowed
-  DBImpl(const DBImpl&);
-  void operator=(const DBImpl&);
-
-  const Comparator* user_comparator() const {
-    return internal_comparator_.user_comparator();
-  }
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

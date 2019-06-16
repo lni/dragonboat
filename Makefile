@@ -251,12 +251,13 @@ gen-test-docker-images:
 	docker build -t dragonboat-centos-test:7.5 -f scripts/Dockerfile-centos-7.5 .
 	docker build -t dragonboat-go-test:1.9 -f scripts/Dockerfile-go-1.9 .
 	docker build -t dragonboat-mindeps-test:1.9 -f scripts/Dockerfile-min-deps .
+	docker build -t dragonboat-ubuntu-no-rocksdb:18.04 -f scripts/Dockerfile-no-rocksdb .
 
 DOCKERROOTDIR="/go/src/github.com/lni/dragonboat"
 DOCKERRUN=docker run --rm -v $(PKGROOT):$(DOCKERROOTDIR)
 docker-test: docker-test-ubuntu-stable docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-go-old \
-	docker-test-min-deps
+	docker-test-min-deps docker-test-no-rocksdb
 docker-test-ubuntu-stable: clean
 	$(DOCKERRUN) -t dragonboat-ubuntu-test:18.04
 docker-test-centos-stable: clean
@@ -269,6 +270,8 @@ docker-test-go-old: clean
 	$(DOCKERRUN) -t dragonboat-go-test:1.9
 docker-test-min-deps: clean
 	$(DOCKERRUN) -t dragonboat-mindeps-test:1.9
+docker-test-no-rocksdb: clean
+	$(DOCKERRUN) -t dragonboat-ubuntu-no-rocksdb:18.04
 
 ###############################################################################
 # tests
@@ -630,4 +633,5 @@ clean: clean-binding
 	slow-multiraft-ioerror-test-bin all-slow-monkey-tests golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
-	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps
+	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
+	docker-test-no-rocksdb
