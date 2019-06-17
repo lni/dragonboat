@@ -3,7 +3,6 @@ sudo: required
 
 go:
   - 1.12.5
-  - 1.11.4
 
 notifications:
   on_success: never
@@ -15,3 +14,7 @@ before_install:
 
 script:
   - make ci-quick-test
+  - go test -tags "dragonboat_leveldb_test" -v -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

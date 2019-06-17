@@ -354,6 +354,10 @@ func step(nodes []*node) bool {
 
 func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 	r *testMessageRouter) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	for _, node := range nodes {
 		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID}
 		tickMsg.ClusterId = testClusterID
@@ -364,6 +368,10 @@ func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 
 func stepNodes(nodes []*node, smList []*rsm.StateMachine,
 	r *testMessageRouter, timeout uint64) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	s := timeout/tickMillisecond + 10
 	for i := uint64(0); i < s; i++ {
 		for _, node := range nodes {
@@ -401,7 +409,7 @@ func isStableGroup(nodes []*node) bool {
 			hasLeader = true
 			continue
 		}
-		if node.node == nil || !node.isFollower() {
+		if node.p == nil || !node.isFollower() {
 			inElection = true
 		}
 	}
@@ -562,7 +570,7 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 				}
 			}
 			ud.UpdateCommit.LastApplied = 0
-			n.node.Commit(ud)
+			n.p.Commit(ud)
 		}
 		if n.handleEvents() {
 			t.Errorf("unexpected event")
