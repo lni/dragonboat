@@ -153,6 +153,21 @@ func TestRaftRPCCanBeExtended(t *testing.T) {
 	}
 }
 
+func TestNewNodeHostReturnErrorOnInvalidConfig(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer os.RemoveAll(singleNodeHostTestDir)
+	os.RemoveAll(singleNodeHostTestDir)
+	c := getTestNodeHostConfig()
+	c.RaftAddress = "12345"
+	if err := c.Validate(); err == nil {
+		t.Fatalf("config is not considered as invalid")
+	}
+	_, err := NewNodeHost(*c)
+	if err == nil {
+		t.Fatalf("NewNodeHost failed to return error")
+	}
+}
+
 func TestDeploymentIDCanBeSetUsingNodeHostConfig(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer os.RemoveAll(singleNodeHostTestDir)
@@ -271,12 +286,16 @@ func createSingleNodeTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 50,
+		RTTMillisecond: 100,
 		RaftAddress:    peers[1],
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
 		return nil, nil, err
+	}
+	rnhc := nh.NodeHostConfig()
+	if !reflect.DeepEqual(&nhc, &rnhc) {
+		panic("configuration changed")
 	}
 	var pst *PST
 	newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
@@ -778,6 +797,116 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	}
 }
 
+func TestInvalidContextDeadlineIsReported(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
+		rcs, err := nh.SyncGetSession(rctx, 2)
+		rcancel()
+		if err != nil {
+			t.Fatalf("failed to get regular session")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 95*time.Millisecond)
+		defer cancel()
+		cs := nh.GetNoOPSession(2)
+		_, err = nh.SyncPropose(ctx, cs, make([]byte, 1))
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		_, err = nh.SyncRead(ctx, 2, nil)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		_, err = nh.SyncGetSession(ctx, 2)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		err = nh.SyncCloseSession(ctx, rcs)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		_, err = nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		err = nh.SyncRequestDeleteNode(ctx, 2, 1, 0)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		err = nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+		err = nh.SyncRequestAddObserver(ctx, 2, 100, "a1", 0)
+		if err != ErrTimeoutTooSmall {
+			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		_, _, err := nh.GetLeaderID(1234)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.StaleRead(1234, nil)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.RequestSnapshot(1234, DefaultSnapshotOption, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.RequestDeleteNode(1234, 10, 0, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.RequestAddNode(1234, 10, "a1", 0, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.RequestAddObserver(1234, 10, "a1", 0, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		err = nh.RequestLeaderTransfer(1234, 10)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, err = nh.GetNodeUser(1234)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		cs := nh.GetNoOPSession(1234)
+		_, err = nh.propose(cs, make([]byte, 1), nil, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		_, _, err = nh.readIndex(1234, nil, 5*time.Second)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+		err = nh.stopNode(1234, 1, true)
+		if err != ErrClusterNotFound {
+			t.Errorf("failed to return ErrClusterNotFound, %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestGetClusterMembership(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := nh.GetClusterMembership(ctx, 2)
+		if err != nil {
+			t.Fatalf("failed to get cluster membership")
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -900,6 +1029,11 @@ func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
 }
 
 func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
+	osv := delaySampleRatio
+	defer func() {
+		delaySampleRatio = osv
+	}()
+	delaySampleRatio = 1
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,

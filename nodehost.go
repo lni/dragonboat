@@ -1904,8 +1904,7 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	h.nh.snapshotStatus.addStatus(clusterID, nodeID, failed, tick)
 }
 
-func (h *messageHandler) HandleUnreachable(clusterID uint64,
-	nodeID uint64) {
+func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
 	// this is called from a worker thread that is no longer serving anything
 	cluster, q, ok := h.nh.getClusterAndQueueNotLocked(clusterID)
 	if ok {
