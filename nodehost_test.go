@@ -53,6 +53,8 @@ import (
 	"github.com/lni/dragonboat/tools"
 )
 
+var ovs = logdb.RDBContextValueSize
+
 func getTestNodeHostConfig() *config.NodeHostConfig {
 	return &config.NodeHostConfig{
 		WALDir:         singleNodeHostTestDir,
@@ -99,89 +101,100 @@ func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 	return nil
 }
 
-func TestLogDBCanBeExtended(t *testing.T) {
+func runNodeHostTest(t *testing.T, f func()) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	defer os.RemoveAll(singleNodeHostTestDir)
 	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	ldb := &noopLogDB{}
-	c.LogDBFactory = func([]string, []string) (raftio.ILogDB, error) {
-		return ldb, nil
+	f()
+}
+
+func TestLogDBCanBeExtended(t *testing.T) {
+	tf := func() {
+		c := getTestNodeHostConfig()
+		ldb := &noopLogDB{}
+		c.LogDBFactory = func([]string, []string) (raftio.ILogDB, error) {
+			return ldb, nil
+		}
+		nh, err := NewNodeHost(*c)
+		if err != nil {
+			t.Fatalf("failed to create NodeHost %v", err)
+		}
+		defer nh.Stop()
+		if nh.logdb.Name() != ldb.Name() {
+			t.Errorf("logdb type name %s, expect %s", nh.logdb.Name(), ldb.Name())
+		}
 	}
-	nh, err := NewNodeHost(*c)
-	if err != nil {
-		t.Fatalf("failed to create NodeHost %v", err)
-	}
-	defer nh.Stop()
-	if nh.logdb.Name() != ldb.Name() {
-		t.Errorf("logdb type name %s, expect %s", nh.logdb.Name(), ldb.Name())
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestTCPTransportIsUsedByDefault(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	nh, err := NewNodeHost(*c)
-	if err != nil {
-		t.Fatalf("failed to create NodeHost %v", err)
+	tf := func() {
+		c := getTestNodeHostConfig()
+		nh, err := NewNodeHost(*c)
+		if err != nil {
+			t.Fatalf("failed to create NodeHost %v", err)
+		}
+		defer nh.Stop()
+		tt := nh.transport.(*transport.Transport)
+		if tt.GetRaftRPC().Name() != transport.TCPRaftRPCName {
+			t.Errorf("raft rpc type name %s, expect %s",
+				tt.GetRaftRPC().Name(), transport.TCPRaftRPCName)
+		}
 	}
-	defer nh.Stop()
-	tt := nh.transport.(*transport.Transport)
-	if tt.GetRaftRPC().Name() != transport.TCPRaftRPCName {
-		t.Errorf("raft rpc type name %s, expect %s",
-			tt.GetRaftRPC().Name(), transport.TCPRaftRPCName)
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestRaftRPCCanBeExtended(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	c.RaftRPCFactory = transport.NewNOOPTransport
-	nh, err := NewNodeHost(*c)
-	if err != nil {
-		t.Fatalf("failed to create NodeHost %v", err)
+	tf := func() {
+		c := getTestNodeHostConfig()
+		c.RaftRPCFactory = transport.NewNOOPTransport
+		nh, err := NewNodeHost(*c)
+		if err != nil {
+			t.Fatalf("failed to create NodeHost %v", err)
+		}
+		defer nh.Stop()
+		tt := nh.transport.(*transport.Transport)
+		if tt.GetRaftRPC().Name() != transport.NOOPRaftName {
+			t.Errorf("raft rpc type name %s, expect %s",
+				tt.GetRaftRPC().Name(), transport.NOOPRaftName)
+		}
 	}
-	defer nh.Stop()
-	tt := nh.transport.(*transport.Transport)
-	if tt.GetRaftRPC().Name() != transport.NOOPRaftName {
-		t.Errorf("raft rpc type name %s, expect %s",
-			tt.GetRaftRPC().Name(), transport.NOOPRaftName)
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNewNodeHostReturnErrorOnInvalidConfig(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	c.RaftAddress = "12345"
-	if err := c.Validate(); err == nil {
-		t.Fatalf("config is not considered as invalid")
+	tf := func() {
+		c := getTestNodeHostConfig()
+		c.RaftAddress = "12345"
+		if err := c.Validate(); err == nil {
+			t.Fatalf("config is not considered as invalid")
+		}
+		_, err := NewNodeHost(*c)
+		if err == nil {
+			t.Fatalf("NewNodeHost failed to return error")
+		}
 	}
-	_, err := NewNodeHost(*c)
-	if err == nil {
-		t.Fatalf("NewNodeHost failed to return error")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestDeploymentIDCanBeSetUsingNodeHostConfig(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	os.RemoveAll(singleNodeHostTestDir)
-	c := getTestNodeHostConfig()
-	c.DeploymentID = 100
-	nh, err := NewNodeHost(*c)
-	if err != nil {
-		t.Fatalf("failed to create NodeHost %v", err)
+	tf := func() {
+		c := getTestNodeHostConfig()
+		c.DeploymentID = 100
+		nh, err := NewNodeHost(*c)
+		if err != nil {
+			t.Fatalf("failed to create NodeHost %v", err)
+		}
+		defer nh.Stop()
+		if nh.deploymentID != 100 {
+			t.Errorf("deployment id not set")
+		}
 	}
-	defer nh.Stop()
-	if nh.deploymentID != 100 {
-		t.Errorf("deployment id not set")
-	}
+	runNodeHostTest(t, tf)
 }
 
 var (
@@ -398,6 +411,10 @@ func createFakeDiskTestNodeHost(addr string,
 
 func singleConcurrentNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost), snapshotEntry uint64, concurrent bool) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
 	nh, err := createConcurrentTestNodeHost(singleNodeHostTestAddr,
@@ -416,6 +433,10 @@ func singleConcurrentNodeHostTest(t *testing.T,
 
 func singleFakeDiskNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost, initialApplied uint64), initialApplied uint64) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
 	nh, _, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
@@ -433,6 +454,10 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 
 func twoFakeDiskNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost)) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
 	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
@@ -608,6 +633,10 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 
 func rateLimitedTwoNodeHostTest(t *testing.T,
 	tf func(t *testing.T, leaderNh *NodeHost, followerNh *NodeHost)) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
 	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
 	defer leaktest.AfterTest(t)()
@@ -627,6 +656,10 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 
 func rateLimitedNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost)) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	defer os.RemoveAll(singleNodeHostTestDir)
 	os.RemoveAll(singleNodeHostTestDir)
@@ -682,119 +715,122 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 }
 
 func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	datadir := singleNodeHostTestDir
-	rc := config.Config{
-		NodeID:             uint64(1),
-		ClusterID:          2,
-		ElectionRTT:        5,
-		HeartbeatRTT:       1,
-		CheckQuorum:        true,
-		SnapshotEntries:    10,
-		CompactionOverhead: 5,
+	tf := func() {
+		datadir := singleNodeHostTestDir
+		rc := config.Config{
+			NodeID:             uint64(1),
+			ClusterID:          2,
+			ElectionRTT:        5,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    10,
+			CompactionOverhead: 5,
+		}
+		peers := make(map[uint64]string)
+		nhc := config.NodeHostConfig{
+			WALDir:         datadir,
+			NodeHostDir:    datadir,
+			RTTMillisecond: 50,
+			RaftAddress:    singleNodeHostTestAddr,
+		}
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer nh.Stop()
+		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &PST{}
+		}
+		if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
+			t.Fatalf("failed to join the cluster")
+		}
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to stop the cluster")
+		}
+		if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
+			t.Fatalf("failed to join the cluster again")
+		}
+		if err := nh.StopCluster(2); err != nil {
+			t.Fatalf("failed to stop the cluster")
+		}
+		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+			t.Fatalf("failed to restartthe cluster again")
+		}
 	}
-	peers := make(map[uint64]string)
-	nhc := config.NodeHostConfig{
-		WALDir:         datadir,
-		NodeHostDir:    datadir,
-		RTTMillisecond: 50,
-		RaftAddress:    singleNodeHostTestAddr,
-	}
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	defer nh.Stop()
-	newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-		return &PST{}
-	}
-	if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
-		t.Fatalf("failed to join the cluster")
-	}
-	if err := nh.StopCluster(2); err != nil {
-		t.Fatalf("failed to stop the cluster")
-	}
-	if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
-		t.Fatalf("failed to join the cluster again")
-	}
-	if err := nh.StopCluster(2); err != nil {
-		t.Fatalf("failed to stop the cluster")
-	}
-	if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-		t.Fatalf("failed to restartthe cluster again")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestSnapshotCanBeStopped(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, true)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, true)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 2)
+		defer os.RemoveAll(singleNodeHostTestDir)
+		createProposalsToTriggerSnapshot(t, nh, 50, true)
+		nh.Stop()
+		time.Sleep(100 * time.Millisecond)
+		if !pst.saved || !pst.stopped {
+			t.Errorf("snapshot not stopped")
+		}
 	}
-	waitForLeaderToBeElected(t, nh, 2)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	createProposalsToTriggerSnapshot(t, nh, 50, true)
-	nh.Stop()
-	time.Sleep(100 * time.Millisecond)
-	if !pst.saved || !pst.stopped {
-		t.Errorf("snapshot not stopped")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
-	}
-	waitForLeaderToBeElected(t, nh, 2)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	createProposalsToTriggerSnapshot(t, nh, 25, false)
-	logdb := nh.logdb
-	snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if len(snapshots) == 0 {
-		t.Fatalf("failed to save snapshots")
-	}
-	if snapshots[0].Dummy {
-		t.Errorf("regular snapshot created dummy snapshot")
-	}
-	nh.Stop()
-	nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to restart nodehost %v", err)
-	}
-	wait := 0
-	for !pst.getRestored() {
-		time.Sleep(100 * time.Millisecond)
-		wait++
-		if wait > 100 {
-			break
+	tf := func() {
+		nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, false)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 2)
+		defer os.RemoveAll(singleNodeHostTestDir)
+		createProposalsToTriggerSnapshot(t, nh, 25, false)
+		logdb := nh.logdb
+		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if len(snapshots) == 0 {
+			t.Fatalf("failed to save snapshots")
+		}
+		if snapshots[0].Dummy {
+			t.Errorf("regular snapshot created dummy snapshot")
+		}
+		nh.Stop()
+		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, false)
+		if err != nil {
+			t.Fatalf("failed to restart nodehost %v", err)
+		}
+		wait := 0
+		for !pst.getRestored() {
+			time.Sleep(100 * time.Millisecond)
+			wait++
+			if wait > 100 {
+				break
+			}
+		}
+		nh.Stop()
+		wait = 0
+		for !pst.stopped {
+			time.Sleep(100 * time.Millisecond)
+			wait++
+			if wait > 100 {
+				break
+			}
+		}
+		if !pst.getRestored() {
+			t.Errorf("not restored")
+		}
+		if !pst.stopped {
+			t.Errorf("not stopped")
 		}
 	}
-	nh.Stop()
-	wait = 0
-	for !pst.stopped {
-		time.Sleep(100 * time.Millisecond)
-		wait++
-		if wait > 100 {
-			break
-		}
-	}
-	if !pst.getRestored() {
-		t.Errorf("not restored")
-	}
-	if !pst.stopped {
-		t.Errorf("not stopped")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestInvalidContextDeadlineIsReported(t *testing.T) {
@@ -1023,6 +1059,10 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 }
 
 func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
 	defer leaktest.AfterTest(t)()
 	testZombieSnapshotDirWillBeDeletedDuringAddCluster(t, "snapshot-AB-01.receiving")
 	testZombieSnapshotDirWillBeDeletedDuringAddCluster(t, "snapshot-AB-10.generating")
@@ -1032,6 +1072,10 @@ func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
 	osv := delaySampleRatio
 	defer func() {
 		delaySampleRatio = osv
+	}()
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
 	}()
 	delaySampleRatio = 1
 	defer leaktest.AfterTest(t)()
@@ -1329,38 +1373,39 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 }
 
 func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, fakeDiskSM, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, 0, true)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		nh, fakeDiskSM, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, 0, true)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		testSM := fakeDiskSM.(*tests.FakeDiskSM)
+		defer os.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			nh.Stop()
+		}()
+		n, ok := nh.getClusterNotLocked(1)
+		if !ok {
+			t.Fatalf("failed to get the node")
+		}
+		if n.initialized() {
+			t.Fatalf("node unexpectedly initialized")
+		}
+		if _, err := nh.StaleRead(1, nil); err != ErrClusterNotInitialized {
+			t.Fatalf("expected to return ErrClusterNotInitialized")
+		}
+		atomic.StoreUint32(&testSM.SlowOpen, 0)
+		for !n.initialized() {
+		}
+		v, err := nh.StaleRead(1, nil)
+		if err != nil {
+			t.Fatalf("stale read failed %v", err)
+		}
+		if len(v.([]byte)) != 8 {
+			t.Fatalf("unexpected result %v", v)
+		}
 	}
-	testSM := fakeDiskSM.(*tests.FakeDiskSM)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer func() {
-		nh.Stop()
-	}()
-	n, ok := nh.getClusterNotLocked(1)
-	if !ok {
-		t.Fatalf("failed to get the node")
-	}
-	if n.initialized() {
-		t.Fatalf("node unexpectedly initialized")
-	}
-	if _, err := nh.StaleRead(1, nil); err != ErrClusterNotInitialized {
-		t.Fatalf("expected to return ErrClusterNotInitialized")
-	}
-	atomic.StoreUint32(&testSM.SlowOpen, 0)
-	for !n.initialized() {
-	}
-	v, err := nh.StaleRead(1, nil)
-	if err != nil {
-		t.Fatalf("stale read failed %v", err)
-	}
-	if len(v.([]byte)) != 8 {
-		t.Fatalf("unexpected result %v", v)
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
@@ -1918,34 +1963,35 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 }
 
 func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	os.RemoveAll(singleNodeHostTestDir)
-	nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, false)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		pst.slowSave = true
+		defer os.RemoveAll(singleNodeHostTestDir)
+		defer nh.Stop()
+		waitForLeaderToBeElected(t, nh, 2)
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err = nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 200*time.Millisecond)
+		if err != nil {
+			t.Errorf("failed to request snapshot")
+		}
+		plog.Infof("going to wait for snapshot request to complete")
+		v := <-sr.CompletedC
+		if !v.Timeout() {
+			t.Errorf("failed to report timeout")
+		}
 	}
-	pst.slowSave = true
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer nh.Stop()
-	waitForLeaderToBeElected(t, nh, 2)
-	session := nh.GetNoOPSession(2)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cmd := make([]byte, 1518)
-	_, err = nh.SyncPropose(ctx, session, cmd)
-	cancel()
-	if err != nil {
-		t.Fatalf("failed to make proposal %v", err)
-	}
-	sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 200*time.Millisecond)
-	if err != nil {
-		t.Errorf("failed to request snapshot")
-	}
-	plog.Infof("going to wait for snapshot request to complete")
-	v := <-sr.CompletedC
-	if !v.Timeout() {
-		t.Errorf("failed to report timeout")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestSyncRemoveData(t *testing.T) {
@@ -2252,133 +2298,134 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 }
 
 func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	nh1dir := path.Join(singleNodeHostTestDir, "nh1")
-	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
-	rc := config.Config{
-		ClusterID:          1,
-		NodeID:             1,
-		ElectionRTT:        3,
-		HeartbeatRTT:       1,
-		CheckQuorum:        true,
-		SnapshotEntries:    5,
-		CompactionOverhead: 2,
-	}
-	peers := make(map[uint64]string)
-	peers[1] = nodeHostTestAddr1
-	nhc1 := config.NodeHostConfig{
-		WALDir:         nh1dir,
-		NodeHostDir:    nh1dir,
-		RTTMillisecond: 10,
-		RaftAddress:    nodeHostTestAddr1,
-		DeploymentID:   1,
-	}
-	nhc2 := config.NodeHostConfig{
-		WALDir:         nh2dir,
-		NodeHostDir:    nh2dir,
-		RTTMillisecond: 10,
-		RaftAddress:    nodeHostTestAddr2,
-		DeploymentID:   1,
-	}
-	plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
-	var once sync.Once
-	nh1, err := NewNodeHost(nhc1)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	nh2, err := NewNodeHost(nhc2)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-		return tests.NewFakeDiskSM(0)
-	}
-	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
-		t.Fatalf("failed to start cluster %v", err)
-	}
-	waitForLeaderToBeElected(t, nh1, 1)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	defer once.Do(func() {
-		nh1.Stop()
-		nh2.Stop()
-	})
-	session := nh1.GetNoOPSession(1)
-	mkproposal := func(nh *NodeHost) {
-		done := false
-		for i := 0; i < 100; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
-			cancel()
-			if err == nil {
-				done = true
-				break
+	tf := func() {
+		nh1dir := path.Join(singleNodeHostTestDir, "nh1")
+		nh2dir := path.Join(singleNodeHostTestDir, "nh2")
+		rc := config.Config{
+			ClusterID:          1,
+			NodeID:             1,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		nhc1 := config.NodeHostConfig{
+			WALDir:         nh1dir,
+			NodeHostDir:    nh1dir,
+			RTTMillisecond: 10,
+			RaftAddress:    nodeHostTestAddr1,
+			DeploymentID:   1,
+		}
+		nhc2 := config.NodeHostConfig{
+			WALDir:         nh2dir,
+			NodeHostDir:    nh2dir,
+			RTTMillisecond: 10,
+			RaftAddress:    nodeHostTestAddr2,
+			DeploymentID:   1,
+		}
+		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
+		var once sync.Once
+		nh1, err := NewNodeHost(nhc1)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		nh2, err := NewNodeHost(nhc2)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewFakeDiskSM(0)
+		}
+		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh1, 1)
+		defer os.RemoveAll(singleNodeHostTestDir)
+		defer once.Do(func() {
+			nh1.Stop()
+			nh2.Stop()
+		})
+		session := nh1.GetNoOPSession(1)
+		mkproposal := func(nh *NodeHost) {
+			done := false
+			for i := 0; i < 100; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+				cancel()
+				if err == nil {
+					done = true
+					break
+				}
+			}
+			if !done {
+				t.Fatalf("failed to make proposal on restored cluster")
 			}
 		}
-		if !done {
-			t.Fatalf("failed to make proposal on restored cluster")
+		mkproposal(nh1)
+		sspath := "exported_snapshot_safe_to_delete"
+		os.RemoveAll(sspath)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
 		}
+		defer os.RemoveAll(sspath)
+		opt := SnapshotOption{
+			Exported:   true,
+			ExportPath: sspath,
+		}
+		sr, err := nh1.RequestSnapshot(1, opt, 3*time.Second)
+		if err != nil {
+			t.Fatalf("failed to request snapshot %v", err)
+		}
+		var index uint64
+		v := <-sr.CompletedC
+		if !v.Completed() {
+			t.Fatalf("failed to complete the requested snapshot")
+		}
+		index = v.SnapshotIndex()
+		plog.Infof("exported snapshot index %d", index)
+		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+		dir := path.Join(sspath, snapshotDir)
+		members := make(map[uint64]string)
+		members[1] = nhc1.RaftAddress
+		members[10] = nhc2.RaftAddress
+		once.Do(func() {
+			nh1.Stop()
+			nh2.Stop()
+		})
+		if err := tools.ImportSnapshot(nhc1, dir, members, 1); err != nil {
+			t.Fatalf("failed to import snapshot %v", err)
+		}
+		if err := tools.ImportSnapshot(nhc2, dir, members, 10); err != nil {
+			t.Fatalf("failed to import snapshot %v", err)
+		}
+		plog.Infof("snapshots imported")
+		rnh1, err := NewNodeHost(nhc1)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		rnh2, err := NewNodeHost(nhc2)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer func() {
+			rnh1.Stop()
+			rnh2.Stop()
+		}()
+		if err := rnh1.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		rc.NodeID = 10
+		if err := rnh2.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, rnh1, 1)
+		mkproposal(rnh1)
+		mkproposal(rnh2)
 	}
-	mkproposal(nh1)
-	sspath := "exported_snapshot_safe_to_delete"
-	os.RemoveAll(sspath)
-	if err := os.MkdirAll(sspath, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
-	defer os.RemoveAll(sspath)
-	opt := SnapshotOption{
-		Exported:   true,
-		ExportPath: sspath,
-	}
-	sr, err := nh1.RequestSnapshot(1, opt, 3*time.Second)
-	if err != nil {
-		t.Fatalf("failed to request snapshot %v", err)
-	}
-	var index uint64
-	v := <-sr.CompletedC
-	if !v.Completed() {
-		t.Fatalf("failed to complete the requested snapshot")
-	}
-	index = v.SnapshotIndex()
-	plog.Infof("exported snapshot index %d", index)
-	snapshotDir := fmt.Sprintf("snapshot-%016X", index)
-	dir := path.Join(sspath, snapshotDir)
-	members := make(map[uint64]string)
-	members[1] = nhc1.RaftAddress
-	members[10] = nhc2.RaftAddress
-	once.Do(func() {
-		nh1.Stop()
-		nh2.Stop()
-	})
-	if err := tools.ImportSnapshot(nhc1, dir, members, 1); err != nil {
-		t.Fatalf("failed to import snapshot %v", err)
-	}
-	if err := tools.ImportSnapshot(nhc2, dir, members, 10); err != nil {
-		t.Fatalf("failed to import snapshot %v", err)
-	}
-	plog.Infof("snapshots imported")
-	rnh1, err := NewNodeHost(nhc1)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	rnh2, err := NewNodeHost(nhc2)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	defer func() {
-		rnh1.Stop()
-		rnh2.Stop()
-	}()
-	if err := rnh1.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
-		t.Fatalf("failed to start cluster %v", err)
-	}
-	rc.NodeID = 10
-	if err := rnh2.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
-		t.Fatalf("failed to start cluster %v", err)
-	}
-	waitForLeaderToBeElected(t, rnh1, 1)
-	mkproposal(rnh1)
-	mkproposal(rnh2)
+	runNodeHostTest(t, tf)
 }
 
 type chunks struct {
@@ -2550,270 +2597,285 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 }
 
 func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
-		RaftAddress:    "microsoft.com:12345",
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 200,
+			RaftAddress:    "microsoft.com:12345",
+		}
+		nh, err := NewNodeHost(nhc)
+		if err == nil {
+			nh.Stop()
+			t.Fatalf("NewNodeHost didn't fail")
+		}
 	}
-	nh, err := NewNodeHost(nhc)
-	if err == nil {
-		nh.Stop()
-		t.Fatalf("NewNodeHost didn't fail")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNodeHostChecksLogDBType(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	f := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return &noopLogDB{}, nil
-	}
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   f,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		f := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+			return &noopLogDB{}, nil
 		}
-		defer nh.Stop()
-	}()
-	nhc.LogDBFactory = nil
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrLogDBType {
-		t.Fatalf("didn't report logdb type error %v", err)
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 20,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   f,
+		}
+		func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost %v", err)
+			}
+			defer nh.Stop()
+		}()
+		nhc.LogDBFactory = nil
+		_, err := NewNodeHost(nhc)
+		if err != server.ErrLogDBType {
+			t.Fatalf("didn't report logdb type error %v", err)
+		}
 	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   leveldb.NewLogDB,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 200,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   leveldb.NewLogDB,
 		}
-		defer nh.Stop()
-		nhc.RaftAddress = nodeHostTestAddr2
+		func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost %v", err)
+			}
+			defer nh.Stop()
+			nhc.RaftAddress = nodeHostTestAddr2
+			_, err = NewNodeHost(nhc)
+			if err != server.ErrLockDirectory {
+				t.Fatalf("failed to return ErrLockDirectory")
+			}
+		}()
+		_, err := NewNodeHost(nhc)
+		if err != server.ErrNotOwner {
+			t.Fatalf("failed to return ErrNotOwner")
+		}
+		nhc.RaftAddress = nodeHostTestAddr1
+		nhc.LogDBFactory = leveldb.NewBatchedLogDB
 		_, err = NewNodeHost(nhc)
-		if err != server.ErrLockDirectory {
-			t.Fatalf("failed to return ErrLockDirectory")
+		if err != server.ErrIncompatibleData {
+			t.Fatalf("failed to return ErrIncompatibleData")
 		}
-	}()
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrNotOwner {
-		t.Fatalf("failed to return ErrNotOwner")
 	}
-	nhc.RaftAddress = nodeHostTestAddr1
-	nhc.LogDBFactory = leveldb.NewBatchedLogDB
-	_, err = NewNodeHost(nhc)
-	if err != server.ErrIncompatibleData {
-		t.Fatalf("failed to return ErrIncompatibleData")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		WALDir:         singleNodeHostTestDir,
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 100,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   logdb.NewDefaultBatchedLogDB,
-	}
-	plog.Infof("going to create nh using batched logdb")
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
-	}
-	bf := nh.logdb.BinaryFormat()
-	if bf != raftio.LogDBBinVersion {
-		t.Errorf("unexpected logdb bin ver %d", bf)
-	}
-	nh.Stop()
-	plog.Infof("node host 1 stopped")
-	nhc.LogDBFactory = logdb.NewDefaultLogDB
-	func() {
-		plog.Infof("going to create nh using plain logdb")
-		nh, err := NewNodeHost(nhc)
-		plog.Infof("err : %v", err)
-		if err != server.ErrLogDBBrokenChange {
-			if err == nil && nh != nil {
-				plog.Infof("going to stop nh")
-				nh.Stop()
-			}
-			t.Fatalf("didn't return the expected error")
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			WALDir:         singleNodeHostTestDir,
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 100,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   logdb.NewDefaultBatchedLogDB,
 		}
-	}()
-	os.RemoveAll(singleNodeHostTestDir)
-	plog.Infof("going to create nh using plain logdb with existing data deleted")
-	nh, err = NewNodeHost(nhc)
-	plog.Infof("err2 : %v", err)
-	if err != nil {
-		t.Fatalf("failed to create node host %v", err)
+		plog.Infof("going to create nh using batched logdb")
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		bf := nh.logdb.BinaryFormat()
+		if bf != raftio.LogDBBinVersion {
+			t.Errorf("unexpected logdb bin ver %d", bf)
+		}
+		nh.Stop()
+		plog.Infof("node host 1 stopped")
+		nhc.LogDBFactory = logdb.NewDefaultLogDB
+		func() {
+			plog.Infof("going to create nh using plain logdb")
+			nh, err := NewNodeHost(nhc)
+			plog.Infof("err : %v", err)
+			if err != server.ErrLogDBBrokenChange {
+				if err == nil && nh != nil {
+					plog.Infof("going to stop nh")
+					nh.Stop()
+				}
+				t.Fatalf("didn't return the expected error")
+			}
+		}()
+		os.RemoveAll(singleNodeHostTestDir)
+		plog.Infof("going to create nh using plain logdb with existing data deleted")
+		nh, err = NewNodeHost(nhc)
+		plog.Infof("err2 : %v", err)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer nh.Stop()
+		bf = nh.logdb.BinaryFormat()
+		if bf != raftio.PlainLogDBBinVersion {
+			t.Errorf("unexpected logdb bin ver %d", bf)
+		}
 	}
-	defer nh.Stop()
-	bf = nh.logdb.BinaryFormat()
-	if bf != raftio.PlainLogDBBinVersion {
-		t.Errorf("unexpected logdb bin ver %d", bf)
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 200,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   logdb.NewDefaultBatchedLogDB,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 200,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   logdb.NewDefaultBatchedLogDB,
 		}
-		defer nh.Stop()
-	}()
-	nhc.LogDBFactory = logdb.NewDefaultLogDB
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrLogDBBrokenChange {
-		t.Fatalf("failed to return ErrIncompatibleData")
+		func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost %v", err)
+			}
+			defer nh.Stop()
+		}()
+		nhc.LogDBFactory = logdb.NewDefaultLogDB
+		_, err := NewNodeHost(nhc)
+		if err != server.ErrLogDBBrokenChange {
+			t.Fatalf("failed to return ErrIncompatibleData")
+		}
 	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   logdb.NewDefaultLogDB,
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 20,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   logdb.NewDefaultLogDB,
+		}
+		func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost %v", err)
+			}
+			defer nh.Stop()
+			rc := config.Config{
+				NodeID:       1,
+				ClusterID:    1,
+				ElectionRTT:  3,
+				HeartbeatRTT: 1,
+			}
+			peers := make(map[uint64]string)
+			peers[1] = nodeHostTestAddr1
+			newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+				return &PST{}
+			}
+			if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+				t.Fatalf("failed to start cluster %v", err)
+			}
+			waitForLeaderToBeElected(t, nh, 1)
+			cs := nh.GetNoOPSession(1)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to make proposal %v", err)
+			}
+		}()
+		nhc.LogDBFactory = logdb.NewDefaultBatchedLogDB
+		_, err := NewNodeHost(nhc)
+		if err != server.ErrIncompatibleData {
+			t.Fatalf("failed to return server.ErrIncompatibleData")
+		}
 	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-		rc := config.Config{
-			NodeID:       1,
-			ClusterID:    1,
-			ElectionRTT:  3,
-			HeartbeatRTT: 1,
-		}
-		peers := make(map[uint64]string)
-		peers[1] = nodeHostTestAddr1
-		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-			return &PST{}
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, nh, 1)
-		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
-	}()
-	nhc.LogDBFactory = logdb.NewDefaultBatchedLogDB
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrIncompatibleData {
-		t.Fatalf("failed to return server.ErrIncompatibleData")
-	}
+	runNodeHostTest(t, tf)
 }
 
 func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   logdb.NewDefaultBatchedLogDB,
+	xf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 20,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   logdb.NewDefaultBatchedLogDB,
+		}
+		tf := func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost %v", err)
+			}
+			defer nh.Stop()
+			rc := config.Config{
+				NodeID:       1,
+				ClusterID:    1,
+				ElectionRTT:  3,
+				HeartbeatRTT: 1,
+			}
+			peers := make(map[uint64]string)
+			peers[1] = nodeHostTestAddr1
+			newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+				return &PST{}
+			}
+			if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+				t.Fatalf("failed to start cluster %v", err)
+			}
+			waitForLeaderToBeElected(t, nh, 1)
+			cs := nh.GetNoOPSession(1)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to make proposal %v", err)
+			}
+		}
+		tf()
+		nhc.LogDBFactory = logdb.NewDefaultLogDB
+		tf()
 	}
+	runNodeHostTest(t, xf)
+}
+
+func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 20,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   leveldb.NewLogDB,
+			DeploymentID:   100,
+		}
+		func() {
+			nh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create nodehost, %v", err)
+			}
+			defer nh.Stop()
+		}()
+		nhc.DeploymentID = 200
+		_, err := NewNodeHost(nhc)
+		if err != server.ErrDeploymentIDChanged {
+			t.Errorf("failed to return ErrDeploymentIDChanged, got %v", err)
+		}
+	}
+	runNodeHostTest(t, tf)
+}
+
+func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 20,
+			RaftAddress:    nodeHostTestAddr1,
+			LogDBFactory:   leveldb.NewLogDB,
+		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		defer nh.Stop()
-		rc := config.Config{
-			NodeID:       1,
-			ClusterID:    1,
-			ElectionRTT:  3,
-			HeartbeatRTT: 1,
-		}
-		peers := make(map[uint64]string)
-		peers[1] = nodeHostTestAddr1
-		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-			return &PST{}
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, nh, 1)
-		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
 	}
-	tf()
-	nhc.LogDBFactory = logdb.NewDefaultLogDB
-	tf()
-}
-
-func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   leveldb.NewLogDB,
-		DeploymentID:   100,
-	}
-	func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost, %v", err)
-		}
-		defer nh.Stop()
-	}()
-	nhc.DeploymentID = 200
-	_, err := NewNodeHost(nhc)
-	if err != server.ErrDeploymentIDChanged {
-		t.Errorf("failed to return ErrDeploymentIDChanged, got %v", err)
-	}
-}
-
-func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
-	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 20,
-		RaftAddress:    nodeHostTestAddr1,
-		LogDBFactory:   leveldb.NewLogDB,
-	}
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		t.Fatalf("failed to create nodehost %v", err)
-	}
-	defer nh.Stop()
+	runNodeHostTest(t, tf)
 }
 
 func TestLeaderInfoIsCorrectlyReported(t *testing.T) {

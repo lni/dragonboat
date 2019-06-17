@@ -94,11 +94,11 @@ func (n *node) GetMembershipHash() uint64 {
 }
 
 func (n *node) GetRateLimiter() *server.RateLimiter {
-	return n.node.GetRateLimiter()
+	return n.p.GetRateLimiter()
 }
 
 func (n *node) GetInMemLogSize() uint64 {
-	return n.node.GetInMemLogSize()
+	return n.p.GetInMemLogSize()
 }
 
 func (n *node) getStateMachineHash() uint64 {
@@ -118,7 +118,7 @@ func (n *node) getMembershipHash() uint64 {
 }
 
 func (n *node) dumpRaftInfoToLog() {
-	if n.node != nil {
+	if n.p != nil {
 		addrMap := make(map[uint64]string)
 		nodes, _, _, _ := n.sm.GetMembership()
 		for nodeID := range nodes {
@@ -131,7 +131,7 @@ func (n *node) dumpRaftInfoToLog() {
 				}
 			}
 		}
-		n.node.DumpRaftInfoToLog(addrMap)
+		n.p.DumpRaftInfoToLog(addrMap)
 	}
 }
 

@@ -77,7 +77,7 @@ type node struct {
 	pendingConfigChange  *pendingConfigChange
 	pendingSnapshot      *pendingSnapshot
 	raftMu               sync.Mutex
-	node                 *raft.Peer
+	p                    *raft.Peer
 	logreader            *logdb.LogReader
 	logdb                raftio.ILogDB
 	snapshotter          *snapshotter
@@ -208,7 +208,7 @@ func (n *node) ApplyUpdate(entry pb.Entry,
 func (n *node) ApplyConfigChange(cc pb.ConfigChange) {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
-	n.node.ApplyConfigChange(cc)
+	n.p.ApplyConfigChange(cc)
 	switch cc.Type {
 	case pb.AddNode:
 		n.nodeRegistry.AddNode(n.clusterID, cc.NodeID, string(cc.Address))
@@ -246,7 +246,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 		}
 	}
 	plog.Infof("%s is restoring remotes %+v", n.id(), snapshot.Membership)
-	n.node.RestoreRemotes(snapshot)
+	n.p.RestoreRemotes(snapshot)
 	n.captureClusterState()
 }
 
@@ -255,7 +255,7 @@ func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
 		n.pendingConfigChange.apply(key, false)
 		n.captureClusterState()
 	} else {
-		n.node.RejectConfigChange()
+		n.p.RejectConfigChange()
 		n.pendingConfigChange.apply(key, true)
 	}
 }
@@ -270,7 +270,7 @@ func (n *node) startRaft(cc config.Config,
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	n.node = raft.Launch(&cc, logdb, pas, initial, newNode)
+	n.p = raft.Launch(&cc, logdb, pas, initial, newNode)
 	return newNode, nil
 }
 
@@ -351,7 +351,7 @@ func (n *node) read(handler ICompleteHandler,
 }
 
 func (n *node) requestLeaderTransfer(nodeID uint64) {
-	n.node.RequestLeaderTransfer(nodeID)
+	n.p.RequestLeaderTransfer(nodeID)
 }
 
 func (n *node) requestSnapshot(opt SnapshotOption,
@@ -411,7 +411,7 @@ func (n *node) requestAddObserverWithOrderID(nodeID uint64,
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
-	v := n.node.GetLeaderID()
+	v := n.p.GetLeaderID()
 	return v, v != raft.NoLeader
 }
 
@@ -837,13 +837,13 @@ func (n *node) sendReplicateMessages(ud pb.Update) {
 
 func (n *node) getUpdate() (pb.Update, bool) {
 	moreEntriesToApply := n.canHaveMoreEntriesToApply()
-	if n.node.HasUpdate(moreEntriesToApply) ||
+	if n.p.HasUpdate(moreEntriesToApply) ||
 		n.confirmedIndex != n.smAppliedIndex {
 		if n.smAppliedIndex < n.confirmedIndex {
 			plog.Panicf("last applied value moving backwards, %d, now %d",
 				n.confirmedIndex, n.smAppliedIndex)
 		}
-		ud := n.node.GetUpdate(moreEntriesToApply, n.smAppliedIndex)
+		ud := n.p.GetUpdate(moreEntriesToApply, n.smAppliedIndex)
 		for idx := range ud.Messages {
 			ud.Messages[idx].ClusterId = n.clusterID
 		}
@@ -909,7 +909,7 @@ func (n *node) processRaftUpdate(ud pb.Update) (bool, error) {
 
 func (n *node) commitRaftUpdate(ud pb.Update) {
 	n.raftMu.Lock()
-	n.node.Commit(ud)
+	n.p.Commit(ud)
 	n.raftMu.Unlock()
 }
 
@@ -918,12 +918,12 @@ func (n *node) canHaveMoreEntriesToApply() bool {
 }
 
 func (n *node) hasEntryToApply() bool {
-	return n.node.HasEntryToApply()
+	return n.p.HasEntryToApply()
 }
 
 func (n *node) updateBatchedLastApplied() uint64 {
 	n.smAppliedIndex = n.sm.GetBatchedLastApplied()
-	n.node.NotifyRaftLastApplied(n.smAppliedIndex)
+	n.p.NotifyRaftLastApplied(n.smAppliedIndex)
 	return n.smAppliedIndex
 }
 
@@ -995,14 +995,14 @@ func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
 }
 
 func (n *node) handleProposals() bool {
-	rateLimited := n.node.RateLimited()
+	rateLimited := n.p.RateLimited()
 	if n.rateLimited != rateLimited {
 		n.rateLimited = rateLimited
 		plog.Infof("%s new rate limit state is %t", n.id(), rateLimited)
 	}
 	entries := n.incomingProposals.get(n.rateLimited)
 	if len(entries) > 0 {
-		n.node.ProposeEntries(entries)
+		n.p.ProposeEntries(entries)
 		return true
 	}
 	return false
@@ -1034,7 +1034,7 @@ func (n *node) handleConfigChangeMessage() bool {
 			if err := cc.Unmarshal(req.data); err != nil {
 				panic(err)
 			}
-			n.node.ProposeConfigChange(cc, req.key)
+			n.p.ProposeConfigChange(cc, req.key)
 		}
 	case <-n.stopc:
 		return false
@@ -1092,7 +1092,7 @@ func (n *node) handleReceivedMessages() bool {
 					m.ClusterId, n.clusterID)
 			}
 			n.tryRecordNodeActivity(m)
-			n.node.Handle(m)
+			n.p.Handle(m)
 		}
 	}
 	if scCount > 0 {
@@ -1111,14 +1111,12 @@ func (n *node) handleMessage(m pb.Message) bool {
 	switch m.Type {
 	case pb.Quiesce:
 		n.tryEnterQuiesce()
-	case pb.LocalTick:
-		n.tick()
 	case pb.SnapshotStatus:
 		plog.Debugf("%s got ReportSnapshot from %d, rejected %t",
 			n.id(), m.From, m.Reject)
-		n.node.ReportSnapshotStatus(m.From, m.Reject)
+		n.p.ReportSnapshotStatus(m.From, m.Reject)
 	case pb.Unreachable:
-		n.node.ReportUnreachableNode(m.From)
+		n.p.ReportUnreachableNode(m.From)
 	default:
 		return false
 	}
@@ -1286,22 +1284,22 @@ func (n *node) processStreamSnapshotStatus() bool {
 
 func (n *node) batchedReadIndex() {
 	ctx := n.pendingReadIndexes.nextCtx()
-	n.node.ReadIndex(ctx)
+	n.p.ReadIndex(ctx)
 }
 
 func (n *node) tick() {
-	if n.node == nil {
+	if n.p == nil {
 		panic("rc node is still nil")
 	}
 	n.tickCount++
 	if n.tickCount%n.electionTick == 0 {
-		n.leaderID = n.node.LocalStatus().LeaderID
+		n.leaderID = n.p.LocalStatus().LeaderID
 	}
 	n.increaseQuiesceTick()
 	if n.quiesced() {
-		n.node.QuiescedTick()
+		n.p.QuiescedTick()
 	} else {
-		n.node.Tick()
+		n.p.Tick()
 	}
 	n.pendingSnapshot.tick()
 	n.pendingProposals.tick()
@@ -1366,16 +1364,16 @@ func (n *node) id() string {
 }
 
 func (n *node) isLeader() bool {
-	if n.node != nil {
-		leaderID := n.node.GetLeaderID()
+	if n.p != nil {
+		leaderID := n.p.GetLeaderID()
 		return n.nodeID == leaderID
 	}
 	return false
 }
 
 func (n *node) isFollower() bool {
-	if n.node != nil {
-		leaderID := n.node.GetLeaderID()
+	if n.p != nil {
+		leaderID := n.p.GetLeaderID()
 		if leaderID != n.nodeID && leaderID != raft.NoLeader {
 			return true
 		}
