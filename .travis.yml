@@ -15,3 +15,7 @@ before_install:
 
 script:
   - make ci-quick-test
+  - go test -tags "dragonboat_leveldb_test" -v -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
