@@ -269,7 +269,7 @@ func (cb *Breaker) Failures() int64 {
 	return cb.counts.Failures()
 }
 
-// ConsecFailures returns the number of consecutive failures that have occured.
+// ConsecFailures returns the number of consecutive failures that have occurred.
 func (cb *Breaker) ConsecFailures() int64 {
 	return atomic.LoadInt64(&cb.consecFailures)
 }

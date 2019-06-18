@@ -148,7 +148,7 @@ func (o *Options) SetBlockRestartInterval(n int) {
 }
 
 // SetCompression sets whether to compress blocks using the specified
-// compresssion algorithm.
+// compression algorithm.
 //
 // The default value is NoCompression, but either SnappyCompression or
 // LZ4Compression are both fast enough that it is unlikely you want to

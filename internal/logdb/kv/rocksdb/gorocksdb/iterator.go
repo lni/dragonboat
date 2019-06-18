@@ -42,7 +42,7 @@ func NewNativeIterator(c unsafe.Pointer) *Iterator {
 func (iter *Iterator) IsValid() (bool, error) {
 	v := C.rocksdb_iter_valid_not_err(iter.c)
 	if v == -1 {
-		return false, errors.New("error occured when iterating rocksdb")
+		return false, errors.New("error occurred when iterating rocksdb")
 	}
 	return v == 1, nil
 }

@@ -92,7 +92,7 @@ func NewNativeUniversalCompactionOptions(c *C.rocksdb_universal_compaction_optio
 	return &UniversalCompactionOptions{c}
 }
 
-// SetSizeRatio sets the percentage flexibilty while comparing file size.
+// SetSizeRatio sets the percentage flexibility while comparing file size.
 // If the candidate file(s) size is 1% smaller than the next file's size,
 // then include next file into this candidate set.
 // Default: 1
