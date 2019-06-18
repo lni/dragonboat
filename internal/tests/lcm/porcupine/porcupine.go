@@ -35,7 +35,7 @@ func (a byTime) Less(i, j int) bool {
 }
 
 func makeEntries(history []Operation) []entry {
-	var entries []entry = nil
+	var entries []entry
 	id := uint(0)
 	for _, elem := range history {
 		entries = append(entries, entry{
@@ -107,7 +107,7 @@ func convertEntries(events []Event) []entry {
 }
 
 func makeLinkedEntries(entries []entry) *node {
-	var root *node = nil
+	var root *node
 	match := make(map[uint]*node)
 	for i := len(entries) - 1; i >= 0; i-- {
 		elem := entries[i]
@@ -226,10 +226,12 @@ func fillDefault(model Model) Model {
 	return model
 }
 
+// CheckOperations ...
 func CheckOperations(model Model, history []Operation) bool {
 	return CheckOperationsTimeout(model, history, 0)
 }
 
+// CheckOperationsTimeout ...
 // timeout = 0 means no timeout
 // if this operation times out, then a false positive is possible
 func CheckOperationsTimeout(model Model, history []Operation, timeout time.Duration) bool {
@@ -269,10 +271,12 @@ loop:
 	return ok
 }
 
+// CheckEvents ...
 func CheckEvents(model Model, history []Event) bool {
 	return CheckEventsTimeout(model, history, 0)
 }
 
+// CheckEventsTimeout ...
 // timeout = 0 means no timeout
 // if this operation times out, then a false positive is possible
 func CheckEventsTimeout(model Model, history []Event, timeout time.Duration) bool {

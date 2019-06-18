@@ -395,7 +395,7 @@ func (v *Vector) Do(fn Operation) {
 	})
 }
 
-// Do performs the function fn on steps stored in the Vector over the range [from, to)
+// DoRange performs the function fn on steps stored in the Vector over the range [from, to)
 // in ascending sort order of start position. fn is passed the start, end and value of
 // the step.
 func (v *Vector) DoRange(from, to int, fn Operation) error {
@@ -481,7 +481,7 @@ func (v *Vector) Apply(m Mutator) {
 	}
 }
 
-// Apply applies the mutator function m to steps stored in the Vector in over the range
+// ApplyRange applies the mutator function m to steps stored in the Vector in over the range
 // [from, to) in ascending sort order of start position. Redundant steps resulting from
 // changes in step values are erased.
 func (v *Vector) ApplyRange(from, to int, m Mutator) error {

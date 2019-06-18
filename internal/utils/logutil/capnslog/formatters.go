@@ -156,11 +156,11 @@ func NewNilFormatter() Formatter {
 }
 
 // Format does nothing.
-func (_ *NilFormatter) Format(_ string, _ LogLevel, _ int, _ ...interface{}) {
+func (nf *NilFormatter) Format(s string, l LogLevel, i int, ii ...interface{}) {
 	// noop
 }
 
 // Flush is included so that the interface is complete, but is a no-op.
-func (_ *NilFormatter) Flush() {
+func (nf *NilFormatter) Flush() {
 	// noop
 }

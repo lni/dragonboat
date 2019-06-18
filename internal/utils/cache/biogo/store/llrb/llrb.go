@@ -18,7 +18,7 @@ const (
 	BU23
 )
 
-// Operation mode of the LLRB tree.
+// Mode of the LLRB tree.
 const Mode = BU23
 
 func init() {

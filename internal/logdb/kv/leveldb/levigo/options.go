@@ -113,7 +113,7 @@ func (o *Options) SetWriteBufferSize(s int) {
 	C.leveldb_options_set_write_buffer_size(o.Opt, C.size_t(s))
 }
 
-// SetParanoidCheck when called with true will cause the database to do
+// SetParanoidChecks when called with true will cause the database to do
 // aggressive checking of the data it is processing and will stop early if it
 // detects errors.
 //

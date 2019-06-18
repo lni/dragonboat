@@ -251,10 +251,10 @@ func (opts *Options) OptimizeForPointLookup(sz uint64) {
 	C.rocksdb_options_optimize_for_point_lookup(opts.c, C.uint64_t(sz))
 }
 
-// Set whether to allow concurrent memtable writes. Conccurent writes are
-// not supported by all memtable factories (currently only SkipList memtables).
-// As of rocksdb 5.0.2 you must call `SetAllowConcurrentMemtableWrites(false)`
-// if you use `OptimizeForPointLookup`.
+// SetAllowConcurrentMemtableWrites set whether to allow concurrent memtable writes.
+// Conccurent writes are not supported by all memtable factories (currently only
+// SkipList memtables). As of rocksdb 5.0.2 you must call
+// `SetAllowConcurrentMemtableWrites(false)` if you use `OptimizeForPointLookup`.
 func (opts *Options) SetAllowConcurrentMemtableWrites(allow bool) {
 	C.rocksdb_options_set_allow_concurrent_memtable_write(opts.c, boolToChar(allow))
 }
