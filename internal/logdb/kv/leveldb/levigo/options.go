@@ -81,10 +81,10 @@ func (o *Options) SetComparator(cmp *C.leveldb_comparator_t) {
 	C.leveldb_options_set_comparator(o.Opt, cmp)
 }
 
-// SetErrorIfExists, if passed true, will cause the opening of a database that
+// SetErrorIfExists if passed true will cause the opening of a database that
 // already exists to throw an error.
-func (o *Options) SetErrorIfExists(error_if_exists bool) {
-	eie := boolToUchar(error_if_exists)
+func (o *Options) SetErrorIfExists(e bool) {
+	eie := boolToUchar(e)
 	C.leveldb_options_set_error_if_exists(o.Opt, eie)
 }
 
@@ -113,7 +113,7 @@ func (o *Options) SetWriteBufferSize(s int) {
 	C.leveldb_options_set_write_buffer_size(o.Opt, C.size_t(s))
 }
 
-// SetParanoidChecks, when called with true, will cause the database to do
+// SetParanoidChecks when called with true will cause the database to do
 // aggressive checking of the data it is processing and will stop early if it
 // detects errors.
 //
@@ -148,7 +148,7 @@ func (o *Options) SetBlockRestartInterval(n int) {
 }
 
 // SetCompression sets whether to compress blocks using the specified
-// compresssion algorithm.
+// compression algorithm.
 //
 // The default value is NoCompression, but either SnappyCompression or
 // LZ4Compression are both fast enough that it is unlikely you want to

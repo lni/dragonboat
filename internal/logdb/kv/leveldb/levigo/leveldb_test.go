@@ -343,7 +343,7 @@ func TestDBGetMany(t *testing.T) {
 		[]byte("hello world1"),
 		[]byte("hello world2"),
 		[]byte("hello world3"),
-		[]byte{}, // Yes an empty byte slice as key is valid
+		{}, // Yes an empty byte slice as key is valid
 		[]byte("hello world4"),
 		nil, // yes a nil key is also valid, it's interpreted as an empty byte slice
 		keyWithEmptyValue,
@@ -389,7 +389,7 @@ func TestDBGetMany(t *testing.T) {
 	keys2 := [][]byte{
 		[]byte("hello world0-NOT_FOUND"),
 		[]byte("hello world1"),
-		[]byte{}, // Yes an empty byte slice as key is valid
+		{}, // Yes an empty byte slice as key is valid
 		[]byte("hello world5-NOT_FOUND"),
 	}
 	values, err = db.GetMany(ro, keys2)
@@ -401,7 +401,7 @@ func TestDBGetMany(t *testing.T) {
 	}
 
 	if values[0] != nil {
-		t.Errorf("Expecting non-existant key to return value of nil")
+		t.Errorf("Expecting non-existent key to return value of nil")
 	}
 	if bytes.Compare(expectedValues[1], values[1]) != 0 {
 		t.Errorf("values[%d] is not the same as expected: %v", 1, expectedValues[1])
@@ -410,7 +410,7 @@ func TestDBGetMany(t *testing.T) {
 		t.Errorf("values[%d] is not the same as expected value under empty key: %v", 2, emptyKeyValue)
 	}
 	if values[3] != nil {
-		t.Errorf("Expecting non-existant key to return value of nil")
+		t.Errorf("Expecting non-existent key to return value of nil")
 	}
 
 	values, err = db.GetMany(ro, nil)

@@ -1,5 +1,6 @@
 package porcupine
 
+// Operation ...
 type Operation struct {
 	Input  interface{}
 	Call   int64 // invocation time
@@ -7,19 +8,24 @@ type Operation struct {
 	Return int64 // response time
 }
 
+// EventKind ...
 type EventKind bool
 
 const (
-	CallEvent   EventKind = false
+	// CallEvent ...
+	CallEvent EventKind = false
+	// ReturnEvent ...
 	ReturnEvent EventKind = true
 )
 
+// Event ...
 type Event struct {
 	Kind  EventKind
 	Value interface{}
 	Id    uint
 }
 
+// Model ...
 type Model struct {
 	// Partition functions, such that a history is linearizable if an only
 	// if each partition is linearizable. If you don't want to implement
@@ -38,14 +44,17 @@ type Model struct {
 	Equal func(state1, state2 interface{}) bool
 }
 
+// NoPartition ...
 func NoPartition(history []Operation) [][]Operation {
 	return [][]Operation{history}
 }
 
+// NoPartitionEvent ...
 func NoPartitionEvent(history []Event) [][]Event {
 	return [][]Event{history}
 }
 
+// ShallowEqual ...
 func ShallowEqual(state1, state2 interface{}) bool {
 	return state1 == state2
 }

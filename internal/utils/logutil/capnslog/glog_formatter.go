@@ -27,21 +27,25 @@ import (
 
 var pid = os.Getpid()
 
+// GlogFormatter ...
 type GlogFormatter struct {
 	StringFormatter
 }
 
+// NewGlogFormatter ...
 func NewGlogFormatter(w io.Writer) *GlogFormatter {
 	g := &GlogFormatter{}
 	g.w = bufio.NewWriter(w)
 	return g
 }
 
+// Format ...
 func (g GlogFormatter) Format(pkg string, level LogLevel, depth int, entries ...interface{}) {
 	g.w.Write(GlogHeader(level, depth+1))
 	g.StringFormatter.Format(pkg, level, depth+1, entries...)
 }
 
+// GlogHeader ...
 func GlogHeader(level LogLevel, depth int) []byte {
 	// Lmmdd hh:mm:ss.uuuuuu threadid file:line]
 	now := time.Now().UTC()

@@ -28,12 +28,15 @@ import (
 	"unsafe"
 )
 
+// DatabaseError ...
 type DatabaseError string
 
+// Error ...
 func (e DatabaseError) Error() string {
 	return string(e)
 }
 
+// ErrDBClosed ...
 var ErrDBClosed = errors.New("database is closed")
 
 // DB is a reusable handle to a LevelDB database on disk, created by Open.

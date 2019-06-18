@@ -31,11 +31,12 @@ import (
 func init() {
 	initHijack()
 
-	// Go `log` pacakge uses os.Stderr.
+	// Go `log` package uses os.Stderr.
 	SetFormatter(NewDefaultFormatter(os.Stderr))
 	SetGlobalLogLevel(INFO)
 }
 
+// NewDefaultFormatter ...
 func NewDefaultFormatter(out io.Writer) Formatter {
 	return NewPrettyFormatter(out, false)
 }

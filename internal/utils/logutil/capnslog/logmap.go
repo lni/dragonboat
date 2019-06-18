@@ -84,7 +84,7 @@ func (l LogLevel) String() string {
 	}
 }
 
-// Update using the given string value. Fulfills the flag.Value interface.
+// Set using the given string value. Fulfills the flag.Value interface.
 func (l *LogLevel) Set(s string) error {
 	value, err := ParseLevel(s)
 	if err != nil {
@@ -95,7 +95,7 @@ func (l *LogLevel) Set(s string) error {
 	return nil
 }
 
-// Returns an empty string, only here to fulfill the pflag.Value interface.
+// Type returns an empty string, only here to fulfill the pflag.Value interface.
 func (l *LogLevel) Type() string {
 	return ""
 }
@@ -121,6 +121,7 @@ func ParseLevel(s string) (LogLevel, error) {
 	return CRITICAL, errors.New("couldn't parse log level " + s)
 }
 
+// RepoLogger ...
 type RepoLogger map[string]*PackageLogger
 
 type loggerStruct struct {

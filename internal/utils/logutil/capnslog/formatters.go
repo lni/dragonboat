@@ -24,21 +24,25 @@ import (
 	"time"
 )
 
+// Formatter ...
 type Formatter interface {
 	Format(pkg string, level LogLevel, depth int, entries ...interface{})
 	Flush()
 }
 
+// NewStringFormatter ...
 func NewStringFormatter(w io.Writer) Formatter {
 	return &StringFormatter{
 		w: bufio.NewWriter(w),
 	}
 }
 
+// StringFormatter ...
 type StringFormatter struct {
 	w *bufio.Writer
 }
 
+// Format ...
 func (s *StringFormatter) Format(pkg string, l LogLevel, i int, entries ...interface{}) {
 	now := time.Now().UTC()
 	s.w.WriteString(now.Format(time.RFC3339))
@@ -59,10 +63,12 @@ func writeEntries(w *bufio.Writer, pkg string, _ LogLevel, _ int, entries ...int
 	}
 }
 
+// Flush ...
 func (s *StringFormatter) Flush() {
 	s.w.Flush()
 }
 
+// NewPrettyFormatter ...
 func NewPrettyFormatter(w io.Writer, debug bool) Formatter {
 	return &PrettyFormatter{
 		w:     bufio.NewWriter(w),
@@ -70,11 +76,13 @@ func NewPrettyFormatter(w io.Writer, debug bool) Formatter {
 	}
 }
 
+// PrettyFormatter ...
 type PrettyFormatter struct {
 	w     *bufio.Writer
 	debug bool
 }
 
+// Format ...
 func (c *PrettyFormatter) Format(pkg string, l LogLevel, depth int, entries ...interface{}) {
 	now := time.Now()
 	ts := now.Format("2006-01-02 15:04:05")
@@ -102,6 +110,7 @@ func (c *PrettyFormatter) Format(pkg string, l LogLevel, depth int, entries ...i
 	c.Flush()
 }
 
+// Flush ...
 func (c *PrettyFormatter) Flush() {
 	c.w.Flush()
 }
@@ -147,11 +156,11 @@ func NewNilFormatter() Formatter {
 }
 
 // Format does nothing.
-func (_ *NilFormatter) Format(_ string, _ LogLevel, _ int, _ ...interface{}) {
+func (nf *NilFormatter) Format(s string, l LogLevel, i int, ii ...interface{}) {
 	// noop
 }
 
 // Flush is included so that the interface is complete, but is a no-op.
-func (_ *NilFormatter) Flush() {
+func (nf *NilFormatter) Flush() {
 	// noop
 }

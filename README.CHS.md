@@ -107,7 +107,7 @@ go build -v -tags="dragonboat_no_rocksdb" pkgname
 
 ## 文档与资料 ##
 
-首先建议您阅读项目的[综述文档](docs/overview.CHS.md)。
+首先建议您阅读项目的[综述文档](docs/overview.CHS.md)与[运维注意事项](docs/devops.CHS.md)。
 
 欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)，[CHANGELOG](CHANGELOG.md)和在线[讨论组](https://gitter.im/lni/dragonboat)。
 

@@ -137,7 +137,7 @@ func (db *TransactionDB) NewCheckpoint() (*Checkpoint, error) {
 }
 
 // Close closes the database.
-func (transactionDB *TransactionDB) Close() {
-	C.rocksdb_transactiondb_close(transactionDB.c)
-	transactionDB.c = nil
+func (db *TransactionDB) Close() {
+	C.rocksdb_transactiondb_close(db.c)
+	db.c = nil
 }

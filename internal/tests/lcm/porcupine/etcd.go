@@ -8,10 +8,12 @@ import (
 	"strconv"
 )
 
+// GetEtcdModel ...
 func GetEtcdModel() Model {
 	return getEtcdModel()
 }
 
+// ParseJepsenLog ...
 func ParseJepsenLog(fn string) []Event {
 	return parseJepsenLog(fn)
 }
@@ -73,7 +75,7 @@ func parseJepsenLog(filename string) []Event {
 	returnCas, _ := regexp.Compile(`^INFO\s+jepsen\.util\s+-\s+(\d+)\s+:(ok|fail)\s+:cas\s+\[(\d+)\s+(\d+)\]$`)
 	timeoutRead, _ := regexp.Compile(`^INFO\s+jepsen\.util\s+-\s+(\d+)\s+:fail\s+:read\s+:timed-out$`)
 
-	var events []Event = nil
+	var events []Event
 
 	id := uint(0)
 	procIdMap := make(map[int]uint)

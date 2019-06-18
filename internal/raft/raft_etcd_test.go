@@ -211,12 +211,12 @@ func TestLeaderTransferToSlowFollower(t *testing.T) {
 		t.Fatalf("node 1 has match %x for node 3, want %x", lead.remotes[3].match, 1)
 	}
 	// Transfer leadership to 3 when node 3 is lack of log.
-	// this will not actually transfer the leadership. on receving the
+	// this will not actually transfer the leadership. on receiving the
 	// MsgLeaderTransfer, dragonboat's raft implementation won't force a MsgAppend msg
 	// to be sent
 	nt.send(pb.Message{From: 3, To: 1, Hint: 3, Type: pb.LeaderTransfer})
 	if lead.state != leader || lead.leaderID != 1 {
-		t.Errorf("leadership transfered to unexpected node")
+		t.Errorf("leadership transferred to unexpected node")
 	}
 	if !lead.leaderTransfering() {
 		t.Errorf("leader transfer flag is gone")

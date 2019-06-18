@@ -98,6 +98,7 @@ func (opts *ReadOptions) SetIterateUpperBound(key []byte) {
 	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, cKey, cKeyLen)
 }
 
+// SetTotalOrderSeek sets to use total order seek.
 func (opts *ReadOptions) SetTotalOrderSeek(value bool) {
 	C.rocksdb_readoptions_set_total_order_seek(opts.c, boolToChar(value))
 }

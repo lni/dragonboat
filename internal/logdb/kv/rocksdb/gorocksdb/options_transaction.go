@@ -36,8 +36,8 @@ func (opts *TransactionOptions) SetDeadlockDetect(value bool) {
 // a transaction attempts to lock a key.
 // If 0, no waiting is done if a lock cannot instantly be acquired.
 // If negative, TransactionDBOptions::transaction_lock_timeout will be used
-func (opts *TransactionOptions) SetLockTimeout(lock_timeout int64) {
-	C.rocksdb_transaction_options_set_lock_timeout(opts.c, C.int64_t(lock_timeout))
+func (opts *TransactionOptions) SetLockTimeout(timeout int64) {
+	C.rocksdb_transaction_options_set_lock_timeout(opts.c, C.int64_t(timeout))
 }
 
 // SetExpiration sets the Expiration duration in milliseconds.
