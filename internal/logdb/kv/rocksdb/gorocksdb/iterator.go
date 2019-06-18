@@ -38,6 +38,7 @@ func NewNativeIterator(c unsafe.Pointer) *Iterator {
 	return &Iterator{nil, 0, (*C.rocksdb_iterator_t)(c)}
 }
 
+// IsValid returns whether the iterator is valid.
 func (iter *Iterator) IsValid() (bool, error) {
 	v := C.rocksdb_iter_valid_not_err(iter.c)
 	if v == -1 {
@@ -85,7 +86,7 @@ func (iter *Iterator) Value() *Slice {
 	return &Slice{cVal, cLen, true}
 }
 
-// Key returns the key the iterator currently holds.
+// OKey returns the key the iterator currently holds.
 func (iter *Iterator) OKey() (Slice, bool) {
 	cKey := C.rocksdb_iter_key(iter.c, &iter.cLen)
 	if cKey == nil {
@@ -94,7 +95,7 @@ func (iter *Iterator) OKey() (Slice, bool) {
 	return Slice{cKey, iter.cLen, true}, true
 }
 
-// Value returns the value in the database the iterator currently holds.
+// OValue returns the value in the database the iterator currently holds.
 func (iter *Iterator) OValue() (Slice, bool) {
 	cVal := C.rocksdb_iter_value(iter.c, &iter.cLen)
 	if cVal == nil {

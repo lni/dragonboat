@@ -121,8 +121,8 @@ func DescribeTree(it *interval.IntTree, fn func(t int, λₜ []int)) {
 	})
 }
 
-// The landscape Interface allows arbitrary collections to be described as a
-// persistence landscape.
+// Interface allows arbitrary collections to be described as a persistence
+// landscape.
 type Interface interface {
 	sort.Interface
 	Item(int) interval.IntRange

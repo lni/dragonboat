@@ -12,6 +12,7 @@ type MultiKeyError struct {
 	errsByIdx map[int]error
 }
 
+// Error ...
 func (mke *MultiKeyError) Error() string {
 	if mke.errsByIdx == nil {
 		return ""
@@ -31,11 +32,12 @@ func (mke *MultiKeyError) Error() string {
 	return fmt.Sprintf("%d keys encountered error (here's a few:%s), cast via err.(*levigo.MultiKeyErrors).ErrorsByKeyIdx() to get all the errors", len(mke.errsByIdx), topErrsMsg)
 }
 
+// GoString ...
 func (mke *MultiKeyError) GoString() string {
 	return fmt.Sprintf("*%#v", *mke)
 }
 
-// ErrorsByKeyIdx() returns a result map of keyIdx => error. e.g.
+// ErrorsByKeyIdx returns a result map of keyIdx => error. e.g.
 // If one calls GetMany(keys) and keys[2], keys[3], keys[7]
 // failed, then result[2] will hold the error for keys[2],
 // result[3] for keys[3] and result[7] the error for keys[7]

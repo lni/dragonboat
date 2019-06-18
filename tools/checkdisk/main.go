@@ -31,33 +31,33 @@ const (
 	dataDirectoryName = "checkdisk-data-safe-to-delete"
 )
 
-type DummyStateMachine struct {
+type dummyStateMachine struct {
 }
 
-func NewDummyStateMachine(clusterID uint64, nodeID uint64) sm.IStateMachine {
-	return &DummyStateMachine{}
+func newDummyStateMachine(clusterID uint64, nodeID uint64) sm.IStateMachine {
+	return &dummyStateMachine{}
 }
 
-func (s *DummyStateMachine) Lookup(query interface{}) (interface{}, error) {
+func (s *dummyStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return query, nil
 }
 
-func (s *DummyStateMachine) Update(data []byte) (sm.Result, error) {
+func (s *dummyStateMachine) Update(data []byte) (sm.Result, error) {
 	return sm.Result{Value: 1}, nil
 }
 
-func (s *DummyStateMachine) SaveSnapshot(w io.Writer,
+func (s *dummyStateMachine) SaveSnapshot(w io.Writer,
 	fc sm.ISnapshotFileCollection, done <-chan struct{}) error {
 	panic("not implemented")
 }
 
-func (s *DummyStateMachine) RecoverFromSnapshot(r io.Reader,
+func (s *dummyStateMachine) RecoverFromSnapshot(r io.Reader,
 	files []sm.SnapshotFile,
 	done <-chan struct{}) error {
 	panic("not implemented")
 }
 
-func (s *DummyStateMachine) Close() error { return nil }
+func (s *dummyStateMachine) Close() error { return nil }
 
 func main() {
 	os.RemoveAll(dataDirectoryName)
@@ -89,7 +89,7 @@ func main() {
 	// use 48 clusters, each with only 1 node
 	for i := uint64(1); i <= uint64(48); i++ {
 		rc.ClusterID = i
-		if err := nh.StartCluster(nodes, false, NewDummyStateMachine, rc); err != nil {
+		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
 		}
 	}

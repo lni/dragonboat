@@ -33,15 +33,15 @@ func NewNativeCheckpoint(c *C.rocksdb_checkpoint_t) *Checkpoint {
 // away from the default, the checkpoint may not contain up-to-date data
 // if WAL writing is not always enabled.
 // Flush will always trigger if it is 2PC.
-func (checkpoint *Checkpoint) CreateCheckpoint(checkpoint_dir string, log_size_for_flush uint64) error {
+func (checkpoint *Checkpoint) CreateCheckpoint(dir string, sz uint64) error {
 	var (
 		cErr *C.char
 	)
 
-	cDir := C.CString(checkpoint_dir)
+	cDir := C.CString(dir)
 	defer C.free(unsafe.Pointer(cDir))
 
-	C.rocksdb_checkpoint_create(checkpoint.c, cDir, C.uint64_t(log_size_for_flush), &cErr)
+	C.rocksdb_checkpoint_create(checkpoint.c, cDir, C.uint64_t(sz), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))

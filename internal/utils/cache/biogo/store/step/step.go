@@ -16,9 +16,12 @@ import (
 )
 
 var (
-	ErrOutOfRange    = errors.New("step: index out of range")
+	// ErrOutOfRange ...
+	ErrOutOfRange = errors.New("step: index out of range")
+	// ErrInvertedRange ...
 	ErrInvertedRange = errors.New("step: inverted range")
-	ErrZeroLength    = errors.New("step: attempt to create zero length vector")
+	// ErrZeroLength ...
+	ErrZeroLength = errors.New("step: attempt to create zero length vector")
 )
 
 type (

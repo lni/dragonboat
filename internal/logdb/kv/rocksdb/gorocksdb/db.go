@@ -13,6 +13,7 @@ import (
 	"unsafe"
 )
 
+// GetRocksdbVersionString returns the version string.
 func GetRocksdbVersionString() string {
 	major := int(C.get_rocksdb_major_version())
 	minor := int(C.get_rocksdb_minor_version())
@@ -239,15 +240,6 @@ func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 		return nil, errors.New(C.GoString(cErr))
 	}
 	return NewSlice(cValue, cValLen), nil
-}
-
-func (db *DB) VGetVal(opts *ReadOptions, key []byte) (Slice, error) {
-	cKey := byteToChar(key)
-	v := C.db_rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)))
-	if v.err > 0 {
-		return Slice{}, errors.New("rocksdb_get failed")
-	}
-	return Slice{v.val, v.len, false}, nil
 }
 
 // GetBytes is like Get but returns a copy of the data.
@@ -623,7 +615,7 @@ func (db *DB) DeleteFile(name string) {
 	C.rocksdb_delete_file(db.c, cName)
 }
 
-// DeleteFileRange deletes files in the specified range.
+// DeleteFileInRange deletes files in the specified range.
 func (db *DB) DeleteFileInRange(startKey, limitKey []byte) error {
 	var (
 		cErr      *C.char

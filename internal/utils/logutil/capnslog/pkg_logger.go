@@ -19,6 +19,7 @@ import (
 	"os"
 )
 
+// PackageLogger ...
 type PackageLogger struct {
 	pkg   string
 	level LogLevel
@@ -51,7 +52,7 @@ func (p *PackageLogger) LevelAt(l LogLevel) bool {
 	return p.level >= l
 }
 
-// Log a formatted string at any level between ERROR and TRACE
+// Logf a formatted string at any level between ERROR and TRACE
 func (p *PackageLogger) Logf(l LogLevel, format string, args ...interface{}) {
 	p.internalLog(calldepth, l, fmt.Sprintf(format, args...))
 }
@@ -63,49 +64,58 @@ func (p *PackageLogger) Log(l LogLevel, args ...interface{}) {
 
 // log stdlib compatibility
 
+// Println ...
 func (p *PackageLogger) Println(args ...interface{}) {
 	p.internalLog(calldepth, INFO, fmt.Sprintln(args...))
 }
 
+// Printf ...
 func (p *PackageLogger) Printf(format string, args ...interface{}) {
 	p.Logf(INFO, format, args...)
 }
 
+// Print ...
 func (p *PackageLogger) Print(args ...interface{}) {
 	p.internalLog(calldepth, INFO, fmt.Sprint(args...))
 }
 
 // Panic and fatal
 
+// Panicf ...
 func (p *PackageLogger) Panicf(format string, args ...interface{}) {
 	s := fmt.Sprintf(format, args...)
 	p.internalLog(calldepth, CRITICAL, s)
 	panic(s)
 }
 
+// Panic ...
 func (p *PackageLogger) Panic(args ...interface{}) {
 	s := fmt.Sprint(args...)
 	p.internalLog(calldepth, CRITICAL, s)
 	panic(s)
 }
 
+// Panicln ...
 func (p *PackageLogger) Panicln(args ...interface{}) {
 	s := fmt.Sprintln(args...)
 	p.internalLog(calldepth, CRITICAL, s)
 	panic(s)
 }
 
+// Fatalf ...
 func (p *PackageLogger) Fatalf(format string, args ...interface{}) {
 	p.Logf(CRITICAL, format, args...)
 	os.Exit(1)
 }
 
+// Fatal ...
 func (p *PackageLogger) Fatal(args ...interface{}) {
 	s := fmt.Sprint(args...)
 	p.internalLog(calldepth, CRITICAL, s)
 	os.Exit(1)
 }
 
+// Fatalln ...
 func (p *PackageLogger) Fatalln(args ...interface{}) {
 	s := fmt.Sprintln(args...)
 	p.internalLog(calldepth, CRITICAL, s)
@@ -114,46 +124,55 @@ func (p *PackageLogger) Fatalln(args ...interface{}) {
 
 // Error Functions
 
+// Errorf ...
 func (p *PackageLogger) Errorf(format string, args ...interface{}) {
 	p.Logf(ERROR, format, args...)
 }
 
+// Error ...
 func (p *PackageLogger) Error(entries ...interface{}) {
 	p.internalLog(calldepth, ERROR, entries...)
 }
 
 // Warning Functions
 
+// Warningf ...
 func (p *PackageLogger) Warningf(format string, args ...interface{}) {
 	p.Logf(WARNING, format, args...)
 }
 
+// Warning ...
 func (p *PackageLogger) Warning(entries ...interface{}) {
 	p.internalLog(calldepth, WARNING, entries...)
 }
 
 // Notice Functions
 
+// Noticef ...
 func (p *PackageLogger) Noticef(format string, args ...interface{}) {
 	p.Logf(NOTICE, format, args...)
 }
 
+// Notice ...
 func (p *PackageLogger) Notice(entries ...interface{}) {
 	p.internalLog(calldepth, NOTICE, entries...)
 }
 
 // Info Functions
 
+// Infof ...
 func (p *PackageLogger) Infof(format string, args ...interface{}) {
 	p.Logf(INFO, format, args...)
 }
 
+// Info ...
 func (p *PackageLogger) Info(entries ...interface{}) {
 	p.internalLog(calldepth, INFO, entries...)
 }
 
 // Debug Functions
 
+// Debugf ...
 func (p *PackageLogger) Debugf(format string, args ...interface{}) {
 	if p.level < DEBUG {
 		return
@@ -161,6 +180,7 @@ func (p *PackageLogger) Debugf(format string, args ...interface{}) {
 	p.Logf(DEBUG, format, args...)
 }
 
+// Debug ...
 func (p *PackageLogger) Debug(entries ...interface{}) {
 	if p.level < DEBUG {
 		return
@@ -170,6 +190,7 @@ func (p *PackageLogger) Debug(entries ...interface{}) {
 
 // Trace Functions
 
+// Tracef ...
 func (p *PackageLogger) Tracef(format string, args ...interface{}) {
 	if p.level < TRACE {
 		return
@@ -177,6 +198,7 @@ func (p *PackageLogger) Tracef(format string, args ...interface{}) {
 	p.Logf(TRACE, format, args...)
 }
 
+// Trace ...
 func (p *PackageLogger) Trace(entries ...interface{}) {
 	if p.level < TRACE {
 		return
@@ -184,6 +206,7 @@ func (p *PackageLogger) Trace(entries ...interface{}) {
 	p.internalLog(calldepth, TRACE, entries...)
 }
 
+// Flush ...
 func (p *PackageLogger) Flush() {
 	logger.Lock()
 	defer logger.Unlock()

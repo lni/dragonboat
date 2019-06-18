@@ -60,6 +60,7 @@ import (
 	"time"
 )
 
+// ExtractGID returns the GID of the goroutine.
 // from https://github.com/petermattis/goid/blob/master/goid.go
 func ExtractGID(s []byte) int64 {
 	s = s[len("goroutine "):]

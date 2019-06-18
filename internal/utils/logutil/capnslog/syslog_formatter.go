@@ -21,10 +21,12 @@ import (
 	"log/syslog"
 )
 
+// NewSyslogFormatter ...
 func NewSyslogFormatter(w *syslog.Writer) Formatter {
 	return &syslogFormatter{w}
 }
 
+// NewDefaultSyslogFormatter ...
 func NewDefaultSyslogFormatter(tag string) (Formatter, error) {
 	w, err := syslog.New(syslog.LOG_DEBUG, tag)
 	if err != nil {

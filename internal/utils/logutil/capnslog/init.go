@@ -36,6 +36,7 @@ func init() {
 	SetGlobalLogLevel(INFO)
 }
 
+// NewDefaultFormatter ...
 func NewDefaultFormatter(out io.Writer) Formatter {
 	return NewPrettyFormatter(out, false)
 }

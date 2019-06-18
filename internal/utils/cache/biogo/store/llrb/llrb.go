@@ -12,7 +12,9 @@
 package llrb
 
 const (
+	// TD234 ...
 	TD234 = iota
+	// BU23 ...
 	BU23
 )
 
@@ -53,18 +55,19 @@ func (c Color) String() string {
 const (
 	// Red as false give us the defined behaviour that new nodes are red. Although this
 	// is incorrect for the root node, that is resolved on the first insertion.
-	Red   Color = false
+	Red Color = false
+	// Black ...
 	Black Color = true
 )
 
-// A Node represents a node in the LLRB tree.
+// Node represents a node in the LLRB tree.
 type Node struct {
 	Elem        Comparable
 	Left, Right *Node
 	Color       Color
 }
 
-// A Tree manages the root node of an LLRB tree. Public methods are exposed through this type.
+// Tree manages the root node of an LLRB tree. Public methods are exposed through this type.
 type Tree struct {
 	Root  *Node // Root node of the tree.
 	Count int   // Number of elements stored.
@@ -346,7 +349,7 @@ func (n *Node) delete(e Comparable) (root *Node, d int) {
 	return
 }
 
-// Return the minimum value stored in the tree. This will be the left-most minimum value if
+// Min returns the minimum value stored in the tree. This will be the left-most minimum value if
 // insertion without replacement has been used.
 func (t *Tree) Min() Comparable {
 	if t.Root == nil {
@@ -361,7 +364,7 @@ func (n *Node) min() *Node {
 	return n
 }
 
-// Return the maximum value stored in the tree. This will be the right-most maximum value if
+// Max returns the maximum value stored in the tree. This will be the right-most maximum value if
 // insertion without replacement has been used.
 func (t *Tree) Max() Comparable {
 	if t.Root == nil {
@@ -561,7 +564,7 @@ func (n *Node) doRangeReverse(fn Operation, hi, lo Comparable) (done bool) {
 	return
 }
 
-// DoMatch performs fn on all values stored in the tree that match q according to Compare, with
+// DoMatching performs fn on all values stored in the tree that match q according to Compare, with
 // q.Compare() used to guide tree traversal, so DoMatching() will out perform Do() with a called
 // conditional function if the condition is based on sort order, but can not be reliably used if
 // the condition is independent of sort order. A boolean is returned indicating whether the Do

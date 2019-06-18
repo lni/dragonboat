@@ -25,19 +25,6 @@ func WriteBatchFrom(data []byte) *WriteBatch {
 	return NewNativeWriteBatch(C.rocksdb_writebatch_create_from(byteToChar(data), C.size_t(len(data))))
 }
 
-func (wb *WriteBatch) BatchedPut(key1, value1, key2, value2, key3, value3, key4, value4,
-	key5, value5, key6, value6, key7, value7, key8, value8 []byte) {
-	C.rocksdb_writebatch_batched_put(wb.c,
-		byteToChar(key1), C.size_t(len(key1)), byteToChar(value1), C.size_t(len(value1)),
-		byteToChar(key2), C.size_t(len(key2)), byteToChar(value2), C.size_t(len(value2)),
-		byteToChar(key3), C.size_t(len(key3)), byteToChar(value3), C.size_t(len(value3)),
-		byteToChar(key4), C.size_t(len(key4)), byteToChar(value4), C.size_t(len(value4)),
-		byteToChar(key5), C.size_t(len(key5)), byteToChar(value5), C.size_t(len(value5)),
-		byteToChar(key6), C.size_t(len(key6)), byteToChar(value6), C.size_t(len(value6)),
-		byteToChar(key7), C.size_t(len(key7)), byteToChar(value7), C.size_t(len(value7)),
-		byteToChar(key8), C.size_t(len(key8)), byteToChar(value8), C.size_t(len(value8)))
-}
-
 // Put queues a key-value pair.
 func (wb *WriteBatch) Put(key, value []byte) {
 	cKey := byteToChar(key)

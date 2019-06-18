@@ -436,7 +436,7 @@ func (n *Node) delete(min Comparable, id uintptr, fast bool) (root *Node, d int)
 	return
 }
 
-// Return the left-most interval stored in the tree.
+// Min returns the left-most interval stored in the tree.
 func (t *Tree) Min() Interface {
 	if t.Root == nil {
 		return nil
@@ -450,7 +450,7 @@ func (n *Node) min() *Node {
 	return n
 }
 
-// Return the right-most interval stored in the tree.
+// Max returns the right-most interval stored in the tree.
 func (t *Tree) Max() Interface {
 	if t.Root == nil {
 		return nil
@@ -601,7 +601,7 @@ func (n *Node) doReverse(fn Operation) (done bool) {
 	return
 }
 
-// DoMatch performs fn on all intervals stored in the tree that match q according to Overlap, with
+// DoMatching performs fn on all intervals stored in the tree that match q according to Overlap, with
 // q.Overlap() used to guide tree traversal, so DoMatching() will out perform Do() with a called
 // conditional function if the condition is based on sort order, but can not be reliably used if
 // the condition is independent of sort order. A boolean is returned indicating whether the Do
@@ -633,7 +633,7 @@ func (n *Node) doMatch(fn Operation, q Overlapper) (done bool) {
 	return
 }
 
-// DoMatchReverse performs fn on all intervals stored in the tree that match q according to Overlap,
+// DoMatchingReverse performs fn on all intervals stored in the tree that match q according to Overlap,
 // with q.Overlap() used to guide tree traversal, so DoMatching() will out perform Do() with a called
 // conditional function if the condition is based on sort order, but can not be reliably used if
 // the condition is independent of sort order. A boolean is returned indicating whether the Do

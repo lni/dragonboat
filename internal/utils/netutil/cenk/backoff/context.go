@@ -20,7 +20,7 @@ type backOffContext struct {
 // WithContext returns a BackOffContext with context ctx
 //
 // ctx must not be nil
-func WithContext(b BackOff, ctx context.Context) BackOffContext {
+func WithContext(ctx context.Context, b BackOff) BackOffContext {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -42,7 +42,7 @@ func ensureContext(b BackOff) BackOffContext {
 	if cb, ok := b.(BackOffContext); ok {
 		return cb
 	}
-	return WithContext(b, context.Background())
+	return WithContext(context.Background(), b)
 }
 
 func (b *backOffContext) Context() context.Context {
