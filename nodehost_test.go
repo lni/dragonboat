@@ -2462,6 +2462,10 @@ func (s *testSink2) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	return true, false
 }
 
+func (s *testSink2) Stop() {
+	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+}
+
 func (s *testSink2) ClusterID() uint64 {
 	return 2000
 }
@@ -2482,6 +2486,10 @@ func (s *dataCorruptionSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	}
 	s.receiver.AddChunk(chunk)
 	return true, false
+}
+
+func (s *dataCorruptionSink) Stop() {
+	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 func (s *dataCorruptionSink) ClusterID() uint64 {

@@ -47,6 +47,11 @@ func (s *Sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	return s.l.SendChunk(chunk)
 }
 
+// Stop stops the sink processing.
+func (s *Sink) Stop() {
+	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+}
+
 // ClusterID returns the cluster ID of the source node.
 func (s *Sink) ClusterID() uint64 {
 	return s.l.clusterID

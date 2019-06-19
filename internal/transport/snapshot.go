@@ -63,8 +63,7 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 }
 
 // GetStreamConnection returns a connection used for streaming snapshot.
-func (t *Transport) GetStreamConnection(clusterID uint64,
-	nodeID uint64) *Sink {
+func (t *Transport) GetStreamConnection(clusterID uint64, nodeID uint64) *Sink {
 	s := t.getStreamConnection(clusterID, nodeID)
 	if s == nil {
 		t.sendSnapshotNotification(clusterID, nodeID, true)
@@ -72,8 +71,7 @@ func (t *Transport) GetStreamConnection(clusterID uint64,
 	return s
 }
 
-func (t *Transport) getStreamConnection(clusterID uint64,
-	nodeID uint64) *Sink {
+func (t *Transport) getStreamConnection(clusterID uint64, nodeID uint64) *Sink {
 	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
 		return nil
