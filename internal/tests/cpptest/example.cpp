@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstring>
 #include <unistd.h>
+#include <vector>
 #include "example.h"
 
 HelloWorldStateMachine::HelloWorldStateMachine(uint64_t clusterID,
@@ -28,11 +29,19 @@ HelloWorldStateMachine::~HelloWorldStateMachine()
 {
 }
 
-uint64_t HelloWorldStateMachine::update(const dragonboat::Byte *data,
-  size_t sz) noexcept
+void HelloWorldStateMachine::update(dragonboat::Entry &ent) noexcept
 {
   count_++;
-  return count_;
+  ent.result = count_;
+}
+
+void HelloWorldStateMachine::batchedUpdate(
+  std::vector<dragonboat::Entry> &ents) noexcept
+{
+  for (auto &it : ents) {
+    count_++;
+    it.result = count_;
+  }
 }
 
 LookupResult HelloWorldStateMachine::lookup(const void *data) const noexcept
@@ -91,11 +100,19 @@ TestConcurrentStateMachine::~TestConcurrentStateMachine()
 {
 }
 
-uint64_t TestConcurrentStateMachine::update(
-  const dragonboat::Byte *data, size_t size) noexcept
+void TestConcurrentStateMachine::update(dragonboat::Entry &ent) noexcept
 {
   count_++;
-  return count_;
+  ent.result = count_;
+}
+
+void TestConcurrentStateMachine::batchedUpdate(
+  std::vector<dragonboat::Entry> &ents) noexcept
+{
+  for (auto &it : ents) {
+    count_++;
+    it.result = count_;
+  }
 }
 
 LookupResult TestConcurrentStateMachine::lookup(const void *data) const noexcept
@@ -174,11 +191,19 @@ OpenResult FakeOnDiskStateMachine::open(
   return r;
 }
 
-uint64_t FakeOnDiskStateMachine::update(
-  const dragonboat::Byte *data, size_t size, uint64_t index) noexcept
+void FakeOnDiskStateMachine::update(dragonboat::Entry &ent) noexcept
 {
   count_++;
-  return count_;
+  ent.result = count_;
+}
+
+void FakeOnDiskStateMachine::batchedUpdate(
+  std::vector<dragonboat::Entry> &ents) noexcept
+{
+  for (auto &it : ents) {
+    count_++;
+    it.result = count_;
+  }
 }
 
 LookupResult FakeOnDiskStateMachine::lookup(const void *data) const noexcept

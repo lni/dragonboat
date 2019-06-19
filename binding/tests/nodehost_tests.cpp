@@ -34,12 +34,18 @@ class TestRegularStateMachine : public dragonboat::RegularStateMachine {
   ~TestRegularStateMachine()
   {}
  protected:
-  uint64_t update(
-    const dragonboat::Byte *data,
-    size_t size) noexcept override
+  void update(dragonboat::Entry &ent) noexcept override
   {
     count_++;
-    return count_;
+    ent.result = count_;
+  }
+
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override
+  {
+    for (auto &it : ents) {
+      count_++;
+      it.result = count_;
+    }
   }
 
   LookupResult lookup(const void *data) const noexcept override
@@ -102,10 +108,18 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine {
   ~TestConcurrentStateMachine()
   {}
  protected:
-  uint64_t update(const dragonboat::Byte *data, size_t size) noexcept override
+  void update(dragonboat::Entry &ent) noexcept override
   {
     count_++;
-    return count_;
+    ent.result = count_;
+  }
+
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override
+  {
+    for (auto &it : ents) {
+      count_++;
+      it.result = count_;
+    }
   }
 
   LookupResult lookup(const void *data) const noexcept override
@@ -195,13 +209,24 @@ class TestOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
     return r;
   }
 
-  uint64_t update(const dragonboat::Byte *data, size_t size,
-    uint64_t index) noexcept override
+  void update(dragonboat::Entry &ent) noexcept override
   {
     count_++;
-    if (index_)
-      *index_ = index;
-    return count_;
+    ent.result = count_;
+    if (index_) {
+      *index_ = ent.index;
+    }
+  }
+
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override
+  {
+    for (auto &it : ents) {
+      count_++;
+      it.result = count_;
+      if (index_) {
+        *index_ = it.index;
+      }
+    }
   }
 
   LookupResult lookup(const void *data) const noexcept override

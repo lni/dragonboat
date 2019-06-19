@@ -268,14 +268,23 @@ func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 
 func (ds *RegularStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	ds.ensureNotDestroyed()
+	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	defer C.free(eps)
 	for idx, ent := range entries {
-		var dp *C.uchar
 		data := ent.Cmd
-		if len(data) > 0 {
-			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-		}
-		v := C.UpdateDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-		entries[idx].Result = sm.Result{Value: uint64(v)}
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		ep.index = C.uint64_t(ent.Index)
+		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
+		ep.cmdLen = C.size_t(len(data))
+		ep.result = C.uint64_t(0)
+	}
+	C.BatchedUpdateDBRegularStateMachine(
+		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
+	for idx, _ := range entries {
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
 	}
 	return entries, nil
 }
@@ -288,7 +297,8 @@ func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	v := C.UpdateDBRegularStateMachine(
+		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
@@ -446,7 +456,8 @@ func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)))
+	v := C.UpdateDBConcurrentStateMachine(
+		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
@@ -455,14 +466,23 @@ func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 
 func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	ds.ensureNotDestroyed()
+	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	defer C.free(eps)
 	for idx, ent := range entries {
-		var dp *C.uchar
 		data := ent.Cmd
-		if len(data) > 0 {
-			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-		}
-		v := C.UpdateDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-		entries[idx].Result = sm.Result{Value: uint64(v)}
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		ep.index = C.uint64_t(ent.Index)
+		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
+		ep.cmdLen = C.size_t(len(data))
+		ep.result = C.uint64_t(0)
+	}
+	C.BatchedUpdateDBConcurrentStateMachine(
+		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
+	for idx, _ := range entries {
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
 	}
 	return entries, nil
 }
@@ -661,7 +681,8 @@ func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	if len(e.Cmd) > 0 {
 		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
 	}
-	v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(e.Cmd)), C.uint64_t(e.Index))
+	v := C.UpdateDBOnDiskStateMachine(
+		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
 	if session != nil {
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
@@ -681,14 +702,23 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 		plog.Panicf("first entry index to apply %d, applied %d",
 			entries[0].Index, ds.applied)
 	}
+	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	defer C.free(eps)
 	for idx, ent := range entries {
-		var dp *C.uchar
 		data := ent.Cmd
-		if len(data) > 0 {
-			dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-		}
-		v := C.UpdateDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)), C.uint64_t(ent.Index))
-		entries[idx].Result = sm.Result{Value: uint64(v)}
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		ep.index = C.uint64_t(ent.Index)
+		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
+		ep.cmdLen = C.size_t(len(data))
+		ep.result = C.uint64_t(0)
+	}
+	C.BatchedUpdateDBOnDiskStateMachine(
+		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
+	for idx, _ := range entries {
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
 	}
 	ds.applied = entries[len(entries)-1].Index
 	return entries, nil

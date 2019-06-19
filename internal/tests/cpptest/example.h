@@ -32,8 +32,8 @@ class HelloWorldStateMachine : public dragonboat::RegularStateMachine
   HelloWorldStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   ~HelloWorldStateMachine();
  protected:
-  uint64_t update(const dragonboat::Byte *data,
-    size_t size) noexcept override;
+  void update(dragonboat::Entry &ent) noexcept override;
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const void *data) const noexcept override;
   uint64_t getHash() const noexcept override;
   SnapshotResult saveSnapshot(dragonboat::SnapshotWriter *writer,
@@ -53,7 +53,8 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
   TestConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   ~TestConcurrentStateMachine();
  protected:
-  uint64_t update(const dragonboat::Byte *data, size_t size) noexcept override;
+  void update(dragonboat::Entry &ent) noexcept override;
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const void *data) const noexcept override;
   uint64_t getHash() const noexcept override;
   PrepareSnapshotResult prepareSnapshot() const noexcept override;
@@ -76,8 +77,8 @@ class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   ~FakeOnDiskStateMachine();
  protected:
   OpenResult open(const dragonboat::DoneChan &done) noexcept override;
-  uint64_t update(const dragonboat::Byte *data, size_t size,
-    uint64_t index) noexcept override;
+  void update(dragonboat::Entry &ent) noexcept override;
+  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const void *data) const noexcept override;
   int sync() const noexcept override;
   uint64_t getHash() const noexcept override;

@@ -87,6 +87,16 @@ typedef struct
   size_t index;
 } Membership;
 
+struct Entry
+{
+  uint64_t index;
+  unsigned char *cmd;
+  size_t cmdLen;
+  uint64_t result;
+};
+
+typedef struct Entry Entry;
+
 // ErrorCode is the error code used by dragonboat's language bindings.
 // Error codes here are mostly mapped from exported Go errors in the
 // github.com/lni/dragonboat/multiraft

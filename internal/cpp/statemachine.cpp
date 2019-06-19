@@ -28,9 +28,14 @@ RegularStateMachine::~RegularStateMachine()
 {
 }
 
-uint64_t RegularStateMachine::Update(const Byte *data, size_t size) noexcept
+void RegularStateMachine::Update(Entry &ent) noexcept
 {
-  return update(data, size);
+  update(ent);
+}
+
+void RegularStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
+{
+  batchedUpdate(ents);
 }
 
 LookupResult RegularStateMachine::Lookup(const void *data) const noexcept
@@ -66,9 +71,14 @@ ConcurrentStateMachine::~ConcurrentStateMachine()
 {
 }
 
-uint64_t ConcurrentStateMachine::Update(const Byte *byte, size_t size) noexcept
+void ConcurrentStateMachine::Update(Entry &ent) noexcept
 {
-  return update(byte, size);
+  update(ent);
+}
+
+void ConcurrentStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
+{
+  batchedUpdate(ents);
 }
 
 LookupResult ConcurrentStateMachine::Lookup(const void *data) const noexcept
@@ -114,10 +124,14 @@ OpenResult OnDiskStateMachine::Open(const DoneChan &done) noexcept
   return open(done);
 }
 
-uint64_t OnDiskStateMachine::Update(const Byte *data, size_t size,
-  uint64_t index) noexcept
+void OnDiskStateMachine::Update(Entry &ent) noexcept
 {
-  return update(data, size, index);
+  update(ent);
+}
+
+void OnDiskStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
+{
+  batchedUpdate(ents);
 }
 
 LookupResult OnDiskStateMachine::Lookup(const void *data) const noexcept

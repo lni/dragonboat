@@ -34,6 +34,15 @@ struct SnapshotFile {
   size_t Length;
 };
 
+struct Entry {
+  Entry(uint64_t index, const Byte *cmd, size_t cmdLen, uint64_t &result)
+    : index(index), cmd(cmd), cmdLen(cmdLen), result(result) {}
+  uint64_t index;
+  const Byte *cmd;
+  size_t cmdLen;
+  uint64_t &result;
+};
+
 using SnapshotFile = struct SnapshotFile;
 
 // StateMachine is the base class of all C++ state machines used in Dragonboat.
@@ -58,7 +67,8 @@ class RegularStateMachine
   // the node. They are provided for logging/debugging purposes.
   RegularStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~RegularStateMachine();
-  uint64_t Update(const Byte *data, size_t size) noexcept;
+  void Update(Entry &ent) noexcept;
+  void BatchedUpdate(std::vector<Entry> &ents) noexcept;
   LookupResult Lookup(const void *data) const noexcept;
   uint64_t GetHash() const noexcept;
   SnapshotResult SaveSnapshot(SnapshotWriter *writer,
@@ -79,7 +89,8 @@ class RegularStateMachine
   // is owned by the caller of the update method, the update method should not
   // keep a reference to it after the end of the update() call. update() returns
   // an uint64 value used to indicate the result of the update operation.
-  virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
+  virtual void update(Entry &ent) noexcept = 0;
+  virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   // lookup() queries the state of the StateMachine and returns the query
   // result. The input byte array parameter is the data used to specify what
   // need to be queried, it is up to the actual subclass of StateMachine to
@@ -138,7 +149,8 @@ class ConcurrentStateMachine
  public:
   ConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~ConcurrentStateMachine();
-  uint64_t Update(const Byte *data, size_t size) noexcept;
+  void Update(Entry &ent) noexcept;
+  void BatchedUpdate(std::vector<Entry> &ents) noexcept;
   LookupResult Lookup(const void *data) const noexcept;
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
@@ -151,7 +163,8 @@ class ConcurrentStateMachine
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
-  virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
+  virtual void update(Entry &ent) noexcept = 0;
+  virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   virtual LookupResult lookup(const void *data) const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;
   // prepareSnapshot prepares the snapshot to be concurrently captured and saved.
@@ -200,7 +213,8 @@ class OnDiskStateMachine
   OnDiskStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~OnDiskStateMachine();
   OpenResult Open(const DoneChan &done) noexcept;
-  uint64_t Update(const Byte *data, size_t size, uint64_t index) noexcept;
+  void Update(Entry &ent) noexcept;
+  void BatchedUpdate(std::vector<Entry> &ents) noexcept;
   LookupResult Lookup(const void *data) const noexcept;
   int Sync() const noexcept;
   uint64_t GetHash() const noexcept;
@@ -213,8 +227,8 @@ class OnDiskStateMachine
   uint64_t cluster_id_;
   uint64_t node_id_;
   virtual OpenResult open(const DoneChan &done) noexcept = 0;
-  virtual uint64_t update(const Byte *data, size_t size,
-    uint64_t index) noexcept = 0;
+  virtual void update(Entry &ent) noexcept = 0;
+  virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   virtual LookupResult lookup(const void *data) const noexcept = 0;
 	// sync synchronizes all in-core state of the state machine to permanent
 	// storage so the state machine can continue from its latest state after
