@@ -898,7 +898,6 @@ func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	err := getSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("stream snapshot failed, %v", err)
-		// FIXME: writer.failed = true
 	}
 	return err
 }
