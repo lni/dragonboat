@@ -1019,6 +1019,10 @@ func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 	return true, false
 }
 
+func (s *testSink) Stop() {
+	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+}
+
 func (s *testSink) ClusterID() uint64 {
 	return 1
 }
