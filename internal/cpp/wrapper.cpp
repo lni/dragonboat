@@ -19,7 +19,9 @@
 #include <cstddef>
 #include <dlfcn.h>
 #include "wrapper.h"
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 #include "dragonboat/snapshotio.h"
 
 typedef struct CollectedFiles {

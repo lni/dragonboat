@@ -15,17 +15,10 @@
 #ifndef DRAGONBOAT_EXAMPLE_STATEMACHINE_H
 #define DRAGONBOAT_EXAMPLE_STATEMACHINE_H
 
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 
-// HelloWorldStateMachine is an example CPP StateMachine. It shows how to
-// implement a StateMachine with your own application logic and interact with
-// the rest of the Dragonboat system. 
-// Basically, the logic is simple - this data store increases the update_count_
-// member variable for each incoming update request no matter what is in the
-// update request. Lookup requests always return the integer value stored in
-// update_count_, same as the getHash method. 
-// 
-// See statemachine.h for more details about the StateMachine interface. 
 class HelloWorldStateMachine : public dragonboat::RegularStateMachine
 {
  public:

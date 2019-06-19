@@ -18,7 +18,6 @@
 #include "_cgo_export.h"
 #include "dragonboat/managed.h"
 #include "dragonboat/dragonboat.h"
-#include "dragonboat/statemachine.h"
 #include "dragonboat/snapshotio.h"
 
 namespace dragonboat {
@@ -33,7 +32,7 @@ WriteToManagedWriter_return writeToManagedWriter(oid_t oid,
   return WriteToManagedWriter(oid, bytes);
 }
 
-ReadFromManagedReader_return  readFromManagedReader(oid_t oid,
+ReadFromManagedReader_return readFromManagedReader(oid_t oid,
   Byte *data, size_t size)
 {
   GoSlice bytes;

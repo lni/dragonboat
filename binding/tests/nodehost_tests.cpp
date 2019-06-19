@@ -21,7 +21,9 @@
 #include "zupply.h"
 #include "dragonboat/dragonboat.h"
 #include "gtest/gtest.h"
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 
 // State Machines
 

@@ -33,8 +33,8 @@
 //   of dragonboat library, as there are obvious overheads for accessing Go
 //   features from C/C++.
 // - User applications can not specify what Raft RPC and Log DB implementation
-//   to use. The C++ binding always use the built-in
-//   TCP based Raft RPC module and the RocksDB based Log DB module.
+//   to use. The C++ binding always use the built-in TCP based Raft RPC module
+//   and the RocksDB/LevelDB based Log DB module.
 // - Users can not specify custom logger to use in C++ applications.
 //
 
@@ -111,8 +111,8 @@ class Config
   // OrderedConfigChange determines whether Raft membership change is enforced
   // with ordered config change ID.
   bool OrderedConfigChange;
-  // MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored in
-  // memory.
+  // MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored
+  // in memory.
   uint64_t MaxInMemLogSize;
 };
 
@@ -322,6 +322,20 @@ class Session : public ManagedObject
   friend class NodeHost;
 };
 
+
+// Entry is the wrapper of dragonboat sm.Entry used to update the state machine
+// Entry::result should be set as the result of the update operation.
+struct Entry {
+  Entry(uint64_t index, const Byte *cmd, size_t cmdLen, uint64_t &result)
+    : index(index), cmd(cmd), cmdLen(cmdLen), result(result) {}
+  // the index used to indicate the index of the raft entry.
+  uint64_t index;
+  const Byte *cmd;
+  size_t cmdLen;
+  // the result store the result of the update operation.
+  uint64_t &result;
+};
+
 // RequestResult is the result returned to client to indicate the complete state
 // and actual result of the request.
 struct RequestResult
@@ -424,6 +438,7 @@ class NodeHost : public ManagedObject
   // factoryName is the function name of the exported C function in the .so to
   // create state machine
   // smType is the state machine type, see binding.h::StateMachineType
+  // For more details, see statemachine/regular.h.
   Status StartCluster(const Peers& replicas, bool join,
     std::string pluginFile, std::string factoryName, StateMachineType smType,
     Config config) noexcept;
@@ -474,11 +489,10 @@ class NodeHost : public ManagedObject
     const Byte *buf, size_t buflen,
     Milliseconds timeout, UpdateResult *result) noexcept;
   // SyncRead performs a synchronous linearizable read on the specified raft
-  // cluster. The query buffer contains the data buffer to be received by the
-  // lookup method of the StateMachine instance, the query result will be
-  // written into the result buffer. It is caller's responsibility to provide a
-  // big enough result buffer, or error code indicating the result buffer is too
-  // smaller will be returned.
+  // cluster. The query points to any data to be received by the lookup method
+  // of the StateMachine instance, the query result owned by the caller will be
+  // stored in the result. It is up to the caller to interpret the meaning of
+  // result and release the associated resource.
   Status SyncRead(ClusterID clusterID,
     const void *query, void **result, Milliseconds timeout) noexcept;
   // Proposes starts an asynchronous proposal on the cluster specified by the

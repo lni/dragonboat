@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <vector>
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 #include "dragonboat/binding.h"
 
 namespace dragonboat {
@@ -38,9 +40,9 @@ void RegularStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
   batchedUpdate(ents);
 }
 
-LookupResult RegularStateMachine::Lookup(const void *data) const noexcept
+LookupResult RegularStateMachine::Lookup(const void *query) const noexcept
 {
-  return lookup(data);
+  return lookup(query);
 }
 
 uint64_t RegularStateMachine::GetHash() const noexcept
@@ -81,9 +83,9 @@ void ConcurrentStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
   batchedUpdate(ents);
 }
 
-LookupResult ConcurrentStateMachine::Lookup(const void *data) const noexcept
+LookupResult ConcurrentStateMachine::Lookup(const void *query) const noexcept
 {
-  return lookup(data);
+  return lookup(query);
 }
 
 uint64_t ConcurrentStateMachine::GetHash() const noexcept
@@ -134,9 +136,9 @@ void OnDiskStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
   batchedUpdate(ents);
 }
 
-LookupResult OnDiskStateMachine::Lookup(const void *data) const noexcept
+LookupResult OnDiskStateMachine::Lookup(const void *query) const noexcept
 {
-  return lookup(data);
+  return lookup(query);
 }
 
 int OnDiskStateMachine::Sync() const noexcept
