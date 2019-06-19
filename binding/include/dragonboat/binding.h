@@ -194,8 +194,7 @@ typedef struct
 
 typedef struct
 {
-  char *result;
-  size_t size;
+  void *result;
   int errcode;
 } PrepareSnapshotResult;
 

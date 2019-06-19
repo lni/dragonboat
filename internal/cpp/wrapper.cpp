@@ -147,13 +147,13 @@ PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
 }
 
 SnapshotResult SaveSnapshotDBConcurrentStateMachine(
-  CPPConcurrentStateMachine *ds, const unsigned char *data, size_t size,
+  CPPConcurrentStateMachine *ds, const void *context,
   uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);
   dragonboat::DoneChan done(doneChOID);
   dragonboat::SnapshotFileCollection collection(collectionOID);
-  return ds->sm->SaveSnapshot(data, size, &writer, &collection, done);
+  return ds->sm->SaveSnapshot(context, &writer, &collection, done);
 }
 
 int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
@@ -162,12 +162,6 @@ int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
     dragonboat::ProxySnapshotReader reader(readerOID);
     dragonboat::DoneChan done(doneChOID);
     return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
-}
-
-void FreePrepareSnapshotResultDBConcurrentStateMachine(
-  CPPConcurrentStateMachine *ds, PrepareSnapshotResult r)
-{
-  ds->sm->FreePrepareSnapshotResult(r);
 }
 
 CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
@@ -230,12 +224,12 @@ PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
 }
 
 SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  const unsigned char *data, size_t size, uint64_t writerOID,
+  const void *context, uint64_t writerOID,
   uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);
   dragonboat::DoneChan done(doneChOID);
-  return ds->sm->SaveSnapshot(data, size, &writer, done);
+  return ds->sm->SaveSnapshot(context, &writer, done);
 }
 
 int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
@@ -244,12 +238,6 @@ int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
     dragonboat::ProxySnapshotReader reader(readerOID);
     dragonboat::DoneChan done(doneChOID);
     return ds->sm->RecoverFromSnapshot(&reader, done);
-}
-
-void FreePrepareSnapshotResultDBOnDiskStateMachine(
-  CPPOnDiskStateMachine *ds, PrepareSnapshotResult r)
-{
-  ds->sm->FreePrepareSnapshotResult(r);
 }
 
 CollectedFiles *GetCollectedFile()

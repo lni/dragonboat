@@ -143,12 +143,11 @@ class ConcurrentStateMachine
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
   // the saved snapshot should be associated with the input ctx
-  SnapshotResult SaveSnapshot(const Byte *ctx, size_t size,
+  SnapshotResult SaveSnapshot(const void *context,
     SnapshotWriter *writer, SnapshotFileCollection *collection,
     const DoneChan &done) const noexcept;
   int RecoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
-  void FreePrepareSnapshotResult(PrepareSnapshotResult r) noexcept;
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
@@ -158,12 +157,19 @@ class ConcurrentStateMachine
   // prepareSnapshot prepares the snapshot to be concurrently captured and saved.
   // prepareSnapshot is invoked before saveSnapshot is called and it is invoked
   // with mutual exclusion protection from the update method.
+  // The returned void *result could point to any type and it is the state
+  // machine's responsibility to interpret its meaning.
+  // The result is immediately parsed to saveSnapshot and the
+  // resource associated with the result should be released in the saveSnapshot.
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
 	// saveSnapshot saves the point in time state of the ConcurrentStateMachine
-	// identified by the input state identifier to the provided SnapshotWriter backed
-	// by a file on disk and the provided SnapshotFileCollection instance. This
-	// is a read only method that should never change the state of the
-	// ConcurrentStateMachine instance.
+	// identified by the input state identifier(context) to the provided
+	// SnapshotWriter backed by a file on disk and the provided
+	// SnapshotFileCollection instance. This is a read only method that should
+	// never change the state of the ConcurrentStateMachine instance.
+	//
+	// The resource associated with the context should be released before returned
+	// from saveSnapshot.
 	//
 	// It is important to understand that saveSnapshot should never save the
 	// current latest state. The point in time state identified by the input state
@@ -171,7 +177,7 @@ class ConcurrentStateMachine
 	// from such specified point in time state as the state machine might have
 	// already been updated by the update() method after the completion of
 	// the call to prepareSnapshot.
-  virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+  virtual SnapshotResult saveSnapshot(const void *context,
     SnapshotWriter *writer, SnapshotFileCollection *collection,
     const DoneChan &done) const noexcept = 0;
 	// recoverFromSnapshot recovers the state of the ConcurrentStateMachine
@@ -184,7 +190,6 @@ class ConcurrentStateMachine
 	// recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
-  virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentStateMachine);
 };
@@ -200,11 +205,10 @@ class OnDiskStateMachine
   int Sync() const noexcept;
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
-  SnapshotResult SaveSnapshot(const Byte *ctx, size_t size,
+  SnapshotResult SaveSnapshot(const void *context,
     SnapshotWriter *writer, const DoneChan &done) const noexcept;
   int RecoverFromSnapshot(SnapshotReader *reader,
     const DoneChan &done) noexcept;
-  void FreePrepareSnapshotResult(PrepareSnapshotResult r) noexcept;
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
@@ -219,20 +223,29 @@ class OnDiskStateMachine
 	// prepareSnapshot and recoverFromSnapshot methods.
   virtual int sync() const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;
-	// prepareSnapshot prepares the snapshot to be concurrently captured and
-	// streamed. prepareSnapshot is invoked before saveSnapshot is called and it
-	// is always invoked with mutual exclusion protection from the update, sync and
-	// recoverFromSnapshot methods.
+  // prepareSnapshot prepares the snapshot to be concurrently captured and saved.
+  // prepareSnapshot is invoked before saveSnapshot is called and it is invoked
+  // with mutual exclusion protection from the update method.
+  // The returned void *result could point to any type and it is the state
+  // machine's responsibility to interpret its meaning.
+  // The result is immediately parsed to saveSnapshot and the
+  // resource associated with the result should be released in the saveSnapshot.
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
 	// saveSnapshot saves the point in time state of the OnDiskStateMachine
-	// instance identified by the input state identifier to the provided
-	// SnapshotWriter. The SnapshotWriter is a connection to a remote node usually
-	// significantly behind in terms of Raft log progress.
-	// It is important to understand that saveSnapshot should never be implemented
-	// to save the current latest state of the state machine when it is invoked.
-	// saveSnapshot must be implemented to save the point in time state identified
-	// by the input state identifier.
-  virtual SnapshotResult saveSnapshot(const Byte *ctx, size_t size,
+	// identified by the input state identifier(context) to the provided
+	// SnapshotWriter backed by a file on disk. This is a read only method that
+	// should never change the state of the OnDiskStateMachine instance.
+	//
+	// The resource associated with the context should be released before returned
+	// from saveSnapshot.
+	//
+	// It is important to understand that saveSnapshot should never save the
+	// current latest state. The point in time state identified by the input state
+	// identifier is what suppose to be saved, the latest state might be different
+	// from such specified point in time state as the state machine might have
+	// already been updated by the update() method after the completion of
+	// the call to prepareSnapshot.
+  virtual SnapshotResult saveSnapshot(const void *context,
     SnapshotWriter *writer, const DoneChan &done) const noexcept = 0;
 	// recoverFromSnapshot recovers the state of the OnDiskStateMachine instance
 	// from a snapshot captured by the saveSnapshot() method on a remote node. The
@@ -242,7 +255,6 @@ class OnDiskStateMachine
 	// methods will not be invoked when recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const DoneChan &done) noexcept = 0;
-  virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(OnDiskStateMachine);
 };

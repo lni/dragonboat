@@ -434,9 +434,9 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if count.Value != 1 {
 		t.Fatalf("initial update returned %v, want 1", count.Value)
 	}
-	ctx, _ := ds1.PrepareSnapshot()
-	if len(ctx.([]byte)) != 8 {
-		t.Fatalf("failed to prepare snapshot")
+	ctx, err := ds1.PrepareSnapshot()
+	if err != nil {
+		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
 	meta := rsm.SnapshotMeta{
 		Request: rsm.SnapshotRequest{
@@ -722,9 +722,9 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if count.Value != 1 {
 		t.Fatalf("initial update returned %v, want 1", count.Value)
 	}
-	ctx, _ := ds1.PrepareSnapshot()
-	if len(ctx.([]byte)) != 16 {
-		t.Fatalf("failed to prepare snapshot")
+	ctx, err := ds1.PrepareSnapshot()
+	if err != nil {
+		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
 	meta := rsm.SnapshotMeta{
 		Request: rsm.SnapshotRequest{
@@ -808,9 +808,9 @@ func TestOnDiskSMRecoverFromBackwardSnapshotWillPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open ds1 %v", err)
 	}
-	ctx, _ := ds1.PrepareSnapshot()
-	if len(ctx.([]byte)) != 16 {
-		t.Fatalf("failed to prepare snapshot")
+	ctx, err := ds1.PrepareSnapshot()
+	if err != nil {
+		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
 	meta := rsm.SnapshotMeta{
 		Request: rsm.SnapshotRequest{
@@ -888,9 +888,9 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open ds1 %v", err)
 	}
-	ctx, _ := ds1.PrepareSnapshot()
-	if len(ctx.([]byte)) != 16 {
-		t.Fatalf("failed to prepare snapshot")
+	ctx, err := ds1.PrepareSnapshot()
+	if err != nil {
+		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
 	meta := rsm.SnapshotMeta{
 		Request: rsm.SnapshotRequest{
@@ -965,9 +965,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if count.Value != 1 {
 		t.Fatalf("initial update returned %v, want 1", count.Value)
 	}
-	ctx, _ := ds1.PrepareSnapshot()
-	if len(ctx.([]byte)) != 16 {
-		t.Fatalf("failed to prepare snapshot")
+	ctx, err := ds1.PrepareSnapshot()
+	if err != nil {
+		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
 	meta := rsm.SnapshotMeta{
 		Request: rsm.SnapshotRequest{

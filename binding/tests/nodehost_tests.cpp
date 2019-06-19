@@ -125,26 +125,25 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine {
   {
     PrepareSnapshotResult r;
     r.result = new char[sizeof(uint64_t)];
-    r.size = sizeof(uint64_t);
     r.errcode = 0;
     memcpy(r.result, &count_, sizeof(uint64_t));
     return r;
   }
 
   SnapshotResult saveSnapshot(
-    const dragonboat::Byte *ctx,
-    size_t size,
+    const void *context,
     dragonboat::SnapshotWriter *writer,
     dragonboat::SnapshotFileCollection *collection,
     const dragonboat::DoneChan &done) const noexcept override
   {
-    auto ret = writer->Write(ctx, size);
+    auto ret = writer->Write((const dragonboat::Byte *)context, 8);
     SnapshotResult r;
     r.errcode = SNAPSHOT_OK;
     r.size = ret.size;
-    if(ret.size != size || ret.error != 0) {
+    if(ret.size != 8 || ret.error != 0) {
       r.errcode = FAILED_TO_SAVE_SNAPSHOT;
     }
+    delete[] (char *)context;
     return r;
   }
 
@@ -161,11 +160,6 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine {
     }
     count_ = *(uint64_t*)data;
     return SNAPSHOT_OK;
-  }
-
-  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override
-  {
-    delete[] r.result;
   }
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(TestConcurrentStateMachine);
@@ -232,26 +226,25 @@ class TestOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   {
     PrepareSnapshotResult r;
     r.result = new char[2*sizeof(uint64_t)];
-    r.size = 2*sizeof(uint64_t);
     r.errcode = 0;
     memcpy(r.result, &initialApplied_, sizeof(uint64_t));
-    memcpy(r.result + sizeof(uint64_t), &count_, sizeof(uint64_t));
+    memcpy((char *)r.result + sizeof(uint64_t), &count_, sizeof(uint64_t));
     return r;
   }
 
   SnapshotResult saveSnapshot(
-    const dragonboat::Byte *ctx,
-    size_t size,
+    const void *context,
     dragonboat::SnapshotWriter *writer,
     const dragonboat::DoneChan &done) const noexcept override
   {
-    auto ret = writer->Write(ctx, size);
+    auto ret = writer->Write((const dragonboat::Byte *)context, 16);
     SnapshotResult r;
     r.errcode = SNAPSHOT_OK;
     r.size = ret.size;
-    if(ret.size != size || ret.error != 0) {
+    if(ret.size != 16 || ret.error != 0) {
       r.errcode = FAILED_TO_SAVE_SNAPSHOT;
     }
+    delete[] (char *)context;
     return r;
   }
 
@@ -268,11 +261,6 @@ class TestOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
     initialApplied_ = *(uint64_t*)data;
     count_ = *(uint64_t*)(data + sizeof(uint64_t));
     return SNAPSHOT_OK;
-  }
-
-  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override
-  {
-    delete[] r.result;
   }
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(TestOnDiskStateMachine);

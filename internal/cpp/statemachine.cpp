@@ -86,11 +86,11 @@ PrepareSnapshotResult ConcurrentStateMachine::PrepareSnapshot() const noexcept
   return prepareSnapshot();
 }
 
-SnapshotResult ConcurrentStateMachine::SaveSnapshot(const Byte *ctx,
-  size_t size, SnapshotWriter *writer, SnapshotFileCollection *collection,
+SnapshotResult ConcurrentStateMachine::SaveSnapshot(const void *context,
+  SnapshotWriter *writer, SnapshotFileCollection *collection,
   const DoneChan &done) const noexcept
 {
-  return saveSnapshot(ctx, size, writer, collection, done);
+  return saveSnapshot(context, writer, collection, done);
 }
 
 int ConcurrentStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
@@ -98,13 +98,6 @@ int ConcurrentStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
 {
   return recoverFromSnapshot(reader, files, done);
 }
-
-void ConcurrentStateMachine::FreePrepareSnapshotResult(
-  PrepareSnapshotResult r) noexcept
-{
-  freePrepareSnapshotResult(r);
-}
-
 
 OnDiskStateMachine::OnDiskStateMachine(uint64_t clusterID,
   uint64_t nodeID) noexcept
@@ -147,22 +140,16 @@ PrepareSnapshotResult OnDiskStateMachine::PrepareSnapshot() const noexcept
   return prepareSnapshot();
 }
 
-SnapshotResult OnDiskStateMachine::SaveSnapshot(const Byte *ctx, size_t size,
+SnapshotResult OnDiskStateMachine::SaveSnapshot(const void *context,
   SnapshotWriter *writer, const DoneChan &done) const noexcept
 {
-  return saveSnapshot(ctx, size, writer, done);
+  return saveSnapshot(context, writer, done);
 }
 
 int OnDiskStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
   const DoneChan &done) noexcept
 {
   return recoverFromSnapshot(reader, done);
-}
-
-void OnDiskStateMachine::FreePrepareSnapshotResult(
-  PrepareSnapshotResult r) noexcept
-{
-  freePrepareSnapshotResult(r);
 }
 
 }  // namespace dragonboat

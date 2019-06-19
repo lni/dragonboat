@@ -116,26 +116,25 @@ PrepareSnapshotResult TestConcurrentStateMachine::prepareSnapshot() const noexce
 {
   PrepareSnapshotResult r;
   r.result = new char[sizeof(uint64_t)];
-  r.size = sizeof(uint64_t);
   r.errcode = 0;
   memcpy(r.result, &count_, sizeof(uint64_t));
   return r;
 }
 
 SnapshotResult TestConcurrentStateMachine::saveSnapshot(
-  const dragonboat::Byte *ctx,
-  size_t size,
+  const void *context,
   dragonboat::SnapshotWriter *writer,
   dragonboat::SnapshotFileCollection *collection,
   const dragonboat::DoneChan &done) const noexcept
 {
-  auto ret = writer->Write(ctx, size);
+  auto ret = writer->Write((const dragonboat::Byte *)context, 8);
   SnapshotResult r;
   r.errcode = SNAPSHOT_OK;
   r.size = ret.size;
-  if(ret.size != size || ret.error != 0) {
+  if(ret.size != 8 || ret.error != 0) {
     r.errcode = FAILED_TO_SAVE_SNAPSHOT;
   }
+  delete[] (char *)context;
   return r;
 }
 
@@ -152,12 +151,6 @@ int TestConcurrentStateMachine::recoverFromSnapshot(
   }
   count_ = *(uint64_t*)data;
   return SNAPSHOT_OK;
-}
-
-void TestConcurrentStateMachine::freePrepareSnapshotResult(
-  PrepareSnapshotResult r) noexcept
-{
-  delete[] r.result;
 }
 
 FakeOnDiskStateMachine::FakeOnDiskStateMachine(uint64_t clusterID,
@@ -211,25 +204,25 @@ PrepareSnapshotResult FakeOnDiskStateMachine::prepareSnapshot() const noexcept
 {
   PrepareSnapshotResult r;
   r.result = new char[2*sizeof(uint64_t)];
-  r.size = 2*sizeof(uint64_t);
   r.errcode = 0;
   std::memcpy(r.result, &initialApplied_, sizeof(uint64_t));
-  std::memcpy(r.result + sizeof(uint64_t), &count_, sizeof(uint64_t));
+  std::memcpy((char *)r.result + sizeof(uint64_t), &count_, sizeof(uint64_t));
   return r;
 }
 
 SnapshotResult FakeOnDiskStateMachine::saveSnapshot(
-  const dragonboat::Byte *ctx, size_t size,
+  const void *context,
   dragonboat::SnapshotWriter *writer,
   const dragonboat::DoneChan &done) const noexcept
 {
-  auto ret = writer->Write(ctx, size);
+  auto ret = writer->Write((const dragonboat::Byte *)context, 16);
   SnapshotResult r;
   r.errcode = SNAPSHOT_OK;
   r.size = ret.size;
-  if(ret.size != size || ret.error != 0) {
+  if(ret.size != 16 || ret.error != 0) {
     r.errcode = FAILED_TO_SAVE_SNAPSHOT;
   }
+  delete[] (char *)context;
   return r;
 }
 
@@ -246,10 +239,4 @@ int FakeOnDiskStateMachine::recoverFromSnapshot(
   initialApplied_ = *(uint64_t*)data;
   count_ = *(uint64_t*)(data + sizeof(uint64_t));
   return SNAPSHOT_OK;
-}
-
-void FakeOnDiskStateMachine::freePrepareSnapshotResult(
-  PrepareSnapshotResult r) noexcept
-{
-  delete[] r.result;
 }

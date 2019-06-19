@@ -509,8 +509,7 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 		plog.Errorf("Prepare snapshot failed, %v", err)
 		return nil, err
 	}
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreePrepareSnapshotResultDBConcurrentStateMachine(ds.dataStore, r)
+	result := unsafe.Pointer(r.result)
 	ds.mu.RUnlock()
 	return result, nil
 }
@@ -535,14 +534,9 @@ func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		RemoveManagedObject(collectionOID)
 		RemoveManagedObject(doneChOID)
 	}()
-	var dp *C.uchar
-	ssctx := meta.Ctx.([]byte)
-	if len(ssctx) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&ssctx[0]))
-	}
-	r := C.SaveSnapshotDBConcurrentStateMachine(ds.dataStore, dp,
-		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(collectionOID),
-		C.uint64_t(doneChOID))
+	ssctx := meta.Ctx.(unsafe.Pointer)
+	r := C.SaveSnapshotDBConcurrentStateMachine(ds.dataStore, ssctx,
+		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
 	err = getSnapshotErrorFromErrNo(errno)
 	if err != nil {
@@ -750,14 +744,13 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	}
 	ds.ensureNotDestroyed()
 	r := C.PrepareSnapshotDBOnDiskStateMachine(ds.dataStore)
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
 	errno := int(r.errcode)
 	err := getPrepareSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("Prepare snapshot failed, %v", err)
 		return nil, err
 	}
-	C.FreePrepareSnapshotResultDBOnDiskStateMachine(ds.dataStore, r)
+	result := unsafe.Pointer(r.result)
 	ds.mu.RUnlock()
 	return result, nil
 }
@@ -787,13 +780,9 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 		RemoveManagedObject(writerOID)
 		RemoveManagedObject(doneChOID)
 	}()
-	var dp *C.uchar
-	ssctx := meta.Ctx.([]byte)
-	if len(ssctx) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&ssctx[0]))
-	}
-	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, dp,
-		C.size_t(len(ssctx)), C.uint64_t(writerOID), C.uint64_t(doneChOID))
+	ssctx := meta.Ctx.(unsafe.Pointer)
+	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, ssctx,
+		C.uint64_t(writerOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
 	err = getSnapshotErrorFromErrNo(errno)
 	if err != nil {
@@ -845,13 +834,8 @@ func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 		RemoveManagedGoObject(writerOID)
 		RemoveManagedGoObject(doneChOID)
 	}()
-	var dp *C.uchar
-	ssctxb := ssctx.([]byte)
-	if len(ssctxb) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&ssctxb[0]))
-	}
-	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, dp,
-		C.size_t(len(ssctxb)), C.uint64_t(writerOID), C.uint64_t(doneChOID))
+	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore,
+		ssctx.(unsafe.Pointer), C.uint64_t(writerOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
 	err := getSnapshotErrorFromErrNo(errno)
 	if err != nil {

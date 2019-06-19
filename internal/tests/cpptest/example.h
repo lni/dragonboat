@@ -57,14 +57,13 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
   LookupResult lookup(const void *data) const noexcept override;
   uint64_t getHash() const noexcept override;
   PrepareSnapshotResult prepareSnapshot() const noexcept override;
-  SnapshotResult saveSnapshot(const dragonboat::Byte *ctx, size_t size,
+  SnapshotResult saveSnapshot(const void *context,
     dragonboat::SnapshotWriter *writer,
     dragonboat::SnapshotFileCollection *collection,
     const dragonboat::DoneChan &done) const noexcept override;
   int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
     const std::vector<dragonboat::SnapshotFile> &files,
     const dragonboat::DoneChan &done) noexcept override;
-  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(TestConcurrentStateMachine);
   uint64_t count_;
@@ -83,13 +82,12 @@ class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   int sync() const noexcept override;
   uint64_t getHash() const noexcept override;
   PrepareSnapshotResult prepareSnapshot() const noexcept override;
-  SnapshotResult saveSnapshot(const dragonboat::Byte *ctx, size_t size,
+  SnapshotResult saveSnapshot(const void *context,
     dragonboat::SnapshotWriter *writer,
     const dragonboat::DoneChan &done) const noexcept override;
   int recoverFromSnapshot(
     dragonboat::SnapshotReader *reader,
     const dragonboat::DoneChan &done) noexcept override;
-  void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept override;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(FakeOnDiskStateMachine);
   uint64_t initialApplied_;
