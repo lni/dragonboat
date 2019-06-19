@@ -58,7 +58,7 @@ func (cw *ChunkWriter) Close() error {
 	if err := cw.flush(); err != nil {
 		return err
 	}
-	cw.sink.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	cw.sink.Stop()
 	return nil
 }
 

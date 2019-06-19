@@ -300,6 +300,7 @@ func GetEntrySliceSize(ents []Entry) uint64 {
 type IChunkSink interface {
 	// return (sent, stopped)
 	Receive(chunk SnapshotChunk) (bool, bool)
+	Stop()
 	ClusterID() uint64
 	ToNodeID() uint64
 }

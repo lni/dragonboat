@@ -288,11 +288,7 @@ func (ds *NativeStateMachine) saveSnapshot(
 // StreamSnapshot creates and streams snapshot to a remote node.
 func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 	writer *ChunkWriter) error {
-	err := ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
-	if err != nil {
-		writer.failed = true
-	}
-	return err
+	return ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot

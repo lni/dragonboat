@@ -68,14 +68,13 @@ func (s *snapshotter) id() string {
 }
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,
-	meta *rsm.SnapshotMeta, sink pb.IChunkSink) (err error) {
+	meta *rsm.SnapshotMeta, sink pb.IChunkSink) error {
 	writer := rsm.NewChunkWriter(sink, meta)
-	defer func() {
-		if cerr := writer.Close(); err == nil {
-			err = cerr
-		}
-	}()
-	return streamable.StreamSnapshot(meta.Ctx, writer)
+	if err := streamable.StreamSnapshot(meta.Ctx, writer); err != nil {
+		sink.Stop()
+		return err
+	}
+	return writer.Close()
 }
 
 func (s *snapshotter) Save(savable rsm.ISavable,
