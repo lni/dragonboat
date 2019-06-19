@@ -1,6 +1,6 @@
 ## Checkdisk ##
 
-Checkdisk is simple program used to show relative performance when using different types of SSDs. There are many minor changes that can be made to make it faster, but this is _NOT_ a benchmark program.
+Checkdisk is simple program used to show relative performance when using different types of SSDs. There are many minor changes that can be made to make it faster, but this is _NOT_ a benchmark program so making it faster is never the goal.
 
 ### How it works ###
 
@@ -15,10 +15,11 @@ An executable file named checkdisk will be generated in the current directory. C
 
 ### Results ###
 
-Results below were observed on a single socket E5-2696v4 server with 22 cores.
+Results below were observed on a single socket E5-2696v4 server (22 cores) running Linux kernel 5.0 with ext4 filesystem.
 
 |Brand|Model|Type|Num of proposals per second|
 |:---:|:---:|:--:|:-------------------------:|
+|Intel|P4510 2T|MVME|7210419|
 |Intel|900P 280G|NVME, Optane|6772066|
 |Intel|P3700 1.6T|NVME|6896307|
 |Intel|P3520 1.2T|NVME|6465987|
