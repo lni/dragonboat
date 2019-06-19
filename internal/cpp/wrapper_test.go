@@ -23,6 +23,7 @@ import (
 	pb "github.com/lni/dragonboat/raftpb"
 	"os"
 	"testing"
+	"unsafe"
 )
 
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
@@ -191,11 +192,11 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from regular data store")
 	}
-	result, err := ds1.Lookup([]byte("test-lookup-data"))
+	result, err := ds1.Lookup(unsafe.Pointer(nil))
 	if err != nil {
 		t.Errorf("failed to lookup regular data store")
 	}
-	v4 := binary.LittleEndian.Uint64(result.([]byte))
+	v4 := uint64((uintptr)(result.(unsafe.Pointer)))
 	if v4 != v3.Value {
 		t.Errorf("regular data store returned %d, want %d", v4, v3)
 	}
@@ -205,11 +206,11 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from concurrent data store")
 	}
-	result, err = ds2.Lookup([]byte("test-lookup-data"))
+	result, err = ds2.Lookup(unsafe.Pointer(nil))
 	if err != nil {
 		t.Errorf("failed to lookup concurrent data store")
 	}
-	v4 = binary.LittleEndian.Uint64(result.([]byte))
+	v4 = uint64((uintptr)(result.(unsafe.Pointer)))
 	if v4 != v3.Value {
 		t.Errorf("concurrent data store returned %d, want %d", v4, v3)
 	}
@@ -222,11 +223,11 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from on-disk data store")
 	}
-	result, err = ds3.Lookup([]byte("test-lookup-data"))
+	result, err = ds3.Lookup(unsafe.Pointer(nil))
 	if err != nil {
 		t.Errorf("failed to lookup on-disk data store")
 	}
-	v4 = binary.LittleEndian.Uint64(result.([]byte))
+	v4 = uint64((uintptr)(result.(unsafe.Pointer)))
 	if v4 != 3 {
 		t.Errorf("on-disk data store returned %d, want %d", v4, 3)
 	}
@@ -404,8 +405,9 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
-	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+	yacount, err := ds2.Lookup(unsafe.Pointer(nil))
+	rv := uint64((uintptr)(yacount.(unsafe.Pointer)))
+	if v := rv; v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
 	h, _ := ds1.GetHash()
@@ -489,8 +491,9 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
-	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+	yacount, err := ds2.Lookup(unsafe.Pointer(nil))
+	rv := uint64((uintptr)(yacount.(unsafe.Pointer)))
+	if v := rv; v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
 	h, _ := ds1.GetHash()
@@ -688,11 +691,12 @@ func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
-	count, err := ds.Lookup([]byte{0})
+	count, err := ds.Lookup(unsafe.Pointer(nil))
 	if err != nil {
 		t.Errorf("lookup failed %v", err)
 	}
-	if v := binary.LittleEndian.Uint64(count.([]byte)); v != 0 {
+	rv := uint64((uintptr)(count.(unsafe.Pointer)))
+	if v := rv; v != 0 {
 		t.Errorf("initial lookup returned %v, want 0", v)
 	}
 }
@@ -779,8 +783,9 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
-	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+	yacount, err := ds2.Lookup(unsafe.Pointer(nil))
+	rv := uint64((uintptr)(yacount.(unsafe.Pointer)))
+	if v := rv; v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
 	h, _ := ds1.GetHash()
@@ -1031,8 +1036,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
-	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
+	yacount, err := ds2.Lookup(unsafe.Pointer(nil))
+	rv := uint64((uintptr)(yacount.(unsafe.Pointer)))
+	if v := rv; v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
 	h, _ := ds1.GetHash()

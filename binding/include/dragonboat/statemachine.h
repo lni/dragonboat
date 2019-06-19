@@ -59,13 +59,12 @@ class RegularStateMachine
   RegularStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~RegularStateMachine();
   uint64_t Update(const Byte *data, size_t size) noexcept;
-  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
+  LookupResult Lookup(const void *data) const noexcept;
   uint64_t GetHash() const noexcept;
   SnapshotResult SaveSnapshot(SnapshotWriter *writer,
     SnapshotFileCollection *collection, const DoneChan &done) const noexcept;
   int RecoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
-  void FreeLookupResult(LookupResult r) noexcept;
  protected:
   // Cluster ID of the state machine. This is mainly used for logging/debugging
   // purposes.
@@ -92,7 +91,7 @@ class RegularStateMachine
   // for the lookup operation. Dragonboat will eventually pass the LookupResult
   // back to the freeLookupResult method so the result buffer in LookupResult
   // can be released or reused.
-  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+  virtual LookupResult lookup(const void *data) const noexcept = 0;
   // getHash() returns a uint64_t integer representing the state of the
   // StateMachine instance, it is usually a hash result of the object state.
   virtual uint64_t getHash() const noexcept = 0;
@@ -130,7 +129,6 @@ class RegularStateMachine
   // lookup(), it is up to your StateMachine implementation to decide whether to
   // free the result buffer included in the specified LookupResult, or just put
   // it back to a pool or something similiar to reuse the buffer in the future.
-  virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(RegularStateMachine);
 };
@@ -141,7 +139,7 @@ class ConcurrentStateMachine
   ConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~ConcurrentStateMachine();
   uint64_t Update(const Byte *data, size_t size) noexcept;
-  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
+  LookupResult Lookup(const void *data) const noexcept;
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
   // the saved snapshot should be associated with the input ctx
@@ -151,12 +149,11 @@ class ConcurrentStateMachine
   int RecoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
   void FreePrepareSnapshotResult(PrepareSnapshotResult r) noexcept;
-  void FreeLookupResult(LookupResult r) noexcept;
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
   virtual uint64_t update(const Byte *data, size_t size) noexcept = 0;
-  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+  virtual LookupResult lookup(const void *data) const noexcept = 0;
   virtual uint64_t getHash() const noexcept = 0;
   // prepareSnapshot prepares the snapshot to be concurrently captured and saved.
   // prepareSnapshot is invoked before saveSnapshot is called and it is invoked
@@ -188,7 +185,6 @@ class ConcurrentStateMachine
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
   virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
-  virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentStateMachine);
 };
@@ -200,7 +196,7 @@ class OnDiskStateMachine
   virtual ~OnDiskStateMachine();
   OpenResult Open(const DoneChan &done) noexcept;
   uint64_t Update(const Byte *data, size_t size, uint64_t index) noexcept;
-  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
+  LookupResult Lookup(const void *data) const noexcept;
   int Sync() const noexcept;
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
@@ -209,14 +205,13 @@ class OnDiskStateMachine
   int RecoverFromSnapshot(SnapshotReader *reader,
     const DoneChan &done) noexcept;
   void FreePrepareSnapshotResult(PrepareSnapshotResult r) noexcept;
-  void FreeLookupResult(LookupResult r) noexcept;
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
   virtual OpenResult open(const DoneChan &done) noexcept = 0;
   virtual uint64_t update(const Byte *data, size_t size,
     uint64_t index) noexcept = 0;
-  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
+  virtual LookupResult lookup(const void *data) const noexcept = 0;
 	// sync synchronizes all in-core state of the state machine to permanent
 	// storage so the state machine can continue from its latest state after
 	// reboot.
@@ -248,7 +243,6 @@ class OnDiskStateMachine
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const DoneChan &done) noexcept = 0;
   virtual void freePrepareSnapshotResult(PrepareSnapshotResult r) noexcept = 0;
-  virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(OnDiskStateMachine);
 };

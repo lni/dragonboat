@@ -480,11 +480,7 @@ class NodeHost : public ManagedObject
   // big enough result buffer, or error code indicating the result buffer is too
   // smaller will be returned.
   Status SyncRead(ClusterID clusterID,
-    const Buffer &query, Buffer *result, Milliseconds timeout) noexcept;
-  Status SyncRead(ClusterID clusterID,
-    const Byte *query, size_t queryLen,
-    Byte *result, size_t resultLen, size_t *written,
-    Milliseconds timeout) noexcept;
+    const void *query, void **result, Milliseconds timeout) noexcept;
   // Proposes starts an asynchronous proposal on the cluster specified by the
   // input client session object. The input event instance will be set by the
   // dragonboat library once the proposal is completed, client applications
@@ -510,19 +506,13 @@ class NodeHost : public ManagedObject
   // StateMachine instance. Note that this method is suppose to be used together
   // with the ReadIndex method, ReadLocal is only suppose to be invoked after a
   // successful completion of ReadIndex to ensure the read is linearizable.
-  Status ReadLocal(ClusterID clusterID, const Buffer &query,
-    Buffer *result) noexcept;
-  Status ReadLocal(ClusterID clusterID,
-    const Byte *query, size_t queryLen,
-    Byte *result, size_t resultLen, size_t *written) noexcept;
+  Status ReadLocal(ClusterID clusterID, const void *query,
+    void **result) noexcept;
   // StaleRead performs a direct read on the specified raft cluster's
   // StateMachine instance without linearizability guarantee. Note that this
   // method is not required to be invoked after ReadIndex.
-  Status StaleRead(ClusterID clusterID, const Buffer &query,
-    Buffer *result) noexcept;
-  Status StaleRead(ClusterID clusterID,
-    const Byte *query, size_t queryLen,
-    Byte *result, size_t resultLen, size_t *written) noexcept;
+  Status StaleRead(ClusterID clusterID, const void *query,
+    void **result) noexcept;
   // SyncRequestSnapshot makes a synchronous request on the specified cluster to
   // generate a snapshot. Once the request is done and a snapshot is
   // successfully generated, the result index of the snapshot is set to the

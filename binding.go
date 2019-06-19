@@ -117,7 +117,7 @@ func (nh *NodeHost) StartClusterUsingFactory(nodes map[uint64]string, join bool,
 // ReadLocal queries the specified Raft node. To ensure the linearizability of
 // the I/O, ReadLocal should only be called after receiving a RequestCompleted
 // notification from the ReadIndex method.
-func (nh *NodeHost) ReadLocal(clusterID uint64, query []byte) ([]byte, error) {
+func (nh *NodeHost) ReadLocal(clusterID uint64, query interface{}) (interface{}, error) {
 	v, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -133,5 +133,5 @@ func (nh *NodeHost) ReadLocal(clusterID uint64, query []byte) ([]byte, error) {
 	if data == nil {
 		return nil, err
 	}
-	return data.([]byte), err
+	return data, err
 }

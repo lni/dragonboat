@@ -480,26 +480,17 @@ func NodeHostProposeSession(oid uint64, timeout uint64, csoid uint64,
 // NodeHost instance.
 //export NodeHostSyncRead
 func NodeHostSyncRead(oid uint64, timeout uint64, clusterID uint64,
-	queryBuf *C.uchar, queryLen C.size_t,
-	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
+	query unsafe.Pointer, result unsafe.Pointer) int {
 	nh := getNodeHost(oid)
-	query := ucharToByte(queryBuf, queryLen)
-	result := ucharToByte(resultBuf, resultLen)
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 	r, err := nh.SyncRead(ctx, clusterID, query)
 	if err != nil {
-		return getErrorCode(err), 0
+		return getErrorCode(err)
 	}
-	rv := r.([]byte)
-	if len(rv) > int(resultLen) {
-		return int(C.ErrResultBufferTooSmall), 0
-	}
-	if copy(result, rv) != len(rv) {
-		panic("failed to copy buffer")
-	}
-	return getErrorCode(err), len(rv)
+	*(*unsafe.Pointer)(result) = r.(unsafe.Pointer)
+	return getErrorCode(err)
 }
 
 // NodeHostReadIndex starts the ReadIndex protocol to get ready for a
@@ -533,45 +524,28 @@ func readIndex(oid uint64,
 // NodeHostReadLocal makes a local read on the specified StateMachine.
 //export NodeHostReadLocal
 func NodeHostReadLocal(oid uint64,
-	clusterID uint64, queryBuf *C.uchar, queryLen C.size_t,
-	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
+	clusterID uint64, query unsafe.Pointer, result unsafe.Pointer) int {
 	nh := getNodeHost(oid)
-	query := ucharToByte(queryBuf, queryLen)
-	result := ucharToByte(resultBuf, resultLen)
 	r, err := nh.ReadLocal(clusterID, query)
 	if err != nil {
-		return getErrorCode(err), 0
+		return getErrorCode(err)
 	}
-	if len(r) > int(resultLen) {
-		return int(C.ErrResultBufferTooSmall), 0
-	}
-	if copy(result, r) != len(r) {
-		panic("failed to copy buffer")
-	}
-	return getErrorCode(err), len(r)
+	*(*unsafe.Pointer)(result) = r.(unsafe.Pointer)
+	return getErrorCode(err)
 }
 
 // NodeHostStaleRead queries the specified Statemachine directly without any
 // linearizability guarantee.
 //export NodeHostStaleRead
 func NodeHostStaleRead(oid uint64, clusterID uint64,
-	queryBuf *C.uchar, queryLen C.size_t,
-	resultBuf *C.uchar, resultLen C.size_t) (int, int) {
+	query unsafe.Pointer, result unsafe.Pointer) int {
 	nh := getNodeHost(oid)
-	query := ucharToByte(queryBuf, queryLen)
-	result := ucharToByte(resultBuf, resultLen)
 	r, err := nh.StaleRead(clusterID, query)
 	if err != nil {
-		return getErrorCode(err), 0
+		return getErrorCode(err)
 	}
-	rv := r.([]byte)
-	if len(rv) > int(resultLen) {
-		return int(C.ErrResultBufferTooSmall), 0
-	}
-	if copy(result, rv) != len(rv) {
-		panic("failed to copy buffer")
-	}
-	return getErrorCode(err), len(rv)
+	*(*unsafe.Pointer)(result) = r.(unsafe.Pointer)
+	return getErrorCode(err)
 }
 
 // NodeHostSyncRequestSnapshot requests a snapshot to be created for the

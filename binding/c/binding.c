@@ -141,38 +141,22 @@ RequestResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   return result;
 }
 
-int CNodeHostSyncRead(uint64_t oid,
-  uint64_t timeout, uint64_t clusterID,
-  const unsigned char *queryBuf, size_t queryBufLen,
-  unsigned char *resultBuf, size_t resultBufLen, size_t *written)
+int CNodeHostSyncRead(uint64_t oid, uint64_t timeout, uint64_t clusterID,
+  const void *query, void **result)
 {
-  struct NodeHostSyncRead_return r;
-  r = NodeHostSyncRead(oid, timeout, clusterID,
-    (unsigned char *)queryBuf, queryBufLen, resultBuf, resultBufLen);
-  *written = r.r1;
-  return r.r0;
+  return NodeHostSyncRead(oid, timeout, clusterID, (void *)query, result);
 }
 
 int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
-  const unsigned char *queryBuf, size_t queryBufLen,
-  unsigned char *resultBuf, size_t resultBufLen, size_t *written)
+  const void *query, void **result)
 {
-  struct NodeHostStaleRead_return r;
-  r = NodeHostStaleRead(oid, clusterID,
-    (unsigned char *)queryBuf, queryBufLen, resultBuf, resultBufLen);
-  *written = r.r1;
-  return r.r0;
+  return NodeHostStaleRead(oid, clusterID, (void *)query, result);
 }
 
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
-  const unsigned char *queryBuf, size_t queryBufLen,
-  unsigned char *resultBuf, size_t resultBufLen, size_t *written)
+  const void *query, void **result)
 {
-  struct NodeHostReadLocal_return r;
-  r = NodeHostReadLocal(oid, clusterID,
-    (unsigned char *)queryBuf, queryBufLen, resultBuf, resultBufLen);
-  *written = r.r1;
-  return r.r0;
+  return NodeHostReadLocal(oid, clusterID, (void *)query, result);
 }
 
 RequestResult CNodeHostSyncRequestSnapshot(uint64_t oid,

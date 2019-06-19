@@ -148,6 +148,15 @@ func AddToSnapshotFileCollection(oid uint64,
 	fc.AddFile(fileID, filePath, data)
 }
 
+func getPrepareSnapshotErrorFromErrNo(errno int) error {
+	if errno == 0 {
+		return nil
+	} else if errno == 1 {
+		return errors.New("failed to prepare snapshot")
+	}
+	return fmt.Errorf("prepare snapshot error with errno %d", errno)
+}
+
 func getSnapshotErrorFromErrNo(errno int) error {
 	if errno == 0 {
 		return nil
@@ -294,36 +303,16 @@ func (ds *RegularStateMachineWrapper) Lookup(query interface{}) (interface{}, er
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query.([]byte)
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBRegularStateMachine(ds.dataStore, r)
+	data := query.(unsafe.Pointer)
+	r := C.LookupDBRegularStateMachine(ds.dataStore, data)
+	result := unsafe.Pointer(r.result)
 	ds.mu.RUnlock()
 	return result, nil
 }
 
 // NALookup queries the data store.
 func (ds *RegularStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
-	ds.mu.RLock()
-	if ds.Destroyed() {
-		ds.mu.RUnlock()
-		return nil, rsm.ErrClusterClosed
-	}
-	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBRegularStateMachine(ds.dataStore, r)
-	ds.mu.RUnlock()
-	return result, nil
+	panic("NALookup not supported in C++ state machine")
 }
 
 // Sync synchronizes the state machine's in-core state with that on disk.
@@ -485,35 +474,15 @@ func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{},
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query.([]byte)
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBConcurrentStateMachine(ds.dataStore, r)
+	data := query.(unsafe.Pointer)
+	r := C.LookupDBConcurrentStateMachine(ds.dataStore, data)
+	result := unsafe.Pointer(r.result)
 	ds.mu.RUnlock()
 	return result, nil
 }
 
 func (ds *ConcurrentStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
-	ds.mu.RLock()
-	if ds.Destroyed() {
-		ds.mu.RUnlock()
-		return nil, rsm.ErrClusterClosed
-	}
-	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBConcurrentStateMachine(ds.dataStore, r)
-	ds.mu.RUnlock()
-	return result, nil
+	panic("NALookup not supported in C++ state machine")
 }
 
 func (ds *ConcurrentStateMachineWrapper) Sync() error {
@@ -534,6 +503,12 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 	}
 	ds.ensureNotDestroyed()
 	r := C.PrepareSnapshotDBConcurrentStateMachine(ds.dataStore)
+	errno := int(r.errcode)
+	err := getPrepareSnapshotErrorFromErrNo(errno)
+	if err != nil {
+		plog.Errorf("Prepare snapshot failed, %v", err)
+		return nil, err
+	}
 	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
 	C.FreePrepareSnapshotResultDBConcurrentStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
@@ -735,38 +710,15 @@ func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, err
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query.([]byte)
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBOnDiskStateMachine(ds.dataStore, r)
+	data := query.(unsafe.Pointer)
+	r := C.LookupDBOnDiskStateMachine(ds.dataStore, data)
+	result := unsafe.Pointer(r.result)
 	ds.mu.RUnlock()
 	return result, nil
 }
 
 func (ds *OnDiskStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
-	if !ds.opened {
-		panic("NALookup called when not opened")
-	}
-	ds.mu.RLock()
-	if ds.Destroyed() {
-		ds.mu.RUnlock()
-		return nil, rsm.ErrClusterClosed
-	}
-	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	data := query
-	if len(data) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
-	}
-	r := C.LookupDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
-	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
-	C.FreeLookupResultDBOnDiskStateMachine(ds.dataStore, r)
-	ds.mu.RUnlock()
-	return result, nil
+	panic("NALookup not supported in C++ state machine")
 }
 
 func (ds *OnDiskStateMachineWrapper) Sync() error {
@@ -799,6 +751,12 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	ds.ensureNotDestroyed()
 	r := C.PrepareSnapshotDBOnDiskStateMachine(ds.dataStore)
 	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	errno := int(r.errcode)
+	err := getPrepareSnapshotErrorFromErrNo(errno)
+	if err != nil {
+		plog.Errorf("Prepare snapshot failed, %v", err)
+		return nil, err
+	}
 	C.FreePrepareSnapshotResultDBOnDiskStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil

@@ -33,10 +33,9 @@ uint64_t RegularStateMachine::Update(const Byte *data, size_t size) noexcept
   return update(data, size);
 }
 
-LookupResult RegularStateMachine::Lookup(const Byte *data,
-  size_t size) const noexcept
+LookupResult RegularStateMachine::Lookup(const void *data) const noexcept
 {
-  return lookup(data, size);
+  return lookup(data);
 }
 
 uint64_t RegularStateMachine::GetHash() const noexcept
@@ -57,11 +56,6 @@ int RegularStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
   return recoverFromSnapshot(reader, files, done);
 }
 
-void RegularStateMachine::FreeLookupResult(LookupResult r) noexcept
-{
-  freeLookupResult(r);
-}
-
 ConcurrentStateMachine::ConcurrentStateMachine(uint64_t clusterID,
   uint64_t nodeID) noexcept
   : cluster_id_(clusterID), node_id_(nodeID)
@@ -77,10 +71,9 @@ uint64_t ConcurrentStateMachine::Update(const Byte *byte, size_t size) noexcept
   return update(byte, size);
 }
 
-LookupResult ConcurrentStateMachine::Lookup(const Byte *data,
-  size_t size) const noexcept
+LookupResult ConcurrentStateMachine::Lookup(const void *data) const noexcept
 {
-  return lookup(data, size);
+  return lookup(data);
 }
 
 uint64_t ConcurrentStateMachine::GetHash() const noexcept
@@ -112,10 +105,6 @@ void ConcurrentStateMachine::FreePrepareSnapshotResult(
   freePrepareSnapshotResult(r);
 }
 
-void ConcurrentStateMachine::FreeLookupResult(LookupResult r) noexcept
-{
-  freeLookupResult(r);
-}
 
 OnDiskStateMachine::OnDiskStateMachine(uint64_t clusterID,
   uint64_t nodeID) noexcept
@@ -138,10 +127,9 @@ uint64_t OnDiskStateMachine::Update(const Byte *data, size_t size,
   return update(data, size, index);
 }
 
-LookupResult OnDiskStateMachine::Lookup(const Byte *data,
-  size_t size) const noexcept
+LookupResult OnDiskStateMachine::Lookup(const void *data) const noexcept
 {
-  return lookup(data, size);
+  return lookup(data);
 }
 
 int OnDiskStateMachine::Sync() const noexcept
@@ -175,11 +163,6 @@ void OnDiskStateMachine::FreePrepareSnapshotResult(
   PrepareSnapshotResult r) noexcept
 {
   freePrepareSnapshotResult(r);
-}
-
-void OnDiskStateMachine::FreeLookupResult(LookupResult r) noexcept
-{
-  freeLookupResult(r);
 }
 
 }  // namespace dragonboat

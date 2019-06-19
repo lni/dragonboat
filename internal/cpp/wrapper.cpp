@@ -72,9 +72,9 @@ uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
 }
 
 LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
-  const unsigned char *data, size_t size)
+  const void *data)
 {
-  return ds->sm->Lookup(data, size);
+  return ds->sm->Lookup(data);
 }
 
 uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds)
@@ -97,12 +97,6 @@ int RecoverFromSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   dragonboat::ProxySnapshotReader reader(readerOID);
   dragonboat::DoneChan done(doneChOID);
   return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
-}
-
-void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
-  LookupResult r)
-{
-  ds->sm->FreeLookupResult(r);
 }
 
 CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
@@ -136,9 +130,9 @@ uint64_t UpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
 }
 
 LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
-  const unsigned char *data, size_t size)
+  const void *data)
 {
-  return ds->sm->Lookup(data, size);
+  return ds->sm->Lookup(data);
 }
 
 uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
@@ -174,12 +168,6 @@ void FreePrepareSnapshotResultDBConcurrentStateMachine(
   CPPConcurrentStateMachine *ds, PrepareSnapshotResult r)
 {
   ds->sm->FreePrepareSnapshotResult(r);
-}
-
-void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
-  LookupResult r)
-{
-  ds->sm->FreeLookupResult(r);
 }
 
 CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
@@ -220,9 +208,9 @@ uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
 }
 
 LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  const unsigned char *data, size_t size)
+  const void *data)
 {
-  return ds->sm->Lookup(data, size);
+  return ds->sm->Lookup(data);
 }
 
 int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)
@@ -262,12 +250,6 @@ void FreePrepareSnapshotResultDBOnDiskStateMachine(
   CPPOnDiskStateMachine *ds, PrepareSnapshotResult r)
 {
   ds->sm->FreePrepareSnapshotResult(r);
-}
-
-void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  LookupResult r)
-{
-  ds->sm->FreeLookupResult(r);
 }
 
 CollectedFiles *GetCollectedFile()
