@@ -21,6 +21,11 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/kv/pebble"
 )
 
+const (
+	// DefaultKVStoreTypeName is the type name of the default kv store
+	DefaultKVStoreTypeName = "pebble"
+)
+
 func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return pebble.NewKVStore(dir, wal)
 }

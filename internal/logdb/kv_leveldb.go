@@ -21,6 +21,11 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/kv/leveldb"
 )
 
+const (
+	// DefaultKVStoreTypeName is the type name of the default kv store
+	DefaultKVStoreTypeName = "leveldb"
+)
+
 func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return leveldb.NewKVStore(dir, wal)
 }

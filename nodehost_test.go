@@ -2918,3 +2918,54 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 	}
 	singleNodeHostTest(t, tf)
 }
+
+func TestV2DataCanBeHandled(t *testing.T) {
+	if logdb.DefaultKVStoreTypeName != "rocksdb" {
+		t.Skip("skipping test as the logdb type is not compatible")
+	}
+	v2datafp := "internal/logdb/testdata/v2-rocksdb-batched.tar.bz2"
+	targetDir := "test-v2-data-safe-to-remove"
+	os.RemoveAll(targetDir)
+	defer os.RemoveAll(targetDir)
+	topDirName := "single_nodehost_test_dir_safe_to_delete"
+	testHostname := "lindfield.local"
+	if err := fileutil.ExtractTarBz2(v2datafp, targetDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("failed to get hostname %v", err)
+	}
+	testPath := filepath.Join(targetDir, topDirName, testHostname)
+	expPath := filepath.Join(targetDir, topDirName, hostname)
+	if expPath != testPath {
+		if err := os.Rename(testPath, expPath); err != nil {
+			t.Fatalf("failed to rename the dir %v", err)
+		}
+	}
+	osv := delaySampleRatio
+	defer func() {
+		delaySampleRatio = osv
+	}()
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
+	delaySampleRatio = 1
+	defer leaktest.AfterTest(t)()
+	v2dataDir := filepath.Join(targetDir, topDirName)
+	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
+		v2dataDir, false)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer nh.Stop()
+	logdb := nh.logdb
+	rs, err := logdb.ReadRaftState(2, 1, 0)
+	if err != nil {
+		t.Fatalf("failed to get raft state %v", err)
+	}
+	if rs.EntryCount != 3 || rs.State.Commit != 3 {
+		t.Errorf("unexpected rs value")
+	}
+}

@@ -23,6 +23,11 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb"
 )
 
+const (
+	// DefaultKVStoreTypeName is the type name of the default kv store
+	DefaultKVStoreTypeName = "rocksdb"
+)
+
 func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
 	return rocksdb.NewKVStore(dir, wal)
 }
