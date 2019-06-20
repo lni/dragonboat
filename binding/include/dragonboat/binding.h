@@ -199,7 +199,8 @@ typedef struct
 
 typedef struct
 {
-  void *result;
+  char *result;
+  size_t size;
 } LookupResult;
 
 typedef struct
@@ -292,10 +293,13 @@ int CNodeHostSyncCloseSession(uint64_t oid,
   uint64_t timeout, uint64_t csoid);
 RequestResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   uint64_t csoid, Bool csupdate, const unsigned char *buf, size_t len);
-int CNodeHostSyncRead(uint64_t oid, uint64_t timeout, uint64_t clusterID,
-  const void *query, void **result);
+int CNodeHostSyncRead(uint64_t oid,
+  uint64_t timeout, uint64_t clusterID,
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written);
 int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
-  const void *query, void **result);
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written);
 RequestResult CNodeHostSyncRequestSnapshot(uint64_t oid,
   uint64_t clusterID, SnapshotOption opt, uint64_t timeout);
 RequestStateResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
@@ -325,7 +329,8 @@ ProposeResult CNodeHostPropose(uint64_t oid, uint64_t timeout, uint64_t csoid,
 ReadIndexResult CNodeHostReadIndex(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, void *handler, int t);
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
-  const void *query, void **result);
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written);
 int CNodeHostSyncRemoveData(uint64_t oid,
   uint64_t clusterID, uint64_t nodeID, uint64_t timeout);
 int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);

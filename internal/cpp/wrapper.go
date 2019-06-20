@@ -313,9 +313,14 @@ func (ds *RegularStateMachineWrapper) Lookup(query interface{}) (interface{}, er
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	data := query.(unsafe.Pointer)
-	r := C.LookupDBRegularStateMachine(ds.dataStore, data)
-	result := unsafe.Pointer(r.result)
+	var dp *C.uchar
+	data := query.([]byte)
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBRegularStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBRegularStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil
 }
@@ -494,9 +499,14 @@ func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{},
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	data := query.(unsafe.Pointer)
-	r := C.LookupDBConcurrentStateMachine(ds.dataStore, data)
-	result := unsafe.Pointer(r.result)
+	var dp *C.uchar
+	data := query.([]byte)
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBConcurrentStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBConcurrentStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil
 }
@@ -734,9 +744,14 @@ func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, err
 		return nil, rsm.ErrClusterClosed
 	}
 	ds.ensureNotDestroyed()
-	data := query.(unsafe.Pointer)
-	r := C.LookupDBOnDiskStateMachine(ds.dataStore, data)
-	result := unsafe.Pointer(r.result)
+	var dp *C.uchar
+	data := query.([]byte)
+	if len(data) > 0 {
+		dp = (*C.uchar)(unsafe.Pointer(&data[0]))
+	}
+	r := C.LookupDBOnDiskStateMachine(ds.dataStore, dp, C.size_t(len(data)))
+	result := C.GoBytes(unsafe.Pointer(r.result), C.int(r.size))
+	C.FreeLookupResultDBOnDiskStateMachine(ds.dataStore, r)
 	ds.mu.RUnlock()
 	return result, nil
 }

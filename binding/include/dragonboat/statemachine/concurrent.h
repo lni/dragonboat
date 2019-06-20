@@ -48,7 +48,7 @@ class ConcurrentStateMachine
   virtual ~ConcurrentStateMachine();
   void Update(Entry &ent) noexcept;
   void BatchedUpdate(std::vector<Entry> &ents) noexcept;
-  LookupResult Lookup(const void *query) const noexcept;
+  LookupResult Lookup(const Byte *data, size_t size) const noexcept;
   uint64_t GetHash() const noexcept;
   PrepareSnapshotResult PrepareSnapshot() const noexcept;
   SnapshotResult SaveSnapshot(const void *context,
@@ -56,6 +56,7 @@ class ConcurrentStateMachine
     const DoneChan &done) const noexcept;
   int RecoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept;
+  void FreeLookupResult(LookupResult r) noexcept;
  protected:
   uint64_t cluster_id_;
   uint64_t node_id_;
@@ -70,17 +71,17 @@ class ConcurrentStateMachine
   // method should not keep a reference to it after the end of the update() call.
   virtual void update(Entry &ent) noexcept = 0;
   virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
-  // lookup() queries the state of the state machine and returns the result.
-  // The input query provided by NodeHost::Read is used to specify what need to
-  // be queried, it is up to the actual subclass of state machine to interpret
-  // the meaning of this input query. The input query is owned by the caller of
-  // the NodeHost::Read method, the lookup method should not keep any reference
-  // of it after the call. lookup() returns a LookupResult struct.
-  // The LookupResult::result is the result of this query and owned by the caller
-  // of the NodeHost::Read (via void **result). It is up to the caller to interpret
-  // the meaning of this result and released the associated resource.
-  // The LookupResult::error is the integer error code for the lookup operation.
-  virtual LookupResult lookup(const void *query) const noexcept = 0;
+  // lookup() queries the state of the StateMachine and returns the query
+  // result. The input byte array parameter is the data used to specify what
+  // need to be queried, it is up to the actual subclass of StateMachine to
+  // interpret the meaning of this input byte array. The input buffer is owned
+  // by the caller of the lookup method, the lookup method should not keep any
+  // reference of it after the call. lookup() returns a LookupResult struct. The
+  // lookup result is provided in the result field of LookupResult and len is
+  // the length of the result buffer. Dragonboat will eventually pass the
+  // LookupResult back to the freeLookupResult method so the result buffer in
+  // LookupResult can be released or reused.
+  virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
   // getHash() returns a uint64_t integer representing the state of the
   // state machine instance, it is usually a hash result of the object state.
   virtual uint64_t getHash() const noexcept = 0;
@@ -113,6 +114,11 @@ class ConcurrentStateMachine
 	// recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
+  // freeLookupResult() receives a LookupResult struct previously returned by
+  // lookup(), it is up to your StateMachine implementation to decide whether to
+  // free the result buffer included in the specified LookupResult, or just put
+  // it back to a pool or something similiar to reuse the buffer in the future.
+  virtual void freeLookupResult(LookupResult r) noexcept = 0;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(ConcurrentStateMachine);
 };

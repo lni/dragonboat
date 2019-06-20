@@ -44,12 +44,13 @@ void HelloWorldStateMachine::batchedUpdate(
   }
 }
 
-LookupResult HelloWorldStateMachine::lookup(const void *data) const noexcept
+LookupResult HelloWorldStateMachine::lookup(const dragonboat::Byte *data,
+  size_t sz) const noexcept
 {
-  // this is a workaround for not using CGo in wrapper_test.go
-  // DON'T DO THIS IN YOUR STATE MACHINE
   LookupResult r;
-  r.result = (void *)count_;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *)r.result) = count_;
   return r;
 }
 
@@ -89,6 +90,11 @@ int HelloWorldStateMachine::recoverFromSnapshot(dragonboat::SnapshotReader *read
   return SNAPSHOT_OK;
 }
 
+void HelloWorldStateMachine::freeLookupResult(LookupResult r) noexcept
+{
+  delete[] r.result;
+}
+
 TestConcurrentStateMachine::TestConcurrentStateMachine(
   uint64_t clusterID, uint64_t nodeID) noexcept
   : dragonboat::ConcurrentStateMachine(clusterID, nodeID),
@@ -115,12 +121,13 @@ void TestConcurrentStateMachine::batchedUpdate(
   }
 }
 
-LookupResult TestConcurrentStateMachine::lookup(const void *data) const noexcept
+LookupResult TestConcurrentStateMachine::lookup(const dragonboat::Byte *data,
+  size_t size) const noexcept
 {
-  // this is a workaround for not using CGo in wrapper_test.go
-  // DON'T DO THIS IN YOUR STATE MACHINE
   LookupResult r;
-  r.result = (void *)count_;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *) r.result) = count_;
   return r;
 }
 
@@ -170,6 +177,12 @@ int TestConcurrentStateMachine::recoverFromSnapshot(
   return SNAPSHOT_OK;
 }
 
+void TestConcurrentStateMachine::freeLookupResult(
+  LookupResult r) noexcept
+{
+  delete[] r.result;
+}
+
 FakeOnDiskStateMachine::FakeOnDiskStateMachine(uint64_t clusterID,
   uint64_t nodeID, uint64_t initialApplied) noexcept
   : dragonboat::OnDiskStateMachine(clusterID, nodeID),
@@ -206,12 +219,13 @@ void FakeOnDiskStateMachine::batchedUpdate(
   }
 }
 
-LookupResult FakeOnDiskStateMachine::lookup(const void *data) const noexcept
+LookupResult FakeOnDiskStateMachine::lookup(
+  const dragonboat::Byte *data, size_t size) const noexcept
 {
-  // this is a workaround for not using CGo in wrapper_test.go
-  // DON'T DO THIS IN YOUR STATE MACHINE
   LookupResult r;
-  r.result = (void *)count_;
+  r.result = new char[sizeof(uint64_t)];
+  r.size = sizeof(uint64_t);
+  *((uint64_t *) r.result) = count_;
   return r;
 }
 
@@ -264,4 +278,9 @@ int FakeOnDiskStateMachine::recoverFromSnapshot(
   initialApplied_ = *(uint64_t*)data;
   count_ = *(uint64_t*)(data + sizeof(uint64_t));
   return SNAPSHOT_OK;
+}
+
+void FakeOnDiskStateMachine::freeLookupResult(LookupResult r) noexcept
+{
+  delete[] r.result;
 }

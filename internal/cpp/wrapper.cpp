@@ -93,9 +93,9 @@ void BatchedUpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
 }
 
 LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
-  const void *data)
+  const unsigned char *data, size_t size)
 {
-  return ds->sm->Lookup(data);
+  return ds->sm->Lookup(data, size);
 }
 
 uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds)
@@ -118,6 +118,12 @@ int RecoverFromSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   dragonboat::ProxySnapshotReader reader(readerOID);
   dragonboat::DoneChan done(doneChOID);
   return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
+}
+
+void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
+  LookupResult r)
+{
+  ds->sm->FreeLookupResult(r);
 }
 
 CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
@@ -169,9 +175,9 @@ void BatchedUpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
 }
 
 LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
-  const void *data)
+  const unsigned char *data, size_t size)
 {
-  return ds->sm->Lookup(data);
+  return ds->sm->Lookup(data, size);
 }
 
 uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
@@ -201,6 +207,12 @@ int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
     dragonboat::ProxySnapshotReader reader(readerOID);
     dragonboat::DoneChan done(doneChOID);
     return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
+}
+
+void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  LookupResult r)
+{
+  ds->sm->FreeLookupResult(r);
 }
 
 CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
@@ -259,9 +271,9 @@ void BatchedUpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
 }
 
 LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  const void *data)
+  const unsigned char *data, size_t size)
 {
-  return ds->sm->Lookup(data);
+  return ds->sm->Lookup(data, size);
 }
 
 int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)
@@ -295,6 +307,12 @@ int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
     dragonboat::ProxySnapshotReader reader(readerOID);
     dragonboat::DoneChan done(doneChOID);
     return ds->sm->RecoverFromSnapshot(&reader, done);
+}
+
+void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  LookupResult r)
+{
+  ds->sm->FreeLookupResult(r);
 }
 
 CollectedFiles *GetCollectedFile()
