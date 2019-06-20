@@ -22,6 +22,11 @@ import (
 	"github.com/lni/dragonboat/internal/logdb/kv"
 )
 
+const (
+	// DefaultKVStoreTypeName is the type name of the default kv store
+	DefaultKVStoreTypeName = "custom"
+)
+
 func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
 	if v := flag.Lookup("test.v"); v == nil || v.Value.String() != "true" {
 		panic("not suppose to be called")
