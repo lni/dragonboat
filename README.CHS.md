@@ -40,7 +40,7 @@ Diego Ongaro的[Raft博士学位论文](https://ramcloud.stanford.edu/~ongaro/th
 ## 性能 ##
 Dragonboat是目前Github网站上最快的开源多组Raft实现。
 
-在三节点系统上，使用中端硬件，如22核2.8Ghz的Intel志强处理器和NVME固态硬盘（具体信息[在此](/docs/test.md)），在16字节的荷载下，Dragonboat可持续每秒900万次写或在9:1的高读写比场景下提供每秒1100万次的混合读写操作。高吞吐在跨地域分布环境依旧被保持，在使用更多的clients的情况下，在RTT为30ms时依旧能实现200万次每秒的IO操作。
+在三节点系统上，使用中端硬件（具体信息[在此](/docs/test.md)）与基于内存的状态机，在16字节的荷载下，Dragonboat可持续每秒900万次写或在9:1的高读写比场景下提供每秒1100万次的混合读写操作。高吞吐在跨地域分布环境依旧被保持，在使用更多的clients的情况下，在RTT为30ms时依旧能实现200万次每秒的IO操作。
 ![throughput](./docs/throughput.png)
 
 每个服务器上可轻易承载数千Raft组。并发的活跃Raft组数量对吞吐有直接影响，而大量的闲置Raft组对系统性能并无巨大影响。

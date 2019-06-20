@@ -39,7 +39,7 @@ Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.
 ## Performance ##
 Dragonboat is the __fastest__ open source multi-group Raft implementation on Github. 
 
-For 3-nodes system using mid-range hardware, e.g. 22 cores Intel Xeon at 2.8Ghz and enterprise NVME SSD (details [here](docs/test.md)), Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
+For 3-nodes system using mid-range hardware (details [here](docs/test.md)) and in-memory state machine, Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
 ![throughput](./docs/throughput.png)
 
 The number of concurrent active Raft groups affects the overall throughput as requests become harder to be batched. On the other hand, having thousands of idle Raft groups has a much smaller impact on throughput.
