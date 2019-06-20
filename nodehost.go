@@ -973,6 +973,9 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 // responsibility to call RemoveCluster on the right NodeHost instance to
 // actually have the cluster node removed from its managing NodeHost instance.
 //
+// Once a node is successfully deleted from a Raft cluster, it will not be
+// allowed to be added back to the cluster with the same node identity.
+//
 // When the raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
 // should be set to the most recent Config Change Index value returned by the
@@ -1004,6 +1007,8 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // After the node is successfully added to the Raft cluster, it is application's
 // responsibility to call StartCluster on the right NodeHost instance to actually
 // start the Raft cluster node.
+//
+// Requesting a removed node back to the Raft cluster will always be rejected.
 //
 // The input address parameter is the RaftAddress of the NodeHost where the new
 // Raft node being added will be running. When the raft cluster is created with
