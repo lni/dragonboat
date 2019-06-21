@@ -7,7 +7,7 @@ package interval_test
 import (
 	"fmt"
 
-	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/interval"
+	"github.com/lni/dragonboat/v3/internal/utils/cache/biogo/store/interval"
 )
 
 func min(a, b Int) Int {

@@ -17,8 +17,8 @@
 package logdb
 
 import (
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/logdb/kv/leveldb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb"
 )
 
 const (

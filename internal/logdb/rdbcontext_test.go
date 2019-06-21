@@ -17,8 +17,8 @@ package logdb
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func TestRDBContextCanBeCreated(t *testing.T) {

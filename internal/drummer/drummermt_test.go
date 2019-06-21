@@ -22,11 +22,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 func runDrummerMonkeyTest(t *testing.T, appname string) {

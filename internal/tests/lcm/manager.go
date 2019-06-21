@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lni/dragonboat/internal/drummer/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/internal/drummer/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 )
 
 const (

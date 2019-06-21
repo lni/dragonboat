@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/petermattis/pebble"
 )
 

@@ -17,7 +17,7 @@ package server
 import (
 	"sync"
 
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 // MessageQueue is the queue used to hold Raft messages.

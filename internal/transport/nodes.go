@@ -22,9 +22,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 // INodeRegistry is the local registry interface used to keep all known

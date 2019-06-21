@@ -8,8 +8,8 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## News ##
-* 2019-06-09 Dragonboat v3.0 beta ([CHANGELOG](CHANGELOG.md)) is now available in the Master branch.  
-* 2019-02-20 Dragonboat v2.0 has been released.
+* 2019-06-21 Dragonboat v3.0 has been released with on disk state machine and Go module support ([CHANGELOG](CHANGELOG.md)).
+* 2019-02-20 Dragonboat v2.1 has been released.
 
 ## About ##
 Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/) with [C++11 binding](/binding) support.
@@ -62,50 +62,53 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 ![stw](./docs/stw.png)
 
 ## Requirements ##
-* x86_64 Linux or MacOS, Go 1.11 or 1.12, GCC or Clang with C++11 support
+* x86_64 Linux or MacOS, Go 1.12, GCC or Clang with C++11 support
 * [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above when using RocksDB for storing Raft logs 
 
 ## Getting Started ##
-__Note that, steps below use code from the Master branch. Master is our unstable branch for development. Please use released versions for any production purposes.__
+__Master is our unstable branch for development. Please use released versions for any production purposes.__ 
 
-To download Dragonboat to your [Go workspace](https://golang.org/doc/install):
-```
-$ go get -u -d github.com/lni/dragonboat
-```
-You need to decide whether to use [RocksDB or LevelDB](docs/storage.md) to store Raft logs. RocksDB is recommended.
+Make sure Go 1.12 or above has been installed. Instructions below require [Go module](https://github.com/golang/go/wiki/Modules) support.
 
-### RocksDB ###
-If RocksDB 5.13.4 or above has not been installed, use the following commands to install RocksDB 5.13.4 to /usr/local/lib and /usr/local/include.
+You need to decide whether to use [RocksDB or LevelDB](docs/storage.md) to store Raft logs. RocksDB is recommended. 
+
+### Install RocksDB ###
+If RocksDB 5.13.4 or above has not already been installed, follow the steps below to install it first.
+
+To download Dragonboat to $HOME/src and install RocksDB to /usr/local/lib and /usr/local/include:
 ```
-$ cd $GOPATH/src/github.com/lni/dragonboat
+$ cd $HOME/src
+$ git clone https://github.com/lni/dragonboat
+$ cd $HOME/src/dragonboat
 $ make install-rocksdb-ull
 ```
 Run built-in tests to check the installation:
 ```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make dragonboat-test
+$ cd $HOME/src/dragonboat
+$ GO111MODULE=on make dragonboat-test
 ```
-To build your application
+Once completed, $HOME/src/dragonboat can be safely deleted if you just plan to use dragonboat in your application.
+
+### Use Dragonboat ###
+To use dragonboat in your application, make sure to import the package __github.com/lni/dragonboat/v3__ in your Go code. Also add "github.com/lni/dragonboat/v3 v3.0.0" to the __require__ section of your go.mod file.
+
+When building your application, you may need to tell Go where is the installed RocksDB library:
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
+You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat.
 
-### LevelDB ###
-Nothing need to be installed when using LevelDB based Raft Log storage.
+### Use LevelDB ###
+No extra dependency is required when choosing to use LevelDB based Raft log storage.
 
-To run built-in tests using LevelDB based storage:
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
-```
-To use LevelDB based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function leveldb.NewLogDB provided in the github.com/lni/dragonboat/plugin/leveldb package.
+To use LevelDB based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function leveldb.NewLogDB provided in the github.com/lni/dragonboat/v3/plugin/leveldb package.
 
-To build the your application when you don't have RocksDB installed
+To build the your application when you don't have RocksDB installed:
 ```
 go build -v -tags="dragonboat_no_rocksdb" pkgname
 ```
 
-### Documents ###
+## Documents ##
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
 
 C++ Binding info can be found [here](https://github.com/lni/dragonboat/blob/master/binding/README.md).

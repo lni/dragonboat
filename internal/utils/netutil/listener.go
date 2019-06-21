@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lni/dragonboat/internal/utils/stringutil"
+	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
 )
 
 var (

@@ -17,12 +17,12 @@ package rocksdb
 import (
 	"bytes"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb/gorocksdb"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/logger"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 var (

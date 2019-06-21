@@ -30,7 +30,7 @@ underlying hosts) are available.
 User applications can leverage the power of the Raft protocol implemented in
 dragonboat by implementing its IStateMachine or IOnDiskStateMachine component.
 IStateMachine and IOnDiskStateMachine is defined in
-github.com/lni/dragonboat/statemachine. Each cluster node is associated with an
+github.com/lni/dragonboat/v3/statemachine. Each cluster node is associated with an
 IStateMachine or IOnDiskStateMachine instance, it is in charge of updating,
 querying and snapshotting application data, with minimum exposure to the
 complexity of the Raft protocol implementation.
@@ -81,7 +81,7 @@ proposals. This is critical for system throughput in high latency environment.
 Dragonboat is also fully batched, it batches internal operations whenever
 possible to maximize system throughput.
 */
-package dragonboat // github.com/lni/dragonboat
+package dragonboat // github.com/lni/dragonboat/v3
 
 import (
 	"context"
@@ -92,18 +92,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

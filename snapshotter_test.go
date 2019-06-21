@@ -26,12 +26,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 const (

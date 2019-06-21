@@ -44,10 +44,10 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/logger"
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/logger"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var (

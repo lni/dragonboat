@@ -17,9 +17,9 @@ package leveldb
 import (
 	"bytes"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/logdb/kv/leveldb/levigo"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb/levigo"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 type levelDBWriteBatch struct {

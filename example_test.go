@@ -22,9 +22,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/tests"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/tests"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var enh *NodeHost

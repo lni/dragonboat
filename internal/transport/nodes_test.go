@@ -17,8 +17,8 @@ package transport
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 func TestPeerCanBeAdded(t *testing.T) {

@@ -36,12 +36,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb/gorocksdb"
-	"github.com/lni/dragonboat/internal/tests/kvpb"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
+	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

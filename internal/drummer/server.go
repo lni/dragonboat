@@ -21,12 +21,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/random"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var (

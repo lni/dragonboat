@@ -25,12 +25,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/logger"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 var (

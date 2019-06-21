@@ -22,13 +22,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/config"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/config"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 const (

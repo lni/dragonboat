@@ -24,8 +24,8 @@ import (
 	"reflect"
 	"testing"
 
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/statemachine"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/statemachine"
 )
 
 func TestDBCanBeSnapshottedAndRestored(t *testing.T) {

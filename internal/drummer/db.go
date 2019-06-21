@@ -21,10 +21,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/statemachine"
-	sm "github.com/lni/dragonboat/statemachine"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/statemachine"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

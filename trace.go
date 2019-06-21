@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 const (

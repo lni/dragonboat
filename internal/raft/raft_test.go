@@ -19,7 +19,7 @@ import (
 	"sort"
 	"testing"
 
-	pb "github.com/lni/dragonboat/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 //

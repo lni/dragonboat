@@ -20,10 +20,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/stringutil"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 var (

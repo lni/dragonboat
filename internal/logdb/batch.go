@@ -18,9 +18,9 @@ import (
 	"errors"
 	"math"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 //

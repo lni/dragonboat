@@ -21,7 +21,7 @@ import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import _ "github.com/gogo/protobuf/gogoproto"
-import client "github.com/lni/dragonboat/client"
+import client "github.com/lni/dragonboat/v3/client"
 
 import context "golang.org/x/net/context"
 import grpc "google.golang.org/grpc"

@@ -36,17 +36,17 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/drummer/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	mr "github.com/lni/dragonboat/internal/drummer/multiraftpb"
-	kvpb "github.com/lni/dragonboat/internal/tests/kvpb"
-	"github.com/lni/dragonboat/internal/tests/lcm"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/drummer/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	mr "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
+	kvpb "github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/tests/lcm"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 const (

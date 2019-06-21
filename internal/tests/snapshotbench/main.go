@@ -26,13 +26,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/rsm"
-	serverConfig "github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/transport"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	serverConfig "github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 //

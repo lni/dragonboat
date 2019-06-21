@@ -18,11 +18,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 var (

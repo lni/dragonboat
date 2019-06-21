@@ -18,7 +18,7 @@
 package client
 
 import (
-	"github.com/lni/dragonboat"
+	"github.com/lni/dragonboat/v3"
 )
 
 // IsNodeHostPartitioned returns a boolean value indicating whether NodeHost

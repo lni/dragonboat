@@ -21,13 +21,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

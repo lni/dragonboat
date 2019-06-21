@@ -26,7 +26,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/lni/dragonboat/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
 )
 
 var (

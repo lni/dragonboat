@@ -26,13 +26,13 @@ import (
 	"math"
 	"sort"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/logger"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/logger"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (

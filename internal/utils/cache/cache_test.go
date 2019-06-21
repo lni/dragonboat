@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
+	"github.com/lni/dragonboat/v3/internal/utils/cache/biogo/store/llrb"
 )
 
 type testKey string

@@ -17,7 +17,7 @@ package raft
 import (
 	"math"
 
-	pb "github.com/lni/dragonboat/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // TestLogDB is used in raft test only. It is basically a logdb.logreader

@@ -22,13 +22,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/logger"
-	"github.com/lni/dragonboat/raftio"
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v3/raftio"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (

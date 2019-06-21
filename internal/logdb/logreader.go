@@ -38,10 +38,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/lni/dragonboat/internal/raft"
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/raft"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // LogReader is the struct used to manage logs that have already been persisted

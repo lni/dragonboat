@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // SnapshotVersion is the snapshot version value type.

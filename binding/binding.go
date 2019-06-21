@@ -34,14 +34,14 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/cpp"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/cpp"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 func init() {

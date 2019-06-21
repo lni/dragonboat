@@ -17,7 +17,7 @@ package raftio
 import (
 	"errors"
 
-	pb "github.com/lni/dragonboat/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (

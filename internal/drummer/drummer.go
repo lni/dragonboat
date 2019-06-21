@@ -32,17 +32,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	serverPkg "github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/envutil"
-	"github.com/lni/dragonboat/internal/utils/netutil"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/internal/utils/stringutil"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	serverPkg "github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/envutil"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 var (

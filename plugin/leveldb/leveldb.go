@@ -21,9 +21,9 @@ Log DB in production.
 package leveldb
 
 import (
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/logdb/kv/leveldb"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 // NewLogDB is the factory function for creating LevelDB based Log DB instances.

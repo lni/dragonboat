@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/raft"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/raft"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func removeTestLogdbDir() {

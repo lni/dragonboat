@@ -20,10 +20,10 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	serverPkg "github.com/lni/dragonboat/internal/server"
-	"github.com/lni/dragonboat/internal/utils/random"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	serverPkg "github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 )
 
 const (

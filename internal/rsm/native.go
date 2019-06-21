@@ -19,8 +19,8 @@ import (
 	"io"
 	"sync"
 
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var (

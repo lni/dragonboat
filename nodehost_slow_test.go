@@ -29,16 +29,16 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/tests"
-	"github.com/lni/dragonboat/internal/tests/kvpb"
-	"github.com/lni/dragonboat/internal/utils/lang"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/internal/utils/random"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/tests"
+	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/utils/lang"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 type multiraftMonkeyTestAddrList struct {
