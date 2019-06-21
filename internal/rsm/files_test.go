@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
 )
 
 const (

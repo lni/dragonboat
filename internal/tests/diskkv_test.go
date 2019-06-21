@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/tests/kvpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 func TestRocksDBCanBeCreatedAndUsed(t *testing.T) {

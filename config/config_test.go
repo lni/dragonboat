@@ -19,7 +19,7 @@ import (
 )
 
 func ExampleNodeHostConfig() {
-	// import "github.com/lni/dragonboat/plugin/rpc"
+	// import "github.com/lni/dragonboat/v3/plugin/rpc"
 	nhc := NodeHostConfig{
 		WALDir:         "/data/wal",
 		NodeHostDir:    "/data/dragonboat-data",

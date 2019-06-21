@@ -18,9 +18,9 @@ Package rocksdb provides factory functions for creating RocksDB based Log DB.
 package rocksdb
 
 import (
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/logdb/kv/rocksdb"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 // NewBatchedLogDB is the factory function for creating RocksDB based Log DB

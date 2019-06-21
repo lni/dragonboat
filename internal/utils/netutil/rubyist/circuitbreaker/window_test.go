@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lni/dragonboat/internal/utils/netutil/facebookgo/clock"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil/facebookgo/clock"
 )
 
 func TestWindowCounts(t *testing.T) {

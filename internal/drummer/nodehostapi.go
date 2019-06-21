@@ -24,12 +24,12 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/internal/drummer/multiraftpb"
-	"github.com/lni/dragonboat/internal/utils/netutil"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 // NodehostAPI implements the grpc server used for making raft IO requests.

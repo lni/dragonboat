@@ -17,13 +17,14 @@ package cpp
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/lni/dragonboat/internal/rsm"
-	"github.com/lni/dragonboat/internal/tests/kvpb"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
 	"os"
 	"testing"
+
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {

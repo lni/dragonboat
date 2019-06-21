@@ -26,9 +26,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/netutil"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 var (

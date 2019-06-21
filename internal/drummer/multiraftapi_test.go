@@ -25,13 +25,13 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/lni/dragonboat/client"
-	dc "github.com/lni/dragonboat/internal/drummer/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	mr "github.com/lni/dragonboat/internal/drummer/multiraftpb"
-	"github.com/lni/dragonboat/internal/tests/kvpb"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/internal/utils/random"
+	"github.com/lni/dragonboat/v3/client"
+	dc "github.com/lni/dragonboat/v3/internal/drummer/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	mr "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
+	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
 )
 
 func getMultiraftAPIAddress(nodehostAddress string,

@@ -19,7 +19,7 @@ package logdb
 import (
 	"flag"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 )
 
 const (

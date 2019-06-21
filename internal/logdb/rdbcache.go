@@ -17,8 +17,8 @@ package logdb
 import (
 	"sync"
 
-	"github.com/lni/dragonboat/raftio"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 type rdbcache struct {

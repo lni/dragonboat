@@ -20,11 +20,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/cpp"
-	"github.com/lni/dragonboat/internal/rsm"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/cpp"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 //

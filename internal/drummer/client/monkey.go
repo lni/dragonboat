@@ -17,7 +17,7 @@
 package client
 
 import (
-	"github.com/lni/dragonboat"
+	"github.com/lni/dragonboat/v3"
 )
 
 func IsNodeHostPartitioned(nh *dragonboat.NodeHost) bool {

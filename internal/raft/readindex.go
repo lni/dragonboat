@@ -15,7 +15,7 @@
 package raft
 
 import (
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 type readStatus struct {

@@ -18,7 +18,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/lni/dragonboat/client"
+	"github.com/lni/dragonboat/v3/client"
 )
 
 func TestBootstrapValidateHandlesJoiningNode(t *testing.T) {

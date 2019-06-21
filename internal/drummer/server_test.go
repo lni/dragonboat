@@ -26,11 +26,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/client"
-	pb "github.com/lni/dragonboat/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	"github.com/lni/dragonboat/internal/utils/random"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/client"
+	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
 )
 
 func isTimeoutError(err error) bool {

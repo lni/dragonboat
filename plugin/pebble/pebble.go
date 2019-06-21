@@ -20,9 +20,9 @@ Pebble support is in ALPHA status, it is NOT ready for production use.
 package pebble
 
 import (
-	"github.com/lni/dragonboat/internal/logdb"
-	"github.com/lni/dragonboat/internal/logdb/kv/pebble"
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 // NewLogDB is the factory function for creating Pebble based Log DB instances.

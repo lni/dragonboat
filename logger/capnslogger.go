@@ -15,12 +15,12 @@
 package logger
 
 import (
-	"github.com/lni/dragonboat/internal/utils/logutil/capnslog"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil/capnslog"
 )
 
 const (
 	// RepoName is the repo name used in capnslog.
-	RepoName = "github.com/lni/dragonboat"
+	RepoName = "github.com/lni/dragonboat/v3"
 )
 
 // CreateCapnsLog creates an ILogger instance based on capnslog.

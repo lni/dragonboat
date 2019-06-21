@@ -17,8 +17,8 @@
 package transport
 
 import (
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/plugin/rpc"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/plugin/rpc"
 )
 
 func getRaftRPCFactoryFunc() config.RaftRPCFactoryFunc {

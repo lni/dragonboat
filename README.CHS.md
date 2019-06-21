@@ -8,8 +8,8 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
-* 2019-06-09 Dragonboat v3.0 测试版([CHANGELOG](CHANGELOG.md))被合并到了Master branch中。
-* 2019-02-20 Dragonboat v2.0 已发布。
+* 2019-06-21 Dragonboat v3.0 已发布，新增基于磁盘的状态机和Go module支持，详见([CHANGELOG](CHANGELOG.md))。
+* 2019-02-20 Dragonboat v2.1 已发布。
 
 ## 关于 ##
 Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库，它同时提供[C++11](/binding)支持。
@@ -63,44 +63,46 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 ![stw](./docs/stw.png)
 
 ## 系统需求 ##
-* x86_64 Linux或MacOS, Go 1.11, 1.12，支持C++11的近期版本GCC或Clang
+* x86_64 Linux或MacOS, Go 1.12，支持C++11的近期版本GCC或Clang
 * [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4或更新的版本
 
 ## 开始使用 ##
-__上列步骤使用的是Master branch的代码。Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
+__Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
 
-下载Dragonboat库至您的[Go工作环境](https://golang.org/doc/install):
-```
-$ go get -u -d github.com/lni/dragonboat
-```
-请选择使用[RocksDB还是LevelDB](docs/storage.CHS.md)来存储Raft日志数据，建议使用RocksDB。
+首先请确保Go 1.12或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
-### RocksDB ###
-如果RocksDB 5.13.4或者更新版本尚未安装：
+请首先选择使用[RocksDB还是LevelDB](docs/storage.CHS.md)来存储Raft日志数据，建议使用RocksDB。
+
+### 安装RocksDB ###
+如果RocksDB 5.13.4或者更新版本尚未安装，可按下列步骤安装。首先下载Dragonboat库至$HOME/src并将RocksDB安装到/usr/local/lib和/usr/local/include位置：
 ```
-$ cd $GOPATH/src/github.com/lni/dragonboat
+$ cd $HOME/src
+$ git clone https://github.com/lni/dragonboat
+$ cd $HOME/src/dragonboat
 $ make install-rocksdb-ull
 ```
-上述命令将把RocksDB 5.13.4安装到/usr/local/lib和/usr/local/include/rocksdb。如果RocksDB已经被安装则可跳过此步。
+运行下列命令检查安装是否正确：
+```
+$ cd $HOME/src/dragonboat
+$ GO111MODULE=on make dragonboat-test
+```
 
-运行内建测试以检查安装是否完成:
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ make dragonboat-test
-```
-编译您自己的基于Dragonboat的应用:
+请注意，如果RocksDB事先已经安装，上述步骤可直接跳过。如果您仅希望使用dragonboat库，至此可以安全的删除$HOME/src/dragonboat目录了。
+
+### 使用Dragonboat ###
+在您的应用中使用dragonboat库，请确保在Go程序代码中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.0.0"添加到您的Go应用的go.mod文件的__require__部分。
+
+编译您的应用的时候，如有需要，可将RocksDB安装位置告知Go:
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
 ```
-### LevelDB ###
-使用LevelDB无额外安装步骤，运行上述同样的测试：
-```
-$ cd $GOPATH/src/github.com/lni/dragonboat
-$ DRAGONBOAT_LOGDB=leveldb make dragonboat-test
-```
-在应用中使用基于LevelDB的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为leveldb.NewLogDB这一在github.com/lni/dragonboat/plugin/leveldb包中提供的factory函数。
 
-编译应用时可如此避免对RocksDB库的依赖:
+具体使用可可参考[示例](https://github.com/lni/dragonboat-example)。
+
+### LevelDB ###
+使用LevelDB无额外安装步骤。在应用中使用基于LevelDB的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为leveldb.NewLogDB这一在github.com/lni/dragonboat/plugin/leveldb包中提供的factory函数。
+
+编译应用时可用如下方法避免对RocksDB库的依赖:
 ```
 go build -v -tags="dragonboat_no_rocksdb" pkgname
 ```

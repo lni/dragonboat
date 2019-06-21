@@ -34,9 +34,9 @@ import (
 	"log"
 	"sync"
 
-	"github.com/lni/dragonboat/internal/utils/envutil"
-	"github.com/lni/dragonboat/internal/utils/lang"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3/internal/utils/envutil"
+	"github.com/lni/dragonboat/v3/internal/utils/lang"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 var (

@@ -15,7 +15,7 @@
 package kv
 
 import (
-	"github.com/lni/dragonboat/raftio"
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 const (

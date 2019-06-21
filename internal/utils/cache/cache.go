@@ -24,8 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lni/dragonboat/internal/utils/cache/biogo/store/llrb"
-	"github.com/lni/dragonboat/logger"
+	"github.com/lni/dragonboat/v3/internal/utils/cache/biogo/store/llrb"
+	"github.com/lni/dragonboat/v3/logger"
 )
 
 var (

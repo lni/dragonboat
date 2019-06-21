@@ -1,4 +1,4 @@
-## v3.0 (Release date TBD)
+## v3.0 (2019-06-21)
 
 Dragonboat v3.0 is a major release with breaking changes. Please make sure to carefully read the CHANGELOG below before upgrading.
 
@@ -9,6 +9,7 @@ Dragonboat v3.0 is a major release with breaking changes. Please make sure to ca
 - Added the ability to use exported snapshot to repair permanently damaged cluster that no longer has majority quorum.
 - Added new API for cleaning up data and release disk spaces after a node is removed from its Raft cluster.
 - Added the ability to limit peak memory usage when disk or network is slow.
+- Added Go module support. Go 1.12 is required.
 
 ### Improvements
 
@@ -21,12 +22,12 @@ Dragonboat v3.0 is a major release with breaking changes. Please make sure to ca
 - The Drummer package has been made invisible from user applications.
 - The statemachine.IStateMachine interface has been upgraded to reflect the fact that not all state machine data is stored in memory ([#46](https://github.com/lni/dragonboat/issues/46)).
 
-## v2.1 (Feb 2019)
+## v2.1 (2019-02-20)
 
 ### New features
 
 - Added support to store Raft Logs in LevelDB.
 
-## v2.0 (Jan 2019)
+## v2.0 (2019-01-04)
 
 Initial open source release. 

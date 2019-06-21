@@ -18,11 +18,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/plugin/leveldb"
-	"github.com/lni/dragonboat/plugin/pebble"
-	"github.com/lni/dragonboat/plugin/rocksdb"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/plugin/leveldb"
+	"github.com/lni/dragonboat/v3/plugin/pebble"
+	"github.com/lni/dragonboat/v3/plugin/rocksdb"
 )
 
 var (

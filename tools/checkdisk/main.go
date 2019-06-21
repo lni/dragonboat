@@ -20,11 +20,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/lni/dragonboat"
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/utils/syncutil"
-	"github.com/lni/dragonboat/logger"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/dragonboat/v3/logger"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

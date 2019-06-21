@@ -24,8 +24,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/server"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/server"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func getAllEntries(l *entryLog) []pb.Entry {

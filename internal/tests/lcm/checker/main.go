@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lni/dragonboat/internal/tests/lcm/porcupine"
+	"github.com/lni/dragonboat/v3/internal/tests/lcm/porcupine"
 )
 
 func main() {

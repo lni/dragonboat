@@ -15,7 +15,7 @@
 package drummer
 
 import (
-	"github.com/lni/dragonboat/internal/utils/random"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
 )
 
 type randomSelector struct {

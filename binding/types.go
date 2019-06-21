@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/lni/dragonboat"
+	"github.com/lni/dragonboat/v3"
 )
 
 func charToByte(data *C.char, len C.size_t) []byte {

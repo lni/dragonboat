@@ -24,9 +24,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lni/dragonboat/internal/logdb/kv"
-	"github.com/lni/dragonboat/internal/utils/leaktest"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func TestKVCanBeCreatedAndClosed(t *testing.T) {

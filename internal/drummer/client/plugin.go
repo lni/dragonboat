@@ -17,9 +17,9 @@ package client
 import (
 	"fmt"
 
-	"github.com/lni/dragonboat/internal/tests"
-	"github.com/lni/dragonboat/internal/utils/fileutil"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/internal/tests"
+	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 type pluginDetails struct {

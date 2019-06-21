@@ -20,7 +20,7 @@ package dragonboat
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/rsm"
 )
 
 func TestWorkReadyCanBeCreated(t *testing.T) {

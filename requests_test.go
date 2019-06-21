@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lni/dragonboat/client"
-	"github.com/lni/dragonboat/internal/rsm"
-	pb "github.com/lni/dragonboat/raftpb"
-	sm "github.com/lni/dragonboat/statemachine"
+	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/internal/rsm"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 const (

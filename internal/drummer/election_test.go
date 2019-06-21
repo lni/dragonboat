@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lni/dragonboat/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
 )
 
 func TestElectionCanStartAndElectLeader(t *testing.T) {

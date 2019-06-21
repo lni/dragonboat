@@ -20,8 +20,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lni/dragonboat/internal/utils/logutil"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func addressEqual(addr1 string, addr2 string) bool {

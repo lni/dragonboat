@@ -21,8 +21,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/internal/utils/cache"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils/cache"
 )
 
 const (

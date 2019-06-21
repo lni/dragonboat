@@ -21,9 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/raftio"
-	"github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/raftio"
+	"github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (

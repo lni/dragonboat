@@ -17,7 +17,7 @@
 package raft
 
 import (
-	"github.com/lni/dragonboat/internal/server"
+	"github.com/lni/dragonboat/v3/internal/server"
 )
 
 func (rc *Peer) GetInMemLogSize() uint64 {

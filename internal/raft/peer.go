@@ -43,8 +43,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/lni/dragonboat/config"
-	pb "github.com/lni/dragonboat/raftpb"
+	"github.com/lni/dragonboat/v3/config"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // PeerAddress is the basic info for a peer in the Raft cluster.

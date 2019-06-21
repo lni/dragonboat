@@ -37,8 +37,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lni/dragonboat/internal/utils/netutil/cenk/backoff"
-	"github.com/lni/dragonboat/internal/utils/netutil/facebookgo/clock"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil/cenk/backoff"
+	"github.com/lni/dragonboat/v3/internal/utils/netutil/facebookgo/clock"
 )
 
 // BreakerEvent indicates the type of event received over an event channel
