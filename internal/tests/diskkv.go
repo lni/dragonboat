@@ -597,7 +597,12 @@ func (d *DiskKVTest) SaveSnapshot(ctx interface{},
 		default:
 		}
 	}
-	rubbish := make([]byte, 1024*1024*6)
+	rsz := uint64(1024 * 1024 * 6)
+	rubbish := make([]byte, rsz)
+	for i := 0; i < 512; i++ {
+		idx := random.LockGuardedRand.Uint64() % rsz
+		rubbish[idx] = byte(random.LockGuardedRand.Uint64())
+	}
 	_, err := w.Write(rubbish)
 	if err != nil {
 		return err
