@@ -24,7 +24,6 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/cpp"
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
