@@ -115,7 +115,7 @@ const (
 	// DragonboatPatch is the patch version number
 	DragonboatPatch = 0
 	// DEVVersion is a boolean flag indicating whether this is a dev version
-	DEVVersion = true
+	DEVVersion = false
 )
 
 var (
