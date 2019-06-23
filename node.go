@@ -53,7 +53,6 @@ type engine interface {
 
 type node struct {
 	readReqCount         uint64
-	leaderID             uint64
 	instanceID           uint64
 	raftAddress          string
 	config               config.Config
@@ -1292,9 +1291,6 @@ func (n *node) tick() {
 		panic("rc node is still nil")
 	}
 	n.tickCount++
-	if n.tickCount%n.electionTick == 0 {
-		n.leaderID = n.p.LocalStatus().LeaderID
-	}
 	n.increaseQuiesceTick()
 	if n.quiesced() {
 		n.p.QuiescedTick()
