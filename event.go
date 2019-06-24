@@ -58,19 +58,19 @@ func newRaftEventListener(clusterID uint64, nodeID uint64,
 	}
 	if useMetrics {
 		label := fmt.Sprintf(`{clusterid="%d",nodeid="%d"}`, clusterID, nodeID)
-		name := fmt.Sprintf(`campaign_launched%s`, label)
+		name := fmt.Sprintf(`raft_node_campaign_launched%s`, label)
 		campaignLaunched := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`campaign_skipped%s`, label)
+		name = fmt.Sprintf(`raft_node_campaign_skipped%s`, label)
 		campaignSkipped := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`snapshot_rejected%s`, label)
+		name = fmt.Sprintf(`raft_node_snapshot_rejected%s`, label)
 		snapshotRejected := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`replication_rejected%s`, label)
+		name = fmt.Sprintf(`raft_node_replication_rejected%s`, label)
 		replicationRejected := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`proposal_dropped%s`, label)
+		name = fmt.Sprintf(`raft_node_proposal_dropped%s`, label)
 		proposalDropped := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`read_index_dropped%s`, label)
+		name = fmt.Sprintf(`raft_node_read_index_dropped%s`, label)
 		readIndexDropped := metrics.GetOrCreateCounter(name)
-		name = fmt.Sprintf(`is_leader%s`, label)
+		name = fmt.Sprintf(`raft_node_is_leader%s`, label)
 		isLeader := metrics.GetOrCreateGauge(name, func() float64 {
 			if atomic.LoadUint64(leaderID) == nodeID {
 				return 1.0
