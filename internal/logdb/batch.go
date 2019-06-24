@@ -226,7 +226,7 @@ func (be *batchedEntries) getRange(clusterID uint64,
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
 		if err := eb.Unmarshal(data); err != nil {
-			return false, err
+			panic(err)
 		}
 		if len(eb.Entries) == 0 {
 			panic("empty batch found")
@@ -245,7 +245,7 @@ func (be *batchedEntries) getRange(clusterID uint64,
 		return true, nil
 	}
 	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
-		return 0, 0, nil
+		return 0, 0, err
 	}
 	return firstIndex, length, nil
 }
