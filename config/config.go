@@ -230,6 +230,11 @@ type NodeHostConfig struct {
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based RPC module to be used.
 	RaftRPCFactory RaftRPCFactoryFunc
+	// EnableMetrics determines whether health metrics in Prometheus format should
+	// be enabled.
+	EnableMetrics bool
+	// RaftEventListener is the listener to get notified for certain Raft events.
+	RaftEventListener raftio.IRaftEventListener
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
