@@ -1147,59 +1147,70 @@ func TestAllWantedEntriesAreAccessible(t *testing.T) {
 }
 
 func TestReadRaftStateWithSnapshot(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
-		ents := make([]pb.Entry, 0)
-		hs := pb.State{
-			Term:   1,
-			Vote:   3,
-			Commit: 100,
-		}
-		ss := pb.Snapshot{
-			Index: 16,
-			Term:  1,
-		}
-		for i := uint64(1); i <= 100; i++ {
-			e := pb.Entry{
-				Term:  1,
-				Index: i,
-				Type:  pb.ApplicationEntry,
-			}
-			ents = append(ents, e)
-		}
-		ud := pb.Update{
-			EntriesToSave: ents,
-			State:         hs,
-			Snapshot:      ss,
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
-		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
-		state, err := db.ReadRaftState(clusterID, nodeID, ss.Index)
-		if err != nil {
-			t.Fatalf("failed to read raft state %v", err)
-		}
-		if state.FirstIndex != ss.Index {
-			t.Errorf("first index %d, want %d", state.FirstIndex, 1)
-		}
-		if state.EntryCount != 85 {
-			t.Errorf("length %d, want %d", state.EntryCount, 85)
-		}
-		logReader := NewLogReader(clusterID, nodeID, db)
-		if err := logReader.ApplySnapshot(ss); err != nil {
-			t.Fatalf("apply snapshot failed")
-		}
-		logReader.SetRange(state.FirstIndex, state.EntryCount)
-		fi, li := logReader.GetRange()
-		if fi != 17 || li != 100 {
-			t.Errorf("unexpected range %d:%d", fi, li)
-		}
+	tests := []struct {
+		snapshotIndex uint64
+		entryCount    uint64
+		firstIndex    uint64
+		lastIndex     uint64
+	}{
+		{16, 85, 17, 100},
+		{100, 0, 101, 100},
 	}
-	runLogDBTest(t, tf)
+	for _, tt := range tests {
+		tf := func(t *testing.T, db raftio.ILogDB) {
+			clusterID := uint64(0)
+			nodeID := uint64(4)
+			ents := make([]pb.Entry, 0)
+			hs := pb.State{
+				Term:   1,
+				Vote:   3,
+				Commit: 100,
+			}
+			ss := pb.Snapshot{
+				Index: tt.snapshotIndex,
+				Term:  1,
+			}
+			for i := uint64(1); i <= 100; i++ {
+				e := pb.Entry{
+					Term:  1,
+					Index: i,
+					Type:  pb.ApplicationEntry,
+				}
+				ents = append(ents, e)
+			}
+			ud := pb.Update{
+				EntriesToSave: ents,
+				State:         hs,
+				Snapshot:      ss,
+				ClusterID:     clusterID,
+				NodeID:        nodeID,
+			}
+			err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+			if err != nil {
+				t.Fatalf("failed to save recs")
+			}
+			state, err := db.ReadRaftState(clusterID, nodeID, ss.Index)
+			if err != nil {
+				t.Fatalf("failed to read raft state %v", err)
+			}
+			if state.FirstIndex != ss.Index {
+				t.Errorf("first index %d, want %d", state.FirstIndex, 1)
+			}
+			if state.EntryCount != tt.entryCount {
+				t.Errorf("length %d, want %d", state.EntryCount, tt.entryCount)
+			}
+			logReader := NewLogReader(clusterID, nodeID, db)
+			if err := logReader.ApplySnapshot(ss); err != nil {
+				t.Fatalf("apply snapshot failed")
+			}
+			logReader.SetRange(state.FirstIndex, state.EntryCount)
+			fi, li := logReader.GetRange()
+			if fi != tt.firstIndex || li != tt.lastIndex {
+				t.Errorf("unexpected range %d:%d", fi, li)
+			}
+		}
+		runLogDBTest(t, tf)
+	}
 }
 
 func TestReadRaftStateWithEntriesOnly(t *testing.T) {

@@ -187,9 +187,11 @@ func (r *rdb) saveRaftState(updates []pb.Update,
 		r.recordState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
 		if !pb.IsEmptySnapshot(ud.Snapshot) {
 			if len(ud.EntriesToSave) > 0 {
-				if ud.Snapshot.Index > ud.EntriesToSave[len(ud.EntriesToSave)-1].Index {
+				// raft/inMemory makes sure such entries no longer need to be saved
+				lastIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
+				if ud.Snapshot.Index > lastIndex {
 					plog.Panicf("max index not handled, %d, %d",
-						ud.Snapshot.Index, ud.EntriesToSave[len(ud.EntriesToSave)-1].Index)
+						ud.Snapshot.Index, lastIndex)
 				}
 			}
 			r.recordSnapshot(wb, ud)
