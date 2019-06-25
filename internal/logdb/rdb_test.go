@@ -298,6 +298,59 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 	runLogDBTest(t, tf)
 }
 
+func TestSnapshotOnlyNodeIsHandledByReadRaftState(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		ss := pb.Snapshot{
+			Index: 100,
+			Term:  2,
+		}
+		hs := pb.State{
+			Term:   2,
+			Vote:   3,
+			Commit: 100,
+		}
+		ud := pb.Update{
+			State:     hs,
+			ClusterID: 3,
+			NodeID:    4,
+			Snapshot:  ss,
+		}
+		if err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+			t.Fatalf("failed to save single de rec")
+		}
+		rs, err := db.ReadRaftState(3, 4, ss.Index)
+		if err != nil {
+			t.Fatalf("read raft state failed %v", err)
+		}
+		if rs.EntryCount != 0 || rs.FirstIndex != ss.Index {
+			t.Errorf("unexpected rs %+v", rs)
+		}
+	}
+	runLogDBTest(t, tf)
+}
+
+func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		ss := pb.Snapshot{
+			Index: 100,
+			Term:  2,
+		}
+		ud := pb.Update{
+			ClusterID: 3,
+			NodeID:    4,
+			Snapshot:  ss,
+		}
+		if err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+			t.Fatalf("failed to save single de rec")
+		}
+		_, err := db.ReadRaftState(3, 4, ss.Index)
+		if err != raftio.ErrNoSavedLog {
+			t.Fatalf("failed to return expected error %v", err)
+		}
+	}
+	runLogDBTest(t, tf)
+}
+
 func TestMaxIndexRuleIsEnforced(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		hs := pb.State{
@@ -360,7 +413,7 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 			Commit: 100,
 		}
 		ents := make([]pb.Entry, 0)
-		for i := uint64(0); i < 1024; i++ {
+		for i := uint64(1); i < 1025; i++ {
 			e := pb.Entry{
 				Term:  2,
 				Index: i,
@@ -386,7 +439,7 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 		if rs.EntryCount != 1024 {
 			t.Errorf("entries size %d, want %d", rs.EntryCount, 1024)
 		}
-		re, _, err := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 0, math.MaxUint64, math.MaxUint64)
+		re, _, err := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 1, math.MaxUint64, math.MaxUint64)
 		if err != nil {
 			t.Errorf("IterateEntries failed %v", err)
 		}
@@ -1093,7 +1146,7 @@ func TestAllWantedEntriesAreAccessible(t *testing.T) {
 	testAllWantedEntriesAreAccessible(t, batchSize+1, batchSize*3+1)
 }
 
-func TestReadRaftStateWithCompactedEntries(t *testing.T) {
+func TestReadRaftStateWithSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		clusterID := uint64(0)
 		nodeID := uint64(4)
@@ -1103,7 +1156,63 @@ func TestReadRaftStateWithCompactedEntries(t *testing.T) {
 			Vote:   3,
 			Commit: 100,
 		}
-		for i := uint64(0); i <= batchSize*3+1; i++ {
+		ss := pb.Snapshot{
+			Index: 16,
+			Term:  1,
+		}
+		for i := uint64(1); i <= 100; i++ {
+			e := pb.Entry{
+				Term:  1,
+				Index: i,
+				Type:  pb.ApplicationEntry,
+			}
+			ents = append(ents, e)
+		}
+		ud := pb.Update{
+			EntriesToSave: ents,
+			State:         hs,
+			Snapshot:      ss,
+			ClusterID:     clusterID,
+			NodeID:        nodeID,
+		}
+		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		if err != nil {
+			t.Fatalf("failed to save recs")
+		}
+		state, err := db.ReadRaftState(clusterID, nodeID, ss.Index)
+		if err != nil {
+			t.Fatalf("failed to read raft state %v", err)
+		}
+		if state.FirstIndex != ss.Index {
+			t.Errorf("first index %d, want %d", state.FirstIndex, 1)
+		}
+		if state.EntryCount != 85 {
+			t.Errorf("length %d, want %d", state.EntryCount, 85)
+		}
+		logReader := NewLogReader(clusterID, nodeID, db)
+		if err := logReader.ApplySnapshot(ss); err != nil {
+			t.Fatalf("apply snapshot failed")
+		}
+		logReader.SetRange(state.FirstIndex, state.EntryCount)
+		fi, li := logReader.GetRange()
+		if fi != 17 || li != 100 {
+			t.Errorf("unexpected range %d:%d", fi, li)
+		}
+	}
+	runLogDBTest(t, tf)
+}
+
+func TestReadRaftStateWithEntriesOnly(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		clusterID := uint64(0)
+		nodeID := uint64(4)
+		ents := make([]pb.Entry, 0)
+		hs := pb.State{
+			Term:   1,
+			Vote:   3,
+			Commit: 100,
+		}
+		for i := uint64(1); i <= batchSize*3+1; i++ {
 			e := pb.Entry{
 				Term:  1,
 				Index: i,
@@ -1151,7 +1260,7 @@ func TestRemoveNodeData(t *testing.T) {
 			Index:    1,
 			Term:     2,
 		}
-		for i := uint64(0); i <= batchSize*3+1; i++ {
+		for i := uint64(1); i <= batchSize*3+1; i++ {
 			e := pb.Entry{
 				Term:  1,
 				Index: i,
@@ -1183,6 +1292,7 @@ func TestRemoveNodeData(t *testing.T) {
 		if err := db.RemoveNodeData(clusterID, nodeID); err != nil {
 			t.Fatalf("failed to remove node data")
 		}
+		plog.Infof("RemoveNodeData done")
 		_, err = db.ReadRaftState(clusterID, nodeID, 1)
 		if err != raftio.ErrNoSavedLog {
 			t.Fatalf("raft state not deleted %v", err)

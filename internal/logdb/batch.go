@@ -213,12 +213,12 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 }
 
 func (be *batchedEntries) getRange(clusterID uint64,
-	nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error) {
+	nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
 	fk := be.keys.get()
 	lk := be.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	low, high := getBatchIDRange(lastIndex, maxIndex+1)
+	low, high := getBatchIDRange(snapshotIndex, maxIndex+1)
 	fk.SetEntryBatchKey(clusterID, nodeID, low)
 	lk.SetEntryBatchKey(clusterID, nodeID, high)
 	firstIndex := uint64(0)
@@ -235,10 +235,10 @@ func (be *batchedEntries) getRange(clusterID uint64,
 			eb = restoreBatchFields(eb)
 		}
 		for _, e := range eb.Entries {
-			if e.Index >= lastIndex && e.Index <= maxIndex {
-				length++
+			if e.Index >= snapshotIndex && e.Index <= maxIndex {
 				if firstIndex == uint64(0) {
 					firstIndex = e.Index
+					return false, nil
 				}
 			}
 		}
@@ -246,6 +246,12 @@ func (be *batchedEntries) getRange(clusterID uint64,
 	}
 	if err := be.kvs.IterateValue(fk.Key(), lk.Key(), false, op); err != nil {
 		return 0, 0, err
+	}
+	if firstIndex == 0 && maxIndex != 0 {
+		panic("firstIndex == 0 && maxIndex != 0")
+	}
+	if firstIndex > 0 {
+		length = maxIndex - firstIndex + 1
 	}
 	return firstIndex, length, nil
 }
