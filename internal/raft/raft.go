@@ -314,6 +314,7 @@ func (r *raft) setLeaderID(leaderID uint64) {
 			ClusterID: r.clusterID,
 			NodeID:    r.nodeID,
 			LeaderID:  leaderID,
+			Term:      r.term,
 		}
 		r.events.LeaderUpdated(info)
 	}
@@ -808,6 +809,7 @@ func (r *raft) becomeCandidate() {
 	r.state = candidate
 	// 2nd paragraph section 5.2 of the raft paper
 	r.reset(r.term + 1)
+	r.setLeaderID(NoLeader)
 	r.vote = r.nodeID
 	plog.Infof("%s became a candidate", r.describe())
 }
@@ -836,7 +838,6 @@ func (r *raft) reset(term uint64) {
 	if r.rl.Enabled() {
 		r.rl.ResetFollowerState()
 	}
-	r.setLeaderID(NoLeader)
 	r.votes = make(map[uint64]bool)
 	r.electionTick = 0
 	r.heartbeatTick = 0
