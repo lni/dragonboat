@@ -330,6 +330,42 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	}
 }
 
+func TestHandleAllocationCount(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	store := &tests.NoOP{NoAlloc: true}
+	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter()
+	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm.index = 1
+	idx := uint64(1)
+	batch := make([]Task, 0, 8)
+	entries := make([]pb.Entry, 1)
+	ac := testing.AllocsPerRun(1000, func() {
+		idx++
+		e1 := pb.Entry{
+			ClientID: 123,
+			SeriesID: client.NoOPSeriesID,
+			Index:    idx,
+			Term:     1,
+		}
+		entries[0] = e1
+		commit := Task{
+			Entries: entries,
+		}
+		sm.taskQ.Add(commit)
+		if _, err := sm.Handle(batch, nil); err != nil {
+			t.Fatalf("handle failed %v", err)
+		}
+		if sm.GetLastApplied() != idx {
+			t.Errorf("last applied %d, want %d", sm.GetLastApplied(), idx)
+		}
+	})
+	if ac != 0 {
+		t.Fatalf("ac %f, want 0", ac)
+	}
+}
+
 func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	createTestDir()

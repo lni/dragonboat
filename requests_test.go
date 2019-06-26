@@ -22,11 +22,13 @@ import (
 	"math/rand"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -945,5 +947,67 @@ func TestSystemGcTimeInSCReadCanBeCleanedUp(t *testing.T) {
 	pp.applied(499)
 	if len(pp.systemGcTime) != 0 {
 		t.Errorf("not cleaning up systemGcTime")
+	}
+}
+
+func TestProposalAllocationCount(t *testing.T) {
+	sz := 128
+	data := make([]byte, sz)
+	p := &sync.Pool{}
+	p.New = func() interface{} {
+		obj := &RequestState{}
+		obj.CompletedC = make(chan RequestResult, 1)
+		obj.pool = p
+		return obj
+	}
+	total := uint64(0)
+	q := newEntryQueue(2048, 0)
+	pp := newPendingProposal(p, q, 1, 1, "localhost:9090", 200)
+	session := client.NewNoOPSession(1, random.LockGuardedRand)
+	ac := testing.AllocsPerRun(1000, func() {
+		v := atomic.AddUint64(&total, 1)
+		rs, err := pp.propose(session, data, nil, time.Second)
+		if err != nil {
+			t.Errorf("%v", err)
+		}
+		if v%128 == 0 {
+			atomic.StoreUint64(&total, 0)
+			q.get(false)
+		}
+		pp.applied(rs.key, rs.clientID, rs.seriesID, sm.Result{Value: 1}, false)
+		rs.readyToRelease.set()
+		rs.Release()
+	})
+	if ac > 1 {
+		t.Fatalf("ac %f, want <=1", ac)
+	}
+}
+
+func TestReadIndexAllocationCount(t *testing.T) {
+	p := &sync.Pool{}
+	p.New = func() interface{} {
+		obj := &RequestState{}
+		obj.CompletedC = make(chan RequestResult, 1)
+		obj.pool = p
+		return obj
+	}
+	total := uint64(0)
+	q := newReadIndexQueue(2048)
+	pri := newPendingReadIndex(p, q, 200)
+	ac := testing.AllocsPerRun(1000, func() {
+		v := atomic.AddUint64(&total, 1)
+		rs, err := pri.read(nil, time.Second)
+		if err != nil {
+			t.Errorf("%v", err)
+		}
+		if v%128 == 0 {
+			atomic.StoreUint64(&total, 0)
+			q.get()
+		}
+		rs.readyToRelease.set()
+		rs.Release()
+	})
+	if ac != 0 {
+		t.Fatalf("ac %f, want 0", ac)
 	}
 }
