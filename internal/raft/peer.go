@@ -41,9 +41,9 @@ package raft
 
 import (
 	"sort"
-	"sync/atomic"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -56,18 +56,18 @@ type PeerAddress struct {
 // Peer is the interface struct for interacting with the underlying Raft
 // protocol implementation.
 type Peer struct {
-	leaderID  uint64
 	raft      *raft
 	prevState pb.State
 }
 
 // Launch starts or restarts a Raft node.
-func Launch(config *config.Config, logdb ILogDB,
+func Launch(config *config.Config,
+	logdb ILogDB, events server.IRaftEventListener,
 	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	r := newRaft(config, logdb)
 	rc := &Peer{raft: r}
-	rc.raft.recordLeader = rc.recordLeader
+	rc.raft.events = events
 	_, lastIndex := logdb.GetRange()
 	if newNode && !config.IsObserver {
 		r.becomeFollower(1, NoLeader)
@@ -266,11 +266,6 @@ func (rc *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
 	rc.raft.dumpRaftInfoToLog(addrMap)
 }
 
-// GetLeaderID returns the leader id.
-func (rc *Peer) GetLeaderID() uint64 {
-	return atomic.LoadUint64(&rc.leaderID)
-}
-
 // NotifyRaftLastApplied passes on the lastApplied index confirmed by the RSM to
 // the raft state machine.
 func (rc *Peer) NotifyRaftLastApplied(lastApplied uint64) {
@@ -281,10 +276,6 @@ func (rc *Peer) NotifyRaftLastApplied(lastApplied uint64) {
 // entries ready to be applied.
 func (rc *Peer) HasEntryToApply() bool {
 	return rc.entryLog().hasEntriesToApply()
-}
-
-func (rc *Peer) recordLeader(leaderID uint64) {
-	atomic.StoreUint64(&rc.leaderID, leaderID)
 }
 
 func (rc *Peer) entryLog() *entryLog {

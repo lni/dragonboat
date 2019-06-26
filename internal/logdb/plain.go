@@ -126,28 +126,34 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 }
 
 func (pe *plainEntries) getRange(clusterID uint64,
-	nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error) {
+	nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
 	fk := pe.keys.get()
 	lk := pe.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.SetEntryKey(clusterID, nodeID, lastIndex)
+	fk.SetEntryKey(clusterID, nodeID, snapshotIndex)
 	lk.SetEntryKey(clusterID, nodeID, maxIndex)
 	firstIndex := uint64(0)
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
-		length++
 		if firstIndex == 0 {
 			var e pb.Entry
 			if err := e.Unmarshal(data); err != nil {
 				return false, err
 			}
 			firstIndex = e.Index
+			return false, nil
 		}
 		return true, nil
 	}
 	if err := pe.kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
 		return 0, 0, err
+	}
+	if firstIndex == 0 && maxIndex != 0 {
+		plog.Panicf("first index %d, max index %d", firstIndex, maxIndex)
+	}
+	if firstIndex > 0 {
+		length = maxIndex - firstIndex + 1
 	}
 	return firstIndex, length, nil
 }

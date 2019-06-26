@@ -37,7 +37,7 @@ type entryManager interface {
 		size uint64, clusterID uint64, nodeID uint64,
 		low uint64, high uint64, maxSize uint64) ([]pb.Entry, uint64, error)
 	getRange(clusterID uint64,
-		nodeID uint64, lastIndex uint64, maxIndex uint64) (uint64, uint64, error)
+		nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error)
 	rangedOp(clusterID uint64,
 		nodeID uint64, index uint64,
 		op func(fk *PooledKey, lk *PooledKey) error) error
@@ -148,8 +148,8 @@ func (r *rdb) listNodeInfo() ([]raftio.NodeInfo, error) {
 }
 
 func (r *rdb) readRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (*raftio.RaftState, error) {
-	firstIndex, length, err := r.getRange(clusterID, nodeID, lastIndex)
+	nodeID uint64, snapshotIndex uint64) (*raftio.RaftState, error) {
+	firstIndex, length, err := r.getRange(clusterID, nodeID, snapshotIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -166,15 +166,18 @@ func (r *rdb) readRaftState(clusterID uint64,
 }
 
 func (r *rdb) getRange(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (uint64, uint64, error) {
+	nodeID uint64, snapshotIndex uint64) (uint64, uint64, error) {
 	maxIndex, err := r.readMaxIndex(clusterID, nodeID)
 	if err == raftio.ErrNoSavedLog {
-		return lastIndex, 0, nil
+		return snapshotIndex, 0, nil
 	}
 	if err != nil {
 		return 0, 0, err
 	}
-	return r.entries.getRange(clusterID, nodeID, lastIndex, maxIndex)
+	if snapshotIndex == maxIndex {
+		return snapshotIndex, 0, nil
+	}
+	return r.entries.getRange(clusterID, nodeID, snapshotIndex, maxIndex)
 }
 
 func (r *rdb) saveRaftState(updates []pb.Update,
@@ -184,9 +187,11 @@ func (r *rdb) saveRaftState(updates []pb.Update,
 		r.recordState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
 		if !pb.IsEmptySnapshot(ud.Snapshot) {
 			if len(ud.EntriesToSave) > 0 {
-				if ud.Snapshot.Index > ud.EntriesToSave[len(ud.EntriesToSave)-1].Index {
+				// raft/inMemory makes sure such entries no longer need to be saved
+				lastIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
+				if ud.Snapshot.Index > lastIndex {
 					plog.Panicf("max index not handled, %d, %d",
-						ud.Snapshot.Index, ud.EntriesToSave[len(ud.EntriesToSave)-1].Index)
+						ud.Snapshot.Index, lastIndex)
 				}
 			}
 			r.recordSnapshot(wb, ud)
@@ -427,6 +432,7 @@ func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 	if err := r.kvs.CommitWriteBatch(wb); err != nil {
 		return err
 	}
+	r.cs.setMaxIndex(clusterID, nodeID, 0)
 	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {
 		return err
 	}

@@ -93,6 +93,7 @@ type node struct {
 	closeOnce            sync.Once
 	ss                   *snapshotState
 	snapshotLock         *syncutil.Lock
+	raftEvents           *raftEventListener
 	initializedMu        struct {
 		sync.Mutex
 		initialized bool
@@ -109,6 +110,7 @@ func newNode(raftAddress string,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
 	engine engine,
+	raftEventListener raftio.IRaftEventListener,
 	getStreamConnection func(uint64, uint64) pb.IChunkSink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
@@ -117,6 +119,7 @@ func newNode(raftAddress string,
 	nodeRegistry transport.INodeRegistry,
 	requestStatePool *sync.Pool,
 	config config.Config,
+	useMetrics bool,
 	tickMillisecond uint64,
 	ldb raftio.ILogDB) (*node, error) {
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
@@ -167,6 +170,8 @@ func newNode(raftAddress string,
 	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rn)
 	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
+	rn.raftEvents = newRaftEventListener(config.ClusterID,
+		config.NodeID, &rn.leaderID, useMetrics, raftEventListener)
 	new, err := rn.startRaft(config, lr, peers, initialMember)
 	if err != nil {
 		return nil, err
@@ -270,7 +275,7 @@ func (n *node) startRaft(cc config.Config,
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	n.p = raft.Launch(&cc, logdb, pas, initial, newNode)
+	n.p = raft.Launch(&cc, logdb, n.raftEvents, pas, initial, newNode)
 	return newNode, nil
 }
 
@@ -411,7 +416,7 @@ func (n *node) requestAddObserverWithOrderID(nodeID uint64,
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
-	v := n.p.GetLeaderID()
+	v := atomic.LoadUint64(&n.leaderID)
 	return v, v != raft.NoLeader
 }
 
@@ -1292,9 +1297,6 @@ func (n *node) tick() {
 		panic("rc node is still nil")
 	}
 	n.tickCount++
-	if n.tickCount%n.electionTick == 0 {
-		n.leaderID = n.p.LocalStatus().LeaderID
-	}
 	n.increaseQuiesceTick()
 	if n.quiesced() {
 		n.p.QuiescedTick()
@@ -1365,7 +1367,7 @@ func (n *node) id() string {
 
 func (n *node) isLeader() bool {
 	if n.p != nil {
-		leaderID := n.p.GetLeaderID()
+		leaderID, _ := n.getLeaderID()
 		return n.nodeID == leaderID
 	}
 	return false
@@ -1373,7 +1375,7 @@ func (n *node) isLeader() bool {
 
 func (n *node) isFollower() bool {
 	if n.p != nil {
-		leaderID := n.p.GetLeaderID()
+		leaderID, _ := n.getLeaderID()
 		if leaderID != n.nodeID && leaderID != raft.NoLeader {
 			return true
 		}

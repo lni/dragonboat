@@ -216,7 +216,7 @@ type raft struct {
 	handle                    stepFunc
 	matched                   []uint64
 	hasNotAppliedConfigChange func() bool
-	recordLeader              func(uint64)
+	events                    server.IRaftEventListener
 }
 
 func newRaft(c *config.Config, logdb ILogDB) *raft {
@@ -309,8 +309,14 @@ func (r *raft) isObserver() bool {
 
 func (r *raft) setLeaderID(leaderID uint64) {
 	r.leaderID = leaderID
-	if r.recordLeader != nil {
-		r.recordLeader(r.leaderID)
+	if r.events != nil {
+		info := server.LeaderInfo{
+			ClusterID: r.clusterID,
+			NodeID:    r.nodeID,
+			LeaderID:  leaderID,
+			Term:      r.term,
+		}
+		r.events.LeaderUpdated(info)
 	}
 }
 
@@ -735,6 +741,8 @@ func (r *raft) sortMatchValues() {
 			r.matched[0] = r.matched[1]
 			r.matched[1] = v
 		}
+	} else if len(r.matched) == 1 {
+		return
 	} else {
 		sort.Slice(r.matched, func(i, j int) bool {
 			return r.matched[i] < r.matched[j]
@@ -803,6 +811,7 @@ func (r *raft) becomeCandidate() {
 	r.state = candidate
 	// 2nd paragraph section 5.2 of the raft paper
 	r.reset(r.term + 1)
+	r.setLeaderID(NoLeader)
 	r.vote = r.nodeID
 	plog.Infof("%s became a candidate", r.describe())
 }
@@ -831,7 +840,6 @@ func (r *raft) reset(term uint64) {
 	if r.rl.Enabled() {
 		r.rl.ResetFollowerState()
 	}
-	r.setLeaderID(NoLeader)
 	r.votes = make(map[uint64]bool)
 	r.electionTick = 0
 	r.heartbeatTick = 0
@@ -908,6 +916,14 @@ func (r *raft) campaign() {
 	plog.Infof("%s campaign called, remotes len: %d", r.describe(), len(r.remotes))
 	r.becomeCandidate()
 	term := r.term
+	if r.events != nil {
+		info := server.CampaignInfo{
+			ClusterID: r.clusterID,
+			NodeID:    r.nodeID,
+			Term:      term,
+		}
+		r.events.CampaignLaunched(info)
+	}
 	r.handleVoteResp(r.nodeID, false)
 	if r.isSingleNodeQuorum() {
 		r.becomeLeader()
@@ -1101,9 +1117,19 @@ func (r *raft) handleInstallSnapshotMessage(m pb.Message) {
 			r.describe(), index, term)
 		resp.LogIndex = r.log.lastIndex()
 	} else {
-		plog.Infof("%s ignored snapshot index %d term %d",
+		plog.Infof("%s rejected snapshot index %d term %d",
 			r.describe(), index, term)
 		resp.LogIndex = r.log.committed
+		if r.events != nil {
+			info := server.SnapshotInfo{
+				ClusterID: r.clusterID,
+				NodeID:    r.nodeID,
+				Index:     m.Snapshot.Index,
+				Term:      m.Snapshot.Term,
+				From:      m.From,
+			}
+			r.events.SnapshotRejected(info)
+		}
 	}
 	r.send(resp)
 }
@@ -1129,6 +1155,16 @@ func (r *raft) handleReplicateMessage(m pb.Message) {
 		resp.Reject = true
 		resp.LogIndex = m.LogIndex
 		resp.Hint = r.log.lastIndex()
+		if r.events != nil {
+			info := server.ReplicationInfo{
+				ClusterID: r.clusterID,
+				NodeID:    r.nodeID,
+				Index:     m.LogIndex,
+				Term:      m.LogTerm,
+				From:      m.From,
+			}
+			r.events.ReplicationRejected(info)
+		}
 	}
 	r.send(resp)
 }
@@ -1251,6 +1287,14 @@ func (r *raft) handleNodeElection(m pb.Message) {
 		if r.hasConfigChangeToApply() {
 			plog.Warningf("%s campaign skipped due to pending Config Change",
 				r.describe())
+			if r.events != nil {
+				info := server.CampaignInfo{
+					ClusterID: r.clusterID,
+					NodeID:    r.nodeID,
+					Term:      r.term,
+				}
+				r.events.CampaignSkipped(info)
+			}
 			return
 		}
 		plog.Infof("%s will campaign at term %d", r.describe(), r.term)
@@ -1338,6 +1382,7 @@ func (r *raft) handleLeaderPropose(m pb.Message) {
 	}
 	if r.leaderTransfering() {
 		plog.Warningf("dropping a proposal, leader transfer is ongoing")
+		r.reportDroppedProposal(m)
 		return
 	}
 	for i, e := range m.Entries {
@@ -1393,7 +1438,8 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) {
 			// leader doesn't know the commit value of the cluster
 			// see raft thesis section 6.4, this is the first step of the ReadIndex
 			// protocol.
-			plog.Warningf("ReadIndex request ignored, no entry committed")
+			plog.Warningf("ReadIndex request dropped, no entry committed")
+			r.reportDroppedReadIndex(m)
 			return
 		}
 		r.readIndex.addRequest(r.log.committed, ctx, m.From)
@@ -1574,6 +1620,7 @@ func (r *raft) handleObserverReadIndexResp(m pb.Message) {
 func (r *raft) handleFollowerPropose(m pb.Message) {
 	if r.leaderID == NoLeader {
 		plog.Warningf("%s dropping proposal as there is no leader", r.describe())
+		r.reportDroppedProposal(m)
 		return
 	}
 	m.To = r.leaderID
@@ -1599,6 +1646,7 @@ func (r *raft) handleFollowerHeartbeat(m pb.Message) {
 func (r *raft) handleFollowerReadIndex(m pb.Message) {
 	if r.leaderID == NoLeader {
 		plog.Warningf("%s dropped ReadIndex as no leader", r.describe())
+		r.reportDroppedReadIndex(m)
 		return
 	}
 	m.To = r.leaderID
@@ -1656,6 +1704,12 @@ func (r *raft) doubleCheckTermMatched(msgTerm uint64) {
 
 func (r *raft) handleCandidatePropose(m pb.Message) {
 	plog.Warningf("%s dropping proposal, no leader", r.describe())
+	r.reportDroppedProposal(m)
+}
+
+func (r *raft) handleCandidateReadIndex(m pb.Message) {
+	plog.Warningf("%s dropping read index request, no leader", r.describe())
+	r.reportDroppedReadIndex(m)
 }
 
 // when any of the following three methods
@@ -1700,6 +1754,27 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 	}
 }
 
+func (r *raft) reportDroppedProposal(m pb.Message) {
+	if r.events != nil {
+		info := server.ProposalInfo{
+			ClusterID: r.clusterID,
+			NodeID:    r.nodeID,
+			Entries:   m.Entries,
+		}
+		r.events.ProposalDropped(info)
+	}
+}
+
+func (r *raft) reportDroppedReadIndex(m pb.Message) {
+	if r.events != nil {
+		info := server.ReadIndexInfo{
+			ClusterID: r.clusterID,
+			NodeID:    r.nodeID,
+		}
+		r.events.ReadIndexDropped(info)
+	}
+}
+
 func lw(r *raft, f func(m pb.Message, rp *remote)) handlerFunc {
 	w := func(nm pb.Message) {
 		if npr, ok := r.remotes[nm.From]; ok {
@@ -1726,6 +1801,7 @@ func (r *raft) initializeHandlerMap() {
 	// candidate
 	r.handlers[candidate][pb.Heartbeat] = r.handleCandidateHeartbeat
 	r.handlers[candidate][pb.Propose] = r.handleCandidatePropose
+	r.handlers[candidate][pb.ReadIndex] = r.handleCandidateReadIndex
 	r.handlers[candidate][pb.Replicate] = r.handleCandidateReplicate
 	r.handlers[candidate][pb.InstallSnapshot] = r.handleCandidateInstallSnapshot
 	r.handlers[candidate][pb.RequestVoteResp] = r.handleCandidateRequestVoteResp

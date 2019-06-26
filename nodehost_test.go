@@ -2919,6 +2919,102 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+type testRaftEventListener struct {
+	received []raftio.LeaderInfo
+}
+
+func (rel *testRaftEventListener) LeaderUpdated(info raftio.LeaderInfo) {
+	plog.Infof("leader info: %+v", info)
+	rel.received = append(rel.received, info)
+}
+
+func TestRaftEventsAreReported(t *testing.T) {
+	logdb.RDBContextValueSize = 1024 * 1024
+	defer func() {
+		logdb.RDBContextValueSize = ovs
+	}()
+	defer leaktest.AfterTest(t)()
+	os.RemoveAll(singleNodeHostTestDir)
+	rel := &testRaftEventListener{
+		received: make([]raftio.LeaderInfo, 0),
+	}
+	rc := config.Config{
+		NodeID:       1,
+		ClusterID:    1,
+		ElectionRTT:  5,
+		HeartbeatRTT: 1,
+		CheckQuorum:  true,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = nodeHostTestAddr1
+	nhc := config.NodeHostConfig{
+		NodeHostDir:       singleNodeHostTestDir,
+		RTTMillisecond:    10,
+		RaftAddress:       peers[1],
+		RaftEventListener: rel,
+	}
+	nh, err := NewNodeHost(nhc)
+	if err != nil {
+		t.Fatalf("failed to create node host")
+	}
+	defer os.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	var pst *PST
+	newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		pst = &PST{slowSave: false}
+		return pst
+	}
+	if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+		t.Fatalf("failed to start cluster")
+	}
+	waitForLeaderToBeElected(t, nh, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	if err := nh.SyncRequestAddNode(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
+		t.Fatalf("add node failed %v", err)
+	}
+	cancel()
+	for i := 0; i < 1000; i++ {
+		if len(rel.received) >= 4 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+		if i == 999 {
+			t.Fatalf("failed to get the second LeaderUpdated notification")
+		}
+	}
+	exp0 := raftio.LeaderInfo{
+		ClusterID: 1,
+		NodeID:    1,
+		LeaderID:  0,
+		Term:      1,
+	}
+	exp1 := raftio.LeaderInfo{
+		ClusterID: 1,
+		NodeID:    1,
+		LeaderID:  0,
+		Term:      2,
+	}
+	exp2 := raftio.LeaderInfo{
+		ClusterID: 1,
+		NodeID:    1,
+		LeaderID:  1,
+		Term:      2,
+	}
+	exp3 := raftio.LeaderInfo{
+		ClusterID: 1,
+		NodeID:    1,
+		LeaderID:  raftio.NoLeader,
+		Term:      2,
+	}
+	expected := []raftio.LeaderInfo{exp0, exp1, exp2, exp3}
+	for idx := range expected {
+		if !reflect.DeepEqual(&(rel.received[idx]), &expected[idx]) {
+			t.Errorf("unexpecded leader info, %d, %v, %v",
+				idx, rel.received[idx], expected[idx])
+		}
+	}
+}
+
 func TestV2DataCanBeHandled(t *testing.T) {
 	if logdb.DefaultKVStoreTypeName != "rocksdb" {
 		t.Skip("skipping test as the logdb type is not compatible")

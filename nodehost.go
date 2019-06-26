@@ -111,7 +111,7 @@ const (
 	// DragonboatMajor is the major version number
 	DragonboatMajor = 3
 	// DragonboatMinor is the minor version number
-	DragonboatMinor = 0
+	DragonboatMinor = 1
 	// DragonboatPatch is the patch version number
 	DragonboatPatch = 0
 	// DEVVersion is a boolean flag indicating whether this is a dev version
@@ -243,6 +243,7 @@ type NodeHost struct {
 	execEngine       *execEngine
 	logdb            raftio.ILogDB
 	transport        transport.ITransport
+	raftEvents       raftio.IRaftEventListener
 	msgHandler       *messageHandler
 	transportLatency *sample
 }
@@ -266,6 +267,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
+		raftEvents:       nhConfig.RaftEventListener,
 	}
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
@@ -1441,6 +1443,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
 		nh.execEngine,
+		nh.raftEvents,
 		getStreamConn,
 		handleSnapshotStatus,
 		nh.sendMessage,
@@ -1449,6 +1452,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		nh.nodes,
 		nh.rsPool[nodeID%rsPoolSize],
 		config,
+		nh.nhConfig.EnableMetrics,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb)
 	if err != nil {
