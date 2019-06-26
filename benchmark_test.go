@@ -496,7 +496,7 @@ func BenchmarkNALookup(b *testing.B) {
 func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.ReportAllocs()
 	b.StopTimer()
-	ds := &tests.NoOP{}
+	ds := &tests.NoOP{NoAlloc: true}
 	done := make(chan struct{})
 	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
 	smo := rsm.NewStateMachine(nds, nil, false, &testDummyNodeProxy{})
@@ -520,7 +520,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 		Cmd:         make([]byte, sz),
 	}
 	entries := make([]pb.Entry, 0)
-	batch := make([]rsm.Task, 0)
+	batch := make([]rsm.Task, 0, 100000)
 	smEntries := make([]sm.Entry, 0)
 	task := rsm.Task{
 		SnapshotAvailable: false,

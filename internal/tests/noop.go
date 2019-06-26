@@ -26,6 +26,7 @@ import (
 // NoOP is a IStateMachine struct used for testing purpose.
 type NoOP struct {
 	MillisecondToSleep uint64
+	NoAlloc            bool
 }
 
 // Lookup locally looks up the data.
@@ -42,6 +43,9 @@ func (n *NoOP) NALookup(key []byte) ([]byte, error) {
 func (n *NoOP) Update(data []byte) (sm.Result, error) {
 	if n.MillisecondToSleep > 0 {
 		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
+	}
+	if n.NoAlloc {
+		return sm.Result{Value: uint64(len(data))}, nil
 	}
 	v := make([]byte, len(data))
 	copy(v, data)

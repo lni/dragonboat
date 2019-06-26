@@ -741,6 +741,8 @@ func (r *raft) sortMatchValues() {
 			r.matched[0] = r.matched[1]
 			r.matched[1] = v
 		}
+	} else if len(r.matched) == 1 {
+		return
 	} else {
 		sort.Slice(r.matched, func(i, j int) bool {
 			return r.matched[i] < r.matched[j]
