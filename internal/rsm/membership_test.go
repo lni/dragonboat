@@ -115,6 +115,33 @@ func TestMembershipIsEmpty(t *testing.T) {
 	}
 }
 
+func TestIsDeletingOnlyNode(t *testing.T) {
+	o := newMembership(1, 2, true)
+	o.members.Addresses[1] = "a1"
+	cc := pb.ConfigChange{
+		Type:   pb.RemoveNode,
+		NodeID: 1,
+	}
+	cc2 := pb.ConfigChange{
+		Type:   pb.AddNode,
+		NodeID: 1,
+	}
+	if !o.isDeletingOnlyNode(cc) {
+		t.Errorf("not considered as deleting only node")
+	}
+	if o.isDeletingOnlyNode(cc2) {
+		t.Errorf("not even a delete node op")
+	}
+	o.members.Observers[2] = "a2"
+	if !o.isDeletingOnlyNode(cc) {
+		t.Errorf("not considered as deleting only node")
+	}
+	o.members.Addresses[3] = "a3"
+	if o.isDeletingOnlyNode(cc) {
+		t.Errorf("still considered as deleting only node")
+	}
+}
+
 func TestIsAddingRemovedNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	cc := pb.ConfigChange{}
@@ -207,31 +234,100 @@ func TestIsConfChangeUpToDate(t *testing.T) {
 func TestIsAddingExistingMember(t *testing.T) {
 	tests := []struct {
 		t         pb.ConfigChangeType
-		addrs     []string
-		observers []string
+		addrs     map[uint64]string
+		observers map[uint64]string
 		addr      string
+		nodeID    uint64
 		result    bool
 	}{
-		{pb.AddNode, []string{"a1"}, []string{"a2"}, "a1", true},
-		{pb.AddNode, []string{"a1"}, []string{"a2"}, "a2", false},
-		{pb.AddNode, []string{"a1"}, []string{"a2"}, "a3", false},
-		{pb.AddObserver, []string{"a1"}, []string{"a2"}, "a1", true},
-		{pb.AddObserver, []string{"a1"}, []string{"a2"}, "a2", true},
-		{pb.AddObserver, []string{"a1"}, []string{"a2"}, "a3", false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, true},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
+		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a4", 2, true},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
 		for i, v := range tt.addrs {
-			o.members.Addresses[uint64(i)] = v
+			o.members.Addresses[i] = v
 		}
 		for i, v := range tt.observers {
-			o.members.Observers[uint64(i)] = v
+			o.members.Observers[i] = v
 		}
 		cc := pb.ConfigChange{
 			Type:    tt.t,
 			Address: tt.addr,
+			NodeID:  tt.nodeID,
 		}
 		if result := o.isAddingExistingMember(cc); result != tt.result {
+			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
+		}
+	}
+}
+
+func TestIsPromotingObserver(t *testing.T) {
+	tests := []struct {
+		t         pb.ConfigChangeType
+		observers map[uint64]string
+		addr      string
+		nodeID    uint64
+		result    bool
+	}{
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, true},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
+	}
+	for idx, tt := range tests {
+		o := newMembership(1, 2, true)
+		for i, v := range tt.observers {
+			o.members.Observers[i] = v
+		}
+		cc := pb.ConfigChange{
+			Type:    tt.t,
+			Address: tt.addr,
+			NodeID:  tt.nodeID,
+		}
+		if result := o.isPromotingObserver(cc); result != tt.result {
+			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
+		}
+	}
+}
+
+func TestIsInvalidObserverPromotion(t *testing.T) {
+	tests := []struct {
+		t         pb.ConfigChangeType
+		observers map[uint64]string
+		addr      string
+		nodeID    uint64
+		result    bool
+	}{
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddNode, map[uint64]string{1: "a1"}, "a2", 1, true},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
+	}
+	for idx, tt := range tests {
+		o := newMembership(1, 2, true)
+		for i, v := range tt.observers {
+			o.members.Observers[i] = v
+		}
+		cc := pb.ConfigChange{
+			Type:    tt.t,
+			Address: tt.addr,
+			NodeID:  tt.nodeID,
+		}
+		if result := o.isInvalidObserverPromotion(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
@@ -259,7 +355,7 @@ func TestAddNodeCanPromoteObserverToNode(t *testing.T) {
 	o.members.Observers[100] = "a2"
 	cc := pb.ConfigChange{
 		Type:    pb.AddNode,
-		Address: "a1",
+		Address: "a2",
 		NodeID:  100,
 	}
 	o.applyConfigChange(cc, 1000)

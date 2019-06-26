@@ -139,7 +139,39 @@ func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
 	return false
 }
 
+func (m *membership) isPromotingObserver(cc pb.ConfigChange) bool {
+	if cc.Type == pb.AddNode {
+		oa, ok := m.members.Observers[cc.NodeID]
+		return ok && addressEqual(oa, string(cc.Address))
+	}
+	return false
+}
+
+func (m *membership) isInvalidObserverPromotion(cc pb.ConfigChange) bool {
+	if cc.Type == pb.AddNode {
+		oa, ok := m.members.Observers[cc.NodeID]
+		return ok && !addressEqual(oa, string(cc.Address))
+	}
+	return false
+}
+
 func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
+	// try to add again with the same node ID
+	if cc.Type == pb.AddNode {
+		_, ok := m.members.Addresses[cc.NodeID]
+		if ok {
+			return true
+		}
+	}
+	if cc.Type == pb.AddObserver {
+		_, ok := m.members.Observers[cc.NodeID]
+		if ok {
+			return true
+		}
+	}
+	if m.isPromotingObserver(cc) {
+		return false
+	}
 	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver {
 		plog.Infof("%s adding node %d:%s, existing members: %v",
 			m.id(), cc.NodeID, string(cc.Address), m.members.Addresses)
@@ -148,10 +180,6 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 				return true
 			}
 		}
-	}
-	if cc.Type == pb.AddObserver {
-		plog.Infof("%s adding observer %d:%s, existing members: %v",
-			m.id(), cc.NodeID, string(cc.Address), m.members.Addresses)
 		for _, addr := range m.members.Observers {
 			if addressEqual(addr, string(cc.Address)) {
 				return true
@@ -169,18 +197,21 @@ func (m *membership) isAddingNodeAsObserver(cc pb.ConfigChange) bool {
 	return false
 }
 
+func (m *membership) isDeletingOnlyNode(cc pb.ConfigChange) bool {
+	if cc.Type == pb.RemoveNode && len(m.members.Addresses) == 1 {
+		_, ok := m.members.Addresses[cc.NodeID]
+		return ok
+	}
+	return false
+}
+
 func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 	m.members.ConfigChangeId = index
 	switch cc.Type {
 	case pb.AddNode:
 		nodeAddr := string(cc.Address)
-		if addr, ok := m.members.Observers[cc.NodeID]; ok {
+		if _, ok := m.members.Observers[cc.NodeID]; ok {
 			delete(m.members.Observers, cc.NodeID)
-			if !addressEqual(nodeAddr, addr) {
-				plog.Warningf("promoting observer, addr changed to %s, use %s",
-					nodeAddr, addr)
-			}
-			nodeAddr = addr
 		}
 		m.members.Addresses[cc.NodeID] = nodeAddr
 	case pb.AddObserver:
@@ -205,7 +236,10 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	alreadyMember := m.isAddingExistingMember(cc)
 	addRemovedNode := m.isAddingRemovedNode(cc)
 	upToDateCC := m.isConfChangeUpToDate(cc)
-	if upToDateCC && !addRemovedNode && !alreadyMember && !nodeBecomingObserver {
+	deleteOnlyNode := m.isDeletingOnlyNode(cc)
+	invalidPromotion := m.isInvalidObserverPromotion(cc)
+	if upToDateCC && !addRemovedNode && !alreadyMember &&
+		!nodeBecomingObserver && !deleteOnlyNode && !invalidPromotion {
 		// current entry index, it will be recorded as the conf change id of the members
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
@@ -234,6 +268,13 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 				m.id(), ccid, cc.NodeID, index, cc.Address)
 		} else if nodeBecomingObserver {
 			plog.Warningf("%s rejected adding existing member as observer ccid %d "+
+				"node id %d, index %d, address %s",
+				m.id(), ccid, cc.NodeID, index, cc.Address)
+		} else if deleteOnlyNode {
+			plog.Warningf("%s rejected removing the only node %d from the cluster",
+				m.id(), cc.NodeID)
+		} else if invalidPromotion {
+			plog.Warningf("%s rejected invalid observer promotion change ccid %d "+
 				"node id %d, index %d, address %s",
 				m.id(), ccid, cc.NodeID, index, cc.Address)
 		} else {

@@ -588,7 +588,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 	runSMTest2(t, tf)
 }
 
-func TestAddObserverWhenNodeAlreadyAddedWillBeRejected(t *testing.T) {
+func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
@@ -650,7 +650,7 @@ func TestObserverCanBeAdded(t *testing.T) {
 	runSMTest2(t, tf)
 }
 
-func TestObserverPromoteToNode(t *testing.T) {
+func TestObserverPromotion(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
@@ -702,7 +702,7 @@ func TestObserverPromoteToNode(t *testing.T) {
 	runSMTest2(t, tf)
 }
 
-func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
+func TestInvalidObserverPromotionIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
@@ -728,6 +728,7 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 		if !nodeProxy.addObserver {
 			t.Errorf("add observer not called")
 		}
+		nodeProxy.accept = false
 		applyConfigChangeEntry(sm,
 			123,
 			pb.AddNode,
@@ -738,21 +739,94 @@ func TestObserverPromoteToNodeWithDifferentAddressIsHandled(t *testing.T) {
 		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
-		v, ok := sm.members.members.Addresses[4]
-		if !ok {
-			t.Errorf("address not found")
+		_, ok := sm.members.members.Addresses[4]
+		if ok {
+			t.Errorf("expectedly promoted observer")
 		}
-		if v != "localhost:1010" {
-			t.Errorf("unexpected address")
+		if nodeProxy.accept {
+			t.Errorf("unexpectedly accepted the promotion")
 		}
 	}
 	runSMTest2(t, tf)
+}
+
+func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType) {
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		sm.members.members.Addresses[5] = "localhost:1010"
+		applyConfigChangeEntry(sm,
+			1,
+			tt,
+			4,
+			"localhost:1010",
+			123)
+
+		batch := make([]Task, 0, 8)
+		if _, err := sm.Handle(batch, nil); err != nil {
+			t.Fatalf("handle failed %v", err)
+		}
+		if sm.GetLastApplied() != 123 {
+			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
+		}
+		if nodeProxy.accept {
+			t.Errorf("accept unexpectedly called")
+		}
+		if nodeProxy.addPeer {
+			t.Errorf("add peer unexpectedly called")
+		}
+	}
+	runSMTest2(t, tf)
+}
+
+func TestAddExistingMemberIsRejected(t *testing.T) {
+	testAddExistingMemberIsRejected(t, pb.AddNode)
+	testAddExistingMemberIsRejected(t, pb.AddObserver)
+}
+
+func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T, tt pb.ConfigChangeType) {
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		if tt == pb.AddNode {
+			sm.members.members.Addresses[5] = "localhost:1010"
+		} else if tt == pb.AddObserver {
+			sm.members.members.Observers[5] = "localhost:1010"
+		} else {
+			panic("unknown tt")
+		}
+		applyConfigChangeEntry(sm,
+			1,
+			tt,
+			5,
+			"localhost:1011",
+			123)
+
+		batch := make([]Task, 0, 8)
+		if _, err := sm.Handle(batch, nil); err != nil {
+			t.Fatalf("handle failed %v", err)
+		}
+		if sm.GetLastApplied() != 123 {
+			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
+		}
+		if nodeProxy.accept {
+			t.Errorf("accept unexpectedly called")
+		}
+		if nodeProxy.addPeer {
+			t.Errorf("add peer unexpectedly called")
+		}
+	}
+	runSMTest2(t, tf)
+}
+
+func TestAddExistingMemberWithSameNodeIDIsRejected(t *testing.T) {
+	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNode)
+	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddObserver)
 }
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1010"
+		sm.members.members.Addresses[2] = "localhost:1011"
 		applyConfigChangeEntry(sm,
 			1,
 			pb.RemoveNode,
@@ -814,6 +888,45 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 		}
 		if sm.members.members.ConfigChangeId != 123 {
 			t.Errorf("conf change id not updated, %d", sm.members.members.ConfigChangeId)
+		}
+	}
+	runSMTest2(t, tf)
+}
+
+func TestRemoveOnlyNodeIsRejected(t *testing.T) {
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		sm.members.members.Addresses[1] = "localhost:1010"
+		applyConfigChangeEntry(sm,
+			1,
+			pb.RemoveNode,
+			1,
+			"",
+			123)
+		_, ok := sm.members.members.Addresses[1]
+		if !ok {
+			t.Errorf("node 1 not in members")
+		}
+		batch := make([]Task, 0, 8)
+		if _, err := sm.Handle(batch, nil); err != nil {
+			t.Fatalf("handle failed %v", err)
+		}
+		if sm.GetLastApplied() != 123 {
+			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
+		}
+		if nodeProxy.accept {
+			t.Errorf("unexpected accepted")
+		}
+		if nodeProxy.removePeer {
+			t.Errorf("remove peer unexpected called")
+		}
+		_, ok = sm.members.members.Addresses[1]
+		if !ok {
+			t.Errorf("unexpectedly removed node 1 from members")
+		}
+		_, ok = sm.members.members.Removed[1]
+		if ok {
+			t.Errorf("removed node 1 as removed")
 		}
 	}
 	runSMTest2(t, tf)
