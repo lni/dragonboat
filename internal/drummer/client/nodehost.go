@@ -334,7 +334,8 @@ func (dc *DrummerClient) handleAddDeleteRequest(ctx context.Context,
 		if !v.Completed() &&
 			!v.Timeout() &&
 			!v.Terminated() &&
-			!v.Rejected() {
+			!v.Rejected() &&
+			!v.Dropped() {
 			plog.Panicf("unknown result code: %v", v)
 		}
 		if v.Completed() && req.Change.Type == pb.Request_DELETE {

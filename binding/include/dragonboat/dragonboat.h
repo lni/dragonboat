@@ -189,6 +189,7 @@ class Status
   static const int ErrResultBufferTooSmall;
   static const int ErrRejected;
   static const int ErrInvalidClusterSettings;
+  static const int ErrClusterNotReady;
  private:
   int code_;
 };

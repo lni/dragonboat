@@ -519,6 +519,8 @@ func (s *execEngine) execNodes(workerID uint64,
 		node := nodes[ud.ClusterID]
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
+		node.processDroppedEntries(ud)
+		node.processDroppedReadIndexes(ud)
 	}
 	p.step.end()
 	p.recordEntryCount(nodeUpdates)

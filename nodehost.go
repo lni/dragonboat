@@ -1260,6 +1260,8 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 			return f(node)
 		} else if s.Terminated() {
 			return nil, ErrClusterClosed
+		} else if s.Dropped() {
+			return nil, ErrClusterNotReady
 		}
 		panic("unknown completedc code")
 	case <-ctx.Done():
@@ -1782,6 +1784,8 @@ func checkRequestState(ctx context.Context,
 			return sm.Result{}, ErrTimeout
 		} else if r.Terminated() {
 			return sm.Result{}, ErrClusterClosed
+		} else if r.Dropped() {
+			return sm.Result{}, ErrClusterNotReady
 		}
 		plog.Panicf("unknown v code %v", r)
 	case <-ctx.Done():

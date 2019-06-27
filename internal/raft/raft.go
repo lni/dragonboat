@@ -205,6 +205,8 @@ type raft struct {
 	pendingConfigChange       bool
 	readIndex                 *readIndex
 	readyToRead               []pb.ReadyToRead
+	droppedEntries            []pb.Entry
+	droppedReadIndexes        []pb.SystemCtx
 	checkQuorum               bool
 	tickCount                 uint64
 	electionTick              uint64
@@ -232,6 +234,7 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 		nodeID:           c.NodeID,
 		leaderID:         NoLeader,
 		msgs:             make([]pb.Message, 0),
+		droppedEntries:   make([]pb.Entry, 0),
 		log:              newEntryLog(logdb, rl),
 		remotes:          make(map[uint64]*remote),
 		observers:        make(map[uint64]*remote),
@@ -1390,6 +1393,7 @@ func (r *raft) handleLeaderPropose(m pb.Message) {
 			if r.hasPendingConfigChange() {
 				plog.Warningf("%s dropped a config change, one is pending",
 					r.describe())
+				r.reportDroppedConfigChange(m.Entries[i])
 				m.Entries[i] = pb.Entry{Type: pb.ApplicationEntry}
 			}
 			r.setPendingConfigChange()
@@ -1710,6 +1714,11 @@ func (r *raft) handleCandidatePropose(m pb.Message) {
 func (r *raft) handleCandidateReadIndex(m pb.Message) {
 	plog.Warningf("%s dropping read index request, no leader", r.describe())
 	r.reportDroppedReadIndex(m)
+	ctx := pb.SystemCtx{
+		Low:  m.Hint,
+		High: m.HintHigh,
+	}
+	r.droppedReadIndexes = append(r.droppedReadIndexes, ctx)
 }
 
 // when any of the following three methods
@@ -1754,7 +1763,12 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 	}
 }
 
+func (r *raft) reportDroppedConfigChange(e pb.Entry) {
+	r.droppedEntries = append(r.droppedEntries, e)
+}
+
 func (r *raft) reportDroppedProposal(m pb.Message) {
+	r.droppedEntries = append(r.droppedEntries, newEntrySlice(m.Entries)...)
 	if r.events != nil {
 		info := server.ProposalInfo{
 			ClusterID: r.clusterID,
@@ -1766,6 +1780,11 @@ func (r *raft) reportDroppedProposal(m pb.Message) {
 }
 
 func (r *raft) reportDroppedReadIndex(m pb.Message) {
+	sysctx := pb.SystemCtx{
+		Low:  m.Hint,
+		High: m.HintHigh,
+	}
+	r.droppedReadIndexes = append(r.droppedReadIndexes, sysctx)
 	if r.events != nil {
 		info := server.ReadIndexInfo{
 			ClusterID: r.clusterID,

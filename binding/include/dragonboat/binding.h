@@ -86,6 +86,7 @@ enum ErrorCode
   ErrResultBufferTooSmall = -15,
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
+  ErrClusterNotReady = -18,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is

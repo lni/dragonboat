@@ -231,12 +231,17 @@ func (rc *Peer) HasUpdate(moreEntriesToApply bool) bool {
 	if len(r.readyToRead) != 0 {
 		return true
 	}
+	if len(r.droppedEntries) > 0 || len(r.droppedReadIndexes) > 0 {
+		return true
+	}
 	return false
 }
 
 // Commit commits the Update state to mark it as processed.
 func (rc *Peer) Commit(ud pb.Update) {
 	rc.raft.msgs = nil
+	rc.raft.droppedEntries = nil
+	rc.raft.droppedReadIndexes = nil
 	if !pb.IsEmptyState(ud.State) {
 		rc.prevState = ud.State
 	}
@@ -375,6 +380,12 @@ func getUpdate(r *raft,
 	}
 	if len(r.readyToRead) > 0 {
 		ud.ReadyToReads = r.readyToRead
+	}
+	if len(r.droppedEntries) > 0 {
+		ud.DroppedEntries = r.droppedEntries
+	}
+	if len(r.droppedReadIndexes) > 0 {
+		ud.DroppedReadIndexes = r.droppedReadIndexes
 	}
 	ud.UpdateCommit = getUpdateCommit(ud)
 	return ud

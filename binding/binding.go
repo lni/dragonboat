@@ -184,6 +184,8 @@ func SelectOnRequestStateForMembershipChange(rsoid uint64) int {
 		err = dragonboat.ErrClusterClosed
 	} else if r.Rejected() {
 		err = dragonboat.ErrRejected
+	} else if r.Dropped() {
+		err = dragonboat.ErrClusterNotReady
 	} else {
 		panic("unknown code")
 	}

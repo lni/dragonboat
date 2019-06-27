@@ -55,6 +55,8 @@ func cboolToBool(v C.Bool) bool {
 func getErrorCode(err error) int {
 	if err == nil {
 		return int(C.StatusOK)
+	} else if err == dragonboat.ErrClusterNotReady {
+		return int(C.ErrClusterNotReady)
 	} else if err == dragonboat.ErrClusterNotFound {
 		return int(C.ErrClusterNotFound)
 	} else if err == dragonboat.ErrClusterAlreadyExist {

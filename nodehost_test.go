@@ -2919,6 +2919,58 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestDroppedRequestsAreReported(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := nh.SyncRequestAddNode(ctx, 2, 2, "noidea:8080", 0); err != nil {
+			t.Fatalf("failed to add node %v", err)
+		}
+		for i := 0; i < 1000; i++ {
+			leaderID, ok, err := nh.GetLeaderID(2)
+			if err != nil {
+				t.Fatalf("failed to get leader id %v", err)
+			}
+			if err == nil && !ok && leaderID == 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+			if i == 999 {
+				t.Fatalf("leader failed to step down")
+			}
+		}
+		func() {
+			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer ncancel()
+			cs := nh.GetNoOPSession(2)
+			for i := 0; i < 10; i++ {
+				if _, err := nh.SyncPropose(nctx, cs, make([]byte, 1)); err != ErrClusterNotReady {
+					t.Errorf("failed to get ErrClusterNotReady, got %v", err)
+				}
+			}
+		}()
+		func() {
+			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer ncancel()
+			for i := 0; i < 10; i++ {
+				if err := nh.SyncRequestAddNode(nctx, 2, 3, "noidea:8080", 0); err != ErrClusterNotReady {
+					t.Errorf("failed to get ErrClusterNotReady, got %v", err)
+				}
+			}
+		}()
+		func() {
+			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer ncancel()
+			for i := 0; i < 10; i++ {
+				if _, err := nh.SyncRead(nctx, 2, nil); err != ErrClusterNotReady {
+					t.Errorf("failed to get ErrClusterNotReady, got %v", err)
+				}
+			}
+		}()
+	}
+	singleNodeHostTest(t, tf)
+}
+
 type testRaftEventListener struct {
 	received []raftio.LeaderInfo
 }
