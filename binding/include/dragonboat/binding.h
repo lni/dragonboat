@@ -120,10 +120,11 @@ enum ErrorCode
   ErrResultBufferTooSmall = -15,
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
-  ErrClusterNotStopped = -18,
-  ErrClusterNotInitialized = -19,
-  ErrNodeRemoved = -20,
-  ErrDirNotExist = -21,
+  ErrClusterNodeReady = -18,
+  ErrClusterNotStopped = -19,
+  ErrClusterNotInitialized = -20,
+  ErrNodeRemoved = -21,
+  ErrDirNotExist = -22,
 };
 
 // ResultCode is the code returned to the client to indicate the completion
@@ -135,6 +136,7 @@ enum ResultCode
   RequestCompleted = 1,
   RequestTerminated = 2,
   RequestRejected = 3,
+  RequestDropped = 4,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is

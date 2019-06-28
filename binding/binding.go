@@ -184,6 +184,8 @@ func SelectOnRequestState(rsoid uint64) (uint64, int) {
 		code = int(C.RequestTerminated)
 	} else if r.Rejected() {
 		code = int(C.RequestRejected)
+	} else if r.Dropped() {
+		code = int(C.RequestDropped)
 	} else {
 		panic("unknown code")
 	}

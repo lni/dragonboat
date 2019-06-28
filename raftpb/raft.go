@@ -93,6 +93,11 @@ type Update struct {
 	// UpdateCommit contains info on how the Update instance can be committed
 	// to actually progress the state of raft.
 	UpdateCommit UpdateCommit
+	// DroppedEntries is a list of entries dropped when no leader is available
+	DroppedEntries []Entry
+	// DroppedReadIndexes is a list of read index requests  dropped when no leader
+	// is available.
+	DroppedReadIndexes []SystemCtx
 }
 
 // HasUpdate returns a boolean value indicating whether the returned Update
@@ -103,7 +108,8 @@ func (ud *Update) HasUpdate() bool {
 		len(ud.EntriesToSave) > 0 ||
 		len(ud.CommittedEntries) > 0 ||
 		len(ud.Messages) > 0 ||
-		len(ud.ReadyToReads) != 0
+		len(ud.ReadyToReads) > 0 ||
+		len(ud.DroppedEntries) > 0
 }
 
 // IsEmptyState returns a boolean flag indicating whether the given State is

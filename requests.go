@@ -77,6 +77,9 @@ var (
 	ErrCanceled = errors.New("request canceled")
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
+	// ErrClusterNotReady indicates that the request has been dropped as the
+	// raft cluster is not ready.
+	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 )
 
 // IsTempError returns a boolean value indicating whether the specified error
@@ -136,6 +139,13 @@ func (rr *RequestResult) Rejected() bool {
 	return rr.code == requestRejected
 }
 
+// Dropped returns a boolean flag indicating whether the request has been
+// dropped as the leader is unavailable or not ready yet. Such dropped requests
+// can usually be retried once the leader is ready.
+func (rr *RequestResult) Dropped() bool {
+	return rr.code == requestDropped
+}
+
 // SnapshotIndex returns the index of the generated snapshot when the
 // RequestResult is from a snapshot related request. Invoking this method on
 // RequestResult instances not related to snapshots will cause panic.
@@ -158,6 +168,7 @@ const (
 	requestCompleted
 	requestTerminated
 	requestRejected
+	requestDropped
 )
 
 var requestResultCodeName = [...]string{
@@ -165,6 +176,7 @@ var requestResultCodeName = [...]string{
 	"RequestCompleted",
 	"RequestTerminated",
 	"RequestRejected",
+	"RequestDropped",
 }
 
 func (c RequestResultCode) String() string {
@@ -180,6 +192,12 @@ func getTerminatedResult() RequestResult {
 func getTimeoutResult() RequestResult {
 	return RequestResult{
 		code: requestTimeout,
+	}
+}
+
+func getDroppedResult() RequestResult {
+	return RequestResult{
+		code: requestDropped,
 	}
 }
 
@@ -547,6 +565,18 @@ func (p *pendingConfigChange) gc() {
 	}
 }
 
+func (p *pendingConfigChange) dropped(key uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending == nil {
+		return
+	}
+	if p.pending.key == key {
+		p.pending.notify(getDroppedResult())
+		p.pending = nil
+	}
+}
+
 func (p *pendingConfigChange) apply(key uint64, rejected bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -691,6 +721,30 @@ func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
 	}
 }
 
+func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.stopped {
+		return
+	}
+	var toDelete []uint64
+	for key, val := range p.mapping {
+		if val == system {
+			req, ok := p.pending[key]
+			if !ok {
+				panic("inconsistent data")
+			}
+			req.notify(getDroppedResult())
+			delete(p.pending, key)
+			toDelete = append(toDelete, key)
+		}
+	}
+	for _, key := range toDelete {
+		delete(p.mapping, key)
+	}
+	delete(p.batches, system)
+}
+
 func (p *pendingReadIndex) applied(applied uint64) {
 	// FIXME:
 	// when there is no pending request, we still want to get a chance to cleanup
@@ -819,6 +873,12 @@ func (p *pendingProposal) close() {
 	for _, pp := range p.shards {
 		pp.close()
 	}
+}
+
+func (p *pendingProposal) dropped(clientID uint64,
+	seriesID uint64, key uint64) {
+	pp := p.shards[key%p.ps]
+	pp.dropped(clientID, seriesID, key)
 }
 
 func (p *pendingProposal) applied(clientID uint64,
@@ -951,6 +1011,18 @@ func (p *proposalShard) getProposal(clientID uint64,
 	return nil
 }
 
+func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
+	tick := p.getTick()
+	ps := p.getProposal(clientID, seriesID, key, tick)
+	if ps != nil {
+		ps.notify(getDroppedResult())
+	}
+	if tick != p.expireNotified {
+		p.gcAt(tick)
+		p.expireNotified = tick
+	}
+}
+
 func (p *proposalShard) applied(clientID uint64,
 	seriesID uint64, key uint64, result sm.Result, rejected bool) {
 	now := p.getTick()
@@ -964,10 +1036,9 @@ func (p *proposalShard) applied(clientID uint64,
 	if ps != nil {
 		ps.notify(RequestResult{code: code, result: result})
 	}
-	tick := p.getTick()
-	if tick != p.expireNotified {
+	if now != p.expireNotified {
 		p.gcAt(now)
-		p.expireNotified = tick
+		p.expireNotified = now
 	}
 }
 

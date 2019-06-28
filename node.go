@@ -858,6 +858,24 @@ func (n *node) getUpdate() (pb.Update, bool) {
 	return pb.Update{}, false
 }
 
+func (n *node) processDroppedReadIndexes(ud pb.Update) {
+	for _, sysctx := range ud.DroppedReadIndexes {
+		n.pendingReadIndexes.dropped(sysctx)
+	}
+}
+
+func (n *node) processDroppedEntries(ud pb.Update) {
+	for _, e := range ud.DroppedEntries {
+		if e.Type == pb.ApplicationEntry {
+			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
+		} else if e.Type == pb.ConfigChangeEntry {
+			n.pendingConfigChange.dropped(e.Key)
+		} else {
+			panic("unknown dropped entry type")
+		}
+	}
+}
+
 func (n *node) processReadyToRead(ud pb.Update) {
 	if len(ud.ReadyToReads) > 0 {
 		n.pendingReadIndexes.addReadyToRead(ud.ReadyToReads)

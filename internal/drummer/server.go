@@ -232,6 +232,8 @@ func waitDrummerRequestResult(ctx context.Context,
 			return nil, dragonboat.ErrTimeout
 		} else if r.Terminated() {
 			return nil, dragonboat.ErrClusterClosed
+		} else if r.Dropped() {
+			return nil, dragonboat.ErrClusterNotReady
 		}
 		plog.Panicf("unknown v code")
 	case <-ctx.Done():

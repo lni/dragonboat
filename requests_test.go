@@ -422,6 +422,9 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 	default:
 		t.Errorf("suppose to return something")
 	}
+	if pcc.pending != nil {
+		t.Errorf("pending rec not cleared")
+	}
 }
 
 func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
@@ -441,6 +444,58 @@ func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 	case <-rs.CompletedC:
 		t.Errorf("unexpectedly notified")
 	default:
+	}
+	if pcc.pending == nil {
+		t.Errorf("pending rec unexpectedly cleared")
+	}
+}
+
+func TestConfigChangeCanBeDropped(t *testing.T) {
+	pcc, _ := getPendingConfigChange()
+	var cc pb.ConfigChange
+	rs, err := pcc.request(cc, time.Second)
+	if err != nil {
+		t.Errorf("RequestConfigChange failed: %v", err)
+	}
+	select {
+	case <-rs.CompletedC:
+		t.Errorf("not suppose to return anything yet")
+	default:
+	}
+	pcc.dropped(rs.key)
+	select {
+	case v := <-rs.CompletedC:
+		if !v.Dropped() {
+			t.Errorf("Dropped() is false")
+		}
+	default:
+		t.Errorf("not dropped")
+	}
+	if pcc.pending != nil {
+		t.Errorf("pending rec not cleared")
+	}
+}
+
+func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
+	pcc, _ := getPendingConfigChange()
+	var cc pb.ConfigChange
+	rs, err := pcc.request(cc, time.Second)
+	if err != nil {
+		t.Errorf("RequestConfigChange failed: %v", err)
+	}
+	select {
+	case <-rs.CompletedC:
+		t.Errorf("not suppose to return anything yet")
+	default:
+	}
+	pcc.dropped(rs.key + 1)
+	select {
+	case <-rs.CompletedC:
+		t.Errorf("CompletedC unexpectedly set")
+	default:
+	}
+	if pcc.pending == nil {
+		t.Errorf("pending rec unexpectedly cleared")
 	}
 }
 
@@ -548,6 +603,28 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	}
 	if countPendingProposal(pp) != 0 {
 		t.Errorf("pending is not empty")
+	}
+}
+
+func TestProposalCanBeDropped(t *testing.T) {
+	pp, _ := getPendingProposal()
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	if err != nil {
+		t.Errorf("failed to make proposal, %v", err)
+	}
+	pp.dropped(rs.clientID, rs.seriesID, rs.key)
+	select {
+	case v := <-rs.CompletedC:
+		if !v.Dropped() {
+			t.Errorf("not dropped")
+		}
+	default:
+		t.Errorf("not notified")
+	}
+	for _, shard := range pp.shards {
+		if len(shard.pending) > 0 {
+			t.Errorf("pending request not cleared")
+		}
 	}
 }
 
@@ -847,6 +924,28 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	}
 	if len(pp.batches) == 0 {
 		t.Errorf("batches is not suppose to be empty")
+	}
+}
+
+func TestPendingReadIndexCanBeDropped(t *testing.T) {
+	pp, _ := getPendingSCRead()
+	rs, err := pp.read(nil, time.Second)
+	if err != nil {
+		t.Errorf("failed to do read")
+	}
+	s := pp.peepNextCtx()
+	pp.addPendingRead(s, []*RequestState{rs})
+	pp.dropped(s)
+	select {
+	case v := <-rs.CompletedC:
+		if !v.Dropped() {
+			t.Errorf("got %v, want %d", v, requestDropped)
+		}
+	default:
+		t.Errorf("expect to complete")
+	}
+	if len(pp.pending) > 0 || len(pp.batches) > 0 || len(pp.mapping) > 0 {
+		t.Errorf("not cleared")
 	}
 }
 
