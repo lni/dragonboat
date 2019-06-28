@@ -77,21 +77,6 @@ uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
   return result;
 }
 
-void BatchedUpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
-  Entry *entries, size_t size)
-{
-  std::vector<dragonboat::Entry> ents;
-  ents.reserve(size);
-  for (size_t i = 0; i < size; ++i) {
-    ents.emplace_back(dragonboat::Entry{
-      entries[i].index,
-      entries[i].cmd,
-      entries[i].cmdLen,
-      entries[i].result});
-  }
-  ds->sm->BatchedUpdate(ents);
-}
-
 LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size)
 {
@@ -148,15 +133,6 @@ void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
 {
   delete ds->sm;
   delete ds;
-}
-
-uint64_t UpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
-  uint64_t index, const unsigned char *cmd, size_t cmdLen)
-{
-  uint64_t result = 0;
-  dragonboat::Entry ent{index, cmd, cmdLen, result};
-  ds->sm->Update(ent);
-  return result;
 }
 
 void BatchedUpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
@@ -244,15 +220,6 @@ OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
 {
   dragonboat::DoneChan done(doneChOID);
   return ds->sm->Open(done);
-}
-
-uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  uint64_t index, const unsigned char *cmd, size_t cmdLen)
-{
-  uint64_t result = 0;
-  dragonboat::Entry ent{index, cmd, cmdLen, result};
-  ds->sm->Update(ent);
-  return result;
 }
 
 void BatchedUpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,

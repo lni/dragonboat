@@ -266,29 +266,6 @@ func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 	ds.SetLoaded(from)
 }
 
-func (ds *RegularStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
-	ds.ensureNotDestroyed()
-	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
-	defer C.free(eps)
-	for idx, ent := range entries {
-		data := ent.Cmd
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		ep.index = C.uint64_t(ent.Index)
-		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
-		ep.cmdLen = C.size_t(len(data))
-		ep.result = C.uint64_t(0)
-	}
-	C.BatchedUpdateDBRegularStateMachine(
-		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
-	for idx, _ := range entries {
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
-	}
-	return entries, nil
-}
-
 // Update updates the data store.
 func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
@@ -303,6 +280,10 @@ func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
 	}
 	return sm.Result{Value: uint64(v)}, nil
+}
+
+func (ds *RegularStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
+	panic("BatchedUpdate not supported in C++ regular state machine")
 }
 
 // Lookup queries the data store.
@@ -456,17 +437,17 @@ func (ds *ConcurrentStateMachineWrapper) Open() (uint64, error) {
 
 func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
-	ds.ensureNotDestroyed()
-	var dp *C.uchar
-	if len(e.Cmd) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
+	results, err := ds.BatchedUpdate([]sm.Entry{{
+		Index: e.Index,
+		Cmd:   e.Cmd,
+	}})
+	if err != nil {
+		return sm.Result{}, err
 	}
-	v := C.UpdateDBConcurrentStateMachine(
-		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
 	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), results[0].Result)
 	}
-	return sm.Result{Value: uint64(v)}, nil
+	return results[0].Result, nil
 }
 
 func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
@@ -674,29 +655,17 @@ func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 
 func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
-	if !ds.opened {
-		panic("Update called when not opened")
+	results, err := ds.BatchedUpdate([]sm.Entry{{
+		Index: e.Index,
+		Cmd:   e.Cmd,
+	}})
+	if err != nil {
+		return sm.Result{}, err
 	}
-	ds.ensureNotDestroyed()
-	if e.Index <= ds.initialIndex {
-		plog.Panicf("last entry index to apply %d, initial index %d",
-			e.Index, ds.initialIndex)
-	}
-	if e.Index <= ds.applied {
-		plog.Panicf("last entry index to apply %d, applied %d",
-			e.Index, ds.applied)
-	}
-	ds.applied = e.Index
-	var dp *C.uchar
-	if len(e.Cmd) > 0 {
-		dp = (*C.uchar)(unsafe.Pointer(&e.Cmd[0]))
-	}
-	v := C.UpdateDBOnDiskStateMachine(
-		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
 	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
+		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), results[0].Result)
 	}
-	return sm.Result{Value: uint64(v)}, nil
+	return results[0].Result, nil
 }
 
 func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {

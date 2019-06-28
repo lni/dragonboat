@@ -236,10 +236,6 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 
 func TestCppWrapperCanBeBatchedUpdatedAndLookedUp(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
-		"./dragonboat-cpp-plugin-example.so",
-		"CreateRegularStateMachine",
-		pb.RegularStateMachine, nil)
 	ds2 := NewStateMachineWrapperFromPlugin(2, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateConcurrentStateMachine",
@@ -250,48 +246,29 @@ func TestCppWrapperCanBeBatchedUpdatedAndLookedUp(t *testing.T) {
 		pb.OnDiskStateMachine, nil)
 	initialApplied := uint64(123)
 	ds3.Open()
-	if ds1 == nil {
-		t.Errorf("failed to return the data store object")
-	}
 	if ds2 == nil {
 		t.Errorf("failed to return the concurrent data store object")
 	}
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
 	}
-	defer ds1.(*RegularStateMachineWrapper).destroy()
 	defer ds2.(*ConcurrentStateMachineWrapper).destroy()
 	defer ds3.(*OnDiskStateMachineWrapper).destroy()
 	e1 := sm.Entry{Index: 1, Cmd: []byte("test-data-1")}
 	e2 := sm.Entry{Index: 2, Cmd: []byte("test-data-2")}
 	e3 := sm.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v, _ := ds1.BatchedUpdate([]sm.Entry{e1, e2, e3})
+	v, _ := ds2.BatchedUpdate([]sm.Entry{e1, e2, e3})
 	v1 := v[0].Result
 	v2 := v[1].Result
 	v3 := v[2].Result
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
-		t.Errorf("Unexpected update result from regular data store")
-	}
-	result, err := ds1.Lookup([]byte("test-lookup-data"))
-	if err != nil {
-		t.Errorf("failed to lookup regular data store")
-	}
-	v4 := binary.LittleEndian.Uint64(result.([]byte))
-	if v4 != v3.Value {
-		t.Errorf("regular data store returned %d, want %d", v4, v3)
-	}
-	v, _ = ds2.BatchedUpdate([]sm.Entry{e1, e2, e3})
-	v1 = v[0].Result
-	v2 = v[1].Result
-	v3 = v[2].Result
-	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from concurrent data store")
 	}
-	result, err = ds2.Lookup([]byte("test-lookup-data"))
+	result, err := ds2.Lookup([]byte("test-lookup-data"))
 	if err != nil {
 		t.Errorf("failed to lookup concurrent data store")
 	}
-	v4 = binary.LittleEndian.Uint64(result.([]byte))
+	v4 := binary.LittleEndian.Uint64(result.([]byte))
 	if v4 != v3.Value {
 		t.Errorf("concurrent data store returned %d, want %d", v4, v3)
 	}

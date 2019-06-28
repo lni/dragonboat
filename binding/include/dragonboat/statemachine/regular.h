@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Jason Yuchen (jasonyuchen@foxmail.com) and other Dragonboat authors.
+// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ class RegularStateMachine
   RegularStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~RegularStateMachine();
   void Update(Entry &ent) noexcept;
-  void BatchedUpdate(std::vector<Entry> &ents) noexcept;
   LookupResult Lookup(const Byte *data, size_t size) const noexcept;
   uint64_t GetHash() const noexcept;
   SnapshotResult SaveSnapshot(SnapshotWriter *writer,
@@ -68,7 +67,6 @@ class RegularStateMachine
   // The input Entry is owned by the caller of the update method, the update
   // method should not keep a reference to it after the end of the update() call.
   virtual void update(Entry &ent) noexcept = 0;
-  virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   // lookup() queries the state of the StateMachine and returns the query
   // result. The input byte array parameter is the data used to specify what
   // need to be queried, it is up to the actual subclass of StateMachine to

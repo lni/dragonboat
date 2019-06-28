@@ -35,11 +35,6 @@ void RegularStateMachine::Update(Entry &ent) noexcept
   update(ent);
 }
 
-void RegularStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
-{
-  batchedUpdate(ents);
-}
-
 LookupResult RegularStateMachine::Lookup(const Byte *data,
   size_t size) const noexcept
 {
@@ -77,11 +72,6 @@ ConcurrentStateMachine::ConcurrentStateMachine(uint64_t clusterID,
 
 ConcurrentStateMachine::~ConcurrentStateMachine()
 {
-}
-
-void ConcurrentStateMachine::Update(Entry &ent) noexcept
-{
-  update(ent);
 }
 
 void ConcurrentStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
@@ -136,11 +126,6 @@ OnDiskStateMachine::~OnDiskStateMachine()
 OpenResult OnDiskStateMachine::Open(const DoneChan &done) noexcept
 {
   return open(done);
-}
-
-void OnDiskStateMachine::Update(Entry &ent) noexcept
-{
-  update(ent);
 }
 
 void OnDiskStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept

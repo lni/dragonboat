@@ -120,7 +120,7 @@ enum ErrorCode
   ErrResultBufferTooSmall = -15,
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
-  ErrClusterNodeReady = -18,
+  ErrClusterNotReady = -18,
   ErrClusterNotStopped = -19,
   ErrClusterNotInitialized = -20,
   ErrNodeRemoved = -21,

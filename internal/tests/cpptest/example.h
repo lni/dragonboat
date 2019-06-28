@@ -26,7 +26,6 @@ class HelloWorldStateMachine : public dragonboat::RegularStateMachine
   ~HelloWorldStateMachine();
  protected:
   void update(dragonboat::Entry &ent) noexcept override;
-  void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const dragonboat::Byte *data,
     size_t size) const noexcept override;
   uint64_t getHash() const noexcept override;
@@ -48,7 +47,6 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
   TestConcurrentStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   ~TestConcurrentStateMachine();
  protected:
-  void update(dragonboat::Entry &ent) noexcept override;
   void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const dragonboat::Byte *data,
     size_t size) const noexcept override;
@@ -61,7 +59,7 @@ class TestConcurrentStateMachine : public dragonboat::ConcurrentStateMachine
   int recoverFromSnapshot(dragonboat::SnapshotReader *reader,
     const std::vector<dragonboat::SnapshotFile> &files,
     const dragonboat::DoneChan &done) noexcept override;
-  void freeLookupResult(LookupResult r) noexcept;
+  void freeLookupResult(LookupResult r) noexcept override;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(TestConcurrentStateMachine);
   uint64_t count_;
@@ -74,7 +72,6 @@ class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   ~FakeOnDiskStateMachine();
  protected:
   OpenResult open(const dragonboat::DoneChan &done) noexcept override;
-  void update(dragonboat::Entry &ent) noexcept override;
   void batchedUpdate(std::vector<dragonboat::Entry> &ents) noexcept override;
   LookupResult lookup(const dragonboat::Byte *data,
     size_t size) const noexcept override;
@@ -87,7 +84,7 @@ class FakeOnDiskStateMachine : public dragonboat::OnDiskStateMachine {
   int recoverFromSnapshot(
     dragonboat::SnapshotReader *reader,
     const dragonboat::DoneChan &done) noexcept override;
-  void freeLookupResult(LookupResult r) noexcept;
+  void freeLookupResult(LookupResult r) noexcept override;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(FakeOnDiskStateMachine);
   uint64_t initialApplied_;

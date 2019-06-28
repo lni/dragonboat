@@ -35,15 +35,6 @@ void HelloWorldStateMachine::update(dragonboat::Entry &ent) noexcept
   ent.result = count_;
 }
 
-void HelloWorldStateMachine::batchedUpdate(
-  std::vector<dragonboat::Entry> &ents) noexcept
-{
-  for (auto &it : ents) {
-    count_++;
-    it.result = count_;
-  }
-}
-
 LookupResult HelloWorldStateMachine::lookup(const dragonboat::Byte *data,
   size_t sz) const noexcept
 {
@@ -104,12 +95,6 @@ TestConcurrentStateMachine::TestConcurrentStateMachine(
 
 TestConcurrentStateMachine::~TestConcurrentStateMachine()
 {
-}
-
-void TestConcurrentStateMachine::update(dragonboat::Entry &ent) noexcept
-{
-  count_++;
-  ent.result = count_;
 }
 
 void TestConcurrentStateMachine::batchedUpdate(
@@ -202,12 +187,6 @@ OpenResult FakeOnDiskStateMachine::open(
   r.result = initialApplied_;
   r.errcode = OPEN_OK;
   return r;
-}
-
-void FakeOnDiskStateMachine::update(dragonboat::Entry &ent) noexcept
-{
-  count_++;
-  ent.result = count_;
 }
 
 void FakeOnDiskStateMachine::batchedUpdate(

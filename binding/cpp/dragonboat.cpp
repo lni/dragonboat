@@ -151,6 +151,8 @@ std::string Status::String() const noexcept
     return "ErrRejected";
   case ::ErrInvalidClusterSettings:
     return "ErrInvalidClusterSettings";
+  case ::ErrClusterNotReady:
+    return "ErrClusterNotReady";
   case ::ErrClusterNotStopped:
     return "ErrClusterNotStopped";
   case ::ErrClusterNotInitialized:
@@ -182,6 +184,7 @@ const int Status::ErrCanceled = ::ErrCanceled;
 const int Status::ErrResultBufferTooSmall = ::ErrResultBufferTooSmall;
 const int Status::ErrRejected = ::ErrRejected;
 const int Status::ErrInvalidClusterSettings = ::ErrInvalidClusterSettings;
+const int Status::ErrClusterNotReady = ::ErrClusterNotReady;
 const int Status::ErrClusterNotStopped = ::ErrClusterNotStopped;
 const int Status::ErrClusterNotInitialized = ::ErrClusterNotInitialized;
 const int Status::ErrNodeRemoved = ::ErrNodeRemoved;

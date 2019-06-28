@@ -35,8 +35,6 @@ CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
 void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds);
 uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
   uint64_t index, const unsigned char *cmd, size_t cmdLen);
-void BatchedUpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
-  Entry *entries, size_t size);
 LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size);
 uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds);
@@ -50,8 +48,6 @@ void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
 CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
   uint64_t nodeID, void *factory, uint64_t cStyle);
 void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
-uint64_t UpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
-  uint64_t index, const unsigned char *cmd, size_t cmdLen);
 void BatchedUpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
   Entry *entries, size_t size);
 LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
@@ -72,8 +68,6 @@ CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
 void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
 OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   uint64_t doneChOID);
-uint64_t UpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
-  uint64_t index, const unsigned char *data, size_t size);
 void BatchedUpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
   Entry *entries, size_t size);
 LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,

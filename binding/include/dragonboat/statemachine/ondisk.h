@@ -47,7 +47,6 @@ class OnDiskStateMachine
   OnDiskStateMachine(uint64_t clusterID, uint64_t nodeID) noexcept;
   virtual ~OnDiskStateMachine();
   OpenResult Open(const DoneChan &done) noexcept;
-  void Update(Entry &ent) noexcept;
   void BatchedUpdate(std::vector<Entry> &ents) noexcept;
   LookupResult Lookup(const Byte *data, size_t size) const noexcept;
   int Sync() const noexcept;
@@ -62,16 +61,15 @@ class OnDiskStateMachine
   uint64_t cluster_id_;
   uint64_t node_id_;
   virtual OpenResult open(const DoneChan &done) noexcept = 0;
-  // update() updates the state machine object.
+  // batchedUpdate() updates the state machine object.
   // The Entry::index is the raft log index associated with this proposal.
   // The Entry::cmd is the proposed data provided by NodeHost::Propose, it is
   // up to the actual subclass of state machine to interpret the meaning of this
   // input byte array and update the state machine accordingly.
-  // The Entry::result should be set in update() to indicate the result of the
+  // The Entry::result should be set in batchedUpdate() to indicate the result of the
   // update operation.
   // The input Entry is owned by the caller of the update method, the update
-  // method should not keep a reference to it after the end of the update() call.
-  virtual void update(Entry &ent) noexcept = 0;
+  // method should not keep a reference to it after the end of the batchedUpdate() call.
   virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   // lookup() queries the state of the StateMachine and returns the query
   // result. The input byte array parameter is the data used to specify what
@@ -86,7 +84,7 @@ class OnDiskStateMachine
   virtual LookupResult lookup(const Byte *data, size_t size) const noexcept = 0;
 	// sync() synchronizes all in-core state of the state machine to permanent
 	// storage so the state machine can continue from its latest state after reboot.
-	// sync() is always invoked with mutual exclusion protection from the update(),
+	// sync() is always invoked with mutual exclusion protection from the batchedUpdate(),
 	// prepareSnapshot() and recoverFromSnapshot().
   virtual int sync() const noexcept = 0;
   // getHash() returns a uint64_t integer representing the state of the
@@ -94,7 +92,7 @@ class OnDiskStateMachine
   virtual uint64_t getHash() const noexcept = 0;
   // prepareSnapshot() prepares the snapshot to be concurrently captured and saved.
   // prepareSnapshot() is invoked before saveSnapshot() is called and it is invoked
-  // with mutual exclusion protection from the update().
+  // with mutual exclusion protection from the batchedUpdate().
   // The returned PrepareSnapshotResult::result could point to any type and it is
   // immediately passed to saveSnapshot() as context.
   // Resource associated with the result should be released in the saveSnapshot.
@@ -109,13 +107,13 @@ class OnDiskStateMachine
 	// current latest state. The point in time state identified by the input context
 	// is what suppose to be saved, the latest state might be different from such
   // specified point in time state as the state machine might have already been
-  // updated by the update() method after the completion of prepareSnapshot().
+  // updated by the batchedUpdate() method after the completion of prepareSnapshot().
   virtual SnapshotResult saveSnapshot(const void *context,
     SnapshotWriter *writer, const DoneChan &done) const noexcept = 0;
 	// recoverFromSnapshot() recovers the state of the state machine instance from
 	// a previously saved snapshot captured by the saveSnapshot() on a remote node.
 	// The saved snapshot is provided as an SnapshotReader backed by a file already
-	// fully available on disk. Dragonboat ensures that the update(), sync(),
+	// fully available on disk. Dragonboat ensures that the batchedUpdate(), sync(),
 	// prepareSnapshot() and saveSnapshot() will not be invoked when
 	// recoverFromSnapshot() is in progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
