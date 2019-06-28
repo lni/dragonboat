@@ -1,4 +1,5 @@
-// Copyright 2017-2019 Jason Yuchen (jasonyuchen@foxmail.com) and other Dragonboat authors.
+// Copyright 2017-2019 Jason Yuchen (jasonyuchen@foxmail.com) and other
+// Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,18 +27,19 @@
 namespace dragonboat {
 
 // ConcurrentStateMachine is the base class of all C++ concurrent state machines
-// used in Dragonboat. Your concurrent state machine implementation in C++ should
-// inherit from the ConcurrentStateMachine class.
+// used in Dragonboat. Your concurrent state machine implementation in C++
+// should inherit from the ConcurrentStateMachine class.
 //
 // There are two ways to apply cpp concurrent state machine in dragonboat:
 //
-//  1. Link your concurrent state machine implementation as a .so dynamic library
-//     together with a factory function defined in the global scope for creating
-//     the concurrent state machine. Specify the .so file name and the corresponding
-//     factory name in NodeHost::StartCluster so it can be picked up by dragonboat
-//     For more details, see github.com/lni/dragonboat/internal/tests/cpptest
+//  1. Link your concurrent state machine implementation as a .so dynamic
+//     library together with a factory function defined in the global scope for
+//     creating the concurrent state machine. Specify the .so file name and the
+//     corresponding factory name in NodeHost::StartCluster so it can be picked
+//     up by dragonboat.
+//     For more details, see internal/tests/cpptest
 //  2. Directly pass the factory function to NodeHost::StartCluster.
-//     For more details, see github.com/lni/dragonboat/binding/tests/nodehost_tests.cpp
+//     For more details, see binding/tests/nodehost_tests.cpp
 
 class ConcurrentStateMachine
 {
@@ -64,10 +66,10 @@ class ConcurrentStateMachine
   // The Entry::cmd is the proposed data provided by NodeHost::Propose, it is
   // up to the actual subclass of state machine to interpret the meaning of this
   // input byte array and update the state machine accordingly.
-  // The Entry::result should be set in batchedUpdate() to indicate the result of the
-  // update operation.
+  // The Entry::result should be set in batchedUpdate() to indicate the result
+  // of the update operation.
   // The input Entry is owned by the caller of the update method, the update
-  // method should not keep a reference to it after the end of the batchedUpdate() call.
+  // method should not keep a reference to it after the end of batchedUpdate().
   virtual void batchedUpdate(std::vector<Entry> &ents) noexcept = 0;
   // lookup() queries the state of the StateMachine and returns the query
   // result. The input byte array parameter is the data used to specify what
@@ -83,33 +85,35 @@ class ConcurrentStateMachine
   // getHash() returns a uint64_t integer representing the state of the
   // state machine instance, it is usually a hash result of the object state.
   virtual uint64_t getHash() const noexcept = 0;
-  // prepareSnapshot() prepares the snapshot to be concurrently captured and saved.
-  // prepareSnapshot() is invoked before saveSnapshot() is called and it is invoked
-  // with mutual exclusion protection from the batchedUpdate().
-  // The returned PrepareSnapshotResult::result could point to any type and it is
-  // immediately passed to saveSnapshot() as context.
+  // prepareSnapshot() prepares the snapshot to be concurrently captured and
+  // saved. prepareSnapshot() is invoked before saveSnapshot() is called and it
+  // is invoked with mutual exclusion protection from the batchedUpdate().
+  // The returned PrepareSnapshotResult::result could point to any data which is
+  // immediately passed to saveSnapshot() as a context.
   // Resource associated with the result should be released in the saveSnapshot.
   virtual PrepareSnapshotResult prepareSnapshot() const noexcept = 0;
-	// saveSnapshot() saves the point in time state of the state machine identified
-	// by the input context to the provided SnapshotWriter backed by a file on disk
-	// and the provided SnapshotFileCollection instance. This is a read only method
-	// that should never change the state of the state machine instance.
+	// saveSnapshot() saves the point in time state of the state machine
+	// identified by the input context to the provided SnapshotWriter backed by a
+	// file on disk and the provided SnapshotFileCollection instance. This is a
+	// read only method that should never change the state of the state machine
+	// instance.
 	// The resource associated with the context generated in prepareSnapshot()
-	// should be released in saveSnapshot().
-	// It is important to understand that saveSnapshot() should never save the
-	// current latest state. The point in time state identified by the input context
-	// is what suppose to be saved, the latest state might be different from such
-  // specified point in time state as the state machine might have already been
-  // updated by the batchedUpdate() method after the completion of prepareSnapshot().
+	// should be released in saveSnapshot(). It is important to understand that
+	// saveSnapshot() should never save the current latest state. The point in
+	// time state identified by the input context is what suppose to be saved, the
+	// latest state might be different from such specified point in time state as
+	// the state machine might have already been updated by the batchedUpdate()
+	// method after the completion of prepareSnapshot().
   virtual SnapshotResult saveSnapshot(const void *context,
     SnapshotWriter *writer, SnapshotFileCollection *collection,
     const DoneChan &done) const noexcept = 0;
 	// recoverFromSnapshot() recovers the state of the state machine instance from
-	// a previously saved snapshot captured by the saveSnapshot() method. The saved
-	// snapshot is provided as an SnapshotReader backed by a file on disk together
-	// with a list of files previously recorded into the SnapshotFileCollection in
-	// saveSnapshot(). Dragonboat ensures that batchedUpdate() will not be invoked when
-	// recoverFromSnapshot() is in progress.
+	// a previously saved snapshot captured by the saveSnapshot() method. The
+	// saved snapshot is provided as an SnapshotReader backed by a file on disk
+	// together with a list of files previously recorded into the
+	// SnapshotFileCollection in saveSnapshot(). Dragonboat ensures that
+	// batchedUpdate() will not be invoked when recoverFromSnapshot() is in
+	// progress.
   virtual int recoverFromSnapshot(SnapshotReader *reader,
     const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept = 0;
   // freeLookupResult() receives a LookupResult struct previously returned by

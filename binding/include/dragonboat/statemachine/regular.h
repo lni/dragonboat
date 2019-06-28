@@ -33,11 +33,12 @@ namespace dragonboat {
 //
 //  1. Link your regular state machine implementation as a .so dynamic library
 //     together with a factory function defined in the global scope for creating
-//     the regular state machine. Specify the .so file name and the corresponding
-//     factory name in NodeHost::StartCluster so it can be picked up by dragonboat
-//     For more details, see github.com/lni/dragonboat/internal/tests/cpptest
+//     the regular state machine. Specify the .so file name and the
+//     corresponding factory name in NodeHost::StartCluster so it can be picked
+//     up by dragonboat.
+//     For more details, see internal/tests/cpptest
 //  2. Directly pass the factory function to NodeHost::StartCluster.
-//     For more details, see github.com/lni/dragonboat/binding/tests/nodehost_tests.cpp
+//     For more details, see binding/tests/nodehost_tests.cpp
 
 class RegularStateMachine
 {
@@ -65,7 +66,7 @@ class RegularStateMachine
   // The Entry::result should be set in update() to indicate the result of the
   // update operation.
   // The input Entry is owned by the caller of the update method, the update
-  // method should not keep a reference to it after the end of the update() call.
+  // method should not keep a reference to it after the end of update().
   virtual void update(Entry &ent) noexcept = 0;
   // lookup() queries the state of the StateMachine and returns the query
   // result. The input byte array parameter is the data used to specify what

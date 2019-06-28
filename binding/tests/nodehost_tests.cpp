@@ -17,6 +17,7 @@
 #include <memory>
 #include <thread>
 #include <condition_variable>
+#include <sys/stat.h>
 
 #include "zupply.h"
 #include "dragonboat/dragonboat.h"
@@ -304,8 +305,10 @@ dragonboat::RegularStateMachine *CreateRegularStateMachine(
   return new TestRegularStateMachine(clusterID, nodeID);
 }
 
-dragonboat::RegularStateMachine *ExtraCreateRegularStateMachine(uint64_t clusterID,
-  uint64_t nodeID, uint64_t placeHolder)
+dragonboat::RegularStateMachine *ExtraCreateRegularStateMachine(
+  uint64_t clusterID,
+  uint64_t nodeID,
+  uint64_t placeHolder)
 {
   return new TestRegularStateMachine(clusterID, nodeID);
 }
@@ -364,9 +367,11 @@ class NodeHostTest : public ::testing::Test {
   dragonboat::NodeHostConfig getTestNodeHostConfig();
   dragonboat::Config getTestConfig();
   void waitForElectionToComplete(bool);
+  bool snapshotExist(const std::string &dir);
 
   const static std::string NodeHostTestDir;
   const static std::string NodeHostTestDir2;
+  const static std::string ExportedSnapshotDir;
   const static std::string RaftAddress;
   const static std::string RaftAddress2;
   const static std::string TestPluginFilename;
@@ -380,6 +385,8 @@ const std::string
   NodeHostTest::NodeHostTestDir = "nodehost_test_dir_safe_to_delete";
 const std::string
   NodeHostTest::NodeHostTestDir2 = "nodehost_test_dir2_safe_to_delete";
+const std::string
+  NodeHostTest::ExportedSnapshotDir = "nodehost_test_snapshotdir_safe_to_delete";
 const std::string
   NodeHostTest::TestPluginFilename = "dragonboat-cpp-plugin-example.so";
 const std::string
@@ -432,6 +439,23 @@ void NodeHostTest::waitForElectionToComplete(bool useNodeHost2 = false)
   EXPECT_TRUE(done);
 }
 
+bool NodeHostTest::snapshotExist(const std::string &dir)
+{
+  auto items = zz::os::list_directory(dir);
+  struct stat info;
+  for (auto &item : items) {
+    auto base = zz::os::path_split_basename(item);
+    if (zz::os::is_file(item) && zz::fmt::starts_with(base, "snapshot")) {
+        stat(item.c_str(), &info);
+        std::cout << "snapshot: " << item << ", size: " << info.st_size << std::endl;
+        return bool(info.st_size);
+    } else if (zz::os::is_directory(item) && snapshotExist(item)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void NodeHostTest::SetUp()
 {
   managed_object_count_ = CGetManagedObjectCount();
@@ -441,6 +465,11 @@ void NodeHostTest::SetUp()
     zz::os::remove_dir(NodeHostTestDir);
   }
   zz::os::create_directory_recursive(NodeHostTestDir);
+  zz::fs::Path ss(ExportedSnapshotDir);
+  if (ss.exist() && ss.is_dir()) {
+    zz::os::remove_dir(ExportedSnapshotDir);
+  }
+  zz::os::create_directory_recursive(ExportedSnapshotDir);
   auto nhConfig = getTestNodeHostConfig();
   nh_.reset(new dragonboat::NodeHost(nhConfig));
   if (TwoNodeHostRequired()) {
@@ -470,6 +499,10 @@ void NodeHostTest::TearDown()
   if (p1.exist() && p1.is_dir()) {
     zz::os::remove_dir(NodeHostTestDir);
   }
+  zz::fs::Path ss(ExportedSnapshotDir);
+  if (ss.exist() && ss.is_dir()) {
+    zz::os::remove_dir(ExportedSnapshotDir);
+  }
   if (TwoNodeHostRequired()) {
     zz::fs::Path p2(NodeHostTestDir2);
     if (p2.exist() && p2.is_dir()) {
@@ -489,7 +522,8 @@ bool NodeHostTest::TwoNodeHostRequired()
     name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
   if (name.find("ObserverCanSyncPropose") != std::string::npos ||
     name.find("ObserverCanReadIndex") != std::string::npos ||
-    name.find("ObserverCanStaleRead") != std::string::npos) {
+    name.find("ObserverCanStaleRead") != std::string::npos ||
+    name.find("SnapshotCanBeStreamed") != std::string::npos) {
     return true;
   }
   return false;
@@ -1273,9 +1307,11 @@ TEST_F(NodeHostTest, RequestSnapshot)
   dragonboat::SnapshotOption option;
   dragonboat::SnapshotResultIndex result;
   option.Exported = false;
-  dragonboat::Status status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
+  dragonboat::Status
+    status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
   EXPECT_TRUE(status.OK());
   EXPECT_GE(result, 1);
+  EXPECT_TRUE(snapshotExist(NodeHostTestDir));
 }
 
 TEST_F(NodeHostTest, AsyncRequestSnapshot)
@@ -1298,6 +1334,7 @@ TEST_F(NodeHostTest, AsyncRequestSnapshot)
   dragonboat::RequestResult result = state->Get();
   EXPECT_EQ(result.code, RequestCompleted);
   EXPECT_GE(result.result, 1);
+  EXPECT_TRUE(snapshotExist(NodeHostTestDir));
 }
 
 TEST_F(NodeHostTest, ExportSnapshot)
@@ -1314,10 +1351,12 @@ TEST_F(NodeHostTest, ExportSnapshot)
   dragonboat::SnapshotOption option;
   dragonboat::SnapshotResultIndex result;
   option.Exported = true;
-  option.ExportedPath = NodeHostTest::NodeHostTestDir;
-  dragonboat::Status status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
+  option.ExportedPath = ExportedSnapshotDir;
+  dragonboat::Status
+    status = nh_->SyncRequestSnapshot(1, option, timeout, &result);
   EXPECT_TRUE(status.OK());
   EXPECT_GE(result, 1);
+  EXPECT_TRUE(snapshotExist(ExportedSnapshotDir));
 }
 
 TEST_F(NodeHostTest, AsyncExportSnapshot)
@@ -1334,13 +1373,14 @@ TEST_F(NodeHostTest, AsyncExportSnapshot)
   dragonboat::SnapshotOption option;
   dragonboat::Status status;
   option.Exported = true;
-  option.ExportedPath = NodeHostTest::NodeHostTestDir;
+  option.ExportedPath = ExportedSnapshotDir;
   std::unique_ptr<dragonboat::RequestState>
     state(nh_->RequestSnapshot(1, option, timeout, &status));
   EXPECT_TRUE(status.OK());
   dragonboat::RequestResult result = state->Get();
   EXPECT_EQ(result.code, RequestCompleted);
   EXPECT_GE(result.result, 1);
+  EXPECT_TRUE(snapshotExist(ExportedSnapshotDir));
 }
 
 TEST_F(NodeHostTest, FailedToLaunchAsyncSnapshot)
@@ -1492,6 +1532,85 @@ TEST_F(NodeHostTest, OnDiskSMSnapshotCanBeCapturedAndRestored)
   // on-disk state machine only saves a dummy snapshot because it is supposed to
   // have all data persisted
   EXPECT_EQ(*count, 0);
+}
+
+TEST_F(NodeHostTest, OnDiskSMSnapshotCanBeStreamed)
+{
+  auto config = getTestConfig();
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  uint64_t lastRaftIndex1 = 0;
+  dragonboat::Status s = nh_->StartCluster(
+    p, false,
+    [&lastRaftIndex1](uint64_t clusterID, uint64_t nodeID) {
+      return new TestOnDiskStateMachine(clusterID, nodeID, &lastRaftIndex1);
+    },
+    config);
+  EXPECT_TRUE(s.OK());
+  auto timeout = dragonboat::Milliseconds(500);
+  waitForElectionToComplete();
+  std::unique_ptr<dragonboat::Session> cs(nh_->GetNoOPSession(1));
+  EXPECT_TRUE(s.OK());
+  dragonboat::Buffer buf(128);
+  for (uint64_t i = 0; i < 64; i++) {
+    dragonboat::UpdateResult code;
+    dragonboat::Status s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
+    EXPECT_TRUE(s.OK());
+  }
+  dragonboat::Buffer query(128);
+  dragonboat::Buffer result(128);
+  s = nh_->SyncRead(1, query, &result, timeout);
+  EXPECT_TRUE(s.OK());
+  EXPECT_EQ(result.Len(), 8);
+  // initial applied index is 64,
+  // plus one empty entry proposed after the leader is elected and one
+  // membership change entry. both of these two are not
+  // visible to the StateMachine, so the returned count is 64, and the index
+  // of the most recent Raft log is 66
+  EXPECT_EQ(*(uint64_t *)result.Data(), 64);
+  EXPECT_EQ(lastRaftIndex1, 66);
+  // add a new node prepared for streamSnapshot
+  std::cout << "going to add node" << std::endl;
+  std::unique_ptr<dragonboat::RequestState>
+    state(nh_->RequestAddNode(1, 2, "localhost:9051", timeout, &s));
+  EXPECT_TRUE(s.OK());
+  dragonboat::RequestResult reqresult = state->Get();
+  EXPECT_EQ(reqresult.code, RequestCompleted);
+
+  dragonboat::Peers p2;
+  uint64_t lastRaftIndex2 = 0;
+  auto config2 = getTestConfig();
+  config2.NodeId = 2;
+  std::cout << "going to start on-disk state machine"
+    << ", snapshot should be streamed" << std::endl;
+  s = nh2_->StartCluster(
+    p2, true,
+    [&lastRaftIndex2](uint64_t clusterID, uint64_t nodeID) {
+      return new TestOnDiskStateMachine(clusterID, nodeID, &lastRaftIndex2);
+    },
+    config2);
+  EXPECT_TRUE(s.OK());
+  for (uint64_t i = 0; i < 10; i++) {
+    s = nh2_->SyncRead(1, query, &result, timeout);
+    std::cout << "try read iteration " << i << std::endl;
+    if (s.OK()) {
+      break;
+    }
+  }
+  EXPECT_TRUE(s.OK());
+  EXPECT_EQ(*(uint64_t*)result.Data(), 64);
+  EXPECT_TRUE(snapshotExist(NodeHostTestDir));
+  EXPECT_TRUE(snapshotExist(NodeHostTestDir2));
+  for (uint64_t i = 0; i < 1; i++) {
+    dragonboat::UpdateResult code;
+    dragonboat::Status s = nh2_->SyncPropose(cs.get(), buf, timeout, &code);
+    EXPECT_TRUE(s.OK());
+  }
+  // Snapshot index is 67, 66 + 1 membership change entry which is not visible
+  // to the StateMachine. After the nh2_->SyncPropose(), the index of the most
+  // recent Raft log is 68.
+  EXPECT_EQ(lastRaftIndex1, 68);
+  EXPECT_EQ(lastRaftIndex2, 68);
 }
 
 TEST_F(NodeHostTest, ObserverCanBeAdded)
