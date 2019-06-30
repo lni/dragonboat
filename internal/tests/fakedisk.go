@@ -117,3 +117,61 @@ func (f *FakeDiskSM) Close() error {
 func (f *FakeDiskSM) GetHash() (uint64, error) {
 	return 0, nil
 }
+
+type SimDiskSM struct {
+	applied uint64
+}
+
+func NewSimDiskSM(applied uint64) *SimDiskSM {
+	return &SimDiskSM{applied: applied}
+}
+
+func (s *SimDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
+	return s.applied, nil
+}
+
+func (s *SimDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
+	fmt.Printf("updated called %v\n", ents)
+	for _, e := range ents {
+		s.applied = e.Index
+		e.Result = sm.Result{Value: e.Index}
+	}
+	return ents, nil
+}
+
+func (s *SimDiskSM) Lookup(query interface{}) (interface{}, error) {
+	result := s.applied
+	return result, nil
+}
+
+func (s *SimDiskSM) PrepareSnapshot() (interface{}, error) {
+	v := &SimDiskSM{applied: s.applied}
+	return v, nil
+}
+
+func (s *SimDiskSM) SaveSnapshot(ctx interface{},
+	w io.Writer, stopc <-chan struct{}) error {
+	pit := ctx.(*SimDiskSM)
+	v := make([]byte, 8)
+	binary.LittleEndian.PutUint64(v, pit.applied)
+	_, err := w.Write(v)
+	return err
+}
+
+func (s *SimDiskSM) RecoverFromSnapshot(r io.Reader,
+	stopc <-chan struct{}) error {
+	v := make([]byte, 8)
+	if _, err := io.ReadFull(r, v); err != nil {
+		return err
+	}
+	s.applied = binary.LittleEndian.Uint64(v)
+	return nil
+}
+
+func (s *SimDiskSM) Sync() error {
+	return nil
+}
+
+func (s *SimDiskSM) Close() error {
+	return nil
+}

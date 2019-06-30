@@ -571,7 +571,8 @@ func (n *node) saveSnapshot(rec rsm.Task) error {
 func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	if n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
+	if !req.IsExportedSnapshot() &&
+		n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
 		// a snapshot has been pushed to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
 		return 0, nil
@@ -1008,7 +1009,8 @@ func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
 		return false
 	}
 	si := n.ss.getReqSnapshotIndex()
-	if lastApplied == si {
+	plog.Infof("req: %+v", req)
+	if !req.IsExportedSnapshot() && lastApplied == si {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}

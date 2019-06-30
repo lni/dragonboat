@@ -361,6 +361,7 @@ func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
 	s := pb.Snapshot{}
 	s.Index = chunk.Index
 	s.Term = chunk.Term
+	s.OnDiskIndex = chunk.OnDiskIndex
 	s.Membership = chunk.Membership
 	fn := filepath.Base(chunk.Filepath)
 	s.Filepath = filepath.Join(snapDir, fn)

@@ -1533,6 +1533,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				for _, ss := range snapshots {
+					if ss.OnDiskIndex == 0 {
+						t.Errorf("on disk index not recorded in ss")
+					}
 					shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
 					if err != nil {
 						t.Errorf("failed to check whether snapshot is shrunk %v", err)
@@ -1901,6 +1904,49 @@ func TestSyncRequestSnapshot(t *testing.T) {
 		}
 		if idx == 0 {
 			t.Errorf("unexpected index %d", idx)
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
+func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		cmd := make([]byte, 1518)
+		_, err := nh.SyncPropose(ctx, session, cmd)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		idx, err := nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
+		cancel()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if idx == 0 {
+			t.Errorf("unexpected index %d", idx)
+		}
+		sspath := "exported_snapshot_safe_to_delete"
+		os.RemoveAll(sspath)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
+		defer os.RemoveAll(sspath)
+		opt := SnapshotOption{
+			Exported:   true,
+			ExportPath: sspath,
+		}
+		plog.Infof("going to export snapshot")
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		exportIdx, err := nh.SyncRequestSnapshot(ctx, 2, opt)
+		cancel()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if exportIdx != idx {
+			t.Errorf("unexpected index %d, want %d", exportIdx, idx)
 		}
 	}
 	singleNodeHostTest(t, tf)
@@ -2297,6 +2343,127 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 	singleFakeDiskNodeHostTest(t, tf, 0)
 }
 
+func TestImportedSnapshotIsAlwaysRestored(t *testing.T) {
+	tf := func() {
+		rc := config.Config{
+			ClusterID:          1,
+			NodeID:             1,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: 10,
+			RaftAddress:    nodeHostTestAddr1,
+		}
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewSimDiskSM(0)
+		}
+		if err := nh.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		makeProposals := func(nn *NodeHost) {
+			session := nh.GetNoOPSession(1)
+			for i := 0; i < 16; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				_, err := nn.SyncPropose(ctx, session, []byte("test-data"))
+				cancel()
+				if err != nil {
+					t.Errorf("failed to make proposal %v", err)
+				}
+			}
+		}
+		makeProposals(nh)
+		sspath := "exported_snapshot_safe_to_delete"
+		os.RemoveAll(sspath)
+		if err := os.MkdirAll(sspath, 0755); err != nil {
+			t.Fatalf("%v", err)
+		}
+		defer os.RemoveAll(sspath)
+		opt := SnapshotOption{
+			Exported:   true,
+			ExportPath: sspath,
+		}
+		var index uint64
+		for i := 0; i < 1000; i++ {
+			if i == 999 {
+				t.Fatalf("failed to export snapshot")
+			}
+			sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
+			if err != nil {
+				t.Fatalf("failed to request snapshot %v", err)
+			}
+			v := <-sr.CompletedC
+			if v.Rejected() {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			if v.Completed() {
+				index = v.SnapshotIndex()
+				break
+			}
+		}
+		plog.Infof("index of exported snapshot %d", index)
+		makeProposals(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		rv, err := nh.SyncRead(ctx, 1, nil)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to read applied value %v", err)
+		}
+		applied := rv.(uint64)
+		if applied <= index {
+			t.Fatalf("invalid applied value %d", applied)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+		if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
+			t.Fatalf("failed to add node %v", err)
+		}
+		nh.Stop()
+		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
+		dir := path.Join(sspath, snapshotDir)
+		members := make(map[uint64]string)
+		members[1] = nhc.RaftAddress
+		if err := tools.ImportSnapshot(nhc, dir, members, 1); err != nil {
+			t.Fatalf("failed to import snapshot %v", err)
+		}
+		rnh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer rnh.Stop()
+		rnewSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewSimDiskSM(applied)
+		}
+		if err := rnh.StartOnDiskCluster(nil, false, rnewSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, rnh, 1)
+		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+		rv, err = rnh.SyncRead(ctx, 1, nil)
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to read applied value %v", err)
+		}
+		if index != rv.(uint64) {
+			t.Fatalf("invalid returned value %d", rv.(uint64))
+		}
+		plog.Infof("checking proposes")
+		makeProposals(rnh)
+	}
+	runNodeHostTest(t, tf)
+}
+
 func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 	tf := func() {
 		nh1dir := path.Join(singleNodeHostTestDir, "nh1")
@@ -2317,14 +2484,12 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			NodeHostDir:    nh1dir,
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr1,
-			DeploymentID:   1,
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr2,
-			DeploymentID:   1,
 		}
 		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once

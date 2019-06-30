@@ -32,7 +32,7 @@ type IStateMachine interface {
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(interface{},
 		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
-	RecoverFromSnapshot(uint64, io.Reader, []sm.SnapshotFile, <-chan struct{}) error
+	RecoverFromSnapshot(io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close() error
 	GetHash() (uint64, error)
 	ConcurrentSnapshot() bool
@@ -110,8 +110,8 @@ func (s *RegularStateMachine) SaveSnapshot(ctx interface{},
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (s *RegularStateMachine) RecoverFromSnapshot(index uint64,
-	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+func (s *RegularStateMachine) RecoverFromSnapshot(r io.Reader,
+	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	return s.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
@@ -208,8 +208,8 @@ func (s *ConcurrentStateMachine) SaveSnapshot(ctx interface{},
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (s *ConcurrentStateMachine) RecoverFromSnapshot(index uint64,
-	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+func (s *ConcurrentStateMachine) RecoverFromSnapshot(r io.Reader,
+	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	return s.sm.RecoverFromSnapshot(r, fs, stopc)
 }
 
@@ -246,12 +246,10 @@ func (s *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
 
 // OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
-	sm           sm.IOnDiskStateMachine
-	h            sm.IHash
-	na           sm.IExtended
-	opened       bool
-	initialIndex uint64
-	applied      uint64
+	sm     sm.IOnDiskStateMachine
+	h      sm.IHash
+	na     sm.IExtended
+	opened bool
 }
 
 // NewOnDiskStateMachine creates and returns an on disk state machine.
@@ -278,8 +276,6 @@ func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	s.initialIndex = applied
-	s.applied = applied
 	return applied, nil
 }
 
@@ -287,17 +283,6 @@ func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 func (s *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if !s.opened {
 		panic("Update called before Open")
-	}
-	if len(entries) > 0 {
-		if entries[len(entries)-1].Index <= s.initialIndex {
-			plog.Panicf("last entry index to apply %d, initial index %d",
-				entries[len(entries)-1].Index, s.initialIndex)
-		}
-		if entries[len(entries)-1].Index <= s.applied {
-			plog.Panicf("last entry index to apply %d, applied %d",
-				entries[len(entries)-1].Index, s.applied)
-		}
-		s.applied = entries[len(entries)-1].Index
 	}
 	return s.sm.Update(entries)
 }
@@ -345,16 +330,23 @@ func (s *OnDiskStateMachine) SaveSnapshot(ctx interface{},
 }
 
 // RecoverFromSnapshot recovers the state machine from a snapshot.
-func (s *OnDiskStateMachine) RecoverFromSnapshot(index uint64,
-	r io.Reader, fs []sm.SnapshotFile, stopc <-chan struct{}) error {
+func (s *OnDiskStateMachine) RecoverFromSnapshot(r io.Reader,
+	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	if !s.opened {
 		panic("RecoverFromSnapshot called when not opened")
 	}
-	if index <= s.applied {
-		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
-			index, s.applied)
-	}
-	s.applied = index
+	/*
+		rollback := ss.Imported && init
+		if !rollback {
+			if ss.StateMachineIndex <= s.index {
+				plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
+					ss.StateMachineIndex, s.index)
+			}
+		} else {
+			s.initialIndex = ss.StateMachineIndex
+		}
+		s.index = ss.StateMachineIndex
+	*/
 	return s.sm.RecoverFromSnapshot(r, stopc)
 }
 

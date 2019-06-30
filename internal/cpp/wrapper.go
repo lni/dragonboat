@@ -347,8 +347,7 @@ func (ds *StateMachineWrapper) OnDiskStateMachine() bool {
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *StateMachineWrapper) RecoverFromSnapshot(index uint64,
-	reader *rsm.SnapshotReader,
+func (ds *StateMachineWrapper) RecoverFromSnapshot(reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
 	cf := C.GetCollectedFile()

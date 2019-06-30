@@ -208,7 +208,7 @@ func TestCppSnapshotWorks(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	reader.ValidateHeader(header)
-	err = ds2.RecoverFromSnapshot(0, reader, nil)
+	err = ds2.RecoverFromSnapshot(reader, nil)
 	if err != nil {
 		t.Errorf("failed to recover from snapshot %v", err)
 	}
