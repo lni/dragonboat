@@ -160,14 +160,15 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	defer serverCtx.Stop()
+	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
+		return err
+	}
 	logdb, err := getLogDB(*serverCtx, nhConfig)
 	if err != nil {
 		return err
 	}
 	defer logdb.Close()
-	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
-		return err
-	}
+
 	if err := serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
 		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name()); err != nil {
 		return err

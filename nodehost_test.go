@@ -2346,7 +2346,7 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 	singleFakeDiskNodeHostTest(t, tf, 0)
 }
 
-func TestImportedSnapshotIsAlwaysRestored(t *testing.T) {
+func testImportedSnapshotIsAlwaysRestored(t *testing.T, newDir bool) {
 	tf := func() {
 		rc := config.Config{
 			ClusterID:          1,
@@ -2437,6 +2437,9 @@ func TestImportedSnapshotIsAlwaysRestored(t *testing.T) {
 		dir := path.Join(sspath, snapshotDir)
 		members := make(map[uint64]string)
 		members[1] = nhc.RaftAddress
+		if newDir {
+			nhc.NodeHostDir = filepath.Join(nhc.NodeHostDir, "newdir")
+		}
 		if err := tools.ImportSnapshot(nhc, dir, members, 1); err != nil {
 			t.Fatalf("failed to import snapshot %v", err)
 		}
@@ -2465,6 +2468,11 @@ func TestImportedSnapshotIsAlwaysRestored(t *testing.T) {
 		makeProposals(rnh)
 	}
 	runNodeHostTest(t, tf)
+}
+
+func TestImportedSnapshotIsAlwaysRestored(t *testing.T) {
+	testImportedSnapshotIsAlwaysRestored(t, true)
+	testImportedSnapshotIsAlwaysRestored(t, false)
 }
 
 func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
