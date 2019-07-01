@@ -3139,7 +3139,6 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
-/*
 type testRaftEventListener struct {
 	received []raftio.LeaderInfo
 }
@@ -3234,7 +3233,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 				idx, rel.received[idx], expected[idx])
 		}
 	}
-}*/
+}
 
 func TestV2DataCanBeHandled(t *testing.T) {
 	if logdb.DefaultKVStoreTypeName != "rocksdb" {

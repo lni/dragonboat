@@ -17,10 +17,12 @@ package dragonboat
 import (
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -36,6 +38,10 @@ type raftEventListener struct {
 	nodeID              uint64
 	leaderID            *uint64
 	metrics             bool
+	workCh              chan struct{}
+	mu                  sync.Mutex
+	notifications       []raftio.LeaderInfo
+	stopper             *syncutil.Stopper
 	isLeader            *metrics.Gauge
 	campaignLaunched    *metrics.Counter
 	campaignSkipped     *metrics.Counter
@@ -50,11 +56,32 @@ func newRaftEventListener(clusterID uint64, nodeID uint64,
 	leaderID *uint64, useMetrics bool,
 	userListener raftio.IRaftEventListener) *raftEventListener {
 	el := &raftEventListener{
-		clusterID:    clusterID,
-		nodeID:       nodeID,
-		leaderID:     leaderID,
-		metrics:      useMetrics,
-		userListener: userListener,
+		clusterID:     clusterID,
+		nodeID:        nodeID,
+		leaderID:      leaderID,
+		metrics:       useMetrics,
+		userListener:  userListener,
+		stopper:       syncutil.NewStopper(),
+		workCh:        make(chan struct{}, 1),
+		notifications: make([]raftio.LeaderInfo, 0),
+	}
+	if userListener != nil {
+		el.stopper.RunWorker(func() {
+			for {
+				select {
+				case <-el.stopper.ShouldStop():
+					return
+				case <-el.workCh:
+					for {
+						v, ok := el.getLeaderInfo()
+						if !ok {
+							break
+						}
+						el.userListener.LeaderUpdated(v)
+					}
+				}
+			}
+		})
 	}
 	if useMetrics {
 		label := fmt.Sprintf(`{clusterid="%d",nodeid="%d"}`, clusterID, nodeID)
@@ -89,6 +116,10 @@ func newRaftEventListener(clusterID uint64, nodeID uint64,
 	return el
 }
 
+func (e *raftEventListener) stop() {
+	e.stopper.Stop()
+}
+
 func (e *raftEventListener) LeaderUpdated(info server.LeaderInfo) {
 	atomic.StoreUint64(e.leaderID, info.LeaderID)
 	if e.userListener != nil {
@@ -98,7 +129,11 @@ func (e *raftEventListener) LeaderUpdated(info server.LeaderInfo) {
 			Term:      info.Term,
 			LeaderID:  info.LeaderID,
 		}
-		go e.userListener.LeaderUpdated(ui)
+		e.addLeaderInfo(ui)
+		select {
+		case e.workCh <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -136,4 +171,21 @@ func (e *raftEventListener) ReadIndexDropped(info server.ReadIndexInfo) {
 	if e.metrics {
 		e.readIndexDropped.Add(1)
 	}
+}
+
+func (e *raftEventListener) addLeaderInfo(li raftio.LeaderInfo) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.notifications = append(e.notifications, li)
+}
+
+func (e *raftEventListener) getLeaderInfo() (raftio.LeaderInfo, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.notifications) > 0 {
+		v := e.notifications[0]
+		e.notifications = e.notifications[1:]
+		return v, true
+	}
+	return raftio.LeaderInfo{}, false
 }
