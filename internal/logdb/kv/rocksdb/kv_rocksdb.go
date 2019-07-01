@@ -129,7 +129,7 @@ func openRocksDB(dir string, wal string) (*KV, error) {
 		return nil, err
 	}
 	if len(wal) > 0 && !walExist {
-		if err := fileutil.Mkdir(wal); err != nil {
+		if err := fileutil.MkdirAll(wal); err != nil {
 			plog.Panicf("cannot create dir for RDB WAL (%v)", err)
 		}
 	}
@@ -138,7 +138,7 @@ func openRocksDB(dir string, wal string) (*KV, error) {
 		return nil, err
 	}
 	if !dirExist {
-		if err := fileutil.Mkdir(dir); err != nil {
+		if err := fileutil.MkdirAll(dir); err != nil {
 			plog.Panicf("cannot create dir (%v)", err)
 		}
 	}
