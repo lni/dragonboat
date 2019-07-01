@@ -243,8 +243,9 @@ type NodeHost struct {
 	execEngine       *execEngine
 	logdb            raftio.ILogDB
 	transport        transport.ITransport
-	raftEvents       raftio.IRaftEventListener
 	msgHandler       *messageHandler
+	liQueue          *leaderInfoQueue
+	userListener     raftio.IRaftEventListener
 	transportLatency *sample
 }
 
@@ -267,7 +268,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
-		raftEvents:       nhConfig.RaftEventListener,
+		userListener:     nhConfig.RaftEventListener,
 	}
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
@@ -300,6 +301,12 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
 	})
+	if nhConfig.RaftEventListener != nil {
+		nh.liQueue = newLeaderInfoQueue()
+		nh.stopper.RunWorker(func() {
+			nh.handleLeaderUpdatedEvents()
+		})
+	}
 	nh.logNodeHostDetails()
 	return nh, nil
 }
@@ -1445,7 +1452,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
 		nh.execEngine,
-		nh.raftEvents,
+		nh.liQueue,
 		getStreamConn,
 		handleSnapshotStatus,
 		nh.sendMessage,
@@ -1588,6 +1595,23 @@ func (nh *NodeHost) tickWorkerMain() {
 		return false
 	}
 	server.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
+}
+
+func (nh *NodeHost) handleLeaderUpdatedEvents() {
+	for {
+		select {
+		case <-nh.stopper.ShouldStop():
+			return
+		case <-nh.liQueue.workReady():
+			for {
+				v, ok := nh.liQueue.getLeaderInfo()
+				if !ok {
+					break
+				}
+				nh.userListener.LeaderUpdated(v)
+			}
+		}
+	}
 }
 
 func (nh *NodeHost) getCurrentClusters(index uint64,

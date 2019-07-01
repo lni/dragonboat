@@ -233,7 +233,10 @@ type NodeHostConfig struct {
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
 	EnableMetrics bool
-	// RaftEventListener is the listener to get notified for certain Raft events.
+	// RaftEventListener is the listener for Raft events exposed to user space.
+	// NodeHost uses a single dedicated goroutine to invoke all RaftEventListener
+	// methods one by one, CPU intensive or IO related procedures that can cause
+	// long delaies should be offloaded to worker goroutines managed by users.
 	RaftEventListener raftio.IRaftEventListener
 }
 

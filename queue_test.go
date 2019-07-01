@@ -20,6 +20,7 @@ package dragonboat
 import (
 	"testing"
 
+	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -267,5 +268,58 @@ func TestReadyClusterCanBeReturnedAndCleared(t *testing.T) {
 	r = rc.getReadyClusters()
 	if len(r) != 1 {
 		t.Errorf("cluster ready not set")
+	}
+}
+
+func TestLeaderInfoQueueCanBeCreated(t *testing.T) {
+	q := newLeaderInfoQueue()
+	if cap(q.workCh) != 1 {
+		t.Errorf("unexpected queue cap")
+	}
+	if len(q.workCh) != 0 {
+		t.Errorf("unexpected queue length")
+	}
+	if len(q.notifications) != 0 {
+		t.Errorf("unexpected notifications length")
+	}
+	ch := q.workReady()
+	if ch == nil {
+		t.Errorf("failed to return work ready chan")
+	}
+}
+
+func TestAddToLeaderInfoQueue(t *testing.T) {
+	q := newLeaderInfoQueue()
+	q.addLeaderInfo(raftio.LeaderInfo{})
+	q.addLeaderInfo(raftio.LeaderInfo{})
+	if len(q.workCh) != 1 {
+		t.Errorf("unexpected workCh len")
+	}
+	if len(q.notifications) != 2 {
+		t.Errorf("unexpected notifications len")
+	}
+}
+
+func TestGetFromLeaderInfoQueue(t *testing.T) {
+	q := newLeaderInfoQueue()
+	_, ok := q.getLeaderInfo()
+	if ok {
+		t.Errorf("unexpectedly returned leader info")
+	}
+	v1 := raftio.LeaderInfo{ClusterID: 101}
+	v2 := raftio.LeaderInfo{ClusterID: 2002}
+	q.addLeaderInfo(v1)
+	q.addLeaderInfo(v2)
+	rv1, ok1 := q.getLeaderInfo()
+	rv2, ok2 := q.getLeaderInfo()
+	_, ok3 := q.getLeaderInfo()
+	if !ok1 || rv1.ClusterID != v1.ClusterID {
+		t.Errorf("unexpected result")
+	}
+	if !ok2 || rv2.ClusterID != v2.ClusterID {
+		t.Errorf("unexpected result")
+	}
+	if ok3 {
+		t.Errorf("unexpectedly return third reader info rec")
 	}
 }

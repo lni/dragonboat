@@ -110,7 +110,7 @@ func newNode(raftAddress string,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
 	engine engine,
-	raftEventListener raftio.IRaftEventListener,
+	liQueue *leaderInfoQueue,
 	getStreamConnection func(uint64, uint64) pb.IChunkSink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
@@ -171,7 +171,7 @@ func newNode(raftAddress string,
 	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
-		config.NodeID, &rn.leaderID, useMetrics, raftEventListener)
+		config.NodeID, &rn.leaderID, useMetrics, liQueue)
 	new, err := rn.startRaft(config, lr, peers, initialMember)
 	if err != nil {
 		return nil, err
