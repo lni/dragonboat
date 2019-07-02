@@ -158,6 +158,17 @@ class NodeHostConfig
   std::string CertFile;
   // KeyFile is the path of the node key file.
   std::string KeyFile;
+  // MaxSendQueueSize is the maximum size in bytes of each send queue.
+  uint64_t MaxSendQueueSize;
+  // MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
+  uint64_t MaxReceiveQueueSize;
+	// EnableMetrics determines whether health metrics in Prometheus format should
+	// be enabled.
+  bool EnableMetrics;
+	// RaftEventListener is the listener for Raft events exposed to user space.
+	// NodeHost uses a single dedicated goroutine to invoke the listener thus
+	// functions with long delays are not suitable here.
+  std::function<void(LeaderInfo)> RaftEventListener;
 };
 
 // SnapshotOption is the options users can specify when requesting a snapshot
@@ -650,7 +661,7 @@ class NodeHost : public ManagedObject
   Status RemoveData(ClusterID clusterID, NodeID nodeID) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(NodeHost);
-  const NodeHostConfig &config_;
+  NodeHostConfig config_;
 };
 
 class IOServiceHandler;

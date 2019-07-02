@@ -26,6 +26,7 @@ typedef struct CPPRegularStateMachine CPPRegularStateMachine;
 typedef struct CPPConcurrentStateMachine CPPConcurrentStateMachine;
 typedef struct CPPOnDiskStateMachine CPPOnDiskStateMachine;
 typedef struct CollectedFiles CollectedFiles;
+typedef struct LeaderInfo LeaderInfo;
 
 
 void *LoadFactoryFromPlugin(char *soFilename, char *factoryName);
@@ -87,6 +88,8 @@ CollectedFiles *GetCollectedFile();
 void FreeCollectedFile(CollectedFiles *cf);
 void AddToCollectedFile(CollectedFiles *cf, uint64_t fileID,
   const char *path, size_t pathLen, const unsigned char *metadata, size_t len);
+
+void LeaderUpdated(void *listener, LeaderInfo info);
 
 #ifdef __cplusplus
 }

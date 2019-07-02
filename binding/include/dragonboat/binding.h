@@ -185,7 +185,19 @@ typedef struct NodeHostConfig
   DBString CAFile;
   DBString CertFile;
   DBString KeyFile;
+  uint64_t MaxSendQueueSize;
+  uint64_t MaxReceiveQueueSize;
+  Bool EnableMetrics;
+  void *RaftEventListener;
 } NodeHostConfig;
+
+struct LeaderInfo
+{
+  uint64_t ClusterID;
+  uint64_t NodeID;
+  uint64_t Term;
+  uint64_t LeaderID;
+};
 
 typedef struct
 {

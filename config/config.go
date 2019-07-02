@@ -236,7 +236,7 @@ type NodeHostConfig struct {
 	// RaftEventListener is the listener for Raft events exposed to user space.
 	// NodeHost uses a single dedicated goroutine to invoke all RaftEventListener
 	// methods one by one, CPU intensive or IO related procedures that can cause
-	// long delaies should be offloaded to worker goroutines managed by users.
+	// long delays should be offloaded to worker goroutines managed by users.
 	RaftEventListener raftio.IRaftEventListener
 }
 

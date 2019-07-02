@@ -301,3 +301,9 @@ void AddToCollectedFile(CollectedFiles *cf, uint64_t fileID,
   std::string p(path, pathLen);
   cf->cf->AddFile(fileID, p, metadata, len);
 }
+
+void LeaderUpdated(void *listener, LeaderInfo info)
+{
+  auto fn = reinterpret_cast<std::function<void(LeaderInfo)>*>(listener);
+  (*fn)(info);
+}

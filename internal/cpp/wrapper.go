@@ -46,6 +46,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -873,4 +874,26 @@ func (ds *OnDiskStateMachineWrapper) ensureNotDestroyed() {
 	if ds.Destroyed() {
 		panic("using a destroyed data store instance detected")
 	}
+}
+
+type RaftListenerWrapper struct {
+	listener unsafe.Pointer
+}
+
+func (lw *RaftListenerWrapper) LeaderUpdated(info raftio.LeaderInfo) {
+	cinfo := C.struct_LeaderInfo{
+		ClusterID: C.uint64_t(info.ClusterID),
+		NodeID:    C.uint64_t(info.NodeID),
+		Term:      C.uint64_t(info.Term),
+		LeaderID:  C.uint64_t(info.LeaderID),
+	}
+	C.LeaderUpdated(lw.listener, cinfo)
+}
+
+func RaftListenerWrapperFactory(
+	listener unsafe.Pointer) raftio.IRaftEventListener {
+	if listener == nil {
+		return nil
+	}
+	return &RaftListenerWrapper{listener: listener}
 }

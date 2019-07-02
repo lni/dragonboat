@@ -363,6 +363,7 @@ class NodeHostTest : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
   bool TwoNodeHostRequired();
+  bool EventListenerRequired();
 
   dragonboat::NodeHostConfig getTestNodeHostConfig();
   dragonboat::Config getTestConfig();
@@ -379,6 +380,7 @@ class NodeHostTest : public ::testing::Test {
   std::unique_ptr<dragonboat::NodeHost> nh2_;
   uint64_t gi_oid_;
   uint64_t managed_object_count_;
+  std::atomic_bool flag_;
 };
 
 const std::string
@@ -471,6 +473,17 @@ void NodeHostTest::SetUp()
   }
   zz::os::create_directory_recursive(ExportedSnapshotDir);
   auto nhConfig = getTestNodeHostConfig();
+  if (EventListenerRequired()) {
+    flag_ = false;
+    nhConfig.RaftEventListener = [this](LeaderInfo info) {
+      flag_ = true;
+      std::cout << "leader updated is reported: "
+        << "ClusterID " << info.ClusterID
+        << ", NodeID " << info.NodeID
+        << ", Term " << info.Term
+        << ", LeaderID " << info.LeaderID << std::endl;
+    };
+  }
   nh_.reset(new dragonboat::NodeHost(nhConfig));
   if (TwoNodeHostRequired()) {
     zz::fs::Path p2(NodeHostTestDir2);
@@ -524,6 +537,16 @@ bool NodeHostTest::TwoNodeHostRequired()
     name.find("ObserverCanReadIndex") != std::string::npos ||
     name.find("ObserverCanStaleRead") != std::string::npos ||
     name.find("SnapshotCanBeStreamed") != std::string::npos) {
+    return true;
+  }
+  return false;
+}
+
+bool NodeHostTest::EventListenerRequired()
+{
+  std::string
+    name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  if (name.find("LeaderUpdated") != std::string::npos) {
     return true;
   }
   return false;
@@ -705,6 +728,26 @@ TEST_F(NodeHostTest, LeaderTransferCanBeRequested)
   EXPECT_TRUE(s.OK());
   s = nh_->RequestLeaderTransfer(1, 1);
   EXPECT_TRUE(s.OK());
+}
+
+TEST_F(NodeHostTest, LeaderUpdatedIsReported)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  EXPECT_FALSE(flag_);
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  for (int i = 0; i < 10; i++) {
+    if (flag_) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  EXPECT_TRUE(flag_);
 }
 
 TEST_F(NodeHostTest, LeaderIDCanBeQueried)

@@ -82,7 +82,9 @@ NodeHostConfig::NodeHostConfig(std::string WALDir,
   std::string NodeHostDir) noexcept
   : DeploymentID(1), WALDir(WALDir), NodeHostDir(NodeHostDir),
   RTTMillisecond(200), RaftAddress("localhost:9050"),
-  MutualTLS(false), CAFile(""), CertFile(""), KeyFile("")
+  MutualTLS(false), CAFile(""), CertFile(""), KeyFile(""),
+  MaxSendQueueSize(0), MaxReceiveQueueSize(0), EnableMetrics(false),
+  RaftEventListener()
 {
 }
 
@@ -383,6 +385,15 @@ NodeHost::NodeHost(const NodeHostConfig &c) noexcept
   cfg.CAFile = toDBString(c.CAFile);
   cfg.CertFile = toDBString(c.CertFile);
   cfg.KeyFile = toDBString(c.KeyFile);
+  cfg.MaxSendQueueSize = c.MaxSendQueueSize;
+  cfg.MaxReceiveQueueSize = c.MaxReceiveQueueSize;
+  cfg.EnableMetrics = c.EnableMetrics == 1;
+  if (config_.RaftEventListener) {
+    cfg.RaftEventListener = const_cast<std::function<void(LeaderInfo)>*>(
+      &config_.RaftEventListener);
+  } else {
+    cfg.RaftEventListener = nullptr;
+  }
   oid_ = CNewNodeHost(cfg);
 }
 

@@ -21,9 +21,9 @@ application.
 */
 package main
 
-//#cgo CFLAGS: -I./include -O3
-//#cgo CXXFLAGS: -std=c++11 -O3 -I./include
-//#include "dragonboat/binding.h"
+// #cgo CFLAGS: -I./include -O3
+// #cgo CXXFLAGS: -std=c++11 -O3 -I./include
+// #include "dragonboat/binding.h"
 import "C"
 import (
 	"context"
@@ -228,15 +228,19 @@ func NewNodeHost(cfg C.NodeHostConfig) uint64 {
 		return v
 	}
 	c := &config.NodeHostConfig{
-		DeploymentID:   uint64(cfg.DeploymentID),
-		WALDir:         charArrayToString(cfg.WALDir.str, cfg.WALDir.len),
-		NodeHostDir:    charArrayToString(cfg.NodeHostDir.str, cfg.NodeHostDir.len),
-		RTTMillisecond: uint64(cfg.RTTMillisecond),
-		RaftAddress:    charArrayToString(cfg.RaftAddress.str, cfg.RaftAddress.len),
-		MutualTLS:      cboolToBool(cfg.MutualTLS),
-		CAFile:         charArrayToString(cfg.CAFile.str, cfg.CAFile.len),
-		CertFile:       charArrayToString(cfg.CertFile.str, cfg.CertFile.len),
-		KeyFile:        charArrayToString(cfg.KeyFile.str, cfg.KeyFile.len),
+		DeploymentID:        uint64(cfg.DeploymentID),
+		WALDir:              charArrayToString(cfg.WALDir.str, cfg.WALDir.len),
+		NodeHostDir:         charArrayToString(cfg.NodeHostDir.str, cfg.NodeHostDir.len),
+		RTTMillisecond:      uint64(cfg.RTTMillisecond),
+		RaftAddress:         charArrayToString(cfg.RaftAddress.str, cfg.RaftAddress.len),
+		MutualTLS:           cboolToBool(cfg.MutualTLS),
+		CAFile:              charArrayToString(cfg.CAFile.str, cfg.CAFile.len),
+		CertFile:            charArrayToString(cfg.CertFile.str, cfg.CertFile.len),
+		KeyFile:             charArrayToString(cfg.KeyFile.str, cfg.KeyFile.len),
+		MaxSendQueueSize:    uint64(cfg.MaxSendQueueSize),
+		MaxReceiveQueueSize: uint64(cfg.MaxReceiveQueueSize),
+		EnableMetrics:       cboolToBool(cfg.EnableMetrics),
+		RaftEventListener:   cpp.RaftListenerWrapperFactory(cfg.RaftEventListener),
 	}
 	nh, err := dragonboat.NewNodeHost(*c)
 	if err != nil {
@@ -439,7 +443,7 @@ func NodeHostPropose(oid uint64, timeout uint64, csoid uint64,
 	if err != nil {
 		return 0, getErrorCode(err)
 	}
-	//req.Release()
+	// req.Release()
 	return 0, getErrorCode(err)
 }
 
