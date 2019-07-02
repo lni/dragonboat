@@ -133,10 +133,12 @@ message Snapshot {
   optional uint64 term            = 5 [(gogoproto.nullable) = false];
   optional Membership membership  = 6 [(gogoproto.nullable) = false];
   repeated SnapshotFile files     = 7;
-  optional bytes Checksum         = 8;
-  optional bool Dummy             = 9 [(gogoproto.nullable) = false];
+  optional bytes checksum         = 8;
+  optional bool dummy             = 9  [(gogoproto.nullable) = false];
   optional uint64 cluster_id      = 10 [(gogoproto.nullable) = false];
   optional StateMachineType type  = 11 [(gogoproto.nullable) = false];
+  optional bool imported          = 12 [(gogoproto.nullable) = false];
+  optional uint64 on_disk_index   = 13 [(gogoproto.nullable) = false];
 }
 
 message Message {
@@ -209,4 +211,5 @@ message SnapshotChunk {
   optional bool has_file_info      = 17 [(gogoproto.nullable) = false];
   optional SnapshotFile file_info  = 18 [(gogoproto.nullable) = false];
   optional uint32 bin_ver          = 19 [(gogoproto.nullable) = false];
+  optional uint64 on_disk_index    = 20 [(gogoproto.nullable) = false];
 }

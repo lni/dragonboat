@@ -384,7 +384,7 @@ func (ds *RegularStateMachineWrapper) OnDiskStateMachine() bool {
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *RegularStateMachineWrapper) RecoverFromSnapshot(index uint64,
+func (ds *RegularStateMachineWrapper) RecoverFromSnapshot(
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
@@ -559,7 +559,7 @@ func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	return false, actualSz + rsm.SnapshotHeaderSize, nil
 }
 
-func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(index uint64,
+func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
@@ -620,12 +620,10 @@ func (ds *ConcurrentStateMachineWrapper) ensureNotDestroyed() {
 
 type OnDiskStateMachineWrapper struct {
 	rsm.OffloadedStatus
-	dataStore    *C.CPPOnDiskStateMachine
-	done         <-chan struct{}
-	mu           sync.RWMutex
-	opened       bool
-	initialIndex uint64
-	applied      uint64
+	dataStore *C.CPPOnDiskStateMachine
+	done      <-chan struct{}
+	mu        sync.RWMutex
+	opened    bool
 }
 
 func (ds *OnDiskStateMachineWrapper) destroy() {
@@ -648,8 +646,6 @@ func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	ds.initialIndex = applied
-	ds.applied = applied
 	return applied, nil
 }
 
@@ -673,14 +669,6 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 		panic("BatchedUpdate called when not opened")
 	}
 	ds.ensureNotDestroyed()
-	if entries[0].Index <= ds.initialIndex {
-		plog.Panicf("first entry index to apply %d, initial index %d",
-			entries[0].Index, ds.initialIndex)
-	}
-	if entries[0].Index <= ds.applied {
-		plog.Panicf("first entry index to apply %d, applied %d",
-			entries[0].Index, ds.applied)
-	}
 	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
 	defer C.free(eps)
 	for idx, ent := range entries {
@@ -699,7 +687,6 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
 		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
 	}
-	ds.applied = entries[len(entries)-1].Index
 	return entries, nil
 }
 
@@ -818,17 +805,13 @@ func (ds *OnDiskStateMachineWrapper) saveDummySnapshot(
 	return writer.GetPayloadSize(sz) + rsm.SnapshotHeaderSize, nil
 }
 
-func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(index uint64,
+func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
 	if !ds.opened {
 		panic("RecoverFromSnapshot called when not opened")
 	}
 	ds.ensureNotDestroyed()
-	if index <= ds.applied {
-		plog.Panicf("recover snapshot moving applied index backwards, %d, %d",
-			index, ds.applied)
-	}
 	readerOID := AddManagedObject(reader)
 	doneChOID := AddManagedObject(ds.done)
 	r := C.RecoverFromSnapshotDBOnDiskStateMachine(ds.dataStore,

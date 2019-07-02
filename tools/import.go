@@ -32,6 +32,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -43,6 +44,7 @@ var (
 )
 
 var (
+	unmanagedDeploymentID = transport.UnmanagedDeploymentID
 	// ErrInvalidMembers indicates that the provided member nodes is invalid.
 	ErrInvalidMembers = errors.New("invalid members")
 	// ErrPathNotExist indicates that the specified exported snapshot directory
@@ -127,6 +129,11 @@ var (
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
+	if nhConfig.DeploymentID == 0 {
+		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
+			unmanagedDeploymentID)
+		nhConfig.DeploymentID = unmanagedDeploymentID
+	}
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
 	}
@@ -153,21 +160,34 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	defer serverCtx.Stop()
+	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
+		return err
+	}
 	logdb, err := getLogDB(*serverCtx, nhConfig)
 	if err != nil {
 		return err
 	}
 	defer logdb.Close()
-	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
-		return err
-	}
+
 	if err := serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
 		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name()); err != nil {
 		return err
 	}
-	if err := serverCtx.CreateSnapshotDir(nhConfig.DeploymentID,
-		oldss.ClusterId, nodeID); err != nil {
+	ssDir := serverCtx.GetSnapshotDir(nhConfig.DeploymentID,
+		oldss.ClusterId, nodeID)
+	exist, err := fileutil.Exist(ssDir)
+	if err != nil {
 		return err
+	}
+	if exist {
+		if err := cleanupSnapshotDir(ssDir); err != nil {
+			return err
+		}
+	} else {
+		if err := serverCtx.CreateSnapshotDir(nhConfig.DeploymentID,
+			oldss.ClusterId, nodeID); err != nil {
+			return err
+		}
 	}
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
@@ -187,6 +207,28 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	return logdb.ImportSnapshot(ss, nodeID)
+}
+
+func cleanupSnapshotDir(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if !fi.IsDir() {
+			continue
+		}
+		name := []byte(fi.Name())
+		if server.SnapshotDirNameRe.Match(name) ||
+			server.GenSnapshotDirNameRe.Match(name) ||
+			server.RecvSnapshotDirNameRe.Match(name) {
+			ssdir := filepath.Join(dir, fi.Name())
+			if err := os.RemoveAll(ssdir); err != nil {
+				return err
+			}
+		}
+	}
+	return fileutil.SyncDir(dir)
 }
 
 func checkImportSettings(nhConfig config.NodeHostConfig,
@@ -309,6 +351,7 @@ func getProcessedSnapshotRecord(dstDir string,
 		Files:     old.Files,
 		Type:      old.Type,
 		ClusterId: old.ClusterId,
+		Imported:  true,
 	}
 	for nid := range old.Membership.Addresses {
 		_, ok := members[nid]

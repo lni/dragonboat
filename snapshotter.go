@@ -107,21 +107,21 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		return nil, env, err
 	}
 	ss = &pb.Snapshot{
-		ClusterId:  s.clusterID,
-		Filepath:   env.GetFilepath(),
-		FileSize:   sz,
-		Membership: meta.Membership,
-		Index:      meta.Index,
-		Term:       meta.Term,
-		Files:      fs,
-		Dummy:      dummy,
-		Type:       meta.Type,
+		ClusterId:   s.clusterID,
+		Filepath:    env.GetFilepath(),
+		FileSize:    sz,
+		Membership:  meta.Membership,
+		Index:       meta.Index,
+		Term:        meta.Term,
+		OnDiskIndex: meta.OnDiskIndex,
+		Files:       fs,
+		Dummy:       dummy,
+		Type:        meta.Type,
 	}
 	return ss, env, nil
 }
 
-func (s *snapshotter) Load(index uint64,
-	sessions rsm.ILoadableSessions,
+func (s *snapshotter) Load(sessions rsm.ILoadableSessions,
 	asm rsm.ILoadableSM, fp string, fs []sm.SnapshotFile) (err error) {
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
@@ -141,7 +141,7 @@ func (s *snapshotter) Load(index uint64,
 	if err := sessions.LoadSessions(reader, v); err != nil {
 		return err
 	}
-	if err := asm.RecoverFromSnapshot(index, reader, fs); err != nil {
+	if err := asm.RecoverFromSnapshot(reader, fs); err != nil {
 		return err
 	}
 	reader.ValidatePayload(header)

@@ -224,8 +224,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 	return ss, env, nil
 }
 
-func (s *testSnapshotter) Load(index uint64,
-	loadableSessions ILoadableSessions,
+func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 	loadableSM ILoadableSM,
 	fp string, fs []sm.SnapshotFile) error {
 	reader, err := NewSnapshotReader(fp)
@@ -244,7 +243,7 @@ func (s *testSnapshotter) Load(index uint64,
 	if err := loadableSessions.LoadSessions(reader, v); err != nil {
 		return err
 	}
-	if err := loadableSM.RecoverFromSnapshot(index, reader, fs); err != nil {
+	if err := loadableSM.RecoverFromSnapshot(reader, fs); err != nil {
 		return err
 	}
 	reader.ValidatePayload(header)
@@ -1656,10 +1655,10 @@ func TestNonUpdateEntryIsNotBatched(t *testing.T) {
 
 func TestEntryAppliedInDiskSM(t *testing.T) {
 	tests := []struct {
-		onDiskSM    bool
-		diskSMIndex uint64
-		index       uint64
-		result      bool
+		onDiskSM        bool
+		onDiskInitIndex uint64
+		index           uint64
+		result          bool
 	}{
 		{true, 100, 50, true},
 		{true, 100, 100, true},
@@ -1669,8 +1668,8 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 		{false, 100, 200, false},
 	}
 	for idx, tt := range tests {
-		sm := StateMachine{onDiskSM: tt.onDiskSM, diskSMIndex: tt.diskSMIndex}
-		result := sm.entryAppliedInDiskSM(tt.index)
+		sm := StateMachine{onDiskSM: tt.onDiskSM, onDiskInitIndex: tt.onDiskInitIndex}
+		result := sm.entryInInitDiskSM(tt.index)
 		if result != tt.result {
 			t.Errorf("%d failed", idx)
 		}
@@ -1679,40 +1678,40 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 
 func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
-		onDisk      bool
-		dummy       bool
-		shrunk      bool
-		init        bool
-		index       uint64
-		diskSMIndex uint64
-		required    bool
+		dummy           bool
+		shrunk          bool
+		init            bool
+		onDiskIndex     uint64
+		onDiskInitIndex uint64
+		required        bool
 	}{
-		{true, true, true, true, 100, 100, false},
-		{true, true, true, true, 200, 100, false},
-		{true, true, true, true, 100, 200, false},
-		{true, true, true, false, 100, 100, false},
-		{true, true, true, false, 200, 100, false},
-		{true, true, true, false, 100, 200, false},
-		{true, true, false, true, 100, 100, false},
-		{true, true, false, true, 200, 100, false},
-		{true, true, false, true, 100, 200, false},
-		{true, true, false, false, 100, 100, false},
-		{true, true, false, false, 200, 100, false},
-		{true, true, false, false, 100, 200, false},
+		{true, true, true, 100, 100, false},
+		{true, true, true, 200, 100, false},
+		{true, true, true, 100, 200, false},
+		{true, true, false, 100, 100, false},
+		{true, true, false, 200, 100, false},
+		{true, true, false, 100, 200, false},
+		{true, false, true, 100, 100, false},
+		{true, false, true, 200, 100, false},
+		{true, false, true, 100, 200, false},
+		{true, false, false, 100, 100, false},
+		{true, false, false, 200, 100, false},
+		{true, false, false, 100, 200, false},
 
-		{true, false, true, true, 100, 100, false},
-		{true, false, true, true, 200, 100, false},
-		{true, false, true, true, 100, 200, false},
-		{true, false, true, false, 100, 100, false},
-		{true, false, true, false, 200, 100, false},
-		{true, false, true, false, 100, 200, false},
-		{true, false, false, true, 100, 100, false},
-		{true, false, false, true, 200, 100, true},
-		{true, false, false, true, 100, 200, false},
-		{true, false, false, false, 100, 100, true},
-		{true, false, false, false, 200, 100, true},
-		{true, false, false, false, 100, 200, true},
+		{false, true, true, 100, 100, false},
+		{false, true, true, 200, 100, false},
+		{false, true, true, 100, 200, false},
+		{false, true, false, 100, 100, false},
+		{false, true, false, 200, 100, false},
+		{false, true, false, 100, 200, false},
+		{false, false, true, 100, 100, false},
+		{false, false, true, 200, 100, true},
+		{false, false, true, 100, 200, false},
+		{false, false, false, 100, 100, false},
+		{false, false, false, 200, 100, true},
+		{false, false, false, 100, 200, false},
 	}
+	ssIndex := uint64(200)
 	for idx, tt := range tests {
 		func() {
 			defer os.RemoveAll(testSnapshotterDir)
@@ -1722,11 +1721,12 @@ func TestRecoverSMRequired(t *testing.T) {
 			}
 			snapshotter := newTestSnapshotter()
 			sm := &StateMachine{
-				snapshotter: snapshotter,
-				onDiskSM:    tt.onDisk,
-				diskSMIndex: tt.diskSMIndex,
+				snapshotter:     snapshotter,
+				onDiskSM:        true,
+				onDiskInitIndex: tt.onDiskInitIndex,
+				onDiskIndex:     tt.onDiskInitIndex,
 			}
-			fp := snapshotter.GetFilePath(tt.index)
+			fp := snapshotter.GetFilePath(ssIndex)
 			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
@@ -1750,16 +1750,17 @@ func TestRecoverSMRequired(t *testing.T) {
 				t.Fatalf("%v", err)
 			}
 			if tt.shrunk {
-				if err := ShrinkSnapshot(fp, snapshotter.GetFilePath(tt.index)); err != nil {
+				if err := ShrinkSnapshot(fp, snapshotter.GetFilePath(ssIndex)); err != nil {
 					t.Fatalf("failed to shrink %v", err)
 				}
 			}
 			ss := pb.Snapshot{
-				Dummy: tt.dummy,
-				Index: tt.index,
+				Dummy:       tt.dummy,
+				Index:       ssIndex,
+				OnDiskIndex: tt.onDiskIndex,
 			}
 			defer func() {
-				if tt.onDisk && !tt.dummy && !tt.init && tt.shrunk {
+				if !tt.dummy && !tt.init && tt.shrunk {
 					if r := recover(); r == nil {
 						t.Fatalf("not panic")
 					}
@@ -1774,10 +1775,10 @@ func TestRecoverSMRequired(t *testing.T) {
 
 func TestReadyToStreamSnapshot(t *testing.T) {
 	tests := []struct {
-		onDisk      bool
-		index       uint64
-		diskSMIndex uint64
-		ready       bool
+		onDisk          bool
+		index           uint64
+		onDiskInitIndex uint64
+		ready           bool
 	}{
 		{true, 100, 100, true},
 		{true, 200, 100, true},
@@ -1788,9 +1789,9 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		sm := &StateMachine{
-			onDiskSM:    tt.onDisk,
-			index:       tt.index,
-			diskSMIndex: tt.diskSMIndex,
+			onDiskSM:        tt.onDisk,
+			index:           tt.index,
+			onDiskInitIndex: tt.onDiskInitIndex,
 		}
 		if result := sm.ReadyToStreamSnapshot(); result != tt.ready {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
@@ -1837,10 +1838,10 @@ func TestUpdateLastApplied(t *testing.T) {
 
 func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
 	sm := &StateMachine{
-		onDiskSM:    true,
-		diskSMIndex: 100,
-		index:       90,
-		term:        5,
+		onDiskSM:        true,
+		onDiskInitIndex: 100,
+		index:           90,
+		term:            5,
 	}
 	ent := pb.Entry{
 		ClientID: 100,
@@ -1885,7 +1886,7 @@ func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
 	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
 	return false, 0, nil
 }
-func (t *testManagedStateMachine) RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error {
+func (t *testManagedStateMachine) RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error {
 	return nil
 }
 func (t *testManagedStateMachine) StreamSnapshot(interface{}, *ChunkWriter) error { return nil }
@@ -1922,7 +1923,7 @@ func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 	if index != 10 {
 		t.Errorf("unexpectedly index %d", index)
 	}
-	if sm.diskSMIndex != 10 {
+	if sm.onDiskInitIndex != 10 {
 		t.Errorf("disk sm index not recorded")
 	}
 }
@@ -1988,12 +1989,12 @@ func TestStreamSnapshot(t *testing.T) {
 
 func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 	tests := []struct {
-		diskSMIndex  uint64
-		index        uint64
-		first        uint64
-		last         uint64
-		firstApplied uint64
-		lastApplied  uint64
+		onDiskInitIndex uint64
+		index           uint64
+		first           uint64
+		last            uint64
+		firstApplied    uint64
+		lastApplied     uint64
 	}{
 		{100, 50, 51, 60, 0, 0},
 		{100, 50, 51, 100, 0, 0},
@@ -2010,12 +2011,12 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		msm := &testManagedStateMachine{}
 		np := newTestNodeProxy()
 		sm := &StateMachine{
-			onDiskSM:    true,
-			diskSMIndex: tt.diskSMIndex,
-			index:       tt.index,
-			term:        100,
-			sm:          msm,
-			node:        np,
+			onDiskSM:        true,
+			onDiskInitIndex: tt.onDiskInitIndex,
+			index:           tt.index,
+			term:            100,
+			sm:              msm,
+			node:            np,
 		}
 		if err := sm.handleBatch(input, ents); err != nil {
 			t.Fatalf("handle batched entries failed %v", err)
@@ -2046,12 +2047,12 @@ func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
 	msm := &testManagedStateMachine{corruptIndex: true}
 	np := newTestNodeProxy()
 	sm := &StateMachine{
-		onDiskSM:    true,
-		diskSMIndex: 0,
-		index:       0,
-		term:        100,
-		sm:          msm,
-		node:        np,
+		onDiskSM:        true,
+		onDiskInitIndex: 0,
+		index:           0,
+		term:            100,
+		sm:              msm,
+		node:            np,
 	}
 	input := make([]pb.Entry, 0)
 	for i := uint64(1); i <= 10; i++ {
@@ -2073,13 +2074,13 @@ func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
 	msm := &testManagedStateMachine{}
 	np := newTestNodeProxy()
 	sm := &StateMachine{
-		onDiskSM:    true,
-		diskSMIndex: 0,
-		index:       0,
-		term:        0,
-		sm:          msm,
-		taskQ:       NewTaskQueue(),
-		node:        np,
+		onDiskSM:        true,
+		onDiskInitIndex: 0,
+		index:           0,
+		term:            0,
+		sm:              msm,
+		taskQ:           NewTaskQueue(),
+		node:            np,
 	}
 	rec, err := sm.Handle(batch, ents)
 	if rec.IsSnapshotTask() {

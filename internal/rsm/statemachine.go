@@ -80,14 +80,15 @@ func (sr *SnapshotRequest) IsExportedSnapshot() bool {
 
 // SnapshotMeta is the metadata of a snapshot.
 type SnapshotMeta struct {
-	From       uint64
-	Index      uint64
-	Term       uint64
-	Request    SnapshotRequest
-	Membership pb.Membership
-	Type       pb.StateMachineType
-	Session    *bytes.Buffer
-	Ctx        interface{}
+	From        uint64
+	Index       uint64
+	Term        uint64
+	OnDiskIndex uint64 // applied index of IOnDiskStateMachine
+	Request     SnapshotRequest
+	Membership  pb.Membership
+	Type        pb.StateMachineType
+	Session     *bytes.Buffer
+	Ctx         interface{}
 }
 
 // Task describes a task that need to be handled by StateMachine.
@@ -141,27 +142,28 @@ type ISnapshotter interface {
 	GetFilePath(uint64) string
 	Stream(IStreamable, *SnapshotMeta, pb.IChunkSink) error
 	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
-	Load(uint64, ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
+	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
 }
 
 // StateMachine is a manager class that manages application state
 // machine
 type StateMachine struct {
-	mu            sync.RWMutex
-	snapshotter   ISnapshotter
-	node          INodeProxy
-	sm            IManagedStateMachine
-	sessions      *SessionManager
-	members       *membership
-	index         uint64
-	term          uint64
-	snapshotIndex uint64
-	diskSMIndex   uint64
-	taskQ         *TaskQueue
-	onDiskSM      bool
-	aborted       bool
-	syncedIndex   struct {
+	mu              sync.RWMutex
+	snapshotter     ISnapshotter
+	node            INodeProxy
+	sm              IManagedStateMachine
+	sessions        *SessionManager
+	members         *membership
+	index           uint64
+	term            uint64
+	snapshotIndex   uint64
+	onDiskInitIndex uint64
+	onDiskIndex     uint64
+	taskQ           *TaskQueue
+	onDiskSM        bool
+	aborted         bool
+	syncedIndex     struct {
 		sync.Mutex
 		index uint64
 	}
@@ -209,7 +211,8 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	plog.Infof("sm.RecoverFromSnapshot called on %s, %+v", s.id(), ss)
+	plog.Infof("sm.RecoverFromSnapshot called on %s, idx %d, on disk idx %d",
+		s.id(), ss.Index, ss.OnDiskIndex)
 	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
 		return idx, err
 	}
@@ -262,13 +265,16 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 		if shrunk {
 			return false
 		}
-		return ss.Index > s.diskSMIndex
+		if ss.Imported {
+			return true
+		}
+		return ss.OnDiskIndex > s.onDiskInitIndex
 	}
-	return true
+	return ss.OnDiskIndex > s.onDiskIndex
 }
 
 func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
-	initial bool) (uint64, error) {
+	init bool) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index := ss.Index
@@ -278,12 +284,13 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 	if s.aborted {
 		return 0, sm.ErrSnapshotStopped
 	}
-	if s.recoverSMRequired(ss, initial) {
+	if s.recoverSMRequired(ss, init) {
 		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
-			s.id(), ss.Term, index, snapshotInfo(ss), initial)
+			s.id(), ss.Term, index, snapshotInfo(ss), init)
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
-		if err := s.snapshotter.Load(index, s.sessions, s.sm, fn, fs); err != nil {
+		s.canRecoverOnDiskSnapshot(ss, init)
+		if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
 			plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
@@ -292,14 +299,42 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 			}
 			return 0, ErrRestoreSnapshot
 		}
+		s.recoverFromOnDiskSnapshot(ss, init)
 	} else {
 		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
-			s.id(), index, s.diskSMIndex)
+			s.id(), index, s.onDiskInitIndex)
 	}
 	s.index = index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
 	return 0, nil
+}
+
+func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
+	if !s.OnDiskStateMachine() {
+		return
+	}
+	if ss.Imported && init {
+		return
+	}
+	if ss.OnDiskIndex <= s.onDiskInitIndex {
+		plog.Panicf("ss.OnDiskIndex (%d) <= s.onDiskInitIndex (%d)",
+			ss.OnDiskIndex, s.onDiskInitIndex)
+	}
+	if ss.OnDiskIndex <= s.onDiskIndex {
+		plog.Panicf("ss.OnDiskInit (%d) <= s.onDiskIndex (%d)",
+			ss.OnDiskIndex, s.onDiskIndex)
+	}
+}
+
+func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
+	if !s.OnDiskStateMachine() {
+		return
+	}
+	s.onDiskIndex = ss.OnDiskIndex
+	if ss.Imported && init {
+		s.onDiskInitIndex = ss.OnDiskIndex
+	}
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
@@ -312,7 +347,7 @@ func (s *StateMachine) ReadyToStreamSnapshot() bool {
 	if !s.OnDiskStateMachine() {
 		return true
 	}
-	return s.GetLastApplied() >= s.diskSMIndex
+	return s.GetLastApplied() >= s.onDiskInitIndex
 }
 
 // OpenOnDiskStateMachine opens the on disk state machine.
@@ -320,15 +355,15 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
-	plog.Infof("%s opened disk state machine, index %d, err %v",
-		s.id(), index, err)
+	plog.Infof("%s opened disk SM, index %d, err %v", s.id(), index, err)
 	if err != nil {
 		if err == sm.ErrOpenStopped {
 			s.aborted = true
 		}
 		return 0, err
 	}
-	s.diskSMIndex = index
+	s.onDiskInitIndex = index
+	s.onDiskIndex = index
 	return index, nil
 }
 
@@ -551,14 +586,15 @@ func (s *StateMachine) getSnapshotMeta(ctx interface{},
 		plog.Panicf("%s has empty membership", s.id())
 	}
 	meta := &SnapshotMeta{
-		From:       s.node.NodeID(),
-		Ctx:        ctx,
-		Index:      s.index,
-		Term:       s.term,
-		Request:    req,
-		Session:    bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap)),
-		Membership: s.members.getMembership(),
-		Type:       s.sm.StateMachineType(),
+		From:        s.node.NodeID(),
+		Ctx:         ctx,
+		Index:       s.index,
+		Term:        s.term,
+		OnDiskIndex: s.onDiskIndex,
+		Request:     req,
+		Session:     bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap)),
+		Membership:  s.members.getMembership(),
+		Type:        s.sm.StateMachineType(),
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
 		s.id(), meta.Index, meta.Membership.Addresses)
@@ -584,7 +620,7 @@ func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
 	s.term = term
 }
 
-func (s *StateMachine) checkSnapshotStatus() error {
+func (s *StateMachine) checkSnapshotStatus(req SnapshotRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
@@ -592,7 +628,8 @@ func (s *StateMachine) checkSnapshotStatus() error {
 		panic("s.index < s.snapshotIndex")
 	}
 	if !s.OnDiskStateMachine() {
-		if s.index > 0 && s.index == s.snapshotIndex {
+		if !req.IsExportedSnapshot() &&
+			s.index > 0 && s.index == s.snapshotIndex {
 			return raft.ErrSnapshotOutOfDate
 		}
 	}
@@ -656,7 +693,7 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 }
 
 func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta, error) {
-	if err := s.checkSnapshotStatus(); err != nil {
+	if err := s.checkSnapshotStatus(req); err != nil {
 		return nil, err
 	}
 	var err error
@@ -737,11 +774,29 @@ func isEmptyResult(result sm.Result) bool {
 	return result.Data == nil && result.Value == 0
 }
 
-func (s *StateMachine) entryAppliedInDiskSM(index uint64) bool {
+func (s *StateMachine) entryInInitDiskSM(index uint64) bool {
 	if !s.OnDiskStateMachine() {
 		return false
 	}
-	return index <= s.diskSMIndex
+	return index <= s.onDiskInitIndex
+}
+
+func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
+	if !s.OnDiskStateMachine() {
+		return
+	}
+	if firstIndex > lastIndex {
+		panic("firstIndex > lastIndex")
+	}
+	if firstIndex <= s.onDiskInitIndex {
+		plog.Panicf("last entry index to apply %d, initial on disk index %d",
+			firstIndex, s.onDiskInitIndex)
+	}
+	if firstIndex <= s.onDiskIndex {
+		plog.Panicf("last entry index to apply %d, on disk index %d",
+			firstIndex, s.onDiskIndex)
+	}
+	s.onDiskIndex = lastIndex
 }
 
 func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
@@ -765,7 +820,7 @@ func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
 				smResult := s.handleUnregisterSession(ent)
 				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
 			} else {
-				if !s.entryAppliedInDiskSM(ent.Index) {
+				if !s.entryInInitDiskSM(ent.Index) {
 					smResult, ignored, rejected, err := s.handleUpdate(ent)
 					if err != nil {
 						return err
@@ -805,7 +860,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	defer s.mu.Unlock()
 	skipped := 0
 	for _, ent := range input {
-		if !s.entryAppliedInDiskSM(ent.Index) {
+		if !s.entryInInitDiskSM(ent.Index) {
 			ents = append(ents, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
 		} else {
 			skipped++
@@ -813,6 +868,9 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		s.updateLastApplied(ent.Index, ent.Term)
 	}
 	if len(ents) > 0 {
+		firstIndex := ents[0].Index
+		lastIndex := ents[len(ents)-1].Index
+		s.updateOnDiskIndex(firstIndex, lastIndex)
 		results, err := s.sm.BatchedUpdate(ents)
 		if err != nil {
 			return err
@@ -913,6 +971,7 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
+	s.updateOnDiskIndex(ent.Index, ent.Index)
 	result, err := s.sm.Update(session, ent)
 	if err != nil {
 		return sm.Result{}, false, false, err

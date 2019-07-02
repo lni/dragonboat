@@ -17,6 +17,7 @@ package dragonboat
 import (
 	"sync"
 
+	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -207,4 +208,45 @@ func (r *readyCluster) getReadyClusters() map[uint64]struct{} {
 	r.ready = nm
 	r.mu.Unlock()
 	return v
+}
+
+type leaderInfoQueue struct {
+	mu            sync.Mutex
+	notifications []raftio.LeaderInfo
+	workCh        chan struct{}
+}
+
+func newLeaderInfoQueue() *leaderInfoQueue {
+	q := &leaderInfoQueue{
+		workCh:        make(chan struct{}, 1),
+		notifications: make([]raftio.LeaderInfo, 0),
+	}
+	return q
+}
+
+func (li *leaderInfoQueue) workReady() chan struct{} {
+	return li.workCh
+}
+
+func (li *leaderInfoQueue) addLeaderInfo(info raftio.LeaderInfo) {
+	func() {
+		li.mu.Lock()
+		defer li.mu.Unlock()
+		li.notifications = append(li.notifications, info)
+	}()
+	select {
+	case li.workCh <- struct{}{}:
+	default:
+	}
+}
+
+func (li *leaderInfoQueue) getLeaderInfo() (raftio.LeaderInfo, bool) {
+	li.mu.Lock()
+	defer li.mu.Unlock()
+	if len(li.notifications) > 0 {
+		v := li.notifications[0]
+		li.notifications = li.notifications[1:]
+		return v, true
+	}
+	return raftio.LeaderInfo{}, false
 }

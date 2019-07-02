@@ -42,7 +42,7 @@ type ISavable interface {
 // ILoadableSM is the interface for types that can have its state restored from
 // snapshots.
 type ILoadableSM interface {
-	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
+	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
 }
 
 // ILoadableSessions is the interface for types that can load client session
@@ -63,7 +63,7 @@ type IManagedStateMachine interface {
 	PrepareSnapshot() (interface{}, error)
 	SaveSnapshot(*SnapshotMeta,
 		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
-	RecoverFromSnapshot(uint64, *SnapshotReader, []sm.SnapshotFile) error
+	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, *ChunkWriter) error
 	Offloaded(From)
 	Loaded(From)
@@ -293,7 +293,7 @@ func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *NativeStateMachine) RecoverFromSnapshot(index uint64,
-	reader *SnapshotReader, files []sm.SnapshotFile) error {
-	return ds.sm.RecoverFromSnapshot(index, reader, files, ds.done)
+func (ds *NativeStateMachine) RecoverFromSnapshot(reader *SnapshotReader,
+	files []sm.SnapshotFile) error {
+	return ds.sm.RecoverFromSnapshot(reader, files, ds.done)
 }

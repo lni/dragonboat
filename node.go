@@ -110,7 +110,7 @@ func newNode(raftAddress string,
 	dataStore rsm.IManagedStateMachine,
 	smType pb.StateMachineType,
 	engine engine,
-	raftEventListener raftio.IRaftEventListener,
+	liQueue *leaderInfoQueue,
 	getStreamConnection func(uint64, uint64) pb.IChunkSink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
@@ -171,7 +171,7 @@ func newNode(raftAddress string,
 	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
-		config.NodeID, &rn.leaderID, useMetrics, raftEventListener)
+		config.NodeID, &rn.leaderID, useMetrics, liQueue)
 	new, err := rn.startRaft(config, lr, peers, initialMember)
 	if err != nil {
 		return nil, err
@@ -281,6 +281,7 @@ func (n *node) startRaft(cc config.Config,
 
 func (n *node) close() {
 	n.requestRemoval()
+	n.raftEvents.stop()
 	n.pendingReadIndexes.close()
 	n.pendingProposals.close()
 	n.pendingConfigChange.close()
@@ -571,7 +572,8 @@ func (n *node) saveSnapshot(rec rsm.Task) error {
 func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	if n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
+	if !req.IsExportedSnapshot() &&
+		n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
 		// a snapshot has been pushed to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
 		return 0, nil
@@ -1008,7 +1010,8 @@ func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
 		return false
 	}
 	si := n.ss.getReqSnapshotIndex()
-	if lastApplied == si {
+	plog.Infof("req: %+v", req)
+	if !req.IsExportedSnapshot() && lastApplied == si {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}

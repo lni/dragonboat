@@ -156,6 +156,7 @@ func (cw *ChunkWriter) getChunk() pb.SnapshotChunk {
 		FileChunkId: cw.chunkID,
 		Index:       cw.meta.Index,
 		Term:        cw.meta.Term,
+		OnDiskIndex: cw.meta.OnDiskIndex,
 		Membership:  cw.meta.Membership,
 		BinVer:      raftio.RPCBinVersion,
 		Filepath:    server.GetSnapshotFilename(cw.meta.Index),
