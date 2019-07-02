@@ -162,12 +162,13 @@ class NodeHostConfig
   uint64_t MaxSendQueueSize;
   // MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
   uint64_t MaxReceiveQueueSize;
-	// EnableMetrics determines whether health metrics in Prometheus format should
-	// be enabled.
+  // EnableMetrics determines whether health metrics in Prometheus format should
+  // be enabled.
   bool EnableMetrics;
-	// RaftEventListener is the listener for Raft events exposed to user space.
-	// NodeHost uses a single dedicated goroutine to invoke the listener thus
-	// functions with long delays are not suitable here.
+  // RaftEventListener is the listener for Raft events exposed to user space.
+  // NodeHost uses a single dedicated goroutine to invoke all RaftEventListener
+  // methods one by one, CPU intensive or IO related procedures that can cause
+  // long delays should be offloaded to worker goroutines managed by users.
   std::function<void(LeaderInfo)> RaftEventListener;
 };
 
