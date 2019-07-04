@@ -228,6 +228,7 @@ func (r *rdb) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	r.recordSnapshot(wb, pb.Update{
 		ClusterID: ss.ClusterId, NodeID: nodeID, Snapshot: ss,
 	})
+	r.recordMaxIndex(wb, ss.ClusterId, nodeID, ss.Index, nil)
 	return r.kvs.CommitWriteBatch(wb)
 }
 
@@ -263,10 +264,20 @@ func (r *rdb) recordSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 
 func (r *rdb) recordMaxIndex(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, index uint64, ctx raftio.IContext) {
-	data := ctx.GetValueBuffer(8)
+	var data []byte
+	var k raftio.IReusableKey
+	if ctx != nil {
+		data = ctx.GetValueBuffer(8)
+	} else {
+		data = make([]byte, 8)
+	}
 	binary.BigEndian.PutUint64(data, index)
 	data = data[:8]
-	k := ctx.GetKey()
+	if ctx != nil {
+		k = ctx.GetKey()
+	} else {
+		k = newKey(maxKeySize, nil)
+	}
 	k.SetMaxIndexKey(clusterID, nodeID)
 	wb.Put(k.Key(), data)
 }

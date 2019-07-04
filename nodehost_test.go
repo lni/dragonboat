@@ -51,6 +51,7 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/dragonboat/v3/tools"
+	"github.com/lni/dragonboat/v3/tools/upgrade310"
 )
 
 var ovs = logdb.RDBContextValueSize
@@ -2282,12 +2283,42 @@ func TestSnapshotCanBeExported(t *testing.T) {
 		if !exist {
 			t.Errorf("snapshot metadata not saved")
 		}
+		var ss pb.Snapshot
+		if err := fileutil.GetFlagFileContent(filepath.Join(sspath, snapshotDir),
+			"snapshot.metadata", &ss); err != nil {
+			t.Fatalf("failed to get snapshot from its metadata file")
+		}
+		if ss.OnDiskIndex != 0 {
+			t.Errorf("on disk index is not 0")
+		}
+		if ss.Imported {
+			t.Errorf("incorrectly recorded as imported")
+		}
+		if ss.Type != pb.RegularStateMachine {
+			t.Errorf("incorrect type")
+		}
 	}
 	singleNodeHostTest(t, tf)
 }
 
 func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost, initialApplied uint64) {
+		session := nh.GetNoOPSession(1)
+		proposed := false
+		for i := 0; i < 16; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err == nil {
+				proposed = true
+				break
+			} else {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+		if !proposed {
+			t.Fatalf("failed to make proposal")
+		}
 		sspath := "exported_snapshot_safe_to_delete"
 		os.RemoveAll(sspath)
 		if err := os.MkdirAll(sspath, 0755); err != nil {
@@ -2341,6 +2372,20 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		}
 		if shrunk {
 			t.Errorf("exported snapshot is considered as shrunk")
+		}
+		var ss pb.Snapshot
+		if err := fileutil.GetFlagFileContent(filepath.Join(sspath, snapshotDir),
+			"snapshot.metadata", &ss); err != nil {
+			t.Fatalf("failed to get snapshot from its metadata file")
+		}
+		if ss.OnDiskIndex == 0 {
+			t.Errorf("on disk index is not recorded")
+		}
+		if ss.Imported {
+			t.Errorf("incorrectly recorded as imported")
+		}
+		if ss.Type != pb.OnDiskStateMachine {
+			t.Errorf("incorrect type")
 		}
 	}
 	singleFakeDiskNodeHostTest(t, tf, 0)
@@ -2443,29 +2488,45 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T, newDir bool) {
 		if err := tools.ImportSnapshot(nhc, dir, members, 1); err != nil {
 			t.Fatalf("failed to import snapshot %v", err)
 		}
-		rnh, err := NewNodeHost(nhc)
+		ok, err := upgrade310.CanUpgradeToV310(nhc)
 		if err != nil {
-			t.Fatalf("failed to create node host %v", err)
+			t.Errorf("failed to check whether upgrade is possible")
 		}
-		defer rnh.Stop()
-		rnewSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-			return tests.NewSimDiskSM(applied)
+		if ok {
+			t.Errorf("should not be considered as ok to upgrade")
 		}
-		if err := rnh.StartOnDiskCluster(nil, false, rnewSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, rnh, 1)
-		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
-		rv, err = rnh.SyncRead(ctx, 1, nil)
-		cancel()
+		func() {
+			rnh, err := NewNodeHost(nhc)
+			if err != nil {
+				t.Fatalf("failed to create node host %v", err)
+			}
+			defer rnh.Stop()
+			rnewSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+				return tests.NewSimDiskSM(applied)
+			}
+			if err := rnh.StartOnDiskCluster(nil, false, rnewSM, rc); err != nil {
+				t.Fatalf("failed to start cluster %v", err)
+			}
+			waitForLeaderToBeElected(t, rnh, 1)
+			ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+			rv, err = rnh.SyncRead(ctx, 1, nil)
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to read applied value %v", err)
+			}
+			if index != rv.(uint64) {
+				t.Fatalf("invalid returned value %d", rv.(uint64))
+			}
+			plog.Infof("checking proposes")
+			makeProposals(rnh)
+		}()
+		ok, err = upgrade310.CanUpgradeToV310(nhc)
 		if err != nil {
-			t.Fatalf("failed to read applied value %v", err)
+			t.Errorf("failed to check whether upgrade is possible")
 		}
-		if index != rv.(uint64) {
-			t.Fatalf("invalid returned value %d", rv.(uint64))
+		if !ok {
+			t.Errorf("can not upgrade")
 		}
-		plog.Infof("checking proposes")
-		makeProposals(rnh)
 	}
 	runNodeHostTest(t, tf)
 }
