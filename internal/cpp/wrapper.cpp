@@ -13,92 +13,82 @@
 // limitations under the License.
 
 #include <string>
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
 #include <cstddef>
 #include <dlfcn.h>
 #include "wrapper.h"
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 #include "dragonboat/snapshotio.h"
-
-const char createStateMachineFuncName[] = "CreateDragonboatPluginStateMachine";
-
 
 typedef struct CollectedFiles {
     dragonboat::CollectedFiles *cf;
 } CollectedFiles;
 
-int IsValidDragonboatPlugin(char *soFilename)
+void *LoadFactoryFromPlugin(char *soFilename, char *factoryName)
 {
   void *handle;
-  CPPStateMachine *(*fn)(uint64_t, uint64_t);
-  handle = ::dlopen(soFilename, RTLD_LAZY);
-  if (!handle) {
-    return 1;
-  }
-  fn = (CPPStateMachine *(*)(uint64_t, uint64_t))::dlsym(handle,
-    createStateMachineFuncName);
-  if (!fn) {
-    dlclose(handle);
-    return 1;
-  }
-  dlclose(handle);
-  return 0;
-}
-
-CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
-  uint64_t nodeID, char *soFilename)
-{
-  void *handle;
-  CPPStateMachine *(*fn)(uint64_t, uint64_t);
   handle = ::dlopen(soFilename, RTLD_LAZY);
   if (!handle) {
     fputs(dlerror(), stderr);
     exit(1);
   }
-  fn = (CPPStateMachine *(*)(uint64_t, uint64_t))::dlsym(handle,
-    createStateMachineFuncName);
-  if (!fn) {
+  void *fn = ::dlsym(handle, factoryName);
+  if(!fn) {
     fputs(dlerror(), stderr);
     exit(1);
   }
-  CPPStateMachine *ds = (*fn)(clusterID, nodeID);
-  return ds;
+  return fn;
 }
 
-CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
-  uint64_t nodeID, void *factory)
+CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle)
 {
-  auto fn = reinterpret_cast<dragonboat::StateMachine *(*)(uint64_t, uint64_t)>(factory);
-  CPPStateMachine *ds = new CPPStateMachine;
-  ds->sm = (*fn)(clusterID, nodeID);
-  return ds;
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::RegularStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPRegularStateMachine *ds = new CPPRegularStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::RegularStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPRegularStateMachine *ds = new CPPRegularStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
 }
 
-void DestroyDBStateMachine(CPPStateMachine *ds)
+void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds)
 {
   delete ds->sm;
   delete ds;
 }
 
-uint64_t UpdateDBStateMachine(CPPStateMachine *ds,
-  const unsigned char *data, size_t size)
+uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
+  uint64_t index, const unsigned char *cmd, size_t cmdLen)
 {
-  return ds->sm->Update(data, size);
+  uint64_t result = 0;
+  dragonboat::Entry ent{index, cmd, cmdLen, result};
+  ds->sm->Update(ent);
+  return result;
 }
 
-LookupResult LookupDBStateMachine(CPPStateMachine *ds,
+LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size)
 {
   return ds->sm->Lookup(data, size);
 }
 
-uint64_t GetHashDBStateMachine(CPPStateMachine *ds)
+uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds)
 {
   return ds->sm->GetHash();
 }
 
-SnapshotResult SaveSnapshotDBStateMachine(CPPStateMachine *ds,
+SnapshotResult SaveSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotWriter writer(writerOID);
@@ -107,7 +97,7 @@ SnapshotResult SaveSnapshotDBStateMachine(CPPStateMachine *ds,
   return ds->sm->SaveSnapshot(&writer, &collection, done);
 }
 
-int RecoverFromSnapshotDBStateMachine(CPPStateMachine *ds,
+int RecoverFromSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID)
 {
   dragonboat::ProxySnapshotReader reader(readerOID);
@@ -115,7 +105,179 @@ int RecoverFromSnapshotDBStateMachine(CPPStateMachine *ds,
   return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
 }
 
-void FreeLookupResult(CPPStateMachine *ds, LookupResult r)
+void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
+  LookupResult r)
+{
+  ds->sm->FreeLookupResult(r);
+}
+
+CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle)
+{
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::ConcurrentStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPConcurrentStateMachine *ds = new CPPConcurrentStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::ConcurrentStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPConcurrentStateMachine *ds = new CPPConcurrentStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
+}
+
+void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
+{
+  delete ds->sm;
+  delete ds;
+}
+
+void BatchedUpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  Entry *entries, size_t size)
+{
+  std::vector<dragonboat::Entry> ents;
+  ents.reserve(size);
+  for (size_t i = 0; i < size; ++i) {
+    ents.emplace_back(dragonboat::Entry{
+      entries[i].index,
+      entries[i].cmd,
+      entries[i].cmdLen,
+      entries[i].result});
+  }
+  ds->sm->BatchedUpdate(ents);
+}
+
+LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size)
+{
+  return ds->sm->Lookup(data, size);
+}
+
+uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds)
+{
+  return ds->sm->GetHash();
+}
+
+PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds)
+{
+  return ds->sm->PrepareSnapshot();
+}
+
+SnapshotResult SaveSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds, const void *context,
+  uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID)
+{
+  dragonboat::ProxySnapshotWriter writer(writerOID);
+  dragonboat::DoneChan done(doneChOID);
+  dragonboat::SnapshotFileCollection collection(collectionOID);
+  return ds->sm->SaveSnapshot(context, &writer, &collection, done);
+}
+
+int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID)
+{
+    dragonboat::ProxySnapshotReader reader(readerOID);
+    dragonboat::DoneChan done(doneChOID);
+    return ds->sm->RecoverFromSnapshot(&reader, cf->cf->GetFiles(), done);
+}
+
+void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  LookupResult r)
+{
+  ds->sm->FreeLookupResult(r);
+}
+
+CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle)
+{
+  if (cStyle) {
+    auto fn = reinterpret_cast<
+      dragonboat::OnDiskStateMachine*(*)(uint64_t, uint64_t)>(factory);
+    CPPOnDiskStateMachine *ds = new CPPOnDiskStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  } else {
+    auto fn = reinterpret_cast<std::function<
+      dragonboat::OnDiskStateMachine*(uint64_t, uint64_t)>*>(factory);
+    CPPOnDiskStateMachine *ds = new CPPOnDiskStateMachine;
+    ds->sm = (*fn)(clusterID, nodeID);
+    return ds;
+  }
+}
+
+void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)
+{
+  delete ds->sm;
+  delete ds;
+}
+
+OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  uint64_t doneChOID)
+{
+  dragonboat::DoneChan done(doneChOID);
+  return ds->sm->Open(done);
+}
+
+void BatchedUpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  Entry *entries, size_t size)
+{
+  std::vector<dragonboat::Entry> ents;
+  ents.reserve(size);
+  for (size_t i = 0; i < size; ++i) {
+    ents.emplace_back(dragonboat::Entry{
+      entries[i].index,
+      entries[i].cmd,
+      entries[i].cmdLen,
+      entries[i].result});
+  }
+  ds->sm->BatchedUpdate(ents);
+}
+
+LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const unsigned char *data, size_t size)
+{
+  return ds->sm->Lookup(data, size);
+}
+
+int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)
+{
+  return ds->sm->Sync();
+}
+
+uint64_t GetHashDBOnDiskStateMachine(CPPOnDiskStateMachine *ds)
+{
+  return ds->sm->GetHash();
+}
+
+PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
+  CPPOnDiskStateMachine *ds)
+{
+  return ds->sm->PrepareSnapshot();
+}
+
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const void *context, uint64_t writerOID,
+  uint64_t doneChOID)
+{
+  dragonboat::ProxySnapshotWriter writer(writerOID);
+  dragonboat::DoneChan done(doneChOID);
+  return ds->sm->SaveSnapshot(context, &writer, done);
+}
+
+int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  uint64_t readerOID, uint64_t doneChOID)
+{
+    dragonboat::ProxySnapshotReader reader(readerOID);
+    dragonboat::DoneChan done(doneChOID);
+    return ds->sm->RecoverFromSnapshot(&reader, done);
+}
+
+void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  LookupResult r)
 {
   ds->sm->FreeLookupResult(r);
 }
@@ -138,4 +300,10 @@ void AddToCollectedFile(CollectedFiles *cf, uint64_t fileID,
 {
   std::string p(path, pathLen);
   cf->cf->AddFile(fileID, p, metadata, len);
+}
+
+void LeaderUpdated(void *listener, LeaderInfo info)
+{
+  auto fn = reinterpret_cast<std::function<void(LeaderInfo)>*>(listener);
+  (*fn)(info);
 }

@@ -14,10 +14,20 @@
 
 #include "example.h"
 
-extern "C" CPPStateMachine *CreateDragonboatPluginStateMachine(uint64_t clusterID,
-  uint64_t nodeID)
+extern "C" dragonboat::RegularStateMachine *CreateRegularStateMachine(
+  uint64_t clusterID, uint64_t nodeID)
 {
-  CPPStateMachine *cds = new CPPStateMachine; 
-  cds->sm = new HelloWorldStateMachine(clusterID, nodeID);
-  return cds;
+  return new HelloWorldStateMachine(clusterID, nodeID);
+}
+
+extern "C" dragonboat::ConcurrentStateMachine *CreateConcurrentStateMachine(
+  uint64_t clusterID, uint64_t nodeID)
+{
+  return new TestConcurrentStateMachine(clusterID, nodeID);
+}
+
+extern "C" dragonboat::OnDiskStateMachine *CreateOnDiskStateMachine(
+  uint64_t clusterID, uint64_t nodeID)
+{
+  return new FakeOnDiskStateMachine(clusterID, nodeID);
 }

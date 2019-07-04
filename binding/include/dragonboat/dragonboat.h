@@ -21,6 +21,7 @@
 #include <memory>
 #include <cstdint>
 #include <chrono>
+#include <functional>
 #include "dragonboat/binding.h"
 #include "dragonboat/types.h"
 #include "dragonboat/managed.h"
@@ -33,7 +34,7 @@
 //   features from C/C++.
 // - User applications can not specify what Raft RPC and Log DB implementation
 //   to use. The C++ binding always use the built-in TCP based Raft RPC module
-//   and the RocksDB based Log DB module.
+//   and the RocksDB/LevelDB based Log DB module.
 // - Users can not specify custom logger to use in C++ applications.
 //
 
@@ -47,6 +48,9 @@ using ClusterID = uint64_t;
 // UpdateResult is the result code returned by the Update method of the
 // replicated state machine.
 using UpdateResult = uint64_t;
+// SnapshotResultIndex is the result index of the SnapshotResult included in
+// SnapshotState
+using SnapshotResultIndex = uint64_t;
 // Milliseconds is the number of milliseconds usually used for timeout settings
 using Milliseconds = std::chrono::milliseconds;
 
@@ -107,6 +111,9 @@ class Config
   // OrderedConfigChange determines whether Raft membership change is enforced
   // with ordered config change ID.
   bool OrderedConfigChange;
+  // MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored
+  // in memory.
+  uint64_t MaxInMemLogSize;
 };
 
 // NodeHostConfig is the configuration for NodeHost. The NodeHostConfig class
@@ -120,7 +127,7 @@ class NodeHostConfig
   // DeploymentID is used to determine whether two nodehost instances are
   // allowed to communicate with each other, only those with the same
   // deployment ID value are allowed to communicate. This ensures that
-  // accidentially misconfigured nodehost instances can not cause data
+  // accidentally misconfigured nodehost instances can not cause data
   // corruption errors by sending messages to unrelated nodehosts.
   // In a typical environment, for a particular application that uses
   // dragonboat, you are expected to set DeploymentID to the same uint64
@@ -139,12 +146,8 @@ class NodeHostConfig
   Milliseconds RTTMillisecond;
   // RaftAddress is the address used for exchanging Raft messages.
   std::string RaftAddress;
-  // APIAddress is the address used for accessing nodehost RPC API. Empty value
-  // means nodehost API RPC server is not required.
-  std::string APIAddress;
-  // DrummerServers is a list of known drummer addresses. Empty value means
-  // there is no drummer server configured for this deployment.
-  std::vector<std::string> DrummerServers;
+  // ListenAddress is used by the Raft RPC module to listen on for Raft messages.
+  std::string ListenAddress;
   // MutualTLS defines whether to use mutual TLS for authenticating servers
   // and clients. Insecure communication is used when MutualTLS is set to
   // false.
@@ -155,6 +158,36 @@ class NodeHostConfig
   std::string CertFile;
   // KeyFile is the path of the node key file.
   std::string KeyFile;
+  // MaxSendQueueSize is the maximum size in bytes of each send queue.
+  uint64_t MaxSendQueueSize;
+  // MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
+  uint64_t MaxReceiveQueueSize;
+  // EnableMetrics determines whether health metrics in Prometheus format should
+  // be enabled.
+  bool EnableMetrics;
+  // RaftEventListener is the listener for Raft events exposed to user space.
+  // NodeHost uses a single dedicated goroutine to invoke all RaftEventListener
+  // methods one by one, CPU intensive or IO related procedures that can cause
+  // long delays should be offloaded to worker goroutines managed by users.
+  std::function<void(LeaderInfo)> RaftEventListener;
+};
+
+// SnapshotOption is the options users can specify when requesting a snapshot
+// to be generated.
+class SnapshotOption
+{
+  public:
+  SnapshotOption(bool Exported = false, std::string ExportedPath = "") noexcept;
+  // Exported is a boolean flag indicating whether the snapshot requested to
+  // be generated should be exported. For an exported snapshot, it is users'
+  // responsibility to manage the snapshot files. By default, a requested
+  // snapshot is not considered as exported, such a regular snapshot is managed
+  // the system.
+  bool Exported;
+  // ExportPath is the path where the exported snapshot should be stored, it
+  // must point to an existing directory for which the current user has write
+  // permission to it.
+  std::string ExportedPath;
 };
 
 // Status is the status returned by various methods for indicating operation
@@ -170,6 +203,8 @@ class Status
   // OK returns a boolean value indicating whether the operation completed
   // successfully.
   bool OK() const noexcept;
+  // get string representation of the error code
+  std::string String() const noexcept;
   // Possible Code() values.
   static const int StatusOK;
   static const int ErrClusterNotFound;
@@ -190,6 +225,10 @@ class Status
   static const int ErrRejected;
   static const int ErrInvalidClusterSettings;
   static const int ErrClusterNotReady;
+  static const int ErrClusterNotStopped;
+  static const int ErrClusterNotInitialized;
+  static const int ErrNodeRemoved;
+  static const int ErrDirNotExist;
  private:
   int code_;
 };
@@ -274,51 +313,55 @@ class Session : public ManagedObject
   // ProposalCompleted marks the current proposal as completed, this makes
   // the Session instance ready to be used for the next proposal.
   void ProposalCompleted() noexcept;
-  void PrepareForRegisteration() noexcept;
-  void PrepareForUnregisteration() noexcept;
+  void PrepareForRegistration() noexcept;
+  void PrepareForUnregistration() noexcept;
   void PrepareForProposal() noexcept;
   static Session *GetNewSession(ClusterID clusterID) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(Session);
   explicit Session(oid_t oid) noexcept;
   bool GetProposalCompleted() const noexcept;
-  bool GetReadyForRegisteration() const noexcept;
-  bool GetReadyForUnregisteration() const noexcept;
+  bool GetReadyForRegistration() const noexcept;
+  bool GetReadyForUnregistration() const noexcept;
   bool GetPreparedForProposal() const noexcept;
   void ClearProposalCompleted() noexcept;
-  void ClearReadyForRegisteration() noexcept;
-  void ClearReadyForUnregisteration() noexcept;
+  void ClearReadyForRegistration() noexcept;
+  void ClearReadyForUnregistration() noexcept;
   void ClearPrepareForProposal() noexcept;
   bool proposalCompleted_;
-  bool readyForRegisteration_;
-  bool readyForUnregisteration_;
+  bool readyForRegistration_;
+  bool readyForUnregistration_;
   bool prepareForProposal_;
   friend class NodeHost;
 };
 
-// ResultCode is the code returned to the client to indicate the completion
-// state of the request. Please see request.go in the dragonboat package for
-// detailed definitions.
-enum class ResultCode : int
-{
-  RequestTimeout = 0,
-  RequestCompleted = 1,
-  RequestTerminated = 2,
-  RequestRejected = 3,
+
+// Entry is the wrapper of dragonboat sm.Entry used to update the state machine
+// Entry::result should be set as the result of the update operation.
+struct Entry {
+  Entry(uint64_t index, const Byte *cmd, size_t cmdLen, uint64_t &result)
+    : index(index), cmd(cmd), cmdLen(cmdLen), result(result) {}
+  // the index used to indicate the index of the raft entry.
+  uint64_t index;
+  const Byte *cmd;
+  size_t cmdLen;
+  // the result store the result of the update operation.
+  uint64_t &result;
 };
 
-// RWResult is the result returned to client to indicate the complete state
+// RequestResult is the result returned to client to indicate the complete state
 // and actual result of the request.
-struct RWResult
+struct RequestResult
 {
   // the ResultCode used to indicate the complete state.
   ResultCode code;
   // for proposals, this is the result value returned by the Update method of
   // your data store.
+  // for snapshots, this is the result index value of the saved snapshot
   uint64_t result;
 };
 
-using RWResult = struct RWResult;
+using RequestResult = struct RequestResult;
 
 // Event is the base class used for passing complete notification from
 // dragonboat library to client applications. Dragonboat invokes the Set method
@@ -338,13 +381,27 @@ class Event
     result_.result = result;
     set();
   };
-  RWResult Get() const noexcept { return result_; };
+  RequestResult Get() const noexcept { return result_; };
  protected:
   virtual void set() noexcept = 0;
  private:
-  RWResult result_;
+  RequestResult result_;
   DISALLOW_COPY_MOVE_AND_ASSIGN(Event);
 };
+
+class RequestState : public ManagedObject
+{
+ public:
+  ~RequestState();
+  RequestResult Get() noexcept;
+ private:
+  DISALLOW_COPY_MOVE_AND_ASSIGN(RequestState);
+  explicit RequestState(oid_t oid) noexcept;
+  bool hasResult_;
+  RequestResult result_;
+  friend class NodeHost;
+};
+
 
 // IOService is a wrapper of the IO service class typically seen in async
 // frameworks, e.g. io_service in boost's asio.
@@ -358,7 +415,9 @@ class IOService
   virtual void run() noexcept = 0;
 };
 
-class StateMachine;
+class RegularStateMachine;
+class ConcurrentStateMachine;
+class OnDiskStateMachine;
 // NodeHost is the C++ wrapper of the Go NodeHost struct provided by the
 // github.com/lni/dragonboat/multiraft package.
 class NodeHost : public ManagedObject
@@ -366,6 +425,8 @@ class NodeHost : public ManagedObject
  public:
   explicit NodeHost(const NodeHostConfig &config) noexcept;
   ~NodeHost();
+
+  NodeHostConfig GetNodeHostConfig() const noexcept;
   // Stop stops this NodeHost instance including all its managed clusters.
   void Stop() noexcept;
   // StartCluster adds the specified Raft cluster node to the NodeHost and
@@ -373,9 +434,8 @@ class NodeHost : public ManagedObject
   // replicas is a map of node ID to node RaftAddress values used to
   // indicate what are the initial nodes when a Raft cluster is first created.
   // The join flag indicating whether the node being added is a new node joining
-  // the cluster. pluginFilepath is the path of the state machine plugin .so
-  // to use. config is the configuration object that will be passed to the
-  // underlying raft node object, the cluster ID and node ID values of the node
+  // the cluster. config is the configuration object that will be passed to the
+  // underlying raft node object, The cluster ID and node ID values of the node
   // being added is specified in the config object.
   // Note that this is not the membership change API to add new node to the Raft
   // cluster.
@@ -386,32 +446,48 @@ class NodeHost : public ManagedObject
   //    the intialPeers instance will be ignored by the system
   //  - joining a new node to an existing Raft cluster, set join to true and
   //    leave replicas empty
-  Status StartCluster(const Peers& replicas,
-    bool join, std::string pluginFilepath, Config config) noexcept;
 
+  // pluginFile is the path of the state machine plugin .so to use.
+  // factoryName is the function name of the exported C function in the .so to
+  // create state machine
+  // smType is the state machine type, see binding.h::StateMachineType
+  // For more details, see statemachine/regular.h.
   Status StartCluster(const Peers& replicas, bool join,
-    StateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+    std::string pluginFile, std::string factoryName, StateMachineType smType,
+    Config config) noexcept;
+  Status StartCluster(const Peers& replicas, bool join,
+    std::function<RegularStateMachine*(uint64_t, uint64_t)> factory,
+    Config config) noexcept;
+  Status StartCluster(const Peers& replicas, bool join,
+    std::function<ConcurrentStateMachine*(uint64_t, uint64_t)> factory,
+    Config config) noexcept;
+  Status StartCluster(const Peers& replicas, bool join,
+    std::function<OnDiskStateMachine*(uint64_t, uint64_t)> factory,
     Config config) noexcept;
   // StopCluster removes the specified cluster node from NodeHost. Note that
   // StopCluster makes the specified node no longer managed by the NodeHost
   // instance, it won't do any membership change to the raft cluster itself.
   Status StopCluster(ClusterID clusterID) noexcept;
+  // StopNode removes the specified cluster node from NodeHost. Note that
+  // StopNode makes the specified node no longer managed by the NodeHost
+  // instance, it won't do any membership change to the raft cluster itself.
+  Status StopNode(ClusterID clusterID, NodeID nodeID) noexcept;
   // GetNoOPSession returns a NOOP client session ready to be used for
   // making proposals. The NOOP client session is a dummy client session that
   // will not be enforced. The returned client Session instance is owned by the
   // caller. The NoOP client session is not required to be closed.
   Session *GetNoOPSession(ClusterID clusterID) noexcept;
-  // GetNewSession returns a new client Session instance for the specified
+  // SyncGetSession returns a new client Session instance for the specified
   // cluster and the returned client Session instance is owned by the caller.
   // On success, status::OK() will be true and a new Session instance is
   // returned. On failure, status::Code() carries the error code and nullptr is
   // returned.
-  Session *GetNewSession(ClusterID clusterID,
+  Session *SyncGetSession(ClusterID clusterID,
     Milliseconds timeout, Status *status) noexcept;
   // CloseSession closes a previously created client Session instance.
   // NoOP client session obtained from the GetNoOPSession method can not
   // be closed.
-  Status CloseSession(const Session &session,
+  Status SyncCloseSession(const Session &session,
     Milliseconds timeout) noexcept;
   // SyncPropose makes a synchronous proposal on the cluster specified by the
   // input client session object. Once the proposal is committed and
@@ -442,7 +518,7 @@ class NodeHost : public ManagedObject
   // dragonboat library once the proposal is completed, client applications
   // can then get the result from the event instance to check the outcome of
   // the proposal. The returned Status instance indicates whether the requested
-  // asynchronous proposal is successfully launched, it is not guaranted that
+  // asynchronous proposal is successfully launched, it is not guaranteed that
   // a successfully launched proposal can be successfully completed and applied.
   Status Propose(Session *session,
     const Buffer &buf, Milliseconds timeout, Event *event) noexcept;
@@ -467,7 +543,35 @@ class NodeHost : public ManagedObject
   Status ReadLocal(ClusterID clusterID,
     const Byte *query, size_t queryLen,
     Byte *result, size_t resultLen, size_t *written) noexcept;
-  // ProposeSession makes a asynchronous proposal on the specified cluster
+  // StaleRead performs a direct read on the specified raft cluster's
+  // StateMachine instance without linearizability guarantee. Note that this
+  // method is not required to be invoked after ReadIndex.
+  Status StaleRead(ClusterID clusterID, const Buffer &query,
+    Buffer *result) noexcept;
+  Status StaleRead(ClusterID clusterID,
+    const Byte *query, size_t queryLen,
+    Byte *result, size_t resultLen, size_t *written) noexcept;
+  // SyncRequestSnapshot makes a synchronous request on the specified cluster to
+  // generate a snapshot. Once the request is done and a snapshot is
+  // successfully generated, the result index of the snapshot is set to the
+  // input result parameter and the returned Status instance will have its OK()
+  // method return true. On failure, such as timeout, the status will carry
+  // the error code and the result input parameter will not be updated.
+  Status SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+    Milliseconds timeout, SnapshotResultIndex *result) noexcept;
+  // RequestSnapshot makes an asynchronous request on the specified cluster to
+  // generate a snapshot. This method returns immediately with the input status
+  // parameter set. The status indicates whether the requested is successfully
+  // launched, it is not guaranteed that a successfully launched RequestSnapshot
+  // operation can always have snapshot generated.
+  // The returned RequestState is owned by the caller. On successful launch,
+  // the status will have its OK() method return true, and the Get() method of
+  // the returned RequestState can then be invoked to wait for the result.
+  // On failed launch, the status will carry the error code and nullptr is
+  // returned.
+  RequestState *RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+    Milliseconds timeout, Status *status) noexcept;
+  // ProposeSession makes an asynchronous proposal on the specified cluster
   // for client session related operation. Depending on the state of the client
   // session object, the supported operations are for registering or
   // unregistering a client session. A new client session for a specified
@@ -476,33 +580,66 @@ class NodeHost : public ManagedObject
   // unregistered.
   Status ProposeSession(Session *session,
     Milliseconds timeout, Event *event) noexcept;
-  // AddNode makes a synchronous proposal to make a raft membership change to
-  // add a new node to the specified raft cluster. If there is already an
-  // observer with the same NodeID in the cluster, it will be promoted to a
+  // SyncRequestAddNode makes a synchronous proposal to make a raft membership
+  // change to add a new node to the specified raft cluster. If there is already
+  // an observer with the same NodeID in the cluster, it will be promoted to a
   // regular node with voting power. After the node is successfully added to
   // the Raft cluster, it is application's responsibility to call StartCluster
   // on the right NodeHost instance to actually start the cluster node.
-  Status AddNode(ClusterID clusterID, NodeID nodeID,
+  Status SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
-  // RemoveNode makes a synchronous proposal to make a raft membership change
+  // RequestAddNode is an asynchronous version of SyncRequestAddNode. This
+  // method returns immediately with the input status parameter set. The status
+  // indicates whether the requested is successfully launched, it is not
+  // guaranteed that a successfully launched RequestAddNode operation can always
+  // have a node added. The returned RequestState is owned by the caller. On
+  // successful launch, the status will have its OK() method return true, and
+  // the Get() method of the returned RequestState can then be invoked to wait
+  // for the result. On failed launch, the status will carry the error code and
+  // nullptr is returned.
+  RequestState *RequestAddNode(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Status *status) noexcept;
+  // SyncRemoveNode makes a synchronous proposal to make a raft membership change
   // to remove the specified node or observer from the requested cluster. It is
   // not guaranteed that removed nodes will automatically close itself and be
   // removed from its managing NodeHost instance. It is application's
   // responsibility to call StopCluster on the right nodehost instance to
   // actually have the cluster node removed from the managing nodehost.
-  Status RemoveNode(ClusterID clusterID, NodeID nodeID,
+  Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
-  // AddObserver makes a synchronous proposal to make a raft membership change
-  // to add a new observer to the specified raft cluster. An observer is able
-  // to get replicated entries from the leader, but it is not allowed to vote
-  // for leaders, it will not be consider as a part of the quorum when making
-  // proposals. After the observer is successfully added to the Raft cluster,
-  // it is application's responsibility to call StartCluster on the right
-  // NodeHost instance to actually start the observer instance. An observer can
-  // be promoted to a regular node with voting power by calling AddNode on the
-  // same NodeID.
-  Status AddObserver(ClusterID clusterID, NodeID nodeID,
+  // RequestDeleteNode is an asynchronous version of SyncRequestDeleteNode. This
+  // method returns immediately with the input status parameter set. The status
+  // indicates whether the requested is successfully launched, it is not
+  // guaranteed that a successfully launched RequestDeleteNode operation can
+  // always have a node deleted. The returned RequestState is owned by the
+  // caller. On successful launch, the status will have its OK() method return
+  // true, and the Get() method of the returned RequestState can then be invoked
+  // to wait for the result. On failed launch, the status will carry the error
+  // code and nullptr is returned.
+  RequestState *RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+    Milliseconds timeout, Status *status) noexcept;
+  // SyncRequestAddObserver makes a synchronous proposal to make a raft
+  // membership change to add a new observer to the specified raft cluster. An
+  // observer is able to get replicated entries from the leader, but it is not
+  // allowed to vote for leaders, it will not be consider as a part of the
+  // quorum when making proposals. After the observer is successfully added to
+  // the Raft cluster, it is application's responsibility to call StartCluster
+  // on the right NodeHost instance to actually start the observer instance. An
+  // observer can be promoted to a regular node with voting power by calling
+  // AddNode on the same NodeID.
+  Status SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout) noexcept;
+  // RequestAddObserver is an asynchronous version of SyncRequestAddObserver.
+  // This method returns immediately with the input status parameter set. The
+  // status indicates whether the requested is successfully launched, it is not
+  // guaranteed that a successfully launched RequestAddObserver operation can
+  // always have a observer added. The returned RequestState is owned by the
+  // caller. On successful launch, the status will have its OK() method return
+  // true, and the Get() method of the returned RequestState can then be invoked
+  // to wait for the result. On failed launch, the status will carry the error
+  // code and nullptr is returned.
+  RequestState *RequestAddObserver(ClusterID clusterID, NodeID nodeID,
+    std::string address, Milliseconds timeout, Status *status) noexcept;
   // RequestLeaderTransfer requests to transfer leadership to the specified node
   // on the specified cluster. When returned Status instance has its OK() method
   // equals to true, it indicates that the request is successfully submitted but
@@ -517,8 +654,15 @@ class NodeHost : public ManagedObject
   // GetLeaderID gets the leader ID of the specified cluster based on local
   // node's current knowledge.
   Status GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept;
+  // RemoveData tries to remove all data associated with the specified node.
+  // This method should only be used after the node has been deleted from its
+  // Raft cluster.
+  Status SyncRemoveData(ClusterID clusterID, NodeID nodeID,
+    Milliseconds timeout) noexcept;
+  Status RemoveData(ClusterID clusterID, NodeID nodeID) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(NodeHost);
+  NodeHostConfig config_;
 };
 
 class IOServiceHandler;

@@ -107,7 +107,7 @@ import (
 )
 
 const (
-	unmanagedDeploymentID uint64 = transport.UnmanagedDeploymentID
+	unmanagedDeploymentID = transport.UnmanagedDeploymentID
 	// DragonboatMajor is the major version number
 	DragonboatMajor = 3
 	// DragonboatMinor is the minor version number
@@ -119,11 +119,11 @@ const (
 )
 
 var (
-	receiveQueueLen   uint64 = settings.Soft.ReceiveQueueLength
-	delaySampleRatio  uint64 = settings.Soft.LatencySampleRatio
-	rsPoolSize        uint64 = settings.Soft.NodeHostSyncPoolSize
-	streamConnections uint64 = settings.Soft.StreamConnections
-	monitorInterval          = 100 * time.Millisecond
+	receiveQueueLen   = settings.Soft.ReceiveQueueLength
+	delaySampleRatio  = settings.Soft.LatencySampleRatio
+	rsPoolSize        = settings.Soft.NodeHostSyncPoolSize
+	streamConnections = settings.Soft.StreamConnections
+	monitorInterval   = 100 * time.Millisecond
 )
 
 var (

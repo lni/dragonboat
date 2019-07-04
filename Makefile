@@ -465,16 +465,16 @@ $(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
 binding: $(SHARED1) $(SHARED2) $(SHARED3) $(BINDING_STATIC_LIB)
 
-FIND_HEADER_CMD=find "$(BINDING_INC_PATH)" \
-  \( -type l -o -type f \) -name "*.h"
 install-headers:
 	install -d $(INSTALL_PATH)/lib
-	install -d $(INSTALL_PATH)/include/dragonboat
-	for header in `$(FIND_HEADER_CMD)`; \
-	do \
-		header=`basename $$header`; \
-		install -C -m 644 $(BINDING_INC_PATH)/$$header \
-			$(INSTALL_PATH)/include/dragonboat/$$header; \
+	for header_dir in `cd $(BINDING_INC_PATH)/..; \
+		find "dragonboat" -type l -o -type d`; do \
+			install -d $(INSTALL_PATH)/include/$$header_dir; \
+	done
+	for header in `cd $(BINDING_INC_PATH)/..; \
+		find "dragonboat" -type l -o -type f -name "*.h"`; do \
+			install -C -m 644 $(BINDING_INC_PATH)/../$$header \
+				$(INSTALL_PATH)/include/$$header; \
 	done
 install-cpp-binding: $(BINDING_STATIC_LIB)
 	install -C -m 755 $(BINDING_STATIC_LIB) $(INSTALL_PATH)/lib

@@ -13,49 +13,160 @@
 // limitations under the License.
 
 #include <vector>
-#include "dragonboat/statemachine.h"
+#include "dragonboat/statemachine/regular.h"
+#include "dragonboat/statemachine/concurrent.h"
+#include "dragonboat/statemachine/ondisk.h"
 #include "dragonboat/binding.h"
 
 namespace dragonboat {
 
-StateMachine::StateMachine(uint64_t clusterID, uint64_t nodeID) noexcept
+RegularStateMachine::RegularStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
   : cluster_id_(clusterID), node_id_(nodeID)
 {
 }
 
-StateMachine::~StateMachine()
+RegularStateMachine::~RegularStateMachine()
 {
 }
 
-uint64_t StateMachine::Update(const Byte *data, size_t size) noexcept
+void RegularStateMachine::Update(Entry &ent) noexcept
 {
-  return update(data, size);
+  update(ent);
 }
 
-LookupResult StateMachine::Lookup(const Byte *data, size_t size) const noexcept
+LookupResult RegularStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
 {
   return lookup(data, size);
 }
 
-uint64_t StateMachine::GetHash() const noexcept
+uint64_t RegularStateMachine::GetHash() const noexcept
 {
   return getHash();
 }
 
-SnapshotResult StateMachine::SaveSnapshot(SnapshotWriter *writer,
+SnapshotResult RegularStateMachine::SaveSnapshot(SnapshotWriter *writer,
   SnapshotFileCollection *collection,
   const DoneChan &done) const noexcept
 {
   return saveSnapshot(writer, collection, done);
 }
 
-int StateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+int RegularStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
   const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
 {
   return recoverFromSnapshot(reader, files, done);
 }
 
-void StateMachine::FreeLookupResult(LookupResult r) noexcept
+void RegularStateMachine::FreeLookupResult(LookupResult r) noexcept
+{
+  freeLookupResult(r);
+}
+
+ConcurrentStateMachine::ConcurrentStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
+  : cluster_id_(clusterID), node_id_(nodeID)
+{
+}
+
+ConcurrentStateMachine::~ConcurrentStateMachine()
+{
+}
+
+void ConcurrentStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
+{
+  batchedUpdate(ents);
+}
+
+LookupResult ConcurrentStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
+{
+  return lookup(data, size);
+}
+
+uint64_t ConcurrentStateMachine::GetHash() const noexcept
+{
+  return getHash();
+}
+
+PrepareSnapshotResult ConcurrentStateMachine::PrepareSnapshot() const noexcept
+{
+  return prepareSnapshot();
+}
+
+SnapshotResult ConcurrentStateMachine::SaveSnapshot(const void *context,
+  SnapshotWriter *writer, SnapshotFileCollection *collection,
+  const DoneChan &done) const noexcept
+{
+  return saveSnapshot(context, writer, collection, done);
+}
+
+int ConcurrentStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+  const std::vector<SnapshotFile> &files, const DoneChan &done) noexcept
+{
+  return recoverFromSnapshot(reader, files, done);
+}
+
+void ConcurrentStateMachine::FreeLookupResult(LookupResult r) noexcept
+{
+  freeLookupResult(r);
+}
+
+OnDiskStateMachine::OnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID) noexcept
+  : cluster_id_(clusterID), node_id_(nodeID)
+{
+}
+
+OnDiskStateMachine::~OnDiskStateMachine()
+{
+}
+
+OpenResult OnDiskStateMachine::Open(const DoneChan &done) noexcept
+{
+  return open(done);
+}
+
+void OnDiskStateMachine::BatchedUpdate(std::vector<Entry> &ents) noexcept
+{
+  batchedUpdate(ents);
+}
+
+LookupResult OnDiskStateMachine::Lookup(const Byte *data,
+  size_t size) const noexcept
+{
+  return lookup(data, size);
+}
+
+int OnDiskStateMachine::Sync() const noexcept
+{
+  return sync();
+}
+
+uint64_t OnDiskStateMachine::GetHash() const noexcept
+{
+  return getHash();
+}
+
+PrepareSnapshotResult OnDiskStateMachine::PrepareSnapshot() const noexcept
+{
+  return prepareSnapshot();
+}
+
+SnapshotResult OnDiskStateMachine::SaveSnapshot(const void *context,
+  SnapshotWriter *writer, const DoneChan &done) const noexcept
+{
+  return saveSnapshot(context, writer, done);
+}
+
+int OnDiskStateMachine::RecoverFromSnapshot(SnapshotReader *reader,
+  const DoneChan &done) noexcept
+{
+  return recoverFromSnapshot(reader, done);
+}
+
+void OnDiskStateMachine::FreeLookupResult(LookupResult r) noexcept
 {
   freeLookupResult(r);
 }

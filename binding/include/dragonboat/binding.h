@@ -26,6 +26,15 @@
 extern "C" {
 #endif
 
+enum StateMachineType
+{
+  // StateMachine type, the same as the StateMachineType int raftpb/raft.pb.go
+  UNKNOWN_STATEMACHINE = 0,
+  REGULAR_STATEMACHINE = 1,
+  CONCURRENT_STATEMACHINE = 2,
+  ONDISK_STATEMACHINE = 3,
+};
+
 enum
 {
   // Save snapshot or recover from snapshot completed successfully.
@@ -37,6 +46,21 @@ enum
   FAILED_TO_SAVE_SNAPSHOT = 3,
   // Snapshot operation has been stopped by request
   SNAPSHOT_STOPPED = 4,
+};
+
+enum
+{
+  // Open on-disk state machine successfully
+  OPEN_OK = 0,
+  // Failed to open on-disk state machine, e.g. the state machine is corrupted
+  FAILED_TO_OPEN = 1,
+  // Open operation has been stopped by request
+  OPEN_STOPPED = 2,
+};
+
+enum
+{
+  SYNC_OK = 0,
 };
 
 typedef struct DBString
@@ -63,6 +87,16 @@ typedef struct
   size_t index;
 } Membership;
 
+struct Entry
+{
+  uint64_t index;
+  unsigned char *cmd;
+  size_t cmdLen;
+  uint64_t result;
+};
+
+typedef struct Entry Entry;
+
 // ErrorCode is the error code used by dragonboat's language bindings.
 // Error codes here are mostly mapped from exported Go errors in the
 // github.com/lni/dragonboat/multiraft
@@ -87,6 +121,22 @@ enum ErrorCode
   ErrRejected = -16,
   ErrInvalidClusterSettings = -17,
   ErrClusterNotReady = -18,
+  ErrClusterNotStopped = -19,
+  ErrClusterNotInitialized = -20,
+  ErrNodeRemoved = -21,
+  ErrDirNotExist = -22,
+};
+
+// ResultCode is the code returned to the client to indicate the completion
+// state of the request. Please see request.go in the dragonboat package for
+// detailed definitions.
+enum ResultCode
+{
+  RequestTimeout = 0,
+  RequestCompleted = 1,
+  RequestTerminated = 2,
+  RequestRejected = 3,
+  RequestDropped = 4,
 };
 
 // CompleteHandlerType is the type of complete handler. CompleteHandlerCPP is
@@ -112,11 +162,10 @@ typedef struct RaftConfig
   Bool Quiesce;
   uint64_t ElectionRTT;
   uint64_t HeartbeatRTT;
-  uint64_t MaxMessageSize;
-  int MaxInflightMessages;
   uint64_t SnapshotEntries;
   uint64_t CompactionOverhead;
   Bool OrderedConfigChange;
+  uint64_t MaxInMemLogSize;
 } RaftConfig;
 
 // NodeHostConfig is the configuration for the NodeHost instance. The
@@ -131,14 +180,36 @@ typedef struct NodeHostConfig
   DBString NodeHostDir;
   uint64_t RTTMillisecond;
   DBString RaftAddress;
-  DBString APIAddress;
-  DBString *DrummerServers;
-  int DrummerServersLen;
+  DBString ListenAddress;
   Bool MutualTLS;
   DBString CAFile;
   DBString CertFile;
   DBString KeyFile;
+  uint64_t MaxSendQueueSize;
+  uint64_t MaxReceiveQueueSize;
+  Bool EnableMetrics;
+  void *RaftEventListener;
 } NodeHostConfig;
+
+struct LeaderInfo
+{
+  uint64_t ClusterID;
+  uint64_t NodeID;
+  uint64_t Term;
+  uint64_t LeaderID;
+};
+
+typedef struct
+{
+  Bool Exported;
+  DBString ExportedPath;
+} SnapshotOption;
+
+typedef struct
+{
+  uint64_t result;
+  int errcode;
+} OpenResult;
 
 typedef struct
 {
@@ -148,8 +219,14 @@ typedef struct
 
 typedef struct
 {
+  void *result;
+  int errcode;
+} PrepareSnapshotResult;
+
+typedef struct
+{
   size_t size;
-  int error;
+  int errcode;
 } SnapshotResult;
 
 typedef struct
@@ -160,27 +237,15 @@ typedef struct
 
 typedef struct
 {
+  uint64_t rsoid;
+  int errcode;
+} RequestStateResult;
+
+typedef struct
+{
   uint64_t result;
   int errcode;
-} SyncProposeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} AddNodeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} DeleteNodeResult;
-
-typedef struct
-{
-  uint64_t rsoid;
-  int errcode;
-} AddObserverResult;
+} RequestResult;
 
 typedef struct
 {
@@ -223,32 +288,47 @@ uint64_t CGetSession(uint64_t clusterID);
 uint64_t CGetNoOPSession(uint64_t clusterID);
 void CRemoveManagedObject(uint64_t csoid);
 int CSetLogLevel(DBString package, int level);
-int CSelectOnRequestStateForMembershipChange(uint64_t rsoid);
+RequestResult CSelectOnRequestState(uint64_t rsoid);
 void CSessionProposalCompleted(uint64_t csoid);
 uint64_t CNewNodeHost(NodeHostConfig cfg);
 void CStopNodeHost(uint64_t oid);
+int CNodeHostStartClusterFromPlugin(uint64_t oid,
+  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
+  Bool join, DBString pluginFile, DBString factoryName,
+  int32_t smType, RaftConfig cfg);
 int CNodeHostStartCluster(uint64_t oid,
   uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, DBString pluginFilename, RaftConfig cfg);
-int CNodeHostStartClusterFromFactory(uint64_t oid,
-  uint64_t *nodeIDList, DBString *nodeAddressList, size_t nodeListLen,
-  Bool join, void *factory, RaftConfig cfg);
+  Bool join, void *factory, int32_t smType, RaftConfig cfg);
 int CNodeHostStopCluster(uint64_t oid, uint64_t clusterID);
-NewSessionResult CNodeHostGetNewSession(uint64_t oid,
+int CNodeHostStopNode(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
+NewSessionResult CNodeHostSyncGetSession(uint64_t oid,
   uint64_t timeout, uint64_t clusterID);
-int CNodeHostCloseSession(uint64_t oid,
+int CNodeHostSyncCloseSession(uint64_t oid,
   uint64_t timeout, uint64_t csoid);
-SyncProposeResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
+RequestResult CNodeHostSyncPropose(uint64_t oid, uint64_t timeout,
   uint64_t csoid, Bool csupdate, const unsigned char *buf, size_t len);
 int CNodeHostSyncRead(uint64_t oid,
   uint64_t timeout, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
-AddNodeResult CNodeHostRequestAddNode(uint64_t oid, uint64_t timeout,
+int CNodeHostStaleRead(uint64_t oid, uint64_t clusterID,
+  const unsigned char *queryBuf, size_t queryBufLen,
+  unsigned char *resultBuf, size_t resultBufLen, size_t *written);
+RequestResult CNodeHostSyncRequestSnapshot(uint64_t oid,
+  uint64_t clusterID, SnapshotOption opt, uint64_t timeout);
+RequestStateResult CNodeHostRequestSnapshot(uint64_t oid, uint64_t clusterID,
+  SnapshotOption opt, uint64_t timeout);
+int CNodeHostSyncRequestAddNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
-DeleteNodeResult CNodeHostRequestDeleteNode(uint64_t oid, uint64_t timeout,
+RequestStateResult CNodeHostRequestAddNode(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID, DBString url);
+int CNodeHostSyncRequestDeleteNode(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID);
-AddObserverResult CNodeHostRequestAddObserver(uint64_t oid, uint64_t timeout,
+RequestStateResult CNodeHostRequestDeleteNode(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID);
+int CNodeHostSyncRequestAddObserver(uint64_t oid, uint64_t timeout,
+  uint64_t clusterID, uint64_t nodeID, DBString url);
+RequestStateResult CNodeHostRequestAddObserver(uint64_t oid, uint64_t timeout,
   uint64_t clusterID, uint64_t nodeID, DBString url);
 int CRequestLeaderTransfer(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 GetMembershipResult CNodeHostGetClusterMembership(uint64_t oid,
@@ -265,6 +345,9 @@ ReadIndexResult CNodeHostReadIndex(uint64_t oid, uint64_t timeout,
 int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
   const unsigned char *queryBuf, size_t queryBufLen,
   unsigned char *resultBuf, size_t resultBufLen, size_t *written);
+int CNodeHostSyncRemoveData(uint64_t oid,
+  uint64_t clusterID, uint64_t nodeID, uint64_t timeout);
+int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
 
 #ifdef __cplusplus
 }

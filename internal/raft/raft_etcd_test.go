@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	testRateLimit uint64 = settings.MaxProposalPayloadSize * 4
+	testRateLimit = settings.MaxProposalPayloadSize * 4
 )
 
 func (r *raft) testOnlyHasConfigChangeToApply() bool {

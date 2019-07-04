@@ -109,6 +109,15 @@ class DoneChan : public ManagedObject
   DISALLOW_COPY_MOVE_AND_ASSIGN(DoneChan);
 };
 
+// SnapshotFile is the struct used to describe an external file included as a
+// part of the snapshot.
+struct SnapshotFile {
+  uint64_t FileID;
+  std::string Filepath;
+  Byte *Metadata;
+  size_t Length;
+};
+
 using SnapshotFile = struct SnapshotFile;
 
 // SnapshotFileCollection is the proxy class for SnapshotFileCollection in

@@ -59,7 +59,7 @@ const char Logger::Transport[] = "transport";
 Config::Config(ClusterID clusterId, NodeID nodeId) noexcept
   : NodeId(nodeId), ClusterId(clusterId), IsObserver(false), CheckQuorum(false),
     Quiesce(false), ElectionRTT(10), HeartbeatRTT(1), SnapshotEntries(0),
-    CompactionOverhead(0), OrderedConfigChange(false)
+    CompactionOverhead(0), OrderedConfigChange(false), MaxInMemLogSize(0)
 {
 }
 
@@ -75,14 +75,21 @@ void parseConfig(const Config &config, ::RaftConfig &cfg) noexcept
   cfg.SnapshotEntries = config.SnapshotEntries;
   cfg.CompactionOverhead = config.CompactionOverhead;
   cfg.OrderedConfigChange = config.OrderedConfigChange;
+  cfg.MaxInMemLogSize = config.MaxInMemLogSize;
 }
 
 NodeHostConfig::NodeHostConfig(std::string WALDir,
   std::string NodeHostDir) noexcept
   : DeploymentID(1), WALDir(WALDir), NodeHostDir(NodeHostDir),
   RTTMillisecond(200), RaftAddress("localhost:9050"),
-  APIAddress("localhost:9060"), DrummerServers(),
-  MutualTLS(false), CAFile(""), CertFile(""), KeyFile("")
+  MutualTLS(false), CAFile(""), CertFile(""), KeyFile(""),
+  MaxSendQueueSize(0), MaxReceiveQueueSize(0), EnableMetrics(false),
+  RaftEventListener()
+{
+}
+
+SnapshotOption::SnapshotOption(bool Exported, std::string ExportedPath) noexcept
+  :  Exported(Exported), ExportedPath(ExportedPath)
 {
 }
 
@@ -106,6 +113,61 @@ bool Status::OK() const noexcept
   return code_ == 0;
 }
 
+std::string Status::String() const noexcept
+{
+  switch (code_)
+  {
+  case ::StatusOK:
+    return "StatusOK";
+  case ::ErrClusterNotFound:
+    return "ErrClusterNotFound";
+  case ::ErrClusterAlreadyExist:
+    return "ErrClusterAlreadyExist";
+  case ::ErrDeadlineNotSet:
+    return "ErrDeadlineNotSet";
+  case ::ErrInvalidDeadline:
+    return "ErrInvalidDeadline";
+  case ::ErrInvalidSession:
+    return "ErrInvalidSession";
+  case ::ErrTimeoutTooSmall:
+    return "ErrTimeoutTooSmall";
+  case ::ErrPayloadTooBig:
+    return "ErrPayloadTooBig";
+  case ::ErrSystemBusy:
+    return "ErrSystemBusy";
+  case ::ErrClusterClosed:
+    return "ErrClusterClosed";
+  case ::ErrBadKey:
+    return "ErrBadKey";
+  case ::ErrPendingConfigChangeExist:
+    return "ErrPendingConfigChangeExist";
+  case ::ErrTimeout:
+    return "ErrTimeout";
+  case ::ErrSystemStopped:
+    return "ErrSystemStopped";
+  case ::ErrCanceled:
+    return "ErrCanceled";
+  case ::ErrResultBufferTooSmall:
+    return "ErrResultBufferTooSmall";
+  case ::ErrRejected:
+    return "ErrRejected";
+  case ::ErrInvalidClusterSettings:
+    return "ErrInvalidClusterSettings";
+  case ::ErrClusterNotReady:
+    return "ErrClusterNotReady";
+  case ::ErrClusterNotStopped:
+    return "ErrClusterNotStopped";
+  case ::ErrClusterNotInitialized:
+    return "ErrClusterNotInitialized";
+  case ::ErrNodeRemoved:
+    return "ErrNodeRemoved";
+  case ::ErrDirNotExist:
+    return "ErrDirNotExist";
+  default:
+    return "Unknown Error Code " + std::to_string(code_);
+  }
+}
+
 const int Status::StatusOK = ::StatusOK;
 const int Status::ErrClusterNotFound = ::ErrClusterNotFound;
 const int Status::ErrClusterAlreadyExist = ::ErrClusterAlreadyExist;
@@ -124,6 +186,11 @@ const int Status::ErrCanceled = ::ErrCanceled;
 const int Status::ErrResultBufferTooSmall = ::ErrResultBufferTooSmall;
 const int Status::ErrRejected = ::ErrRejected;
 const int Status::ErrInvalidClusterSettings = ::ErrInvalidClusterSettings;
+const int Status::ErrClusterNotReady = ::ErrClusterNotReady;
+const int Status::ErrClusterNotStopped = ::ErrClusterNotStopped;
+const int Status::ErrClusterNotInitialized = ::ErrClusterNotInitialized;
+const int Status::ErrNodeRemoved = ::ErrNodeRemoved;
+const int Status::ErrDirNotExist = ::ErrDirNotExist;
 
 Buffer::Buffer(size_t n) noexcept
   : data_(), len_(n)
@@ -209,8 +276,8 @@ NodeID LeaderID::GetLeaderID() const noexcept {
 Session::Session(oid_t oid) noexcept
   : ManagedObject(oid),
     proposalCompleted_(false),
-    readyForRegisteration_(false),
-    readyForUnregisteration_(false),
+    readyForRegistration_(false),
+    readyForUnregistration_(false),
     prepareForProposal_(false)
 {
 }
@@ -229,14 +296,14 @@ void Session::PrepareForProposal() noexcept
   prepareForProposal_ = true;
 }
 
-void Session::PrepareForRegisteration() noexcept
+void Session::PrepareForRegistration() noexcept
 {
-  readyForRegisteration_ = true;
+  readyForRegistration_ = true;
 }
 
-void Session::PrepareForUnregisteration() noexcept
+void Session::PrepareForUnregistration() noexcept
 {
-  readyForUnregisteration_ = true;
+  readyForUnregistration_ = true;
 }
 
 Session *Session::GetNewSession(ClusterID clusterID) noexcept
@@ -249,14 +316,14 @@ bool Session::GetProposalCompleted() const noexcept
   return proposalCompleted_;
 }
 
-bool Session::GetReadyForRegisteration() const noexcept
+bool Session::GetReadyForRegistration() const noexcept
 {
-  return readyForRegisteration_;
+  return readyForRegistration_;
 }
 
-bool Session::GetReadyForUnregisteration() const noexcept
+bool Session::GetReadyForUnregistration() const noexcept
 {
-  return readyForUnregisteration_;
+  return readyForUnregistration_;
 }
 
 bool Session::GetPreparedForProposal() const noexcept
@@ -269,14 +336,14 @@ void Session::ClearProposalCompleted() noexcept
   proposalCompleted_ = false;
 }
 
-void Session::ClearReadyForRegisteration() noexcept
+void Session::ClearReadyForRegistration() noexcept
 {
-  readyForRegisteration_ = false;
+  readyForRegistration_ = false;
 }
 
-void Session::ClearReadyForUnregisteration() noexcept
+void Session::ClearReadyForUnregistration() noexcept
 {
-  readyForUnregisteration_ = false;
+  readyForUnregistration_ = false;
 }
 
 void Session::ClearPrepareForProposal() noexcept
@@ -284,8 +351,28 @@ void Session::ClearPrepareForProposal() noexcept
   prepareForProposal_ = false;
 }
 
+RequestState::RequestState(oid_t oid) noexcept
+  : ManagedObject(oid), hasResult_(false)
+{
+}
+
+RequestState::~RequestState()
+{
+}
+
+RequestResult RequestState::Get() noexcept
+{
+  if (!hasResult_) {
+    hasResult_ = true;
+    ::RequestResult result = CSelectOnRequestState(oid_);
+    result_.code = static_cast<ResultCode>(result.errcode);
+    result_.result = result.result;
+  }
+  return result_;
+}
+
 NodeHost::NodeHost(const NodeHostConfig &c) noexcept
-  : ManagedObject(0)
+  : ManagedObject(0), config_(c)
 {
   ::NodeHostConfig cfg;
   cfg.DeploymentID = c.DeploymentID;
@@ -293,42 +380,37 @@ NodeHost::NodeHost(const NodeHostConfig &c) noexcept
   cfg.NodeHostDir = toDBString(c.NodeHostDir);
   cfg.RTTMillisecond = c.RTTMillisecond.count();
   cfg.RaftAddress = toDBString(c.RaftAddress);
-  cfg.APIAddress = toDBString(c.APIAddress);
-  cfg.DrummerServersLen = c.DrummerServers.size();
-  cfg.DrummerServers = new DBString[c.DrummerServers.size()];
-  for (int i = 0; 0 < c.DrummerServers.size(); i++) {
-    cfg.DrummerServers[i] = toDBString(c.DrummerServers[i]);
-  }
+  cfg.ListenAddress = toDBString(c.ListenAddress);
   cfg.MutualTLS = c.MutualTLS == 1;
   cfg.CAFile = toDBString(c.CAFile);
   cfg.CertFile = toDBString(c.CertFile);
   cfg.KeyFile = toDBString(c.KeyFile);
+  cfg.MaxSendQueueSize = c.MaxSendQueueSize;
+  cfg.MaxReceiveQueueSize = c.MaxReceiveQueueSize;
+  cfg.EnableMetrics = c.EnableMetrics == 1;
+  if (config_.RaftEventListener) {
+    cfg.RaftEventListener = const_cast<std::function<void(LeaderInfo)>*>(
+      &config_.RaftEventListener);
+  } else {
+    cfg.RaftEventListener = nullptr;
+  }
   oid_ = CNewNodeHost(cfg);
-  delete[] cfg.DrummerServers;
 }
 
 NodeHost::~NodeHost() {}
+
+NodeHostConfig NodeHost::GetNodeHostConfig() const noexcept
+{
+  return config_;
+}
 
 void NodeHost::Stop() noexcept
 {
   CStopNodeHost(oid_);
 }
 
-Status NodeHost::StartCluster(const Peers& peers,
-  bool join, std::string pluginFilename, Config config) noexcept
-{
-  ::RaftConfig cfg;
-  parseConfig(config, cfg);
-  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
-  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
-  parsePeers(peers, strs.get(), nodeIDList.get());
-  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, toDBString(pluginFilename), cfg);
-  return Status(code);
-}
-
 Status NodeHost::StartCluster(const Peers& peers, bool join,
-  StateMachine*(*factory)(uint64_t clusterID, uint64_t nodeID),
+  std::string pluginFile, std::string factoryName, StateMachineType smType,
   Config config) noexcept
 {
   ::RaftConfig cfg;
@@ -336,8 +418,54 @@ Status NodeHost::StartCluster(const Peers& peers, bool join,
   std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
   std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
   parsePeers(peers, strs.get(), nodeIDList.get());
-  int code = CNodeHostStartClusterFromFactory(oid_, nodeIDList.get(), strs.get(),
-    peers.Len(), join, reinterpret_cast<void *>(factory), cfg);
+  int code = CNodeHostStartClusterFromPlugin(oid_,
+    nodeIDList.get(), strs.get(), peers.Len(), join,
+    toDBString(pluginFile), toDBString(factoryName), smType, cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  std::function<RegularStateMachine*(uint64_t, uint64_t)> factory,
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
+    REGULAR_STATEMACHINE, cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  std::function<ConcurrentStateMachine*(uint64_t, uint64_t)> factory,
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
+    CONCURRENT_STATEMACHINE, cfg);
+  return Status(code);
+}
+
+Status NodeHost::StartCluster(const Peers& peers, bool join,
+  std::function<OnDiskStateMachine*(uint64_t, uint64_t)> factory,
+  Config config) noexcept
+{
+  ::RaftConfig cfg;
+  parseConfig(config, cfg);
+  std::unique_ptr<::DBString[]> strs(new ::DBString[peers.Len()]);
+  std::unique_ptr<uint64_t[]> nodeIDList(new uint64_t[peers.Len()]);
+  parsePeers(peers, strs.get(), nodeIDList.get());
+  int code = CNodeHostStartCluster(oid_, nodeIDList.get(), strs.get(),
+    peers.Len(), join, reinterpret_cast<void *>(&factory),
+    ONDISK_STATEMACHINE, cfg);
   return Status(code);
 }
 
@@ -346,18 +474,23 @@ Status NodeHost::StopCluster(ClusterID clusterID) noexcept
   return Status(CNodeHostStopCluster(oid_, clusterID));
 }
 
+Status NodeHost::StopNode(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return Status(CNodeHostStopNode(oid_, clusterID, nodeID));
+}
+
 Session *NodeHost::GetNoOPSession(ClusterID clusterID) noexcept
 {
   uint64_t oid = CGetNoOPSession(clusterID);
   return new Session(oid);
 }
 
-Session *NodeHost::GetNewSession(ClusterID clusterID,
+Session *NodeHost::SyncGetSession(ClusterID clusterID,
   Milliseconds timeout, Status *status) noexcept
 {
   auto ts = timeout.count();
   ::NewSessionResult result;
-  result = CNodeHostGetNewSession(oid_, ts, clusterID);
+  result = CNodeHostSyncGetSession(oid_, ts, clusterID);
   *status = Status(result.errcode);
   if (result.csoid == 0) {
     return nullptr;
@@ -365,11 +498,11 @@ Session *NodeHost::GetNewSession(ClusterID clusterID,
   return new Session(result.csoid);
 }
 
-Status NodeHost::CloseSession(const Session &session,
+Status NodeHost::SyncCloseSession(const Session &session,
   Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  int code = CNodeHostCloseSession(oid_, ts, session.OID());
+  int code = CNodeHostSyncCloseSession(oid_, ts, session.OID());
   return Status(code);
 }
 
@@ -384,7 +517,7 @@ Status NodeHost::SyncPropose(Session *session,
   Milliseconds timeout, UpdateResult *result) noexcept
 {
   auto ts = timeout.count();
-  ::SyncProposeResult ret;
+  ::RequestResult ret;
   bool proposalCompleted = session->GetProposalCompleted();
   session->ClearProposalCompleted();
   ret = CNodeHostSyncPropose(oid_,
@@ -401,8 +534,7 @@ Status NodeHost::SyncRead(ClusterID clusterID,
   int code = CNodeHostSyncRead(oid_, ts, clusterID,
     const_cast<Byte*>(query.Data()), query.Len(),
     const_cast<Byte*>(result->Data()), result->Capacity(), &written);
-  if (code == 0)
-  {
+  if (code == 0) {
     result->SetLen(written);
   }
   return Status(code);
@@ -456,7 +588,7 @@ Status NodeHost::ReadLocal(ClusterID clusterID,
 {
   size_t written;
   int code = CNodeHostReadLocal(oid_, clusterID,
-    const_cast<Byte*>(query.Data()), query.Len(),
+    query.Data(), query.Len(),
     const_cast<Byte*>(result->Data()), result->Capacity(), &written);
   if (code == 0)
   {
@@ -474,63 +606,132 @@ Status NodeHost::ReadLocal(ClusterID clusterID,
   return Status(code);
 }
 
+Status NodeHost::StaleRead(ClusterID clusterID, const Buffer &query,
+  Buffer *result) noexcept
+{
+  size_t written;
+  int code = CNodeHostStaleRead(oid_, clusterID,
+    query.Data(), query.Len(),
+    const_cast<Byte*>(result->Data()), result->Capacity(), &written);
+  if (code == 0) {
+    result->SetLen(written);
+  }
+  return Status(code);
+}
+
+Status NodeHost::StaleRead(ClusterID clusterID,
+  const Byte *query, size_t queryLen,
+  Byte *result, size_t resultLen, size_t *written) noexcept
+{
+  int code = CNodeHostStaleRead(oid_, clusterID,
+    query, queryLen, result, resultLen, written);
+  return Status(code);
+}
+
+Status NodeHost::SyncRequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+  Milliseconds timeout, SnapshotResultIndex *result) noexcept
+{
+  auto ts = timeout.count();
+  ::SnapshotOption option;
+  option.Exported = opt.Exported;
+  option.ExportedPath = toDBString(opt.ExportedPath);
+  ::RequestResult ret = CNodeHostSyncRequestSnapshot(oid_, clusterID, option, ts);
+  *result = ret.result;
+  return Status(ret.errcode);
+}
+
+RequestState *NodeHost::RequestSnapshot(ClusterID clusterID, SnapshotOption opt,
+  Milliseconds timeout, Status *status) noexcept
+{
+  auto ts = timeout.count();
+  ::SnapshotOption option;
+  option.Exported = opt.Exported;
+  option.ExportedPath = toDBString(opt.ExportedPath);
+  ::RequestStateResult result;
+  result = CNodeHostRequestSnapshot(oid_, clusterID, option, ts);
+  *status = Status(result.errcode);
+  if (result.rsoid == 0) {
+    return nullptr;
+  }
+  return new RequestState(result.rsoid);
+}
+
 Status NodeHost::ProposeSession(Session *cs,
   Milliseconds timeout, Event *event) noexcept
 {
   auto ts = timeout.count();
   ::ProposeResult result;
-  bool readyForRegisteration = cs->GetReadyForRegisteration();
-  bool readyForUnregisteration = cs->GetReadyForUnregisteration();
-  cs->ClearReadyForRegisteration();
-  cs->ClearReadyForUnregisteration();
+  bool readyForRegisteration = cs->GetReadyForRegistration();
+  bool readyForUnregisteration = cs->GetReadyForUnregistration();
+  cs->ClearReadyForRegistration();
+  cs->ClearReadyForUnregistration();
   result = CNodeHostProposeSession(oid_, ts, cs->OID(),
     readyForRegisteration, readyForUnregisteration,
     reinterpret_cast<void *>(event), CompleteHandlerCPP);
   return Status(result.errcode);
 }
 
-Status NodeHost::AddNode(ClusterID clusterID, NodeID nodeID,
+Status NodeHost::SyncRequestAddNode(ClusterID clusterID, NodeID nodeID,
   std::string url, Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  ::AddNodeResult result;
-  result = CNodeHostRequestAddNode(oid_,
-    ts, clusterID, nodeID, toDBString(url));
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
-  }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return Status(CNodeHostSyncRequestAddNode(oid_,
+    ts, clusterID, nodeID, toDBString(url)));
 }
 
-Status NodeHost::AddObserver(ClusterID clusterID, NodeID nodeID,
-  std::string url, Milliseconds timeout) noexcept
+RequestState *NodeHost::RequestAddNode(ClusterID clusterID, NodeID nodeID,
+  std::string url, Milliseconds timeout, Status *status) noexcept
 {
   auto ts = timeout.count();
-  ::AddObserverResult result;
-  result = CNodeHostRequestAddObserver(oid_,
-    ts, clusterID, nodeID, toDBString(url));
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
+  ::RequestStateResult result;
+  result = CNodeHostRequestAddNode(oid_, ts, clusterID, nodeID, toDBString(url));
+  *status = Status(result.errcode);
+  if (result.rsoid == 0) {
+    return nullptr;
   }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return new RequestState(result.rsoid);
 }
 
-Status NodeHost::RemoveNode(ClusterID clusterID, NodeID nodeID,
+Status NodeHost::SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
   Milliseconds timeout) noexcept
 {
   auto ts = timeout.count();
-  ::DeleteNodeResult result;
+  return Status(CNodeHostSyncRequestDeleteNode(oid_, ts, clusterID, nodeID));
+}
+
+RequestState *NodeHost::RequestDeleteNode(ClusterID clusterID, NodeID nodeID,
+  Milliseconds timeout, Status *status) noexcept
+{
+  auto ts = timeout.count();
+  ::RequestStateResult result;
   result = CNodeHostRequestDeleteNode(oid_, ts, clusterID, nodeID);
-  Status requestStatus(result.errcode);
-  ManagedObject mo(result.rsoid);
-  if (!requestStatus.OK()) {
-    return requestStatus;
+  *status = Status(result.errcode);
+  if (result.rsoid == 0) {
+    return nullptr;
   }
-  return Status(CSelectOnRequestStateForMembershipChange(mo.OID()));
+  return new RequestState(result.rsoid);
+}
+
+Status NodeHost::SyncRequestAddObserver(ClusterID clusterID, NodeID nodeID,
+  std::string url, Milliseconds timeout) noexcept
+{
+  auto ts = timeout.count();
+  return Status(CNodeHostSyncRequestAddObserver(oid_,
+    ts, clusterID, nodeID, toDBString(url)));
+}
+
+RequestState *NodeHost::RequestAddObserver(ClusterID clusterID, NodeID nodeID,
+  std::string url, Milliseconds timeout, Status *status) noexcept
+{
+  auto ts = timeout.count();
+  ::RequestStateResult result;
+  result = CNodeHostRequestAddObserver(oid_,
+    ts, clusterID, nodeID, toDBString(url));
+  *status = Status(result.errcode);
+  if (result.rsoid == 0) {
+    return nullptr;
+  }
+  return new RequestState(result.rsoid);
 }
 
 Status NodeHost::RequestLeaderTransfer(ClusterID clusterID,
@@ -566,6 +767,18 @@ Status NodeHost::GetLeaderID(ClusterID clusterID, LeaderID *leaderID) noexcept
   GetLeaderIDResult r = CNodeHostGetLeaderID(oid_, clusterID);
   leaderID->SetLeaderID(r.nodeID, r.valid);
   return Status(r.errcode);
+}
+
+Status NodeHost::SyncRemoveData(ClusterID clusterID, NodeID nodeID,
+  Milliseconds timeout) noexcept
+{
+  auto ts = timeout.count();
+  return Status(CNodeHostSyncRemoveData(oid_, clusterID, nodeID, ts));
+}
+
+Status NodeHost::RemoveData(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return Status(CNodeHostRemoveData(oid_, clusterID, nodeID));
 }
 
 IOServiceHandler *RunIOServiceInGoRuntime(IOService* iosp,

@@ -22,29 +22,74 @@
 extern "C" {
 #endif
 
-typedef struct CPPStateMachine CPPStateMachine;
+typedef struct CPPRegularStateMachine CPPRegularStateMachine;
+typedef struct CPPConcurrentStateMachine CPPConcurrentStateMachine;
+typedef struct CPPOnDiskStateMachine CPPOnDiskStateMachine;
 typedef struct CollectedFiles CollectedFiles;
+typedef struct LeaderInfo LeaderInfo;
 
-int IsValidDragonboatPlugin(char *soFilename);
-CPPStateMachine *CreateDBStateMachine(uint64_t clusterID,
-  uint64_t nodeID, char *soFilename);
-CPPStateMachine *CreateDBStateMachineFromFactory(uint64_t clusterID,
-  uint64_t nodeID, void *factory);
-void DestroyDBStateMachine(CPPStateMachine *ds);
-uint64_t UpdateDBStateMachine(CPPStateMachine *ds,
+
+void *LoadFactoryFromPlugin(char *soFilename, char *factoryName);
+
+CPPRegularStateMachine *CreateDBRegularStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle);
+void DestroyDBRegularStateMachine(CPPRegularStateMachine *ds);
+uint64_t UpdateDBRegularStateMachine(CPPRegularStateMachine *ds,
+  uint64_t index, const unsigned char *cmd, size_t cmdLen);
+LookupResult LookupDBRegularStateMachine(CPPRegularStateMachine *ds,
   const unsigned char *data, size_t size);
-LookupResult LookupDBStateMachine(CPPStateMachine *ds,
-  const unsigned char *data, size_t size);
-uint64_t GetHashDBStateMachine(CPPStateMachine *ds);
-SnapshotResult SaveSnapshotDBStateMachine(CPPStateMachine *ds,
+uint64_t GetHashDBRegularStateMachine(CPPRegularStateMachine *ds);
+SnapshotResult SaveSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID);
-int RecoverFromSnapshotDBStateMachine(CPPStateMachine *ds,
+int RecoverFromSnapshotDBRegularStateMachine(CPPRegularStateMachine *ds,
   CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
-void FreeLookupResult(CPPStateMachine *ds, LookupResult r);
+void FreeLookupResultDBRegularStateMachine(CPPRegularStateMachine *ds,
+  LookupResult r);
+
+CPPConcurrentStateMachine *CreateDBConcurrentStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle);
+void DestroyDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
+void BatchedUpdateDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  Entry *entries, size_t size);
+LookupResult LookupDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  const unsigned char *data, size_t size);
+uint64_t GetHashDBConcurrentStateMachine(CPPConcurrentStateMachine *ds);
+PrepareSnapshotResult PrepareSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds);
+SnapshotResult SaveSnapshotDBConcurrentStateMachine(
+  CPPConcurrentStateMachine *ds, const void *context,
+  uint64_t writerOID, uint64_t collectionOID, uint64_t doneChOID);
+int RecoverFromSnapshotDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  CollectedFiles *cf, uint64_t readerOID, uint64_t doneChOID);
+void FreeLookupResultDBConcurrentStateMachine(CPPConcurrentStateMachine *ds,
+  LookupResult r);
+
+CPPOnDiskStateMachine *CreateDBOnDiskStateMachine(uint64_t clusterID,
+  uint64_t nodeID, void *factory, uint64_t cStyle);
+void DestroyDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+OpenResult OpenDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  uint64_t doneChOID);
+void BatchedUpdateDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  Entry *entries, size_t size);
+LookupResult LookupDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const unsigned char *data, size_t size);
+int SyncDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+uint64_t GetHashDBOnDiskStateMachine(CPPOnDiskStateMachine *ds);
+PrepareSnapshotResult PrepareSnapshotDBOnDiskStateMachine(
+  CPPOnDiskStateMachine *ds);
+SnapshotResult SaveSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  const void *context, uint64_t writerOID, uint64_t doneChOID);
+int RecoverFromSnapshotDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  uint64_t readerOID, uint64_t doneChOID);
+void FreeLookupResultDBOnDiskStateMachine(CPPOnDiskStateMachine *ds,
+  LookupResult r);
+
 CollectedFiles *GetCollectedFile();
 void FreeCollectedFile(CollectedFiles *cf);
 void AddToCollectedFile(CollectedFiles *cf, uint64_t fileID,
   const char *path, size_t pathLen, const unsigned char *metadata, size_t len);
+
+void LeaderUpdated(void *listener, LeaderInfo info);
 
 #ifdef __cplusplus
 }
