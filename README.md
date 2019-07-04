@@ -8,6 +8,7 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## News ##
+* 2019-07-04 Dragonboat v3.1 has been released, please read [CHANGELOG](CHANGELOG.md) before you upgrade.
 * 2019-06-21 Dragonboat v3.0 has been released with on disk state machine and Go module support ([CHANGELOG](CHANGELOG.md)).
 * 2019-02-20 Dragonboat v2.1 has been released.
 

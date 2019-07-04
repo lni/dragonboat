@@ -16,6 +16,7 @@ package dragonboat
 
 import (
 	"fmt"
+	"io"
 	"sync/atomic"
 
 	"github.com/VictoriaMetrics/metrics"
@@ -23,16 +24,12 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
-// WriteHealthMetrics is disabled for v3.1
-
-/*
 // WriteHealthMetrics writes all health metrics in Prometheus format to the
 // specified writer. This function is typically called by the metrics http
 // handler.
 func WriteHealthMetrics(w io.Writer) {
 	metrics.WritePrometheus(w, false)
 }
-*/
 
 type raftEventListener struct {
 	clusterID           uint64
