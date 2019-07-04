@@ -1,3 +1,24 @@
+## v3.1 (2019-07-04)
+
+Dragonboat v3.1 is a maintenance release with breaking change. All v3.0.x users are recommended to upgrade. Please make sure to carefully read the CHANGELOG below before upgrading.
+
+### Bug fixes
+
+- Fixed ImportSnapshot. 
+
+### New features
+
+- Added NodeHostConfig.RaftEventListener to allow user applications to be notified for certain Raft events.
+
+### Improvements
+
+- Made restarting an existing node faster.
+- Immediately return ErrClusterNotReady when requests are dropped for not having a leader.
+
+### Breaking changes
+
+- When upgrading to v3.1.x from v3.0.x, dragonboat requires all streamed or imported snapshots to have been applied. github.com/lni/dragonboat/tools/upgrade310 is provided to check that. See the godoc in github.com/lni/dragonboat/tools/upgrade310 for more details. For users who use NodeHost.RequestSnapshot to export snapshots for backup purposes, we recommend to re-generate all exported snapshots once upgraded to v3.1.
+
 ## v3.0 (2019-06-21)
 
 Dragonboat v3.0 is a major release with breaking changes. Please make sure to carefully read the CHANGELOG below before upgrading.

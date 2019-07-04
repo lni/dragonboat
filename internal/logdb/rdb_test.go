@@ -1405,6 +1405,28 @@ func TestImportSnapshot(t *testing.T) {
 		if state.State.Commit != snapshots[0].Index {
 			t.Errorf("unexpected commit value")
 		}
+		rdb := db.(*ShardedRDB).shards[2]
+		rdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
+		maxIndex, err := rdb.readMaxIndex(clusterID, nodeID)
+		if err != nil {
+			t.Errorf("failed to get max index")
+		}
+		if maxIndex != ssimport.Index {
+			t.Errorf("unexpected max index value %d", maxIndex)
+		}
+		state, err = db.ReadRaftState(clusterID, nodeID, snapshots[0].Index)
+		if err != nil {
+			t.Fatalf("raft state not deleted %v", err)
+		}
+		if state == nil {
+			t.Fatalf("failed to get raft state")
+		}
+		if state.FirstIndex != snapshots[0].Index {
+			t.Errorf("first index: %d, ss index %d", state.FirstIndex, snapshots[0].Index)
+		}
+		if state.EntryCount != 0 {
+			t.Errorf("unexpected entry count %d", state.EntryCount)
+		}
 	}
 	runLogDBTest(t, tf)
 }
