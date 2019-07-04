@@ -398,6 +398,7 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	defer os.Remove(fp)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
@@ -478,6 +479,7 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	defer os.Remove(fp)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateConcurrentStateMachine",
@@ -665,6 +667,7 @@ func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
 func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	defer os.Remove(fp)
 	initialApplied := uint64(123)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
@@ -758,6 +761,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	defer os.Remove(fp)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
@@ -874,6 +878,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
+	defer os.Remove(fp)
 	f, err := os.Create(fp)
 	if err != nil {
 		t.Errorf("failed to create temp snapshot file")
