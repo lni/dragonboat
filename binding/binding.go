@@ -766,3 +766,67 @@ func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
 	nh := getNodeHost(oid)
 	return getErrorCode(nh.RemoveData(clusterID, nodeID))
 }
+
+// HasNodeInfo returns a boolean value indicating whether the specified node
+// has been bootstrapped on the current NodeHost instance.
+//export NodeHostHasNodeInfo
+func NodeHostHasNodeInfo(oid uint64, clusterID uint64, nodeID uint64) C.char {
+	nh := getNodeHost(oid)
+	return boolToCChar(nh.HasNodeInfo(clusterID, nodeID))
+}
+
+// GetNodeHostInfo returns a NodeHostInfo instance that contains all details
+// of the NodeHost, this includes details of all Raft clusters managed by the
+// the NodeHost instance.
+//export NodeHostGetNodeHostInfo
+func NodeHostGetNodeHostInfo(oid uint64, opt C.NodeHostInfoOption,
+	cnhi unsafe.Pointer) {
+	nh := getNodeHost(oid)
+	option := dragonboat.NodeHostInfoOption{
+		SkipLogInfo: cboolToBool(opt.SkipLogInfo),
+	}
+	v := nh.GetNodeHostInfo(option)
+	nhi := (*C.struct_NodeHostInfo)(cnhi)
+	// clusterInfoListPtr released in C++
+	nhi.ClusterInfoList = (*C.struct_ClusterInfo)(C.malloc(
+		C.sizeof_struct_ClusterInfo * C.size_t(len(v.ClusterInfoList))))
+	nhi.ClusterInfoListLen = C.uint64_t(len(v.ClusterInfoList))
+	for idx, clusterInfo := range v.ClusterInfoList {
+		cClusterInfo := (*C.struct_ClusterInfo)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(nhi.ClusterInfoList)) +
+				uintptr(C.sizeof_struct_ClusterInfo*C.size_t(idx))))
+		cClusterInfo.ClusterID = C.uint64_t(clusterInfo.ClusterID)
+		cClusterInfo.NodeID = C.uint64_t(clusterInfo.NodeID)
+		cClusterInfo.IsLeader = boolToCChar(clusterInfo.IsLeader)
+		cClusterInfo.IsObserver = boolToCChar(clusterInfo.IsObserver)
+		cClusterInfo.SMType = C.uint64_t(clusterInfo.StateMachineType)
+		// NodeAddrPairs released in C++
+		cClusterInfo.NodeAddrPairs = (*C.struct_NodeAddrPair)(C.malloc(
+			C.sizeof_struct_NodeAddrPair * C.size_t(len(clusterInfo.Nodes))))
+		index := 0
+		for id, addr := range clusterInfo.Nodes {
+			pair := (*C.struct_NodeAddrPair)(unsafe.Pointer(
+				uintptr(unsafe.Pointer(cClusterInfo.NodeAddrPairs)) +
+					uintptr(C.sizeof_struct_NodeAddrPair*C.size_t(index))))
+			index++
+			pair.NodeID = C.uint64_t(id)
+			// RaftAddress released in C++
+			pair.RaftAddress = C.CString(addr)
+		}
+		cClusterInfo.NodeAddrPairsNum = C.uint64_t(len(clusterInfo.Nodes))
+		cClusterInfo.ConfigChangeIndex = C.uint64_t(clusterInfo.ConfigChangeIndex)
+		cClusterInfo.Pending = boolToCChar(clusterInfo.Pending)
+	}
+
+	// logInfoPtr released in C++
+	nhi.LogInfo = (*C.struct_NodeInfo)(C.malloc(
+		C.sizeof_struct_NodeInfo * C.size_t(len(v.LogInfo))))
+	nhi.LogInfoLen = C.uint64_t(len(v.LogInfo))
+	for idx, logInfo := range v.LogInfo {
+		cLogInfo := (*C.struct_NodeInfo)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(nhi.LogInfo)) +
+				uintptr(C.sizeof_struct_NodeInfo*C.size_t(idx))))
+		cLogInfo.ClusterID = C.uint64_t(logInfo.ClusterID)
+		cLogInfo.NodeID = C.uint64_t(logInfo.NodeID)
+	}
+}

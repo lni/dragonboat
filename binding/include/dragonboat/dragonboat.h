@@ -415,6 +415,63 @@ class IOService
   virtual void run() noexcept = 0;
 };
 
+class ClusterInfo
+{
+ public:
+	// ClusterID is the cluster ID of the Raft cluster node.
+  uint64_t ClusterID;
+	// NodeID is the node ID of the Raft cluster node.
+  uint64_t NodeID;
+	// IsLeader indicates whether this is a leader node.
+  bool IsLeader;
+  // IsObserver indicates whether this is a non-voting observer node.
+  bool IsObserver;
+	// StateMachineType is the type of the state machine.
+  StateMachineType SMType;
+	// Nodes is a map of member node IDs to their Raft addresses.
+  std::map<uint64_t, std::string> Nodes;
+	// ConfigChangeIndex is the current config change index of the Raft node.
+	// ConfigChangeIndex is Raft Log index of the last applied membership
+	// change entry.
+  uint64_t ConfigChangeIndex;
+	// Pending is a boolean flag indicating whether details of the cluster node
+	// is not available. The Pending flag is set to true usually because the node
+	// has not had anything applied yet.
+  bool Pending;
+};
+
+class NodeInfo
+{
+ public:
+  NodeInfo(uint64_t clusterID, uint64_t nodeID)
+    : ClusterID(clusterID), NodeID(nodeID) {}
+  uint64_t ClusterID;
+  uint64_t NodeID;
+};
+
+// NodeHostInfo provides info about the NodeHost, including its managed Raft
+// cluster nodes and available Raft logs saved in its local persistent storage.
+class NodeHostInfo
+{
+ public:
+  // RaftAddress is the public address and the identifier of the NodeHost.
+  std::string RaftAddress;
+  // ClusterInfo is a list of all Raft clusters managed by the NodeHost
+  std::vector<ClusterInfo> ClusterInfoList;
+	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
+	// stored on the NodeHost.
+  std::vector<NodeInfo> LogInfo;
+};
+
+// NodeHostInfoOption is the option type used when querying NodeHostInfo.
+class NodeHostInfoOption
+{
+ public:
+  NodeHostInfoOption() : SkipLogInfo(false) {}
+  explicit NodeHostInfoOption(bool skipLogInfo) : SkipLogInfo(skipLogInfo) {}
+  bool SkipLogInfo;
+};
+
 class RegularStateMachine;
 class ConcurrentStateMachine;
 class OnDiskStateMachine;
@@ -425,7 +482,8 @@ class NodeHost : public ManagedObject
  public:
   explicit NodeHost(const NodeHostConfig &config) noexcept;
   ~NodeHost();
-
+  // GetNodeHostConfig returns the NodeHostConfig instance used for configuring
+  // this NodeHost instance.
   NodeHostConfig GetNodeHostConfig() const noexcept;
   // Stop stops this NodeHost instance including all its managed clusters.
   void Stop() noexcept;
@@ -599,10 +657,10 @@ class NodeHost : public ManagedObject
   // nullptr is returned.
   RequestState *RequestAddNode(ClusterID clusterID, NodeID nodeID,
     std::string address, Milliseconds timeout, Status *status) noexcept;
-  // SyncRemoveNode makes a synchronous proposal to make a raft membership change
-  // to remove the specified node or observer from the requested cluster. It is
-  // not guaranteed that removed nodes will automatically close itself and be
-  // removed from its managing NodeHost instance. It is application's
+  // SyncRemoveNode makes a synchronous proposal to make a raft membership
+  // change to remove the specified node or observer from the requested cluster.
+  // It is not guaranteed that removed nodes will automatically close itself
+  // and be removed from its managing NodeHost instance. It is application's
   // responsibility to call StopCluster on the right nodehost instance to
   // actually have the cluster node removed from the managing nodehost.
   Status SyncRequestDeleteNode(ClusterID clusterID, NodeID nodeID,
@@ -660,6 +718,13 @@ class NodeHost : public ManagedObject
   Status SyncRemoveData(ClusterID clusterID, NodeID nodeID,
     Milliseconds timeout) noexcept;
   Status RemoveData(ClusterID clusterID, NodeID nodeID) noexcept;
+  // HasNodeInfo returns a boolean value indicating whether the specified node
+  // has been bootstrapped on the current NodeHost instance.
+  bool HasNodeInfo(ClusterID clusterID, NodeID nodeID) noexcept;
+  // GetNodeHostInfo returns a NodeHostInfo instance that contains all details
+  // of the NodeHost, this includes details of all Raft clusters managed by the
+  // the NodeHost instance.
+  NodeHostInfo GetNodeHostInfo(NodeHostInfoOption option) noexcept;
  private:
   DISALLOW_COPY_MOVE_AND_ASSIGN(NodeHost);
   NodeHostConfig config_;

@@ -323,3 +323,14 @@ ReadIndexResult CNodeHostReadIndex(uint64_t oid, uint64_t timeout,
   result.errcode = r.r1;
   return result;
 }
+
+Bool CNodeHostHasNodeInfo(uint64_t oid, uint64_t clusterID, uint64_t nodeID)
+{
+  return NodeHostHasNodeInfo(oid, clusterID, nodeID);
+}
+
+void CNodeHostGetNodeHostInfo(uint64_t oid,
+  NodeHostInfoOption opt, NodeHostInfo *nhi)
+{
+  NodeHostGetNodeHostInfo(oid, opt, nhi);
+}

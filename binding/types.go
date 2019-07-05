@@ -52,6 +52,13 @@ func cboolToBool(v C.Bool) bool {
 	return v == 1
 }
 
+func boolToCChar(v bool) C.char {
+	if v {
+		return C.char(1)
+	}
+	return C.char(0)
+}
+
 func getErrorCode(err error) int {
 	if err == nil {
 		return int(C.StatusOK)

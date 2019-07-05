@@ -781,6 +781,42 @@ Status NodeHost::RemoveData(ClusterID clusterID, NodeID nodeID) noexcept
   return Status(CNodeHostRemoveData(oid_, clusterID, nodeID));
 }
 
+bool NodeHost::HasNodeInfo(ClusterID clusterID, NodeID nodeID) noexcept
+{
+  return CNodeHostHasNodeInfo(oid_, clusterID, nodeID);
+}
+
+NodeHostInfo NodeHost::GetNodeHostInfo(NodeHostInfoOption option) noexcept
+{
+  ::NodeHostInfoOption opt;
+  opt.SkipLogInfo = option.SkipLogInfo;
+  ::NodeHostInfo info;
+  CNodeHostGetNodeHostInfo(oid_, opt, &info);
+  NodeHostInfo nhi;
+  nhi.RaftAddress = config_.RaftAddress;
+  for (uint64_t idx = 0; idx < info.ClusterInfoListLen; idx++) {
+    ClusterInfo ci;
+    ::ClusterInfo *cip = info.ClusterInfoList;
+    ci.ClusterID = cip[idx].ClusterID;
+    ci.NodeID = cip[idx].NodeID;
+    ci.IsLeader = cip[idx].IsLeader;
+    ci.SMType = static_cast<StateMachineType>(cip[idx].SMType);
+    for (uint64_t i = 0; i < cip[idx].NodeAddrPairsNum; i++) {
+      ci.Nodes[cip[idx].NodeAddrPairs[i].NodeID] = std::string(cip[idx].NodeAddrPairs[i].RaftAddress);
+    }
+    free(cip[idx].NodeAddrPairs);
+    ci.ConfigChangeIndex = cip[idx].ConfigChangeIndex;
+    ci.Pending = cip[idx].Pending;
+    nhi.ClusterInfoList.emplace_back(std::move(ci));
+  }
+  free(info.ClusterInfoList);
+  for (uint64_t idx = 0; idx < info.LogInfoLen; idx++) {
+    nhi.LogInfo.emplace_back(NodeInfo{info.LogInfo[idx].ClusterID, info.LogInfo[idx].NodeID});
+  }
+  free(info.LogInfo);
+  return nhi;
+}
+
 IOServiceHandler *RunIOServiceInGoRuntime(IOService* iosp,
   size_t threadCount) noexcept
 {
