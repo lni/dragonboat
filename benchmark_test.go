@@ -340,11 +340,12 @@ func (h *benchmarkMessageHandler) reset() {
 	atomic.StoreUint64(&h.count, 0)
 }
 
-func (h *benchmarkMessageHandler) HandleMessageBatch(batch pb.MessageBatch) {
+func (h *benchmarkMessageHandler) HandleMessageBatch(batch pb.MessageBatch) (uint64, uint64) {
 	v := atomic.AddUint64(&h.count, uint64(len(batch.Requests)))
 	if v >= h.expected {
 		h.ch <- struct{}{}
 	}
+	return 0, 0
 }
 
 func (h *benchmarkMessageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {

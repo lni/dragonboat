@@ -162,9 +162,11 @@ func newTestMessageHandler() *testMessageHandler {
 	}
 }
 
-func (h *testMessageHandler) HandleMessageBatch(reqs raftpb.MessageBatch) {
+func (h *testMessageHandler) HandleMessageBatch(reqs raftpb.MessageBatch) (uint64, uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	ss := uint64(0)
+	msg := uint64(0)
 	for _, req := range reqs.Requests {
 		epk := raftio.GetNodeInfo(req.ClusterId, req.To)
 		v, ok := h.requestCount[epk]
@@ -174,14 +176,18 @@ func (h *testMessageHandler) HandleMessageBatch(reqs raftpb.MessageBatch) {
 			h.requestCount[epk] = 1
 		}
 		if req.Type == raftpb.InstallSnapshot {
+			ss++
 			v, ok = h.snapshotCount[epk]
 			if ok {
 				h.snapshotCount[epk] = v + 1
 			} else {
 				h.snapshotCount[epk] = 1
 			}
+		} else {
+			msg++
 		}
 	}
+	return ss, msg
 }
 
 func (h *testMessageHandler) HandleSnapshotStatus(clusterID uint64,

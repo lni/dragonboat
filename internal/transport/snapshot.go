@@ -98,6 +98,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
+		t.metrics.snapshotCnnectionFailure()
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
@@ -149,6 +150,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 				logutil.DescribeNode(clusterID, nodeID))
 			t.sendSnapshotNotification(clusterID, nodeID, true)
 			close(c.failed)
+			t.metrics.snapshotCnnectionFailure()
 			return err
 		}
 		defer c.close()
@@ -171,6 +173,11 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 
 func (t *Transport) sendSnapshotNotification(clusterID uint64,
 	nodeID uint64, rejected bool) {
+	if rejected {
+		t.metrics.snapshotSendFailure()
+	} else {
+		t.metrics.snapshotSendSuccess()
+	}
 	if t.handlerRemoved() {
 		plog.Warningf("handler removed, snapshot notification to %s ignored",
 			logutil.DescribeNode(clusterID, nodeID))
