@@ -1,5 +1,5 @@
-github.com/VictoriaMetrics/metrics v1.5.0 h1:WvQqPn+z9pR1U7J58CgaGiWrN8phNGSpr2xUSxJnfpE=
-github.com/VictoriaMetrics/metrics v1.5.0/go.mod h1:QZAL5yLaXvhSPeib0ahluGo9VK0HXDZHovKaKlpuWvs=
+github.com/VictoriaMetrics/metrics v1.6.2 h1:VMe8c8ZBPgNVZkPoT06LsoU2nb+8e7iPaOWbVRNhxjo=
+github.com/VictoriaMetrics/metrics v1.6.2/go.mod h1:LU2j9qq7xqZYXz8tF3/RQnB2z2MbZms5TDiIg9/NHiQ=
 github.com/golang/protobuf v1.2.0 h1:P3YflyNX/ehuJFLhxviNdFxQPkGK5cDcApsge1SqnvM=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/valyala/fastrand v1.0.0 h1:LUKT9aKer2dVQNUi3waewTbKV+7H17kvWFNKs2ObdkI=
