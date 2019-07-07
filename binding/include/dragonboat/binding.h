@@ -199,6 +199,52 @@ struct LeaderInfo
   uint64_t LeaderID;
 };
 
+struct NodeAddrPair
+{
+  uint64_t NodeID;
+  char *RaftAddress;
+};
+
+typedef struct NodeAddrPair NodeAddrPair;
+
+struct ClusterInfo
+{
+  uint64_t ClusterID;
+  uint64_t NodeID;
+  Bool IsLeader;
+  Bool IsObserver;
+  uint64_t SMType;
+  NodeAddrPair *NodeAddrPairs;
+  uint64_t NodeAddrPairsNum;
+  uint64_t ConfigChangeIndex;
+  Bool Pending;
+};
+
+typedef struct ClusterInfo ClusterInfo;
+
+struct NodeInfo
+{
+  uint64_t ClusterID;
+  uint64_t NodeID;
+};
+
+typedef struct NodeInfo NodeInfo;
+
+struct NodeHostInfo
+{
+  ClusterInfo *ClusterInfoList;
+  uint64_t ClusterInfoListLen;
+  NodeInfo *LogInfo;
+  uint64_t LogInfoLen;
+};
+
+typedef struct NodeHostInfo NodeHostInfo;
+
+typedef struct
+{
+  Bool SkipLogInfo;
+} NodeHostInfoOption;
+
 typedef struct
 {
   Bool Exported;
@@ -348,6 +394,9 @@ int CNodeHostReadLocal(uint64_t oid, uint64_t clusterID,
 int CNodeHostSyncRemoveData(uint64_t oid,
   uint64_t clusterID, uint64_t nodeID, uint64_t timeout);
 int CNodeHostRemoveData(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
+Bool CNodeHostHasNodeInfo(uint64_t oid, uint64_t clusterID, uint64_t nodeID);
+void CNodeHostGetNodeHostInfo(uint64_t oid,
+  NodeHostInfoOption opt, NodeHostInfo *nhi);
 
 #ifdef __cplusplus
 }

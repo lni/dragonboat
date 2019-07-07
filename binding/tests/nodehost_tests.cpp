@@ -794,6 +794,71 @@ TEST_F(NodeHostTest, ClusterMembershipCanBeQueried)
   EXPECT_EQ(s.Code(), dragonboat::Status::ErrClusterNotFound);
 }
 
+TEST_F(NodeHostTest, NodeHostInfoCanBeQueried)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+
+  dragonboat::NodeHostInfoOption option;
+  option.SkipLogInfo = false;
+  dragonboat::NodeHostInfo info = nh_->GetNodeHostInfo(option);
+  EXPECT_EQ(info.ClusterInfoList.size(), 0);
+  EXPECT_EQ(info.LogInfo.size(), 0);
+
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+
+  info = nh_->GetNodeHostInfo(option);
+  EXPECT_EQ(info.ClusterInfoList.size(), 1);
+  dragonboat::ClusterInfo cinfo = info.ClusterInfoList.back();
+  EXPECT_EQ(cinfo.ClusterID, 1);
+  EXPECT_EQ(cinfo.NodeID, 1);
+  EXPECT_TRUE(cinfo.IsLeader);
+  EXPECT_FALSE(cinfo.IsObserver);
+  EXPECT_EQ(cinfo.SMType, REGULAR_STATEMACHINE);
+  EXPECT_EQ(cinfo.Nodes.size(), 1);
+  EXPECT_EQ(cinfo.Nodes[1], "localhost:9050");
+  EXPECT_EQ(cinfo.ConfigChangeIndex, 1);
+  EXPECT_FALSE(cinfo.Pending);
+  EXPECT_EQ(info.LogInfo.size(), 1);
+  dragonboat::NodeInfo linfo = info.LogInfo.back();
+  EXPECT_EQ(linfo.ClusterID, 1);
+  EXPECT_EQ(linfo.NodeID, 1);
+
+  option.SkipLogInfo = true;
+  info = nh_->GetNodeHostInfo(option);
+  EXPECT_EQ(info.ClusterInfoList.size(), 1);
+  cinfo = info.ClusterInfoList.back();
+  EXPECT_EQ(cinfo.ClusterID, 1);
+  EXPECT_EQ(cinfo.NodeID, 1);
+  EXPECT_TRUE(cinfo.IsLeader);
+  EXPECT_FALSE(cinfo.IsObserver);
+  EXPECT_EQ(cinfo.SMType, REGULAR_STATEMACHINE);
+  EXPECT_EQ(cinfo.Nodes.size(), 1);
+  EXPECT_EQ(cinfo.Nodes[1], "localhost:9050");
+  EXPECT_EQ(cinfo.ConfigChangeIndex, 1);
+  EXPECT_FALSE(cinfo.Pending);
+  EXPECT_EQ(info.LogInfo.size(), 0);
+}
+
+TEST_F(NodeHostTest, HasNodeInfo)
+{
+  dragonboat::Peers p;
+  p.AddMember("localhost:9050", 1);
+  auto config = getTestConfig();
+  EXPECT_FALSE(nh_->HasNodeInfo(1, 1));
+  dragonboat::Status s = nh_->StartCluster(
+    p, false, CreateRegularStateMachine,
+    config);
+  EXPECT_TRUE(s.OK());
+  waitForElectionToComplete();
+  EXPECT_TRUE(nh_->HasNodeInfo(1, 1));
+}
+
 TEST_F(NodeHostTest, ProposalAndRead)
 {
   auto config = getTestConfig();
