@@ -418,25 +418,25 @@ class IOService
 class ClusterInfo
 {
  public:
-	// ClusterID is the cluster ID of the Raft cluster node.
+  // ClusterID is the cluster ID of the Raft cluster node.
   uint64_t ClusterID;
-	// NodeID is the node ID of the Raft cluster node.
+  // NodeID is the node ID of the Raft cluster node.
   uint64_t NodeID;
-	// IsLeader indicates whether this is a leader node.
+  // IsLeader indicates whether this is a leader node.
   bool IsLeader;
   // IsObserver indicates whether this is a non-voting observer node.
   bool IsObserver;
-	// StateMachineType is the type of the state machine.
+  // StateMachineType is the type of the state machine.
   StateMachineType SMType;
-	// Nodes is a map of member node IDs to their Raft addresses.
+  // Nodes is a map of member node IDs to their Raft addresses.
   std::map<uint64_t, std::string> Nodes;
-	// ConfigChangeIndex is the current config change index of the Raft node.
-	// ConfigChangeIndex is Raft Log index of the last applied membership
-	// change entry.
+  // ConfigChangeIndex is the current config change index of the Raft node.
+  // ConfigChangeIndex is Raft Log index of the last applied membership
+  // change entry.
   uint64_t ConfigChangeIndex;
-	// Pending is a boolean flag indicating whether details of the cluster node
-	// is not available. The Pending flag is set to true usually because the node
-	// has not had anything applied yet.
+  // Pending is a boolean flag indicating whether details of the cluster node
+  // is not available. The Pending flag is set to true usually because the node
+  // has not had anything applied yet.
   bool Pending;
 };
 
@@ -458,8 +458,8 @@ class NodeHostInfo
   std::string RaftAddress;
   // ClusterInfo is a list of all Raft clusters managed by the NodeHost
   std::vector<ClusterInfo> ClusterInfoList;
-	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
-	// stored on the NodeHost.
+  // LogInfo is a list of raftio.NodeInfo values representing all Raft logs
+  // stored on the NodeHost.
   std::vector<NodeInfo> LogInfo;
 };
 
