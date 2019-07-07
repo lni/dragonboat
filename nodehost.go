@@ -1891,9 +1891,11 @@ func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 	return &messageHandler{nh: nh}
 }
 
-func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) {
+func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64) {
 	nh := h.nh
 	mustKeep := false
+	snapshotCount := uint64(0)
+	msgCount := uint64(0)
 	if nh.isPartitioned() {
 		// InstallSnapshot is a in-memory local message type that will never be
 		// dropped in production as it will never be sent via networks
@@ -1903,7 +1905,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) {
 			}
 		}
 		if !mustKeep {
-			return
+			return 0, 0
 		}
 	}
 	for _, req := range msg.Requests {
@@ -1925,14 +1927,18 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) {
 		if ok {
 			if req.Type == pb.InstallSnapshot {
 				q.AddSnapshot(req)
+				snapshotCount++
 			} else {
 				if added, stopped := q.Add(req); !added || stopped {
 					plog.Warningf("dropped an incoming message")
+				} else {
+					msgCount++
 				}
 			}
 			nh.execEngine.setNodeReady(req.ClusterId)
 		}
 	}
+	return snapshotCount, msgCount
 }
 
 func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,

@@ -97,7 +97,7 @@ type INodeAddressResolver interface {
 // IRaftMessageHandler is the interface required to handle incoming raft
 // requests.
 type IRaftMessageHandler interface {
-	HandleMessageBatch(batch pb.MessageBatch)
+	HandleMessageBatch(batch pb.MessageBatch) (uint64, uint64)
 	HandleUnreachable(clusterID uint64, nodeID uint64)
 	HandleSnapshotStatus(clusterID uint64, nodeID uint64, rejected bool)
 	HandleSnapshot(clusterID uint64, nodeID uint64, from uint64)
@@ -193,6 +193,7 @@ type Transport struct {
 		breakers map[string]*circuit.Breaker
 	}
 	lanes               uint32
+	metrics             *transportMetrics
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
 	sourceAddress       string
@@ -240,6 +241,15 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]sendQueue)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
+	msgConn := func() float64 {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		return float64(len(t.mu.queues))
+	}
+	ssCount := func() float64 {
+		return float64(atomic.LoadUint32(&t.lanes))
+	}
+	t.metrics = newTransportMetrics(true, msgConn, ssCount)
 	return t, nil
 }
 
@@ -327,7 +337,9 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 			}
 		}
 	}
-	handler.(IRaftMessageHandler).HandleMessageBatch(req)
+	ssCount, msgCount := handler.(IRaftMessageHandler).HandleMessageBatch(req)
+	dropedMsgCount := uint64(len(req.Requests)) - ssCount - msgCount
+	t.metrics.receivedMessages(ssCount, msgCount, dropedMsgCount)
 }
 
 func (t *Transport) snapshotReceived(clusterID uint64,
@@ -364,6 +376,14 @@ func (t *Transport) sendUnreachableNotification(addr string) {
 // The generic async send Go pattern used in ASyncSend is found in CockroachDB's
 // codebase.
 func (t *Transport) ASyncSend(req pb.Message) bool {
+	v := t.asyncSend(req)
+	if !v {
+		t.metrics.messageSendFailure(1)
+	}
+	return v
+}
+
+func (t *Transport) asyncSend(req pb.Message) bool {
 	if req.Type == pb.InstallSnapshot {
 		panic("snapshot message must be sent via its own channel.")
 	}
@@ -378,6 +398,7 @@ func (t *Transport) ASyncSend(req pb.Message) bool {
 	}
 	// fail fast
 	if !t.GetCircuitBreaker(addr).Ready() {
+		t.metrics.messageConnectionFailure()
 		return false
 	}
 	// get the channel, create it in case it is not in the queue map
@@ -441,6 +462,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
 			t.sourceAddress, remoteHost, err.Error())
 		breaker.Fail()
+		t.metrics.messageConnectionFailure()
 	}
 }
 
@@ -546,7 +568,12 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 		}
 		return conn.SendMessageBatch(updated)
 	}
-	return conn.SendMessageBatch(batch)
+	if err := conn.SendMessageBatch(batch); err != nil {
+		t.metrics.messageSendFailure(uint64(len(batch.Requests)))
+		return err
+	}
+	t.metrics.messageSendSuccess(uint64(len(batch.Requests)))
+	return nil
 }
 
 func (t *Transport) handlerRemoved() bool {
