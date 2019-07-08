@@ -1,3 +1,11 @@
+## v3.2 (TBD)
+
+Dragonboat v3.1 is a minor release with new features and bug fixes. All v3.1.x users are recommended to upgrade. 
+
+### Breaking changes
+
+- No breanking change for regular users. If you have built customized transport module implementing the raftio.IRaftRPC interface, there is minor change to the config.RaftRPCFactoryFunc type. See github.com/lni/dragoboat/config/config.go for details.
+
 ## v3.1 (2019-07-04)
 
 Dragonboat v3.1 is a maintenance release with breaking change. All v3.0.x users are recommended to upgrade. Please make sure to carefully read the CHANGELOG below before upgrading.
