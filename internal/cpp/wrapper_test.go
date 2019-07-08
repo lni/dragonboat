@@ -465,7 +465,7 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
+	yacount, _ := ds2.Lookup([]byte{0})
 	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
@@ -551,7 +551,7 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
+	yacount, _ := ds2.Lookup([]byte{0})
 	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
@@ -747,7 +747,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
+	yacount, _ := ds2.Lookup([]byte{0})
 	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
@@ -887,7 +887,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		f.Write(chunk.Data)
 	}
 	f.Close()
-	f, err = os.Open(fp)
+	f, _ = os.Open(fp)
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
@@ -924,7 +924,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recover from snapshot %v", err)
 	}
-	yacount, err := ds2.Lookup([]byte{0})
+	yacount, _ := ds2.Lookup([]byte{0})
 	if v := binary.LittleEndian.Uint64(yacount.([]byte)); v != 1 {
 		t.Fatalf("lookup recovered data store returned %v, want 1", v)
 	}
