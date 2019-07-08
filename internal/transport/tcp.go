@@ -66,6 +66,15 @@ type requestHeader struct {
 	crc    uint32
 }
 
+// TODO:
+// TCP is never reliable [1]. dragonboat uses application layer crc32 checksum
+// to help protecting raft state and log from some faulty network switches or
+// buggy kernels. However, this is not necessary when TLS encryption is used.
+// Update tcp.go to stop crc32 checking messages when TLS is used.
+//
+// [1] twitter's 2015 data corruption accident -
+// https://www.evanjones.ca/checksum-failure-is-a-kernel-bug.html
+// https://www.evanjones.ca/tcp-and-ethernet-checksums-fail.html
 func (h *requestHeader) encode(buf []byte) []byte {
 	if len(buf) < requestHeaderSize {
 		panic("input buf too small")
