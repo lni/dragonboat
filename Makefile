@@ -283,7 +283,7 @@ BUILD_TEST_ONLY=-c -o test.bin
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-multiraft test-utils test-config test-client test-server \
 	test-tools
-ci-quick-test: test-raft test-raftpb test-rsm test-logdb test-transport \
+travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-utils test-config test-client test-server test-tests test-tools
 test: dragonboat-test test-drummer test-plugins test-tests
 slow-test: test-slow-multiraft test-slow-drummer
@@ -635,4 +635,4 @@ clean: clean-binding
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb
+	docker-test-no-rocksdb travis-ci-test
