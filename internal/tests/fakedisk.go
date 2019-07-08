@@ -118,18 +118,22 @@ func (f *FakeDiskSM) GetHash() (uint64, error) {
 	return 0, nil
 }
 
+// SimDiskSM is a fake disk based state machine used for testing purposes
 type SimDiskSM struct {
 	applied uint64
 }
 
+// NewSimDiskSM ...
 func NewSimDiskSM(applied uint64) *SimDiskSM {
 	return &SimDiskSM{applied: applied}
 }
 
+// Open ...
 func (s *SimDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 	return s.applied, nil
 }
 
+// Update ...
 func (s *SimDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	fmt.Printf("updated called %v\n", ents)
 	for _, e := range ents {
@@ -139,16 +143,19 @@ func (s *SimDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	return ents, nil
 }
 
+// Lookup ...
 func (s *SimDiskSM) Lookup(query interface{}) (interface{}, error) {
 	result := s.applied
 	return result, nil
 }
 
+// PrepareSnapshot ...
 func (s *SimDiskSM) PrepareSnapshot() (interface{}, error) {
 	v := &SimDiskSM{applied: s.applied}
 	return v, nil
 }
 
+// SaveSnapshot ...
 func (s *SimDiskSM) SaveSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) error {
 	pit := ctx.(*SimDiskSM)
@@ -158,6 +165,7 @@ func (s *SimDiskSM) SaveSnapshot(ctx interface{},
 	return err
 }
 
+// RecoverFromSnapshot ...
 func (s *SimDiskSM) RecoverFromSnapshot(r io.Reader,
 	stopc <-chan struct{}) error {
 	v := make([]byte, 8)
@@ -168,10 +176,12 @@ func (s *SimDiskSM) RecoverFromSnapshot(r io.Reader,
 	return nil
 }
 
+// Sync ...
 func (s *SimDiskSM) Sync() error {
 	return nil
 }
 
+// Close ...
 func (s *SimDiskSM) Close() error {
 	return nil
 }
