@@ -31,7 +31,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/utils/netutil"
 	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/lni/dragonboat/v3/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (
@@ -273,7 +273,7 @@ func (c *TCPConnection) Close() {
 }
 
 // SendMessageBatch sends a raft message batch to remote node.
-func (c *TCPConnection) SendMessageBatch(batch raftpb.MessageBatch) error {
+func (c *TCPConnection) SendMessageBatch(batch pb.MessageBatch) error {
 	header := requestHeader{method: raftType}
 	sz := batch.SizeUpperLimit()
 	var buf []byte
@@ -314,7 +314,7 @@ func (c *TCPSnapshotConnection) Close() {
 }
 
 // SendSnapshotChunk sends the specified snapshot chunk to remote node.
-func (c *TCPSnapshotConnection) SendSnapshotChunk(chunk raftpb.SnapshotChunk) error {
+func (c *TCPSnapshotConnection) SendSnapshotChunk(chunk pb.SnapshotChunk) error {
 	header := requestHeader{method: snapshotType}
 	sz := chunk.Size()
 	buf := make([]byte, sz)
@@ -331,32 +331,18 @@ type TCPTransport struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
 	requestHandler raftio.RequestHandler
-	chunks         raftio.IChunkSink
+	chunkHandler   raftio.IChunkHandler
 }
 
 // NewTCPTransport creates and returns a new TCP transport module.
 func NewTCPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	sinkFactory raftio.ChunkSinkFactory) raftio.IRaftRPC {
-	chunks := sinkFactory()
-	stopper := syncutil.NewStopper()
-	stopper.RunWorker(func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				chunks.Tick()
-			case <-stopper.ShouldStop():
-				return
-			}
-		}
-	})
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
 	return &TCPTransport{
 		nhConfig:       nhConfig,
-		stopper:        stopper,
+		stopper:        syncutil.NewStopper(),
 		requestHandler: requestHandler,
-		chunks:         chunks,
+		chunkHandler:   chunkHandler,
 	}
 }
 
@@ -405,7 +391,6 @@ func (g *TCPTransport) Start() error {
 // Stop stops the TCP transport module.
 func (g *TCPTransport) Stop() {
 	g.stopper.Stop()
-	g.chunks.Close()
 }
 
 // GetConnection returns a new raftio.IConnection for sending raft messages.
@@ -460,17 +445,17 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 			return
 		}
 		if rheader.method == raftType {
-			batch := raftpb.MessageBatch{}
+			batch := pb.MessageBatch{}
 			if err := batch.Unmarshal(buf); err != nil {
 				return
 			}
 			g.requestHandler(batch)
 		} else {
-			chunk := raftpb.SnapshotChunk{}
+			chunk := pb.SnapshotChunk{}
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}
-			if !g.chunks.AddChunk(chunk) {
+			if !g.chunkHandler.AddChunk(chunk) {
 				plog.Errorf("chunk rejected %s", snapshotKey(chunk))
 				return
 			}

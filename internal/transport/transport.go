@@ -226,11 +226,9 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		snapshotLocator:   locator,
 		streamConnections: streamConnections,
 	}
-	sinkFactory := func() raftio.IChunkSink {
-		return NewSnapshotChunks(t.handleRequest,
-			t.snapshotReceived, t.getDeploymentID, t.snapshotLocator)
-	}
-	raftRPC := createTransportRPC(nhConfig, t.handleRequest, sinkFactory)
+	chunks := NewSnapshotChunks(t.handleRequest,
+		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator)
+	raftRPC := createTransportRPC(nhConfig, t.handleRequest, chunks)
 	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC
 	if err := t.raftRPC.Start(); err != nil {
@@ -238,6 +236,20 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		t.raftRPC.Stop()
 		return nil, err
 	}
+	t.stopper.RunWorker(func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				chunks.Tick()
+			case <-stopper.ShouldStop():
+				chunks.Close()
+				return
+			}
+		}
+	})
+
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]sendQueue)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
@@ -590,14 +602,14 @@ func setDialTimeoutSecond(v uint64) {
 
 func createTransportRPC(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	sinkFactory raftio.ChunkSinkFactory) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
 	var factory config.RaftRPCFactoryFunc
 	if nhConfig.RaftRPCFactory != nil {
 		factory = nhConfig.RaftRPCFactory
 	} else {
 		factory = NewTCPTransport
 	}
-	return factory(nhConfig, requestHandler, sinkFactory)
+	return factory(nhConfig, requestHandler, chunkHandler)
 }
 
 func sampleNodeInfoList(l []raftio.NodeInfo) string {

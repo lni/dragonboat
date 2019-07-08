@@ -34,20 +34,20 @@ import (
 // have them processed by Dragonboat.
 type RequestHandler func(req pb.MessageBatch)
 
-// ChunkSinkFactory is a factory function that returns a new IChunkSink
-// instance. The returned IChunkSink will be used to accept future received
-// snapshot chunks.
-type ChunkSinkFactory func() IChunkSink
-
-// IChunkSink is the interface of snapshot chunk sink. IChunkSink is used to
-// accept received snapshot chunks.
-type IChunkSink interface {
-	// Close closes the sink instance and releases all resources held by it.
-	Close()
+// IChunkHandler is the handler interface to handle incoming snapshot chunks.
+type IChunkHandler interface {
 	// AddChunk adds a new snapshot chunk to the snapshot chunk sink. All chunks
 	// belong to the snapshot will be combined into the snapshot image and then
 	// be passed to Dragonboat once all member chunks are received.
 	AddChunk(chunk pb.SnapshotChunk) bool
+}
+
+// IChunkSink is the interface of snapshot chunk sink. IChunkSink is used to
+// accept received snapshot chunks.
+type IChunkSink interface {
+	IChunkHandler
+	// Close closes the sink instance and releases all resources held by it.
+	Close()
 	// Tick moves forward the internal logic clock. It is suppose to be called
 	// roughly every second.
 	Tick()

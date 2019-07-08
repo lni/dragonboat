@@ -36,7 +36,7 @@ var (
 // RaftRPCFactoryFunc is the factory function that creates the Raft RPC module
 // instance for exchanging Raft messages between NodeHosts.
 type RaftRPCFactoryFunc func(NodeHostConfig,
-	raftio.RequestHandler, raftio.ChunkSinkFactory) raftio.IRaftRPC
+	raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.

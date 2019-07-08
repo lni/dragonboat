@@ -133,7 +133,7 @@ type NOOPTransport struct {
 // NewNOOPTransport creates a new NOOPTransport instance.
 func NewNOOPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	sinkFactory raftio.ChunkSinkFactory) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
 	return &NOOPTransport{
 		req:     &noopRequest{},
 		connReq: &noopConnectRequest{},
