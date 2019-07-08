@@ -240,7 +240,7 @@ func NewNodeHost(cfg C.NodeHostConfig) uint64 {
 		MaxSendQueueSize:    uint64(cfg.MaxSendQueueSize),
 		MaxReceiveQueueSize: uint64(cfg.MaxReceiveQueueSize),
 		EnableMetrics:       cboolToBool(cfg.EnableMetrics),
-		RaftEventListener:   cpp.RaftListenerWrapperFactory(cfg.RaftEventListener),
+		RaftEventListener:   cpp.NewRaftEventListener(cfg.RaftEventListener),
 	}
 	nh, err := dragonboat.NewNodeHost(*c)
 	if err != nil {
@@ -360,7 +360,7 @@ func NodeHostSyncGetSession(oid uint64, timeout uint64,
 	return csoid, getErrorCode(err)
 }
 
-// NodeHostCloseSession closes the specified client session instance.
+// NodeHostSyncCloseSession closes the specified client session instance.
 //export NodeHostSyncCloseSession
 func NodeHostSyncCloseSession(oid uint64, timeout uint64, csoid uint64) int {
 	nh := getNodeHost(oid)
@@ -767,17 +767,17 @@ func NodeHostRemoveData(oid uint64, clusterID uint64, nodeID uint64) int {
 	return getErrorCode(nh.RemoveData(clusterID, nodeID))
 }
 
-// HasNodeInfo returns a boolean value indicating whether the specified node
-// has been bootstrapped on the current NodeHost instance.
+// NodeHostHasNodeInfo returns a boolean value indicating whether the specified
+// node has been bootstrapped on the current NodeHost instance.
 //export NodeHostHasNodeInfo
 func NodeHostHasNodeInfo(oid uint64, clusterID uint64, nodeID uint64) C.char {
 	nh := getNodeHost(oid)
 	return boolToCChar(nh.HasNodeInfo(clusterID, nodeID))
 }
 
-// GetNodeHostInfo returns a NodeHostInfo instance that contains all details
-// of the NodeHost, this includes details of all Raft clusters managed by the
-// the NodeHost instance.
+// NodeHostGetNodeHostInfo returns a NodeHostInfo instance that contains all
+// details of the NodeHost, this includes details of all Raft clusters managed
+// by the the NodeHost instance.
 //export NodeHostGetNodeHostInfo
 func NodeHostGetNodeHostInfo(oid uint64, opt C.NodeHostInfoOption,
 	cnhi unsafe.Pointer) {

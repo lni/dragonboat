@@ -283,6 +283,7 @@ func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 	return sm.Result{Value: uint64(v)}, nil
 }
 
+// BatchedUpdate updates the data store in batches.
 func (ds *RegularStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	panic("BatchedUpdate not supported in C++ regular state machine")
 }
@@ -421,6 +422,7 @@ func getCPPSOFileName(dsname string) string {
 	return fmt.Sprintf("./dragonboat-cpp-plugin-%s.so", d)
 }
 
+// ConcurrentStateMachineWrapper ...
 type ConcurrentStateMachineWrapper struct {
 	rsm.OffloadedStatus
 	dataStore *C.CPPConcurrentStateMachine
@@ -432,10 +434,12 @@ func (ds *ConcurrentStateMachineWrapper) destroy() {
 	C.DestroyDBConcurrentStateMachine(ds.dataStore)
 }
 
+// Open ...
 func (ds *ConcurrentStateMachineWrapper) Open() (uint64, error) {
 	panic("Open not suppose to be called on ConcurrentStateMachineWrapper")
 }
 
+// Update ...
 func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
 	results, err := ds.BatchedUpdate([]sm.Entry{{
@@ -451,6 +455,7 @@ func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 	return results[0].Result, nil
 }
 
+// BatchedUpdate ...
 func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	ds.ensureNotDestroyed()
 	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
@@ -466,7 +471,7 @@ func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm
 	}
 	C.BatchedUpdateDBConcurrentStateMachine(
 		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
-	for idx, _ := range entries {
+	for idx := 0; idx < len(entries); idx++ {
 		ep := (*C.struct_Entry)(unsafe.Pointer(
 			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
 		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
@@ -474,6 +479,7 @@ func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm
 	return entries, nil
 }
 
+// Lookup ...
 func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
@@ -493,20 +499,24 @@ func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{},
 	return result, nil
 }
 
+// NALookup ...
 func (ds *ConcurrentStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
 	panic("NALookup not supported in C++ state machine")
 }
 
+// Sync ...
 func (ds *ConcurrentStateMachineWrapper) Sync() error {
 	panic("Sync not suppose to be called on ConcurrentStateMachineWrapper")
 }
 
+// GetHash ...
 func (ds *ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
 	v := C.GetHashDBConcurrentStateMachine(ds.dataStore)
 	return uint64(v), nil
 }
 
+// PrepareSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
@@ -526,6 +536,7 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 	return result, nil
 }
 
+// SaveSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	writer *rsm.SnapshotWriter,
 	session []byte,
@@ -560,6 +571,7 @@ func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	return false, actualSz + rsm.SnapshotHeaderSize, nil
 }
 
+// RecoverFromSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
@@ -580,11 +592,13 @@ func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(
 	return getSnapshotErrorFromErrNo(int(r))
 }
 
+// StreamSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
 	panic("StreamSnapshot not suppose to be called on ConcurrentStateMachineWrapper")
 }
 
+// Offloaded ...
 func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
@@ -595,20 +609,24 @@ func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) {
 	}
 }
 
+// Loaded ...
 func (ds *ConcurrentStateMachineWrapper) Loaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
 }
 
+// ConcurrentSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) ConcurrentSnapshot() bool {
 	return true
 }
 
+// OnDiskStateMachine ...
 func (ds *ConcurrentStateMachineWrapper) OnDiskStateMachine() bool {
 	return false
 }
 
+// StateMachineType ...
 func (ds *ConcurrentStateMachineWrapper) StateMachineType() pb.StateMachineType {
 	return pb.ConcurrentStateMachine
 }
@@ -619,6 +637,7 @@ func (ds *ConcurrentStateMachineWrapper) ensureNotDestroyed() {
 	}
 }
 
+// OnDiskStateMachineWrapper ...
 type OnDiskStateMachineWrapper struct {
 	rsm.OffloadedStatus
 	dataStore *C.CPPOnDiskStateMachine
@@ -631,6 +650,7 @@ func (ds *OnDiskStateMachineWrapper) destroy() {
 	C.DestroyDBOnDiskStateMachine(ds.dataStore)
 }
 
+// Open ...
 func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 	if ds.opened {
 		panic("Open called more than once on OnDiskStateMachineWrapper")
@@ -650,6 +670,7 @@ func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 	return applied, nil
 }
 
+// Update ...
 func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	e pb.Entry) (sm.Result, error) {
 	results, err := ds.BatchedUpdate([]sm.Entry{{
@@ -665,6 +686,7 @@ func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
 	return results[0].Result, nil
 }
 
+// BatchedUpdate ...
 func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	if !ds.opened {
 		panic("BatchedUpdate called when not opened")
@@ -683,7 +705,7 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 	}
 	C.BatchedUpdateDBOnDiskStateMachine(
 		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
-	for idx, _ := range entries {
+	for idx := 0; idx < len(entries); idx++ {
 		ep := (*C.struct_Entry)(unsafe.Pointer(
 			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
 		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
@@ -691,6 +713,7 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 	return entries, nil
 }
 
+// Lookup ...
 func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, error) {
 	if !ds.opened {
 		panic("Lookup called when not opened")
@@ -713,10 +736,12 @@ func (ds *OnDiskStateMachineWrapper) Lookup(query interface{}) (interface{}, err
 	return result, nil
 }
 
+// NALookup ...
 func (ds *OnDiskStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
 	panic("NALookup not supported in C++ state machine")
 }
 
+// Sync ...
 func (ds *OnDiskStateMachineWrapper) Sync() error {
 	if !ds.opened {
 		panic("Sync called when not opened")
@@ -729,12 +754,14 @@ func (ds *OnDiskStateMachineWrapper) Sync() error {
 	return nil
 }
 
+// GetHash ...
 func (ds *OnDiskStateMachineWrapper) GetHash() (uint64, error) {
 	ds.ensureNotDestroyed()
 	v := C.GetHashDBOnDiskStateMachine(ds.dataStore)
 	return uint64(v), nil
 }
 
+// PrepareSnapshot ...
 func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	if !ds.opened {
 		panic("PrepareSnapshot called when not opened")
@@ -757,6 +784,7 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	return result, nil
 }
 
+// SaveSnapshot ...
 func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	writer *rsm.SnapshotWriter,
 	session []byte,
@@ -806,6 +834,7 @@ func (ds *OnDiskStateMachineWrapper) saveDummySnapshot(
 	return writer.GetPayloadSize(sz) + rsm.SnapshotHeaderSize, nil
 }
 
+// RecoverFromSnapshot ...
 func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(
 	reader *rsm.SnapshotReader,
 	files []sm.SnapshotFile) error {
@@ -820,6 +849,7 @@ func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(
 	return getSnapshotErrorFromErrNo(int(r))
 }
 
+// StreamSnapshot ...
 func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	writer *rsm.ChunkWriter) error {
 	if !ds.opened {
@@ -842,6 +872,7 @@ func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 	return err
 }
 
+// Offloaded ...
 func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
@@ -852,20 +883,24 @@ func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) {
 	}
 }
 
+// Loaded ...
 func (ds *OnDiskStateMachineWrapper) Loaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
 }
 
+// ConcurrentSnapshot ...
 func (ds *OnDiskStateMachineWrapper) ConcurrentSnapshot() bool {
 	return true
 }
 
+// OnDiskStateMachine ...
 func (ds *OnDiskStateMachineWrapper) OnDiskStateMachine() bool {
 	return true
 }
 
+// StateMachineType ...
 func (ds *OnDiskStateMachineWrapper) StateMachineType() pb.StateMachineType {
 	return pb.OnDiskStateMachine
 }
@@ -876,11 +911,11 @@ func (ds *OnDiskStateMachineWrapper) ensureNotDestroyed() {
 	}
 }
 
-type RaftListenerWrapper struct {
+type raftListenerWrapper struct {
 	listener unsafe.Pointer
 }
 
-func (lw *RaftListenerWrapper) LeaderUpdated(info raftio.LeaderInfo) {
+func (lw *raftListenerWrapper) LeaderUpdated(info raftio.LeaderInfo) {
 	cinfo := C.struct_LeaderInfo{
 		ClusterID: C.uint64_t(info.ClusterID),
 		NodeID:    C.uint64_t(info.NodeID),
@@ -890,10 +925,12 @@ func (lw *RaftListenerWrapper) LeaderUpdated(info raftio.LeaderInfo) {
 	C.LeaderUpdated(lw.listener, cinfo)
 }
 
-func RaftListenerWrapperFactory(
+// NewRaftEventListener creates and returns the new raftio.IRaftEventListener
+// instance to handle cpp listener.
+func NewRaftEventListener(
 	listener unsafe.Pointer) raftio.IRaftEventListener {
 	if listener == nil {
 		return nil
 	}
-	return &RaftListenerWrapper{listener: listener}
+	return &raftListenerWrapper{listener: listener}
 }
