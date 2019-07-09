@@ -3209,12 +3209,25 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 }
 
 type testRaftEventListener struct {
+	mu       sync.Mutex
 	received []raftio.LeaderInfo
 }
 
 func (rel *testRaftEventListener) LeaderUpdated(info raftio.LeaderInfo) {
+	rel.mu.Lock()
+	defer rel.mu.Unlock()
 	plog.Infof("leader info: %+v", info)
 	rel.received = append(rel.received, info)
+}
+
+func (rel *testRaftEventListener) get() []raftio.LeaderInfo {
+	rel.mu.Lock()
+	defer rel.mu.Unlock()
+	r := make([]raftio.LeaderInfo, 0)
+	for _, rec := range rel.received {
+		r = append(r, rec)
+	}
+	return r
 }
 
 func TestRaftEventsAreReported(t *testing.T) {
@@ -3262,8 +3275,10 @@ func TestRaftEventsAreReported(t *testing.T) {
 		t.Fatalf("add node failed %v", err)
 	}
 	cancel()
+	var received []raftio.LeaderInfo
 	for i := 0; i < 1000; i++ {
-		if len(rel.received) >= 4 {
+		received = rel.get()
+		if len(received) >= 4 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -3297,9 +3312,9 @@ func TestRaftEventsAreReported(t *testing.T) {
 	}
 	expected := []raftio.LeaderInfo{exp0, exp1, exp2, exp3}
 	for idx := range expected {
-		if !reflect.DeepEqual(&(rel.received[idx]), &expected[idx]) {
+		if !reflect.DeepEqual(&(received[idx]), &expected[idx]) {
 			t.Errorf("unexpecded leader info, %d, %v, %v",
-				idx, rel.received[idx], expected[idx])
+				idx, received[idx], expected[idx])
 		}
 	}
 }
