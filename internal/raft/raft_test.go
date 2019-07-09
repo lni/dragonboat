@@ -29,6 +29,32 @@ import (
 // integration tests.
 //
 
+func TestMustBeLeaderPanicWhenNotLeader(t *testing.T) {
+	tests := []struct {
+		st          State
+		shouldPanic bool
+	}{
+		{follower, true},
+		{candidate, true},
+		{leader, false},
+		{observer, true},
+	}
+	for idx, tt := range tests {
+		r := raft{state: tt.st}
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					if tt.shouldPanic {
+						t.Errorf("%d, failed to panic", idx)
+					}
+				}
+			}()
+			r.mustBeLeader()
+		}()
+	}
+}
+
 func TestOneNodeWithHigherTermAndOneNodeWithMostRecentLogCanCompleteElection(t *testing.T) {
 	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	b := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
@@ -1858,6 +1884,62 @@ func TestHandlegElection(t *testing.T) {
 	}
 }
 
+func TestLeaderStepDownAfterRemoved(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+	r.becomeFollower(2, 2)
+	msg := pb.Message{
+		Type: pb.Election,
+	}
+	r.handleNodeElection(msg)
+	if r.state != leader {
+		t.Errorf("not a leader")
+	}
+	r.removeNode(2)
+	if r.state != leader {
+		t.Errorf("no longer a leader, %s", r.state)
+	}
+	r.removeNode(1)
+	if r.state != follower {
+		t.Errorf("not a follower, %s", r.state)
+	}
+	if r.leaderID != NoLeader {
+		t.Errorf("unexpected leader id %d", r.leaderID)
+	}
+}
+
+func TestLeaderStepDownAfterRemovedBySnapshot(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+	r.becomeFollower(2, 2)
+	msg := pb.Message{
+		Type: pb.Election,
+	}
+	r.handleNodeElection(msg)
+	if r.state != leader {
+		t.Errorf("not a leader")
+	}
+	ss := pb.Snapshot{
+		Membership: pb.Membership{
+			Addresses: map[uint64]string{2: "a2", 1: "a1"},
+		},
+	}
+	r.restoreRemotes(ss)
+	if r.state != leader {
+		t.Errorf("no longer a leader, %s", r.state)
+	}
+	ss = pb.Snapshot{
+		Membership: pb.Membership{
+			Addresses: map[uint64]string{2: "a2"},
+		},
+	}
+	r.restoreRemotes(ss)
+	if r.state != follower {
+		t.Errorf("not a follower, %s", r.state)
+	}
+	if r.leaderID != NoLeader {
+		t.Errorf("unexpected leader id %d", r.leaderID)
+	}
+}
+
 func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
@@ -2030,30 +2112,6 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoreReadIndexWhenSelfRemoved(t *testing.T) {
-	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
-	r.becomeCandidate()
-	r.becomeLeader()
-	r.deleteRemote(r.nodeID)
-	if !r.selfRemoved() {
-		t.Fatalf("not self removed")
-	}
-	msg := pb.Message{
-		Type:     pb.ReadIndex,
-		Hint:     101,
-		HintHigh: 1002,
-	}
-	r.handleLeaderReadIndex(msg)
-	if len(r.msgs) != 0 {
-		t.Errorf("unexpected msg sent")
-	}
-	if len(r.readyToRead) != 0 {
-		t.Errorf("readyToRead has unexpected rec")
-	}
-	if len(r.readIndex.pending) != 0 || len(r.readIndex.queue) != 0 {
-		t.Errorf("unexpected readIndex content")
-	}
-}
 func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()

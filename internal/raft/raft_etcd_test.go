@@ -1151,12 +1151,7 @@ func TestCommit(t *testing.T) {
 		for j := 0; j < len(tt.matches); j++ {
 			sm.setRemote(uint64(j)+1, tt.matches[j], tt.matches[j]+1)
 		}
-		// lni:
-		// get the quorum from match values, together with local node's term,
-		// call log.maybeCommit, advance the committed value if the quorum value
-		// is greater than the current committed value and the term of the quorum
-		// value according to the log matches local node's term.
-		// see above.
+		sm.state = leader
 		sm.tryCommit()
 		if g := sm.log.committed; g != tt.w {
 			t.Errorf("#%d: committed = %d, want %d", i, g, tt.w)
