@@ -199,6 +199,7 @@ type Transport struct {
 	sourceAddress       string
 	resolver            INodeAddressResolver
 	stopper             *syncutil.Stopper
+	cstopper            *syncutil.Stopper
 	snapshotLocator     server.GetSnapshotDirFunc
 	raftRPC             raftio.IRaftRPC
 	handlerRemovedFlag  uint32
@@ -216,13 +217,13 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	ctx *server.Context, resolver INodeAddressResolver,
 	locator server.GetSnapshotDirFunc) (*Transport, error) {
 	address := nhConfig.RaftAddress
-	stopper := syncutil.NewStopper()
 	t := &Transport{
 		nhConfig:          nhConfig,
 		serverCtx:         ctx,
 		sourceAddress:     address,
 		resolver:          resolver,
-		stopper:           stopper,
+		stopper:           syncutil.NewStopper(),
+		cstopper:          syncutil.NewStopper(),
 		snapshotLocator:   locator,
 		streamConnections: streamConnections,
 	}
@@ -236,20 +237,19 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		t.raftRPC.Stop()
 		return nil, err
 	}
-	t.stopper.RunWorker(func() {
+	t.cstopper.RunWorker(func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				chunks.Tick()
-			case <-stopper.ShouldStop():
+			case <-t.cstopper.ShouldStop():
 				chunks.Close()
 				return
 			}
 		}
 	})
-
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.mu.queues = make(map[string]sendQueue)
 	t.mu.breakers = make(map[string]*circuit.Breaker)
@@ -292,6 +292,7 @@ func (t *Transport) Stop() {
 	t.cancel()
 	t.stopper.Stop()
 	t.raftRPC.Stop()
+	t.cstopper.Stop()
 }
 
 // GetCircuitBreaker returns the circuit breaker used for the specified
