@@ -66,8 +66,8 @@ func Launch(config *config.Config,
 	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	r := newRaft(config, logdb)
-	rc := &Peer{raft: r}
-	rc.raft.events = events
+	p := &Peer{raft: r}
+	p.raft.events = events
 	_, lastIndex := logdb.GetRange()
 	if newNode && !config.IsObserver {
 		r.becomeFollower(1, NoLeader)
@@ -78,24 +78,24 @@ func Launch(config *config.Config,
 		bootstrap(r, addresses)
 	}
 	if lastIndex == 0 {
-		rc.prevState = emptyState
+		p.prevState = emptyState
 	} else {
-		rc.prevState = r.raftState()
+		p.prevState = r.raftState()
 	}
-	return rc
+	return p
 }
 
 // Tick moves the logical clock forward by one tick.
-func (rc *Peer) Tick() {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) Tick() {
+	p.raft.Handle(pb.Message{
 		Type:   pb.LocalTick,
 		Reject: false,
 	})
 }
 
 // QuiescedTick moves the logical clock forward by one tick in quiesced mode.
-func (rc *Peer) QuiescedTick() {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) QuiescedTick() {
+	p.raft.Handle(pb.Message{
 		Type:   pb.LocalTick,
 		Reject: true,
 	})
@@ -103,11 +103,11 @@ func (rc *Peer) QuiescedTick() {
 
 // RequestLeaderTransfer makes a request to transfer the leadership to the
 // specified target node.
-func (rc *Peer) RequestLeaderTransfer(target uint64) {
+func (p *Peer) RequestLeaderTransfer(target uint64) {
 	plog.Infof("RequestLeaderTransfer called, target %d", target)
-	rc.raft.Handle(pb.Message{
+	p.raft.Handle(pb.Message{
 		Type: pb.LeaderTransfer,
-		To:   rc.raft.nodeID,
+		To:   p.raft.nodeID,
 		From: target,
 		Hint: target,
 	})
@@ -115,33 +115,33 @@ func (rc *Peer) RequestLeaderTransfer(target uint64) {
 
 // ProposeEntries proposes specified entries in a batched mode using a single
 // MTPropose message.
-func (rc *Peer) ProposeEntries(ents []pb.Entry) {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) ProposeEntries(ents []pb.Entry) {
+	p.raft.Handle(pb.Message{
 		Type:    pb.Propose,
-		From:    rc.raft.nodeID,
+		From:    p.raft.nodeID,
 		Entries: ents,
 	})
 }
 
 // ProposeConfigChange proposes a raft membership change.
-func (rc *Peer) ProposeConfigChange(configChange pb.ConfigChange, key uint64) {
+func (p *Peer) ProposeConfigChange(configChange pb.ConfigChange, key uint64) {
 	data, err := configChange.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	rc.raft.Handle(pb.Message{
+	p.raft.Handle(pb.Message{
 		Type:    pb.Propose,
 		Entries: []pb.Entry{{Type: pb.ConfigChangeEntry, Cmd: data, Key: key}},
 	})
 }
 
 // ApplyConfigChange applies a raft membership change to the local raft node.
-func (rc *Peer) ApplyConfigChange(cc pb.ConfigChange) {
+func (p *Peer) ApplyConfigChange(cc pb.ConfigChange) {
 	if cc.NodeID == NoLeader {
-		rc.raft.clearPendingConfigChange()
+		p.raft.clearPendingConfigChange()
 		return
 	}
-	rc.raft.Handle(pb.Message{
+	p.raft.Handle(pb.Message{
 		Type:     pb.ConfigChangeEvent,
 		Reject:   false,
 		Hint:     cc.NodeID,
@@ -150,24 +150,24 @@ func (rc *Peer) ApplyConfigChange(cc pb.ConfigChange) {
 }
 
 // RejectConfigChange rejects the currently pending raft membership change.
-func (rc *Peer) RejectConfigChange() {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) RejectConfigChange() {
+	p.raft.Handle(pb.Message{
 		Type:   pb.ConfigChangeEvent,
 		Reject: true,
 	})
 }
 
 // RestoreRemotes applies the remotes info obtained from the specified snapshot.
-func (rc *Peer) RestoreRemotes(ss pb.Snapshot) {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) RestoreRemotes(ss pb.Snapshot) {
+	p.raft.Handle(pb.Message{
 		Type:     pb.SnapshotReceived,
 		Snapshot: ss,
 	})
 }
 
 // ReportUnreachableNode marks the specified node as not reachable.
-func (rc *Peer) ReportUnreachableNode(nodeID uint64) {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) ReportUnreachableNode(nodeID uint64) {
+	p.raft.Handle(pb.Message{
 		Type: pb.Unreachable,
 		From: nodeID,
 	})
@@ -175,8 +175,8 @@ func (rc *Peer) ReportUnreachableNode(nodeID uint64) {
 
 // ReportSnapshotStatus reports the status of the snapshot to the local raft
 // node.
-func (rc *Peer) ReportSnapshotStatus(nodeID uint64, reject bool) {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) ReportSnapshotStatus(nodeID uint64, reject bool) {
+	p.raft.Handle(pb.Message{
 		Type:   pb.SnapshotStatus,
 		From:   nodeID,
 		Reject: reject,
@@ -184,35 +184,74 @@ func (rc *Peer) ReportSnapshotStatus(nodeID uint64, reject bool) {
 }
 
 // Handle processes the given message.
-func (rc *Peer) Handle(m pb.Message) {
+func (p *Peer) Handle(m pb.Message) {
 	if IsLocalMessageType(m.Type) {
 		panic("local message sent to Step")
 	}
-	_, rok := rc.raft.remotes[m.From]
-	_, ook := rc.raft.observers[m.From]
+	_, rok := p.raft.remotes[m.From]
+	_, ook := p.raft.observers[m.From]
 	if rok || ook || !isResponseMessageType(m.Type) {
-		rc.raft.Handle(m)
+		p.raft.Handle(m)
 	}
 }
 
 // GetUpdate returns the current state of the Peer.
-func (rc *Peer) GetUpdate(moreEntriesToApply bool,
-	lastApplied uint64) pb.Update {
-	return getUpdate(rc.raft, rc.prevState, moreEntriesToApply, lastApplied)
+func (p *Peer) GetUpdate(moreToApply bool, lastApplied uint64) pb.Update {
+	ud := p.getUpdate(moreToApply, lastApplied)
+	validateUpdate(ud)
+	ud = setFastApply(ud)
+	ud.UpdateCommit = getUpdateCommit(ud)
+	return ud
+}
+
+func setFastApply(ud pb.Update) pb.Update {
+	ud.FastApply = true
+	if !pb.IsEmptySnapshot(ud.Snapshot) {
+		ud.FastApply = false
+	}
+	if ud.FastApply {
+		if len(ud.CommittedEntries) > 0 && len(ud.EntriesToSave) > 0 {
+			lastApplyIndex := ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
+			lastSaveIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
+			firstSaveIndex := ud.EntriesToSave[0].Index
+			if lastApplyIndex >= firstSaveIndex && lastApplyIndex <= lastSaveIndex {
+				ud.FastApply = false
+			}
+		}
+	}
+	return ud
+}
+
+func validateUpdate(ud pb.Update) {
+	if ud.Commit > 0 && len(ud.CommittedEntries) > 0 {
+		lastIndex := ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
+		if lastIndex > ud.Commit {
+			plog.Panicf("trying to apply not committed entry: %d, %d",
+				ud.Commit, lastIndex)
+		}
+	}
+	if len(ud.CommittedEntries) > 0 && len(ud.EntriesToSave) > 0 {
+		lastApply := ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
+		lastSave := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
+		if lastApply > lastSave {
+			plog.Panicf("trying to apply not saved entry: %d, %d",
+				lastApply, lastSave)
+		}
+	}
 }
 
 // RateLimited returns a boolean flag indicating whether the Raft node is rate
 // limited.
-func (rc *Peer) RateLimited() bool {
-	return rc.raft.rl.RateLimited()
+func (p *Peer) RateLimited() bool {
+	return p.raft.rl.RateLimited()
 }
 
 // HasUpdate returns a boolean value indicating whether there is any Update
 // ready to be processed.
-func (rc *Peer) HasUpdate(moreEntriesToApply bool) bool {
-	r := rc.raft
+func (p *Peer) HasUpdate(moreEntriesToApply bool) bool {
+	r := p.raft
 	if pst := r.raftState(); !pb.IsEmptyState(pst) &&
-		!pb.IsStateEqual(pst, rc.prevState) {
+		!pb.IsStateEqual(pst, p.prevState) {
 		return true
 	}
 	if r.log.inmem.snapshot != nil &&
@@ -238,28 +277,23 @@ func (rc *Peer) HasUpdate(moreEntriesToApply bool) bool {
 }
 
 // Commit commits the Update state to mark it as processed.
-func (rc *Peer) Commit(ud pb.Update) {
-	rc.raft.msgs = nil
-	rc.raft.droppedEntries = nil
-	rc.raft.droppedReadIndexes = nil
+func (p *Peer) Commit(ud pb.Update) {
+	p.raft.msgs = nil
+	p.raft.droppedEntries = nil
+	p.raft.droppedReadIndexes = nil
 	if !pb.IsEmptyState(ud.State) {
-		rc.prevState = ud.State
+		p.prevState = ud.State
 	}
 	if ud.UpdateCommit.ReadyToRead > 0 {
-		rc.raft.clearReadyToRead()
+		p.raft.clearReadyToRead()
 	}
-	rc.entryLog().commitUpdate(ud.UpdateCommit)
-}
-
-// LocalStatus returns the current local status of the raft node.
-func (rc *Peer) LocalStatus() Status {
-	return getLocalStatus(rc.raft)
+	p.entryLog().commitUpdate(ud.UpdateCommit)
 }
 
 // ReadIndex starts a ReadIndex operation. The ReadIndex protocol is defined in
 // the section 6.4 of the Raft thesis.
-func (rc *Peer) ReadIndex(ctx pb.SystemCtx) {
-	rc.raft.Handle(pb.Message{
+func (p *Peer) ReadIndex(ctx pb.SystemCtx) {
+	p.raft.Handle(pb.Message{
 		Type:     pb.ReadIndex,
 		Hint:     ctx.Low,
 		HintHigh: ctx.High,
@@ -267,24 +301,58 @@ func (rc *Peer) ReadIndex(ctx pb.SystemCtx) {
 }
 
 // DumpRaftInfoToLog prints the raft state to log for debugging purposes.
-func (rc *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
-	rc.raft.dumpRaftInfoToLog(addrMap)
+func (p *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
+	p.raft.dumpRaftInfoToLog(addrMap)
 }
 
 // NotifyRaftLastApplied passes on the lastApplied index confirmed by the RSM to
 // the raft state machine.
-func (rc *Peer) NotifyRaftLastApplied(lastApplied uint64) {
-	rc.raft.setApplied(lastApplied)
+func (p *Peer) NotifyRaftLastApplied(lastApplied uint64) {
+	p.raft.setApplied(lastApplied)
 }
 
 // HasEntryToApply returns a boolean flag indicating whether there are more
 // entries ready to be applied.
-func (rc *Peer) HasEntryToApply() bool {
-	return rc.entryLog().hasEntriesToApply()
+func (p *Peer) HasEntryToApply() bool {
+	return p.entryLog().hasEntriesToApply()
 }
 
-func (rc *Peer) entryLog() *entryLog {
-	return rc.raft.log
+func (p *Peer) entryLog() *entryLog {
+	return p.raft.log
+}
+
+func (p *Peer) getUpdate(moreEntriesToApply bool, lastApplied uint64) pb.Update {
+	ud := pb.Update{
+		ClusterID:     p.raft.clusterID,
+		NodeID:        p.raft.nodeID,
+		EntriesToSave: p.entryLog().entriesToSave(),
+		Messages:      p.raft.msgs,
+		LastApplied:   lastApplied,
+		FastApply:     true,
+	}
+	if moreEntriesToApply {
+		ud.CommittedEntries = p.entryLog().entriesToApply()
+	}
+	if len(ud.CommittedEntries) > 0 {
+		lastIndex := ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
+		ud.MoreCommittedEntries = p.entryLog().hasMoreEntriesToApply(lastIndex)
+	}
+	if pst := p.raft.raftState(); !pb.IsStateEqual(pst, p.prevState) {
+		ud.State = pst
+	}
+	if p.entryLog().inmem.snapshot != nil {
+		ud.Snapshot = *p.entryLog().inmem.snapshot
+	}
+	if len(p.raft.readyToRead) > 0 {
+		ud.ReadyToReads = p.raft.readyToRead
+	}
+	if len(p.raft.droppedEntries) > 0 {
+		ud.DroppedEntries = p.raft.droppedEntries
+	}
+	if len(p.raft.droppedReadIndexes) > 0 {
+		ud.DroppedReadIndexes = p.raft.droppedReadIndexes
+	}
+	return ud
 }
 
 func checkLaunchRequest(config *config.Config,
@@ -354,39 +422,4 @@ func getUpdateCommit(ud pb.Update) pb.UpdateCommit {
 		uc.Processed = max(uc.Processed, uc.StableSnapshotTo)
 	}
 	return uc
-}
-
-func getUpdate(r *raft,
-	ppst pb.State, moreEntriesToApply bool, lastApplied uint64) pb.Update {
-	ud := pb.Update{
-		ClusterID:     r.clusterID,
-		NodeID:        r.nodeID,
-		EntriesToSave: r.log.entriesToSave(),
-		Messages:      r.msgs,
-		LastApplied:   lastApplied,
-	}
-	if moreEntriesToApply {
-		ud.CommittedEntries = r.log.entriesToApply()
-	}
-	if len(ud.CommittedEntries) > 0 {
-		lastIndex := ud.CommittedEntries[len(ud.CommittedEntries)-1].Index
-		ud.MoreCommittedEntries = r.log.hasMoreEntriesToApply(lastIndex)
-	}
-	if pst := r.raftState(); !pb.IsStateEqual(pst, ppst) {
-		ud.State = pst
-	}
-	if r.log.inmem.snapshot != nil {
-		ud.Snapshot = *r.log.inmem.snapshot
-	}
-	if len(r.readyToRead) > 0 {
-		ud.ReadyToReads = r.readyToRead
-	}
-	if len(r.droppedEntries) > 0 {
-		ud.DroppedEntries = r.droppedEntries
-	}
-	if len(r.droppedReadIndexes) > 0 {
-		ud.DroppedReadIndexes = r.droppedReadIndexes
-	}
-	ud.UpdateCommit = getUpdateCommit(ud)
-	return ud
 }

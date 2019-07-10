@@ -72,6 +72,9 @@ type Update struct {
 	// persistent storage before any non-replication can be sent to other nodes.
 	// isStateEqual(emptyState) returns true when the state is empty.
 	State
+	// whether CommittedEntries can be applied without waiting for the Update
+	// to be persisted to disk
+	FastApply bool
 	// EntriesToSave are entries waiting to be stored onto persistent storage.
 	EntriesToSave []Entry
 	// CommittedEntries are entries already committed in raft and ready to be

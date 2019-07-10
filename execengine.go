@@ -492,7 +492,6 @@ func (s *execEngine) execNodes(workerID uint64,
 			clusterIDMap[cid] = struct{}{}
 		}
 	}
-	hasSnapshot := false
 	nodeUpdates := nodeCtx.GetUpdates()
 	for cid := range clusterIDMap {
 		node, ok := nodes[cid]
@@ -501,15 +500,10 @@ func (s *execEngine) execNodes(workerID uint64,
 		}
 		ud, hasUpdate := node.stepNode()
 		if hasUpdate {
-			if !pb.IsEmptySnapshot(ud.Snapshot) {
-				hasSnapshot = true
-			}
 			nodeUpdates = append(nodeUpdates, ud)
 		}
 	}
-	if !hasSnapshot {
-		s.applySnapshotAndUpdate(nodeUpdates, nodes)
-	}
+	s.applySnapshotAndUpdate(nodeUpdates, nodes, true)
 	if tests.ReadyToReturnTestKnob(stopC, false, "sending append msg") {
 		return
 	}
@@ -535,15 +529,13 @@ func (s *execEngine) execNodes(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, false, "saving snapshots") {
 		return
 	}
-	if hasSnapshot {
-		if err := s.onSnapshotSaved(nodeUpdates, nodes); err != nil {
-			panic(err)
-		}
-		if tests.ReadyToReturnTestKnob(stopC, false, "applying updates") {
-			return
-		}
-		s.applySnapshotAndUpdate(nodeUpdates, nodes)
+	if err := s.onSnapshotSaved(nodeUpdates, nodes); err != nil {
+		panic(err)
 	}
+	if tests.ReadyToReturnTestKnob(stopC, false, "applying updates") {
+		return
+	}
+	s.applySnapshotAndUpdate(nodeUpdates, nodes, false)
 	if tests.ReadyToReturnTestKnob(stopC, false, "processing raft updates") {
 		return
 	}
@@ -586,8 +578,11 @@ func (s *execEngine) processMoreCommittedEntries(ud pb.Update) {
 }
 
 func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
-	nodes map[uint64]*node) {
+	nodes map[uint64]*node, fastApply bool) {
 	for _, ud := range updates {
+		if ud.FastApply != fastApply {
+			continue
+		}
 		node := nodes[ud.ClusterID]
 		cont, err := node.processSnapshot(ud)
 		if err != nil {

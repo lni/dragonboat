@@ -38,16 +38,16 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // Campaign starts the campaign procedure.
 func (rc *Peer) Campaign() {
-	rc.raft.Handle(raftpb.Message{Type: raftpb.Election})
+	rc.raft.Handle(pb.Message{Type: pb.Election})
 }
 
-func getTestMembership(nodes []uint64) raftpb.Membership {
-	m := raftpb.Membership{
+func getTestMembership(nodes []uint64) pb.Membership {
+	m := pb.Membership{
 		Addresses: make(map[uint64]string),
 		Removed:   make(map[uint64]bool),
 	}
@@ -58,16 +58,16 @@ func getTestMembership(nodes []uint64) raftpb.Membership {
 }
 
 func TestRaftAPINodeStep(t *testing.T) {
-	for i := range raftpb.MessageType_name {
+	for i := range pb.MessageType_name {
 		s := NewTestLogDB()
 		rawNode := Launch(newTestConfig(1, 10, 1, s), s, nil, []PeerAddress{{NodeID: 1}}, true, true)
 		rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 
-		msgt := raftpb.MessageType(i)
+		msgt := pb.MessageType(i)
 		// stepping on non-local messages should be fine
 		if !isLocalMessageType(msgt) &&
-			msgt != raftpb.SnapshotReceived && msgt != raftpb.TimeoutNow {
-			rawNode.Handle(raftpb.Message{Type: msgt})
+			msgt != pb.SnapshotReceived && msgt != pb.TimeoutNow {
+			rawNode.Handle(pb.Message{Type: msgt})
 		}
 	}
 }
@@ -126,7 +126,7 @@ func TestRaftAPIReportSnapshotStatus(t *testing.T) {
 	}
 }
 
-func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, t *testing.T) {
+func testRaftAPIProposeAndConfigChange(cct pb.ConfigChangeType, nid uint64, t *testing.T) {
 	s := NewTestLogDB()
 	var err error
 	rawNode := Launch(newTestConfig(1, 10, 1, s), s, nil, []PeerAddress{{NodeID: 1}}, true, true)
@@ -150,8 +150,8 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 		}
 		// Once we are the leader, propose a command and a ConfigChange.
 		if !proposed && rawNode.raft.leaderID == rawNode.raft.nodeID {
-			rawNode.ProposeEntries([]raftpb.Entry{{Cmd: []byte("somedata")}})
-			cc := raftpb.ConfigChange{Type: cct, NodeID: nid}
+			rawNode.ProposeEntries([]pb.Entry{{Cmd: []byte("somedata")}})
+			cc := pb.ConfigChange{Type: cct, NodeID: nid}
 			ccdata, err = cc.Marshal()
 			if err != nil {
 				t.Fatal(err)
@@ -180,8 +180,8 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 	if !bytes.Equal(entries[0].Cmd, []byte("somedata")) {
 		t.Errorf("entries[0].Cmd = %v, want %v", entries[0].Cmd, []byte("somedata"))
 	}
-	if entries[1].Type != raftpb.ConfigChangeEntry {
-		t.Fatalf("type = %v, want %v", entries[1].Type, raftpb.ConfigChangeEntry)
+	if entries[1].Type != pb.ConfigChangeEntry {
+		t.Fatalf("type = %v, want %v", entries[1].Type, pb.ConfigChangeEntry)
 	}
 	if entries[1].Key != 128 {
 		t.Errorf("key not recorded")
@@ -192,10 +192,10 @@ func testRaftAPIProposeAndConfigChange(cct raftpb.ConfigChangeType, nid uint64, 
 }
 
 func TestRaftAPIProposeAndConfigChange(t *testing.T) {
-	testRaftAPIProposeAndConfigChange(raftpb.AddNode, NoLeader, t)
-	testRaftAPIProposeAndConfigChange(raftpb.AddNode, 2, t)
-	testRaftAPIProposeAndConfigChange(raftpb.RemoveNode, 2, t)
-	testRaftAPIProposeAndConfigChange(raftpb.AddObserver, 2, t)
+	testRaftAPIProposeAndConfigChange(pb.AddNode, NoLeader, t)
+	testRaftAPIProposeAndConfigChange(pb.AddNode, 2, t)
+	testRaftAPIProposeAndConfigChange(pb.RemoveNode, 2, t)
+	testRaftAPIProposeAndConfigChange(pb.AddObserver, 2, t)
 }
 
 func TestGetUpdateIncludeLastAppliedValue(t *testing.T) {
@@ -233,7 +233,7 @@ func TestRaftMoreEntriesToApplyControl(t *testing.T) {
 		}
 		rawNode.Commit(ud)
 	}
-	cc := raftpb.ConfigChange{Type: raftpb.AddNode, NodeID: 1}
+	cc := pb.ConfigChange{Type: pb.AddNode, NodeID: 1}
 	rawNode.ProposeConfigChange(cc, 128)
 	if !rawNode.HasUpdate(true) {
 		t.Errorf("HasUpdate returned false")
@@ -271,15 +271,15 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 		rawNode.Commit(ud)
 	}
 
-	proposeConfigChangeAndApply := func(cc raftpb.ConfigChange, key uint64) {
+	proposeConfigChangeAndApply := func(cc pb.ConfigChange, key uint64) {
 		rawNode.ProposeConfigChange(cc, key)
 		ud = rawNode.GetUpdate(true, 0)
 		if err := s.Append(ud.EntriesToSave); err != nil {
 			t.Fatalf("%v", err)
 		}
 		for _, entry := range ud.CommittedEntries {
-			if entry.Type == raftpb.ConfigChangeEntry {
-				var cc raftpb.ConfigChange
+			if entry.Type == pb.ConfigChangeEntry {
+				var cc pb.ConfigChange
 				if err := cc.Unmarshal(entry.Cmd); err != nil {
 					t.Fatalf("%v", err)
 				}
@@ -289,7 +289,7 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 		rawNode.Commit(ud)
 	}
 
-	cc1 := raftpb.ConfigChange{Type: raftpb.AddNode, NodeID: 1}
+	cc1 := pb.ConfigChange{Type: pb.AddNode, NodeID: 1}
 	ccdata1, err := cc1.Marshal()
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +300,7 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	proposeConfigChangeAndApply(cc1, 129)
 
 	// the new node join should be ok
-	cc2 := raftpb.ConfigChange{Type: raftpb.AddNode, NodeID: 2}
+	cc2 := pb.ConfigChange{Type: pb.AddNode, NodeID: 2}
 	ccdata2, err := cc2.Marshal()
 	if err != nil {
 		t.Fatal(err)
@@ -323,11 +323,11 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	if !bytes.Equal(entries[2].Cmd, ccdata2) {
 		t.Errorf("entries[2].Cmd = %v, want %v", entries[2].Cmd, ccdata2)
 	}
-	cc3 := raftpb.ConfigChange{Type: raftpb.RemoveNode, NodeID: 2}
+	cc3 := pb.ConfigChange{Type: pb.RemoveNode, NodeID: 2}
 	rawNode.ApplyConfigChange(cc3)
-	cc4 := raftpb.ConfigChange{Type: raftpb.AddObserver, NodeID: 3}
+	cc4 := pb.ConfigChange{Type: pb.AddObserver, NodeID: 3}
 	rawNode.ApplyConfigChange(cc4)
-	cc5 := raftpb.ConfigChange{Type: raftpb.RemoveNode, NodeID: NoLeader}
+	cc5 := pb.ConfigChange{Type: pb.RemoveNode, NodeID: NoLeader}
 	rawNode.ApplyConfigChange(cc5)
 }
 
@@ -363,11 +363,11 @@ func TestRaftAPIDumpRaftInfoToLog(t *testing.T) {
 }
 
 func TestRaftAPIReadIndex(t *testing.T) {
-	msgs := []raftpb.Message{}
-	appendStep := func(r *raft, m raftpb.Message) {
+	msgs := []pb.Message{}
+	appendStep := func(r *raft, m pb.Message) {
 		msgs = append(msgs, m)
 	}
-	wrs := []raftpb.ReadyToRead{{Index: uint64(1), SystemCtx: getTestSystemCtx(12345)}}
+	wrs := []pb.ReadyToRead{{Index: uint64(1), SystemCtx: getTestSystemCtx(12345)}}
 
 	s := NewTestLogDB()
 	c := newTestConfig(1, 10, 1, s)
@@ -412,8 +412,8 @@ func TestRaftAPIReadIndex(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("len(msgs) = %d, want %d", len(msgs), 1)
 	}
-	if msgs[0].Type != raftpb.ReadIndex {
-		t.Errorf("msg type = %d, want %d", msgs[0].Type, raftpb.ReadIndex)
+	if msgs[0].Type != pb.ReadIndex {
+		t.Errorf("msg type = %d, want %d", msgs[0].Type, pb.ReadIndex)
 	}
 	if msgs[0].Hint != wrequestCtx.Low || msgs[0].HintHigh != wrequestCtx.High {
 		t.Errorf("data = %d, want %d", msgs[0].Hint, wrequestCtx)
@@ -424,7 +424,7 @@ func TestRaftAPIStatus(t *testing.T) {
 	storage := NewTestLogDB()
 	rawNode := Launch(newTestConfig(1, 10, 1, storage), storage, nil, []PeerAddress{{NodeID: 1}}, true, true)
 	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
-	status := rawNode.LocalStatus()
+	status := getLocalStatus(rawNode.raft)
 	if status.NodeID != 1 {
 		t.Errorf("expected status struct, got nil")
 	}
@@ -467,29 +467,29 @@ func TestRaftAPIDuplicatedAddressCausePanicInLaunch(t *testing.T) {
 }
 
 func TestRaftAPILaunch(t *testing.T) {
-	cc := raftpb.ConfigChange{Type: raftpb.AddNode, NodeID: 1, Initialize: true}
+	cc := pb.ConfigChange{Type: pb.AddNode, NodeID: 1, Initialize: true}
 	ccdata, err := cc.Marshal()
 	if err != nil {
 		t.Fatalf("unexpected marshal error: %v", err)
 	}
-	wants := []raftpb.Update{
+	wants := []pb.Update{
 		{
 			NodeID: 1,
-			State:  raftpb.State{Term: 1, Commit: 1, Vote: 0},
-			EntriesToSave: []raftpb.Entry{
-				{Type: raftpb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
+			State:  pb.State{Term: 1, Commit: 1, Vote: 0},
+			EntriesToSave: []pb.Entry{
+				{Type: pb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
 			},
-			CommittedEntries: []raftpb.Entry{
-				{Type: raftpb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
+			CommittedEntries: []pb.Entry{
+				{Type: pb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
 			},
-			UpdateCommit: raftpb.UpdateCommit{Processed: 1, StableLogTo: 1, StableLogTerm: 1},
+			UpdateCommit: pb.UpdateCommit{Processed: 1, StableLogTo: 1, StableLogTerm: 1},
 		},
 		{
 			NodeID:           1,
-			State:            raftpb.State{Term: 2, Commit: 3, Vote: 1},
-			EntriesToSave:    []raftpb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
-			CommittedEntries: []raftpb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
-			UpdateCommit:     raftpb.UpdateCommit{Processed: 3, StableLogTo: 3, StableLogTerm: 2},
+			State:            pb.State{Term: 2, Commit: 3, Vote: 1},
+			EntriesToSave:    []pb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
+			CommittedEntries: []pb.Entry{{Term: 2, Index: 3, Cmd: []byte("foo")}},
+			UpdateCommit:     pb.UpdateCommit{Processed: 3, StableLogTo: 3, StableLogTerm: 2},
 		},
 	}
 
@@ -518,7 +518,7 @@ func TestRaftAPILaunch(t *testing.T) {
 	}
 	rawNode.Commit(ud)
 
-	rawNode.ProposeEntries([]raftpb.Entry{{Cmd: []byte("foo")}})
+	rawNode.ProposeEntries([]pb.Entry{{Cmd: []byte("foo")}})
 	ud = rawNode.GetUpdate(true, 0)
 	ud.Messages = nil
 	if !reflect.DeepEqual(ud, wants[1]) {
@@ -536,18 +536,19 @@ func TestRaftAPILaunch(t *testing.T) {
 }
 
 func TestRaftAPIRestart(t *testing.T) {
-	entries := []raftpb.Entry{
+	entries := []pb.Entry{
 		{Term: 1, Index: 1},
 		{Term: 1, Index: 2, Cmd: []byte("foo")},
 	}
-	st := raftpb.State{Term: 1, Commit: 1}
+	st := pb.State{Term: 1, Commit: 1}
 
-	want := raftpb.Update{
+	want := pb.Update{
 		NodeID: 1,
 		State:  emptyState,
 		// commit up to commit index in st
 		CommittedEntries: entries[:st.Commit],
-		UpdateCommit:     raftpb.UpdateCommit{Processed: 1},
+		UpdateCommit:     pb.UpdateCommit{Processed: 1},
+		FastApply:        true,
 	}
 
 	storage := NewTestLogDB()
@@ -569,22 +570,23 @@ func TestRaftAPIRestart(t *testing.T) {
 }
 
 func TestRaftAPIRestartFromSnapshot(t *testing.T) {
-	snap := raftpb.Snapshot{
+	snap := pb.Snapshot{
 		Membership: getTestMembership([]uint64{1, 2}),
 		Index:      2,
 		Term:       1,
 	}
-	entries := []raftpb.Entry{
+	entries := []pb.Entry{
 		{Term: 1, Index: 3, Cmd: []byte("foo")},
 	}
-	st := raftpb.State{Term: 1, Commit: 3}
+	st := pb.State{Term: 1, Commit: 3}
 
-	want := raftpb.Update{
+	want := pb.Update{
 		NodeID: 1,
 		State:  emptyState,
 		// commit up to commit index in st
 		CommittedEntries: entries,
-		UpdateCommit:     raftpb.UpdateCommit{Processed: 3},
+		UpdateCommit:     pb.UpdateCommit{Processed: 3},
+		FastApply:        true,
 	}
 
 	s := NewTestLogDB()
@@ -618,20 +620,20 @@ func TestRaftAPIStepOnLocalMessageWillPanic(t *testing.T) {
 	}()
 	storage := NewTestLogDB()
 	p := Launch(newTestConfig(1, 10, 1, storage), storage, nil, []PeerAddress{{NodeID: 1}}, true, true)
-	p.Handle(raftpb.Message{Type: raftpb.LocalTick})
+	p.Handle(pb.Message{Type: pb.LocalTick})
 }
 
 func TestRaftAPIGetUpdateCommit(t *testing.T) {
-	ud := raftpb.Update{
-		CommittedEntries: []raftpb.Entry{
+	ud := pb.Update{
+		CommittedEntries: []pb.Entry{
 			{Index: 100, Term: 2},
 			{Index: 101, Term: 3},
 		},
-		EntriesToSave: []raftpb.Entry{
+		EntriesToSave: []pb.Entry{
 			{Index: 102, Term: 3},
 			{Index: 103, Term: 4},
 		},
-		Snapshot:    raftpb.Snapshot{Index: 105},
+		Snapshot:    pb.Snapshot{Index: 105},
 		LastApplied: 99,
 	}
 	uc := getUpdateCommit(ud)
@@ -670,4 +672,112 @@ func TestCheckLaunchRequest(t *testing.T) {
 	expectPanicFn(func() {
 		checkLaunchRequest(&config.Config{NodeID: 1}, addr, false, false)
 	})
+}
+
+func TestValidateUpdate(t *testing.T) {
+	tests := []struct {
+		commit              uint64
+		firstCommittedIndex uint64
+		committedLength     uint64
+		firstSaveIndex      uint64
+		saveLength          uint64
+		panic               bool
+	}{
+		{0, 1, 2, 0, 0, false},
+		{1, 1, 2, 0, 0, true},
+		{2, 1, 2, 0, 0, false},
+		{0, 1, 2, 1, 2, false},
+		{0, 1, 2, 1, 1, true},
+		{0, 1, 2, 3, 1, false},
+		{0, 0, 0, 1, 2, false},
+		{0, 1, 2, 0, 0, false},
+	}
+	for idx, tt := range tests {
+		tidx := idx
+		ud := pb.Update{}
+		ud.Commit = tt.commit
+		if tt.committedLength > 0 {
+			lastIndex := uint64(tt.firstCommittedIndex) + uint64(tt.committedLength) - 1
+			for i := uint64(tt.firstCommittedIndex); i <= lastIndex; i++ {
+				e := pb.Entry{
+					Index: i,
+				}
+				ud.CommittedEntries = append(ud.CommittedEntries, e)
+			}
+		}
+		if tt.saveLength > 0 {
+			lastIndex := uint64(tt.firstSaveIndex) + uint64(tt.saveLength) - 1
+			for i := uint64(tt.firstSaveIndex); i <= lastIndex; i++ {
+				e := pb.Entry{
+					Index: i,
+				}
+				ud.EntriesToSave = append(ud.EntriesToSave, e)
+			}
+		}
+		func() {
+			if tt.panic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Fatalf("%d, failed to panic", tidx)
+					}
+				}()
+			}
+			validateUpdate(ud)
+		}()
+	}
+}
+
+func TestSetFastApply(t *testing.T) {
+	tests := []struct {
+		hasSnapshot         bool
+		firstCommittedIndex uint64
+		committedLength     uint64
+		firstSaveIndex      uint64
+		saveLength          uint64
+		fastApply           bool
+	}{
+		{true, 0, 0, 0, 0, false},
+		{true, 0, 0, 1, 2, false},
+		{true, 1, 2, 0, 0, false},
+		{true, 1, 2, 1, 2, false},
+		{true, 1, 2, 1, 1, false},
+		{true, 1, 1, 1, 2, false},
+		{false, 1, 2, 1, 2, false},
+		{false, 1, 2, 0, 0, true},
+		{false, 0, 0, 1, 2, true},
+		{false, 1, 2, 2, 3, false},
+		{false, 1, 1, 2, 3, true},
+	}
+
+	for idx, tt := range tests {
+		tidx := idx
+		ud := pb.Update{FastApply: true}
+		if tt.hasSnapshot {
+			ud.Snapshot = pb.Snapshot{
+				Index: 1,
+			}
+		}
+		if tt.committedLength > 0 {
+			lastIndex := uint64(tt.firstCommittedIndex) + uint64(tt.committedLength) - 1
+			for i := uint64(tt.firstCommittedIndex); i <= lastIndex; i++ {
+				e := pb.Entry{
+					Index: i,
+				}
+				ud.CommittedEntries = append(ud.CommittedEntries, e)
+			}
+		}
+		if tt.saveLength > 0 {
+			lastIndex := uint64(tt.firstSaveIndex) + uint64(tt.saveLength) - 1
+			for i := uint64(tt.firstSaveIndex); i <= lastIndex; i++ {
+				e := pb.Entry{
+					Index: i,
+				}
+				ud.EntriesToSave = append(ud.EntriesToSave, e)
+			}
+		}
+		ud = setFastApply(ud)
+		if ud.FastApply != tt.fastApply {
+			t.Fatalf("%d, fast apply not expected", tidx)
+		}
+	}
 }

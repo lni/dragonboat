@@ -45,6 +45,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
 	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/random"
 	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 	"github.com/lni/dragonboat/v3/plugin/leveldb"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -1571,8 +1572,10 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				session := nh.GetNoOPSession(clusterID)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
 				if err != nil {
+					plog.Infof("write failed %v", err)
 					t.Fatalf("failed to make proposal %v", err)
 				}
+				plog.Infof("write completed")
 				cancel()
 				if atomic.LoadUint32(&count) > 0 {
 					return
@@ -1581,9 +1584,17 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 		})
 		stopper.RunWorker(func() {
 			for i := 0; i < 10000; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-				result, err := nh.SyncRead(ctx, clusterID, []byte("test"))
-				cancel()
+				rs, err := nh.ReadIndex(clusterID, 200*time.Millisecond)
+				if err != nil {
+					continue
+				}
+				s := <-rs.CompletedC
+				if !s.Completed() {
+					continue
+				}
+				st := random.LockGuardedRand.Uint64()%7 + 1
+				time.Sleep(time.Duration(st) * time.Millisecond)
+				result, err := nh.ReadLocalNode(rs, []byte("test"))
 				if err != nil {
 					continue
 				}
