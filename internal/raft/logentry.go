@@ -22,8 +22,8 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-const (
-	maxEntriesToApplySize = settings.MaxProposalPayloadSize * 2
+var (
+	maxEntriesToApplySize = settings.Soft.MaxEntrySize
 )
 
 // ErrCompacted is the error returned to indicate that the requested entries

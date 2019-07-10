@@ -29,8 +29,8 @@ var intconv = binary.BigEndian
 
 // Colfer configuration attributes
 var (
-	// ColferSizeMax is the upper limit for serial byte sizes.
-	ColferSizeMax = 256 * 1024 * 1024
+	// ColferSizeMax is the upper limit for serial byte sizes
+	ColferSizeMax uint64 = 8 * 1024 * 1024 * 1024 * 1024
 )
 
 // ColferMax signals an upper limit breach.
@@ -138,7 +138,7 @@ func (o *Entry) Size() int {
 	}
 
 	if x := len(o.Cmd); x != 0 {
-		if x > ColferSizeMax {
+		if uint64(x) > ColferSizeMax {
 			panic("max size reached")
 		}
 		for l += x + 2; x >= 0x80; l++ {
@@ -146,7 +146,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if l > ColferSizeMax {
+	if uint64(l) > ColferSizeMax {
 		panic(fmt.Sprintf("max size reached %d", l))
 	}
 	return l
@@ -640,11 +640,11 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 	if header != 0x7f {
 		return 0, ColferError(i - 1)
 	}
-	if i < ColferSizeMax {
+	if uint64(i) < ColferSizeMax {
 		return i, nil
 	}
 eof:
-	if i >= ColferSizeMax {
+	if uint64(i) >= ColferSizeMax {
 		return 0, ColferMax(fmt.Sprintf("colfer: struct raftpb.Entry size exceeds %d bytes", ColferSizeMax))
 	}
 	return 0, io.EOF

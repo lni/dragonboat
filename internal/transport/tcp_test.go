@@ -55,16 +55,16 @@ func TestRequestHeaderCRCIsChecked(t *testing.T) {
 	if !rr.decode(result) {
 		t.Fatalf("decode failed")
 	}
-	crc := binary.BigEndian.Uint32(result[6:])
-	binary.BigEndian.PutUint32(result[6:], crc+1)
+	crc := binary.BigEndian.Uint32(result[10:])
+	binary.BigEndian.PutUint32(result[10:], crc+1)
 	if rr.decode(result) {
 		t.Fatalf("crc error not reported")
 	}
-	binary.BigEndian.PutUint32(result[6:], crc)
+	binary.BigEndian.PutUint32(result[10:], crc)
 	if !rr.decode(result) {
 		t.Fatalf("decode failed")
 	}
-	binary.BigEndian.PutUint32(result[2:], 0)
+	binary.BigEndian.PutUint64(result[2:], 0)
 	if rr.decode(result) {
 		t.Fatalf("crc error not reported")
 	}

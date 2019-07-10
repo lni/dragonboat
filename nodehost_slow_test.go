@@ -534,9 +534,6 @@ func testNodeHostLinearizableReadWorks(t *testing.T, size int) {
 	if err != nil {
 		panic(err)
 	}
-	if len(rec) > int(settings.MaxProposalPayloadSize) {
-		t.Fatalf("input is too big")
-	}
 	testProposalCanBeMade(t, nhList[3], rec)
 	testLinearizableReadReturnExpectedResult(t,
 		nhList[2], []byte(kv.Key), []byte(kv.Val))
@@ -549,11 +546,8 @@ func TestNodeHostLinearizableReadWorksInMostBasicSettings(t *testing.T) {
 
 func TestNodeHostLinearizableReadWorksWithLargePayload(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	if settings.MaxProposalPayloadSize < uint64(31*1024*1024) {
-		t.Fatalf("MaxProposalPayloadSize not big enough")
-	}
 	testNodeHostLinearizableReadWorks(t,
-		int(settings.MaxProposalPayloadSize-16))
+		int(settings.LargeEntitySize-16))
 }
 
 func getTestKVData() []byte {

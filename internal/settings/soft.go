@@ -18,6 +18,9 @@ const (
 	// EntryNonCmdFieldsSize defines the upper limit of the non-cmd field
 	// length in pb.Entry.
 	EntryNonCmdFieldsSize = 16 * 8
+	// LargeEntitySize defines what is considered as a large entity for per node
+	// entities.
+	LargeEntitySize uint64 = 64 * 1024 * 1024
 )
 
 //
@@ -68,9 +71,6 @@ type soft struct {
 	// allocated once the free entry size in the current slice is less than
 	// MinEntrySliceFreeSize.
 	MinEntrySliceFreeSize uint64
-	// ExpectedMaxInMemLogSize is the minimum MaxInMemLogSize value expected
-	// in a raft config.
-	ExpectedMaxInMemLogSize uint64
 
 	//
 	// Multiraft
@@ -158,9 +158,9 @@ type soft struct {
 	StreamConnections uint64
 	// PerConnBufSize is the size of the per connection buffer used for
 	// receiving incoming messages.
-	PerConnectionBufferSize uint64
-	// PerCpnnectionRecvBufSize is the size of the recv buffer size.
-	PerCpnnectionRecvBufSize uint64
+	PerConnectionSendBufSize uint64
+	// PerConnectionRecvBufSize is the size of the recv buffer size.
+	PerConnectionRecvBufSize uint64
 	// SnapshotGCTick defines the number of ticks between two snapshot GC
 	// operations.
 	SnapshotGCTick uint64
@@ -227,10 +227,9 @@ func getDefaultSoftSettings() soft {
 		BatchedEntryApply:              true,
 		LocalRaftRequestTimeoutMs:      10000,
 		GetConnectedTimeoutSecond:      5,
-		MaxEntrySize:                   2 * MaxProposalPayloadSize,
+		MaxEntrySize:                   MaxMessageBatchSize,
 		InMemEntrySliceSize:            512,
 		MinEntrySliceFreeSize:          96,
-		ExpectedMaxInMemLogSize:        2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),
 		IncomingReadIndexQueueLength:   4096,
 		IncomingProposalQueueLength:    2048,
 		UnknownRegionName:              "UNKNOWN",
@@ -247,8 +246,8 @@ func getDefaultSoftSettings() soft {
 		MaxDrummerServerMsgSize:        256 * 1024 * 1024,
 		MaxDrummerClientMsgSize:        256 * 1024 * 1024,
 		StreamConnections:              4,
-		PerConnectionBufferSize:        64 * 1024 * 1024,
-		PerCpnnectionRecvBufSize:       64 * 1024,
+		PerConnectionSendBufSize:       LargeEntitySize,
+		PerConnectionRecvBufSize:       2 * 1024 * 1024,
 		SnapshotGCTick:                 30,
 		SnapshotChunkTimeoutTick:       900,
 		DrummerClientName:              "drummer-client",

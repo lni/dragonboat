@@ -101,12 +101,9 @@ const (
 	// transport
 	//
 
-	// MaxProposalPayloadSize is the max size allowed for a proposal payload.
-	MaxProposalPayloadSize uint64 = 32 * 1024 * 1024
-	// MaxMessageSize is the max size for a single gRPC message sent between
-	// raft nodes. It must be greater than MaxProposalPayloadSize and smaller
-	// than the current default of max gRPC send/receive size (4MBytes).
-	MaxMessageSize uint64 = 2*MaxProposalPayloadSize + 2*1024*1024
+	// MaxMessageBatchSize is the max size for a single message batch sent between
+	// nodehosts.
+	MaxMessageBatchSize uint64 = LargeEntitySize
 	// SnapshotChunkSize is the snapshot chunk size sent by the gRPC transport
 	// module.
 	SnapshotChunkSize uint64 = 2 * 1024 * 1024

@@ -18,7 +18,6 @@
 package dragonboat
 
 import (
-	"bytes"
 	"math/rand"
 	"reflect"
 	"sync"
@@ -763,36 +762,6 @@ func TestProposalErrorsAreReported(t *testing.T) {
 	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
 	if err != ErrSystemBusy {
 		t.Errorf("suppose to return ErrSystemBusy")
-	}
-	if c.leftInWrite {
-		cq = c.left
-	} else {
-		cq = c.right
-	}
-	if len(cq) != sz {
-		t.Errorf("len(c)=%d, want %d", len(cq), sz)
-	}
-	pp, c = getPendingProposal()
-	var buffer bytes.Buffer
-	for i := uint64(0); i < maxProposalPayloadSize; i++ {
-		buffer.WriteString("a")
-	}
-	data := buffer.Bytes()
-	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
-	if err != nil {
-		t.Errorf("suppose to be successful")
-	}
-	buffer.WriteString("a")
-	data = buffer.Bytes()
-	if c.leftInWrite {
-		cq = c.left
-	} else {
-		cq = c.right
-	}
-	sz = len(cq)
-	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
-	if err != ErrPayloadTooBig {
-		t.Errorf("suppose to return ErrPayloadTooBig")
 	}
 	if c.leftInWrite {
 		cq = c.left

@@ -50,7 +50,8 @@ const (
 )
 
 var (
-	emptyState = pb.State{}
+	emptyState   = pb.State{}
+	maxEntrySize = settings.Soft.MaxEntrySize
 )
 
 // State is the state of a raft node defined in the raft paper, possible states
@@ -644,7 +645,7 @@ func (r *raft) sendReplicateMessage(to uint64) {
 	if rp.isPaused() {
 		return
 	}
-	m, err := r.makeReplicateMessage(to, rp.next, settings.Soft.MaxEntrySize)
+	m, err := r.makeReplicateMessage(to, rp.next, maxEntrySize)
 	if err != nil {
 		// log not available due to compaction, send snapshot
 		if !rp.isActive() {

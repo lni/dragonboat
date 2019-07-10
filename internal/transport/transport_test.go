@@ -33,7 +33,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
 	"github.com/lni/dragonboat/v3/internal/utils/netutil"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
 	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
@@ -361,16 +360,19 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
 	done := false
 	for i := 0; i < 200; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if handler.getRequestCount(100, 2) == 20 {
+		count := handler.getRequestCount(100, 2)
+		if count == 20 {
 			done = true
 			break
+		} else {
+			plog.Infof("count: %d, want 20, will wait for 100ms", count)
 		}
 	}
 	if !done {
 		t.Errorf("failed to get all 20 sent messages")
 	}
 	// test to ensure a single big message can be sent/received.
-	payload := []byte(random.String(int(sz)))
+	payload := make([]byte, sz)
 	m := raftpb.Message{
 		Type:      raftpb.Replicate,
 		To:        2,
@@ -400,13 +402,13 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
 
 func TestMessageCanBeSent(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	testMessageCanBeSent(t, false, settings.MaxProposalPayloadSize*2)
+	testMessageCanBeSent(t, false, settings.LargeEntitySize*2)
 	testMessageCanBeSent(t, false, recvBufSize/2)
 	testMessageCanBeSent(t, false, recvBufSize+1)
 	testMessageCanBeSent(t, false, perConnBufSize+1)
 	testMessageCanBeSent(t, false, perConnBufSize/2)
 	testMessageCanBeSent(t, false, 1)
-	testMessageCanBeSent(t, true, settings.MaxProposalPayloadSize*2)
+	testMessageCanBeSent(t, true, settings.LargeEntitySize*2)
 	testMessageCanBeSent(t, true, recvBufSize/2)
 	testMessageCanBeSent(t, true, recvBufSize+1)
 	testMessageCanBeSent(t, true, perConnBufSize+1)

@@ -47,22 +47,22 @@ var (
 	headerDuration      = 2 * time.Second
 	readDuration        = 5 * time.Second
 	writeDuration       = 5 * time.Second
-	keepAlivePeriod     = 30 * time.Second
-	perConnBufSize      = settings.Soft.PerConnectionBufferSize
-	recvBufSize         = settings.Soft.PerCpnnectionRecvBufSize
+	keepAlivePeriod     = 10 * time.Second
+	perConnBufSize      = settings.Soft.PerConnectionSendBufSize
+	recvBufSize         = settings.Soft.PerConnectionRecvBufSize
 )
 
 const (
 	// TCPRaftRPCName is the name of the tcp RPC module.
 	TCPRaftRPCName           = "go-tcp-transport"
-	requestHeaderSize        = 14
+	requestHeaderSize        = 18
 	raftType          uint16 = 100
 	snapshotType      uint16 = 200
 )
 
 type requestHeader struct {
 	method uint16
-	size   uint32
+	size   uint64
 	crc    uint32
 }
 
@@ -80,11 +80,11 @@ func (h *requestHeader) encode(buf []byte) []byte {
 		panic("input buf too small")
 	}
 	binary.BigEndian.PutUint16(buf, h.method)
-	binary.BigEndian.PutUint32(buf[2:], h.size)
-	binary.BigEndian.PutUint32(buf[6:], 0)
-	binary.BigEndian.PutUint32(buf[10:], h.crc)
+	binary.BigEndian.PutUint64(buf[2:], h.size)
+	binary.BigEndian.PutUint32(buf[10:], 0)
+	binary.BigEndian.PutUint32(buf[14:], h.crc)
 	v := crc32.ChecksumIEEE(buf[:requestHeaderSize])
-	binary.BigEndian.PutUint32(buf[6:], v)
+	binary.BigEndian.PutUint32(buf[10:], v)
 	return buf[:requestHeaderSize]
 }
 
@@ -92,22 +92,22 @@ func (h *requestHeader) decode(buf []byte) bool {
 	if len(buf) < requestHeaderSize {
 		return false
 	}
-	incoming := binary.BigEndian.Uint32(buf[6:])
-	binary.BigEndian.PutUint32(buf[6:], 0)
+	incoming := binary.BigEndian.Uint32(buf[10:])
+	binary.BigEndian.PutUint32(buf[10:], 0)
 	expected := crc32.ChecksumIEEE(buf[:requestHeaderSize])
 	if incoming != expected {
 		plog.Errorf("header crc check failed")
 		return false
 	}
-	binary.BigEndian.PutUint32(buf[6:], incoming)
+	binary.BigEndian.PutUint32(buf[10:], incoming)
 	method := binary.BigEndian.Uint16(buf)
 	if method != raftType && method != snapshotType {
 		plog.Errorf("invalid method type")
 		return false
 	}
 	h.method = method
-	h.size = binary.BigEndian.Uint32(buf[2:])
-	h.crc = binary.BigEndian.Uint32(buf[10:])
+	h.size = binary.BigEndian.Uint64(buf[2:])
+	h.crc = binary.BigEndian.Uint32(buf[14:])
 	return true
 }
 
@@ -147,7 +147,7 @@ func waitPoisonAck(conn net.Conn) {
 func writeMessage(conn net.Conn,
 	header requestHeader, buf []byte, headerBuf []byte) error {
 	crc := crc32.ChecksumIEEE(buf)
-	header.size = uint32(len(buf))
+	header.size = uint64(len(buf))
 	header.crc = crc
 	headerBuf = header.encode(headerBuf)
 	tt := time.Now().Add(magicNumberDuration).Add(headerDuration)
@@ -201,14 +201,14 @@ func readMessage(conn net.Conn,
 		return requestHeader{}, nil, ErrBadMessage
 	}
 	var buf []byte
-	if rheader.size > uint32(len(rbuf)) {
+	if rheader.size > uint64(len(rbuf)) {
 		buf = make([]byte, rheader.size)
 	} else {
 		buf = rbuf[:rheader.size]
 	}
-	received := 0
+	received := uint64(0)
 	var recvBuf []byte
-	if rheader.size < uint32(recvBufSize) {
+	if rheader.size < uint64(recvBufSize) {
 		recvBuf = buf[:rheader.size]
 	} else {
 		recvBuf = buf[:recvBufSize]
@@ -222,15 +222,15 @@ func readMessage(conn net.Conn,
 		if _, err := io.ReadFull(conn, recvBuf); err != nil {
 			return requestHeader{}, nil, err
 		}
-		toRead -= uint32(len(recvBuf))
-		received += len(recvBuf)
-		if toRead < uint32(recvBufSize) {
-			recvBuf = buf[received : uint32(received)+toRead]
+		toRead -= uint64(len(recvBuf))
+		received += uint64(len(recvBuf))
+		if toRead < uint64(recvBufSize) {
+			recvBuf = buf[received : uint64(received)+toRead]
 		} else {
-			recvBuf = buf[received : received+int(recvBufSize)]
+			recvBuf = buf[received : received+uint64(recvBufSize)]
 		}
 	}
-	if uint32(received) != rheader.size {
+	if uint64(received) != rheader.size {
 		panic("unexpected size")
 	}
 	if crc32.ChecksumIEEE(buf) != rheader.crc {

@@ -66,7 +66,7 @@ import (
 )
 
 const (
-	maxMsgSize = settings.MaxMessageSize
+	maxMsgBatchSize = settings.MaxMessageBatchSize
 	// UnmanagedDeploymentID is the special DeploymentID used when the system is
 	// not managed by master servers.
 	UnmanagedDeploymentID = uint64(1)
@@ -513,9 +513,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 			requests = append(requests, req)
 			// batch below allows multiple requests to be sent in a single message,
 			// then each request can have multiple log entries.
-			// this batching design is largely for heartbeat messages as entries are
-			// already batched into much smaller number of messages.
-			for done := false; !done && sz < maxMsgSize; {
+			for done := false; !done && sz < maxMsgBatchSize; {
 				select {
 				case req = <-sq.ch:
 					sq.decrease(req)
@@ -534,7 +532,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				continue
 			}
 			twoBatch := false
-			if sz < maxMsgSize || len(requests) == 1 {
+			if sz < maxMsgBatchSize || len(requests) == 1 {
 				batch.Requests = requests
 			} else {
 				twoBatch = true

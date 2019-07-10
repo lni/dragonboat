@@ -28,7 +28,6 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/utils/random"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -200,10 +199,6 @@ func getDroppedResult() RequestResult {
 		code: requestDropped,
 	}
 }
-
-const (
-	maxProposalPayloadSize = settings.MaxProposalPayloadSize
-)
 
 type logicalClock struct {
 	ltick             uint64
@@ -929,9 +924,6 @@ func (p *proposalShard) propose(session *client.Session,
 	timeoutTick := p.getTimeoutTick(timeout)
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
-	}
-	if uint64(len(cmd)) > maxProposalPayloadSize {
-		return nil, ErrPayloadTooBig
 	}
 	entry := pb.Entry{
 		Key:         key,

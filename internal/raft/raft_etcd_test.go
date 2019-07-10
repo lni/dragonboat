@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	testRateLimit = settings.MaxProposalPayloadSize * 4
+	testRateLimit = settings.LargeEntitySize * 4
 )
 
 func (r *raft) testOnlyHasConfigChangeToApply() bool {

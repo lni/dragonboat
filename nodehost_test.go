@@ -40,7 +40,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
@@ -547,11 +546,6 @@ func createRateLimitedTestNodeHost(addr string,
 	newRSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
 		return &tests.NoOP{MillisecondToSleep: 20}
 	}
-	oldv := settings.Soft.ExpectedMaxInMemLogSize
-	settings.Soft.ExpectedMaxInMemLogSize = 3 * 1024
-	defer func() {
-		settings.Soft.ExpectedMaxInMemLogSize = oldv
-	}()
 	if err := nh.StartCluster(peers, false, newRSM, rc); err != nil {
 		return nil, err
 	}
@@ -599,11 +593,6 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	newRSM2 := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
 		return sm2
 	}
-	oldv := settings.Soft.ExpectedMaxInMemLogSize
-	settings.Soft.ExpectedMaxInMemLogSize = 3 * 1024
-	defer func() {
-		settings.Soft.ExpectedMaxInMemLogSize = oldv
-	}()
 	rc.NodeID = 1
 	if err := nh1.StartCluster(peers, false, newRSM1, rc); err != nil {
 		return nil, nil, err
