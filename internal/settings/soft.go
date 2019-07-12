@@ -71,6 +71,9 @@ type soft struct {
 	// allocated once the free entry size in the current slice is less than
 	// MinEntrySliceFreeSize.
 	MinEntrySliceFreeSize uint64
+	// InMemGCTimeout defines how often dragonboat collects partial object.
+	// It is defined in terms of number of ticks.
+	InMemGCTimeout uint64
 
 	//
 	// Multiraft
@@ -228,6 +231,7 @@ func getDefaultSoftSettings() soft {
 		LocalRaftRequestTimeoutMs:      10000,
 		GetConnectedTimeoutSecond:      5,
 		MaxEntrySize:                   MaxMessageBatchSize,
+		InMemGCTimeout:                 100,
 		InMemEntrySliceSize:            512,
 		MinEntrySliceFreeSize:          96,
 		IncomingReadIndexQueueLength:   4096,
