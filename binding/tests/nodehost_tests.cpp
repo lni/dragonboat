@@ -949,6 +949,7 @@ TEST_F(NodeHostTest, TooSmallTimeoutIsReported)
 TEST_F(NodeHostTest, TooBigPayloadIsReported)
 {
   auto config = getTestConfig();
+  config.MaxInMemLogSize = 1024 * 1024;
   dragonboat::Peers p;
   p.AddMember("localhost:9050", 1);
   dragonboat::Status s = nh_->StartCluster(
@@ -960,7 +961,7 @@ TEST_F(NodeHostTest, TooBigPayloadIsReported)
   std::unique_ptr<dragonboat::Session> cs(nh_->SyncGetSession(1, timeout, &s));
   EXPECT_TRUE(s.OK());
   dragonboat::UpdateResult code;
-  int sz = 1024 * 1024 * 128;
+  int sz = 1024 * 1024 * 2;
   dragonboat::Buffer buf(sz);
   s = nh_->SyncPropose(cs.get(), buf, timeout, &code);
   EXPECT_FALSE(s.OK());
