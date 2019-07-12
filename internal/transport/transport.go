@@ -173,14 +173,14 @@ func (sq *sendQueue) increase(msg pb.Message) {
 	if msg.Type != pb.Replicate {
 		return
 	}
-	sq.rl.Increase(pb.GetEntrySliceSize(msg.Entries))
+	sq.rl.Increase(pb.GetEntrySliceInMemSize(msg.Entries))
 }
 
 func (sq *sendQueue) decrease(msg pb.Message) {
 	if msg.Type != pb.Replicate {
 		return
 	}
-	sq.rl.Decrease(pb.GetEntrySliceSize(msg.Entries))
+	sq.rl.Decrease(pb.GetEntrySliceInMemSize(msg.Entries))
 }
 
 // Transport is the transport layer for delivering raft messages and snapshots.

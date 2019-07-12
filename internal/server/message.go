@@ -130,7 +130,7 @@ func (q *MessageQueue) tryAdd(msg raftpb.Message) bool {
 		plog.Warningf("rate limited dropped a replicate msg from %d", msg.ClusterId)
 		return false
 	}
-	q.rl.Increase(raftpb.GetEntrySliceSize(msg.Entries))
+	q.rl.Increase(raftpb.GetEntrySliceInMemSize(msg.Entries))
 	return true
 }
 

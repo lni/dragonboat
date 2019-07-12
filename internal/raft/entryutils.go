@@ -76,6 +76,10 @@ func max(x uint64, y uint64) uint64 {
 	return y
 }
 
+func getEntrySliceInMemSize(ents []pb.Entry) uint64 {
+	return pb.GetEntrySliceInMemSize(ents)
+}
+
 func getEntrySliceSize(ents []pb.Entry) uint64 {
 	return pb.GetEntrySliceSize(ents)
 }

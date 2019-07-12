@@ -150,6 +150,25 @@ func TestRateLimiterCanBeEnabledInMessageQueue(t *testing.T) {
 	}
 }
 
+func TestSingleMessageCanAlwaysBeAdded(t *testing.T) {
+	q := NewMessageQueue(10000, false, 0, 1024)
+	e := raftpb.Entry{Index: 1, Cmd: make([]byte, 2048)}
+	m := raftpb.Message{
+		Type:    raftpb.Replicate,
+		Entries: []raftpb.Entry{e},
+	}
+	added, stopped := q.Add(m)
+	if !added {
+		t.Errorf("not added")
+	}
+	if stopped {
+		t.Errorf("stopped")
+	}
+	if !q.rl.RateLimited() {
+		t.Errorf("not rate limited")
+	}
+}
+
 func TestAddMessageIsRateLimited(t *testing.T) {
 	q := NewMessageQueue(10000, false, 0, 1024)
 	for i := 0; i < 10000; i++ {
@@ -167,7 +186,7 @@ func TestAddMessageIsRateLimited(t *testing.T) {
 			sz := q.rl.Get()
 			added, stopped := q.Add(m)
 			if added {
-				if q.rl.Get() != sz+uint64(e.SizeUpperLimit()) {
+				if q.rl.Get() != sz+uint64(raftpb.GetEntrySliceInMemSize([]raftpb.Entry{e})) {
 					t.Errorf("failed to update rate limit")
 				}
 			}

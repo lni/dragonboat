@@ -19,6 +19,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"unsafe"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -300,6 +301,21 @@ func GetEntrySliceSize(ents []Entry) uint64 {
 	sz := uint64(0)
 	for _, e := range ents {
 		sz += uint64(e.SizeUpperLimit())
+	}
+	return sz
+}
+
+// GetEntrySliceInMemSize returns the in memory size of the specified entry
+// slice. Size 24 bytes used to hold ents itself is not counted.
+func GetEntrySliceInMemSize(ents []Entry) uint64 {
+	sz := uint64(0)
+	if len(ents) == 0 {
+		return 0
+	}
+	stSz := uint64(unsafe.Sizeof(ents[0]))
+	for _, e := range ents {
+		sz += uint64(len(e.Cmd))
+		sz += stSz
 	}
 	return sz
 }

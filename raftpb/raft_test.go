@@ -381,3 +381,26 @@ func TestMessageBatchSizeUpperLimit(t *testing.T) {
 		t.Errorf("size > size upper limit")
 	}
 }
+
+func TestGetEntrySliceInMemSize(t *testing.T) {
+	e0 := Entry{}
+	e16 := Entry{Cmd: make([]byte, 16)}
+	e64 := Entry{Cmd: make([]byte, 64)}
+	tests := []struct {
+		ents []Entry
+		size uint64
+	}{
+		{[]Entry{}, 0},
+		{[]Entry{e0}, 80},
+		{[]Entry{e16}, 96},
+		{[]Entry{e64}, 144},
+		{[]Entry{e0, e64}, 224},
+		{[]Entry{e0, e16, e64}, 320},
+	}
+	for idx, tt := range tests {
+		result := GetEntrySliceInMemSize(tt.ents)
+		if result != tt.size {
+			t.Errorf("%d, result %d, want %d", idx, result, tt.size)
+		}
+	}
+}
