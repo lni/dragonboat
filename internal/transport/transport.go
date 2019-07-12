@@ -517,7 +517,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				select {
 				case req = <-sq.ch:
 					sq.decrease(req)
-					sz += uint64(req.Size())
+					sz += uint64(req.SizeUpperLimit())
 					requests = append(requests, req)
 				default:
 					done = true
