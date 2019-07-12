@@ -625,13 +625,12 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 		return 0, nil
 	}
 	compactionOverhead := n.getCompactionOverhead(req)
-	plog.Infof("===> compaction overhead %d", compactionOverhead)
 	if ss.Index > compactionOverhead {
 		n.ss.setCompactLogTo(ss.Index - compactionOverhead)
-		if err := n.snapshotter.Compact(ss.Index); err != nil {
-			plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
-			return 0, err
-		}
+	}
+	if err := n.snapshotter.Compact(ss.Index); err != nil {
+		plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
+		return 0, err
 	}
 	n.ss.setSnapshotIndex(ss.Index)
 	return ss.Index, nil
