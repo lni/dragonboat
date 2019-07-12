@@ -210,6 +210,15 @@ type SnapshotOption struct {
 	// must point to an existing directory for which the current user has write
 	// permission to it.
 	ExportPath string
+	// OverrideCompactionOverhead defines whether the requested snapshot operation
+	// should override the compaction overhead setting specified in node's config.
+	// This field is ignored by the system when exporting a snapshot, that is when
+	// Exported is true.
+	OverrideCompactionOverhead bool
+	// CompactionOverhead is the compaction overhead value to use for the request
+	// snapshot operation when OverrideCompactionOverhead is true. This field is
+	// ignored when exporting a snapshot, that is when Exported is true.
+	CompactionOverhead uint64
 }
 
 // DefaultSnapshotOption is the default SnapshotOption value to use when

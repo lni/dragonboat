@@ -88,7 +88,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -111,7 +111,7 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, 50)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", 49*time.Millisecond)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 49*time.Millisecond)
 	if err != ErrTimeoutTooSmall {
 		t.Errorf("request not rejected")
 	}
@@ -123,14 +123,14 @@ func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ss, err = ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err = ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != ErrPendingSnapshotRequestExist {
 		t.Errorf("request not rejected")
 	}
@@ -142,7 +142,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -177,7 +177,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -201,7 +201,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -225,7 +225,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -250,12 +250,29 @@ func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ps.close()
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != ErrClusterClosed {
 		t.Errorf("not report as closed")
 	}
 	if ss != nil {
 		t.Errorf("snapshot state returned")
+	}
+}
+
+func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
+	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	_, err := ps.request(rsm.UserRequestedSnapshot, "", true, 123, time.Second)
+	if err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	select {
+	case req := <-snapshotC:
+		if !req.OverrideCompaction || req.CompactionOverhead != 123 {
+			t.Errorf("compaction details not recorded")
+		}
+	default:
+		t.Errorf("snapshot request not available")
 	}
 }
 

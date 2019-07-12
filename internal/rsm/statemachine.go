@@ -67,9 +67,11 @@ const (
 
 // SnapshotRequest is the type for describing the details of a snapshot request.
 type SnapshotRequest struct {
-	Type SnapshotRequestType
-	Key  uint64
-	Path string
+	Type               SnapshotRequestType
+	Key                uint64
+	Path               string
+	OverrideCompaction bool
+	CompactionOverhead uint64
 }
 
 // IsExportedSnapshot returns a boolean value indicating whether the snapshot

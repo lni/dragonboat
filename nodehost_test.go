@@ -1956,6 +1956,61 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 	singleNodeHostTest(t, tf)
 }
 
+func TestCanOverrideSnapshotOverhead(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		cmd := make([]byte, 1)
+		for i := 0; i < 16; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, cmd)
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to make proposal %v", err)
+			}
+		}
+		opt := SnapshotOption{
+			OverrideCompactionOverhead: true,
+			CompactionOverhead:         0,
+		}
+		sr, err := nh.RequestSnapshot(2, opt, 2*time.Second)
+		if err != nil {
+			t.Fatalf("failed to request snapshot")
+		}
+		v := <-sr.CompletedC
+		if !v.Completed() {
+			t.Errorf("failed to complete the requested snapshot")
+		}
+		if v.SnapshotIndex() < 16 {
+			t.Fatalf("unexpected snapshot index %d", v.SnapshotIndex())
+		}
+		logdb := nh.logdb
+		for i := 0; i < 1000; i++ {
+			if i == 999 {
+				t.Fatalf("failed to compact the entries")
+			}
+			time.Sleep(10 * time.Millisecond)
+			// make sure the exec engine is stepping the node
+			// this is not required when not running single node test
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, cmd)
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to make proposal %v", err)
+			}
+			ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 12, 14, math.MaxUint64)
+			if err != nil {
+				t.Fatalf("failed to iterate entries, %v", err)
+			}
+			if len(ents) != 0 {
+				continue
+			} else {
+				return
+			}
+		}
+	}
+	singleNodeHostTest(t, tf)
+}
+
 func TestSnapshotCanBeRequested(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)

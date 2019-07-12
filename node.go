@@ -379,7 +379,11 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 			opt.ExportPath = ""
 		}
 	}
-	return n.pendingSnapshot.request(st, opt.ExportPath, timeout)
+	return n.pendingSnapshot.request(st,
+		opt.ExportPath,
+		opt.OverrideCompactionOverhead,
+		opt.CompactionOverhead,
+		timeout)
 }
 
 func (n *node) reportIgnoredSnapshotRequest(key uint64) {
@@ -620,8 +624,10 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 		}
 		return 0, nil
 	}
-	if ss.Index > n.config.CompactionOverhead {
-		n.ss.setCompactLogTo(ss.Index - n.config.CompactionOverhead)
+	compactionOverhead := n.getCompactionOverhead(req)
+	plog.Infof("===> compaction overhead %d", compactionOverhead)
+	if ss.Index > compactionOverhead {
+		n.ss.setCompactLogTo(ss.Index - compactionOverhead)
 		if err := n.snapshotter.Compact(ss.Index); err != nil {
 			plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
 			return 0, err
@@ -629,6 +635,13 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 	}
 	n.ss.setSnapshotIndex(ss.Index)
 	return ss.Index, nil
+}
+
+func (n *node) getCompactionOverhead(req rsm.SnapshotRequest) uint64 {
+	if req.OverrideCompaction {
+		return req.CompactionOverhead
+	}
+	return n.config.CompactionOverhead
 }
 
 func (n *node) streamSnapshot(sink pb.IChunkSink) error {
@@ -1010,7 +1023,6 @@ func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
 		return false
 	}
 	si := n.ss.getReqSnapshotIndex()
-	plog.Infof("req: %+v", req)
 	if !req.IsExportedSnapshot() && lastApplied == si {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false

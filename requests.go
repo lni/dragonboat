@@ -410,7 +410,8 @@ func (p *pendingSnapshot) close() {
 }
 
 func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
-	path string, timeout time.Duration) (*RequestState, error) {
+	path string, override bool, overhead uint64,
+	timeout time.Duration) (*RequestState, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	timeoutTick := p.getTimeoutTick(timeout)
@@ -424,9 +425,11 @@ func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
 		return nil, ErrClusterClosed
 	}
 	ssreq := rsm.SnapshotRequest{
-		Type: st,
-		Path: path,
-		Key:  random.LockGuardedRand.Uint64(),
+		Type:               st,
+		Path:               path,
+		Key:                random.LockGuardedRand.Uint64(),
+		OverrideCompaction: override,
+		CompactionOverhead: overhead,
 	}
 	req := &RequestState{
 		key:        ssreq.Key,

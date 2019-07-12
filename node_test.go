@@ -1546,6 +1546,27 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 	n.processTakeSnapshotStatus()
 }
 
+func TestGetCompactionOverhead(t *testing.T) {
+	cfg := config.Config{
+		CompactionOverhead: 234,
+	}
+	n := node{config: cfg}
+	req1 := rsm.SnapshotRequest{
+		OverrideCompaction: true,
+		CompactionOverhead: 123,
+	}
+	req2 := rsm.SnapshotRequest{
+		OverrideCompaction: false,
+		CompactionOverhead: 456,
+	}
+	if v := n.getCompactionOverhead(req1); v != 123 {
+		t.Errorf("snapshot overhead override not applied")
+	}
+	if v := n.getCompactionOverhead(req2); v != 234 {
+		t.Errorf("snapshot overhead override unexpectedly applied")
+	}
+}
+
 type testDummyNodeProxy struct{}
 
 func (np *testDummyNodeProxy) NodeReady()                                        {}
