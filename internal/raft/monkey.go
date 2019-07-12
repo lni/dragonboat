@@ -21,7 +21,7 @@ import (
 )
 
 func (rc *Peer) GetInMemLogSize() uint64 {
-	return getEntrySliceSize(rc.raft.log.inmem.entries)
+	return getEntrySliceInMemSize(rc.raft.log.inmem.entries)
 }
 
 func (rc *Peer) GetRateLimiter() *server.RateLimiter {
