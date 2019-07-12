@@ -3224,10 +3224,7 @@ func (rel *testRaftEventListener) get() []raftio.LeaderInfo {
 	rel.mu.Lock()
 	defer rel.mu.Unlock()
 	r := make([]raftio.LeaderInfo, 0)
-	for _, rec := range rel.received {
-		r = append(r, rec)
-	}
-	return r
+	return append(r, rel.received...)
 }
 
 func TestRaftEventsAreReported(t *testing.T) {

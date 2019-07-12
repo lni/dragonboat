@@ -2327,7 +2327,7 @@ func TestFirstQuiescedTickResizesInMemoryEntriesSlice(t *testing.T) {
 	if uint64(cap(r.log.inmem.entries)) != entrySliceSize {
 		t.Errorf("not resized, cap: %d", oldcap)
 	}
-	r.log.inmem.entries = make([]pb.Entry, 0, 0)
+	r.log.inmem.entries = make([]pb.Entry, 0)
 	r.quiescedTick()
 	if cap(r.log.inmem.entries) != 0 {
 		t.Errorf("unexpectedly resized again")

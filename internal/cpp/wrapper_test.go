@@ -78,7 +78,10 @@ func TestStateMachineWrapperCanBeCreatedAndDestroyed(t *testing.T) {
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
 	}
-	ds3.Open()
+	_, err := ds3.Open()
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromNodeHost)
 	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromStepWorker)
 	ds1.(*RegularStateMachineWrapper).SetOffloaded(rsm.FromCommitWorker)
@@ -127,7 +130,10 @@ func TestOffloadedWorksAsExpected(t *testing.T) {
 	if ds3 == nil {
 		t.Errorf("failed to return the on-disk data store object")
 	}
-	ds3.Open()
+	_, err := ds3.Open()
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	tests := []struct {
 		val       rsm.From
 		destroyed bool
@@ -171,7 +177,10 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
 	initialApplied := uint64(123)
-	ds3.Open()
+	_, err := ds3.Open()
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	if ds1 == nil {
 		t.Errorf("failed to return the data store object")
 	}
@@ -245,7 +254,10 @@ func TestCppWrapperCanBeBatchedUpdatedAndLookedUp(t *testing.T) {
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
 	initialApplied := uint64(123)
-	ds3.Open()
+	_, err := ds3.Open()
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	if ds2 == nil {
 		t.Errorf("failed to return the concurrent data store object")
 	}
@@ -884,10 +896,16 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		t.Errorf("failed to create temp snapshot file")
 	}
 	for _, chunk := range sink.chunks {
-		f.Write(chunk.Data)
+		_, err := f.Write(chunk.Data)
+		if err != nil {
+			t.Fatalf("open failed %v", err)
+		}
 	}
 	f.Close()
-	f, _ = os.Open(fp)
+	_, err = os.Open(fp)
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	reader, err := rsm.NewSnapshotReader(fp)
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
@@ -904,7 +922,10 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	// the next 8 bytes indicate the actual number of struct session
 	// because on-disk-sm does not support sessions, the 16 extra bytes
 	// in streamed snapshot are just used as place holders
-	reader.Read(buf)
+	_, err = reader.Read(buf)
+	if err != nil {
+		t.Fatalf("open failed %v", err)
+	}
 	if binary.LittleEndian.Uint64(buf[0:8]) != 4096 || binary.LittleEndian.Uint64(buf[8:]) != 0 {
 		t.Errorf("sessions not empty")
 	}

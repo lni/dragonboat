@@ -39,7 +39,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -415,11 +414,6 @@ func (ds *RegularStateMachineWrapper) ensureNotDestroyed() {
 	if ds.Destroyed() {
 		panic("using a destroyed data store instance detected")
 	}
-}
-
-func getCPPSOFileName(dsname string) string {
-	d := strings.ToLower(dsname)
-	return fmt.Sprintf("./dragonboat-cpp-plugin-%s.so", d)
 }
 
 // ConcurrentStateMachineWrapper ...
