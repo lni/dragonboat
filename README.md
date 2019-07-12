@@ -25,6 +25,8 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 * Disk based and memory based state machine support
 * Fully pipelined and TLS mutual authentication support, ready for high latency open environment
 * Custom Raft log storage and Raft RPC support, easy to integrate with latest I/O techs
+* Prometheus based health metrics support
+* Built-in tool to repair Raft clusters that permanently lost the quorum
 * [Extensively tested](/docs/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
 
 Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
