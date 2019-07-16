@@ -321,10 +321,6 @@ test-tools:
 # slow tests excuted nightly & after major changes
 ###############################################################################
 
-slow-multiraft-ioerror-test-bin: TESTTAGVALS+=$(IOERROR_INJECTION_BUILDTAGS)
-slow-multiraft-ioerror-test-bin:
-	$(GOTEST) -c -o $(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) $(PKGNAME)
-
 test-slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
 test-slow-multiraft:
 	$(GOTEST) $(PKGNAME)
@@ -573,7 +569,7 @@ clean: clean-binding
 	test test-raft test-rsm test-logdb test-tools test-transport test-multiraft \
 	test-client test-server test-config test-tests static-check clean \
 	logdb-checker test-slow-multiraft test-grpc-transport slow-test more-test \
-	slow-multiraft-ioerror-test-bin golangci-lint-check \
+	golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
