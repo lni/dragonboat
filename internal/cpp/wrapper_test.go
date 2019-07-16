@@ -851,9 +851,6 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	}
 	emptySession := rsm.GetEmptyLRUSession()
 	writer := rsm.NewChunkWriter(&sink, &meta)
-	if _, err := writer.Write(emptySession); err != nil {
-		t.Fatalf("failed to write session data")
-	}
 	err = ds1.StreamSnapshot(ctx, writer)
 	if err != nil {
 		t.Errorf("failed to stream snapshot, %v", err)
