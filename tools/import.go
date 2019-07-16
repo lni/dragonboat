@@ -192,7 +192,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
-	env := server.NewSnapshotEnv(getSnapshotDir,
+	env := server.NewSSEnv(getSnapshotDir,
 		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshottingMode)
 	if err := env.CreateTempDir(); err != nil {
 		return err

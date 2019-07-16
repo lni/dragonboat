@@ -68,14 +68,14 @@ func getChecksumedBlockSize(sz uint64, blockSize uint64) uint64 {
 	return uint64(math.Ceil(float64(sz)/float64(blockSize)))*checksumSize + sz
 }
 
-func validateHeader(header pb.SnapshotHeader) bool {
+func validateHeaderRecord(header pb.SnapshotHeader) bool {
 	checksum := header.HeaderChecksum
 	header.HeaderChecksum = nil
 	if header.ChecksumType != pb.CRC32IEEE {
 		plog.Errorf("unsupported checksum type %d", header.ChecksumType)
 		return false
 	}
-	version := (SnapshotVersion)(header.Version)
+	version := SSVersion(header.Version)
 	if version != V1SnapshotVersion && version != V2SnapshotVersion {
 		plog.Errorf("unsupported version %d", header.Version)
 		return false
@@ -288,7 +288,7 @@ func (br *blockReader) readBlock() (int, error) {
 // IVWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
 	Write(data []byte) (int, error)
-	GetVersion() SnapshotVersion
+	GetVersion() SSVersion
 	GetPayloadSum() []byte
 	GetPayloadSize(uint64) uint64
 	Flush() error
@@ -315,7 +315,7 @@ func (v1w *v1writer) Write(data []byte) (int, error) {
 	return v1w.f.Write(data)
 }
 
-func (v1w *v1writer) GetVersion() SnapshotVersion {
+func (v1w *v1writer) GetVersion() SSVersion {
 	return V1SnapshotVersion
 }
 
@@ -374,7 +374,7 @@ func (v2w *v2writer) Write(data []byte) (int, error) {
 	return v2w.bw.Write(data)
 }
 
-func (v2w *v2writer) GetVersion() SnapshotVersion {
+func (v2w *v2writer) GetVersion() SSVersion {
 	return V2SnapshotVersion
 }
 
@@ -406,20 +406,17 @@ func (br *v2reader) Sum() []byte {
 	return []byte{0, 0, 0, 0}
 }
 
-func getHeaderFromFirstChunk(data []byte) (pb.SnapshotHeader, bool) {
+func getHeaderFromFirstChunk(data []byte) ([]byte, []byte, bool) {
 	if uint64(len(data)) < SnapshotHeaderSize {
 		panic("first chunk is too small")
 	}
 	sz := binary.LittleEndian.Uint64(data)
 	if sz > SnapshotHeaderSize-8 {
-		return pb.SnapshotHeader{}, false
+		return nil, nil, false
 	}
-	headerData := data[8 : 8+sz]
-	r := pb.SnapshotHeader{}
-	if err := r.Unmarshal(headerData); err != nil {
-		return pb.SnapshotHeader{}, false
-	}
-	return r, true
+	header := data[8 : 8+sz]
+	crc := data[8+sz : 12+sz]
+	return header, crc, true
 }
 
 // IVValidator is the interface for versioned validator.
@@ -581,7 +578,6 @@ func getV2ChecksumType(fp string) (ct pb.ChecksumType, err error) {
 	if err != nil {
 		return pb.ChecksumType(0), err
 	}
-	reader.ValidateHeader(header)
 	if header.Version != uint64(V2SnapshotVersion) {
 		return pb.ChecksumType(0), errors.New("not a v2 snapshot file")
 	}

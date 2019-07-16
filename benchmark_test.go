@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/snappy"
+
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -461,7 +463,7 @@ func BenchmarkLookup(b *testing.B) {
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
-	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -480,7 +482,7 @@ func BenchmarkNALookup(b *testing.B) {
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
-	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -499,8 +501,8 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.StopTimer()
 	ds := &tests.NoOP{NoAlloc: true}
 	done := make(chan struct{})
-	nds := rsm.NewNativeStateMachine(1, 1, rsm.NewRegularStateMachine(ds), done)
-	smo := rsm.NewStateMachine(nds, nil, false, &testDummyNodeProxy{})
+	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
+	smo := rsm.NewStateMachine(nds, nil, config.Config{}, &testDummyNodeProxy{})
 	idx := uint64(0)
 	var s *client.Session
 	if noopSession {
@@ -575,4 +577,42 @@ func BenchmarkStateMachineStep128(b *testing.B) {
 
 func BenchmarkStateMachineStep1024(b *testing.B) {
 	benchmarkStateMachineStep(b, 1024, false)
+}
+
+type noopSink struct{}
+
+func (n *noopSink) Receive(pb.SnapshotChunk) (bool, bool) { return true, false }
+func (n *noopSink) Stop()                                 {}
+func (n *noopSink) ClusterID() uint64                     { return 1 }
+func (n *noopSink) ToNodeID() uint64                      { return 1 }
+
+func BenchmarkSnapshotChunkWriter(b *testing.B) {
+	sink := &noopSink{}
+	meta := &rsm.SSMeta{}
+	cw := rsm.NewChunkWriter(sink, meta)
+	sz := int64(1024 * 256)
+	data := make([]byte, sz)
+	rand.Read(data)
+	b.ReportAllocs()
+	b.SetBytes(sz)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cw.Write(data)
+	}
+}
+
+func BenchmarkSnappyCompressedSnapshotChunkWriter(b *testing.B) {
+	sink := &noopSink{}
+	meta := &rsm.SSMeta{}
+	cw := rsm.NewChunkWriter(sink, meta)
+	w := snappy.NewBufferedWriter(cw)
+	sz := int64(1024 * 256)
+	data := make([]byte, sz)
+	rand.Read(data)
+	b.ReportAllocs()
+	b.SetBytes(sz)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Write(data)
+	}
 }

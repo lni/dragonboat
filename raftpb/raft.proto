@@ -70,6 +70,11 @@ enum StateMachineType {
   OnDiskStateMachine     = 3;
 }
 
+enum CompressionType {
+  NoCompression = 0;
+  Snappy = 1;
+}
+
 message Bootstrap {
   map<uint64, string> addresses   = 1;
   optional bool join              = 2 [(gogoproto.nullable) = false];
@@ -171,14 +176,15 @@ enum ChecksumType {
 }
 
 message SnapshotHeader {
-  optional uint64 session_size        = 1 [(gogoproto.nullable) = false];
-  optional uint64 data_store_size     = 2 [(gogoproto.nullable) = false];
-  optional uint64 unreliable_time     = 3 [(gogoproto.nullable) = false];
-  optional string git_version         = 4 [(gogoproto.nullable) = false];
-  optional bytes header_checksum      = 5 [(gogoproto.nullable) = false];
-  optional bytes payload_checksum     = 6 [(gogoproto.nullable) = false];
-  optional ChecksumType checksum_type = 7 [(gogoproto.nullable) = false];
-  optional uint64 version             = 8 [(gogoproto.nullable) = false];
+  optional uint64 session_size              = 1 [(gogoproto.nullable) = false];
+  optional uint64 data_store_size           = 2 [(gogoproto.nullable) = false];
+  optional uint64 unreliable_time           = 3 [(gogoproto.nullable) = false];
+  optional string git_version               = 4 [(gogoproto.nullable) = false];
+  optional bytes header_checksum            = 5 [(gogoproto.nullable) = false];
+  optional bytes payload_checksum           = 6 [(gogoproto.nullable) = false];
+  optional ChecksumType checksum_type       = 7 [(gogoproto.nullable) = false];
+  optional uint64 version                   = 8 [(gogoproto.nullable) = false];
+  optional CompressionType compression_type = 9 [(gogoproto.nullable) = false];
 }
 
 // dummy message used by grpc

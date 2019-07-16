@@ -36,18 +36,16 @@ type ChunkWriter struct {
 	failed  bool
 	stopped bool
 	chunkID uint64
-	first   bool
 	sink    pb.IChunkSink
 	bw      IBlockWriter
-	meta    *SnapshotMeta
+	meta    *SSMeta
 }
 
 // NewChunkWriter creates and returns a chunk writer instance.
-func NewChunkWriter(sink pb.IChunkSink, meta *SnapshotMeta) *ChunkWriter {
+func NewChunkWriter(sink pb.IChunkSink, meta *SSMeta) *ChunkWriter {
 	cw := &ChunkWriter{
-		sink:  sink,
-		meta:  meta,
-		first: true,
+		sink: sink,
+		meta: meta,
 	}
 	cw.bw = NewBlockWriter(ChunkSize, cw.onNewBlock, DefaultChecksumType)
 	return cw
@@ -70,12 +68,6 @@ func (cw *ChunkWriter) Write(data []byte) (int, error) {
 	if cw.failed {
 		return 0, sm.ErrSnapshotStreaming
 	}
-	if cw.first {
-		cw.first = false
-		if _, err := cw.Write(GetEmptyLRUSession()); err != nil {
-			return 0, err
-		}
-	}
 	return cw.bw.Write(data)
 }
 
@@ -97,6 +89,8 @@ func (cw *ChunkWriter) onNewBlock(data []byte, crc []byte) error {
 	var payload []byte
 	if cw.chunkID == 0 {
 		payload = cw.getHeader()
+	} else {
+		payload = make([]byte, 0, len(data)+len(crc))
 	}
 	payload = append(payload, data...)
 	payload = append(payload, crc...)
@@ -126,25 +120,22 @@ func (cw *ChunkWriter) getHeader() []byte {
 		PayloadChecksum: []byte{0, 0, 0, 0},
 		ChecksumType:    DefaultChecksumType,
 		Version:         uint64(V2SnapshotVersion),
+		CompressionType: pb.CompressionType(cw.meta.CompressionType),
 	}
 	data, err := header.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	headerHash := GetDefaultChecksum()
-	if _, err := headerHash.Write(data); err != nil {
+	h := newCRC32Hash()
+	if _, err := h.Write(data); err != nil {
 		panic(err)
 	}
-	headerChecksum := headerHash.Sum(nil)
-	header.HeaderChecksum = headerChecksum
-	data, err = header.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	headerData := make([]byte, SnapshotHeaderSize)
-	binary.LittleEndian.PutUint64(headerData, uint64(len(data)))
-	copy(headerData[8:], data)
-	return headerData
+	checksum := h.Sum(nil)
+	result := make([]byte, SnapshotHeaderSize)
+	binary.LittleEndian.PutUint64(result, uint64(len(data)))
+	copy(result[8:], data)
+	copy(result[8+len(data):], checksum)
+	return result
 }
 
 func (cw *ChunkWriter) getChunk() pb.SnapshotChunk {

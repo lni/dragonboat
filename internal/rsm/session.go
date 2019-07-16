@@ -105,33 +105,23 @@ func (s *Session) hasResponded(id RaftSeriesID) bool {
 	return id <= s.RespondedUpTo
 }
 
-func (s *Session) save(writer io.Writer) (uint64, error) {
+func (s *Session) save(writer io.Writer) error {
 	data, err := json.Marshal(s)
 	if err != nil {
 		panic(err)
 	}
-	sz := len(data)
 	lenbuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(lenbuf, uint64(sz))
-	n, err := writer.Write(lenbuf)
-	if err != nil {
-		return 0, err
+	binary.LittleEndian.PutUint64(lenbuf, uint64(len(data)))
+	if _, err := writer.Write(lenbuf); err != nil {
+		return err
 	}
-	if n != len(lenbuf) {
-		return 0, io.ErrShortWrite
+	if _, err = writer.Write(data); err != nil {
+		return err
 	}
-	n, err = writer.Write(data)
-	if err != nil {
-		return 0, err
-	}
-	if n != len(data) {
-		return 0, io.ErrShortWrite
-	}
-	return uint64(len(data) + 8), nil
+	return nil
 }
 
-func (s *Session) recoverFromSnapshot(reader io.Reader,
-	v SnapshotVersion) error {
+func (s *Session) recoverFromSnapshot(reader io.Reader, v SSVersion) error {
 	lenbuf := make([]byte, 8)
 	n, err := io.ReadFull(reader, lenbuf)
 	if err != nil {

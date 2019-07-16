@@ -123,12 +123,11 @@ func (ds *SessionManager) AddResponse(session *Session,
 }
 
 // SaveSessions saves the sessions to the provided io.writer.
-func (ds *SessionManager) SaveSessions(writer io.Writer) (uint64, error) {
+func (ds *SessionManager) SaveSessions(writer io.Writer) error {
 	return ds.sessions.save(writer)
 }
 
 // LoadSessions loads and restores sessions from io.Reader.
-func (ds *SessionManager) LoadSessions(reader io.Reader,
-	v SnapshotVersion) error {
+func (ds *SessionManager) LoadSessions(reader io.Reader, v SSVersion) error {
 	return ds.sessions.load(reader, v)
 }

@@ -417,7 +417,7 @@ func (nh *NodeHost) StartCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(clusterID,
+		return rsm.NewNativeSM(clusterID,
 			nodeID, rsm.NewRegularStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
@@ -433,7 +433,7 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(clusterID,
+		return rsm.NewNativeSM(clusterID,
 			nodeID, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
@@ -449,7 +449,7 @@ func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(clusterID,
+		return rsm.NewNativeSM(clusterID,
 			nodeID, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
@@ -1450,7 +1450,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
-		getSnapshotDirFunc, nh.logdb, stopc)
+		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc)
 	if err := snapshotter.ProcessOrphans(); err != nil {
 		panic(err)
 	}

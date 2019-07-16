@@ -135,7 +135,7 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx], Data: cmd})
 		}
 		snapshot := &bytes.Buffer{}
-		if _, err := s.save(snapshot); err != nil {
+		if err := s.save(snapshot); err != nil {
 			t.Fatalf("save failed %v", err)
 		}
 		data := snapshot.Bytes()
@@ -224,7 +224,7 @@ func TestUnknownVersionCausePanicWhenRecoverSessionFromSnapshot(t *testing.T) {
 			t.Fatalf("panic not triggered")
 		}
 	}()
-	if err := newS.recoverFromSnapshot(toRecover, (SnapshotVersion)(3)); err != nil {
+	if err := newS.recoverFromSnapshot(toRecover, SSVersion(3)); err != nil {
 		t.Errorf("recover from ss %v", err)
 	}
 }

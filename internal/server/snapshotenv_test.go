@@ -67,12 +67,12 @@ func TestTempSuffix(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
 	dir := env.GetTempDir()
 	if !strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
 	}
-	env = NewSnapshotEnv(f, 1, 1, 1, 2, ReceivingMode)
+	env = NewSSEnv(f, 1, 1, 1, 2, ReceivingMode)
 	dir = env.GetTempDir()
 	if !strings.Contains(dir, ".receiving") {
 		t.Errorf("unexpected suffix: %s", dir)
@@ -83,7 +83,7 @@ func TestFinalSnapshotDirDoesNotContainTempSuffix(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
 	dir := env.GetFinalDir()
 	if strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
@@ -94,7 +94,7 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSnapshotEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
 	tmpDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
 	rootDir := env.GetRootDir()
@@ -102,7 +102,7 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	mustBeChild(rootDir, finalDir)
 }
 
-func runEnvTest(t *testing.T, f func(t *testing.T, env *SnapshotEnv)) {
+func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv)) {
 	rd := "server-pkg-test-data-safe-to-delete"
 	ff := func(cid uint64, nid uint64) string {
 		return rd
@@ -110,7 +110,7 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SnapshotEnv)) {
 	defer func() {
 		os.RemoveAll(rd)
 	}()
-	env := NewSnapshotEnv(ff, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSSEnv(ff, 1, 1, 1, 2, SnapshottingMode)
 	tmpDir := env.GetTempDir()
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		t.Fatalf("%v", err)
@@ -119,7 +119,7 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SnapshotEnv)) {
 }
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
-	tf := func(t *testing.T, env *SnapshotEnv) {
+	tf := func(t *testing.T, env *SSEnv) {
 		finalDir := env.GetFinalDir()
 		if err := os.MkdirAll(finalDir, 0755); err != nil {
 			t.Fatalf("%v", err)
@@ -133,7 +133,7 @@ func TestRenameTempDirToFinalDir(t *testing.T) {
 }
 
 func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
-	tf := func(t *testing.T, env *SnapshotEnv) {
+	tf := func(t *testing.T, env *SSEnv) {
 		if env.isFinalDirExists() {
 			t.Errorf("final dir already exist")
 		}
@@ -152,7 +152,7 @@ func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 }
 
 func TestFlagFileExists(t *testing.T) {
-	tf := func(t *testing.T, env *SnapshotEnv) {
+	tf := func(t *testing.T, env *SSEnv) {
 		if env.isFinalDirExists() {
 			t.Errorf("final dir already exist")
 		}
@@ -175,7 +175,7 @@ func TestFlagFileExists(t *testing.T) {
 }
 
 func TestFinalizeSnapshotCanComplete(t *testing.T) {
-	tf := func(t *testing.T, env *SnapshotEnv) {
+	tf := func(t *testing.T, env *SSEnv) {
 		m := &pb.Message{}
 		if err := env.FinalizeSnapshot(m); err != nil {
 			t.Errorf("failed to finalize snapshot %v", err)
@@ -191,7 +191,7 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 }
 
 func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
-	tf := func(t *testing.T, env *SnapshotEnv) {
+	tf := func(t *testing.T, env *SSEnv) {
 		finalDir := env.GetFinalDir()
 		if err := os.MkdirAll(finalDir, 0755); err != nil {
 			t.Fatalf("%v", err)

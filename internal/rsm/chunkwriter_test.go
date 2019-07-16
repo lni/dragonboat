@@ -49,8 +49,8 @@ func (s *testSink) ToNodeID() uint64 {
 	return 300
 }
 
-func getTestSnapshotMeta() *SnapshotMeta {
-	return &SnapshotMeta{
+func getTestSSMeta() *SSMeta {
+	return &SSMeta{
 		Index: 1000,
 		Term:  5,
 		From:  150,
@@ -58,7 +58,7 @@ func getTestSnapshotMeta() *SnapshotMeta {
 }
 
 func TestChunkWriterCanBeWritten(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	cw := NewChunkWriter(&testSink{}, meta)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, ChunkSize)
@@ -69,8 +69,8 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 	if err := cw.Close(); err != nil {
 		t.Fatalf("failed to flush %v", err)
 	}
-	if len(cw.sink.(*testSink).chunks) != 14 {
-		t.Errorf("chunks count %d, want 14", len(cw.sink.(*testSink).chunks))
+	if len(cw.sink.(*testSink).chunks) != 13 {
+		t.Errorf("chunks count %d, want 13", len(cw.sink.(*testSink).chunks))
 	}
 	for idx, chunk := range cw.sink.(*testSink).chunks {
 		if idx == 0 {
@@ -80,14 +80,14 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 			if err := header.Unmarshal(headerData); err != nil {
 				t.Fatalf("failed to unmarshal %v", err)
 			}
-		} else if idx == 12 {
+		} else if idx == 11 {
 			if chunk.ChunkCount != pb.LastChunkCount {
 				t.Errorf("last chunk not marked, %d", idx)
 			}
 			if chunk.FileChunkCount != pb.LastChunkCount {
 				t.Errorf("last chunk not marked, %d", idx)
 			}
-		} else if idx == 13 {
+		} else if idx == 12 {
 		} else {
 			if chunk.ChunkCount != 0 {
 				t.Errorf("unexpectedly marked as last chunk, %d", idx)
@@ -97,7 +97,7 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 }
 
 func TestChunkWriterCanFailWrite(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	for i := 0; i < 10; i++ {
@@ -118,7 +118,7 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 }
 
 func TestChunkWriterCanBeStopped(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	for i := 0; i < 10; i++ {
@@ -139,7 +139,7 @@ func TestChunkWriterCanBeStopped(t *testing.T) {
 }
 
 func TestGetTailChunk(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	chunk := cw.getTailChunk()
@@ -154,7 +154,7 @@ func TestGetTailChunk(t *testing.T) {
 }
 
 func TestCloseChunk(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	cw.Close()
@@ -166,7 +166,7 @@ func TestCloseChunk(t *testing.T) {
 }
 
 func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
-	meta := getTestSnapshotMeta()
+	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	cw.failed = true
@@ -175,6 +175,7 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 		if idx == 0 {
 			sz := binary.LittleEndian.Uint64(chunk.Data)
 			headerdata := chunk.Data[8 : 8+sz]
+			crc := chunk.Data[8+sz : 12+sz]
 			var header pb.SnapshotHeader
 			if err := header.Unmarshal(headerdata); err != nil {
 				t.Fatalf("%v", err)
@@ -183,16 +184,14 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 				t.Errorf("unexpected data size")
 			}
 			checksum := header.HeaderChecksum
-			header.HeaderChecksum = nil
-			data, err := header.Marshal()
-			if err != nil {
+			if checksum != nil {
+				t.Errorf("not expected to set the checksum field")
+			}
+			h := newCRC32Hash()
+			if _, err := h.Write(headerdata); err != nil {
 				panic(err)
 			}
-			headerHash := GetDefaultChecksum()
-			if _, err := headerHash.Write(data); err != nil {
-				panic(err)
-			}
-			if !bytes.Equal(headerHash.Sum(nil), checksum) {
+			if !bytes.Equal(h.Sum(nil), crc) {
 				t.Fatalf("not a valid header")
 			}
 		} else if idx == 1 {

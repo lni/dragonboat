@@ -331,25 +331,20 @@ func (ds *RegularStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 
 // StreamSnapshot streams the snapshot to the remote node.
 func (ds *RegularStateMachineWrapper) StreamSnapshot(ssctx interface{},
-	writer *rsm.ChunkWriter) error {
+	writer io.Writer) error {
 	panic("StreamSnapshot not suppose to be called on RegularStateMachineWrapper")
 }
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
 func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
-	writer *rsm.SnapshotWriter,
-	session []byte,
-	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
+	writer io.Writer, session []byte,
+	collection sm.ISnapshotFileCollection) (bool, error) {
 	ds.ensureNotDestroyed()
-	n, err := writer.Write(session)
+	_, err := writer.Write(session)
 	if err != nil {
-		return false, 0, err
+		return false, err
 	}
-	if n != len(session) {
-		return false, 0, io.ErrShortWrite
-	}
-	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	collectionOID := AddManagedObject(collection)
 	doneChOID := AddManagedObject(ds.done)
@@ -364,11 +359,9 @@ func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	err = getSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		return false, 0, err
+		return false, err
 	}
-	sz := uint64(r.size)
-	actualSz := writer.GetPayloadSize(sz + smsz)
-	return false, actualSz + rsm.SnapshotHeaderSize, nil
+	return false, nil
 }
 
 // ConcurrentSnapshot returns a boolean flag indicating whether the state
@@ -386,8 +379,7 @@ func (ds *RegularStateMachineWrapper) OnDiskStateMachine() bool {
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
 func (ds *RegularStateMachineWrapper) RecoverFromSnapshot(
-	reader *rsm.SnapshotReader,
-	files []sm.SnapshotFile) error {
+	reader io.Reader, files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
 	cf := C.GetCollectedFile()
 	defer C.FreeCollectedFile(cf)
@@ -532,17 +524,11 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 
 // SaveSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
-	writer *rsm.SnapshotWriter,
-	session []byte,
-	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
-	n, err := writer.Write(session)
-	if err != nil {
-		return false, 0, err
+	writer io.Writer, session []byte,
+	collection sm.ISnapshotFileCollection) (bool, error) {
+	if _, err := writer.Write(session); err != nil {
+		return false, err
 	}
-	if n != len(session) {
-		return false, 0, io.ErrShortWrite
-	}
-	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	collectionOID := AddManagedObject(collection)
 	doneChOID := AddManagedObject(ds.done)
@@ -555,20 +541,17 @@ func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	r := C.SaveSnapshotDBConcurrentStateMachine(ds.dataStore, ssctx,
 		C.uint64_t(writerOID), C.uint64_t(collectionOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
-	err = getSnapshotErrorFromErrNo(errno)
+	err := getSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		return false, 0, err
+		return false, err
 	}
-	sz := uint64(r.size)
-	actualSz := writer.GetPayloadSize(sz + smsz)
-	return false, actualSz + rsm.SnapshotHeaderSize, nil
+	return false, nil
 }
 
 // RecoverFromSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(
-	reader *rsm.SnapshotReader,
-	files []sm.SnapshotFile) error {
+	reader io.Reader, files []sm.SnapshotFile) error {
 	ds.ensureNotDestroyed()
 	cf := C.GetCollectedFile()
 	defer C.FreeCollectedFile(cf)
@@ -588,7 +571,7 @@ func (ds *ConcurrentStateMachineWrapper) RecoverFromSnapshot(
 
 // StreamSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) StreamSnapshot(ssctx interface{},
-	writer *rsm.ChunkWriter) error {
+	writer io.Writer) error {
 	panic("StreamSnapshot not suppose to be called on ConcurrentStateMachineWrapper")
 }
 
@@ -780,24 +763,17 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot ...
 func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
-	writer *rsm.SnapshotWriter,
-	session []byte,
-	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
+	writer io.Writer, session []byte,
+	collection sm.ISnapshotFileCollection) (bool, error) {
 	if !ds.opened {
 		panic("SaveSnapshot called when not opened")
 	}
 	if !meta.Request.IsExportedSnapshot() {
-		sz, err := ds.saveDummySnapshot(writer, session)
-		return true, sz, err
+		return true, ds.saveDummySnapshot(writer, session)
 	}
-	n, err := writer.Write(session)
-	if err != nil {
-		return false, 0, err
+	if _, err := writer.Write(session); err != nil {
+		return false, err
 	}
-	if n != len(session) {
-		return false, 0, io.ErrShortWrite
-	}
-	smsz := uint64(len(session))
 	writerOID := AddManagedObject(writer)
 	doneChOID := AddManagedObject(ds.done)
 	defer func() {
@@ -808,30 +784,23 @@ func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
 	r := C.SaveSnapshotDBOnDiskStateMachine(ds.dataStore, ssctx,
 		C.uint64_t(writerOID), C.uint64_t(doneChOID))
 	errno := int(r.errcode)
-	err = getSnapshotErrorFromErrNo(errno)
+	err := getSnapshotErrorFromErrNo(errno)
 	if err != nil {
 		plog.Errorf("save snapshot failed, %v", err)
-		return false, 0, err
+		return false, err
 	}
-	sz := uint64(r.size)
-	actualSz := writer.GetPayloadSize(sz + smsz)
-	return false, actualSz + rsm.SnapshotHeaderSize, nil
+	return false, nil
 }
 
 func (ds *OnDiskStateMachineWrapper) saveDummySnapshot(
-	writer *rsm.SnapshotWriter, session []byte) (uint64, error) {
+	writer io.Writer, session []byte) error {
 	_, err := writer.Write(session)
-	if err != nil {
-		return 0, err
-	}
-	sz := rsm.EmptyClientSessionLength
-	return writer.GetPayloadSize(sz) + rsm.SnapshotHeaderSize, nil
+	return err
 }
 
 // RecoverFromSnapshot ...
 func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(
-	reader *rsm.SnapshotReader,
-	files []sm.SnapshotFile) error {
+	reader io.Reader, files []sm.SnapshotFile) error {
 	if !ds.opened {
 		panic("RecoverFromSnapshot called when not opened")
 	}
@@ -845,9 +814,12 @@ func (ds *OnDiskStateMachineWrapper) RecoverFromSnapshot(
 
 // StreamSnapshot ...
 func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
-	writer *rsm.ChunkWriter) error {
+	writer io.Writer) error {
 	if !ds.opened {
 		panic("StreamSnapshot called when not opened")
+	}
+	if _, err := writer.Write(rsm.GetEmptyLRUSession()); err != nil {
+		return err
 	}
 	ds.ensureNotDestroyed()
 	writerOID := AddManagedObject(writer)

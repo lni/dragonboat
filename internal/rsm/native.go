@@ -30,25 +30,25 @@ var (
 
 // IStreamable is the interface for types that can be snapshot streamed.
 type IStreamable interface {
-	StreamSnapshot(interface{}, *ChunkWriter) error
+	StreamSnapshot(interface{}, io.Writer) error
 }
 
 // ISavable is the interface for types that can its content saved as snapshots.
 type ISavable interface {
-	SaveSnapshot(*SnapshotMeta,
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
+	SaveSnapshot(*SSMeta,
+		io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 }
 
 // ILoadableSM is the interface for types that can have its state restored from
 // snapshots.
 type ILoadableSM interface {
-	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
+	RecoverFromSnapshot(io.Reader, []sm.SnapshotFile) error
 }
 
 // ILoadableSessions is the interface for types that can load client session
 // state from a snapshot.
 type ILoadableSessions interface {
-	LoadSessions(io.Reader, SnapshotVersion) error
+	LoadSessions(io.Reader, SSVersion) error
 }
 
 // IManagedStateMachine is the interface used to manage data store.
@@ -61,10 +61,10 @@ type IManagedStateMachine interface {
 	Sync() error
 	GetHash() (uint64, error)
 	PrepareSnapshot() (interface{}, error)
-	SaveSnapshot(*SnapshotMeta,
-		*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error)
-	RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error
-	StreamSnapshot(interface{}, *ChunkWriter) error
+	SaveSnapshot(*SSMeta,
+		io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
+	RecoverFromSnapshot(io.Reader, []sm.SnapshotFile) error
+	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From)
 	Loaded(From)
 	ConcurrentSnapshot() bool
@@ -91,9 +91,9 @@ func (cw *countedWriter) Write(data []byte) (int, error) {
 type ManagedStateMachineFactory func(clusterID uint64,
 	nodeID uint64, stopc <-chan struct{}) IManagedStateMachine
 
-// NativeStateMachine is the IManagedStateMachine object used to manage native
+// NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
-type NativeStateMachine struct {
+type NativeSM struct {
 	sm   IStateMachine
 	done <-chan struct{}
 	ue   []sm.Entry
@@ -101,10 +101,10 @@ type NativeStateMachine struct {
 	OffloadedStatus
 }
 
-// NewNativeStateMachine creates and returns a new NativeStateMachine object.
-func NewNativeStateMachine(clusterID uint64, nodeID uint64, ism IStateMachine,
+// NewNativeSM creates and returns a new NativeSM object.
+func NewNativeSM(clusterID uint64, nodeID uint64, ism IStateMachine,
 	done <-chan struct{}) IManagedStateMachine {
-	s := &NativeStateMachine{
+	s := &NativeSM{
 		sm:   ism,
 		done: done,
 		ue:   make([]sm.Entry, 1),
@@ -115,12 +115,12 @@ func NewNativeStateMachine(clusterID uint64, nodeID uint64, ism IStateMachine,
 }
 
 // Open opens on disk state machine.
-func (ds *NativeStateMachine) Open() (uint64, error) {
+func (ds *NativeSM) Open() (uint64, error) {
 	return ds.sm.Open(ds.done)
 }
 
 // Offloaded offloads the data store from the specified part of the system.
-func (ds *NativeStateMachine) Offloaded(from From) {
+func (ds *NativeSM) Offloaded(from From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
@@ -133,7 +133,7 @@ func (ds *NativeStateMachine) Offloaded(from From) {
 }
 
 // Loaded marks the statemachine as loaded by the specified component.
-func (ds *NativeStateMachine) Loaded(from From) {
+func (ds *NativeSM) Loaded(from From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
@@ -141,23 +141,23 @@ func (ds *NativeStateMachine) Loaded(from From) {
 
 // ConcurrentSnapshot returns a boolean flag to indicate whether the managed
 // state machine instance is capable of doing concurrent snapshots.
-func (ds *NativeStateMachine) ConcurrentSnapshot() bool {
+func (ds *NativeSM) ConcurrentSnapshot() bool {
 	return ds.sm.ConcurrentSnapshot()
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether the state
 // machine is an on disk state machine.
-func (ds *NativeStateMachine) OnDiskStateMachine() bool {
+func (ds *NativeSM) OnDiskStateMachine() bool {
 	return ds.sm.OnDiskStateMachine()
 }
 
 // StateMachineType returns the state machine type.
-func (ds *NativeStateMachine) StateMachineType() pb.StateMachineType {
+func (ds *NativeSM) StateMachineType() pb.StateMachineType {
 	return ds.sm.StateMachineType()
 }
 
 // Update updates the data store.
-func (ds *NativeStateMachine) Update(session *Session,
+func (ds *NativeSM) Update(session *Session,
 	e pb.Entry) (sm.Result, error) {
 	if session != nil {
 		_, ok := session.getResponse(RaftSeriesID(e.SeriesID))
@@ -181,7 +181,7 @@ func (ds *NativeStateMachine) Update(session *Session,
 }
 
 // BatchedUpdate applies committed entries in a batch to hide latency.
-func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
+func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	il := len(ents)
 	results, err := ds.sm.Update(ents)
 	if err != nil {
@@ -194,7 +194,7 @@ func (ds *NativeStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error)
 }
 
 // Lookup queries the data store.
-func (ds *NativeStateMachine) Lookup(query interface{}) (interface{}, error) {
+func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
 		ds.mu.RUnlock()
@@ -206,7 +206,7 @@ func (ds *NativeStateMachine) Lookup(query interface{}) (interface{}, error) {
 }
 
 // NALookup queries the data store.
-func (ds *NativeStateMachine) NALookup(query []byte) ([]byte, error) {
+func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
 	ds.mu.RLock()
 	if ds.Destroyed() {
 		ds.mu.RUnlock()
@@ -218,7 +218,7 @@ func (ds *NativeStateMachine) NALookup(query []byte) ([]byte, error) {
 }
 
 // Sync synchronizes state machine's in-core state with that on disk.
-func (ds *NativeStateMachine) Sync() error {
+func (ds *NativeSM) Sync() error {
 	if !ds.sm.OnDiskStateMachine() {
 		panic("sync called on non-ondisk SM")
 	}
@@ -226,12 +226,12 @@ func (ds *NativeStateMachine) Sync() error {
 }
 
 // GetHash returns an integer value representing the state of the data store.
-func (ds *NativeStateMachine) GetHash() (uint64, error) {
+func (ds *NativeSM) GetHash() (uint64, error) {
 	return ds.sm.GetHash()
 }
 
 // PrepareSnapshot makes preparation for concurrently taking snapshot.
-func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
+func (ds *NativeSM) PrepareSnapshot() (interface{}, error) {
 	if !ds.ConcurrentSnapshot() {
 		panic("state machine is not capable of concurrent snapshotting")
 	}
@@ -240,60 +240,47 @@ func (ds *NativeStateMachine) PrepareSnapshot() (interface{}, error) {
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
-func (ds *NativeStateMachine) SaveSnapshot(meta *SnapshotMeta,
-	writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (bool, uint64, error) {
+func (ds *NativeSM) SaveSnapshot(meta *SSMeta,
+	w io.Writer, session []byte,
+	collection sm.ISnapshotFileCollection) (bool, error) {
 	if ds.sm.OnDiskStateMachine() && !meta.Request.IsExportedSnapshot() {
-		sz, err := ds.saveDummySnapshot(writer, session)
-		return true, sz, err
+		return true, ds.saveDummySnapshot(w, session)
 	}
-	sz, err := ds.saveSnapshot(meta.Ctx, writer, session, collection)
-	return false, sz, err
+	return false, ds.saveSnapshot(meta.Ctx, w, session, collection)
 }
 
-func (ds *NativeStateMachine) saveDummySnapshot(writer *SnapshotWriter,
-	session []byte) (uint64, error) {
+func (ds *NativeSM) saveDummySnapshot(w io.Writer, session []byte) error {
 	if !ds.sm.OnDiskStateMachine() {
 		panic("saveDummySnapshot called on non OnDiskStateMachine")
 	}
-	_, err := writer.Write(session)
-	if err != nil {
-		return 0, err
+	if _, err := w.Write(session); err != nil {
+		return err
 	}
-	sz := EmptyClientSessionLength
-	return writer.GetPayloadSize(sz) + SnapshotHeaderSize, nil
+	return nil
 }
 
-func (ds *NativeStateMachine) saveSnapshot(
-	ssctx interface{}, writer *SnapshotWriter, session []byte,
-	collection sm.ISnapshotFileCollection) (uint64, error) {
-	n, err := writer.Write(session)
-	if err != nil {
-		return 0, err
+func (ds *NativeSM) saveSnapshot(ssctx interface{},
+	w io.Writer, session []byte, collection sm.ISnapshotFileCollection) error {
+	if _, err := w.Write(session); err != nil {
+		return err
 	}
-	if n != len(session) {
-		return 0, io.ErrShortWrite
+	if err := ds.sm.SaveSnapshot(ssctx, w, collection, ds.done); err != nil {
+		return err
 	}
-	smsz := uint64(len(session))
-	cw := &countedWriter{w: writer}
-	err = ds.sm.SaveSnapshot(ssctx, cw, collection, ds.done)
-	if err != nil {
-		return 0, err
-	}
-	sz := cw.total
-	actualSz := writer.GetPayloadSize(sz + smsz)
-	return actualSz + SnapshotHeaderSize, nil
+	return nil
 }
 
 // StreamSnapshot creates and streams snapshot to a remote node.
-func (ds *NativeStateMachine) StreamSnapshot(ssctx interface{},
-	writer *ChunkWriter) error {
-	return ds.sm.SaveSnapshot(ssctx, writer, nil, ds.done)
+func (ds *NativeSM) StreamSnapshot(ssctx interface{}, w io.Writer) error {
+	if _, err := w.Write(GetEmptyLRUSession()); err != nil {
+		return err
+	}
+	return ds.sm.SaveSnapshot(ssctx, w, nil, ds.done)
 }
 
 // RecoverFromSnapshot recovers the state of the data store from the snapshot
 // file specified by the fp input string.
-func (ds *NativeStateMachine) RecoverFromSnapshot(reader *SnapshotReader,
+func (ds *NativeSM) RecoverFromSnapshot(r io.Reader,
 	files []sm.SnapshotFile) error {
-	return ds.sm.RecoverFromSnapshot(reader, files, ds.done)
+	return ds.sm.RecoverFromSnapshot(r, files, ds.done)
 }

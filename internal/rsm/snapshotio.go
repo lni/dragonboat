@@ -29,16 +29,16 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-// SnapshotVersion is the snapshot version value type.
-type SnapshotVersion uint64
+// SSVersion is the snapshot version value type.
+type SSVersion uint64
 
 const (
 	// V1SnapshotVersion is the value of snapshot version 1.
-	V1SnapshotVersion SnapshotVersion = 1
+	V1SnapshotVersion SSVersion = 1
 	// V2SnapshotVersion is the value of snapshot version 2.
-	V2SnapshotVersion SnapshotVersion = 2
-	// CurrentSnapshotVersion is the snapshot binary format version.
-	CurrentSnapshotVersion SnapshotVersion = V2SnapshotVersion
+	V2SnapshotVersion SSVersion = 2
+	// SnapshotVersion is the snapshot binary format version.
+	SnapshotVersion SSVersion = V2SnapshotVersion
 	// SnapshotHeaderSize is the size of snapshot in number of bytes.
 	SnapshotHeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
@@ -80,7 +80,7 @@ func mustGetChecksum(t pb.ChecksumType) hash.Hash {
 	return c
 }
 
-func getVersionedWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
+func getVersionedWriter(w io.Writer, v SSVersion) (IVWriter, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Wrtier(w), true
 	} else if v == V2SnapshotVersion {
@@ -89,7 +89,7 @@ func getVersionedWriter(w io.Writer, v SnapshotVersion) (IVWriter, bool) {
 	return nil, false
 }
 
-func mustGetVersionedWriter(w io.Writer, v SnapshotVersion) IVWriter {
+func mustGetVersionedWriter(w io.Writer, v SSVersion) IVWriter {
 	vw, ok := getVersionedWriter(w, v)
 	if !ok {
 		plog.Panicf("failed to get version writer, v %d", v)
@@ -98,7 +98,7 @@ func mustGetVersionedWriter(w io.Writer, v SnapshotVersion) IVWriter {
 }
 
 func getVersionedReader(r io.Reader,
-	v SnapshotVersion, t pb.ChecksumType) (IVReader, bool) {
+	v SSVersion, t pb.ChecksumType) (IVReader, bool) {
 	if v == V1SnapshotVersion {
 		return newV1Reader(r), true
 	} else if v == V2SnapshotVersion {
@@ -108,7 +108,7 @@ func getVersionedReader(r io.Reader,
 }
 
 func mustGetVersionedReader(r io.Reader,
-	v SnapshotVersion, t pb.ChecksumType) IVReader {
+	v SSVersion, t pb.ChecksumType) IVReader {
 	vr, ok := getVersionedReader(r, v, t)
 	if !ok {
 		plog.Panicf("failed to get version reader, v %d", v)
@@ -117,7 +117,7 @@ func mustGetVersionedReader(r io.Reader,
 }
 
 func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
-	v := (SnapshotVersion)(header.Version)
+	v := (SSVersion)(header.Version)
 	if v == V1SnapshotVersion {
 		return newV1Validator(header), true
 	} else if v == V2SnapshotVersion {
@@ -135,27 +135,26 @@ type SnapshotWriter struct {
 	vw   IVWriter
 	file *os.File
 	fp   string
+	ct   pb.CompressionType
 }
 
 // NewSnapshotWriter creates a new snapshot writer instance.
 func NewSnapshotWriter(fp string,
-	version SnapshotVersion) (*SnapshotWriter, error) {
+	v SSVersion, ct pb.CompressionType) (*SnapshotWriter, error) {
 	f, err := os.OpenFile(fp,
 		os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileutil.DefaultFileMode)
 	if err != nil {
 		return nil, err
 	}
 	dummy := make([]byte, SnapshotHeaderSize)
-	for i := uint64(0); i < SnapshotHeaderSize; i++ {
-		dummy[i] = 0
-	}
 	if _, err := f.Write(dummy); err != nil {
 		return nil, err
 	}
 	sw := &SnapshotWriter{
-		vw:   mustGetVersionedWriter(f, version),
+		vw:   mustGetVersionedWriter(f, v),
 		file: f,
 		fp:   fp,
+		ct:   ct,
 	}
 	return sw, nil
 }
@@ -204,6 +203,7 @@ func (sw *SnapshotWriter) saveHeader() error {
 		PayloadChecksum: sw.GetPayloadChecksum(),
 		ChecksumType:    getChecksumType(),
 		Version:         uint64(sw.vw.GetVersion()),
+		CompressionType: sw.ct,
 	}
 	data, err := sh.Marshal()
 	if err != nil {
@@ -283,6 +283,17 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if err := sr.header.Unmarshal(data); err != nil {
 		panic(err)
 	}
+	crcdata := make([]byte, 4)
+	n, err = io.ReadFull(sr.file, crcdata)
+	if err != nil {
+		return empty, err
+	}
+	if n != 4 {
+		return empty, io.ErrUnexpectedEOF
+	}
+	if !validateHeader(data, crcdata) {
+		panic("corrupted header")
+	}
 	offset, err := sr.file.Seek(int64(SnapshotHeaderSize), 0)
 	if err != nil {
 		return empty, err
@@ -291,7 +302,8 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		return empty, io.ErrUnexpectedEOF
 	}
 	var reader io.Reader = sr.file
-	if (SnapshotVersion)(sr.header.Version) == V2SnapshotVersion {
+	v := SSVersion(sr.header.Version)
+	if v == V2SnapshotVersion {
 		st, err := sr.file.Stat()
 		if err != nil {
 			return empty, err
@@ -300,7 +312,6 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		payloadSz := fileSz - int64(SnapshotHeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	v := (SnapshotVersion)(sr.header.Version)
 	t := (pb.ChecksumType)(sr.header.ChecksumType)
 	sr.r = mustGetVersionedReader(reader, v, t)
 	return sr.header, nil
@@ -328,12 +339,20 @@ func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
 	}
 }
 
-// ValidateHeader validates whether the header matches the header checksum
-// recorded in the header.
-func (sr *SnapshotReader) ValidateHeader(header pb.SnapshotHeader) {
-	if !validateHeader(header) {
-		panic("corrupted snapshot header")
+var fourZeroBytes = []byte{0, 0, 0, 0}
+
+func validateHeader(header []byte, crc32 []byte) bool {
+	if len(crc32) != 4 {
+		plog.Panicf("invalid crc32 len: %d", len(crc32))
 	}
+	if !bytes.Equal(crc32, fourZeroBytes) {
+		h := newCRC32Hash()
+		if _, err := h.Write(header); err != nil {
+			panic(err)
+		}
+		return bytes.Equal(h.Sum(nil), crc32)
+	}
+	return true
 }
 
 // SnapshotValidator is the validator used to check incoming snapshot chunks.
@@ -349,17 +368,23 @@ func NewSnapshotValidator() *SnapshotValidator {
 // AddChunk adds a new snapshot chunk to the validator.
 func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
 	if chunkID == 0 {
-		header, ok := getHeaderFromFirstChunk(data)
+		header, crc, ok := getHeaderFromFirstChunk(data)
 		if !ok {
+			plog.Errorf("failed to get header from first chunk")
 			return false
 		}
 		if v.v != nil {
 			return false
 		}
-		if !validateHeader(header) {
+		if !validateHeader(header, crc) {
+			plog.Errorf("validate header failed")
 			return false
 		}
-		v.v, ok = getVersionedValidator(header)
+		var headerRec pb.SnapshotHeader
+		if err := headerRec.Unmarshal(header); err != nil {
+			panic(err)
+		}
+		v.v, ok = getVersionedValidator(headerRec)
 		if !ok {
 			return false
 		}
@@ -435,7 +460,7 @@ func ShrinkSnapshot(fp string, newFp string) (err error) {
 			err = cerr
 		}
 	}()
-	writer, err := NewSnapshotWriter(newFp, CurrentSnapshotVersion)
+	writer, err := NewSnapshotWriter(newFp, SnapshotVersion, pb.NoCompression)
 	if err != nil {
 		return err
 	}

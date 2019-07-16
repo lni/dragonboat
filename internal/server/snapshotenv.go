@@ -112,9 +112,9 @@ func getFinalSnapshotDirName(rootDir string, index uint64) string {
 	return filepath.Join(rootDir, getSnapshotDirName(index))
 }
 
-// SnapshotEnv is the struct used to manage involved directories for taking or
+// SSEnv is the struct used to manage involved directories for taking or
 // receiving snapshots.
-type SnapshotEnv struct {
+type SSEnv struct {
 	index uint64
 	// rootDir is the parent of all snapshot tmp/final dirs for a specified
 	// raft node
@@ -124,10 +124,10 @@ type SnapshotEnv struct {
 	filepath string
 }
 
-// NewSnapshotEnv creates and returns a new SnapshotEnv instance.
-func NewSnapshotEnv(f GetSnapshotDirFunc,
+// NewSSEnv creates and returns a new SSEnv instance.
+func NewSSEnv(f GetSnapshotDirFunc,
 	clusterID uint64, nodeID uint64, index uint64,
-	from uint64, mode Mode) *SnapshotEnv {
+	from uint64, mode Mode) *SSEnv {
 	var tmpSuffix string
 	if mode == SnapshottingMode {
 		tmpSuffix = genTmpDirSuffix
@@ -137,7 +137,7 @@ func NewSnapshotEnv(f GetSnapshotDirFunc,
 	rootDir := f(clusterID, nodeID)
 	fp := filepath.Join(getFinalSnapshotDirName(rootDir, index),
 		getSnapshotFilename(index))
-	return &SnapshotEnv{
+	return &SSEnv{
 		index:    index,
 		rootDir:  rootDir,
 		tmpDir:   getTempSnapshotDirName(rootDir, tmpSuffix, index, from),
@@ -147,29 +147,29 @@ func NewSnapshotEnv(f GetSnapshotDirFunc,
 }
 
 // GetTempDir returns the temp snapshot directory.
-func (se *SnapshotEnv) GetTempDir() string {
+func (se *SSEnv) GetTempDir() string {
 	return se.tmpDir
 }
 
 // GetFinalDir returns the final snapshot directory.
-func (se *SnapshotEnv) GetFinalDir() string {
+func (se *SSEnv) GetFinalDir() string {
 	return se.finalDir
 }
 
 // GetRootDir returns the root directory. The temp and final snapshot
 // directories are children of the root directory.
-func (se *SnapshotEnv) GetRootDir() string {
+func (se *SSEnv) GetRootDir() string {
 	return se.rootDir
 }
 
 // RemoveTempDir removes the temp snapshot directory.
-func (se *SnapshotEnv) RemoveTempDir() error {
+func (se *SSEnv) RemoveTempDir() error {
 	return se.removeDir(se.tmpDir)
 }
 
 // MustRemoveTempDir removes the temp snapshot directory and panic if there
 // is any error.
-func (se *SnapshotEnv) MustRemoveTempDir() {
+func (se *SSEnv) MustRemoveTempDir() {
 	if err := se.removeDir(se.tmpDir); err != nil {
 		if operr, ok := err.(*os.PathError); ok {
 			if errno, ok := operr.Err.(syscall.Errno); ok {
@@ -183,7 +183,7 @@ func (se *SnapshotEnv) MustRemoveTempDir() {
 }
 
 // FinalizeSnapshot finalizes the snapshot.
-func (se *SnapshotEnv) FinalizeSnapshot(msg proto.Message) error {
+func (se *SSEnv) FinalizeSnapshot(msg proto.Message) error {
 	finalizeLock.Lock()
 	defer finalizeLock.Unlock()
 	if err := se.createFlagFile(msg); err != nil {
@@ -200,17 +200,17 @@ func (se *SnapshotEnv) FinalizeSnapshot(msg proto.Message) error {
 }
 
 // CreateTempDir creates the temp snapshot directory.
-func (se *SnapshotEnv) CreateTempDir() error {
+func (se *SSEnv) CreateTempDir() error {
 	return se.createDir(se.tmpDir)
 }
 
 // RemoveFinalDir removes the final snapshot directory.
-func (se *SnapshotEnv) RemoveFinalDir() error {
+func (se *SSEnv) RemoveFinalDir() error {
 	return se.removeDir(se.finalDir)
 }
 
-// SaveSnapshotMetadata saves the metadata of the snapshot file.
-func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
+// SaveSSMetadata saves the metadata of the snapshot file.
+func (se *SSEnv) SaveSSMetadata(msg proto.Message) error {
 	err := fileutil.CreateFlagFile(se.tmpDir,
 		SnapshotMetadataFilename, msg)
 	return err
@@ -218,7 +218,7 @@ func (se *SnapshotEnv) SaveSnapshotMetadata(msg proto.Message) error {
 
 // HasFlagFile returns a boolean flag indicating whether the flag file is
 // available in the final directory.
-func (se *SnapshotEnv) HasFlagFile() bool {
+func (se *SSEnv) HasFlagFile() bool {
 	fp := filepath.Join(se.finalDir, fileutil.SnapshotFlagFilename)
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
 		return false
@@ -227,36 +227,36 @@ func (se *SnapshotEnv) HasFlagFile() bool {
 }
 
 // RemoveFlagFile removes the flag file from the final directory.
-func (se *SnapshotEnv) RemoveFlagFile() error {
+func (se *SSEnv) RemoveFlagFile() error {
 	return fileutil.RemoveFlagFile(se.finalDir, fileutil.SnapshotFlagFilename)
 }
 
 // GetFilename returns the snapshot filename.
-func (se *SnapshotEnv) GetFilename() string {
+func (se *SSEnv) GetFilename() string {
 	return getSnapshotFilename(se.index)
 }
 
 // GetFilepath returns the snapshot file path.
-func (se *SnapshotEnv) GetFilepath() string {
+func (se *SSEnv) GetFilepath() string {
 	return filepath.Join(se.finalDir, getSnapshotFilename(se.index))
 }
 
 // GetShrinkedFilepath returns the file path of the shrunk snapshot.
-func (se *SnapshotEnv) GetShrinkedFilepath() string {
+func (se *SSEnv) GetShrinkedFilepath() string {
 	return filepath.Join(se.finalDir, getShrinkedSnapshotFilename(se.index))
 }
 
 // GetTempFilepath returns the temp snapshot file path.
-func (se *SnapshotEnv) GetTempFilepath() string {
+func (se *SSEnv) GetTempFilepath() string {
 	return filepath.Join(se.tmpDir, getSnapshotFilename(se.index))
 }
 
-func (se *SnapshotEnv) createDir(dir string) error {
+func (se *SSEnv) createDir(dir string) error {
 	mustBeChild(se.rootDir, dir)
 	return fileutil.Mkdir(dir)
 }
 
-func (se *SnapshotEnv) removeDir(dir string) error {
+func (se *SSEnv) removeDir(dir string) error {
 	mustBeChild(se.rootDir, dir)
 	if err := os.RemoveAll(dir); err != nil {
 		return err
@@ -264,14 +264,14 @@ func (se *SnapshotEnv) removeDir(dir string) error {
 	return fileutil.SyncDir(se.rootDir)
 }
 
-func (se *SnapshotEnv) isFinalDirExists() bool {
+func (se *SSEnv) isFinalDirExists() bool {
 	if _, err := os.Stat(se.finalDir); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
-func (se *SnapshotEnv) renameTempDirToFinalDir() error {
+func (se *SSEnv) renameTempDirToFinalDir() error {
 	if err := os.Rename(se.tmpDir, se.finalDir); err != nil {
 		if isTargetDirExistError(err) {
 			return ErrSnapshotOutOfDate
@@ -281,7 +281,7 @@ func (se *SnapshotEnv) renameTempDirToFinalDir() error {
 	return fileutil.SyncDir(se.rootDir)
 }
 
-func (se *SnapshotEnv) createFlagFile(msg proto.Message) error {
+func (se *SSEnv) createFlagFile(msg proto.Message) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		fileutil.SnapshotFlagFilename, msg)
 }

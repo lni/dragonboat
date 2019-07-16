@@ -137,7 +137,7 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 		oldList = append(oldList, *key)
 	})
 	snapshot := &bytes.Buffer{}
-	if _, err := m.save(snapshot); err != nil {
+	if err := m.save(snapshot); err != nil {
 		t.Fatalf("save failed %v", err)
 	}
 	data := snapshot.Bytes()
@@ -207,7 +207,7 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 		m.addSession(i, *s)
 	}
 	snapshot := &bytes.Buffer{}
-	if _, err := m.save(snapshot); err != nil {
+	if err := m.save(snapshot); err != nil {
 		t.Fatalf("save failed %v", err)
 	}
 	data := snapshot.Bytes()
@@ -252,14 +252,13 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 func TestGetEmptyLRUSession(t *testing.T) {
 	s := newLRUSession(LRUMaxSessionCount)
 	buf := bytes.NewBuffer(make([]byte, 0))
-	n, err := s.save(buf)
-	if n != EmptyClientSessionLength {
-		t.Fatalf("unexpected length %d", n)
-	}
-	if err != nil {
+	if err := s.save(buf); err != nil {
 		t.Fatalf("failed to save %v", err)
 	}
 	data := buf.Bytes()
+	if uint64(len(data)) != EmptyClientSessionLength {
+		t.Fatalf("unexpected length %d", len(data))
+	}
 	if !bytes.Equal(data, GetEmptyLRUSession()) {
 		t.Errorf("unexpected data")
 	}

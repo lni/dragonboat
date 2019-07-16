@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (
@@ -42,6 +43,18 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 // storage module known as Log DB.
 type LogDBFactoryFunc func(dirs []string,
 	lowLatencyDirs []string) (raftio.ILogDB, error)
+
+// CompressionType is the type of the compression.
+type CompressionType = pb.CompressionType
+
+const (
+	// NoCompression is the CompressionType value used to indicate not to use
+	// any compression.
+	NoCompression CompressionType = pb.NoCompression
+	// Snappy is the CompressionType value used to indicate that google snappy
+	// is used for data compression.
+	Snappy CompressionType = pb.Snappy
+)
 
 // Config is used to configure Raft nodes.
 type Config struct {
@@ -126,6 +139,9 @@ type Config struct {
 	// basically means no limit. When MaxInMemLogSize is set and the limit is
 	// reached, error will be returned when clients try to make any new proposals.
 	MaxInMemLogSize uint64
+	// SnapshotCompressionType is the compression type to use for compressing
+	// generated snapshot data. No compression is used by default.
+	SnapshotCompressionType CompressionType
 }
 
 // Validate validates the Config instance and return an error when any member
@@ -146,6 +162,10 @@ func (c *Config) Validate() error {
 	if c.MaxInMemLogSize > 0 &&
 		c.MaxInMemLogSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxInMemLogSize is too small")
+	}
+	if c.SnapshotCompressionType != Snappy &&
+		c.SnapshotCompressionType != NoCompression {
+		return errors.New("Unknown compression type")
 	}
 	return nil
 }

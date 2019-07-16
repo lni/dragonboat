@@ -59,7 +59,7 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
-	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
+	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	if len(ps.snapshotC) != 0 {
 		t.Errorf("snapshotC not empty")
@@ -86,7 +86,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeRequested(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -109,7 +109,7 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 }
 
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
-	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
+	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, 50)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 49*time.Millisecond)
 	if err != ErrTimeoutTooSmall {
@@ -121,7 +121,7 @@ func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 }
 
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
-	snapshotC := make(chan<- rsm.SnapshotRequest, 1)
+	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -175,7 +175,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeApplied(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -199,7 +199,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 }
 
 func TestPendingSnapshotCanBeIgnored(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -223,7 +223,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 }
 
 func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
 	if err != nil {
@@ -247,7 +247,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 }
 
 func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	ps.close()
 	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
@@ -260,7 +260,7 @@ func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 }
 
 func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
 	_, err := ps.request(rsm.UserRequestedSnapshot, "", true, 123, time.Second)
 	if err != nil {

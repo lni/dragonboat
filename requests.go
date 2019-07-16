@@ -374,11 +374,11 @@ type pendingConfigChange struct {
 type pendingSnapshot struct {
 	mu        sync.Mutex
 	pending   *RequestState
-	snapshotC chan<- rsm.SnapshotRequest
+	snapshotC chan<- rsm.SSRequest
 	logicalClock
 }
 
-func newPendingSnapshot(snapshotC chan<- rsm.SnapshotRequest,
+func newPendingSnapshot(snapshotC chan<- rsm.SSRequest,
 	tickInMillisecond uint64) *pendingSnapshot {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
@@ -409,7 +409,7 @@ func (p *pendingSnapshot) close() {
 	}
 }
 
-func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
+func (p *pendingSnapshot) request(st rsm.SSReqType,
 	path string, override bool, overhead uint64,
 	timeout time.Duration) (*RequestState, error) {
 	p.mu.Lock()
@@ -424,7 +424,7 @@ func (p *pendingSnapshot) request(st rsm.SnapshotRequestType,
 	if p.snapshotC == nil {
 		return nil, ErrClusterClosed
 	}
-	ssreq := rsm.SnapshotRequest{
+	ssreq := rsm.SSRequest{
 		Type:               st,
 		Path:               path,
 		Key:                random.LockGuardedRand.Uint64(),

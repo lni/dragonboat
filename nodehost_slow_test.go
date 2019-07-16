@@ -146,7 +146,7 @@ func (n *mtNodeHost) Start() {
 	createStateMachine := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		ds := tests.NewKVTest(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(clusterID, nodeID, rsm.NewRegularStateMachine(ds), done)
+		return rsm.NewNativeSM(clusterID, nodeID, rsm.NewRegularStateMachine(ds), done)
 	}
 	for i := uint64(1); i <= mtNumOfClusters; i++ {
 		rc.ClusterID = i
@@ -170,7 +170,7 @@ func (n *mtNodeHost) RestartCluster(clusterID uint64) {
 	createStateMachine := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		ds := tests.NewKVTest(clusterID, nodeID)
-		return rsm.NewNativeStateMachine(clusterID,
+		return rsm.NewNativeSM(clusterID,
 			nodeID, rsm.NewRegularStateMachine(ds), done)
 	}
 	rc.ClusterID = clusterID

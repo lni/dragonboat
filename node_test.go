@@ -221,10 +221,11 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}
-		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, nil)
+		snapshotter := newSnapshotter(testClusterID, i,
+			config.NodeHostConfig{}, rootDirFunc, ldb, nil)
 		// create the sm
 		sm := &tests.NoOP{}
-		ds := rsm.NewNativeStateMachine(testClusterID,
+		ds := rsm.NewNativeSM(testClusterID,
 			i, rsm.NewRegularStateMachine(sm), make(chan struct{}))
 		// node registry
 		nr := transport.NewNodes(settings.Soft.StreamConnections)
@@ -1551,11 +1552,11 @@ func TestGetCompactionOverhead(t *testing.T) {
 		CompactionOverhead: 234,
 	}
 	n := node{config: cfg}
-	req1 := rsm.SnapshotRequest{
+	req1 := rsm.SSRequest{
 		OverrideCompaction: true,
 		CompactionOverhead: 123,
 	}
-	req2 := rsm.SnapshotRequest{
+	req2 := rsm.SSRequest{
 		OverrideCompaction: false,
 		CompactionOverhead: 456,
 	}
@@ -1581,7 +1582,7 @@ func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                      
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeStateMachine(1, 1, &rsm.RegularStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
+		rsm.NewNativeSM(1, 1, &rsm.RegularStateMachine{}, nil), nil, config.Config{}, &testDummyNodeProxy{})
 	if n.concurrentSnapshot() {
 		t.Errorf("concurrency not suppose to be supported")
 	}
@@ -1595,7 +1596,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeStateMachine(1, 1, &rsm.ConcurrentStateMachine{}, nil), nil, false, &testDummyNodeProxy{})
+		rsm.NewNativeSM(1, 1, &rsm.ConcurrentStateMachine{}, nil), nil, config.Config{}, &testDummyNodeProxy{})
 	if !n.concurrentSnapshot() {
 		t.Errorf("concurrency not supported")
 	}

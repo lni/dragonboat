@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 const (
@@ -31,7 +33,7 @@ const (
 )
 
 func TestSnapshotWriterCanBeCreated(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename, CurrentSnapshotVersion)
+	w, err := NewSnapshotWriter(testSnapshotFilename, SnapshotVersion, pb.NoCompression)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -47,7 +49,7 @@ func TestSnapshotWriterCanBeCreated(t *testing.T) {
 }
 
 func TestSaveHeaderSavesTheHeader(t *testing.T) {
-	w, err := NewSnapshotWriter(testSnapshotFilename, CurrentSnapshotVersion)
+	w, err := NewSnapshotWriter(testSnapshotFilename, SnapshotVersion, pb.NoCompression)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -77,10 +79,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	r.ValidateHeader(header)
-	if header.Version != uint64(CurrentSnapshotVersion) {
+	if header.Version != uint64(SnapshotVersion) {
 		t.Errorf("invalid version %d, want %d",
-			header.Version, CurrentSnapshotVersion)
+			header.Version, SnapshotVersion)
 	}
 	if header.ChecksumType != DefaultChecksumType {
 		t.Errorf("unexpected checksum type %d, want %d",
@@ -93,9 +94,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 }
 
 func makeTestSnapshotFile(t *testing.T, ssz uint64,
-	psz uint64, v SnapshotVersion) (*SnapshotWriter, []byte, []byte) {
+	psz uint64, v SSVersion) (*SnapshotWriter, []byte, []byte) {
 	os.RemoveAll(testSnapshotFilename)
-	w, err := NewSnapshotWriter(testSnapshotFilename, v)
+	w, err := NewSnapshotWriter(testSnapshotFilename, v, pb.NoCompression)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -143,37 +144,11 @@ func corruptSnapshotPayload(t *testing.T) {
 }
 
 func createTestSnapshotFile(t *testing.T,
-	v SnapshotVersion) (*SnapshotWriter, []byte, []byte) {
+	v SSVersion) (*SnapshotWriter, []byte, []byte) {
 	return makeTestSnapshotFile(t, testSessionSize, testPayloadSize, v)
 }
 
-func testCorruptedHeaderWillBeDetected(t *testing.T, v SnapshotVersion) {
-	createTestSnapshotFile(t, v)
-	defer os.RemoveAll(testSnapshotFilename)
-	r, err := NewSnapshotReader(testSnapshotFilename)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	defer r.Close()
-	header, err := r.GetHeader()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	rand.Read(header.HeaderChecksum)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("validation error not reported")
-		}
-	}()
-	r.ValidateHeader(header)
-}
-
-func TestCorruptedHeaderWillBeDetected(t *testing.T) {
-	testCorruptedHeaderWillBeDetected(t, V1SnapshotVersion)
-	testCorruptedHeaderWillBeDetected(t, V2SnapshotVersion)
-}
-
-func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
+func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion) {
 	createTestSnapshotFile(t, v)
 	corruptSnapshotPayload(t)
 	defer os.RemoveAll(testSnapshotFilename)
@@ -192,7 +167,6 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SnapshotVersion) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	r.ValidateHeader(header)
 	rand.Read(header.PayloadChecksum)
 	s := make([]byte, testSessionSize)
 	p := make([]byte, testPayloadSize)
@@ -213,7 +187,7 @@ func TestCorruptedPayloadWillBeDetected(t *testing.T) {
 	testCorruptedPayloadWillBeDetected(t, V2SnapshotVersion)
 }
 
-func testNormalSnapshotCanPassValidation(t *testing.T, v SnapshotVersion) {
+func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion) {
 	_, sessionData, storeData := createTestSnapshotFile(t, v)
 	defer os.RemoveAll(testSnapshotFilename)
 	r, err := NewSnapshotReader(testSnapshotFilename)
@@ -225,7 +199,6 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SnapshotVersion) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	r.ValidateHeader(header)
 	s := make([]byte, testSessionSize)
 	p := make([]byte, testPayloadSize)
 	n, err := io.ReadFull(r, s)
@@ -264,7 +237,7 @@ func readTestSnapshot(fn string, sz uint64) ([]byte, error) {
 	return data[:n], nil
 }
 
-func testSingleBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
+func testSingleBlockSnapshotValidation(t *testing.T, sv SSVersion) {
 	createTestSnapshotFile(t, sv)
 	defer os.RemoveAll(testSnapshotFilename)
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024)
@@ -297,7 +270,7 @@ func TestSingleBlockSnapshotValidation(t *testing.T) {
 	testSingleBlockSnapshotValidation(t, V2SnapshotVersion)
 }
 
-func testMultiBlockSnapshotValidation(t *testing.T, sv SnapshotVersion) {
+func testMultiBlockSnapshotValidation(t *testing.T, sv SSVersion) {
 	makeTestSnapshotFile(t, 1024*1024, 1024*1024*8, sv)
 	defer os.RemoveAll(testSnapshotFilename)
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024*10)
@@ -363,7 +336,7 @@ func TestMustInSameDir(t *testing.T) {
 func TestShrinkSnapshot(t *testing.T) {
 	snapshotFilename := "test_snapshot_safe_to_delete.data"
 	shrunkFilename := "test_snapshot_safe_to_delete.shrunk"
-	writer, err := NewSnapshotWriter(snapshotFilename, V2SnapshotVersion)
+	writer, err := NewSnapshotWriter(snapshotFilename, V2SnapshotVersion, pb.NoCompression)
 	if err != nil {
 		t.Fatalf("failed to get writer %v", err)
 	}
@@ -513,11 +486,10 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get header %v", err)
 	}
-	reader.ValidateHeader(header)
 	if header.Version != 1 {
 		t.Fatalf("not a version 1 snapshot file")
 	}
-	v := (SnapshotVersion)(header.Version)
+	v := (SSVersion)(header.Version)
 	sm := NewSessionManager()
 	if err := sm.LoadSessions(reader, v); err != nil {
 		t.Fatalf("failed to load sessions %v", err)
@@ -553,4 +525,23 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 		t.Errorf("unexpected content")
 	}
 	reader.ValidatePayload(header)
+}
+
+func TestValidateHeader(t *testing.T) {
+	data := []byte{1, 2, 3, 4}
+	if !validateHeader(data, fourZeroBytes) {
+		t.Errorf("not skipped")
+	}
+	h := newCRC32Hash()
+	if _, err := h.Write(data); err != nil {
+		t.Fatalf("write failed %v", err)
+	}
+	crc := h.Sum(nil)
+	if !validateHeader(data, crc) {
+		t.Errorf("expected to report valid")
+	}
+	crc[0] = byte(crc[0] + 1)
+	if validateHeader(data, crc) {
+		t.Errorf("corrupted header data not reported")
+	}
 }

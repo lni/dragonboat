@@ -58,7 +58,7 @@ type node struct {
 	raftAddress          string
 	config               config.Config
 	confChangeC          <-chan configChangeRequest
-	snapshotC            <-chan rsm.SnapshotRequest
+	snapshotC            <-chan rsm.SSRequest
 	taskQ                *rsm.TaskQueue
 	mq                   *server.MessageQueue
 	smAppliedIndex       uint64
@@ -125,7 +125,7 @@ func newNode(raftAddress string,
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
-	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	snapshotC := make(chan rsm.SSRequest, 1)
 	pp := newPendingProposal(requestStatePool,
 		proposals, config.ClusterID, config.NodeID, raftAddress, tickMillisecond)
 	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
@@ -166,8 +166,7 @@ func newNode(raftAddress string,
 			nodeID:       config.NodeID,
 		},
 	}
-	ordered := config.OrderedConfigChange
-	sm := rsm.NewStateMachine(dataStore, snapshotter, ordered, rn)
+	sm := rsm.NewStateMachine(dataStore, snapshotter, config, rn)
 	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
@@ -309,7 +308,7 @@ func (n *node) shouldStop() <-chan struct{} {
 }
 
 func (n *node) concurrentSnapshot() bool {
-	return n.sm.ConcurrentSnapshot()
+	return n.sm.Concurrent()
 }
 
 func (n *node) supportClientSession() bool {
@@ -483,8 +482,8 @@ func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) bool {
 	return n.pushTask(rec)
 }
 
-func (n *node) pushTakeSnapshotRequest(req rsm.SnapshotRequest) bool {
-	rec := rsm.Task{SnapshotRequested: true, SnapshotRequest: req}
+func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) bool {
+	rec := rsm.Task{SnapshotRequested: true, SSRequest: req}
 	return n.pushTask(rec)
 }
 
@@ -565,15 +564,15 @@ func isSoftSnapshotError(err error) bool {
 }
 
 func (n *node) saveSnapshot(rec rsm.Task) error {
-	index, err := n.doSaveSnapshot(rec.SnapshotRequest)
+	index, err := n.doSaveSnapshot(rec.SSRequest)
 	if err != nil {
 		return err
 	}
-	n.pendingSnapshot.apply(rec.SnapshotRequest.Key, index == 0, index)
+	n.pendingSnapshot.apply(rec.SSRequest.Key, index == 0, index)
 	return nil
 }
 
-func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
+func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	if !req.IsExportedSnapshot() &&
@@ -636,7 +635,7 @@ func (n *node) doSaveSnapshot(req rsm.SnapshotRequest) (uint64, error) {
 	return ss.Index, nil
 }
 
-func (n *node) getCompactionOverhead(req rsm.SnapshotRequest) uint64 {
+func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
 	if req.OverrideCompaction {
 		return req.CompactionOverhead
 	}
@@ -939,7 +938,7 @@ func (n *node) processRaftUpdate(ud pb.Update) (bool, error) {
 		return false, nil
 	}
 	if n.saveSnapshotRequired(ud.LastApplied) {
-		return n.pushTakeSnapshotRequest(rsm.SnapshotRequest{}), nil
+		return n.pushTakeSnapshotRequest(rsm.SSRequest{}), nil
 	}
 	return true, nil
 }
@@ -1015,7 +1014,7 @@ func (n *node) handleEvents() bool {
 }
 
 func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
-	var req rsm.SnapshotRequest
+	var req rsm.SSRequest
 	select {
 	case req = <-n.snapshotC:
 	default:
@@ -1181,7 +1180,7 @@ func (n *node) handleSnapshotTask(task rsm.Task) {
 		plog.Infof("reportRequestedSnapshot, %s", n.id())
 		if n.ss.takingSnapshot() {
 			plog.Infof("task.SnapshotRequested ignored on %s", n.id())
-			n.reportIgnoredSnapshotRequest(task.SnapshotRequest.Key)
+			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
 		n.reportRequestedSnapshot(task)

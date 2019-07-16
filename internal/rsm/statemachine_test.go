@@ -17,6 +17,7 @@ package rsm
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -25,10 +26,12 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/utils/dio"
 	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -180,7 +183,7 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 }
 
 func (s *testSnapshotter) Stream(streamable IStreamable,
-	meta *SnapshotMeta, sink pb.IChunkSink) error {
+	meta *SSMeta, sink pb.IChunkSink) error {
 	writer := NewChunkWriter(sink, meta)
 	defer func() {
 		if err := writer.Close(); err != nil {
@@ -191,32 +194,33 @@ func (s *testSnapshotter) Stream(streamable IStreamable,
 }
 
 func (s *testSnapshotter) Save(savable ISavable,
-	meta *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error) {
+	meta *SSMeta) (ss *pb.Snapshot, env *server.SSEnv, err error) {
 	s.index = meta.Index
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
 	}
-	env := server.NewSnapshotEnv(f, 1, 1, s.index, 1, server.SnapshottingMode)
+	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshottingMode)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := filepath.Join(testSnapshotterDir, fn)
-	writer, err := NewSnapshotWriter(fp, CurrentSnapshotVersion)
+	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression)
 	if err != nil {
 		return nil, env, err
 	}
+	cw := dio.NewCountedWriter(writer)
 	defer func() {
-		if err := writer.Close(); err != nil {
-			panic(err)
+		if cerr := cw.Close(); err == nil {
+			err = cerr
+		}
+		if ss != nil {
+			ss.FileSize = cw.BytesWritten() + SnapshotHeaderSize
 		}
 	}()
 	session := meta.Session.Bytes()
-	_, sz, err := savable.SaveSnapshot(&SnapshotMeta{}, writer, session, nil)
-	s.dataSize = sz
-	if err != nil {
+	if _, err := savable.SaveSnapshot(&SSMeta{}, cw, session, nil); err != nil {
 		return nil, env, err
 	}
-	ss := &pb.Snapshot{
+	ss = &pb.Snapshot{
 		Filepath:   env.GetFilepath(),
-		FileSize:   sz,
 		Membership: meta.Membership,
 		Index:      meta.Index,
 		Term:       meta.Term,
@@ -238,8 +242,7 @@ func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 	if err != nil {
 		return err
 	}
-	reader.ValidateHeader(header)
-	v := (SnapshotVersion)(header.Version)
+	v := SSVersion(header.Version)
 	if err := loadableSessions.LoadSessions(reader, v); err != nil {
 		return err
 	}
@@ -254,10 +257,10 @@ func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
 	tf(t, sm)
 }
 
@@ -269,10 +272,10 @@ func runSMTest2(t *testing.T,
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
@@ -288,10 +291,10 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeStateMachine(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -332,10 +335,10 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 func TestHandleAllocationCount(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	store := &tests.NoOP{NoAlloc: true}
-	ds := NewNativeStateMachine(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
 	sm.index = 1
 	idx := uint64(1)
 	batch := make([]Task, 0, 8)
@@ -370,10 +373,10 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeStateMachine(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeSM(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, false, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -547,19 +550,21 @@ func TestGetMembershipHash(t *testing.T) {
 	runSMTest(t, tf)
 }
 
-func TestGetSnapshotMetaPanicWhenThereIsNoMember(t *testing.T) {
+func TestGetSSMetaPanicWhenThereIsNoMember(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Fatalf("didn't panic")
 			}
 		}()
-		sm.getSnapshotMeta(nil, SnapshotRequest{})
+		if _, err := sm.getSSMeta(nil, SSRequest{}); err != nil {
+			t.Fatalf("get snapshot meta failed %v", err)
+		}
 	}
 	runSMTest(t, tf)
 }
 
-func TestGetSnapshotMeta(t *testing.T) {
+func TestGetSSMeta(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
 		sm.members.members = &pb.Membership{
 			Addresses: map[uint64]string{
@@ -571,7 +576,10 @@ func TestGetSnapshotMeta(t *testing.T) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		sm.index = 100
 		sm.term = 101
-		meta := sm.getSnapshotMeta(make([]byte, 123), SnapshotRequest{})
+		meta, err := sm.getSSMeta(make([]byte, 123), SSRequest{})
+		if err != nil {
+			t.Fatalf("get snapshot meta failed %v", err)
+		}
 		if meta.Index != 100 || meta.Term != 101 {
 			t.Errorf("index/term not recorded")
 		}
@@ -1161,7 +1169,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.index = 3
 		hash1, _ := sm.GetHash()
-		ss, _, err := sm.SaveSnapshot(SnapshotRequest{})
+		ss, _, err := sm.SaveSnapshot(SSRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
 		}
@@ -1171,10 +1179,10 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		}
 		store2 := tests.NewKVTest(1, 1)
 		store2.(*tests.KVTest).DisableLargeDelay()
-		ds2 := NewNativeStateMachine(1, 1, NewRegularStateMachine(store2), make(chan struct{}))
+		ds2 := NewNativeSM(1, 1, NewRegularStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
-		sm2 := NewStateMachine(ds2, snapshotter2, false, nodeProxy2)
+		sm2 := NewStateMachine(ds2, snapshotter2, config.Config{}, nodeProxy2)
 		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}
@@ -1214,7 +1222,7 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
-		ss, _, err := sm.SaveSnapshot(SnapshotRequest{})
+		ss, _, err := sm.SaveSnapshot(SSRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
@@ -1252,11 +1260,11 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		_, _, err := sm.SaveSnapshot(SnapshotRequest{})
+		_, _, err := sm.SaveSnapshot(SSRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
-		_, _, err = sm.SaveSnapshot(SnapshotRequest{})
+		_, _, err = sm.SaveSnapshot(SSRequest{})
 		if err != raft.ErrSnapshotOutOfDate {
 			t.Errorf("snapshot twice completed, %v", err)
 		}
@@ -1730,7 +1738,7 @@ func TestRecoverSMRequired(t *testing.T) {
 			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
-			w, err := NewSnapshotWriter(fp, CurrentSnapshotVersion)
+			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression)
 			if err != nil {
 				t.Fatalf("failed to create snapshot writer %v", err)
 			}
@@ -1882,19 +1890,19 @@ func (t *testManagedStateMachine) Sync() error {
 }
 func (t *testManagedStateMachine) GetHash() (uint64, error)              { return 0, nil }
 func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
-func (t *testManagedStateMachine) SaveSnapshot(*SnapshotMeta,
-	*SnapshotWriter, []byte, sm.ISnapshotFileCollection) (bool, uint64, error) {
-	return false, 0, nil
+func (t *testManagedStateMachine) SaveSnapshot(*SSMeta,
+	io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error) {
+	return false, nil
 }
-func (t *testManagedStateMachine) RecoverFromSnapshot(*SnapshotReader, []sm.SnapshotFile) error {
+func (t *testManagedStateMachine) RecoverFromSnapshot(io.Reader, []sm.SnapshotFile) error {
 	return nil
 }
-func (t *testManagedStateMachine) StreamSnapshot(interface{}, *ChunkWriter) error { return nil }
-func (t *testManagedStateMachine) Offloaded(From)                                 {}
-func (t *testManagedStateMachine) Loaded(From)                                    {}
-func (t *testManagedStateMachine) ConcurrentSnapshot() bool                       { return false }
-func (t *testManagedStateMachine) OnDiskStateMachine() bool                       { return false }
-func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType          { return 0 }
+func (t *testManagedStateMachine) StreamSnapshot(interface{}, io.Writer) error { return nil }
+func (t *testManagedStateMachine) Offloaded(From)                              {}
+func (t *testManagedStateMachine) Loaded(From)                                 {}
+func (t *testManagedStateMachine) ConcurrentSnapshot() bool                    { return false }
+func (t *testManagedStateMachine) OnDiskStateMachine() bool                    { return false }
+func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType       { return 0 }
 func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	if !t.corruptIndex {
 		t.first = ents[0].Index
@@ -1944,7 +1952,7 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 		members:     newMembership(1, 1, false),
 	}
 	sm.members.members.Addresses[1] = "a1"
-	ss, _, err := sm.saveConcurrentSnapshot(SnapshotRequest{})
+	ss, _, err := sm.saveConcurrentSnapshot(SSRequest{})
 	if err != nil {
 		t.Fatalf("concurrent snapshot failed %v", err)
 	}
@@ -2027,8 +2035,8 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if msm.last != tt.lastApplied {
 			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
 		}
-		if sm.batchedLastApplied.index != tt.last {
-			t.Errorf("%d, index %d, last %d", idx, sm.batchedLastApplied.index, tt.last)
+		if sm.batchedIndex.index != tt.last {
+			t.Errorf("%d, index %d, last %d", idx, sm.batchedIndex.index, tt.last)
 		}
 		if np.firstIndex != tt.firstApplied {
 			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
@@ -2139,5 +2147,34 @@ func TestNALookup(t *testing.T) {
 	}
 	if !msm.nalookup {
 		t.Errorf("NALookup not called")
+	}
+}
+
+func TestIsDummySnapshot(t *testing.T) {
+	tests := []struct {
+		onDisk    bool
+		exported  bool
+		streaming bool
+		dummy     bool
+	}{
+		{false, false, false, false},
+		{false, true, false, false},
+		{false, false, true, false},
+		{true, true, false, false},
+		{true, false, true, false},
+		{true, false, false, true},
+	}
+	for idx, tt := range tests {
+		s := &StateMachine{onDiskSM: tt.onDisk}
+		r := SSRequest{Type: PeriodicSnapshot}
+		if tt.exported {
+			r.Type = ExportedSnapshot
+		}
+		if tt.streaming {
+			r.Type = StreamSnapshot
+		}
+		if s.isDummySnapshot(r) != tt.dummy {
+			t.Errorf("%d, is dummy test failed", idx)
+		}
 	}
 }

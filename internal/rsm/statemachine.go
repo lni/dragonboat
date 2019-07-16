@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -53,21 +54,23 @@ var (
 	sessionBufferInitialCap uint64 = 128 * 1024
 )
 
-// SnapshotRequestType is the type of a snapshot request.
-type SnapshotRequestType uint64
+// SSReqType is the type of a snapshot request.
+type SSReqType uint64
 
 const (
 	// PeriodicSnapshot is the value to indicate periodic snapshot.
-	PeriodicSnapshot SnapshotRequestType = iota
+	PeriodicSnapshot SSReqType = iota
 	// UserRequestedSnapshot is the value to indicate user requested snapshot.
 	UserRequestedSnapshot
 	// ExportedSnapshot is the value to indicate exported snapshot.
 	ExportedSnapshot
+	// StreamSnapshot is the value to indicate snapshot streaming.
+	StreamSnapshot
 )
 
-// SnapshotRequest is the type for describing the details of a snapshot request.
-type SnapshotRequest struct {
-	Type               SnapshotRequestType
+// SSRequest is the type for describing the details of a snapshot request.
+type SSRequest struct {
+	Type               SSReqType
 	Key                uint64
 	Path               string
 	OverrideCompaction bool
@@ -76,21 +79,28 @@ type SnapshotRequest struct {
 
 // IsExportedSnapshot returns a boolean value indicating whether the snapshot
 // request is to create an exported snapshot.
-func (sr *SnapshotRequest) IsExportedSnapshot() bool {
-	return sr.Type == ExportedSnapshot
+func (r *SSRequest) IsExportedSnapshot() bool {
+	return r.Type == ExportedSnapshot
 }
 
-// SnapshotMeta is the metadata of a snapshot.
-type SnapshotMeta struct {
-	From        uint64
-	Index       uint64
-	Term        uint64
-	OnDiskIndex uint64 // applied index of IOnDiskStateMachine
-	Request     SnapshotRequest
-	Membership  pb.Membership
-	Type        pb.StateMachineType
-	Session     *bytes.Buffer
-	Ctx         interface{}
+// IsStreamingSnapshot returns a boolean value indicating whether the snapshot
+// request is to stream snapshot.
+func (r *SSRequest) IsStreamingSnapshot() bool {
+	return r.Type == StreamSnapshot
+}
+
+// SSMeta is the metadata of a snapshot.
+type SSMeta struct {
+	From            uint64
+	Index           uint64
+	Term            uint64
+	OnDiskIndex     uint64 // applied index of IOnDiskStateMachine
+	Request         SSRequest
+	Membership      pb.Membership
+	Type            pb.StateMachineType
+	Session         *bytes.Buffer
+	Ctx             interface{}
+	CompressionType config.CompressionType
 }
 
 // Task describes a task that need to be handled by StateMachine.
@@ -104,7 +114,7 @@ type Task struct {
 	StreamSnapshot    bool
 	PeriodicSync      bool
 	NewNode           bool
-	SnapshotRequest   SnapshotRequest
+	SSRequest         SSRequest
 	Entries           []pb.Entry
 }
 
@@ -142,8 +152,8 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	GetFilePath(uint64) string
-	Stream(IStreamable, *SnapshotMeta, pb.IChunkSink) error
-	Save(ISavable, *SnapshotMeta) (*pb.Snapshot, *server.SnapshotEnv, error)
+	Stream(IStreamable, *SSMeta, pb.IChunkSink) error
+	Save(ISavable, *SSMeta) (*pb.Snapshot, *server.SSEnv, error)
 	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
 }
@@ -165,11 +175,12 @@ type StateMachine struct {
 	taskQ           *TaskQueue
 	onDiskSM        bool
 	aborted         bool
+	sct             config.CompressionType
 	syncedIndex     struct {
 		sync.Mutex
 		index uint64
 	}
-	batchedLastApplied struct {
+	batchedIndex struct {
 		sync.Mutex
 		index uint64
 	}
@@ -177,8 +188,9 @@ type StateMachine struct {
 
 // NewStateMachine creates a new application state machine object.
 func NewStateMachine(sm IManagedStateMachine,
-	snapshotter ISnapshotter, ordered bool,
-	proxy INodeProxy) *StateMachine {
+	snapshotter ISnapshotter, cfg config.Config, proxy INodeProxy) *StateMachine {
+	ordered := cfg.OrderedConfigChange
+	ct := cfg.SnapshotCompressionType
 	a := &StateMachine{
 		snapshotter: snapshotter,
 		sm:          sm,
@@ -187,6 +199,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		node:        proxy,
 		sessions:    NewSessionManager(),
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
+		sct:         ct,
 	}
 	return a
 }
@@ -379,9 +392,9 @@ func (s *StateMachine) GetLastApplied() uint64 {
 
 // GetBatchedLastApplied returns the batched last applied value.
 func (s *StateMachine) GetBatchedLastApplied() uint64 {
-	s.batchedLastApplied.Lock()
-	v := s.batchedLastApplied.index
-	s.batchedLastApplied.Unlock()
+	s.batchedIndex.Lock()
+	v := s.batchedIndex.index
+	s.batchedIndex.Unlock()
 	return v
 }
 
@@ -409,9 +422,9 @@ func (s *StateMachine) setSyncedIndex(index uint64) {
 }
 
 func (s *StateMachine) setBatchedLastApplied(index uint64) {
-	s.batchedLastApplied.Lock()
-	s.batchedLastApplied.index = index
-	s.batchedLastApplied.Unlock()
+	s.batchedIndex.Lock()
+	s.batchedIndex.index = index
+	s.batchedIndex.Unlock()
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
@@ -426,7 +439,7 @@ func (s *StateMachine) Loaded(from From) {
 
 // Lookup queries the local state machine.
 func (s *StateMachine) Lookup(query interface{}) (interface{}, error) {
-	if s.sm.ConcurrentSnapshot() {
+	if s.Concurrent() {
 		return s.concurrentLookup(query)
 	}
 	return s.lookup(query)
@@ -449,7 +462,7 @@ func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) 
 
 // NALookup queries the local state machine.
 func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
-	if s.sm.ConcurrentSnapshot() {
+	if s.Concurrent() {
 		return s.naConcurrentLookup(query)
 	}
 	return s.nalookup(query)
@@ -478,9 +491,9 @@ func (s *StateMachine) GetMembership() (map[uint64]string,
 	return s.members.get()
 }
 
-// ConcurrentSnapshot returns a boolean flag indicating whether the state
-// machine is capable of taking concurrent snapshot.
-func (s *StateMachine) ConcurrentSnapshot() bool {
+// Concurrent returns a boolean flag indicating whether the state machine is
+// capable of taking concurrent snapshot.
+func (s *StateMachine) Concurrent() bool {
 	return s.sm.ConcurrentSnapshot()
 }
 
@@ -491,9 +504,12 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 }
 
 // SaveSnapshot creates a snapshot.
-func (s *StateMachine) SaveSnapshot(req SnapshotRequest) (*pb.Snapshot,
-	*server.SnapshotEnv, error) {
-	if s.sm.ConcurrentSnapshot() {
+func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
+	*server.SSEnv, error) {
+	if req.IsStreamingSnapshot() {
+		panic("invalid snapshot request")
+	}
+	if s.Concurrent() {
 		return s.saveConcurrentSnapshot(req)
 	}
 	return s.saveSnapshot(req)
@@ -582,47 +598,61 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	return Task{}, s.handle(batch, apply)
 }
 
-func (s *StateMachine) getSnapshotMeta(ctx interface{},
-	req SnapshotRequest) *SnapshotMeta {
+func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
+	if s.OnDiskStateMachine() {
+		if r.IsExportedSnapshot() || r.IsStreamingSnapshot() {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	if s.members.isEmpty() {
 		plog.Panicf("%s has empty membership", s.id())
 	}
-	meta := &SnapshotMeta{
-		From:        s.node.NodeID(),
-		Ctx:         ctx,
-		Index:       s.index,
-		Term:        s.term,
-		OnDiskIndex: s.onDiskIndex,
-		Request:     req,
-		Session:     bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap)),
-		Membership:  s.members.getMembership(),
-		Type:        s.sm.StateMachineType(),
+	ct := s.sct
+	// never compress dummy snapshot file
+	if s.isDummySnapshot(r) {
+		ct = config.NoCompression
+	}
+	buf := bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap))
+	meta := &SSMeta{
+		From:            s.node.NodeID(),
+		Ctx:             c,
+		Index:           s.index,
+		Term:            s.term,
+		OnDiskIndex:     s.onDiskIndex,
+		Request:         r,
+		Session:         buf,
+		Membership:      s.members.getMembership(),
+		Type:            s.sm.StateMachineType(),
+		CompressionType: ct,
 	}
 	plog.Infof("%s generating a snapshot at index %d, members %v",
 		s.id(), meta.Index, meta.Membership.Addresses)
-	if _, err := s.sessions.SaveSessions(meta.Session); err != nil {
-		plog.Panicf("failed to save sessions %v", err)
+	if err := s.sessions.SaveSessions(meta.Session); err != nil {
+		return nil, err
 	}
-	return meta
+	return meta, nil
 }
 
 func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
 	if s.index+1 != index {
-		plog.Panicf("%s, not sequential update, last applied %d, applying %d",
-			s.id(), s.index, index)
+		plog.Panicf("%s invalid index %d, applied %d", s.id(), index, s.index)
 	}
 	if index == 0 || term == 0 {
-		plog.Panicf("%s invalid last index %d or term %d", s.id(), index, term)
+		plog.Panicf("%s invalid index %d or term %d", s.id(), index, term)
 	}
 	if term < s.term {
-		plog.Panicf("%s term is moving backward, term %d, new term %d",
-			s.id(), s.term, term)
+		plog.Panicf("%s term %d moving backward, new term %d", s.id(), s.term, term)
 	}
 	s.index = index
 	s.term = term
 }
 
-func (s *StateMachine) checkSnapshotStatus(req SnapshotRequest) error {
+func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
@@ -640,11 +670,11 @@ func (s *StateMachine) checkSnapshotStatus(req SnapshotRequest) error {
 
 func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	var err error
-	var meta *SnapshotMeta
+	var meta *SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot(SnapshotRequest{})
+		meta, err = s.prepareSnapshot(SSRequest{Type: StreamSnapshot})
 		return err
 	}(); err != nil {
 		return err
@@ -655,10 +685,10 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
-func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot,
-	*server.SnapshotEnv, error) {
+func (s *StateMachine) saveConcurrentSnapshot(req SSRequest) (*pb.Snapshot,
+	*server.SSEnv, error) {
 	var err error
-	var meta *SnapshotMeta
+	var meta *SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
@@ -679,8 +709,8 @@ func (s *StateMachine) saveConcurrentSnapshot(req SnapshotRequest) (*pb.Snapshot
 	return s.doSaveSnapshot(meta)
 }
 
-func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
-	*server.SnapshotEnv, error) {
+func (s *StateMachine) saveSnapshot(req SSRequest) (*pb.Snapshot,
+	*server.SSEnv, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	meta, err := s.prepareSnapshot(req)
@@ -694,19 +724,19 @@ func (s *StateMachine) saveSnapshot(req SnapshotRequest) (*pb.Snapshot,
 	return s.doSaveSnapshot(meta)
 }
 
-func (s *StateMachine) prepareSnapshot(req SnapshotRequest) (*SnapshotMeta, error) {
+func (s *StateMachine) prepareSnapshot(req SSRequest) (*SSMeta, error) {
 	if err := s.checkSnapshotStatus(req); err != nil {
 		return nil, err
 	}
 	var err error
 	var ctx interface{}
-	if s.ConcurrentSnapshot() {
+	if s.Concurrent() {
 		ctx, err = s.sm.PrepareSnapshot()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return s.getSnapshotMeta(ctx, req), nil
+	return s.getSSMeta(ctx, req)
 }
 
 func (s *StateMachine) sync() error {
@@ -723,8 +753,8 @@ func (s *StateMachine) sync() error {
 	return nil
 }
 
-func (s *StateMachine) doSaveSnapshot(meta *SnapshotMeta) (*pb.Snapshot,
-	*server.SnapshotEnv, error) {
+func (s *StateMachine) doSaveSnapshot(meta *SSMeta) (*pb.Snapshot,
+	*server.SSEnv, error) {
 	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
 		plog.Errorf("%s snapshotter.Save failed %v", s.id(), err)
@@ -749,7 +779,7 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 }
 
 func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
-	batchSupport := batchedEntryApply && s.ConcurrentSnapshot()
+	batchSupport := batchedEntryApply && s.Concurrent()
 	for b := range batch {
 		if batch[b].IsSnapshotTask() || batch[b].isSyncTask() {
 			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())

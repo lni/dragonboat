@@ -88,7 +88,7 @@ func (rec *lrusession) getSession(key RaftClientID) (*Session, bool) {
 
 // Save checkpoints the state of the lrusession and save the checkpointed
 // state into the writer.
-func (rec *lrusession) save(writer io.Writer) (uint64, error) {
+func (rec *lrusession) save(writer io.Writer) error {
 	rec.Lock()
 	defer rec.Unlock()
 	idList := make([]RaftClientID, 0)
@@ -96,37 +96,30 @@ func (rec *lrusession) save(writer io.Writer) (uint64, error) {
 		key := k.(*RaftClientID)
 		idList = append(idList, *key)
 	})
-	sz := uint64(0)
 	totalbuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(totalbuf, rec.size)
-	_, err := writer.Write(totalbuf)
-	if err != nil {
-		return 0, err
+	if _, err := writer.Write(totalbuf); err != nil {
+		return err
 	}
-	sz += 8
 	binary.LittleEndian.PutUint64(totalbuf, uint64(len(idList)))
-	_, err = writer.Write(totalbuf)
-	if err != nil {
-		return 0, err
+	if _, err := writer.Write(totalbuf); err != nil {
+		return err
 	}
-	sz += 8
 	for _, key := range idList {
 		session, ok := rec.getSessionLocked(key)
 		if !ok || session == nil {
 			panic("bad state")
 		}
-		sessionSize, err := session.save(writer)
-		if err != nil {
-			return 0, err
+		if err := session.save(writer); err != nil {
+			return err
 		}
-		sz += sessionSize
 	}
-	return sz, nil
+	return nil
 }
 
 // Load restores the state the of lrusession from the provided reader.
 // reader contains lrusession state previously checkpointed.
-func (rec *lrusession) load(reader io.Reader, v SnapshotVersion) error {
+func (rec *lrusession) load(reader io.Reader, v SSVersion) error {
 	rec.Lock()
 	defer rec.Unlock()
 	sessionList := make([]*Session, 0)
@@ -207,7 +200,7 @@ func (rec *lrusession) delSession(key RaftClientID) {
 
 func (rec *lrusession) getHash() uint64 {
 	snapshot := &bytes.Buffer{}
-	if _, err := rec.save(snapshot); err != nil {
+	if err := rec.save(snapshot); err != nil {
 		panic(err)
 	}
 	data := snapshot.Bytes()
