@@ -16,17 +16,9 @@
 
 package logdb
 
-// SetEntryBatchSize sets the entry batch size.
-func SetEntryBatchSize(sz uint64) {
-	batchSize = sz
-}
-
-// SetLogDBInstanceCount set the number of rocksdb instances to use.
-func SetLogDBInstanceCount(count uint64) {
-	numOfRocksDBInstance = count
-}
-
-// SetRDBContextSize set the RDB context related sizes
-func SetRDBContextSize(valueSize uint64) {
-	RDBContextValueSize = valueSize
+// ApplyMonkeySettings applies monkey settings
+func ApplyMonkeySettings() {
+	batchSize = 4
+	numOfRocksDBInstance = 1
+	RDBContextValueSize = 1
 }

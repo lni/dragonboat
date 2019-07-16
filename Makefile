@@ -108,7 +108,7 @@ GO=$(GOCMD)
 endif
 # golang race detector
 # set the RACE environmental variable to 1 to enable it, e.g.
-# RACE=1 make test-monkey-drummer
+# RACE=1 make test
 ifeq ($(RACE),1)
 RACE_DETECTOR_FLAG=-race
 $(warning "data race detector enabled, this is a DEBUG build")
@@ -141,8 +141,6 @@ SHARED4=$(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
 # testing bin
 SNAPSHOT_BENCHMARK_TESTING_BIN=snapbench
 LOGDB_CHECKER_BIN=logdb-checker-bin
-PORCUPINE_CHECKER_BIN=porcupine-checker-bin
-DRUMMER_MONKEY_TESTING_BIN=drummer-monkey-testing
 DUMMY_TEST_BIN=test.bin
 
 # go build tags
@@ -154,12 +152,11 @@ TESTTAGS="$(TESTTAGVALS)"
 $(info build tags are set to $(GOBUILDTAGS))
 IOERROR_INJECTION_BUILDTAGS=dragonboat_errorinjectiontest
 DRUMMER_SLOW_TEST_BUILDTAGS=dragonboat_slowtest $(GOBUILDTAGVALS)
-DRUMMER_MONKEY_TEST_BUILDTAGS=dragonboat_monkeytest $(GOBUILDTAGVALS)
 MULTIRAFT_SLOW_TEST_BUILDTAGS=dragonboat_slowtest
 LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
 all:
-rebuild-all: clean all-slow-monkey-tests unit-test-bin
+rebuild-all: clean unit-test-bin
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
@@ -229,19 +226,6 @@ gen-gitversion:
 
 GOBUILD=$(GO) build $(VERBOSE) -tags=$(GOBUILDTAGS) -o $@
 
-$(DRUMMER_MONKEY_TESTING_BIN):
-	$(GO) test $(RACE_DETECTOR_FLAG) $(VERBOSE) \
-		-tags="$(DRUMMER_MONKEY_TEST_BUILDTAGS)" -c -o $@ $(PKGNAME)/internal/drummer
-drummer-monkey-test-bin: $(DRUMMER_MONKEY_TESTING_BIN)
-
-$(PORCUPINE_CHECKER_BIN):
-	$(GO) build -o $@ $(VERBOSE) $(PKGNAME)/internal/tests/lcm/checker
-porcupine-checker: $(PORCUPINE_CHECKER_BIN)
-
-$(LOGDB_CHECKER_BIN):
-	$(GO) build -o $@ $(VERBOSE) $(PKGNAME)/internal/tests/logdb/checker
-logdb-checker: $(LOGDB_CHECKER_BIN)
-
 ###############################################################################
 # docker tests
 ###############################################################################
@@ -284,10 +268,9 @@ dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-multiraft test-config test-client test-server test-tools
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-config test-client test-server test-tests test-tools
-test: dragonboat-test test-drummer test-plugins test-tests
-slow-test: test-slow-multiraft test-slow-drummer
-more-test: test test-slow-multiraft test-slow-drummer
-monkey-test: test-monkey-drummer
+test: dragonboat-test test-plugins test-tests
+slow-test: test-slow-multiraft
+more-test: test test-slow-multiraft
 dev-test: test test-grpc-transport
 
 ###############################################################################
@@ -297,7 +280,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
-	test-tests test-drummer
+	test-tests
 
 ###############################################################################
 # fast tests executed for every git push
@@ -331,8 +314,6 @@ test-multiraft:
 	$(GOTEST) $(PKGNAME)
 test-tests:
 	$(GOTEST) $(PKGNAME)/internal/tests
-test-drummer:
-	$(GOTEST) $(PKGNAME)/internal/drummer
 test-tools:
 	$(GOTEST) $(PKGNAME)/tools
 
@@ -348,16 +329,6 @@ test-slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
 test-slow-multiraft:
 	$(GOTEST) $(PKGNAME)
 
-test-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-test-slow-drummer:
-	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
-	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
-
-test-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-test-monkey-drummer:
-	$(GOTEST) -o $(DRUMMER_MONKEY_TESTING_BIN) -c $(PKGNAME)/internal/drummer
-	./$(DRUMMER_MONKEY_TESTING_BIN) -test.v -test.timeout 9999s
-
 ###############################################################################
 # snapshot benchmark test to check actual bandwidth achieved when streaming
 # snapshot images
@@ -367,24 +338,16 @@ snapshot-benchmark-test:
 		$(PKGNAME)/internal/tests/snapshotbench
 
 ###############################################################################
-# build slow/monkey tests 
+# build slow tests 
 ###############################################################################
-# build slow and monkey tests, this is invoked for every push
+# build slow tests, this is invoked for every push
 # we can't afford to run all these tests that are known to be slow, but we can
 # check whether the push fails the build
 slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
 slow-multiraft:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)
 
-slow-drummer: TESTTAGVALS+=$(DRUMMER_SLOW_TEST_BUILDTAGS)
-slow-drummer:
-	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
-
-monkey-drummer: TESTTAGVALS+=$(DRUMMER_MONKEY_TEST_BUILDTAGS)
-monkey-drummer:
-	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)/internal/drummer
-
-all-slow-monkey-tests: slow-multiraft slow-drummer monkey-drummer
+all-slow-tests: slow-multiraft
 
 ###############################################################################
 # language bindings
@@ -545,11 +508,10 @@ clean-binding:
 # static checks
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
-	internal/cpp internal/rsm internal/settings internal/tests internal/tests/lcm\
-	internal/server internal/drummer internal/drummer/client plugin/leveldb      \
+	internal/cpp internal/rsm internal/settings internal/tests internal/server   \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
 	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config       \
-	statemachine client
+	statemachine client plugin/leveldb
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
@@ -566,10 +528,6 @@ static-check:
 		fi; \
 		golint $$p; \
 		ineffassign $$p; \
-		if [ $$p != "internal/drummer" ] ; \
-		then \
-			gocyclo -over 41 $$p; \
-		fi; \
 	done;
 
 cpp-static-check:
@@ -606,22 +564,17 @@ clean: clean-binding
 	@rm -f $(SEQUENCE_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
-		$(DRUMMER_MONKEY_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(SNAPSHOT_BENCHMARK_TESTING_BIN) \
 		$(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) \
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
-	$(DRUMMER_MONKEY_TESTING_BIN) $(MULTIRAFT_MONKEY_TESTING_BIN) \
-	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
-	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
-	test-transport test-multiraft test-drummer test-client test-server \
-	test-config test-tests static-check clean logdb-checker \
-	test-monkey-drummer test-slow-multiraft test-grpc-transport \
-	test-slow-drummer slow-test more-test monkey-test dev-test \
-	slow-multiraft-ioerror-test-bin all-slow-monkey-tests golangci-lint-check \
+	test test-raft test-rsm test-logdb test-tools test-transport test-multiraft \
+	test-client test-server test-config test-tests static-check clean \
+	logdb-checker test-slow-multiraft test-grpc-transport slow-test more-test \
+	slow-multiraft-ioerror-test-bin golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb travis-ci-test
+	docker-test-no-rocksdb travis-ci-test dev-test

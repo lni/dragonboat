@@ -19,10 +19,16 @@ package dragonboat
 import (
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/raftio"
 )
+
+func ApplyMonkeySettings() {
+	transport.ApplyMonkeySettings()
+	logdb.ApplyMonkeySettings()
+}
 
 //
 // code here is used in testing only.

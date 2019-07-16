@@ -16,20 +16,10 @@
 
 package transport
 
-func SetPerConnBufferSize(sz uint64) {
-	perConnBufSize = sz
-}
-
-func SetSendQueueLength(l uint64) {
-	sendQueueLen = l
-}
-
-func SetPayloadBuffserSize(sz uint64) {
-	payloadBufferSize = sz
-}
-
-// Set the size of snapshot chunk. This function is only available in
-// monekytest.
-func SetSnapshotChunkSize(sz uint64) {
-	snapshotChunkSize = sz
+// ApplyMonkeySettings applies monkey settings
+func ApplyMonkeySettings() {
+	perConnBufSize = 1024 * 64
+	sendQueueLen = 64
+	snapshotChunkSize = 1024
+	payloadBufferSize = 1024 * 8
 }
