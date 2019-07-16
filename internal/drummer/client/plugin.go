@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/lni/dragonboat/v3/internal/tests"
-	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/goutils/fileutil"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 

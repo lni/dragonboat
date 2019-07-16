@@ -17,7 +17,7 @@ package dragonboat
 import (
 	"sync/atomic"
 
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/goutils/logutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 

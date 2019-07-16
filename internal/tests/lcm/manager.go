@@ -28,7 +28,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/drummer/client"
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/syncutil"
 )
 
 const (

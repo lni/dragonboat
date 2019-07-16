@@ -43,9 +43,9 @@ import (
 	mr "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
 	kvpb "github.com/lni/dragonboat/v3/internal/tests/kvpb"
 	"github.com/lni/dragonboat/v3/internal/tests/lcm"
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/logutil"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/raftpb"
 )
 

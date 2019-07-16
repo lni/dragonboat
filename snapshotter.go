@@ -24,17 +24,27 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/utils/dio"
-	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/dio"
+	"github.com/lni/goutils/fileutil"
+	"github.com/lni/goutils/logutil"
 )
 
 const (
 	snapshotsToKeep = 3
 )
+
+func compressionType(ct pb.CompressionType) dio.CompressionType {
+	if ct == pb.NoCompression {
+		return dio.NoCompression
+	} else if ct == pb.Snappy {
+		return dio.Snappy
+	} else {
+		panic("unknown compression type")
+	}
+}
 
 var (
 	// ErrNoSnapshot is the error used to indicate that there is no snapshot
@@ -74,7 +84,7 @@ func (s *snapshotter) id() string {
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,
 	meta *rsm.SSMeta, sink pb.IChunkSink) error {
-	ct := meta.CompressionType
+	ct := compressionType(meta.CompressionType)
 	cw := dio.NewCompressor(ct, rsm.NewChunkWriter(sink, meta))
 	if err := streamable.StreamSnapshot(meta.Ctx, cw); err != nil {
 		sink.Stop()
@@ -91,8 +101,9 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	}
 	files := rsm.NewFileCollection()
 	fp := env.GetTempFilepath()
-	ct := meta.CompressionType
-	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, ct)
+	ct := compressionType(meta.CompressionType)
+	writer, err := rsm.NewSnapshotWriter(fp,
+		rsm.SnapshotVersion, meta.CompressionType)
 	if err != nil {
 		return nil, env, err
 	}
@@ -142,7 +153,8 @@ func (s *snapshotter) Load(sessions rsm.ILoadableSessions,
 		reader.Close()
 		return err
 	}
-	cr := dio.NewDecompressor(header.CompressionType, reader)
+	ct := compressionType(header.CompressionType)
+	cr := dio.NewDecompressor(ct, reader)
 	defer func() {
 		if cerr := cr.Close(); err == nil {
 			err = cerr

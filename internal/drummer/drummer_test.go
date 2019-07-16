@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/goutils/leaktest"
 )
 
 func testDrummerIsAwareOfNodeHosts(t *testing.T, tls bool) {

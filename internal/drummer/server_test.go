@@ -29,8 +29,8 @@ import (
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/client"
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
 )
 
 func isTimeoutError(err error) bool {

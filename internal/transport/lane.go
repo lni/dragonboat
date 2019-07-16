@@ -19,7 +19,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/goutils/logutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )

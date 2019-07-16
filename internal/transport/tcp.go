@@ -28,8 +28,8 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/netutil"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/netutil"
+	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )

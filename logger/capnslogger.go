@@ -15,7 +15,7 @@
 package logger
 
 import (
-	"github.com/lni/dragonboat/v3/internal/utils/logutil/capnslog"
+	"github.com/lni/goutils/logutil/capnslog"
 )
 
 const (

@@ -17,7 +17,7 @@ package client
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/random"
 )
 
 func TestNoOPSessionHasExpectedSeriesID(t *testing.T) {

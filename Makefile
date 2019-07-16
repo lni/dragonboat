@@ -281,10 +281,9 @@ TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
 	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-utils test-config test-client test-server \
-	test-tools
+	test-multiraft test-config test-client test-server test-tools
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-utils test-config test-client test-server test-tests test-tools
+  test-config test-client test-server test-tests test-tools
 test: dragonboat-test test-drummer test-plugins test-tests
 slow-test: test-slow-multiraft test-slow-drummer
 more-test: test test-slow-multiraft test-slow-drummer
@@ -294,11 +293,11 @@ dev-test: test test-grpc-transport
 ###############################################################################
 # build unit tests
 ###############################################################################
-unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) \
+unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
-unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-multiraft test-utils test-config test-client test-server test-tools \
-	test-plugins test-tests test-drummer
+unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
+  test-multiraft test-config test-client test-server test-tools test-plugins \
+	test-tests test-drummer
 
 ###############################################################################
 # fast tests executed for every git push
@@ -312,11 +311,6 @@ benchmark-fsync:
 GOTEST=$(GO) $(TEST_OPTIONS)
 test-plugins:
 	$(GOTEST) $(PKGNAME)/plugin
-test-utils:
-	$(GOTEST) $(PKGNAME)/internal/utils/syncutil
-	$(GOTEST) $(PKGNAME)/internal/utils/netutil
-	$(GOTEST) $(PKGNAME)/internal/utils/fileutil
-	$(GOTEST) $(PKGNAME)/internal/utils/cache
 test-server:
 	$(GOTEST) $(PKGNAME)/internal/server
 test-config:
@@ -552,9 +546,6 @@ clean-binding:
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/cpp internal/rsm internal/settings internal/tests internal/tests/lcm\
-	internal/utils/lang internal/utils/random internal/utils/fileutil            \
-	internal/utils/syncutil internal/utils/stringutil internal/utils/logutil     \
-	internal/utils/netutil internal/utils/cache internal/utils/envutil           \
 	internal/server internal/drummer internal/drummer/client plugin/leveldb      \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
 	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config       \
@@ -595,9 +586,7 @@ GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
 	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
-	internal/utils/cache internal/utils/fileutil internal/utils/stringutil       \
-	internal/utils/netutil internal/utils/random internal/utils/logutil          \
-	internal/utils/lang internal/logdb/kv
+	internal/logdb/kv
 
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \
@@ -627,7 +616,7 @@ clean: clean-binding
 	$(DRUMMER_MONKEY_TESTING_BIN) $(MULTIRAFT_MONKEY_TESTING_BIN) \
 	$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN) \
 	drummer-monkey-test-bin test test-raft test-rsm test-logdb test-tools \
-	test-transport test-multiraft test-drummer test-client test-server test-utils \
+	test-transport test-multiraft test-drummer test-client test-server \
 	test-config test-tests static-check clean logdb-checker \
 	test-monkey-drummer test-slow-multiraft test-grpc-transport \
 	test-slow-drummer slow-test more-test monkey-test dev-test \

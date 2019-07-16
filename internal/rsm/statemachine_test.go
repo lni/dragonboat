@@ -31,8 +31,8 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/dio"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/goutils/dio"
+	"github.com/lni/goutils/leaktest"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )

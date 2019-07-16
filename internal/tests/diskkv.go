@@ -38,9 +38,9 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/fileutil"
+	"github.com/lni/goutils/logutil"
+	"github.com/lni/goutils/random"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 

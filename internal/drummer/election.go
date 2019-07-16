@@ -22,8 +22,8 @@ import (
 
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
 	serverPkg "github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
 )
 
 const (

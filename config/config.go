@@ -23,8 +23,8 @@ import (
 	"errors"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/netutil"
-	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
+	"github.com/lni/goutils/netutil"
+	"github.com/lni/goutils/stringutil"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"

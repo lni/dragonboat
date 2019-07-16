@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
+	"github.com/lni/goutils/leaktest"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 

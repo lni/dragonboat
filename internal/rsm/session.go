@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/lni/dragonboat/v3/internal/utils/cache/biogo/store/llrb"
+	"github.com/lni/goutils/cache/biogo/store/llrb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 

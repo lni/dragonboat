@@ -23,7 +23,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
+	"github.com/lni/goutils/stringutil"
 	"github.com/lni/dragonboat/v3/logger"
 )
 

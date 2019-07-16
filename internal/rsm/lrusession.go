@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/cache"
+	"github.com/lni/goutils/cache"
 )
 
 const (

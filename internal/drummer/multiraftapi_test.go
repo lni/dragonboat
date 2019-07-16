@@ -30,8 +30,8 @@ import (
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
 	mr "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
 )
 
 func getMultiraftAPIAddress(nodehostAddress string,

@@ -30,7 +30,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/tests/charybdefs/server"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/random"
 )
 
 const (

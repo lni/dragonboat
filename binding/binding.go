@@ -38,9 +38,9 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/cpp"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/logger"
 )
 

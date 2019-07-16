@@ -337,7 +337,7 @@ func (ds *RegularStateMachineWrapper) StreamSnapshot(ssctx interface{},
 
 // SaveSnapshot saves the state of the data store to the snapshot file specified
 // by the fp input string.
-func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+func (ds *RegularStateMachineWrapper) SaveSnapshot(meta *rsm.SSMeta,
 	writer io.Writer, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, error) {
 	ds.ensureNotDestroyed()
@@ -523,7 +523,7 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 }
 
 // SaveSnapshot ...
-func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+func (ds *ConcurrentStateMachineWrapper) SaveSnapshot(meta *rsm.SSMeta,
 	writer io.Writer, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, error) {
 	if _, err := writer.Write(session); err != nil {
@@ -762,7 +762,7 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 }
 
 // SaveSnapshot ...
-func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SnapshotMeta,
+func (ds *OnDiskStateMachineWrapper) SaveSnapshot(meta *rsm.SSMeta,
 	writer io.Writer, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, error) {
 	if !ds.opened {

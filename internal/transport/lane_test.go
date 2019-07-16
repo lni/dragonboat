@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/syncutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 

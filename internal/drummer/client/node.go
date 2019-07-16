@@ -20,8 +20,8 @@ import (
 
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 

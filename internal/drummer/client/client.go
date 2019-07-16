@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/netutil"
+	"github.com/lni/goutils/netutil"
 	"github.com/lni/dragonboat/v3/logger"
 )
 

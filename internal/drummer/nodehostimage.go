@@ -16,7 +16,7 @@ package drummer
 
 import (
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
-	"github.com/lni/dragonboat/v3/internal/utils/logutil"
+	"github.com/lni/goutils/logutil"
 )
 
 type nodeHostSpec struct {

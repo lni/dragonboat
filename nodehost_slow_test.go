@@ -35,9 +35,9 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/lang"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/lang"
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 

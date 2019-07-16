@@ -31,7 +31,7 @@ import (
 	serverConfig "github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/dragonboat/v3/internal/utils/fileutil"
+	"github.com/lni/goutils/fileutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 

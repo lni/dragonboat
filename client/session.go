@@ -17,7 +17,7 @@ package client
 import (
 	"math"
 
-	"github.com/lni/dragonboat/v3/internal/utils/random"
+	"github.com/lni/goutils/random"
 )
 
 const (

@@ -37,11 +37,11 @@ import (
 	pb "github.com/lni/dragonboat/v3/internal/drummer/drummerpb"
 	serverPkg "github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/utils/envutil"
-	"github.com/lni/dragonboat/v3/internal/utils/netutil"
-	"github.com/lni/dragonboat/v3/internal/utils/random"
-	"github.com/lni/dragonboat/v3/internal/utils/stringutil"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/envutil"
+	"github.com/lni/goutils/netutil"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/stringutil"
+	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/logger"
 )
 

@@ -22,9 +22,9 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/dragonboat/v3/internal/utils/leaktest"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/leaktest"
 )
 
 func TestManagedObjectCanBeAddedReturnedAndRemoved(t *testing.T) {
@@ -418,7 +418,7 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if count.Value != 1 {
 		t.Fatalf("initial update returned %v, want 1", count.Value)
 	}
-	meta := rsm.SnapshotMeta{
+	meta := rsm.SSMeta{
 		Request: rsm.SSRequest{
 			Type: rsm.ExportedSnapshot,
 		},
@@ -495,7 +495,7 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
-	meta := rsm.SnapshotMeta{
+	meta := rsm.SSMeta{
 		Request: rsm.SSRequest{
 			Type: rsm.ExportedSnapshot,
 		},
@@ -679,7 +679,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
-	meta := rsm.SnapshotMeta{
+	meta := rsm.SSMeta{
 		Request: rsm.SSRequest{
 			Type: rsm.ExportedSnapshot,
 		},
@@ -756,7 +756,7 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
-	meta := rsm.SnapshotMeta{
+	meta := rsm.SSMeta{
 		Request: rsm.SSRequest{
 			Type: rsm.UserRequestedSnapshot,
 		},
@@ -836,7 +836,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare snapshot: %v", err)
 	}
-	meta := rsm.SnapshotMeta{
+	meta := rsm.SSMeta{
 		Request: rsm.SSRequest{
 			Type: rsm.ExportedSnapshot,
 		},

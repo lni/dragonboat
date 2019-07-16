@@ -27,8 +27,8 @@ import (
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/client"
 	pb "github.com/lni/dragonboat/v3/internal/drummer/multiraftpb"
-	"github.com/lni/dragonboat/v3/internal/utils/netutil"
-	"github.com/lni/dragonboat/v3/internal/utils/syncutil"
+	"github.com/lni/goutils/netutil"
+	"github.com/lni/goutils/syncutil"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
