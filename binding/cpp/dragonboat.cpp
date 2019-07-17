@@ -803,6 +803,7 @@ NodeHostInfo NodeHost::GetNodeHostInfo(NodeHostInfoOption option) noexcept
     ci.SMType = static_cast<StateMachineType>(cip[idx].SMType);
     for (uint64_t i = 0; i < cip[idx].NodeAddrPairsNum; i++) {
       ci.Nodes[cip[idx].NodeAddrPairs[i].NodeID] = std::string(cip[idx].NodeAddrPairs[i].RaftAddress);
+      free(cip[idx].NodeAddrPairs[i].RaftAddress);
     }
     free(cip[idx].NodeAddrPairs);
     ci.ConfigChangeIndex = cip[idx].ConfigChangeIndex;
