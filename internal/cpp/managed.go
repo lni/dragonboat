@@ -42,6 +42,7 @@ func AddManagedObject(object interface{}) uint64 {
 	return oid
 }
 
+// AddManagedObjects ...
 func AddManagedObjects(objects ...interface{}) []uint64 {
 	oids := make([]uint64, len(objects))
 	for idx, obj := range objects {
@@ -61,6 +62,7 @@ func RemoveManagedObject(oid uint64) {
 	bindingObjects.objects.Delete(oid)
 }
 
+// RemoveManagedObjects ...
 func RemoveManagedObjects(oids ...uint64) {
 	for _, oid := range oids {
 		RemoveManagedObject(oid)
