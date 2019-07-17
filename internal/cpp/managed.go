@@ -42,6 +42,14 @@ func AddManagedObject(object interface{}) uint64 {
 	return oid
 }
 
+func AddManagedObjects(objects ...interface{}) []uint64 {
+	oids := make([]uint64, len(objects))
+	for idx, obj := range objects {
+		oids[idx] = AddManagedObject(obj)
+	}
+	return oids
+}
+
 // GetManagedObject returns the Go object specified by the oid value.
 func GetManagedObject(oid uint64) (interface{}, bool) {
 	return bindingObjects.objects.Load(oid)
@@ -51,6 +59,12 @@ func GetManagedObject(oid uint64) (interface{}, bool) {
 // managedObject collection.
 func RemoveManagedObject(oid uint64) {
 	bindingObjects.objects.Delete(oid)
+}
+
+func RemoveManagedObjects(oids ...uint64) {
+	for _, oid := range oids {
+		RemoveManagedObject(oid)
+	}
 }
 
 // GetManagedObjectCount returns the number of object in the managed objects
