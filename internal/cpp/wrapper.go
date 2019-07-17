@@ -187,6 +187,28 @@ func getOpenErrorFromErrNo(errno int) error {
 	return fmt.Errorf("open error with errno %d", errno)
 }
 
+func getCEntries(entries []sm.Entry) unsafe.Pointer {
+	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	for idx, ent := range entries {
+		data := ent.Cmd
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		ep.index = C.uint64_t(ent.Index)
+		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
+		ep.cmdLen = C.size_t(len(data))
+		ep.result = C.uint64_t(0)
+	}
+	return eps
+}
+
+func setResultsFromCEntries(entries []sm.Entry, eps unsafe.Pointer) {
+	for idx := 0; idx < len(entries); idx++ {
+		ep := (*C.struct_Entry)(unsafe.Pointer(
+			uintptr(eps) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
+		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
+	}
+}
+
 // NewStateMachineWrapperFromPlugin creates and returns the new plugin based
 // NewStateMachineWrapper instance.
 func NewStateMachineWrapperFromPlugin(clusterID uint64, nodeID uint64,
@@ -444,24 +466,11 @@ func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
 // BatchedUpdate ...
 func (ds *ConcurrentStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Entry, error) {
 	ds.ensureNotDestroyed()
-	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	eps := getCEntries(entries)
 	defer C.free(eps)
-	for idx, ent := range entries {
-		data := ent.Cmd
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		ep.index = C.uint64_t(ent.Index)
-		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
-		ep.cmdLen = C.size_t(len(data))
-		ep.result = C.uint64_t(0)
-	}
 	C.BatchedUpdateDBConcurrentStateMachine(
 		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
-	for idx := 0; idx < len(entries); idx++ {
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
-	}
+	setResultsFromCEntries(entries, eps)
 	return entries, nil
 }
 
@@ -504,11 +513,6 @@ func (ds *ConcurrentStateMachineWrapper) GetHash() (uint64, error) {
 
 // PrepareSnapshot ...
 func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
-	ds.mu.RLock()
-	if ds.Destroyed() {
-		ds.mu.RUnlock()
-		return nil, rsm.ErrClusterClosed
-	}
 	ds.ensureNotDestroyed()
 	r := C.PrepareSnapshotDBConcurrentStateMachine(ds.dataStore)
 	errno := int(r.errcode)
@@ -518,7 +522,6 @@ func (ds *ConcurrentStateMachineWrapper) PrepareSnapshot() (interface{}, error) 
 		return nil, err
 	}
 	result := unsafe.Pointer(r.result)
-	ds.mu.RUnlock()
 	return result, nil
 }
 
@@ -669,24 +672,11 @@ func (ds *OnDiskStateMachineWrapper) BatchedUpdate(entries []sm.Entry) ([]sm.Ent
 		panic("BatchedUpdate called when not opened")
 	}
 	ds.ensureNotDestroyed()
-	eps := C.malloc(C.sizeof_struct_Entry * C.size_t(len(entries)))
+	eps := getCEntries(entries)
 	defer C.free(eps)
-	for idx, ent := range entries {
-		data := ent.Cmd
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		ep.index = C.uint64_t(ent.Index)
-		ep.cmd = (*C.uchar)(unsafe.Pointer(&data[0]))
-		ep.cmdLen = C.size_t(len(data))
-		ep.result = C.uint64_t(0)
-	}
 	C.BatchedUpdateDBOnDiskStateMachine(
 		ds.dataStore, (*C.struct_Entry)(eps), C.size_t(len(entries)))
-	for idx := 0; idx < len(entries); idx++ {
-		ep := (*C.struct_Entry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(eps)) + uintptr(C.sizeof_struct_Entry*C.size_t(idx))))
-		entries[idx].Result = sm.Result{Value: uint64(ep.result)}
-	}
+	setResultsFromCEntries(entries, eps)
 	return entries, nil
 }
 
@@ -743,11 +733,6 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 	if !ds.opened {
 		panic("PrepareSnapshot called when not opened")
 	}
-	ds.mu.RLock()
-	if ds.Destroyed() {
-		ds.mu.RUnlock()
-		return nil, rsm.ErrClusterClosed
-	}
 	ds.ensureNotDestroyed()
 	r := C.PrepareSnapshotDBOnDiskStateMachine(ds.dataStore)
 	errno := int(r.errcode)
@@ -757,7 +742,6 @@ func (ds *OnDiskStateMachineWrapper) PrepareSnapshot() (interface{}, error) {
 		return nil, err
 	}
 	result := unsafe.Pointer(r.result)
-	ds.mu.RUnlock()
 	return result, nil
 }
 
