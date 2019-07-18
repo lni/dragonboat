@@ -59,7 +59,8 @@ const char Logger::Transport[] = "transport";
 Config::Config(ClusterID clusterId, NodeID nodeId) noexcept
   : NodeId(nodeId), ClusterId(clusterId), IsObserver(false), CheckQuorum(false),
     Quiesce(false), ElectionRTT(10), HeartbeatRTT(1), SnapshotEntries(0),
-    CompactionOverhead(0), OrderedConfigChange(false), MaxInMemLogSize(0)
+    CompactionOverhead(0), OrderedConfigChange(false), MaxInMemLogSize(0),
+    SnapshotCompressionType(NO_COMPRESSION)
 {
 }
 
@@ -76,6 +77,7 @@ void parseConfig(const Config &config, ::RaftConfig &cfg) noexcept
   cfg.CompactionOverhead = config.CompactionOverhead;
   cfg.OrderedConfigChange = config.OrderedConfigChange;
   cfg.MaxInMemLogSize = config.MaxInMemLogSize;
+  cfg.SnapshotCompressionType = config.SnapshotCompressionType;
 }
 
 NodeHostConfig::NodeHostConfig(std::string WALDir,
@@ -803,6 +805,7 @@ NodeHostInfo NodeHost::GetNodeHostInfo(NodeHostInfoOption option) noexcept
     ci.SMType = static_cast<StateMachineType>(cip[idx].SMType);
     for (uint64_t i = 0; i < cip[idx].NodeAddrPairsNum; i++) {
       ci.Nodes[cip[idx].NodeAddrPairs[i].NodeID] = std::string(cip[idx].NodeAddrPairs[i].RaftAddress);
+      free(cip[idx].NodeAddrPairs[i].RaftAddress);
     }
     free(cip[idx].NodeAddrPairs);
     ci.ConfigChangeIndex = cip[idx].ConfigChangeIndex;
