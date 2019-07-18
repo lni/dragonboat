@@ -38,10 +38,10 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/cpp"
+	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
 	"github.com/lni/goutils/syncutil"
-	"github.com/lni/dragonboat/v3/logger"
 )
 
 func init() {
@@ -285,17 +285,18 @@ func nodeHostStartCluster(oid uint64,
 	joinPeer C.char, factory unsafe.Pointer, pluginFile C.DBString,
 	factoryName C.DBString, smType int32, cfg C.RaftConfig) int {
 	c := config.Config{
-		NodeID:              uint64(cfg.NodeID),
-		ClusterID:           uint64(cfg.ClusterID),
-		IsObserver:          cboolToBool(cfg.IsObserver),
-		CheckQuorum:         cboolToBool(cfg.CheckQuorum),
-		Quiesce:             cboolToBool(cfg.Quiesce),
-		ElectionRTT:         uint64(cfg.ElectionRTT),
-		HeartbeatRTT:        uint64(cfg.HeartbeatRTT),
-		SnapshotEntries:     uint64(cfg.SnapshotEntries),
-		CompactionOverhead:  uint64(cfg.CompactionOverhead),
-		OrderedConfigChange: cboolToBool(cfg.OrderedConfigChange),
-		MaxInMemLogSize:     uint64(cfg.MaxInMemLogSize),
+		NodeID:                  uint64(cfg.NodeID),
+		ClusterID:               uint64(cfg.ClusterID),
+		IsObserver:              cboolToBool(cfg.IsObserver),
+		CheckQuorum:             cboolToBool(cfg.CheckQuorum),
+		Quiesce:                 cboolToBool(cfg.Quiesce),
+		ElectionRTT:             uint64(cfg.ElectionRTT),
+		HeartbeatRTT:            uint64(cfg.HeartbeatRTT),
+		SnapshotEntries:         uint64(cfg.SnapshotEntries),
+		CompactionOverhead:      uint64(cfg.CompactionOverhead),
+		OrderedConfigChange:     cboolToBool(cfg.OrderedConfigChange),
+		MaxInMemLogSize:         uint64(cfg.MaxInMemLogSize),
+		SnapshotCompressionType: config.CompressionType(cfg.SnapshotCompressionType),
 	}
 	join := charToBool(joinPeer)
 	peers := make(map[uint64]string)

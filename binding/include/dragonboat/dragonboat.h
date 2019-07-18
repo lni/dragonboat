@@ -114,6 +114,8 @@ class Config
   // MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored
   // in memory.
   uint64_t MaxInMemLogSize;
+  // SnapshotCompressionType is the type of the compression used by snapshot.
+  CompressionType SnapshotCompressionType;
 };
 
 // NodeHostConfig is the configuration for NodeHost. The NodeHostConfig class

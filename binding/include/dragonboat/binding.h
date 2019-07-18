@@ -28,11 +28,18 @@ extern "C" {
 
 enum StateMachineType
 {
-  // StateMachine type, the same as the StateMachineType int raftpb/raft.pb.go
+  // StateMachine type, the same as the StateMachineType in raftpb/raft.pb.go
   UNKNOWN_STATEMACHINE = 0,
   REGULAR_STATEMACHINE = 1,
   CONCURRENT_STATEMACHINE = 2,
   ONDISK_STATEMACHINE = 3,
+};
+
+enum CompressionType
+{
+  // Compression type, the same as the CompressionType in raftpb/raft.pb.go
+  NO_COMPRESSION = 0,
+  SNAPPY = 1,
 };
 
 enum
@@ -166,6 +173,7 @@ typedef struct RaftConfig
   uint64_t CompactionOverhead;
   Bool OrderedConfigChange;
   uint64_t MaxInMemLogSize;
+  int32_t SnapshotCompressionType;
 } RaftConfig;
 
 // NodeHostConfig is the configuration for the NodeHost instance. The
