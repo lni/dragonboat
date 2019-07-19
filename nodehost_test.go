@@ -42,16 +42,16 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/leaktest"
-	"github.com/lni/goutils/random"
-	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/plugin/leveldb"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/dragonboat/v3/tools"
 	"github.com/lni/dragonboat/v3/tools/upgrade310"
+	"github.com/lni/goutils/fileutil"
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
 )
 
 var ovs = logdb.RDBContextValueSize
@@ -3416,13 +3416,13 @@ func TestRaftEventsAreReported(t *testing.T) {
 	exp0 := raftio.LeaderInfo{
 		ClusterID: 1,
 		NodeID:    1,
-		LeaderID:  0,
+		LeaderID:  raftio.NoLeader,
 		Term:      1,
 	}
 	exp1 := raftio.LeaderInfo{
 		ClusterID: 1,
 		NodeID:    1,
-		LeaderID:  0,
+		LeaderID:  raftio.NoLeader,
 		Term:      2,
 	}
 	exp2 := raftio.LeaderInfo{
