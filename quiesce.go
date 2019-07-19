@@ -17,8 +17,8 @@ package dragonboat
 import (
 	"sync/atomic"
 
-	"github.com/lni/goutils/logutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/goutils/logutil"
 )
 
 type quiesceManager struct {

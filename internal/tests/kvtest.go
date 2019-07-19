@@ -36,8 +36,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/goutils/random"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/random"
 )
 
 // random delays

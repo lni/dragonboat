@@ -22,9 +22,9 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/goutils/syncutil"
 )
 
 var (

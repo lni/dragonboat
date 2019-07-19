@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/lni/goutils/cache/biogo/store/llrb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/cache/biogo/store/llrb"
 )
 
 // RaftClientID is the type used as client id in sessions.
