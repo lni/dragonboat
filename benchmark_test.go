@@ -34,13 +34,14 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/utils/dio"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/random"
 )
 
-func benchmarkNoPool128Allocs(b *testing.B, sz uint64) {
+func benchmarkAllocs(b *testing.B, sz uint64) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -53,24 +54,51 @@ func benchmarkNoPool128Allocs(b *testing.B, sz uint64) {
 	})
 }
 
-func BenchmarkNoPool128Allocs512Bytes(b *testing.B) {
-	benchmarkNoPool128Allocs(b, 512)
+func BenchmarkAllocs16Bytes(b *testing.B) {
+	benchmarkAllocs(b, 16)
 }
 
-func BenchmarkNoPool128Allocs15Bytes(b *testing.B) {
-	benchmarkNoPool128Allocs(b, 15)
+func BenchmarkAllocs512Bytes(b *testing.B) {
+	benchmarkAllocs(b, 512)
 }
 
-func BenchmarkNoPool128Allocs2Bytes(b *testing.B) {
-	benchmarkNoPool128Allocs(b, 2)
+func BenchmarkAllocs4096Bytes(b *testing.B) {
+	benchmarkAllocs(b, 4096)
 }
 
-func BenchmarkNoPool128Allocs16Bytes(b *testing.B) {
-	benchmarkNoPool128Allocs(b, 16)
+func benchmarkEncodedPayload(b *testing.B, ct dio.CompressionType, sz uint64) {
+	b.ReportAllocs()
+	b.SetBytes(int64(sz))
+	input := make([]byte, sz)
+	rand.Read(input)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rsm.GetEncodedPayload(ct, input, nil)
+	}
 }
 
-func BenchmarkNoPool128Allocs17Bytes(b *testing.B) {
-	benchmarkNoPool128Allocs(b, 17)
+func BenchmarkSnappyEncodedPayload16Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.Snappy, 16)
+}
+
+func BenchmarkSnappyEncodedPayload512Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.Snappy, 512)
+}
+
+func BenchmarkSnappyEncodedPayload4096Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.Snappy, 4096)
+}
+
+func BenchmarkNoCompressionEncodedPayload16Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.NoCompression, 16)
+}
+
+func BenchmarkNoCompressionEncodedPayload512Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.NoCompression, 512)
+}
+
+func BenchmarkNoCompressionEncodedPayload4096Bytes(b *testing.B) {
+	benchmarkEncodedPayload(b, dio.NoCompression, 4096)
 }
 
 func BenchmarkAddToEntryQueue(b *testing.B) {
