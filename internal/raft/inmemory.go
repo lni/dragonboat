@@ -29,6 +29,7 @@ var (
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
 	shrunk      bool
+	newEntries  bool
 	snapshot    *pb.Snapshot
 	entries     []pb.Entry
 	markerIndex uint64
@@ -44,6 +45,7 @@ func newInMemory(lastIndex uint64, rl *server.RateLimiter) inMemory {
 		markerIndex: lastIndex + 1,
 		savedTo:     lastIndex,
 		rl:          rl,
+		newEntries:  true,
 	}
 }
 
@@ -138,7 +140,15 @@ func (im *inMemory) appliedLogTo(index uint64) {
 		return
 	}
 	newMarkerIndex := index
-	applied := im.entries[:newMarkerIndex-im.markerIndex]
+	move := uint64(newMarkerIndex - im.markerIndex)
+	if newMarkerIndex-im.markerIndex+1 <= uint64(len(im.entries)) {
+		move = newMarkerIndex - im.markerIndex + 1
+	}
+	applied := im.entries[:move]
+	if !im.newEntries {
+		applied = applied[1:]
+	}
+	im.newEntries = false
 	im.shrunk = true
 	im.entries = im.entries[newMarkerIndex-im.markerIndex:]
 	im.markerIndex = newMarkerIndex
@@ -193,6 +203,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.entries = newEntrySlice(ents)
 		im.savedTo = firstNewIndex - 1
 		if im.rateLimited() {
+			im.newEntries = true
 			im.rl.Set(getEntrySliceInMemSize(ents))
 		}
 	} else {
@@ -206,6 +217,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		if im.rateLimited() {
 			sz := getEntrySliceInMemSize(ents) + getEntrySliceInMemSize(existing)
 			im.rl.Set(sz)
+			im.newEntries = true
 		}
 	}
 	im.checkMarkerIndex()
@@ -218,6 +230,7 @@ func (im *inMemory) restore(ss pb.Snapshot) {
 	im.entries = nil
 	im.savedTo = ss.Index
 	if im.rateLimited() {
+		im.newEntries = true
 		im.rl.Set(0)
 	}
 }

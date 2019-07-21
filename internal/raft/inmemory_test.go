@@ -613,7 +613,12 @@ func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 	}
 	for idx := uint64(2); idx < uint64(5); idx++ {
 		im.appliedLogTo(idx)
-		if im.rl.Get() != getEntrySliceInMemSize(im.entries) {
+		if len(im.entries[1:]) > 0 {
+			if im.entries[1:][0].Index != idx+1 {
+				t.Errorf("alignment error")
+			}
+		}
+		if im.rl.Get() != getEntrySliceInMemSize(im.entries[1:]) {
 			t.Errorf("log size not updated")
 		}
 	}

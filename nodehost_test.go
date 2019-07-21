@@ -1854,6 +1854,21 @@ func TestTooBigPayloadIsRejectedWhenRateLimited(t *testing.T) {
 	rateLimitedNodeHostTest(t, tf)
 }
 
+func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(1)
+		for i := 0; i < 16; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, make([]byte, 2500))
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to make proposal %v", err)
+			}
+		}
+	}
+	rateLimitedNodeHostTest(t, tf)
+}
+
 func TestRateLimitCanBeTriggered(t *testing.T) {
 	limited := uint64(0)
 	stopper := syncutil.NewStopper()

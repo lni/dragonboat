@@ -133,11 +133,16 @@ type Config struct {
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.
 	OrderedConfigChange bool
-	// MaxInMemLogSize is the maximum size in bytes allowed for storing in memory
-	// Raft logs. Raft logs waiting to be committed and applied are stored in
-	// memory. When MaxInMemLogSize is 0, the limit is set to math.MaxUint64 which
-	// basically means no limit. When MaxInMemLogSize is set and the limit is
-	// reached, error will be returned when clients try to make any new proposals.
+	// MaxInMemLogSize is the target size in bytes allowed for storing in memory
+	// Raft logs on each Raft node. In memory Raft logs are the ones that have
+	// not been applied yet.
+	// MaxInMemLogSize is a target value implemented to prevent unbounded memory
+	// growth, it is not for precisely limiting the exact memory usage.
+	// When MaxInMemLogSize is 0, the target is set to math.MaxUint64. When
+	// MaxInMemLogSize is set and the target is reached, error will be returned
+	// when clients try to make new proposals.
+	// MaxInMemLogSize is recommended to be significantly larger than the biggest
+	// proposal you are going to use.
 	MaxInMemLogSize uint64
 	// SnapshotCompressionType is the compression type to use for compressing
 	// generated snapshot data. No compression is used by default.
@@ -169,6 +174,10 @@ func (c *Config) Validate() error {
 	}
 	if c.SnapshotCompressionType != Snappy &&
 		c.SnapshotCompressionType != NoCompression {
+		return errors.New("Unknown compression type")
+	}
+	if c.EntryCompressionType != Snappy &&
+		c.EntryCompressionType != NoCompression {
 		return errors.New("Unknown compression type")
 	}
 	return nil
