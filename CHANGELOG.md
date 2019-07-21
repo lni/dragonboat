@@ -1,6 +1,10 @@
 ## v3.2 (TBD)
 
-Dragonboat v3.1 is a minor release with new features and bug fixes. All v3.1.x users are recommended to upgrade. 
+Dragonboat v3.2 is a minor release with new features and bug fixes. All v3.1.x users are recommended to upgrade. 
+
+### New features
+
+- Added snappy compression support for Raft entires and snapshots.
 
 ### Breaking changes
 There is no breanking change for regular users. However, 
@@ -35,7 +39,7 @@ Dragonboat v3.0 is a major release with breaking changes. Please make sure to ca
 ### New features
 
 - Added on disk state machine (statemachine.IOnDiskStateMachine) support. The on disk state machine is close to the concept described in the section 5.2 of Diego Ongaro's Raft thesis. 
-- Added new API for requesting a  snapshot to be created or exported.
+- Added new API for requesting a snapshot to be created or exported.
 - Added the ability to use exported snapshot to repair permanently damaged cluster that no longer has majority quorum.
 - Added new API for cleaning up data and release disk spaces after a node is removed from its Raft cluster.
 - Added the ability to limit peak memory usage when disk or network is slow.

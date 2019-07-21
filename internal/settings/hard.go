@@ -14,7 +14,8 @@
 
 /*
 Package settings is used for managing internal parameters that can be set at
-compile time by expert level users.
+compile time by expert level users. Most of those parameters can also be
+overwritten by using the json mechanism described below.
 */
 package settings
 
