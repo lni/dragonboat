@@ -133,15 +133,19 @@ type Config struct {
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.
 	OrderedConfigChange bool
-	// MaxInMemLogSize is the maximum bytes size of Raft logs that can be stored in
-	// memory. Raft logs waiting to be committed and applied are stored in memory.
-	// When MaxInMemLogSize is 0, the limit is set to math.MaxUint64 which
+	// MaxInMemLogSize is the maximum size in bytes allowed for storing in memory
+	// Raft logs. Raft logs waiting to be committed and applied are stored in
+	// memory. When MaxInMemLogSize is 0, the limit is set to math.MaxUint64 which
 	// basically means no limit. When MaxInMemLogSize is set and the limit is
 	// reached, error will be returned when clients try to make any new proposals.
 	MaxInMemLogSize uint64
 	// SnapshotCompressionType is the compression type to use for compressing
 	// generated snapshot data. No compression is used by default.
 	SnapshotCompressionType CompressionType
+	// EntryCompressionType is the compression type to use for compressing the
+	// payload of user proposals. When Snappy is used, the maximum proposal
+	// payload allowed is roughly limited to 3.42GBytes.
+	EntryCompressionType CompressionType
 }
 
 // Validate validates the Config instance and return an error when any member

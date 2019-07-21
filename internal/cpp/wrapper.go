@@ -301,8 +301,7 @@ func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 }
 
 // Update updates the data store.
-func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
-	e pb.Entry) (sm.Result, error) {
+func (ds *RegularStateMachineWrapper) Update(e sm.Entry) (sm.Result, error) {
 	ds.ensureNotDestroyed()
 	var dp *C.uchar
 	if len(e.Cmd) > 0 {
@@ -310,9 +309,6 @@ func (ds *RegularStateMachineWrapper) Update(session *rsm.Session,
 	}
 	v := C.UpdateDBRegularStateMachine(
 		ds.dataStore, C.uint64_t(e.Index), dp, C.size_t(len(e.Cmd)))
-	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), sm.Result{Value: uint64(v)})
-	}
 	return sm.Result{Value: uint64(v)}, nil
 }
 
@@ -445,17 +441,10 @@ func (ds *ConcurrentStateMachineWrapper) Open() (uint64, error) {
 }
 
 // Update ...
-func (ds *ConcurrentStateMachineWrapper) Update(session *rsm.Session,
-	e pb.Entry) (sm.Result, error) {
-	results, err := ds.BatchedUpdate([]sm.Entry{{
-		Index: e.Index,
-		Cmd:   e.Cmd,
-	}})
+func (ds *ConcurrentStateMachineWrapper) Update(e sm.Entry) (sm.Result, error) {
+	results, err := ds.BatchedUpdate([]sm.Entry{e})
 	if err != nil {
 		return sm.Result{}, err
-	}
-	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), results[0].Result)
 	}
 	return results[0].Result, nil
 }
@@ -629,17 +618,10 @@ func (ds *OnDiskStateMachineWrapper) Open() (uint64, error) {
 }
 
 // Update ...
-func (ds *OnDiskStateMachineWrapper) Update(session *rsm.Session,
-	e pb.Entry) (sm.Result, error) {
-	results, err := ds.BatchedUpdate([]sm.Entry{{
-		Index: e.Index,
-		Cmd:   e.Cmd,
-	}})
+func (ds *OnDiskStateMachineWrapper) Update(e sm.Entry) (sm.Result, error) {
+	results, err := ds.BatchedUpdate([]sm.Entry{e})
 	if err != nil {
 		return sm.Result{}, err
-	}
-	if session != nil {
-		session.AddResponse((rsm.RaftSeriesID)(e.SeriesID), results[0].Result)
 	}
 	return results[0].Result, nil
 }

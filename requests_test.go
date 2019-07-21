@@ -26,10 +26,11 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/goutils/random"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/random"
 )
 
 const (
@@ -528,8 +529,9 @@ func getPendingProposal() (*pendingProposal, *entryQueue) {
 		obj.CompletedC = make(chan RequestResult, 1)
 		return obj
 	}
-	return newPendingProposal(p,
-		c, 100, 120, "nodehost:12345", testTickInMillisecond), c
+	cfg := config.Config{ClusterID: 100, NodeID: 120}
+	return newPendingProposal(cfg,
+		p, c, "nodehost:12345", testTickInMillisecond), c
 }
 
 func getBlankTestSession() *client.Session {
@@ -554,6 +556,34 @@ func countPendingProposal(p *pendingProposal) int {
 	}
 	return total
 }
+
+// TODO:
+// the test below uses at least 8GBs RAM, move it to a more suitable place
+// and re-enable it
+
+/*
+func TestLargeProposalCanBeProposed(t *testing.T) {
+	pp, _ := getPendingProposal()
+	data := make([]byte, 8*1024*1024*1024)
+	_, err := pp.propose(getBlankTestSession(), data, nil, time.Second)
+	if err != nil {
+		t.Errorf("failed to make proposal, %v", err)
+	}
+	pp, _ = getPendingProposal()
+	for idx := range pp.shards {
+		pp.shards[idx].cfg = config.Config{EntryCompressionType: config.Snappy}
+	}
+	data = make([]byte, 6*(0xffffffff-32)/7)
+	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
+	if err != nil {
+		t.Errorf("failed to make proposal, %v", err)
+	}
+	data = make([]byte, 6*(0xffffffff-32)/7+1)
+	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
+	if err != ErrPayloadTooBig {
+		t.Errorf("failed to return the expected error, %v", err)
+	}
+}*/
 
 func TestProposalCanBeProposed(t *testing.T) {
 	pp, c := getPendingProposal()
@@ -1047,7 +1077,8 @@ func TestProposalAllocationCount(t *testing.T) {
 	}
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
-	pp := newPendingProposal(p, q, 1, 1, "localhost:9090", 200)
+	cfg := config.Config{ClusterID: 1, NodeID: 1}
+	pp := newPendingProposal(cfg, p, q, "localhost:9090", 200)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)

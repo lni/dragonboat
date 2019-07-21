@@ -193,12 +193,12 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	defer ds1.(*RegularStateMachineWrapper).destroy()
 	defer ds2.(*ConcurrentStateMachineWrapper).destroy()
 	defer ds3.(*OnDiskStateMachineWrapper).destroy()
-	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
-	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
-	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v1, _ := ds1.Update(nil, e1)
-	v2, _ := ds1.Update(nil, e2)
-	v3, _ := ds1.Update(nil, e3)
+	e1 := sm.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	e2 := sm.Entry{Index: 2, Cmd: []byte("test-data-2")}
+	e3 := sm.Entry{Index: 3, Cmd: []byte("test-data-3")}
+	v1, _ := ds1.Update(e1)
+	v2, _ := ds1.Update(e2)
+	v3, _ := ds1.Update(e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from regular data store")
 	}
@@ -210,9 +210,9 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	if v4 != v3.Value {
 		t.Errorf("regular data store returned %d, want %d", v4, v3)
 	}
-	v1, _ = ds2.Update(nil, e1)
-	v2, _ = ds2.Update(nil, e2)
-	v3, _ = ds2.Update(nil, e3)
+	v1, _ = ds2.Update(e1)
+	v2, _ = ds2.Update(e2)
+	v3, _ = ds2.Update(e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from concurrent data store")
 	}
@@ -227,9 +227,9 @@ func TestCppWrapperCanBeUpdatedAndLookedUp(t *testing.T) {
 	e1.Index = initialApplied + 1
 	e2.Index = initialApplied + 2
 	e3.Index = initialApplied + 3
-	v1, _ = ds3.Update(nil, e1)
-	v2, _ = ds3.Update(nil, e2)
-	v3, _ = ds3.Update(nil, e3)
+	v1, _ = ds3.Update(e1)
+	v2, _ = ds3.Update(e2)
+	v3, _ = ds3.Update(e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result from on-disk data store")
 	}
@@ -324,8 +324,8 @@ func TestCppWrapperCanUseProtobuf(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	e := pb.Entry{Index: 1, Cmd: data}
-	if _, err := ds.Update(nil, e); err != nil {
+	e := sm.Entry{Index: 1, Cmd: data}
+	if _, err := ds.Update(e); err != nil {
 		t.Fatalf("%v", err)
 	}
 }
@@ -342,12 +342,12 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds.(*RegularStateMachineWrapper).destroy()
-	e1 := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
-	e2 := pb.Entry{Index: 2, Cmd: []byte("test-data-2")}
-	e3 := pb.Entry{Index: 3, Cmd: []byte("test-data-3")}
-	v1, _ := ds.Update(nil, e1)
-	v2, _ := ds.Update(nil, e2)
-	v3, _ := ds.Update(nil, e3)
+	e1 := sm.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	e2 := sm.Entry{Index: 2, Cmd: []byte("test-data-2")}
+	e3 := sm.Entry{Index: 3, Cmd: []byte("test-data-3")}
+	v1, _ := ds.Update(e1)
+	v2, _ := ds.Update(e2)
+	v3, _ := ds.Update(e3)
 	if v2.Value != v1.Value+1 || v3.Value != v2.Value+1 {
 		t.Errorf("Unexpected update result")
 	}
@@ -410,8 +410,8 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		pb.RegularStateMachine, nil)
 	defer ds1.(*RegularStateMachineWrapper).destroy()
 
-	entry := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
-	count, err := ds1.Update(nil, entry)
+	entry := sm.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(entry)
 	if err != nil {
 		t.Fatalf("update failed %v", err)
 	}
@@ -483,8 +483,8 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		pb.ConcurrentStateMachine, nil)
 	defer ds1.(*ConcurrentStateMachineWrapper).destroy()
 
-	entry := pb.Entry{Index: 1, Cmd: []byte("test-data-1")}
-	count, err := ds1.Update(nil, entry)
+	entry := sm.Entry{Index: 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(entry)
 	if err != nil {
 		t.Fatalf("update failed %v", err)
 	}
@@ -602,13 +602,13 @@ func TestUpdateAnUnopenedOnDiskSMWillPanic(t *testing.T) {
 		"CreateOnDiskStateMachine",
 		pb.OnDiskStateMachine, nil)
 	defer ds.(*OnDiskStateMachineWrapper).destroy()
-	entry := pb.Entry{Index: applied + 1, Cmd: []byte("test-data-1")}
+	entry := sm.Entry{Index: applied + 1, Cmd: []byte("test-data-1")}
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("no panic")
 		}
 	}()
-	if _, err := ds.Update(nil, entry); err != nil {
+	if _, err := ds.Update(entry); err != nil {
 		t.Fatalf("update failed %v", err)
 	}
 }
@@ -667,8 +667,8 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open ds1 %v", err)
 	}
-	entry := pb.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
-	count, err := ds1.Update(nil, entry)
+	entry := sm.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(entry)
 	if err != nil {
 		t.Fatalf("update failed %v", err)
 	}
@@ -824,8 +824,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open ds1 %v", err)
 	}
-	entry := pb.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
-	count, err := ds1.Update(nil, entry)
+	entry := sm.Entry{Index: initialApplied + 1, Cmd: []byte("test-data-1")}
+	count, err := ds1.Update(entry)
 	if err != nil {
 		t.Fatalf("update failed %v", err)
 	}

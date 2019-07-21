@@ -126,8 +126,8 @@ func newNode(raftAddress string,
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SSRequest, 1)
-	pp := newPendingProposal(requestStatePool,
-		proposals, config.ClusterID, config.NodeID, raftAddress, tickMillisecond)
+	pp := newPendingProposal(config,
+		requestStatePool, proposals, raftAddress, tickMillisecond)
 	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
 	pcc := newPendingConfigChange(confChangeC, tickMillisecond)
 	ps := newPendingSnapshot(snapshotC, tickMillisecond)
@@ -879,12 +879,12 @@ func (n *node) processDroppedReadIndexes(ud pb.Update) {
 
 func (n *node) processDroppedEntries(ud pb.Update) {
 	for _, e := range ud.DroppedEntries {
-		if e.Type == pb.ApplicationEntry {
+		if e.Type == pb.ApplicationEntry || e.Type == pb.EncodedEntry {
 			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
 		} else {
-			panic("unknown dropped entry type")
+			plog.Panicf("unknown dropped entry type %s", e.Type)
 		}
 	}
 }

@@ -317,7 +317,7 @@ func createSnapshotCompressedTestNodeHost(addr string,
 }
 
 func createSingleNodeTestNodeHost(addr string,
-	datadir string, slowSave bool) (*NodeHost, *PST, error) {
+	datadir string, slowSave bool, compress bool) (*NodeHost, *PST, error) {
 	// config for raft
 	rc := config.Config{
 		NodeID:             uint64(1),
@@ -327,6 +327,9 @@ func createSingleNodeTestNodeHost(addr string,
 		CheckQuorum:        true,
 		SnapshotEntries:    10,
 		CompactionOverhead: 5,
+	}
+	if compress {
+		rc.EntryCompressionType = config.Snappy
 	}
 	peers := make(map[uint64]string)
 	peers[1] = addr
@@ -420,6 +423,7 @@ func createFakeDiskTestNodeHost(addr string,
 	}
 	if compressed {
 		rc.SnapshotCompressionType = config.Snappy
+		rc.EntryCompressionType = config.Snappy
 	}
 	peers := make(map[uint64]string)
 	peers[1] = addr
@@ -814,7 +818,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 func TestSnapshotCanBeStopped(t *testing.T) {
 	tf := func() {
 		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-			singleNodeHostTestDir, true)
+			singleNodeHostTestDir, true, false)
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
@@ -833,7 +837,7 @@ func TestSnapshotCanBeStopped(t *testing.T) {
 func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	tf := func() {
 		nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-			singleNodeHostTestDir, false)
+			singleNodeHostTestDir, false, false)
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
@@ -853,7 +857,7 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 		}
 		nh.Stop()
 		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-			singleNodeHostTestDir, false)
+			singleNodeHostTestDir, false, false)
 		if err != nil {
 			t.Fatalf("failed to restart nodehost %v", err)
 		}
@@ -1082,7 +1086,7 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 
 func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName string) {
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
+		singleNodeHostTestDir, false, false)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
@@ -1098,7 +1102,7 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 	}
 	nh.Stop()
 	nh, _, err = createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
+		singleNodeHostTestDir, false, false)
 	defer nh.Stop()
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
@@ -1119,7 +1123,8 @@ func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
 	testZombieSnapshotDirWillBeDeletedDuringAddCluster(t, "snapshot-AB-10.generating")
 }
 
-func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
+func runSingleNodeHostTest(t *testing.T,
+	tf func(t *testing.T, nh *NodeHost), compressed bool) {
 	osv := delaySampleRatio
 	defer func() {
 		delaySampleRatio = osv
@@ -1132,7 +1137,7 @@ func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false)
+		singleNodeHostTestDir, false, compressed)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
@@ -1140,6 +1145,14 @@ func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer nh.Stop()
 	tf(t, nh)
+}
+
+func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
+	runSingleNodeHostTest(t, tf, false)
+}
+
+func singleNodeHostCompressionTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
+	runSingleNodeHostTest(t, tf, true)
 }
 
 func testNodeHostReadIndex(t *testing.T) {
@@ -1209,6 +1222,38 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		}
 	}
 	singleNodeHostTest(t, tf)
+}
+
+func TestEntryCompression(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		cs := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, err := nh.SyncPropose(ctx, cs, make([]byte, 1024))
+		if err != nil {
+			t.Errorf("make proposal failed %v", err)
+		}
+		logdb := nh.logdb
+		ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 1, 100, math.MaxUint64)
+		if err != nil {
+			t.Errorf("failed to get entries %v", err)
+		}
+		hasEncodedEntry := false
+		for _, e := range ents {
+			if e.Type == pb.EncodedEntry {
+				hasEncodedEntry = true
+				payload := rsm.GetEntryPayload(e)
+				plog.Infof("compressed size: %d, original size: %d", len(e.Cmd), len(payload))
+				if !bytes.Equal(payload, make([]byte, 1024)) {
+					t.Errorf("payload changed")
+				}
+			}
+		}
+		if !hasEncodedEntry {
+			t.Errorf("failed to locate any encoded entry")
+		}
+	}
+	singleNodeHostCompressionTest(t, tf)
 }
 
 func TestSyncRequestDeleteNode(t *testing.T) {
@@ -2139,7 +2184,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 	tf := func() {
 		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-			singleNodeHostTestDir, false)
+			singleNodeHostTestDir, false, false)
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
@@ -3482,7 +3527,7 @@ func TestV2DataCanBeHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	v2dataDir := filepath.Join(targetDir, topDirName)
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		v2dataDir, false)
+		v2dataDir, false, false)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}

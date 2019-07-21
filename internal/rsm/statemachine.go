@@ -31,10 +31,10 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
-	"github.com/lni/goutils/logutil"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/logutil"
 )
 
 var (
@@ -893,7 +893,11 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	skipped := 0
 	for _, ent := range input {
 		if !s.entryInInitDiskSM(ent.Index) {
-			ents = append(ents, sm.Entry{Index: ent.Index, Cmd: ent.Cmd})
+			e := sm.Entry{
+				Index: ent.Index,
+				Cmd:   getEntryPayload(ent),
+			}
+			ents = append(ents, e)
 		} else {
 			skipped++
 		}
@@ -987,26 +991,34 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 			return sm.Result{}, false, true, nil
 		}
 		s.sessions.UpdateRespondedTo(session, ent.RespondedTo)
-		result, responded, updateRequired := s.sessions.UpdateRequired(session,
-			ent.SeriesID)
+		v, responded, toUpdate := s.sessions.UpdateRequired(session, ent.SeriesID)
 		if responded {
 			// should ignore. client is expected to timeout
 			return sm.Result{}, true, false, nil
 		}
-		if !updateRequired {
+		if !toUpdate {
 			// server responded, client never confirmed
 			// return the result again but not update the sm again
 			// this implements the no-more-than-once update of the SM
-			return result, false, false, nil
+			return v, false, false, nil
 		}
 	}
 	if !ent.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
+	if session != nil {
+		if _, ok := session.getResponse(RaftSeriesID(ent.SeriesID)); ok {
+			panic("already has response in session")
+		}
+	}
 	s.updateOnDiskIndex(ent.Index, ent.Index)
-	result, err := s.sm.Update(session, ent)
+	cmd := getEntryPayload(ent)
+	result, err := s.sm.Update(sm.Entry{Index: ent.Index, Cmd: cmd})
 	if err != nil {
 		return sm.Result{}, false, false, err
+	}
+	if session != nil {
+		session.addResponse(RaftSeriesID(ent.SeriesID), result)
 	}
 	return result, false, false, nil
 }

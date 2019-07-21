@@ -87,16 +87,18 @@ func (s *ConcurrentKVTest) Lookup(key interface{}) (interface{}, error) {
 
 // Update updates the object using the specified committed raft entry.
 func (s *ConcurrentKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
-	dataKv := &kvpb.PBKV{}
-	err := proto.Unmarshal(ents[0].Cmd, dataKv)
-	if err != nil {
-		panic(err)
+	for i := 0; i < len(ents); i++ {
+		dataKv := &kvpb.PBKV{}
+		err := proto.Unmarshal(ents[i].Cmd, dataKv)
+		if err != nil {
+			panic(err)
+		}
+		key := dataKv.GetKey()
+		val := dataKv.GetVal()
+		kvdata := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
+		kvdata.kvs.Store(key, val)
+		ents[i].Result = sm.Result{Value: uint64(len(ents[i].Cmd))}
 	}
-	key := dataKv.GetKey()
-	val := dataKv.GetVal()
-	kvdata := (*kvdata)(atomic.LoadPointer(&(s.kvdata)))
-	kvdata.kvs.Store(key, val)
-	ents[0].Result = sm.Result{Value: uint64(len(ents[0].Cmd))}
 	return ents, nil
 }
 

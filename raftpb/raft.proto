@@ -55,6 +55,7 @@ enum MessageType {
 enum EntryType {
 	ApplicationEntry  = 0;
 	ConfigChangeEntry = 1;
+  EncodedEntry = 2;
 }
 
 enum ConfigChangeType {

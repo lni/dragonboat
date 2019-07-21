@@ -103,7 +103,8 @@ func benchmarkProposeN(b *testing.B, sz int) {
 	}
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
-	pp := newPendingProposal(p, q, 1, 1, "localhost:9090", 200)
+	cfg := config.Config{ClusterID: 1, NodeID: 1}
+	pp := newPendingProposal(cfg, p, q, "localhost:9090", 200)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -146,7 +147,8 @@ func BenchmarkPendingProposalNextKey(b *testing.B) {
 		return obj
 	}
 	q := newEntryQueue(2048, 0)
-	pp := newPendingProposal(p, q, 1, 1, "localhost:9090", 200)
+	cfg := config.Config{ClusterID: 1, NodeID: 1}
+	pp := newPendingProposal(cfg, p, q, "localhost:9090", 200)
 	b.RunParallel(func(pb *testing.PB) {
 		clientID := rand.Uint64()
 		for pb.Next() {
@@ -597,7 +599,9 @@ func BenchmarkSnapshotChunkWriter(b *testing.B) {
 	b.SetBytes(sz)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cw.Write(data)
+		if _, err := cw.Write(data); err != nil {
+			b.Fatalf("failed to write %v", err)
+		}
 	}
 }
 
@@ -613,6 +617,8 @@ func BenchmarkSnappyCompressedSnapshotChunkWriter(b *testing.B) {
 	b.SetBytes(sz)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			b.Fatalf("failed to write %v", err)
+		}
 	}
 }

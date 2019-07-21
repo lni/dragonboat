@@ -137,16 +137,19 @@ type EntryType int32
 const (
 	ApplicationEntry  EntryType = 0
 	ConfigChangeEntry EntryType = 1
+	EncodedEntry      EntryType = 2
 )
 
 var EntryType_name = map[int32]string{
 	0: "ApplicationEntry",
 	1: "ConfigChangeEntry",
+	2: "EncodedEntry",
 }
 
 var EntryType_value = map[string]int32{
 	"ApplicationEntry":  0,
 	"ConfigChangeEntry": 1,
+	"EncodedEntry":      2,
 }
 
 func (x EntryType) Enum() *EntryType {

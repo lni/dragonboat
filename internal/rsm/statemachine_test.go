@@ -31,10 +31,10 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
-	"github.com/lni/goutils/dio"
-	"github.com/lni/goutils/leaktest"
+	"github.com/lni/dragonboat/v3/internal/utils/dio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/leaktest"
 )
 
 const (
@@ -330,6 +330,65 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	if count != 3 {
 		t.Fatalf("not batched as expected, batched update count %d, want 3", count)
 	}
+}
+
+func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
+	defer leaktest.AfterTest(t)()
+	createTestDir()
+	defer removeTestDir()
+	store := tests.NewConcurrentKVTest(1, 1)
+	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter()
+	tsm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	data1 := getTestKVData()
+	data2 := getTestKVData2()
+	encoded1 := GetEncodedPayload(ct, data1, make([]byte, 512))
+	encoded2 := GetEncodedPayload(ct, data2, make([]byte, 512))
+	e1 := pb.Entry{
+		Type:     pb.EncodedEntry,
+		ClientID: 123,
+		SeriesID: 0,
+		Cmd:      encoded1,
+		Index:    236,
+		Term:     1,
+	}
+	e2 := pb.Entry{
+		Type:     pb.EncodedEntry,
+		ClientID: 123,
+		SeriesID: 0,
+		Cmd:      encoded2,
+		Index:    237,
+		Term:     1,
+	}
+	tsm.index = 235
+	entries := []pb.Entry{e1, e2}
+	batch := make([]sm.Entry, 0, 8)
+	if err := tsm.handleBatch(entries, batch); err != nil {
+		t.Fatalf("handle failed %v", err)
+	}
+	if tsm.GetLastApplied() != 237 {
+		t.Errorf("last applied %d, want 236", tsm.GetLastApplied())
+	}
+	v, err := store.Lookup([]byte("test-key"))
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	if string(v.([]byte)) != "test-value" {
+		t.Errorf("v: %s, want test-value", v)
+	}
+	v, err = store.Lookup([]byte("test-key-2"))
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	if string(v.([]byte)) != "test-value-2" {
+		t.Errorf("v: %s, want test-value-2", v)
+	}
+}
+
+func TestHandleBatchedSnappyEncodedEntry(t *testing.T) {
+	testHandleBatchedSnappyEncodedEntry(t, dio.Snappy)
+	testHandleBatchedSnappyEncodedEntry(t, dio.NoCompression)
 }
 
 func TestHandleAllocationCount(t *testing.T) {
@@ -1100,8 +1159,14 @@ func TestHandleEmptyEvent(t *testing.T) {
 }
 
 func getTestKVData() []byte {
-	k := "test-key"
-	d := "test-value"
+	return genTestKVData("test-key", "test-value")
+}
+
+func getTestKVData2() []byte {
+	return genTestKVData("test-key-2", "test-value-2")
+}
+
+func genTestKVData(k, d string) []byte {
 	u := kvpb.PBKV{
 		Key: k,
 		Val: d,
@@ -1111,6 +1176,48 @@ func getTestKVData() []byte {
 		panic(err)
 	}
 	return data
+}
+
+func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		data := getTestKVData()
+		encoded := GetEncodedPayload(ct, data, make([]byte, 512))
+		e1 := pb.Entry{
+			Type:     pb.EncodedEntry,
+			ClientID: 123,
+			SeriesID: 0,
+			Cmd:      encoded,
+			Index:    236,
+			Term:     1,
+		}
+		commit := Task{
+			Entries: []pb.Entry{e1},
+		}
+		sm.index = 235
+		sm.taskQ.Add(commit)
+		// two commits to handle
+		batch := make([]Task, 0, 8)
+		if _, err := sm.Handle(batch, nil); err != nil {
+			t.Fatalf("handle failed %v", err)
+		}
+		if sm.GetLastApplied() != 236 {
+			t.Errorf("last applied %d, want 236", sm.GetLastApplied())
+		}
+		v, ok := store.(*tests.KVTest).KVStore["test-key"]
+		if !ok {
+			t.Errorf("value not set")
+		}
+		if v != "test-value" {
+			t.Errorf("v: %s, want test-value", v)
+		}
+	}
+	runSMTest2(t, tf)
+}
+
+func TestHandleSnappyEncodedEntry(t *testing.T) {
+	testHandleSnappyEncodedEntry(t, dio.Snappy)
+	testHandleSnappyEncodedEntry(t, dio.NoCompression)
 }
 
 func TestHandleUpate(t *testing.T) {
@@ -1474,10 +1581,11 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		}
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
-		// check normal update is accepted and handleped
+		// check normal update is accepted and handled
 		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
+		plog.Infof("Handle returned")
 		if sm.GetLastApplied() != e.Index {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
@@ -1876,7 +1984,7 @@ type testManagedStateMachine struct {
 }
 
 func (t *testManagedStateMachine) Open() (uint64, error) { return 10, nil }
-func (t *testManagedStateMachine) Update(*Session, pb.Entry) (sm.Result, error) {
+func (t *testManagedStateMachine) Update(sm.Entry) (sm.Result, error) {
 	return sm.Result{}, nil
 }
 func (t *testManagedStateMachine) Lookup(interface{}) (interface{}, error) { return nil, nil }

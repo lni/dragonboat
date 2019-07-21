@@ -27,11 +27,12 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/v3/client"
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/goutils/random"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/random"
 )
 
 const (
@@ -313,6 +314,7 @@ type proposalShard struct {
 	proposals      *entryQueue
 	pending        map[uint64]*RequestState
 	pool           *sync.Pool
+	cfg            config.Config
 	stopped        bool
 	expireNotified uint64
 	logicalClock
@@ -842,8 +844,8 @@ func getRandomGenerator(clusterID uint64,
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}
 }
 
-func newPendingProposal(pool *sync.Pool,
-	proposals *entryQueue, clusterID uint64, nodeID uint64, raftAddress string,
+func newPendingProposal(cfg config.Config,
+	pool *sync.Pool, proposals *entryQueue, raftAddress string,
 	tickInMillisecond uint64) *pendingProposal {
 	ps := uint64(16)
 	p := &pendingProposal{
@@ -852,9 +854,9 @@ func newPendingProposal(pool *sync.Pool,
 		ps:     ps,
 	}
 	for i := uint64(0); i < ps; i++ {
-		p.shards[i] = newPendingProposalShard(pool,
-			proposals, tickInMillisecond)
-		p.keyg[i] = getRandomGenerator(clusterID, nodeID, raftAddress, i)
+		p.shards[i] = newPendingProposalShard(cfg,
+			pool, proposals, tickInMillisecond)
+		p.keyg[i] = getRandomGenerator(cfg.ClusterID, cfg.NodeID, raftAddress, i)
 	}
 	return p
 }
@@ -902,7 +904,7 @@ func (p *pendingProposal) gc() {
 	}
 }
 
-func newPendingProposalShard(pool *sync.Pool,
+func newPendingProposalShard(cfg config.Config, pool *sync.Pool,
 	proposals *entryQueue, tickInMillisecond uint64) *proposalShard {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
@@ -917,6 +919,7 @@ func newPendingProposalShard(pool *sync.Pool,
 		pending:      make(map[uint64]*RequestState),
 		logicalClock: lcu,
 		pool:         pool,
+		cfg:          cfg,
 	}
 	return p
 }
@@ -928,12 +931,20 @@ func (p *proposalShard) propose(session *client.Session,
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
+	if rsm.GetMaxBlockSize(p.cfg.EntryCompressionType) < uint64(len(cmd)) {
+		return nil, ErrPayloadTooBig
+	}
 	entry := pb.Entry{
 		Key:         key,
 		ClientID:    session.ClientID,
 		SeriesID:    session.SeriesID,
 		RespondedTo: session.RespondedTo,
-		Cmd:         prepareProposalPayload(cmd),
+	}
+	if len(cmd) == 0 {
+		entry.Type = pb.ApplicationEntry
+	} else {
+		entry.Type = pb.EncodedEntry
+		entry.Cmd = prepareProposalPayload(p.cfg.EntryCompressionType, cmd)
 	}
 	req := p.pool.Get().(*RequestState)
 	req.clientID = session.ClientID
@@ -1067,8 +1078,7 @@ func (p *proposalShard) gcAt(now uint64) {
 	}
 }
 
-func prepareProposalPayload(cmd []byte) []byte {
-	dst := make([]byte, len(cmd))
-	copy(dst, cmd)
-	return dst
+func prepareProposalPayload(ct config.CompressionType, cmd []byte) []byte {
+	dct := rsm.ToDioCompressionType(ct)
+	return rsm.GetEncodedPayload(dct, cmd, nil)
 }
