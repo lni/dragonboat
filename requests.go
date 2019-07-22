@@ -970,7 +970,8 @@ func (p *proposalShard) propose(session *client.Session,
 
 	added, stopped := p.proposals.add(entry)
 	if stopped {
-		plog.Warningf("dropping proposals, cluster stopped")
+		plog.Warningf("%s dropped proposal, cluster stopped",
+			dn(p.cfg.ClusterID, p.cfg.NodeID))
 		p.mu.Lock()
 		delete(p.pending, entry.Key)
 		p.mu.Unlock()
@@ -980,7 +981,8 @@ func (p *proposalShard) propose(session *client.Session,
 		p.mu.Lock()
 		delete(p.pending, entry.Key)
 		p.mu.Unlock()
-		plog.Warningf("dropping proposals, overloaded")
+		plog.Debugf("%s dropped proposal, overloaded",
+			dn(p.cfg.ClusterID, p.cfg.NodeID))
 		return nil, ErrSystemBusy
 	}
 	return req, nil

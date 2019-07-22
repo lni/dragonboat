@@ -258,6 +258,8 @@ type NodeHost struct {
 	transportLatency *sample
 }
 
+var dn = logutil.DescribeNode
+
 // NewNodeHost creates a new NodeHost instance. The returned NodeHost instance
 // is configured using the specified NodeHostConfig instance. In a typical
 // application, it is expected to have one NodeHost on each server.
@@ -302,7 +304,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
-	plog.Infof("LogDB created")
 	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
@@ -1153,8 +1154,7 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
-	plog.Infof("going to remove data that belong to %s",
-		logutil.DescribeNode(clusterID, nodeID))
+	plog.Infof("%s called RemoveData", dn(clusterID, nodeID))
 	return nh.removeData(clusterID, nodeID)
 }
 
@@ -1371,20 +1371,18 @@ func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
 		if err != nil {
 			return nil, false, err
 		}
-		plog.Infof("node %s bootstrapped, %v",
-			logutil.DescribeNode(config.ClusterID, config.NodeID), members)
+		plog.Infof("%s bootstrapped, members: %v",
+			dn(config.ClusterID, config.NodeID), members)
 		return members, !join, nil
 	} else if err != nil {
 		return nil, false, err
 	}
 	if !binfo.Validate(nodes, join, smType) {
 		plog.Errorf("bootstrap validation failed, %s, %v, %t, %v, %t",
-			logutil.DescribeNode(config.ClusterID, config.NodeID),
+			dn(config.ClusterID, config.NodeID),
 			binfo.Addresses, binfo.Join, nodes, join)
 		return nil, false, ErrInvalidClusterSettings
 	}
-	plog.Infof("bootstrap for %s going to return %v",
-		logutil.DescribeNode(config.ClusterID, config.NodeID), binfo.Addresses)
 	return binfo.Addresses, !binfo.Join, nil
 }
 
@@ -1396,8 +1394,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
-	plog.Infof("startCluster called for %s, join %t, nodes %v",
-		logutil.DescribeNode(clusterID, nodeID), join, nodes)
+	plog.Infof("%s called startCluster, join %t, nodes %v",
+		dn(clusterID, nodeID), join, nodes)
 	nh.clusterMu.Lock()
 	defer nh.clusterMu.Unlock()
 	if nh.clusterMu.stopped {
@@ -1408,7 +1406,7 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	}
 	if join && len(nodes) > 0 {
 		plog.Errorf("trying to join %s with initial member list %v",
-			logutil.DescribeNode(clusterID, nodeID), nodes)
+			dn(clusterID, nodeID), nodes)
 		return ErrInvalidClusterSettings
 	}
 	addrs, members, err := nh.bootstrapCluster(nodes, join, config, smType)
@@ -1418,14 +1416,12 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	if err != nil {
 		panic(err)
 	}
-	plog.Infof("bootstrap for %s returned address list %v",
-		logutil.DescribeNode(clusterID, nodeID), addrs)
+	plog.Infof("%s reported bootstrap info %v", dn(clusterID, nodeID), addrs)
 	queue := server.NewMessageQueue(receiveQueueLen,
 		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
 	for k, v := range addrs {
 		if k != nodeID {
-			plog.Infof("AddNode called with node %s, addr %s",
-				logutil.DescribeNode(clusterID, k), v)
+			plog.Infof("%s called AddNode, addr %s", dn(clusterID, k), v)
 			nh.nodes.AddNode(clusterID, k, v)
 		}
 	}
@@ -1653,8 +1649,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 		nh.checkTransportLatency(msg.ClusterId, msg.To, msg.From, msg.Term)
 	} else {
 		plog.Infof("%s is sending snapshot to %s, index %d, size %d",
-			logutil.DescribeNode(msg.ClusterId, msg.From),
-			logutil.DescribeNode(msg.ClusterId, msg.To),
+			dn(msg.ClusterId, msg.From), dn(msg.ClusterId, msg.To),
 			msg.Snapshot.Index, msg.Snapshot.FileSize)
 		if n, ok := nh.getCluster(msg.ClusterId); ok {
 			if !n.OnDiskStateMachine() {
@@ -1748,8 +1743,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 		added, stopped := q.Add(m)
 		if added {
 			nh.execEngine.setNodeReady(clusterID)
-			plog.Infof("snapshot status sent to %s",
-				logutil.DescribeNode(clusterID, nodeID))
+			plog.Infof("%s just got snapshot status", dn(clusterID, nodeID))
 			return true
 		}
 		if stopped {
@@ -1764,8 +1758,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 			return false
 		}
 	}
-	plog.Warningf("failed to send snapshot status to %s",
-		logutil.DescribeNode(clusterID, nodeID))
+	plog.Warningf("failed to send snapshot status to %s", dn(clusterID, nodeID))
 	return true
 }
 
@@ -1987,9 +1980,8 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 		ClusterId: clusterID,
 		Type:      pb.SnapshotReceived,
 	}
-	plog.Infof("%s is sending MsgSnapshotReceived to %d",
-		logutil.DescribeNode(clusterID, nodeID), from)
 	h.nh.sendMessage(msg)
+	plog.Infof("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
 }
 
 func (h *messageHandler) HandlePingMessage(msg pb.Message) {

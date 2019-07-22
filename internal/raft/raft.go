@@ -188,6 +188,8 @@ func getLocalStatus(r *raft) Status {
 // * simplified flow control
 //
 
+var dn = logutil.DescribeNode
+
 type raft struct {
 	applied                   uint64
 	nodeID                    uint64
@@ -247,8 +249,8 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 		readIndex:        newReadIndex(),
 		rl:               rl,
 	}
-	plog.Infof("raft log rate limit enabled: %t, %d",
-		r.rl.Enabled(), c.MaxInMemLogSize)
+	plog.Infof("%s raft log rate limit enabled: %t, %d",
+		dn(r.clusterID, r.nodeID), r.rl.Enabled(), c.MaxInMemLogSize)
 	st, members := logdb.NodeState()
 	for p := range members.Addresses {
 		r.remotes[p] = &remote{
@@ -301,12 +303,12 @@ func (r *raft) describe() string {
 	li := r.log.lastIndex()
 	t, err := r.log.term(li)
 	if err != nil && err != ErrCompacted {
-		panic(err)
+		plog.Panicf("%s failed to get term, %v", dn(r.clusterID, r.nodeID), err)
 	}
 	fmtstr := "[f-idx:%d,l-idx:%d,logterm:%d,commit:%d,applied:%d] %s term %d"
 	return fmt.Sprintf(fmtstr,
 		r.log.firstIndex(), r.log.lastIndex(), t, r.log.committed,
-		r.log.processed, logutil.DescribeNode(r.clusterID, r.nodeID), r.term)
+		r.log.processed, dn(r.clusterID, r.nodeID), r.term)
 }
 
 func (r *raft) isObserver() bool {
@@ -570,10 +572,11 @@ func (r *raft) setRandomizedElectionTimeout() {
 
 func (r *raft) finalizeMessageTerm(m pb.Message) pb.Message {
 	if m.Term == 0 && m.Type == pb.RequestVote {
-		plog.Panicf("sending RequestVote with 0 term")
+		plog.Panicf("%s sending RequestVote with 0 term", r.describe())
 	}
 	if m.Term > 0 && m.Type != pb.RequestVote {
-		plog.Panicf("term unexpectedly set for message type %d", m.Type)
+		plog.Panicf("%s term unexpectedly set for message type %d",
+			r.describe(), m.Type)
 	}
 	if !isRequestMessage(m.Type) {
 		m.Term = r.term
@@ -616,7 +619,7 @@ func (r *raft) makeInstallSnapshotMessage(to uint64, m *pb.Message) uint64 {
 	m.Type = pb.InstallSnapshot
 	snapshot := r.log.snapshot()
 	if pb.IsEmptySnapshot(snapshot) {
-		panic("got an empty snapshot")
+		plog.Panicf("%s got an empty snapshot", r.describe())
 	}
 	m.Snapshot = snapshot
 	return snapshot.Index
@@ -633,9 +636,11 @@ func (r *raft) makeReplicateMessage(to uint64,
 		return pb.Message{}, err
 	}
 	if len(entries) > 0 {
-		if entries[len(entries)-1].Index != next-1+uint64(len(entries)) {
-			plog.Panicf("expected last index in Replicate %d, got %d",
-				next-1+uint64(len(entries)), entries[len(entries)-1].Index)
+		lastIndex := entries[len(entries)-1].Index
+		expected := next - 1 + uint64(len(entries))
+		if lastIndex != expected {
+			plog.Panicf("%s expected last index in Replicate %d, got %d",
+				r.describe(), expected, lastIndex)
 		}
 	}
 	return pb.Message{
@@ -655,7 +660,7 @@ func (r *raft) sendReplicateMessage(to uint64) {
 	} else {
 		rp, ok = r.observers[to]
 		if !ok {
-			panic("failed to get the remote instance")
+			plog.Panicf("%s failed to get the remote instance", r.describe())
 		}
 	}
 	if rp.isPaused() {
@@ -665,8 +670,8 @@ func (r *raft) sendReplicateMessage(to uint64) {
 	if err != nil {
 		// log not available due to compaction, send snapshot
 		if !rp.isActive() {
-			plog.Warningf("node %s is not active, sending snapshot is skipped",
-				NodeID(to))
+			plog.Warningf("%s, %s is not active, sending snapshot is skipped",
+				r.describe(), NodeID(to))
 			return
 		}
 		index := r.makeInstallSnapshotMessage(to, &m)
@@ -693,7 +698,7 @@ func (r *raft) broadcastReplicateMessage() {
 	}
 	for nid := range r.observers {
 		if nid == r.nodeID {
-			panic("observer is trying to broadcast Replicate msg")
+			plog.Panicf("%s observer is broadcasting Replicate msg", r.describe())
 		}
 		r.sendReplicateMessage(nid)
 	}
@@ -887,10 +892,9 @@ func (r *raft) reset(term uint64) {
 func (r *raft) preLeaderPromotionHandleConfigChange() {
 	n := r.getPendingConfigChangeCount()
 	if n > 1 {
-		panic("multiple uncommitted config change entries")
+		plog.Panicf("%s multiple uncommitted config change entries", r.describe())
 	} else if n == 1 {
-		plog.Infof("%s is becoming a leader with pending Config Change",
-			r.describe())
+		plog.Infof("%s becoming leader with pending ConfigChange", r.describe())
 		r.setPendingConfigChange()
 	}
 }
@@ -1116,7 +1120,7 @@ func (r *raft) getPendingConfigChangeCount() int {
 	for {
 		ents, err := r.log.entries(idx, maxEntriesToApplySize)
 		if err != nil {
-			plog.Panicf("failed to get entries %v", err)
+			plog.Panicf("%s failed to get entries %v", r.describe(), err)
 		}
 		if len(ents) == 0 {
 			return count
@@ -1149,12 +1153,10 @@ func (r *raft) handleInstallSnapshotMessage(m pb.Message) {
 		Type: pb.ReplicateResp,
 	}
 	if r.restore(m.Snapshot) {
-		plog.Infof("%s restored snapshot index %d term %d",
-			r.describe(), index, term)
+		plog.Infof("%s restored snapshot %d term %d", r.describe(), index, term)
 		resp.LogIndex = r.log.lastIndex()
 	} else {
-		plog.Infof("%s rejected snapshot index %d term %d",
-			r.describe(), index, term)
+		plog.Infof("%s rejected snapshot %d term %d", r.describe(), index, term)
 		resp.LogIndex = r.log.committed
 		if r.events != nil {
 			info := server.SnapshotInfo{
@@ -1290,7 +1292,7 @@ func (r *raft) hasConfigChangeToApply() bool {
 	// this is a hack to make it easier to port etcd raft tests
 	// check those *_etcd_test.go for details
 	if r.hasNotAppliedConfigChange != nil {
-		plog.Infof("using test-only hasConfigChangeToApply()")
+		plog.Warningf("using test-only hasConfigChangeToApply()")
 		return r.hasNotAppliedConfigChange()
 	}
 	// TODO:
@@ -1336,7 +1338,7 @@ func (r *raft) handleNodeElection(m pb.Message) {
 		plog.Infof("%s will campaign at term %d", r.describe(), r.term)
 		r.campaign()
 	} else {
-		plog.Infof("leader node %s ignored Election", r.describe())
+		plog.Infof("%s is leader, ignored Election", r.describe())
 	}
 }
 
@@ -1406,8 +1408,7 @@ func (r *raft) handleLeaderHeartbeat(m pb.Message) {
 func (r *raft) handleLeaderCheckQuorum(m pb.Message) {
 	r.mustBeLeader()
 	if !r.leaderHasQuorum() {
-		plog.Warningf("%s stepped down, no longer has quorum",
-			r.describe())
+		plog.Warningf("%s stepped down, no longer has quorum", r.describe())
 		r.becomeFollower(r.term, NoLeader)
 	}
 }
@@ -1415,15 +1416,14 @@ func (r *raft) handleLeaderCheckQuorum(m pb.Message) {
 func (r *raft) handleLeaderPropose(m pb.Message) {
 	r.mustBeLeader()
 	if r.leaderTransfering() {
-		plog.Warningf("dropping a proposal, leader transfer is ongoing")
+		plog.Warningf("%s dropped a proposal, leader transfering", r.describe())
 		r.reportDroppedProposal(m)
 		return
 	}
 	for i, e := range m.Entries {
 		if e.Type == pb.ConfigChangeEntry {
 			if r.hasPendingConfigChange() {
-				plog.Warningf("%s dropped a config change, one is pending",
-					r.describe())
+				plog.Warningf("%s dropped extra config change", r.describe())
 				r.reportDroppedConfigChange(m.Entries[i])
 				m.Entries[i] = pb.Entry{Type: pb.ApplicationEntry}
 			}
@@ -1441,7 +1441,7 @@ func (r *raft) hasCommittedEntryAtCurrentTerm() bool {
 	}
 	lastCommittedTerm, err := r.log.term(r.log.committed)
 	if err != nil && err != ErrCompacted {
-		panic(err)
+		plog.Panicf("%s failed to get term, %v", r.describe(), err)
 	}
 	return lastCommittedTerm == r.term
 }
@@ -1470,7 +1470,7 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) {
 			// leader doesn't know the commit value of the cluster
 			// see raft thesis section 6.4, this is the first step of the ReadIndex
 			// protocol.
-			plog.Warningf("ReadIndex request dropped, no entry committed")
+			plog.Warningf("%s dropped ReadIndex, not ready", r.describe())
 			r.reportDroppedReadIndex(m)
 			return
 		}
@@ -1540,10 +1540,9 @@ func (r *raft) handleLeaderHeartbeatResp(m pb.Message, rp *remote) {
 func (r *raft) handleLeaderTransfer(m pb.Message, rp *remote) {
 	r.mustBeLeader()
 	target := m.Hint
-	plog.Infof("handleLeaderTransfer called on cluster %d, target %d",
-		r.clusterID, target)
+	plog.Infof("%s called handleLeaderTransfer, target %d", r.describe(), target)
 	if target == NoNode {
-		panic("leader transfer target not set")
+		plog.Panicf("%s leader transfer target not set", r.describe())
 	}
 	if r.leaderTransfering() {
 		plog.Warningf("LeaderTransfer ignored, leader transfer is ongoing")
@@ -1609,8 +1608,7 @@ func (r *raft) handleLeaderRateLimit(m pb.Message) {
 	if r.rl.Enabled() {
 		r.rl.SetFollowerState(m.From, m.Hint)
 	} else {
-		plog.Warningf("%s dropped a rate limit message as rate limiter not enabled",
-			r.describe())
+		plog.Warningf("%s dropped rate limit msg as rl disabled", r.describe())
 	}
 }
 
@@ -1654,7 +1652,7 @@ func (r *raft) handleObserverReadIndexResp(m pb.Message) {
 
 func (r *raft) handleFollowerPropose(m pb.Message) {
 	if r.leaderID == NoLeader {
-		plog.Warningf("%s dropping proposal as there is no leader", r.describe())
+		plog.Warningf("%s dropped proposal as no leader", r.describe())
 		r.reportDroppedProposal(m)
 		return
 	}
@@ -1693,8 +1691,6 @@ func (r *raft) handleFollowerLeaderTransfer(m pb.Message) {
 		plog.Warningf("%s dropped LeaderTransfer as no leader", r.describe())
 		return
 	}
-	plog.Infof("rerouting LeaderTransfer for %d to %d",
-		r.clusterID, r.leaderID)
 	m.To = r.leaderID
 	r.send(m)
 }
@@ -1718,7 +1714,7 @@ func (r *raft) handleFollowerInstallSnapshot(m pb.Message) {
 func (r *raft) handleFollowerTimeoutNow(m pb.Message) {
 	// the last paragraph, p29 of the raft thesis mentions that this is nothing
 	// different from the clock moving forward quickly
-	plog.Infof("TimeoutNow received on %d:%d", r.clusterID, r.nodeID)
+	plog.Infof("%s TimeoutNow received", r.describe())
 	r.electionTick = r.randomizedElectionTimeout
 	r.isLeaderTransferTarget = true
 	r.tick()
@@ -1733,17 +1729,17 @@ func (r *raft) handleFollowerTimeoutNow(m pb.Message) {
 
 func (r *raft) doubleCheckTermMatched(msgTerm uint64) {
 	if msgTerm != 0 && r.term != msgTerm {
-		panic("mismatched term found")
+		plog.Panicf("%s mismatched term found", r.describe())
 	}
 }
 
 func (r *raft) handleCandidatePropose(m pb.Message) {
-	plog.Warningf("%s dropping proposal, no leader", r.describe())
+	plog.Warningf("%s dropped proposal, no leader", r.describe())
 	r.reportDroppedProposal(m)
 }
 
 func (r *raft) handleCandidateReadIndex(m pb.Message) {
-	plog.Warningf("%s dropping read index request, no leader", r.describe())
+	plog.Warningf("%s dropped read index request, no leader", r.describe())
 	r.reportDroppedReadIndex(m)
 	ctx := pb.SystemCtx{
 		Low:  m.Hint,
@@ -1774,12 +1770,10 @@ func (r *raft) handleCandidateHeartbeat(m pb.Message) {
 }
 
 func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
-	_, ok := r.observers[m.From]
-	if ok {
-		plog.Warningf("dropping a RequestVoteResp from observer")
+	if _, ok := r.observers[m.From]; ok {
+		plog.Warningf("dropped a RequestVoteResp from observer")
 		return
 	}
-
 	count := r.handleVoteResp(m.From, m.Reject)
 	plog.Infof("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
@@ -1832,8 +1826,7 @@ func lw(r *raft, f func(m pb.Message, rp *remote)) handlerFunc {
 		} else if nob, ok := r.observers[nm.From]; ok {
 			f(nm, nob)
 		} else {
-			plog.Infof("%s no remote available for %s",
-				r.describe(), NodeID(nm.From))
+			plog.Infof("%s no remote for %s", r.describe(), NodeID(nm.From))
 			return
 		}
 	}

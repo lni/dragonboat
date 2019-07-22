@@ -3144,7 +3144,6 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		os.RemoveAll(singleNodeHostTestDir)
 		plog.Infof("going to create nh using plain logdb with existing data deleted")
 		nh, err = NewNodeHost(nhc)
-		plog.Infof("err2 : %v", err)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
 		}

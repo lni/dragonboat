@@ -291,7 +291,6 @@ func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
 	if !ok {
 		return
 	}
-	plog.Infof("%s called saveSnapshot", node.id())
 	if err := node.saveSnapshot(rec); err != nil {
 		panic(err)
 	} else {
@@ -326,7 +325,6 @@ func (s *execEngine) recoverFromSnapshot(clusterID uint64,
 	if !ok {
 		return
 	}
-	plog.Infof("%s called recoverFromSnapshot", node.id())
 	if index, err := node.recoverFromSnapshot(rec); err != nil {
 		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
 			panic(err)

@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/logutil"
 )
 
 type quiesceManager struct {
@@ -78,7 +77,7 @@ func (q *quiesceManager) recordActivity(msgType pb.MessageType) {
 	if q.quiesced() {
 		q.exitQuiesce()
 		plog.Infof("%s exited from quiesce, msg type %s, current tick %d",
-			logutil.DescribeNode(q.clusterID, q.nodeID), msgType, q.tick)
+			dn(q.clusterID, q.nodeID), msgType, q.tick)
 	}
 }
 
@@ -106,7 +105,7 @@ func (q *quiesceManager) tryEnterQuiesce() {
 	}
 	if !q.quiesced() {
 		plog.Infof("%s going to enter quiesce due to quiesce message",
-			logutil.DescribeNode(q.clusterID, q.nodeID))
+			dn(q.clusterID, q.nodeID))
 		q.enterQuiesce()
 	}
 }
@@ -115,8 +114,7 @@ func (q *quiesceManager) enterQuiesce() {
 	q.quiescedSince = q.tick
 	q.noActivitySince = q.tick
 	q.setNewQuiesceStateFlag()
-	plog.Infof("%s entered quiesce",
-		logutil.DescribeNode(q.clusterID, q.nodeID))
+	plog.Infof("%s entered quiesce", dn(q.clusterID, q.nodeID))
 }
 
 func (q *quiesceManager) exitQuiesce() {

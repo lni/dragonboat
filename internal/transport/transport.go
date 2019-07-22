@@ -84,6 +84,7 @@ var (
 	errBatchSendSkipped = errors.New("raft request batch is skipped")
 	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
 	idleTimeout         = time.Minute
+	dn                  = logutil.DescribeNode
 )
 
 // INodeAddressResolver converts the (cluster id, node id( tuple to network
@@ -405,8 +406,8 @@ func (t *Transport) asyncSend(req pb.Message) bool {
 	from := req.From
 	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
-		plog.Warningf("node %s do not have the address for %s, dropping a message",
-			t.sourceAddress, logutil.DescribeNode(clusterID, toNodeID))
+		plog.Warningf("%s do not have the address for %s, dropping a message",
+			t.sourceAddress, dn(clusterID, toNodeID))
 		return false
 	}
 	// fail fast
@@ -455,7 +456,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
 	if err := func() error {
-		plog.Infof("Nodehost %s is trying to established a connection to %s",
+		plog.Infof("%s is trying to connect to %s",
 			t.sourceAddress, remoteHost)
 		conn, err := t.raftRPC.GetConnection(t.ctx, remoteHost)
 		if err != nil {
@@ -466,9 +467,8 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 		defer conn.Close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
-			plog.Infof("raft RPC stream from %s to %s (%s) established",
-				logutil.DescribeNode(clusterID, from),
-				logutil.DescribeNode(clusterID, toNodeID), remoteHost)
+			plog.Infof("%s, raft RPC stream to %s (%s) established",
+				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
 		}
 		return t.processQueue(clusterID, toNodeID, sq, conn)
 	}(); err != nil {
@@ -502,8 +502,6 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 		}
 		select {
 		case <-t.stopper.ShouldStop():
-			plog.Debugf("stopper stopped, %s",
-				logutil.DescribeNode(clusterID, toNodeID))
 			return nil
 		case <-idleTimer.C:
 			return nil
@@ -539,15 +537,15 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				batch.Requests = requests[:len(requests)-1]
 			}
 			if err := t.sendMessageBatch(conn, batch); err != nil {
-				plog.Warningf("Send batch failed, target node %s (%v), %d",
-					logutil.DescribeNode(clusterID, toNodeID), err, len(batch.Requests))
+				plog.Errorf("Send batch failed, target node %s (%v), %d",
+					dn(clusterID, toNodeID), err, len(batch.Requests))
 				return err
 			}
 			if twoBatch {
 				batch.Requests = []pb.Message{requests[len(requests)-1]}
 				if err := t.sendMessageBatch(conn, batch); err != nil {
-					plog.Warningf("Send batch failed, taret node %s (%v), %d",
-						logutil.DescribeNode(clusterID, toNodeID), err, len(batch.Requests))
+					plog.Errorf("Send batch failed, taret node %s (%v), %d",
+						dn(clusterID, toNodeID), err, len(batch.Requests))
 					return err
 				}
 			}
@@ -626,7 +624,7 @@ func sampleNodeInfoList(l []raftio.NodeInfo) string {
 func nodeInfoListToString(l []raftio.NodeInfo) []string {
 	result := make([]string, 0)
 	for _, rec := range l {
-		s := logutil.DescribeNode(rec.ClusterID, rec.NodeID)
+		s := dn(rec.ClusterID, rec.NodeID)
 		result = append(result, s)
 	}
 	sort.Slice(result, func(i, j int) bool {

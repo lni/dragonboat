@@ -135,7 +135,6 @@ func (s *SimDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 
 // Update ...
 func (s *SimDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
-	fmt.Printf("updated called %v\n", ents)
 	for _, e := range ents {
 		s.applied = e.Index
 		e.Result = sm.Result{Value: e.Index}

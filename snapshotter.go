@@ -29,7 +29,6 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/logutil"
 )
 
 const (
@@ -79,7 +78,7 @@ func newSnapshotter(clusterID uint64,
 }
 
 func (s *snapshotter) id() string {
-	return logutil.DescribeNode(s.clusterID, s.nodeID)
+	return dn(s.clusterID, s.nodeID)
 }
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,

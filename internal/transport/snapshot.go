@@ -43,7 +43,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/logutil"
 )
 
 var (
@@ -54,8 +53,7 @@ var (
 // ASyncSendSnapshot sends raft snapshot message to its target.
 func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 	if !t.asyncSendSnapshot(m) {
-		plog.Debugf("failed to send snapshot to %s",
-			logutil.DescribeNode(m.ClusterId, m.To))
+		plog.Errorf("failed to send snapshot to %s", dn(m.ClusterId, m.To))
 		t.sendSnapshotNotification(m.ClusterId, m.To, true)
 		return false
 	}
@@ -132,7 +130,7 @@ func (t *Transport) createConnection(key raftio.NodeInfo,
 	t.stopper.RunWorker(func() {
 		t.connectAndProcessSnapshot(c, addr)
 		plog.Infof("%s connectAndProcessSnapshot returned",
-			logutil.DescribeNode(key.ClusterID, key.NodeID))
+			dn(key.ClusterID, key.NodeID))
 		shutdown()
 	})
 	return c
@@ -146,8 +144,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 	nodeID := c.nodeID
 	if err := func() error {
 		if err := c.connect(addr); err != nil {
-			plog.Warningf("failed to get snapshot client to %s",
-				logutil.DescribeNode(clusterID, nodeID))
+			plog.Warningf("failed to get snapshot client to %s", dn(clusterID, nodeID))
 			t.sendSnapshotNotification(clusterID, nodeID, true)
 			close(c.failed)
 			t.metrics.snapshotCnnectionFailure()
@@ -157,7 +154,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
 			plog.Infof("snapshot stream to %s (%s) established",
-				logutil.DescribeNode(clusterID, nodeID), addr)
+				dn(clusterID, nodeID), addr)
 		}
 		err := c.process()
 		if err != nil {
@@ -179,20 +176,17 @@ func (t *Transport) sendSnapshotNotification(clusterID uint64,
 		t.metrics.snapshotSendSuccess()
 	}
 	if t.handlerRemoved() {
-		plog.Warningf("handler removed, snapshot notification to %s ignored",
-			logutil.DescribeNode(clusterID, nodeID))
+		plog.Warningf("snapshot notification to %s ignored", dn(clusterID, nodeID))
 		return
 	}
 	handler := t.handler.Load()
 	if handler != nil {
 		h := handler.(IRaftMessageHandler)
 		h.HandleSnapshotStatus(clusterID, nodeID, rejected)
-		plog.Debugf("snapshot notification to %s added, reject value %t",
-			logutil.DescribeNode(clusterID, nodeID), rejected)
-
+		plog.Debugf("snapshot notification to %s added, reject %t",
+			dn(clusterID, nodeID), rejected)
 	} else {
-		plog.Warningf("no handler, snapshot notification to %s ignored",
-			logutil.DescribeNode(clusterID, nodeID))
+		plog.Warningf("snapshot notification to %s ignored", dn(clusterID, nodeID))
 	}
 }
 

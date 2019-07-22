@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/lni/goutils/logutil"
 )
 
 var (
@@ -58,12 +57,10 @@ func (p *snapshotFeedback) pushReady(tick uint64) {
 	notDelivered := make([]snapshotStatus, 0)
 	for _, s := range ready {
 		if !p.pf(s.clusterID, s.nodeID, s.failed) {
-			plog.Debugf("snapshot status to %s not delivered",
-				logutil.DescribeNode(s.clusterID, s.nodeID))
+			plog.Debugf("snapshot status to %s failed", dn(s.clusterID, s.nodeID))
 			notDelivered = append(notDelivered, s)
 		} else {
-			plog.Debugf("snapshot status to %s pushed",
-				logutil.DescribeNode(s.clusterID, s.nodeID))
+			plog.Debugf("snapshot status to %s pushed", dn(s.clusterID, s.nodeID))
 		}
 	}
 	p.addRetry(notDelivered, tick)
@@ -89,8 +86,7 @@ func (p *snapshotFeedback) addStatus(clusterID uint64,
 	nodeID uint64, failed bool, tick uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	plog.Debugf("snapshot status to %s has been added",
-		logutil.DescribeNode(clusterID, nodeID))
+	plog.Debugf("snapshot status to %s added", dn(clusterID, nodeID))
 	s := snapshotStatus{
 		clusterID:   clusterID,
 		nodeID:      nodeID,
@@ -120,8 +116,7 @@ func (p *snapshotFeedback) confirm(clusterID uint64,
 	nodeID uint64, tick uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	plog.Debugf("snapshot status to %s has been confirmed",
-		logutil.DescribeNode(clusterID, nodeID))
+	plog.Debugf("snapshot status to %s confirmed", dn(clusterID, nodeID))
 	cn := raftio.GetNodeInfo(clusterID, nodeID)
 	s := snapshotStatus{
 		clusterID:   clusterID,

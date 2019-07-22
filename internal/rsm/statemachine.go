@@ -226,7 +226,7 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate()
-	plog.Infof("sm.RecoverFromSnapshot called on %s, idx %d, on disk idx %d",
+	plog.Infof("%s called RecoverFromSnapshot, idx %d, on disk idx %d",
 		s.id(), ss.Index, ss.OnDiskIndex)
 	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
 		return idx, err
@@ -253,7 +253,7 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	}
 	snapshot, err := s.snapshotter.GetMostRecentSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
-		plog.Infof("%s no snapshot available during start up", s.id())
+		plog.Infof("%s no snapshot available during node launch", s.id())
 		return pb.Snapshot{}, nil
 	}
 	return snapshot, nil
@@ -316,7 +316,7 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 		}
 		s.recoverFromOnDiskSnapshot(ss, init)
 	} else {
-		plog.Infof("all disk SM %s, %d vs %d, memory SM not restored",
+		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
 			s.id(), index, s.onDiskInitIndex)
 	}
 	s.index = index
@@ -333,12 +333,12 @@ func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
 		return
 	}
 	if ss.OnDiskIndex <= s.onDiskInitIndex {
-		plog.Panicf("ss.OnDiskIndex (%d) <= s.onDiskInitIndex (%d)",
-			ss.OnDiskIndex, s.onDiskInitIndex)
+		plog.Panicf("%s, ss.OnDiskIndex (%d) <= s.onDiskInitIndex (%d)",
+			s.id(), ss.OnDiskIndex, s.onDiskInitIndex)
 	}
 	if ss.OnDiskIndex <= s.onDiskIndex {
-		plog.Panicf("ss.OnDiskInit (%d) <= s.onDiskIndex (%d)",
-			ss.OnDiskIndex, s.onDiskIndex)
+		plog.Panicf("%s, ss.OnDiskInit (%d) <= s.onDiskIndex (%d)",
+			s.id(), ss.OnDiskIndex, s.onDiskIndex)
 	}
 }
 
@@ -370,12 +370,14 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.sm.Open()
-	plog.Infof("%s opened disk SM, index %d, err %v", s.id(), index, err)
 	if err != nil {
+		plog.Errorf("%s failed to open on disk SM", s.id())
 		if err == sm.ErrOpenStopped {
 			s.aborted = true
 		}
 		return 0, err
+	} else {
+		plog.Infof("%s opened disk SM, index %d", s.id(), index)
 	}
 	s.onDiskInitIndex = index
 	s.onDiskIndex = index

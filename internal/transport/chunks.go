@@ -25,10 +25,9 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/logutil"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/goutils/fileutil"
 )
 
 var (
@@ -272,8 +271,7 @@ func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
 		plog.Infof("%s received snapshot from %d, idx %d, term %d",
-			logutil.DescribeNode(chunk.ClusterId, chunk.NodeId),
-			chunk.From, chunk.Index, chunk.Term)
+			dn(chunk.ClusterId, chunk.NodeId), chunk.From, chunk.Index, chunk.Term)
 		c.onReceive(snapshotMessage)
 		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)
 	}

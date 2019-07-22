@@ -384,7 +384,7 @@ func (sc *Context) compatible(dir string,
 					ldbBinVer == raftio.PlainLogDBBinVersion {
 					return ErrLogDBBrokenChange
 				}
-				plog.Errorf("binary compatibility version, data dir %d, software %d",
+				plog.Errorf("binary compatibility version - data dir %d, software %d",
 					status.BinVer, ldbBinVer)
 				return ErrIncompatibleData
 			}

@@ -32,7 +32,6 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 )
 
@@ -363,7 +362,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 	timeout time.Duration) (*RequestState, error) {
 	st := rsm.UserRequestedSnapshot
 	if opt.Exported {
-		plog.Infof("export snapshot called on %s", n.id())
+		plog.Infof("%s called export snapshot", n.id())
 		st = rsm.ExportedSnapshot
 		exist, err := fileutil.Exist(opt.ExportPath)
 		if err != nil {
@@ -529,7 +528,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		return false, err
 	}
 	if rs.State != nil {
-		plog.Infof("%s logdb entries size %d commit %d term %d",
+		plog.Infof("%s has logdb entries size %d commit %d term %d",
 			n.id(), rs.EntryCount, rs.State.Commit, rs.State.Term)
 		n.logreader.SetState(*rs.State)
 	}
@@ -554,7 +553,7 @@ func (n *node) saveSnapshotRequired(lastApplied uint64) bool {
 	if n.isBusySnapshotting() {
 		return false
 	}
-	plog.Infof("snapshot at index %d requested on %s", lastApplied, n.id())
+	plog.Infof("%s requested snapshot at index %d", n.id(), lastApplied)
 	n.ss.setReqSnapshotIndex(lastApplied)
 	return true
 }
@@ -564,6 +563,7 @@ func isSoftSnapshotError(err error) bool {
 }
 
 func (n *node) saveSnapshot(rec rsm.Task) error {
+	plog.Infof("%s called saveSnapshot", n.id())
 	index, err := n.doSaveSnapshot(rec.SSRequest)
 	if err != nil {
 		return err
@@ -666,19 +666,20 @@ func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 }
 
 func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
+	plog.Infof("%s called recoverFromSnapshot", n.id())
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	var index uint64
 	var err error
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
-		plog.Infof("all disk SM %s beng initialized", n.id())
+		plog.Infof("%s all disk SM is beng initialized", n.id())
 		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
 			plog.Infof("%s aborted OpenOnDiskStateMachine", n.id())
 			return 0, sm.ErrOpenStopped
 		}
 		if err != nil {
-			plog.Errorf("OpenOnDiskStateMachine failed %v, %s", err, n.id())
+			plog.Errorf("%s, OpenOnDiskStateMachine failed %v", n.id(), err)
 			return 0, err
 		}
 		if idx > 0 && rec.NewNode {
@@ -905,8 +906,7 @@ func (n *node) processSnapshot(ud pb.Update) (bool, error) {
 		if err != nil && !isSoftSnapshotError(err) {
 			return false, err
 		}
-		plog.Infof("%s, snapshot %d ready to be pushed", n.id(),
-			ud.Snapshot.Index)
+		plog.Infof("%s, snapshot %d ready to be pushed", n.id(), ud.Snapshot.Index)
 		if !n.pushSnapshot(ud.Snapshot, ud.LastApplied) {
 			return false, nil
 		}
@@ -1171,15 +1171,13 @@ func (n *node) setInitialStatus(index uint64) {
 
 func (n *node) handleSnapshotTask(task rsm.Task) {
 	if n.ss.recoveringFromSnapshot() {
-		plog.Panicf("recovering from snapshot again")
+		plog.Panicf("%s is recovering from snapshot again", n.id())
 	}
 	if task.SnapshotAvailable {
-		plog.Infof("check incoming snapshot, %s", n.id())
 		n.reportAvailableSnapshot(task)
 	} else if task.SnapshotRequested {
-		plog.Infof("reportRequestedSnapshot, %s", n.id())
 		if n.ss.takingSnapshot() {
-			plog.Infof("task.SnapshotRequested ignored on %s", n.id())
+			plog.Infof("%s ignored task.SnapshotRequested", n.id())
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
@@ -1205,8 +1203,7 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 	getSinkFn := func() pb.IChunkSink {
 		conn := n.getStreamConnection(rec.ClusterID, rec.NodeID)
 		if conn == nil {
-			plog.Errorf("failed to get connection to %s",
-				logutil.DescribeNode(rec.ClusterID, rec.NodeID))
+			plog.Errorf("failed to connect to %s", dn(rec.ClusterID, rec.NodeID))
 			return nil
 		}
 		return conn
@@ -1217,11 +1214,11 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 
 func (n *node) canStreamSnapshot() bool {
 	if n.ss.streamingSnapshot() {
-		plog.Infof("task.StreamSnapshot ignored on %s", n.id())
+		plog.Infof("%s ignored task.StreamSnapshot", n.id())
 		return false
 	}
 	if !n.sm.ReadyToStreamSnapshot() {
-		plog.Infof("not ready to stream snapshot %s", n.id())
+		plog.Infof("%s is not ready to stream snapshot", n.id())
 		return false
 	}
 	return true
@@ -1259,7 +1256,7 @@ func (n *node) processSnapshotStatusTransition() bool {
 
 func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
-		plog.Infof("check initial snapshot, %s", n.id())
+		plog.Infof("%s is checking initial snapshot", n.id())
 		return rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
@@ -1275,12 +1272,12 @@ func (n *node) processRecoverSnapshotStatus() bool {
 		if !ok {
 			return true
 		}
-		plog.Infof("%s got completed snapshot rec (1) %+v", n.id(), rec)
+		plog.Infof("%s got recover completed rec", n.id())
 		if rec.SnapshotRequested {
 			panic("got a completed.SnapshotRequested")
 		}
 		if rec.InitialSnapshot {
-			plog.Infof("%s handled initial snapshot, %d", n.id(), rec.Index)
+			plog.Infof("%s handled initial snapshot, index %d", n.id(), rec.Index)
 			n.setInitialStatus(rec.Index)
 		}
 		n.ss.clearRecoveringFromSnapshot()
@@ -1294,7 +1291,7 @@ func (n *node) processTakeSnapshotStatus() bool {
 		if !ok {
 			return !n.concurrentSnapshot()
 		}
-		plog.Infof("%s got completed snapshot rec (2) %+v", n.id(), rec)
+		plog.Infof("%s got save snapshot completed rec", n.id())
 		if rec.SnapshotRequested && !n.initialized() {
 			plog.Panicf("%s taking snapshot when uninitialized", n.id())
 		}
@@ -1308,11 +1305,11 @@ func (n *node) processStreamSnapshotStatus() bool {
 		if !n.OnDiskStateMachine() {
 			panic("non-on disk sm is streaming snapshot")
 		}
-		rec, ok := n.ss.getStreamSnapshotCompleted()
+		_, ok := n.ss.getStreamSnapshotCompleted()
 		if !ok {
 			return false
 		}
-		plog.Infof("%s got completed streaming rec (3) %+v", n.id(), rec)
+		plog.Infof("%s got stream completed rec", n.id())
 		n.ss.clearStreamingSnapshot()
 	}
 	return false
@@ -1393,7 +1390,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 }
 
 func (n *node) id() string {
-	return logutil.DescribeNode(n.clusterID, n.nodeID)
+	return dn(n.clusterID, n.nodeID)
 }
 
 func (n *node) isLeader() bool {

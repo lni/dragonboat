@@ -21,7 +21,6 @@ import (
 
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/logutil"
 )
 
 const (
@@ -130,14 +129,12 @@ func (l *lane) sendSavedSnapshot(m pb.Message) {
 
 func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	plog.Infof("node %d is sending chunk %d to %s",
-		chunk.From, chunk.ChunkId,
-		logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
+		chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
 	select {
 	case l.ch <- chunk:
 		return true, false
 	case <-l.failed:
-		plog.Infof("streaming snapshot to %s terminated, connection failed",
-			logutil.DescribeNode(l.clusterID, l.nodeID))
+		plog.Infof("stream snapshot to %s failed", dn(l.clusterID, l.nodeID))
 		return false, false
 	case <-l.stopc:
 		return false, true
@@ -162,8 +159,7 @@ func (l *lane) streamSnapshot() error {
 	for {
 		select {
 		case <-l.stopc:
-			plog.Infof("streaming snapshot to %s terminated, stopc signalled",
-				logutil.DescribeNode(l.clusterID, l.nodeID))
+			plog.Infof("stream snapshot to %s stopped", dn(l.clusterID, l.nodeID))
 			return ErrStopped
 		case chunk := <-l.ch:
 			chunk.DeploymentId = l.deploymentID
@@ -172,12 +168,12 @@ func (l *lane) streamSnapshot() error {
 			}
 			if err := l.sendChunk(chunk, l.conn); err != nil {
 				plog.Errorf("streaming snapshot chunk to %s failed",
-					logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
+					dn(chunk.ClusterId, chunk.NodeId))
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
 				plog.Infof("node %d just sent last chunk to %s",
-					chunk.From, logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
+					chunk.From, dn(chunk.ClusterId, chunk.NodeId))
 				return nil
 			}
 		}
@@ -213,8 +209,7 @@ func (l *lane) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 		chunk.Data = data
 		chunk.DeploymentId = l.deploymentID
 		if err := l.sendChunk(chunk, l.conn); err != nil {
-			plog.Debugf("snapshot to %s failed",
-				logutil.DescribeNode(chunk.ClusterId, chunk.NodeId))
+			plog.Debugf("send chunk to %s failed", dn(chunk.ClusterId, chunk.NodeId))
 			return err
 		}
 		if v := l.streamChunkSent.Load(); v != nil {
