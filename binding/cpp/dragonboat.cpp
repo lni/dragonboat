@@ -802,6 +802,7 @@ NodeHostInfo NodeHost::GetNodeHostInfo(NodeHostInfoOption option) noexcept
     ci.ClusterID = cip[idx].ClusterID;
     ci.NodeID = cip[idx].NodeID;
     ci.IsLeader = cip[idx].IsLeader;
+    ci.IsObserver = cip[idx].IsObserver;
     ci.SMType = static_cast<StateMachineType>(cip[idx].SMType);
     for (uint64_t i = 0; i < cip[idx].NodeAddrPairsNum; i++) {
       ci.Nodes[cip[idx].NodeAddrPairs[i].NodeID] = std::string(cip[idx].NodeAddrPairs[i].RaftAddress);
