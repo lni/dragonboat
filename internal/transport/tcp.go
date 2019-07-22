@@ -145,10 +145,11 @@ func waitPoisonAck(conn net.Conn) {
 }
 
 func writeMessage(conn net.Conn,
-	header requestHeader, buf []byte, headerBuf []byte) error {
-	crc := crc32.ChecksumIEEE(buf)
+	header requestHeader, buf []byte, headerBuf []byte, encrypted bool) error {
 	header.size = uint64(len(buf))
-	header.crc = crc
+	if !encrypted {
+		header.crc = crc32.ChecksumIEEE(buf)
+	}
 	headerBuf = header.encode(headerBuf)
 	tt := time.Now().Add(magicNumberDuration).Add(headerDuration)
 	if err := conn.SetWriteDeadline(tt); err != nil {
@@ -182,7 +183,7 @@ func writeMessage(conn net.Conn,
 }
 
 func readMessage(conn net.Conn,
-	header []byte, rbuf []byte) (requestHeader, []byte, error) {
+	header []byte, rbuf []byte, encrypted bool) (requestHeader, []byte, error) {
 	tt := time.Now().Add(headerDuration)
 	if err := conn.SetReadDeadline(tt); err != nil {
 		return requestHeader{}, nil, err
@@ -233,7 +234,7 @@ func readMessage(conn net.Conn,
 	if uint64(received) != rheader.size {
 		panic("unexpected size")
 	}
-	if crc32.ChecksumIEEE(buf) != rheader.crc {
+	if !encrypted && crc32.ChecksumIEEE(buf) != rheader.crc {
 		plog.Errorf("invalid payload checksum")
 		return requestHeader{}, nil, ErrBadMessage
 	}
@@ -260,17 +261,19 @@ func readMagicNumber(conn net.Conn, magicNum []byte) error {
 // TCPConnection is the connection used for sending raft messages to remote
 // nodes.
 type TCPConnection struct {
-	conn    net.Conn
-	header  []byte
-	payload []byte
+	conn      net.Conn
+	header    []byte
+	payload   []byte
+	encrypted bool
 }
 
 // NewTCPConnection creates and returns a new TCPConnection instance.
-func NewTCPConnection(conn net.Conn) *TCPConnection {
+func NewTCPConnection(conn net.Conn, encrypted bool) *TCPConnection {
 	return &TCPConnection{
-		conn:    conn,
-		header:  make([]byte, requestHeaderSize),
-		payload: make([]byte, perConnBufSize),
+		conn:      conn,
+		header:    make([]byte, requestHeaderSize),
+		payload:   make([]byte, perConnBufSize),
+		encrypted: encrypted,
 	}
 }
 
@@ -295,21 +298,24 @@ func (c *TCPConnection) SendMessageBatch(batch pb.MessageBatch) error {
 	if err != nil {
 		panic(err)
 	}
-	return writeMessage(c.conn, header, buf[:n], c.header)
+	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
 }
 
 // TCPSnapshotConnection is the connection for sending raft snapshot chunks to
 // remote nodes.
 type TCPSnapshotConnection struct {
-	conn   net.Conn
-	header []byte
+	conn      net.Conn
+	header    []byte
+	encrypted bool
 }
 
 // NewTCPSnapshotConnection creates and returns a new snapshot connection.
-func NewTCPSnapshotConnection(conn net.Conn) *TCPSnapshotConnection {
+func NewTCPSnapshotConnection(conn net.Conn,
+	encrypted bool) *TCPSnapshotConnection {
 	return &TCPSnapshotConnection{
-		conn:   conn,
-		header: make([]byte, requestHeaderSize),
+		conn:      conn,
+		header:    make([]byte, requestHeaderSize),
+		encrypted: encrypted,
 	}
 }
 
@@ -331,7 +337,7 @@ func (c *TCPSnapshotConnection) SendSnapshotChunk(chunk pb.SnapshotChunk) error 
 	if err != nil {
 		panic(err)
 	}
-	return writeMessage(c.conn, header, buf[:n], c.header)
+	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
 }
 
 // TCPTransport is a TCP based RPC module for exchanging raft messages and
@@ -341,6 +347,7 @@ type TCPTransport struct {
 	stopper        *syncutil.Stopper
 	requestHandler raftio.RequestHandler
 	chunkHandler   raftio.IChunkHandler
+	encrypted      bool
 }
 
 // NewTCPTransport creates and returns a new TCP transport module.
@@ -352,6 +359,7 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 		stopper:        syncutil.NewStopper(),
 		requestHandler: requestHandler,
 		chunkHandler:   chunkHandler,
+		encrypted:      nhConfig.MutualTLS,
 	}
 }
 
@@ -409,7 +417,7 @@ func (g *TCPTransport) GetConnection(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPConnection(conn), nil
+	return NewTCPConnection(conn, g.encrypted), nil
 }
 
 // GetSnapshotConnection returns a new raftio.IConnection for sending raft
@@ -420,7 +428,7 @@ func (g *TCPTransport) GetSnapshotConnection(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPSnapshotConnection(conn), nil
+	return NewTCPSnapshotConnection(conn, g.encrypted), nil
 }
 
 // Name returns a human readable name of the TCP transport module.
@@ -449,7 +457,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 				return
 			}
 		}
-		rheader, buf, err := readMessage(conn, header, tbuf)
+		rheader, buf, err := readMessage(conn, header, tbuf, g.encrypted)
 		if err != nil {
 			return
 		}
