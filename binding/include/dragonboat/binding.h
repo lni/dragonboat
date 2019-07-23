@@ -174,6 +174,7 @@ typedef struct RaftConfig
   Bool OrderedConfigChange;
   uint64_t MaxInMemLogSize;
   int32_t SnapshotCompressionType;
+  int32_t EntryCompressionType;
 } RaftConfig;
 
 // NodeHostConfig is the configuration for the NodeHost instance. The

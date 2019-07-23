@@ -60,7 +60,8 @@ Config::Config(ClusterID clusterId, NodeID nodeId) noexcept
   : NodeId(nodeId), ClusterId(clusterId), IsObserver(false), CheckQuorum(false),
     Quiesce(false), ElectionRTT(10), HeartbeatRTT(1), SnapshotEntries(0),
     CompactionOverhead(0), OrderedConfigChange(false), MaxInMemLogSize(0),
-    SnapshotCompressionType(NO_COMPRESSION)
+    SnapshotCompressionType(NO_COMPRESSION),
+    EntryCompressionType(NO_COMPRESSION)
 {
 }
 
@@ -78,6 +79,7 @@ void parseConfig(const Config &config, ::RaftConfig &cfg) noexcept
   cfg.OrderedConfigChange = config.OrderedConfigChange;
   cfg.MaxInMemLogSize = config.MaxInMemLogSize;
   cfg.SnapshotCompressionType = config.SnapshotCompressionType;
+  cfg.EntryCompressionType = config.EntryCompressionType;
 }
 
 NodeHostConfig::NodeHostConfig(std::string WALDir,

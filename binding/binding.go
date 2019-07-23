@@ -297,6 +297,7 @@ func nodeHostStartCluster(oid uint64,
 		OrderedConfigChange:     cboolToBool(cfg.OrderedConfigChange),
 		MaxInMemLogSize:         uint64(cfg.MaxInMemLogSize),
 		SnapshotCompressionType: config.CompressionType(cfg.SnapshotCompressionType),
+		EntryCompressionType:    config.CompressionType(cfg.EntryCompressionType),
 	}
 	join := charToBool(joinPeer)
 	peers := make(map[uint64]string)

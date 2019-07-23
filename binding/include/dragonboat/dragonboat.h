@@ -116,6 +116,8 @@ class Config
   uint64_t MaxInMemLogSize;
   // SnapshotCompressionType is the type of the compression used by snapshot.
   CompressionType SnapshotCompressionType;
+  // EntryCompressionType is the type of the compression used for Raft entries.
+  CompressionType EntryCompressionType;
 };
 
 // NodeHostConfig is the configuration for NodeHost. The NodeHostConfig class
