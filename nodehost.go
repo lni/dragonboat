@@ -586,7 +586,7 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 // its confirmed completion, failure or timeout.
 //
 // Deprecated: Use NodeHost.SyncGetClusterMembership instead.
-// NodeHost.GetClusterMembership will be removed in v3.2.
+// NodeHost.GetClusterMembership will be removed in v4.0.
 func (nh *NodeHost) GetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
 	return nh.SyncGetClusterMembership(ctx, clusterID)
@@ -635,7 +635,7 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 // multiple client sessions when making concurrent proposals.
 //
 // Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
-// be removed in v3.2.
+// be removed in v4.0.
 func (nh *NodeHost) GetNewSession(ctx context.Context,
 	clusterID uint64) (*client.Session, error) {
 	return nh.SyncGetSession(ctx, clusterID)
@@ -649,7 +649,7 @@ func (nh *NodeHost) GetNewSession(ctx context.Context,
 // Closed client session should no longer be used in future proposals.
 //
 // Deprecated: Use NodeHost.SyncCloseSession instead. NodeHost.CloseSession will
-// be removed in v3.2
+// be removed in v4.0.
 func (nh *NodeHost) CloseSession(ctx context.Context,
 	session *client.Session) error {
 	return nh.SyncCloseSession(ctx, session)
