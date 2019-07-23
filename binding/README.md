@@ -21,11 +21,15 @@ $ cd $GOPATH/src/github.com/lni/dragonboat
 $ make clean
 $ make test-cppwrapper
 ```
-We also have an [example program](https://github.com/lni/dragonboat-example) showing how to use the C++11 binding.
+
+[JasonYuchen](https://github.com/JasonYuchen) provided some excellent [examples](https://github.com/JasonYuchen/dragonboat-cpp-example) on how to use the C++11 binding.
 
 ## Status ##
 The C++ binding is in BETA status. The limitations are:
 
-* Currently targetting Dragonboat v2.1.x, v3.0 features are not supported.
 * Custom Log DB or Raft RPC modules are not supported.
 * Custom logger is not supported.
+
+## Contributors ##
+
+[JasonYuchen](https://github.com/JasonYuchen) contributed the dragonboat v3.x support for the C++11 binding.
