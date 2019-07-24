@@ -511,44 +511,36 @@ func TestInMemMergeSetSaveTo(t *testing.T) {
 }
 
 func TestAppliedLogTo(t *testing.T) {
-	im := inMemory{
-		markerIndex: 5,
-		entries: []pb.Entry{
-			{Index: 5, Term: 5},
-			{Index: 6, Term: 6},
-			{Index: 7, Term: 7},
-			{Index: 8, Term: 8},
-			{Index: 9, Term: 9},
-			{Index: 10, Term: 10},
-		},
-		savedTo: 4,
-	}
 	tests := []struct {
 		appliedTo  uint64
 		length     int
 		firstIndex uint64
-		shrunk     bool
 	}{
-		{5, 6, 5, true},
-		{11, 6, 5, true},
-		{6, 5, 6, true},
-		{6, 5, 6, true},
-		{10, 1, 10, false},
+		{4, 6, 5},
+		{5, 5, 6},
+		{11, 6, 5},
+		{6, 4, 7},
+		{10, 0, 11},
 	}
 	for idx, tt := range tests {
-		len1 := len(im.entries)
-		im.appliedLogTo(tt.appliedTo)
-		len2 := len(im.entries)
-		if len2 < len1 {
-			if tt.shrunk && !im.shrunk {
-				t.Errorf("shrunk flag not set")
-			}
+		im := inMemory{
+			markerIndex: 5,
+			entries: []pb.Entry{
+				{Index: 5, Term: 5},
+				{Index: 6, Term: 6},
+				{Index: 7, Term: 7},
+				{Index: 8, Term: 8},
+				{Index: 9, Term: 9},
+				{Index: 10, Term: 10},
+			},
+			savedTo: 4,
 		}
+		im.appliedLogTo(tt.appliedTo)
 		if len(im.entries) != tt.length {
 			t.Errorf("%d, unexpected entry slice len %d, want %d",
 				idx, len(im.entries), tt.length)
 		}
-		if im.entries[0].Index != tt.firstIndex {
+		if len(im.entries) > 0 && im.entries[0].Index != tt.firstIndex {
 			t.Errorf("%d, unexpected first index %d, want %d",
 				idx, im.entries[0].Index, tt.firstIndex)
 		}
@@ -614,12 +606,12 @@ func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 	}
 	for idx := uint64(2); idx < uint64(5); idx++ {
 		im.appliedLogTo(idx)
-		if len(im.entries[1:]) > 0 {
-			if im.entries[1:][0].Index != idx+1 {
+		if len(im.entries) > 0 {
+			if im.entries[0].Index != idx+1 {
 				t.Errorf("alignment error")
 			}
 		}
-		if im.rl.Get() != getEntrySliceInMemSize(im.entries[1:]) {
+		if im.rl.Get() != getEntrySliceInMemSize(im.entries) {
 			t.Errorf("log size not updated")
 		}
 	}

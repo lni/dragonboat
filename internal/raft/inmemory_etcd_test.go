@@ -346,19 +346,19 @@ func TestUnstableStableTo(t *testing.T) {
 			[]pb.Entry{{Index: 5, Term: 1}}, 5, nil,
 			5, 1, // stable to the first entry
 			5,
-			5, 1,
+			6, 0,
 		},
 		{
 			[]pb.Entry{{Index: 5, Term: 1}, {Index: 6, Term: 1}}, 5, nil,
 			5, 1, // stable to the first entry
 			5,
-			5, 2,
+			6, 1,
 		},
 		{
 			[]pb.Entry{{Index: 6, Term: 2}}, 6, nil,
 			6, 1, // stable to the first entry and term mismatch
 			0,
-			6, 1,
+			7, 0,
 		},
 		{
 			[]pb.Entry{{Index: 5, Term: 1}}, 5, nil,
@@ -377,19 +377,19 @@ func TestUnstableStableTo(t *testing.T) {
 			[]pb.Entry{{Index: 5, Term: 1}}, 5, &pb.Snapshot{Index: 4, Term: 1},
 			5, 1, // stable to the first entry
 			5,
-			5, 1,
+			6, 0,
 		},
 		{
 			[]pb.Entry{{Index: 5, Term: 1}, {Index: 6, Term: 1}}, 5, &pb.Snapshot{Index: 4, Term: 1},
 			5, 1, // stable to the first entry
 			5,
-			5, 2,
+			6, 1,
 		},
 		{
 			[]pb.Entry{{Index: 6, Term: 2}}, 6, &pb.Snapshot{Index: 5, Term: 1},
 			6, 1, // stable to the first entry and term mismatch
 			0,
-			6, 1,
+			7, 0,
 		},
 		{
 			[]pb.Entry{{Index: 5, Term: 1}}, 5, &pb.Snapshot{Index: 4, Term: 1},

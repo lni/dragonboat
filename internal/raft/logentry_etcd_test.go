@@ -814,7 +814,7 @@ func TestUnstableEnts(t *testing.T) {
 			t.Errorf("#%d: unstableEnts = %+v, want %+v", i, ents, tt.wents)
 		}
 		if len(ents) > 0 {
-			w := ents[len(ents)-1].Index
+			w := ents[len(ents)-1].Index + 1
 			if g := raftLog.inmem.markerIndex; g != w {
 				t.Errorf("#%d: unstable = %d, want %d", i, g, w)
 			}

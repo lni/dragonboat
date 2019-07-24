@@ -34,13 +34,14 @@ var (
 // inMemory is a two stage in memory log storage struct to keep log entries
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
-	shrunk      bool
-	newEntries  bool
-	snapshot    *pb.Snapshot
-	entries     []pb.Entry
-	markerIndex uint64
-	savedTo     uint64
-	rl          *server.RateLimiter
+	shrunk         bool
+	snapshot       *pb.Snapshot
+	entries        []pb.Entry
+	markerIndex    uint64
+	appliedToIndex uint64
+	appliedToTerm  uint64
+	savedTo        uint64
+	rl             *server.RateLimiter
 }
 
 func newInMemory(lastIndex uint64, rl *server.RateLimiter) inMemory {
@@ -51,7 +52,6 @@ func newInMemory(lastIndex uint64, rl *server.RateLimiter) inMemory {
 		markerIndex: lastIndex + 1,
 		savedTo:     lastIndex,
 		rl:          rl,
-		newEntries:  true,
 	}
 }
 
@@ -91,6 +91,12 @@ func (im *inMemory) getLastIndex() (uint64, bool) {
 }
 
 func (im *inMemory) getTerm(index uint64) (uint64, bool) {
+	if index > 0 && index == im.appliedToIndex {
+		if im.appliedToTerm == 0 {
+			plog.Panicf("im.appliedToTerm == 0, index %d", index)
+		}
+		return im.appliedToTerm, true
+	}
 	if index < im.markerIndex {
 		if idx, ok := im.getSnapshotIndex(); ok && idx == index {
 			return im.snapshot.Term, true
@@ -145,16 +151,14 @@ func (im *inMemory) appliedLogTo(index uint64) {
 	if index > im.entries[len(im.entries)-1].Index {
 		return
 	}
-	newMarkerIndex := index
-	move := uint64(newMarkerIndex - im.markerIndex)
-	if newMarkerIndex-im.markerIndex+1 <= uint64(len(im.entries)) {
-		move = newMarkerIndex - im.markerIndex + 1
+	lastAppliedEntry := im.entries[index-im.markerIndex]
+	if lastAppliedEntry.Index != index {
+		panic("lastAppliedEntry.Index != index")
 	}
-	applied := im.entries[:move]
-	if !im.newEntries {
-		applied = applied[1:]
-	}
-	im.newEntries = false
+	im.appliedToIndex = lastAppliedEntry.Index
+	im.appliedToTerm = lastAppliedEntry.Term
+	newMarkerIndex := index + 1
+	applied := im.entries[:newMarkerIndex-im.markerIndex]
 	im.shrunk = true
 	im.entries = im.entries[newMarkerIndex-im.markerIndex:]
 	im.markerIndex = newMarkerIndex
@@ -214,7 +218,6 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.entries = im.newEntrySlice(ents)
 		im.savedTo = firstNewIndex - 1
 		if im.rateLimited() {
-			im.newEntries = true
 			im.rl.Set(getEntrySliceInMemSize(ents))
 		}
 	} else {
@@ -227,7 +230,6 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		if im.rateLimited() {
 			sz := getEntrySliceInMemSize(ents) + getEntrySliceInMemSize(existing)
 			im.rl.Set(sz)
-			im.newEntries = true
 		}
 	}
 	im.checkMarkerIndex()
@@ -236,11 +238,12 @@ func (im *inMemory) merge(ents []pb.Entry) {
 func (im *inMemory) restore(ss pb.Snapshot) {
 	im.snapshot = &ss
 	im.markerIndex = ss.Index + 1
+	im.appliedToIndex = ss.Index
+	im.appliedToTerm = ss.Term
 	im.shrunk = false
 	im.entries = nil
 	im.savedTo = ss.Index
 	if im.rateLimited() {
-		im.newEntries = true
 		im.rl.Set(0)
 	}
 }
