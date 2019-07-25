@@ -25,6 +25,12 @@ var (
 	minEntrySliceSize = settings.Soft.MinEntrySliceFreeSize
 )
 
+//
+// known issues -
+// * the newEntries field is unnecessary
+// * the first element of im.entries is usually redundant
+//
+
 // inMemory is a two stage in memory log storage struct to keep log entries
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
@@ -182,9 +188,17 @@ func (im *inMemory) tryResize() {
 }
 
 func (im *inMemory) resizeEntrySlice() {
-	if im.shrunk && cap(im.entries)-len(im.entries) < int(minEntrySliceSize) {
+	toResize := cap(im.entries)-len(im.entries) < int(minEntrySliceSize)
+	if len(im.entries) == 0 || (im.shrunk && toResize) {
 		im.resize()
 	}
+}
+
+func (im *inMemory) newEntrySlice(ents []pb.Entry) []pb.Entry {
+	sz := max(entrySliceSize, uint64(len(ents)*2))
+	newEntries := make([]pb.Entry, 0, sz)
+	newEntries = append(newEntries, ents...)
+	return newEntries
 }
 
 func (im *inMemory) merge(ents []pb.Entry) {
@@ -200,7 +214,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		im.markerIndex = firstNewIndex
 		// ents might come from entryQueue, copy it to its own storage
 		im.shrunk = false
-		im.entries = newEntrySlice(ents)
+		im.entries = im.newEntrySlice(ents)
 		im.savedTo = firstNewIndex - 1
 		if im.rateLimited() {
 			im.newEntries = true
@@ -210,8 +224,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 		existing := im.getEntries(im.markerIndex, firstNewIndex)
 		checkEntriesToAppend(existing, ents)
 		im.shrunk = false
-		im.entries = make([]pb.Entry, 0, len(existing)+len(ents))
-		im.entries = append(im.entries, existing...)
+		im.entries = im.newEntrySlice(existing)
 		im.entries = append(im.entries, ents...)
 		im.savedTo = min(im.savedTo, firstNewIndex-1)
 		if im.rateLimited() {
