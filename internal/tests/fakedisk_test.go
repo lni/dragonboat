@@ -34,7 +34,7 @@ func TestSimDiskSMCanBeOpened(t *testing.T) {
 
 func TestSimDiskSMCanBeUpdatedAndQueried(t *testing.T) {
 	m := NewSimDiskSM(1)
-	ents := []sm.Entry{sm.Entry{Index: 2}, sm.Entry{Index: 3}, sm.Entry{Index: 4}}
+	ents := []sm.Entry{{Index: 2}, {Index: 3}, {Index: 4}}
 	_, _ = m.Update(ents)
 	if m.applied != 4 {
 		t.Errorf("sm not updated")
@@ -50,7 +50,7 @@ func TestSimDiskSMCanBeUpdatedAndQueried(t *testing.T) {
 
 func TestSimDiskSnapshotWorks(t *testing.T) {
 	m := NewSimDiskSM(1)
-	ents := []sm.Entry{sm.Entry{Index: 2}, sm.Entry{Index: 3}, sm.Entry{Index: 4}}
+	ents := []sm.Entry{{Index: 2}, {Index: 3}, {Index: 4}}
 	_, _ = m.Update(ents)
 	if m.applied != 4 {
 		t.Errorf("sm not updated")

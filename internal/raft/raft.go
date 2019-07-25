@@ -1416,7 +1416,7 @@ func (r *raft) handleLeaderCheckQuorum(m pb.Message) {
 func (r *raft) handleLeaderPropose(m pb.Message) {
 	r.mustBeLeader()
 	if r.leaderTransfering() {
-		plog.Warningf("%s dropped a proposal, leader transfering", r.describe())
+		plog.Warningf("%s dropped a proposal, leader transferring", r.describe())
 		r.reportDroppedProposal(m)
 		return
 	}

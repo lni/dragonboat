@@ -376,9 +376,8 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 			s.aborted = true
 		}
 		return 0, err
-	} else {
-		plog.Infof("%s opened disk SM, index %d", s.id(), index)
 	}
+	plog.Infof("%s opened disk SM, index %d", s.id(), index)
 	s.onDiskInitIndex = index
 	s.onDiskIndex = index
 	return index, nil

@@ -260,7 +260,7 @@ func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
 			done:      done,
 		}
 	default:
-		panic("unkown statemachine type")
+		panic("unknown statemachine type")
 	}
 }
 

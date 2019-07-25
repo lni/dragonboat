@@ -21,7 +21,7 @@ required when building your customized persistent Raft log storage or RPC
 modules. You can safely skip this package if you plan to use the default
 built-in LogDB and Raft RPC modules provided by Dragonboat.
 
-Structs, interfaces and functions defined in the raftio pacakge are not
+Structs, interfaces and functions defined in the raftio package are not
 considered as a part of Dragonboat's public APIs. Breaking changes might
 happen in the coming minor releases.
 */

@@ -27,10 +27,10 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	"github.com/lni/goutils/fileutil"
-	"github.com/lni/goutils/random"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
+	"github.com/lni/goutils/fileutil"
+	"github.com/lni/goutils/random"
 )
 
 var (

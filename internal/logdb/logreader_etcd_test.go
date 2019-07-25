@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/raft"
-	"github.com/lni/goutils/leaktest"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/goutils/leaktest"
 )
 
 // most tests below are ported from etcd rafts

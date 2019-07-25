@@ -22,9 +22,9 @@ import (
 
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/goutils/syncutil"
 	"github.com/lni/dragonboat/v3/logger"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/syncutil"
 )
 
 const (
