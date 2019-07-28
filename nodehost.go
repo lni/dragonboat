@@ -1512,6 +1512,9 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if _, ok := nh.clusterMu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
+	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
+		return ErrClusterAlreadyExist
+	}
 	if join && len(initialMembers) > 0 {
 		return ErrInvalidClusterSettings
 	}
@@ -1820,6 +1823,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 	if !ok && chosen < len(keys) {
 		clusterID := keys[chosen]
 		nodeID := nodeIDs[chosen]
+		plog.Infof("%s will be stopped by the node monitor", dn(clusterID, nodeID))
 		if err := nh.StopNode(clusterID, nodeID); err != nil {
 			plog.Errorf("failed to remove cluster %d", clusterID)
 		}

@@ -464,6 +464,7 @@ func (n *node) getLeaderID() (uint64, bool) {
 
 func (n *node) notifyOffloaded(from rsm.From) {
 	n.sm.Offloaded(from)
+	plog.Infof("%s offloaded from %s", n.id(), from)
 }
 
 func (n *node) notifyLoaded(from rsm.From) {

@@ -15,6 +15,7 @@
 package dragonboat
 
 import (
+	"reflect"
 	"sync"
 	"time"
 
@@ -123,40 +124,519 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 	return readyMap.getReadyClusters()
 }
 
+type tsn struct {
+	task rsm.Task
+	sink getSink
+	node *node
+}
+
+type ssWorker struct {
+	workerID   uint64
+	stopper    *syncutil.Stopper
+	requestC   chan tsn
+	completedC chan struct{}
+}
+
+func newSSWorker(workerID uint64, stopper *syncutil.Stopper) *ssWorker {
+	w := &ssWorker{
+		workerID:   workerID,
+		stopper:    stopper,
+		requestC:   make(chan tsn, 1),
+		completedC: make(chan struct{}, 1),
+	}
+	stopper.RunWorker(func() {
+		w.workerMain()
+	})
+	return w
+}
+
+func (w *ssWorker) workerMain() {
+	for {
+		select {
+		case <-w.stopper.ShouldStop():
+			return
+		case req := <-w.requestC:
+			if req.node == nil {
+				panic("req.node == nil")
+			}
+			w.handle(req)
+			w.completed()
+		}
+	}
+}
+
+func (w *ssWorker) completed() {
+	select {
+	case w.completedC <- struct{}{}:
+	}
+}
+
+func (w *ssWorker) handle(req tsn) {
+	if !req.task.IsSnapshotTask() {
+		panic("not a snapshot task")
+	}
+	if req.task.SnapshotAvailable {
+		w.recoverFromSnapshot(req)
+	} else if req.task.SnapshotRequested {
+		w.saveSnapshot(req)
+	} else if req.task.StreamSnapshot {
+		w.streamSnapshot(req)
+	} else {
+		panic("unknown snapshot task type")
+	}
+}
+
+func (w *ssWorker) recoverFromSnapshot(rec tsn) {
+	if index, err := rec.node.recoverFromSnapshot(rec.task); err != nil {
+		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
+			panic(err)
+		}
+	} else {
+		rec.node.recoverFromSnapshotDone(index)
+	}
+}
+
+func (w *ssWorker) saveSnapshot(rec tsn) {
+	if err := rec.node.saveSnapshot(rec.task); err != nil {
+		panic(err)
+	} else {
+		rec.node.saveSnapshotDone()
+	}
+}
+
+func (w *ssWorker) streamSnapshot(rec tsn) {
+	if err := rec.node.streamSnapshot(rec.sink()); err != nil {
+		panic(err)
+	} else {
+		rec.node.streamSnapshotDone()
+	}
+}
+
+type workerPool struct {
+	nh            nodeLoader
+	loaded        *loadedNodes
+	saveReady     *workReady
+	recoverReady  *workReady
+	streamReady   *workReady
+	workers       []*ssWorker
+	busy          map[uint64]*node    // map of workerID -> *node
+	saving        map[uint64]struct{} // map of clusterID
+	recovering    map[uint64]struct{} // map of clusterID
+	streaming     map[uint64]uint64   // map of clusterID -> target count
+	pending       []tsn
+	workerStopper *syncutil.Stopper
+	poolStopper   *syncutil.Stopper
+}
+
+func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
+	w := &workerPool{
+		nh:            nh,
+		loaded:        loaded,
+		saveReady:     newWorkReady(1),
+		recoverReady:  newWorkReady(1),
+		streamReady:   newWorkReady(1),
+		workers:       make([]*ssWorker, snapshotWorkerCount),
+		busy:          make(map[uint64]*node, snapshotWorkerCount),
+		saving:        make(map[uint64]struct{}, snapshotWorkerCount),
+		recovering:    make(map[uint64]struct{}, snapshotWorkerCount),
+		streaming:     make(map[uint64]uint64, snapshotWorkerCount),
+		pending:       make([]tsn, 0),
+		workerStopper: syncutil.NewStopper(),
+		poolStopper:   syncutil.NewStopper(),
+	}
+	for workerID := uint64(0); workerID < snapshotWorkerCount; workerID++ {
+		w.workers[workerID] = newSSWorker(workerID, w.workerStopper)
+	}
+	w.poolStopper.RunWorker(func() {
+		w.workerPoolMain()
+	})
+	return w
+}
+
+func (p *workerPool) stop() {
+	p.poolStopper.Stop()
+}
+
+func (p *workerPool) getWorker() *ssWorker {
+	for _, w := range p.workers {
+		if _, busy := p.busy[w.workerID]; !busy {
+			return w
+		}
+	}
+	return nil
+}
+
+func (p *workerPool) workerPoolMain() {
+	// TODO:
+	// convert the selects below using reflect.Select
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	nodes := make(map[uint64]*node)
+	cci := uint64(0)
+	busyUpdated := false
+	for {
+		toSchedule := false
+		// 0 - pool stopper stopc
+		// 1 - p.saveReady.waitCh(1)
+		// 2 - p.recoverReady.waitCh(1)
+		// 3 - p.streamReady.waitCh(1)
+		// 4 - worker completedC
+		// 4 + len(workers) - ticker.C
+		cases := make([]reflect.SelectCase, len(p.workers)+5)
+		cases[0] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.poolStopper.ShouldStop()),
+		}
+		cases[1] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.saveReady.waitCh(1)),
+		}
+		cases[2] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.recoverReady.waitCh(1)),
+		}
+		cases[3] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.streamReady.waitCh(1)),
+		}
+		for idx, w := range p.workers {
+			cases[4+idx] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(w.completedC),
+			}
+		}
+		cases[4+len(p.workers)] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ticker.C),
+		}
+		chosen, _, _ := reflect.Select(cases)
+		if chosen == 0 {
+			p.workerStopper.Stop()
+			for _, node := range nodes {
+				node.notifyOffloaded(rsm.FromSnapshotWorker)
+			}
+			return
+		} else if chosen == 1 {
+			cci, nodes = p.loadNodes(cci, nodes)
+			clusters := p.saveReady.getReadyMap(1)
+			for cid := range clusters {
+				n, ok := nodes[cid]
+				if ok {
+					req, ok := n.ss.getSaveSnapshotReq()
+					if !ok {
+						continue
+					}
+					req.ClusterID = cid
+					tr := tsn{task: req}
+					p.pending = append(p.pending, tr)
+					toSchedule = true
+				}
+			}
+		} else if chosen == 2 {
+			cci, nodes = p.loadNodes(cci, nodes)
+			clusters := p.recoverReady.getReadyMap(1)
+			for cid := range clusters {
+				n, ok := nodes[cid]
+				if ok {
+					if n.clusterID != cid {
+						plog.Panicf("n.clusterID != cid")
+					}
+					req, ok := n.ss.getRecoverFromSnapshotReq()
+					if !ok {
+						continue
+					}
+					req.ClusterID = cid
+					tr := tsn{task: req}
+					p.pending = append(p.pending, tr)
+					toSchedule = true
+				}
+			}
+		} else if chosen == 3 {
+			cci, nodes = p.loadNodes(cci, nodes)
+			clusters := p.streamReady.getReadyMap(1)
+			for cid := range clusters {
+				n, ok := nodes[cid]
+				if ok {
+					req, sinkFn, ok := n.ss.getStreamSnapshotReq()
+					if !ok {
+						continue
+					}
+					req.ClusterID = cid
+					tr := tsn{task: req, sink: sinkFn}
+					p.pending = append(p.pending, tr)
+					toSchedule = true
+				}
+			}
+		} else if chosen >= 4 && chosen <= 4+len(p.workers)-1 {
+			workerID := uint64(chosen - 4)
+			w := p.workers[workerID]
+			if w.workerID != workerID {
+				panic("w.workerID != workerID")
+			}
+			_, ok := p.busy[workerID]
+			if !ok {
+				plog.Panicf("not in busy state")
+			}
+			p.completed(workerID)
+			busyUpdated = true
+			cci, nodes = p.loadNodes(0, nodes)
+			toSchedule = true
+		} else if chosen == len(cases)-1 {
+			if busyUpdated {
+				cci, nodes = p.loadNodes(0, nodes)
+				busyUpdated = false
+			} else {
+				cci, nodes = p.loadNodes(cci, nodes)
+			}
+		} else {
+			plog.Panicf("chosen %d, unexpected case", chosen)
+		}
+		if toSchedule {
+			if cci == 0 || len(nodes) == 0 {
+				cci, nodes = p.loadNodes(cci, nodes)
+			}
+			p.schedule(nodes)
+		}
+	}
+}
+
+func (p *workerPool) loadNodes(cci uint64,
+	nodes map[uint64]*node) (uint64, map[uint64]*node) {
+	newCCI, newNodes := p.doLoadNodes(cci, nodes)
+	p.loaded.update(1, rsm.FromSnapshotWorker, newNodes)
+	return newCCI, newNodes
+}
+
+func (p *workerPool) doLoadNodes(cci uint64,
+	nodes map[uint64]*node) (uint64, map[uint64]*node) {
+	newCCI := p.nh.getClusterSetIndex()
+	if newCCI != cci {
+		newNodes := make(map[uint64]*node)
+		for _, n := range p.busy {
+			newNodes[n.clusterID] = n
+		}
+		p.nh.forEachClusterRun(nil,
+			func() bool {
+				for cid, node := range nodes {
+					_, ok := newNodes[cid]
+					if !ok {
+						node.notifyOffloaded(rsm.FromSnapshotWorker)
+					}
+					// TODO:
+					// check instanceID change issue
+				}
+				return true
+			},
+			func(cid uint64, v *node) bool {
+				v.notifyLoaded(rsm.FromSnapshotWorker)
+				_, ok := newNodes[cid]
+				if !ok {
+					newNodes[cid] = v
+				}
+				return true
+			})
+		return newCCI, newNodes
+	}
+	return cci, nodes
+}
+
+func (p *workerPool) completed(workerID uint64) {
+	n, ok := p.busy[workerID]
+	if !ok {
+		plog.Panicf("worker %d is not busy", workerID)
+	}
+	delete(p.busy, workerID)
+	_, ok1 := p.saving[n.clusterID]
+	if ok1 {
+		delete(p.saving, n.clusterID)
+	}
+	_, ok2 := p.recovering[n.clusterID]
+	if ok2 {
+		delete(p.recovering, n.clusterID)
+	}
+	count, ok3 := p.streaming[n.clusterID]
+	if ok3 {
+		if count == 0 {
+			plog.Panicf("node is not streaming, but it just completed streaming")
+		} else if count == 1 {
+			delete(p.streaming, n.clusterID)
+		} else {
+			p.streaming[n.clusterID] = count - 1
+		}
+	}
+	if !ok1 && !ok2 && !ok3 {
+		plog.Panicf("not sure what got completed")
+	}
+}
+
+func (p *workerPool) inProgress(clusterID uint64) bool {
+	_, ok1 := p.saving[clusterID]
+	_, ok2 := p.recovering[clusterID]
+	_, ok3 := p.streaming[clusterID]
+	return ok1 || ok2 || ok3
+}
+
+func (p *workerPool) canStream(clusterID uint64) bool {
+	_, ok := p.saving[clusterID]
+	if ok {
+		return false
+	}
+	_, ok = p.recovering[clusterID]
+	if ok {
+		return false
+	}
+	return true
+}
+
+func (p *workerPool) canSave(clusterID uint64) bool {
+	return !p.inProgress(clusterID)
+}
+
+func (p *workerPool) canRecover(clusterID uint64) bool {
+	return !p.inProgress(clusterID)
+}
+
+func (p *workerPool) canSchedule(rec tsn) bool {
+	if rec.task.SnapshotAvailable {
+		v := p.canRecover(rec.task.ClusterID)
+		return v
+	} else if rec.task.SnapshotRequested {
+		return p.canSave(rec.task.ClusterID)
+	} else if rec.task.StreamSnapshot {
+		return p.canStream(rec.task.ClusterID)
+	}
+	plog.Panicf("unknown task type %v", rec.task)
+	return false
+}
+
+func (p workerPool) setBusy(node *node, workerID uint64) {
+	_, ok := p.busy[workerID]
+	if ok {
+		plog.Panicf("trying to use a busy worker")
+	}
+	p.busy[workerID] = node
+}
+
+func (p *workerPool) startStreaming(node *node, workerID uint64) {
+	count, ok := p.streaming[node.clusterID]
+	if !ok {
+		p.streaming[node.clusterID] = 1
+	} else {
+		p.streaming[node.clusterID] = count + 1
+	}
+}
+
+func (p *workerPool) startSaving(node *node, workerID uint64) {
+	_, ok := p.saving[node.clusterID]
+	if ok {
+		plog.Panicf("%s trying to start saving again", node.id())
+	}
+	p.saving[node.clusterID] = struct{}{}
+}
+
+func (p *workerPool) startRecovering(node *node, workerID uint64) {
+	_, ok := p.recovering[node.clusterID]
+	if ok {
+		plog.Panicf("%s trying to start recovering again", node.id())
+	}
+	p.recovering[node.clusterID] = struct{}{}
+}
+
+func (p *workerPool) start(rec tsn, node *node, workerID uint64) {
+	p.setBusy(node, workerID)
+	if rec.task.SnapshotAvailable {
+		p.startRecovering(node, workerID)
+	} else if rec.task.SnapshotRequested {
+		p.startSaving(node, workerID)
+	} else if rec.task.StreamSnapshot {
+		p.startStreaming(node, workerID)
+	} else {
+		plog.Panicf("unknown task type %v", rec.task)
+	}
+}
+
+func (p *workerPool) schedule(nodes map[uint64]*node) {
+	for {
+		if !p.scheduleWorker(nodes) {
+			return
+		}
+	}
+}
+
+func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
+	if len(p.pending) == 0 {
+		return false
+	}
+	w := p.getWorker()
+	if w == nil {
+		return false
+	}
+	for idx, ct := range p.pending {
+		n, ok := nodes[ct.task.ClusterID]
+		if !ok {
+			p.removeFromPending(idx)
+			return true
+		}
+		if n.clusterID != ct.task.ClusterID {
+			plog.Panicf("n.clusterID != ct.task.ClusterID")
+		}
+		if p.canSchedule(ct) {
+			p.scheduleTask(ct, n, w)
+			p.removeFromPending(idx)
+			return true
+		}
+	}
+	return false
+}
+
+func (p *workerPool) removeFromPending(idx int) {
+	sz := len(p.pending)
+	copy(p.pending[idx:], p.pending[idx+1:])
+	p.pending = p.pending[:sz-1]
+	if len(p.pending) != sz-1 {
+		panic("len(p.pending) != sz - 1")
+	}
+}
+
+func (p *workerPool) scheduleTask(rec tsn, n *node, w *ssWorker) {
+	p.start(rec, n, w.workerID)
+	req := tsn{task: rec.task, sink: rec.sink, node: n}
+	select {
+	case w.requestC <- req:
+	default:
+		panic("worker busy")
+	}
+}
+
 type execEngine struct {
-	nodeStopper                *syncutil.Stopper
-	taskStopper                *syncutil.Stopper
-	snapshotStopper            *syncutil.Stopper
-	nh                         nodeLoader
-	loaded                     *loadedNodes
-	ctx                        *server.Context
-	logdb                      raftio.ILogDB
-	ctxs                       []raftio.IContext
-	profilers                  []*profiler
-	nodeWorkReady              *workReady
-	taskWorkReady              *workReady
-	snapshotWorkReady          *workReady
-	requestedSnapshotWorkReady *workReady
-	streamSnapshotWorkReady    *workReady
+	nodeStopper   *syncutil.Stopper
+	taskStopper   *syncutil.Stopper
+	nh            nodeLoader
+	loaded        *loadedNodes
+	ctx           *server.Context
+	logdb         raftio.ILogDB
+	ctxs          []raftio.IContext
+	profilers     []*profiler
+	nodeWorkReady *workReady
+	taskWorkReady *workReady
+	wp            *workerPool
 }
 
 func newExecEngine(nh nodeLoader,
 	ctx *server.Context, logdb raftio.ILogDB) *execEngine {
+	loaded := newLoadedNodes()
 	s := &execEngine{
-		nh:                         nh,
-		ctx:                        ctx,
-		logdb:                      logdb,
-		loaded:                     newLoadedNodes(),
-		nodeStopper:                syncutil.NewStopper(),
-		taskStopper:                syncutil.NewStopper(),
-		snapshotStopper:            syncutil.NewStopper(),
-		nodeWorkReady:              newWorkReady(workerCount),
-		taskWorkReady:              newWorkReady(taskWorkerCount),
-		snapshotWorkReady:          newWorkReady(snapshotWorkerCount),
-		requestedSnapshotWorkReady: newWorkReady(snapshotWorkerCount),
-		streamSnapshotWorkReady:    newWorkReady(snapshotWorkerCount),
-		ctxs:                       make([]raftio.IContext, workerCount),
-		profilers:                  make([]*profiler, workerCount),
+		nh:            nh,
+		ctx:           ctx,
+		logdb:         logdb,
+		loaded:        loaded,
+		nodeStopper:   syncutil.NewStopper(),
+		taskStopper:   syncutil.NewStopper(),
+		nodeWorkReady: newWorkReady(workerCount),
+		taskWorkReady: newWorkReady(taskWorkerCount),
+		ctxs:          make([]raftio.IContext, workerCount),
+		profilers:     make([]*profiler, workerCount),
+		wp:            newWorkerPool(nh, loaded),
 	}
 	sampleRatio := int64(delaySampleRatio / 10)
 	for i := uint64(1); i <= workerCount; i++ {
@@ -173,19 +653,13 @@ func newExecEngine(nh nodeLoader,
 			s.taskWorkerMain(taskWorkerID)
 		})
 	}
-	for i := uint64(1); i <= snapshotWorkerCount; i++ {
-		snapshotWorkerID := i
-		s.snapshotStopper.RunWorker(func() {
-			s.snapshotWorkerMain(snapshotWorkerID)
-		})
-	}
 	return s
 }
 
 func (s *execEngine) stop() {
 	s.nodeStopper.Stop()
 	s.taskStopper.Stop()
-	s.snapshotStopper.Stop()
+	s.wp.stop()
 	for _, ctx := range s.ctxs {
 		if ctx != nil {
 			ctx.Destroy()
@@ -212,126 +686,6 @@ func (s *execEngine) logProfileStats() {
 
 func (s *execEngine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
 	return s.loaded.loaded(clusterID, nodeID)
-}
-
-func (s *execEngine) snapshotWorkerClosed(nodes map[uint64]*node) bool {
-	select {
-	case <-s.snapshotStopper.ShouldStop():
-		s.offloadNodeMap(nodes, rsm.FromSnapshotWorker)
-		return true
-	default:
-	}
-	return false
-}
-
-func (s *execEngine) snapshotWorkerMain(workerID uint64) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	nodes := make(map[uint64]*node)
-	cci := uint64(0)
-	for {
-		select {
-		case <-s.snapshotStopper.ShouldStop():
-			s.offloadNodeMap(nodes, rsm.FromSnapshotWorker)
-			return
-		case <-ticker.C:
-			nodes, cci = s.loadSnapshotNodes(workerID, cci, nodes)
-			for _, node := range nodes {
-				s.recoverFromSnapshot(node.clusterID, nodes)
-				s.saveSnapshot(node.clusterID, nodes)
-				if s.snapshotWorkerClosed(nodes) {
-					return
-				}
-			}
-		case <-s.snapshotWorkReady.waitCh(workerID):
-			clusterIDMap := s.snapshotWorkReady.getReadyMap(workerID)
-			for clusterID := range clusterIDMap {
-				nodes, cci = s.loadSnapshotNodes(workerID, cci, nodes)
-				s.recoverFromSnapshot(clusterID, nodes)
-				if s.snapshotWorkerClosed(nodes) {
-					return
-				}
-			}
-		case <-s.requestedSnapshotWorkReady.waitCh(workerID):
-			clusterIDMap := s.requestedSnapshotWorkReady.getReadyMap(workerID)
-			for clusterID := range clusterIDMap {
-				nodes, cci = s.loadSnapshotNodes(workerID, cci, nodes)
-				s.saveSnapshot(clusterID, nodes)
-				if s.snapshotWorkerClosed(nodes) {
-					return
-				}
-			}
-		case <-s.streamSnapshotWorkReady.waitCh(workerID):
-			clusterIDMap := s.streamSnapshotWorkReady.getReadyMap(workerID)
-			for clusterID := range clusterIDMap {
-				nodes, cci = s.loadSnapshotNodes(workerID, cci, nodes)
-				s.streamSnapshot(clusterID, nodes)
-				if s.snapshotWorkerClosed(nodes) {
-					return
-				}
-			}
-		}
-	}
-}
-
-func (s *execEngine) loadSnapshotNodes(workerID uint64, cci uint64,
-	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	result, cci := s.loadBucketNodes(workerID, cci, nodes,
-		s.snapshotWorkReady.getPartitioner(), rsm.FromSnapshotWorker)
-	s.loaded.update(workerID, rsm.FromSnapshotWorker, result)
-	return result, cci
-}
-
-func (s *execEngine) saveSnapshot(clusterID uint64, nodes map[uint64]*node) {
-	node, ok := nodes[clusterID]
-	if !ok {
-		return
-	}
-	rec, ok := node.ss.getSaveSnapshotReq()
-	if !ok {
-		return
-	}
-	if err := node.saveSnapshot(rec); err != nil {
-		panic(err)
-	} else {
-		node.saveSnapshotDone()
-	}
-}
-
-func (s *execEngine) streamSnapshot(clusterID uint64, nodes map[uint64]*node) {
-	node, ok := nodes[clusterID]
-	if !ok {
-		return
-	}
-	_, getSinkFn, ok := node.ss.getStreamSnapshotReq()
-	if !ok {
-		return
-	}
-	sink := getSinkFn()
-	if err := node.streamSnapshot(sink); err != nil {
-		panic(err)
-	} else {
-		node.streamSnapshotDone()
-	}
-}
-
-func (s *execEngine) recoverFromSnapshot(clusterID uint64,
-	nodes map[uint64]*node) {
-	node, ok := nodes[clusterID]
-	if !ok {
-		return
-	}
-	rec, ok := node.ss.getRecoverFromSnapshotReq()
-	if !ok {
-		return
-	}
-	if index, err := node.recoverFromSnapshot(rec); err != nil {
-		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
-			panic(err)
-		}
-	} else {
-		node.recoverFromSnapshotDone(index)
-	}
 }
 
 func (s *execEngine) taskWorkerMain(workerID uint64) {
@@ -618,15 +972,15 @@ func (s *execEngine) setTaskReady(clusterID uint64) {
 }
 
 func (s *execEngine) setStreamReady(clusterID uint64) {
-	s.streamSnapshotWorkReady.clusterReady(clusterID)
+	s.wp.streamReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) setRequestedSnapshotReady(clusterID uint64) {
-	s.requestedSnapshotWorkReady.clusterReady(clusterID)
+	s.wp.saveReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) setAvailableSnapshotReady(clusterID uint64) {
-	s.snapshotWorkReady.clusterReady(clusterID)
+	s.wp.recoverReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) proposeDelay(clusterID uint64, startTime time.Time) {

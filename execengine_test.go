@@ -135,5 +135,39 @@ func TestLoadedNodes(t *testing.T) {
 	if lns.loaded(2, 3) {
 		t.Errorf("unexpectedly returned true")
 	}
+}
 
+func TestWPRemoveFromPending(t *testing.T) {
+	tests := []struct {
+		length uint64
+		idx    uint64
+	}{
+		{1, 0},
+		{5, 0},
+		{5, 1},
+		{5, 4},
+	}
+	for idx, tt := range tests {
+		w := &workerPool{}
+		for i := uint64(0); i < tt.length; i++ {
+			cid := uint64(1)
+			if i == tt.idx {
+				cid = uint64(0)
+			}
+			r := tsn{task: rsm.Task{ClusterID: cid}}
+			w.pending = append(w.pending, r)
+		}
+		if uint64(len(w.pending)) != tt.length {
+			t.Errorf("unexpected length")
+		}
+		w.removeFromPending(int(tt.idx))
+		if uint64(len(w.pending)) != tt.length-1 {
+			t.Errorf("unexpected length")
+		}
+		for _, p := range w.pending {
+			if p.task.ClusterID == 0 {
+				t.Errorf("%d, pending not removed, %+v", idx, w.pending)
+			}
+		}
+	}
 }
