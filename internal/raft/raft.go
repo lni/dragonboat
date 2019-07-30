@@ -431,18 +431,6 @@ func (r *raft) votingMembers() map[uint64]*remote {
 	return nodes
 }
 
-func (r *raft) sortedVotingMemberIds() []uint64 {
-	nodes := r.votingMembers()
-
-	ids := make([]uint64, 0)
-	for id := range nodes {
-		ids = append(ids, id)
-	}
-
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	return ids
-}
-
 func (r *raft) raftState() pb.State {
 	return pb.State{
 		Term:   r.term,
@@ -1109,7 +1097,7 @@ func (r *raft) campaign() {
 		r.isLeaderTransferTarget = false
 	}
 
-	for _, k := range r.sortedVotingMemberIds() {
+	for k := range r.votingMembers() {
 		if k == r.nodeID {
 			continue
 		}
