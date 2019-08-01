@@ -26,12 +26,6 @@ var (
 	maxEntriesToApplySize = settings.Soft.MaxEntrySize
 )
 
-const (
-	defaultFirstIndex = 1
-	defaultLastIndex  = 0
-	defaultTerm       = 0
-)
-
 // ErrCompacted is the error returned to indicate that the requested entries
 // are no longer in the LogDB due to compaction.
 var ErrCompacted = errors.New("entry compacted")
@@ -90,13 +84,7 @@ type entryLog struct {
 }
 
 func newEntryLog(logdb ILogDB, rl *server.RateLimiter) *entryLog {
-	var firstIndex uint64 = defaultFirstIndex
-	var lastIndex uint64 = defaultLastIndex
-
-	// Could happen with a witness role.
-	if logdb != nil {
-		firstIndex, lastIndex = logdb.GetRange()
-	}
+	firstIndex, lastIndex := logdb.GetRange()
 
 	l := &entryLog{
 		logdb:     logdb,
@@ -112,9 +100,6 @@ func (l *entryLog) firstIndex() uint64 {
 	if ok {
 		return index + 1
 	}
-	if l.logdb == nil {
-		return defaultFirstIndex
-	}
 
 	index, _ = l.logdb.GetRange()
 	return index
@@ -124,9 +109,6 @@ func (l *entryLog) lastIndex() uint64 {
 	index, ok := l.inmem.getLastIndex()
 	if ok {
 		return index
-	}
-	if l.logdb == nil {
-		return defaultLastIndex
 	}
 
 	_, index = l.logdb.GetRange()
@@ -167,9 +149,6 @@ func (l *entryLog) term(index uint64) (uint64, error) {
 	if t, ok := l.inmem.getTerm(index); ok {
 		return t, nil
 	}
-	if l.logdb == nil {
-		return defaultTerm, nil
-	}
 
 	t, err := l.logdb.Term(index)
 	if err != nil && err != ErrCompacted && err != ErrUnavailable {
@@ -206,7 +185,7 @@ func (l *entryLog) getUncommittedEntries() []pb.Entry {
 
 func (l *entryLog) getEntriesFromLogDB(low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, bool, error) {
-	if low >= l.inmem.markerIndex || l.logdb == nil {
+	if low >= l.inmem.markerIndex {
 		return nil, true, nil
 	}
 

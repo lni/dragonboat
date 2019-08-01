@@ -634,7 +634,7 @@ func TestObserverCanBeRemoved(t *testing.T) {
 }
 
 func TestWitnessWillNotStartElection(t *testing.T) {
-	p := newTestWitness(1, nil, []uint64{1}, 10, 1)
+	p := newTestWitness(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not a witness")
 	}
@@ -651,7 +651,7 @@ func TestWitnessWillNotStartElection(t *testing.T) {
 }
 
 func TestWitnessWillVoteInElection(t *testing.T) {
-	p := newTestWitness(1, nil, []uint64{1}, 10, 1)
+	p := newTestWitness(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not a witness")
 	}
@@ -669,7 +669,7 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 	}()
 	nodeId := uint64(1)
 
-	p := newTestWitness(nodeId, nil, []uint64{1}, 10, 1)
+	p := newTestWitness(nodeId, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not an witness")
 	}
@@ -678,7 +678,7 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 
 func TestWitnessReplication(t *testing.T) {
 	p1 := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	p2 := newTestWitness(2, nil, []uint64{}, 10, 1)
+	p2 := newTestWitness(2, nil, []uint64{}, 10, 1, NewTestLogDB())
 	p1.addNode(1)
 	p1.addWitness(2)
 	p2.addNode(1)
@@ -717,7 +717,7 @@ func TestWitnessReplication(t *testing.T) {
 
 func TestWitnessCanPropose(t *testing.T) {
 	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestWitness(2, nil, []uint64{2}, 10, 1)
+	p2 := newTestWitness(2, nil, []uint64{2}, 10, 1, NewTestLogDB())
 	p1.addWitness(2)
 	p2.addNode(1)
 	if !p2.isWitness() {
@@ -759,7 +759,7 @@ func TestWitnessCanPropose(t *testing.T) {
 func TestWitnessCanReadIndexQuorum2(t *testing.T) {
 	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p2 := newTestRaft(2, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p3 := newTestWitness(3, nil, []uint64{3}, 10, 1)
+	p3 := newTestWitness(3, nil, []uint64{3}, 10, 1, NewTestLogDB())
 	p1.addWitness(3)
 	p2.addWitness(3)
 	p3.addNode(1)
@@ -809,7 +809,7 @@ func TestWitnessCanReceiveSnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestWitness(3, []uint64{1}, []uint64{2}, 10, 1)
+	p1 := newTestWitness(3, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
 	if !p1.isWitness() {
 		t.Errorf("not a witness")
 	}
@@ -820,7 +820,7 @@ func TestWitnessCanReceiveSnapshot(t *testing.T) {
 }
 
 func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
-	p1 := newTestWitness(2, []uint64{1}, []uint64{2}, 10, 1)
+	p1 := newTestWitness(2, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
 	m := pb.Message{
 		From:     1,
 		To:       2,
@@ -868,7 +868,7 @@ func TestWitnessCanNotBeRestored(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestWitness(3, []uint64{1, 2}, []uint64{3}, 10, 1)
+	p1 := newTestWitness(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
 	if ok := p1.restore(ss); !ok {
 		t.Errorf("failed to restore")
 	}
@@ -914,7 +914,7 @@ func TestWitnessCanBeAdded(t *testing.T) {
 }
 
 func TestWitnessCanBeRemoved(t *testing.T) {
-	p1 := newTestWitness(1, []uint64{1}, []uint64{2}, 10, 1)
+	p1 := newTestWitness(1, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
 	if len(p1.witnesses) != 1 {
 		t.Errorf("unexpected witness count")
 	}

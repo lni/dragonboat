@@ -235,8 +235,7 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 		panic(err)
 	}
 
-	// All nodes except witness should have logdb initialized.
-	if logdb == nil && !c.IsWitness {
+	if logdb == nil {
 		panic("logdb is nil")
 	}
 
@@ -262,28 +261,26 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 	plog.Infof("%s raft log rate limit enabled: %t, %d",
 		dn(r.clusterID, r.nodeID), r.rl.Enabled(), c.MaxInMemLogSize)
 
-	if logdb != nil {
-		st, members := logdb.NodeState()
-		for p := range members.Addresses {
-			r.remotes[p] = &remote{
-				next: 1,
-			}
+	st, members := logdb.NodeState()
+	for p := range members.Addresses {
+		r.remotes[p] = &remote{
+			next: 1,
 		}
-		for p := range members.Observers {
-			r.observers[p] = &remote{
-				next: 1,
-			}
+	}
+	for p := range members.Observers {
+		r.observers[p] = &remote{
+			next: 1,
 		}
-		for p := range members.Witnesses {
-			r.witnesses[p] = &remote{
-				next: 1,
-			}
+	}
+	for p := range members.Witnesses {
+		r.witnesses[p] = &remote{
+			next: 1,
 		}
+	}
 
-		r.resetMatchValueArray()
-		if !pb.IsEmptyState(st) {
-			r.loadState(st)
-		}
+	r.resetMatchValueArray()
+	if !pb.IsEmptyState(st) {
+		r.loadState(st)
 	}
 
 	// Set node initial state.
@@ -835,16 +832,13 @@ func (r *raft) broadcastHeartbeatMessage() {
 
 func (r *raft) broadcastHeartbeatMessageWithHint(ctx pb.SystemCtx) {
 	zeroCtx := pb.SystemCtx{}
-	for id, rm := range r.remotes {
+	for id, rm := range r.votingMembers() {
 		if id != r.nodeID {
 			r.sendHeartbeatMessage(id, ctx, rm.match)
 		}
 	}
 	if ctx == zeroCtx {
 		for id, rm := range r.observers {
-			r.sendHeartbeatMessage(id, zeroCtx, rm.match)
-		}
-		for id, rm := range r.witnesses {
 			r.sendHeartbeatMessage(id, zeroCtx, rm.match)
 		}
 	}

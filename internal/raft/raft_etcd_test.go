@@ -3041,10 +3041,10 @@ func newTestObserver(id uint64, peers []uint64, observers []uint64, election, he
 	return r
 }
 
-func newTestWitness(id uint64, peers []uint64, witnesses []uint64, election, heartbeat int) *raft {
-	cfg := newTestConfig(id, election, heartbeat, nil)
+func newTestWitness(id uint64, peers []uint64, witnesses []uint64, election, heartbeat int, logdb ILogDB) *raft {
+	cfg := newTestConfig(id, election, heartbeat, logdb)
 	cfg.IsWitness = true
-	r := newRaft(cfg, nil)
+	r := newRaft(cfg, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
