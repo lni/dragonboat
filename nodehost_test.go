@@ -2090,7 +2090,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 		session := nh.GetNoOPSession(2)
 		cmd := make([]byte, 1)
 		for i := 0; i < 16; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			_, err := nh.SyncPropose(ctx, session, cmd)
 			cancel()
 			if err != nil {
