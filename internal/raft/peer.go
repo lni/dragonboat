@@ -104,7 +104,6 @@ func (p *Peer) QuiescedTick() {
 // RequestLeaderTransfer makes a request to transfer the leadership to the
 // specified target node.
 func (p *Peer) RequestLeaderTransfer(target uint64) {
-	plog.Infof("RequestLeaderTransfer called, target %d", target)
 	p.raft.Handle(pb.Message{
 		Type: pb.LeaderTransfer,
 		To:   p.raft.nodeID,

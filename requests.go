@@ -80,6 +80,10 @@ var (
 	// ErrClusterNotReady indicates that the request has been dropped as the
 	// raft cluster is not ready.
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
+	// ErrInvalidTarget indicates that the specified node id invalid.
+	ErrInvalidTarget = errors.New("invalid target node ID")
+	// ErrPendingLeaderTransferExist indicates that leader transfer request exist.
+	ErrPendingLeaderTransferExist = errors.New("pending leader transfer exist")
 )
 
 // IsTempError returns a boolean value indicating whether the specified error
@@ -378,6 +382,37 @@ type pendingSnapshot struct {
 	pending   *RequestState
 	snapshotC chan<- rsm.SSRequest
 	logicalClock
+}
+
+type pendingLeaderTransfer struct {
+	leaderTransferC chan uint64
+}
+
+func newPendingLeaderTransfer() *pendingLeaderTransfer {
+	return &pendingLeaderTransfer{
+		leaderTransferC: make(chan uint64, 1),
+	}
+}
+
+func (l *pendingLeaderTransfer) request(target uint64) error {
+	if target == pb.NoNode {
+		return ErrInvalidTarget
+	}
+	select {
+	case l.leaderTransferC <- target:
+	default:
+		return ErrPendingLeaderTransferExist
+	}
+	return nil
+}
+
+func (l *pendingLeaderTransfer) get() (uint64, bool) {
+	select {
+	case v := <-l.leaderTransferC:
+		return v, true
+	default:
+	}
+	return 0, false
 }
 
 func newPendingSnapshot(snapshotC chan<- rsm.SSRequest,
