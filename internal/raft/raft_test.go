@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"github.com/lni/dragonboat/config"
+	"github.com/lni/dragonboat/internal/settings"
 	"github.com/lni/dragonboat/raftpb"
 	"math"
 	"reflect"
@@ -30,6 +32,43 @@ import (
 // tests ported from etcd raft, those tests are more like raft protocol level
 // integration tests.
 //
+
+func TestInitializeRaft(t *testing.T) {
+	m := pb.Membership{
+		Addresses: map[uint64]string{
+			5: "",
+			6: "",
+			7: "",
+		},
+		Observers: map[uint64]string{
+			3: "",
+			4: "",
+		},
+		Witnesses: map[uint64]string{
+			1: "",
+			2: "",
+		},
+		Removed: make(map[uint64]bool),
+	}
+
+	logdb := &TestLogDB{
+		entries: make([]pb.Entry, 0),
+		snapshot: pb.Snapshot{
+			Membership: m,
+		},
+	}
+
+	node := newRaft(newTestConfig(1, 10, 1), logdb)
+	if len(node.remotes) != 3 {
+		t.Errorf("remotes length not expected: %d", len(node.remotes))
+	}
+	if len(node.observers) != 2 {
+		t.Errorf("observers length not expected: %d", len(node.observers))
+	}
+	if len(node.witnesses) != 2 {
+		t.Errorf("witnesses length not expected: %d", len(node.witnesses))
+	}
+}
 
 func TestMustBeLeaderPanicWhenNotLeader(t *testing.T) {
 	tests := []struct {
@@ -55,6 +94,55 @@ func TestMustBeLeaderPanicWhenNotLeader(t *testing.T) {
 			r.mustBeLeader()
 		}()
 	}
+}
+
+func TestConfigViolationWillPanic(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     *config.Config
+		shouldFail bool
+	}{
+		{"Zero node id", newTestConfig(0, 10, 1), true},
+		{"Zero heartbeat", newTestConfig(1, 10, 0), true},
+		{"Zero election rtt", newTestConfig(1, 0, 1), true},
+		{"Too low election rtt", newTestConfig(1, 3, 2), true},
+		{"Good config", newTestConfig(1, 10, 1), false},
+		{"Rate limit too small", newRateLimitedTestConfig(1, 10, 1, 15), true},
+		{"Good rate limit config", newRateLimitedTestConfig(1, 10, 1, settings.EntryNonCmdFieldsSize+5), false},
+	}
+
+	for _, test := range tests {
+		func() {
+			defer func() {
+				if r := recover(); test.shouldFail == (r == nil) {
+					t.Errorf("Test %v failed: panic expectaion is %v however get recover result %v",
+						test.name, test.shouldFail, r)
+				}
+			}()
+			newRaft(test.config, NewTestLogDB())
+		}()
+	}
+}
+
+func TestNilLogdbWillPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Should have panic with nil logdb.")
+		}
+	}()
+	newRaft(newTestConfig(1, 10, 1), nil)
+}
+
+func TesthandleNodeConfigChange(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	r.handleNodeConfigChange(pb.Message{
+		HintHigh: 0, // add node
+		Hint:     2,
+	})
+	if len(r.remotes) != 1 {
+		t.Errorf("One remote node ")
+	}
+
 }
 
 func TestOneNodeWithHigherTermAndOneNodeWithMostRecentLogCanCompleteElection(t *testing.T) {
@@ -678,6 +766,32 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 	p.addNode(nodeId)
 }
 
+func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
+	members := pb.Membership{
+		Addresses: make(map[uint64]string),
+		Observers: make(map[uint64]string),
+		Removed:   make(map[uint64]bool),
+	}
+	members.Addresses[1] = "a1"
+	members.Addresses[2] = "a2"
+	ss := pb.Snapshot{
+		Index:      20,
+		Term:       20,
+		Membership: members,
+	}
+	p1 := newTestObserver(1, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
+	if !p1.isObserver() {
+		t.Errorf("not an observer")
+	}
+	if ok := p1.restore(ss); !ok {
+		t.Errorf("failed to restore")
+	}
+	p1.restoreRemotes(ss)
+	if p1.isObserver() {
+		t.Errorf("observer not promoted")
+	}
+}
+
 func TestWitnessReplication(t *testing.T) {
 	leader, witness, nt := setUpLeaderAndWitness(t)
 
@@ -697,14 +811,27 @@ func TestWitnessReplication(t *testing.T) {
 	}
 }
 
+func TestWitnessCannotBroadcastReplicateMessage(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+	r.becomeCandidate()
+	r.becomeLeader()
+	r.witnesses[1] = &remote{}
+	defer func() {
+		if r := recover(); r == nil {
+			panic("Broadcast should cause panic")
+		}
+	}()
+	r.broadcastReplicateMessage()
+}
+
 func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 	_, witness, _ := setUpLeaderAndWitness(t)
 
 	expectedEntry := pb.Entry{
-		Type: raftpb.MetadataEntry,
-		Term: 1,
+		Type:  raftpb.MetadataEntry,
+		Term:  1,
 		Index: 1,
-		Cmd: nil,
+		Cmd:   nil,
 	}
 	witnessEntries, err := witness.log.getEntries(1, 2, math.MaxUint64)
 	if err != nil {
@@ -719,11 +846,11 @@ func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
 	leader, witness, nt := setUpLeaderAndWitness(t)
 
- 	configChangEntry := pb.Entry{
-		Term: 1,
+	configChangEntry := pb.Entry{
+		Term:  1,
 		Index: 2,
-		Type: pb.ConfigChangeEntry,
-		Cmd: []byte("test-data"),
+		Type:  pb.ConfigChangeEntry,
+		Cmd:   []byte("test-data"),
 	}
 
 	leader.log.append([]pb.Entry{configChangEntry})
@@ -757,7 +884,7 @@ func TestWitnessDummySnapshot(t *testing.T) {
 		t.Errorf("unexpected index %d", idx)
 	}
 	if msg.Type != pb.InstallSnapshot || msg.Snapshot.Index != 10 ||
-		msg.Snapshot.Term != 2 || !msg.Snapshot.Dummy  {
+		msg.Snapshot.Term != 2 || !msg.Snapshot.Dummy {
 		t.Errorf("unexpected message values")
 	}
 }
@@ -788,43 +915,13 @@ func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
 	return leader, witness, nt
 }
 
-func TestWitnessCanReadIndexQuorum2(t *testing.T) {
-	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestRaft(2, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p3 := newTestWitness(3, nil, []uint64{3}, 10, 1, NewTestLogDB())
-	p1.addWitness(3)
-	p2.addWitness(3)
-	p3.addNode(1)
-	p3.addNode(2)
+func TestWitnessCannotReadIndex(t *testing.T) {
+	witness := newTestWitness(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
 
-	nt := newNetwork(p1, p2, p3)
-	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
-	if p1.state != leader {
-		t.Errorf("failed to start election")
-	}
-	if p2.state != follower {
-		t.Errorf("not a follower")
-	}
-	if !p3.isWitness() {
-		t.Errorf("not a witness")
-	}
-	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
-		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
-	}
-	committed := p1.log.committed
-	for i := 0; i < 10; i++ {
-		nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
-	}
-	if committed+10 != p1.log.committed {
-		t.Errorf("entry not committed")
-	}
-	nt.send(pb.Message{From: 3, To: 3, Type: pb.ReadIndex, Hint: 12345})
-	if len(p3.readyToRead) != 1 {
-		t.Fatalf("ready to read len is not 1")
-	}
-	if p3.readyToRead[0].Index != p1.log.committed {
-		t.Errorf("unexpected ready to read index")
+	nt := newNetwork(witness)
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.ReadIndex, Hint: 12345})
+	if len(witness.readyToRead) != 0 {
+		t.Errorf("ready to read len is not 0")
 	}
 }
 
@@ -1454,12 +1551,34 @@ func TestResetRemotes(t *testing.T) {
 	}
 }
 
-func TestSelfRemoved(t *testing.T) {
+func TestFollowerSelfRemoved(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	if r.selfRemoved() {
 		t.Errorf("unexpectedly self removed")
 	}
 	delete(r.remotes, 1)
+	if !r.selfRemoved() {
+		t.Errorf("self removed not report removed")
+	}
+}
+
+func TestObserverSelfRemoved(t *testing.T) {
+	r := newTestObserver(1, []uint64{}, []uint64{1}, 5, 1, NewTestLogDB())
+	if r.selfRemoved() {
+		t.Errorf("unexpectedly self removed")
+	}
+	delete(r.observers, 1)
+	if !r.selfRemoved() {
+		t.Errorf("self removed not report removed")
+	}
+}
+
+func TestWitnessSelfRemoved(t *testing.T) {
+	r := newTestWitness(1, []uint64{}, []uint64{1}, 5, 1, NewTestLogDB())
+	if r.selfRemoved() {
+		t.Errorf("unexpectedly self removed")
+	}
+	delete(r.witnesses, 1)
 	if !r.selfRemoved() {
 		t.Errorf("self removed not report removed")
 	}
@@ -1800,14 +1919,30 @@ func TestRestoreRemote(t *testing.T) {
 	ss.Membership.Addresses[1] = ""
 	ss.Membership.Addresses[2] = ""
 	ss.Membership.Addresses[3] = ""
+	ss.Membership.Observers = make(map[uint64]string)
+	ss.Membership.Observers[4] = ""
+	ss.Membership.Observers[5] = ""
+	ss.Membership.Witnesses = make(map[uint64]string)
+	ss.Membership.Witnesses[6] = ""
+	ss.Membership.Witnesses[7] = ""
 	r.restoreRemotes(ss)
 	if len(r.remotes) != 3 {
 		t.Errorf("remotes length unexpected %d", len(r.remotes))
 	}
-	if len(r.matched) != 3 {
-		t.Errorf("matchValue not reset")
+	if len(r.observers) != 2 {
+		t.Errorf("observers length unexpected %d", len(r.observers))
 	}
-	for nid, rm := range r.remotes {
+	if len(r.witnesses) != 2 {
+		t.Errorf("witnesses length unexpected %d", len(r.observers))
+	}
+	if len(r.nodesSorted()) != 7 {
+		t.Errorf("total node length unexpected %d", len(r.nodesSorted()))
+	}
+
+	if len(r.matched) != 5 {
+		t.Errorf("matchValue not reset as %d", len(r.matched))
+	}
+	for nid, rm := range r.votingMembers() {
 		if nid == 1 {
 			if rm.match != 3 {
 				t.Errorf("match not moved, %d", rm.match)
@@ -2555,6 +2690,26 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 	}
 	if len(r.readIndex.pending) != 1 || len(r.readIndex.queue) != 1 {
 		t.Errorf("readIndex not updated")
+	}
+}
+
+func TestVotingMemberLengthMismatchWillResetMatchArray(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r.becomeFollower(1, NoLeader)
+	r.becomeCandidate()
+	r.becomeLeader()
+	r.remotes[2].tryUpdate(r.log.lastIndex())
+	if len(r.matched) != 3 {
+		t.Errorf("Match array length unexpected %v", len(r.matched))
+	}
+	// Changing the number of total voting members
+	r.witnesses[4] = &remote{}
+
+	if r.tryCommit() {
+		t.Errorf("Should fail commit")
+	}
+	if len(r.matched) != 4 {
+		t.Errorf("Match array should already be reset to 4 however get %v", len(r.matched))
 	}
 }
 
