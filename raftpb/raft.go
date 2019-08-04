@@ -32,6 +32,11 @@ var (
 	emptyState          = State{}
 )
 
+const (
+	// NoNode is the flag used to indicate that the node id field is not set.
+	NoNode uint64 = 0
+)
+
 // TODO
 // structs below are not pb generated. move them to a more suitable place?
 

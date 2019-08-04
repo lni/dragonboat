@@ -1087,8 +1087,11 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	}
 	plog.Infof("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
-	v.requestLeaderTransfer(targetNodeID)
-	return nil
+	err := v.requestLeaderTransfer(targetNodeID)
+	if err == nil {
+		nh.execEngine.setNodeReady(clusterID)
+	}
+	return err
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for

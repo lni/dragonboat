@@ -52,49 +52,50 @@ type engine interface {
 }
 
 type node struct {
-	readReqCount         uint64
-	leaderID             uint64
-	instanceID           uint64
-	raftAddress          string
-	config               config.Config
-	confChangeC          <-chan configChangeRequest
-	snapshotC            <-chan rsm.SnapshotRequest
-	taskQ                *rsm.TaskQueue
-	mq                   *server.MessageQueue
-	smAppliedIndex       uint64
-	confirmedIndex       uint64
-	pushedIndex          uint64
-	engine               engine
-	getStreamConnection  func(uint64, uint64) pb.IChunkSink
-	handleSnapshotStatus func(uint64, uint64, bool)
-	sendRaftMessage      func(pb.Message)
-	sm                   *rsm.StateMachine
-	smType               pb.StateMachineType
-	incomingProposals    *entryQueue
-	incomingReadIndexes  *readIndexQueue
-	pendingProposals     *pendingProposal
-	pendingReadIndexes   *pendingReadIndex
-	pendingConfigChange  *pendingConfigChange
-	pendingSnapshot      *pendingSnapshot
-	raftMu               sync.Mutex
-	p                    *raft.Peer
-	logreader            *logdb.LogReader
-	logdb                raftio.ILogDB
-	snapshotter          *snapshotter
-	nodeRegistry         transport.INodeRegistry
-	stopc                chan struct{}
-	clusterInfo          atomic.Value
-	tickCount            uint64
-	expireNotified       uint64
-	tickMillisecond      uint64
-	syncTask             *task
-	rateLimited          bool
-	new                  bool
-	closeOnce            sync.Once
-	ss                   *snapshotState
-	snapshotLock         *syncutil.Lock
-	raftEvents           *raftEventListener
-	initializedMu        struct {
+	readReqCount          uint64
+	leaderID              uint64
+	instanceID            uint64
+	raftAddress           string
+	config                config.Config
+	confChangeC           <-chan configChangeRequest
+	snapshotC             <-chan rsm.SnapshotRequest
+	taskQ                 *rsm.TaskQueue
+	mq                    *server.MessageQueue
+	smAppliedIndex        uint64
+	confirmedIndex        uint64
+	pushedIndex           uint64
+	engine                engine
+	getStreamConnection   func(uint64, uint64) pb.IChunkSink
+	handleSnapshotStatus  func(uint64, uint64, bool)
+	sendRaftMessage       func(pb.Message)
+	sm                    *rsm.StateMachine
+	smType                pb.StateMachineType
+	incomingProposals     *entryQueue
+	incomingReadIndexes   *readIndexQueue
+	pendingProposals      *pendingProposal
+	pendingReadIndexes    *pendingReadIndex
+	pendingConfigChange   *pendingConfigChange
+	pendingSnapshot       *pendingSnapshot
+	pendingLeaderTransfer *pendingLeaderTransfer
+	raftMu                sync.Mutex
+	p                     *raft.Peer
+	logreader             *logdb.LogReader
+	logdb                 raftio.ILogDB
+	snapshotter           *snapshotter
+	nodeRegistry          transport.INodeRegistry
+	stopc                 chan struct{}
+	clusterInfo           atomic.Value
+	tickCount             uint64
+	expireNotified        uint64
+	tickMillisecond       uint64
+	syncTask              *task
+	rateLimited           bool
+	new                   bool
+	closeOnce             sync.Once
+	ss                    *snapshotState
+	snapshotLock          *syncutil.Lock
+	raftEvents            *raftEventListener
+	initializedMu         struct {
 		sync.Mutex
 		initialized bool
 	}
@@ -126,6 +127,7 @@ func newNode(raftAddress string,
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SnapshotRequest, 1)
+	leaderTransfer := newPendingLeaderTransfer()
 	pp := newPendingProposal(requestStatePool,
 		proposals, config.ClusterID, config.NodeID, raftAddress, tickMillisecond)
 	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
@@ -133,32 +135,33 @@ func newNode(raftAddress string,
 	ps := newPendingSnapshot(snapshotC, tickMillisecond)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rn := &node{
-		instanceID:           atomic.AddUint64(&instanceID, 1),
-		tickMillisecond:      tickMillisecond,
-		config:               config,
-		raftAddress:          raftAddress,
-		incomingProposals:    proposals,
-		incomingReadIndexes:  readIndexes,
-		confChangeC:          confChangeC,
-		snapshotC:            snapshotC,
-		engine:               engine,
-		getStreamConnection:  getStreamConnection,
-		handleSnapshotStatus: handleSnapshotStatus,
-		stopc:                stopc,
-		pendingProposals:     pp,
-		pendingReadIndexes:   pscr,
-		pendingConfigChange:  pcc,
-		pendingSnapshot:      ps,
-		nodeRegistry:         nodeRegistry,
-		snapshotter:          snapshotter,
-		logreader:            lr,
-		sendRaftMessage:      sendMessage,
-		mq:                   mq,
-		logdb:                ldb,
-		snapshotLock:         syncutil.NewLock(),
-		ss:                   &snapshotState{},
-		syncTask:             newTask(syncTaskInterval),
-		smType:               smType,
+		instanceID:            atomic.AddUint64(&instanceID, 1),
+		tickMillisecond:       tickMillisecond,
+		config:                config,
+		raftAddress:           raftAddress,
+		incomingProposals:     proposals,
+		incomingReadIndexes:   readIndexes,
+		confChangeC:           confChangeC,
+		snapshotC:             snapshotC,
+		engine:                engine,
+		getStreamConnection:   getStreamConnection,
+		handleSnapshotStatus:  handleSnapshotStatus,
+		stopc:                 stopc,
+		pendingProposals:      pp,
+		pendingReadIndexes:    pscr,
+		pendingConfigChange:   pcc,
+		pendingSnapshot:       ps,
+		pendingLeaderTransfer: leaderTransfer,
+		nodeRegistry:          nodeRegistry,
+		snapshotter:           snapshotter,
+		logreader:             lr,
+		sendRaftMessage:       sendMessage,
+		mq:                    mq,
+		logdb:                 ldb,
+		snapshotLock:          syncutil.NewLock(),
+		ss:                    &snapshotState{},
+		syncTask:              newTask(syncTaskInterval),
+		smType:                smType,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -356,8 +359,8 @@ func (n *node) read(handler ICompleteHandler,
 	return rs, err
 }
 
-func (n *node) requestLeaderTransfer(nodeID uint64) {
-	n.p.RequestLeaderTransfer(nodeID)
+func (n *node) requestLeaderTransfer(nodeID uint64) error {
+	return n.pendingLeaderTransfer.request(nodeID)
 }
 
 func (n *node) requestSnapshot(opt SnapshotOption,
@@ -987,6 +990,9 @@ func (n *node) handleEvents() bool {
 	if n.handleProposals() {
 		hasEvent = true
 	}
+	if n.handleLeaderTransferRequest() {
+		hasEvent = true
+	}
 	if n.handleSnapshotRequest(lastApplied) {
 		hasEvent = true
 	}
@@ -1000,6 +1006,14 @@ func (n *node) handleEvents() bool {
 		n.pendingReadIndexes.applied(lastApplied)
 	}
 	return hasEvent
+}
+
+func (n *node) handleLeaderTransferRequest() bool {
+	target, ok := n.pendingLeaderTransfer.get()
+	if ok {
+		n.p.RequestLeaderTransfer(target)
+	}
+	return ok
 }
 
 func (n *node) handleSnapshotRequest(lastApplied uint64) bool {

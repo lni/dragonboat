@@ -37,6 +37,53 @@ const (
 	testTickInMillisecond uint64 = 50
 )
 
+func TestPendingLeaderTransferCanBeCreated(t *testing.T) {
+	p := newPendingLeaderTransfer()
+	if len(p.leaderTransferC) != 0 || p.leaderTransferC == nil {
+		t.Errorf("leaderTransferC not ready")
+	}
+}
+
+func TestLeaderTransferCanBeRequested(t *testing.T) {
+	p := newPendingLeaderTransfer()
+	if err := p.request(1); err != nil {
+		t.Errorf("failed to request leadership transfer %v", err)
+	}
+	if len(p.leaderTransferC) != 1 {
+		t.Errorf("leader transfer not requested")
+	}
+}
+
+func TestInvalidLeaderTransferIsNotAllowed(t *testing.T) {
+	p := newPendingLeaderTransfer()
+	if err := p.request(0); err != ErrInvalidTarget {
+		t.Errorf("failed to reject invalid target node id")
+	}
+	if err := p.request(1); err != nil {
+		t.Errorf("failed to request %v", err)
+	}
+	if err := p.request(2); err != ErrPendingLeaderTransferExist {
+		t.Errorf("failed to reject")
+	}
+}
+
+func TestCanGetExitingLeaderTransferRequest(t *testing.T) {
+	p := newPendingLeaderTransfer()
+	_, ok := p.get()
+	if ok {
+		t.Errorf("unexpectedly returned request")
+	}
+	p.request(1)
+	v, ok := p.get()
+	if !ok || v != 1 {
+		t.Errorf("failed to get request")
+	}
+	v, ok = p.get()
+	if ok || v != 0 {
+		t.Errorf("unexpectedly returned request")
+	}
+}
+
 func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	fn := func(rs *RequestState) {
 		defer func() {
