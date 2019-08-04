@@ -333,6 +333,10 @@ func (r *raft) describe() string {
 		r.log.processed, dn(r.clusterID, r.nodeID), r.term)
 }
 
+func (r *raft) isLeader() bool {
+	return r.state == leader
+}
+
 func (r *raft) isObserver() bool {
 	return r.state == observer
 }
@@ -727,13 +731,8 @@ func (r *raft) makeReplicateMessage(to uint64,
 	}
 	// Don't send actual log entry to witness as they won't replicate real message,
 	// unless there is a config change.
-	if r.isWitness() {
-		for _, entry := range entries {
-			if entry.Type == pb.ApplicationEntry {
-				entry.Cmd = nil
-			}
-			entry.Type = pb.MetadataEntry
-		}
+	if _, ok := r.witnesses[to]; ok {
+		entries = makeMetadataEntries(entries)
 	}
 
 	return pb.Message{
@@ -744,6 +743,35 @@ func (r *raft) makeReplicateMessage(to uint64,
 		Entries:  entries,
 		Commit:   r.log.committed,
 	}, nil
+}
+
+func makeMetadataEntries(entries []pb.Entry) []pb.Entry {
+	metadataEntries := make([]pb.Entry, len(entries), len(entries))
+	copy(metadataEntries, entries)
+
+	for i, entry := range entries {
+		if entry.Type != pb.ConfigChangeEntry {
+			metadataEntries[i].Term = entries[i].Term
+			metadataEntries[i].Index = entries[i].Index
+			metadataEntries[i].Type = pb.MetadataEntry
+		} else {
+			metadataEntries[i] = copyEntry(entries[i])
+		}
+	}
+	return metadataEntries
+}
+
+func copyEntry(src pb.Entry) pb.Entry {
+	return pb.Entry{
+		Term: src.Term,
+		Index: src.Index,
+		Type: src.Type,
+		Key: src.Key,
+		Cmd: src.Cmd,
+		SeriesID: src.SeriesID,
+		ClientID: src.ClientID,
+		RespondedTo: src.RespondedTo,
+	}
 }
 
 func (r *raft) sendReplicateMessage(to uint64) {

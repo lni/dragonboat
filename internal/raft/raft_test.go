@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"github.com/lni/dragonboat/raftpb"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -677,83 +679,118 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 }
 
 func TestWitnessReplication(t *testing.T) {
-	p1 := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	p2 := newTestWitness(2, nil, []uint64{}, 10, 1, NewTestLogDB())
-	p1.addNode(1)
-	p1.addWitness(2)
-	p2.addNode(1)
-	if p1.isObserver() {
-		t.Errorf("p1 is still observer")
-	}
-	if !p2.isWitness() {
-		t.Errorf("p2 is not witness")
-	}
-	nt := newNetwork(p1, p2)
-	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
-	if len(p1.remotes) != 1 {
-		t.Errorf("remotes len: %d, want 0", len(p1.remotes))
-	}
-	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
-	}
-	if p1.state != leader {
-		t.Errorf("failed to start election")
-	}
-	committed := p1.log.committed
+	leader, witness, nt := setUpLeaderAndWitness(t)
+
+	committed := leader.log.committed
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
 
 	expectedIndex := committed + 1
-	if expectedIndex != p1.log.committed {
-		t.Errorf("entry not committed on leader: %d", p2.log.committed)
+	if expectedIndex != leader.log.committed {
+		t.Errorf("entry not committed on leader: %d", witness.log.committed)
 	}
 	// the no-op blank entry appended after p1 becomes the leader is also replicated
-	if expectedIndex != p2.log.committed {
-		t.Errorf("entry not committed on witness: %d", p2.log.committed)
+	if expectedIndex != witness.log.committed {
+		t.Errorf("entry not committed on witness: %d", witness.log.committed)
 	}
-	if expectedIndex != p1.witnesses[2].match {
-		t.Errorf("match value expected: %d, actual: %d", expectedIndex, p1.witnesses[2].match)
+	if expectedIndex != leader.witnesses[2].match {
+		t.Errorf("match value expected: %d, actual: %d", expectedIndex, leader.witnesses[2].match)
+	}
+}
+
+func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
+	_, witness, _ := setUpLeaderAndWitness(t)
+
+	expectedEntry := pb.Entry{
+		Type: raftpb.MetadataEntry,
+		Term: 1,
+		Index: 1,
+		Cmd: nil,
+	}
+	witnessEntries, err := witness.log.getEntries(1, 2, math.MaxUint64)
+	if err != nil {
+		t.Errorf("Encounter error during get entries: %v", err)
+	}
+
+	if !reflect.DeepEqual(expectedEntry, witnessEntries[0]) {
+		t.Errorf("Found entry not matching. Expected: %v, actual: %v", expectedEntry, witnessEntries[0])
+	}
+}
+
+func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
+	leader, witness, nt := setUpLeaderAndWitness(t)
+
+ 	configChangEntry := pb.Entry{
+		Term: 1,
+		Index: 2,
+		Type: pb.ConfigChangeEntry,
+		Cmd: []byte("test-data"),
+	}
+
+	leader.log.append([]pb.Entry{configChangEntry})
+
+	// Send config change to witness.
+	leader.sendReplicateMessage(2)
+	nt.send(leader.msgs[0])
+
+	witnessEntries, err := witness.log.getEntries(1, 3, math.MaxUint64)
+	if err != nil {
+		t.Errorf("Encounter error during get entries: %v", err)
+	}
+
+	if !reflect.DeepEqual(configChangEntry, witnessEntries[1]) {
+		t.Errorf("Found entry not matching. Expected: %v, actual: %v", configChangEntry, witnessEntries[1])
 	}
 }
 
 func TestWitnessCanPropose(t *testing.T) {
-	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestWitness(2, nil, []uint64{2}, 10, 1, NewTestLogDB())
-	p1.addWitness(2)
-	p2.addNode(1)
-	if !p2.isWitness() {
-		t.Errorf("p2 is not witness")
-	}
-	nt := newNetwork(p1, p2)
-	if len(p1.remotes) != 1 {
-		t.Errorf("remotes len: %d, want 1", len(p1.remotes))
-	}
-	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
-	if p1.state != leader {
-		t.Errorf("failed to start election")
-	}
-	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
-		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
-	}
-	if !p2.isWitness() {
-		t.Errorf("not witness")
-	}
-	committed := p1.log.committed
+	leader, witness, nt := setUpLeaderAndWitness(t)
+
+	committed := leader.log.committed
 	for i := 0; i < 10; i++ {
 		nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
 	}
 
 	expectedIndex := committed + 10
-	if expectedIndex != p1.log.committed {
-		t.Errorf("entry not committed on leader: %d", p1.log.committed)
+	if expectedIndex != leader.log.committed {
+		t.Errorf("entry not committed on leader: %d", leader.log.committed)
 	}
 	// the no-op blank entry appended after p1 becomes the leader is also replicated
-	if expectedIndex != p2.log.committed {
-		t.Errorf("entry not committed on witness: %d", p2.log.committed)
+	if expectedIndex != witness.log.committed {
+		t.Errorf("entry not committed on witness: %d", witness.log.committed)
 	}
-	if expectedIndex != p1.witnesses[2].match {
-		t.Errorf("match value expected: %d, actual %d", expectedIndex, p1.witnesses[2].match)
+	if expectedIndex != leader.witnesses[2].match {
+		t.Errorf("match value expected: %d, actual %d", expectedIndex, leader.witnesses[2].match)
 	}
+}
+
+//func TestWitnessWillInstallEmptySnapshot() {
+//
+//}
+
+func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
+	leader := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	witness := newTestWitness(2, nil, []uint64{2}, 10, 1, NewTestLogDB())
+	leader.addWitness(2)
+	witness.addNode(1)
+	if !witness.isWitness() {
+		t.Errorf("Assumed witness is not witness")
+	}
+	nt := newNetwork(leader, witness)
+	if len(leader.remotes) != 1 {
+		t.Errorf("remotes len: %d, want 1", len(leader.remotes))
+	}
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if !leader.isLeader() {
+		t.Errorf("failed to start election")
+	}
+	for i := uint64(0); i <= leader.randomizedElectionTimeout; i++ {
+		leader.tick()
+		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
+	}
+	if !witness.isWitness() {
+		t.Errorf("not witness")
+	}
+	return leader, witness, nt
 }
 
 func TestWitnessCanReadIndexQuorum2(t *testing.T) {

@@ -887,6 +887,8 @@ func (n *node) processDroppedEntries(ud pb.Update) {
 			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
+		} else if e.Type == pb.MetadataEntry {
+			// not applicable atm
 		} else {
 			plog.Panicf("unknown dropped entry type %s", e.Type)
 		}
