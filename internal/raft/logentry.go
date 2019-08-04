@@ -53,7 +53,7 @@ type ILogDB interface {
 	SetState(ps pb.State)
 	// CreateSnapshot sets the snapshot known to ILogDB
 	CreateSnapshot(ss pb.Snapshot) error
-	// ApplySnapshot makes the sbapshot known to ILogDB and also update the entry
+	// ApplySnapshot makes the snapshot known to ILogDB and also update the entry
 	// range known to ILogDB.
 	ApplySnapshot(ss pb.Snapshot) error
 	// Term returns the entry term of the specified entry.

@@ -729,7 +729,10 @@ func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
 	leader.log.append([]pb.Entry{configChangEntry})
 
 	// Send config change to witness.
-	leader.sendReplicateMessage(2)
+	leader.broadcastReplicateMessage()
+	if len(leader.msgs) != 1 {
+		t.Errorf("Expecting 1 election message, actually get %v", len(leader.msgs))
+	}
 	nt.send(leader.msgs[0])
 
 	witnessEntries, err := witness.log.getEntries(1, 3, math.MaxUint64)
@@ -742,30 +745,22 @@ func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
 	}
 }
 
-func TestWitnessCanPropose(t *testing.T) {
-	leader, witness, nt := setUpLeaderAndWitness(t)
+func TestWitnessDummySnapshot(t *testing.T) {
+	leader, _, _ := setUpLeaderAndWitness(t)
 
-	committed := leader.log.committed
-	for i := 0; i < 10; i++ {
-		nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+	ss := pb.Snapshot{Index: 10, Term: 2}
+	if err := leader.log.logdb.ApplySnapshot(ss); err != nil {
+		t.Errorf("apply snapshot failed %v", err)
 	}
-
-	expectedIndex := committed + 10
-	if expectedIndex != leader.log.committed {
-		t.Errorf("entry not committed on leader: %d", leader.log.committed)
+	msg := pb.Message{}
+	if idx := leader.makeInstallSnapshotMessage(2, &msg); idx != 10 {
+		t.Errorf("unexpected index %d", idx)
 	}
-	// the no-op blank entry appended after p1 becomes the leader is also replicated
-	if expectedIndex != witness.log.committed {
-		t.Errorf("entry not committed on witness: %d", witness.log.committed)
-	}
-	if expectedIndex != leader.witnesses[2].match {
-		t.Errorf("match value expected: %d, actual %d", expectedIndex, leader.witnesses[2].match)
+	if msg.Type != pb.InstallSnapshot || msg.Snapshot.Index != 10 ||
+		msg.Snapshot.Term != 2 || !msg.Snapshot.Dummy  {
+		t.Errorf("unexpected message values")
 	}
 }
-
-//func TestWitnessWillInstallEmptySnapshot() {
-//
-//}
 
 func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
 	leader := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())

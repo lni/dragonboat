@@ -705,8 +705,30 @@ func (r *raft) makeInstallSnapshotMessage(to uint64, m *pb.Message) uint64 {
 	if pb.IsEmptySnapshot(snapshot) {
 		plog.Panicf("%s got an empty snapshot", r.describe())
 	}
+
+	// For witness, snapshot message will be marked as dummy snapshot.
+	if _, ok := r.witnesses[to]; ok {
+		snapshot = makeMetadataSnapshot(snapshot)
+	}
+
 	m.Snapshot = snapshot
 	return snapshot.Index
+}
+
+func makeMetadataSnapshot(snapshot pb.Snapshot) pb.Snapshot {
+	return pb.Snapshot{
+		Filepath: snapshot.Filepath,
+		Index: snapshot.Index,
+		Term: snapshot.Term,
+		Membership: snapshot.Membership,
+		Files: snapshot.Files,
+		Checksum: snapshot.Checksum,
+		Dummy: true,
+		ClusterId: snapshot.ClusterId,
+		Type:        snapshot.Type,
+		Imported   : snapshot.Imported,
+		OnDiskIndex: snapshot.OnDiskIndex,
+	}
 }
 
 func (r *raft) makeReplicateMessage(to uint64,
@@ -1846,18 +1868,6 @@ func (r *raft) handleWitnessSnapshot(m pb.Message) {
 	r.handleFollowerInstallSnapshot(m)
 }
 
-func (r *raft) handleWitnessPropose(m pb.Message) {
-	r.handleFollowerPropose(m)
-}
-
-func (r *raft) handleWitnessReadIndex(m pb.Message) {
-	r.handleFollowerReadIndex(m)
-}
-
-func (r *raft) handleWitnessReadIndexResp(m pb.Message) {
-	r.handleFollowerReadIndexResp(m)
-}
-
 //
 // message handlers used by follower
 //
@@ -2111,9 +2121,6 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[witness][pb.Heartbeat] = r.handleWitnessHeartbeat
 	r.handlers[witness][pb.Replicate] = r.handleWitnessReplicate
 	r.handlers[witness][pb.InstallSnapshot] = r.handleWitnessSnapshot
-	r.handlers[witness][pb.Propose] = r.handleWitnessPropose
-	r.handlers[witness][pb.ReadIndex] = r.handleWitnessReadIndex
-	r.handlers[witness][pb.ReadIndexResp] = r.handleWitnessReadIndexResp
 	r.handlers[witness][pb.RequestVote] = r.handleNodeRequestVote
 	r.handlers[witness][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[witness][pb.LocalTick] = r.handleLocalTick
@@ -2145,6 +2152,9 @@ func (r *raft) checkHandlerMap() {
 		{observer, pb.ReplicateResp},
 		{observer, pb.HeartbeatResp},
 		{witness, pb.Election},
+		{witness, pb.Propose},
+		{witness, pb.ReadIndex},
+		{witness, pb.ReadIndexResp},
 		{witness, pb.RequestVoteResp},
 		{witness, pb.ReplicateResp},
 		{witness, pb.HeartbeatResp},
