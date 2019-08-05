@@ -408,8 +408,7 @@ func (r *raft) restore(ss pb.Snapshot) bool {
 func (r *raft) restoreRemotes(ss pb.Snapshot) {
 	r.remotes = make(map[uint64]*remote)
 	for id := range ss.Membership.Addresses {
-		_, ok := r.observers[id]
-		if ok {
+		if id == r.nodeID && r.state == observer {
 			r.becomeFollower(r.term, r.leaderID)
 		}
 		match := uint64(0)

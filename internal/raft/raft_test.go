@@ -432,7 +432,7 @@ func TestObserverCanReceiveSnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(3, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
+	p1 := newTestObserver(3, []uint64{1}, []uint64{2, 3}, 10, 1, NewTestLogDB())
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
@@ -508,7 +508,7 @@ func TestObserverCanBePromotedBySnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(1, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
+	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
@@ -518,6 +518,38 @@ func TestObserverCanBePromotedBySnapshot(t *testing.T) {
 	p1.restoreRemotes(ss)
 	if p1.isObserver() {
 		t.Errorf("observer not promoted")
+	}
+}
+
+func TestCorrectObserverCanBePromotedBySnapshot(t *testing.T) {
+	members := pb.Membership{
+		Addresses: make(map[uint64]string),
+		Observers: make(map[uint64]string),
+		Removed:   make(map[uint64]bool),
+	}
+	members.Observers[1] = "a1"
+	members.Addresses[2] = "a2"
+	members.Addresses[3] = "a3"
+	ss := pb.Snapshot{
+		Index:      20,
+		Term:       20,
+		Membership: members,
+	}
+	p1 := newTestObserver(1, []uint64{2}, []uint64{1, 3}, 10, 1, NewTestLogDB())
+	if !p1.isObserver() {
+		t.Errorf("not an observer")
+	}
+	_, ok := p1.observers[1]
+	if !ok {
+		t.Errorf("not an observer")
+	}
+	_, ok = p1.observers[3]
+	if !ok {
+		t.Errorf("not an observer")
+	}
+	p1.restoreRemotes(ss)
+	if !p1.isObserver() {
+		t.Errorf("observer p1 unexpectedly promoted")
 	}
 }
 
@@ -561,13 +593,17 @@ func TestObserverCanBeAdded(t *testing.T) {
 }
 
 func TestObserverCanBeRemoved(t *testing.T) {
-	p1 := newTestObserver(1, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
-	if len(p1.observers) != 1 {
+	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	if len(p1.observers) != 2 {
 		t.Errorf("unexpected observer count")
 	}
 	p1.removeNode(2)
-	if len(p1.observers) != 0 {
+	if len(p1.observers) != 1 {
 		t.Errorf("observer not removed")
+	}
+	_, ok := p1.observers[2]
+	if ok {
+		t.Errorf("observer node 2 not removed")
 	}
 }
 
