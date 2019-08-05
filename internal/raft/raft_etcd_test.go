@@ -3007,6 +3007,15 @@ func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, 
 }
 
 func newTestObserver(id uint64, peers []uint64, observers []uint64, election, heartbeat int, logdb ILogDB) *raft {
+	found := false
+	for _, p := range observers {
+		if p == id {
+			found = true
+		}
+	}
+	if !found {
+		panic("observer node id not included in the observers list")
+	}
 	cfg := newTestConfig(id, election, heartbeat, logdb)
 	cfg.IsObserver = true
 	r := newRaft(cfg, logdb)
