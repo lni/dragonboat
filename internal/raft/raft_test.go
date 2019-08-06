@@ -15,8 +15,8 @@
 package raft
 
 import (
-	"github.com/lni/dragonboat/config"
-	"github.com/lni/dragonboat/internal/settings"
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	"math"
 	"reflect"
 	"sort"
