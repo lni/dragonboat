@@ -46,6 +46,8 @@ var (
 )
 
 var (
+	// ErrInvalidOperation indicates that the requested operation is not allowed.
+	ErrInvalidOperation = errors.New("invalid operation")
 	// ErrInvalidSession indicates that the specified client session is invalid.
 	ErrInvalidSession = errors.New("invalid session")
 	// ErrTimeoutTooSmall indicates that the specified timeout value is too small.

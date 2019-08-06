@@ -175,6 +175,7 @@ type StateMachine struct {
 	taskQ           *TaskQueue
 	onDiskSM        bool
 	aborted         bool
+	isWitness       bool
 	sct             config.CompressionType
 	syncedIndex     struct {
 		sync.Mutex
@@ -199,6 +200,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		node:        proxy,
 		sessions:    NewSessionManager(),
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
+		isWitness:   cfg.IsWitness,
 		sct:         ct,
 	}
 	return a
@@ -501,7 +503,7 @@ func (s *StateMachine) Concurrent() bool {
 // OnDiskStateMachine returns a boolean flag indicating whether it is an on
 // disk state machine.
 func (s *StateMachine) OnDiskStateMachine() bool {
-	return s.onDiskSM
+	return s.onDiskSM && !s.isWitness
 }
 
 // SaveSnapshot creates a snapshot.

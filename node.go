@@ -199,6 +199,9 @@ func (n *node) NodeReady() {
 
 func (n *node) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	if n.isWitness() {
+		return
+	}
 	if notifyReadClient {
 		n.pendingReadIndexes.applied(entry.Index)
 	}
@@ -257,6 +260,9 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 }
 
 func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
+	if n.isWitness() {
+		return
+	}
 	if accepted {
 		n.pendingConfigChange.apply(key, false)
 		n.captureClusterState()
@@ -317,12 +323,19 @@ func (n *node) supportClientSession() bool {
 	return !n.OnDiskStateMachine()
 }
 
+func (n *node) isWitness() bool {
+	return n.config.IsWitness
+}
+
 func (n *node) OnDiskStateMachine() bool {
 	return n.sm.OnDiskStateMachine()
 }
 
 func (n *node) proposeSession(session *client.Session,
 	handler ICompleteHandler, timeout time.Duration) (*RequestState, error) {
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	if !session.ValidForSessionOp(n.clusterID) {
 		return nil, ErrInvalidSession
 	}
@@ -339,6 +352,9 @@ func (n *node) payloadTooBig(sz int) bool {
 func (n *node) propose(session *client.Session,
 	cmd []byte, handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	if !session.ValidForProposal(n.clusterID) {
 		return nil, ErrInvalidSession
 	}
@@ -350,6 +366,9 @@ func (n *node) propose(session *client.Session,
 
 func (n *node) read(handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, error) {
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	rs, err := n.pendingReadIndexes.read(handler, timeout)
 	if err == nil {
 		rs.node = n
@@ -364,6 +383,9 @@ func (n *node) requestLeaderTransfer(nodeID uint64) error {
 func (n *node) requestSnapshot(opt SnapshotOption,
 	timeout time.Duration) (*RequestState, error) {
 	st := rsm.UserRequestedSnapshot
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	if opt.Exported {
 		plog.Infof("%s called export snapshot", n.id())
 		st = rsm.ExportedSnapshot
@@ -394,6 +416,9 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, addr string, orderID uint64,
 	timeout time.Duration) (*RequestState, error) {
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	cc := pb.ConfigChange{
 		Type:           cct,
 		NodeID:         nodeID,

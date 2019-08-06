@@ -404,3 +404,26 @@ func TestGetEntrySliceInMemSize(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataEntry(t *testing.T) {
+	me := Entry{
+		Type:  MetadataEntry,
+		Index: 200,
+		Term:  5,
+	}
+	if !me.IsEmpty() {
+		t.Errorf("IsEmpty returned false")
+	}
+	if me.IsSessionManaged() {
+		t.Errorf("IsSessionManaged returned true")
+	}
+	if !me.IsNoOPSession() {
+		t.Errorf("IsNoOPSession returned false")
+	}
+	if me.IsNewSessionRequest() || me.IsEndOfSessionRequest() {
+		t.Errorf("not suppose to be session related")
+	}
+	if me.IsUpdateEntry() {
+		t.Errorf("IsUpdateEntry returned true")
+	}
+}

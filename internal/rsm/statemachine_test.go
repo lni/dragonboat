@@ -332,6 +332,45 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	}
 }
 
+func TestMetadataEntryCanBeHandled(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	store := &tests.ConcurrentUpdate{}
+	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	sm := NewStateMachine(ds, nil, config.Config{}, nodeProxy)
+	e1 := pb.Entry{
+		Type:  pb.MetadataEntry,
+		Index: 235,
+		Term:  1,
+	}
+	e2 := pb.Entry{
+		Type:  pb.MetadataEntry,
+		Index: 236,
+		Term:  1,
+	}
+	e3 := pb.Entry{
+		Type:  pb.MetadataEntry,
+		Index: 237,
+		Term:  1,
+	}
+	commit := Task{
+		Entries: []pb.Entry{e1, e2, e3},
+	}
+	sm.index = 234
+	sm.taskQ.Add(commit)
+	// two commits to handle
+	batch := make([]Task, 0, 8)
+	if _, err := sm.Handle(batch, nil); err != nil {
+		t.Fatalf("handle failed %v", err)
+	}
+	if sm.GetLastApplied() != 237 {
+		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
+	}
+	if store.UpdateCount != 0 {
+		t.Fatalf("Update() not suppose to be called")
+	}
+}
+
 func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
 	defer leaktest.AfterTest(t)()
 	createTestDir()
@@ -2283,6 +2322,28 @@ func TestIsDummySnapshot(t *testing.T) {
 		}
 		if s.isDummySnapshot(r) != tt.dummy {
 			t.Errorf("%d, is dummy test failed", idx)
+		}
+	}
+}
+
+func TestWitnessNodeIsNeverConsideredAsOnDiskSM(t *testing.T) {
+	tests := []struct {
+		onDiskSM  bool
+		isWitness bool
+		result    bool
+	}{
+		{true, true, false},
+		{true, false, true},
+		{false, true, false},
+		{false, false, false},
+	}
+	for idx, tt := range tests {
+		sm := &StateMachine{
+			onDiskSM:  tt.onDiskSM,
+			isWitness: tt.isWitness,
+		}
+		if sm.OnDiskStateMachine() != tt.result {
+			t.Errorf("%d, got %t, want %t", idx, sm.OnDiskStateMachine(), tt.result)
 		}
 	}
 }

@@ -837,6 +837,9 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 	if !v.initialized() {
 		return nil, ErrClusterNotInitialized
 	}
+	if v.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	data, err := v.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {
 		return nil, ErrClusterClosed
