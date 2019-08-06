@@ -123,6 +123,7 @@ message Membership {
   map<uint64, string> addresses   = 2;
   map<uint64, bool> removed       = 3;
   map<uint64, string> observers   = 4;
+  map<uint64, string> witnesses   = 5;
 }
 
 // field id 1 was used for optional string filename

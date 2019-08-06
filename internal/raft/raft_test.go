@@ -17,7 +17,6 @@ package raft
 import (
 	"github.com/lni/dragonboat/config"
 	"github.com/lni/dragonboat/internal/settings"
-	"github.com/lni/dragonboat/raftpb"
 	"math"
 	"reflect"
 	"sort"
@@ -828,7 +827,7 @@ func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 	_, witness, _ := setUpLeaderAndWitness(t)
 
 	expectedEntry := pb.Entry{
-		Type:  raftpb.MetadataEntry,
+		Type:  pb.MetadataEntry,
 		Term:  1,
 		Index: 1,
 		Cmd:   nil,
@@ -1581,6 +1580,43 @@ func TestWitnessSelfRemoved(t *testing.T) {
 	delete(r.witnesses, 1)
 	if !r.selfRemoved() {
 		t.Errorf("self removed not report removed")
+	}
+}
+
+func TestFullMemberWithOneWitnessCouldMakeProgressWithOneMemberDrop(t *testing.T) {
+	p1 := newTestRaft(1, []uint64{1, 2, 3, 4}, 10, 1, NewTestLogDB())
+	p2 := newTestRaft(1, []uint64{1, 2, 3, 4}, 10, 1, NewTestLogDB())
+	p3 := newTestRaft(1, []uint64{1, 2, 3, 4}, 10, 1, NewTestLogDB())
+	p4 := newTestWitness(1, []uint64{1, 2, 3, 4}, []uint64{4}, 10, 1, NewTestLogDB())
+	nt := newNetwork(p1, p2, p3, p4)
+
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if !p1.isLeader() {
+		t.Errorf("p1 should be leader")
+	}
+	if !p4.isWitness() {
+		t.Errorf("p4 should be witness")
+	}
+
+	committed := p1.log.committed
+	nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+
+	peers := []*raft{p1, p2, p3, p4}
+	for _, p := range peers {
+		if p.log.committed != committed+1 {
+			t.Errorf("new propose should have committed for member %v", p.nodeID)
+		}
+	}
+
+	// Partition a full member
+	nt.isolate(3)
+	nt.send(pb.Message{From: 2, To: 2, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
+
+	for _, p := range peers {
+		// Only p3 will lag behind.
+		if p.log.committed != committed+2 && p.nodeID != 3 {
+			t.Errorf("new propose should have committed for member %v", p.nodeID)
+		}
 	}
 }
 

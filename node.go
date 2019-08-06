@@ -883,12 +883,10 @@ func (n *node) processDroppedReadIndexes(ud pb.Update) {
 
 func (n *node) processDroppedEntries(ud pb.Update) {
 	for _, e := range ud.DroppedEntries {
-		if e.Type == pb.ApplicationEntry || e.Type == pb.EncodedEntry {
+		if e.Type == pb.ApplicationEntry || e.Type == pb.EncodedEntry || e.Type == pb.MetadataEntry {
 			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
-		} else if e.Type == pb.MetadataEntry {
-			// not applicable atm
 		} else {
 			plog.Panicf("unknown dropped entry type %s", e.Type)
 		}

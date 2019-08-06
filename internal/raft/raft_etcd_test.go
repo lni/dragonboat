@@ -23,7 +23,6 @@ package raft
 import (
 	"bytes"
 	"fmt"
-	config2 "github.com/lni/dragonboat/config"
 	"io"
 	"io/ioutil"
 	"math"
@@ -2979,11 +2978,11 @@ func setRandomizedElectionTimeout(r *raft, v uint64) {
 	r.randomizedElectionTimeout = v
 }
 
-func newTestConfig(id uint64, election, heartbeat int) *config2.Config {
+func newTestConfig(id uint64, election, heartbeat int) *config.Config {
 	return newRateLimitedTestConfig(id, election, heartbeat, 0)
 }
 
-func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) *config2.Config {
+func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) *config.Config {
 	return &config.Config{
 		NodeID:       id,
 		ElectionRTT:  uint64(election),
