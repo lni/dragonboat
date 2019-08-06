@@ -47,13 +47,13 @@ type ILogDB interface {
 	GetRange() (uint64, uint64)
 	// SetRange updates the ILogDB to extend the entry range known to the ILogDB.
 	SetRange(index uint64, length uint64)
-	// NodeState returns the state of the node persistented in LogDB.
+	// NodeState returns the state of the node persistent in LogDB.
 	NodeState() (pb.State, pb.Membership)
 	// SetState sets the persistent state known to ILogDB.
 	SetState(ps pb.State)
 	// CreateSnapshot sets the snapshot known to ILogDB
 	CreateSnapshot(ss pb.Snapshot) error
-	// ApplySnapshot makes the sbapshot known to ILogDB and also update the entry
+	// ApplySnapshot makes the snapshot known to ILogDB and also update the entry
 	// range known to ILogDB.
 	ApplySnapshot(ss pb.Snapshot) error
 	// Term returns the entry term of the specified entry.
@@ -85,6 +85,7 @@ type entryLog struct {
 
 func newEntryLog(logdb ILogDB, rl *server.RateLimiter) *entryLog {
 	firstIndex, lastIndex := logdb.GetRange()
+
 	l := &entryLog{
 		logdb:     logdb,
 		inmem:     newInMemory(lastIndex, rl),
@@ -99,6 +100,7 @@ func (l *entryLog) firstIndex() uint64 {
 	if ok {
 		return index + 1
 	}
+
 	index, _ = l.logdb.GetRange()
 	return index
 }
@@ -108,6 +110,7 @@ func (l *entryLog) lastIndex() uint64 {
 	if ok {
 		return index
 	}
+
 	_, index = l.logdb.GetRange()
 	return index
 }
@@ -146,6 +149,7 @@ func (l *entryLog) term(index uint64) (uint64, error) {
 	if t, ok := l.inmem.getTerm(index); ok {
 		return t, nil
 	}
+
 	t, err := l.logdb.Term(index)
 	if err != nil && err != ErrCompacted && err != ErrUnavailable {
 		panic(err)
@@ -184,6 +188,7 @@ func (l *entryLog) getEntriesFromLogDB(low uint64,
 	if low >= l.inmem.markerIndex {
 		return nil, true, nil
 	}
+
 	upperBound := min(high, l.inmem.markerIndex)
 	ents, err := l.logdb.Entries(low, upperBound, maxSize)
 	if err == ErrCompacted {

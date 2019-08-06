@@ -55,13 +55,15 @@ enum MessageType {
 enum EntryType {
 	ApplicationEntry  = 0;
 	ConfigChangeEntry = 1;
-  EncodedEntry = 2;
+    EncodedEntry      = 2;
+	MetadataEntry     = 3;
 }
 
 enum ConfigChangeType {
 	AddNode     = 0;
   RemoveNode  = 1;
   AddObserver = 2;
+  AddWitness = 3;
 }
 
 enum StateMachineType {
@@ -121,6 +123,7 @@ message Membership {
   map<uint64, string> addresses   = 2;
   map<uint64, bool> removed       = 3;
   map<uint64, string> observers   = 4;
+  map<uint64, string> witnesses   = 5;
 }
 
 // field id 1 was used for optional string filename

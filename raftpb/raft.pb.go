@@ -138,6 +138,7 @@ const (
 	ApplicationEntry  EntryType = 0
 	ConfigChangeEntry EntryType = 1
 	EncodedEntry      EntryType = 2
+	MetadataEntry     EntryType = 3
 )
 
 var EntryType_name = map[int32]string{
@@ -181,18 +182,21 @@ const (
 	AddNode     ConfigChangeType = 0
 	RemoveNode  ConfigChangeType = 1
 	AddObserver ConfigChangeType = 2
+	AddWitness  ConfigChangeType = 3
 )
 
 var ConfigChangeType_name = map[int32]string{
 	0: "AddNode",
 	1: "RemoveNode",
 	2: "AddObserver",
+	3: "AddWitness",
 }
 
 var ConfigChangeType_value = map[string]int32{
 	"AddNode":     0,
 	"RemoveNode":  1,
 	"AddObserver": 2,
+	"AddWitness":  3,
 }
 
 func (x ConfigChangeType) Enum() *ConfigChangeType {
@@ -729,6 +733,7 @@ type Membership struct {
 	Addresses      map[uint64]string `protobuf:"bytes,2,rep,name=addresses" json:"addresses,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Removed        map[uint64]bool   `protobuf:"bytes,3,rep,name=removed" json:"removed,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	Observers      map[uint64]string `protobuf:"bytes,4,rep,name=observers" json:"observers,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Witnesses      map[uint64]string `protobuf:"bytes,5,rep,name=witnesses" json:"witnesses,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *Membership) Reset()         { *m = Membership{} }

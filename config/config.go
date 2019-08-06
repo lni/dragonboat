@@ -65,6 +65,8 @@ type Config struct {
 	// IsObserver indicates whether this is an observer Raft node without voting
 	// power.
 	IsObserver bool
+	// IsWitness indicates whether this is a witness Raft node without real log data.
+	IsWitness bool
 	// CheckQuorum specifies whether the leader node should periodically check
 	// non-leader node status and step down to become a follower node when it no
 	// longer has the quorum.

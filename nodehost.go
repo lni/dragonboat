@@ -160,6 +160,8 @@ type ClusterInfo struct {
 	IsLeader bool
 	// IsObserver indicates whether this is a non-voting observer node.
 	IsObserver bool
+	// IsWitness indicates whether this is a witness node without actual log.
+	IsWitness bool
 	// StateMachineType is the type of the state machine.
 	StateMachineType sm.Type
 	// Nodes is a map of member node IDs to their Raft addresses.

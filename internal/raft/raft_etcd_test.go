@@ -234,7 +234,7 @@ func TestLeaderTransferAfterSnapshot(t *testing.T) {
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{}}})
 	lead := nt.peers[1].(*raft)
 	nextEnts(lead, nt.storage[1])
-	m := getTestMembership(lead.nodes())
+	m := getTestMembership(lead.nodesSorted())
 	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.processed, &m)
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
@@ -2251,12 +2251,12 @@ func TestRestore(t *testing.T) {
 		t.Errorf("log.lastTerm = %d, want %d", mustTerm(sm.log.term(s.Index)), s.Term)
 	}
 
-	if sliceEqual(sm.nodes(), getNodesFromMembership(s.Membership)) {
-		t.Errorf("snapshot remotes info restored too earlier: %v", sm.nodes())
+	if sliceEqual(sm.nodesSorted(), getNodesFromMembership(s.Membership)) {
+		t.Errorf("snapshot remotes info restored too earlier: %v", sm.nodesSorted())
 	}
 
 	sm.restoreRemotes(s)
-	sg := sm.nodes()
+	sg := sm.nodesSorted()
 	if !sliceEqual(sg, getNodesFromMembership(s.Membership)) {
 		t.Errorf("sm.Nodes = %+v, want %+v", sg, getNodesFromMembership(s.Membership))
 	}
@@ -2386,7 +2386,7 @@ func TestSlowNodeRestore(t *testing.T) {
 	}
 	lead := nt.peers[1].(*raft)
 	nextEnts(lead, nt.storage[1])
-	m := getTestMembership(lead.nodes())
+	m := getTestMembership(lead.nodesSorted())
 	ss, err := nt.storage[1].(*TestLogDB).getSnapshot(lead.log.processed, &m)
 	if err != nil {
 		t.Fatalf("failed to get snapshot")
@@ -2505,7 +2505,7 @@ func TestAddNode(t *testing.T) {
 	if r.pendingConfigChange {
 		t.Errorf("pendingConfigChange = %v, want false", r.pendingConfigChange)
 	}
-	nodes := r.nodes()
+	nodes := r.nodesSorted()
 	wnodes := []uint64{1, 2}
 	if !reflect.DeepEqual(nodes, wnodes) {
 		t.Errorf("nodes = %v, want %v", nodes, wnodes)
@@ -2522,14 +2522,14 @@ func TestRemoveNode(t *testing.T) {
 		t.Errorf("pendingConfigChange = %v, want false", r.pendingConfigChange)
 	}
 	w := []uint64{1}
-	if g := r.nodes(); !reflect.DeepEqual(g, w) {
+	if g := r.nodesSorted(); !reflect.DeepEqual(g, w) {
 		t.Errorf("nodes = %v, want %v", g, w)
 	}
 
 	// remove all nodes from cluster
 	r.removeNode(1)
 	w = []uint64{}
-	if g := r.nodes(); !reflect.DeepEqual(g, w) {
+	if g := r.nodesSorted(); !reflect.DeepEqual(g, w) {
 		t.Errorf("nodes = %v, want %v", g, w)
 	}
 }
@@ -2571,8 +2571,8 @@ func TestRaftNodes(t *testing.T) {
 	}
 	for i, tt := range tests {
 		r := newTestRaft(1, tt.ids, 10, 1, NewTestLogDB())
-		if !reflect.DeepEqual(r.nodes(), tt.wids) {
-			t.Errorf("#%d: nodes = %+v, want %+v", i, r.nodes(), tt.wids)
+		if !reflect.DeepEqual(r.nodesSorted(), tt.wids) {
+			t.Errorf("#%d: nodes = %+v, want %+v", i, r.nodesSorted(), tt.wids)
 		}
 	}
 }
@@ -2584,7 +2584,7 @@ func TestCampaignWhileLeader(t *testing.T) {
 func testCampaignWhileLeader(t *testing.T) {
 	s := NewTestLogDB()
 	peers := []uint64{1}
-	cfg := newTestConfig(1, 5, 1, s)
+	cfg := newTestConfig(1, 5, 1)
 	r := newRaft(cfg, s)
 	r.setTestPeers(peers)
 	if r.state != follower {
@@ -2794,7 +2794,7 @@ func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
 			panic(err)
 		}
 	}
-	cfg := newTestConfig(1, 5, 1, storage)
+	cfg := newTestConfig(1, 5, 1)
 	if configFunc != nil {
 		configFunc(cfg)
 	}
@@ -2809,7 +2809,7 @@ func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
 func votedWithConfig(configFunc func(*config.Config), vote, term uint64) *raft {
 	storage := NewTestLogDB()
 	storage.SetState(pb.State{Vote: vote, Term: term})
-	cfg := newTestConfig(1, 5, 1, storage)
+	cfg := newTestConfig(1, 5, 1)
 	if configFunc != nil {
 		configFunc(cfg)
 	}
@@ -2847,7 +2847,7 @@ func newNetworkWithConfig(configFunc func(*config.Config), peers ...stateMachine
 		switch v := p.(type) {
 		case nil:
 			nstorage[id] = NewTestLogDB()
-			cfg := newTestConfig(id, 10, 1, nstorage[id])
+			cfg := newTestConfig(id, 10, 1)
 			if configFunc != nil {
 				configFunc(cfg)
 			}
@@ -2857,15 +2857,23 @@ func newNetworkWithConfig(configFunc func(*config.Config), peers ...stateMachine
 			npeers[id] = sm
 		case *raft:
 			observers := make(map[uint64]bool)
+			witnesses := make(map[uint64]bool)
 			for i := range v.observers {
 				observers[i] = true
 			}
+			for i := range v.witnesses {
+				witnesses[i] = true
+			}
+
 			v.nodeID = id
 			v.remotes = make(map[uint64]*remote)
 			v.observers = make(map[uint64]*remote)
+			v.witnesses = make(map[uint64]*remote)
 			for i := 0; i < size; i++ {
 				if _, ok := observers[peerAddrs[i]]; ok {
 					v.observers[peerAddrs[i]] = &remote{}
+				} else if _, ok := witnesses[peerAddrs[i]]; ok {
+					v.witnesses[peerAddrs[i]] = &remote{}
 				} else {
 					v.remotes[peerAddrs[i]] = &remote{}
 				}
@@ -2970,16 +2978,21 @@ func setRandomizedElectionTimeout(r *raft, v uint64) {
 	r.randomizedElectionTimeout = v
 }
 
-func newTestConfig(id uint64, election, heartbeat int, logdb ILogDB) *config.Config {
+func newTestConfig(id uint64, election, heartbeat int) *config.Config {
+	return newRateLimitedTestConfig(id, election, heartbeat, 0)
+}
+
+func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) *config.Config {
 	return &config.Config{
 		NodeID:       id,
 		ElectionRTT:  uint64(election),
 		HeartbeatRTT: uint64(heartbeat),
+		MaxInMemLogSize: uint64(maxLogSize),
 	}
 }
 
 func newTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
-	r := newRaft(newTestConfig(id, election, heartbeat, logdb), logdb)
+	r := newRaft(newTestConfig(id, election, heartbeat), logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
@@ -3016,7 +3029,7 @@ func newTestObserver(id uint64, peers []uint64, observers []uint64, election, he
 	if !found {
 		panic("observer node id not included in the observers list")
 	}
-	cfg := newTestConfig(id, election, heartbeat, logdb)
+	cfg := newTestConfig(id, election, heartbeat)
 	cfg.IsObserver = true
 	r := newRaft(cfg, logdb)
 	if len(r.remotes) == 0 {
@@ -3027,6 +3040,24 @@ func newTestObserver(id uint64, peers []uint64, observers []uint64, election, he
 	if len(r.observers) == 0 {
 		for _, p := range observers {
 			r.observers[p] = &remote{next: 1}
+		}
+	}
+	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply
+	return r
+}
+
+func newTestWitness(id uint64, peers []uint64, witnesses []uint64, election, heartbeat int, logdb ILogDB) *raft {
+	cfg := newTestConfig(id, election, heartbeat)
+	cfg.IsWitness = true
+	r := newRaft(cfg, logdb)
+	if len(r.remotes) == 0 {
+		for _, p := range peers {
+			r.remotes[p] = &remote{next: 1}
+		}
+	}
+	if len(r.witnesses) == 0 {
+		for _, p := range witnesses {
+			r.witnesses[p] = &remote{next: 1}
 		}
 	}
 	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply
