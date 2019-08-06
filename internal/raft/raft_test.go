@@ -778,7 +778,7 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(1, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
+	p1 := newTestObserver(1, []uint64{1}, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
@@ -789,6 +789,14 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 	if p1.isObserver() {
 		t.Errorf("observer not promoted")
 	}
+
+	p1.witnesses[2] = &remote{}
+	defer func() {
+		if r := recover(); r == nil {
+			panic("assumed witness not promotion not causing panic")
+		}
+	}()
+	p1.restoreRemotes(ss)
 }
 
 func TestWitnessReplication(t *testing.T) {
