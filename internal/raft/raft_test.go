@@ -132,6 +132,7 @@ func TestNilLogdbWillPanic(t *testing.T) {
 	newRaft(newTestConfig(1, 10, 1), nil)
 }
 
+// FIXME: ???
 func TesthandleNodeConfigChange(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
 	r.handleNodeConfigChange(pb.Message{
