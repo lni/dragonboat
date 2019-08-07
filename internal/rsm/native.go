@@ -19,6 +19,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -94,23 +95,25 @@ type ManagedStateMachineFactory func(clusterID uint64,
 // NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
 type NativeSM struct {
-	sm   IStateMachine
-	done <-chan struct{}
-	ue   []sm.Entry
-	mu   sync.RWMutex
+	config config.Config
+	sm     IStateMachine
+	done   <-chan struct{}
+	ue     []sm.Entry
+	mu     sync.RWMutex
 	OffloadedStatus
 }
 
 // NewNativeSM creates and returns a new NativeSM object.
-func NewNativeSM(clusterID uint64, nodeID uint64, ism IStateMachine,
+func NewNativeSM(config config.Config, ism IStateMachine,
 	done <-chan struct{}) IManagedStateMachine {
 	s := &NativeSM{
-		sm:   ism,
-		done: done,
-		ue:   make([]sm.Entry, 1),
+		config: config,
+		sm:     ism,
+		done:   done,
+		ue:     make([]sm.Entry, 1),
 	}
-	s.OffloadedStatus.clusterID = clusterID
-	s.OffloadedStatus.nodeID = nodeID
+	s.OffloadedStatus.clusterID = config.ClusterID
+	s.OffloadedStatus.nodeID = config.NodeID
 	return s
 }
 
@@ -234,7 +237,8 @@ func (ds *NativeSM) PrepareSnapshot() (interface{}, error) {
 func (ds *NativeSM) SaveSnapshot(meta *SSMeta,
 	w io.Writer, session []byte,
 	collection sm.ISnapshotFileCollection) (bool, error) {
-	if ds.sm.OnDiskStateMachine() && !meta.Request.IsExportedSnapshot() {
+	if ds.config.IsWitness ||
+		ds.sm.OnDiskStateMachine() && !meta.Request.IsExportedSnapshot() {
 		return true, ds.saveDummySnapshot(w, session)
 	}
 	return false, ds.saveSnapshot(meta.Ctx, w, session, collection)

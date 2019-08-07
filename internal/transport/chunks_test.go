@@ -516,6 +516,49 @@ func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
 	testSnapshotWithExternalFilesAreHandledByChunks(t, false, 1)
 }
 
+func TestWitnessSnapshotCanBeHandled(t *testing.T) {
+	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
+		ss := pb.Snapshot{
+			Filepath: "",
+			FileSize: 0,
+			Index:    100,
+			Term:     200,
+			Files:    nil,
+			Dummy:    false,
+			Witness:  true,
+		}
+		msg := pb.Message{
+			Type:      pb.InstallSnapshot,
+			To:        2,
+			From:      1,
+			ClusterId: 100,
+			Snapshot:  ss,
+		}
+		inputs := splitSnapshotMessage(msg)
+		if len(inputs) != 1 {
+			t.Errorf("got %d chunks, want 1", len(inputs))
+		}
+		chunk := inputs[0]
+		if chunk.BinVer != raftio.RPCBinVersion || !chunk.Witness ||
+			chunk.ClusterId != 100 || chunk.From != 1 || chunk.NodeId != 2 {
+			t.Errorf("unexpected chunk %+v", chunk)
+		}
+		for _, c := range inputs {
+			if len(c.Data) == 0 {
+				t.Errorf("data is empty")
+			}
+			added := chunks.addChunk(c)
+			if !added {
+				t.Errorf("failed to add chunk")
+			}
+		}
+		if handler.getSnapshotCount(100, 2) != 1 {
+			t.Errorf("failed to receive snapshot")
+		}
+	}
+	runChunkTest(t, fn)
+}
+
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 	ss := pb.Snapshot{
 		Filepath: "filepath.data",

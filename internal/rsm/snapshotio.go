@@ -20,6 +20,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -130,6 +131,27 @@ func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	return nil, false
 }
 
+// GetWitnessSnapshot returns the content of a witness snapshot.
+func GetWitnessSnapshot() ([]byte, error) {
+	f, err := ioutil.TempFile("", "dragonboat-witness-snapshot")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(f.Name())
+	w, err := newSnapshotWriter(f, SnapshotVersion, pb.NoCompression)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := w.Write(GetEmptyLRUSession()); err != nil {
+		w.Close()
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return ioutil.ReadFile(f.Name())
+}
+
 // SnapshotWriter is an io.Writer used to write snapshot file.
 type SnapshotWriter struct {
 	vw   IVWriter
@@ -146,6 +168,11 @@ func NewSnapshotWriter(fp string,
 	if err != nil {
 		return nil, err
 	}
+	return newSnapshotWriter(f, v, ct)
+}
+
+func newSnapshotWriter(f *os.File,
+	v SSVersion, ct pb.CompressionType) (*SnapshotWriter, error) {
 	dummy := make([]byte, SnapshotHeaderSize)
 	if _, err := f.Write(dummy); err != nil {
 		return nil, err
@@ -153,7 +180,7 @@ func NewSnapshotWriter(fp string,
 	sw := &SnapshotWriter{
 		vw:   mustGetVersionedWriter(f, v),
 		file: f,
-		fp:   fp,
+		fp:   f.Name(),
 		ct:   ct,
 	}
 	return sw, nil

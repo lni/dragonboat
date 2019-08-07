@@ -57,7 +57,7 @@ const (
 )
 
 func getMemberNodes(r *rsm.StateMachine) []uint64 {
-	m, _, _, _ := r.GetMembership()
+	m, _, _, _, _ := r.GetMembership()
 	n := make([]uint64, 0)
 	for nid := range m {
 		n = append(n, nid)
@@ -225,10 +225,6 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			config.NodeHostConfig{}, rootDirFunc, ldb, nil)
 		// create the sm
 		sm := &tests.NoOP{}
-		ds := rsm.NewNativeSM(testClusterID,
-			i, rsm.NewRegularStateMachine(sm), make(chan struct{}))
-		// node registry
-		nr := transport.NewNodes(settings.Soft.StreamConnections)
 		config := config.Config{
 			NodeID:              uint64(i),
 			ClusterID:           testClusterID,
@@ -239,6 +235,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			CompactionOverhead:  10,
 			OrderedConfigChange: ordered,
 		}
+		ds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), make(chan struct{}))
+		// node registry
+		nr := transport.NewNodes(settings.Soft.StreamConnections)
 		addr := fmt.Sprintf("a%d", i)
 		ch := router.getMessageReceiveChannel(testClusterID, uint64(i))
 		node, err := newNode(addr,
@@ -652,7 +651,7 @@ func TestMembershipCanBeLocallyRead(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		v, _, _, _ := n.sm.GetMembership()
+		v, _, _, _, _ := n.sm.GetMembership()
 		if len(v) != 3 {
 			t.Errorf("unexpected member count %d", len(v))
 		}
@@ -1194,7 +1193,7 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 			t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
-	_, _, _, ccid := n.sm.GetMembership()
+	_, _, _, _, ccid := n.sm.GetMembership()
 	rs, err = n.requestAddNodeWithOrderID(5, "a5:5", ccid, time.Duration(2*time.Second))
 	if err != nil {
 		t.Fatalf("request to add node failed")
@@ -1236,7 +1235,7 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 			t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
-	_, _, _, ccid := n.sm.GetMembership()
+	_, _, _, _, ccid := n.sm.GetMembership()
 	rs, err = n.requestDeleteNodeWithOrderID(2, ccid, time.Duration(2*time.Second))
 	if err != nil {
 		t.Fatalf("request to add node failed")
@@ -1581,8 +1580,9 @@ func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                      
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
+	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeSM(1, 1, &rsm.RegularStateMachine{}, nil), nil, config.Config{}, &testDummyNodeProxy{})
+		rsm.NewNativeSM(config, &rsm.RegularStateMachine{}, nil), nil, config, &testDummyNodeProxy{})
 	if n.concurrentSnapshot() {
 		t.Errorf("concurrency not suppose to be supported")
 	}
@@ -1595,8 +1595,9 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 
 func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
+	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeSM(1, 1, &rsm.ConcurrentStateMachine{}, nil), nil, config.Config{}, &testDummyNodeProxy{})
+		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil), nil, config, &testDummyNodeProxy{})
 	if !n.concurrentSnapshot() {
 		t.Errorf("concurrency not supported")
 	}

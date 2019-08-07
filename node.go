@@ -446,6 +446,12 @@ func (n *node) requestAddObserverWithOrderID(nodeID uint64,
 		nodeID, addr, orderID, timeout)
 }
 
+func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
+	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddWitness,
+		nodeID, addr, orderID, timeout)
+}
+
 func (n *node) getLeaderID() (uint64, bool) {
 	v := atomic.LoadUint64(&n.leaderID)
 	return v, v != raft.NoLeader
@@ -849,7 +855,7 @@ func isFreeOrderMessage(m pb.Message) bool {
 }
 
 func (n *node) sendEnterQuiesceMessages() {
-	nodes, _, _, _ := n.sm.GetMembership()
+	nodes, _, _, _, _ := n.sm.GetMembership()
 	for nodeID := range nodes {
 		if nodeID != n.nodeID {
 			msg := pb.Message{
@@ -1377,11 +1383,12 @@ func (n *node) tick() {
 }
 
 func (n *node) captureClusterState() {
-	nodes, observers, _, index := n.sm.GetMembership()
+	nodes, observers, witnesses, _, index := n.sm.GetMembership()
 	if len(nodes) == 0 {
 		plog.Panicf("empty nodes %s", n.id())
 	}
 	_, isObserver := observers[n.nodeID]
+	_, isWitness := witnesses[n.nodeID]
 	plog.Infof("%s called captureClusterState, nodes %v, observers %v",
 		n.id(), nodes, observers)
 	ci := &ClusterInfo{
@@ -1389,6 +1396,7 @@ func (n *node) captureClusterState() {
 		NodeID:            n.nodeID,
 		IsLeader:          n.isLeader(),
 		IsObserver:        isObserver,
+		IsWitness:         isWitness,
 		ConfigChangeIndex: index,
 		Nodes:             nodes,
 	}

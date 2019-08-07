@@ -270,6 +270,14 @@ func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
 			return false
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
+		/*if len(snapshotMessage.Requests) == 0 {
+			panic("invalid snapshot message")
+		}
+		if !snapshotMessage.Requests[0].Snapshot.Validate() {
+			plog.Errorf("snapshot.Validate() returned false, %+v",
+				snapshotMessage.Requests[0].Snapshot)
+			return false
+		}*/
 		plog.Infof("%s received snapshot from %d, idx %d, term %d",
 			dn(chunk.ClusterId, chunk.NodeId), chunk.From, chunk.Index, chunk.Term)
 		c.onReceive(snapshotMessage)

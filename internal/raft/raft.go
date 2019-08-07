@@ -691,18 +691,19 @@ func (r *raft) makeInstallSnapshotMessage(to uint64, m *pb.Message) uint64 {
 	}
 	// For witness, snapshot message will be marked as dummy snapshot.
 	if _, ok := r.witnesses[to]; ok {
-		snapshot = makeMetadataSnapshot(snapshot)
+		snapshot = makeWitnessSnapshot(snapshot)
 	}
 	m.Snapshot = snapshot
 	return snapshot.Index
 }
 
-func makeMetadataSnapshot(snapshot pb.Snapshot) pb.Snapshot {
+func makeWitnessSnapshot(snapshot pb.Snapshot) pb.Snapshot {
 	result := snapshot
 	result.Filepath = ""
 	result.FileSize = 0
 	result.Files = nil
-	result.Dummy = true
+	result.Witness = true
+	result.Dummy = false
 	return result
 }
 

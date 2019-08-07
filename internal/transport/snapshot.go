@@ -39,6 +39,7 @@ import (
 	"errors"
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -222,6 +223,7 @@ func splitBySnapshotFile(msg pb.Message,
 			Membership:     msg.Snapshot.Membership,
 			Filepath:       filepath,
 			FileSize:       filesize,
+			Witness:        msg.Snapshot.Witness,
 		}
 		if sf != nil {
 			c.HasFileInfo = true
@@ -232,10 +234,7 @@ func splitBySnapshotFile(msg pb.Message,
 	return results
 }
 
-func splitSnapshotMessage(m pb.Message) []pb.SnapshotChunk {
-	if m.Type != pb.InstallSnapshot {
-		panic("not a snapshot message")
-	}
+func getChunks(m pb.Message) []pb.SnapshotChunk {
 	startChunkID := uint64(0)
 	results := splitBySnapshotFile(m,
 		m.Snapshot.Filepath, m.Snapshot.FileSize, startChunkID, nil)
@@ -250,6 +249,44 @@ func splitSnapshotMessage(m pb.Message) []pb.SnapshotChunk {
 		results[idx].ChunkCount = uint64(len(results))
 	}
 	return results
+}
+
+func getWitnessChunk(m pb.Message) []pb.SnapshotChunk {
+	ss, err := rsm.GetWitnessSnapshot()
+	if err != nil {
+		panic(err)
+	}
+	results := make([]pb.SnapshotChunk, 0)
+	results = append(results, pb.SnapshotChunk{
+		BinVer:         raftio.RPCBinVersion,
+		ClusterId:      m.ClusterId,
+		NodeId:         m.To,
+		From:           m.From,
+		FileChunkId:    0,
+		FileChunkCount: 1,
+		ChunkId:        0,
+		ChunkCount:     1,
+		ChunkSize:      uint64(len(ss)),
+		Index:          m.Snapshot.Index,
+		Term:           m.Snapshot.Term,
+		OnDiskIndex:    0,
+		Membership:     m.Snapshot.Membership,
+		Filepath:       "witness.snapshot",
+		FileSize:       uint64(len(ss)),
+		Witness:        true,
+		Data:           ss,
+	})
+	return results
+}
+
+func splitSnapshotMessage(m pb.Message) []pb.SnapshotChunk {
+	if m.Type != pb.InstallSnapshot {
+		panic("not a snapshot message")
+	}
+	if m.Snapshot.Witness {
+		return getWitnessChunk(m)
+	}
+	return getChunks(m)
 }
 
 func loadSnapshotChunkData(chunk pb.SnapshotChunk,

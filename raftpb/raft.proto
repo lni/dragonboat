@@ -148,6 +148,7 @@ message Snapshot {
   optional StateMachineType type  = 11 [(gogoproto.nullable) = false];
   optional bool imported          = 12 [(gogoproto.nullable) = false];
   optional uint64 on_disk_index   = 13 [(gogoproto.nullable) = false];
+  optional bool witness           = 14 [(gogoproto.nullable) = false];
 }
 
 message Message {
@@ -222,4 +223,5 @@ message SnapshotChunk {
   optional SnapshotFile file_info  = 18 [(gogoproto.nullable) = false];
   optional uint32 bin_ver          = 19 [(gogoproto.nullable) = false];
   optional uint64 on_disk_index    = 20 [(gogoproto.nullable) = false];
+  optional bool witness            = 21 [(gogoproto.nullable) = false]; 
 }

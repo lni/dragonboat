@@ -880,9 +880,8 @@ func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
 	}
 }
 
-func TestWitnessDummySnapshot(t *testing.T) {
+func TestWitnessSnapshot(t *testing.T) {
 	leader, _, _ := setUpLeaderAndWitness(t)
-
 	ss := pb.Snapshot{Index: 10, Term: 2}
 	if err := leader.log.logdb.ApplySnapshot(ss); err != nil {
 		t.Errorf("apply snapshot failed %v", err)
@@ -892,7 +891,7 @@ func TestWitnessDummySnapshot(t *testing.T) {
 		t.Errorf("unexpected index %d", idx)
 	}
 	if msg.Type != pb.InstallSnapshot || msg.Snapshot.Index != 10 ||
-		msg.Snapshot.Term != 2 || !msg.Snapshot.Dummy {
+		msg.Snapshot.Term != 2 || !msg.Snapshot.Witness || msg.Snapshot.Dummy {
 		t.Errorf("unexpected message values")
 	}
 }

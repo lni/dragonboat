@@ -262,6 +262,9 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 }
 
 func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
+	if ss.Witness {
+		return false
+	}
 	if !s.OnDiskStateMachine() {
 		return true
 	}
@@ -488,7 +491,7 @@ func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
 
 // GetMembership returns the membership info maintained by the state machine.
 func (s *StateMachine) GetMembership() (map[uint64]string,
-	map[uint64]string, map[uint64]struct{}, uint64) {
+	map[uint64]string, map[uint64]string, map[uint64]struct{}, uint64) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.members.get()

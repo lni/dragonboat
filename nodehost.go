@@ -420,8 +420,7 @@ func (nh *NodeHost) StartCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(clusterID,
-			nodeID, rsm.NewRegularStateMachine(sm), done)
+		return rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
 }
@@ -436,8 +435,7 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(clusterID,
-			nodeID, rsm.NewConcurrentStateMachine(sm), done)
+		return rsm.NewNativeSM(config, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
@@ -452,8 +450,7 @@ func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(clusterID,
-			nodeID, rsm.NewOnDiskStateMachine(sm), done)
+		return rsm.NewNativeSM(config, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
 }
@@ -546,8 +543,11 @@ type Membership struct {
 	// Raft nodes.
 	Nodes map[uint64]string
 	// Observers is a map of NodeID values to NodeHost Raft addresses for all
-	// observers.
+	// observers in the Raft cluster.
 	Observers map[uint64]string
+	// Witnesses is a map of NodeID values to NodeHost Raft addrsses for all
+	// witnesses in the Raft cluster.
+	Witnesses map[uint64]string
 	// Removed is a set of NodeID values that have been removed from the Raft
 	// cluster. They are not allowed to be added back to the cluster.
 	Removed map[uint64]struct{}
@@ -563,12 +563,13 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
 		func(node *node) (interface{}, error) {
-			members, observers, removed, confChangeID := node.sm.GetMembership()
+			members, observers, witnesses, removed, ccid := node.sm.GetMembership()
 			membership := &Membership{
 				Nodes:          members,
 				Observers:      observers,
+				Witnesses:      witnesses,
 				Removed:        removed,
-				ConfigChangeID: confChangeID,
+				ConfigChangeID: ccid,
 			}
 			return membership, nil
 		})
@@ -986,6 +987,22 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 	return err
 }
 
+func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
+	clusterID uint64, nodeID uint64,
+	address string, configChangeIndex uint64) error {
+	timeout, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	rs, err := nh.RequestAddWitness(clusterID,
+		nodeID, address, configChangeIndex, timeout)
+	if err != nil {
+		return err
+	}
+	_, err = checkRequestState(ctx, rs)
+	return err
+}
+
 // RequestDeleteNode is a Raft cluster membership change method for requesting
 // the specified node to be removed from the specified Raft cluster. It starts
 // an asynchronous request to remove the node from the Raft cluster membership
@@ -1084,6 +1101,19 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestAddObserverWithOrderID(nodeID,
+		address, configChangeIndex, timeout)
+	nh.execEngine.setNodeReady(clusterID)
+	return req, err
+}
+
+func (nh *NodeHost) RequestAddWitness(clusterID uint64,
+	nodeID uint64, address string, configChangeIndex uint64,
+	timeout time.Duration) (*RequestState, error) {
+	v, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	req, err := v.requestAddWitnessWithOrderID(nodeID,
 		address, configChangeIndex, timeout)
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
@@ -1656,11 +1686,12 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 		nh.transport.ASyncSend(msg)
 		nh.checkTransportLatency(msg.ClusterId, msg.To, msg.From, msg.Term)
 	} else {
-		plog.Infof("%s is sending snapshot to %s, index %d, size %d",
+		witness := msg.Snapshot.Witness
+		plog.Infof("%s is sending snapshot to %s, witness %t, index %d, size %d",
 			dn(msg.ClusterId, msg.From), dn(msg.ClusterId, msg.To),
-			msg.Snapshot.Index, msg.Snapshot.FileSize)
+			witness, msg.Snapshot.Index, msg.Snapshot.FileSize)
 		if n, ok := nh.getCluster(msg.ClusterId); ok {
-			if !n.OnDiskStateMachine() {
+			if witness || !n.OnDiskStateMachine() {
 				nh.transport.ASyncSendSnapshot(msg)
 			} else {
 				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)

@@ -256,11 +256,12 @@ func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
+	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	tf(t, sm)
 }
 
@@ -271,11 +272,12 @@ func runSMTest2(t *testing.T,
 	createTestDir()
 	defer removeTestDir()
 	store := tests.NewKVTest(1, 1)
+	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
@@ -291,10 +293,11 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -335,9 +338,10 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 func TestMetadataEntryCanBeHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	sm := NewStateMachine(ds, nil, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, nil, config, nodeProxy)
 	e1 := pb.Entry{
 		Type:  pb.MetadataEntry,
 		Index: 235,
@@ -376,10 +380,11 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
 	createTestDir()
 	defer removeTestDir()
 	store := tests.NewConcurrentKVTest(1, 1)
-	ds := NewNativeSM(1, 1, NewConcurrentStateMachine(store), make(chan struct{}))
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	tsm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	tsm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	data1 := getTestKVData()
 	data2 := getTestKVData2()
 	encoded1 := GetEncodedPayload(ct, data1, make([]byte, 512))
@@ -433,10 +438,11 @@ func TestHandleBatchedSnappyEncodedEntry(t *testing.T) {
 func TestHandleAllocationCount(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	store := &tests.NoOP{NoAlloc: true}
-	ds := NewNativeSM(1, 1, NewRegularStateMachine(store), make(chan struct{}))
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	sm.index = 1
 	idx := uint64(1)
 	batch := make([]Task, 0, 8)
@@ -471,10 +477,11 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	createTestDir()
 	defer removeTestDir()
 	store := &tests.ConcurrentUpdate{}
-	ds := NewNativeSM(1, 1, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config.Config{}, nodeProxy)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -585,13 +592,16 @@ func TestGetMembership(t *testing.T) {
 				500: true,
 				600: true,
 			},
+			Witnesses: map[uint64]string{
+				700: "a700",
+			},
 			ConfigChangeId: 12345,
 		}
-		m, o, r, cid := sm.GetMembership()
+		m, o, w, r, cid := sm.GetMembership()
 		if cid != 12345 {
 			t.Errorf("unexpected cid value")
 		}
-		if len(m) != 2 || len(o) != 2 || len(r) != 3 {
+		if len(m) != 2 || len(o) != 2 || len(r) != 3 || len(w) != 1 {
 			t.Errorf("len changed")
 		}
 	}
@@ -616,7 +626,7 @@ func TestGetMembershipNodes(t *testing.T) {
 			},
 			ConfigChangeId: 12345,
 		}
-		n, _, _, _ := sm.GetMembership()
+		n, _, _, _, _ := sm.GetMembership()
 		if len(n) != 2 {
 			t.Errorf("unexpected len")
 		}
@@ -1324,11 +1334,12 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
+		config := config.Config{ClusterID: 1, NodeID: 1}
 		store2.(*tests.KVTest).DisableLargeDelay()
-		ds2 := NewNativeSM(1, 1, NewRegularStateMachine(store2), make(chan struct{}))
+		ds2 := NewNativeSM(config, NewRegularStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter()
-		sm2 := NewStateMachine(ds2, snapshotter2, config.Config{}, nodeProxy2)
+		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2)
 		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}

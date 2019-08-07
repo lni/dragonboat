@@ -493,7 +493,8 @@ func BenchmarkLookup(b *testing.B) {
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
-	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -512,7 +513,8 @@ func BenchmarkNALookup(b *testing.B) {
 	b.StopTimer()
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
-	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -531,8 +533,9 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	b.StopTimer()
 	ds := &tests.NoOP{NoAlloc: true}
 	done := make(chan struct{})
-	nds := rsm.NewNativeSM(1, 1, rsm.NewRegularStateMachine(ds), done)
-	smo := rsm.NewStateMachine(nds, nil, config.Config{}, &testDummyNodeProxy{})
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
+	smo := rsm.NewStateMachine(nds, nil, config, &testDummyNodeProxy{})
 	idx := uint64(0)
 	var s *client.Session
 	if noopSession {
