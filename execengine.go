@@ -505,7 +505,7 @@ func (s *execEngine) execNodes(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, false, "sending append msg") {
 		return
 	}
-	// see raft thesis section 10.2.1 on details why we send Relicate message
+	// see raft thesis section 10.2.1 on details why we send Replicate message
 	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]

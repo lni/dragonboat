@@ -293,6 +293,11 @@ func (snapshot *Snapshot) Validate() bool {
 		}
 		checkFileSize(f.Filepath, f.FileSize)
 	}
+
+	if snapshot.Index == 0 || snapshot.Term == 0 {
+		plog.Errorf("Snapshot contains invalid index %d or term %d: they both should be > 0", snapshot.Index, snapshot.Term)
+		return false
+	}
 	return true
 }
 

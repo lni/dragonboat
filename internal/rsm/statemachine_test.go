@@ -1882,7 +1882,7 @@ func TestRecoverSMRequired(t *testing.T) {
 					}
 				}
 			}()
-			if res := sm.recoverSMRequired(ss, tt.init); res != tt.required {
+			if res := sm.recoverSMRequiredForOnDiskMachine(ss, tt.init); res != tt.required {
 				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
 			}
 		}()
@@ -1920,16 +1920,17 @@ func TestUpdateLastApplied(t *testing.T) {
 		index uint64
 		term  uint64
 		crash bool
+		reason string
 	}{
-		{0, 100, true},
-		{101, 0, true},
-		{100, 100, true},
-		{101, 100, false},
-		{100, 90, true},
-		{100, 101, true},
-		{100, 110, true},
-		{101, 0, true},
-		{101, 99, true},
+		{0, 100, true, "invalid index, term matches"},
+		{101, 0, true, "index +1, invalid term"},
+		{100, 100, true, "index not +1, term matches"},
+		{101, 100, false, "Good one: index +1, term matches"},
+		{100, 90, true, "index not +1, term not match"},
+		{100, 101, true, "index not +1, term +1"},
+		{100, 110, true, "index not +1, term too high"},
+		{101, 0, true, "index +1, invalid term"},
+		{101, 99, true, "index +1, term too small"},
 	}
 	for idx, tt := range tests {
 		func() {

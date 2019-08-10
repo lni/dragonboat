@@ -890,7 +890,7 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // True, a snapshot will be exported to the directory pointed by the ExportPath
 // field of the SnapshotOption instance. Such an exported snapshot is not
 // managed by the system and it is mainly used to repair the cluster when it
-// permanently lose its majority quorum. See the ImportSnapshot method in the
+// permanently loses its majority quorum. See the ImportSnapshot method in the
 // tools package for more details.
 //
 // When the Exported field of the input SnapshotOption instance is set to false,
@@ -1055,7 +1055,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // node as an observer.
 //
 // Such observer is able to receive replicated states from the leader node, but
-// it is not allowed to vote for leader, it is not considered as a part of
+// it is neither allowed to vote for leader, nor considered as a part of
 // the quorum when replicating state. An observer can be promoted to a regular
 // node with voting power by making a RequestAddNode call using its clusterID
 // and nodeID values. An observer can be removed from the cluster by calling
@@ -1116,7 +1116,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
 	}
-	ticker := time.NewTicker(20 * time.Millisecond)
+	ticker := time.NewTicker(20 * time.Millisecond) // why 20 millisecond? Do we want to define a constant?
 	defer ticker.Stop()
 	for {
 		select {

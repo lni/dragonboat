@@ -45,12 +45,10 @@ var (
 	// ErrTestKnobReturn is the error returned when returned earlier due to test
 	// knob.
 	ErrTestKnobReturn = errors.New("returned earlier due to test knob")
-	// ErrSaveSnapshot indicates there is error when trying to save a snapshot
-	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
 	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
-	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
+	batchedEntryApply       	   = settings.Soft.BatchedEntryApply
 	sessionBufferInitialCap uint64 = 128 * 1024
 )
 
@@ -259,9 +257,9 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	return snapshot, nil
 }
 
-func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
+func (s *StateMachine) recoverSMRequiredForOnDiskMachine(ss pb.Snapshot, init bool) bool {
 	if !s.OnDiskStateMachine() {
-		return true
+		plog.Panicf("non-disk based state machine shouldn't attempt this check")
 	}
 	if ss.Dummy {
 		return false
@@ -276,12 +274,22 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	if !init && shrunk {
 		panic("not initial recovery but snapshot shrunk")
 	}
+
 	if init {
 		if shrunk {
 			return false
 		}
 		if ss.Imported {
 			return true
+		} else {
+			if ss.OnDiskIndex <= s.onDiskInitIndex {
+				plog.Panicf("%s, ss.OnDiskIndex (%d) <= s.onDiskInitIndex (%d)",
+					s.id(), ss.OnDiskIndex, s.onDiskInitIndex)
+			}
+			if ss.OnDiskIndex <= s.onDiskIndex {
+				plog.Panicf("%s, ss.OnDiskInit (%d) <= s.onDiskIndex (%d)",
+					s.id(), ss.OnDiskIndex, s.onDiskIndex)
+			}
 		}
 		return ss.OnDiskIndex > s.onDiskInitIndex
 	}
@@ -299,57 +307,50 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 	if s.aborted {
 		return 0, sm.ErrSnapshotStopped
 	}
-	if s.recoverSMRequired(ss, init) {
-		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
-			s.id(), ss.Term, index, snapshotInfo(ss), init)
-		fs := getSnapshotFiles(ss)
-		fn := s.snapshotter.GetFilePath(index)
-		s.canRecoverOnDiskSnapshot(ss, init)
-		if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
-			plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
-			if err == sm.ErrSnapshotStopped {
-				// no more lookup allowed
-				s.aborted = true
-				return 0, err
-			}
-			return 0, ErrRestoreSnapshot
+
+	if !s.OnDiskStateMachine() {
+		return s.recoverStateMachine(ss, init, index)
+	} else if s.recoverSMRequiredForOnDiskMachine(ss, init) {
+		if index, err := s.recoverStateMachine(ss, init, index); err != nil {
+			return index, err
 		}
-		s.recoverFromOnDiskSnapshot(ss, init)
+
+		s.onDiskIndex = ss.OnDiskIndex
+		if ss.Imported && init {
+			s.onDiskInitIndex = ss.OnDiskIndex
+		}
+		return 0, nil
 	} else {
 		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
 			s.id(), index, s.onDiskInitIndex)
+		s.applySnapshotMetadata(ss)
+		return 0, nil
 	}
-	s.index = index
-	s.term = ss.Term
-	s.members.set(ss.Membership)
+}
+
+func (s *StateMachine) recoverStateMachine(ss pb.Snapshot, init bool, ssIndex uint64) (uint64, error) {
+	plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
+		s.id(), ss.Term, ssIndex, snapshotInfo(ss), init)
+	fs := getSnapshotFiles(ss)
+	fn := s.snapshotter.GetFilePath(ssIndex)
+	if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
+		plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
+		if err == sm.ErrSnapshotStopped {
+			// no more lookup allowed
+			s.aborted = true
+			return 0, err
+		}
+		return 0, ErrRestoreSnapshot
+	}
+
+	s.applySnapshotMetadata(ss)
 	return 0, nil
 }
 
-func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
-	if !s.OnDiskStateMachine() {
-		return
-	}
-	if ss.Imported && init {
-		return
-	}
-	if ss.OnDiskIndex <= s.onDiskInitIndex {
-		plog.Panicf("%s, ss.OnDiskIndex (%d) <= s.onDiskInitIndex (%d)",
-			s.id(), ss.OnDiskIndex, s.onDiskInitIndex)
-	}
-	if ss.OnDiskIndex <= s.onDiskIndex {
-		plog.Panicf("%s, ss.OnDiskInit (%d) <= s.onDiskIndex (%d)",
-			s.id(), ss.OnDiskIndex, s.onDiskIndex)
-	}
-}
-
-func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
-	if !s.OnDiskStateMachine() {
-		return
-	}
-	s.onDiskIndex = ss.OnDiskIndex
-	if ss.Imported && init {
-		s.onDiskInitIndex = ss.OnDiskIndex
-	}
+func (s *StateMachine) applySnapshotMetadata(ss pb.Snapshot) {
+	s.index = ss.Index
+	s.term = ss.Term
+	s.members.set(ss.Membership)
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
@@ -359,10 +360,7 @@ func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
 // membership state is catching up with the all disk SM state. however, meta
 // only snapshot can be taken at any time.
 func (s *StateMachine) ReadyToStreamSnapshot() bool {
-	if !s.OnDiskStateMachine() {
-		return true
-	}
-	return s.GetLastApplied() >= s.onDiskInitIndex
+	return !s.OnDiskStateMachine() || s.GetLastApplied() >= s.onDiskInitIndex
 }
 
 // OpenOnDiskStateMachine opens the on disk state machine.
@@ -466,10 +464,10 @@ func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
 	if s.Concurrent() {
 		return s.naConcurrentLookup(query)
 	}
-	return s.nalookup(query)
+	return s.naLookup(query)
 }
 
-func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
+func (s *StateMachine) naLookup(query []byte) ([]byte, error) {
 	s.mu.RLock()
 	if s.aborted {
 		s.mu.RUnlock()
@@ -556,7 +554,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	defer func() {
 		// give the node worker a chance to run when
 		//  - batched applied value has been updated
-		//  - taskC has been poped
+		//  - taskC has been popped
 		if processed {
 			s.node.NodeReady()
 		}
@@ -657,6 +655,8 @@ func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
+
+	// When will this condition trigger? Could we protect when changing these indexes?
 	if s.index < s.snapshotIndex {
 		panic("s.index < s.snapshotIndex")
 	}

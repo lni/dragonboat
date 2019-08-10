@@ -4,7 +4,7 @@ Dragonboat v3.2 is a minor release with new features and improvements. All v3.1.
 
 ### New features
 
-- Added snappy compression support for Raft entires and snapshots.
+- Added snappy compression support for Raft entries and snapshots.
 - C++ binding has been updated to cover all v3.x features. Thanks JasonYuchen for working on that.
 
 ### Improvements

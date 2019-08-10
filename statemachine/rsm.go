@@ -45,7 +45,7 @@ snapshotted to disks. CPU, disk bandwidth and disk space overheads are thus
 introduced for generating and storing such periodic snapshots.
 
 For IOnDiskStateMachine based application state machine, the major difference is
-that the state machine state is persisted on disk so it can surivive reboot
+that the state machine state is persisted on disk so it can survive reboot
 without reconstruction from saved snapshots and Raft Logs. As the state is
 mostly persisted on disk by design, there is no need to periodically save the
 entire state to disk again as full snapshots. A full snapshot is only generated
@@ -58,7 +58,7 @@ the user implementation to correctly and safely maintain its internal data
 structures during such concurrent accesses. IOnDiskStateMachine is basically the
 on disk state machine type described in the section 5.2 of the Raft thesis.
 
-When you are not sure whether to IStateMachine or IOnDiskStateMachine in your
+To determine whether to use IStateMachine or IOnDiskStateMachine in your
 project, the rule of thumb is to implement IStateMachine first and upgrade it
 to an IOnDiskStateMachine later when necessary.
 
