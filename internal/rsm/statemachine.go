@@ -353,10 +353,8 @@ func (s *StateMachine) applySnapshotMetadata(ss pb.Snapshot) {
 	s.members.set(ss.Membership)
 }
 
-//TODO: add test to cover the case when ReadyToStreamSnapshot returns false
-
 // ReadyToStreamSnapshot returns a boolean flag to indicate whether the state
-// machine is ready to stream snasphot. It can not stream a full snapshot when
+// machine is ready to stream snapshot. It can not stream a full snapshot when
 // membership state is catching up with the all disk SM state. however, meta
 // only snapshot can be taken at any time.
 func (s *StateMachine) ReadyToStreamSnapshot() bool {
@@ -598,13 +596,9 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 }
 
 func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
-	if s.OnDiskStateMachine() {
-		if r.IsExportedSnapshot() || r.IsStreamingSnapshot() {
-			return false
-		}
-		return true
-	}
-	return false
+	return s.OnDiskStateMachine() &&
+		!r.IsExportedSnapshot() &&
+		!r.IsStreamingSnapshot()
 }
 
 func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {

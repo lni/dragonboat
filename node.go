@@ -222,7 +222,7 @@ func (n *node) ApplyConfigChange(cc pb.ConfigChange) {
 		n.nodeRegistry.AddNode(n.clusterID, cc.NodeID, string(cc.Address))
 	case pb.RemoveNode:
 		if cc.NodeID == n.nodeID {
-			plog.Infof("%s applied ConfChange Remove for itself", n.id())
+			plog.Infof(n.nodeMsg("applied ConfChange Remove for itself"))
 			n.nodeRegistry.RemoveCluster(n.clusterID)
 			n.requestRemoval()
 		} else {
@@ -251,7 +251,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 			n.requestRemoval()
 		}
 	}
-	plog.Infof("%s is restoring remotes %+v", n.id(), snapshot.Membership)
+	plog.Infof(n.nodeMsg("restoring remotes %+v"), snapshot.Membership)
 	n.p.RestoreRemotes(snapshot)
 	n.captureClusterState()
 }
@@ -302,7 +302,7 @@ func (n *node) requestRemoval() {
 	n.closeOnce.Do(func() {
 		close(n.stopc)
 	})
-	plog.Infof("%s called requestRemoval()", n.id())
+	plog.Infof(n.nodeMsg("called requestRemoval()"))
 }
 
 func (n *node) shouldStop() <-chan struct{} {
@@ -365,7 +365,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 	timeout time.Duration) (*RequestState, error) {
 	st := rsm.UserRequestedSnapshot
 	if opt.Exported {
-		plog.Infof("%s called export snapshot", n.id())
+		plog.Infof(n.nodeMsg("called export snapshot"))
 		st = rsm.ExportedSnapshot
 		exist, err := fileutil.Exist(opt.ExportPath)
 		if err != nil {
@@ -443,13 +443,13 @@ func (n *node) entriesToApply(ents []pb.Entry) (newents []pb.Entry) {
 	}
 	lastIdx := ents[len(ents)-1].Index
 	if lastIdx < n.pushedIndex {
-		plog.Panicf("%s got entries [%d-%d] older than current state %d",
-			n.id(), ents[0].Index, lastIdx, n.pushedIndex)
+		plog.Panicf(n.nodeMsg("got entries [%d-%d] older than current state %d"),
+			ents[0].Index, lastIdx, n.pushedIndex)
 	}
 	firstIdx := ents[0].Index
 	if firstIdx > n.pushedIndex+1 {
-		plog.Panicf("%s has hole in to be applied logs, found: %d, want: %d",
-			n.id(), firstIdx, n.pushedIndex+1)
+		plog.Panicf(n.nodeMsg("has hole in to be applied logs, found: %d, want: %d"),
+			firstIdx, n.pushedIndex+1)
 	}
 	if n.pushedIndex-firstIdx+1 < uint64(len(ents)) {
 		newents = ents[n.pushedIndex-firstIdx+1:]
@@ -512,7 +512,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot,
 }
 
 func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
-	plog.Infof("%s is replaying logs", n.id())
+	plog.Infof(n.nodeMsg("is replaying logs"))
 	snapshot, err := n.snapshotter.GetMostRecentSnapshot()
 	if err != nil && err != ErrNoSnapshot {
 		return false, err
@@ -531,8 +531,8 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		return false, err
 	}
 	if rs.State != nil {
-		plog.Infof("%s has logdb entries size %d commit %d term %d",
-			n.id(), rs.EntryCount, rs.State.Commit, rs.State.Term)
+		plog.Infof(n.nodeMsg("has logdb entries size %d commit %d term %d"),
+			rs.EntryCount, rs.State.Commit, rs.State.Term)
 		n.logreader.SetState(*rs.State)
 	}
 	n.logreader.SetRange(rs.FirstIndex, rs.EntryCount)
@@ -556,7 +556,7 @@ func (n *node) saveSnapshotRequired(lastApplied uint64) bool {
 	if n.isBusySnapshotting() {
 		return false
 	}
-	plog.Infof("%s requested snapshot at index %d", n.id(), lastApplied)
+	plog.Infof(n.nodeMsg("requested snapshot at index %d"), lastApplied)
 	n.ss.setReqSnapshotIndex(lastApplied)
 	return true
 }
@@ -566,7 +566,7 @@ func isSoftSnapshotError(err error) bool {
 }
 
 func (n *node) saveSnapshot(rec rsm.Task) error {
-	plog.Infof("%s called saveSnapshot", n.id())
+	plog.Infof(n.nodeMsg("called saveSnapshot"))
 	index, err := n.doSaveSnapshot(rec.SSRequest)
 	if err != nil {
 		return err
@@ -588,21 +588,21 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	if err != nil {
 		if err == sm.ErrSnapshotStopped {
 			ssenv.MustRemoveTempDir()
-			plog.Infof("%s aborted SaveSnapshot", n.id())
+			plog.Infof(n.nodeMsg("aborted SaveSnapshot"))
 			return 0, nil
 		} else if isSoftSnapshotError(err) || err == rsm.ErrTestKnobReturn {
 			return 0, nil
 		}
-		plog.Errorf("%s SaveSnapshot failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("SaveSnapshot failed %v"), err)
 		return 0, err
 	}
 	if tests.ReadyToReturnTestKnob(n.stopc, true, "snapshotter.Commit") {
 		return 0, nil
 	}
-	plog.Infof("%s snapshotted, index %d, term %d, file count %d",
-		n.id(), ss.Index, ss.Term, len(ss.Files))
+	plog.Infof(n.nodeMsg("snapshotted, index %d, term %d, file count %d"),
+		ss.Index, ss.Term, len(ss.Files))
 	if err := n.snapshotter.Commit(*ss, req); err != nil {
-		plog.Errorf("%s Commit failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("Commit failed %v"), err)
 		if err == errSnapshotOutOfDate {
 			ssenv.MustRemoveTempDir()
 			return 0, nil
@@ -617,10 +617,10 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		return ss.Index, nil
 	}
 	if !ss.Validate() {
-		plog.Panicf("%s generated invalid snapshot %v", n.id(), ss)
+		plog.Panicf(n.nodeMsg("generated invalid snapshot %v"), ss)
 	}
 	if err = n.logreader.CreateSnapshot(*ss); err != nil {
-		plog.Errorf("%s CreateSnapshot failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("CreateSnapshot failed %v"), err)
 		if !isSoftSnapshotError(err) {
 			return 0, err
 		}
@@ -631,7 +631,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		n.ss.setCompactLogTo(ss.Index - compactionOverhead)
 	}
 	if err := n.snapshotter.Compact(ss.Index); err != nil {
-		plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("snapshotter.Compact failed %v"), err)
 		return 0, err
 	}
 	n.ss.setSnapshotIndex(ss.Index)
@@ -648,7 +648,7 @@ func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
 func (n *node) streamSnapshot(sink pb.IChunkSink) error {
 	if sink != nil {
 		target := sink.ToNodeID
-		plog.Infof("%s called streamSnapshot to node %d", n.id(), target)
+		plog.Infof(n.nodeMsg("%s called streamSnapshot to node"), target)
 		if err := n.doStreamSnapshot(sink); err != nil {
 			return err
 		}
@@ -658,7 +658,7 @@ func (n *node) streamSnapshot(sink pb.IChunkSink) error {
 
 func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 	if err := n.sm.StreamSnapshot(sink); err != nil {
-		plog.Errorf("%s StreamSnapshot failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("StreamSnapshot failed %v"), err)
 		if err != sm.ErrSnapshotStopped &&
 			err != sm.ErrSnapshotStreaming &&
 			err != rsm.ErrTestKnobReturn {
@@ -669,48 +669,48 @@ func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 }
 
 func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
-	plog.Infof("%s called recoverFromSnapshot", n.id())
+	plog.Infof(n.nodeMsg("called recoverFromSnapshot"))
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	var index uint64
 	var err error
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
-		plog.Infof("%s all disk SM is beng initialized", n.id())
+		plog.Infof(n.nodeMsg("all disk SM is being initialized"))
 		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
-			plog.Infof("%s aborted OpenOnDiskStateMachine", n.id())
+			plog.Infof(n.nodeMsg("aborted OpenOnDiskStateMachine"))
 			return 0, sm.ErrOpenStopped
 		}
 		if err != nil {
-			plog.Errorf("%s, OpenOnDiskStateMachine failed %v", n.id(), err)
+			plog.Errorf(n.nodeMsg("OpenOnDiskStateMachine failed %v"), err)
 			return 0, err
 		}
 		if idx > 0 && rec.NewNode {
-			plog.Panicf("Open returned index %d (>0) on new node %s", idx, n.id())
+			plog.Panicf(n.nodeMsg("Open returned index %d (>0) on new node"), idx)
 		}
 	}
 	index, err = n.sm.RecoverFromSnapshot(rec)
 	if err == sm.ErrSnapshotStopped {
-		plog.Infof("%s aborted its RecoverFromSnapshot", n.id())
+		plog.Infof(n.nodeMsg("aborted its RecoverFromSnapshot"))
 		return 0, err
 	}
 	if err != nil && err != raft.ErrSnapshotOutOfDate {
-		plog.Errorf("%s RecoverFromSnapshot failed %v", n.id(), err)
+		plog.Errorf(n.nodeMsg("RecoverFromSnapshot failed %v"), err)
 		return 0, err
 	}
 	if index > 0 {
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
-				plog.Errorf("sm.Sync failed %v", err)
+				plog.Errorf(n.nodeMsg("sm.Sync failed %v"), err)
 				return 0, err
 			}
 			if err := n.snapshotter.Shrink(index); err != nil {
-				plog.Errorf("snapshotter.Shrink snapshot failed %v", err)
+				plog.Errorf(n.nodeMsg("snapshotter.Shrink snapshot failed %v"), err)
 				return 0, err
 			}
 		}
 		if err := n.snapshotter.Compact(index); err != nil {
-			plog.Errorf("snapshotter.Compact failed %v", err)
+			plog.Errorf(n.nodeMsg("snapshotter.Compact failed %v"), err)
 			return 0, err
 		}
 	}
@@ -761,7 +761,7 @@ func (n *node) runSyncTask() (bool, error) {
 		!n.syncTask.timeToRun(n.millisecondSinceStart()) {
 		return true, nil
 	}
-	plog.Infof("%s is running sync task", n.id())
+	plog.Infof(n.nodeMsg("running sync task"))
 	if !n.sm.TaskChanBusy() {
 		task := rsm.Task{PeriodicSync: true}
 		if !n.pushTask(task) {
@@ -781,7 +781,7 @@ func (n *node) shrinkSnapshots(index uint64) error {
 		if !n.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
-		plog.Infof("%s will shrink snapshots up to %d", n.id(), index)
+		plog.Infof(n.nodeMsg("will shrink snapshots up to %d"), index)
 		if err := n.snapshotter.Shrink(index); err != nil {
 			return err
 		}
@@ -814,7 +814,7 @@ func (n *node) compactLog() error {
 			n.nodeID, compactTo); err != nil {
 			return err
 		}
-		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
+		plog.Infof(n.nodeMsg("compacted log up to index %d"), compactTo)
 	}
 	return nil
 }
@@ -909,7 +909,7 @@ func (n *node) processSnapshot(ud pb.Update) (bool, error) {
 		if err != nil && !isSoftSnapshotError(err) {
 			return false, err
 		}
-		plog.Infof("%s, snapshot %d ready to be pushed", n.id(), ud.Snapshot.Index)
+		plog.Infof(n.nodeMsg("snapshot %d ready to be pushed"), ud.Snapshot.Index)
 		if !n.pushSnapshot(ud.Snapshot, ud.LastApplied) {
 			return false, nil
 		}
@@ -1048,7 +1048,7 @@ func (n *node) handleProposals() bool {
 	rateLimited := n.p.RateLimited()
 	if n.rateLimited != rateLimited {
 		n.rateLimited = rateLimited
-		plog.Infof("%s new rate limit state is %t", n.id(), rateLimited)
+		plog.Infof(n.nodeMsg("new rate limit state is %t"), rateLimited)
 	}
 	entries := n.incomingProposals.get(n.rateLimited)
 	if len(entries) > 0 {
@@ -1162,8 +1162,7 @@ func (n *node) handleMessage(m pb.Message) bool {
 	case pb.Quiesce:
 		n.tryEnterQuiesce()
 	case pb.SnapshotStatus:
-		plog.Debugf("%s got ReportSnapshot from %d, rejected %t",
-			n.id(), m.From, m.Reject)
+		plog.Debugf(n.nodeMsg("got ReportSnapshot from %d, rejected %t"), m.From, m.Reject)
 		n.p.ReportSnapshotStatus(m.From, m.Reject)
 	case pb.Unreachable:
 		n.p.ReportUnreachableNode(m.From)
@@ -1177,7 +1176,7 @@ func (n *node) setInitialStatus(index uint64) {
 	if n.initialized() {
 		panic("setInitialStatus called twice")
 	}
-	plog.Infof("%s initial index set to %d", n.id(), index)
+	plog.Infof(n.nodeMsg("initial index set to %d"), index)
 	n.ss.setSnapshotIndex(index)
 	n.pushedIndex = index
 	n.setInitialized()
@@ -1185,13 +1184,13 @@ func (n *node) setInitialStatus(index uint64) {
 
 func (n *node) handleSnapshotTask(task rsm.Task) {
 	if n.ss.recoveringFromSnapshot() {
-		plog.Panicf("%s is recovering from snapshot again", n.id())
+		plog.Panicf(n.nodeMsg("is recovering from snapshot again"))
 	}
 	if task.SnapshotAvailable {
 		n.reportAvailableSnapshot(task)
 	} else if task.SnapshotRequested {
 		if n.ss.takingSnapshot() {
-			plog.Infof("%s ignored task.SnapshotRequested", n.id())
+			plog.Infof(n.nodeMsg("ignored task.SnapshotRequested"))
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
@@ -1228,11 +1227,11 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 
 func (n *node) canStreamSnapshot() bool {
 	if n.ss.streamingSnapshot() {
-		plog.Infof("%s ignored task.StreamSnapshot", n.id())
+		plog.Infof(n.nodeMsg("ignored task.StreamSnapshot"))
 		return false
 	}
 	if !n.sm.ReadyToStreamSnapshot() {
-		plog.Infof("%s is not ready to stream snapshot", n.id())
+		plog.Infof(n.nodeMsg("is not ready to stream snapshot"))
 		return false
 	}
 	return true
@@ -1270,7 +1269,7 @@ func (n *node) processSnapshotStatusTransition() bool {
 
 func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
-		plog.Infof("%s is checking initial snapshot", n.id())
+		plog.Infof(n.nodeMsg("checking initial snapshot"))
 		return rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
@@ -1286,12 +1285,12 @@ func (n *node) processRecoverSnapshotStatus() bool {
 		if !ok {
 			return true
 		}
-		plog.Infof("%s got recover completed rec", n.id())
+		plog.Infof(n.nodeMsg("got recover completed rec"))
 		if rec.SnapshotRequested {
 			panic("got a completed.SnapshotRequested")
 		}
 		if rec.InitialSnapshot {
-			plog.Infof("%s handled initial snapshot, index %d", n.id(), rec.Index)
+			plog.Infof(n.nodeMsg("handled initial snapshot, index %d"), rec.Index)
 			n.setInitialStatus(rec.Index)
 		}
 		n.ss.clearRecoveringFromSnapshot()
@@ -1305,9 +1304,9 @@ func (n *node) processTakeSnapshotStatus() bool {
 		if !ok {
 			return !n.concurrentSnapshot()
 		}
-		plog.Infof("%s got save snapshot completed rec", n.id())
+		plog.Infof(n.nodeMsg("got save snapshot completed rec"))
 		if rec.SnapshotRequested && !n.initialized() {
-			plog.Panicf("%s taking snapshot when uninitialized", n.id())
+			plog.Panicf(n.nodeMsg("taking snapshot when uninitialized"))
 		}
 		n.ss.clearTakingSnapshot()
 	}
@@ -1323,7 +1322,7 @@ func (n *node) processStreamSnapshotStatus() bool {
 		if !ok {
 			return false
 		}
-		plog.Infof("%s got stream completed rec", n.id())
+		plog.Infof(n.nodeMsg("got stream completed rec"))
 		n.ss.clearStreamingSnapshot()
 	}
 	return false
@@ -1354,11 +1353,10 @@ func (n *node) tick() {
 func (n *node) captureClusterState() {
 	nodes, observers, _, index := n.sm.GetMembership()
 	if len(nodes) == 0 {
-		plog.Panicf("empty nodes %s", n.id())
+		plog.Panicf( n.nodeMsg("empty nodes in membership"))
 	}
 	_, isObserver := observers[n.nodeID]
-	plog.Infof("%s called captureClusterState, nodes %v, observers %v",
-		n.id(), nodes, observers)
+	plog.Infof(n.nodeMsg("called captureClusterState, nodes %v, observers %v"), nodes, observers)
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,
@@ -1405,6 +1403,10 @@ func (n *node) getClusterInfo() *ClusterInfo {
 
 func (n *node) id() string {
 	return dn(n.clusterID, n.nodeID)
+}
+
+func (n *node) nodeMsg(msg string) string {
+	return "[Node " + n.id() + "]: " + msg
 }
 
 func (n *node) isLeader() bool {

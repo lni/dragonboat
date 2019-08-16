@@ -1904,12 +1904,12 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 		{false, 100, 200, true},
 	}
 	for idx, tt := range tests {
-		sm := &StateMachine{
+		stateMachine := &StateMachine{
 			onDiskSM:        tt.onDisk,
 			index:           tt.index,
 			onDiskInitIndex: tt.onDiskInitIndex,
 		}
-		if result := sm.ReadyToStreamSnapshot(); result != tt.ready {
+		if result := stateMachine.ReadyToStreamSnapshot(); result != tt.ready {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
 		}
 	}

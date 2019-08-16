@@ -375,11 +375,11 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 // R, T, won't happen, when in R state, execSMs will not process the node
 
 func (s *execEngine) execSMs(workerID uint64,
-	idmap map[uint64]struct{},
+	idMap map[uint64]struct{},
 	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
-	if len(idmap) == 0 {
+	if len(idMap) == 0 {
 		for k := range nodes {
-			idmap[k] = struct{}{}
+			idMap[k] = struct{}{}
 		}
 	}
 	var p *profiler
@@ -388,7 +388,7 @@ func (s *execEngine) execSMs(workerID uint64,
 		p.newCommitIteration()
 		p.exec.start()
 	}
-	for clusterID := range idmap {
+	for clusterID := range idMap {
 		node, ok := nodes[clusterID]
 		if !ok || node.stopped() {
 			continue
@@ -545,7 +545,7 @@ func (s *execEngine) execNodes(workerID uint64,
 			panic(err)
 		}
 		if !cont {
-			plog.Infof("process update failed, %s is ready to exit", node.id())
+			plog.Infof(node.nodeMsg("process update failed, node is ready to exit"))
 		}
 		s.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, false, "committing updates") {
@@ -587,8 +587,7 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 			panic(err)
 		}
 		if !cont || !node.applyRaftUpdates(ud) {
-			plog.Infof("raft update and snapshot not published, %s stopped",
-				node.id())
+			plog.Infof(node.nodeMsg("raft update and snapshot not published, node stopped"))
 		}
 	}
 }
