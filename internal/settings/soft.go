@@ -198,7 +198,8 @@ type soft struct {
 	//
 	// LogDB
 	//
-
+	// RDBKeepLogFileNum defines how many log files to keep.
+	RDBKeepLogFileNum uint64
 	// RDBMaxBackgroundCompactions is the MaxBackgroundCompactions parameter
 	// directly passed to rocksdb.
 	RDBMaxBackgroundCompactions uint64
@@ -260,5 +261,6 @@ func getDefaultSoftSettings() soft {
 		RDBMaxBackgroundCompactions:    2,
 		RDBMaxBackgroundFlushes:        2,
 		RDBLRUCacheSize:                0,
+		RDBKeepLogFileNum:              16,
 	}
 }
