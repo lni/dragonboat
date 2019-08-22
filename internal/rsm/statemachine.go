@@ -48,7 +48,7 @@ var (
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
 	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
-	batchedEntryApply       	   = settings.Soft.BatchedEntryApply
+	batchedEntryApply              = settings.Soft.BatchedEntryApply
 	sessionBufferInitialCap uint64 = 128 * 1024
 )
 

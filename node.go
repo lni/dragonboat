@@ -1353,7 +1353,7 @@ func (n *node) tick() {
 func (n *node) captureClusterState() {
 	nodes, observers, _, index := n.sm.GetMembership()
 	if len(nodes) == 0 {
-		plog.Panicf( n.nodeMsg("empty nodes in membership"))
+		plog.Panicf(n.nodeMsg("empty nodes in membership"))
 	}
 	_, isObserver := observers[n.nodeID]
 	plog.Infof(n.nodeMsg("called captureClusterState, nodes %v, observers %v"), nodes, observers)

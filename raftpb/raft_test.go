@@ -404,7 +404,3 @@ func TestGetEntrySliceInMemSize(t *testing.T) {
 		}
 	}
 }
-
-func TestSnapshotValidate(t *testing.T) {
-
-}

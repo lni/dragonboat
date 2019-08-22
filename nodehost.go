@@ -566,7 +566,7 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 			membership := &Membership{
 				Nodes:          membershipPb.GetAddresses(),
 				Observers:      membershipPb.GetObservers(),
-				Removed:         membershipPb.GetRemoved(),
+				Removed:        membershipPb.GetRemoved(),
 				ConfigChangeID: membershipPb.GetConfigChangeId(),
 			}
 			return membership, nil

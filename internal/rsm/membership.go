@@ -92,7 +92,7 @@ func (m *membership) get() *pb.Membership {
 	}
 
 	membership := &pb.Membership{
-		Addresses:          members,
+		Addresses:      members,
 		Observers:      observers,
 		Removed:        removed,
 		ConfigChangeId: m.members.ConfigChangeId,
