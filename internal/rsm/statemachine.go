@@ -481,8 +481,7 @@ func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
 }
 
 // GetMembership returns the membership info maintained by the state machine.
-func (s *StateMachine) GetMembership() (map[uint64]string,
-	map[uint64]string, map[uint64]struct{}, uint64) {
+func (s *StateMachine) GetMembership() *pb.Membership {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.members.get()
@@ -827,7 +826,7 @@ func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
 }
 
 func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
-	// ConfChnage also go through the SM so the index value is updated
+	// ConfChange also goes through the SM so the index value is updated
 	if ent.IsConfigChange() {
 		accepted := s.handleConfigChange(ent)
 		s.node.ConfigChangeProcessed(ent.Key, accepted)

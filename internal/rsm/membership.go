@@ -77,11 +77,10 @@ func (m *membership) set(n pb.Membership) {
 	m.members = &cm
 }
 
-func (m *membership) get() (map[uint64]string,
-	map[uint64]string, map[uint64]struct{}, uint64) {
+func (m *membership) get() *pb.Membership {
 	members := make(map[uint64]string)
 	observers := make(map[uint64]string)
-	removed := make(map[uint64]struct{})
+	removed := make(map[uint64]bool)
 	for nid, addr := range m.members.Addresses {
 		members[nid] = addr
 	}
@@ -89,15 +88,23 @@ func (m *membership) get() (map[uint64]string,
 		observers[nid] = addr
 	}
 	for nid := range m.members.Removed {
-		removed[nid] = struct{}{}
+		removed[nid] = true
 	}
-	return members, observers, removed, m.members.ConfigChangeId
+
+	membership := &pb.Membership{
+		Addresses:          members,
+		Observers:      observers,
+		Removed:        removed,
+		ConfigChangeId: m.members.ConfigChangeId,
+	}
+	return membership
 }
 
 func (m *membership) getMembership() pb.Membership {
 	return deepCopyMembership(*m.members)
 }
 
+// For membership hash, do we care about other roles such as observers and witnesses?
 func (m *membership) getHash() uint64 {
 	vals := make([]uint64, 0)
 	for v := range m.members.Addresses {

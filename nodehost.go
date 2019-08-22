@@ -548,7 +548,7 @@ type Membership struct {
 	Observers map[uint64]string
 	// Removed is a set of NodeID values that have been removed from the Raft
 	// cluster. They are not allowed to be added back to the cluster.
-	Removed map[uint64]struct{}
+	Removed map[uint64]bool
 }
 
 // SyncGetClusterMembership is a rsynchronous method that queries the membership
@@ -561,12 +561,13 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
 		func(node *node) (interface{}, error) {
-			members, observers, removed, confChangeID := node.sm.GetMembership()
+			membershipPb := node.sm.GetMembership()
+
 			membership := &Membership{
-				Nodes:          members,
-				Observers:      observers,
-				Removed:        removed,
-				ConfigChangeID: confChangeID,
+				Nodes:          membershipPb.GetAddresses(),
+				Observers:      membershipPb.GetObservers(),
+				Removed:         membershipPb.GetRemoved(),
+				ConfigChangeID: membershipPb.GetConfigChangeId(),
 			}
 			return membership, nil
 		})
