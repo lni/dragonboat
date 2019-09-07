@@ -1918,7 +1918,9 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
 			cancel()
-			if err == ErrSystemBusy {
+			if err == ErrClusterNotReady {
+				time.Sleep(20 * time.Millisecond)
+			} else if err == ErrSystemBusy {
 				limited = true
 				break
 			}
