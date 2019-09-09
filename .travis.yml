@@ -2,7 +2,8 @@ language: go
 sudo: required
 
 go:
-  - 1.12.6
+  - 1.13.x
+  - 1.12.x
 
 notifications:
   on_success: never
