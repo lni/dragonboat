@@ -1060,10 +1060,6 @@ func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
 	if ps != nil {
 		ps.notify(getDroppedResult())
 	}
-	if tick != p.expireNotified {
-		p.gcAt(tick)
-		p.expireNotified = tick
-	}
 }
 
 func (p *proposalShard) applied(clientID uint64,
