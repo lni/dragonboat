@@ -65,7 +65,7 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 ![stw](./docs/stw.png)
 
 ## Requirements ##
-* x86_64 Linux or MacOS, Go 1.12, GCC or Clang with C++11 support
+* x86_64 Linux or MacOS, Go 1.13 or 1.12, GCC or Clang with C++11 support
 * [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above when using RocksDB for storing Raft logs 
 
 ## Getting Started ##

@@ -33,6 +33,7 @@ var (
 	logDBLRUCacheSize        = int(settings.Soft.RDBLRUCacheSize)
 	maxBackgroundCompactions = int(settings.Soft.RDBMaxBackgroundCompactions)
 	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
+	keepLogFileNum           = int(settings.Soft.RDBKeepLogFileNum)
 )
 
 // NewKVStore returns a RocksDB based IKVStore instance.
@@ -73,6 +74,8 @@ func getRocksDBOptions(directory string,
 	}
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetMaxManifestFileSize(1024 * 1024 * 128)
+	opts.SetMaxLogFileSize(1024 * 1024 * 128)
+	opts.SetKeepLogFileNum(keepLogFileNum)
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
 	opts.SetUseFsync(true)
