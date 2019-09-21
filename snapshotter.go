@@ -236,7 +236,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 		if ss.Index > shrinkTo {
 			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
 		}
-		if !ss.Dummy {
+		if !ss.Dummy && !ss.Witness {
 			env := s.getSSEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()

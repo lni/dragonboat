@@ -838,7 +838,6 @@ func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
 }
 
 func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
-	// ConfChnage also go through the SM so the index value is updated
 	if ent.IsConfigChange() {
 		accepted := s.handleConfigChange(ent)
 		s.node.ConfigChangeProcessed(ent.Key, accepted)

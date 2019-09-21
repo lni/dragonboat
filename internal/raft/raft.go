@@ -325,6 +325,10 @@ func (r *raft) describe() string {
 		r.log.processed, dn(r.clusterID, r.nodeID), r.term)
 }
 
+func (r *raft) isCandidate() bool {
+	return r.state == candidate
+}
+
 func (r *raft) isLeader() bool {
 	return r.state == leader
 }
@@ -926,8 +930,11 @@ func (r *raft) appendEntries(entries []pb.Entry) {
 //
 
 func (r *raft) becomeObserver(term uint64, leaderID uint64) {
-	if r.state != observer {
+	if !r.isObserver() {
 		panic("transitioning to observer state from non-observer")
+	}
+	if r.isWitness() {
+		panic("transitioning to observer from witness state")
 	}
 	r.reset(term)
 	r.setLeaderID(leaderID)
@@ -935,7 +942,7 @@ func (r *raft) becomeObserver(term uint64, leaderID uint64) {
 }
 
 func (r *raft) becomeWitness(term uint64, leaderID uint64) {
-	if r.state != witness {
+	if !r.isWitness() {
 		panic("transitioning to witness state from non-witness")
 	}
 	r.reset(term)
@@ -944,6 +951,9 @@ func (r *raft) becomeWitness(term uint64, leaderID uint64) {
 }
 
 func (r *raft) becomeFollower(term uint64, leaderID uint64) {
+	if r.isWitness() {
+		panic("transitioning to follower from witness state")
+	}
 	r.state = follower
 	r.reset(term)
 	r.setLeaderID(leaderID)
@@ -957,10 +967,9 @@ func (r *raft) becomeCandidate() {
 	if r.isObserver() {
 		panic("observer is becoming candidate")
 	}
-	if r.state == witness {
+	if r.isWitness() {
 		panic("witness is becoming candidate")
 	}
-
 	r.state = candidate
 	// 2nd paragraph section 5.2 of the raft paper
 	r.reset(r.term + 1)
@@ -971,7 +980,7 @@ func (r *raft) becomeCandidate() {
 
 func (r *raft) becomeLeader() {
 	// need a state transition machine
-	if r.state != leader && r.state != candidate {
+	if !r.isLeader() && !r.isCandidate() {
 		plog.Panicf("transitioning to leader state from %v", r.state.String())
 	}
 	r.state = leader

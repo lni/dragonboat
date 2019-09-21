@@ -201,13 +201,15 @@ func (l *lane) processSavedSnapshot() error {
 func (l *lane) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 	for _, chunk := range chunks {
 		chunkData := make([]byte, snapshotChunkSize)
-		data, err := loadSnapshotChunkData(chunk, chunkData)
-		if err != nil {
-			plog.Errorf("failed to read the snapshot chunk, %v", err)
-			return err
-		}
-		chunk.Data = data
 		chunk.DeploymentId = l.deploymentID
+		if !chunk.Witness {
+			data, err := loadSnapshotChunkData(chunk, chunkData)
+			if err != nil {
+				plog.Errorf("failed to read the snapshot chunk, %v", err)
+				return err
+			}
+			chunk.Data = data
+		}
 		if err := l.sendChunk(chunk, l.conn); err != nil {
 			plog.Debugf("send chunk to %s failed", dn(chunk.ClusterId, chunk.NodeId))
 			return err

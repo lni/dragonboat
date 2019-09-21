@@ -3584,3 +3584,85 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 	}
 	snapshotCompressedTest(t, tf)
 }
+
+func TestWitnessCanReplicateEntries(t *testing.T) {
+	tf := func() {
+		rc := config.Config{
+			ClusterID:    1,
+			NodeID:       1,
+			ElectionRTT:  3,
+			HeartbeatRTT: 1,
+			CheckQuorum:  true,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		nhc1 := config.NodeHostConfig{
+			NodeHostDir:    path.Join(singleNodeHostTestDir, "nh1"),
+			RTTMillisecond: 10,
+			RaftAddress:    nodeHostTestAddr1,
+		}
+		nh1, err := NewNodeHost(nhc1)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer nh1.Stop()
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewSimDiskSM(0)
+		}
+		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh1, 1)
+		makeProposals := func(nh *NodeHost) {
+			session := nh.GetNoOPSession(1)
+			for i := 0; i < 16; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+				cancel()
+				if err != nil {
+					plog.Errorf("failed to make proposal %v", err)
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}
+		for i := 0; i < 8; i++ {
+			makeProposals(nh1)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
+			if _, err := nh1.SyncRequestSnapshot(ctx, 1, opt); err != nil {
+				t.Fatalf("failed to request snapshot")
+			}
+			cancel()
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		if err := nh1.SyncRequestAddWitness(ctx, 1, 2, nodeHostTestAddr2, 0); err != nil {
+			t.Fatalf("failed to add witness")
+		}
+		cancel()
+		rc2 := rc
+		rc2.NodeID = 2
+		nhc2 := nhc1
+		nhc2.RaftAddress = nodeHostTestAddr2
+		nhc2.NodeHostDir = path.Join(singleNodeHostTestDir, "nh2")
+		nh2, err := NewNodeHost(nhc2)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer nh2.Stop()
+		witness := tests.NewSimDiskSM(0)
+		newWitness := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return witness
+		}
+		if err := nh2.StartOnDiskCluster(peers, false, newWitness, rc2); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh2, 1)
+		for i := 0; i < 8; i++ {
+			makeProposals(nh1)
+		}
+		if witness.GetApplied() > 10 {
+			t.Fatalf("unexpected applied count %d", witness.GetApplied())
+		}
+	}
+	runNodeHostTest(t, tf)
+}

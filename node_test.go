@@ -671,6 +671,72 @@ func TestMembershipCanBeLocallyRead(t *testing.T) {
 	runRaftNodeTest(t, false, tf)
 }
 
+func TestConfigChangeOnWitnessWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		n.config.IsWitness = true
+		_, err := n.requestConfigChange(pb.AddNode, 100, "noidea:9090", 0, time.Second)
+		if err != ErrInvalidOperation {
+			t.Errorf("config change not rejected")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
+func TestReadOnWitnessWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		n.config.IsWitness = true
+		_, err := n.read(nil, time.Second)
+		if err != ErrInvalidOperation {
+			t.Errorf("read not rejected")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
+func TestMakingProposalOnWitnessNodeWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		n.config.IsWitness = true
+		cs := client.NewNoOPSession(n.clusterID, random.NewLockedRand())
+		_, err := n.propose(cs, make([]byte, 1), nil, time.Second)
+		if err != ErrInvalidOperation {
+			t.Errorf("making proposal not rejected")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
+func TestProposingSessionOnWitnessNodeWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		n.config.IsWitness = true
+		_, err := n.proposeSession(nil, nil, time.Second)
+		if err != ErrInvalidOperation {
+			t.Errorf("proposing session not rejected")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
+func TestRequestingSnapshotOnWitnessWillBeRejected(t *testing.T) {
+	tf := func(t *testing.T, nodes []*node,
+		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		n := nodes[0]
+		n.config.IsWitness = true
+		_, err := n.requestSnapshot(SnapshotOption{}, time.Second)
+		if err != ErrInvalidOperation {
+			t.Errorf("requesting snapshot not rejected")
+		}
+	}
+	runRaftNodeTest(t, false, tf)
+}
+
 func TestProposalWithClientSessionCanBeMade(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
@@ -1605,5 +1671,16 @@ func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *tes
 	n.initializedMu.initialized = true
 	if n.processTakeSnapshotStatus() {
 		t.Fatalf("node unexpectedly skipped")
+	}
+}
+
+func TestIsWitnessNode(t *testing.T) {
+	n1 := node{config: config.Config{}}
+	if n1.isWitness() {
+		t.Errorf("not expect to be witness")
+	}
+	n2 := node{config: config.Config{IsWitness: true}}
+	if !n2.isWitness() {
+		t.Errorf("not reported as witness")
 	}
 }

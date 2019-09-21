@@ -49,17 +49,27 @@ func TestDeepCopyMembership(t *testing.T) {
 		Addresses:      make(map[uint64]string),
 		Removed:        make(map[uint64]bool),
 		Observers:      make(map[uint64]string),
+		Witnesses:      make(map[uint64]string),
 	}
 	copied := deepCopyMembership(m)
 	m.ConfigChangeId = 102
 	m.Addresses[1] = "addr1"
 	m.Removed[1] = true
 	m.Observers[1] = "addr1"
+	m.Witnesses[1] = "addr1"
 	if copied.ConfigChangeId != 101 ||
 		len(copied.Addresses) != 0 ||
 		len(copied.Removed) != 0 ||
 		len(copied.Observers) != 0 {
 		t.Fatalf("copied membership changed")
+	}
+	copied2 := deepCopyMembership(m)
+	if copied2.ConfigChangeId != 102 ||
+		len(copied2.Addresses) != 1 ||
+		len(copied2.Removed) != 1 ||
+		len(copied2.Observers) != 1 ||
+		len(copied2.Witnesses) != 1 {
+		t.Fatalf("unexpected copied membership data")
 	}
 }
 
@@ -70,7 +80,8 @@ func TestMembershipCanBeCreated(t *testing.T) {
 	}
 	if len(m.members.Addresses) != 0 ||
 		len(m.members.Observers) != 0 ||
-		len(m.members.Removed) != 0 {
+		len(m.members.Removed) != 0 ||
+		len(m.members.Witnesses) != 0 {
 		t.Errorf("unexpected data")
 	}
 }
@@ -81,20 +92,23 @@ func TestMembershipCanBeSet(t *testing.T) {
 		Addresses:      make(map[uint64]string),
 		Removed:        make(map[uint64]bool),
 		Observers:      make(map[uint64]string),
+		Witnesses:      make(map[uint64]string),
 	}
 	m.Addresses[1] = "addr1"
 	m.Removed[2] = true
 	m.Observers[3] = "addr2"
+	m.Witnesses[4] = "addr3"
 	o := newMembership(1, 2, true)
 	o.set(m)
 	if len(o.members.Addresses) != 1 ||
 		len(o.members.Observers) != 1 ||
 		len(o.members.Removed) != 1 ||
+		len(o.members.Witnesses) != 1 ||
 		o.members.ConfigChangeId != 101 {
 		t.Errorf("membership not set")
 	}
 	m.ConfigChangeId = 200
-	m.Addresses[5] = "addr3"
+	m.Addresses[5] = "addr4"
 	if o.members.ConfigChangeId != 101 || len(o.members.Addresses) != 1 {
 		t.Fatalf("membership changed")
 	}
@@ -158,11 +172,20 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	if o.isAddingRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
+	cc.Type = pb.AddWitness
+	if o.isAddingRemovedNode(cc) {
+		t.Errorf("incorrect result")
+	}
 	o.members.Removed[1] = true
 	cc.Type = pb.AddNode
 	if !o.isAddingRemovedNode(cc) {
 		t.Errorf("not rejected")
 	}
+	cc.Type = pb.AddWitness
+	if !o.isAddingRemovedNode(cc) {
+		t.Errorf("not rejected")
+	}
+	cc.Type = pb.AddObserver
 	cc.NodeID = 2
 	if o.isAddingRemovedNode(cc) {
 		t.Errorf("incorrectly rejected")
@@ -178,6 +201,8 @@ func TestIsAddingNodeAsObserver(t *testing.T) {
 	}{
 		{pb.AddNode, 1, []uint64{1}, false},
 		{pb.AddNode, 1, []uint64{}, false},
+		{pb.AddWitness, 1, []uint64{1}, false},
+		{pb.AddWitness, 1, []uint64{}, false},
 		{pb.RemoveNode, 1, []uint64{1}, false},
 		{pb.RemoveNode, 1, []uint64{}, false},
 		{pb.AddObserver, 1, []uint64{1}, true},
@@ -246,6 +271,12 @@ func TestIsAddingExistingMember(t *testing.T) {
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, true},
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
@@ -282,6 +313,9 @@ func TestIsPromotingObserver(t *testing.T) {
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a2", 1, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 1, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
@@ -313,6 +347,9 @@ func TestIsInvalidObserverPromotion(t *testing.T) {
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a2", 1, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 1, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
 		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
@@ -419,13 +456,15 @@ func TestApplyRemoveNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	o.members.Observers[100] = "a1"
+	o.members.Witnesses[100] = "a1"
 	cc := pb.ConfigChange{
 		Type:   pb.RemoveNode,
 		NodeID: 100,
 	}
 	o.applyConfigChange(cc, 1000)
 	if len(o.members.Addresses) != 0 ||
-		len(o.members.Observers) != 0 {
+		len(o.members.Observers) != 0 ||
+		len(o.members.Witnesses) != 0 {
 		t.Errorf("node not removed")
 	}
 	_, ok := o.members.Removed[100]

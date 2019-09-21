@@ -141,7 +141,9 @@ func (m *membership) isConfChangeUpToDate(cc pb.ConfigChange) bool {
 }
 
 func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver {
+	if cc.Type == pb.AddNode ||
+		cc.Type == pb.AddObserver ||
+		cc.Type == pb.AddWitness {
 		_, ok := m.members.Removed[cc.NodeID]
 		return ok
 	}
@@ -187,7 +189,8 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 	if m.isPromotingObserver(cc) {
 		return false
 	}
-	if cc.Type == pb.AddNode || cc.Type == pb.AddObserver ||
+	if cc.Type == pb.AddNode ||
+		cc.Type == pb.AddObserver ||
 		cc.Type == pb.AddWitness {
 		plog.Infof("%s adding node %d:%s, existing members: %v, observer: %v",
 			m.id(), cc.NodeID, string(cc.Address),
@@ -322,8 +325,11 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		} else if cc.Type == pb.AddObserver {
 			plog.Infof("%s applied ConfChange Add Observer ccid %d, node %s index %d address %s",
 				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+		} else if cc.Type == pb.AddWitness {
+			plog.Infof("%s applied ConfChange Add Witness ccid %d, node %s index %d address %s",
+				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
 		} else {
-			plog.Panicf("unknown cc.Type value")
+			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}
 		accepted = true
 	} else {

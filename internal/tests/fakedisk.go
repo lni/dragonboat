@@ -128,6 +128,11 @@ func NewSimDiskSM(applied uint64) *SimDiskSM {
 	return &SimDiskSM{applied: applied}
 }
 
+// GetApplied ...
+func (s *SimDiskSM) GetApplied() uint64 {
+	return s.applied
+}
+
 // Open ...
 func (s *SimDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 	return s.applied, nil

@@ -101,6 +101,8 @@ func (c *Chunks) AddChunk(chunk pb.SnapshotChunk) bool {
 	did := c.getDeploymentID()
 	if chunk.DeploymentId != did ||
 		chunk.BinVer != raftio.RPCBinVersion {
+		plog.Errorf("invalid did or binver, %d, %d, %d, %d",
+			chunk.DeploymentId, did, chunk.BinVer, raftio.RPCBinVersion)
 		return false
 	}
 	return c.addChunk(chunk)
@@ -270,14 +272,6 @@ func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
 			return false
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
-		/*if len(snapshotMessage.Requests) == 0 {
-			panic("invalid snapshot message")
-		}
-		if !snapshotMessage.Requests[0].Snapshot.Validate() {
-			plog.Errorf("snapshot.Validate() returned false, %+v",
-				snapshotMessage.Requests[0].Snapshot)
-			return false
-		}*/
 		plog.Infof("%s received snapshot from %d, idx %d, term %d",
 			dn(chunk.ClusterId, chunk.NodeId), chunk.From, chunk.Index, chunk.Term)
 		c.onReceive(snapshotMessage)
@@ -372,6 +366,7 @@ func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
 	fn := filepath.Base(chunk.Filepath)
 	s.Filepath = filepath.Join(snapDir, fn)
 	s.FileSize = chunk.FileSize
+	s.Witness = chunk.Witness
 	m.Snapshot = s
 	m.Snapshot.Files = files
 	for idx := range m.Snapshot.Files {

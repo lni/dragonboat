@@ -47,6 +47,7 @@ var (
 
 var (
 	// ErrInvalidOperation indicates that the requested operation is not allowed.
+	// e.g. making read or write requests on witness node are not allowed.
 	ErrInvalidOperation = errors.New("invalid operation")
 	// ErrInvalidSession indicates that the specified client session is invalid.
 	ErrInvalidSession = errors.New("invalid session")
