@@ -150,6 +150,12 @@ type soft struct {
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
 	SendQueueLength uint64
+	// MaxDrummerClientMsgSize is the max size of messages sent/received on
+	// the nodehost side.
+	MaxDrummerClientMsgSize uint64
+	// MaxDrummerServerMsgSize is the max size of messages sent/received on
+	// the Drummer side.
+	MaxDrummerServerMsgSize uint64
 	// StreamConnections defines how many connections to use for each remote
 	// nodehost whene exchanging raft messages
 	StreamConnections uint64
@@ -168,6 +174,8 @@ type soft struct {
 	//
 	// Drummer/node scheduling
 	//
+	// DrummerClientName defines the name of the built-in drummer client.
+	DrummerClientName string
 	// NodeHostInfoReportSecond defines how often in seconds nodehost report it
 	// details to Drummer servers.
 	NodeHostInfoReportSecond uint64
@@ -184,23 +192,29 @@ type soft struct {
 	// a cycle. PersisentLogReportCycle defines how often each nodehost need to
 	// update Drummer servers in terms of NodeHostInfoReportSecond cycles.
 	PersisentLogReportCycle uint64
+	// DrummerLoopIntervalFactor defines how often Drummer need to examine all
+	// NodeHost info reported to it measured by the number of nodehost info
+	// report cycles.
+	DrummerLoopIntervalFactor uint64
 
 	//
 	// LogDB
 	//
-	RocksDBKeepLogFileNum                 uint64
-	RocksDBMaxBackgroundCompactions       uint64
-	RocksDBMaxBackgroundFlushes           uint64
-	RocksDBLRUCacheSize                   uint64
-	RocksDBWriteBufferSize                uint64
-	RocksDBMaxWriteBufferNumber           uint64
-	RocksDBLevel0FileNumCompactionTrigger uint64
-	RocksDBLevel0SlowdownWritesTrigger    uint64
-	RocksDBLevel0StopWritesTrigger        uint64
-	RocksDBMaxBytesForLevelBase           uint64
-	RocksDBMaxBytesForLevelMultiplier     uint64
-	RocksDBTargetFileSizeBase             uint64
-	RocksDBTargetFileSizeMultiplier       uint64
+	RocksDBKeepLogFileNum                   uint64
+	RocksDBMaxBackgroundCompactions         uint64
+	RocksDBMaxBackgroundFlushes             uint64
+	RocksDBLRUCacheSize                     uint64
+	RocksDBWriteBufferSize                  uint64
+	RocksDBMaxWriteBufferNumber             uint64
+	RocksDBLevel0FileNumCompactionTrigger   uint64
+	RocksDBLevel0SlowdownWritesTrigger      uint64
+	RocksDBLevel0StopWritesTrigger          uint64
+	RocksDBMaxBytesForLevelBase             uint64
+	RocksDBMaxBytesForLevelMultiplier       uint64
+	RocksDBTargetFileSizeBase               uint64
+	RocksDBTargetFileSizeMultiplier         uint64
+	RocksDBLevelCompactionDynamicLevelBytes uint64
+	RocksDBRecycleLogFileNum                uint64
 }
 
 func getSoftSettings() soft {
@@ -212,50 +226,56 @@ func getSoftSettings() soft {
 func getDefaultSoftSettings() soft {
 	NodeHostInfoReportSecond := uint64(20)
 	return soft{
-		MaxConcurrentStreamingSnapshot:        128,
-		MaxSnapshotConnections:                64,
-		SyncTaskInterval:                      180000,
-		PanicOnSizeMismatch:                   1,
-		LazyFreeCycle:                         1,
-		LatencySampleRatio:                    0,
-		BatchedEntryApply:                     true,
-		LocalRaftRequestTimeoutMs:             10000,
-		GetConnectedTimeoutSecond:             5,
-		InMemGCTimeout:                        100,
-		InMemEntrySliceSize:                   512,
-		MinEntrySliceFreeSize:                 96,
-		IncomingReadIndexQueueLength:          4096,
-		IncomingProposalQueueLength:           2048,
-		UnknownRegionName:                     "UNKNOWN",
-		SnapshotStatusPushDelayMS:             1000,
-		TaskQueueInitialCap:                   64,
-		TaskQueueTargetLength:                 1024,
-		NodeHostSyncPoolSize:                  8,
-		TaskBatchSize:                         512,
-		NodeReloadMillisecond:                 200,
-		StepEngineTaskWorkerCount:             16,
-		StepEngineSnapshotWorkerCount:         64,
-		SendQueueLength:                       1024 * 2,
-		ReceiveQueueLength:                    1024,
-		StreamConnections:                     4,
-		SnapshotGCTick:                        30,
-		SnapshotChunkTimeoutTick:              900,
-		NodeHostInfoReportSecond:              NodeHostInfoReportSecond,
-		NodeHostTTL:                           NodeHostInfoReportSecond * 3,
-		NodeToStartMaxWait:                    NodeHostInfoReportSecond * 12,
-		PersisentLogReportCycle:               3,
-		RocksDBMaxBackgroundCompactions:       2,
-		RocksDBMaxBackgroundFlushes:           2,
-		RocksDBLRUCacheSize:                   0,
-		RocksDBKeepLogFileNum:                 16,
-		RocksDBWriteBufferSize:                256 * 1024 * 1024,
-		RocksDBMaxWriteBufferNumber:           25,
-		RocksDBLevel0FileNumCompactionTrigger: 8,
-		RocksDBLevel0SlowdownWritesTrigger:    17,
-		RocksDBLevel0StopWritesTrigger:        24,
-		RocksDBMaxBytesForLevelBase:           4 * 1024 * 1024 * 1024,
-		RocksDBMaxBytesForLevelMultiplier:     2,
-		RocksDBTargetFileSizeBase:             256 * 1024 * 1024,
-		RocksDBTargetFileSizeMultiplier:       1,
+		MaxConcurrentStreamingSnapshot:          128,
+		MaxSnapshotConnections:                  64,
+		SyncTaskInterval:                        180000,
+		PanicOnSizeMismatch:                     1,
+		LazyFreeCycle:                           1,
+		LatencySampleRatio:                      0,
+		BatchedEntryApply:                       true,
+		LocalRaftRequestTimeoutMs:               10000,
+		GetConnectedTimeoutSecond:               5,
+		InMemGCTimeout:                          100,
+		InMemEntrySliceSize:                     512,
+		MinEntrySliceFreeSize:                   96,
+		IncomingReadIndexQueueLength:            4096,
+		IncomingProposalQueueLength:             2048,
+		UnknownRegionName:                       "UNKNOWN",
+		SnapshotStatusPushDelayMS:               1000,
+		TaskQueueInitialCap:                     64,
+		TaskQueueTargetLength:                   1024,
+		NodeHostSyncPoolSize:                    8,
+		TaskBatchSize:                           512,
+		NodeReloadMillisecond:                   200,
+		StepEngineTaskWorkerCount:               16,
+		StepEngineSnapshotWorkerCount:           64,
+		SendQueueLength:                         1024 * 2,
+		ReceiveQueueLength:                      1024,
+		MaxDrummerClientMsgSize:                 256 * 1024 * 1024,
+		MaxDrummerServerMsgSize:                 256 * 1024 * 1024,
+		StreamConnections:                       4,
+		SnapshotGCTick:                          30,
+		SnapshotChunkTimeoutTick:                900,
+		DrummerClientName:                       "drummer-client",
+		NodeHostInfoReportSecond:                NodeHostInfoReportSecond,
+		NodeHostTTL:                             NodeHostInfoReportSecond * 3,
+		NodeToStartMaxWait:                      NodeHostInfoReportSecond * 12,
+		DrummerLoopIntervalFactor:               1,
+		PersisentLogReportCycle:                 3,
+		RocksDBMaxBackgroundCompactions:         2,
+		RocksDBMaxBackgroundFlushes:             2,
+		RocksDBLRUCacheSize:                     0,
+		RocksDBKeepLogFileNum:                   16,
+		RocksDBWriteBufferSize:                  256 * 1024 * 1024,
+		RocksDBMaxWriteBufferNumber:             25,
+		RocksDBLevel0FileNumCompactionTrigger:   8,
+		RocksDBLevel0SlowdownWritesTrigger:      17,
+		RocksDBLevel0StopWritesTrigger:          24,
+		RocksDBMaxBytesForLevelBase:             4 * 1024 * 1024 * 1024,
+		RocksDBMaxBytesForLevelMultiplier:       2,
+		RocksDBTargetFileSizeBase:               256 * 1024 * 1024,
+		RocksDBTargetFileSizeMultiplier:         1,
+		RocksDBLevelCompactionDynamicLevelBytes: 0,
+		RocksDBRecycleLogFileNum:                0,
 	}
 }

@@ -488,6 +488,12 @@ func (opts *Options) SetMaxBytesForLevelMultiplierAdditional(value []int) {
 	C.rocksdb_options_set_max_bytes_for_level_multiplier_additional(opts.c, &cLevels[0], C.size_t(len(value)))
 }
 
+// SetLevelCompactionDynamicLevelBytes enables/disables the
+// level_compaction_dynamic_level_bytes option field.
+func (opts *Options) SetLevelCompactionDynamicLevelBytes(value bool) {
+	C.rocksdb_options_set_level_compaction_dynamic_level_bytes(opts.c, boolToChar(value))
+}
+
 // SetUseFsync enable/disable fsync.
 //
 // If true, then every store to stable storage will issue a fsync.
@@ -943,6 +949,11 @@ func (opts *Options) SetCreateIfMissingColumnFamilies(value bool) {
 func (opts *Options) SetBlockBasedTableFactory(value *BlockBasedTableOptions) {
 	opts.bbto = value
 	C.rocksdb_options_set_block_based_table_factory(opts.c, value.c)
+}
+
+// SetRecycleLogFileNum sets the recycle_log_file_num option field.
+func (opts *Options) SetRecycleLogFileNum(value int) {
+	C.rocksdb_options_set_recycle_log_file_num(opts.c, C.size_t(value))
 }
 
 // Destroy deallocates the Options object.
