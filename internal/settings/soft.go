@@ -150,12 +150,6 @@ type soft struct {
 	// exchanged between nodehosts. You may need to increase this value when
 	// you want to host large number nodes per nodehost.
 	SendQueueLength uint64
-	// MaxDrummerServerMsgSize is the max size of messages sent/received on
-	// the Drummer side.
-	MaxDrummerServerMsgSize uint64
-	// MaxDrummerClientMsgSize is the max size of messages sent/received on
-	// the nodehost side.
-	MaxDrummerClientMsgSize uint64
 	// StreamConnections defines how many connections to use for each remote
 	// nodehost whene exchanging raft messages
 	StreamConnections uint64
@@ -174,9 +168,6 @@ type soft struct {
 	//
 	// Drummer/node scheduling
 	//
-
-	// DrummerClientName defines the name of the built-in drummer client.
-	DrummerClientName string
 	// NodeHostInfoReportSecond defines how often in seconds nodehost report it
 	// details to Drummer servers.
 	NodeHostInfoReportSecond uint64
@@ -188,10 +179,6 @@ type soft struct {
 	// added to the raft cluster but has not been confirmed to be launched and
 	// running on its assigned nodehost.
 	NodeToStartMaxWait uint64
-	// DrummerLoopIntervalFactor defines how often Drummer need to examine all
-	// NodeHost info reported to it measured by the number of nodehost info
-	// report cycles.
-	DrummerLoopIntervalFactor uint64
 	// PersisentLogReportCycle defines how often local persisted log info need
 	// to be reported to Drummer server. Each NodeHostInfoReportSecond is called
 	// a cycle. PersisentLogReportCycle defines how often each nodehost need to
@@ -251,18 +238,14 @@ func getDefaultSoftSettings() soft {
 		StepEngineSnapshotWorkerCount:         64,
 		SendQueueLength:                       1024 * 2,
 		ReceiveQueueLength:                    1024,
-		MaxDrummerServerMsgSize:               256 * 1024 * 1024,
-		MaxDrummerClientMsgSize:               256 * 1024 * 1024,
 		StreamConnections:                     4,
 		PerConnectionSendBufSize:              LargeEntitySize,
 		PerConnectionRecvBufSize:              2 * 1024 * 1024,
 		SnapshotGCTick:                        30,
 		SnapshotChunkTimeoutTick:              900,
-		DrummerClientName:                     "drummer-client",
 		NodeHostInfoReportSecond:              NodeHostInfoReportSecond,
 		NodeHostTTL:                           NodeHostInfoReportSecond * 3,
 		NodeToStartMaxWait:                    NodeHostInfoReportSecond * 12,
-		DrummerLoopIntervalFactor:             1,
 		PersisentLogReportCycle:               3,
 		RocksDBMaxBackgroundCompactions:       2,
 		RocksDBMaxBackgroundFlushes:           2,
