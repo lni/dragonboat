@@ -43,6 +43,8 @@ var (
 	maxBytesForLevelMultiplier = float64(settings.Soft.RocksDBMaxBytesForLevelMultiplier)
 	targetFileSizeBase         = settings.Soft.RocksDBTargetFileSizeBase
 	targetFileSizeMultiplier   = int(settings.Soft.RocksDBTargetFileSizeMultiplier)
+	dynamicLevelBytes          = settings.Soft.RocksDBLevelCompactionDynamicLevelBytes
+	recycleLogFileNum          = int(settings.Soft.RocksDBRecycleLogFileNum)
 )
 
 // NewKVStore returns a RocksDB based IKVStore instance.
@@ -124,6 +126,10 @@ func getRocksDBOptions(directory string,
 	opts.SetTargetFileSizeMultiplier(targetFileSizeMultiplier)
 	opts.SetMaxBackgroundCompactions(maxBackgroundCompactions)
 	opts.SetMaxBackgroundFlushes(maxBackgroundFlushes)
+	opts.SetRecycleLogFileNum(recycleLogFileNum)
+	if dynamicLevelBytes != 0 {
+		opts.SetLevelCompactionDynamicLevelBytes(true)
+	}
 	return opts, bbto, cache
 }
 
