@@ -1,6 +1,6 @@
 # Storage #
 
-Dragonboat uses RocksDB or LevelDB to store Raft logs. 
+Dragonboat uses RocksDB or LevelDB to store Raft logs. We also have the plan to support [Pebble](https://github.com/cockroachdb/pebble) once Pebble is declared as ready for production by its authors. 
 
 ## Important Notice ##
 
@@ -27,6 +27,12 @@ go build -tags dragonboat_no_rocksdb pkg_name
 ``` 
 
 See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using LevelDB.
+
+## Pebble ##
+
+[Pebble](https://github.com/cockroachdb/pebble) is a native Go key-value store currently being developed by [cockroachdb](https://github.com/cockroachdb) developers. Pebble is not production ready yet, it is [expected](https://github.com/cockroachdb/pebble/issues/233) to be production ready by Spring 2020.
+
+Dragonboat can already use Pebble to store Raft logs, the pebble support is experimental and not recommended for any production use. As a Go storage engine, Pebble completely avoids all CGO related issues and concerns mentioned above. We plan to eventually switch to use Pebble as the default storage engine once it is stable.
 
 ## Use custom storage solution ##
 

@@ -93,7 +93,7 @@ $ GO111MODULE=on make dragonboat-test
 请注意，如果RocksDB事先已经安装，上述步骤可直接跳过。如果您仅希望使用dragonboat库，至此可以安全的删除$HOME/src/dragonboat目录了。
 
 ### 使用Dragonboat ###
-在您的应用中使用dragonboat库，请确保在Go程序代码中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.1.0"添加到您的Go应用的go.mod文件的__require__部分。
+在您的应用中使用dragonboat库，请确保在Go程序代码中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.1.3"添加到您的Go应用的go.mod文件的__require__部分。
 
 编译您的应用的时候，如有需要，可将RocksDB安装位置告知Go:
 ```

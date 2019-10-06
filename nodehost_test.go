@@ -42,7 +42,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/dragonboat/v3/plugin/leveldb"
+	"github.com/lni/dragonboat/v3/plugin/pebble"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -3082,7 +3082,7 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3101,7 +3101,7 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 			t.Fatalf("failed to return ErrNotOwner")
 		}
 		nhc.RaftAddress = nodeHostTestAddr1
-		nhc.LogDBFactory = leveldb.NewBatchedLogDB
+		nhc.LogDBFactory = pebble.NewBatchedLogDB
 		_, err = NewNodeHost(nhc)
 		if err != server.ErrIncompatibleData {
 			t.Fatalf("failed to return ErrIncompatibleData")
@@ -3278,7 +3278,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 			DeploymentID:   100,
 		}
 		func() {
@@ -3297,13 +3297,13 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	runNodeHostTest(t, tf)
 }
 
-func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
+func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 	tf := func() {
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
