@@ -153,6 +153,18 @@ LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
 all:
 rebuild-all: clean unit-test-bin
+
+cross-rebuild: LOGDB_TAG=dragonboat_no_rocksdb
+cross-rebuild: cross-build-bin
+cross-rebuild-win: EXTNAME=win
+cross-rebuild-win: GO=GOOS=windows $(GOCMD)
+cross-rebuild-win: cross-rebuild
+cross-rebuild-darwin: EXTNAME=darwin
+cross-rebuild-darwin: GO=GOOS=darwin $(GOCMD)
+cross-rebuild-darwin: cross-rebuild
+cross-rebuild-freebsd: EXTNAME=freebsd
+cross-rebuild-freebsd: GO=GOOS=freebsd $(GOCMD)
+cross-rebuild-freebsd: cross-rebuild
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
@@ -290,6 +302,11 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
 	test-tests
+
+cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)       \
+  -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
+cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport      \
+  test-multiraft test-config test-client test-server test-tools test-tests
 
 ###############################################################################
 # fast tests executed for every git push
@@ -565,7 +582,7 @@ golangci-lint-check:
 clean: clean-binding
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
-	@rm -f test-*.bin
+	@rm -f test-*.bin test-*.freebsd test-*.win test-*.darwin
 	@rm -f $(SEQUENCE_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
@@ -582,4 +599,5 @@ clean: clean-binding
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb travis-ci-test dev-test
+	docker-test-no-rocksdb travis-ci-test dev-test \
+	cross-rebuild cross-rebuild-win cross-rebuild-darwin cross-rebuild-freebsd
