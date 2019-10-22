@@ -1433,6 +1433,17 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 					t.Fatalf("dummy snapshot is not recorded as dummy")
 				}
 				break
+			} else if i%100 == 0 {
+				// this is an ugly hack to workaround RocksDB's incorrect fsync
+				// implementation on macos.
+				// fcntl(fd, F_FULLFSYNC) is required for a proper fsync on macos,
+				// sadly rocksdb is not doing that. this means we can make proposals
+				// very fast as they are not actually fsynced on macos but making
+				// snapshots are going to be much much slower as dragonboat properly
+				// fsyncs its snapshot data. we can end up completing all required
+				// proposals even before completing the first ongoing snapshotting
+				// operation.
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
@@ -1490,6 +1501,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				break
+			} else if i%50 == 0 {
+				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
@@ -1549,6 +1563,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 					}
 				}
 				break
+			} else if i%50 == 0 {
+				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
