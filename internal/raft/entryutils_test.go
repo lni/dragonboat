@@ -20,17 +20,6 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-func TestNewEntrySlice(t *testing.T) {
-	e := make([]pb.Entry, 1, 128)
-	n := newEntrySlice(e)
-	// TODO
-	// should actually check the underly pointer and length to make sure
-	// they don't overlap
-	if cap(n) == cap(e) {
-		t.Errorf("cap is the same")
-	}
-}
-
 func TestLimitSizeOnEmptyEntryList(t *testing.T) {
 	ents := []pb.Entry{}
 	limitSize(ents, 0)

@@ -527,19 +527,20 @@ func TestAppliedLogTo(t *testing.T) {
 		appliedTo  uint64
 		length     int
 		firstIndex uint64
+		shrunk     bool
 	}{
-		{5, 6, 5},
-		{11, 6, 5},
-		{6, 5, 6},
-		{6, 5, 6},
-		{10, 1, 10},
+		{5, 6, 5, true},
+		{11, 6, 5, true},
+		{6, 5, 6, true},
+		{6, 5, 6, true},
+		{10, 1, 10, false},
 	}
 	for idx, tt := range tests {
 		len1 := len(im.entries)
 		im.appliedLogTo(tt.appliedTo)
 		len2 := len(im.entries)
 		if len2 < len1 {
-			if !im.shrunk {
+			if tt.shrunk && !im.shrunk {
 				t.Errorf("shrunk flag not set")
 			}
 		}
@@ -700,5 +701,28 @@ func TestTryResize(t *testing.T) {
 	im.tryResize()
 	if cap(im.entries) == initcap {
 		t.Errorf("cap/len unexpectedly not changed")
+	}
+}
+
+func TestNewEntrySlice(t *testing.T) {
+	tests := []struct {
+		input uint64
+		oCap  uint64
+		oLen  uint64
+	}{
+		{entrySliceSize, entrySliceSize, entrySliceSize},
+		{entrySliceSize - 1, entrySliceSize, entrySliceSize - 1},
+		{entrySliceSize + 1, entrySliceSize + 1, entrySliceSize + 1},
+	}
+	for idx, tt := range tests {
+		ents := make([]pb.Entry, tt.input)
+		im := inMemory{}
+		output := im.newEntrySlice(ents)
+		if uint64(cap(output)) != tt.oCap {
+			t.Errorf("%d, unexpected cap %d, want %d", idx, cap(output), tt.oCap)
+		}
+		if uint64(len(output)) != tt.oLen {
+			t.Errorf("%d, unexpected len %d, want %d", idx, len(output), tt.oLen)
+		}
 	}
 }
