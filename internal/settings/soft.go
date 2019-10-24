@@ -71,6 +71,9 @@ type soft struct {
 	// ExpectedMaxInMemLogSize is the minimum MaxInMemLogSize value expected
 	// in a raft config.
 	ExpectedMaxInMemLogSize uint64
+	// InMemGCTimeout defines how often dragonboat collects partial object.
+	// It is defined in terms of number of ticks.
+	InMemGCTimeout uint64
 
 	//
 	// Multiraft
@@ -229,6 +232,7 @@ func getDefaultSoftSettings() soft {
 		LocalRaftRequestTimeoutMs:      10000,
 		GetConnectedTimeoutSecond:      5,
 		MaxEntrySize:                   2 * MaxProposalPayloadSize,
+		InMemGCTimeout:                 100,
 		InMemEntrySliceSize:            512,
 		MinEntrySliceFreeSize:          96,
 		ExpectedMaxInMemLogSize:        2 * (MaxProposalPayloadSize + EntryNonCmdFieldsSize),

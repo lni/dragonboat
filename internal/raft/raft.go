@@ -50,7 +50,9 @@ const (
 )
 
 var (
-	emptyState = pb.State{}
+	emptyState     = pb.State{}
+	maxEntrySize   = settings.Soft.MaxEntrySize
+	inMemGcTimeout = settings.Soft.InMemGCTimeout
 )
 
 // State is the state of a raft node defined in the raft paper, possible states
@@ -207,6 +209,7 @@ type raft struct {
 	readyToRead               []pb.ReadyToRead
 	droppedEntries            []pb.Entry
 	droppedReadIndexes        []pb.SystemCtx
+	quiesce                   bool
 	checkQuorum               bool
 	tickCount                 uint64
 	electionTick              uint64
@@ -462,8 +465,18 @@ func (r *raft) timeForRateLimitCheck() bool {
 	return r.tickCount%r.electionTimeout == 0
 }
 
+func (r *raft) timeForInMemGC() bool {
+	return r.tickCount%inMemGcTimeout == 0
+}
+
 func (r *raft) tick() {
+	r.quiesce = false
 	r.tickCount++
+	// this is to work around the language limitation described in
+	// https://github.com/golang/go/issues/9618
+	if r.timeForInMemGC() {
+		r.log.inmem.tryResize()
+	}
 	if r.state == leader {
 		r.leaderTick()
 	} else {
@@ -531,6 +544,10 @@ func (r *raft) leaderTick() {
 }
 
 func (r *raft) quiescedTick() {
+	if !r.quiesce {
+		r.quiesce = true
+		r.log.inmem.resize()
+	}
 	r.electionTick++
 }
 

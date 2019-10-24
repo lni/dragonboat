@@ -2279,3 +2279,35 @@ func TestRateLimitMessageIsSentByNonLeader(t *testing.T) {
 	testRateLimitMessageIsSentByNonLeader(2, true, t)
 	testRateLimitMessageIsSentByNonLeader(NoLeader, false, t)
 }
+
+func TestInMemoryEntriesSliceCanBeResized(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+	oldcap := cap(r.log.inmem.entries)
+	if oldcap != 0 {
+		t.Errorf("unexpected cap val: %d", oldcap)
+	}
+	r.log.inmem.shrunk = true
+	for i := uint64(0); i < inMemGcTimeout; i++ {
+		r.tick()
+	}
+	if uint64(cap(r.log.inmem.entries)) != entrySliceSize {
+		t.Errorf("not resized")
+	}
+}
+
+func TestFirstQuiescedTickResizesInMemoryEntriesSlice(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+	oldcap := cap(r.log.inmem.entries)
+	if oldcap != 0 {
+		t.Errorf("unexpected cap val: %d", oldcap)
+	}
+	r.quiescedTick()
+	if uint64(cap(r.log.inmem.entries)) != entrySliceSize {
+		t.Errorf("not resized, cap: %d", oldcap)
+	}
+	r.log.inmem.entries = make([]pb.Entry, 0, 0)
+	r.quiescedTick()
+	if cap(r.log.inmem.entries) != 0 {
+		t.Errorf("unexpectedly resized again")
+	}
+}
