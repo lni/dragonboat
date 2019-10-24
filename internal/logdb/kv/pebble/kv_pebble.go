@@ -20,9 +20,10 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/cockroachdb/pebble"
+
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/petermattis/pebble"
 )
 
 type pebbleWriteBatch struct {
