@@ -809,7 +809,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			t.Fatalf("failed to stop the cluster")
 		}
 		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to restartthe cluster again")
+			t.Fatalf("failed to restart the cluster again %v", err)
 		}
 	}
 	runNodeHostTest(t, tf)
