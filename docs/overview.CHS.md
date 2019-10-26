@@ -31,6 +31,7 @@ This document is an overview of the dragonboat library, it is in Chinese. The En
 Raft组：Raft协议控制下的一个独立的具有多个副本的实体，组内各个副本提供上一节中描述的一致性保证。一个应用可以使用管理一个或者多个Raft组。每个Raft组由一个系统内全局唯一的用户设定的64位整形数ClusterID来指代。
 集群Cluster：Raft组的别称。
 节点Node：Raft组中的一个成员副本。每个节点由一个Raft组内唯一的用户设定的64位整形数NodeID来指代。
+初始成员节点Initial Member：一个Raft组在最初出现的时候所设定的原始成员。
 Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有一个Leader节点，只有当Leader节点确定时才能对该Raft组进行读写。
 快照Snapshot：把状态机在某具体时间点上的状态完全保存所得到的数据，可用于快速恢复状态机状态。
 
@@ -53,6 +54,20 @@ Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有
 ### 两类状态机的选择 ###
 
 上述两类状态机的选择的最重要指标是状态机所管理的总数据大小。在所有状态机数据可以被存放于内存内的时候，比如几十G字节以内，建议使用基于内存的状态机，基于磁盘的状态机可以视为是状态机管理数据量较大情况下的一种针对避免额外开销的优化。
+
+## 节点启动 ##
+
+使用一个节点前首先需要启动该节点，使得其被NodeHost装载并管理。NodeHost的StartCluster, StartConcurrentCluster与StartOnDiskCluster方法用于启动相应节点。
+
+当一个Raft cluster的各初始成员首次启动时，用户需要提供该Raft cluster的所有初始成员信息(initial members)，且各副本必须以完全相同的初始成员信息启动。该初始成员信息用于确保各副本从一个一致的成员列表开始演进后续用户要求的成员变更。当一个副本并非该Raft cluster的初始成员，而是后续通过成员变更（如SyncRequestAddNode）所新增的节点，其第一次启动时无需提供初始成员信息，只需要将join参数设置为true。
+
+当一个节点重启时，不论该节点是一个初始节点还是后续通过成员变更添加的节点，均无需再次提供初始成员信息，也不再需要设置join参数为true。
+
+## 节点停止 ##
+
+用户可以通过NodeHost的StopCluster方法来停止所指定的Raft cluster在该NodeHost管理下的副本。停止后的节点不再响应读写请求，但可以通过上述节点启动方式再次重新启动。
+
+在一个副本被StopCluster要求停止后，如果它正在执行快照的创建或恢复，该节点可能不会立刻停止而需等待至快照的创建或恢复完成。为避免这种长期等待，由用户实现的快照创建与恢复方法提供了一个<-chan struct{}的参数，当节点被要求停止后，该<-chan struct{}会被关闭，用户的快照创建与恢复方法可据此选择是否放弃当前的快照创建与恢复，从而快速响应节点停止的请求。
 
 ## 写操作 ##
 
