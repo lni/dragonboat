@@ -139,6 +139,14 @@ var (
 	// ErrInvalidClusterSettings indicates that cluster settings specified for
 	// the StartCluster method are invalid.
 	ErrInvalidClusterSettings = errors.New("cluster settings are invalid")
+	// ErrClusterNotBootstrapped indicates that the specified cluster has not
+	// been boostrapped yet. When starting this node, depending on whether this
+	// node is an initial member of the Raft cluster, you must either specify
+	// all of its initial members or set the join flag to true.
+	// When used correctly, dragonboat only returns this error in the rare
+	// situation when you try to restart a node crashed during its previous
+	// bootstrap attempt.
+	ErrClusterNotBootstrapped = errors.New("cluster not bootstrapped")
 	// ErrDeadlineNotSet indicates that the context parameter provided does not
 	// carry a deadline.
 	ErrDeadlineNotSet = errors.New("deadline not set")
@@ -1379,6 +1387,9 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {
+		if !join && len(initialMembers) == 0 {
+			return nil, false, ErrClusterNotBootstrapped
+		}
 		var members map[uint64]string
 		if !join {
 			members = initialMembers
@@ -1420,7 +1431,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if join && len(initialMembers) > 0 {
 		return ErrInvalidClusterSettings
 	}
-	addrs, im, err := nh.bootstrapCluster(initialMembers, join, config, smType)
+	peers, im, err := nh.bootstrapCluster(initialMembers, join, config, smType)
 	if err == ErrInvalidClusterSettings {
 		return ErrInvalidClusterSettings
 	}
@@ -1429,7 +1440,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	}
 	queue := server.NewMessageQueue(receiveQueueLen,
 		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
-	for k, v := range addrs {
+	for k, v := range peers {
 		if k != nodeID {
 			nh.nodes.AddNode(clusterID, k, v)
 		}
@@ -1460,7 +1471,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		panic(err)
 	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
-		addrs,
+		peers,
 		im,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
