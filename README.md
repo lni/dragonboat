@@ -93,7 +93,7 @@ $ GO111MODULE=on make dragonboat-test
 Once completed, $HOME/src/dragonboat can be safely deleted if you just plan to use dragonboat in your application.
 
 ### Use Dragonboat ###
-To use dragonboat in your application, make sure to import the package __github.com/lni/dragonboat/v3__ in your Go code. Also add "github.com/lni/dragonboat/v3 v3.1.0" to the __require__ section of your project's go.mod file.
+To use dragonboat in your application, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.1.3" to the __require__ section of your project's go.mod file.
 
 When building your application, you may need to tell Go where is the installed RocksDB library:
 ```

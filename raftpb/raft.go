@@ -231,34 +231,30 @@ func (b *Bootstrap) Validate(nodes map[uint64]string,
 		plog.Errorf("restarting previously joined node, member list %v", nodes)
 		return false
 	}
-	if join && len(nodes) > 0 {
-		plog.Errorf("joining node with member list %v", nodes)
-		return false
-	}
 	if join && len(b.Addresses) > 0 {
 		plog.Errorf("joining node when it is an initial member")
 		return false
 	}
-	ret := true
+	valid := true
 	if len(nodes) > 0 {
 		if len(nodes) != len(b.Addresses) {
-			ret = false
+			valid = false
 		}
 		for nid, addr := range nodes {
 			ba, ok := b.Addresses[nid]
 			if !ok {
-				ret = false
+				valid = false
 			}
 			if strings.Compare(ba, stringutil.CleanAddress(addr)) != 0 {
-				ret = false
+				valid = false
 			}
 		}
 	}
-	if !ret {
+	if !valid {
 		plog.Errorf("inconsistent node list, bootstrap %v, incoming %v",
 			b.Addresses, nodes)
 	}
-	return ret
+	return valid
 }
 
 func checkFileSize(path string, size uint64) {

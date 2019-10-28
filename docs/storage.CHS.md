@@ -1,6 +1,6 @@
 # 存储 #
 
-Dragonboat使用RocksDB或LevelDB来存储Raft协议的日志数据。
+Dragonboat使用RocksDB或LevelDB来存储Raft协议的日志数据。我们计划在[Pebble](https://github.com/cockroachdb/pebble)被其维护者宣布为生产系统适用后立即支持以Pebble存储Raft日志数据。
 
 ## 重要告知 ##
 
@@ -28,6 +28,12 @@ go build -tags dragonboat_no_rocksdb pkg_name
 ```
 
 请参考[中文说明](https://github.com/lni/dragonboat/blob/master/README.CHS.md)的“开始使用”一节以获知如何使用LevelDB来运行内建的测试。
+
+## Pebble ##
+
+[Pebble](https://github.com/cockroachdb/pebble)是一个Go实现的Key-Value数据库，它由[cockroachdb](https://github.com/cockroachdb)的作者开发。Pebble目前尚未适用于生产系统，其作者预期在2020年春以前宣布其为适用于生产系统。
+
+Dragonboat已可以使用Pebble来存储Raft日志数据，但这一实验性的功能不应该被用于任何生产系统。作为一个Go实现的存储引擎，Pebble没有上述提及的诸多CGO带来的问题与顾虑。基于此，我们计划未来时机成熟后将Pebble转换为Dragonboat的默认存储引擎。
 
 ## 使用自定义的存储方案 ##
 

@@ -320,6 +320,10 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	deleteTestDB()
 	defer deleteTestDB()
 	maxIndex := uint64(1024 * 128)
+	fk := newKey(entryKeySize, nil)
+	lk := newKey(entryKeySize, nil)
+	fk.SetEntryKey(100, 1, 1)
+	lk.SetEntryKey(100, 1, maxIndex+1)
 	func() {
 		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 		if err != nil {
@@ -339,7 +343,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			t.Fatalf("failed to commit wb %v", err)
 		}
 	}()
-	sz, err := getDirSize(RDBTestDirectory)
+	sz, err := getDirSize(RDBTestDirectory, true)
 	if err != nil {
 		t.Fatalf("failed to get sz %v", err)
 	}
@@ -351,17 +355,13 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 		t.Fatalf("failed to open kv rocksdb")
 	}
 	defer kvs.Close()
-	fk := newKey(entryKeySize, nil)
-	lk := newKey(entryKeySize, nil)
-	fk.SetEntryKey(100, 1, 1)
-	lk.SetEntryKey(100, 1, maxIndex+1)
 	if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
 		t.Fatalf("remove entry failed %v", err)
 	}
 	if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
 		t.Fatalf("compaction failed %v", err)
 	}
-	sz, err = getDirSize(RDBTestDirectory)
+	sz, err = getDirSize(RDBTestDirectory, false)
 	if err != nil {
 		t.Fatalf("failed to get sz %v", err)
 	}

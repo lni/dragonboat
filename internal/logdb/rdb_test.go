@@ -32,10 +32,13 @@ const (
 	RDBTestDirectory = "rdb_test_dir_safe_to_delete"
 )
 
-func getDirSize(path string) (int64, error) {
+func getDirSize(path string, includeLogSize bool) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
+			if !includeLogSize && strings.HasSuffix(info.Name(), ".log") {
+				return nil
+			}
 			size += info.Size()
 		}
 		return nil
@@ -1115,7 +1118,7 @@ func TestRemoveEntriesTo(t *testing.T) {
 	// https://github.com/google/leveldb/issues/573
 	// https://github.com/google/leveldb/issues/593
 	if !skipSizeCheck {
-		sz, err := getDirSize(RDBTestDirectory)
+		sz, err := getDirSize(RDBTestDirectory, false)
 		if err != nil {
 			t.Fatalf("failed to get sz %v", err)
 		}

@@ -19,10 +19,23 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"sync/atomic"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/raftio"
+)
+
+var (
+	writeBufferSize            = int(settings.Soft.RocksDBWriteBufferSize)
+	maxWriteBufferNumber       = int(settings.Soft.RocksDBMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger = int(settings.Soft.RocksDBLevel0FileNumCompactionTrigger)
+	l0SlowdownWritesTrigger    = int(settings.Soft.RocksDBLevel0SlowdownWritesTrigger)
+	l0StopWritesTrigger        = int(settings.Soft.RocksDBLevel0StopWritesTrigger)
+	maxBytesForLevelBase       = int64(settings.Soft.RocksDBMaxBytesForLevelBase)
+	targetFileSizeBase         = int64(settings.Soft.RocksDBTargetFileSizeBase)
 )
 
 type pebbleWriteBatch struct {
@@ -51,6 +64,7 @@ func (w *pebbleWriteBatch) Delete(key []byte) {
 }
 
 func (w *pebbleWriteBatch) Clear() {
+	// TODO: reuse the write batch
 	w.wb = w.db.NewBatch()
 	w.count = 0
 }
@@ -72,11 +86,32 @@ type KV struct {
 	wo   *pebble.WriteOptions
 }
 
+var pebbleWarningFlag uint32
+
 func openPebbleDB(dir string, walDir string) (*KV, error) {
-	fmt.Printf("pebble support is experimental, DO NOT USE IN PRODUCTION\n")
-	lopts := pebble.LevelOptions{Compression: pebble.NoCompression}
+	if atomic.CompareAndSwapUint32(&pebbleWarningFlag, 0, 1) {
+		fmt.Fprintf(os.Stderr, "pebble support is experimental, DO NOT USE IN PRODUCTION\n")
+	}
+	lopts := make([]pebble.LevelOptions, 0)
+	fs := targetFileSizeBase
+	for l := 0; l < 7; l++ {
+		opt := pebble.LevelOptions{
+			Compression:    pebble.NoCompression,
+			BlockSize:      32 * 1024,
+			TargetFileSize: fs,
+		}
+		fs = fs * 2
+		lopts = append(lopts, opt)
+	}
 	opts := &pebble.Options{
-		Levels: []pebble.LevelOptions{lopts},
+		Levels:                      lopts,
+		MaxManifestFileSize:         1024 * 1024 * 128,
+		MemTableSize:                writeBufferSize,
+		MemTableStopWritesThreshold: maxWriteBufferNumber,
+		LBaseMaxBytes:               maxBytesForLevelBase,
+		L0CompactionThreshold:       l0FileNumCompactionTrigger,
+		L0StopWritesThreshold:       l0StopWritesTrigger,
+		Cache:                       pebble.NewCache(0),
 	}
 	if len(walDir) > 0 {
 		opts.WALDir = walDir

@@ -42,7 +42,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/dragonboat/v3/plugin/leveldb"
+	"github.com/lni/dragonboat/v3/plugin/pebble"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -809,7 +809,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			t.Fatalf("failed to stop the cluster")
 		}
 		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to restartthe cluster again")
+			t.Fatalf("failed to restart the cluster again %v", err)
 		}
 	}
 	runNodeHostTest(t, tf)
@@ -1528,6 +1528,17 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 					t.Fatalf("dummy snapshot is not recorded as dummy")
 				}
 				break
+			} else if i%100 == 0 {
+				// this is an ugly hack to workaround RocksDB's incorrect fsync
+				// implementation on macos.
+				// fcntl(fd, F_FULLFSYNC) is required for a proper fsync on macos,
+				// sadly rocksdb is not doing that. this means we can make proposals
+				// very fast as they are not actually fsynced on macos but making
+				// snapshots are going to be much much slower as dragonboat properly
+				// fsyncs its snapshot data. we can end up completing all required
+				// proposals even before completing the first ongoing snapshotting
+				// operation.
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
@@ -1593,6 +1604,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			if len(snapshots) >= 3 {
 				snapshotted = true
 				break
+			} else if i%50 == 0 {
+				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
@@ -1652,6 +1666,9 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 					}
 				}
 				break
+			} else if i%50 == 0 {
+				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		if !snapshotted {
@@ -3082,7 +3099,7 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3101,7 +3118,7 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 			t.Fatalf("failed to return ErrNotOwner")
 		}
 		nhc.RaftAddress = nodeHostTestAddr1
-		nhc.LogDBFactory = leveldb.NewBatchedLogDB
+		nhc.LogDBFactory = pebble.NewBatchedLogDB
 		_, err = NewNodeHost(nhc)
 		if err != server.ErrIncompatibleData {
 			t.Fatalf("failed to return ErrIncompatibleData")
@@ -3278,7 +3295,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 			DeploymentID:   100,
 		}
 		func() {
@@ -3297,13 +3314,13 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	runNodeHostTest(t, tf)
 }
 
-func TestNodeHostWithLevelDBLogDBCanBeCreated(t *testing.T) {
+func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 	tf := func() {
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   leveldb.NewLogDB,
+			LogDBFactory:   pebble.NewLogDB,
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {

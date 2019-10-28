@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Dragonboat is known to work on - 
+# Linux AMD64, Linux ARM64, MacOS and FreeBSD AMD64
+# only Linux AMD64 is officially supported
 OS := $(shell uname)
 # the location of this Makefile
 PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -32,25 +35,17 @@ GOCMD=go
 LOGDB_TAG=dragonboat_no_rocksdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
 $(info using rocksdb based log storage)
-# set the variables below to tell the Makefile where to find 
-# rocksdb libs and includes, e.g. /usr/local/lib and /usr/local/include
-# tested rocksdb version -
-# rocksdb 5.13.x
-# very briefly tested -
-# rocksdb 5.15.10, 5.16.6, 5.17.2 and 6.0.2
-ROCKSDB_MAJOR_VER=5
-ROCKSDB_MINOR_VER=13
-ROCKSDB_PATCH_VER=4
-ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
-
 ifeq ($(OS),Darwin)
-ROCKSDB_SO_FILE=librocksdb.$(ROCKSDB_MAJOR_VER).dylib
+ROCKSDB_SO_FILE=librocksdb.dylib
 else ifeq ($(OS),Linux)
-ROCKSDB_SO_FILE=librocksdb.so.$(ROCKSDB_MAJOR_VER)
+ROCKSDB_SO_FILE=librocksdb.so
+else ifeq ($(OS),FreeBSD)
+ROCKSDB_SO_FILE=librocksdb.so
 else
 $(error OS type $(OS) not supported)
 endif
 
+# RocksDB version 5 or 6 are required
 ROCKSDB_INC_PATH ?=
 ROCKSDB_LIB_PATH ?=
 # figure out where is the rocksdb installation
@@ -74,6 +69,7 @@ ifneq ($(wildcard /usr/local/lib/$(ROCKSDB_SO_FILE)),)
 ifneq ($(wildcard /usr/local/include/rocksdb/c.h),)
 $(info rocksdb lib found at /usr/local/lib/$(ROCKSDB_SO_FILE))
 ROCKSDB_LIB_PATH=/usr/local/lib
+ROCKSDB_INC_PATH=/usr/local/include
 endif
 endif
 endif
@@ -89,11 +85,11 @@ CDEPS_LDFLAGS=-L$(ROCKSDB_LIB_PATH) -lrocksdb
 endif
 
 ifneq ($(ROCKSDB_INC_PATH),)
-CGO_CXXFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
+CGO_CFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
 endif
 
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
-GOCMD=$(CGO_LDFLAGS) $(CGO_CXXFLAGS) go
+GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) go
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
@@ -157,10 +153,35 @@ LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
 all:
 rebuild-all: clean unit-test-bin
+
+cross-rebuild: LOGDB_TAG=dragonboat_no_rocksdb
+cross-rebuild: cross-build-bin
+cross-rebuild-win: EXTNAME=win
+cross-rebuild-win: GO=GOOS=windows $(GOCMD)
+cross-rebuild-win: cross-rebuild
+cross-rebuild-darwin: EXTNAME=darwin
+cross-rebuild-darwin: GO=GOOS=darwin $(GOCMD)
+cross-rebuild-darwin: cross-rebuild
+cross-rebuild-freebsd: EXTNAME=freebsd
+cross-rebuild-freebsd: GO=GOOS=freebsd $(GOCMD)
+cross-rebuild-freebsd: cross-rebuild
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
 LIBCONF_PATH=/etc/ld.so.conf.d/usr_local_lib.conf
+# set the variables below to tell the Makefile which version of rocksdb you
+# want to install. rocksdb v5.13.4 is the version we used in production, it is
+# used here as the default, feel free to change to the version number you like
+#
+# tested rocksdb version -
+# rocksdb 5.13.x
+# very briefly tested -
+# rocksdb 5.15.10, 5.16.6, 5.17.2 and 6.0.2
+ROCKSDB_MAJOR_VER=5
+ROCKSDB_MINOR_VER=13
+ROCKSDB_PATCH_VER=4
+ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
+
 RDBTMPDIR=$(PKGROOT)/build/rocksdbtmp
 RDBURL=https://github.com/facebook/rocksdb/archive/v$(ROCKSDB_VER).tar.gz
 build-rocksdb: get-rocksdb make-rocksdb
@@ -282,6 +303,11 @@ unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
 	test-tests
 
+cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)       \
+  -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
+cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport      \
+  test-multiraft test-config test-client test-server test-tools test-tests
+
 ###############################################################################
 # fast tests executed for every git push
 ###############################################################################
@@ -336,9 +362,8 @@ snapshot-benchmark-test:
 ###############################################################################
 # build slow tests 
 ###############################################################################
-# build slow tests, this is invoked for every push
-# we can't afford to run all these tests that are known to be slow, but we can
-# check whether the push fails the build
+# build slow tests, we can't afford to run all these tests that are known to be
+# slow, but we can check whether the push fails the build
 slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
 slow-multiraft:
 	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)
@@ -360,6 +385,8 @@ $(info TESTBUILD flag set, doing a DEBUG build)
 ifeq ($(OS),Darwin)
 SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=undefined
 else ifeq ($(OS),Linux)
+SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=leak
+else ifeq ($(OS),FreeBSD)
 SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=leak
 else
 $(error OS type $(OS) not supported)
@@ -449,11 +476,10 @@ PLUGIN_CPP_EXAMPLE_BIN=dragonboat-cpp-plugin-example.so
 ifeq ($(OS),Darwin)
 CPPTEST_LDFLAGS=-bundle -undefined dynamic_lookup \
   -Wl,-install_name,$(PLUGIN_CPP_EXAMPLE_BIN)
-CPPKVTEST_LDFLAGS=-bundle -undefined dynamic_lookup \
-  -Wl,-install_name,$(PLUGIN_CPP_KVTEST_BIN)
 else ifeq ($(OS),Linux)
 CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-CPPKVTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_KVTEST_BIN)
+else ifeq ($(OS),FreeBSD)
+CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
 else
 $(error OS type $(OS) not supported)
 endif
@@ -556,7 +582,7 @@ golangci-lint-check:
 clean: clean-binding
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
-	@rm -f test-*.bin
+	@rm -f test-*.bin test-*.freebsd test-*.win test-*.darwin
 	@rm -f $(SEQUENCE_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(IOERROR_INJECTION_BUILDTAGS) \
@@ -573,4 +599,5 @@ clean: clean-binding
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb travis-ci-test dev-test
+	docker-test-no-rocksdb travis-ci-test dev-test \
+	cross-rebuild cross-rebuild-win cross-rebuild-darwin cross-rebuild-freebsd

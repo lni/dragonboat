@@ -30,10 +30,21 @@ var (
 )
 
 var (
-	logDBLRUCacheSize        = int(settings.Soft.RDBLRUCacheSize)
-	maxBackgroundCompactions = int(settings.Soft.RDBMaxBackgroundCompactions)
-	maxBackgroundFlushes     = int(settings.Soft.RDBMaxBackgroundFlushes)
-	keepLogFileNum           = int(settings.Soft.RDBKeepLogFileNum)
+	logDBLRUCacheSize          = int(settings.Soft.RocksDBLRUCacheSize)
+	maxBackgroundCompactions   = int(settings.Soft.RocksDBMaxBackgroundCompactions)
+	maxBackgroundFlushes       = int(settings.Soft.RocksDBMaxBackgroundFlushes)
+	keepLogFileNum             = int(settings.Soft.RocksDBKeepLogFileNum)
+	writeBufferSize            = int(settings.Soft.RocksDBWriteBufferSize)
+	maxWriteBufferNumber       = int(settings.Soft.RocksDBMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger = int(settings.Soft.RocksDBLevel0FileNumCompactionTrigger)
+	l0SlowdownWritesTrigger    = int(settings.Soft.RocksDBLevel0SlowdownWritesTrigger)
+	l0StopWritesTrigger        = int(settings.Soft.RocksDBLevel0StopWritesTrigger)
+	maxBytesForLevelBase       = settings.Soft.RocksDBMaxBytesForLevelBase
+	maxBytesForLevelMultiplier = float64(settings.Soft.RocksDBMaxBytesForLevelMultiplier)
+	targetFileSizeBase         = settings.Soft.RocksDBTargetFileSizeBase
+	targetFileSizeMultiplier   = int(settings.Soft.RocksDBTargetFileSizeMultiplier)
+	dynamicLevelBytes          = settings.Soft.RocksDBLevelCompactionDynamicLevelBytes
+	recycleLogFileNum          = int(settings.Soft.RocksDBRecycleLogFileNum)
 )
 
 // NewKVStore returns a RocksDB based IKVStore instance.
@@ -52,8 +63,6 @@ type KV struct {
 	opts      *gorocksdb.Options
 }
 
-// FIXME:
-// move these option parameters to the settings package to make it configurable
 func getRocksDBOptions(directory string,
 	walDirectory string) (*gorocksdb.Options,
 	*gorocksdb.BlockBasedTableOptions, *gorocksdb.Cache) {
@@ -93,9 +102,9 @@ func getRocksDBOptions(directory string,
 		// based on the write buffer size.
 		opts.SetWriteBufferSize(512 * 1024)
 	} else {
-		opts.SetWriteBufferSize(256 * 1024 * 1024)
+		opts.SetWriteBufferSize(writeBufferSize)
 	}
-	// in normal mode, by default, we try to minimize write amplifcation, we have
+	// by default, in our deployments, we try to minimize write amplifcation -
 	// L0 size = 256MBytes * 2 (min_write_buffer_number_to_merge) * \
 	//              8 (level0_file_num_compaction_trigger)
 	//         = 4GBytes
@@ -104,23 +113,23 @@ func getRocksDBOptions(directory string,
 	// L2 size is 8G, L3 is 16G, L4 is 32G, L5 64G...
 	//
 	// note this is the size of a shard, and the content of the rdb is expected
-	// to be compacted by raft.
-	//
-	opts.SetLevel0FileNumCompactionTrigger(8)
-	opts.SetLevel0SlowdownWritesTrigger(17)
-	opts.SetLevel0StopWritesTrigger(24)
-	opts.SetMaxWriteBufferNumber(25)
+	// to be regularly compacted by raft. users are also free to change these
+	// settings when they feel necessary.
+	opts.SetLevel0FileNumCompactionTrigger(l0FileNumCompactionTrigger)
+	opts.SetLevel0SlowdownWritesTrigger(l0SlowdownWritesTrigger)
+	opts.SetLevel0StopWritesTrigger(l0StopWritesTrigger)
+	opts.SetMaxWriteBufferNumber(maxWriteBufferNumber)
 	opts.SetNumLevels(7)
-	// MaxBytesForLevelBase is the total size of L1, should be close to the size
-	// of L0
-	opts.SetMaxBytesForLevelBase(4 * 1024 * 1024 * 1024)
-	opts.SetMaxBytesForLevelMultiplier(2)
-	// files in L1 will have TargetFileSizeBase bytes
-	opts.SetTargetFileSizeBase(256 * 1024 * 1024)
-	opts.SetTargetFileSizeMultiplier(1)
-	// IO parallism
+	opts.SetMaxBytesForLevelBase(maxBytesForLevelBase)
+	opts.SetMaxBytesForLevelMultiplier(maxBytesForLevelMultiplier)
+	opts.SetTargetFileSizeBase(targetFileSizeBase)
+	opts.SetTargetFileSizeMultiplier(targetFileSizeMultiplier)
 	opts.SetMaxBackgroundCompactions(maxBackgroundCompactions)
 	opts.SetMaxBackgroundFlushes(maxBackgroundFlushes)
+	opts.SetRecycleLogFileNum(recycleLogFileNum)
+	if dynamicLevelBytes != 0 {
+		opts.SetLevelCompactionDynamicLevelBytes(true)
+	}
 	return opts, bbto, cache
 }
 

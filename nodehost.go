@@ -139,6 +139,14 @@ var (
 	// ErrInvalidClusterSettings indicates that cluster settings specified for
 	// the StartCluster method are invalid.
 	ErrInvalidClusterSettings = errors.New("cluster settings are invalid")
+	// ErrClusterNotBootstrapped indicates that the specified cluster has not
+	// been boostrapped yet. When starting this node, depending on whether this
+	// node is an initial member of the Raft cluster, you must either specify
+	// all of its initial members or set the join flag to true.
+	// When used correctly, dragonboat only returns this error in the rare
+	// situation when you try to restart a node crashed during its previous
+	// bootstrap attempt.
+	ErrClusterNotBootstrapped = errors.New("cluster not bootstrapped")
 	// ErrDeadlineNotSet indicates that the context parameter provided does not
 	// carry a deadline.
 	ErrDeadlineNotSet = errors.New("deadline not set")
@@ -391,30 +399,38 @@ func (nh *NodeHost) Stop() {
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
-// the node to make it ready for accepting incoming requests.
+// the node to make it ready for accepting incoming requests. The node to be
+// started is backed by a regular state machine that implements the
+// sm.IStateMachine interface.
 //
-// The input parameter nodes is a map of node ID to RaftAddress for indicating
-// what are initial nodes when the Raft cluster is first created. The join flag
-// indicates whether the node is a new node joining an existing cluster.
-// createStateMachine is a factory function for creating the IStateMachine
-// instance, config is the configuration instance that will be passed to the
-// underlying Raft node object, the cluster ID and node ID of the involved node
-// is given in the ClusterID and NodeID fields of the config object.
+// The input parameter initialMembers is a map of node ID to RaftAddress for all
+// Raft cluster's initial member nodes. For the same Raft cluster, the same
+// initialMembers map should be specified when starting its initial member nodes
+// on distributed NodeHost instances.
+//
+// The join flag indicates whether the node
+// is a new node joining an existing cluster. createStateMachine is a factory
+// function for creating the IStateMachine instance, config is the configuration
+// instance that will be passed to the underlying Raft node object, the cluster
+// ID and node ID of the involved node is given in the ClusterID and NodeID
+// fields of the specified config parameter.
 //
 // Note that this method is not for changing the membership of the specified
 // Raft cluster, it launches a node that is already a member of the Raft
 // cluster.
 //
 // As a summary, when -
-//  - starting a brand new Raft cluster with initial member nodes, set join to
-//    false and specify all initial member node details in the nodes map.
-//  - restarting an crashed or stopped node, set join to false. the content of
-//    the nodes map is ignored.
+//  - starting a brand new Raft cluster, set join to false and specify all initial
+//    member node details in the initialMembers map.
 //  - joining a new node to an existing Raft cluster, set join to true and leave
-//    the nodes map empty. This requires the joining node to have already been
-//    added as a member of the Raft cluster.
-func (nh *NodeHost) StartCluster(nodes map[uint64]string,
-	join bool, createStateMachine func(uint64, uint64) sm.IStateMachine,
+//    the initialMembers map empty. This requires the joining node to have already
+//    been added as a member node of the Raft cluster.
+//  - restarting an crashed or stopped node, set join to false and leave the
+//    initialMembers map to be empty. This applies to both initial member nodes
+//    and those joined later.
+func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
+	join bool,
+	createStateMachine func(uint64, uint64) sm.IStateMachine,
 	config config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
@@ -422,12 +438,13 @@ func (nh *NodeHost) StartCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.RegularStateMachine)
+	return nh.startCluster(initialMembers,
+		join, cf, stopc, config, pb.RegularStateMachine)
 }
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
-// to add and start a Raft node backed by a concurrent state machine.
-func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
+// to start a Raft node backed by a concurrent state machine.
+func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IConcurrentStateMachine,
 	config config.Config) error {
@@ -437,12 +454,13 @@ func (nh *NodeHost) StartConcurrentCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeSM(config, rsm.NewConcurrentStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.ConcurrentStateMachine)
+	return nh.startCluster(initialMembers,
+		join, cf, stopc, config, pb.ConcurrentStateMachine)
 }
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
-// add and start a Raft node backed by an IOnDiskStateMachine.
-func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
+// start a Raft node backed by an IOnDiskStateMachine.
+func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IOnDiskStateMachine,
 	config config.Config) error {
@@ -452,7 +470,8 @@ func (nh *NodeHost) StartOnDiskCluster(nodes map[uint64]string,
 		sm := createStateMachine(clusterID, nodeID)
 		return rsm.NewNativeSM(config, rsm.NewOnDiskStateMachine(sm), done)
 	}
-	return nh.startCluster(nodes, join, cf, stopc, config, pb.OnDiskStateMachine)
+	return nh.startCluster(initialMembers,
+		join, cf, stopc, config, pb.OnDiskStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
@@ -1384,47 +1403,51 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
 	nh.forEachClusterRun(nil, nil, f)
 }
 
-// there are two major reasons to bootstrap the cluster
-// 1. check whether user is incorrectly specifying the startCluster parameters,
-//    e.g. call startCluster with join=true first, restart the NodeHost then
-//    call startCluster again with join=false and len(nodes) > 0
+// there are three major reasons to bootstrap the cluster
+//
+// 1. when possible, we check whether user incorrectly specified parameters
+//    for the startCluster method, e.g. call startCluster with join=true first,
+//    then restart the NodeHost instance and call startCluster again with
+//    join=false and len(nodes) > 0
 // 2. when restarting a node which is a part of the initial cluster members,
-//    we should allow the caller not to provide a non-empty nodes with all
-//    initial member info in it, but when it is necessary to bootstrap at
-//    the raft node level again, we need to get the initial member info from
-//    somewhere. bootstrap is the process that records such info
-// 3. bootstrap record is used as the node info record in our default Log DB
-//    implementation
-func (nh *NodeHost) bootstrapCluster(nodes map[uint64]string,
-	join bool, config config.Config,
+//    for user convenience, we allow the caller not to provide the details of
+//    all initial members. when the initial cluster member info is required,
+//    we need to get the initial member info from somewhere. bootstrap is the
+//    procedure that records such info.
+// 3. the bootstrap record is used as a marker record in our default Log DB
+//    implementation to indicate that a certain node exists there
+func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
+	join bool,
+	cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
-	binfo, err := nh.logdb.GetBootstrapInfo(config.ClusterID, config.NodeID)
+	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {
+		if !join && len(initialMembers) == 0 {
+			return nil, false, ErrClusterNotBootstrapped
+		}
 		var members map[uint64]string
 		if !join {
-			members = nodes
+			members = initialMembers
 		}
-		bs := pb.NewBootstrapInfo(join, smType, nodes)
-		err := nh.logdb.SaveBootstrapInfo(config.ClusterID, config.NodeID, *bs)
+		bi = pb.NewBootstrapInfo(join, smType, initialMembers)
+		err := nh.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, *bi)
 		if err != nil {
 			return nil, false, err
 		}
-		plog.Infof("%s bootstrapped, members: %v",
-			dn(config.ClusterID, config.NodeID), members)
 		return members, !join, nil
 	} else if err != nil {
 		return nil, false, err
 	}
-	if !binfo.Validate(nodes, join, smType) {
-		plog.Errorf("bootstrap validation failed, %s, %v, %t, %v, %t",
-			dn(config.ClusterID, config.NodeID),
-			binfo.Addresses, binfo.Join, nodes, join)
+	if !bi.Validate(initialMembers, join, smType) {
+		plog.Errorf("bootstrap info validation failed, %s, %v, %t, %v, %t",
+			dn(cfg.ClusterID, cfg.NodeID),
+			bi.Addresses, bi.Join, initialMembers, join)
 		return nil, false, ErrInvalidClusterSettings
 	}
-	return binfo.Addresses, !binfo.Join, nil
+	return bi.Addresses, !bi.Join, nil
 }
 
-func (nh *NodeHost) startCluster(nodes map[uint64]string,
+func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine rsm.ManagedStateMachineFactory,
 	stopc chan struct{},
@@ -1432,8 +1455,6 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
-	plog.Infof("%s called startCluster, join %t, nodes %v",
-		dn(clusterID, nodeID), join, nodes)
 	nh.clusterMu.Lock()
 	defer nh.clusterMu.Unlock()
 	if nh.clusterMu.stopped {
@@ -1442,24 +1463,20 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 	if _, ok := nh.clusterMu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
-	if join && len(nodes) > 0 {
-		plog.Errorf("trying to join %s with initial member list %v",
-			dn(clusterID, nodeID), nodes)
+	if join && len(initialMembers) > 0 {
 		return ErrInvalidClusterSettings
 	}
-	addrs, members, err := nh.bootstrapCluster(nodes, join, config, smType)
+	peers, im, err := nh.bootstrapCluster(initialMembers, join, config, smType)
 	if err == ErrInvalidClusterSettings {
 		return ErrInvalidClusterSettings
 	}
 	if err != nil {
 		panic(err)
 	}
-	plog.Infof("%s reported bootstrap info %v", dn(clusterID, nodeID), addrs)
 	queue := server.NewMessageQueue(receiveQueueLen,
 		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
-	for k, v := range addrs {
+	for k, v := range peers {
 		if k != nodeID {
-			plog.Infof("%s called AddNode, addr %s", dn(clusterID, k), v)
 			nh.nodes.AddNode(clusterID, k, v)
 		}
 	}
@@ -1489,8 +1506,8 @@ func (nh *NodeHost) startCluster(nodes map[uint64]string,
 		panic(err)
 	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
-		addrs,
-		members,
+		peers,
+		im,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,

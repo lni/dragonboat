@@ -26,7 +26,7 @@ var (
 )
 
 //
-// known issues -
+// known issues (NICV) -
 // * the newEntries field is unnecessary
 // * the first element of im.entries is usually redundant
 //
@@ -174,11 +174,8 @@ func (im *inMemory) savedSnapshotTo(index uint64) {
 }
 
 func (im *inMemory) resize() {
-	old := im.entries
 	im.shrunk = false
-	sz := max(entrySliceSize, uint64(len(old)*2))
-	im.entries = make([]pb.Entry, 0, sz)
-	im.entries = append(im.entries, old...)
+	im.entries = im.newEntrySlice(im.entries)
 }
 
 func (im *inMemory) tryResize() {
@@ -189,13 +186,13 @@ func (im *inMemory) tryResize() {
 
 func (im *inMemory) resizeEntrySlice() {
 	toResize := cap(im.entries)-len(im.entries) < int(minEntrySliceSize)
-	if len(im.entries) == 0 || (im.shrunk && toResize) {
+	if im.shrunk && (len(im.entries) <= 1 || toResize) {
 		im.resize()
 	}
 }
 
 func (im *inMemory) newEntrySlice(ents []pb.Entry) []pb.Entry {
-	sz := max(entrySliceSize, uint64(len(ents)*2))
+	sz := max(entrySliceSize, uint64(len(ents)))
 	newEntries := make([]pb.Entry, 0, sz)
 	newEntries = append(newEntries, ents...)
 	return newEntries
