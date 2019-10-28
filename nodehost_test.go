@@ -3644,20 +3644,21 @@ func TestWitnessCanReplicateEntries(t *testing.T) {
 		}
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
 			if _, err := nh1.SyncRequestSnapshot(ctx, 1, opt); err != nil {
-				t.Fatalf("failed to request snapshot")
+				t.Fatalf("failed to request snapshot %v", err)
 			}
 			cancel()
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		if err := nh1.SyncRequestAddWitness(ctx, 1, 2, nodeHostTestAddr2, 0); err != nil {
-			t.Fatalf("failed to add witness")
+			t.Fatalf("failed to add witness %v", err)
 		}
 		cancel()
 		rc2 := rc
 		rc2.NodeID = 2
+		rc2.IsWitness = true
 		nhc2 := nhc1
 		nhc2.RaftAddress = nodeHostTestAddr2
 		nhc2.NodeHostDir = path.Join(singleNodeHostTestDir, "nh2")
@@ -3676,9 +3677,18 @@ func TestWitnessCanReplicateEntries(t *testing.T) {
 		waitForLeaderToBeElected(t, nh2, 1)
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
+			if _, err := nh2.SyncRequestSnapshot(ctx, 1, opt); err != ErrInvalidOperation {
+				t.Fatalf("requesting snapshot on witness not rejected")
+			}
+			cancel()
 		}
-		if witness.GetApplied() > 10 {
+		if witness.GetApplied() > 0 {
 			t.Fatalf("unexpected applied count %d", witness.GetApplied())
+		}
+		if witness.GetRecovered() > 0 {
+			t.Fatalf("unexpected recovered count %d", witness.GetRecovered())
 		}
 	}
 	runNodeHostTest(t, tf)

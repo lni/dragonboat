@@ -120,7 +120,8 @@ func (f *FakeDiskSM) GetHash() (uint64, error) {
 
 // SimDiskSM is a fake disk based state machine used for testing purposes
 type SimDiskSM struct {
-	applied uint64
+	applied   uint64
+	recovered uint64
 }
 
 // NewSimDiskSM ...
@@ -131,6 +132,11 @@ func NewSimDiskSM(applied uint64) *SimDiskSM {
 // GetApplied ...
 func (s *SimDiskSM) GetApplied() uint64 {
 	return s.applied
+}
+
+// GetRecovered ...
+func (s *SimDiskSM) GetRecovered() uint64 {
+	return atomic.LoadUint64(&s.recovered)
 }
 
 // Open ...
@@ -172,6 +178,7 @@ func (s *SimDiskSM) SaveSnapshot(ctx interface{},
 // RecoverFromSnapshot ...
 func (s *SimDiskSM) RecoverFromSnapshot(r io.Reader,
 	stopc <-chan struct{}) error {
+	atomic.AddUint64(&s.recovered, 1)
 	v := make([]byte, 8)
 	if _, err := io.ReadFull(r, v); err != nil {
 		return err
