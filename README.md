@@ -31,11 +31,12 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 
 Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
 * leader election, log replication, snapshotting and log compaction
-* membership changes
+* membership change
 * ReadIndex protocol for read-only queries
 * leadership transfer
-* non-voting members
-* idempotent updates transparent to applications
+* non-voting member
+* witness member
+* idempotent update transparent to applications
 * batching and pipelining
 * disk based state machine
 

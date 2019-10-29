@@ -36,6 +36,7 @@ Diego Ongaro的[Raft博士学位论文](https://ramcloud.stanford.edu/~ongaro/th
 * 基于ReadIndex协议的只读查询
 * 主节点转移
 * 无投票权成员
+* Witness成员
 * 应用透明的幂等更新支持
 * 成组处理优化与流水化处理
 * 基于磁盘的状态机

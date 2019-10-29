@@ -62,18 +62,10 @@ type Config struct {
 	NodeID uint64
 	// ClusterID is the unique value used to identify a Raft cluster.
 	ClusterID uint64
-	// IsObserver indicates whether this is an observer Raft node without voting
-	// power.
-	IsObserver bool
-	// IsWitness indicates whether this is a witness Raft node without real log data.
-	IsWitness bool
 	// CheckQuorum specifies whether the leader node should periodically check
 	// non-leader node status and step down to become a follower node when it no
 	// longer has the quorum.
 	CheckQuorum bool
-	// Quiesce specifies whether to let the Raft cluster enter quiesce mode when
-	// there is no cluster activity.
-	Quiesce bool
 	// ElectionRTT is the minimum number of message RTT between elections. Message
 	// RTT is defined by NodeHostConfig.RTTMillisecond. The Raft paper suggests it
 	// to be a magnitude greater than HeartbeatRTT, which is the interval between
@@ -153,6 +145,27 @@ type Config struct {
 	// payload of user proposals. When Snappy is used, the maximum proposal
 	// payload allowed is roughly limited to 3.42GBytes.
 	EntryCompressionType CompressionType
+	// IsObserver indicates whether this is an observer Raft node without voting
+	// power. Described as non-voting members in the section 4.2.1 of Diego
+	// Ongaro's thesis, observer nodes are usually used to allow a new node to
+	// join the cluster and catch up with other existing ndoes without impacting
+	// the availability. Extra observer nodes can also be introduced to serve
+	// read-only requests without affecting system write throughput.
+	//
+	// Observer support is currently experimental.
+	IsObserver bool
+	// IsWitness indicates whether this is a witness Raft node without actual log
+	// replication and do not have state machine. It is mentioned in the section
+	// 11.7.2 of Diego Ongaro's thesis.
+	//
+	// Witness support is currently experimental.
+	IsWitness bool
+	// Quiesce specifies whether to let the Raft cluster enter quiesce mode when
+	// there is no cluster activity. Clusters in quiesce mode do not exchange
+	// heartbeat messages to minimize bandwidth consumption.
+	//
+	// Quiesce support is currently experimental.
+	Quiesce bool
 }
 
 // Validate validates the Config instance and return an error when any member
