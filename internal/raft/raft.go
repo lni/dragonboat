@@ -258,19 +258,13 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 		dn(r.clusterID, r.nodeID), r.rl.Enabled(), c.MaxInMemLogSize)
 	st, members := logdb.NodeState()
 	for p := range members.Addresses {
-		r.remotes[p] = &remote{
-			next: 1,
-		}
+		r.remotes[p] = &remote{next: 1}
 	}
 	for p := range members.Observers {
-		r.observers[p] = &remote{
-			next: 1,
-		}
+		r.observers[p] = &remote{next: 1}
 	}
 	for p := range members.Witnesses {
-		r.witnesses[p] = &remote{
-			next: 1,
-		}
+		r.witnesses[p] = &remote{next: 1}
 	}
 	r.resetMatchValueArray()
 	if !pb.IsEmptyState(st) {
@@ -342,7 +336,7 @@ func (r *raft) isWitness() bool {
 }
 
 func (r *raft) mustBeLeader() {
-	if r.state != leader {
+	if !r.isLeader() {
 		plog.Panicf("%s is not a leader", r.describe())
 	}
 }
@@ -484,7 +478,6 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 		if ok {
 			plog.Panicf("Assumed witness could not promote to full member")
 		}
-
 		match := uint64(0)
 		next := r.log.lastIndex() + 1
 		if id == r.nodeID {
@@ -797,17 +790,12 @@ func (r *raft) sendReplicateMessage(to uint64) {
 }
 
 func (r *raft) broadcastReplicateMessage() {
-	if r.state != leader {
+	if !r.isLeader() {
 		panic("non-leader broadcasting replication msg")
 	}
 	for nid := range r.observers {
 		if nid == r.nodeID {
 			plog.Panicf("%s observer is broadcasting Replicate msg", r.describe())
-		}
-	}
-	for nid := range r.witnesses {
-		if nid == r.nodeID {
-			panic("witness is trying to broadcast Replicate msg")
 		}
 	}
 	for _, nid := range r.nodes() {
@@ -1130,7 +1118,7 @@ func (r *raft) selfRemoved() bool {
 		_, ok := r.observers[r.nodeID]
 		return !ok
 	}
-	if r.state == witness {
+	if r.isWitness() {
 		_, ok := r.witnesses[r.nodeID]
 		return !ok
 	}
@@ -1140,6 +1128,9 @@ func (r *raft) selfRemoved() bool {
 
 func (r *raft) addNode(nodeID uint64) {
 	r.clearPendingConfigChange()
+	if nodeID == r.nodeID && r.isWitness() {
+		plog.Panicf("%s is a witness", r.describe())
+	}
 	if _, ok := r.remotes[nodeID]; ok {
 		// already a voting member
 		return
@@ -1161,6 +1152,9 @@ func (r *raft) addNode(nodeID uint64) {
 
 func (r *raft) addObserver(nodeID uint64) {
 	r.clearPendingConfigChange()
+	if nodeID == r.nodeID && !r.isObserver() {
+		plog.Panicf("%s iks not an observer", r.describe())
+	}
 	if _, ok := r.observers[nodeID]; ok {
 		return
 	}
@@ -1169,6 +1163,9 @@ func (r *raft) addObserver(nodeID uint64) {
 
 func (r *raft) addWitness(nodeID uint64) {
 	r.clearPendingConfigChange()
+	if nodeID == r.nodeID && !r.isWitness() {
+		plog.Panicf("%s is not a witness", r.describe())
+	}
 	if _, ok := r.witnesses[nodeID]; ok {
 		return
 	}
@@ -1476,7 +1473,7 @@ func (r *raft) canGrantVote(m pb.Message) bool {
 //
 
 func (r *raft) handleNodeElection(m pb.Message) {
-	if r.state != leader {
+	if !r.isLeader() {
 		// there can be multiple pending membership change entries committed but not
 		// applied on this node. say with a cluster of X, Y and Z, there are two
 		// such entries for adding node A and B are committed but not applied

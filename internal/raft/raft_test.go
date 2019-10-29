@@ -723,6 +723,36 @@ func TestObserverCanBeRemoved(t *testing.T) {
 	}
 }
 
+func TestWitnessCanNotBecomeObserver(t *testing.T) {
+	_, witness, _ := setUpLeaderAndWitness(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("witness became follower")
+		}
+	}()
+	witness.becomeObserver(1, 1)
+}
+
+func TestWitnessCanNotBecomeFollower(t *testing.T) {
+	_, witness, _ := setUpLeaderAndWitness(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("witness became follower")
+		}
+	}()
+	witness.becomeFollower(1, 1)
+}
+
+func TestWitnessCanNotBecomeCandidate(t *testing.T) {
+	_, witness, _ := setUpLeaderAndWitness(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("witness became candidate")
+		}
+	}()
+	witness.becomeCandidate()
+}
+
 func TestWitnessWillNotStartElection(t *testing.T) {
 	p := newTestWitness(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
@@ -734,7 +764,7 @@ func TestWitnessWillNotStartElection(t *testing.T) {
 	for i := uint64(0); i < p.randomizedElectionTimeout*10; i++ {
 		p.tick()
 	}
-	// gRequestVote won't be sent
+	// RequestVote won't be sent
 	if len(p.msgs) != 0 {
 		t.Errorf("unexpected msg found %+v", p.msgs)
 	}
@@ -747,7 +777,10 @@ func TestWitnessWillVoteInElection(t *testing.T) {
 	}
 	p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100})
 	if len(p.msgs) != 1 {
-		t.Errorf("witness is not voting")
+		t.Fatalf("witness is not voting")
+	}
+	if p.msgs[0].Type != pb.RequestVoteResp {
+		t.Errorf("witness didn't send vote resp")
 	}
 }
 
@@ -758,7 +791,6 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 		}
 	}()
 	nodeId := uint64(1)
-
 	p := newTestWitness(nodeId, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not an witness")
@@ -802,10 +834,8 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 
 func TestWitnessReplication(t *testing.T) {
 	leader, witness, nt := setUpLeaderAndWitness(t)
-
 	committed := leader.log.committed
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("test-data")}}})
-
 	expectedIndex := committed + 1
 	if expectedIndex != leader.log.committed {
 		t.Errorf("entry not committed on leader: %d", witness.log.committed)
@@ -819,22 +849,8 @@ func TestWitnessReplication(t *testing.T) {
 	}
 }
 
-func TestWitnessCannotBroadcastReplicateMessage(t *testing.T) {
-	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
-	r.becomeCandidate()
-	r.becomeLeader()
-	r.witnesses[1] = &remote{}
-	defer func() {
-		if r := recover(); r == nil {
-			panic("Broadcast should cause panic")
-		}
-	}()
-	r.broadcastReplicateMessage()
-}
-
 func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 	_, witness, _ := setUpLeaderAndWitness(t)
-
 	expectedEntry := pb.Entry{
 		Type:  pb.MetadataEntry,
 		Term:  1,
@@ -845,7 +861,6 @@ func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Errorf("Encounter error during get entries: %v", err)
 	}
-
 	if !reflect.DeepEqual(expectedEntry, witnessEntries[0]) {
 		t.Errorf("Found entry not matching. Expected: %v, actual: %v", expectedEntry, witnessEntries[0])
 	}
@@ -853,28 +868,23 @@ func TestApplicationMessageSentToWitnessIsEmpty(t *testing.T) {
 
 func TestConfigChangeMessageSentToWitnessIsEmpty(t *testing.T) {
 	leader, witness, nt := setUpLeaderAndWitness(t)
-
 	configChangEntry := pb.Entry{
 		Term:  1,
 		Index: 2,
 		Type:  pb.ConfigChangeEntry,
 		Cmd:   []byte("test-data"),
 	}
-
 	leader.log.append([]pb.Entry{configChangEntry})
-
 	// Send config change to witness.
 	leader.broadcastReplicateMessage()
 	if len(leader.msgs) != 1 {
 		t.Errorf("Expecting 1 election message, actually get %v", len(leader.msgs))
 	}
 	nt.send(leader.msgs[0])
-
 	witnessEntries, err := witness.log.getEntries(1, 3, math.MaxUint64)
 	if err != nil {
 		t.Errorf("Encounter error during get entries: %v", err)
 	}
-
 	if !reflect.DeepEqual(configChangEntry, witnessEntries[1]) {
 		t.Errorf("Found entry not matching. Expected: %v, actual: %v", configChangEntry, witnessEntries[1])
 	}
@@ -894,6 +904,26 @@ func TestWitnessSnapshot(t *testing.T) {
 		msg.Snapshot.Term != 2 || !msg.Snapshot.Witness || msg.Snapshot.Dummy {
 		t.Errorf("unexpected message values")
 	}
+}
+
+func TestNonWitnessCanNotAddItselfAsWitness(t *testing.T) {
+	p := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	defer func() {
+		if r := recover(); r == nil {
+			panic("added non witness node as witness")
+		}
+	}()
+	p.addWitness(1)
+}
+
+func TestWitnessCanNotBeAddedAsNode(t *testing.T) {
+	_, witness, _ := setUpLeaderAndWitness(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("witness added as a node")
+		}
+	}()
+	witness.addNode(2)
 }
 
 func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
@@ -924,7 +954,6 @@ func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
 
 func TestWitnessCannotReadIndex(t *testing.T) {
 	witness := newTestWitness(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-
 	nt := newNetwork(witness)
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.ReadIndex, Hint: 12345})
 	if len(witness.readyToRead) != 0 {
@@ -953,6 +982,12 @@ func TestWitnessCanReceiveSnapshot(t *testing.T) {
 	if p1.log.committed != 20 {
 		t.Errorf("snapshot not applied")
 	}
+	if len(p1.msgs) != 1 {
+		t.Fatalf("failed to send ss resp")
+	}
+	if p1.msgs[len(p1.msgs)-1].LogIndex != 20 {
+		t.Errorf("unexpected log index")
+	}
 }
 
 func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
@@ -966,7 +1001,6 @@ func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
 		Commit:   0,
 		Entries:  make([]pb.Entry, 0),
 	}
-
 	m.Entries = append(m.Entries, pb.Entry{Index: 1, Term: 1, Type: pb.MetadataEntry})
 	m.Entries = append(m.Entries, pb.Entry{Index: 2, Term: 1, Type: pb.MetadataEntry})
 	m.Entries = append(m.Entries, pb.Entry{Index: 3, Term: 1, Type: pb.MetadataEntry})
@@ -990,7 +1024,7 @@ func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
 	}
 }
 
-func TestWitnessCanNotBeRestored(t *testing.T) {
+func TestWitnessCanBeRestored(t *testing.T) {
 	members := pb.Membership{
 		Addresses: make(map[uint64]string),
 		Witnesses: make(map[uint64]string),
