@@ -250,6 +250,9 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 	for nid, addr := range snapshot.Membership.Observers {
 		n.nodeRegistry.AddNode(n.clusterID, nid, addr)
 	}
+	for nid, addr := range snapshot.Membership.Witnesses {
+		n.nodeRegistry.AddNode(n.clusterID, nid, addr)
+	}
 	for nid := range snapshot.Membership.Removed {
 		if nid == n.nodeID {
 			n.nodeRegistry.RemoveCluster(n.clusterID)
