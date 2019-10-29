@@ -452,6 +452,38 @@ func TestAddingExistingNodeAsObserverWillPanic(t *testing.T) {
 	o.applyConfigChange(cc, 1000)
 }
 
+func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("not panic")
+		}
+	}()
+	o := newMembership(1, 2, true)
+	o.members.Addresses[100] = "a1"
+	cc := pb.ConfigChange{
+		Type:    pb.AddWitness,
+		Address: "a1",
+		NodeID:  100,
+	}
+	o.applyConfigChange(cc, 1000)
+}
+
+func TestAddingExistingObserverAsWitnessWillPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("not panic")
+		}
+	}()
+	o := newMembership(1, 2, true)
+	o.members.Observers[100] = "a1"
+	cc := pb.ConfigChange{
+		Type:    pb.AddWitness,
+		Address: "a1",
+		NodeID:  100,
+	}
+	o.applyConfigChange(cc, 1000)
+}
+
 func TestApplyRemoveNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"

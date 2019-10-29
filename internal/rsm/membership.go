@@ -297,7 +297,6 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 }
 
 func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
-	accepted := false
 	// order id requested by user
 	ccid := cc.ConfigChangeId
 	nodeBecomingObserver := m.isAddingNodeAsObserver(cc)
@@ -310,10 +309,17 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	upToDateCC := m.isConfChangeUpToDate(cc)
 	deleteOnlyNode := m.isDeletingOnlyNode(cc)
 	invalidPromotion := m.isInvalidObserverPromotion(cc)
-	if upToDateCC && !addRemovedNode && !alreadyMember &&
-		!nodeBecomingObserver && !nodeBecomingWitness && !witnessBecomingNode &&
-		!witnessBecomingObserver && !observerBecomingWitness &&
-		!deleteOnlyNode && !invalidPromotion {
+	accepted := upToDateCC &&
+		!addRemovedNode &&
+		!alreadyMember &&
+		!nodeBecomingObserver &&
+		!nodeBecomingWitness &&
+		!witnessBecomingNode &&
+		!witnessBecomingObserver &&
+		!observerBecomingWitness &&
+		!deleteOnlyNode &&
+		!invalidPromotion
+	if accepted {
 		// current entry index, it will be recorded as the conf change id of the members
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
@@ -331,7 +337,6 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		} else {
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}
-		accepted = true
 	} else {
 		if !upToDateCC {
 			plog.Warningf("%s rejected out-of-order ConfChange ccid %d, type %s, index %d",
