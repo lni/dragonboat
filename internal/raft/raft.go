@@ -501,6 +501,7 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 		plog.Infof("%s restored observer progress of %s [%s]",
 			r.describe(), NodeID(id), r.observers[id])
 	}
+	r.witnesses = make(map[uint64]*remote)
 	for id := range ss.Membership.Witnesses {
 		match := uint64(0)
 		next := r.log.lastIndex() + 1
