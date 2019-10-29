@@ -382,6 +382,9 @@ func (n *node) read(handler ICompleteHandler,
 }
 
 func (n *node) requestLeaderTransfer(nodeID uint64) error {
+	if n.isWitness() {
+		return ErrInvalidOperation
+	}
 	return n.pendingLeaderTransfer.request(nodeID)
 }
 

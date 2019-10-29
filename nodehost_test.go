@@ -36,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -3602,7 +3603,8 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 	snapshotCompressedTest(t, tf)
 }
 
-func TestWitnessCanReplicateEntries(t *testing.T) {
+func testWitnessIO(t *testing.T,
+	witnessTestFunc func(*NodeHost, *NodeHost, *tests.SimDiskSM)) {
 	tf := func() {
 		rc := config.Config{
 			ClusterID:    1,
@@ -3675,21 +3677,96 @@ func TestWitnessCanReplicateEntries(t *testing.T) {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh2, 1)
+		witnessTestFunc(nh1, nh2, witness)
+	}
+	runNodeHostTest(t, tf)
+}
+
+func TestWitnessSnapshotIsCorrectlyHandled(t *testing.T) {
+	testFunc := func(nh1 *NodeHost, nh2 *NodeHost, witness *tests.SimDiskSM) {
+		for {
+			if witness.GetRecovered() > 0 {
+				t.Fatalf("unexpected recovered count %d", witness.GetRecovered())
+			}
+			snapshots, err := nh2.logdb.ListSnapshots(1, 2, math.MaxUint64)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			if len(snapshots) == 0 {
+				time.Sleep(100 * time.Millisecond)
+			} else {
+				for _, ss := range snapshots {
+					if !ss.Witness {
+						t.Errorf("not a witness snapshot")
+					}
+				}
+				return
+			}
+		}
+	}
+	testWitnessIO(t, testFunc)
+}
+
+func TestWitnessCanReplicateEntries(t *testing.T) {
+	makeProposals := func(nh *NodeHost) {
+		session := nh.GetNoOPSession(1)
+		for i := 0; i < 16; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			if err != nil {
+				plog.Errorf("failed to make proposal %v", err)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+	testFunc := func(nh1 *NodeHost, nh2 *NodeHost, witness *tests.SimDiskSM) {
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
-			if _, err := nh2.SyncRequestSnapshot(ctx, 1, opt); err != ErrInvalidOperation {
-				t.Fatalf("requesting snapshot on witness not rejected")
-			}
-			cancel()
 		}
 		if witness.GetApplied() > 0 {
 			t.Fatalf("unexpected applied count %d", witness.GetApplied())
 		}
-		if witness.GetRecovered() > 0 {
-			t.Fatalf("unexpected recovered count %d", witness.GetRecovered())
+	}
+	testWitnessIO(t, testFunc)
+}
+
+func TestWitnessCanNotInitiateIORequest(t *testing.T) {
+	testFunc := func(nh1 *NodeHost, nh2 *NodeHost, witness *tests.SimDiskSM) {
+		opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
+		if _, err := nh2.RequestSnapshot(1, opt, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("requesting snapshot on witness not rejected")
+		}
+		session := nh2.GetNoOPSession(1)
+		if _, err := nh2.Propose(session, []byte("test-data"), time.Second); err != ErrInvalidOperation {
+			t.Fatalf("proposal not rejected on witness")
+		}
+		session = client.NewSession(1, nh2.serverCtx.GetRandomSource())
+		session.PrepareForRegister()
+		if _, err := nh2.ProposeSession(session, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("propose session not rejected on witness")
+		}
+		if _, err := nh2.ReadIndex(1, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("sync read not rejected on witness")
+		}
+		if _, err := nh2.RequestAddNode(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("add node not rejected on witness")
+		}
+		if _, err := nh2.RequestDeleteNode(1, 3, 0, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("delete node not rejected on witness")
+		}
+		if _, err := nh2.RequestAddObserver(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("add observer not rejected on witness")
+		}
+		if _, err := nh2.RequestAddWitness(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+			t.Fatalf("add witness not rejected on witness")
+		}
+		if err := nh2.RequestLeaderTransfer(1, 3); err != ErrInvalidOperation {
+			t.Fatalf("leader transfer not rejected on witness")
+		}
+		if _, err := nh2.StaleRead(1, nil); err != ErrInvalidOperation {
+			t.Fatalf("stale read not rejected on witness")
 		}
 	}
-	runNodeHostTest(t, tf)
+	testWitnessIO(t, testFunc)
 }
