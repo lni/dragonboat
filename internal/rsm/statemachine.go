@@ -515,6 +515,9 @@ func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
 	if req.IsStreamingSnapshot() {
 		panic("invalid snapshot request")
 	}
+	if s.isWitness {
+		plog.Panicf("witness node %s is trying to save snapshot", s.id())
+	}
 	if s.Concurrent() {
 		return s.saveConcurrentSnapshot(req)
 	}

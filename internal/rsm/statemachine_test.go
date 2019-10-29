@@ -2358,3 +2358,13 @@ func TestWitnessNodeIsNeverConsideredAsOnDiskSM(t *testing.T) {
 		}
 	}
 }
+
+func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
+	sm := &StateMachine{isWitness: true}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("failed to trigger panic")
+		}
+	}()
+	sm.SaveSnapshot(SSRequest{})
+}
