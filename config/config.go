@@ -195,6 +195,12 @@ func (c *Config) Validate() error {
 		c.EntryCompressionType != NoCompression {
 		return errors.New("Unknown compression type")
 	}
+	if c.IsWitness && c.SnapshotEntries > 0 {
+		return errors.New("witness node can not take snapshot")
+	}
+	if c.IsWitness && c.IsObserver {
+		return errors.New("witness node can not be an observer")
+	}
 	return nil
 }
 

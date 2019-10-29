@@ -104,3 +104,17 @@ func TestIsValidAddress(t *testing.T) {
 		checkInvalidAddress(t, v)
 	}
 }
+
+func TestWitnessNodeCanNotBeAnObserver(t *testing.T) {
+	cfg := Config{IsWitness: true, IsObserver: true}
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("witness node can not be an observer")
+	}
+}
+
+func TestWitnessCanNotTakeSnapshot(t *testing.T) {
+	cfg := Config{IsWitness: true, SnapshotEntries: 100}
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("witness node can not take snapshot")
+	}
+}
