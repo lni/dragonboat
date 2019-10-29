@@ -126,7 +126,7 @@ func (n *node) getMembershipHash() uint64 {
 func (n *node) dumpRaftInfoToLog() {
 	if n.p != nil {
 		addrMap := make(map[uint64]string)
-		nodes, _, _, _ := n.sm.GetMembership()
+		nodes, _, _, _, _ := n.sm.GetMembership()
 		for nodeID := range nodes {
 			if nodeID == n.nodeID {
 				addrMap[nodeID] = n.raftAddress
