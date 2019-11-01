@@ -292,6 +292,14 @@ type NodeHostConfig struct {
 	// methods one by one, CPU intensive or IO related procedures that can cause
 	// long delays should be offloaded to worker goroutines managed by users.
 	RaftEventListener raftio.IRaftEventListener
+	// MaxSnapshotSendBytesPerSecond defines how much snapshot data can be sent
+	// every second for all Raft clusters managed by the NodeHost instance.
+	// The default value 0 means there is no limit set for snapshot streaming.
+	MaxSnapshotSendBytesPerSecond uint64
+	// MaxSnapshotRecvBytesPerSecond defines how much snapshot data can be
+	// received each second for all Raft clusters managed by the NodeHost instance.
+	// The default value 0 means there is no limit for receiving snapshot data.
+	MaxSnapshotRecvBytesPerSecond uint64
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
