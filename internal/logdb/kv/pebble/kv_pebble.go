@@ -205,7 +205,10 @@ func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb != nil {
-			return ctx.GetWriteBatch().(*pebbleWriteBatch)
+			pwb := wb.(*pebbleWriteBatch)
+			if pwb.db == r.db {
+				return pwb
+			}
 		}
 	}
 	return &pebbleWriteBatch{wb: r.db.NewBatch(), db: r.db, wo: r.wo}
