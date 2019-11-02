@@ -254,7 +254,7 @@ type NodeHostConfig struct {
 	// MutualTLS defines whether to use mutual TLS for authenticating servers
 	// and clients. Insecure communication is used when MutualTLS is set to
 	// False.
-	// See https://github.com/lni/dragonboat/v3/wiki/TLS-in-Dragonboat for more
+	// See https://github.com/lni/dragonboat/wiki/TLS-in-Dragonboat for more
 	// details on how to use Mutual TLS.
 	MutualTLS bool
 	// CAFile is the path of the CA certificate file. This field is ignored when
