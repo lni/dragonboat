@@ -748,14 +748,17 @@ func TestGetMessageFromChunk(t *testing.T) {
 		if ss.FileSize != chunk.FileSize {
 			t.Errorf("file size not set correctly")
 		}
-		if ss.Filepath != "gtransport_test_data_safe_to_delete/snapshot-123-3/snapshot-00000000000000C8/test.data" {
+		if ss.Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+			"snapshot-123-3", "snapshot-00000000000000C8", "test.data") {
 			t.Errorf("unexpected file path, %s", ss.Filepath)
 		}
 		if len(ss.Files[0].Metadata) != len(sf1.Metadata) || len(ss.Files[1].Metadata) != len(sf2.Metadata) {
 			t.Errorf("external files not set correctly")
 		}
-		if ss.Files[0].Filepath != "gtransport_test_data_safe_to_delete/snapshot-123-3/snapshot-00000000000000C8/external-file-1" ||
-			ss.Files[1].Filepath != "gtransport_test_data_safe_to_delete/snapshot-123-3/snapshot-00000000000000C8/external-file-2" {
+		if ss.Files[0].Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+			"snapshot-123-3", "snapshot-00000000000000C8", "external-file-1") ||
+			ss.Files[1].Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+				"snapshot-123-3", "snapshot-00000000000000C8", "external-file-2") {
 			t.Errorf("file path not set correctly, %s\n, %s", ss.Files[0].Filepath, ss.Files[1].Filepath)
 		}
 	}
