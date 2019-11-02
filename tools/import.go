@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -411,8 +412,15 @@ func copyFile(src string, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := out.Chmod(fi.Mode()); err != nil {
-		return err
+	defer func() {
+		if cerr := out.Close(); err == nil {
+			err = cerr
+		}
+	}()
+	if runtime.GOOS != "windows" {
+		if err := out.Chmod(fi.Mode()); err != nil {
+			return err
+		}
 	}
 	if _, err = io.Copy(out, in); err != nil {
 		return err
