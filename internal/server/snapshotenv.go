@@ -189,14 +189,10 @@ func (se *SSEnv) FinalizeSnapshot(msg proto.Message) error {
 	if err := se.createFlagFile(msg); err != nil {
 		return err
 	}
-	if se.isFinalDirExists() {
+	if se.finalDirExists() {
 		return ErrSnapshotOutOfDate
 	}
-	err := se.renameTempDirToFinalDir()
-	if err == ErrSnapshotOutOfDate {
-		panic("got ErrSnapshotOutOfDate after confirming no final dir")
-	}
-	return err
+	return se.renameTempDirToFinalDir()
 }
 
 // CreateTempDir creates the temp snapshot directory.
@@ -264,7 +260,7 @@ func (se *SSEnv) removeDir(dir string) error {
 	return fileutil.SyncDir(se.rootDir)
 }
 
-func (se *SSEnv) isFinalDirExists() bool {
+func (se *SSEnv) finalDirExists() bool {
 	if _, err := os.Stat(se.finalDir); os.IsNotExist(err) {
 		return false
 	}
@@ -273,9 +269,6 @@ func (se *SSEnv) isFinalDirExists() bool {
 
 func (se *SSEnv) renameTempDirToFinalDir() error {
 	if err := os.Rename(se.tmpDir, se.finalDir); err != nil {
-		if isTargetDirExistError(err) {
-			return ErrSnapshotOutOfDate
-		}
 		return err
 	}
 	return fileutil.SyncDir(se.rootDir)
@@ -284,17 +277,4 @@ func (se *SSEnv) renameTempDirToFinalDir() error {
 func (se *SSEnv) createFlagFile(msg proto.Message) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		fileutil.SnapshotFlagFilename, msg)
-}
-
-// see rename() in go/src/os/file_unix.go for details
-// checked on golang 1.10/1.11
-func isTargetDirExistError(err error) bool {
-	// TODO:
-	// how to handle this on windows? windows return an Access is denied error
-	// which can also be caused by the src is opened by a process
-	e, ok := err.(*os.LinkError)
-	if ok {
-		return e.Err == syscall.EEXIST || e.Err == syscall.ENOTEMPTY
-	}
-	return false
 }

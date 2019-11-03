@@ -120,15 +120,8 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv)) {
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
 	tf := func(t *testing.T, env *SSEnv) {
-		finalDir := env.GetFinalDir()
-		if err := os.MkdirAll(finalDir, 0755); err != nil {
-			t.Fatalf("%v", err)
-		}
-		// TODO:
-		// this fails on windows, see snapshotenv.go for details
-		err := env.renameTempDirToFinalDir()
-		if err != ErrSnapshotOutOfDate {
-			t.Errorf("err is nil")
+		if err := env.renameTempDirToFinalDir(); err != nil {
+			t.Errorf("failed to rename dir, %v", err)
 		}
 	}
 	runEnvTest(t, tf)
@@ -136,14 +129,14 @@ func TestRenameTempDirToFinalDir(t *testing.T) {
 
 func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 	tf := func(t *testing.T, env *SSEnv) {
-		if env.isFinalDirExists() {
+		if env.finalDirExists() {
 			t.Errorf("final dir already exist")
 		}
 		err := env.renameTempDirToFinalDir()
 		if err != nil {
 			t.Errorf("rename tmp dir to final dir failed %v", err)
 		}
-		if !env.isFinalDirExists() {
+		if !env.finalDirExists() {
 			t.Errorf("final dir does not exist")
 		}
 		if env.HasFlagFile() {
@@ -155,7 +148,7 @@ func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 
 func TestFlagFileExists(t *testing.T) {
 	tf := func(t *testing.T, env *SSEnv) {
-		if env.isFinalDirExists() {
+		if env.finalDirExists() {
 			t.Errorf("final dir already exist")
 		}
 		msg := &pb.Message{}
@@ -166,7 +159,7 @@ func TestFlagFileExists(t *testing.T) {
 		if err != nil {
 			t.Errorf("rename tmp dir to final dir failed %v", err)
 		}
-		if !env.isFinalDirExists() {
+		if !env.finalDirExists() {
 			t.Errorf("final dir does not exist")
 		}
 		if !env.HasFlagFile() {
@@ -185,7 +178,7 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 		if !env.HasFlagFile() {
 			t.Errorf("no flag file")
 		}
-		if !env.isFinalDirExists() {
+		if !env.finalDirExists() {
 			t.Errorf("no final dir")
 		}
 	}
