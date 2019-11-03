@@ -124,6 +124,8 @@ func TestRenameTempDirToFinalDir(t *testing.T) {
 		if err := os.MkdirAll(finalDir, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
+		// TODO:
+		// this fails on windows, see snapshotenv.go for details
 		err := env.renameTempDirToFinalDir()
 		if err != ErrSnapshotOutOfDate {
 			t.Errorf("err is nil")

@@ -289,6 +289,9 @@ func (se *SSEnv) createFlagFile(msg proto.Message) error {
 // see rename() in go/src/os/file_unix.go for details
 // checked on golang 1.10/1.11
 func isTargetDirExistError(err error) bool {
+	// TODO:
+	// how to handle this on windows? windows return an Access is denied error
+	// which can also be caused by the src is opened by a process
 	e, ok := err.(*os.LinkError)
 	if ok {
 		return e.Err == syscall.EEXIST || e.Err == syscall.ENOTEMPTY

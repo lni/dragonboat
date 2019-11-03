@@ -2070,7 +2070,8 @@ func logBuildTagsAndVersion() {
 	plog.Infof("dragonboat version: %d.%d.%d (%s)",
 		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
-	if runtime.GOOS == "darwin" {
-		plog.Warningf("Running on darwin, don't use for production purposes")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		plog.Warningf("Running on %s, don't use for production purposes",
+			runtime.GOOS)
 	}
 }
