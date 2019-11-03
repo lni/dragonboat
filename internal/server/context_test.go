@@ -151,23 +151,7 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	if err := ctx.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
-	for fp := range ctx.flocks {
-		if filepath.Base(fp) != lockFilename {
-			t.Fatalf("not the lock file")
-		}
-		fl := fileutil.New(fp)
-		locked, err := fl.TryLock()
-		if err != nil {
-			t.Fatalf("try lock failed %v", err)
-		}
-		if locked {
-			t.Fatalf("managed to lock the file again")
-		}
-	}
 	ctx.Stop()
-	if err := ctx.LockNodeHostDir(); err != nil {
-		t.Fatalf("failed to lock the directory %v", err)
-	}
 }
 
 func TestRemoveSavedSnapshots(t *testing.T) {

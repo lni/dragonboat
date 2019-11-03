@@ -215,13 +215,7 @@ func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
 func (sc *Context) LockNodeHostDir() error {
 	dirs, lldirs := sc.getDataDirs()
 	for i := 0; i < len(dirs); i++ {
-		if err := sc.tryCreateLockFile(dirs[i], lockFilename); err != nil {
-			return err
-		}
 		if err := sc.tryLockNodeHostDir(dirs[i]); err != nil {
-			return err
-		}
-		if err := sc.tryCreateLockFile(lldirs[i], lockFilename); err != nil {
 			return err
 		}
 		if err := sc.tryLockNodeHostDir(lldirs[i]); err != nil {
