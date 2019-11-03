@@ -146,9 +146,6 @@ TESTTAGVALS+=$(GOBUILDTAGVALS)
 TESTTAGVALS+=$(LOGDB_TEST_BUILDTAGS)
 TESTTAGS="$(TESTTAGVALS)"
 $(info build tags are set to $(GOBUILDTAGS))
-IOERROR_INJECTION_BUILDTAGS=dragonboat_errorinjectiontest
-DRUMMER_SLOW_TEST_BUILDTAGS=dragonboat_slowtest $(GOBUILDTAGVALS)
-MULTIRAFT_SLOW_TEST_BUILDTAGS=dragonboat_slowtest
 LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
 all:
@@ -290,9 +287,7 @@ dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-config test-client test-server test-tests test-tools
 test: dragonboat-test test-plugins test-tests
-slow-test: test-slow-multiraft
-more-test: test test-slow-multiraft
-dev-test: test test-grpc-transport
+dev-test: test
 
 ###############################################################################
 # build unit tests
@@ -344,31 +339,12 @@ test-tools:
 	$(GOTEST) $(PKGNAME)/tools
 
 ###############################################################################
-# slow tests excuted nightly & after major changes
-###############################################################################
-
-test-slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
-test-slow-multiraft:
-	$(GOTEST) $(PKGNAME)
-
-###############################################################################
 # snapshot benchmark test to check actual bandwidth achieved when streaming
 # snapshot images
 ###############################################################################
 snapshot-benchmark-test:
 	$(GO) build -v -o $(SNAPSHOT_BENCHMARK_TESTING_BIN) \
 		$(PKGNAME)/internal/tests/snapshotbench
-
-###############################################################################
-# build slow tests 
-###############################################################################
-# build slow tests, we can't afford to run all these tests that are known to be
-# slow, but we can check whether the push fails the build
-slow-multiraft: TESTTAGVALS+=$(MULTIRAFT_SLOW_TEST_BUILDTAGS)
-slow-multiraft:
-	$(GOTEST) $(BUILD_TEST_ONLY) $(PKGNAME)
-
-all-slow-tests: slow-multiraft
 
 ###############################################################################
 # language bindings
@@ -585,7 +561,6 @@ clean: clean-binding
 	@rm -f test-*.bin test-*.freebsd test-*.win test-*.darwin
 	@rm -f $(SEQUENCE_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
-		$(IOERROR_INJECTION_BUILDTAGS) \
 		$(DUMMY_TEST_BIN) \
 		$(SNAPSHOT_BENCHMARK_TESTING_BIN) \
 		$(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) \
@@ -594,8 +569,7 @@ clean: clean-binding
 .PHONY: gen-gitversion install-dragonboat install-rocksdb \
 	test test-raft test-rsm test-logdb test-tools test-transport test-multiraft \
 	test-client test-server test-config test-tests static-check clean \
-	logdb-checker test-slow-multiraft test-grpc-transport slow-test more-test \
-	golangci-lint-check \
+	logdb-checker golangci-lint-check \
 	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
