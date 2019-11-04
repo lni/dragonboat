@@ -623,15 +623,15 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if x > uint(ColferSizeMax) {
 			return 0, ColferMax(fmt.Sprintf("colfer: raftpb.Entry.Cmd size %d exceeds %d bytes", x, ColferSizeMax))
 		}
-		v := make([]byte, int(x))
 
 		start := i
-		i += len(v)
+		i += int(x)
 		if i >= len(data) {
 			goto eof
 		}
-		copy(v, data[start:i])
-		o.Cmd = v
+		// https://github.com/golang/go/wiki/SliceTricks
+		ic := data[start:i]
+		o.Cmd = append(ic[:0:0], ic...)
 
 		header = data[i]
 		i++

@@ -16,7 +16,10 @@ package raftpb
 
 import (
 	"math"
+	"math/rand"
+	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/lni/dragonboat/v3/client"
 )
@@ -426,4 +429,36 @@ func TestMetadataEntry(t *testing.T) {
 	if me.IsUpdateEntry() {
 		t.Errorf("IsUpdateEntry returned true")
 	}
+}
+
+func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
+	cmd := make([]byte, 1024)
+	rand.Read(cmd)
+	e := Entry{
+		Type:        MetadataEntry,
+		Index:       200,
+		Term:        5,
+		Key:         12345678,
+		ClientID:    7654321,
+		RespondedTo: 13579,
+		Cmd:         cmd,
+	}
+	m, err := e.Marshal()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	e2 := Entry{}
+	if err := e2.Unmarshal(m); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if !reflect.DeepEqual(&e, &e2) {
+		t.Fatalf("entry changed")
+	}
+	sh1 := (*reflect.SliceHeader)(unsafe.Pointer(&e.Cmd))
+	sh2 := (*reflect.SliceHeader)(unsafe.Pointer(&e2.Cmd))
+	if !(sh2.Data+uintptr(sh2.Len) <= sh1.Data ||
+		sh2.Data >= sh1.Data+uintptr(sh1.Len)) {
+		t.Fatalf("overlapping slice")
+	}
+
 }
