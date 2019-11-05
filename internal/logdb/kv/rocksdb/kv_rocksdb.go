@@ -29,6 +29,11 @@ var (
 	plog = logger.GetLogger("rocksdb")
 )
 
+const (
+	maxLogFileSize = 1024 * 1024 * 128
+	blockSize      = 1024 * 32
+)
+
 var (
 	logDBLRUCacheSize          = int(settings.Soft.RocksDBLRUCacheSize)
 	maxBackgroundCompactions   = int(settings.Soft.RocksDBMaxBackgroundCompactions)
@@ -68,11 +73,10 @@ func getRocksDBOptions(directory string,
 	*gorocksdb.BlockBasedTableOptions, *gorocksdb.Cache) {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetWholeKeyFiltering(true)
-	bbto.SetBlockSize(32 * 1024)
+	bbto.SetBlockSize(blockSize)
 	var cache *gorocksdb.Cache
 	if inMonkeyTesting {
-		cache = gorocksdb.NewLRUCache(1024 * 512)
-		bbto.SetBlockCache(cache)
+		bbto.SetNoBlockCache(true)
 	} else {
 		if logDBLRUCacheSize > 0 {
 			cache = gorocksdb.NewLRUCache(logDBLRUCacheSize)
@@ -82,8 +86,8 @@ func getRocksDBOptions(directory string,
 		}
 	}
 	opts := gorocksdb.NewDefaultOptions()
-	opts.SetMaxManifestFileSize(1024 * 1024 * 128)
-	opts.SetMaxLogFileSize(1024 * 1024 * 128)
+	opts.SetMaxManifestFileSize(maxLogFileSize)
+	opts.SetMaxLogFileSize(maxLogFileSize)
 	opts.SetKeepLogFileNum(keepLogFileNum)
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)

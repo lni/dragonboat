@@ -28,6 +28,11 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
+const (
+	maxLogFileSize = 1024 * 1024 * 128
+	blockSize      = 1024 * 32
+)
+
 var (
 	writeBufferSize            = int(settings.Soft.RocksDBWriteBufferSize)
 	maxWriteBufferNumber       = int(settings.Soft.RocksDBMaxWriteBufferNumber)
@@ -97,15 +102,18 @@ func openPebbleDB(dir string, walDir string) (*KV, error) {
 	for l := 0; l < 7; l++ {
 		opt := pebble.LevelOptions{
 			Compression:    pebble.NoCompression,
-			BlockSize:      32 * 1024,
+			BlockSize:      blockSize,
 			TargetFileSize: fs,
 		}
 		fs = fs * 2
 		lopts = append(lopts, opt)
 	}
+	if inMonkeyTesting {
+		writeBufferSize = 1024 * 1024 * 4
+	}
 	opts := &pebble.Options{
 		Levels:                      lopts,
-		MaxManifestFileSize:         1024 * 1024 * 128,
+		MaxManifestFileSize:         maxLogFileSize,
 		MemTableSize:                writeBufferSize,
 		MemTableStopWritesThreshold: maxWriteBufferNumber,
 		LBaseMaxBytes:               maxBytesForLevelBase,

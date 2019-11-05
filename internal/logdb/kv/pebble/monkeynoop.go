@@ -12,24 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_monkeytest
+// +build !dragonboat_monkeytest
 
-package raft
+package pebble
 
-import (
-	"github.com/lni/dragonboat/v3/internal/server"
+const (
+	inMonkeyTesting = false
 )
-
-func (rc *Peer) GetInMemLogSize() uint64 {
-	ents := rc.raft.log.inmem.entries
-	if len(ents) > 0 {
-		if ents[0].Index == rc.raft.applied {
-			ents = ents[1:]
-		}
-	}
-	return getEntrySliceInMemSize(ents)
-}
-
-func (rc *Peer) GetRateLimiter() *server.RateLimiter {
-	return rc.raft.log.inmem.rl
-}

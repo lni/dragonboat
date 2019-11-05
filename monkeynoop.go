@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_slowtest,!dragonboat_monkeytest
+// +build !dragonboat_slowtest
 
 package dragonboat
 
