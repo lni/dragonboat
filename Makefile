@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+GOBIN ?= go
 # Dragonboat is known to work on - 
 # Linux AMD64, Linux ARM64, MacOS and FreeBSD AMD64
 # only Linux AMD64 is officially supported
