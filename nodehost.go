@@ -1006,6 +1006,10 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 	return err
 }
 
+// SyncRequestAddWitness is the synchronous variant of the RequestAddWitness
+// method. See RequestAddWitness for more details.
+//
+// The input ctx must have its deadline set.
 func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	address string, configChangeIndex uint64) error {
@@ -1040,8 +1044,8 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
 // should be set to the most recent Config Change Index value returned by the
 // SyncGetClusterMembership method. The requested delete node operation will be
-// rejected if other membership change has been applied since the call to
-// the SyncGetClusterMembership method.
+// rejected if other membership change has been applied since that earlier call
+// to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	nodeID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
@@ -1076,7 +1080,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // parameter is ignored. Otherwise, it should be set to the most recent Config
 // Change Index value returned by the SyncGetClusterMembership method. The
 // requested add node operation will be rejected if other membership change has
-// been applied since the call to the SyncGetClusterMembership method.
+// been applied since that earlier call to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1111,7 +1115,8 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // parameter is ignored. Otherwise, it should be set to the most recent Config
 // Change Index value returned by the SyncGetClusterMembership method. The
 // requested add observer operation will be rejected if other membership change
-// has been applied since the call to the SyncGetClusterMembership method.
+// has been applied since that earlier call to the SyncGetClusterMembership
+// method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1125,6 +1130,27 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	return req, err
 }
 
+// RequestAddWitness is a Raft cluster membership change method for requesting
+// the specified node to be added as a witness to the given Raft cluster. It
+// starts an asynchronous request to add the specified node as an witness.
+//
+// A witness can vote in elections but it doesn't have any Raft log or
+// application state machine associated. The witness node can not be used
+// to initiate read, write or membership change operations on its Raft cluster.
+// Section 11.7.2 of Diego Ongaro's thesis contains more info on such witness
+// role.
+//
+// Application should later call StartCluster with config.Config.IsWitness
+// set to true on the right NodeHost to actually start the witness node.
+//
+// The input address parameter is the RaftAddress of the NodeHost where the new
+// witness being added will be running. When the raft cluster is created with
+// the OrderedConfigChange config flag set as false, the configChangeIndex
+// parameter is ignored. Otherwise, it should be set to the most recent Config
+// Change Index value returned by the SyncGetClusterMembership method. The
+// requested add witness operation will be rejected if other membership change
+// has been applied since that earlier call to the SyncGetClusterMembership
+// method.
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {

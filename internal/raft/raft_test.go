@@ -132,19 +132,6 @@ func TestNilLogdbWillPanic(t *testing.T) {
 	newRaft(newTestConfig(1, 10, 1), nil)
 }
 
-// FIXME: ???
-func TesthandleNodeConfigChange(t *testing.T) {
-	r := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
-	r.handleNodeConfigChange(pb.Message{
-		HintHigh: 0, // add node
-		Hint:     2,
-	})
-	if len(r.remotes) != 1 {
-		t.Errorf("One remote node ")
-	}
-
-}
-
 func TestOneNodeWithHigherTermAndOneNodeWithMostRecentLogCanCompleteElection(t *testing.T) {
 	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	b := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
@@ -790,12 +777,12 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 			t.Errorf("Should panic while promoting from witness")
 		}
 	}()
-	nodeId := uint64(1)
-	p := newTestWitness(nodeId, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	nodeID := uint64(1)
+	p := newTestWitness(nodeID, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not an witness")
 	}
-	p.addNode(nodeId)
+	p.addNode(nodeID)
 }
 
 func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
