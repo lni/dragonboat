@@ -24,16 +24,17 @@ PKGNAME=github.com/lni/dragonboat/v3
 # LogDB implementation. 
 ifeq ($(DRAGONBOAT_LOGDB),leveldb)
 $(info using leveldb based log storage)
-GOCMD=go
+GOCMD=$(GOBIN)
 LOGDB_TAG=dragonboat_leveldb_test
 else ifeq ($(DRAGONBOAT_LOGDB),pebble)
-GOCMD=go
+GOCMD=$(GOBIN)
 LOGDB_TAG=dragonboat_pebble_test
 else ifeq ($(DRAGONBOAT_LOGDB),custom)
 $(info using custom lodb)
-GOCMD=go
+GOCMD=$(GOBIN)
 LOGDB_TAG=dragonboat_no_rocksdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
+GOCMD=$(GOBIN)
 $(info using rocksdb based log storage)
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.dylib
@@ -89,11 +90,10 @@ CGO_CFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
 endif
 
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
-GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) go
+GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) $(GOBIN)
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
-
 
 # verbosity, use -v to see details of go build
 VERBOSE ?= -v
