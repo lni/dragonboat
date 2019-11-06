@@ -144,6 +144,7 @@ func getLocalStatus(r *raft) Status {
 //  * quorum check
 //  * batching
 //  * pipelining
+//  * witness
 //
 // Features currently being worked on -
 //  * pre-vote
@@ -153,7 +154,7 @@ func getLocalStatus(r *raft) Status {
 // This implementation made references to etcd raft's design in the following
 // aspects:
 //  * it models the raft protocol state as a state machine
-//  * restricting to at most one pending leadership change at a time
+//  * restricting to at most one pending leadership change request at a time
 //  * replication flow control
 //
 // Copyright 2015 The etcd Authors
@@ -888,7 +889,11 @@ func (r *raft) tryCommit() bool {
 		r.resetMatchValueArray()
 	}
 	idx := 0
-	for _, v := range r.votingMembers() {
+	for _, v := range r.remotes {
+		r.matched[idx] = v.match
+		idx++
+	}
+	for _, v := range r.witnesses {
 		r.matched[idx] = v.match
 		idx++
 	}
@@ -1194,7 +1199,6 @@ func (r *raft) removeNode(nodeID uint64) {
 
 func (r *raft) deleteRemote(nodeID uint64) {
 	delete(r.remotes, nodeID)
-	r.resetMatchValueArray()
 }
 
 func (r *raft) deleteObserver(nodeID uint64) {
@@ -1212,7 +1216,6 @@ func (r *raft) setRemote(nodeID uint64, match uint64, next uint64) {
 		next:  next,
 		match: match,
 	}
-	r.resetMatchValueArray()
 }
 
 func (r *raft) setObserver(nodeID uint64, match uint64, next uint64) {
@@ -1391,7 +1394,7 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 			r.describe(), m.From)
 		return false
 	}
-	if r.isLeader() && r.electionTick >= r.electionTimeout {
+	if r.isLeader() && !r.quiesce && r.electionTick >= r.electionTimeout {
 		panic("r.electionTick >= r.electionTimeout on leader")
 	}
 	// we got a RequestVote with higher term, but we recently had heartbeat msg
@@ -1849,14 +1852,18 @@ func (r *raft) handleFollowerPropose(m pb.Message) {
 	r.send(m)
 }
 
-func (r *raft) handleFollowerReplicate(m pb.Message) {
+func (r *raft) leaderIsAvailable() {
 	r.electionTick = 0
+}
+
+func (r *raft) handleFollowerReplicate(m pb.Message) {
+	r.leaderIsAvailable()
 	r.setLeaderID(m.From)
 	r.handleReplicateMessage(m)
 }
 
 func (r *raft) handleFollowerHeartbeat(m pb.Message) {
-	r.electionTick = 0
+	r.leaderIsAvailable()
 	r.setLeaderID(m.From)
 	r.handleHeartbeatMessage(m)
 }
@@ -1885,13 +1892,13 @@ func (r *raft) handleFollowerReadIndexResp(m pb.Message) {
 		Low:  m.Hint,
 		High: m.HintHigh,
 	}
-	r.electionTick = 0
+	r.leaderIsAvailable()
 	r.setLeaderID(m.From)
 	r.addReadyToRead(m.LogIndex, ctx)
 }
 
 func (r *raft) handleFollowerInstallSnapshot(m pb.Message) {
-	r.electionTick = 0
+	r.leaderIsAvailable()
 	r.setLeaderID(m.From)
 	r.handleInstallSnapshotMessage(m)
 }

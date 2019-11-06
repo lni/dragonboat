@@ -132,6 +132,17 @@ func TestNilLogdbWillPanic(t *testing.T) {
 	newRaft(newTestConfig(1, 10, 1), nil)
 }
 
+func TestTryCommitResetsMatchArray(t *testing.T) {
+	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	p.becomeCandidate()
+	p.becomeLeader()
+	p.matched = nil
+	p.tryCommit()
+	if len(p.matched) != 3 {
+		t.Errorf("tryCommit didn't resize the match array")
+	}
+}
+
 func TestOneNodeWithHigherTermAndOneNodeWithMostRecentLogCanCompleteElection(t *testing.T) {
 	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	b := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
@@ -1659,23 +1670,17 @@ func TestSetRemote(t *testing.T) {
 	if !ok {
 		t.Errorf("node 4 not added")
 	}
-	if len(r.matched) != 4 {
-		t.Errorf("match values not reset")
-	}
 }
 
 func TestDeleteRemote(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.deleteRemote(3)
-	if len(r.matched) != 2 {
-		t.Errorf("match values not deleted")
-	}
-	if len(r.remotes) != 2 {
-		t.Errorf("remote not deleted")
-	}
 	_, ok := r.remotes[3]
 	if ok {
 		t.Errorf("node 3 not deleted")
+	}
+	if len(r.remotes) != 2 {
+		t.Errorf("remote not deleted")
 	}
 }
 
@@ -1849,9 +1854,6 @@ func TestRemoveNodeDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.setPendingConfigChange()
 	r.removeNode(2)
-	if len(r.remotes) != 1 || len(r.matched) != 1 {
-		t.Errorf("remotes and matched not resized")
-	}
 	if r.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not cleared")
 	}
