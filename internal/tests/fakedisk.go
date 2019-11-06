@@ -29,6 +29,8 @@ type FakeDiskSM struct {
 	SlowOpen       uint32
 	initialApplied uint64
 	count          uint64
+	aborted        bool
+	recovered      bool
 }
 
 // NewFakeDiskSM creates a new fake disk sm for testing purpose.
@@ -42,6 +44,26 @@ func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return f.initialApplied, nil
+}
+
+// SetAborted ...
+func (f *FakeDiskSM) SetAborted() {
+	f.aborted = true
+}
+
+// ClearAborted ...
+func (f *FakeDiskSM) ClearAborted() {
+	f.aborted = false
+}
+
+// Aborted ...
+func (f *FakeDiskSM) Aborted() bool {
+	return f.aborted
+}
+
+// Recovered ...
+func (f *FakeDiskSM) Recovered() bool {
+	return f.recovered
 }
 
 // Update updates the state machine.
@@ -78,6 +100,10 @@ func (f *FakeDiskSM) Sync() error {
 // SaveSnapshot saves the state to a snapshot.
 func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) error {
+	if !f.aborted {
+		f.aborted = true
+		return sm.ErrSnapshotAborted
+	}
 	pit := ctx.(*FakeDiskSM)
 	fmt.Printf("saving initial %d, count %d\n", pit.initialApplied, pit.count)
 	v := make([]byte, 8)
@@ -95,6 +121,7 @@ func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 // RecoverFromSnapshot recovers the state of the state machine from a snapshot.
 func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 	stopc <-chan struct{}) error {
+	f.recovered = true
 	v := make([]byte, 8)
 	if _, err := io.ReadFull(r, v); err != nil {
 		return err

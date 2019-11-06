@@ -1681,3 +1681,21 @@ func TestIsWitnessNode(t *testing.T) {
 		t.Errorf("not reported as witness")
 	}
 }
+
+func TestSaveSnapshotAborted(t *testing.T) {
+	tests := []struct {
+		err     error
+		aborted bool
+	}{
+		{sm.ErrSnapshotStopped, true},
+		{sm.ErrSnapshotAborted, true},
+		{nil, false},
+		{sm.ErrSnapshotStreaming, false},
+	}
+
+	for idx, tt := range tests {
+		if saveSnapshotAborted(tt.err) != tt.aborted {
+			t.Errorf("%d, saveSnapshotAborted failed", idx)
+		}
+	}
+}

@@ -418,7 +418,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 }
 
 func (n *node) reportIgnoredSnapshotRequest(key uint64) {
-	n.pendingSnapshot.apply(key, true, 0)
+	n.pendingSnapshot.apply(key, true, false, 0)
 }
 
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
@@ -610,8 +610,12 @@ func (n *node) saveSnapshot(rec rsm.Task) error {
 	if err != nil {
 		return err
 	}
-	n.pendingSnapshot.apply(rec.SSRequest.Key, index == 0, index)
+	n.pendingSnapshot.apply(rec.SSRequest.Key, index == 0, false, index)
 	return nil
+}
+
+func saveSnapshotAborted(err error) bool {
+	return err == sm.ErrSnapshotStopped || err == sm.ErrSnapshotAborted
 }
 
 func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
@@ -625,8 +629,9 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	}
 	ss, ssenv, err := n.sm.SaveSnapshot(req)
 	if err != nil {
-		if err == sm.ErrSnapshotStopped {
+		if saveSnapshotAborted(err) {
 			ssenv.MustRemoveTempDir()
+			n.pendingSnapshot.apply(req.Key, false, true, 0)
 			plog.Infof("%s aborted SaveSnapshot", n.id())
 			return 0, nil
 		} else if isSoftSnapshotError(err) || err == rsm.ErrTestKnobReturn {
@@ -647,7 +652,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 			return 0, nil
 		}
 		// this can only happen in monkey test
-		if err == sm.ErrSnapshotStopped {
+		if saveSnapshotAborted(err) {
 			return 0, nil
 		}
 		return 0, err
@@ -665,16 +670,19 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, nil
 	}
-	compactionOverhead := n.getCompactionOverhead(req)
-	if ss.Index > compactionOverhead {
-		n.ss.setCompactLogTo(ss.Index - compactionOverhead)
-	}
-	if err := n.snapshotter.Compact(ss.Index); err != nil {
-		plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
+	if err := n.compactSnapshot(req, ss.Index); err != nil {
 		return 0, err
 	}
 	n.ss.setSnapshotIndex(ss.Index)
 	return ss.Index, nil
+}
+
+func (n *node) compactSnapshot(req rsm.SSRequest, index uint64) error {
+	compactionOverhead := n.getCompactionOverhead(req)
+	if index > compactionOverhead {
+		n.ss.setCompactLogTo(index - compactionOverhead)
+	}
+	return n.snapshotter.Compact(index)
 }
 
 func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
@@ -698,7 +706,7 @@ func (n *node) streamSnapshot(sink pb.IChunkSink) error {
 func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 	if err := n.sm.StreamSnapshot(sink); err != nil {
 		plog.Errorf("%s StreamSnapshot failed %v", n.id(), err)
-		if err != sm.ErrSnapshotStopped &&
+		if !saveSnapshotAborted(err) &&
 			err != sm.ErrSnapshotStreaming &&
 			err != rsm.ErrTestKnobReturn {
 			return err

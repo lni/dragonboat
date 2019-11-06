@@ -229,7 +229,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.key, false, 123)
+	ps.apply(ss.key, false, false, 123)
 	select {
 	case v := <-ss.CompletedC:
 		if v.SnapshotIndex() != 123 {
@@ -253,7 +253,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ps.apply(ss.key, true, 123)
+	ps.apply(ss.key, true, false, 123)
 	select {
 	case v := <-ss.CompletedC:
 		if v.SnapshotIndex() != 0 {
@@ -280,7 +280,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	if ps.pending == nil {
 		t.Errorf("pending not set")
 	}
-	ps.apply(ss.key+1, false, 123)
+	ps.apply(ss.key+1, false, false, 123)
 	if ps.pending == nil {
 		t.Errorf("pending unexpectedly cleared")
 	}

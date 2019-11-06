@@ -192,9 +192,18 @@ type IOnDiskStateMachine interface {
 	// IOnDiskStateMachine can choose to abort the SaveSnapshot procedure and
 	// return ErrSnapshotStopped immediately.
 	//
+	// SaveSnapshot is allowed to abort the snapshotting operation at any time by
+	// returning ErrSnapshotAborted.
+	//
 	// The SaveSnapshot method is allowed to be invoked when there is concurrent
 	// call to the Update method. SaveSnapshot is a read-only method, it should
 	// never change the state of the IOnDiskStateMachine.
+	//
+	// SaveSnapshot returns the encountered error when generating the snapshot.
+	// Other than the above mentioned ErrSnapshotStopped and ErrSnapshotAborted
+	// errors, the IConcurrentStateMachine implementation should only return a
+	// non-nil error when the system need to be immediately halted for critical
+	// errors, e.g. disk error preventing you from saving the snapshot.
 	SaveSnapshot(interface{}, io.Writer, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IOnDiskStateMachine instance
 	// from a snapshot captured by the SaveSnapshot() method on a remote node. The

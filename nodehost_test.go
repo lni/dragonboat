@@ -513,8 +513,7 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 }
 
 func twoFakeDiskNodeHostTest(t *testing.T,
-	tf func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost),
-	ct config.CompressionType) {
+	tf func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost)) {
 	logdb.RDBContextValueSize = 1024 * 1024
 	defer func() {
 		logdb.RDBContextValueSize = ovs
@@ -524,11 +523,10 @@ func twoFakeDiskNodeHostTest(t *testing.T,
 	nh2dir := path.Join(singleNodeHostTestDir, "nh2")
 	os.RemoveAll(singleNodeHostTestDir)
 	nh1, nh2, err := createFakeDiskTwoTestNodeHosts(nodeHostTestAddr1,
-		nodeHostTestAddr2, nh1dir, nh2dir, ct)
+		nodeHostTestAddr2, nh1dir, nh2dir)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
-	waitForLeaderToBeElected(t, nh1, 1)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		nh1.Stop()
@@ -538,18 +536,7 @@ func twoFakeDiskNodeHostTest(t *testing.T,
 }
 
 func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
-	datadir1 string, datadir2 string,
-	ct config.CompressionType) (*NodeHost, *NodeHost, error) {
-	rc := config.Config{
-		ClusterID:               1,
-		NodeID:                  1,
-		ElectionRTT:             3,
-		HeartbeatRTT:            1,
-		CheckQuorum:             true,
-		SnapshotEntries:         5,
-		CompactionOverhead:      2,
-		SnapshotCompressionType: ct,
-	}
+	datadir1 string, datadir2 string) (*NodeHost, *NodeHost, error) {
 	peers := make(map[uint64]string)
 	peers[1] = addr1
 	nhc1 := config.NodeHostConfig{
@@ -571,12 +558,6 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	}
 	nh2, err := NewNodeHost(nhc2)
 	if err != nil {
-		return nil, nil, err
-	}
-	newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-		return tests.NewFakeDiskSM(0)
-	}
-	if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
 		return nil, nil, err
 	}
 	return nh1, nh2, nil
@@ -665,6 +646,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	}
 	var leaderNh *NodeHost
 	var followerNh *NodeHost
+
 	for i := 0; i < 200; i++ {
 		leaderID, ready, err := nh1.GetLeaderID(1)
 		if err == nil && ready {
@@ -679,6 +661,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			}
 			return leaderNh, followerNh, nil
 		}
+		// wait for leader to be elected
 		time.Sleep(100 * time.Millisecond)
 	}
 	return nil, nil, errors.New("failed to get usable nodehosts")
@@ -1584,6 +1567,28 @@ func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
 
 func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		rc := config.Config{
+			ClusterID:               1,
+			NodeID:                  1,
+			ElectionRTT:             3,
+			HeartbeatRTT:            1,
+			CheckQuorum:             true,
+			SnapshotEntries:         5,
+			CompactionOverhead:      2,
+			SnapshotCompressionType: config.Snappy,
+			EntryCompressionType:    config.Snappy,
+		}
+		sm1 := tests.NewFakeDiskSM(0)
+		sm1.SetAborted()
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return sm1
+		}
+		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh1, 1)
 		logdb := nh1.logdb
 		snapshotted := false
 		session := nh1.GetNoOPSession(1)
@@ -1618,7 +1623,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !s.Completed() {
 			t.Fatalf("failed to complete the add node request")
 		}
-		rc := config.Config{
+		rc = config.Config{
 			ClusterID:          1,
 			NodeID:             2,
 			ElectionRTT:        3,
@@ -1627,11 +1632,13 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			SnapshotEntries:    5,
 			CompactionOverhead: 2,
 		}
-		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
-			return tests.NewFakeDiskSM(0)
+		sm2 := tests.NewFakeDiskSM(0)
+		sm2.SetAborted()
+		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return sm2
 		}
-		peers := make(map[uint64]string)
-		if err := nh2.StartOnDiskCluster(peers, true, newSM, rc); err != nil {
+		sm1.ClearAborted()
+		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		snapshotted = false
@@ -1651,6 +1658,12 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			}
 			if len(snapshots) >= 3 {
 				snapshotted = true
+				if !sm2.Recovered() {
+					t.Fatalf("not recovered")
+				}
+				if !sm1.Aborted() {
+					t.Fatalf("not aborted")
+				}
 				for _, ss := range snapshots {
 					if ss.OnDiskIndex == 0 {
 						t.Errorf("on disk index not recorded in ss")
@@ -1672,10 +1685,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
-
 	}
-	// twoFakeDiskNodeHostTest(t, tf, config.NoCompression)
-	twoFakeDiskNodeHostTest(t, tf, config.Snappy)
+	twoFakeDiskNodeHostTest(t, tf)
 }
 
 func TestConcurrentStateMachineLookup(t *testing.T) {
@@ -1981,6 +1992,25 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
 		rc := config.Config{
+			ClusterID:               1,
+			NodeID:                  1,
+			ElectionRTT:             3,
+			HeartbeatRTT:            1,
+			CheckQuorum:             true,
+			SnapshotEntries:         5,
+			CompactionOverhead:      2,
+			SnapshotCompressionType: config.NoCompression,
+		}
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewFakeDiskSM(0)
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Errorf("failed to start observer %v", err)
+		}
+		waitForLeaderToBeElected(t, nh1, 1)
+		rc = config.Config{
 			ClusterID:          1,
 			NodeID:             2,
 			ElectionRTT:        3,
@@ -1990,7 +2020,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			SnapshotEntries:    5,
 			CompactionOverhead: 2,
 		}
-		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewFakeDiskSM(0)
 		}
 		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, 2000*time.Millisecond)
@@ -1998,7 +2028,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			t.Fatalf("failed to add observer %v", err)
 		}
 		<-rs.CompletedC
-		if err := nh2.StartOnDiskCluster(nil, true, newSM, rc); err != nil {
+		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
 			t.Errorf("failed to start observer %v", err)
 		}
 		for i := 0; i < 10000; i++ {
@@ -2015,7 +2045,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		}
 		t.Errorf("failed to get is observer flag")
 	}
-	twoFakeDiskNodeHostTest(t, tf, config.NoCompression)
+	twoFakeDiskNodeHostTest(t, tf)
 }
 
 func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
@@ -2530,16 +2560,27 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			Exported:   true,
 			ExportPath: sspath,
 		}
-		sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
-		if err != nil {
-			t.Fatalf("failed to request snapshot %v", err)
+		aborted := false
+		index := uint64(0)
+		for {
+			sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
+			if err != nil {
+				t.Fatalf("failed to request snapshot %v", err)
+			}
+			v := <-sr.CompletedC
+			if v.Aborted() {
+				aborted = true
+				continue
+			}
+			if !v.Completed() {
+				t.Fatalf("failed to complete the requested snapshot, %s", v.code)
+			}
+			index = v.SnapshotIndex()
+			break
 		}
-		var index uint64
-		v := <-sr.CompletedC
-		if !v.Completed() {
-			t.Fatalf("failed to complete the requested snapshot")
+		if !aborted {
+			t.Fatalf("never aborted")
 		}
-		index = v.SnapshotIndex()
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
@@ -2777,7 +2818,12 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
 		}
+		sm1 := tests.NewFakeDiskSM(0)
+		sm1.SetAborted()
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return sm1
+		}
+		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewFakeDiskSM(0)
 		}
 		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
@@ -2859,7 +2905,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		rc.NodeID = 10
-		if err := rnh2.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
+		if err := rnh2.StartOnDiskCluster(nil, false, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, rnh1, 1)

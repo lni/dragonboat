@@ -134,6 +134,10 @@ func (rr *RequestResult) Terminated() bool {
 	return rr.code == requestTerminated
 }
 
+func (rr *RequestResult) Aborted() bool {
+	return rr.code == requestAborted
+}
+
 // Rejected returns a boolean value indicating the request is rejected. For a
 // proposal, it means that the used client session instance is not registered
 // or it has been evicted on the server side. When requesting a client session
@@ -176,6 +180,7 @@ const (
 	requestTerminated
 	requestRejected
 	requestDropped
+	requestAborted
 )
 
 var requestResultCodeName = [...]string{
@@ -184,6 +189,7 @@ var requestResultCodeName = [...]string{
 	"RequestTerminated",
 	"RequestRejected",
 	"RequestDropped",
+	"RequestAborted",
 }
 
 func (c RequestResultCode) String() string {
@@ -193,6 +199,12 @@ func (c RequestResultCode) String() string {
 func getTerminatedResult() RequestResult {
 	return RequestResult{
 		code: requestTerminated,
+	}
+}
+
+func getAbortedResult() RequestResult {
+	return RequestResult{
+		code: requestAborted,
 	}
 }
 
@@ -502,7 +514,11 @@ func (p *pendingSnapshot) gc() {
 	}
 }
 
-func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
+func (p *pendingSnapshot) apply(key uint64,
+	ignored bool, aborted bool, index uint64) {
+	if ignored && aborted {
+		panic("ignored && aborted")
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.pending == nil {
@@ -512,6 +528,8 @@ func (p *pendingSnapshot) apply(key uint64, ignored bool, index uint64) {
 		r := RequestResult{}
 		if ignored {
 			r.code = requestRejected
+		} else if aborted {
+			r.code = requestAborted
 		} else {
 			r.code = requestCompleted
 			r.result.Value = index

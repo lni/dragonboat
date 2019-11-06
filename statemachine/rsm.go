@@ -73,11 +73,13 @@ import (
 )
 
 var (
-	// ErrSnapshotStopped is returned by the SaveSnapshot and RecoverFromSnapshot
-	// methods of the IStateMachine interface to indicate that those two snapshot
-	// related operations have been aborted as the associated raft node is being
-	// closed.
+	// ErrSnapshotStopped is returned by state machine's SaveSnapshot and
+	// RecoverFromSnapshot methods to indicate that those two snapshot operations
+	// have been aborted as the associated raft node is being closed.
 	ErrSnapshotStopped = errors.New("snapshot stopped")
+	// ErrSnapshotAborted is returned by state machine's SaveSnapshot method to
+	// indicate that the SaveSnapshot operation is aborted by the user.
+	ErrSnapshotAborted = errors.New("snapshot aborted")
 )
 
 // Type is the state machine type.
@@ -232,11 +234,14 @@ type IStateMachine interface {
 	// can choose to abort the SaveSnapshot procedure and return
 	// ErrSnapshotStopped immediately.
 	//
+	// SaveSnapshot is allowed to abort the snapshotting operation at any time by
+	// returning ErrSnapshotAborted.
+	//
 	// SaveSnapshot returns the encountered error when generating the snapshot.
-	// Other than the above mentioned ErrSnapshotStopped error, the IStateMachine
-	// implementation should only return a non-nil error when the system need to
-	// be immediately halted for critical errors, e.g. disk error preventing you
-	// from saving the snapshot.
+	// Other than the above mentioned ErrSnapshotStopped and ErrSnapshotAborted
+	// errors, the IStateMachine implementation should only return a non-nil error
+	// when the system need to be immediately halted for critical errors, e.g.
+	// disk error preventing you from saving the snapshot.
 	SaveSnapshot(io.Writer, ISnapshotFileCollection, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IStateMachine object from a
 	// previously saved snapshot captured by the SaveSnapshot method. The saved
