@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-GOBIN ?= go
+GOEXEC ?= go
 # Dragonboat is known to work on - 
 # Linux AMD64, Linux ARM64, MacOS and FreeBSD AMD64
 # only Linux AMD64 is officially supported
@@ -25,17 +25,17 @@ PKGNAME=github.com/lni/dragonboat/v3
 # LogDB implementation. 
 ifeq ($(DRAGONBOAT_LOGDB),leveldb)
 $(info using leveldb based log storage)
-GOCMD=$(GOBIN)
+GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_leveldb_test
 else ifeq ($(DRAGONBOAT_LOGDB),pebble)
-GOCMD=$(GOBIN)
+GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_pebble_test
 else ifeq ($(DRAGONBOAT_LOGDB),custom)
 $(info using custom lodb)
-GOCMD=$(GOBIN)
+GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_no_rocksdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
-GOCMD=$(GOBIN)
+GOCMD=$(GOEXEC)
 $(info using rocksdb based log storage)
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.dylib
@@ -91,7 +91,7 @@ CGO_CFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
 endif
 
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
-GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) $(GOBIN)
+GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) $(GOEXEC)
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
