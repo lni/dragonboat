@@ -1391,6 +1391,9 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 			r.describe(), m.From)
 		return false
 	}
+	if r.isLeader() && r.electionTick >= r.electionTimeout {
+		panic("r.electionTick >= r.electionTimeout on leader")
+	}
 	// we got a RequestVote with higher term, but we recently had heartbeat msg
 	// from leader within the minimum election timeout and that leader is known
 	// to have quorum. we thus drop such RequestVote to minimize interruption by

@@ -183,6 +183,9 @@ func (c *Config) Validate() error {
 	if c.ElectionRTT <= 2*c.HeartbeatRTT {
 		return errors.New("invalid election rtt")
 	}
+	if c.ElectionRTT < 10*c.HeartbeatRTT {
+		plog.Warningf("ElectionRTT is not a magnitude larger than HeartbeatRTT")
+	}
 	if c.MaxInMemLogSize > 0 &&
 		c.MaxInMemLogSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxInMemLogSize is too small")
@@ -236,7 +239,8 @@ type NodeHostConfig struct {
 	// caused by NodeHost queuing and processing. As an example, when fully
 	// loaded, the average Rround Trip Time between two of our NodeHost instances
 	// used for benchmarking purposes is up to 500 microseconds when the ping time
-	// between them is 100 microseconds.
+	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
+	// than 1 million in your environment.
 	RTTMillisecond uint64
 	// RaftAddress is a hostname:port or IP:port address used by the Raft RPC
 	// module for exchanging Raft messages and snapshots. This is also the
@@ -305,6 +309,9 @@ type NodeHostConfig struct {
 // Validate validates the NodeHostConfig instance and return an error when
 // the configuration is considered as invalid.
 func (c *NodeHostConfig) Validate() error {
+	if c.RTTMillisecond == 0 {
+		return errors.New("invalid RTTMillisecond")
+	}
 	if !stringutil.IsValidAddress(c.RaftAddress) {
 		return errors.New("invalid NodeHost address")
 	}
