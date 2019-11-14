@@ -29,6 +29,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
+	"github.com/lni/dragonboat/v3/statemachine"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
@@ -47,6 +48,10 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 // storage module known as Log DB.
 type LogDBFactoryFunc func(config LogDBConfig,
 	dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error)
+
+// AutoPromoteCallbackFunc is the callback function invoked when the auto promotion
+// is completed.
+type AutoPromoteCallbackFunc func(result statemachine.Result)
 
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
@@ -95,7 +100,7 @@ type Config struct {
 	// HeartbeatRTT should be set to 2.
 	HeartbeatRTT uint64
 	// SnapshotEntries defines how often the state machine should be snapshotted
-	// automcatically. It is defined in terms of the number of applied Raft log
+	// automatically. It is defined in terms of the number of applied Raft log
 	// entries. SnapshotEntries can be set to 0 to disable such automatic
 	// snapshotting.
 	//
@@ -168,6 +173,21 @@ type Config struct {
 	//
 	// Observer support is currently experimental.
 	IsObserver bool
+	// AutoPromoteCallback, when sets to non-nil, indicates whether an observer will automatically transit
+	// to a follower once it is caught up. The motivation is described in Raft paper 4.2.1,
+	// but the implementation takes a different approach.
+	// In the paper, leader is responsible for tracking the observer progress by monitoring the new entry replication
+	// speed, and promote the observer when one replication round is less than election timeout, which suggests the
+	// gap is sufficiently small. This idea adds burden to leader logic complexity and overhead for leadership
+	// transfer.
+	// Instead, Dragonboat chooses a self-nomination approach through observer initiates readIndex call to make
+	// sure it is sufficiently catching up with the leader. If we see consecutive rounds of readIndex success
+	// within election timeout, the observer will trigger a config change to add itself as a follower on next round.
+	// This is a de-centralized design which saves the dependency on elected leader to decide the role,
+	// thus easier to reason about.
+	// A note to user would be to unset IsObserver and AutoPromoteCallback once the auto promotion is complete.
+	// Otherwise the entire operation will be executed again which is unnecessary.
+	AutoPromoteCallback AutoPromoteCallbackFunc
 	// IsWitness indicates whether this is a witness Raft node without actual log
 	// replication and do not have state machine. It is mentioned in the section
 	// 11.7.2 of Diego Ongaro's thesis.
@@ -206,11 +226,14 @@ func (c *Config) Validate() error {
 	}
 	if c.SnapshotCompressionType != Snappy &&
 		c.SnapshotCompressionType != NoCompression {
-		return errors.New("Unknown compression type")
+		return errors.New("unknown compression type")
 	}
 	if c.EntryCompressionType != Snappy &&
 		c.EntryCompressionType != NoCompression {
-		return errors.New("Unknown compression type")
+		return errors.New("unknown compression type")
+	}
+	if c.AutoPromoteCallback != nil && !c.IsObserver {
+		return errors.New("node is not an observer, but configured with auto promote")
 	}
 	if c.IsWitness && c.SnapshotEntries > 0 {
 		return errors.New("witness node can not take snapshot")
@@ -244,14 +267,14 @@ type NodeHostConfig struct {
 	WALDir string
 	// NodeHostDir is where everything else is stored.
 	NodeHostDir string
-	// RTTMillisecond defines the average Rround Trip Time (RTT) in milliseconds
+	// RTTMillisecond defines the average Round Trip Time (RTT) in milliseconds
 	// between two NodeHost instances. Such a RTT interval is internally used as
 	// a logical clock tick, Raft heartbeat and election intervals are both
 	// defined in term of how many such RTT intervals.
 	// Note that RTTMillisecond is the combined delays between two NodeHost
 	// instances including all delays caused by network transmission, delays
 	// caused by NodeHost queuing and processing. As an example, when fully
-	// loaded, the average Rround Trip Time between two of our NodeHost instances
+	// loaded, the average Round Trip Time between two of our NodeHost instances
 	// used for benchmarking purposes is up to 500 microseconds when the ping time
 	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
 	// than 1 million in your environment.

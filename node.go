@@ -105,6 +105,7 @@ type node struct {
 		sync.Mutex
 		initialized bool
 	}
+	pm *PromotionManager
 	quiesceManager
 }
 
@@ -192,6 +193,17 @@ func newNode(raftAddress string,
 		return nil, err
 	}
 	rn.new = new
+
+	autoPromoteCb := rn.config.AutoPromoteCallback
+	if autoPromoteCb != nil {
+		readIndexFunc := func(readIndexTimeout uint64) (*RequestState, error) {
+			return rn.read(nil, readIndexTimeout/tickMillisecond)
+		}
+		promoteFunc := func(configChangeTimeout uint64) (*RequestState, error) {
+			return rn.requestConfigChange(pb.AddNode, rn.nodeID, rn.raftAddress, rn.getNextConfigChangeId(), configChangeTimeout/tickMillisecond)
+		}
+		rn.pm = NewPromotionManager(rn.config.ElectionRTT, readIndexFunc, promoteFunc, autoPromoteCb)
+ 	}
 	return rn, nil
 }
 
@@ -388,6 +400,8 @@ func (n *node) read(timeoutTick uint64) (*RequestState, error) {
 		return nil, ErrInvalidOperation
 	}
 	rs, err := n.pendingReadIndexes.read(timeoutTick)
+	//rs, err := n.pendingReadIndexes.read(handler, timeoutTick)
+
 	if err == nil {
 		rs.node = n
 	}
@@ -1099,6 +1113,12 @@ func (n *node) updateBatchedLastApplied() uint64 {
 	return n.smAppliedIndex
 }
 
+func (n *node) maybeRefreshPromoM() {
+	if n.pm != nil {
+		n.pm.Process()
+	}
+}
+
 func (n *node) stepNode() (pb.Update, bool) {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
@@ -1262,12 +1282,12 @@ func (n *node) tryRecordNodeActivity(m pb.Message) {
 }
 
 func (n *node) handleReceivedMessages() bool {
-	hasEvent := false
 	ltCount := uint64(0)
+	rrCount := n.getReadReqCount()
+
 	busy := n.isBusySnapshotting()
 	msgs := n.mq.Get()
 	for _, m := range msgs {
-		hasEvent = true
 		if m.Type == pb.LocalTick {
 			ltCount++
 			continue
@@ -1284,6 +1304,10 @@ func (n *node) handleReceivedMessages() bool {
 			n.p.Handle(m)
 		}
 	}
+
+	if rrCount > 0 {
+		n.batchedReadIndex()
+	}
 	if lazyFreeCycle > 0 {
 		for i := range msgs {
 			msgs[i].Entries = nil
@@ -1291,6 +1315,8 @@ func (n *node) handleReceivedMessages() bool {
 	}
 	n.handleLocalTick(ltCount)
 	return hasEvent
+	//n.handleLocalTickMessage(ltCount)
+	//return len(msgs) > 0
 }
 
 func (n *node) handleMessage(m pb.Message) bool {
@@ -1491,11 +1517,15 @@ func (n *node) notifyConfigChange() {
 	}
 	_, isObserver := m.Observers[n.nodeID]
 	_, isWitness := m.Witnesses[n.nodeID]
+	_, isFollower := m.Addresses[n.nodeID]
+	plog.Infof("%s called captureClusterState, nodes %v, observers %v",
+		n.id(), nodes, observers)
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,
 		IsLeader:          n.isLeader(),
 		IsObserver:        isObserver,
+		IsFollower:        isFollower,
 		IsWitness:         isWitness,
 		ConfigChangeIndex: m.ConfigChangeId,
 		Nodes:             m.Addresses,
@@ -1535,6 +1565,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		NodeID:            ci.NodeID,
 		IsLeader:          n.isLeader(),
 		IsObserver:        ci.IsObserver,
+		IsFollower:        ci.IsFollower,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
 		StateMachineType:  n.getStateMachineType(),
@@ -1565,6 +1596,19 @@ func (n *node) isFollower() bool {
 		}
 	}
 	return false
+}
+
+func (n *node) getNextConfigChangeId() uint64 {
+	_, _, _, _, ccid := n.sm.GetMembership()
+	return ccid + 1
+}
+
+func (n *node) increaseReadReqCount() {
+	atomic.AddUint64(&n.readReqCount, 1)
+}
+
+func (n *node) getReadReqCount() uint64 {
+	return atomic.SwapUint64(&n.readReqCount, 0)
 }
 
 func (n *node) initialized() bool {

@@ -67,6 +67,18 @@ type soft struct {
 	// It is defined in terms of number of ticks.
 	InMemGCTimeout uint64
 
+	// PromotionReadTimeoutMs determines how long we will abort the read index operation
+	// for observer promotion.
+	PromotionReadIndexBackOff uint64
+
+	// PromotionConfigChangeTimeoutMs determines how long we will abort the config change
+	// for observer promotion.
+	PromotionConfigChangeTimeoutMs uint64
+
+	// MinInsyncIterations determines how many successful read index we perform before starting
+	// the observer promotion.
+	MinInsyncIterations uint64
+
 	//
 	// Multiraft
 	//
@@ -198,6 +210,8 @@ func getDefaultSoftSettings() soft {
 		MinEntrySliceFreeSize:          96,
 		IncomingReadIndexQueueLength:   4096,
 		IncomingProposalQueueLength:    2048,
+		PromotionReadIndexBackOff:               64,
+		PromotionConfigChangeTimeoutMs:          5000,
 		SnapshotStatusPushDelayMS:      1000,
 		PendingProposalShards:          16,
 		TaskQueueInitialCap:            64,

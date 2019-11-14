@@ -96,17 +96,6 @@ var (
 	ErrPendingLeaderTransferExist = errors.New("pending leader transfer exist")
 )
 
-// IsTempError returns a boolean value indicating whether the specified error
-// is a temporary error that worth to be retried later with the exact same
-// input, potentially on a more suitable NodeHost instance.
-func IsTempError(err error) bool {
-	return err == ErrSystemBusy ||
-		err == ErrBadKey ||
-		err == ErrPendingConfigChangeExist ||
-		err == ErrClusterClosed ||
-		err == ErrSystemStopped
-}
-
 // RequestResultCode is the result code returned to the client to indicate the
 // outcome of the request.
 type RequestResultCode int

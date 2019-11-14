@@ -179,6 +179,8 @@ type ClusterInfo struct {
 	// has not had anything applied yet.
 	// IsLeader indicates whether this is a leader node.
 	IsLeader bool
+	// IsFollower indicates whether this is a follower node.
+	IsFollower bool
 	// IsObserver indicates whether this is a non-voting observer node.
 	IsObserver bool
 	// IsWitness indicates whether this is a witness node without actual log.
@@ -588,7 +590,7 @@ type Membership struct {
 	Removed map[uint64]struct{}
 }
 
-// SyncGetClusterMembership is a rsynchronous method that queries the membership
+// SyncGetClusterMembership is a synchronous method that queries the membership
 // information from the specified Raft cluster. The specified context parameter
 // must has the timeout value set.
 //
@@ -1763,6 +1765,7 @@ func (nh *NodeHost) tickWorkerMain() {
 			idx, nodes, qs = nh.getCurrentClusters(idx, nodes, qs)
 			nh.snapshotStatus.pushReady(nh.getTick())
 			nh.sendTickMessage(nodes, qs)
+			nh.checkNodePromotion(nodes)
 		}
 		return false
 	}
@@ -1852,6 +1855,12 @@ func (nh *NodeHost) sendTickMessage(clusters []*node,
 		}
 		q.Add(m)
 		nh.execEngine.setStepReady(n.clusterID)
+	}
+}
+
+func (nh *NodeHost) checkNodePromotion(nodes []*node) {
+	for _, node := range nodes {
+		node.maybeRefreshPromoM()
 	}
 }
 
