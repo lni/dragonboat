@@ -1636,7 +1636,9 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) {
 		High: m.HintHigh,
 		Low:  m.Hint,
 	}
-	if !r.isSingleNodeQuorum() {
+	if _, wok := r.witnesses[m.From]; wok {
+		plog.Errorf("%s dropped ReadIndex from witness node %v", r.describe(), m.From)
+	} else if !r.isSingleNodeQuorum() {
 		if !r.hasCommittedEntryAtCurrentTerm() {
 			// leader doesn't know the commit value of the cluster
 			// see raft thesis section 6.4, this is the first step of the ReadIndex
@@ -1650,8 +1652,7 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) {
 	} else {
 		r.addReadyToRead(r.log.committed, ctx)
 		_, ook := r.observers[m.From]
-		_, wok := r.witnesses[m.From]
-		if m.From != r.nodeID && (ook || wok) {
+		if m.From != r.nodeID && ook {
 			r.send(pb.Message{
 				To:       m.From,
 				Type:     pb.ReadIndexResp,

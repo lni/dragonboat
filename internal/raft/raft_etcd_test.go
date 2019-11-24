@@ -2984,9 +2984,9 @@ func newTestConfig(id uint64, election, heartbeat int) *config.Config {
 
 func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) *config.Config {
 	return &config.Config{
-		NodeID:       id,
-		ElectionRTT:  uint64(election),
-		HeartbeatRTT: uint64(heartbeat),
+		NodeID:          id,
+		ElectionRTT:     uint64(election),
+		HeartbeatRTT:    uint64(heartbeat),
 		MaxInMemLogSize: uint64(maxLogSize),
 	}
 }
