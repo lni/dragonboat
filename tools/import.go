@@ -323,6 +323,13 @@ func checkMembers(old pb.Membership, members map[uint64]string) error {
 		if ok {
 			return errors.New("adding an observer as regular node")
 		}
+		v, ok = old.Witnesses[nodeID]
+		if ok && v != addr {
+			return errors.New("node address changed")
+		}
+		if ok {
+			return errors.New("adding a witness as regular node")
+		}
 		_, ok = old.Removed[nodeID]
 		if ok {
 			return errors.New("adding a removed node")
@@ -348,6 +355,7 @@ func getProcessedSnapshotRecord(dstDir string,
 			Removed:        make(map[uint64]bool),
 			Observers:      make(map[uint64]string),
 			Addresses:      make(map[uint64]string),
+			Witnesses:      make(map[uint64]string),
 		},
 		Files:     old.Files,
 		Type:      old.Type,
@@ -361,6 +369,12 @@ func getProcessedSnapshotRecord(dstDir string,
 		}
 	}
 	for nid := range old.Membership.Observers {
+		_, ok := members[nid]
+		if !ok {
+			ss.Membership.Removed[nid] = true
+		}
+	}
+	for nid := range old.Membership.Witnesses {
 		_, ok := members[nid]
 		if !ok {
 			ss.Membership.Removed[nid] = true
