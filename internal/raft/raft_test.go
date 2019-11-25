@@ -2760,6 +2760,32 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 	}
 }
 
+func TestWitnessReadIndex(t *testing.T) {
+	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
+
+	r.becomeFollower(1, NoLeader)
+	if r.hasCommittedEntryAtCurrentTerm() {
+		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
+	}
+	r.becomeCandidate()
+	r.becomeLeader()
+
+	r.addWitness(2)
+
+	msg := pb.Message{
+		Type:     pb.ReadIndex,
+		Hint:     101,
+		HintHigh: 1002,
+		From:     2,
+	}
+
+	r.handleLeaderReadIndex(msg)
+
+	if len(r.readIndex.pending) != 0 || len(r.readIndex.queue) != 0 {
+		t.Errorf("readIndex updated unexpectedly")
+	}
+}
+
 func TestVotingMemberLengthMismatchWillResetMatchArray(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeFollower(1, NoLeader)
