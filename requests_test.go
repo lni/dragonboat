@@ -20,7 +20,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -105,7 +104,7 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 
 func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ps := newPendingSnapshot(snapshotC)
 	if len(ps.snapshotC) != 0 {
 		t.Errorf("snapshotC not empty")
 	}
@@ -132,8 +131,8 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 
 func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 10)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -155,8 +154,8 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, 50)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 49*time.Millisecond)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 0)
 	if err != ErrTimeoutTooSmall {
 		t.Errorf("request not rejected")
 	}
@@ -167,15 +166,15 @@ func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Errorf("nil ss returned")
 	}
-	ss, err = ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ss, err = ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != ErrPendingSnapshotRequestExist {
 		t.Errorf("request not rejected")
 	}
@@ -186,8 +185,8 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 20)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -221,8 +220,8 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 
 func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -245,8 +244,8 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 
 func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -269,8 +268,8 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 
 func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -293,9 +292,9 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 
 func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
+	ps := newPendingSnapshot(snapshotC)
 	ps.close()
-	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, time.Second)
+	ss, err := ps.request(rsm.UserRequestedSnapshot, "", false, 0, 100)
 	if err != ErrClusterClosed {
 		t.Errorf("not report as closed")
 	}
@@ -306,8 +305,8 @@ func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 
 func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
-	ps := newPendingSnapshot(snapshotC, testTickInMillisecond)
-	_, err := ps.request(rsm.UserRequestedSnapshot, "", true, 123, time.Second)
+	ps := newPendingSnapshot(snapshotC)
+	_, err := ps.request(rsm.UserRequestedSnapshot, "", true, 123, 100)
 	if err != nil {
 		t.Errorf("failed to request snapshot")
 	}
@@ -323,7 +322,7 @@ func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
 
 func getPendingConfigChange() (*pendingConfigChange, chan configChangeRequest) {
 	c := make(chan configChangeRequest, 1)
-	return newPendingConfigChange(c, testTickInMillisecond), c
+	return newPendingConfigChange(c), c
 }
 
 func TestRequestStateRelease(t *testing.T) {
@@ -397,7 +396,7 @@ func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
 func TestConfigChangeCanBeRequested(t *testing.T) {
 	pcc, c := getPendingConfigChange()
 	var cc pb.ConfigChange
-	rs, err := pcc.request(cc, time.Second)
+	rs, err := pcc.request(cc, 100)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -410,7 +409,7 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 	if len(c) != 1 {
 		t.Errorf("len(c) = %d, want 1", len(c))
 	}
-	_, err = pcc.request(cc, time.Second)
+	_, err = pcc.request(cc, 100)
 	if err == nil {
 		t.Errorf("not expect to be success")
 	}
@@ -431,9 +430,8 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 func TestConfigChangeCanExpire(t *testing.T) {
 	pcc, _ := getPendingConfigChange()
 	var cc pb.ConfigChange
-	timeout := time.Duration(1000 * time.Millisecond)
-	tickCount := uint64(1000 / testTickInMillisecond)
-	rs, err := pcc.request(cc, timeout)
+	tickCount := uint64(100)
+	rs, err := pcc.request(cc, tickCount)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -465,7 +463,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 	pcc, _ := getPendingConfigChange()
 	var cc pb.ConfigChange
-	rs, err := pcc.request(cc, time.Second)
+	rs, err := pcc.request(cc, 100)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -491,7 +489,7 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 	pcc, _ := getPendingConfigChange()
 	var cc pb.ConfigChange
-	rs, err := pcc.request(cc, time.Second)
+	rs, err := pcc.request(cc, 100)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -514,7 +512,7 @@ func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 func TestConfigChangeCanBeDropped(t *testing.T) {
 	pcc, _ := getPendingConfigChange()
 	var cc pb.ConfigChange
-	rs, err := pcc.request(cc, time.Second)
+	rs, err := pcc.request(cc, 100)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -540,7 +538,7 @@ func TestConfigChangeCanBeDropped(t *testing.T) {
 func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
 	pcc, _ := getPendingConfigChange()
 	var cc pb.ConfigChange
-	rs, err := pcc.request(cc, time.Second)
+	rs, err := pcc.request(cc, 100)
 	if err != nil {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
@@ -574,8 +572,7 @@ func getPendingProposal() (*pendingProposal, *entryQueue) {
 		return obj
 	}
 	cfg := config.Config{ClusterID: 100, NodeID: 120}
-	return newPendingProposal(cfg,
-		p, c, "nodehost:12345", testTickInMillisecond), c
+	return newPendingProposal(cfg, p, c, "nodehost:12345"), c
 }
 
 func getBlankTestSession() *client.Session {
@@ -631,7 +628,7 @@ func TestLargeProposalCanBeProposed(t *testing.T) {
 
 func TestProposalCanBeProposed(t *testing.T) {
 	pp, c := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -661,7 +658,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 	pp, _ := getPendingProposal()
 	pp.close()
-	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != ErrClusterClosed {
 		t.Errorf("unexpected err %v", err)
 	}
@@ -669,7 +666,7 @@ func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 
 func TestProposalCanBeCompleted(t *testing.T) {
 	pp, _ := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -698,7 +695,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 
 func TestProposalCanBeDropped(t *testing.T) {
 	pp, _ := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -720,7 +717,7 @@ func TestProposalCanBeDropped(t *testing.T) {
 
 func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	pp, _ := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -746,7 +743,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 
 func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -775,7 +772,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 
 func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal()
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -804,12 +801,11 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 
 func TestProposalCanBeExpired(t *testing.T) {
 	pp, _ := getPendingProposal()
-	timeout := time.Duration(1000 * time.Millisecond)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, timeout)
+	tickCount := uint64(100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, tickCount)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
-	tickCount := uint64(1000 / testTickInMillisecond)
 	for i := uint64(0); i < tickCount; i++ {
 		pp.tick()
 		pp.gc()
@@ -838,7 +834,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 func TestProposalErrorsAreReported(t *testing.T) {
 	pp, c := getPendingProposal()
 	for i := 0; i < 5; i++ {
-		_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+		_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 		if err != nil {
 			t.Errorf("propose failed")
 		}
@@ -850,7 +846,7 @@ func TestProposalErrorsAreReported(t *testing.T) {
 		cq = c.right
 	}
 	sz := len(cq)
-	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, time.Second)
+	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != ErrSystemBusy {
 		t.Errorf("suppose to return ErrSystemBusy")
 	}
@@ -871,7 +867,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 		SeriesID:    200,
 		RespondedTo: 199,
 	}
-	rs, _ := pp.propose(session, nil, nil, time.Duration(5*time.Second))
+	rs, _ := pp.propose(session, nil, nil, 100)
 	select {
 	case <-rs.CompletedC:
 		t.Fatalf("completedC is already signalled")
@@ -897,7 +893,7 @@ func getPendingSCRead() (*pendingReadIndex, *readIndexQueue) {
 		obj.CompletedC = make(chan RequestResult, 1)
 		return obj
 	}
-	return newPendingReadIndex(p, q, testTickInMillisecond), q
+	return newPendingReadIndex(p, q), q
 }
 
 func TestPendingSCReadCanBeCreatedAndClosed(t *testing.T) {
@@ -913,7 +909,7 @@ func TestPendingSCReadCanBeCreatedAndClosed(t *testing.T) {
 
 func TestPendingSCReadCanRead(t *testing.T) {
 	pp, c := getPendingSCRead()
-	rs, err := pp.read(nil, time.Second)
+	rs, err := pp.read(nil, 100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -950,7 +946,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 
 func TestPendingSCReadCanComplete(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, time.Second)
+	rs, err := pp.read(nil, 100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -989,7 +985,7 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 
 func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, time.Second)
+	rs, err := pp.read(nil, 100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1011,8 +1007,7 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 
 func TestPendingSCReadCanExpire(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	timeout := time.Duration(1000 * time.Millisecond)
-	rs, err := pp.read(nil, timeout)
+	rs, err := pp.read(nil, 100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1020,7 +1015,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 	pp.addPendingRead(s, []*RequestState{rs})
 	readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
 	pp.addReadyToRead([]pb.ReadyToRead{readState})
-	tickToWait := 1000/testTickInMillisecond + defaultGCTick + 1
+	tickToWait := 100 + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick()
 		pp.applied(499)
@@ -1040,14 +1035,13 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 
 func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	timeout := time.Duration(1000 * time.Millisecond)
-	rs, err := pp.read(nil, timeout)
+	rs, err := pp.read(nil, 100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
 	s := pp.peepNextCtx()
 	pp.addPendingRead(s, []*RequestState{rs})
-	tickToWait := 1000/testTickInMillisecond + defaultGCTick + 1
+	tickToWait := 100 + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick()
 		pp.applied(499)
@@ -1070,7 +1064,7 @@ func TestExpiredSystemGcWillBeCollected(t *testing.T) {
 	if len(pp.systemGcTime) != 0 {
 		t.Fatalf("systemGcTime is not empty")
 	}
-	expireTick := sysGcMillisecond / pp.tickInMillisecond
+	expireTick := uint64(1000)
 	for i := uint64(0); i < expireTick+1; i++ {
 		pp.nextCtx()
 		pp.tick()
@@ -1122,11 +1116,11 @@ func TestProposalAllocationCount(t *testing.T) {
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
-	pp := newPendingProposal(cfg, p, q, "localhost:9090", 200)
+	pp := newPendingProposal(cfg, p, q, "localhost:9090")
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)
-		rs, err := pp.propose(session, data, nil, time.Second)
+		rs, err := pp.propose(session, data, nil, 100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -1153,10 +1147,10 @@ func TestReadIndexAllocationCount(t *testing.T) {
 	}
 	total := uint64(0)
 	q := newReadIndexQueue(2048)
-	pri := newPendingReadIndex(p, q, 200)
+	pri := newPendingReadIndex(p, q)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)
-		rs, err := pri.read(nil, time.Second)
+		rs, err := pri.read(nil, 100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}

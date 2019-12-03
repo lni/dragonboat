@@ -782,7 +782,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 	if !v.supportClientSession() && !session.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	req, err := v.proposeSession(session, nil, timeout)
+	req, err := v.proposeSession(session, nil, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(session.ClusterID)
 	return req, err
 }
@@ -943,7 +943,7 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestSnapshot(opt, timeout)
+	req, err := v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }
@@ -1053,7 +1053,8 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, timeout)
+	tt := nh.getTimeoutTick(timeout)
+	req, err := v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }
@@ -1089,7 +1090,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestAddNodeWithOrderID(nodeID,
-		address, configChangeIndex, timeout)
+		address, configChangeIndex, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }
@@ -1125,7 +1126,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestAddObserverWithOrderID(nodeID,
-		address, configChangeIndex, timeout)
+		address, configChangeIndex, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }
@@ -1159,7 +1160,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestAddWitnessWithOrderID(nodeID,
-		address, configChangeIndex, timeout)
+		address, configChangeIndex, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
 }
@@ -1316,7 +1317,7 @@ func (nh *NodeHost) propose(s *client.Session,
 	if !v.supportClientSession() && !s.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	req, err := v.propose(s, cmd, handler, timeout)
+	req, err := v.propose(s, cmd, handler, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(s.ClusterID)
 	if sampled {
 		nh.execEngine.proposeDelay(s.ClusterID, st)
@@ -1331,7 +1332,7 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 	if !ok {
 		return nil, nil, ErrClusterNotFound
 	}
-	req, err := n.read(handler, timeout)
+	req, err := n.read(handler, nh.getTimeoutTick(timeout))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1852,6 +1853,11 @@ func (nh *NodeHost) getTick() uint64 {
 	return atomic.LoadUint64(&nh.tick)
 }
 
+func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
+	timeoutMs := uint64(timeout.Nanoseconds() / 1000000)
+	return timeoutMs / nh.nhConfig.RTTMillisecond
+}
+
 func (nh *NodeHost) getClusterSetIndex() uint64 {
 	nh.clusterMu.RLock()
 	v := nh.clusterMu.csi
@@ -1942,7 +1948,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 	if sampled {
 		st = time.Now()
 	}
-	req, err := nu.node.propose(s, cmd, nil, timeout)
+	req, err := nu.node.propose(s, cmd, nil, nu.nh.getTimeoutTick(timeout))
 	nu.setNodeReady(s.ClusterID)
 	if sampled {
 		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
@@ -1951,7 +1957,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 }
 
 func (nu *nodeUser) ReadIndex(timeout time.Duration) (*RequestState, error) {
-	rs, err := nu.node.read(nil, timeout)
+	rs, err := nu.node.read(nil, nu.nh.getTimeoutTick(timeout))
 	return rs, err
 }
 

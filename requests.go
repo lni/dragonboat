@@ -36,8 +36,7 @@ import (
 )
 
 const (
-	badKeyCheck      bool   = false
-	sysGcMillisecond uint64 = 15000
+	badKeyCheck bool = false
 )
 
 var (
@@ -221,10 +220,9 @@ func getDroppedResult() RequestResult {
 }
 
 type logicalClock struct {
-	ltick             uint64
-	lastGcTime        uint64
-	gcTick            uint64
-	tickInMillisecond uint64
+	ltick      uint64
+	lastGcTime uint64
+	gcTick     uint64
 }
 
 func (p *logicalClock) tick() {
@@ -233,11 +231,6 @@ func (p *logicalClock) tick() {
 
 func (p *logicalClock) getTick() uint64 {
 	return atomic.LoadUint64(&p.ltick)
-}
-
-func (p *logicalClock) getTimeoutTick(timeout time.Duration) uint64 {
-	timeoutMs := uint64(timeout.Nanoseconds() / 1000000)
-	return timeoutMs / p.tickInMillisecond
 }
 
 // ICompleteHandler is a handler interface that will be invoked when the request
@@ -430,16 +423,12 @@ func (l *pendingLeaderTransfer) get() (uint64, bool) {
 	return 0, false
 }
 
-func newPendingSnapshot(snapshotC chan<- rsm.SSRequest,
-	tickInMillisecond uint64) *pendingSnapshot {
+func newPendingSnapshot(snapshotC chan<- rsm.SSRequest) *pendingSnapshot {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
 	}
-	lcu := logicalClock{
-		tickInMillisecond: tickInMillisecond,
-		gcTick:            gcTick,
-	}
+	lcu := logicalClock{gcTick: gcTick}
 	return &pendingSnapshot{
 		logicalClock: lcu,
 		snapshotC:    snapshotC,
@@ -463,13 +452,12 @@ func (p *pendingSnapshot) close() {
 
 func (p *pendingSnapshot) request(st rsm.SSReqType,
 	path string, override bool, overhead uint64,
-	timeout time.Duration) (*RequestState, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	timeoutTick := p.getTimeoutTick(timeout)
+	timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.pending != nil {
 		return nil, ErrPendingSnapshotRequestExist
 	}
@@ -539,16 +527,12 @@ func (p *pendingSnapshot) apply(key uint64,
 	}
 }
 
-func newPendingConfigChange(confChangeC chan<- configChangeRequest,
-	tickInMillisecond uint64) *pendingConfigChange {
+func newPendingConfigChange(confChangeC chan<- configChangeRequest) *pendingConfigChange {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
 	}
-	lcu := logicalClock{
-		tickInMillisecond: tickInMillisecond,
-		gcTick:            gcTick,
-	}
+	lcu := logicalClock{gcTick: gcTick}
 	return &pendingConfigChange{
 		confChangeC:  confChangeC,
 		logicalClock: lcu,
@@ -569,13 +553,12 @@ func (p *pendingConfigChange) close() {
 }
 
 func (p *pendingConfigChange) request(cc pb.ConfigChange,
-	timeout time.Duration) (*RequestState, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	timeoutTick := p.getTimeoutTick(timeout)
+	timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.pending != nil {
 		return nil, ErrPendingConfigChangeExist
 	}
@@ -651,16 +634,13 @@ func (p *pendingConfigChange) apply(key uint64, rejected bool) {
 	}
 }
 
-func newPendingReadIndex(pool *sync.Pool, requests *readIndexQueue,
-	tickInMillisecond uint64) *pendingReadIndex {
+func newPendingReadIndex(pool *sync.Pool,
+	requests *readIndexQueue) *pendingReadIndex {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
 	}
-	lcu := logicalClock{
-		tickInMillisecond: tickInMillisecond,
-		gcTick:            gcTick,
-	}
+	lcu := logicalClock{gcTick: gcTick}
 	p := &pendingReadIndex{
 		pending:      make(map[uint64]*RequestState),
 		batches:      make(map[pb.SystemCtx]uint64),
@@ -691,8 +671,7 @@ func (p *pendingReadIndex) close() {
 }
 
 func (p *pendingReadIndex) read(handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
-	timeoutTick := p.getTimeoutTick(timeout)
+	timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
@@ -734,11 +713,10 @@ func (p *pendingReadIndex) nextCtx() pb.SystemCtx {
 	defer p.mu.Unlock()
 	v := p.system
 	p.system = p.nextSystemCtx()
-	expireTick := sysGcMillisecond / p.tickInMillisecond
 	p.systemGcTime = append(p.systemGcTime,
 		systemCtxGcTime{
 			ctx:        v,
-			expireTime: p.getTick() + expireTick,
+			expireTime: p.getTick() + 1000,
 		})
 	return v
 }
@@ -802,23 +780,13 @@ func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
 }
 
 func (p *pendingReadIndex) applied(applied uint64) {
-	// FIXME:
-	// when there is no pending request, we still want to get a chance to cleanup
-	// systemGcTime. the parameter sysGcMillisecond is how many
-	// milliseconds are allowed before the readIndex message is considered as
-	// timeout. as we send one msgIndex per 1 millisecond by default, we expect
-	// the max length of systemGcTime to be less than
-	// sysGcMillisecond.
-	// here as you can see the one msgIndex per 1 millisecond by default
-	// is not taken into consideration when checking the systemGcTime,
-	// this need to be fixed.
 	p.mu.Lock()
 	if p.stopped {
 		p.mu.Unlock()
 		return
 	}
 	if len(p.pending) == 0 &&
-		uint64(len(p.systemGcTime)) < sysGcMillisecond {
+		uint64(len(p.systemGcTime)) < 1000 {
 		p.mu.Unlock()
 		return
 	}
@@ -901,8 +869,7 @@ func getRandomGenerator(clusterID uint64,
 }
 
 func newPendingProposal(cfg config.Config,
-	pool *sync.Pool, proposals *entryQueue, raftAddress string,
-	tickInMillisecond uint64) *pendingProposal {
+	pool *sync.Pool, proposals *entryQueue, raftAddress string) *pendingProposal {
 	ps := uint64(16)
 	p := &pendingProposal{
 		shards: make([]*proposalShard, ps),
@@ -910,8 +877,7 @@ func newPendingProposal(cfg config.Config,
 		ps:     ps,
 	}
 	for i := uint64(0); i < ps; i++ {
-		p.shards[i] = newPendingProposalShard(cfg,
-			pool, proposals, tickInMillisecond)
+		p.shards[i] = newPendingProposalShard(cfg, pool, proposals)
 		p.keyg[i] = getRandomGenerator(cfg.ClusterID, cfg.NodeID, raftAddress, i)
 	}
 	return p
@@ -919,10 +885,10 @@ func newPendingProposal(cfg config.Config,
 
 func (p *pendingProposal) propose(session *client.Session,
 	cmd []byte, handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	key := p.nextKey(session.ClientID)
 	pp := p.shards[key%p.ps]
-	return pp.propose(session, cmd, key, handler, timeout)
+	return pp.propose(session, cmd, key, handler, timeoutTick)
 }
 
 func (p *pendingProposal) close() {
@@ -961,15 +927,12 @@ func (p *pendingProposal) gc() {
 }
 
 func newPendingProposalShard(cfg config.Config, pool *sync.Pool,
-	proposals *entryQueue, tickInMillisecond uint64) *proposalShard {
+	proposals *entryQueue) *proposalShard {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
 	}
-	lcu := logicalClock{
-		tickInMillisecond: tickInMillisecond,
-		gcTick:            gcTick,
-	}
+	lcu := logicalClock{gcTick: gcTick}
 	p := &proposalShard{
 		proposals:    proposals,
 		pending:      make(map[uint64]*RequestState),
@@ -982,8 +945,7 @@ func newPendingProposalShard(cfg config.Config, pool *sync.Pool,
 
 func (p *proposalShard) propose(session *client.Session,
 	cmd []byte, key uint64, handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
-	timeoutTick := p.getTimeoutTick(timeout)
+	timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}

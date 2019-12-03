@@ -17,7 +17,6 @@ package dragonboat
 import (
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -126,12 +125,11 @@ func newNode(raftAddress string,
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SSRequest, 1)
-	pp := newPendingProposal(config,
-		requestStatePool, proposals, raftAddress, tickMillisecond)
+	pp := newPendingProposal(config, requestStatePool, proposals, raftAddress)
 	leaderTransfer := newPendingLeaderTransfer()
-	pscr := newPendingReadIndex(requestStatePool, readIndexes, tickMillisecond)
-	pcc := newPendingConfigChange(confChangeC, tickMillisecond)
-	ps := newPendingSnapshot(snapshotC, tickMillisecond)
+	pscr := newPendingReadIndex(requestStatePool, readIndexes)
+	pcc := newPendingConfigChange(confChangeC)
+	ps := newPendingSnapshot(snapshotC)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rn := &node{
 		instanceID:            atomic.AddUint64(&instanceID, 1),
@@ -337,14 +335,14 @@ func (n *node) OnDiskStateMachine() bool {
 }
 
 func (n *node) proposeSession(session *client.Session,
-	handler ICompleteHandler, timeout time.Duration) (*RequestState, error) {
+	handler ICompleteHandler, timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
 	if !session.ValidForSessionOp(n.clusterID) {
 		return nil, ErrInvalidSession
 	}
-	return n.pendingProposals.propose(session, nil, handler, timeout)
+	return n.pendingProposals.propose(session, nil, handler, timeoutTick)
 }
 
 func (n *node) payloadTooBig(sz int) bool {
@@ -356,7 +354,7 @@ func (n *node) payloadTooBig(sz int) bool {
 
 func (n *node) propose(session *client.Session,
 	cmd []byte, handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -366,15 +364,15 @@ func (n *node) propose(session *client.Session,
 	if n.payloadTooBig(len(cmd)) {
 		return nil, ErrPayloadTooBig
 	}
-	return n.pendingProposals.propose(session, cmd, handler, timeout)
+	return n.pendingProposals.propose(session, cmd, handler, timeoutTick)
 }
 
 func (n *node) read(handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	rs, err := n.pendingReadIndexes.read(handler, timeout)
+	rs, err := n.pendingReadIndexes.read(handler, timeoutTick)
 	if err == nil {
 		rs.node = n
 	}
@@ -389,7 +387,7 @@ func (n *node) requestLeaderTransfer(nodeID uint64) error {
 }
 
 func (n *node) requestSnapshot(opt SnapshotOption,
-	timeout time.Duration) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	st := rsm.UserRequestedSnapshot
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -414,7 +412,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 		opt.ExportPath,
 		opt.OverrideCompactionOverhead,
 		opt.CompactionOverhead,
-		timeout)
+		timeoutTick)
 }
 
 func (n *node) reportIgnoredSnapshotRequest(key uint64) {
@@ -423,7 +421,7 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, addr string, orderID uint64,
-	timeout time.Duration) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -433,31 +431,30 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 		ConfigChangeId: orderID,
 		Address:        addr,
 	}
-	return n.pendingConfigChange.request(cc, timeout)
+	return n.pendingConfigChange.request(cc, timeoutTick)
 }
 
 func (n *node) requestDeleteNodeWithOrderID(nodeID uint64,
-	orderID uint64, timeout time.Duration) (*RequestState, error) {
-	return n.requestConfigChange(pb.RemoveNode,
-		nodeID, "", orderID, timeout)
+	orderID uint64, timeoutTick uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.RemoveNode, nodeID, "", orderID, timeoutTick)
 }
 
 func (n *node) requestAddNodeWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
+	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
 	return n.requestConfigChange(pb.AddNode,
-		nodeID, addr, orderID, timeout)
+		nodeID, addr, orderID, timeoutTick)
 }
 
 func (n *node) requestAddObserverWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
+	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
 	return n.requestConfigChange(pb.AddObserver,
-		nodeID, addr, orderID, timeout)
+		nodeID, addr, orderID, timeoutTick)
 }
 
 func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
+	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
 	return n.requestConfigChange(pb.AddWitness,
-		nodeID, addr, orderID, timeout)
+		nodeID, addr, orderID, timeoutTick)
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
