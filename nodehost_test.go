@@ -320,7 +320,7 @@ func createSingleNodeTestNodeHost(addr string,
 	rc := config.Config{
 		NodeID:             uint64(1),
 		ClusterID:          2,
-		ElectionRTT:        5,
+		ElectionRTT:        10,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
 		SnapshotEntries:    10,
@@ -2141,6 +2141,11 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 			_, err := nh.SyncPropose(ctx, session, cmd)
 			cancel()
 			if err != nil {
+				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
+				if err == ErrTimeout {
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
 				t.Fatalf("failed to make proposal %v", err)
 			}
 		}
