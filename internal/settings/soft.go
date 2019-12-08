@@ -36,11 +36,9 @@ const (
 //
 // {
 //   "GetConnectedTimeoutSecond": 15,
-//   "UnknownRegionName": "no-idea-region"
 // }
 //
 // soft.GetConnectedTimeoutSecond will be 15,
-// soft.UnknownRegionName will be "no-idea-region"
 //
 // The application need to be restarted to apply such configuration changes.
 //
@@ -50,12 +48,6 @@ const (
 var Soft = getSoftSettings()
 
 type soft struct {
-	// LocalRaftRequestTimeoutMs is the raft request timeout in millisecond.
-	LocalRaftRequestTimeoutMs uint64
-	// GetConnectedTimeoutSecond is the default timeout value in second when
-	// trying to connect to a gRPC based server.
-	GetConnectedTimeoutSecond uint64
-
 	//
 	// Raft
 	//
@@ -88,9 +80,6 @@ type soft struct {
 	// IncomingProposalQueueLength defines the number of pending proposals
 	// allowed for each raft group.
 	IncomingProposalQueueLength uint64
-	// UnknownRegionName defines the region name to use when the region
-	// is unknown.
-	UnknownRegionName string
 	// ReceiveQueueLength is the length of the receive queue on each node.
 	ReceiveQueueLength uint64
 	// SnapshotStatusPushDelayMS is the number of millisecond delays we impose
@@ -112,7 +101,7 @@ type soft struct {
 	LazyFreeCycle uint64
 	// PanicOnSizeMismatch defines whether dragonboat should panic when snapshot
 	// file size doesn't match the size recorded in snapshot metadata.
-	PanicOnSizeMismatch uint64
+	PanicOnSizeMismatch bool
 
 	//
 	// RSM
@@ -140,6 +129,9 @@ type soft struct {
 	// transport
 	//
 
+	// GetConnectedTimeoutSecond is the default timeout value in second when
+	// trying to connect to a gRPC based server.
+	GetConnectedTimeoutSecond uint64
 	// MaxSnapshotConnections defines the max number of concurrent outgoing
 	// snapshot connections.
 	MaxSnapshotConnections uint64
@@ -171,19 +163,6 @@ type soft struct {
 	// NodeHostInfoReportSecond defines how often in seconds nodehost report it
 	// details to Drummer servers.
 	NodeHostInfoReportSecond uint64
-	// NodeHostTTL defines the number of seconds without any report from the
-	// nodehost required to consider it as dead.
-	NodeHostTTL uint64
-	// NodeToStartMaxWait is the number of seconds allowed for a new node to stay
-	// in the to start state. To start state is the stage when a node has been
-	// added to the raft cluster but has not been confirmed to be launched and
-	// running on its assigned nodehost.
-	NodeToStartMaxWait uint64
-	// PersisentLogReportCycle defines how often local persisted log info need
-	// to be reported to Drummer server. Each NodeHostInfoReportSecond is called
-	// a cycle. PersisentLogReportCycle defines how often each nodehost need to
-	// update Drummer servers in terms of NodeHostInfoReportSecond cycles.
-	PersisentLogReportCycle uint64
 
 	//
 	// LogDB
@@ -217,11 +196,10 @@ func getDefaultSoftSettings() soft {
 		MaxConcurrentStreamingSnapshot:          128,
 		MaxSnapshotConnections:                  64,
 		SyncTaskInterval:                        180000,
-		PanicOnSizeMismatch:                     1,
+		PanicOnSizeMismatch:                     true,
 		LazyFreeCycle:                           1,
 		LatencySampleRatio:                      0,
 		BatchedEntryApply:                       true,
-		LocalRaftRequestTimeoutMs:               10000,
 		GetConnectedTimeoutSecond:               5,
 		MaxEntrySize:                            MaxMessageBatchSize,
 		InMemGCTimeout:                          100,
@@ -229,7 +207,6 @@ func getDefaultSoftSettings() soft {
 		MinEntrySliceFreeSize:                   96,
 		IncomingReadIndexQueueLength:            4096,
 		IncomingProposalQueueLength:             2048,
-		UnknownRegionName:                       "UNKNOWN",
 		SnapshotStatusPushDelayMS:               1000,
 		TaskQueueInitialCap:                     64,
 		TaskQueueTargetLength:                   1024,
@@ -246,9 +223,6 @@ func getDefaultSoftSettings() soft {
 		SnapshotGCTick:                          30,
 		SnapshotChunkTimeoutTick:                900,
 		NodeHostInfoReportSecond:                NodeHostInfoReportSecond,
-		NodeHostTTL:                             NodeHostInfoReportSecond * 3,
-		NodeToStartMaxWait:                      NodeHostInfoReportSecond * 12,
-		PersisentLogReportCycle:                 3,
 		RocksDBMaxBackgroundCompactions:         2,
 		RocksDBMaxBackgroundFlushes:             2,
 		RocksDBLRUCacheSize:                     0,

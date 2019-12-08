@@ -259,19 +259,17 @@ func (b *Bootstrap) Validate(nodes map[uint64]string,
 
 func checkFileSize(path string, size uint64) {
 	var er func(format string, args ...interface{})
-	if panicOnSizeMismatch > 0 {
+	if panicOnSizeMismatch {
 		er = plog.Panicf
 	} else {
 		er = plog.Errorf
 	}
-	if panicOnSizeMismatch > 0 {
-		fs, err := os.Stat(path)
-		if err != nil {
-			plog.Panicf("failed to access %s", path)
-		}
-		if size != uint64(fs.Size()) {
-			er("file %s size %d, expect %d", path, fs.Size(), size)
-		}
+	fs, err := os.Stat(path)
+	if err != nil {
+		plog.Panicf("failed to access %s", path)
+	}
+	if size != uint64(fs.Size()) {
+		er("file %s size %d, expect %d", path, fs.Size(), size)
 	}
 }
 
