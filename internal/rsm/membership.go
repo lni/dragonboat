@@ -192,9 +192,6 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode ||
 		cc.Type == pb.AddObserver ||
 		cc.Type == pb.AddWitness {
-		plog.Infof("%s adding node %d:%s, existing members: %v, observer: %v",
-			m.id(), cc.NodeID, string(cc.Address),
-			m.members.Addresses, m.members.Observers)
 		for _, addr := range m.members.Addresses {
 			if addressEqual(addr, string(cc.Address)) {
 				return true

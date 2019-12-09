@@ -23,7 +23,6 @@ package rsm
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -305,8 +304,11 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 		return 0, sm.ErrSnapshotStopped
 	}
 	if s.recoverSMRequired(ss, init) {
-		plog.Infof("%s recovering from snapshot, term %d, index %d, %s, init %t",
-			s.id(), ss.Term, index, snapshotInfo(ss), init)
+		plog.Infof("%s recovering from snapshot, term %d, index %d, init %t",
+			s.id(), ss.Term, index, init)
+		logMembership("members", index, ss.Membership.Addresses)
+		logMembership("observers", index, ss.Membership.Observers)
+		logMembership("witnesses", index, ss.Membership.Witnesses)
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
 		s.canRecoverOnDiskSnapshot(ss, init)
@@ -617,6 +619,13 @@ func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
 	return false
 }
 
+func logMembership(name string, index uint64, members map[uint64]string) {
+	plog.Infof("%d %s included in snapshot %d", len(members), name, index)
+	for nid, addr := range members {
+		plog.Infof("\t%d:%s", nid, addr)
+	}
+}
+
 func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	if s.members.isEmpty() {
 		plog.Panicf("%s has empty membership", s.id())
@@ -639,8 +648,8 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		Type:            s.sm.StateMachineType(),
 		CompressionType: ct,
 	}
-	plog.Infof("%s generating a snapshot at index %d, members %v",
-		s.id(), meta.Index, meta.Membership.Addresses)
+	plog.Infof("%s generating a snapshot at index %d", s.id(), meta.Index)
+	logMembership("members", meta.Index, meta.Membership.Addresses)
 	if err := s.sessions.SaveSessions(meta.Session); err != nil {
 		return nil, err
 	}
@@ -1033,11 +1042,6 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 
 func (s *StateMachine) id() string {
 	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
-}
-
-func snapshotInfo(ss pb.Snapshot) string {
-	return fmt.Sprintf("addresses %v, config change id %d",
-		ss.Membership.Addresses, ss.Membership.ConfigChangeId)
 }
 
 func getSnapshotFiles(snapshot pb.Snapshot) []sm.SnapshotFile {

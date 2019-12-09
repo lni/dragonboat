@@ -537,14 +537,14 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				batch.Requests = requests[:len(requests)-1]
 			}
 			if err := t.sendMessageBatch(conn, batch); err != nil {
-				plog.Errorf("Send batch failed, target node %s (%v), %d",
+				plog.Errorf("send batch failed, target node %s (%v), %d",
 					dn(clusterID, toNodeID), err, len(batch.Requests))
 				return err
 			}
 			if twoBatch {
 				batch.Requests = []pb.Message{requests[len(requests)-1]}
 				if err := t.sendMessageBatch(conn, batch); err != nil {
-					plog.Errorf("Send batch failed, taret node %s (%v), %d",
+					plog.Errorf("send batch failed, taret node %s (%v), %d",
 						dn(clusterID, toNodeID), err, len(batch.Requests))
 					return err
 				}

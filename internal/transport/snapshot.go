@@ -130,8 +130,6 @@ func (t *Transport) createConnection(key raftio.NodeInfo,
 	}
 	t.stopper.RunWorker(func() {
 		t.connectAndProcessSnapshot(c, addr)
-		plog.Infof("%s connectAndProcessSnapshot returned",
-			dn(key.ClusterID, key.NodeID))
 		shutdown()
 	})
 	return c
@@ -159,7 +157,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 		}
 		err := c.process()
 		if err != nil {
-			plog.Errorf("snapshot chunk processing failed %v", err)
+			plog.Errorf("snapshot chunk processing failed: %v", err)
 		}
 		t.sendSnapshotNotification(clusterID, nodeID, err != nil)
 		return err

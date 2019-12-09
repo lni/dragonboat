@@ -65,6 +65,8 @@ func Launch(config *config.Config,
 	logdb ILogDB, events server.IRaftEventListener,
 	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
+	plog.Infof("%s created, initial: %t, new %t",
+		dn(config.ClusterID, config.NodeID), initial, newNode)
 	r := newRaft(config, logdb)
 	p := &Peer{raft: r}
 	p.raft.events = events
@@ -72,8 +74,6 @@ func Launch(config *config.Config,
 	if newNode && !config.IsObserver && !config.IsWitness {
 		r.becomeFollower(1, NoLeader)
 	}
-	plog.Infof("raft node created, %s, lastIndex %d, initial %t, newNode %t",
-		r.describe(), lastIndex, initial, newNode)
 	if initial && newNode {
 		bootstrap(r, addresses)
 	}
@@ -362,7 +362,6 @@ func checkLaunchRequest(config *config.Config,
 	if config.NodeID == 0 {
 		panic("config.NodeID must not be zero")
 	}
-	plog.Infof("initial node: %t, new node %t", initial, newNode)
 	if initial && newNode && len(addresses) == 0 {
 		panic("addresses must be specified")
 	}

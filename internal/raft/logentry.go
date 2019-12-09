@@ -394,7 +394,6 @@ func (l *entryLog) tryCommit(index uint64, term uint64) bool {
 }
 
 func (l *entryLog) restore(s pb.Snapshot) {
-	plog.Infof("applying snapshot %d,%d", s.Index, s.Term)
 	l.inmem.restore(s)
 	l.committed = s.Index
 	l.processed = s.Index

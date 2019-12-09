@@ -128,8 +128,13 @@ func (l *lane) sendSavedSnapshot(m pb.Message) {
 }
 
 func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
-	plog.Infof("node %d is sending chunk %d to %s",
-		chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
+	if !chunk.IsPoisonChunk() {
+		plog.Infof("node %d is sending chunk %d to %s",
+			chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
+	} else {
+		plog.Infof("sending a poison chunk to %s", dn(l.clusterID, l.nodeID))
+	}
+
 	select {
 	case l.ch <- chunk:
 		return true, false
@@ -172,7 +177,7 @@ func (l *lane) streamSnapshot() error {
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
-				plog.Infof("node %d just sent last chunk to %s",
+				plog.Infof("node %d just sent all chunks to %s",
 					chunk.From, dn(chunk.ClusterId, chunk.NodeId))
 				return nil
 			}

@@ -602,7 +602,6 @@ func isSoftSnapshotError(err error) bool {
 }
 
 func (n *node) saveSnapshot(rec rsm.Task) error {
-	plog.Infof("%s called saveSnapshot", n.id())
 	index, err := n.doSaveSnapshot(rec.SSRequest)
 	if err != nil {
 		return err
@@ -713,7 +712,6 @@ func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 }
 
 func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
-	plog.Infof("%s called recoverFromSnapshot", n.id())
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	var index uint64
@@ -805,7 +803,6 @@ func (n *node) runSyncTask() (bool, error) {
 		!n.syncTask.timeToRun(n.millisecondSinceStart()) {
 		return true, nil
 	}
-	plog.Infof("%s is running sync task", n.id())
 	if !n.sm.TaskChanBusy() {
 		task := rsm.Task{PeriodicSync: true}
 		if !n.pushTask(task) {
@@ -1235,7 +1232,7 @@ func (n *node) handleSnapshotTask(task rsm.Task) {
 		n.reportAvailableSnapshot(task)
 	} else if task.SnapshotRequested {
 		if n.ss.takingSnapshot() {
-			plog.Infof("%s ignored task.SnapshotRequested", n.id())
+			plog.Infof("%s is taking snapshot, ignored new snapshot req", n.id())
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
@@ -1330,7 +1327,6 @@ func (n *node) processRecoverSnapshotStatus() bool {
 		if !ok {
 			return true
 		}
-		plog.Infof("%s got recover completed rec", n.id())
 		if rec.SnapshotRequested {
 			panic("got a completed.SnapshotRequested")
 		}
@@ -1349,7 +1345,6 @@ func (n *node) processTakeSnapshotStatus() bool {
 		if !ok {
 			return !n.concurrentSnapshot()
 		}
-		plog.Infof("%s got save snapshot completed rec", n.id())
 		if rec.SnapshotRequested && !n.initialized() {
 			plog.Panicf("%s taking snapshot when uninitialized", n.id())
 		}
@@ -1367,7 +1362,6 @@ func (n *node) processStreamSnapshotStatus() bool {
 		if !ok {
 			return false
 		}
-		plog.Infof("%s got stream completed rec", n.id())
 		n.ss.clearStreamingSnapshot()
 	}
 	return false
@@ -1402,8 +1396,6 @@ func (n *node) captureClusterState() {
 	}
 	_, isObserver := observers[n.nodeID]
 	_, isWitness := witnesses[n.nodeID]
-	plog.Infof("%s called captureClusterState, nodes %v, observers %v",
-		n.id(), nodes, observers)
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,

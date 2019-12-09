@@ -314,7 +314,7 @@ func (r *raft) describe() string {
 	if err != nil && err != ErrCompacted {
 		plog.Panicf("%s failed to get term, %v", dn(r.clusterID, r.nodeID), err)
 	}
-	fmtstr := "[f-idx:%d,l-idx:%d,logterm:%d,commit:%d,applied:%d] %s term %d"
+	fmtstr := "[first:%d,last:%d,term:%d,commit:%d,applied:%d] %s term %d"
 	return fmt.Sprintf(fmtstr,
 		r.log.firstIndex(), r.log.lastIndex(), t, r.log.committed,
 		r.log.processed, dn(r.clusterID, r.nodeID), r.term)
@@ -1417,6 +1417,8 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		return false
 	}
 	if r.dropRequestVoteFromHighTermNode(m) {
+		plog.Infof("dropped a RequestVote at term %d from %d, leader is available",
+			m.Term, m.From)
 		return true
 	}
 	if m.Term > r.term {
@@ -1453,7 +1455,7 @@ func (r *raft) Handle(m pb.Message) {
 		r.doubleCheckTermMatched(m.Term)
 		r.handle(r, m)
 	} else {
-		plog.Infof("term not matched")
+		plog.Infof("dropped a %s from %d, term not matched", m.Type, m.From)
 	}
 }
 
@@ -1579,7 +1581,7 @@ func (r *raft) handleLeaderHeartbeat(m pb.Message) {
 func (r *raft) handleLeaderCheckQuorum(m pb.Message) {
 	r.mustBeLeader()
 	if !r.leaderHasQuorum() {
-		plog.Warningf("%s stepped down, no longer has quorum", r.describe())
+		plog.Warningf("%s has lost quorum", r.describe())
 		r.becomeFollower(r.term, NoLeader)
 	}
 }
