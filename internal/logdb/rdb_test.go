@@ -1096,9 +1096,11 @@ func TestRemoveEntriesTo(t *testing.T) {
 			t.Fatalf("failed to remove entries to, %v", err)
 		}
 		for i := 0; i < 1000; i++ {
-			if atomic.LoadUint64(&(sdb.completedCompactions)) == 0 {
+			count := atomic.LoadUint64(&(sdb.completedCompactions))
+			if count == 0 {
 				time.Sleep(10 * time.Millisecond)
 			} else {
+				plog.Infof("count: %d, done", count)
 				break
 			}
 			if i == 999 {
@@ -1111,7 +1113,7 @@ func TestRemoveEntriesTo(t *testing.T) {
 			t.Errorf("iterate entries failed %v", err)
 		}
 		if len(results) > 0 {
-			t.Errorf("entries not deleted")
+			t.Errorf("entries not deleted, %d", len(results))
 		}
 	}()
 	// leveldb has the leftover ldb file

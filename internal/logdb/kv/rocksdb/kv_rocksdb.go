@@ -16,6 +16,7 @@ package rocksdb
 
 import (
 	"bytes"
+	"sync"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
@@ -52,9 +53,23 @@ var (
 	recycleLogFileNum          = int(settings.Soft.RocksDBRecycleLogFileNum)
 )
 
+var versionWarning sync.Once
+
 // NewKVStore returns a RocksDB based IKVStore instance.
 func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
+	checkRocksDBVersion()
 	return openRocksDB(dir, wal)
+}
+
+func checkRocksDBVersion() {
+	major := gorocksdb.GetRocksDBVersionMajor()
+	minor := gorocksdb.GetRocksDBVersionMinor()
+	if major > 6 || (major == 6 && minor >= 3) {
+		return
+	}
+	versionWarning.Do(func() {
+		plog.Warningf("RocksDB v6.3.x is required, v6.4.x is recommended")
+	})
 }
 
 // KV is a RocksDB based IKVStore type.
@@ -305,14 +320,14 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 
 // BulkRemoveEntries returns the keys specified by the input range.
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
-	return nil
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.DeleteRange(fk, lk)
+	return r.db.Write(r.wo, wb)
 }
 
 // CompactEntries compacts the specified key range.
 func (r *KV) CompactEntries(fk []byte, lk []byte) error {
-	if err := r.deleteRange(fk, lk); err != nil {
-		return err
-	}
 	opts := gorocksdb.NewCompactionOptions()
 	opts.SetExclusiveManualCompaction(false)
 	opts.SetChangeLevel(true)
@@ -344,37 +359,5 @@ func (r *KV) FullCompaction() error {
 		Limit: lk,
 	}
 	r.db.CompactRangeWithOptions(opts, rng)
-	return nil
-}
-
-func (r *KV) deleteRange(fk []byte, lk []byte) error {
-	iter := r.db.NewIterator(r.ro)
-	defer iter.Close()
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	for iter.Seek(fk); ; iter.Next() {
-		v, err := iter.IsValid()
-		if err != nil {
-			return err
-		}
-		if !v {
-			break
-		}
-		key, ok := iter.OKey()
-		if !ok {
-			panic("failed to get key")
-		}
-		kd := key.Data()
-		if bytes.Compare(kd, lk) < 0 {
-			wb.Delete(kd)
-			key.Free()
-		} else {
-			key.Free()
-			break
-		}
-	}
-	if wb.Count() > 0 {
-		return r.db.Write(r.wo, wb)
-	}
 	return nil
 }

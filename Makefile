@@ -77,6 +77,12 @@ endif
 endif
 endif 
 
+ifeq ($(OS),Linux)
+ROCKSDB_LIB_FLAG=-lrocksdb -ldl
+else
+ROCKSDB_LIB_FLAG=-lrocksdb
+endif
+
 # by default, shared rocksdb lib is used. when using the static rocksdb lib,
 # you may need to add
 # -lbz2 -lsnappy -lz -llz4 
@@ -171,13 +177,10 @@ LIBCONF_PATH=/etc/ld.so.conf.d/usr_local_lib.conf
 # want to install. rocksdb v5.13.4 is the version we used in production, it is
 # used here as the default, feel free to change to the version number you like
 #
-# tested rocksdb version -
-# rocksdb 5.13.x
-# very briefly tested -
-# rocksdb 5.15.10, 5.16.6, 5.17.2 and 6.0.2
-ROCKSDB_MAJOR_VER=5
-ROCKSDB_MINOR_VER=13
-ROCKSDB_PATCH_VER=4
+# rocksdb 6.3.x or 6.4.x is required
+ROCKSDB_MAJOR_VER=6
+ROCKSDB_MINOR_VER=4
+ROCKSDB_PATCH_VER=6
 ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
 
 RDBTMPDIR=$(PKGROOT)/build/rocksdbtmp
@@ -194,9 +197,9 @@ get-rocksdb:
 		tar xzvf $(RDBTMPDIR)/v$(ROCKSDB_VER).tar.gz -C $(RDBTMPDIR); \
 	}
 make-rocksdb:
-	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
+	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
 make-rocksdb-static:
-	@make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
+	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
 ldconfig-rocksdb-lib-ull:
 	if [ $(OS) = Linux ]; then \
 		sudo sh -c "if [ ! -f $(LIBCONF_PATH) ]; \

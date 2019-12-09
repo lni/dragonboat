@@ -14,11 +14,21 @@ import (
 )
 
 // GetRocksdbVersionString returns the version string.
-func GetRocksdbVersionString() string {
+func GetRocksDBVersionString() string {
 	major := int(C.get_rocksdb_major_version())
 	minor := int(C.get_rocksdb_minor_version())
 	patch := int(C.get_rocksdb_patch_version())
 	return fmt.Sprintf("%d.%d.%d", major, minor, patch)
+}
+
+// GetRocksDBVersionMajor returns the major version number of the rocksdb.
+func GetRocksDBVersionMajor() int {
+	return int(C.get_rocksdb_major_version())
+}
+
+// GetRocksDBVersionMinor returns the minor version number of the rocksdb.
+func GetRocksDBVersionMinor() int {
+	return int(C.get_rocksdb_minor_version())
 }
 
 // Range is a range of keys in the database. GetApproximateSizes calls with it

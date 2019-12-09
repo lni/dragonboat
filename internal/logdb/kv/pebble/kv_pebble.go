@@ -233,30 +233,16 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 
 // BulkRemoveEntries ...
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
-	return nil
-}
-
-func (r *KV) deleteRange(fk []byte, lk []byte) error {
-	iter := r.db.NewIter(r.ro)
-	defer iter.Close()
-	wb := r.GetWriteBatch(nil)
-	for iter.SeekGE(fk); iteratorIsValid(iter); iter.Next() {
-		if bytes.Compare(iter.Key(), lk) >= 0 {
-			break
-		}
-		wb.Delete(iter.Key())
+	wb := r.db.NewBatch()
+	defer wb.Close()
+	if err := wb.DeleteRange(fk, lk, r.wo); err != nil {
+		return err
 	}
-	if wb.Count() > 0 {
-		return r.CommitWriteBatch(wb)
-	}
-	return nil
+	return r.db.Apply(wb, r.wo)
 }
 
 // CompactEntries ...
 func (r *KV) CompactEntries(fk []byte, lk []byte) error {
-	if err := r.deleteRange(fk, lk); err != nil {
-		return err
-	}
 	return r.db.Compact(fk, lk)
 }
 
