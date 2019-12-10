@@ -68,6 +68,7 @@ type snapshotState struct {
 	snapshotIndex              uint64
 	reqSnapshotIndex           uint64
 	compactLogTo               uint64
+	compactedTo                uint64
 	recoverReady               snapshotTask
 	saveSnapshotReady          snapshotTask
 	streamSnapshotReady        snapshotTask
@@ -138,6 +139,18 @@ func (rs *snapshotState) getCompactLogTo() uint64 {
 
 func (rs *snapshotState) setCompactLogTo(v uint64) {
 	atomic.StoreUint64(&rs.compactLogTo, v)
+}
+
+func (rs *snapshotState) setCompactedTo(v uint64) {
+	atomic.StoreUint64(&rs.compactedTo, v)
+}
+
+func (rs *snapshotState) getCompactedTo() uint64 {
+	return atomic.SwapUint64(&rs.compactedTo, 0)
+}
+
+func (rs *snapshotState) hasCompactedTo() bool {
+	return atomic.LoadUint64(&rs.compactedTo) > 0
 }
 
 func (rs *snapshotState) setStreamSnapshotReq(t rsm.Task, getSinkFn getSink) {

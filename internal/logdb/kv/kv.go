@@ -55,9 +55,8 @@ type IKVStore interface {
 	// it is suppose to immediately return without significant delay.
 	// BulkRemoveEntries is usually implemented in KV store's range delete feature.
 	BulkRemoveEntries(firstKey []byte, lastKey []byte) error
-	// CompactEntries is called by the compaction goroutine for the specified
-	// range [firstKey, lastKey). CompactEntries is triggered by the
-	// BulkRemoveEntries method for the same key range.
+	// CompactEntries reclaims the underlying disk space used for storing entries
+	// specified the input range.
 	CompactEntries(firstKey []byte, lastKey []byte) error
 	// FullCompaction compact the entire key space.
 	FullCompaction() error

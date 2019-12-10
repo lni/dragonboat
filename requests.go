@@ -133,6 +133,7 @@ func (rr *RequestResult) Terminated() bool {
 	return rr.code == requestTerminated
 }
 
+// Aborted returns a boolean value indicating the request is aborted.
 func (rr *RequestResult) Aborted() bool {
 	return rr.code == requestAborted
 }
@@ -255,6 +256,18 @@ func (r *ready) clear() {
 
 func (r *ready) set() {
 	atomic.StoreUint32(&r.val, 1)
+}
+
+// SysOpState is the object used to provide system maintenance operation result
+// to users.
+type SysOpState struct {
+	completedC <-chan struct{}
+}
+
+// CompletedC returns a struct{} chan that is closed when the requested
+// operation is completed.
+func (o *SysOpState) CompletedC() <-chan struct{} {
+	return o.completedC
 }
 
 // RequestState is the object used to provide request result to users.

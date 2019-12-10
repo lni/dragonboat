@@ -24,16 +24,22 @@ type task struct {
 	clusterID uint64
 	nodeID    uint64
 	index     uint64
+	done      chan struct{}
+}
+
+type compactionInfo struct {
+	index uint64
+	done  chan struct{}
 }
 
 type compactions struct {
 	mu       sync.Mutex
-	pendings map[raftio.NodeInfo]uint64
+	pendings map[raftio.NodeInfo]compactionInfo
 }
 
 func newCompactions() *compactions {
 	return &compactions{
-		pendings: make(map[raftio.NodeInfo]uint64),
+		pendings: make(map[raftio.NodeInfo]compactionInfo),
 	}
 }
 
@@ -43,38 +49,39 @@ func (p *compactions) len() int {
 	return len(p.pendings)
 }
 
-func (p *compactions) addTask(task task) {
+func (p *compactions) addTask(task task) chan struct{} {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	key := raftio.NodeInfo{
 		ClusterID: task.clusterID,
 		NodeID:    task.nodeID,
 	}
+	ci := compactionInfo{index: task.index}
 	v, ok := p.pendings[key]
-	if ok && v > task.index {
+	if ok && v.index > task.index {
 		panic("existing index > task.index")
 	}
-	p.pendings[key] = task.index
+	if ok {
+		ci.done = v.done
+	} else {
+		ci.done = make(chan struct{})
+	}
+	p.pendings[key] = ci
+	return ci.done
 }
 
 func (p *compactions) getTask() (task, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	hasTask := false
-	task := task{}
 	for k, v := range p.pendings {
-		task.clusterID = k.ClusterID
-		task.nodeID = k.NodeID
-		task.index = v
-		hasTask = true
-		break
-	}
-	if hasTask {
-		key := raftio.NodeInfo{
-			ClusterID: task.clusterID,
-			NodeID:    task.nodeID,
+		task := task{
+			clusterID: k.ClusterID,
+			nodeID:    k.NodeID,
+			index:     v.index,
+			done:      v.done,
 		}
-		delete(p.pendings, key)
+		delete(p.pendings, k)
+		return task, true
 	}
-	return task, hasTask
+	return task{}, false
 }

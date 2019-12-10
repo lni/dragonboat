@@ -234,8 +234,7 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
-	plog.Infof("%s snapshot %d restored, members %v",
-		s.id(), ss.Index, ss.Membership.Addresses)
+	plog.Infof("%s snapshot %d restored", s.id(), ss.Index)
 	return ss.Index, nil
 }
 

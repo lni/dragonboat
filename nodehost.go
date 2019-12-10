@@ -907,8 +907,8 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 }
 
 // RequestSnapshot requests a snapshot to be created asynchronously for the
-// specified cluster node. For each node, only one pending requested snapshot
-// operation is allowed.
+// specified cluster node. For each node, only one ongoing snapshot operation
+// is allowed.
 //
 // Users can use an option parameter to specify details of the requested
 // snapshot. For example, when the input SnapshotOption's Exported field is
@@ -946,6 +946,23 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	req, err := v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(clusterID)
 	return req, err
+}
+
+// RequestCompaction requests a compaction operation to be asynchronously
+// executed in the background to reclaim disk spaces from Raft entries that have
+// been included in created snapshots.
+//
+// The returned *SysOpState can be used to get notified when the requested
+// compaction is completed. ErrRejected is returned when there is nothing to be
+// reclaimed.
+func (nh *NodeHost) RequestCompaction(clusterID uint64) (*SysOpState, error) {
+	v, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	op, err := v.requestCompaction()
+	nh.execEngine.setNodeReady(clusterID)
+	return op, err
 }
 
 // SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode

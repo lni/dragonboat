@@ -320,17 +320,17 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		// current entry index, it will be recorded as the conf change id of the members
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
-			plog.Infof("%s applied ConfChange Add ccid %d, node %s index %d address %s",
-				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+			plog.Infof("%s applied ConfChange Add ccid %d (%d), node %s (%s)",
+				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
 		} else if cc.Type == pb.RemoveNode {
-			plog.Infof("%s applied ConfChange Remove ccid %d, node %s, index %d",
-				m.id(), ccid, logutil.NodeID(cc.NodeID), index)
+			plog.Infof("%s applied ConfChange Remove ccid %d (%d), node %s",
+				m.id(), ccid, index, logutil.NodeID(cc.NodeID))
 		} else if cc.Type == pb.AddObserver {
-			plog.Infof("%s applied ConfChange Add Observer ccid %d, node %s index %d address %s",
-				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+			plog.Infof("%s applied ConfChange Add Observer ccid %d (%d), node %s (%s)",
+				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
 		} else if cc.Type == pb.AddWitness {
-			plog.Infof("%s applied ConfChange Add Witness ccid %d, node %s index %d address %s",
-				m.id(), ccid, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+			plog.Infof("%s applied ConfChange Add Witness ccid %d (%d), node %s (%s)",
+				m.id(), ccid, index, logutil.NodeID(cc.NodeID), index, string(cc.Address))
 		} else {
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}

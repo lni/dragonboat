@@ -90,9 +90,13 @@ func (n *noopLogDB) ReadRaftState(clusterID uint64, nodeID uint64,
 	return nil, nil
 }
 func (n *noopLogDB) RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error { return nil }
-func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error                { return nil }
-func (n *noopLogDB) SaveSnapshots([]pb.Update) error                                     { return nil }
-func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error  { return nil }
+func (n *noopLogDB) CompactEntriesTo(clusterID uint64,
+	nodeID uint64, index uint64) (<-chan struct{}, error) {
+	return nil, nil
+}
+func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error               { return nil }
+func (n *noopLogDB) SaveSnapshots([]pb.Update) error                                    { return nil }
+func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error { return nil }
 func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64, index uint64) ([]pb.Snapshot, error) {
 	return nil, nil
 }
@@ -239,7 +243,6 @@ func (n *PST) Update(data []byte) (sm.Result, error) {
 func (n *PST) SaveSnapshot(w io.Writer,
 	fileCollection sm.ISnapshotFileCollection,
 	done <-chan struct{}) error {
-	plog.Infof("save snapshot called")
 	n.saved = true
 	if !n.slowSave {
 		_, err := w.Write([]byte("random-data"))
@@ -794,6 +797,47 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 		}
 	}
 	runNodeHostTest(t, tf)
+}
+
+func TestCompactionCanBeRequested(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		session := nh.GetNoOPSession(2)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+		if err != nil {
+			t.Fatalf("failed to make proposal, %v", err)
+		}
+		opt := SnapshotOption{
+			OverrideCompactionOverhead: true,
+			CompactionOverhead:         0,
+		}
+		if _, err := nh.SyncRequestSnapshot(ctx, 2, opt); err != nil {
+			t.Fatalf("failed to request snapshot %v", err)
+		}
+		for i := 0; i < 100; i++ {
+			op, err := nh.RequestCompaction(2)
+			if err == ErrRejected {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if err != nil {
+				t.Fatalf("failed to request compaction %v", err)
+			}
+			select {
+			case <-op.CompletedC():
+				break
+			case <-ctx.Done():
+				t.Fatalf("failed to complete the compaction")
+			}
+			break
+		}
+		_, err = nh.RequestCompaction(2)
+		if err != ErrRejected {
+			t.Fatalf("not rejected")
+		}
+	}
+	singleNodeHostTest(t, tf)
 }
 
 func TestSnapshotCanBeStopped(t *testing.T) {

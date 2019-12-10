@@ -195,6 +195,7 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 
 // BulkRemoveEntries ...
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
+	// level-db doesn't support bulk remove
 	return nil
 }
 

@@ -232,8 +232,15 @@ func (mw *ShardedRDB) RemoveEntriesTo(clusterID uint64,
 		nodeID, index); err != nil {
 		return err
 	}
-	mw.addCompaction(clusterID, nodeID, index)
 	return nil
+}
+
+// CompactEntriesTo reclaims underlying storage space used for storing
+// entries up to the specified index.
+func (mw *ShardedRDB) CompactEntriesTo(clusterID uint64,
+	nodeID uint64, index uint64) (<-chan struct{}, error) {
+	done := mw.addCompaction(clusterID, nodeID, index)
+	return done, nil
 }
 
 // RemoveNodeData deletes all node data that belongs to the specified node.
@@ -292,35 +299,37 @@ func (mw *ShardedRDB) compactionWorkerMain() {
 }
 
 func (mw *ShardedRDB) addCompaction(clusterID uint64,
-	nodeID uint64, index uint64) {
+	nodeID uint64, index uint64) chan struct{} {
 	task := task{
 		clusterID: clusterID,
 		nodeID:    nodeID,
 		index:     index,
 	}
-	mw.compactions.addTask(task)
+	done := mw.compactions.addTask(task)
 	select {
 	case mw.compactionCh <- struct{}{}:
 	default:
 	}
+	return done
 }
 
 func (mw *ShardedRDB) compaction() {
 	for {
-		t, hasTask := mw.compactions.getTask()
-		if !hasTask {
+		if t, hasTask := mw.compactions.getTask(); hasTask {
+			idx := mw.partitioner.GetPartitionID(t.clusterID)
+			shard := mw.shards[idx]
+			if err := shard.compaction(t.clusterID, t.nodeID, t.index); err != nil {
+				panic(err)
+			}
+			atomic.AddUint64(&mw.completedCompactions, 1)
+			close(t.done)
+			select {
+			case <-mw.stopper.ShouldStop():
+				return
+			default:
+			}
+		} else {
 			return
-		}
-		idx := mw.partitioner.GetPartitionID(t.clusterID)
-		shard := mw.shards[idx]
-		if err := shard.compaction(t.clusterID, t.nodeID, t.index); err != nil {
-			panic(err)
-		}
-		atomic.AddUint64(&mw.completedCompactions, 1)
-		select {
-		case <-mw.stopper.ShouldStop():
-			return
-		default:
 		}
 	}
 }

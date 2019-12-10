@@ -44,7 +44,7 @@ func TestCompactionTaskCanBeAdded(t *testing.T) {
 	if !ok {
 		t.Errorf("not added")
 	}
-	if v != 3 {
+	if v.index != 3 {
 		t.Errorf("unexpected index %d", v)
 	}
 }
@@ -61,8 +61,23 @@ func TestCompactionTaskCanBeUpdated(t *testing.T) {
 	if !ok {
 		t.Errorf("not added")
 	}
-	if v != 10 {
+	if v.index != 10 {
 		t.Errorf("unexpected index %d", v)
+	}
+}
+
+func TestCompactionDoneChanIsRetained(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	p := newCompactions()
+	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
+	done := p.pendings[raftio.NodeInfo{1, 2}].done
+	p.addTask(task{clusterID: 1, nodeID: 2, index: 10})
+	v, ok := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}]
+	if !ok {
+		t.Errorf("not added")
+	}
+	if v.done != done {
+		t.Errorf("chan not retained")
 	}
 }
 
@@ -78,6 +93,10 @@ func TestCompactionTaskGetReturnTheExpectedValue(t *testing.T) {
 	if !ok {
 		t.Errorf("ok flag unexpected")
 	}
+	if task.done == nil {
+		t.Fatalf("task.done == nil")
+	}
+	task.done = nil
 	if !reflect.DeepEqual(&tt, &task) {
 		t.Errorf("%v vs %v", tt, task)
 	}

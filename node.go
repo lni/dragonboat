@@ -257,7 +257,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 			n.requestRemoval()
 		}
 	}
-	plog.Infof("%s is restoring remotes %+v", n.id(), snapshot.Membership)
+	plog.Infof("%s is restoring remotes", n.id())
 	n.p.RestoreRemotes(snapshot)
 	n.captureClusterState()
 }
@@ -840,7 +840,7 @@ func (n *node) compactSnapshots(index uint64) error {
 	return nil
 }
 
-func (n *node) compactLog() error {
+func (n *node) removeLog() error {
 	if n.ss.hasCompactLogTo() {
 		compactTo := n.ss.getCompactLogTo()
 		if compactTo == 0 {
@@ -856,8 +856,20 @@ func (n *node) compactLog() error {
 			return err
 		}
 		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
+		n.ss.setCompactedTo(compactTo)
 	}
 	return nil
+}
+
+func (n *node) requestCompaction() (*SysOpState, error) {
+	if compactTo := n.ss.getCompactedTo(); compactTo > 0 {
+		done, err := n.logdb.CompactEntriesTo(n.clusterID, n.nodeID, compactTo)
+		if err != nil {
+			return nil, err
+		}
+		return &SysOpState{completedC: done}, nil
+	}
+	return nil, ErrRejected
 }
 
 func isFreeOrderMessage(m pb.Message) bool {
@@ -901,7 +913,8 @@ func (n *node) sendReplicateMessages(ud pb.Update) {
 func (n *node) getUpdate() (pb.Update, bool) {
 	moreEntriesToApply := n.canHaveMoreEntriesToApply()
 	if n.p.HasUpdate(moreEntriesToApply) ||
-		n.confirmedIndex != n.smAppliedIndex {
+		n.confirmedIndex != n.smAppliedIndex ||
+		n.ss.hasCompactLogTo() || n.ss.hasCompactedTo() {
 		if n.smAppliedIndex < n.confirmedIndex {
 			plog.Panicf("last applied value moving backwards, %d, now %d",
 				n.confirmedIndex, n.smAppliedIndex)
@@ -924,7 +937,9 @@ func (n *node) processDroppedReadIndexes(ud pb.Update) {
 
 func (n *node) processDroppedEntries(ud pb.Update) {
 	for _, e := range ud.DroppedEntries {
-		if e.Type == pb.ApplicationEntry || e.Type == pb.EncodedEntry || e.Type == pb.MetadataEntry {
+		if e.Type == pb.ApplicationEntry ||
+			e.Type == pb.EncodedEntry ||
+			e.Type == pb.MetadataEntry {
 			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
@@ -971,7 +986,7 @@ func (n *node) processRaftUpdate(ud pb.Update) (bool, error) {
 		return false, err
 	}
 	n.sendMessages(ud.Messages)
-	if err := n.compactLog(); err != nil {
+	if err := n.removeLog(); err != nil {
 		return false, err
 	}
 	cont, err := n.runSyncTask()
@@ -1048,6 +1063,9 @@ func (n *node) handleEvents() bool {
 	if n.handleSnapshotRequest(lastApplied) {
 		hasEvent = true
 	}
+	if n.handleCompactionRequest() {
+		hasEvent = true
+	}
 	if hasEvent {
 		if n.expireNotified != n.tickCount {
 			n.pendingProposals.gc()
@@ -1058,6 +1076,10 @@ func (n *node) handleEvents() bool {
 		n.pendingReadIndexes.applied(lastApplied)
 	}
 	return hasEvent
+}
+
+func (n *node) handleCompactionRequest() bool {
+	return n.ss.hasCompactedTo() || n.ss.hasCompactLogTo()
 }
 
 func (n *node) handleLeaderTransferRequest() bool {

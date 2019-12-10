@@ -131,6 +131,10 @@ type ILogDB interface {
 	// RemoveEntriesTo removes entries associated with the specified Raft node up
 	// to the specified index.
 	RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error
+	// CompactEntriesTo reclaims underlying storage space used for storing
+	// entries up to the specified index.
+	CompactEntriesTo(clusterID uint64,
+		nodeID uint64, index uint64) (<-chan struct{}, error)
 	// SaveSnapshots saves all snapshot metadata found in the pb.Update list.
 	SaveSnapshots([]pb.Update) error
 	// DeleteSnapshot removes the specified snapshot metadata from the log DB.

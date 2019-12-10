@@ -1093,7 +1093,11 @@ func TestRemoveEntriesTo(t *testing.T) {
 			t.Fatalf("failed to save recs")
 		}
 		if err := db.RemoveEntriesTo(clusterID, nodeID, maxIndex); err != nil {
-			t.Fatalf("failed to remove entries to, %v", err)
+			t.Fatalf("failed to remove entries, %v", err)
+		}
+		done, err := db.CompactEntriesTo(clusterID, nodeID, maxIndex)
+		if err != nil {
+			t.Fatalf("failed to compact entries to, %v", err)
 		}
 		for i := 0; i < 1000; i++ {
 			count := atomic.LoadUint64(&(sdb.completedCompactions))
@@ -1106,6 +1110,11 @@ func TestRemoveEntriesTo(t *testing.T) {
 			if i == 999 {
 				t.Fatalf("failed to trigger compaction")
 			}
+		}
+		select {
+		case <-done:
+		default:
+			t.Fatalf("done chan not closed")
 		}
 		results, _, err := db.IterateEntries(nil,
 			0, clusterID, nodeID, 1, 100, math.MaxUint64)
