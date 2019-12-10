@@ -75,7 +75,7 @@ func (nh *NodeHost) ProposeSessionCH(s *client.Session,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.proposeSession(s, handler, timeout)
+	req, err := v.proposeSession(s, handler, nh.getTimeoutTick(timeout))
 	nh.execEngine.setNodeReady(s.ClusterID)
 	return req, err
 }
