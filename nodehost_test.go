@@ -2214,14 +2214,6 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 				t.Fatalf("failed to compact the entries")
 			}
 			time.Sleep(10 * time.Millisecond)
-			// make sure the exec engine is stepping the node
-			// this is not required when not running single node test
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, cmd)
-			cancel()
-			if err != nil {
-				t.Fatalf("failed to make proposal %v", err)
-			}
 			ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 12, 14, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("failed to iterate entries, %v", err)

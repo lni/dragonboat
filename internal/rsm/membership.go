@@ -330,7 +330,7 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
 		} else if cc.Type == pb.AddWitness {
 			plog.Infof("%s applied ConfChange Add Witness ccid %d (%d), node %s (%s)",
-				m.id(), ccid, index, logutil.NodeID(cc.NodeID), index, string(cc.Address))
+				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
 		} else {
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}
