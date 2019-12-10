@@ -952,6 +952,11 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 // executed in the background to reclaim disk spaces from Raft entries that have
 // been included in created snapshots.
 //
+// By default, auto compaction is automatically issued after each snapshot is
+// captured. RequestCompaction is usually used to manually trigger such
+// compaction when the above mentioned auto compaction is disabled by the
+// DisableAutoCompactions option in config.Config.
+//
 // The returned *SysOpState can be used to get notified when the requested
 // compaction is completed. ErrRejected is returned when there is nothing to be
 // reclaimed.

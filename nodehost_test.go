@@ -319,7 +319,6 @@ func createSnapshotCompressedTestNodeHost(addr string,
 
 func createSingleNodeTestNodeHost(addr string,
 	datadir string, slowSave bool, compress bool) (*NodeHost, *PST, error) {
-	// config for raft
 	rc := config.Config{
 		NodeID:             uint64(1),
 		ClusterID:          2,
@@ -329,6 +328,12 @@ func createSingleNodeTestNodeHost(addr string,
 		SnapshotEntries:    10,
 		CompactionOverhead: 5,
 	}
+	return createSingleNodeTestNodeHostCfg(addr, datadir, slowSave, rc, compress)
+}
+
+func createSingleNodeTestNodeHostCfg(addr string,
+	datadir string, slowSave bool, rc config.Config,
+	compress bool) (*NodeHost, *PST, error) {
 	if compress {
 		rc.EntryCompressionType = config.Snappy
 	}
@@ -837,7 +842,17 @@ func TestCompactionCanBeRequested(t *testing.T) {
 			t.Fatalf("not rejected")
 		}
 	}
-	singleNodeHostTest(t, tf)
+	rc := config.Config{
+		NodeID:                 uint64(1),
+		ClusterID:              2,
+		ElectionRTT:            10,
+		HeartbeatRTT:           1,
+		CheckQuorum:            true,
+		SnapshotEntries:        10,
+		CompactionOverhead:     5,
+		DisableAutoCompactions: true,
+	}
+	singleNodeHostTestCfg(t, rc, tf)
 }
 
 func TestSnapshotCanBeStopped(t *testing.T) {
@@ -1149,7 +1164,7 @@ func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
 }
 
 func runSingleNodeHostTest(t *testing.T,
-	tf func(t *testing.T, nh *NodeHost), compressed bool) {
+	tf func(t *testing.T, nh *NodeHost), cfg config.Config, compressed bool) {
 	osv := delaySampleRatio
 	defer func() {
 		delaySampleRatio = osv
@@ -1161,8 +1176,8 @@ func runSingleNodeHostTest(t *testing.T,
 	delaySampleRatio = 1
 	defer leaktest.AfterTest(t)()
 	os.RemoveAll(singleNodeHostTestDir)
-	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
-		singleNodeHostTestDir, false, compressed)
+	nh, _, err := createSingleNodeTestNodeHostCfg(singleNodeHostTestAddr,
+		singleNodeHostTestDir, false, cfg, compressed)
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
@@ -1172,12 +1187,30 @@ func runSingleNodeHostTest(t *testing.T,
 	tf(t, nh)
 }
 
+func singleNodeHostTestCfg(t *testing.T,
+	cfg config.Config, tf func(t *testing.T, nh *NodeHost)) {
+	runSingleNodeHostTest(t, tf, cfg, false)
+}
+
+func doSingleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost), compress bool) {
+	rc := config.Config{
+		NodeID:             uint64(1),
+		ClusterID:          2,
+		ElectionRTT:        10,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    10,
+		CompactionOverhead: 5,
+	}
+	runSingleNodeHostTest(t, tf, rc, compress)
+}
+
 func singleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
-	runSingleNodeHostTest(t, tf, false)
+	doSingleNodeHostTest(t, tf, false)
 }
 
 func singleNodeHostCompressionTest(t *testing.T, tf func(t *testing.T, nh *NodeHost)) {
-	runSingleNodeHostTest(t, tf, true)
+	doSingleNodeHostTest(t, tf, true)
 }
 
 func testNodeHostReadIndex(t *testing.T) {
@@ -2207,21 +2240,6 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 		}
 		if v.SnapshotIndex() < 16 {
 			t.Fatalf("unexpected snapshot index %d", v.SnapshotIndex())
-		}
-		for {
-			op, err := nh.RequestCompaction(2)
-			if err == ErrRejected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			if err != nil {
-				t.Fatalf("failed to ")
-			}
-			select {
-			case <-op.CompletedC():
-				plog.Infof("done")
-			}
-			break
 		}
 		logdb := nh.logdb
 		for i := 0; i < 1000; i++ {

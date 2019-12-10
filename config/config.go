@@ -145,6 +145,13 @@ type Config struct {
 	// payload of user proposals. When Snappy is used, the maximum proposal
 	// payload allowed is roughly limited to 3.42GBytes.
 	EntryCompressionType CompressionType
+	// DisableAutoCompactions disables auto compaction used for reclaiming Raft
+	// entry storage spaces. By default, compaction is issued every time when
+	// a snapshot is captured, this helps to reclaim disk spaces as soon as
+	// possible at the cost of higher IO overhead. Users can disable such auto
+	// compactions and use NodeHost.RequestCompaction to manually request such
+	// compactions when necessary.
+	DisableAutoCompactions bool
 	// IsObserver indicates whether this is an observer Raft node without voting
 	// power. Described as non-voting members in the section 4.2.1 of Diego
 	// Ongaro's thesis, observer nodes are usually used to allow a new node to

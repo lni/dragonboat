@@ -857,6 +857,11 @@ func (n *node) removeLog() error {
 		}
 		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
 		n.ss.setCompactedTo(compactTo)
+		if !n.config.DisableAutoCompactions {
+			if _, err := n.requestCompaction(); err == nil {
+				plog.Infof("auto compaction for %s up to index %d", n.id(), compactTo)
+			}
+		}
 	}
 	return nil
 }

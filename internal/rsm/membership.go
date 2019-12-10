@@ -336,42 +336,34 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		}
 	} else {
 		if !upToDateCC {
-			plog.Warningf("%s rejected out-of-order ConfChange ccid %d, type %s, index %d",
-				m.id(), ccid, cc.Type, index)
+			plog.Warningf("%s rejected out-of-order ConfChange ccid %d (%d), type %s",
+				m.id(), ccid, index, cc.Type)
 		} else if addRemovedNode {
-			plog.Warningf("%s rejected adding removed node ccid %d, node id %d, index %d",
-				m.id(), ccid, cc.NodeID, index)
+			plog.Warningf("%s rejected adding removed node ccid %d (%d), node id %d",
+				m.id(), ccid, index, cc.NodeID)
 		} else if alreadyMember {
-			plog.Warningf("%s rejected adding existing member to raft cluster ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding existing member ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if nodeBecomingObserver {
-			plog.Warningf("%s rejected adding existing member as observer ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding existing member as observer ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if nodeBecomingWitness {
-			plog.Warningf("%s rejected adding existing member as witness ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding existing member as witness ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if witnessBecomingNode {
-			plog.Warningf("%s rejected adding witness as node ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding witness as node ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if witnessBecomingObserver {
-			plog.Warningf("%s rejected adding witness as observer ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding witness as observer ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if observerBecomingWitness {
-			plog.Warningf("%s rejected adding observer as witness ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected adding observer as witness ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else if deleteOnlyNode {
-			plog.Warningf("%s rejected removing the only node %d from the cluster",
-				m.id(), cc.NodeID)
+			plog.Warningf("%s rejected removing the only node %d", m.id(), cc.NodeID)
 		} else if invalidPromotion {
-			plog.Warningf("%s rejected invalid observer promotion change ccid %d "+
-				"node id %d, index %d, address %s",
-				m.id(), ccid, cc.NodeID, index, cc.Address)
+			plog.Warningf("%s rejected invalid observer promotion change ccid %d (%d) node id %d (%s)",
+				m.id(), ccid, index, cc.NodeID, cc.Address)
 		} else {
 			plog.Panicf("config change rejected for unknown reasons")
 		}
