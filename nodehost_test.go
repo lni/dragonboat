@@ -2208,12 +2208,33 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 		if v.SnapshotIndex() < 16 {
 			t.Fatalf("unexpected snapshot index %d", v.SnapshotIndex())
 		}
+		for {
+			op, err := nh.RequestCompaction(2)
+			if err == ErrRejected {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if err != nil {
+				t.Fatalf("failed to ")
+			}
+			select {
+			case <-op.CompletedC():
+				plog.Infof("done")
+			}
+			break
+		}
 		logdb := nh.logdb
 		for i := 0; i < 1000; i++ {
 			if i == 999 {
 				t.Fatalf("failed to compact the entries")
 			}
 			time.Sleep(10 * time.Millisecond)
+			op, err := nh.RequestCompaction(2)
+			if err == nil {
+				select {
+				case <-op.CompletedC():
+				}
+			}
 			ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 12, 14, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("failed to iterate entries, %v", err)
