@@ -1972,6 +1972,20 @@ func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
 	rateLimitedNodeHostTest(t, tf)
 }
 
+func makeTestProposal(nh *NodeHost, count int) bool {
+	session := nh.GetNoOPSession(1)
+	for i := 0; i < count; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
+		cancel()
+		if err == nil {
+			return true
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return false
+}
+
 func TestRateLimitCanBeTriggered(t *testing.T) {
 	limited := uint64(0)
 	stopper := syncutil.NewStopper()
@@ -1997,17 +2011,9 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 		if atomic.LoadUint64(&limited) != 1 {
 			t.Fatalf("failed to observe ErrSystemBusy")
 		}
-
-		for i := 0; i < 10000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
-			cancel()
-			if err == nil {
-				return
-			}
-			time.Sleep(20 * time.Millisecond)
+		if makeTestProposal(nh, 10000) {
+			return
 		}
-
 		t.Fatalf("failed to make proposal again")
 	}
 	rateLimitedNodeHostTest(t, tf)
@@ -2031,14 +2037,8 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 		if !limited {
 			t.Fatalf("failed to observe rate limited")
 		}
-		for i := 0; i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
-			cancel()
-			if err == nil {
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
+		if makeTestProposal(nh1, 1000) {
+			return
 		}
 		t.Fatalf("failed to make proposal again")
 	}
@@ -2925,6 +2925,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 				if err == nil {
 					done = true
 					break
+				} else {
+					time.Sleep(200 * time.Millisecond)
 				}
 			}
 			if !done {
@@ -3323,6 +3325,39 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	runNodeHostTest(t, tf)
 }
 
+func getLogDBTestFunc(t *testing.T, nhc config.NodeHostConfig) func() {
+	tf := func() {
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		rc := config.Config{
+			NodeID:       1,
+			ClusterID:    1,
+			ElectionRTT:  3,
+			HeartbeatRTT: 1,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &PST{}
+		}
+		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		cs := nh.GetNoOPSession(1)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
+		cancel()
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+	}
+	return tf
+}
+
 func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	tf := func() {
 		nhc := config.NodeHostConfig{
@@ -3331,35 +3366,8 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   logdb.NewDefaultLogDB,
 		}
-		func() {
-			nh, err := NewNodeHost(nhc)
-			if err != nil {
-				t.Fatalf("failed to create nodehost %v", err)
-			}
-			defer nh.Stop()
-			rc := config.Config{
-				NodeID:       1,
-				ClusterID:    1,
-				ElectionRTT:  3,
-				HeartbeatRTT: 1,
-			}
-			peers := make(map[uint64]string)
-			peers[1] = nodeHostTestAddr1
-			newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-				return &PST{}
-			}
-			if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-				t.Fatalf("failed to start cluster %v", err)
-			}
-			waitForLeaderToBeElected(t, nh, 1)
-			cs := nh.GetNoOPSession(1)
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-			cancel()
-			if err != nil {
-				t.Fatalf("failed to make proposal %v", err)
-			}
-		}()
+		xf := getLogDBTestFunc(t, nhc)
+		xf()
 		nhc.LogDBFactory = logdb.NewDefaultBatchedLogDB
 		_, err := NewNodeHost(nhc)
 		if err != server.ErrIncompatibleData {
@@ -3377,35 +3385,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   logdb.NewDefaultBatchedLogDB,
 		}
-		tf := func() {
-			nh, err := NewNodeHost(nhc)
-			if err != nil {
-				t.Fatalf("failed to create nodehost %v", err)
-			}
-			defer nh.Stop()
-			rc := config.Config{
-				NodeID:       1,
-				ClusterID:    1,
-				ElectionRTT:  3,
-				HeartbeatRTT: 1,
-			}
-			peers := make(map[uint64]string)
-			peers[1] = nodeHostTestAddr1
-			newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-				return &PST{}
-			}
-			if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-				t.Fatalf("failed to start cluster %v", err)
-			}
-			waitForLeaderToBeElected(t, nh, 1)
-			cs := nh.GetNoOPSession(1)
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-			cancel()
-			if err != nil {
-				t.Fatalf("failed to make proposal %v", err)
-			}
-		}
+		tf := getLogDBTestFunc(t, nhc)
 		tf()
 		nhc.LogDBFactory = logdb.NewDefaultLogDB
 		tf()
@@ -3726,6 +3706,19 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 	snapshotCompressedTest(t, tf)
 }
 
+func makeProposals(nh *NodeHost) {
+	session := nh.GetNoOPSession(1)
+	for i := 0; i < 16; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
+		cancel()
+		if err != nil {
+			plog.Errorf("failed to make proposal %v", err)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func testWitnessIO(t *testing.T,
 	witnessTestFunc func(*NodeHost, *NodeHost, *tests.SimDiskSM)) {
 	tf := func() {
@@ -3755,18 +3748,6 @@ func testWitnessIO(t *testing.T,
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
-		makeProposals := func(nh *NodeHost) {
-			session := nh.GetNoOPSession(1)
-			for i := 0; i < 16; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-				_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
-				cancel()
-				if err != nil {
-					plog.Errorf("failed to make proposal %v", err)
-					time.Sleep(100 * time.Millisecond)
-				}
-			}
-		}
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -3831,18 +3812,6 @@ func TestWitnessSnapshotIsCorrectlyHandled(t *testing.T) {
 }
 
 func TestWitnessCanReplicateEntries(t *testing.T) {
-	makeProposals := func(nh *NodeHost) {
-		session := nh.GetNoOPSession(1)
-		for i := 0; i < 16; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
-			cancel()
-			if err != nil {
-				plog.Errorf("failed to make proposal %v", err)
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}
 	testFunc := func(nh1 *NodeHost, nh2 *NodeHost, witness *tests.SimDiskSM) {
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)

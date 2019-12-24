@@ -33,11 +33,11 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+		t.Fatalf("failed to open kv store %v", err)
 	}
 	defer deleteTestDB()
 	if err := kvs.Close(); err != nil {
-		t.Errorf("failed to close kv rocksdb")
+		t.Errorf("failed to close kv store %v", err)
 	}
 }
 
@@ -46,7 +46,7 @@ func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore)) {
 	defer deleteTestDB()
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+		t.Fatalf("failed to open kv store %v", err)
 	}
 	defer func() {
 		if err := kvs.Close(); err != nil {
@@ -327,7 +327,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	func() {
 		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 		if err != nil {
-			t.Fatalf("failed to open kv rocksdb")
+			t.Fatalf("failed to open kv store %v", err)
 		}
 		defer kvs.Close()
 		wb := kvs.GetWriteBatch(nil)
@@ -352,7 +352,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	}
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+		t.Fatalf("failed to open kv store %v", err)
 	}
 	defer kvs.Close()
 	if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
@@ -373,15 +373,21 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 var flagContent = "YYYY"
 var corruptedContent = "XXXX"
 
-func getDataFilePathList(dir string) ([]string, error) {
+func getDataFilePathList(dir string, wal bool) ([]string, error) {
 	fi, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]string, 0)
 	for _, v := range fi {
-		if strings.HasSuffix(v.Name(), ".ldb") || strings.HasSuffix(v.Name(), ".sst") {
-			result = append(result, filepath.Join(dir, v.Name()))
+		if !wal {
+			if strings.HasSuffix(v.Name(), ".ldb") || strings.HasSuffix(v.Name(), ".sst") {
+				result = append(result, filepath.Join(dir, v.Name()))
+			}
+		} else {
+			if strings.HasSuffix(v.Name(), ".log") {
+				result = append(result, filepath.Join(dir, v.Name()))
+			}
 		}
 	}
 	return result, nil
@@ -418,6 +424,7 @@ func modifyDataFile(fp string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	plog.Infof("corrupted data written")
 	_, err = f.Write([]byte(corruptedContent))
 	if err != nil {
 		return false, err
@@ -425,13 +432,13 @@ func modifyDataFile(fp string) (bool, error) {
 	return true, nil
 }
 
-func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
+func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 	deleteTestDB()
 	defer deleteTestDB()
 	func() {
 		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 		if err != nil {
-			t.Fatalf("failed to open kv rocksdb")
+			t.Fatalf("failed to open kv store %v", err)
 		}
 		defer kvs.Close()
 		wb := kvs.GetWriteBatch(nil)
@@ -448,11 +455,13 @@ func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
 		if err := kvs.CommitWriteBatch(wb); err != nil {
 			t.Fatalf("failed to commit wb %v", err)
 		}
-		if err := kvs.FullCompaction(); err != nil {
-			t.Fatalf("full compaction failed %v", err)
+		if !wal {
+			if err := kvs.FullCompaction(); err != nil {
+				t.Fatalf("full compaction failed %v", err)
+			}
 		}
 	}()
-	files, err := getDataFilePathList(RDBTestDirectory)
+	files, err := getDataFilePathList(RDBTestDirectory, wal)
 	if err != nil {
 		t.Fatalf("failed to get data files %v", err)
 	}
@@ -470,9 +479,11 @@ func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
 	if !corrupted {
 		t.Fatalf("failed to corrupt data files")
 	}
+	// FIXME:
+	// when the WAL is corrupted, err is expected to be not nil
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
 	if err != nil {
-		t.Fatalf("failed to open kv rocksdb")
+		t.Fatalf("failed to open kv store %v", err)
 	}
 	defer kvs.Close()
 	fk := newKey(entryKeySize, nil)
@@ -488,3 +499,14 @@ func TestIterateValueWithDiskCorruptionIsHandled(t *testing.T) {
 		t.Fatalf("no checksum error returned")
 	}
 }
+
+func TestSSTCorruptionIsHandled(t *testing.T) {
+	testDiskCorruptionIsHandled(t, false)
+}
+
+// FIXME: this fails on rocksdb/pebble/leveldb
+/*
+func TestWALCorruptionIsHandled(t *testing.T) {
+	testDiskCorruptionIsHandled(t, true)
+}
+*/
