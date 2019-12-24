@@ -14,7 +14,7 @@
 
 GOEXEC ?= go
 # Dragonboat is known to work on - 
-# Linux AMD64, Linux ARM64, MacOS and FreeBSD AMD64
+# Linux AMD64, Linux ARM64, MacOS, Windows/MinGW and FreeBSD AMD64
 # only Linux AMD64 is officially supported
 OS := $(shell uname)
 # the location of this Makefile
@@ -43,6 +43,8 @@ else ifeq ($(OS),Linux)
 ROCKSDB_SO_FILE=librocksdb.so
 else ifeq ($(OS),FreeBSD)
 ROCKSDB_SO_FILE=librocksdb.so
+else ifneq (,$(findstring MINGW,$(OS)))
+$(info running on Windows/MinGW)
 else
 $(error OS type $(OS) not supported)
 endif
@@ -460,7 +462,7 @@ else ifeq ($(OS),Linux)
 CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
 else ifeq ($(OS),FreeBSD)
 CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-else
+else ifeq (,$(findstring MINGW,$(OS)))
 $(error OS type $(OS) not supported)
 endif
 
