@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/leaktest"
 )
@@ -441,6 +442,13 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 			t.Fatalf("failed to open kv store %v", err)
 		}
 		defer kvs.Close()
+		if wal && kvs.Name() != "rocksdb" {
+			t.Skip("test skipped, WAL hardware corruption is not handled")
+		}
+		if wal && kvs.Name() == "rocksdb" &&
+			!settings.Soft.RocksDBTolerateCorruptedTailRecords {
+			t.Skip("test skipped, RocksDBTolerateCorruptedTailRecords disabled")
+		}
 		wb := kvs.GetWriteBatch(nil)
 		defer wb.Destroy()
 		data := make([]byte, 0)
@@ -479,13 +487,18 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 	if !corrupted {
 		t.Fatalf("failed to corrupt data files")
 	}
-	// FIXME:
-	// when the WAL is corrupted, err is expected to be not nil
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	if err == nil {
+		defer kvs.Close()
+	}
+	if wal && err == nil {
+		t.Fatalf("corrupted WAL not reported")
+	} else {
+		return
+	}
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
-	defer kvs.Close()
 	fk := newKey(entryKeySize, nil)
 	lk := newKey(entryKeySize, nil)
 	fk.SetEntryKey(100, 1, 1)
@@ -504,9 +517,7 @@ func TestSSTCorruptionIsHandled(t *testing.T) {
 	testDiskCorruptionIsHandled(t, false)
 }
 
-// FIXME: this fails on rocksdb/pebble/leveldb
-/*
+// see testDiskCorruptionIsHandled's comments for more details
 func TestWALCorruptionIsHandled(t *testing.T) {
 	testDiskCorruptionIsHandled(t, true)
 }
-*/

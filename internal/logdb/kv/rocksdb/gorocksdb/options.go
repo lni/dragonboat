@@ -81,6 +81,16 @@ const (
 	FatalInfoLogLevel = InfoLogLevel(4)
 )
 
+type WALRecoveryMode int
+
+// Recovery mode
+const (
+	TolerateCorruptedTailRecords = WALRecoveryMode(C.rocksdb_tolerate_corrupted_tail_records_recovery)
+	AbsoluteConsistency          = WALRecoveryMode(C.rocksdb_absolute_consistency_recovery)
+	PointInTime                  = WALRecoveryMode(C.rocksdb_point_in_time_recovery)
+	SkipAnyCorruptedRecords      = WALRecoveryMode(C.rocksdb_skip_any_corrupted_records_recovery)
+)
+
 // Options represent all of the available options when opening a database with Open.
 type Options struct {
 	c *C.rocksdb_options_t
@@ -971,4 +981,9 @@ func (opts *Options) Destroy() {
 	opts.c = nil
 	opts.env = nil
 	opts.bbto = nil
+}
+
+// SetWALRecoveryMode sets the wal recovery mode.
+func (opts *Options) SetWALRecoveryMode(mode WALRecoveryMode) {
+	C.rocksdb_options_set_wal_recovery_mode(opts.c, C.int(mode))
 }

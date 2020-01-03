@@ -93,7 +93,7 @@ type KV struct {
 
 var pebbleWarningFlag uint32
 
-func openPebbleDB(dir string, walDir string) (*KV, error) {
+func openPebbleDB(dir string, walDir string) (kv.IKVStore, error) {
 	if atomic.CompareAndSwapUint32(&pebbleWarningFlag, 0, 1) {
 		fmt.Fprintf(os.Stderr, "pebble support is experimental, DO NOT USE IN PRODUCTION\n")
 	}

@@ -64,7 +64,7 @@ type KV struct {
 	fp   *levigo.FilterPolicy
 }
 
-func openLevelDB(dir string, wal string) (*KV, error) {
+func openLevelDB(dir string, wal string) (kv.IKVStore, error) {
 	opts := levigo.NewOptions()
 	opts.SetCreateIfMissing(true)
 	filter := levigo.NewBloomFilter(10)

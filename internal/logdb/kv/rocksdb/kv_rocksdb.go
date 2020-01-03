@@ -51,6 +51,7 @@ var (
 	targetFileSizeMultiplier   = int(settings.Soft.RocksDBTargetFileSizeMultiplier)
 	dynamicLevelBytes          = settings.Soft.RocksDBLevelCompactionDynamicLevelBytes
 	recycleLogFileNum          = int(settings.Soft.RocksDBRecycleLogFileNum)
+	tolerateTailCorruption     = settings.Soft.RocksDBTolerateCorruptedTailRecords
 )
 
 var versionWarning sync.Once
@@ -146,13 +147,17 @@ func getRocksDBOptions(directory string,
 	opts.SetMaxBackgroundCompactions(maxBackgroundCompactions)
 	opts.SetMaxBackgroundFlushes(maxBackgroundFlushes)
 	opts.SetRecycleLogFileNum(recycleLogFileNum)
+	if tolerateTailCorruption {
+		plog.Infof("RocksDB's recovery mode set to kTolerateCorruptedTailRecords")
+		opts.SetWALRecoveryMode(gorocksdb.TolerateCorruptedTailRecords)
+	}
 	if dynamicLevelBytes != 0 {
 		opts.SetLevelCompactionDynamicLevelBytes(true)
 	}
 	return opts, bbto, cache
 }
 
-func openRocksDB(dir string, wal string) (*KV, error) {
+func openRocksDB(dir string, wal string) (kv.IKVStore, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
 	walExist, err := fileutil.Exist(wal)

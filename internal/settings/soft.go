@@ -182,6 +182,7 @@ type soft struct {
 	RocksDBTargetFileSizeMultiplier         uint64
 	RocksDBLevelCompactionDynamicLevelBytes uint64
 	RocksDBRecycleLogFileNum                uint64
+	RocksDBTolerateCorruptedTailRecords     bool
 }
 
 func getSoftSettings() soft {
@@ -238,5 +239,6 @@ func getDefaultSoftSettings() soft {
 		RocksDBTargetFileSizeMultiplier:         2,
 		RocksDBLevelCompactionDynamicLevelBytes: 0,
 		RocksDBRecycleLogFileNum:                0,
+		RocksDBTolerateCorruptedTailRecords:     true,
 	}
 }
