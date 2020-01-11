@@ -45,6 +45,8 @@ else ifeq ($(OS),FreeBSD)
 ROCKSDB_SO_FILE=librocksdb.so
 else ifneq (,$(findstring MINGW,$(OS)))
 $(info running on Windows/MinGW)
+else ifneq (,$(findstring MSYS, $(OS)))
+$(info running on Windows/MSYS)
 else
 $(error OS type $(OS) not supported)
 endif
@@ -462,7 +464,9 @@ else ifeq ($(OS),Linux)
 CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
 else ifeq ($(OS),FreeBSD)
 CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-else ifeq (,$(findstring MINGW,$(OS)))
+else ifneq (,$(findstring MINGW,$(OS)))
+else ifneq (,$(findstring MSYS, $(OS)))
+else
 $(error OS type $(OS) not supported)
 endif
 
