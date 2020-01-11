@@ -13,8 +13,8 @@ before_install:
   - go get -u google.golang.org/grpc
 
 script:
-  - GO111MODULE=on DRAGONBOAT_LOGDB=leveldb make travis-ci-test
-  - GO111MODULE=on go test -tags "dragonboat_leveldb_test" -v -coverprofile=coverage.txt -covermode=atomic
+  - GO111MODULE=on DRAGONBOAT_LOGDB=pebble make travis-ci-test
+  - GO111MODULE=on go test -tags "dragonboat_pebble_test" -v -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
