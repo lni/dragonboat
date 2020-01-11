@@ -34,13 +34,13 @@ const (
 )
 
 var (
-	writeBufferSize            = int(settings.Soft.RocksDBWriteBufferSize)
-	maxWriteBufferNumber       = int(settings.Soft.RocksDBMaxWriteBufferNumber)
-	l0FileNumCompactionTrigger = int(settings.Soft.RocksDBLevel0FileNumCompactionTrigger)
-	l0SlowdownWritesTrigger    = int(settings.Soft.RocksDBLevel0SlowdownWritesTrigger)
-	l0StopWritesTrigger        = int(settings.Soft.RocksDBLevel0StopWritesTrigger)
-	maxBytesForLevelBase       = int64(settings.Soft.RocksDBMaxBytesForLevelBase)
-	targetFileSizeBase         = int64(settings.Soft.RocksDBTargetFileSizeBase)
+	writeBufferSize            = int(settings.Soft.KVWriteBufferSize)
+	maxWriteBufferNumber       = int(settings.Soft.KVMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
+	l0SlowdownWritesTrigger    = int(settings.Soft.KVLevel0SlowdownWritesTrigger)
+	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
+	maxBytesForLevelBase       = int64(settings.Soft.KVMaxBytesForLevelBase)
+	targetFileSizeBase         = int64(settings.Soft.KVTargetFileSizeBase)
 )
 
 type pebbleWriteBatch struct {

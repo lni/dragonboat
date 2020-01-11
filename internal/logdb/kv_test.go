@@ -446,7 +446,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 			t.Skip("test skipped, WAL hardware corruption is not handled")
 		}
 		if wal && kvs.Name() == "rocksdb" &&
-			!settings.Soft.RocksDBTolerateCorruptedTailRecords {
+			!settings.Soft.KVTolerateCorruptedTailRecords {
 			t.Skip("test skipped, RocksDBTolerateCorruptedTailRecords disabled")
 		}
 		wb := kvs.GetWriteBatch(nil)

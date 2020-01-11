@@ -17,6 +17,7 @@ package rocksdb
 import (
 	"bytes"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
@@ -36,22 +37,22 @@ const (
 )
 
 var (
-	logDBLRUCacheSize          = int(settings.Soft.RocksDBLRUCacheSize)
-	maxBackgroundCompactions   = int(settings.Soft.RocksDBMaxBackgroundCompactions)
-	maxBackgroundFlushes       = int(settings.Soft.RocksDBMaxBackgroundFlushes)
-	keepLogFileNum             = int(settings.Soft.RocksDBKeepLogFileNum)
-	writeBufferSize            = int(settings.Soft.RocksDBWriteBufferSize)
-	maxWriteBufferNumber       = int(settings.Soft.RocksDBMaxWriteBufferNumber)
-	l0FileNumCompactionTrigger = int(settings.Soft.RocksDBLevel0FileNumCompactionTrigger)
-	l0SlowdownWritesTrigger    = int(settings.Soft.RocksDBLevel0SlowdownWritesTrigger)
-	l0StopWritesTrigger        = int(settings.Soft.RocksDBLevel0StopWritesTrigger)
-	maxBytesForLevelBase       = settings.Soft.RocksDBMaxBytesForLevelBase
-	maxBytesForLevelMultiplier = float64(settings.Soft.RocksDBMaxBytesForLevelMultiplier)
-	targetFileSizeBase         = settings.Soft.RocksDBTargetFileSizeBase
-	targetFileSizeMultiplier   = int(settings.Soft.RocksDBTargetFileSizeMultiplier)
-	dynamicLevelBytes          = settings.Soft.RocksDBLevelCompactionDynamicLevelBytes
-	recycleLogFileNum          = int(settings.Soft.RocksDBRecycleLogFileNum)
-	tolerateTailCorruption     = settings.Soft.RocksDBTolerateCorruptedTailRecords
+	logDBLRUCacheSize          = int(settings.Soft.KVLRUCacheSize)
+	maxBackgroundCompactions   = int(settings.Soft.KVMaxBackgroundCompactions)
+	maxBackgroundFlushes       = int(settings.Soft.KVMaxBackgroundFlushes)
+	keepLogFileNum             = int(settings.Soft.KVKeepLogFileNum)
+	writeBufferSize            = int(settings.Soft.KVWriteBufferSize)
+	maxWriteBufferNumber       = int(settings.Soft.KVMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
+	l0SlowdownWritesTrigger    = int(settings.Soft.KVLevel0SlowdownWritesTrigger)
+	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
+	maxBytesForLevelBase       = settings.Soft.KVMaxBytesForLevelBase
+	maxBytesForLevelMultiplier = float64(settings.Soft.KVMaxBytesForLevelMultiplier)
+	targetFileSizeBase         = settings.Soft.KVTargetFileSizeBase
+	targetFileSizeMultiplier   = int(settings.Soft.KVTargetFileSizeMultiplier)
+	dynamicLevelBytes          = settings.Soft.KVLevelCompactionDynamicLevelBytes
+	recycleLogFileNum          = int(settings.Soft.KVRecycleLogFileNum)
+	tolerateTailCorruption     = settings.Soft.KVTolerateCorruptedTailRecords
 )
 
 var versionWarning sync.Once
@@ -83,6 +84,8 @@ type KV struct {
 	wo        *gorocksdb.WriteOptions
 	opts      *gorocksdb.Options
 }
+
+var tolerateTailCorruptionWarning uint32
 
 func getRocksDBOptions(directory string,
 	walDirectory string) (*gorocksdb.Options,
@@ -148,7 +151,9 @@ func getRocksDBOptions(directory string,
 	opts.SetMaxBackgroundFlushes(maxBackgroundFlushes)
 	opts.SetRecycleLogFileNum(recycleLogFileNum)
 	if tolerateTailCorruption {
-		plog.Infof("RocksDB's recovery mode set to kTolerateCorruptedTailRecords")
+		if atomic.CompareAndSwapUint32(&tolerateTailCorruptionWarning, 0, 1) {
+			plog.Infof("RocksDB's recovery mode set to kTolerateCorruptedTailRecords")
+		}
 		opts.SetWALRecoveryMode(gorocksdb.TolerateCorruptedTailRecords)
 	}
 	if dynamicLevelBytes != 0 {

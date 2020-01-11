@@ -167,22 +167,22 @@ type soft struct {
 	//
 	// LogDB
 	//
-	RocksDBKeepLogFileNum                   uint64
-	RocksDBMaxBackgroundCompactions         uint64
-	RocksDBMaxBackgroundFlushes             uint64
-	RocksDBLRUCacheSize                     uint64
-	RocksDBWriteBufferSize                  uint64
-	RocksDBMaxWriteBufferNumber             uint64
-	RocksDBLevel0FileNumCompactionTrigger   uint64
-	RocksDBLevel0SlowdownWritesTrigger      uint64
-	RocksDBLevel0StopWritesTrigger          uint64
-	RocksDBMaxBytesForLevelBase             uint64
-	RocksDBMaxBytesForLevelMultiplier       uint64
-	RocksDBTargetFileSizeBase               uint64
-	RocksDBTargetFileSizeMultiplier         uint64
-	RocksDBLevelCompactionDynamicLevelBytes uint64
-	RocksDBRecycleLogFileNum                uint64
-	RocksDBTolerateCorruptedTailRecords     bool
+	KVKeepLogFileNum                   uint64
+	KVMaxBackgroundCompactions         uint64
+	KVMaxBackgroundFlushes             uint64
+	KVLRUCacheSize                     uint64
+	KVWriteBufferSize                  uint64
+	KVMaxWriteBufferNumber             uint64
+	KVLevel0FileNumCompactionTrigger   uint64
+	KVLevel0SlowdownWritesTrigger      uint64
+	KVLevel0StopWritesTrigger          uint64
+	KVMaxBytesForLevelBase             uint64
+	KVMaxBytesForLevelMultiplier       uint64
+	KVTargetFileSizeBase               uint64
+	KVTargetFileSizeMultiplier         uint64
+	KVLevelCompactionDynamicLevelBytes uint64
+	KVRecycleLogFileNum                uint64
+	KVTolerateCorruptedTailRecords     bool
 }
 
 func getSoftSettings() soft {
@@ -194,51 +194,51 @@ func getSoftSettings() soft {
 func getDefaultSoftSettings() soft {
 	NodeHostInfoReportSecond := uint64(20)
 	return soft{
-		MaxConcurrentStreamingSnapshot:          128,
-		MaxSnapshotConnections:                  64,
-		SyncTaskInterval:                        180000,
-		PanicOnSizeMismatch:                     true,
-		LazyFreeCycle:                           1,
-		LatencySampleRatio:                      0,
-		BatchedEntryApply:                       true,
-		GetConnectedTimeoutSecond:               5,
-		MaxEntrySize:                            MaxMessageBatchSize,
-		InMemGCTimeout:                          100,
-		InMemEntrySliceSize:                     512,
-		MinEntrySliceFreeSize:                   96,
-		IncomingReadIndexQueueLength:            4096,
-		IncomingProposalQueueLength:             2048,
-		SnapshotStatusPushDelayMS:               1000,
-		TaskQueueInitialCap:                     64,
-		TaskQueueTargetLength:                   1024,
-		NodeHostSyncPoolSize:                    8,
-		TaskBatchSize:                           512,
-		NodeReloadMillisecond:                   200,
-		StepEngineTaskWorkerCount:               16,
-		StepEngineSnapshotWorkerCount:           64,
-		SendQueueLength:                         1024 * 2,
-		ReceiveQueueLength:                      1024,
-		StreamConnections:                       4,
-		PerConnectionSendBufSize:                LargeEntitySize,
-		PerConnectionRecvBufSize:                2 * 1024 * 1024,
-		SnapshotGCTick:                          30,
-		SnapshotChunkTimeoutTick:                900,
-		NodeHostInfoReportSecond:                NodeHostInfoReportSecond,
-		RocksDBMaxBackgroundCompactions:         2,
-		RocksDBMaxBackgroundFlushes:             2,
-		RocksDBLRUCacheSize:                     0,
-		RocksDBKeepLogFileNum:                   16,
-		RocksDBWriteBufferSize:                  256 * 1024 * 1024,
-		RocksDBMaxWriteBufferNumber:             8,
-		RocksDBLevel0FileNumCompactionTrigger:   8,
-		RocksDBLevel0SlowdownWritesTrigger:      17,
-		RocksDBLevel0StopWritesTrigger:          24,
-		RocksDBMaxBytesForLevelBase:             4 * 1024 * 1024 * 1024,
-		RocksDBMaxBytesForLevelMultiplier:       2,
-		RocksDBTargetFileSizeBase:               16 * 1024 * 1024,
-		RocksDBTargetFileSizeMultiplier:         2,
-		RocksDBLevelCompactionDynamicLevelBytes: 0,
-		RocksDBRecycleLogFileNum:                0,
-		RocksDBTolerateCorruptedTailRecords:     true,
+		MaxConcurrentStreamingSnapshot:     128,
+		MaxSnapshotConnections:             64,
+		SyncTaskInterval:                   180000,
+		PanicOnSizeMismatch:                true,
+		LazyFreeCycle:                      1,
+		LatencySampleRatio:                 0,
+		BatchedEntryApply:                  true,
+		GetConnectedTimeoutSecond:          5,
+		MaxEntrySize:                       MaxMessageBatchSize,
+		InMemGCTimeout:                     100,
+		InMemEntrySliceSize:                512,
+		MinEntrySliceFreeSize:              96,
+		IncomingReadIndexQueueLength:       4096,
+		IncomingProposalQueueLength:        2048,
+		SnapshotStatusPushDelayMS:          1000,
+		TaskQueueInitialCap:                64,
+		TaskQueueTargetLength:              1024,
+		NodeHostSyncPoolSize:               8,
+		TaskBatchSize:                      512,
+		NodeReloadMillisecond:              200,
+		StepEngineTaskWorkerCount:          16,
+		StepEngineSnapshotWorkerCount:      64,
+		SendQueueLength:                    1024 * 2,
+		ReceiveQueueLength:                 1024,
+		StreamConnections:                  4,
+		PerConnectionSendBufSize:           LargeEntitySize,
+		PerConnectionRecvBufSize:           2 * 1024 * 1024,
+		SnapshotGCTick:                     30,
+		SnapshotChunkTimeoutTick:           900,
+		NodeHostInfoReportSecond:           NodeHostInfoReportSecond,
+		KVMaxBackgroundCompactions:         2,
+		KVMaxBackgroundFlushes:             2,
+		KVLRUCacheSize:                     0,
+		KVKeepLogFileNum:                   16,
+		KVWriteBufferSize:                  256 * 1024 * 1024,
+		KVMaxWriteBufferNumber:             8,
+		KVLevel0FileNumCompactionTrigger:   8,
+		KVLevel0SlowdownWritesTrigger:      17,
+		KVLevel0StopWritesTrigger:          24,
+		KVMaxBytesForLevelBase:             4 * 1024 * 1024 * 1024,
+		KVMaxBytesForLevelMultiplier:       2,
+		KVTargetFileSizeBase:               16 * 1024 * 1024,
+		KVTargetFileSizeMultiplier:         2,
+		KVLevelCompactionDynamicLevelBytes: 0,
+		KVRecycleLogFileNum:                0,
+		KVTolerateCorruptedTailRecords:     true,
 	}
 }
