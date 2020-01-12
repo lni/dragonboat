@@ -33,10 +33,10 @@ var (
 
 const (
 	maxLogFileSize = 1024 * 1024 * 128
-	blockSize      = 1024 * 32
 )
 
 var (
+	blockSize                  = int(settings.Soft.KVBlockSize)
 	logDBLRUCacheSize          = int(settings.Soft.KVLRUCacheSize)
 	maxBackgroundCompactions   = int(settings.Soft.KVMaxBackgroundCompactions)
 	maxBackgroundFlushes       = int(settings.Soft.KVMaxBackgroundFlushes)
@@ -46,6 +46,8 @@ var (
 	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
 	l0SlowdownWritesTrigger    = int(settings.Soft.KVLevel0SlowdownWritesTrigger)
 	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
+	numOfLevels                = int(settings.Soft.KVNumOfLevels)
+	useUniversalCompaction     = settings.Soft.KVUseUniversalCompaction
 	maxBytesForLevelBase       = settings.Soft.KVMaxBytesForLevelBase
 	maxBytesForLevelMultiplier = float64(settings.Soft.KVMaxBytesForLevelMultiplier)
 	targetFileSizeBase         = settings.Soft.KVTargetFileSizeBase
@@ -86,6 +88,7 @@ type KV struct {
 }
 
 var tolerateTailCorruptionWarning uint32
+var useUniversalCompactionWarning uint32
 
 func getRocksDBOptions(directory string,
 	walDirectory string) (*gorocksdb.Options,
@@ -142,7 +145,7 @@ func getRocksDBOptions(directory string,
 	opts.SetLevel0SlowdownWritesTrigger(l0SlowdownWritesTrigger)
 	opts.SetLevel0StopWritesTrigger(l0StopWritesTrigger)
 	opts.SetMaxWriteBufferNumber(maxWriteBufferNumber)
-	opts.SetNumLevels(7)
+	opts.SetNumLevels(numOfLevels)
 	opts.SetMaxBytesForLevelBase(maxBytesForLevelBase)
 	opts.SetMaxBytesForLevelMultiplier(maxBytesForLevelMultiplier)
 	opts.SetTargetFileSizeBase(targetFileSizeBase)
@@ -155,6 +158,12 @@ func getRocksDBOptions(directory string,
 			plog.Infof("RocksDB's recovery mode set to kTolerateCorruptedTailRecords")
 		}
 		opts.SetWALRecoveryMode(gorocksdb.TolerateCorruptedTailRecords)
+	}
+	if useUniversalCompaction {
+		if atomic.CompareAndSwapUint32(&useUniversalCompactionWarning, 0, 1) {
+			plog.Infof("use Universal Compaction in RocksDB")
+		}
+		opts.SetCompactionStyle(gorocksdb.UniversalCompactionStyle)
 	}
 	if dynamicLevelBytes != 0 {
 		opts.SetLevelCompactionDynamicLevelBytes(true)

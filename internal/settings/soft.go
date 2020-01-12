@@ -182,7 +182,16 @@ type soft struct {
 	KVTargetFileSizeMultiplier         uint64
 	KVLevelCompactionDynamicLevelBytes uint64
 	KVRecycleLogFileNum                uint64
+	KVNumOfLevels                      uint64
+	KVBlockSize                        uint64
 	KVTolerateCorruptedTailRecords     bool
+	// KVUseUniversalCompaction defines whether to use universal compaction to
+	// reduce write amplification. This setting is default to false, change it to
+	// true for existing system might cause unexpected consequences, please check
+	// the documentation of your KV store for more details.
+	//
+	// KVUseUniversalCompaction support is experimental - it is not fully tested.
+	KVUseUniversalCompaction bool
 }
 
 func getSoftSettings() soft {
@@ -239,6 +248,9 @@ func getDefaultSoftSettings() soft {
 		KVTargetFileSizeMultiplier:         2,
 		KVLevelCompactionDynamicLevelBytes: 0,
 		KVRecycleLogFileNum:                0,
+		KVNumOfLevels:                      7,
+		KVBlockSize:                        32 * 1024,
 		KVTolerateCorruptedTailRecords:     true,
+		KVUseUniversalCompaction:           false,
 	}
 }
