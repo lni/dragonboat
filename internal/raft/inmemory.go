@@ -25,12 +25,6 @@ var (
 	minEntrySliceSize = settings.Soft.MinEntrySliceFreeSize
 )
 
-//
-// known issues (NICV) -
-// * the newEntries field is unnecessary
-// * the first element of im.entries is usually redundant
-//
-
 // inMemory is a two stage in memory log storage struct to keep log entries
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
