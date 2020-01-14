@@ -1,20 +1,32 @@
 ## v3.2 (TBD)
 
-Dragonboat v3.2 is a minor release with new features and improvements. All v3.1.x users are recommended to upgrade. 
+Dragonboat v3.2 is a release with new features and improvements. All v3.1.x users are recommended to upgrade. 
 
 ### New features
 
 - Added snappy compression support for Raft entires and snapshots.
-- C++ binding has been updated to cover all v3.x features. Thanks JasonYuchen for working on that.
+- Added experimental witness support.
+- Added new API to allow LogDB compaction to be manually triggered.
+- Added event listener support to allow users to be notified for certain Raft events.
+- Added some Raft related metrics to exported. 
+- Added rate limiter to control the maximum amount of bandwidth to be used for snapshot streaming.
+- C++ binding has been updated to cover all v3.1 features. Thanks JasonYuchen for working on that.
+- Added experimental Windows support.
 
 ### Improvements
 
 - Removed the restriction on max proposal payload size.
+- Re-enabled the range delete support in LogDB.
+- Better handling of concurrent snapshot streams.
 
 ### Breaking changes
 There is no breanking change for regular users. However, 
  - If you have built customized transport module implementing the raftio.IRaftRPC interface, there is minor change to the config.RaftRPCFactoryFunc type. See github.com/lni/dragoboat/config/config.go for details.
  - The internal transport module has been updated, it is no longer compatible with earlier versions of dragonboat. 
+
+### Other changes
+
+ - LevelDB has been marked as depreciated. 
 
 ## v3.1 (2019-07-04)
 
