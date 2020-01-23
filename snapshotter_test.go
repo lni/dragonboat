@@ -66,7 +66,7 @@ func getTestSnapshotter(ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
 	f := func(cid uint64, nid uint64) string {
 		return fp
 	}
-	return newSnapshotter(1, 1, config.NodeHostConfig{FS: vfs.GetTestFS()}, f, ldb, nil)
+	return newSnapshotter(1, 1, config.NodeHostConfig{}, f, ldb, nil, fs)
 }
 
 func runSnapshotterTest(t *testing.T,

@@ -129,9 +129,13 @@ var (
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
-	if nhConfig.FS == nil {
-		nhConfig.FS = vfs.GetTestFS()
-	}
+	fs := vfs.GetTestFS()
+	return ImportSnapshotFS(nhConfig, srcDir, memberNodes, nodeID, fs)
+}
+
+func ImportSnapshotFS(nhConfig config.NodeHostConfig,
+	srcDir string, memberNodes map[uint64]string,
+	nodeID uint64, fs vfs.IFS) error {
 	if nhConfig.DeploymentID == 0 {
 		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
 			unmanagedDeploymentID)
@@ -140,16 +144,16 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
 	}
-	ssfp, err := getSnapshotFilepath(srcDir, nhConfig.FS)
+	ssfp, err := getSnapshotFilepath(srcDir, fs)
 	if err != nil {
 		return err
 	}
 	oldss, err := getSnapshotRecord(srcDir,
-		server.SnapshotMetadataFilename, nhConfig.FS)
+		server.SnapshotMetadataFilename, fs)
 	if err != nil {
 		return err
 	}
-	ok, err := isCompleteSnapshotImage(ssfp, oldss, nhConfig.FS)
+	ok, err := isCompleteSnapshotImage(ssfp, oldss, fs)
 	if err != nil {
 		return err
 	}
@@ -159,7 +163,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := checkMembers(oldss.Membership, memberNodes); err != nil {
 		return err
 	}
-	serverCtx, err := server.NewContext(nhConfig)
+	serverCtx, err := server.NewContext(nhConfig, fs)
 	if err != nil {
 		return err
 	}
@@ -167,7 +171,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
 		return err
 	}
-	logdb, err := getLogDB(*serverCtx, nhConfig)
+	logdb, err := getLogDB(*serverCtx, nhConfig, fs)
 	if err != nil {
 		return err
 	}
@@ -179,12 +183,12 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	ssDir := serverCtx.GetSnapshotDir(nhConfig.DeploymentID,
 		oldss.ClusterId, nodeID)
-	exist, err := fileutil.Exist(ssDir, nhConfig.FS)
+	exist, err := fileutil.Exist(ssDir, fs)
 	if err != nil {
 		return err
 	}
 	if exist {
-		if err := cleanupSnapshotDir(ssDir, nhConfig.FS); err != nil {
+		if err := cleanupSnapshotDir(ssDir, fs); err != nil {
 			return err
 		}
 	} else {
@@ -198,14 +202,14 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	env := server.NewSSEnv(getSnapshotDir,
 		oldss.ClusterId, nodeID, oldss.Index, nodeID,
-		server.SnapshottingMode, nhConfig.FS)
+		server.SnapshottingMode, fs)
 	if err := env.CreateTempDir(); err != nil {
 		return err
 	}
 	dstDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
-	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes, nhConfig.FS)
-	if err := copySnapshot(oldss, srcDir, dstDir, nhConfig.FS); err != nil {
+	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes, fs)
+	if err := copySnapshot(oldss, srcDir, dstDir, fs); err != nil {
 		return err
 	}
 	if err := env.FinalizeSnapshot(&ss); err != nil {
@@ -464,7 +468,7 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 }
 
 func getLogDB(ctx server.Context,
-	nhConfig config.NodeHostConfig) (raftio.ILogDB, error) {
+	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
 	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
-	return logdb.NewDefaultLogDB(nhDir, walDir, nhConfig.FS)
+	return logdb.NewDefaultLogDB(nhDir, walDir, fs)
 }

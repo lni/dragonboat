@@ -16,6 +16,10 @@
 
 package vfs
 
+func GetFS() IFS {
+	return DefaultFS
+}
+
 func GetTestFS() IFS {
 	return DefaultFS
 }

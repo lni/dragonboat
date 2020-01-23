@@ -56,6 +56,7 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -211,12 +212,13 @@ type Transport struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	streamConnections   uint64
+	fs                  vfs.IFS
 }
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
 	ctx *server.Context, resolver INodeAddressResolver,
-	locator server.GetSnapshotDirFunc) (*Transport, error) {
+	locator server.GetSnapshotDirFunc, fs vfs.IFS) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	t := &Transport{
 		nhConfig:          nhConfig,
@@ -227,9 +229,10 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		cstopper:          syncutil.NewStopper(),
 		snapshotLocator:   locator,
 		streamConnections: streamConnections,
+		fs:                fs,
 	}
 	chunks := NewSnapshotChunks(t.handleRequest,
-		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator, nhConfig.FS)
+		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator, fs)
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, chunks)
 	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC

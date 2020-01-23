@@ -296,6 +296,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 
 func newNOOPTestTransport() (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
+	fs := vfs.GetTestFS()
 	t := newTestSnapshotDir()
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	c := config.NodeHostConfig{
@@ -303,11 +304,11 @@ func newNOOPTestTransport() (*Transport,
 		RaftAddress:      "localhost:9876",
 		RaftRPCFactory:   NewNOOPTransport,
 	}
-	ctx, err := server.NewContext(c)
+	ctx, err := server.NewContext(c, fs)
 	if err != nil {
 		panic(err)
 	}
-	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, fs)
 	if err != nil {
 		panic(err)
 	}
@@ -320,12 +321,12 @@ func newNOOPTestTransport() (*Transport,
 
 func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 	*syncutil.Stopper, *testSnapshotDir) {
+	fs := vfs.GetTestFS()
 	stopper := syncutil.NewStopper()
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	t := newTestSnapshotDir()
 	c := config.NodeHostConfig{
 		RaftAddress: serverAddress,
-		FS:          vfs.GetTestFS(),
 	}
 	if mutualTLS {
 		c.MutualTLS = true
@@ -333,11 +334,11 @@ func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 		c.CertFile = certFile
 		c.KeyFile = keyFile
 	}
-	ctx, err := server.NewContext(c)
+	ctx, err := server.NewContext(c, fs)
 	if err != nil {
 		panic(err)
 	}
-	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir)
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, fs)
 	if err != nil {
 		panic(err)
 	}
@@ -752,8 +753,9 @@ func getTestSnapshotFileSize(sz uint64) uint64 {
 }
 
 func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
-	defer trans.nhConfig.FS.RemoveAll(snapshotDir)
+	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -762,17 +764,17 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
 	nodes.AddNode(100, 2, serverAddress)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, trans.nhConfig.FS)
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	if err := trans.nhConfig.FS.MkdirAll(snapDir, 0755); err != nil {
+	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -812,6 +814,7 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 
 func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	f StreamChunkSendFunc, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -821,11 +824,11 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
 	nodes.AddNode(100, 2, serverAddress)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", 1024, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", 1024, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(1024)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.SetPreStreamChunkSendHook(f)
 	done := trans.ASyncSendSnapshot(m)
@@ -867,9 +870,10 @@ func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 }
 
 func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
-	defer trans.nhConfig.FS.RemoveAll(snapshotDir)
+	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -878,16 +882,16 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
 	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, trans.nhConfig.FS)
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
 	snapDir := chunks.getSnapshotDir(100, 2)
-	if err := trans.nhConfig.FS.MkdirAll(snapDir, 0755); err != nil {
+	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
 	nodes.AddNode(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-		fp := trans.nhConfig.FS.PathJoin(snapDir, "testsnapshot.gbsnap")
-		err := trans.nhConfig.FS.Remove(fp)
+		fp := fs.PathJoin(snapDir, "testsnapshot.gbsnap")
+		err := fs.Remove(fp)
 		if err != nil {
 			plog.Errorf("failed to remove file %v", err)
 		} else {
@@ -896,11 +900,11 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 	}
 	trans.streamChunkSent.Store(onStreamChunkSent)
 	tt.generateSnapshotFile(100,
-		12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, trans.nhConfig.FS)
+		12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -972,6 +976,7 @@ func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
 }
 
 func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
@@ -983,11 +988,11 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
 	trans.SetDeploymentID(12345)
 	// invalid address
 	nodes.AddNode(100, 2, "localhost:12345")
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.ASyncSendSnapshot(m)
 	if !done {
@@ -1014,6 +1019,7 @@ func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
 }
 
 func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
 	defer trans.serverCtx.Stop()
@@ -1034,29 +1040,29 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 	}
 	trans.SetPreStreamChunkSendHook(f)
 	// send two snapshots to the same node {100:2}
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize, fs)
 	m2 := getTestSnapshotMessage(2)
 	m2.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m2.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot1.gbsnap")
+	m2.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot1.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m2)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize, fs)
 	m3 := getTestSnapshotMessage(3)
 	m3.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m3.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m3.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m3)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize, fs)
 	m4 := getTestSnapshotMessage(2)
 	m4.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
-	m4.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot2.gbsnap")
+	m4.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot2.gbsnap")
 	// send the snapshot file
 	trans.ASyncSendSnapshot(m4)
 	atomic.StoreUint32(&snapshotSent, 1)
@@ -1083,8 +1089,9 @@ func TestFailedSnapshotSendWillBeReported(t *testing.T) {
 
 func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	sz uint64, maxWait uint64, mutualTLS bool) {
+	fs := vfs.GetTestFS()
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
-	defer trans.nhConfig.FS.RemoveAll(snapshotDir)
+	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -1093,27 +1100,27 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
 	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, trans.nhConfig.FS)
+		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	if err := trans.nhConfig.FS.MkdirAll(snapDir, 0755); err != nil {
+	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
 	nodes.AddNode(100, 2, serverAddress)
-	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, trans.nhConfig.FS)
+	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external2.data", sz)
 	m := getTestSnapshotMessage(2)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
-	m.Snapshot.Filepath = trans.nhConfig.FS.PathJoin(dir, "testsnapshot.gbsnap")
+	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	f1 := &raftpb.SnapshotFile{
-		Filepath: trans.nhConfig.FS.PathJoin(dir, "external1.data"),
+		Filepath: fs.PathJoin(dir, "external1.data"),
 		FileSize: sz,
 		FileId:   1,
 	}
 	f2 := &raftpb.SnapshotFile{
-		Filepath: trans.nhConfig.FS.PathJoin(dir, "external2.data"),
+		Filepath: fs.PathJoin(dir, "external2.data"),
 		FileSize: sz,
 		FileId:   2,
 	}

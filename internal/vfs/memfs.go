@@ -16,6 +16,10 @@
 
 package vfs
 
+func GetFS() IFS {
+	return MemStrictFS
+}
+
 func GetTestFS() IFS {
 	return MemStrictFS
 }

@@ -99,6 +99,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -266,6 +267,7 @@ type NodeHost struct {
 	liQueue          *leaderInfoQueue
 	userListener     raftio.IRaftEventListener
 	transportLatency *sample
+	fs               vfs.IFS
 }
 
 var dn = logutil.DescribeNode
@@ -278,10 +280,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Validate(); err != nil {
 		return nil, err
 	}
-	if nhConfig.FS == nil {
-		panic("fs not set")
-	}
-	serverCtx, err := server.NewContext(nhConfig)
+	fs := vfs.GetFS()
+	serverCtx, err := server.NewContext(nhConfig, fs)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +293,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
 		userListener:     nhConfig.RaftEventListener,
+		fs:               fs,
 	}
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
@@ -1556,7 +1557,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
-		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc)
+		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc, nh.fs)
 	if err := snapshotter.ProcessOrphans(); err != nil {
 		panic(err)
 	}
@@ -1612,7 +1613,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	}
 	var factory config.LogDBFactoryFunc
 	df := func(dirs []string, lows []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(dirs, lows, cfg.FS)
+		return logdb.NewDefaultLogDB(dirs, lows, nh.fs)
 	}
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
@@ -1620,7 +1621,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		factory = df
 	}
 	// create a tmp logdb to get LogDB type info
-	name, err := logdb.GetLogDBInfo(factory, nhDirs, nh.nhConfig.FS)
+	name, err := logdb.GetLogDBInfo(factory, nhDirs, nh.fs)
 	if err != nil {
 		return err
 	}
@@ -1654,7 +1655,7 @@ func (nh *NodeHost) createTransport() error {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.serverCtx, nh.nodes, getSnapshotDirFunc)
+		nh.serverCtx, nh.nodes, getSnapshotDirFunc, nh.fs)
 	if err != nil {
 		return err
 	}

@@ -40,19 +40,19 @@ func getTestNodeHostConfig() config.NodeHostConfig {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 50,
 		RaftAddress:    testAddress,
-		FS:             vfs.GetTestFS(),
 	}
 }
 
 func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
+	fs := vfs.GetTestFS()
 	c := getTestNodeHostConfig()
-	defer c.FS.RemoveAll(singleNodeHostTestDir)
+	defer fs.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("panic not expected")
 		}
 	}()
-	ctx, err := NewContext(c)
+	ctx, err := NewContext(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
@@ -69,7 +69,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		Hostname:     ctx.hostname,
 		DeploymentId: testDeploymentID,
 	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, c.FS)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -81,9 +81,10 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	addr string, hostname string, binVer uint32, name string, hardHashMismatch bool, expErr error) {
+	fs := vfs.GetTestFS()
 	c := getTestNodeHostConfig()
-	defer c.FS.RemoveAll(singleNodeHostTestDir)
-	ctx, err := NewContext(c)
+	defer fs.RemoveAll(singleNodeHostTestDir)
+	ctx, err := NewContext(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}
@@ -101,7 +102,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if hardHashMismatch {
 		status.HardHash = 1
 	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, c.FS)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -138,9 +139,10 @@ func TestCanDetectMismatchedHardHash(t *testing.T) {
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
+	fs := vfs.GetTestFS()
 	c := getTestNodeHostConfig()
-	defer c.FS.RemoveAll(singleNodeHostTestDir)
-	ctx, err := NewContext(c)
+	defer fs.RemoveAll(singleNodeHostTestDir)
+	ctx, err := NewContext(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
 	}

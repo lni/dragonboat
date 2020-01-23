@@ -96,7 +96,7 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler
 	trans.SetMessageHandler(handler)
 	chunks := NewSnapshotChunks(trans.handleRequest,
 		trans.snapshotReceived, getTestDeploymentID,
-		trans.snapshotLocator, trans.nhConfig.FS)
+		trans.snapshotLocator, fs)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {

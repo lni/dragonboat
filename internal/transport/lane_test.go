@@ -25,18 +25,20 @@ import (
 )
 
 func TestSnapshotLaneCanBeCreatedInSavedMode(t *testing.T) {
-	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	fs := vfs.GetTestFS()
+	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil, cfg.FS)
+	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil, fs)
 	if cap(c.ch) != 201 {
 		t.Errorf("unexpected chan length %d, want 201", cap(c.ch))
 	}
 }
 
 func TestSnapshotLaneCanBeCreatedInStreamingMode(t *testing.T) {
-	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	fs := vfs.GetTestFS()
+	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil, cfg.FS)
+	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil, fs)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -63,9 +65,10 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 }
 
 func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
-	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	fs := vfs.GetTestFS()
+	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, cfg.FS)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -105,9 +108,10 @@ func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 }
 
 func testSpecialChunkCanStopTheProcessLoop(t *testing.T, tt uint64, experr error) {
-	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	fs := vfs.GetTestFS()
+	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, cfg.FS)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
 	if err := c.connect("a1"); err != nil {
 		t.Fatalf("connect failed %v", err)
 	}

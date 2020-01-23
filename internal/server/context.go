@@ -80,13 +80,13 @@ type Context struct {
 }
 
 // NewContext creates and returns a new server Context object.
-func NewContext(nhConfig config.NodeHostConfig) (*Context, error) {
+func NewContext(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Context, error) {
 	s := &Context{
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
 		partitioner:  NewFixedPartitioner(defaultClusterIDMod),
 		flocks:       make(map[string]io.Closer),
-		fs:           nhConfig.FS,
+		fs:           fs,
 	}
 	hostname, err := os.Hostname()
 	if err != nil {

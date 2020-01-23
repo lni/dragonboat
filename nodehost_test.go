@@ -59,7 +59,6 @@ func getTestNodeHostConfig() *config.NodeHostConfig {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 50,
 		RaftAddress:    "localhost:1111",
-		FS:             vfs.GetTestFS(),
 	}
 }
 
@@ -304,7 +303,6 @@ func createSnapshotCompressedTestNodeHost(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: 100,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -346,7 +344,6 @@ func createSingleNodeTestNodeHostCfg(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: 100,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -385,7 +382,6 @@ func createConcurrentTestNodeHost(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: 1,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -442,7 +438,6 @@ func createFakeDiskTestNodeHost(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: 1,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -561,14 +556,12 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		NodeHostDir:    datadir1,
 		RTTMillisecond: 10,
 		RaftAddress:    addr1,
-		FS:             vfs.GetTestFS(),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:         datadir2,
 		NodeHostDir:    datadir2,
 		RTTMillisecond: 10,
 		RaftAddress:    addr2,
-		FS:             vfs.GetTestFS(),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -600,7 +593,6 @@ func createRateLimitedTestNodeHost(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -632,14 +624,12 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		NodeHostDir:    datadir1,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[1],
-		FS:             vfs.GetTestFS(),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:         datadir2,
 		NodeHostDir:    datadir2,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[2],
-		FS:             vfs.GetTestFS(),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -792,7 +782,6 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			NodeHostDir:    datadir,
 			RTTMillisecond: 50,
 			RaftAddress:    singleNodeHostTestAddr,
-			FS:             vfs.GetTestFS(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -2772,7 +2761,6 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             vfs.GetTestFS(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -2927,14 +2915,12 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			NodeHostDir:    nh1dir,
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             vfs.GetTestFS(),
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr2,
-			FS:             vfs.GetTestFS(),
 		}
 		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once
@@ -3232,7 +3218,6 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 200,
 			RaftAddress:    "microsoft.com:12345",
-			FS:             vfs.GetTestFS(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err == nil {
@@ -3253,7 +3238,6 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   f,
-			FS:             vfs.GetTestFS(),
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3282,7 +3266,6 @@ func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pebble.NewLogDB,
-			FS:             vfs.GetTestFS(),
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3327,7 +3310,6 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 			RTTMillisecond: 100,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
-			FS:             fs,
 		}
 		plog.Infof("going to create nh using batched logdb")
 		nh, err := NewNodeHost(nhc)
@@ -3382,7 +3364,6 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
-			FS:             fs,
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3447,7 +3428,6 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   nff,
-			FS:             fs,
 		}
 		xf := getLogDBTestFunc(t, nhc)
 		xf()
@@ -3474,7 +3454,6 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
-			FS:             fs,
 		}
 		tf := getLogDBTestFunc(t, nhc)
 		tf()
@@ -3496,7 +3475,6 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 			DeploymentID:   100,
-			FS:             fs,
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3525,7 +3503,6 @@ func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 			RTTMillisecond: 20,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
-			FS:             fs,
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -3665,7 +3642,6 @@ func TestRaftEventsAreReported(t *testing.T) {
 		RTTMillisecond:    10,
 		RaftAddress:       peers[1],
 		RaftEventListener: rel,
-		FS:                vfs.GetTestFS(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -3840,7 +3816,6 @@ func testWitnessIO(t *testing.T,
 			NodeHostDir:    path.Join(singleNodeHostTestDir, "nh1"),
 			RTTMillisecond: 10,
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             vfs.GetTestFS(),
 		}
 		nh1, err := NewNodeHost(nhc1)
 		if err != nil {

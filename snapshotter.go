@@ -65,7 +65,7 @@ type snapshotter struct {
 func newSnapshotter(clusterID uint64,
 	nodeID uint64,
 	nhConfig config.NodeHostConfig, rootDirFunc server.GetSnapshotDirFunc,
-	ldb raftio.ILogDB, stopc chan struct{}) *snapshotter {
+	ldb raftio.ILogDB, stopc chan struct{}, fs vfs.IFS) *snapshotter {
 	return &snapshotter{
 		rootDirFunc: rootDirFunc,
 		nhConfig:    nhConfig,
@@ -74,7 +74,7 @@ func newSnapshotter(clusterID uint64,
 		clusterID:   clusterID,
 		nodeID:      nodeID,
 		stopc:       stopc,
-		fs:          nhConfig.FS,
+		fs:          fs,
 	}
 }
 

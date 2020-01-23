@@ -91,7 +91,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	if m.Type != pb.InstallSnapshot {
 		panic("non-snapshot message received by ASyncSendSnapshot")
 	}
-	chunks := splitSnapshotMessage(m, t.nhConfig.FS)
+	chunks := splitSnapshotMessage(m, t.fs)
 	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		return false
@@ -123,7 +123,7 @@ func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *lane {
 	c := newLane(t.ctx, key.ClusterID, key.NodeID,
 		t.getDeploymentID(), streaming, sz, t.raftRPC,
-		t.stopper.ShouldStop(), t.nhConfig.FS)
+		t.stopper.ShouldStop(), t.fs)
 	c.streamChunkSent = t.streamChunkSent
 	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {

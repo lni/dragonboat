@@ -47,7 +47,8 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 	if nhConfig.DeploymentID == 0 {
 		nhConfig.DeploymentID = 1
 	}
-	serverCtx, err := server.NewContext(nhConfig)
+	fs := vfs.DefaultFS
+	serverCtx, err := server.NewContext(nhConfig, fs)
 	if err != nil {
 		return false, err
 	}
@@ -56,7 +57,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		return false, err
 	}
 	nhDir, walDir := serverCtx.GetLogDBDirs(nhConfig.DeploymentID)
-	logdb, err := logdb.NewDefaultLogDB(nhDir, walDir, vfs.DefaultFS)
+	logdb, err := logdb.NewDefaultLogDB(nhDir, walDir, fs)
 	if err != nil {
 		return false, err
 	}
@@ -72,7 +73,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		}
 		for _, ss := range ssList {
 			if ss.Type == pb.OnDiskStateMachine && ss.OnDiskIndex == 0 {
-				shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, vfs.DefaultFS)
+				shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
 				if err != nil {
 					return false, err
 				}

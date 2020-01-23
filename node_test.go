@@ -199,7 +199,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		if err := fs.MkdirAll(nodeLowLatencyLogDir, 0755); err != nil {
 			panic(err)
 		}
-		ldb, err = logdb.NewDefaultLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir}, vfs.GetTestFS())
+		ldb, err = logdb.NewDefaultLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
 		if err != nil {
 			plog.Panicf("failed to open logdb, %v", err)
 		}
@@ -217,7 +217,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			return snapdir
 		}
 		snapshotter := newSnapshotter(testClusterID, i,
-			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, nil)
+			config.NodeHostConfig{}, rootDirFunc, ldb, nil, fs)
 		// create the sm
 		sm := &tests.NoOP{}
 		config := config.Config{
