@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build dragonboat_pebble_memfs_test
+// +build dragonboat_memfs_test
 
 package logdb
 
@@ -36,8 +36,4 @@ func newDefaultKVStore(dir string,
 		panic("invalid fs")
 	}
 	return pebble.NewKVStore(dir, wal, fs)
-}
-
-func getTestFS() vfs.IFS {
-	return vfs.MemStrictFS
 }

@@ -30,7 +30,7 @@ import (
 )
 
 func TestKVCanBeCreatedAndClosed(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 }
 
 func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore)) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB(fs)
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
@@ -319,7 +319,7 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 }
 
 func TestCompactionReleaseStorageSpace(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	deleteTestDB(fs)
 	defer deleteTestDB(fs)
 	maxIndex := uint64(1024 * 128)
@@ -444,7 +444,7 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 }
 
 func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	deleteTestDB(fs)
 	defer deleteTestDB(fs)
 	func() {

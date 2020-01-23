@@ -34,7 +34,3 @@ func newDefaultKVStore(dir string,
 	}
 	return pebble.NewKVStore(dir, wal, fs)
 }
-
-func getTestFS() vfs.IFS {
-	return vfs.DefaultFS
-}

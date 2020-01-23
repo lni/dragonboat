@@ -30,12 +30,18 @@ LOGDB_TAG=dragonboat_leveldb_test
 else ifeq ($(DRAGONBOAT_LOGDB),pebble)
 GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_pebble_test
+else ifeq ($(DRAGONBOAT_LOGDB),pebble_memfs)
+$(error invalid DRAGONBOAT_LOGDB pebble_memfs)
 else ifeq ($(DRAGONBOAT_LOGDB),custom)
 $(info using custom lodb)
 GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_no_rocksdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
 GOCMD=$(GOEXEC)
+ifneq ($(DRAGONBOAT_MEMFS_TEST),)
+$(info using memfs based pebble)
+LOGDB_TAG=dragonboat_memfs_test
+else
 $(info using rocksdb based log storage)
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.dylib
@@ -49,6 +55,7 @@ else ifneq (,$(findstring MSYS, $(OS)))
 $(info running on Windows/MSYS)
 else
 $(error OS type $(OS) not supported)
+endif
 endif
 
 # RocksDB version 5 or 6 are required

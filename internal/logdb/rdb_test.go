@@ -64,7 +64,7 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 		panic(err)
 	}
 	db, err := NewLogDB([]string{d},
-		[]string{lld}, batched, false, getTestFS(), newDefaultKVStore)
+		[]string{lld}, batched, false, vfs.GetTestFS(), newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}
@@ -100,7 +100,7 @@ func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), 
 }
 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		bootstrap, err := db.GetBootstrapInfo(1, 2)
 		if err != raftio.ErrNoBootstrapInfo {
@@ -160,7 +160,7 @@ func TestBootstrapInfoCanBeSavedAndChecked(t *testing.T) {
 			t.Errorf("failed to get node info list")
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -200,7 +200,7 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			t.Errorf("max index %d, want 3", maxIndex)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -222,7 +222,7 @@ func TestSaveSnapshotTogetherWithUnexpectedEntriesWillPanic(t *testing.T) {
 			t.Errorf("panic not triggered")
 		}
 	}()
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -311,7 +311,7 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 			t.Errorf("max index %d, want 10", maxIndex)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -343,7 +343,7 @@ func TestSnapshotOnlyNodeIsHandledByReadRaftState(t *testing.T) {
 			t.Errorf("unexpected rs %+v", rs)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -366,7 +366,7 @@ func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) 
 			t.Fatalf("failed to return expected error %v", err)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -421,7 +421,7 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 			t.Errorf("entry index %d, want 3", rs.FirstIndex)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -474,7 +474,7 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 			lastIndex = e.Index
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -527,7 +527,7 @@ func TestSaveRaftState(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		testSaveRaftState(t, db)
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -582,7 +582,7 @@ func TestStateIsUpdated(t *testing.T) {
 			t.Errorf("unexpected persistent state value %v", rs)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -641,7 +641,7 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			t.Errorf("max index %d, want 11", maxIndex)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -709,7 +709,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 			t.Errorf("ents sz %d, want 2", rs.EntryCount)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -774,7 +774,7 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 			t.Errorf("ents sz %d, want 3", len(ents))
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -861,7 +861,7 @@ func TestIterateEntries(t *testing.T) {
 			}
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -927,7 +927,7 @@ func TestSaveSnapshot(t *testing.T) {
 			t.Errorf("unexpected snapshot returned")
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -1014,7 +1014,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			t.Errorf("unexpected index")
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -1068,12 +1068,12 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 			t.Errorf("length %d, want %d", length, last-first+1)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
 func TestRemoveEntriesTo(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
@@ -1251,7 +1251,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				t.Errorf("unexpected range %d:%d", fi, li)
 			}
 		}
-		fs := getTestFS()
+		fs := vfs.GetTestFS()
 		runLogDBTest(t, tf, fs)
 	}
 }
@@ -1295,7 +1295,7 @@ func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 			t.Errorf("length %d, want %d", state.EntryCount, batchSize*3+1)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -1375,7 +1375,7 @@ func TestRemoveNodeData(t *testing.T) {
 			t.Fatalf("entry returned")
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
@@ -1473,6 +1473,6 @@ func TestImportSnapshot(t *testing.T) {
 			t.Errorf("unexpected entry count %d", state.EntryCount)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }

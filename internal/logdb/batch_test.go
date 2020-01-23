@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -335,7 +336,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			t.Errorf("unexpected index %d, want 10", eb.Entries[0].Index)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runBatchedLogDBTest(t, tf, fs)
 }
 
@@ -399,7 +400,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			}
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runBatchedLogDBTest(t, tf, fs)
 }
 
@@ -467,6 +468,6 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			plog.Infof("idx %d", e.Index)
 		}
 	}
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	runBatchedLogDBTest(t, tf, fs)
 }

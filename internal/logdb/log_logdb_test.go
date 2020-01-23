@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/raft"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -32,7 +33,7 @@ func removeTestLogdbDir() {
 }
 
 func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {
-	logdb := getNewLogReaderTestDB(entries, getTestFS())
+	logdb := getNewLogReaderTestDB(entries, vfs.GetTestFS())
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
 	if len(entries) > 0 {
 		if err := ls.Append(entries); err != nil {

@@ -61,7 +61,7 @@ func TestLogReaderEntries(t *testing.T) {
 }
 
 func testLogReaderEntries(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
 		lo, hi, maxsize uint64
@@ -104,7 +104,7 @@ func TestLogReaderTerm(t *testing.T) {
 }
 
 func testLogReaderTerm(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		i      uint64
@@ -147,7 +147,7 @@ func TestLogReaderLastIndex(t *testing.T) {
 }
 
 func testLogReaderLastIndex(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	s := getTestLogReader(ents, fs)
 	_, last := s.GetRange()
@@ -171,7 +171,7 @@ func TestLogReaderFirstIndex(t *testing.T) {
 }
 
 func testLogReaderFirstIndex(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	s := getTestLogReader(ents, fs)
 	first, _ := s.GetRange()
@@ -203,7 +203,7 @@ func TestLogReaderAppend(t *testing.T) {
 }
 
 func testLogReaderAppend(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		entries  []pb.Entry
@@ -289,7 +289,7 @@ func testLogReaderAppend(t *testing.T) {
 }
 
 func TestLogReaderApplySnapshot(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 0, Term: 0}}
 	cs := &pb.Membership{
@@ -325,7 +325,7 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 }
 
 func TestLogReaderCreateSnapshot(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
@@ -355,7 +355,7 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 }
 
 func TestLogReaderSetRange(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -384,7 +384,7 @@ func TestLogReaderSetRange(t *testing.T) {
 }
 
 func TestLogReaderGetSnapshot(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
@@ -404,7 +404,7 @@ func TestLogReaderGetSnapshot(t *testing.T) {
 }
 
 func TestLogReaderInitialState(t *testing.T) {
-	fs := getTestFS()
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
