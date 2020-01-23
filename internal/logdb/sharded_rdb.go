@@ -17,11 +17,11 @@ package logdb
 import (
 	"fmt"
 	"math"
-	"path/filepath"
 	"sync/atomic"
 
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/syncutil"
@@ -44,14 +44,15 @@ type ShardedRDB struct {
 	stopper              *syncutil.Stopper
 }
 
-func checkAllShards(dirs []string, lls []string, kvf kvFactory) (bool, error) {
+func checkAllShards(dirs []string,
+	lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
-		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
+		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lls) > 0 {
-			lldir = filepath.Join(lls[i], fmt.Sprintf("logdb-%d", i))
+			lldir = fs.PathJoin(lls[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := hasBatchedRecord(dir, lldir, kvf)
+		batched, err := hasBatchedRecord(dir, lldir, fs, kvf)
 		if err != nil {
 			return false, err
 		}
@@ -64,7 +65,7 @@ func checkAllShards(dirs []string, lls []string, kvf kvFactory) (bool, error) {
 
 // OpenShardedRDB creates a ShardedRDB instance.
 func OpenShardedRDB(dirs []string, lldirs []string,
-	batched bool, check bool, kvf kvFactory) (*ShardedRDB, error) {
+	batched bool, check bool, fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("using batched ShardedRDB")
@@ -77,19 +78,19 @@ func OpenShardedRDB(dirs []string, lldirs []string,
 	var err error
 	if check {
 		plog.Infof("checking all LogDB shards...")
-		batched, err = checkAllShards(dirs, lldirs, kvf)
+		batched, err = checkAllShards(dirs, lldirs, fs, kvf)
 		if err != nil {
 			return nil, err
 		}
 		plog.Infof("all shards checked, batched: %t", batched)
 	}
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
-		dir := filepath.Join(dirs[i], fmt.Sprintf("logdb-%d", i))
+		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lldirs) > 0 {
-			lldir = filepath.Join(lldirs[i], fmt.Sprintf("logdb-%d", i))
+			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		db, err := openRDB(dir, lldir, batched, kvf)
+		db, err := openRDB(dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()

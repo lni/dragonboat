@@ -20,6 +20,7 @@ package rocksdb
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -28,5 +29,6 @@ import (
 // uses more memory than the default RocksDB based Log DB and provides better
 // throughput performance.
 func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.NewLogDB(dirs, lldirs, true, false, rocksdb.NewKVStore)
+	fs := vfs.GetTestFS()
+	return logdb.NewLogDB(dirs, lldirs, true, false, fs, rocksdb.NewKVStore)
 }

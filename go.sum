@@ -11,6 +11,10 @@ github.com/cockroachdb/pebble v0.0.0-20191231201750-64a2f724618f h1:TQk0jJNZjR5R
 github.com/cockroachdb/pebble v0.0.0-20191231201750-64a2f724618f/go.mod h1:97dSg7Ku6fZIyYdu6XUrh31SaKMdnSUN3aDW2Fi8Zp8=
 github.com/cockroachdb/pebble v0.0.0-20200111020457-a00e53f2b05a h1:by5lv7akW7YhfZelaNN/SSuew4pr+M8SzVWpr+/1700=
 github.com/cockroachdb/pebble v0.0.0-20200111020457-a00e53f2b05a/go.mod h1:97dSg7Ku6fZIyYdu6XUrh31SaKMdnSUN3aDW2Fi8Zp8=
+github.com/cockroachdb/pebble v0.0.0-20200116011840-630c28c1074e h1:/64z8pOdvLPVWnDrDCLho2kBeLXB//E3w4rrWGqCE04=
+github.com/cockroachdb/pebble v0.0.0-20200116011840-630c28c1074e/go.mod h1:97dSg7Ku6fZIyYdu6XUrh31SaKMdnSUN3aDW2Fi8Zp8=
+github.com/cockroachdb/pebble v0.0.0-20200121195918-c23353d37a7f h1:BCwKMHAtdfGVA7zRu901jItbI60uIflxtN5X3WCsTa8=
+github.com/cockroachdb/pebble v0.0.0-20200121195918-c23353d37a7f/go.mod h1:97dSg7Ku6fZIyYdu6XUrh31SaKMdnSUN3aDW2Fi8Zp8=
 github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd/go.mod h1:sE/e/2PUdi/liOCUjSTXgM1o87ZssimdTWN964YiIeI=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/ghemawat/stream v0.0.0-20171120220530-696b145b53b9/go.mod h1:106OIgooyS7OzLDOpUGgm9fA3bQENb/cFSyyBmMoJDs=
@@ -29,6 +33,8 @@ github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441/go.mod h1:qapgC/G
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/lni/goutils v0.0.0-20200123080223-6f37aef54ee4 h1:XD80mC7KFUcoVGPpKQZGalLXuWTDg5Rnl43GixiMD2A=
+github.com/lni/goutils v0.0.0-20200123080223-6f37aef54ee4/go.mod h1:NDD+zR5cMNH2OsJj+r/X7zBSzBlmxytUUot268gtOOw=
 github.com/lni/goutils v1.0.0 h1:6WZd06gJ8Z5D/xsfo/0Vjvpka4CnsfFEqA46jEa+QtY=
 github.com/lni/goutils v1.0.0/go.mod h1:YXJ/qxCzsqyfhiMd8eVZ+8EP+BZfzC3mbMIY5lJdqOg=
 github.com/lni/goutils v1.0.1 h1:b0RTWAg84viMYUy9zJZGATzyXZlCLra3HqMgzydCx8I=

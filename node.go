@@ -20,6 +20,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -30,7 +31,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/fileutil"
 	"github.com/lni/goutils/syncutil"
 )
 
@@ -166,7 +166,7 @@ func newNode(raftAddress string,
 			nodeID:       config.NodeID,
 		},
 	}
-	sm := rsm.NewStateMachine(dataStore, snapshotter, config, rn)
+	sm := rsm.NewStateMachine(dataStore, snapshotter, config, rn, snapshotter.fs)
 	rn.taskQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
@@ -395,7 +395,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 	if opt.Exported {
 		plog.Infof("%s called export snapshot", n.id())
 		st = rsm.ExportedSnapshot
-		exist, err := fileutil.Exist(opt.ExportPath)
+		exist, err := fileutil.Exist(opt.ExportPath, n.snapshotter.fs)
 		if err != nil {
 			return nil, err
 		}
@@ -657,7 +657,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	if req.IsExportedSnapshot() {
 		return ss.Index, nil
 	}
-	if !ss.Validate() {
+	if !ss.Validate(n.snapshotter.fs) {
 		plog.Panicf("%s generated invalid snapshot %v", n.id(), ss)
 	}
 	if err = n.logreader.CreateSnapshot(*ss); err != nil {

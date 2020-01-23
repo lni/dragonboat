@@ -31,6 +31,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils/dio"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -271,7 +272,7 @@ func BenchmarkFSyncLatency(b *testing.B) {
 	b.StopTimer()
 	l := logger.GetLogger("logdb")
 	l.SetLevel(logger.WARNING)
-	db := getNewTestDB("db", "lldb")
+	db := getNewTestDB("db", "lldb", vfs.DefaultFS)
 	defer os.RemoveAll(rdbTestDirectory)
 	defer db.Close()
 	e := pb.Entry{
@@ -304,7 +305,7 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	b.StopTimer()
 	l := logger.GetLogger("logdb")
 	l.SetLevel(logger.WARNING)
-	db := getNewTestDB("db", "lldb")
+	db := getNewTestDB("db", "lldb", vfs.DefaultFS)
 	defer os.RemoveAll(rdbTestDirectory)
 	defer db.Close()
 	clusterID := uint64(1)
@@ -531,7 +532,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	done := make(chan struct{})
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
-	smo := rsm.NewStateMachine(nds, nil, config, &testDummyNodeProxy{})
+	smo := rsm.NewStateMachine(nds, nil, config, &testDummyNodeProxy{}, vfs.DefaultFS)
 	idx := uint64(0)
 	var s *client.Session
 	if noopSession {

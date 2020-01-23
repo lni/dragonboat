@@ -229,7 +229,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		streamConnections: streamConnections,
 	}
 	chunks := NewSnapshotChunks(t.handleRequest,
-		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator)
+		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator, nhConfig.FS)
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, chunks)
 	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC

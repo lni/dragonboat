@@ -19,36 +19,40 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/syncutil"
 )
 
 func TestSnapshotLaneCanBeCreatedInSavedMode(t *testing.T) {
-	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil)
+	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	transport := NewNOOPTransport(cfg, nil, nil)
+	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil, cfg.FS)
 	if cap(c.ch) != 201 {
 		t.Errorf("unexpected chan length %d, want 201", cap(c.ch))
 	}
 }
 
 func TestSnapshotLaneCanBeCreatedInStreamingMode(t *testing.T) {
-	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil)
+	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	transport := NewNOOPTransport(cfg, nil, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil, cfg.FS)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
 }
 
 func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
+	fs := vfs.GetTestFS()
 	m := pb.Message{
 		Type: pb.InstallSnapshot,
 		Snapshot: pb.Snapshot{
 			FileSize: 1024 * 1024 * 512,
 		},
 	}
-	chunks := splitSnapshotMessage(m)
+	chunks := splitSnapshotMessage(m, fs)
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, false, len(chunks), transport, nil)
+	c := newLane(context.Background(), 1, 1, 1, false, len(chunks), transport, nil, fs)
 	if cap(c.ch) != len(chunks) {
 		t.Errorf("unexpected chan length %d", cap(c.ch))
 	}
@@ -59,8 +63,9 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 }
 
 func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
-	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
+	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	transport := NewNOOPTransport(cfg, nil, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, cfg.FS)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -100,8 +105,9 @@ func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 }
 
 func testSpecialChunkCanStopTheProcessLoop(t *testing.T, tt uint64, experr error) {
-	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil)
+	cfg := config.NodeHostConfig{FS: vfs.GetTestFS()}
+	transport := NewNOOPTransport(cfg, nil, nil)
+	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, cfg.FS)
 	if err := c.connect("a1"); err != nil {
 		t.Fatalf("connect failed %v", err)
 	}

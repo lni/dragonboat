@@ -26,7 +26,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/lni/goutils/fileutil"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
 var (
@@ -122,12 +123,13 @@ type SSEnv struct {
 	tmpDir   string
 	finalDir string
 	filepath string
+	fs       vfs.IFS
 }
 
 // NewSSEnv creates and returns a new SSEnv instance.
 func NewSSEnv(f GetSnapshotDirFunc,
 	clusterID uint64, nodeID uint64, index uint64,
-	from uint64, mode Mode) *SSEnv {
+	from uint64, mode Mode, fs vfs.IFS) *SSEnv {
 	var tmpSuffix string
 	if mode == SnapshottingMode {
 		tmpSuffix = genTmpDirSuffix
@@ -143,6 +145,7 @@ func NewSSEnv(f GetSnapshotDirFunc,
 		tmpDir:   getTempSnapshotDirName(rootDir, tmpSuffix, index, from),
 		finalDir: getFinalSnapshotDirName(rootDir, index),
 		filepath: fp,
+		fs:       fs,
 	}
 }
 
@@ -208,7 +211,7 @@ func (se *SSEnv) RemoveFinalDir() error {
 // SaveSSMetadata saves the metadata of the snapshot file.
 func (se *SSEnv) SaveSSMetadata(msg proto.Message) error {
 	err := fileutil.CreateFlagFile(se.tmpDir,
-		SnapshotMetadataFilename, msg)
+		SnapshotMetadataFilename, msg, se.fs)
 	return err
 }
 
@@ -216,7 +219,7 @@ func (se *SSEnv) SaveSSMetadata(msg proto.Message) error {
 // available in the final directory.
 func (se *SSEnv) HasFlagFile() bool {
 	fp := filepath.Join(se.finalDir, fileutil.SnapshotFlagFilename)
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
+	if _, err := se.fs.Stat(fp); os.IsNotExist(err) {
 		return false
 	}
 	return true
@@ -224,7 +227,8 @@ func (se *SSEnv) HasFlagFile() bool {
 
 // RemoveFlagFile removes the flag file from the final directory.
 func (se *SSEnv) RemoveFlagFile() error {
-	return fileutil.RemoveFlagFile(se.finalDir, fileutil.SnapshotFlagFilename)
+	return fileutil.RemoveFlagFile(se.finalDir,
+		fileutil.SnapshotFlagFilename, se.fs)
 }
 
 // GetFilename returns the snapshot filename.
@@ -249,32 +253,32 @@ func (se *SSEnv) GetTempFilepath() string {
 
 func (se *SSEnv) createDir(dir string) error {
 	mustBeChild(se.rootDir, dir)
-	return fileutil.Mkdir(dir)
+	return fileutil.Mkdir(dir, se.fs)
 }
 
 func (se *SSEnv) removeDir(dir string) error {
 	mustBeChild(se.rootDir, dir)
-	if err := os.RemoveAll(dir); err != nil {
+	if err := se.fs.RemoveAll(dir); err != nil {
 		return err
 	}
-	return fileutil.SyncDir(se.rootDir)
+	return fileutil.SyncDir(se.rootDir, se.fs)
 }
 
 func (se *SSEnv) finalDirExists() bool {
-	if _, err := os.Stat(se.finalDir); os.IsNotExist(err) {
+	if _, err := se.fs.Stat(se.finalDir); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
 func (se *SSEnv) renameTempDirToFinalDir() error {
-	if err := os.Rename(se.tmpDir, se.finalDir); err != nil {
+	if err := se.fs.Rename(se.tmpDir, se.finalDir); err != nil {
 		return err
 	}
-	return fileutil.SyncDir(se.rootDir)
+	return fileutil.SyncDir(se.rootDir, se.fs)
 }
 
 func (se *SSEnv) createFlagFile(msg proto.Message) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
-		fileutil.SnapshotFlagFilename, msg)
+		fileutil.SnapshotFlagFilename, msg, se.fs)
 }

@@ -20,6 +20,7 @@ import (
 	"flag"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 	DefaultKVStoreTypeName = "custom"
 )
 
-func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
+func newDefaultKVStore(dir string, wal string, fs vfs.fs) (kv.IKVStore, error) {
 	if v := flag.Lookup("test.v"); v == nil || v.Value.String() != "true" {
 		panic("not suppose to be called")
 	} else {

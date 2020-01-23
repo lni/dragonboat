@@ -19,6 +19,7 @@ import (
 	"errors"
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -75,12 +76,13 @@ type lane struct {
 	failed             chan struct{}
 	streamChunkSent    atomic.Value
 	preStreamChunkSend atomic.Value
+	fs                 vfs.IFS
 }
 
 func newLane(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	did uint64, streaming bool, sz int, rpc raftio.IRaftRPC,
-	stopc chan struct{}) *lane {
+	stopc chan struct{}, fs vfs.IFS) *lane {
 	l := &lane{
 		clusterID:    clusterID,
 		nodeID:       nodeID,
@@ -90,6 +92,7 @@ func newLane(ctx context.Context,
 		rpc:          rpc,
 		stopc:        stopc,
 		failed:       make(chan struct{}),
+		fs:           fs,
 	}
 	var chsz int
 	if streaming {
@@ -118,7 +121,7 @@ func (l *lane) connect(addr string) error {
 }
 
 func (l *lane) sendSavedSnapshot(m pb.Message) {
-	chunks := splitSnapshotMessage(m)
+	chunks := splitSnapshotMessage(m, l.fs)
 	if len(chunks) != cap(l.ch) {
 		plog.Panicf("cap of ch is %d, want %d", cap(l.ch), len(chunks))
 	}
@@ -208,7 +211,7 @@ func (l *lane) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 		chunkData := make([]byte, snapshotChunkSize)
 		chunk.DeploymentId = l.deploymentID
 		if !chunk.Witness {
-			data, err := loadSnapshotChunkData(chunk, chunkData)
+			data, err := loadSnapshotChunkData(chunk, chunkData, l.fs)
 			if err != nil {
 				plog.Errorf("failed to read the snapshot chunk, %v", err)
 				return err

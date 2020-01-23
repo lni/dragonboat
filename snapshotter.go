@@ -16,19 +16,18 @@ package dragonboat
 
 import (
 	"errors"
-	"io/ioutil"
 	"math"
-	"os"
 	"path/filepath"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/utils/dio"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/fileutil"
 )
 
 const (
@@ -60,6 +59,7 @@ type snapshotter struct {
 	nodeID      uint64
 	logdb       raftio.ILogDB
 	stopc       chan struct{}
+	fs          vfs.IFS
 }
 
 func newSnapshotter(clusterID uint64,
@@ -74,6 +74,7 @@ func newSnapshotter(clusterID uint64,
 		clusterID:   clusterID,
 		nodeID:      nodeID,
 		stopc:       stopc,
+		fs:          nhConfig.FS,
 	}
 }
 
@@ -102,7 +103,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	fp := env.GetTempFilepath()
 	ct := compressionType(meta.CompressionType)
 	writer, err := rsm.NewSnapshotWriter(fp,
-		rsm.SnapshotVersion, meta.CompressionType)
+		rsm.SnapshotVersion, meta.CompressionType, s.fs)
 	if err != nil {
 		return nil, env, err
 	}
@@ -143,7 +144,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 
 func (s *snapshotter) Load(sessions rsm.ILoadableSessions,
 	asm rsm.ILoadableSM, fp string, fs []sm.SnapshotFile) (err error) {
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
 	}
@@ -241,10 +242,10 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
 			plog.Infof("%s shrinking snapshot %d, %d", s.id(), ss.Index, idx)
-			if err := rsm.ShrinkSnapshot(fp, shrinkedFp); err != nil {
+			if err := rsm.ShrinkSnapshot(fp, shrinkedFp, s.fs); err != nil {
 				return err
 			}
-			if err := rsm.ReplaceSnapshotFile(shrinkedFp, fp); err != nil {
+			if err := rsm.ReplaceSnapshotFile(shrinkedFp, fp, s.fs); err != nil {
 				return err
 			}
 		}
@@ -277,11 +278,15 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 }
 
 func (s *snapshotter) ProcessOrphans() error {
-	files, err := ioutil.ReadDir(s.dir)
+	files, err := s.fs.List(s.dir)
 	if err != nil {
 		return err
 	}
-	for _, fi := range files {
+	for _, n := range files {
+		fi, err := s.fs.Stat(s.fs.PathJoin(s.dir, n))
+		if err != nil {
+			return err
+		}
 		if !fi.IsDir() {
 			continue
 		}
@@ -290,7 +295,7 @@ func (s *snapshotter) ProcessOrphans() error {
 			plog.Infof("found a orphan snapshot dir %s, %s", fi.Name(), fdir)
 			var ss pb.Snapshot
 			if err := fileutil.GetFlagFileContent(fdir,
-				fileutil.SnapshotFlagFilename, &ss); err != nil {
+				fileutil.SnapshotFlagFilename, &ss, s.fs); err != nil {
 				return err
 			}
 			if pb.IsEmptySnapshot(ss) {
@@ -322,14 +327,15 @@ func (s *snapshotter) ProcessOrphans() error {
 				if err := env.RemoveFlagFile(); err != nil {
 					return err
 				}
+				plog.Infof("flag file removed")
 			}
 		} else if s.isZombieDir(fi.Name()) {
 			plog.Infof("going to delete a zombie dir %s", fdir)
-			if err := os.RemoveAll(fdir); err != nil {
+			if err := s.fs.RemoveAll(fdir); err != nil {
 				return err
 			}
 			plog.Infof("going to sync the folder %s", s.dir)
-			if err := fileutil.SyncDir(s.dir); err != nil {
+			if err := fileutil.SyncDir(s.dir, s.fs); err != nil {
 				return err
 			}
 		}
@@ -344,7 +350,7 @@ func (s *snapshotter) removeFlagFile(index uint64) error {
 
 func (s *snapshotter) getSSEnv(index uint64) *server.SSEnv {
 	return server.NewSSEnv(s.rootDirFunc,
-		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshottingMode)
+		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshottingMode, s.fs)
 }
 
 func (s *snapshotter) getCustomSSEnv(meta *rsm.SSMeta) *server.SSEnv {
@@ -356,7 +362,7 @@ func (s *snapshotter) getCustomSSEnv(meta *rsm.SSMeta) *server.SSEnv {
 			return meta.Request.Path
 		}
 		return server.NewSSEnv(getPath,
-			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode)
+			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode, s.fs)
 	}
 	return s.getSSEnv(meta.Index)
 }
@@ -384,5 +390,5 @@ func (s *snapshotter) isOrphanDir(dir string) bool {
 		return false
 	}
 	fdir := filepath.Join(s.dir, dir)
-	return fileutil.HasFlagFile(fdir, fileutil.SnapshotFlagFilename)
+	return fileutil.HasFlagFile(fdir, fileutil.SnapshotFlagFilename, s.fs)
 }

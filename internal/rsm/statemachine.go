@@ -30,6 +30,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -176,6 +177,7 @@ type StateMachine struct {
 	aborted         bool
 	isWitness       bool
 	sct             config.CompressionType
+	fs              vfs.IFS
 	syncedIndex     struct {
 		sync.Mutex
 		index uint64
@@ -188,7 +190,8 @@ type StateMachine struct {
 
 // NewStateMachine creates a new application state machine object.
 func NewStateMachine(sm IManagedStateMachine,
-	snapshotter ISnapshotter, cfg config.Config, proxy INodeProxy) *StateMachine {
+	snapshotter ISnapshotter,
+	cfg config.Config, proxy INodeProxy, fs vfs.IFS) *StateMachine {
 	ordered := cfg.OrderedConfigChange
 	ct := cfg.SnapshotCompressionType
 	a := &StateMachine{
@@ -201,6 +204,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
 		isWitness:   cfg.IsWitness,
 		sct:         ct,
+		fs:          fs,
 	}
 	return a
 }
@@ -226,7 +230,7 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	if pb.IsEmptySnapshot(ss) {
 		return 0, nil
 	}
-	ss.Validate()
+	ss.Validate(s.fs)
 	plog.Infof("%s called RecoverFromSnapshot, idx %d, on disk idx %d",
 		s.id(), ss.Index, ss.OnDiskIndex)
 	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
@@ -272,7 +276,7 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	// just a self test to see whether it is trying to recover from a shrunk
 	// snapshot
 	fn := s.snapshotter.GetFilePath(ss.Index)
-	shrunk, err := IsShrinkedSnapshotFile(fn)
+	shrunk, err := IsShrinkedSnapshotFile(fn, s.fs)
 	if err != nil {
 		panic(err)
 	}

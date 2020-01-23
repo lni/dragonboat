@@ -16,16 +16,14 @@ package server
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 )
 
 const (
@@ -42,17 +40,18 @@ func getTestNodeHostConfig() config.NodeHostConfig {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 50,
 		RaftAddress:    testAddress,
+		FS:             vfs.GetTestFS(),
 	}
 }
 
 func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
+	c := getTestNodeHostConfig()
+	defer c.FS.RemoveAll(singleNodeHostTestDir)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("panic not expected")
 		}
 	}()
-	c := getTestNodeHostConfig()
 	ctx, err := NewContext(c)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
@@ -70,7 +69,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		Hostname:     ctx.hostname,
 		DeploymentId: testDeploymentID,
 	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, c.FS)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -82,8 +81,8 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	addr string, hostname string, binVer uint32, name string, hardHashMismatch bool, expErr error) {
-	defer os.RemoveAll(singleNodeHostTestDir)
 	c := getTestNodeHostConfig()
+	defer c.FS.RemoveAll(singleNodeHostTestDir)
 	ctx, err := NewContext(c)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
@@ -102,7 +101,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if hardHashMismatch {
 		status.HardHash = 1
 	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status)
+	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, c.FS)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -139,8 +138,8 @@ func TestCanDetectMismatchedHardHash(t *testing.T) {
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
-	defer os.RemoveAll(singleNodeHostTestDir)
 	c := getTestNodeHostConfig()
+	defer c.FS.RemoveAll(singleNodeHostTestDir)
 	ctx, err := NewContext(c)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
@@ -155,31 +154,36 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 }
 
 func TestRemoveSavedSnapshots(t *testing.T) {
-	os.RemoveAll(singleNodeHostTestDir)
-	if err := os.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(singleNodeHostTestDir)
+	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(singleNodeHostTestDir)
+	defer fs.RemoveAll(singleNodeHostTestDir)
 	for i := 0; i < 16; i++ {
-		ssdir := filepath.Join(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))
-		if err := os.MkdirAll(ssdir, 0755); err != nil {
+		ssdir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))
+		if err := fs.MkdirAll(ssdir, 0755); err != nil {
 			t.Fatalf("failed to mkdir %v", err)
 		}
 	}
 	for i := 1; i <= 2; i++ {
-		ssdir := filepath.Join(singleNodeHostTestDir, fmt.Sprintf("mydata-%X", i))
-		if err := os.MkdirAll(ssdir, 0755); err != nil {
+		ssdir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("mydata-%X", i))
+		if err := fs.MkdirAll(ssdir, 0755); err != nil {
 			t.Fatalf("failed to mkdir %v", err)
 		}
 	}
-	if err := removeSavedSnapshots(singleNodeHostTestDir); err != nil {
+	if err := removeSavedSnapshots(singleNodeHostTestDir, fs); err != nil {
 		t.Fatalf("failed to remove saved snapshots %v", err)
 	}
-	files, err := ioutil.ReadDir(singleNodeHostTestDir)
+	files, err := fs.List(singleNodeHostTestDir)
 	if err != nil {
 		t.Fatalf("failed to read dir %v", err)
 	}
-	for _, fi := range files {
+	for _, fn := range files {
+		fi, err := fs.Stat(fs.PathJoin(singleNodeHostTestDir, fn))
+		if err != nil {
+			t.Fatalf("failed to get stat %v", err)
+		}
 		if !fi.IsDir() {
 			t.Errorf("found unexpected file %v", fi)
 		}

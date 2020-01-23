@@ -17,12 +17,12 @@ package raftpb
 import (
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"unsafe"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/goutils/stringutil"
 )
@@ -257,35 +257,35 @@ func (b *Bootstrap) Validate(nodes map[uint64]string,
 	return valid
 }
 
-func checkFileSize(path string, size uint64) {
+func checkFileSize(path string, size uint64, fs vfs.IFS) {
 	var er func(format string, args ...interface{})
 	if panicOnSizeMismatch {
 		er = plog.Panicf
 	} else {
 		er = plog.Errorf
 	}
-	fs, err := os.Stat(path)
+	fi, err := fs.Stat(path)
 	if err != nil {
 		plog.Panicf("failed to access %s", path)
 	}
-	if size != uint64(fs.Size()) {
-		er("file %s size %d, expect %d", path, fs.Size(), size)
+	if size != uint64(fi.Size()) {
+		er("file %s size %d, expect %d", path, fi.Size(), size)
 	}
 }
 
 // Validate validates the snapshot instance.
-func (snapshot *Snapshot) Validate() bool {
+func (snapshot *Snapshot) Validate(fs vfs.IFS) bool {
 	if len(snapshot.Filepath) == 0 ||
 		snapshot.FileSize == 0 {
 		return false
 	}
-	checkFileSize(snapshot.Filepath, snapshot.FileSize)
+	checkFileSize(snapshot.Filepath, snapshot.FileSize, fs)
 	for _, f := range snapshot.Files {
 		if len(f.Filepath) == 0 ||
 			f.FileSize == 0 {
 			return false
 		}
-		checkFileSize(f.Filepath, f.FileSize)
+		checkFileSize(f.Filepath, f.FileSize, fs)
 	}
 	return true
 }

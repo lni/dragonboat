@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"sync/atomic"
+	"sync"
 
 	"github.com/cockroachdb/pebble"
+
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -79,8 +81,8 @@ func (w *pebbleWriteBatch) Count() int {
 }
 
 // NewKVStore returns a pebble based IKVStore instance.
-func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
-	return openPebbleDB(dir, wal)
+func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	return openPebbleDB(dir, wal, fs)
 }
 
 // KV is a pebble based IKVStore type.
@@ -91,21 +93,24 @@ type KV struct {
 	wo   *pebble.WriteOptions
 }
 
-var pebbleWarningFlag uint32
+var pebbleWarning sync.Once
 
-func openPebbleDB(dir string, walDir string) (kv.IKVStore, error) {
-	if atomic.CompareAndSwapUint32(&pebbleWarningFlag, 0, 1) {
+func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
+	pebbleWarning.Do(func() {
 		fmt.Fprintf(os.Stderr, "pebble support is experimental, DO NOT USE IN PRODUCTION\n")
-	}
+		if fs == vfs.MemStrictFS {
+			fmt.Fprintf(os.Stderr, "running in pebble memfs test mode\n")
+		}
+	})
 	lopts := make([]pebble.LevelOptions, 0)
-	fs := targetFileSizeBase
+	sz := targetFileSizeBase
 	for l := 0; l < 7; l++ {
 		opt := pebble.LevelOptions{
 			Compression:    pebble.NoCompression,
 			BlockSize:      blockSize,
-			TargetFileSize: fs,
+			TargetFileSize: sz,
 		}
-		fs = fs * 2
+		sz = sz * 2
 		lopts = append(lopts, opt)
 	}
 	if inMonkeyTesting {
@@ -120,6 +125,7 @@ func openPebbleDB(dir string, walDir string) (kv.IKVStore, error) {
 		L0CompactionThreshold:       l0FileNumCompactionTrigger,
 		L0StopWritesThreshold:       l0StopWritesTrigger,
 		Cache:                       pebble.NewCache(0),
+		FS:                          vfs.NewPebbleFS(fs),
 	}
 	if len(walDir) > 0 {
 		opts.WALDir = walDir

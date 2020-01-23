@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rocksdb
+// +build !dragonboat_memfs_test
 
-func directIOSupported(dir string) bool {
-	return false
+package vfs
+
+func GetTestFS() IFS {
+	return DefaultFS
 }

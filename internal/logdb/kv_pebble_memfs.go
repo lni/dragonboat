@@ -12,8 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rocksdb
+// +build dragonboat_pebble_memfs_test
 
-func directIOSupported(dir string) bool {
-	return false
+package logdb
+
+import (
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
+	"github.com/lni/dragonboat/v3/internal/vfs"
+)
+
+const (
+	// DefaultKVStoreTypeName is the type name of the default kv store
+	DefaultKVStoreTypeName = "pebble"
+)
+
+func newDefaultKVStore(dir string,
+	wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if fs == nil {
+		panic("nil fs")
+	}
+	if fs != vfs.MemStrictFS {
+		panic("invalid fs")
+	}
+	return pebble.NewKVStore(dir, wal, fs)
+}
+
+func getTestFS() vfs.IFS {
+	return vfs.MemStrictFS
 }

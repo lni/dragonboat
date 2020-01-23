@@ -89,7 +89,6 @@ func (nh *NodeHost) StartClusterUsingPlugin(nodes map[uint64]string,
 	join bool, pluginFile string, factoryName string,
 	smType int32, config config.Config) error {
 	stopc := make(chan struct{})
-	// appName := fileutil.GetAppNameFromFilename(pluginFile)
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		return cpp.NewStateMachineWrapperFromPlugin(clusterID, nodeID,

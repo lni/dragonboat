@@ -20,6 +20,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -72,8 +73,9 @@ func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 	return located, nil
 }
 
-func hasBatchedRecord(dir string, wal string, kvf kvFactory) (bool, error) {
-	kvs, err := kvf(dir, wal)
+func hasBatchedRecord(dir string,
+	wal string, fs vfs.IFS, kvf kvFactory) (bool, error) {
+	kvs, err := kvf(dir, wal, fs)
 	if err != nil {
 		return false, err
 	}
@@ -86,8 +88,8 @@ func hasBatchedRecord(dir string, wal string, kvf kvFactory) (bool, error) {
 }
 
 func openRDB(dir string, wal string,
-	batched bool, kvf kvFactory) (*rdb, error) {
-	kvs, err := kvf(dir, wal)
+	batched bool, fs vfs.IFS, kvf kvFactory) (*rdb, error) {
+	kvs, err := kvf(dir, wal, fs)
 	if err != nil {
 		return nil, err
 	}

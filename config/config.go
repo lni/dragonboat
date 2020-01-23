@@ -23,6 +23,7 @@ import (
 	"errors"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -311,6 +312,8 @@ type NodeHostConfig struct {
 	// received each second for all Raft clusters managed by the NodeHost instance.
 	// The default value 0 means there is no limit for receiving snapshot data.
 	MaxSnapshotRecvBytesPerSecond uint64
+
+	FS vfs.IFS
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -347,6 +350,9 @@ func (c *NodeHostConfig) Validate() error {
 	if c.MaxReceiveQueueSize > 0 &&
 		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxReceiveSize value is too small")
+	}
+	if c.FS == nil {
+		c.FS = vfs.GetTestFS()
 	}
 	return nil
 }

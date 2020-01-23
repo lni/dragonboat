@@ -41,9 +41,9 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 )
 
 var (
@@ -91,7 +91,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	if m.Type != pb.InstallSnapshot {
 		panic("non-snapshot message received by ASyncSendSnapshot")
 	}
-	chunks := splitSnapshotMessage(m)
+	chunks := splitSnapshotMessage(m, t.nhConfig.FS)
 	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		return false
@@ -122,7 +122,8 @@ func (t *Transport) tryCreateLane(key raftio.NodeInfo,
 func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *lane {
 	c := newLane(t.ctx, key.ClusterID, key.NodeID,
-		t.getDeploymentID(), streaming, sz, t.raftRPC, t.stopper.ShouldStop())
+		t.getDeploymentID(), streaming, sz, t.raftRPC,
+		t.stopper.ShouldStop(), t.nhConfig.FS)
 	c.streamChunkSent = t.streamChunkSent
 	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {
@@ -249,8 +250,8 @@ func getChunks(m pb.Message) []pb.SnapshotChunk {
 	return results
 }
 
-func getWitnessChunk(m pb.Message) []pb.SnapshotChunk {
-	ss, err := rsm.GetWitnessSnapshot()
+func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
+	ss, err := rsm.GetWitnessSnapshot(fs)
 	if err != nil {
 		panic(err)
 	}
@@ -277,31 +278,28 @@ func getWitnessChunk(m pb.Message) []pb.SnapshotChunk {
 	return results
 }
 
-func splitSnapshotMessage(m pb.Message) []pb.SnapshotChunk {
+func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
 	if m.Type != pb.InstallSnapshot {
 		panic("not a snapshot message")
 	}
 	if m.Snapshot.Witness {
-		return getWitnessChunk(m)
+		return getWitnessChunk(m, fs)
 	}
 	return getChunks(m)
 }
 
 func loadSnapshotChunkData(chunk pb.SnapshotChunk,
-	data []byte) ([]byte, error) {
-	f, err := fileutil.OpenChunkFileForRead(chunk.Filepath)
+	data []byte, fs vfs.IFS) ([]byte, error) {
+	f, err := OpenChunkFileForRead(chunk.Filepath, fs)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 	offset := chunk.FileChunkId * snapshotChunkSize
-	if _, err = f.SeekFromBeginning(int64(offset)); err != nil {
-		return nil, err
-	}
 	if chunk.ChunkSize != uint64(len(data)) {
 		data = make([]byte, chunk.ChunkSize)
 	}
-	n, err := f.Read(data)
+	n, err := f.ReadAt(data, int64(offset))
 	if err != nil {
 		return nil, err
 	}

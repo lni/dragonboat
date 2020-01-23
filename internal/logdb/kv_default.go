@@ -14,6 +14,7 @@
 
 // +build !dragonboat_no_rocksdb
 // +build !dragonboat_pebble_test
+// +build !dragonboat_pebble_memfs_test
 // +build !dragonboat_leveldb_test
 
 package logdb
@@ -21,6 +22,7 @@ package logdb
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
 const (
@@ -28,6 +30,14 @@ const (
 	DefaultKVStoreTypeName = "rocksdb"
 )
 
-func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
-	return rocksdb.NewKVStore(dir, wal)
+func newDefaultKVStore(dir string,
+	wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if fs != vfs.DefaultFS {
+		panic("invalid fs")
+	}
+	return rocksdb.NewKVStore(dir, wal, fs)
+}
+
+func getTestFS() vfs.IFS {
+	return vfs.DefaultFS
 }

@@ -19,6 +19,7 @@ package logdb
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
 const (
@@ -26,6 +27,14 @@ const (
 	DefaultKVStoreTypeName = "pebble"
 )
 
-func newDefaultKVStore(dir string, wal string) (kv.IKVStore, error) {
-	return pebble.NewKVStore(dir, wal)
+func newDefaultKVStore(dir string,
+	wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if fs != vfs.DefaultFS {
+		panic("invalid fs")
+	}
+	return pebble.NewKVStore(dir, wal, fs)
+}
+
+func getTestFS() vfs.IFS {
+	return vfs.DefaultFS
 }

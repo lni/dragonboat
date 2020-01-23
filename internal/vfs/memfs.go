@@ -12,22 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rocksdb
+// +build dragonboat_memfs_test
 
-import (
-	"os"
-	"path/filepath"
-	"syscall"
-)
+package vfs
 
-func directIOSupported(dir string) bool {
-	testfp := filepath.Join(dir, ".direct_io_test_safe_to_delete.dragonboat")
-	defer os.Remove(testfp)
-	f, err := os.OpenFile(testfp, os.O_CREATE|syscall.O_DIRECT, 0x777)
-	if err != nil {
-		plog.Errorf("direct io failed: %v", err)
-		return false
-	}
-	f.Close()
-	return true
+func GetTestFS() IFS {
+	return MemStrictFS
 }

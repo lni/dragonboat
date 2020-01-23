@@ -18,16 +18,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 )
 
 var (
@@ -75,6 +75,7 @@ type Chunks struct {
 	locks           map[string]*snapshotLock
 	timeoutTick     uint64
 	gcTick          uint64
+	fs              vfs.IFS
 	mu              sync.Mutex
 }
 
@@ -82,7 +83,8 @@ type Chunks struct {
 func NewSnapshotChunks(onReceive func(pb.MessageBatch),
 	confirm func(uint64, uint64, uint64),
 	getDeploymentID func() uint64,
-	getSnapshotDirFunc server.GetSnapshotDirFunc) *Chunks {
+	getSnapshotDirFunc server.GetSnapshotDirFunc,
+	fs vfs.IFS) *Chunks {
 	return &Chunks{
 		validate:        true,
 		onReceive:       onReceive,
@@ -93,6 +95,7 @@ func NewSnapshotChunks(onReceive func(pb.MessageBatch),
 		timeoutTick:     snapshotChunkTimeoutTick,
 		gcTick:          gcIntervalTick,
 		getSnapshotDir:  getSnapshotDirFunc,
+		fs:              fs,
 	}
 }
 
@@ -283,7 +286,7 @@ func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
 func (c *Chunks) nodeRemoved(chunk pb.SnapshotChunk) (bool, error) {
 	env := c.getSSEnv(chunk)
 	dir := env.GetRootDir()
-	return fileutil.IsDirMarkedAsDeleted(dir)
+	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
 func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
@@ -293,14 +296,14 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
 			return err
 		}
 	}
-	fn := filepath.Base(chunk.Filepath)
-	fp := filepath.Join(env.GetTempDir(), fn)
-	var f *fileutil.ChunkFile
+	fn := c.fs.PathBase(chunk.Filepath)
+	fp := c.fs.PathJoin(env.GetTempDir(), fn)
+	var f *ChunkFile
 	var err error
 	if chunk.FileChunkId == 0 {
-		f, err = fileutil.CreateChunkFile(fp)
+		f, err = CreateChunkFile(fp, c.fs)
 	} else {
-		f, err = fileutil.OpenChunkFileForAppend(fp)
+		f, err = OpenChunkFileForAppend(fp, c.fs)
 	}
 	if err != nil {
 		return err
@@ -324,7 +327,7 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
 func (c *Chunks) getSSEnv(chunk pb.SnapshotChunk) *server.SSEnv {
 	return server.NewSSEnv(c.getSnapshotDir,
 		chunk.ClusterId, chunk.NodeId, chunk.Index, chunk.From,
-		server.ReceivingMode)
+		server.ReceivingMode, c.fs)
 }
 
 func (c *Chunks) finalizeSnapshot(chunk pb.SnapshotChunk, td *tracked) error {
@@ -363,14 +366,14 @@ func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
 	s.Term = chunk.Term
 	s.OnDiskIndex = chunk.OnDiskIndex
 	s.Membership = chunk.Membership
-	fn := filepath.Base(chunk.Filepath)
-	s.Filepath = filepath.Join(snapDir, fn)
+	fn := c.fs.PathBase(chunk.Filepath)
+	s.Filepath = c.fs.PathJoin(snapDir, fn)
 	s.FileSize = chunk.FileSize
 	s.Witness = chunk.Witness
 	m.Snapshot = s
 	m.Snapshot.Files = files
 	for idx := range m.Snapshot.Files {
-		fp := filepath.Join(snapDir, m.Snapshot.Files[idx].Filename())
+		fp := c.fs.PathJoin(snapDir, m.Snapshot.Files[idx].Filename())
 		m.Snapshot.Files[idx].Filepath = fp
 	}
 	return pb.MessageBatch{

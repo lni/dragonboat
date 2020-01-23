@@ -17,14 +17,13 @@ package tools
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -51,15 +50,16 @@ func TestCheckImportSettings(t *testing.T) {
 }
 
 func TestGetSnapshotFilenames(t *testing.T) {
-	os.RemoveAll(testDataDir)
-	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(testDataDir)
+	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(testDataDir)
+	defer fs.RemoveAll(testDataDir)
 	for i := 0; i < 16; i++ {
 		fn := fmt.Sprintf("%d.%s", i, server.SnapshotFileSuffix)
-		dst := filepath.Join(testDataDir, fn)
-		f, err := os.Create(dst)
+		dst := fs.PathJoin(testDataDir, fn)
+		f, err := fs.Create(dst)
 		if err != nil {
 			t.Fatalf("failed to create file %v", err)
 		}
@@ -67,46 +67,47 @@ func TestGetSnapshotFilenames(t *testing.T) {
 			t.Fatalf("failed to close file %v", err)
 		}
 	}
-	fns, err := getSnapshotFilenames(testDataDir)
+	fns, err := getSnapshotFilenames(testDataDir, fs)
 	if err != nil {
 		t.Fatalf("failed to get filenames %v", err)
 	}
 	if len(fns) != 16 {
 		t.Errorf("failed to return all filenames")
 	}
-	fps, err := getSnapshotFiles(testDataDir)
+	fps, err := getSnapshotFiles(testDataDir, fs)
 	if err != nil {
 		t.Fatalf("failed to get filenames %v", err)
 	}
 	if len(fps) != 16 {
 		t.Errorf("failed to return all filenames")
 	}
-	_, err = getSnapshotFilepath(testDataDir)
+	_, err = getSnapshotFilepath(testDataDir, fs)
 	if err != ErrIncompleteSnapshot {
 		t.Errorf("failed to report ErrIncompleteSnapshot, got %v", err)
 	}
 }
 
 func TestSnapshotFilepath(t *testing.T) {
-	os.RemoveAll(testDataDir)
-	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(testDataDir)
+	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(testDataDir)
+	defer fs.RemoveAll(testDataDir)
 	fn := fmt.Sprintf("testdata.%s", server.SnapshotFileSuffix)
-	dst := filepath.Join(testDataDir, fn)
-	f, err := os.Create(dst)
+	dst := fs.PathJoin(testDataDir, fn)
+	f, err := fs.Create(dst)
 	if err != nil {
 		t.Fatalf("failed to create file %v", err)
 	}
 	if err := f.Close(); err != nil {
 		t.Fatalf("failed to close file %v", err)
 	}
-	fp, err := getSnapshotFilepath(testDataDir)
+	fp, err := getSnapshotFilepath(testDataDir, fs)
 	if err != nil {
 		t.Errorf("failed to get snapshot file path %v", err)
 	}
-	if fp != filepath.Join(testDataDir, fn) {
+	if fp != fs.PathJoin(testDataDir, fn) {
 		t.Errorf("unexpected fp %s", fp)
 	}
 }
@@ -135,8 +136,8 @@ func TestCheckMembers(t *testing.T) {
 	}
 }
 
-func createTestDataFile(path string, sz uint64) error {
-	f, err := os.Create(path)
+func createTestDataFile(path string, sz uint64, fs vfs.IFS) error {
+	f, err := fs.Create(path)
 	if err != nil {
 		return err
 	}
@@ -150,58 +151,60 @@ func createTestDataFile(path string, sz uint64) error {
 }
 
 func TestCopySnapshot(t *testing.T) {
-	os.RemoveAll(testDataDir)
-	os.RemoveAll(testDstDataDir)
-	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(testDataDir)
+	fs.RemoveAll(testDstDataDir)
+	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	if err := os.MkdirAll(testDstDataDir, 0755); err != nil {
+	if err := fs.MkdirAll(testDstDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(testDataDir)
-	defer os.RemoveAll(testDstDataDir)
-	src := filepath.Join(testDataDir, "test.gbsnap")
-	if err := createTestDataFile(src, 1024); err != nil {
+	defer fs.RemoveAll(testDataDir)
+	defer fs.RemoveAll(testDstDataDir)
+	src := fs.PathJoin(testDataDir, "test.gbsnap")
+	if err := createTestDataFile(src, 1024, fs); err != nil {
 		t.Fatalf("failed to create test file %v", err)
 	}
-	extsrc := filepath.Join(testDataDir, "external-1")
-	if err := createTestDataFile(extsrc, 2048); err != nil {
+	extsrc := fs.PathJoin(testDataDir, "external-1")
+	if err := createTestDataFile(extsrc, 2048, fs); err != nil {
 		t.Fatalf("failed to create external test file %v", err)
 	}
 	ss := pb.Snapshot{
 		Filepath: src,
 		Files:    []*pb.SnapshotFile{{Filepath: extsrc}},
 	}
-	if err := copySnapshot(ss, testDataDir, testDstDataDir); err != nil {
+	if err := copySnapshot(ss, testDataDir, testDstDataDir, fs); err != nil {
 		t.Fatalf("failed to copy snapshot files %v", err)
 	}
-	exp := filepath.Join(testDstDataDir, "test.gbsnap")
-	fs, err := os.Stat(exp)
+	exp := fs.PathJoin(testDstDataDir, "test.gbsnap")
+	fi, err := fs.Stat(exp)
 	if err != nil {
 		t.Fatalf("failed to get file stat %v", err)
 	}
-	if fs.Size() != 1024 {
+	if fi.Size() != 1024 {
 		t.Errorf("failed to copy the file")
 	}
-	exp = filepath.Join(testDstDataDir, "external-1")
-	fs, err = os.Stat(exp)
+	exp = fs.PathJoin(testDstDataDir, "external-1")
+	fi, err = fs.Stat(exp)
 	if err != nil {
 		t.Fatalf("failed to get file stat %v", err)
 	}
-	if fs.Size() != 2048 {
+	if fi.Size() != 2048 {
 		t.Errorf("failed to copy the file")
 	}
 }
 
 func TestCopySnapshotFile(t *testing.T) {
-	os.RemoveAll(testDataDir)
-	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(testDataDir)
+	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(testDataDir)
-	src := filepath.Join(testDataDir, "test.data")
-	dst := filepath.Join(testDataDir, "test.data.copied")
-	f, err := os.Create(src)
+	defer fs.RemoveAll(testDataDir)
+	src := fs.PathJoin(testDataDir, "test.data")
+	dst := fs.PathJoin(testDataDir, "test.data.copied")
+	f, err := fs.Create(src)
 	if err != nil {
 		t.Fatalf("failed to create test file %v", err)
 	}
@@ -214,31 +217,36 @@ func TestCopySnapshotFile(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatalf("failed to close file %v", err)
 	}
-	if err := copyFile(src, dst); err != nil {
+	if err := copyFile(src, dst, fs); err != nil {
 		t.Fatalf("failed to copy file %v", err)
 	}
-	dstdata, err := ioutil.ReadFile(dst)
+	buf := &bytes.Buffer{}
+	dstf, err := fs.Open(dst)
 	if err != nil {
-		t.Fatalf("failed to read the copied file %v", err)
+		t.Fatalf("failed to open %v", err)
 	}
-	if !bytes.Equal(dstdata, data) {
+	defer dstf.Close()
+	io.Copy(buf, dstf)
+	if !bytes.Equal(buf.Bytes(), data) {
 		t.Fatalf("content changed")
 	}
 }
 
 func TestMissingMetadataFileIsReported(t *testing.T) {
-	os.RemoveAll(testDataDir)
-	if err := os.MkdirAll(testDataDir, 0755); err != nil {
+	fs := vfs.GetTestFS()
+	fs.RemoveAll(testDataDir)
+	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer os.RemoveAll(testDataDir)
-	_, err := getSnapshotRecord(testDataDir, "test.data")
+	defer fs.RemoveAll(testDataDir)
+	_, err := getSnapshotRecord(testDataDir, "test.data", fs)
 	if err == nil {
 		t.Fatalf("failed to report error")
 	}
 }
 
 func TestGetProcessedSnapshotRecord(t *testing.T) {
+	fs := vfs.GetTestFS()
 	ss := pb.Snapshot{
 		Filepath: "/original_dir/test.gbsnap",
 		FileSize: 123,
@@ -277,18 +285,18 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 	members[1] = "a1"
 	members[5] = "a5"
 	finalDir := "final_data"
-	newss := getProcessedSnapshotRecord(finalDir, ss, members)
+	newss := getProcessedSnapshotRecord(finalDir, ss, members, fs)
 	if newss.Index != ss.Index || newss.Term != ss.Term {
 		t.Errorf("index/term not copied")
 	}
 	if newss.Dummy != ss.Dummy || newss.ClusterId != ss.ClusterId || newss.Type != ss.Type {
 		t.Errorf("dummy/ClusterId/Type fields not copied")
 	}
-	if filepath.Dir(newss.Filepath) != finalDir {
+	if fs.PathDir(newss.Filepath) != finalDir {
 		t.Errorf("filepath not processed %s", newss.Filepath)
 	}
 	for _, file := range newss.Files {
-		if filepath.Dir(file.Filepath) != finalDir {
+		if fs.PathDir(file.Filepath) != finalDir {
 			t.Errorf("filepath in files not processed %s", file.Filepath)
 		}
 	}

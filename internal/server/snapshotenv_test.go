@@ -15,10 +15,10 @@
 package server
 
 import (
-	"os"
 	"strings"
 	"testing"
 
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -67,12 +67,13 @@ func TestTempSuffix(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	fs := vfs.GetTestFS()
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
 	dir := env.GetTempDir()
 	if !strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
 	}
-	env = NewSSEnv(f, 1, 1, 1, 2, ReceivingMode)
+	env = NewSSEnv(f, 1, 1, 1, 2, ReceivingMode, fs)
 	dir = env.GetTempDir()
 	if !strings.Contains(dir, ".receiving") {
 		t.Errorf("unexpected suffix: %s", dir)
@@ -83,7 +84,8 @@ func TestFinalSnapshotDirDoesNotContainTempSuffix(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	fs := vfs.GetTestFS()
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
 	dir := env.GetFinalDir()
 	if strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
@@ -94,7 +96,8 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	f := func(cid uint64, nid uint64) string {
 		return "/data"
 	}
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode)
+	fs := vfs.GetTestFS()
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
 	tmpDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
 	rootDir := env.GetRootDir()
@@ -107,12 +110,13 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv)) {
 	ff := func(cid uint64, nid uint64) string {
 		return rd
 	}
+	fs := vfs.GetTestFS()
 	defer func() {
-		os.RemoveAll(rd)
+		fs.RemoveAll(rd)
 	}()
-	env := NewSSEnv(ff, 1, 1, 1, 2, SnapshottingMode)
+	env := NewSSEnv(ff, 1, 1, 1, 2, SnapshottingMode, fs)
 	tmpDir := env.GetTempDir()
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+	if err := fs.MkdirAll(tmpDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
 	f(t, env)
@@ -188,7 +192,7 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
 	tf := func(t *testing.T, env *SSEnv) {
 		finalDir := env.GetFinalDir()
-		if err := os.MkdirAll(finalDir, 0755); err != nil {
+		if err := env.fs.MkdirAll(finalDir, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
 		m := &pb.Message{}

@@ -23,21 +23,20 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 )
 
 var (
@@ -130,6 +129,9 @@ var (
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
+	if nhConfig.FS == nil {
+		nhConfig.FS = vfs.GetTestFS()
+	}
 	if nhConfig.DeploymentID == 0 {
 		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
 			unmanagedDeploymentID)
@@ -138,15 +140,16 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
 	}
-	ssfp, err := getSnapshotFilepath(srcDir)
+	ssfp, err := getSnapshotFilepath(srcDir, nhConfig.FS)
 	if err != nil {
 		return err
 	}
-	oldss, err := getSnapshotRecord(srcDir, server.SnapshotMetadataFilename)
+	oldss, err := getSnapshotRecord(srcDir,
+		server.SnapshotMetadataFilename, nhConfig.FS)
 	if err != nil {
 		return err
 	}
-	ok, err := isCompleteSnapshotImage(ssfp, oldss)
+	ok, err := isCompleteSnapshotImage(ssfp, oldss, nhConfig.FS)
 	if err != nil {
 		return err
 	}
@@ -176,12 +179,12 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	ssDir := serverCtx.GetSnapshotDir(nhConfig.DeploymentID,
 		oldss.ClusterId, nodeID)
-	exist, err := fileutil.Exist(ssDir)
+	exist, err := fileutil.Exist(ssDir, nhConfig.FS)
 	if err != nil {
 		return err
 	}
 	if exist {
-		if err := cleanupSnapshotDir(ssDir); err != nil {
+		if err := cleanupSnapshotDir(ssDir, nhConfig.FS); err != nil {
 			return err
 		}
 	} else {
@@ -194,14 +197,15 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	env := server.NewSSEnv(getSnapshotDir,
-		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshottingMode)
+		oldss.ClusterId, nodeID, oldss.Index, nodeID,
+		server.SnapshottingMode, nhConfig.FS)
 	if err := env.CreateTempDir(); err != nil {
 		return err
 	}
 	dstDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
-	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes)
-	if err := copySnapshot(oldss, srcDir, dstDir); err != nil {
+	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes, nhConfig.FS)
+	if err := copySnapshot(oldss, srcDir, dstDir, nhConfig.FS); err != nil {
 		return err
 	}
 	if err := env.FinalizeSnapshot(&ss); err != nil {
@@ -210,12 +214,16 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	return logdb.ImportSnapshot(ss, nodeID)
 }
 
-func cleanupSnapshotDir(dir string) error {
-	files, err := ioutil.ReadDir(dir)
+func cleanupSnapshotDir(dir string, fs vfs.IFS) error {
+	files, err := fs.List(dir)
 	if err != nil {
 		return err
 	}
-	for _, fi := range files {
+	for _, v := range files {
+		fi, err := fs.Stat(fs.PathJoin(dir, v))
+		if err != nil {
+			return err
+		}
 		if !fi.IsDir() {
 			continue
 		}
@@ -223,13 +231,13 @@ func cleanupSnapshotDir(dir string) error {
 		if server.SnapshotDirNameRe.Match(name) ||
 			server.GenSnapshotDirNameRe.Match(name) ||
 			server.RecvSnapshotDirNameRe.Match(name) {
-			ssdir := filepath.Join(dir, fi.Name())
-			if err := os.RemoveAll(ssdir); err != nil {
+			ssdir := fs.PathJoin(dir, fi.Name())
+			if err := fs.RemoveAll(ssdir); err != nil {
 				return err
 			}
 		}
 	}
-	return fileutil.SyncDir(dir)
+	return fileutil.SyncDir(dir, fs)
 }
 
 func checkImportSettings(nhConfig config.NodeHostConfig,
@@ -247,23 +255,24 @@ func checkImportSettings(nhConfig config.NodeHostConfig,
 	return nil
 }
 
-func isCompleteSnapshotImage(ssfp string, ss pb.Snapshot) (bool, error) {
-	checksum, err := rsm.GetV2PayloadChecksum(ssfp)
+func isCompleteSnapshotImage(ssfp string,
+	ss pb.Snapshot, fs vfs.IFS) (bool, error) {
+	checksum, err := rsm.GetV2PayloadChecksum(ssfp, fs)
 	if err != nil {
 		return false, err
 	}
 	return bytes.Equal(checksum, ss.Checksum), nil
 }
 
-func getSnapshotFilepath(dir string) (string, error) {
-	exist, err := fileutil.Exist(dir)
+func getSnapshotFilepath(dir string, fs vfs.IFS) (string, error) {
+	exist, err := fileutil.Exist(dir, fs)
 	if err != nil {
 		return "", err
 	}
 	if !exist {
 		return "", ErrPathNotExist
 	}
-	files, err := getSnapshotFiles(dir)
+	files, err := getSnapshotFiles(dir, fs)
 	if err != nil {
 		return "", err
 	}
@@ -273,25 +282,29 @@ func getSnapshotFilepath(dir string) (string, error) {
 	return files[0], nil
 }
 
-func getSnapshotFiles(path string) ([]string, error) {
-	names, err := getSnapshotFilenames(path)
+func getSnapshotFiles(path string, fs vfs.IFS) ([]string, error) {
+	names, err := getSnapshotFilenames(path, fs)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]string, 0)
 	for _, name := range names {
-		results = append(results, filepath.Join(path, name))
+		results = append(results, fs.PathJoin(path, name))
 	}
 	return results, nil
 }
 
-func getSnapshotFilenames(path string) ([]string, error) {
-	files, err := ioutil.ReadDir(path)
+func getSnapshotFilenames(path string, fs vfs.IFS) ([]string, error) {
+	files, err := fs.List(path)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]string, 0)
-	for _, file := range files {
+	for _, v := range files {
+		file, err := fs.Stat(fs.PathJoin(path, v))
+		if err != nil {
+			return nil, err
+		}
 		if file.IsDir() {
 			continue
 		}
@@ -302,9 +315,10 @@ func getSnapshotFilenames(path string) ([]string, error) {
 	return results, nil
 }
 
-func getSnapshotRecord(dir string, filename string) (pb.Snapshot, error) {
+func getSnapshotRecord(dir string,
+	filename string, fs vfs.IFS) (pb.Snapshot, error) {
 	var ss pb.Snapshot
-	if err := fileutil.GetFlagFileContent(dir, filename, &ss); err != nil {
+	if err := fileutil.GetFlagFileContent(dir, filename, &ss, fs); err != nil {
 		return pb.Snapshot{}, err
 	}
 	return ss, nil
@@ -339,12 +353,12 @@ func checkMembers(old pb.Membership, members map[uint64]string) error {
 }
 
 func getProcessedSnapshotRecord(dstDir string,
-	old pb.Snapshot, members map[uint64]string) pb.Snapshot {
+	old pb.Snapshot, members map[uint64]string, fs vfs.IFS) pb.Snapshot {
 	for _, file := range old.Files {
-		file.Filepath = filepath.Join(dstDir, filepath.Base(file.Filepath))
+		file.Filepath = fs.PathJoin(dstDir, fs.PathBase(file.Filepath))
 	}
 	ss := pb.Snapshot{
-		Filepath: filepath.Join(dstDir, filepath.Base(old.Filepath)),
+		Filepath: fs.PathJoin(dstDir, fs.PathBase(old.Filepath)),
 		FileSize: old.FileSize,
 		Index:    old.Index,
 		Term:     old.Term,
@@ -389,27 +403,28 @@ func getProcessedSnapshotRecord(dstDir string,
 	return ss
 }
 
-func copySnapshot(ss pb.Snapshot, srcDir string, dstDir string) error {
-	fp, err := getSnapshotFilepath(srcDir)
+func copySnapshot(ss pb.Snapshot,
+	srcDir string, dstDir string, fs vfs.IFS) error {
+	fp, err := getSnapshotFilepath(srcDir, fs)
 	if err != nil {
 		return err
 	}
-	dstfp := filepath.Join(dstDir, filepath.Base(fp))
-	if err := copyFile(fp, dstfp); err != nil {
+	dstfp := fs.PathJoin(dstDir, fs.PathBase(fp))
+	if err := copyFile(fp, dstfp, fs); err != nil {
 		return err
 	}
 	for _, file := range ss.Files {
-		fname := filepath.Base(file.Filepath)
-		if err := copyFile(filepath.Join(srcDir, fname),
-			filepath.Join(dstDir, fname)); err != nil {
+		fname := fs.PathBase(file.Filepath)
+		if err := copyFile(fs.PathJoin(srcDir, fname),
+			fs.PathJoin(dstDir, fname), fs); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func copyFile(src string, dst string) (err error) {
-	in, err := os.Open(src)
+func copyFile(src string, dst string, fs vfs.IFS) (err error) {
+	in, err := fs.Open(src)
 	if err != nil {
 		return err
 	}
@@ -422,7 +437,7 @@ func copyFile(src string, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	out, err := os.Create(dst)
+	out, err := fs.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -432,8 +447,11 @@ func copyFile(src string, dst string) (err error) {
 		}
 	}()
 	if runtime.GOOS != "windows" {
-		if err := out.Chmod(fi.Mode()); err != nil {
-			return err
+		of, ok := out.(*os.File)
+		if ok {
+			if err := of.Chmod(fi.Mode()); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err = io.Copy(out, in); err != nil {
@@ -442,11 +460,11 @@ func copyFile(src string, dst string) (err error) {
 	if err := out.Sync(); err != nil {
 		return err
 	}
-	return fileutil.SyncDir(filepath.Dir(dst))
+	return fileutil.SyncDir(fs.PathDir(dst), fs)
 }
 
 func getLogDB(ctx server.Context,
 	nhConfig config.NodeHostConfig) (raftio.ILogDB, error) {
 	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
-	return logdb.NewDefaultLogDB(nhDir, walDir)
+	return logdb.NewDefaultLogDB(nhDir, walDir, nhConfig.FS)
 }

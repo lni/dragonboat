@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
 	"github.com/lni/dragonboat/v3/internal/utils/dio"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/leaktest"
@@ -42,13 +42,13 @@ const (
 	snapshotFileSuffix = "gbsnap"
 )
 
-func removeTestDir() {
-	os.RemoveAll(testSnapshotterDir)
+func removeTestDir(fs vfs.IFS) {
+	fs.RemoveAll(testSnapshotterDir)
 }
 
-func createTestDir() {
-	removeTestDir()
-	if err := os.MkdirAll(testSnapshotterDir, 0755); err != nil {
+func createTestDir(fs vfs.IFS) {
+	removeTestDir(fs)
+	if err := fs.MkdirAll(testSnapshotterDir, 0755); err != nil {
 		panic(err)
 	}
 }
@@ -134,10 +134,11 @@ func (p *testNodeProxy) ClusterID() uint64 { return 1 }
 type testSnapshotter struct {
 	index    uint64
 	dataSize uint64
+	fs       vfs.IFS
 }
 
-func newTestSnapshotter() *testSnapshotter {
-	return &testSnapshotter{}
+func newTestSnapshotter(fs vfs.IFS) *testSnapshotter {
+	return &testSnapshotter{fs: fs}
 }
 
 func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
@@ -199,10 +200,10 @@ func (s *testSnapshotter) Save(savable ISavable,
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
 	}
-	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshottingMode)
+	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshottingMode, s.fs)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := filepath.Join(testSnapshotterDir, fn)
-	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression)
+	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, s.fs)
 	if err != nil {
 		return nil, env, err
 	}
@@ -231,7 +232,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 	loadableSM ILoadableSM,
 	fp string, fs []sm.SnapshotFile) error {
-	reader, err := NewSnapshotReader(fp)
+	reader, err := NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
 	}
@@ -255,29 +256,31 @@ func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	defer leaktest.AfterTest(t)()
+	fs := vfs.GetTestFS()
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	tf(t, sm)
 }
 
 func runSMTest2(t *testing.T,
 	tf func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine)) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	createTestDir()
-	defer removeTestDir()
+	createTestDir(fs)
+	defer removeTestDir(fs)
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
 }
 
@@ -289,15 +292,16 @@ func TestDefaultTaskIsNotSnapshotTask(t *testing.T) {
 }
 
 func TestUpdatesCanBeBatched(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	createTestDir()
-	defer removeTestDir()
+	createTestDir(fs)
+	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -336,12 +340,13 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 }
 
 func TestMetadataEntryCanBeHandled(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	sm := NewStateMachine(ds, nil, config, nodeProxy)
+	sm := NewStateMachine(ds, nil, config, nodeProxy, fs)
 	e1 := pb.Entry{
 		Type:  pb.MetadataEntry,
 		Index: 235,
@@ -376,15 +381,16 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 }
 
 func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	createTestDir()
-	defer removeTestDir()
+	createTestDir(fs)
+	defer removeTestDir(fs)
 	store := tests.NewConcurrentKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	tsm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	tsm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	data1 := getTestKVData()
 	data2 := getTestKVData2()
 	encoded1 := GetEncodedPayload(ct, data1, make([]byte, 512))
@@ -436,13 +442,14 @@ func TestHandleBatchedSnappyEncodedEntry(t *testing.T) {
 }
 
 func TestHandleAllocationCount(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	store := &tests.NoOP{NoAlloc: true}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	sm.index = 1
 	idx := uint64(1)
 	batch := make([]Task, 0, 8)
@@ -473,15 +480,16 @@ func TestHandleAllocationCount(t *testing.T) {
 }
 
 func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	createTestDir()
-	defer removeTestDir()
+	createTestDir(fs)
+	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	ds := NewNativeSM(config, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
-	snapshotter := newTestSnapshotter()
-	sm := NewStateMachine(ds, snapshotter, config, nodeProxy)
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	e1 := pb.Entry{
 		ClientID: 123,
 		SeriesID: client.NoOPSeriesID,
@@ -1320,6 +1328,7 @@ func TestHandleUpate(t *testing.T) {
 func TestSnapshotCanBeApplied(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		fs := vfs.GetTestFS()
 		sm.members.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
@@ -1338,8 +1347,8 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store2.(*tests.KVTest).DisableLargeDelay()
 		ds2 := NewNativeSM(config, NewRegularStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
-		snapshotter2 := newTestSnapshotter()
-		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2)
+		snapshotter2 := newTestSnapshotter(fs)
+		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
 		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}
@@ -1843,6 +1852,7 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 }
 
 func TestRecoverSMRequired(t *testing.T) {
+	fs := vfs.GetTestFS()
 	tests := []struct {
 		dummy           bool
 		shrunk          bool
@@ -1880,23 +1890,24 @@ func TestRecoverSMRequired(t *testing.T) {
 	ssIndex := uint64(200)
 	for idx, tt := range tests {
 		func() {
-			defer os.RemoveAll(testSnapshotterDir)
-			os.RemoveAll(testSnapshotterDir)
-			if err := os.MkdirAll(testSnapshotterDir, 0755); err != nil {
+			defer fs.RemoveAll(testSnapshotterDir)
+			fs.RemoveAll(testSnapshotterDir)
+			if err := fs.MkdirAll(testSnapshotterDir, 0755); err != nil {
 				t.Fatalf("mkdir failed %v", err)
 			}
-			snapshotter := newTestSnapshotter()
+			snapshotter := newTestSnapshotter(fs)
 			sm := &StateMachine{
 				snapshotter:     snapshotter,
 				onDiskSM:        true,
 				onDiskInitIndex: tt.onDiskInitIndex,
 				onDiskIndex:     tt.onDiskInitIndex,
+				fs:              fs,
 			}
 			fp := snapshotter.GetFilePath(ssIndex)
 			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
-			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression)
+			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, fs)
 			if err != nil {
 				t.Fatalf("failed to create snapshot writer %v", err)
 			}
@@ -1916,7 +1927,8 @@ func TestRecoverSMRequired(t *testing.T) {
 				t.Fatalf("%v", err)
 			}
 			if tt.shrunk {
-				if err := ShrinkSnapshot(fp, snapshotter.GetFilePath(ssIndex)); err != nil {
+				if err := ShrinkSnapshot(fp,
+					snapshotter.GetFilePath(ssIndex), fs); err != nil {
 					t.Fatalf("failed to shrink %v", err)
 				}
 			}
@@ -2095,19 +2107,21 @@ func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 }
 
 func TestSaveConcurrentSnapshot(t *testing.T) {
+	fs := vfs.GetTestFS()
 	msm := &testManagedStateMachine{}
 	np := newTestNodeProxy()
-	createTestDir()
-	defer removeTestDir()
+	createTestDir(fs)
+	defer removeTestDir(fs)
 	sm := &StateMachine{
 		onDiskSM:    true,
 		sm:          msm,
 		node:        np,
 		index:       100,
 		term:        5,
-		snapshotter: newTestSnapshotter(),
+		snapshotter: newTestSnapshotter(fs),
 		sessions:    NewSessionManager(),
 		members:     newMembership(1, 1, false),
+		fs:          fs,
 	}
 	sm.members.members.Addresses[1] = "a1"
 	ss, _, err := sm.saveConcurrentSnapshot(SSRequest{})
@@ -2125,15 +2139,17 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 func TestStreamSnapshot(t *testing.T) {
 	msm := &testManagedStateMachine{}
 	np := newTestNodeProxy()
+	fs := vfs.GetTestFS()
 	sm := &StateMachine{
 		onDiskSM:    true,
 		sm:          msm,
 		node:        np,
 		index:       100,
 		term:        5,
-		snapshotter: newTestSnapshotter(),
+		snapshotter: newTestSnapshotter(fs),
 		sessions:    NewSessionManager(),
 		members:     newMembership(1, 1, false),
+		fs:          fs,
 	}
 	sm.members.members.Addresses[1] = "a1"
 	ts := &testSink{

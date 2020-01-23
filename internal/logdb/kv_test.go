@@ -15,37 +15,38 @@
 package logdb
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/leaktest"
 )
 
 func TestKVCanBeCreatedAndClosed(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
-	defer deleteTestDB()
+	defer deleteTestDB(fs)
 	if err := kvs.Close(); err != nil {
 		t.Errorf("failed to close kv store %v", err)
 	}
 }
 
 func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore)) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
-	defer deleteTestDB()
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	defer deleteTestDB(fs)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -318,15 +319,16 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 }
 
 func TestCompactionReleaseStorageSpace(t *testing.T) {
-	deleteTestDB()
-	defer deleteTestDB()
+	fs := getTestFS()
+	deleteTestDB(fs)
+	defer deleteTestDB(fs)
 	maxIndex := uint64(1024 * 128)
 	fk := newKey(entryKeySize, nil)
 	lk := newKey(entryKeySize, nil)
 	fk.SetEntryKey(100, 1, 1)
 	lk.SetEntryKey(100, 1, maxIndex+1)
 	func() {
-		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -344,14 +346,14 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			t.Fatalf("failed to commit wb %v", err)
 		}
 	}()
-	sz, err := getDirSize(RDBTestDirectory, true)
+	sz, err := getDirSize(RDBTestDirectory, true, fs)
 	if err != nil {
 		t.Fatalf("failed to get sz %v", err)
 	}
 	if sz < 1024*1024*8 {
 		t.Errorf("unexpected size %d", sz)
 	}
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -362,7 +364,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
 		t.Fatalf("compaction failed %v", err)
 	}
-	sz, err = getDirSize(RDBTestDirectory, false)
+	sz, err = getDirSize(RDBTestDirectory, false, fs)
 	if err != nil {
 		t.Fatalf("failed to get sz %v", err)
 	}
@@ -374,70 +376,79 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 var flagContent = "YYYY"
 var corruptedContent = "XXXX"
 
-func getDataFilePathList(dir string, wal bool) ([]string, error) {
-	fi, err := ioutil.ReadDir(dir)
+func getDataFilePathList(dir string, wal bool, fs vfs.IFS) ([]string, error) {
+	elms, err := fs.List(dir)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]string, 0)
-	for _, v := range fi {
+	for _, path := range elms {
+		v, err := fs.Stat(fs.PathJoin(dir, path))
+		if err != nil {
+			return nil, err
+		}
 		if !wal {
 			if strings.HasSuffix(v.Name(), ".ldb") || strings.HasSuffix(v.Name(), ".sst") {
-				result = append(result, filepath.Join(dir, v.Name()))
+				result = append(result, fs.PathJoin(dir, v.Name()))
 			}
 		} else {
 			if strings.HasSuffix(v.Name(), ".log") {
-				result = append(result, filepath.Join(dir, v.Name()))
+				result = append(result, fs.PathJoin(dir, v.Name()))
 			}
 		}
 	}
 	return result, nil
 }
 
-func modifyDataFile(fp string) (bool, error) {
-	idx := int64(0)
-	f, err := os.OpenFile(fp, os.O_RDWR, 0755)
-	if err != nil {
-		return false, err
-	}
-	defer f.Close()
-	located := false
-	data := make([]byte, 4)
-	for {
-		_, err := f.Read(data)
+func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
+	tmpFp := fs.PathJoin(fs.PathDir(fp), "tmp")
+	if err := func() error {
+		idx := int64(0)
+		f, err := fs.ReuseForWrite(fp, tmpFp)
 		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				return false, err
+			return err
+		}
+		defer f.Close()
+		located := false
+		data := make([]byte, 4)
+		for {
+			if _, err := f.Read(data); err != nil {
+				if err == io.EOF {
+					break
+				} else {
+					panic(err)
+					return err
+				}
 			}
+			if string(data) == flagContent {
+				located = true
+				break
+			}
+			idx += 4
 		}
-		if string(data) == flagContent {
-			located = true
-			break
+		if !located {
+			return errors.New("failed to locaate the data")
 		}
-		idx += 4
-	}
-	if !located {
-		return false, nil
-	}
-	_, err = f.Seek(idx, 0)
-	if err != nil {
+		if _, err = f.WriteAt([]byte(corruptedContent), idx); err != nil {
+			plog.Infof("failed to write")
+			return err
+		}
+		return nil
+	}(); err != nil {
 		return false, err
 	}
-	plog.Infof("corrupted data written")
-	_, err = f.Write([]byte(corruptedContent))
-	if err != nil {
+	if err := fs.Rename(tmpFp, fp); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
-	deleteTestDB()
-	defer deleteTestDB()
+	fs := getTestFS()
+	deleteTestDB(fs)
+	defer deleteTestDB(fs)
 	func() {
-		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -469,13 +480,13 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 			}
 		}
 	}()
-	files, err := getDataFilePathList(RDBTestDirectory, wal)
+	files, err := getDataFilePathList(RDBTestDirectory, wal, fs)
 	if err != nil {
 		t.Fatalf("failed to get data files %v", err)
 	}
 	corrupted := false
 	for _, fp := range files {
-		done, err := modifyDataFile(fp)
+		done, err := modifyDataFile(fp, fs)
 		if err != nil {
 			t.Fatalf("failed to modify data file %v", err)
 		}
@@ -487,7 +498,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 	if !corrupted {
 		t.Fatalf("failed to corrupt data files")
 	}
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory)
+	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
 	if err == nil {
 		defer kvs.Close()
 	}

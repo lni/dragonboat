@@ -17,10 +17,7 @@ package dragonboat
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -36,6 +33,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -152,13 +150,13 @@ func (r *testMessageRouter) addChannel(nodeID uint64, q *server.MessageQueue) {
 	r.msgReceiveCh[nodeID] = q
 }
 
-func cleanupTestDir() {
-	os.RemoveAll(raftTestTopDir)
+func cleanupTestDir(fs vfs.IFS) {
+	fs.RemoveAll(raftTestTopDir)
 }
 
-func getTestRaftNodes(count int) ([]*node, []*rsm.StateMachine,
+func getTestRaftNodes(count int, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 	*testMessageRouter, raftio.ILogDB) {
-	return doGetTestRaftNodes(1, count, false, nil)
+	return doGetTestRaftNodes(1, count, false, nil, fs)
 }
 
 type dummyEngine struct {
@@ -171,7 +169,7 @@ func (d *dummyEngine) setRequestedSnapshotReady(clusterID uint64) {}
 func (d *dummyEngine) setAvailableSnapshotReady(clusterID uint64) {}
 
 func doGetTestRaftNodes(startID uint64, count int, ordered bool,
-	ldb raftio.ILogDB) ([]*node, []*rsm.StateMachine,
+	ldb raftio.ILogDB, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 	*testMessageRouter, raftio.ILogDB) {
 	nodes := make([]*node, 0)
 	smList := make([]*rsm.StateMachine, 0)
@@ -193,15 +191,15 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	}
 	var err error
 	if ldb == nil {
-		nodeLogDir := filepath.Join(raftTestTopDir, logdbDir)
-		nodeLowLatencyLogDir := filepath.Join(raftTestTopDir, lowLatencyLogDBDir)
-		if err := os.MkdirAll(nodeLogDir, 0755); err != nil {
+		nodeLogDir := fs.PathJoin(raftTestTopDir, logdbDir)
+		nodeLowLatencyLogDir := fs.PathJoin(raftTestTopDir, lowLatencyLogDBDir)
+		if err := fs.MkdirAll(nodeLogDir, 0755); err != nil {
 			panic(err)
 		}
-		if err := os.MkdirAll(nodeLowLatencyLogDir, 0755); err != nil {
+		if err := fs.MkdirAll(nodeLowLatencyLogDir, 0755); err != nil {
 			panic(err)
 		}
-		ldb, err = logdb.NewDefaultLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir})
+		ldb, err = logdb.NewDefaultLogDB([]string{nodeLogDir}, []string{nodeLowLatencyLogDir}, vfs.GetTestFS())
 		if err != nil {
 			plog.Panicf("failed to open logdb, %v", err)
 		}
@@ -211,15 +209,15 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	for i := startID; i <= endID; i++ {
 		// create the snapshotter object
 		nodeSnapDir := fmt.Sprintf(snapDir, testClusterID, i)
-		snapdir := filepath.Join(raftTestTopDir, nodeSnapDir)
-		if err := os.MkdirAll(snapdir, 0755); err != nil {
+		snapdir := fs.PathJoin(raftTestTopDir, nodeSnapDir)
+		if err := fs.MkdirAll(snapdir, 0755); err != nil {
 			panic(err)
 		}
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}
 		snapshotter := newSnapshotter(testClusterID, i,
-			config.NodeHostConfig{}, rootDirFunc, ldb, nil)
+			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, nil)
 		// create the sm
 		sm := &tests.NoOP{}
 		config := config.Config{
@@ -422,10 +420,11 @@ func stopNodes(nodes []*node) {
 }
 
 func TestNodeCanBeCreatedAndStarted(t *testing.T) {
+	fs := vfs.GetTestFS()
 	logger.GetLogger("raft").SetLevel(logger.ERROR)
 	defer leaktest.AfterTest(t)()
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := getTestRaftNodes(3)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := getTestRaftNodes(3, fs)
 	if len(nodes) != 3 {
 		t.Errorf("len(nodes)=%d, want 3", len(nodes))
 	}
@@ -526,9 +525,10 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 func runRaftNodeTest(t *testing.T, quiesce bool,
 	tf func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB)) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := getTestRaftNodes(3)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := getTestRaftNodes(3, fs)
 	if quiesce {
 		for idx := range nodes {
 			(nodes[idx]).quiesceManager.enabled = true
@@ -904,10 +904,11 @@ func TestProposalsWithCorruptedSessionWillPanic(t *testing.T) {
 }
 
 func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	// quiesce is disabled by default
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := getTestRaftNodes(3)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := getTestRaftNodes(3, fs)
 	if len(nodes) != 3 {
 		t.Fatalf("failed to get 3 nodes")
 	}
@@ -1182,6 +1183,7 @@ func sliceEqual(s1 []uint64, s2 []uint64) bool {
 func TestNodeCanBeAdded2(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		fs := vfs.GetTestFS()
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
 		if !ok {
@@ -1213,7 +1215,7 @@ func TestNodeCanBeAdded2(t *testing.T) {
 			}
 		}
 		// now bring the node 5 online
-		newNodes, newSMList, newRouter, _ := doGetTestRaftNodes(4, 1, true, ldb)
+		newNodes, newSMList, newRouter, _ := doGetTestRaftNodes(4, 1, true, ldb, fs)
 		if len(newNodes) != 1 {
 			t.Fatalf("failed to get 1 nodes")
 		}
@@ -1231,9 +1233,10 @@ func TestNodeCanBeAdded2(t *testing.T) {
 }
 
 func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := doGetTestRaftNodes(1, 3, true, nil)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := doGetTestRaftNodes(1, 3, true, nil, fs)
 	if len(nodes) != 3 {
 		t.Fatalf("failed to get 3 nodes")
 	}
@@ -1273,9 +1276,10 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 }
 
 func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := doGetTestRaftNodes(1, 3, true, nil)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := doGetTestRaftNodes(1, 3, true, nil, fs)
 	if len(nodes) != 3 {
 		t.Fatalf("failed to get 3 nodes")
 	}
@@ -1314,17 +1318,21 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 	}
 }
 
-func getSnapshotFileCount(dir string) (int, error) {
-	fiList, err := ioutil.ReadDir(dir)
+func getSnapshotFileCount(dir string, fs vfs.IFS) (int, error) {
+	fiList, err := fs.List(dir)
 	if err != nil {
 		return 0, err
 	}
 	count := 0
-	for _, f := range fiList {
-		if !f.IsDir() {
+	for _, fn := range fiList {
+		fi, err := fs.Stat(fs.PathJoin(dir, fn))
+		if err != nil {
+			return 0, err
+		}
+		if !fi.IsDir() {
 			continue
 		}
-		if strings.HasPrefix(f.Name(), "snapshot-") {
+		if strings.HasPrefix(fi.Name(), "snapshot-") {
 			count++
 		}
 	}
@@ -1334,6 +1342,7 @@ func getSnapshotFileCount(dir string) (int, error) {
 func TestSnapshotCanBeMade(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
+		fs := vfs.GetTestFS()
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
 		if !ok {
@@ -1359,8 +1368,8 @@ func TestSnapshotCanBeMade(t *testing.T) {
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
 			sd := fmt.Sprintf(snapDir, testClusterID, node.nodeID)
-			dir := filepath.Join(raftTestTopDir, sd)
-			count, err := getSnapshotFileCount(dir)
+			dir := fs.PathJoin(raftTestTopDir, sd)
+			count, err := getSnapshotFileCount(dir, fs)
 			if err != nil {
 				t.Fatalf("failed to get snapshot count")
 			}
@@ -1411,9 +1420,10 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 }
 
 func TestNodesCanBeRestarted(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	defer cleanupTestDir()
-	nodes, smList, router, ldb := getTestRaftNodes(3)
+	defer cleanupTestDir(fs)
+	nodes, smList, router, ldb := getTestRaftNodes(3, fs)
 	if len(nodes) != 3 {
 		t.Fatalf("failed to get 3 nodes")
 	}
@@ -1440,8 +1450,8 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	closeProposalTestClient(n, nodes, smList, router, session)
 	for _, node := range nodes {
 		sd := fmt.Sprintf(snapDir, testClusterID, node.nodeID)
-		dir := filepath.Join(raftTestTopDir, sd)
-		count, err := getSnapshotFileCount(dir)
+		dir := fs.PathJoin(raftTestTopDir, sd)
+		count, err := getSnapshotFileCount(dir, fs)
 		if err != nil {
 			t.Fatalf("failed to get snapshot count")
 		}
@@ -1455,7 +1465,7 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	}
 	ldb.Close()
 	// restart
-	nodes, smList, router, ldb = getTestRaftNodes(3)
+	nodes, smList, router, ldb = getTestRaftNodes(3, fs)
 	defer stopNodes(nodes)
 	defer ldb.Close()
 	if len(nodes) != 3 {
@@ -1644,7 +1654,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 	n := &node{ss: &snapshotState{}}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeSM(config, &rsm.RegularStateMachine{}, nil), nil, config, &testDummyNodeProxy{})
+		rsm.NewNativeSM(config, &rsm.RegularStateMachine{}, nil), nil, config, &testDummyNodeProxy{}, vfs.GetTestFS())
 	if n.concurrentSnapshot() {
 		t.Errorf("concurrency not suppose to be supported")
 	}
@@ -1659,7 +1669,7 @@ func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *tes
 	n := &node{ss: &snapshotState{}}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
-		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil), nil, config, &testDummyNodeProxy{})
+		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil), nil, config, &testDummyNodeProxy{}, vfs.GetTestFS())
 	if !n.concurrentSnapshot() {
 		t.Errorf("concurrency not supported")
 	}

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/internal/raft"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/leaktest"
@@ -32,8 +33,8 @@ const (
 	LogReaderTestNodeID    uint64 = 12345
 )
 
-func getNewLogReaderTestDB(entries []pb.Entry) raftio.ILogDB {
-	logdb := getNewTestDB("db-dir", "wal-db-dir", false)
+func getNewLogReaderTestDB(entries []pb.Entry, fs vfs.IFS) raftio.ILogDB {
+	logdb := getNewTestDB("db-dir", "wal-db-dir", false, fs)
 	ud := pb.Update{
 		EntriesToSave: entries,
 		ClusterID:     LogReaderTestClusterID,
@@ -45,8 +46,8 @@ func getNewLogReaderTestDB(entries []pb.Entry) raftio.ILogDB {
 	return logdb
 }
 
-func getTestLogReader(entries []pb.Entry) *LogReader {
-	logdb := getNewLogReaderTestDB(entries)
+func getTestLogReader(entries []pb.Entry, fs vfs.IFS) *LogReader {
+	logdb := getNewLogReaderTestDB(entries, fs)
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
 	ls.markerIndex = entries[0].Index
 	ls.markerTerm = entries[0].Term
@@ -60,6 +61,7 @@ func TestLogReaderEntries(t *testing.T) {
 }
 
 func testLogReaderEntries(t *testing.T) {
+	fs := getTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
 		lo, hi, maxsize uint64
@@ -83,7 +85,7 @@ func testLogReaderEntries(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		s := getTestLogReader(ents)
+		s := getTestLogReader(ents, fs)
 		entries, err := s.Entries(tt.lo, tt.hi, tt.maxsize)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
@@ -92,7 +94,7 @@ func testLogReaderEntries(t *testing.T) {
 			t.Errorf("#%d: entries = %v, want %v", i, entries, tt.wentries)
 		}
 		s.logdb.Close()
-		deleteTestDB()
+		deleteTestDB(fs)
 	}
 }
 
@@ -102,6 +104,7 @@ func TestLogReaderTerm(t *testing.T) {
 }
 
 func testLogReaderTerm(t *testing.T) {
+	fs := getTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		i      uint64
@@ -116,7 +119,7 @@ func testLogReaderTerm(t *testing.T) {
 		{6, raft.ErrUnavailable, 0, false},
 	}
 	for i, tt := range tests {
-		s := getTestLogReader(ents)
+		s := getTestLogReader(ents, fs)
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -134,7 +137,7 @@ func testLogReaderTerm(t *testing.T) {
 			}
 		}()
 		s.logdb.Close()
-		deleteTestDB()
+		deleteTestDB(fs)
 	}
 }
 
@@ -144,8 +147,9 @@ func TestLogReaderLastIndex(t *testing.T) {
 }
 
 func testLogReaderLastIndex(t *testing.T) {
+	fs := getTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	s := getTestLogReader(ents)
+	s := getTestLogReader(ents, fs)
 	_, last := s.GetRange()
 	if last != 5 {
 		t.Errorf("term = %d, want %d", last, 5)
@@ -158,7 +162,7 @@ func testLogReaderLastIndex(t *testing.T) {
 		t.Errorf("last = %d, want %d", last, 5)
 	}
 	s.logdb.Close()
-	deleteTestDB()
+	deleteTestDB(fs)
 }
 
 func TestLogReaderFirstIndex(t *testing.T) {
@@ -167,8 +171,9 @@ func TestLogReaderFirstIndex(t *testing.T) {
 }
 
 func testLogReaderFirstIndex(t *testing.T) {
+	fs := getTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	s := getTestLogReader(ents)
+	s := getTestLogReader(ents, fs)
 	first, _ := s.GetRange()
 	if first != 4 {
 		t.Errorf("first = %d, want %d", first, 4)
@@ -189,7 +194,7 @@ func testLogReaderFirstIndex(t *testing.T) {
 		t.Errorf("last index = %d, want 5", li)
 	}
 	s.logdb.Close()
-	deleteTestDB()
+	deleteTestDB(fs)
 }
 
 func TestLogReaderAppend(t *testing.T) {
@@ -198,6 +203,7 @@ func TestLogReaderAppend(t *testing.T) {
 }
 
 func testLogReaderAppend(t *testing.T) {
+	fs := getTestFS()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		entries  []pb.Entry
@@ -239,7 +245,7 @@ func testLogReaderAppend(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		s := getTestLogReader(ents)
+		s := getTestLogReader(ents, fs)
 		if err := s.Append(tt.entries); err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -278,11 +284,12 @@ func testLogReaderAppend(t *testing.T) {
 			}
 		}
 		s.logdb.Close()
-		deleteTestDB()
+		deleteTestDB(fs)
 	}
 }
 
 func TestLogReaderApplySnapshot(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 0, Term: 0}}
 	cs := &pb.Membership{
@@ -292,7 +299,7 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 		{Index: 4, Term: 4, Membership: *cs},
 		{Index: 3, Term: 3, Membership: *cs},
 	}
-	s := getTestLogReader(ents)
+	s := getTestLogReader(ents, fs)
 	//Apply Snapshot successful
 	i := 0
 	tt := tests[i]
@@ -314,10 +321,11 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 		t.Errorf("#%d: err = %v, want %v", i, err, raft.ErrSnapshotOutOfDate)
 	}
 	s.logdb.Close()
-	deleteTestDB()
+	deleteTestDB(fs)
 }
 
 func TestLogReaderCreateSnapshot(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
@@ -333,7 +341,7 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 		{5, 5, nil, pb.Snapshot{Index: 5, Term: 5, Membership: *cs}},
 	}
 	for i, tt := range tests {
-		s := getTestLogReader(ents)
+		s := getTestLogReader(ents, fs)
 		err := s.CreateSnapshot(tt.wsnap)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
@@ -342,14 +350,14 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 			t.Errorf("#%d: snap = %+v, want %+v", i, s.snapshot, tt.wsnap)
 		}
 		s.logdb.Close()
-		deleteTestDB()
+		deleteTestDB(fs)
 	}
 }
 
 func TestLogReaderSetRange(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-
 	tests := []struct {
 		firstIndex     uint64
 		length         uint64
@@ -362,7 +370,7 @@ func TestLogReaderSetRange(t *testing.T) {
 		{6, 6, 9, 3},
 	}
 	for idx, tt := range tests {
-		s := getTestLogReader(ents)
+		s := getTestLogReader(ents, fs)
 		s.SetRange(tt.firstIndex, tt.length)
 		if s.markerIndex != tt.expMarkerIndex {
 			t.Errorf("%d, marker index %d, want %d", idx, s.markerIndex, tt.expMarkerIndex)
@@ -371,19 +379,20 @@ func TestLogReaderSetRange(t *testing.T) {
 			t.Errorf("%d, length %d, want %d", idx, s.length, tt.expLength)
 		}
 		s.logdb.Close()
-		deleteTestDB()
+		deleteTestDB(fs)
 	}
 }
 
 func TestLogReaderGetSnapshot(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
 		Addresses: map[uint64]string{1: "", 2: "", 3: ""},
 	}
 	ss := pb.Snapshot{Index: 4, Term: 4, Membership: *cs}
-	s := getTestLogReader(ents)
-	defer deleteTestDB()
+	s := getTestLogReader(ents, fs)
+	defer deleteTestDB(fs)
 	defer s.logdb.Close()
 	if err := s.ApplySnapshot(ss); err != nil {
 		t.Errorf("create snapshot failed %v", err)
@@ -395,14 +404,15 @@ func TestLogReaderGetSnapshot(t *testing.T) {
 }
 
 func TestLogReaderInitialState(t *testing.T) {
+	fs := getTestFS()
 	defer leaktest.AfterTest(t)()
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.Membership{
 		Addresses: map[uint64]string{1: "", 2: "", 3: ""},
 	}
 	ss := pb.Snapshot{Index: 4, Term: 4, Membership: *cs}
-	s := getTestLogReader(ents)
-	defer deleteTestDB()
+	s := getTestLogReader(ents, fs)
+	defer deleteTestDB(fs)
 	defer s.logdb.Close()
 	if err := s.ApplySnapshot(ss); err != nil {
 		t.Errorf("create snapshot failed %v", err)

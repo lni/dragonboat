@@ -19,12 +19,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/lni/goutils/fileutil"
 )
 
 var (
@@ -60,9 +61,12 @@ var (
 var versionWarning sync.Once
 
 // NewKVStore returns a RocksDB based IKVStore instance.
-func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
+func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if fs != vfs.DefaultFS {
+		panic("only vfs.DefaultFS is not supported")
+	}
 	checkRocksDBVersion()
-	return openRocksDB(dir, wal)
+	return openRocksDB(dir, wal, fs)
 }
 
 func checkRocksDBVersion() {
@@ -117,11 +121,6 @@ func getRocksDBOptions(directory string,
 	if len(walDirectory) > 0 {
 		opts.SetWalDir(walDirectory)
 	}
-	ddio := directIOSupported(directory)
-	wdio := directIOSupported(walDirectory)
-	if ddio && wdio {
-		opts.SetUseDirectIOForFlushAndCompaction(true)
-	}
 	opts.SetCompression(gorocksdb.NoCompression)
 	if inMonkeyTesting {
 		// rocksdb perallocates size for its log file and the size is calculated
@@ -171,26 +170,11 @@ func getRocksDBOptions(directory string,
 	return opts, bbto, cache
 }
 
-func openRocksDB(dir string, wal string) (kv.IKVStore, error) {
+func openRocksDB(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
-	walExist, err := fileutil.Exist(wal)
-	if err != nil {
-		return nil, err
-	}
-	if len(wal) > 0 && !walExist {
-		if err := fileutil.Mkdir(wal); err != nil {
-			plog.Panicf("cannot create dir for RDB WAL (%v)", err)
-		}
-	}
-	dirExist, err := fileutil.Exist(dir)
-	if err != nil {
-		return nil, err
-	}
-	if !dirExist {
-		if err := fileutil.Mkdir(dir); err != nil {
-			plog.Panicf("cannot create dir (%v)", err)
-		}
+	if err := fileutil.MkdirAll(wal, fs); err != nil {
+		panic(err)
 	}
 	opts, bbto, cache := getRocksDBOptions(dir, wal)
 	db, err := gorocksdb.OpenDb(opts, dir)

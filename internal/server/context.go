@@ -17,17 +17,18 @@ package server
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
-	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 	"github.com/lni/goutils/random"
 )
 
@@ -74,7 +75,8 @@ type Context struct {
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
-	flocks       map[string]*fileutil.Flock
+	flocks       map[string]io.Closer
+	fs           vfs.IFS
 }
 
 // NewContext creates and returns a new server Context object.
@@ -83,7 +85,8 @@ func NewContext(nhConfig config.NodeHostConfig) (*Context, error) {
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
 		partitioner:  NewFixedPartitioner(defaultClusterIDMod),
-		flocks:       make(map[string]*fileutil.Flock),
+		flocks:       make(map[string]io.Closer),
+		fs:           nhConfig.FS,
 	}
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -99,7 +102,7 @@ func NewContext(nhConfig config.NodeHostConfig) (*Context, error) {
 // Stop stops the context.
 func (sc *Context) Stop() {
 	for _, fl := range sc.flocks {
-		if err := fl.Unlock(); err != nil {
+		if err := fl.Close(); err != nil {
 			panic(err)
 		}
 	}
@@ -114,7 +117,7 @@ func (sc *Context) GetRandomSource() random.Source {
 func (sc *Context) GetSnapshotDir(did uint64, clusterID uint64,
 	nodeID uint64) string {
 	parts, _, _ := sc.getSnapshotDirParts(did, clusterID, nodeID)
-	return filepath.Join(parts...)
+	return sc.fs.PathJoin(parts...)
 }
 
 func (sc *Context) getSnapshotDirParts(did uint64,
@@ -126,7 +129,7 @@ func (sc *Context) getSnapshotDirParts(did uint64,
 	parts := make([]string, 0)
 	toBeCreated := make([]string, 0)
 	return append(parts, dirs[0], sc.hostname, dd, pd, sd),
-		filepath.Join(dirs[0], sc.hostname, dd), append(toBeCreated, pd, sd)
+		sc.fs.PathJoin(dirs[0], sc.hostname, dd), append(toBeCreated, pd, sd)
 }
 
 // GetLogDBDirs returns the directory names for LogDB
@@ -134,11 +137,11 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 	dirs, lldirs := sc.getDataDirs()
 	didStr := sc.getDeploymentIDSubDirName(did)
 	for i := 0; i < len(dirs); i++ {
-		dirs[i] = filepath.Join(dirs[i], sc.hostname, didStr)
+		dirs[i] = sc.fs.PathJoin(dirs[i], sc.hostname, didStr)
 	}
 	if len(sc.nhConfig.WALDir) > 0 {
 		for i := 0; i < len(dirs); i++ {
-			lldirs[i] = filepath.Join(lldirs[i], sc.hostname, didStr)
+			lldirs[i] = sc.fs.PathJoin(lldirs[i], sc.hostname, didStr)
 		}
 		return dirs, lldirs
 	}
@@ -162,10 +165,10 @@ func (sc *Context) getDataDirs() ([]string, []string) {
 func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string, error) {
 	dirs, lldirs := sc.GetLogDBDirs(did)
 	for i := 0; i < len(dirs); i++ {
-		if err := fileutil.MkdirAll(dirs[i]); err != nil {
+		if err := fileutil.MkdirAll(dirs[i], sc.fs); err != nil {
 			return nil, nil, err
 		}
-		if err := fileutil.MkdirAll(lldirs[i]); err != nil {
+		if err := fileutil.MkdirAll(lldirs[i], sc.fs); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -177,17 +180,17 @@ func (sc *Context) CreateSnapshotDir(did uint64,
 	clusterID uint64, nodeID uint64) error {
 	_, path, parts := sc.getSnapshotDirParts(did, clusterID, nodeID)
 	for _, part := range parts {
-		path = filepath.Join(path, part)
-		exist, err := fileutil.Exist(path)
+		path = sc.fs.PathJoin(path, part)
+		exist, err := fileutil.Exist(path, sc.fs)
 		if err != nil {
 			return err
 		}
 		if !exist {
-			if err := fileutil.Mkdir(path); err != nil {
+			if err := fileutil.Mkdir(path, sc.fs); err != nil {
 				return err
 			}
 		} else {
-			deleted, err := fileutil.IsDirMarkedAsDeleted(path)
+			deleted, err := fileutil.IsDirMarkedAsDeleted(path, sc.fs)
 			if err != nil {
 				return err
 			}
@@ -230,7 +233,7 @@ func (sc *Context) LockNodeHostDir() error {
 func (sc *Context) RemoveSnapshotDir(did uint64,
 	clusterID uint64, nodeID uint64) error {
 	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	exist, err := fileutil.Exist(dir)
+	exist, err := fileutil.Exist(dir, sc.fs)
 	if err != nil {
 		return err
 	}
@@ -238,7 +241,7 @@ func (sc *Context) RemoveSnapshotDir(did uint64,
 		if err := sc.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
 			return err
 		}
-		if err := removeSavedSnapshots(dir); err != nil {
+		if err := removeSavedSnapshots(dir, sc.fs); err != nil {
 			return err
 		}
 	}
@@ -249,26 +252,30 @@ func (sc *Context) markSnapshotDirRemoved(did uint64, clusterID uint64,
 	nodeID uint64) error {
 	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
 	s := &raftpb.RaftDataStatus{}
-	return fileutil.MarkDirAsDeleted(dir, s)
+	return fileutil.MarkDirAsDeleted(dir, s, sc.fs)
 }
 
-func removeSavedSnapshots(dir string) error {
-	files, err := ioutil.ReadDir(dir)
+func removeSavedSnapshots(dir string, fs vfs.IFS) error {
+	files, err := fs.List(dir)
 	if err != nil {
 		return err
 	}
-	for _, fi := range files {
+	for _, fn := range files {
+		fi, err := fs.Stat(fs.PathJoin(dir, fn))
+		if err != nil {
+			return err
+		}
 		if !fi.IsDir() {
 			continue
 		}
 		if SnapshotDirNameRe.Match([]byte(fi.Name())) {
-			ssdir := filepath.Join(dir, fi.Name())
-			if err := os.RemoveAll(ssdir); err != nil {
+			ssdir := fs.PathJoin(dir, fi.Name())
+			if err := fs.RemoveAll(ssdir); err != nil {
 				return err
 			}
 		}
 	}
-	return fileutil.SyncDir(dir)
+	return fileutil.SyncDir(dir, fs)
 }
 
 func (sc *Context) checkNodeHostDir(did uint64,
@@ -285,41 +292,21 @@ func (sc *Context) checkNodeHostDir(did uint64,
 	return nil
 }
 
-func (sc *Context) tryCreateLockFile(dir string, fl string) error {
-	fp := filepath.Join(dir, fl)
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
-		s := &raftpb.RaftDataStatus{}
-		err = fileutil.CreateFlagFile(dir, fl, s)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (sc *Context) tryLockNodeHostDir(dir string) error {
-	fp := filepath.Join(dir, lockFilename)
-	if err := sc.tryCreateLockFile(dir, lockFilename); err != nil {
-		return err
-	}
-	var fl *fileutil.Flock
+	fp := sc.fs.PathJoin(dir, lockFilename)
 	_, ok := sc.flocks[fp]
 	if !ok {
-		fl = fileutil.New(fp)
-		sc.flocks[fp] = fl
-	} else {
-		return nil
+		c, err := sc.fs.Lock(fp)
+		if err != nil {
+			if err == syscall.EAGAIN {
+				return ErrLockDirectory
+			} else {
+				panic(fmt.Sprintf("Unknown error from lock %v", err))
+			}
+		}
+		sc.flocks[fp] = c
 	}
-	locked, err := fl.TryLock()
-	if err != nil {
-		return err
-	}
-	if locked {
-		return nil
-	}
-	return ErrLockDirectory
+	return nil
 }
 
 func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
@@ -329,12 +316,12 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 func (sc *Context) compatible(dir string,
 	did uint64, addr string, hostname string,
 	ldbBinVer uint32, name string, dbto bool) error {
-	fp := filepath.Join(dir, addressFilename)
+	fp := sc.fs.PathJoin(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
 		return strings.ToLower(strings.TrimSpace(s1)) ==
 			strings.ToLower(strings.TrimSpace(s2))
 	}
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
+	if _, err := sc.fs.Stat(fp); os.IsNotExist(err) {
 		if dbto {
 			return nil
 		}
@@ -350,13 +337,13 @@ func (sc *Context) compatible(dir string,
 			MaxSessionCount: settings.Hard.LRUMaxSessionCount,
 			EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 		}
-		err = fileutil.CreateFlagFile(dir, addressFilename, &status)
+		err = fileutil.CreateFlagFile(dir, addressFilename, &status, sc.fs)
 		if err != nil {
 			return err
 		}
 	} else {
 		status := raftpb.RaftDataStatus{}
-		err := fileutil.GetFlagFileContent(dir, addressFilename, &status)
+		err := fileutil.GetFlagFileContent(dir, addressFilename, &status, sc.fs)
 		if err != nil {
 			return err
 		}

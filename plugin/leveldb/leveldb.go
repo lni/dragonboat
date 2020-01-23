@@ -23,6 +23,7 @@ package leveldb
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -30,12 +31,14 @@ import (
 // Raft entries are stored in its plain format, it uses less memory than the
 // batched alternative implementation but comes at the cost of lower throughput.
 func NewLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.NewLogDB(dirs, lldirs, false, false, leveldb.NewKVStore)
+	fs := vfs.DefaultFS
+	return logdb.NewLogDB(dirs, lldirs, false, false, fs, leveldb.NewKVStore)
 }
 
 // NewBatchedLogDB is the factory function for creating LevelDB based Log DB
 // instances. Raft entries are batched before they get stored into LevelDB, it
 // uses more memory and provides better throughput performance.
 func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return logdb.NewLogDB(dirs, lldirs, true, false, leveldb.NewKVStore)
+	fs := vfs.DefaultFS
+	return logdb.NewLogDB(dirs, lldirs, true, false, fs, leveldb.NewKVStore)
 }

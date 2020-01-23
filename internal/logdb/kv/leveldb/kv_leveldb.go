@@ -19,6 +19,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb/levigo"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -51,7 +52,10 @@ func (w *levelDBWriteBatch) Count() int {
 }
 
 // NewKVStore returns a new leveldb based IKVStore instance.
-func NewKVStore(dir string, wal string) (kv.IKVStore, error) {
+func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if fs != vfs.DefaultFS {
+		panic("only vfs.DefaultFS is supported")
+	}
 	return openLevelDB(dir, wal)
 }
 

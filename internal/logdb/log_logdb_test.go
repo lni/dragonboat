@@ -32,7 +32,7 @@ func removeTestLogdbDir() {
 }
 
 func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {
-	logdb := getNewLogReaderTestDB(entries)
+	logdb := getNewLogReaderTestDB(entries, getTestFS())
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
 	if len(entries) > 0 {
 		if err := ls.Append(entries); err != nil {

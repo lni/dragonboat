@@ -17,15 +17,15 @@ package transport
 import (
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/fileutil"
 	"github.com/lni/goutils/leaktest"
 )
 
@@ -62,16 +62,17 @@ func getTestChunks() []pb.SnapshotChunk {
 func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
 	env := cs.getSSEnv(c)
 	fp := env.GetTempFilepath()
-	if _, err := os.Stat(fp); os.IsNotExist(err) {
+	if _, err := cs.fs.Stat(fp); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
 func hasExternalFile(cs *Chunks, c pb.SnapshotChunk, fn string, sz uint64) bool {
+	ifs := vfs.GetTestFS()
 	env := cs.getSSEnv(c)
-	efp := filepath.Join(env.GetFinalDir(), fn)
-	fs, err := os.Stat(efp)
+	efp := ifs.PathJoin(env.GetFinalDir(), fn)
+	fs, err := cs.fs.Stat(efp)
 	if os.IsNotExist(err) {
 		return false
 	}
@@ -83,7 +84,8 @@ func getTestDeploymentID() uint64 {
 }
 
 func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler)) {
-	defer os.RemoveAll(snapshotDir)
+	fs := vfs.GetTestFS()
+	defer fs.RemoveAll(snapshotDir)
 	defer leaktest.AfterTest(t)()
 	trans, _, stopper, tt := newTestTransport(false)
 	defer trans.serverCtx.Stop()
@@ -93,10 +95,11 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator)
+		trans.snapshotReceived, getTestDeploymentID,
+		trans.snapshotLocator, trans.nhConfig.FS)
 	ts := getTestChunks()
 	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
-	if err := os.MkdirAll(snapDir, 0755); err != nil {
+	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
 	fn(t, chunks, handler)
@@ -104,7 +107,7 @@ func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler
 
 func TestMaxSlotIsEnforced(t *testing.T) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
-		defer os.RemoveAll(snapshotDir)
+		defer chunks.fs.RemoveAll(snapshotDir)
 		inputs := getTestChunks()
 		chunks.validate = false
 		v := uint64(1)
@@ -113,7 +116,7 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 			v++
 			c.ClusterId = v
 			snapDir := chunks.getSnapshotDir(v, c.NodeId)
-			if err := os.MkdirAll(snapDir, 0755); err != nil {
+			if err := chunks.fs.MkdirAll(snapDir, 0755); err != nil {
 				t.Fatalf("%v", err)
 			}
 			if !chunks.addChunk(c) {
@@ -322,7 +325,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 			t.Fatalf("failed to add chunk")
 		}
 		snapshotDir := env.GetRootDir()
-		if err := fileutil.MarkDirAsDeleted(snapshotDir, &pb.Message{}); err != nil {
+		if err := fileutil.MarkDirAsDeleted(snapshotDir, &pb.Message{}, chunks.fs); err != nil {
 			t.Fatalf("failed to create the delete flag %v", err)
 		}
 		for idx, c := range inputs {
@@ -334,7 +337,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 			}
 		}
 		tmpSnapDir := env.GetTempDir()
-		if _, err := os.Stat(tmpSnapDir); !os.IsNotExist(err) {
+		if _, err := chunks.fs.Stat(tmpSnapDir); !os.IsNotExist(err) {
 			t.Errorf("tmp dir not removed")
 		}
 	}
@@ -347,7 +350,7 @@ func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
 		inputs := getTestChunks()
 		env := chunks.getSSEnv(inputs[0])
 		snapDir := env.GetFinalDir()
-		if err := os.MkdirAll(snapDir, 0755); err != nil {
+		if err := chunks.fs.MkdirAll(snapDir, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
 		}
 		chunks.validate = false
@@ -361,7 +364,7 @@ func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
 		}
 		tmpSnapDir := env.GetTempDir()
-		if _, err := os.Stat(tmpSnapDir); !os.IsNotExist(err) {
+		if _, err := chunks.fs.Stat(tmpSnapDir); !os.IsNotExist(err) {
 			t.Errorf("tmp dir not removed")
 		}
 	}
@@ -411,7 +414,7 @@ func checkTestSnapshotFile(chunks *Chunks,
 	chunk pb.SnapshotChunk, size uint64) bool {
 	env := chunks.getSSEnv(chunk)
 	finalFp := env.GetFilepath()
-	f, err := os.Open(finalFp)
+	f, err := chunks.fs.Open(finalFp)
 	if err != nil {
 		plog.Errorf("no final fp file %s", finalFp)
 		return false
@@ -486,7 +489,7 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 			ClusterId: 100,
 			Snapshot:  ss,
 		}
-		inputs := splitSnapshotMessage(msg)
+		inputs := splitSnapshotMessage(msg, chunks.fs)
 		for _, c := range inputs {
 			c.Data = make([]byte, c.ChunkSize)
 			added := chunks.addChunk(c)
@@ -534,7 +537,7 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 			ClusterId: 100,
 			Snapshot:  ss,
 		}
-		inputs := splitSnapshotMessage(msg)
+		inputs := splitSnapshotMessage(msg, chunks.fs)
 		if len(inputs) != 1 {
 			t.Errorf("got %d chunks, want 1", len(inputs))
 		}
@@ -560,6 +563,7 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 }
 
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
+	fs := vfs.GetTestFS()
 	ss := pb.Snapshot{
 		Filepath: "filepath.data",
 		FileSize: snapshotChunkSize*3 + 100,
@@ -573,7 +577,7 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 		ClusterId: 100,
 		Snapshot:  ss,
 	}
-	chunks := splitSnapshotMessage(msg)
+	chunks := splitSnapshotMessage(msg, fs)
 	if len(chunks) != 4 {
 		t.Errorf("got %d counts, want 4", len(chunks))
 	}
@@ -628,6 +632,7 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 }
 
 func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
+	fs := vfs.GetTestFS()
 	sf1 := &pb.SnapshotFile{
 		Filepath: "/data/external1.data",
 		FileSize: 100,
@@ -654,7 +659,7 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunks(t *testing.T) {
 		ClusterId: 100,
 		Snapshot:  ss,
 	}
-	chunks := splitSnapshotMessage(msg)
+	chunks := splitSnapshotMessage(msg, fs)
 	if len(chunks) != 7 {
 		t.Errorf("unexpected chunk count")
 	}
@@ -748,16 +753,16 @@ func TestGetMessageFromChunk(t *testing.T) {
 		if ss.FileSize != chunk.FileSize {
 			t.Errorf("file size not set correctly")
 		}
-		if ss.Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+		if ss.Filepath != chunks.fs.PathJoin("gtransport_test_data_safe_to_delete",
 			"snapshot-123-3", "snapshot-00000000000000C8", "test.data") {
 			t.Errorf("unexpected file path, %s", ss.Filepath)
 		}
 		if len(ss.Files[0].Metadata) != len(sf1.Metadata) || len(ss.Files[1].Metadata) != len(sf2.Metadata) {
 			t.Errorf("external files not set correctly")
 		}
-		if ss.Files[0].Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+		if ss.Files[0].Filepath != chunks.fs.PathJoin("gtransport_test_data_safe_to_delete",
 			"snapshot-123-3", "snapshot-00000000000000C8", "external-file-1") ||
-			ss.Files[1].Filepath != filepath.Join("gtransport_test_data_safe_to_delete",
+			ss.Files[1].Filepath != chunks.fs.PathJoin("gtransport_test_data_safe_to_delete",
 				"snapshot-123-3", "snapshot-00000000000000C8", "external-file-2") {
 			t.Errorf("file path not set correctly, %s\n, %s", ss.Files[0].Filepath, ss.Files[1].Filepath)
 		}

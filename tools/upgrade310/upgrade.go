@@ -21,6 +21,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -55,7 +56,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		return false, err
 	}
 	nhDir, walDir := serverCtx.GetLogDBDirs(nhConfig.DeploymentID)
-	logdb, err := logdb.NewDefaultLogDB(nhDir, walDir)
+	logdb, err := logdb.NewDefaultLogDB(nhDir, walDir, vfs.DefaultFS)
 	if err != nil {
 		return false, err
 	}
@@ -71,7 +72,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		}
 		for _, ss := range ssList {
 			if ss.Type == pb.OnDiskStateMachine && ss.OnDiskIndex == 0 {
-				shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath)
+				shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, vfs.DefaultFS)
 				if err != nil {
 					return false, err
 				}

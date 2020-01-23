@@ -335,7 +335,8 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			t.Errorf("unexpected index %d, want 10", eb.Entries[0].Index)
 		}
 	}
-	runBatchedLogDBTest(t, tf)
+	fs := getTestFS()
+	runBatchedLogDBTest(t, tf, fs)
 }
 
 func TestEntryBatchMergedNotLastBatch(t *testing.T) {
@@ -398,7 +399,8 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			}
 		}
 	}
-	runBatchedLogDBTest(t, tf)
+	fs := getTestFS()
+	runBatchedLogDBTest(t, tf, fs)
 }
 
 func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
@@ -465,5 +467,6 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			plog.Infof("idx %d", e.Index)
 		}
 	}
-	runBatchedLogDBTest(t, tf)
+	fs := getTestFS()
+	runBatchedLogDBTest(t, tf, fs)
 }
