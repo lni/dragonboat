@@ -57,7 +57,7 @@ func getTestNodeHostConfig() *config.NodeHostConfig {
 	return &config.NodeHostConfig{
 		WALDir:         singleNodeHostTestDir,
 		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 50,
+		RTTMillisecond: 2,
 		RaftAddress:    "localhost:1111",
 	}
 }
@@ -342,7 +342,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 100,
+		RTTMillisecond: 2,
 		RaftAddress:    peers[1],
 	}
 	nh, err := NewNodeHost(nhc)
@@ -948,7 +948,7 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get regular session")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 95*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 		defer cancel()
 		cs := nh.GetNoOPSession(2)
 		_, err = nh.SyncPropose(ctx, cs, make([]byte, 1))
@@ -2765,7 +2765,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		peers[1] = nodeHostTestAddr1
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 10,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 		}
 		nh, err := NewNodeHost(nhc)
@@ -2919,13 +2919,13 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		nhc1 := config.NodeHostConfig{
 			WALDir:         nh1dir,
 			NodeHostDir:    nh1dir,
-			RTTMillisecond: 10,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
-			RTTMillisecond: 10,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr2,
 		}
 		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
@@ -3222,7 +3222,7 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	tf := func() {
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 200,
+			RTTMillisecond: 2,
 			RaftAddress:    "microsoft.com:12345",
 		}
 		nh, err := NewNodeHost(nhc)
@@ -3241,7 +3241,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 20,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   f,
 		}
@@ -3313,7 +3313,7 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		nhc := config.NodeHostConfig{
 			WALDir:         singleNodeHostTestDir,
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 100,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 		}
@@ -3367,7 +3367,7 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 200,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 		}
@@ -3431,7 +3431,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 20,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   nff,
 		}
@@ -3457,7 +3457,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 20,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 		}
@@ -3477,7 +3477,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 20,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 			DeploymentID:   100,
@@ -3506,7 +3506,7 @@ func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 20,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 		}
@@ -3645,7 +3645,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 	peers[1] = nodeHostTestAddr1
 	nhc := config.NodeHostConfig{
 		NodeHostDir:       singleNodeHostTestDir,
-		RTTMillisecond:    10,
+		RTTMillisecond:    2,
 		RaftAddress:       peers[1],
 		RaftEventListener: rel,
 	}
@@ -3820,7 +3820,7 @@ func testWitnessIO(t *testing.T,
 		peers[1] = nodeHostTestAddr1
 		nhc1 := config.NodeHostConfig{
 			NodeHostDir:    path.Join(singleNodeHostTestDir, "nh1"),
-			RTTMillisecond: 10,
+			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 		}
 		nh1, err := NewNodeHost(nhc1)
