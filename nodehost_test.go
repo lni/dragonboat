@@ -289,7 +289,7 @@ func createSnapshotCompressedTestNodeHost(addr string,
 	rc := config.Config{
 		NodeID:                  1,
 		ClusterID:               1,
-		ElectionRTT:             5,
+		ElectionRTT:             3,
 		HeartbeatRTT:            1,
 		CheckQuorum:             true,
 		SnapshotEntries:         10,
@@ -322,7 +322,7 @@ func createSingleNodeTestNodeHost(addr string,
 	rc := config.Config{
 		NodeID:             uint64(1),
 		ClusterID:          2,
-		ElectionRTT:        10,
+		ElectionRTT:        3,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
 		SnapshotEntries:    10,
@@ -369,7 +369,7 @@ func createConcurrentTestNodeHost(addr string,
 	// config for raft
 	rc := config.Config{
 		NodeID:             uint64(1),
-		ElectionRTT:        5,
+		ElectionRTT:        3,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
 		SnapshotEntries:    snapshotEntry,
@@ -421,7 +421,7 @@ func createFakeDiskTestNodeHost(addr string,
 	rc := config.Config{
 		ClusterID:          uint64(1),
 		NodeID:             uint64(1),
-		ElectionRTT:        5,
+		ElectionRTT:        3,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
 		SnapshotEntries:    30,
@@ -581,7 +581,7 @@ func createRateLimitedTestNodeHost(addr string,
 	rc := config.Config{
 		NodeID:          uint64(1),
 		ClusterID:       1,
-		ElectionRTT:     5,
+		ElectionRTT:     3,
 		HeartbeatRTT:    1,
 		CheckQuorum:     true,
 		MaxInMemLogSize: 1024 * 3,
@@ -770,7 +770,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 		rc := config.Config{
 			NodeID:             uint64(1),
 			ClusterID:          2,
-			ElectionRTT:        5,
+			ElectionRTT:        3,
 			HeartbeatRTT:       1,
 			CheckQuorum:        true,
 			SnapshotEntries:    10,
@@ -792,19 +792,23 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			return &PST{}
 		}
 		if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
-			t.Fatalf("failed to join the cluster")
+			t.Fatalf("failed to join the cluster, %v", err)
 		}
 		if err := nh.StopCluster(2); err != nil {
-			t.Fatalf("failed to stop the cluster")
+			t.Fatalf("failed to stop the cluster, %v", err)
 		}
-		if err := nh.StartCluster(peers, true, newPST, rc); err != nil {
-			t.Fatalf("failed to join the cluster again")
-		}
-		if err := nh.StopCluster(2); err != nil {
-			t.Fatalf("failed to stop the cluster")
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to restart the cluster again %v", err)
+		for i := 0; i < 1000; i++ {
+			err := nh.StartCluster(peers, true, newPST, rc)
+			if err == nil {
+				return
+			} else {
+				if err == ErrClusterAlreadyExist {
+					time.Sleep(5 * time.Millisecond)
+					continue
+				} else {
+					t.Fatalf("failed to join the cluster again, %v", err)
+				}
+			}
 		}
 	}
 	runNodeHostTest(t, tf)
@@ -851,7 +855,7 @@ func TestCompactionCanBeRequested(t *testing.T) {
 	rc := config.Config{
 		NodeID:                 uint64(1),
 		ClusterID:              2,
-		ElectionRTT:            10,
+		ElectionRTT:            3,
 		HeartbeatRTT:           1,
 		CheckQuorum:            true,
 		SnapshotEntries:        10,
@@ -938,6 +942,7 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 
 func TestInvalidContextDeadlineIsReported(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
+		plog.Infof("nh is ready")
 		rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
 		rcs, err := nh.SyncGetSession(rctx, 2)
 		rcancel()
@@ -1192,7 +1197,9 @@ func runSingleNodeHostTest(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
+	plog.Infof("going to wait for leader election")
 	waitForLeaderToBeElected(t, nh, 2)
+	plog.Infof("leader is ready")
 	defer fs.RemoveAll(singleNodeHostTestDir)
 	defer nh.Stop()
 	tf(t, nh)
@@ -1207,7 +1214,7 @@ func doSingleNodeHostTest(t *testing.T, tf func(t *testing.T, nh *NodeHost), com
 	rc := config.Config{
 		NodeID:             uint64(1),
 		ClusterID:          2,
-		ElectionRTT:        10,
+		ElectionRTT:        3,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
 		SnapshotEntries:    10,
@@ -2414,7 +2421,7 @@ func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
 		rc := config.Config{
 			NodeID:             uint64(1),
 			ClusterID:          2,
-			ElectionRTT:        5,
+			ElectionRTT:        3,
 			HeartbeatRTT:       1,
 			CheckQuorum:        true,
 			SnapshotEntries:    10,
@@ -3631,7 +3638,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 	rc := config.Config{
 		NodeID:       1,
 		ClusterID:    1,
-		ElectionRTT:  5,
+		ElectionRTT:  3,
 		HeartbeatRTT: 1,
 		CheckQuorum:  true,
 	}

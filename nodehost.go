@@ -1586,6 +1586,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	nh.clusterMu.clusters.Store(clusterID, rn)
 	nh.clusterMu.requests[clusterID] = queue
 	nh.clusterMu.csi++
+	nh.execEngine.setTaskReady(clusterID)
 	return nil
 }
 

@@ -706,6 +706,9 @@ func (s *execEngine) taskWorkerMain(workerID uint64) {
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
 		case <-s.taskWorkReady.waitCh(workerID):
+			if cci == 0 || len(nodes) == 0 {
+				nodes, cci = s.loadSMs(workerID, cci, nodes)
+			}
 			clusterIDMap := s.taskWorkReady.getReadyMap(workerID)
 			s.execSMs(workerID, clusterIDMap, nodes, batch, entries)
 		}
@@ -778,6 +781,9 @@ func (s *execEngine) nodeWorkerMain(workerID uint64) {
 			nodes, cci = s.loadNodes(workerID, cci, nodes)
 			s.execNodes(workerID, make(map[uint64]struct{}), nodes, stopC)
 		case <-s.nodeWorkReady.waitCh(workerID):
+			if cci == 0 || len(nodes) == 0 {
+				nodes, cci = s.loadNodes(workerID, cci, nodes)
+			}
 			clusterIDMap := s.nodeWorkReady.getReadyMap(workerID)
 			s.execNodes(workerID, clusterIDMap, nodes, stopC)
 		}
