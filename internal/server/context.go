@@ -320,7 +320,7 @@ func (sc *Context) compatible(dir string,
 		return strings.ToLower(strings.TrimSpace(s1)) ==
 			strings.ToLower(strings.TrimSpace(s2))
 	}
-	if _, err := sc.fs.Stat(fp); os.IsNotExist(err) {
+	if _, err := sc.fs.Stat(fp); vfs.IsNotExist(err) {
 		if dbto {
 			return nil
 		}

@@ -16,7 +16,6 @@ package logdb
 
 import (
 	"math"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -55,8 +54,8 @@ func getDirSize(path string, includeLogSize bool, fs vfs.IFS) (int64, error) {
 }
 
 func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILogDB {
-	d := filepath.Join(RDBTestDirectory, dir)
-	lld := filepath.Join(RDBTestDirectory, lldir)
+	d := fs.PathJoin(RDBTestDirectory, dir)
+	lld := fs.PathJoin(RDBTestDirectory, lldir)
 	if err := fileutil.MkdirAll(d, fs); err != nil {
 		panic(err)
 	}
@@ -80,8 +79,8 @@ func runLogDBTestAs(t *testing.T,
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
-	d := filepath.Join(RDBTestDirectory, dir)
-	lld := filepath.Join(RDBTestDirectory, lldir)
+	d := fs.PathJoin(RDBTestDirectory, dir)
+	lld := fs.PathJoin(RDBTestDirectory, lldir)
 	fs.RemoveAll(d)
 	fs.RemoveAll(lld)
 	db := getNewTestDB(dir, lldir, batched, fs)

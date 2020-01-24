@@ -16,7 +16,6 @@ package transport
 
 import (
 	"math/rand"
-	"os"
 	"reflect"
 	"testing"
 
@@ -62,7 +61,7 @@ func getTestChunks() []pb.SnapshotChunk {
 func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
 	env := cs.getSSEnv(c)
 	fp := env.GetTempFilepath()
-	if _, err := cs.fs.Stat(fp); os.IsNotExist(err) {
+	if _, err := cs.fs.Stat(fp); vfs.IsNotExist(err) {
 		return false
 	}
 	return true
@@ -73,7 +72,7 @@ func hasExternalFile(cs *Chunks, c pb.SnapshotChunk, fn string, sz uint64) bool 
 	env := cs.getSSEnv(c)
 	efp := ifs.PathJoin(env.GetFinalDir(), fn)
 	fs, err := cs.fs.Stat(efp)
-	if os.IsNotExist(err) {
+	if vfs.IsNotExist(err) {
 		return false
 	}
 	return uint64(fs.Size()) == sz
@@ -337,7 +336,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 			}
 		}
 		tmpSnapDir := env.GetTempDir()
-		if _, err := chunks.fs.Stat(tmpSnapDir); !os.IsNotExist(err) {
+		if _, err := chunks.fs.Stat(tmpSnapDir); !vfs.IsNotExist(err) {
 			t.Errorf("tmp dir not removed")
 		}
 	}
@@ -364,7 +363,7 @@ func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
 		}
 		tmpSnapDir := env.GetTempDir()
-		if _, err := chunks.fs.Stat(tmpSnapDir); !os.IsNotExist(err) {
+		if _, err := chunks.fs.Stat(tmpSnapDir); !vfs.IsNotExist(err) {
 			t.Errorf("tmp dir not removed")
 		}
 	}

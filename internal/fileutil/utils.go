@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -51,7 +49,7 @@ func Exist(name string, fs vfs.IFS) (bool, error) {
 		return true, nil
 	}
 	_, err := fs.Stat(name)
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && vfs.IsNotExist(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -113,7 +111,7 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 	if !fileInfo.IsDir() {
 		panic("not a dir")
 	}
-	df, err := fs.Open(filepath.Clean(dir))
+	df, err := fs.Open(vfs.Clean(dir))
 	if err != nil {
 		return err
 	}
@@ -191,7 +189,7 @@ func CreateFlagFile(dir string,
 func GetFlagFileContent(dir string,
 	filename string, msg proto.Message, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
-	f, err := fs.Open(filepath.Clean(fp))
+	f, err := fs.Open(vfs.Clean(fp))
 	if err != nil {
 		return err
 	}
@@ -311,7 +309,7 @@ func nextRandom() string {
 func TempFile(dir,
 	pattern string, fs vfs.IFS) (f vfs.File, name string, err error) {
 	if dir == "" {
-		dir = os.TempDir()
+		dir = vfs.TempDir()
 		if fs != vfs.DefaultFS {
 			if err := fs.MkdirAll(dir, defaultDirFileMode); err != nil {
 				panic(err)
@@ -328,7 +326,7 @@ func TempFile(dir,
 	for i := 0; i < 10000; i++ {
 		name = fs.PathJoin(dir, prefix+nextRandom()+suffix)
 		f, err = fs.Create(name)
-		if os.IsExist(err) {
+		if vfs.IsExist(err) {
 			if nconflict++; nconflict > 10 {
 				randmu.Lock()
 				rand = reseed()

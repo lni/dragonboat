@@ -18,8 +18,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -59,7 +57,7 @@ func deleteTestRDB(fs vfs.IFS) {
 }
 
 func getTestSnapshotter(ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
-	fp := filepath.Join(rdbTestDirectory, "snapshot")
+	fp := fs.PathJoin(rdbTestDirectory, "snapshot")
 	if err := fs.MkdirAll(fp, 0777); err != nil {
 		panic(err)
 	}
@@ -127,7 +125,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to get stat for tmp dir, %v", err)
 		}
-		testfp := filepath.Join(tmpDir, "test.data")
+		testfp := fs.PathJoin(tmpDir, "test.data")
 		f, err := fs.Create(testfp)
 		if err != nil {
 			t.Errorf("failed to create test file")
@@ -157,7 +155,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if err != ErrNoSnapshot {
 			t.Errorf("unexpected err %v", err)
 		}
-		if _, err = fs.Stat(tmpDir); !os.IsNotExist(err) {
+		if _, err = fs.Stat(tmpDir); !vfs.IsNotExist(err) {
 			t.Errorf("tmp dir not removed, %v", err)
 		}
 		fi, err := fs.Stat(finalSnapDir)
@@ -170,7 +168,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if fileutil.HasFlagFile(finalSnapDir, fileutil.SnapshotFlagFilename, fs) {
 			t.Errorf("flag file not removed")
 		}
-		vfp := filepath.Join(finalSnapDir, "test.data")
+		vfp := fs.PathJoin(finalSnapDir, "test.data")
 		fi, err = fs.Stat(vfp)
 		if err != nil {
 			t.Errorf("failed to get stat %v", err)
@@ -214,8 +212,8 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 		env2 := s.getSSEnv(200)
 		fd1 := env1.GetFinalDir()
 		fd2 := env2.GetFinalDir()
-		fd1 = filepath.Join(fd1, tmpSnapshotDirSuffix)
-		fd2 = filepath.Join(fd2, ".receiving")
+		fd1 = fs.PathJoin(fd1, tmpSnapshotDirSuffix)
+		fd2 = fs.PathJoin(fd2, ".receiving")
 		if err := fs.MkdirAll(fd1, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
 		}
@@ -225,10 +223,10 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 		if err := s.ProcessOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
-		if _, err := fs.Stat(fd1); os.IsNotExist(err) {
+		if _, err := fs.Stat(fd1); vfs.IsNotExist(err) {
 			t.Errorf("fd1 not removed")
 		}
-		if _, err := fs.Stat(fd2); os.IsNotExist(err) {
+		if _, err := fs.Stat(fd2); vfs.IsNotExist(err) {
 			t.Errorf("fd2 not removed")
 		}
 	}
@@ -255,7 +253,7 @@ func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
 		if err := s.ProcessOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
-		if _, err := fs.Stat(fd1); !os.IsNotExist(err) {
+		if _, err := fs.Stat(fd1); !vfs.IsNotExist(err) {
 			t.Errorf("fd1 not removed")
 		}
 	}
@@ -327,10 +325,10 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 		if !fileutil.HasFlagFile(fd4, fileutil.SnapshotFlagFilename, fs) {
 			t.Errorf("flag for fd4 is missing")
 		}
-		if _, err := fs.Stat(fd1); os.IsNotExist(err) {
+		if _, err := fs.Stat(fd1); vfs.IsNotExist(err) {
 			t.Errorf("fd1 removed by mistake")
 		}
-		if _, err := fs.Stat(fd2); !os.IsNotExist(err) {
+		if _, err := fs.Stat(fd2); !vfs.IsNotExist(err) {
 			t.Errorf("fd2 not removed")
 		}
 	}
@@ -383,7 +381,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 		for i := uint64(1); i < removed; i++ {
 			env := snapshotter.getSSEnv(i)
 			snapDir := env.GetFinalDir()
-			if _, err = fs.Stat(snapDir); os.IsNotExist(err) {
+			if _, err = fs.Stat(snapDir); vfs.IsNotExist(err) {
 				t.Errorf("snapshot dir didn't get created, %s", snapDir)
 			}
 		}
@@ -405,12 +403,12 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 		}
 		for i := uint64(0); i < removed; i++ {
 			fp := snapshotter.GetFilePath(i)
-			if _, err := fs.Stat(fp); !os.IsNotExist(err) {
+			if _, err := fs.Stat(fp); !vfs.IsNotExist(err) {
 				t.Errorf("snapshot file didn't get deleted")
 			}
 			env := snapshotter.getSSEnv(i)
 			snapDir := env.GetFinalDir()
-			if _, err := fs.Stat(snapDir); !os.IsNotExist(err) {
+			if _, err := fs.Stat(snapDir); !vfs.IsNotExist(err) {
 				t.Errorf("snapshot dir didn't get removed")
 			}
 		}

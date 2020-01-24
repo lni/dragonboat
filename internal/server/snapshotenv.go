@@ -137,7 +137,7 @@ func NewSSEnv(f GetSnapshotDirFunc,
 		tmpSuffix = recvTmpDirSuffix
 	}
 	rootDir := f(clusterID, nodeID)
-	fp := filepath.Join(getFinalSnapshotDirName(rootDir, index),
+	fp := fs.PathJoin(getFinalSnapshotDirName(rootDir, index),
 		getSnapshotFilename(index))
 	return &SSEnv{
 		index:    index,
@@ -218,8 +218,8 @@ func (se *SSEnv) SaveSSMetadata(msg proto.Message) error {
 // HasFlagFile returns a boolean flag indicating whether the flag file is
 // available in the final directory.
 func (se *SSEnv) HasFlagFile() bool {
-	fp := filepath.Join(se.finalDir, fileutil.SnapshotFlagFilename)
-	if _, err := se.fs.Stat(fp); os.IsNotExist(err) {
+	fp := se.fs.PathJoin(se.finalDir, fileutil.SnapshotFlagFilename)
+	if _, err := se.fs.Stat(fp); vfs.IsNotExist(err) {
 		return false
 	}
 	return true
@@ -238,17 +238,17 @@ func (se *SSEnv) GetFilename() string {
 
 // GetFilepath returns the snapshot file path.
 func (se *SSEnv) GetFilepath() string {
-	return filepath.Join(se.finalDir, getSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.finalDir, getSnapshotFilename(se.index))
 }
 
 // GetShrinkedFilepath returns the file path of the shrunk snapshot.
 func (se *SSEnv) GetShrinkedFilepath() string {
-	return filepath.Join(se.finalDir, getShrinkedSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.finalDir, getShrinkedSnapshotFilename(se.index))
 }
 
 // GetTempFilepath returns the temp snapshot file path.
 func (se *SSEnv) GetTempFilepath() string {
-	return filepath.Join(se.tmpDir, getSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.tmpDir, getSnapshotFilename(se.index))
 }
 
 func (se *SSEnv) createDir(dir string) error {
@@ -265,7 +265,7 @@ func (se *SSEnv) removeDir(dir string) error {
 }
 
 func (se *SSEnv) finalDirExists() bool {
-	if _, err := se.fs.Stat(se.finalDir); os.IsNotExist(err) {
+	if _, err := se.fs.Stat(se.finalDir); vfs.IsNotExist(err) {
 		return false
 	}
 	return true

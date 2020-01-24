@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"path/filepath"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -143,7 +142,7 @@ func newTestSnapshotter(fs vfs.IFS) *testSnapshotter {
 
 func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
-	fp := filepath.Join(testSnapshotterDir, fn)
+	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	address := make(map[uint64]string)
 	address[1] = "localhost:1"
 	address[2] = "localhost:2"
@@ -161,12 +160,12 @@ func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 
 func (s *testSnapshotter) GetFilePath(index uint64) string {
 	filename := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
-	return filepath.Join(testSnapshotterDir, filename)
+	return s.fs.PathJoin(testSnapshotterDir, filename)
 }
 
 func (s *testSnapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
-	fp := filepath.Join(testSnapshotterDir, fn)
+	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	snap := pb.Snapshot{
 		Filepath: fp,
 		FileSize: s.dataSize,
@@ -202,7 +201,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 	}
 	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshottingMode, s.fs)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
-	fp := filepath.Join(testSnapshotterDir, fn)
+	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, s.fs)
 	if err != nil {
 		return nil, env, err

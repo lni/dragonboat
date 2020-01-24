@@ -18,8 +18,6 @@ package pebble
 
 import (
 	"bytes"
-	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -27,7 +25,12 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
+)
+
+var (
+	plog = logger.GetLogger("pebblekv")
 )
 
 const (
@@ -97,9 +100,9 @@ var pebbleWarning sync.Once
 
 func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 	pebbleWarning.Do(func() {
-		fmt.Fprintf(os.Stderr, "pebble support is experimental, DO NOT USE IN PRODUCTION\n")
+		plog.Warningf("pebble support is experimental, DO NOT USE IN PRODUCTION")
 		if fs == vfs.MemStrictFS {
-			fmt.Fprintf(os.Stderr, "running in pebble memfs test mode\n")
+			plog.Warningf("running in pebble memfs test mode")
 		}
 	})
 	lopts := make([]pebble.LevelOptions, 0)

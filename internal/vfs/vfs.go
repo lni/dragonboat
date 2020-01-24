@@ -17,6 +17,7 @@ package vfs
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	pvfs "github.com/cockroachdb/pebble/vfs"
 
@@ -125,4 +126,26 @@ func (p *PebbleFS) PathJoin(elem ...string) string {
 // PathDir ...
 func (p *PebbleFS) PathDir(path string) string {
 	return p.fs.PathDir(path)
+}
+
+// IsNotExist returns a boolean value indicating whether the specified error is
+// to indicate that a file or directory does not exist.
+func IsNotExist(err error) bool {
+	return os.IsNotExist(err)
+}
+
+// IsExist returns a boolean value indicating whether the specified error is to
+// indicate that a file or directory already exists.
+func IsExist(err error) bool {
+	return os.IsExist(err)
+}
+
+// TempDir returns the directory use for storing temporary files.
+func TempDir() string {
+	return os.TempDir()
+}
+
+// Clean is a wrapper for filepath.Clean.
+func Clean(dir string) string {
+	return filepath.Clean(dir)
 }

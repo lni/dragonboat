@@ -17,7 +17,6 @@ package dragonboat
 import (
 	"errors"
 	"math"
-	"path/filepath"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -290,7 +289,7 @@ func (s *snapshotter) ProcessOrphans() error {
 		if !fi.IsDir() {
 			continue
 		}
-		fdir := filepath.Join(s.dir, fi.Name())
+		fdir := s.fs.PathJoin(s.dir, fi.Name())
 		if s.isOrphanDir(fi.Name()) {
 			plog.Infof("found a orphan snapshot dir %s, %s", fi.Name(), fdir)
 			var ss pb.Snapshot
@@ -389,6 +388,6 @@ func (s *snapshotter) isOrphanDir(dir string) bool {
 	if !s.dirNameMatch(dir) {
 		return false
 	}
-	fdir := filepath.Join(s.dir, dir)
+	fdir := s.fs.PathJoin(s.dir, dir)
 	return fileutil.HasFlagFile(fdir, fileutil.SnapshotFlagFilename, s.fs)
 }

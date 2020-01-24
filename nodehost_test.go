@@ -1162,7 +1162,7 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 		t.Fatalf("failed to create nodehost %v", err)
 	}
 	_, err = fs.Stat(z1)
-	if !os.IsNotExist(err) {
+	if !vfs.IsNotExist(err) {
 		t.Fatalf("failed to delete zombie dir")
 	}
 }
