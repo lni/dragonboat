@@ -416,7 +416,6 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 				if err == io.EOF {
 					break
 				} else {
-					panic(err)
 					return err
 				}
 			}

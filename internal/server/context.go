@@ -300,9 +300,8 @@ func (sc *Context) tryLockNodeHostDir(dir string) error {
 		if err != nil {
 			if err == syscall.EAGAIN {
 				return ErrLockDirectory
-			} else {
-				panic(fmt.Sprintf("Unknown error from lock %v", err))
 			}
+			panic(fmt.Sprintf("Unknown error from lock %v", err))
 		}
 		sc.flocks[fp] = c
 	}

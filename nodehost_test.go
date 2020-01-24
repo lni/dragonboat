@@ -801,13 +801,12 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			err := nh.StartCluster(peers, true, newPST, rc)
 			if err == nil {
 				return
+			}
+			if err == ErrClusterAlreadyExist {
+				time.Sleep(5 * time.Millisecond)
+				continue
 			} else {
-				if err == ErrClusterAlreadyExist {
-					time.Sleep(5 * time.Millisecond)
-					continue
-				} else {
-					t.Fatalf("failed to join the cluster again, %v", err)
-				}
+				t.Fatalf("failed to join the cluster again, %v", err)
 			}
 		}
 	}

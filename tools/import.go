@@ -133,6 +133,9 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	return ImportSnapshotFS(nhConfig, srcDir, memberNodes, nodeID, fs)
 }
 
+// ImportSnapshotFS imports the specified snapshot to the system.
+// ImportSnapshotFS is similar to ImportSnapshot but callers are allowed to
+// specify what vfs to use.
 func ImportSnapshotFS(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string,
 	nodeID uint64, fs vfs.IFS) error {

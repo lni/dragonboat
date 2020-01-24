@@ -70,7 +70,7 @@ func TestCompactionDoneChanIsRetained(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
 	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
-	done := p.pendings[raftio.NodeInfo{1, 2}].done
+	done := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}].done
 	p.addTask(task{clusterID: 1, nodeID: 2, index: 10})
 	v, ok := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}]
 	if !ok {

@@ -55,7 +55,7 @@ func CreateChunkFile(fp string, fs vfs.IFS) (*ChunkFile, error) {
 	return &ChunkFile{file: f, syncDir: true, dir: fs.PathDir(fp), fs: fs}, nil
 }
 
-// Read reads from the file.
+// ReadAt reads from the file.
 func (cf *ChunkFile) ReadAt(data []byte, offset int64) (int, error) {
 	return cf.file.ReadAt(data, offset)
 }

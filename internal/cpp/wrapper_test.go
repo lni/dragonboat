@@ -22,6 +22,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/leaktest"
@@ -352,7 +353,7 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 		t.Errorf("Unexpected update result")
 	}
 	writer, err := rsm.NewSnapshotWriter(fp,
-		rsm.SnapshotVersion, pb.NoCompression)
+		rsm.SnapshotVersion, pb.NoCompression, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -377,7 +378,7 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds2.(*RegularStateMachineWrapper).destroy()
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -425,7 +426,8 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		Type:    pb.RegularStateMachine,
 		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
 	}
-	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, pb.NoCompression)
+	writer, err := rsm.NewSnapshotWriter(fp,
+		rsm.SnapshotVersion, pb.NoCompression, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to new snapshot writer %v", err)
 	}
@@ -449,7 +451,7 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds2.(*RegularStateMachineWrapper).destroy()
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
 	}
@@ -503,7 +505,8 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
 		Ctx:     ctx,
 	}
-	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, pb.NoCompression)
+	writer, err := rsm.NewSnapshotWriter(fp,
+		rsm.SnapshotVersion, pb.NoCompression, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to new snapshot writer %v", err)
 	}
@@ -527,7 +530,7 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		t.Errorf("failed to return the data store object")
 	}
 	defer ds2.(*ConcurrentStateMachineWrapper).destroy()
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
 	}
@@ -655,6 +658,7 @@ func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
 
 func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
+	fs := vfs.GetTestFS()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
 	defer os.Remove(fp)
 	initialApplied := uint64(123)
@@ -687,7 +691,8 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
 		Ctx:     ctx,
 	}
-	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, pb.NoCompression)
+	writer, err := rsm.NewSnapshotWriter(fp,
+		rsm.SnapshotVersion, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to new snapshot writer %v", err)
 	}
@@ -715,7 +720,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open ds2 %v", err)
 	}
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, fs)
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
 	}
@@ -741,6 +746,7 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 
 func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
+	fs := vfs.GetTestFS()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
 	defer os.Remove(fp)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
@@ -764,7 +770,7 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 		Session: bytes.NewBuffer(make([]byte, 0, 1024*1024)),
 		Ctx:     ctx,
 	}
-	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, pb.NoCompression)
+	writer, err := rsm.NewSnapshotWriter(fp, rsm.SnapshotVersion, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to new snapshot writer %v", err)
 	}
@@ -775,7 +781,7 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, fs)
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
 	}
@@ -875,7 +881,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open failed %v", err)
 	}
-	reader, err := rsm.NewSnapshotReader(fp)
+	reader, err := rsm.NewSnapshotReader(fp, vfs.GetTestFS())
 	if err != nil {
 		t.Fatalf("failed to new snapshot reader %v", err)
 	}
