@@ -34,7 +34,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/vfs"
-	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -421,7 +420,6 @@ func stopNodes(nodes []*node) {
 
 func TestNodeCanBeCreatedAndStarted(t *testing.T) {
 	fs := vfs.GetTestFS()
-	logger.GetLogger("raft").SetLevel(logger.ERROR)
 	defer leaktest.AfterTest(t)()
 	defer cleanupTestDir(fs)
 	nodes, smList, router, ldb := getTestRaftNodes(3, fs)

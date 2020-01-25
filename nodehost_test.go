@@ -1995,7 +1995,7 @@ func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
 func makeTestProposal(nh *NodeHost, count int) bool {
 	session := nh.GetNoOPSession(1)
 	for i := 0; i < count; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
 		cancel()
 		if err == nil {
@@ -2017,7 +2017,7 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 					if atomic.LoadUint64(&limited) == 1 {
 						return
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+					ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 					_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
 					cancel()
 					if err == ErrSystemBusy {
