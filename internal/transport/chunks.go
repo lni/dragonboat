@@ -289,7 +289,7 @@ func (c *Chunks) nodeRemoved(chunk pb.SnapshotChunk) (bool, error) {
 	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
-func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
+func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) (err error) {
 	env := c.getSSEnv(chunk)
 	if chunk.ChunkId == 0 {
 		if err := env.CreateTempDir(); err != nil {
@@ -299,7 +299,6 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
 	fn := c.fs.PathBase(chunk.Filepath)
 	fp := c.fs.PathJoin(env.GetTempDir(), fn)
 	var f *ChunkFile
-	var err error
 	if chunk.FileChunkId == 0 {
 		f, err = CreateChunkFile(fp, c.fs)
 	} else {
@@ -308,7 +307,11 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	n, err := f.Write(chunk.Data)
 	if err != nil {
 		return err

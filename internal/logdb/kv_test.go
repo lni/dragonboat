@@ -42,8 +42,7 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	}
 }
 
-func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore)) {
-	fs := vfs.GetTestFS()
+func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB(fs)
 	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
@@ -82,7 +81,8 @@ func TestKVGetAndSet(t *testing.T) {
 			t.Errorf("failed to get value")
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestKVValueCanBeDeleted(t *testing.T) {
@@ -112,7 +112,8 @@ func TestKVValueCanBeDeleted(t *testing.T) {
 			t.Errorf("failed to delete result")
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestKVWriteBatch(t *testing.T) {
@@ -145,7 +146,8 @@ func TestKVWriteBatch(t *testing.T) {
 			t.Errorf("failed to get the result")
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func testKVIterateValue(t *testing.T,
@@ -170,7 +172,8 @@ func testKVIterateValue(t *testing.T,
 			t.Errorf("op called %d times, want %d", opcalled, count)
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestKVIterateValue(t *testing.T) {
@@ -200,7 +203,8 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 			t.Fatalf("get value failed %v", err)
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestHasEntryRecord(t *testing.T) {
@@ -268,7 +272,8 @@ func TestHasEntryRecord(t *testing.T) {
 			t.Errorf("unexpected result")
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
@@ -315,7 +320,8 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 			t.Fatalf("failed to get all key value pairs, count %d", count)
 		}
 	}
-	runKVTest(t, tf)
+	fs := vfs.GetTestFS()
+	runKVTest(t, tf, fs)
 }
 
 func TestCompactionReleaseStorageSpace(t *testing.T) {
@@ -442,8 +448,7 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 	return true, nil
 }
 
-func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
-	fs := vfs.GetTestFS()
+func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 	deleteTestDB(fs)
 	defer deleteTestDB(fs)
 	func() {
@@ -524,10 +529,12 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool) {
 }
 
 func TestSSTCorruptionIsHandled(t *testing.T) {
-	testDiskCorruptionIsHandled(t, false)
+	fs := vfs.GetTestFS()
+	testDiskCorruptionIsHandled(t, false, fs)
 }
 
 // see testDiskCorruptionIsHandled's comments for more details
 func TestWALCorruptionIsHandled(t *testing.T) {
-	testDiskCorruptionIsHandled(t, true)
+	fs := vfs.GetTestFS()
+	testDiskCorruptionIsHandled(t, true, fs)
 }

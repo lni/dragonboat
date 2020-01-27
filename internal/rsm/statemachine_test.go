@@ -253,9 +253,8 @@ func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 	return nil
 }
 
-func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
+func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
-	fs := vfs.GetTestFS()
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
@@ -264,12 +263,13 @@ func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine)) {
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	tf(t, sm)
+	reportLeakedFD(fs, t)
 }
 
 func runSMTest2(t *testing.T,
 	tf func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine)) {
-	fs := vfs.GetTestFS()
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	createTestDir(fs)
 	defer removeTestDir(fs)
@@ -281,6 +281,7 @@ func runSMTest2(t *testing.T,
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	tf(t, sm, ds, nodeProxy, snapshotter, store)
+	reportLeakedFD(fs, t)
 }
 
 func TestDefaultTaskIsNotSnapshotTask(t *testing.T) {
@@ -336,6 +337,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	if count != 3 {
 		t.Fatalf("not batched as expected, batched update count %d, want 3", count)
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestMetadataEntryCanBeHandled(t *testing.T) {
@@ -377,10 +379,11 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 	if store.UpdateCount != 0 {
 		t.Fatalf("Update() not suppose to be called")
 	}
+	reportLeakedFD(fs, t)
 }
 
-func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
-	fs := vfs.GetTestFS()
+func testHandleBatchedSnappyEncodedEntry(t *testing.T,
+	ct dio.CompressionType, fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	createTestDir(fs)
 	defer removeTestDir(fs)
@@ -433,11 +436,13 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
 	if string(v.([]byte)) != "test-value-2" {
 		t.Errorf("v: %s, want test-value-2", v)
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestHandleBatchedSnappyEncodedEntry(t *testing.T) {
-	testHandleBatchedSnappyEncodedEntry(t, dio.Snappy)
-	testHandleBatchedSnappyEncodedEntry(t, dio.NoCompression)
+	fs := vfs.GetTestFS()
+	testHandleBatchedSnappyEncodedEntry(t, dio.Snappy, fs)
+	testHandleBatchedSnappyEncodedEntry(t, dio.NoCompression, fs)
 }
 
 func TestHandleAllocationCount(t *testing.T) {
@@ -520,6 +525,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	if sm.GetLastApplied() != 237 {
 		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestStateMachineCanBeCreated(t *testing.T) {
@@ -528,7 +534,8 @@ func TestStateMachineCanBeCreated(t *testing.T) {
 			t.Errorf("commitChan busy")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func applyConfigChangeEntry(sm *StateMachine,
@@ -566,7 +573,8 @@ func TestBatchedLastAppliedValue(t *testing.T) {
 			t.Errorf("batched last applied value can not be set/get")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
@@ -580,7 +588,8 @@ func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
 			t.Errorf("unexpected result")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestGetMembership(t *testing.T) {
@@ -612,7 +621,8 @@ func TestGetMembership(t *testing.T) {
 			t.Errorf("len changed")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestGetMembershipNodes(t *testing.T) {
@@ -643,7 +653,8 @@ func TestGetMembershipNodes(t *testing.T) {
 			t.Errorf("unexpected node id")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestGetMembershipHash(t *testing.T) {
@@ -662,7 +673,8 @@ func TestGetMembershipHash(t *testing.T) {
 			t.Errorf("hash doesn't change after membership change")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestGetSSMetaPanicWhenThereIsNoMember(t *testing.T) {
@@ -676,7 +688,8 @@ func TestGetSSMetaPanicWhenThereIsNoMember(t *testing.T) {
 			t.Fatalf("get snapshot meta failed %v", err)
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestGetSSMeta(t *testing.T) {
@@ -710,7 +723,8 @@ func TestGetSSMeta(t *testing.T) {
 			t.Errorf("sessions not saved")
 		}
 	}
-	runSMTest(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest(t, tf, fs)
 }
 
 func TestHandleConfChangeAddNode(t *testing.T) {
@@ -743,7 +757,8 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 			t.Errorf("address recorded %s, want localhost:1010", v)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
@@ -775,7 +790,8 @@ func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
 			t.Errorf("invalid cc not rejected")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestObserverCanBeAdded(t *testing.T) {
@@ -805,7 +821,8 @@ func TestObserverCanBeAdded(t *testing.T) {
 			t.Errorf("add observer not called")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestObserverPromotion(t *testing.T) {
@@ -857,7 +874,8 @@ func TestObserverPromotion(t *testing.T) {
 			t.Errorf("observer count != 0")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestInvalidObserverPromotionIsRejected(t *testing.T) {
@@ -905,10 +923,11 @@ func TestInvalidObserverPromotionIsRejected(t *testing.T) {
 			t.Errorf("unexpectedly accepted the promotion")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
-func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType) {
+func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[5] = "localhost:1010"
@@ -933,15 +952,17 @@ func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType) {
 			t.Errorf("add peer unexpectedly called")
 		}
 	}
-	runSMTest2(t, tf)
+	runSMTest2(t, tf, fs)
 }
 
 func TestAddExistingMemberIsRejected(t *testing.T) {
-	testAddExistingMemberIsRejected(t, pb.AddNode)
-	testAddExistingMemberIsRejected(t, pb.AddObserver)
+	fs := vfs.GetTestFS()
+	testAddExistingMemberIsRejected(t, pb.AddNode, fs)
+	testAddExistingMemberIsRejected(t, pb.AddObserver, fs)
 }
 
-func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T, tt pb.ConfigChangeType) {
+func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
+	tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		if tt == pb.AddNode {
@@ -972,12 +993,13 @@ func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T, tt pb.ConfigCha
 			t.Errorf("add peer unexpectedly called")
 		}
 	}
-	runSMTest2(t, tf)
+	runSMTest2(t, tf, fs)
 }
 
 func TestAddExistingMemberWithSameNodeIDIsRejected(t *testing.T) {
-	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNode)
-	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddObserver)
+	fs := vfs.GetTestFS()
+	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNode, fs)
+	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddObserver, fs)
 }
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {
@@ -1018,7 +1040,8 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 			t.Errorf("removed node not recorded as removed")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestOrderedConfChangeIsAccepted(t *testing.T) {
@@ -1048,7 +1071,8 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 			t.Errorf("conf change id not updated, %d", sm.members.members.ConfigChangeId)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestRemoveOnlyNodeIsRejected(t *testing.T) {
@@ -1087,7 +1111,8 @@ func TestRemoveOnlyNodeIsRejected(t *testing.T) {
 			t.Errorf("removed node 1 as removed")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
@@ -1115,7 +1140,8 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 			t.Errorf("conf change unexpected updated, %d", sm.members.members.ConfigChangeId)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
@@ -1140,7 +1166,8 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 			t.Errorf("add peer unexpectedly called")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
@@ -1165,7 +1192,8 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 			t.Errorf("remove peer unexpectedly called")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestHandleSyncTask(t *testing.T) {
@@ -1187,7 +1215,8 @@ func TestHandleSyncTask(t *testing.T) {
 			t.Errorf("index unexpected moved")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestHandleEmptyEvent(t *testing.T) {
@@ -1211,7 +1240,8 @@ func TestHandleEmptyEvent(t *testing.T) {
 			t.Errorf("last applied %d, want 234", sm.GetLastApplied())
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func getTestKVData() []byte {
@@ -1234,7 +1264,7 @@ func genTestKVData(k, d string) []byte {
 	return data
 }
 
-func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
+func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		data := getTestKVData()
@@ -1268,12 +1298,13 @@ func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType) {
 			t.Errorf("v: %s, want test-value", v)
 		}
 	}
-	runSMTest2(t, tf)
+	runSMTest2(t, tf, fs)
 }
 
 func TestHandleSnappyEncodedEntry(t *testing.T) {
-	testHandleSnappyEncodedEntry(t, dio.Snappy)
-	testHandleSnappyEncodedEntry(t, dio.NoCompression)
+	fs := vfs.GetTestFS()
+	testHandleSnappyEncodedEntry(t, dio.Snappy, fs)
+	testHandleSnappyEncodedEntry(t, dio.NoCompression, fs)
 }
 
 func TestHandleUpate(t *testing.T) {
@@ -1321,13 +1352,14 @@ func TestHandleUpate(t *testing.T) {
 			t.Errorf("result %s, want test-value", string(result.([]byte)))
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestSnapshotCanBeApplied(t *testing.T) {
+	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		fs := vfs.GetTestFS()
 		sm.members.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
@@ -1379,7 +1411,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			t.Errorf("failed to pass on address to node proxy")
 		}
 	}
-	runSMTest2(t, tf)
+	runSMTest2(t, tf, fs)
 }
 
 func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
@@ -1404,7 +1436,8 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 			t.Errorf("unexpected address")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestSnapshotTwiceIsHandled(t *testing.T) {
@@ -1434,7 +1467,8 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 			t.Errorf("snapshot twice completed, %v", err)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func applySessionRegisterEntry(sm *StateMachine,
@@ -1524,7 +1558,8 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 			t.Errorf("smResult %d, want %d", nodeProxy.smResult, clientID)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestDuplicatedSessionWillBeReported(t *testing.T) {
@@ -1569,7 +1604,8 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 			t.Errorf("reject flag not set")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
@@ -1597,7 +1633,8 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 			t.Errorf("reject flag not set")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
@@ -1626,7 +1663,8 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 			t.Errorf("rejected %t, want true", nodeProxy.rejected)
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
@@ -1676,7 +1714,8 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 			t.Errorf("store update invoked twice, not expected")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
@@ -1725,7 +1764,8 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 			t.Errorf("store update invoked twice, not expected")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
@@ -1761,7 +1801,8 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 			t.Errorf("entry not applied")
 		}
 	}
-	runSMTest2(t, tf)
+	fs := vfs.GetTestFS()
+	runSMTest2(t, tf, fs)
 }
 
 func TestGetSnapshotFilesReturnFiles(t *testing.T) {
@@ -1851,7 +1892,6 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 }
 
 func TestRecoverSMRequired(t *testing.T) {
-	fs := vfs.GetTestFS()
 	tests := []struct {
 		dummy           bool
 		shrunk          bool
@@ -1888,8 +1928,9 @@ func TestRecoverSMRequired(t *testing.T) {
 	}
 	ssIndex := uint64(200)
 	for idx, tt := range tests {
+		fs := vfs.GetTestFS()
+		defer fs.RemoveAll(testSnapshotterDir)
 		func() {
-			defer fs.RemoveAll(testSnapshotterDir)
 			fs.RemoveAll(testSnapshotterDir)
 			if err := fs.MkdirAll(testSnapshotterDir, 0755); err != nil {
 				t.Fatalf("mkdir failed %v", err)
@@ -1947,6 +1988,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
 			}
 		}()
+		reportLeakedFD(fs, t)
 	}
 }
 
@@ -2133,6 +2175,7 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 	if !msm.synced {
 		t.Errorf("not synced")
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestStreamSnapshot(t *testing.T) {
@@ -2166,6 +2209,7 @@ func TestStreamSnapshot(t *testing.T) {
 	if !ts.chunks[2].IsPoisonChunk() {
 		t.Errorf("failed to get the poison chunk")
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {

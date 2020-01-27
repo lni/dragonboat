@@ -29,6 +29,6 @@ import (
 // uses more memory than the default RocksDB based Log DB and provides better
 // throughput performance.
 func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	fs := vfs.GetTestFS()
+	fs := vfs.DefaultFS
 	return logdb.NewLogDB(dirs, lldirs, true, false, fs, rocksdb.NewKVStore)
 }

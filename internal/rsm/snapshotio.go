@@ -135,7 +135,6 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	plog.Infof("path: %s", path)
 	w, err := newSnapshotWriter(f, path, SnapshotVersion, pb.NoCompression, fs)
 	if err != nil {
 		return nil, err

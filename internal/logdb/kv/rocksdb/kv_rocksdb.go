@@ -63,7 +63,7 @@ var versionWarning sync.Once
 // NewKVStore returns a RocksDB based IKVStore instance.
 func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs != vfs.DefaultFS {
-		panic("only vfs.DefaultFS is not supported")
+		panic("only vfs.DefaultFS is supported")
 	}
 	checkRocksDBVersion()
 	return openRocksDB(dir, wal, fs)

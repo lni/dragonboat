@@ -56,12 +56,12 @@ func getTestLogReader(entries []pb.Entry, fs vfs.IFS) *LogReader {
 }
 
 func TestLogReaderEntries(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testLogReaderEntries(t)
+	testLogReaderEntries(t, fs)
 }
 
-func testLogReaderEntries(t *testing.T) {
-	fs := vfs.GetTestFS()
+func testLogReaderEntries(t *testing.T, fs vfs.IFS) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
 		lo, hi, maxsize uint64
@@ -99,12 +99,12 @@ func testLogReaderEntries(t *testing.T) {
 }
 
 func TestLogReaderTerm(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testLogReaderTerm(t)
+	testLogReaderTerm(t, fs)
 }
 
-func testLogReaderTerm(t *testing.T) {
-	fs := vfs.GetTestFS()
+func testLogReaderTerm(t *testing.T, fs vfs.IFS) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		i      uint64
@@ -142,12 +142,12 @@ func testLogReaderTerm(t *testing.T) {
 }
 
 func TestLogReaderLastIndex(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testLogReaderLastIndex(t)
+	testLogReaderLastIndex(t, fs)
 }
 
-func testLogReaderLastIndex(t *testing.T) {
-	fs := vfs.GetTestFS()
+func testLogReaderLastIndex(t *testing.T, fs vfs.IFS) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	s := getTestLogReader(ents, fs)
 	_, last := s.GetRange()
@@ -166,12 +166,12 @@ func testLogReaderLastIndex(t *testing.T) {
 }
 
 func TestLogReaderFirstIndex(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testLogReaderFirstIndex(t)
+	testLogReaderFirstIndex(t, fs)
 }
 
-func testLogReaderFirstIndex(t *testing.T) {
-	fs := vfs.GetTestFS()
+func testLogReaderFirstIndex(t *testing.T, fs vfs.IFS) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	s := getTestLogReader(ents, fs)
 	first, _ := s.GetRange()
@@ -198,12 +198,12 @@ func testLogReaderFirstIndex(t *testing.T) {
 }
 
 func TestLogReaderAppend(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testLogReaderAppend(t)
+	testLogReaderAppend(t, fs)
 }
 
-func testLogReaderAppend(t *testing.T) {
-	fs := vfs.GetTestFS()
+func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
 		entries  []pb.Entry

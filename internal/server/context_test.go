@@ -45,43 +45,46 @@ func getTestNodeHostConfig() config.NodeHostConfig {
 
 func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	fs := vfs.GetTestFS()
-	c := getTestNodeHostConfig()
 	defer fs.RemoveAll(singleNodeHostTestDir)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("panic not expected")
+	func() {
+		c := getTestNodeHostConfig()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("panic not expected")
+			}
+		}()
+		ctx, err := NewContext(c, fs)
+		if err != nil {
+			t.Fatalf("failed to new context %v", err)
+		}
+		if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+			t.Fatalf("%v", err)
+		}
+		dirs, _ := ctx.getDataDirs()
+		testName := "test-name"
+		status := raftpb.RaftDataStatus{
+			Address:      testAddress,
+			BinVer:       raftio.LogDBBinVersion,
+			HardHash:     settings.Hard.Hash(),
+			LogdbType:    testName,
+			Hostname:     ctx.hostname,
+			DeploymentId: testDeploymentID,
+		}
+		err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
+		if err != nil {
+			t.Errorf("failed to create flag file %v", err)
+		}
+		if err := ctx.CheckNodeHostDir(testDeploymentID,
+			testAddress, raftio.LogDBBinVersion, testName); err != nil {
+			t.Fatalf("check node host dir failed %v", err)
 		}
 	}()
-	ctx, err := NewContext(c, fs)
-	if err != nil {
-		t.Fatalf("failed to new context %v", err)
-	}
-	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
-		t.Fatalf("%v", err)
-	}
-	dirs, _ := ctx.getDataDirs()
-	testName := "test-name"
-	status := raftpb.RaftDataStatus{
-		Address:      testAddress,
-		BinVer:       raftio.LogDBBinVersion,
-		HardHash:     settings.Hard.Hash(),
-		LogdbType:    testName,
-		Hostname:     ctx.hostname,
-		DeploymentId: testDeploymentID,
-	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
-	if err != nil {
-		t.Errorf("failed to create flag file %v", err)
-	}
-	if err := ctx.CheckNodeHostDir(testDeploymentID,
-		testAddress, raftio.LogDBBinVersion, testName); err != nil {
-		t.Fatalf("check node host dir failed %v", err)
-	}
+	reportLeakedFD(fs, t)
 }
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
-	addr string, hostname string, binVer uint32, name string, hardHashMismatch bool, expErr error) {
-	fs := vfs.GetTestFS()
+	addr string, hostname string, binVer uint32, name string,
+	hardHashMismatch bool, expErr error, fs vfs.IFS) {
 	c := getTestNodeHostConfig()
 	defer fs.RemoveAll(singleNodeHostTestDir)
 	ctx, err := NewContext(c, fs)
@@ -111,31 +114,42 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != expErr {
 		t.Errorf("expect err %v, got %v", expErr, err)
 	}
+	reportLeakedFD(fs, t)
 }
 
 func TestCanDetectMismatchedHostname(t *testing.T) {
+	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, "incorrect-hostname", raftio.LogDBBinVersion, testLogDBName, false, ErrHostnameChanged)
+		testAddress, "incorrect-hostname", raftio.LogDBBinVersion,
+		testLogDBName, false, ErrHostnameChanged, fs)
 }
 
 func TestCanDetectMismatchedLogDBName(t *testing.T) {
+	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, "", raftio.LogDBBinVersion, "incorrect name", false, ErrLogDBType)
+		testAddress, "", raftio.LogDBBinVersion,
+		"incorrect name", false, ErrLogDBType, fs)
 }
 
 func TestCanDetectMismatchedBinVer(t *testing.T) {
+	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, "", raftio.LogDBBinVersion+1, testLogDBName, false, ErrIncompatibleData)
+		testAddress, "", raftio.LogDBBinVersion+1,
+		testLogDBName, false, ErrIncompatibleData, fs)
 }
 
 func TestCanDetectMismatchedAddress(t *testing.T) {
+	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
-		"invalid:12345", "", raftio.LogDBBinVersion, testLogDBName, false, ErrNotOwner)
+		"invalid:12345", "", raftio.LogDBBinVersion,
+		testLogDBName, false, ErrNotOwner, fs)
 }
 
 func TestCanDetectMismatchedHardHash(t *testing.T) {
+	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
-		testAddress, "", raftio.LogDBBinVersion, testLogDBName, true, ErrHardSettingsChanged)
+		testAddress, "", raftio.LogDBBinVersion,
+		testLogDBName, true, ErrHardSettingsChanged, fs)
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
@@ -153,6 +167,7 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
 	ctx.Stop()
+	reportLeakedFD(fs, t)
 }
 
 func TestRemoveSavedSnapshots(t *testing.T) {
@@ -193,4 +208,5 @@ func TestRemoveSavedSnapshots(t *testing.T) {
 			t.Errorf("unexpected dir found %s", fi.Name())
 		}
 	}
+	reportLeakedFD(fs, t)
 }

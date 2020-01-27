@@ -17,6 +17,7 @@ package transport
 import (
 	"io"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
@@ -71,19 +72,14 @@ func (cf *ChunkFile) Write(data []byte) (int, error) {
 }
 
 // Close closes the chunk file.
-func (cf *ChunkFile) Close() {
+func (cf *ChunkFile) Close() error {
 	if err := cf.file.Close(); err != nil {
-		panic(err)
+		return err
 	}
 	if cf.syncDir {
-		if f, err := cf.fs.Open(cf.dir); err != nil {
-			panic(err)
-		} else {
-			if serr := f.Sync(); serr != nil {
-				panic(serr)
-			}
-		}
+		return fileutil.SyncDir(cf.dir, cf.fs)
 	}
+	return nil
 }
 
 // Sync syncs the chunk file.

@@ -280,8 +280,10 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Validate(); err != nil {
 		return nil, err
 	}
-	fs := vfs.GetFS()
-	serverCtx, err := server.NewContext(nhConfig, fs)
+	if nhConfig.FS == nil {
+		nhConfig.FS = vfs.DefaultFS
+	}
+	serverCtx, err := server.NewContext(nhConfig, nhConfig.FS)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +295,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
 		userListener:     nhConfig.RaftEventListener,
-		fs:               fs,
+		fs:               nhConfig.FS,
 	}
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)

@@ -64,12 +64,11 @@ func getTestSnapshotter(ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
 	f := func(cid uint64, nid uint64) string {
 		return fp
 	}
-	return newSnapshotter(1, 1, config.NodeHostConfig{}, f, ldb, nil, fs)
+	return newSnapshotter(1, 1, config.NodeHostConfig{FS: fs}, f, ldb, nil, fs)
 }
 
 func runSnapshotterTest(t *testing.T,
-	fn func(t *testing.T, logdb raftio.ILogDB, snapshotter *snapshotter)) {
-	fs := vfs.GetTestFS()
+	fn func(t *testing.T, logdb raftio.ILogDB, snapshotter *snapshotter), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	dir := "db-dir"
 	lldir := "wal-db-dir"
@@ -82,8 +81,8 @@ func runSnapshotterTest(t *testing.T,
 }
 
 func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		fs := vfs.GetTestFS()
 		ss := pb.Snapshot{
 			FileSize: 1234,
 			Filepath: "f2",
@@ -102,12 +101,12 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 			t.Errorf("unexpected error result %v", err)
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestSnapshotCanBeFinalized(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		fs := vfs.GetTestFS()
 		ss := pb.Snapshot{
 			FileSize: 1234,
 			Filepath: "f2",
@@ -177,7 +176,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 			t.Errorf("not the same test file. ")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestSnapshotCanBeSavedToLogDB(t *testing.T) {
@@ -202,12 +201,13 @@ func TestSnapshotCanBeSavedToLogDB(t *testing.T) {
 			t.Errorf("snapshot record changed")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	fs := vfs.GetTestFS()
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		fs := vfs.GetTestFS()
 		env1 := s.getSSEnv(100)
 		env2 := s.getSSEnv(200)
 		fd1 := env1.GetFinalDir()
@@ -230,12 +230,12 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 			t.Errorf("fd2 not removed")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		fs := vfs.GetTestFS()
 		s1 := pb.Snapshot{
 			FileSize: 1234,
 			Filepath: "f2",
@@ -257,12 +257,12 @@ func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
 			t.Errorf("fd1 not removed")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		fs := vfs.GetTestFS()
 		s1 := pb.Snapshot{
 			FileSize: 1234,
 			Filepath: "f2",
@@ -332,22 +332,22 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 			t.Errorf("fd2 not removed")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestRemoveUnusedSnapshotRemoveSnapshots(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	// normal case
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 5)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 5, fs)
 	// snapshotsToKeep snapshots will be kept
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 4, 5, 2)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 4, 5, 2, fs)
 	// snapshotsToKeep snapshots will be kept
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 3, 3, 1)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 3, 3, 1, fs)
 }
 
 func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
-	total uint64, upTo uint64, removed uint64) {
-	fs := vfs.GetTestFS()
+	total uint64, upTo uint64, removed uint64, fs vfs.IFS) {
 	fn := func(t *testing.T, ldb raftio.ILogDB, snapshotter *snapshotter) {
 		for i := uint64(1); i <= total; i++ {
 			fn := fmt.Sprintf("f%d.data", i)
@@ -413,12 +413,12 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			}
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestShrinkSnapshots(t *testing.T) {
+	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, snapshotter *snapshotter) {
-		fs := vfs.GetTestFS()
 		for i := uint64(1); i <= 3; i++ {
 			index := i * 10
 			env := snapshotter.getSSEnv(index)
@@ -484,7 +484,7 @@ func TestShrinkSnapshots(t *testing.T) {
 			t.Errorf("snapshot rec missing")
 		}
 	}
-	runSnapshotterTest(t, fn)
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestSnapshotDirNameMatchWorks(t *testing.T) {
@@ -506,7 +506,8 @@ func TestSnapshotDirNameMatchWorks(t *testing.T) {
 			}
 		}
 	}
-	runSnapshotterTest(t, fn)
+	fs := vfs.GetTestFS()
+	runSnapshotterTest(t, fn, fs)
 }
 
 func TestZombieSnapshotDirNameMatchWorks(t *testing.T) {
@@ -539,5 +540,6 @@ func TestZombieSnapshotDirNameMatchWorks(t *testing.T) {
 			}
 		}
 	}
-	runSnapshotterTest(t, fn)
+	fs := vfs.GetTestFS()
+	runSnapshotterTest(t, fn, fs)
 }

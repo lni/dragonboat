@@ -399,6 +399,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 	addr2 := "localhost:43568"
 	nhc1 := config.NodeHostConfig{
 		RaftAddress: addr1,
+		FS:          vfs.DefaultFS,
 	}
 	ctx1, err := server.NewContext(nhc1, vfs.DefaultFS)
 	if err != nil {
@@ -406,6 +407,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 	}
 	nhc2 := config.NodeHostConfig{
 		RaftAddress: addr2,
+		FS:          vfs.DefaultFS,
 	}
 	ctx2, err := server.NewContext(nhc2, vfs.DefaultFS)
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"errors"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -46,6 +47,8 @@ type LogDBFactoryFunc func(dirs []string,
 
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
+
+type IFS = vfs.IFS
 
 const (
 	// NoCompression is the CompressionType value used to indicate not to use
@@ -311,6 +314,8 @@ type NodeHostConfig struct {
 	// received each second for all Raft clusters managed by the NodeHost instance.
 	// The default value 0 means there is no limit for receiving snapshot data.
 	MaxSnapshotRecvBytesPerSecond uint64
+
+	FS IFS
 }
 
 // Validate validates the NodeHostConfig instance and return an error when

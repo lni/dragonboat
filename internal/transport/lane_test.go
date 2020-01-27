@@ -107,8 +107,8 @@ func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
 	c.close()
 }
 
-func testSpecialChunkCanStopTheProcessLoop(t *testing.T, tt uint64, experr error) {
-	fs := vfs.GetTestFS()
+func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
+	tt uint64, experr error, fs vfs.IFS) {
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
 	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
@@ -137,9 +137,12 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T, tt uint64, experr error
 }
 
 func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
-	testSpecialChunkCanStopTheProcessLoop(t, pb.PoisonChunkCount, ErrStreamSnapshot)
+	fs := vfs.GetTestFS()
+	testSpecialChunkCanStopTheProcessLoop(t,
+		pb.PoisonChunkCount, ErrStreamSnapshot, fs)
 }
 
 func TestLastChunkCanStopTheProcessLoop(t *testing.T) {
-	testSpecialChunkCanStopTheProcessLoop(t, pb.LastChunkCount, nil)
+	fs := vfs.GetTestFS()
+	testSpecialChunkCanStopTheProcessLoop(t, pb.LastChunkCount, nil, fs)
 }

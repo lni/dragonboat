@@ -129,21 +129,15 @@ var (
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
 	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
-	fs := vfs.GetTestFS()
-	return ImportSnapshotFS(nhConfig, srcDir, memberNodes, nodeID, fs)
-}
-
-// ImportSnapshotFS imports the specified snapshot to the system.
-// ImportSnapshotFS is similar to ImportSnapshot but callers are allowed to
-// specify what vfs to use.
-func ImportSnapshotFS(nhConfig config.NodeHostConfig,
-	srcDir string, memberNodes map[uint64]string,
-	nodeID uint64, fs vfs.IFS) error {
 	if nhConfig.DeploymentID == 0 {
 		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
 			unmanagedDeploymentID)
 		nhConfig.DeploymentID = unmanagedDeploymentID
 	}
+	if nhConfig.FS == nil {
+		nhConfig.FS = vfs.DefaultFS
+	}
+	fs := nhConfig.FS
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
 	}

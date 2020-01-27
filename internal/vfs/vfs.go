@@ -27,6 +27,8 @@ import (
 // IFS is the vfs interface used by dragonboat.
 type IFS = gvfs.FS
 
+type MemFS = gvfs.MemFS
+
 // DefaultFS is a vfs instance using underlying OS fs.
 var DefaultFS IFS = gvfs.Default
 

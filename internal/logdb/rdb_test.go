@@ -63,7 +63,7 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 		panic(err)
 	}
 	db, err := NewLogDB([]string{d},
-		[]string{lld}, batched, false, vfs.GetTestFS(), newDefaultKVStore)
+		[]string{lld}, batched, false, fs, newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}

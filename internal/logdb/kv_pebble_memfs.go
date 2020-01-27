@@ -20,6 +20,8 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+
+	gvfs "github.com/lni/goutils/vfs"
 )
 
 const (
@@ -32,7 +34,8 @@ func newDefaultKVStore(dir string,
 	if fs == nil {
 		panic("nil fs")
 	}
-	if fs != vfs.MemStrictFS {
+	_, ok := fs.(*gvfs.MemFS)
+	if !ok {
 		panic("invalid fs")
 	}
 	return pebble.NewKVStore(dir, wal, fs)

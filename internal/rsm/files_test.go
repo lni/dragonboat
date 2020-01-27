@@ -58,6 +58,9 @@ func TestFileWithDuplicatedIDCanNotBeAdded(t *testing.T) {
 
 func TestPrepareFiles(t *testing.T) {
 	fs := vfs.GetTestFS()
+	if fs != vfs.DefaultFS {
+		t.Skip("this test only support the default fs")
+	}
 	defer leaktest.AfterTest(t)()
 	if err := fs.MkdirAll(rdbTestDirectory, 0755); err != nil {
 		t.Errorf("failed to make dir %v", err)

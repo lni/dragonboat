@@ -67,8 +67,8 @@ func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
 	return true
 }
 
-func hasExternalFile(cs *Chunks, c pb.SnapshotChunk, fn string, sz uint64) bool {
-	ifs := vfs.GetTestFS()
+func hasExternalFile(cs *Chunks,
+	c pb.SnapshotChunk, fn string, sz uint64, ifs vfs.IFS) bool {
 	env := cs.getSSEnv(c)
 	efp := ifs.PathJoin(env.GetFinalDir(), fn)
 	fs, err := cs.fs.Stat(efp)
@@ -82,11 +82,11 @@ func getTestDeploymentID() uint64 {
 	return testDeploymentID
 }
 
-func runChunkTest(t *testing.T, fn func(*testing.T, *Chunks, *testMessageHandler)) {
-	fs := vfs.GetTestFS()
+func runChunkTest(t *testing.T,
+	fn func(*testing.T, *Chunks, *testMessageHandler), fs vfs.IFS) {
 	defer fs.RemoveAll(snapshotDir)
 	defer leaktest.AfterTest(t)()
-	trans, _, stopper, tt := newTestTransport(false)
+	trans, _, stopper, tt := newTestTransport(false, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -134,7 +134,8 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 			t.Errorf("tracked count changed")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
@@ -154,7 +155,8 @@ func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 			t.Fatalf("next chunk id unexpected moved")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
@@ -174,7 +176,8 @@ func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
 			t.Fatalf("next chunk id unexpected moved")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestNotTrackedChunkWillBeIgnored(t *testing.T) {
@@ -184,7 +187,8 @@ func TestNotTrackedChunkWillBeIgnored(t *testing.T) {
 			t.Errorf("not tracked chunk not rejected")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestGetOrCreateSnapshotLock(t *testing.T) {
@@ -207,7 +211,8 @@ func TestGetOrCreateSnapshotLock(t *testing.T) {
 			t.Errorf("%d locks, want 3", len(chunks.locks))
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestShouldUpdateValidator(t *testing.T) {
@@ -260,7 +265,8 @@ func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
 			t.Errorf("no temp file")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestGcRemovesRecordAndTempFile(t *testing.T) {
@@ -286,7 +292,8 @@ func TestGcRemovesRecordAndTempFile(t *testing.T) {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
@@ -309,7 +316,8 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
@@ -340,7 +348,8 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 			t.Errorf("tmp dir not removed")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 // when there is no flag file
@@ -367,7 +376,8 @@ func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
 			t.Errorf("tmp dir not removed")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
@@ -406,7 +416,8 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 			t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func checkTestSnapshotFile(chunks *Chunks,
@@ -455,11 +466,12 @@ func TestAddingFirstChunkAgainResetsTempFile(t *testing.T) {
 			t.Errorf("failed to generate the final snapshot file")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
-	validate bool, snapshotCount uint64) {
+	validate bool, snapshotCount uint64, fs vfs.IFS) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		chunks.validate = validate
 		sf1 := &pb.SnapshotFile{
@@ -500,8 +512,8 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 			if handler.getSnapshotCount(100, 2) != 1 {
 				t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
 			}
-			if !hasExternalFile(chunks, inputs[0], "external1.data", 100) ||
-				!hasExternalFile(chunks, inputs[0], "external2.data", snapshotChunkSize+100) {
+			if !hasExternalFile(chunks, inputs[0], "external1.data", 100, fs) ||
+				!hasExternalFile(chunks, inputs[0], "external2.data", snapshotChunkSize+100, fs) {
 				t.Errorf("external file missing")
 			}
 		} else {
@@ -510,12 +522,13 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 			}
 		}
 	}
-	runChunkTest(t, fn)
+	runChunkTest(t, fn, fs)
 }
 
 func TestSnapshotWithExternalFilesAreHandledByChunks(t *testing.T) {
-	testSnapshotWithExternalFilesAreHandledByChunks(t, true, 0)
-	testSnapshotWithExternalFilesAreHandledByChunks(t, false, 1)
+	fs := vfs.GetTestFS()
+	testSnapshotWithExternalFilesAreHandledByChunks(t, true, 0, fs)
+	testSnapshotWithExternalFilesAreHandledByChunks(t, false, 1, fs)
 }
 
 func TestWitnessSnapshotCanBeHandled(t *testing.T) {
@@ -558,7 +571,8 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 			t.Errorf("failed to receive snapshot")
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }
 
 func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunks(t *testing.T) {
@@ -766,5 +780,6 @@ func TestGetMessageFromChunk(t *testing.T) {
 			t.Errorf("file path not set correctly, %s\n, %s", ss.Files[0].Filepath, ss.Files[1].Filepath)
 		}
 	}
-	runChunkTest(t, fn)
+	fs := vfs.GetTestFS()
+	runChunkTest(t, fn, fs)
 }

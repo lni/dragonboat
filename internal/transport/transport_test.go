@@ -50,8 +50,8 @@ type testSnapshotDir struct {
 	fs vfs.IFS
 }
 
-func newTestSnapshotDir() *testSnapshotDir {
-	return &testSnapshotDir{fs: vfs.GetTestFS()}
+func newTestSnapshotDir(fs vfs.IFS) *testSnapshotDir {
+	return &testSnapshotDir{fs: fs}
 }
 
 func (g *testSnapshotDir) GetSnapshotRootDir(clusterID uint64,
@@ -294,10 +294,9 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 	return 0
 }
 
-func newNOOPTestTransport() (*Transport,
+func newNOOPTestTransport(fs vfs.IFS) (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
-	fs := vfs.GetTestFS()
-	t := newTestSnapshotDir()
+	t := newTestSnapshotDir(fs)
 	nodes := NewNodes(settings.Soft.StreamConnections)
 	c := config.NodeHostConfig{
 		MaxSendQueueSize: 256 * 1024 * 1024,
@@ -319,12 +318,11 @@ func newNOOPTestTransport() (*Transport,
 	return transport, nodes, raftRPC, raftRPC.req, raftRPC.connReq
 }
 
-func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
+func newTestTransport(mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
 	*syncutil.Stopper, *testSnapshotDir) {
-	fs := vfs.GetTestFS()
 	stopper := syncutil.NewStopper()
 	nodes := NewNodes(settings.Soft.StreamConnections)
-	t := newTestSnapshotDir()
+	t := newTestSnapshotDir(fs)
 	c := config.NodeHostConfig{
 		RaftAddress: serverAddress,
 	}
@@ -345,8 +343,8 @@ func newTestTransport(mutualTLS bool) (*Transport, *Nodes,
 	return transport, nodes, stopper, t
 }
 
-func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
-	trans, nodes, stopper, _ := newTestTransport(mutualTLS)
+func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
+	trans, nodes, stopper, _ := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -409,19 +407,20 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64) {
 }
 
 func TestMessageCanBeSent(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testMessageCanBeSent(t, false, settings.LargeEntitySize*2)
-	testMessageCanBeSent(t, false, recvBufSize/2)
-	testMessageCanBeSent(t, false, recvBufSize+1)
-	testMessageCanBeSent(t, false, perConnBufSize+1)
-	testMessageCanBeSent(t, false, perConnBufSize/2)
-	testMessageCanBeSent(t, false, 1)
-	testMessageCanBeSent(t, true, settings.LargeEntitySize*2)
-	testMessageCanBeSent(t, true, recvBufSize/2)
-	testMessageCanBeSent(t, true, recvBufSize+1)
-	testMessageCanBeSent(t, true, perConnBufSize+1)
-	testMessageCanBeSent(t, true, perConnBufSize/2)
-	testMessageCanBeSent(t, true, 1)
+	testMessageCanBeSent(t, false, settings.LargeEntitySize*2, fs)
+	testMessageCanBeSent(t, false, recvBufSize/2, fs)
+	testMessageCanBeSent(t, false, recvBufSize+1, fs)
+	testMessageCanBeSent(t, false, perConnBufSize+1, fs)
+	testMessageCanBeSent(t, false, perConnBufSize/2, fs)
+	testMessageCanBeSent(t, false, 1, fs)
+	testMessageCanBeSent(t, true, settings.LargeEntitySize*2, fs)
+	testMessageCanBeSent(t, true, recvBufSize/2, fs)
+	testMessageCanBeSent(t, true, recvBufSize+1, fs)
+	testMessageCanBeSent(t, true, perConnBufSize+1, fs)
+	testMessageCanBeSent(t, true, perConnBufSize/2, fs)
+	testMessageCanBeSent(t, true, 1, fs)
 }
 
 // add some latency to localhost
@@ -434,8 +433,8 @@ func TestMessageCanBeSent(t *testing.T) {
 // net.core.rmem_max = 25165824
 // net.ipv4.tcp_rmem = 4096 87380 25165824
 // net.ipv4.tcp_wmem = 4096 87380 25165824
-func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool) {
-	trans, nodes, stopper, _ := newTestTransport(mutualTLS)
+func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, _ := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -470,13 +469,14 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool) {
 
 // latency need to be simulated by configuring your environment
 func TestMessageCanBeSentWithLargeLatency(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testMessageCanBeSentWithLargeLatency(t, true)
-	testMessageCanBeSentWithLargeLatency(t, false)
+	testMessageCanBeSentWithLargeLatency(t, true, fs)
+	testMessageCanBeSentWithLargeLatency(t, false, fs)
 }
 
-func testNothingSentBeforeDeploymentIDIsSet(t *testing.T, mutualTLS bool) {
-	trans, nodes, stopper, _ := newTestTransport(mutualTLS)
+func testNothingSentBeforeDeploymentIDIsSet(t *testing.T, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, _ := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -502,14 +502,15 @@ func testNothingSentBeforeDeploymentIDIsSet(t *testing.T, mutualTLS bool) {
 }
 
 func TestNothingSentBeforeDeploymentIDIsSet(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testNothingSentBeforeDeploymentIDIsSet(t, true)
-	testNothingSentBeforeDeploymentIDIsSet(t, false)
+	testNothingSentBeforeDeploymentIDIsSet(t, true, fs)
+	testNothingSentBeforeDeploymentIDIsSet(t, false, fs)
 }
 
 func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
-	f SendMessageBatchFunc, mutualTLS bool) {
-	trans, nodes, stopper, _ := newTestTransport(mutualTLS)
+	f SendMessageBatchFunc, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, _ := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -537,13 +538,14 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 }
 
 func TestMessageBatchWithNotMatchedDeploymentIDAreDropped(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	f := func(b raftpb.MessageBatch) (raftpb.MessageBatch, bool) {
 		b.DeploymentId = 1
 		return b, true
 	}
-	testMessageBatchWithNotMatchedDBVAreDropped(t, f, true)
-	testMessageBatchWithNotMatchedDBVAreDropped(t, f, false)
+	testMessageBatchWithNotMatchedDBVAreDropped(t, f, true, fs)
+	testMessageBatchWithNotMatchedDBVAreDropped(t, f, false, fs)
 }
 
 func TestMessageBatchWithNotMatchedBinVerAreDropped(t *testing.T) {
@@ -552,8 +554,9 @@ func TestMessageBatchWithNotMatchedBinVerAreDropped(t *testing.T) {
 		b.BinVer = raftio.RPCBinVersion + 1
 		return b, true
 	}
-	testMessageBatchWithNotMatchedDBVAreDropped(t, f, true)
-	testMessageBatchWithNotMatchedDBVAreDropped(t, f, false)
+	fs := vfs.GetTestFS()
+	testMessageBatchWithNotMatchedDBVAreDropped(t, f, true, fs)
+	testMessageBatchWithNotMatchedDBVAreDropped(t, f, false, fs)
 }
 
 func TestCircuitBreaker(t *testing.T) {
@@ -572,8 +575,9 @@ func (t *Transport) queueSize() int {
 }
 
 func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	trans, nodes, stopper, _ := newTestTransport(false)
+	trans, nodes, stopper, _ := newTestTransport(false, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -629,26 +633,28 @@ func getTestSnapshotMessage(to uint64) raftpb.Message {
 }
 
 func TestSnapshotCanBeSent(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	mutualTLSValues := []bool{true, false}
 	for _, v := range mutualTLSValues {
-		testSnapshotCanBeSent(t, snapshotChunkSize-1, 3000, v)
-		testSnapshotCanBeSent(t, snapshotChunkSize/2, 3000, v)
-		testSnapshotCanBeSent(t, snapshotChunkSize+1, 3000, v)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3, 3000, v)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 3000, v)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 3000, v)
+		testSnapshotCanBeSent(t, snapshotChunkSize-1, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize/2, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize+1, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 3000, v, fs)
 	}
 }
 
 func TestLargeSnapshotCanBeSent(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testSnapshotCanBeSent(t, 64*1024*1024, 20000, true)
-	testSnapshotCanBeSent(t, 256*1024*1024+5, 20000, false)
+	testSnapshotCanBeSent(t, 64*1024*1024, 20000, true, fs)
+	testSnapshotCanBeSent(t, 256*1024*1024+5, 20000, false, fs)
 }
 
-func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool) {
-	trans, nodes, stopper, _ := newTestTransport(mutualTLS)
+func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, _ := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -688,9 +694,10 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool) {
 }
 
 func TestSourceAddressWillBeAddedToNodeRegistry(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testSourceAddressWillBeAddedToNodeRegistry(t, true)
-	testSourceAddressWillBeAddedToNodeRegistry(t, false)
+	testSourceAddressWillBeAddedToNodeRegistry(t, true, fs)
+	testSourceAddressWillBeAddedToNodeRegistry(t, false, fs)
 }
 
 func waitForTotalSnapshotStatusUpdateCount(handler *testMessageHandler,
@@ -752,9 +759,9 @@ func getTestSnapshotFileSize(sz uint64) uint64 {
 	}
 }
 
-func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bool) {
-	fs := vfs.GetTestFS()
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+func testSnapshotCanBeSent(t *testing.T,
+	sz uint64, maxWait uint64, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -813,9 +820,8 @@ func testSnapshotCanBeSent(t *testing.T, sz uint64, maxWait uint64, mutualTLS bo
 }
 
 func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
-	f StreamChunkSendFunc, mutualTLS bool) {
-	fs := vfs.GetTestFS()
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	f StreamChunkSendFunc, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -850,29 +856,31 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 }
 
 func TestSnapshotWithNotMatchedDeploymentIDWillBeDropped(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
 		c.DeploymentId = 1
 		return c, true
 	}
-	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, true)
-	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, false)
+	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, true, fs)
+	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, false, fs)
 }
 
 func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
 		c.BinVer = raftio.RPCBinVersion + 1
 		return c, true
 	}
-	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, true)
-	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, false)
+	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, true, fs)
+	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, false, fs)
 }
 
-func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
-	fs := vfs.GetTestFS()
+func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
+	mutualTLS bool, fs vfs.IFS) {
 	snapshotSize := uint64(snapshotChunkSize) * 10
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -923,7 +931,8 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T, mutualTLS bool) {
 }
 
 func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
-	trans, nodes, stopper, tt := newTestTransport(false)
+	fs := vfs.GetTestFS()
+	trans, nodes, stopper, tt := newTestTransport(false, fs)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -970,15 +979,16 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 }
 
 func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testFailedSnapshotLoadChunkWillBeReported(t, false)
-	testFailedSnapshotLoadChunkWillBeReported(t, true)
+	testFailedSnapshotLoadChunkWillBeReported(t, false, fs)
+	testFailedSnapshotLoadChunkWillBeReported(t, true, fs)
 }
 
-func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
-	fs := vfs.GetTestFS()
+func testFailedConnectionReportsSnapshotFailure(t *testing.T,
+	mutualTLS bool, fs vfs.IFS) {
 	snapshotSize := uint64(snapshotChunkSize) * 10
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -1013,15 +1023,15 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T, mutualTLS bool) {
 }
 
 func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testFailedConnectionReportsSnapshotFailure(t, true)
-	testFailedConnectionReportsSnapshotFailure(t, false)
+	testFailedConnectionReportsSnapshotFailure(t, true, fs)
+	testFailedConnectionReportsSnapshotFailure(t, false, fs)
 }
 
-func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
-	fs := vfs.GetTestFS()
+func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.IFS) {
 	snapshotSize := uint64(snapshotChunkSize) * 10
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -1082,15 +1092,15 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool) {
 }
 
 func TestFailedSnapshotSendWillBeReported(t *testing.T) {
+	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testFailedSnapshotSendWillBeReported(t, true)
-	testFailedSnapshotSendWillBeReported(t, false)
+	testFailedSnapshotSendWillBeReported(t, true, fs)
+	testFailedSnapshotSendWillBeReported(t, false, fs)
 }
 
 func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
-	sz uint64, maxWait uint64, mutualTLS bool) {
-	fs := vfs.GetTestFS()
-	trans, nodes, stopper, tt := newTestTransport(mutualTLS)
+	sz uint64, maxWait uint64, mutualTLS bool, fs vfs.IFS) {
+	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer fs.RemoveAll(snapshotDir)
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
@@ -1164,19 +1174,22 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 }
 
 func TestSnapshotWithExternalFilesCanBeSend(t *testing.T) {
-	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, false)
-	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, false)
-	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, true)
-	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, true)
+	fs := vfs.GetTestFS()
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, false, fs)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, false, fs)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize/2, 3000, true, fs)
+	testSnapshotWithExternalFilesCanBeSend(t, snapshotChunkSize*3+100, 3000, true, fs)
 }
 
 func TestNoOPTransportCanBeCreated(t *testing.T) {
-	tt, _, _, _, _ := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, _, _, _, _ := newNOOPTestTransport(fs)
 	defer tt.Stop()
 }
 
 func TestInitialMessageCanBeSent(t *testing.T) {
-	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1211,7 +1224,8 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 }
 
 func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
-	tt, nodes, _, req, connReq := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, req, connReq := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1246,7 +1260,8 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 }
 
 func TestCircuitBreakerCauseFailFast(t *testing.T) {
-	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1296,7 +1311,8 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 
 // unknown target
 func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
-	tt, nodes, _, _, _ := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, _, _ := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1316,7 +1332,8 @@ func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
 
 // failed to connect
 func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
-	tt, nodes, _, req, connReq := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, req, connReq := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1341,7 +1358,8 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 
 // failed to connect due to too many connections
 func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
-	tt, nodes, _, _, _ := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, _, _ := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1376,7 +1394,8 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 }
 
 func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
-	tt, nodes, _, req, _ := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, req, _ := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
@@ -1428,7 +1447,8 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 }
 
 func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
-	tt, nodes, _, _, _ := newNOOPTestTransport()
+	fs := vfs.GetTestFS()
+	tt, nodes, _, _, _ := newNOOPTestTransport(fs)
 	defer tt.Stop()
 	tt.SetDeploymentID(12345)
 	handler := newTestMessageHandler()
