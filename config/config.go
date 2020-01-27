@@ -48,6 +48,7 @@ type LogDBFactoryFunc func(dirs []string,
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
 
+// IFS is the filesystem interface used by tests.
 type IFS = vfs.IFS
 
 const (
@@ -314,7 +315,8 @@ type NodeHostConfig struct {
 	// received each second for all Raft clusters managed by the NodeHost instance.
 	// The default value 0 means there is no limit for receiving snapshot data.
 	MaxSnapshotRecvBytesPerSecond uint64
-
+	// FS is the filesystem used by tests. Dragonboat applications are not
+	// required to explicitly set this field.
 	FS IFS
 }
 

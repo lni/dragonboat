@@ -27,6 +27,7 @@ import (
 // IFS is the vfs interface used by dragonboat.
 type IFS = gvfs.FS
 
+// MemFS is a memory backed file system for testing purposes.
 type MemFS = gvfs.MemFS
 
 // DefaultFS is a vfs instance using underlying OS fs.
