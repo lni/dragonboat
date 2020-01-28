@@ -88,6 +88,8 @@ func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	return openPebbleDB(dir, wal, fs)
 }
 
+var _ kv.IKVStore = &KV{}
+
 // KV is a pebble based IKVStore type.
 type KV struct {
 	db   *pebble.DB

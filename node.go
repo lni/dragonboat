@@ -49,6 +49,8 @@ type engine interface {
 	setAvailableSnapshotReady(clusterID uint64)
 }
 
+var _ rsm.INode = &node{}
+
 type node struct {
 	readReqCount          uint64
 	leaderID              uint64

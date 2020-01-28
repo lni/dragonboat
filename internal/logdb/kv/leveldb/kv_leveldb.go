@@ -59,6 +59,8 @@ func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	return openLevelDB(dir, wal)
 }
 
+var _ kv.IKVStore = &KV{}
+
 // KV is a leveldb based IKVStore type.
 type KV struct {
 	db   *levigo.DB

@@ -27,13 +27,15 @@ import (
 	"github.com/lni/goutils/logutil"
 )
 
+var _ INodeRegistry = &Nodes{}
+var _ INodeAddressResolver = &Nodes{}
+
 // INodeRegistry is the local registry interface used to keep all known
-// nodes in the multi raft system.
+// nodes in the system..
 type INodeRegistry interface {
 	AddNode(clusterID uint64, nodeID uint64, url string)
 	RemoveNode(clusterID uint64, nodeID uint64)
 	RemoveCluster(clusterID uint64)
-	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
 }
 
 type addr struct {

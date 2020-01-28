@@ -20,6 +20,8 @@ import (
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
+var _ ILoadableSessions = &SessionManager{}
+
 // SessionManager is the wrapper struct that implements client session related
 // functionalites used in the IManagedStateMachine interface.
 type SessionManager struct {

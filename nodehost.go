@@ -1964,6 +1964,8 @@ type INodeUser interface {
 	ReadIndex(timeout time.Duration) (*RequestState, error)
 }
 
+var _ INodeUser = &nodeUser{}
+
 func delaySampled(s *client.Session) bool {
 	if delaySampleRatio == 0 {
 		return false
@@ -2008,6 +2010,8 @@ func getTimeoutFromContext(ctx context.Context) (time.Duration, error) {
 	}
 	return d.Sub(now), nil
 }
+
+var _ transport.IRaftMessageHandler = &messageHandler{}
 
 type messageHandler struct {
 	nh *NodeHost
@@ -2143,3 +2147,5 @@ func logBuildTagsAndVersion() {
 			runtime.GOOS)
 	}
 }
+
+var _ nodeLoader = &NodeHost{}

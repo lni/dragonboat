@@ -44,6 +44,8 @@ import (
 	"github.com/lni/goutils/logutil"
 )
 
+var _ raft.ILogDB = &LogReader{}
+
 // LogReader is the struct used to manage logs that have already been persisted
 // into LogDB. This implementation is influenced by CockroachDB's
 // replicaRaftStorage.

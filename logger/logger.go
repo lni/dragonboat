@@ -41,6 +41,8 @@ const (
 // specified package.
 type Factory func(pkgName string) ILogger
 
+var _ ILogger = &dragonboatLogger{}
+
 // ILogger is the interface implemented by loggers that can be used by
 // dragonboat. You can implement your own ILogger implementation by building
 // wrapper struct on top of your favourite logging library.

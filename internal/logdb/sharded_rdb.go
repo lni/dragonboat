@@ -34,6 +34,8 @@ var (
 	RDBContextValueSize uint64 = 1024 * 1024 * 64
 )
 
+var _ raftio.ILogDB = &ShardedRDB{}
+
 // ShardedRDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedRDB struct {
 	completedCompactions uint64

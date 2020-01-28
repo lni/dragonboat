@@ -108,6 +108,8 @@ func validateBlock(block []byte, h hash.Hash) bool {
 	return bytes.Equal(crc, h.Sum(nil))
 }
 
+var _ IBlockWriter = &BlockWriter{}
+
 // BlockWriter is a writer type that writes the input data to the underlying
 // storage with checksum appended at the end of each block.
 type BlockWriter struct {
@@ -285,6 +287,11 @@ func (br *blockReader) readBlock() (int, error) {
 	return len(br.block), nil
 }
 
+var _ IVWriter = &v1writer{}
+var _ IVWriter = &v2writer{}
+var _ IVReader = &v1reader{}
+var _ IVReader = &v2reader{}
+
 // IVWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
 	Write(data []byte) (int, error)
@@ -418,6 +425,9 @@ func getHeaderFromFirstChunk(data []byte) ([]byte, []byte, bool) {
 	crc := data[8+sz : 12+sz]
 	return header, crc, true
 }
+
+var _ IVValidator = &v1validator{}
+var _ IVValidator = &v2validator{}
 
 // IVValidator is the interface for versioned validator.
 type IVValidator interface {

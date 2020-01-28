@@ -234,6 +234,10 @@ func NewStateMachineWrapperFromPlugin(clusterID uint64, nodeID uint64,
 	return NewStateMachineWrapper(clusterID, nodeID, factory, 1, smType, done)
 }
 
+var _ rsm.IManagedStateMachine = &RegularStateMachineWrapper{}
+var _ rsm.IManagedStateMachine = &ConcurrentStateMachineWrapper{}
+var _ rsm.IManagedStateMachine = &OnDiskStateMachineWrapper{}
+
 // NewStateMachineWrapper creates and returns the new NewStateMachineWrapper
 // instance.
 func NewStateMachineWrapper(clusterID uint64, nodeID uint64,

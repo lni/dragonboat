@@ -185,6 +185,8 @@ func (sq *sendQueue) decrease(msg pb.Message) {
 	sq.rl.Decrease(pb.GetEntrySliceInMemSize(msg.Entries))
 }
 
+var _ ITransport = &Transport{}
+
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
 	DeploymentID

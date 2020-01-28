@@ -316,6 +316,10 @@ func (c *connection) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
+var _ raftio.IRaftRPC = &TCPTransport{}
+var _ raftio.IConnection = &TCPConnection{}
+var _ raftio.ISnapshotConnection = &TCPSnapshotConnection{}
+
 // TCPConnection is the connection used for sending raft messages to remote
 // nodes.
 type TCPConnection struct {

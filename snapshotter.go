@@ -50,6 +50,8 @@ var (
 	errSnapshotOutOfDate = errors.New("snapshot being generated is out of date")
 )
 
+var _ rsm.ISnapshotter = &snapshotter{}
+
 type snapshotter struct {
 	rootDirFunc server.GetSnapshotDirFunc
 	nhConfig    config.NodeHostConfig

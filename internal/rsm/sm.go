@@ -40,6 +40,8 @@ type IStateMachine interface {
 	StateMachineType() pb.StateMachineType
 }
 
+var _ IStateMachine = &RegularStateMachine{}
+
 // RegularStateMachine is a regular state machine not capable of taking
 // concurrent snapshots.
 type RegularStateMachine struct {

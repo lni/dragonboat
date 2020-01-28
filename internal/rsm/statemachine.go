@@ -135,8 +135,8 @@ func (t *Task) isSyncTask() bool {
 type SMFactoryFunc func(clusterID uint64,
 	nodeID uint64, done <-chan struct{}) IManagedStateMachine
 
-// INodeProxy is the interface used as proxy to a nodehost.
-type INodeProxy interface {
+// INode is the interface of a dragonboat node.
+type INode interface {
 	NodeReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
@@ -163,7 +163,7 @@ type ISnapshotter interface {
 type StateMachine struct {
 	mu              sync.RWMutex
 	snapshotter     ISnapshotter
-	node            INodeProxy
+	node            INode
 	sm              IManagedStateMachine
 	sessions        *SessionManager
 	members         *membership
@@ -191,7 +191,7 @@ type StateMachine struct {
 // NewStateMachine creates a new application state machine object.
 func NewStateMachine(sm IManagedStateMachine,
 	snapshotter ISnapshotter,
-	cfg config.Config, proxy INodeProxy, fs vfs.IFS) *StateMachine {
+	cfg config.Config, node INode, fs vfs.IFS) *StateMachine {
 	ordered := cfg.OrderedConfigChange
 	ct := cfg.SnapshotCompressionType
 	a := &StateMachine{
@@ -199,9 +199,9 @@ func NewStateMachine(sm IManagedStateMachine,
 		sm:          sm,
 		onDiskSM:    sm.OnDiskStateMachine(),
 		taskQ:       NewTaskQueue(),
-		node:        proxy,
+		node:        node,
 		sessions:    NewSessionManager(),
-		members:     newMembership(proxy.ClusterID(), proxy.NodeID(), ordered),
+		members:     newMembership(node.ClusterID(), node.NodeID(), ordered),
 		isWitness:   cfg.IsWitness,
 		sct:         ct,
 		fs:          fs,
