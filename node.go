@@ -95,6 +95,7 @@ type node struct {
 	ss                    *snapshotState
 	snapshotLock          *syncutil.Lock
 	raftEvents            *raftEventListener
+	sysEvents             *sysEventListener
 	initializedMu         struct {
 		sync.Mutex
 		initialized bool
@@ -122,7 +123,8 @@ func newNode(raftAddress string,
 	config config.Config,
 	useMetrics bool,
 	tickMillisecond uint64,
-	ldb raftio.ILogDB) (*node, error) {
+	ldb raftio.ILogDB,
+	sysEvents *sysEventListener) (*node, error) {
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
@@ -161,6 +163,7 @@ func newNode(raftAddress string,
 		ss:                    &snapshotState{},
 		syncTask:              newTask(syncTaskInterval),
 		smType:                smType,
+		sysEvents:             sysEvents,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -261,7 +264,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 	}
 	plog.Infof("%s is restoring remotes", n.id())
 	n.p.RestoreRemotes(snapshot)
-	n.captureClusterState()
+	n.notifyConfigChange()
 }
 
 func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
@@ -270,7 +273,7 @@ func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
 	}
 	if accepted {
 		n.pendingConfigChange.apply(key, false)
-		n.captureClusterState()
+		n.notifyConfigChange()
 	} else {
 		n.p.RejectConfigChange()
 		n.pendingConfigChange.apply(key, true)
@@ -465,8 +468,13 @@ func (n *node) getLeaderID() (uint64, bool) {
 }
 
 func (n *node) notifyOffloaded(from rsm.From) {
-	n.sm.Offloaded(from)
-	plog.Infof("%s offloaded from %s", n.id(), from)
+	if n.sm.Offloaded(from) {
+		n.sysEvents.Publish(server.SystemEvent{
+			Type:      server.NodeUnloaded,
+			ClusterID: n.clusterID,
+			NodeID:    n.nodeID,
+		})
+	}
 }
 
 func (n *node) notifyLoaded(from rsm.From) {
@@ -610,6 +618,11 @@ func (n *node) saveSnapshot(rec rsm.Task) error {
 		return err
 	}
 	n.pendingSnapshot.apply(rec.SSRequest.Key, index == 0, false, index)
+	n.sysEvents.Publish(server.SystemEvent{
+		Type:      server.SnapshotCreated,
+		ClusterID: n.clusterID,
+		NodeID:    n.nodeID,
+	})
 	return nil
 }
 
@@ -759,6 +772,12 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 			return 0, err
 		}
 	}
+	n.sysEvents.Publish(server.SystemEvent{
+		Type:      server.SnapshotRecovered,
+		ClusterID: n.clusterID,
+		NodeID:    n.nodeID,
+		Index:     index,
+	})
 	return index, nil
 }
 
@@ -839,6 +858,12 @@ func (n *node) compactSnapshots(index uint64) error {
 		if err := n.snapshotter.Compact(index); err != nil {
 			return err
 		}
+		n.sysEvents.Publish(server.SystemEvent{
+			Type:      server.SnapshotCompacted,
+			ClusterID: n.clusterID,
+			NodeID:    n.nodeID,
+			Index:     index,
+		})
 	}
 	return nil
 }
@@ -860,6 +885,12 @@ func (n *node) removeLog() error {
 		}
 		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
 		n.ss.setCompactedTo(compactTo)
+		n.sysEvents.Publish(server.SystemEvent{
+			Type:      server.LogCompacted,
+			ClusterID: n.clusterID,
+			NodeID:    n.nodeID,
+			Index:     compactTo,
+		})
 		if !n.config.DisableAutoCompactions {
 			if _, err := n.requestCompaction(); err == nil {
 				plog.Infof("auto compaction for %s up to index %d", n.id(), compactTo)
@@ -875,6 +906,12 @@ func (n *node) requestCompaction() (*SysOpState, error) {
 		if err != nil {
 			return nil, err
 		}
+		n.sysEvents.Publish(server.SystemEvent{
+			Type:      server.LogDBCompacted,
+			ClusterID: n.clusterID,
+			NodeID:    n.nodeID,
+			Index:     compactTo,
+		})
 		return &SysOpState{completedC: done}, nil
 	}
 	return nil, ErrRejected
@@ -1363,6 +1400,11 @@ func (n *node) processRecoverSnapshotStatus() bool {
 		if rec.InitialSnapshot {
 			plog.Infof("%s handled initial snapshot, index %d", n.id(), rec.Index)
 			n.setInitialStatus(rec.Index)
+			n.sysEvents.Publish(server.SystemEvent{
+				Type:      server.NodeReady,
+				ClusterID: n.clusterID,
+				NodeID:    n.nodeID,
+			})
 		}
 		n.ss.clearRecoveringFromSnapshot()
 	}
@@ -1419,7 +1461,7 @@ func (n *node) tick() {
 	n.pendingConfigChange.tick()
 }
 
-func (n *node) captureClusterState() {
+func (n *node) notifyConfigChange() {
 	nodes, observers, witnesses, _, index := n.sm.GetMembership()
 	if len(nodes) == 0 {
 		plog.Panicf("empty nodes %s", n.id())
@@ -1436,6 +1478,11 @@ func (n *node) captureClusterState() {
 		Nodes:             nodes,
 	}
 	n.clusterInfo.Store(ci)
+	n.sysEvents.Publish(server.SystemEvent{
+		Type:      server.MembershipChanged,
+		ClusterID: n.clusterID,
+		NodeID:    n.nodeID,
+	})
 }
 
 func (n *node) getStateMachineType() sm.Type {

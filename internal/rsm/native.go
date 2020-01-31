@@ -66,7 +66,7 @@ type IManagedStateMachine interface {
 		io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 	RecoverFromSnapshot(io.Reader, []sm.SnapshotFile) error
 	StreamSnapshot(interface{}, io.Writer) error
-	Offloaded(From)
+	Offloaded(From) bool
 	Loaded(From)
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
@@ -127,7 +127,7 @@ func (ds *NativeSM) Open() (uint64, error) {
 }
 
 // Offloaded offloads the data store from the specified part of the system.
-func (ds *NativeSM) Offloaded(from From) {
+func (ds *NativeSM) Offloaded(from From) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
@@ -136,7 +136,9 @@ func (ds *NativeSM) Offloaded(from From) {
 			panic(err)
 		}
 		ds.SetDestroyed()
+		return true
 	}
+	return false
 }
 
 // Loaded marks the statemachine as loaded by the specified component.

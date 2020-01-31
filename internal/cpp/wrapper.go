@@ -287,14 +287,16 @@ func (ds *RegularStateMachineWrapper) Open() (uint64, error) {
 }
 
 // Offloaded offloads the data store from the specified part of the system.
-func (ds *RegularStateMachineWrapper) Offloaded(from rsm.From) {
+func (ds *RegularStateMachineWrapper) Offloaded(from rsm.From) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
 		ds.destroy()
 		ds.SetDestroyed()
+		return true
 	}
+	return false
 }
 
 // Loaded marks the data store as loaded by the specified component.
@@ -553,14 +555,16 @@ func (ds *ConcurrentStateMachineWrapper) StreamSnapshot(ssctx interface{},
 }
 
 // Offloaded ...
-func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) {
+func (ds *ConcurrentStateMachineWrapper) Offloaded(from rsm.From) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
 		ds.destroy()
 		ds.SetDestroyed()
+		return true
 	}
+	return false
 }
 
 // Loaded ...
@@ -775,14 +779,16 @@ func (ds *OnDiskStateMachineWrapper) StreamSnapshot(ssctx interface{},
 }
 
 // Offloaded ...
-func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) {
+func (ds *OnDiskStateMachineWrapper) Offloaded(from rsm.From) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
 		ds.destroy()
 		ds.SetDestroyed()
+		return true
 	}
+	return false
 }
 
 // Loaded ...

@@ -185,6 +185,12 @@ func (sq *sendQueue) decrease(msg pb.Message) {
 	sq.rl.Decrease(pb.GetEntrySliceInMemSize(msg.Entries))
 }
 
+// ITransportEvent is the interface for notifying connection status changes.
+type ITransportEvent interface {
+	ConnectionEstablished(string, bool)
+	ConnectionFailed(string, bool)
+}
+
 var _ ITransport = &Transport{}
 
 // Transport is the transport layer for delivering raft messages and snapshots.
@@ -214,13 +220,15 @@ type Transport struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	streamConnections   uint64
+	sysEvents           ITransportEvent
 	fs                  vfs.IFS
 }
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
 	ctx *server.Context, resolver INodeAddressResolver,
-	locator server.GetSnapshotDirFunc, fs vfs.IFS) (*Transport, error) {
+	locator server.GetSnapshotDirFunc, sysEvents ITransportEvent,
+	fs vfs.IFS) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	t := &Transport{
 		nhConfig:          nhConfig,
@@ -231,6 +239,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		cstopper:          syncutil.NewStopper(),
 		snapshotLocator:   locator,
 		streamConnections: streamConnections,
+		sysEvents:         sysEvents,
 		fs:                fs,
 	}
 	chunks := NewSnapshotChunks(t.handleRequest,
@@ -474,6 +483,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 		if successes == 0 || consecFailures > 0 {
 			plog.Infof("%s, raft RPC stream to %s (%s) established",
 				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
+			t.sysEvents.ConnectionEstablished(remoteHost, false)
 		}
 		return t.processQueue(clusterID, toNodeID, sq, conn)
 	}(); err != nil {
@@ -481,6 +491,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 			t.sourceAddress, remoteHost, err.Error())
 		breaker.Fail()
 		t.metrics.messageConnectionFailure()
+		t.sysEvents.ConnectionFailed(remoteHost, false)
 	}
 }
 

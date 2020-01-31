@@ -81,3 +81,51 @@ type IRaftEventListener interface {
 	ProposalDropped(info ProposalInfo)
 	ReadIndexDropped(info ReadIndexInfo)
 }
+
+// SystemEventType is the type of system events.
+type SystemEventType uint64
+
+const (
+	// NodeHostShuttingDown ...
+	NodeHostShuttingDown SystemEventType = iota
+	// NodeReady ...
+	NodeReady
+	// NodeUnloaded ...
+	NodeUnloaded
+	// MembershipChanged ...
+	MembershipChanged
+	// ConnectionEstablished ...
+	ConnectionEstablished
+	// ConnectionFailed ...
+	ConnectionFailed
+	// SendSnapshotStarted ...
+	SendSnapshotStarted
+	// SendSnapshotCompleted ...
+	SendSnapshotCompleted
+	// SendSnapshotAborted ...
+	SendSnapshotAborted
+	// SnapshotReceived ...
+	SnapshotReceived
+	// SnapshotRecovered ...
+	SnapshotRecovered
+	// SnapshotCreated ...
+	SnapshotCreated
+	// SnapshotCompacted ...
+	SnapshotCompacted
+	// LogCompacted ...
+	LogCompacted
+	// LogDBCompacted ...
+	LogDBCompacted
+)
+
+// SystemEvent is an system event record published by the system that can be
+// handled by a raftio.ISystemEventListener.
+type SystemEvent struct {
+	Type               SystemEventType
+	ClusterID          uint64
+	NodeID             uint64
+	Address            string
+	SnapshotConnection bool
+	From               uint64
+	Index              uint64
+}

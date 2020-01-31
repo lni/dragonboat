@@ -46,6 +46,11 @@ const (
 	testSnapshotIndex = uint64(12345)
 )
 
+type dummyTransportEvent struct{}
+
+func (d *dummyTransportEvent) ConnectionEstablished(addr string, snapshot bool) {}
+func (d *dummyTransportEvent) ConnectionFailed(addr string, snapshot bool)      {}
+
 type testSnapshotDir struct {
 	fs vfs.IFS
 }
@@ -307,7 +312,7 @@ func newNOOPTestTransport(fs vfs.IFS) (*Transport,
 	if err != nil {
 		panic(err)
 	}
-	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, fs)
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, &dummyTransportEvent{}, fs)
 	if err != nil {
 		panic(err)
 	}
@@ -336,7 +341,7 @@ func newTestTransport(mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
 	if err != nil {
 		panic(err)
 	}
-	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, fs)
+	transport, err := NewTransport(c, ctx, nodes, t.GetSnapshotRootDir, &dummyTransportEvent{}, fs)
 	if err != nil {
 		panic(err)
 	}

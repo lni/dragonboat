@@ -388,6 +388,11 @@ func (h *benchmarkMessageHandler) HandleSnapshot(clusterID uint64,
 	nodeID uint64, from uint64) {
 }
 
+type dummyTransportEvent struct{}
+
+func (d *dummyTransportEvent) ConnectionEstablished(addr string, snapshot bool) {}
+func (d *dummyTransportEvent) ConnectionFailed(addr string, snapshot bool)      {}
+
 func benchmarkTransport(b *testing.B, sz int) {
 	b.ReportAllocs()
 	b.StopTimer()
@@ -416,12 +421,12 @@ func benchmarkTransport(b *testing.B, sz int) {
 	nodes1 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes2 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes1.AddRemoteAddress(1, 2, addr2)
-	t1, err := transport.NewTransport(nhc1, ctx1, nodes1, nil, vfs.DefaultFS)
+	t1, err := transport.NewTransport(nhc1, ctx1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
 	t1.SetUnmanagedDeploymentID()
-	t2, err := transport.NewTransport(nhc2, ctx2, nodes2, nil, vfs.DefaultFS)
+	t2, err := transport.NewTransport(nhc2, ctx2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}

@@ -155,6 +155,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 		if successes == 0 || consecFailures > 0 {
 			plog.Infof("snapshot stream to %s (%s) established",
 				dn(clusterID, nodeID), addr)
+			t.sysEvents.ConnectionEstablished(addr, true)
 		}
 		err := c.process()
 		if err != nil {
@@ -165,6 +166,7 @@ func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
 	}(); err != nil {
 		plog.Warningf("connectAndProcessSnapshot failed: %v", err)
 		breaker.Fail()
+		t.sysEvents.ConnectionFailed(addr, true)
 	}
 }
 

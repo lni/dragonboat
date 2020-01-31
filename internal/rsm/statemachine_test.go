@@ -2109,7 +2109,7 @@ func (t *testManagedStateMachine) RecoverFromSnapshot(io.Reader, []sm.SnapshotFi
 	return nil
 }
 func (t *testManagedStateMachine) StreamSnapshot(interface{}, io.Writer) error { return nil }
-func (t *testManagedStateMachine) Offloaded(From)                              {}
+func (t *testManagedStateMachine) Offloaded(From) bool                         { return false }
 func (t *testManagedStateMachine) Loaded(From)                                 {}
 func (t *testManagedStateMachine) ConcurrentSnapshot() bool                    { return false }
 func (t *testManagedStateMachine) OnDiskStateMachine() bool                    { return false }

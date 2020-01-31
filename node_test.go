@@ -252,7 +252,8 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			config,
 			false,
 			tickMillisecond,
-			ldb)
+			ldb,
+			newSysEventListener(nil, nil))
 		if err != nil {
 			panic(err)
 		}
@@ -1590,7 +1591,7 @@ func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 }
 
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
 	n.ss.setRecoveringFromSnapshot()
 	n.ss.notifySnapshotStatus(false, true, false, true, 100)
 	if n.processRecoverSnapshotStatus() {
@@ -1608,7 +1609,7 @@ func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 }
 
 func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
 	n.ss.setRecoveringFromSnapshot()
 	if !n.processRecoverSnapshotStatus() {
 		t.Errorf("not skipped")

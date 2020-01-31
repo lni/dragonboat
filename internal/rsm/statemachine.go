@@ -193,8 +193,7 @@ func NewStateMachine(sm IManagedStateMachine,
 	snapshotter ISnapshotter,
 	cfg config.Config, node INode, fs vfs.IFS) *StateMachine {
 	ordered := cfg.OrderedConfigChange
-	ct := cfg.SnapshotCompressionType
-	a := &StateMachine{
+	return &StateMachine{
 		snapshotter: snapshotter,
 		sm:          sm,
 		onDiskSM:    sm.OnDiskStateMachine(),
@@ -203,10 +202,9 @@ func NewStateMachine(sm IManagedStateMachine,
 		sessions:    NewSessionManager(),
 		members:     newMembership(node.ClusterID(), node.NodeID(), ordered),
 		isWitness:   cfg.IsWitness,
-		sct:         ct,
+		sct:         cfg.SnapshotCompressionType,
 		fs:          fs,
 	}
-	return a
 }
 
 // TaskQ returns the task queue.
@@ -439,8 +437,10 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 }
 
 // Offloaded marks the state machine as offloaded from the specified component.
-func (s *StateMachine) Offloaded(from From) {
-	s.sm.Offloaded(from)
+// It returns a boolean value indicating whether the node has been fully
+// unloaded after unloading from the specified component.
+func (s *StateMachine) Offloaded(from From) bool {
+	return s.sm.Offloaded(from)
 }
 
 // Loaded marks the state machine as loaded from the specified component.

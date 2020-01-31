@@ -351,11 +351,12 @@ func createSingleNodeTestNodeHostCfg(addr string,
 	peers := make(map[uint64]string)
 	peers[1] = addr
 	nhc := config.NodeHostConfig{
-		WALDir:         datadir,
-		NodeHostDir:    datadir,
-		RTTMillisecond: 2,
-		RaftAddress:    peers[1],
-		FS:             fs,
+		WALDir:              datadir,
+		NodeHostDir:         datadir,
+		RTTMillisecond:      2,
+		RaftAddress:         peers[1],
+		FS:                  fs,
+		SystemEventListener: &testSysEventListener{},
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -577,18 +578,20 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	peers := make(map[uint64]string)
 	peers[1] = addr1
 	nhc1 := config.NodeHostConfig{
-		WALDir:         datadir1,
-		NodeHostDir:    datadir1,
-		RTTMillisecond: 10,
-		RaftAddress:    addr1,
-		FS:             fs,
+		WALDir:              datadir1,
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      10,
+		RaftAddress:         addr1,
+		FS:                  fs,
+		SystemEventListener: &testSysEventListener{},
 	}
 	nhc2 := config.NodeHostConfig{
-		WALDir:         datadir2,
-		NodeHostDir:    datadir2,
-		RTTMillisecond: 10,
-		RaftAddress:    addr2,
-		FS:             fs,
+		WALDir:              datadir2,
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      10,
+		RaftAddress:         addr2,
+		FS:                  fs,
+		SystemEventListener: &testSysEventListener{},
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -886,6 +889,13 @@ func TestCompactionCanBeRequested(t *testing.T) {
 		_, err = nh.RequestCompaction(2)
 		if err != ErrRejected {
 			t.Fatalf("not rejected")
+		}
+		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		if len(listener.logdbCompacted) == 0 {
+			t.Fatalf("logdb compaction not notified")
 		}
 	}
 	rc := config.Config{
@@ -1350,6 +1360,18 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		if err := nh.StopCluster(2); err != nil {
 			t.Errorf("failed to stop cluster 2 %v", err)
 		}
+		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		if len(listener.nodeReady) != 1 {
+			t.Errorf("node ready not signalled")
+		} else {
+			ni := listener.nodeReady[0]
+			if ni.ClusterID != 2 || ni.NodeID != 1 {
+				t.Fatalf("incorrect node ready info")
+			}
+		}
 	}
 	singleNodeHostTest(t, tf, fs)
 }
@@ -1395,6 +1417,23 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 		err := nh.SyncRequestDeleteNode(ctx, 2, 2, 0)
 		if err != nil {
 			t.Errorf("failed to delete node %v", err)
+		}
+		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		retry := 0
+		for retry < 10000 {
+			if len(listener.membershipChanged) != 1 {
+				time.Sleep(time.Millisecond)
+				retry++
+			} else {
+				break
+			}
+		}
+		ni := listener.membershipChanged[0]
+		if ni.ClusterID != 2 || ni.NodeID != 1 {
+			t.Fatalf("incorrect node ready info")
 		}
 	}
 	singleNodeHostTest(t, tf, fs)
@@ -1850,6 +1889,35 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
+		listener, ok := nh2.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		if len(listener.snapshotReceived) == 0 {
+			t.Fatalf("snapshot received not notified")
+		}
+		if len(listener.snapshotRecovered) == 0 {
+			t.Fatalf("failed to be notified for recovered snapshot")
+		}
+		if len(listener.snapshotCompacted) == 0 {
+			t.Fatalf("snapshot compaction not notified")
+		}
+		if len(listener.logCompacted) == 0 {
+			t.Fatalf("log compaction not notified")
+		}
+		listener, ok = nh1.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		if len(listener.sendSnapshotStarted) == 0 {
+			t.Fatalf("send snapshot started not notified")
+		}
+		if len(listener.sendSnapshotCompleted) == 0 {
+			t.Fatalf("send snapshot completed not notified")
+		}
+		if listener.connectionEstablished == 0 {
+			t.Fatalf("connection established not notified")
+		}
 	}
 	twoFakeDiskNodeHostTest(t, tf, fs)
 }
@@ -2263,6 +2331,23 @@ func TestSyncRequestSnapshot(t *testing.T) {
 		if idx == 0 {
 			t.Errorf("unexpected index %d", idx)
 		}
+		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		retry := 0
+		for retry < 10000 {
+			if len(listener.snapshotCreated) != 1 {
+				time.Sleep(time.Millisecond)
+				retry++
+			} else {
+				break
+			}
+		}
+		si := listener.snapshotCreated[0]
+		if si.ClusterID != 2 || si.NodeID != 1 {
+			t.Fatalf("incorrect created snapshot info")
+		}
 	}
 	singleNodeHostTest(t, tf, fs)
 }
@@ -2470,6 +2555,18 @@ func TestSyncRemoveData(t *testing.T) {
 		defer cancel()
 		if err := nh.SyncRemoveData(ctx, 2, 1); err != nil {
 			t.Fatalf("sync remove data fail %v", err)
+		}
+		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		if !ok {
+			t.Fatalf("failed to get the system event listener")
+		}
+		if len(listener.nodeUnloaded) != 1 {
+			t.Errorf("node ready not signalled")
+		} else {
+			ni := listener.nodeUnloaded[0]
+			if ni.ClusterID != 2 || ni.NodeID != 1 {
+				t.Fatalf("incorrect node unloaded info")
+			}
 		}
 	}
 	singleNodeHostTest(t, tf, fs)
@@ -4053,4 +4150,66 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		}
 	}
 	testWitnessIO(t, tf, fs)
+}
+
+type testSysEventListener struct {
+	nodeHostShuttingdown  uint64
+	nodeUnloaded          []raftio.NodeInfo
+	nodeReady             []raftio.NodeInfo
+	membershipChanged     []raftio.NodeInfo
+	snapshotCreated       []raftio.SnapshotInfo
+	snapshotRecovered     []raftio.SnapshotInfo
+	snapshotReceived      []raftio.SnapshotInfo
+	sendSnapshotStarted   []raftio.SnapshotInfo
+	sendSnapshotCompleted []raftio.SnapshotInfo
+	snapshotCompacted     []raftio.SnapshotInfo
+	logCompacted          []raftio.EntryInfo
+	logdbCompacted        []raftio.EntryInfo
+	connectionEstablished uint64
+}
+
+func (t *testSysEventListener) NodeHostShuttingDown() {
+	t.nodeHostShuttingdown++
+}
+
+func (t *testSysEventListener) NodeReady(info raftio.NodeInfo) {
+	t.nodeReady = append(t.nodeReady, info)
+}
+
+func (t *testSysEventListener) NodeUnloaded(info raftio.NodeInfo) {
+	t.nodeUnloaded = append(t.nodeUnloaded, info)
+}
+
+func (t *testSysEventListener) MembershipChanged(info raftio.NodeInfo) {
+	t.membershipChanged = append(t.membershipChanged, info)
+}
+
+func (t *testSysEventListener) ConnectionEstablished(info raftio.ConnectionInfo) {
+	t.connectionEstablished++
+}
+func (t *testSysEventListener) ConnectionFailed(info raftio.ConnectionInfo) {}
+func (t *testSysEventListener) SendSnapshotStarted(info raftio.SnapshotInfo) {
+	t.sendSnapshotStarted = append(t.sendSnapshotStarted, info)
+}
+func (t *testSysEventListener) SendSnapshotCompleted(info raftio.SnapshotInfo) {
+	t.sendSnapshotCompleted = append(t.sendSnapshotCompleted, info)
+}
+func (t *testSysEventListener) SendSnapshotAborted(info raftio.SnapshotInfo) {}
+func (t *testSysEventListener) SnapshotReceived(info raftio.SnapshotInfo) {
+	t.snapshotReceived = append(t.snapshotReceived, info)
+}
+func (t *testSysEventListener) SnapshotRecovered(info raftio.SnapshotInfo) {
+	t.snapshotRecovered = append(t.snapshotRecovered, info)
+}
+func (t *testSysEventListener) SnapshotCreated(info raftio.SnapshotInfo) {
+	t.snapshotCreated = append(t.snapshotCreated, info)
+}
+func (t *testSysEventListener) SnapshotCompacted(info raftio.SnapshotInfo) {
+	t.snapshotCompacted = append(t.snapshotCompacted, info)
+}
+func (t *testSysEventListener) LogCompacted(info raftio.EntryInfo) {
+	t.logCompacted = append(t.logCompacted, info)
+}
+func (t *testSysEventListener) LogDBCompacted(info raftio.EntryInfo) {
+	t.logdbCompacted = append(t.logdbCompacted, info)
 }

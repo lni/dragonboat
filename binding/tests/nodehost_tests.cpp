@@ -651,7 +651,15 @@ TEST_F(NodeHostTest, RestartingWithDifferentPeerSetIsNotAllowed)
   p2.AddMember("localhost:9051", 1);
   s = nh_->StopCluster(config.ClusterId);
   EXPECT_TRUE(s.OK());
-  s = nh_->StartCluster(p2, false, CreateRegularStateMachine, config);
+  while(true) {
+    s = nh_->StartCluster(p2, false, CreateRegularStateMachine, config);
+    if(!s.OK() && s.Code() == dragonboat::Status::ErrClusterAlreadyExist) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      continue;
+    } else {
+      break;
+    }
+  }
   EXPECT_FALSE(s.OK());
   EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
 }
@@ -668,7 +676,15 @@ TEST_F(NodeHostTest, JoinAnInitialPeerIsNotAllowed)
   dragonboat::Peers p2;
   s = nh_->StopCluster(config.ClusterId);
   EXPECT_TRUE(s.OK());
-  s = nh_->StartCluster(p2, true, CreateRegularStateMachine, config);
+  while(true) {
+    s = nh_->StartCluster(p2, true, CreateRegularStateMachine, config);
+    if(!s.OK() && s.Code() == dragonboat::Status::ErrClusterAlreadyExist) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      continue;
+    } else {
+      break;
+    }
+  }
   EXPECT_FALSE(s.OK());
   EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
 }
@@ -685,7 +701,15 @@ TEST_F(NodeHostTest, RestartPreviouslyJoinedNodeWithPeerSetIsNotAllowed)
   EXPECT_TRUE(s.OK());
   dragonboat::Peers p2;
   p2.AddMember("localhost:9050", 1);
-  s = nh_->StartCluster(p2, false, CreateRegularStateMachine, config);
+  while(true) {
+    s = nh_->StartCluster(p2, false, CreateRegularStateMachine, config);
+    if(!s.OK() && s.Code() == dragonboat::Status::ErrClusterAlreadyExist) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      continue;
+    } else {
+      break;
+    } 
+  }
   EXPECT_FALSE(s.OK());
   EXPECT_EQ(s.Code(), dragonboat::Status::ErrInvalidClusterSettings);
 }

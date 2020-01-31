@@ -265,7 +265,8 @@ type NodeHost struct {
 	transport        transport.ITransport
 	msgHandler       *messageHandler
 	liQueue          *leaderInfoQueue
-	userListener     raftio.IRaftEventListener
+	raftUserListener raftio.IRaftEventListener
+	sysUserListener  *sysEventListener
 	transportLatency *sample
 	fs               vfs.IFS
 }
@@ -294,9 +295,11 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
 		transportLatency: newSample(),
-		userListener:     nhConfig.RaftEventListener,
+		raftUserListener: nhConfig.RaftEventListener,
 		fs:               nhConfig.FS,
 	}
+	nh.sysUserListener = newSysEventListener(nhConfig.SystemEventListener,
+		nh.stopper.ShouldStop())
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
@@ -327,10 +330,12 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
 	})
-	if nhConfig.RaftEventListener != nil {
-		nh.liQueue = newLeaderInfoQueue()
+	if nhConfig.RaftEventListener != nil || nhConfig.SystemEventListener != nil {
+		if nhConfig.RaftEventListener != nil {
+			nh.liQueue = newLeaderInfoQueue()
+		}
 		nh.stopper.RunWorker(func() {
-			nh.handleLeaderUpdatedEvents()
+			nh.handleListenerEvents()
 		})
 	}
 	nh.logNodeHostDetails()
@@ -354,6 +359,9 @@ func (nh *NodeHost) RaftAddress() string {
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
 // transport and persistent storage modules.
 func (nh *NodeHost) Stop() {
+	nh.sysUserListener.Publish(server.SystemEvent{
+		Type: server.NodeHostShuttingDown,
+	})
 	nh.clusterMu.Lock()
 	nh.clusterMu.stopped = true
 	nh.clusterMu.Unlock()
@@ -1581,7 +1589,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		config,
 		nh.nhConfig.EnableMetrics,
 		nh.nhConfig.RTTMillisecond,
-		nh.logdb)
+		nh.logdb,
+		nh.sysUserListener)
 	if err != nil {
 		panic(err)
 	}
@@ -1653,12 +1662,31 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	return nil
 }
 
+type transportEvent struct {
+	nh *NodeHost
+}
+
+func (te *transportEvent) ConnectionEstablished(addr string, snapshot bool) {
+	te.nh.sysUserListener.Publish(server.SystemEvent{
+		Type:               server.ConnectionEstablished,
+		Address:            addr,
+		SnapshotConnection: snapshot,
+	})
+}
+func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
+	te.nh.sysUserListener.Publish(server.SystemEvent{
+		Type:               server.ConnectionFailed,
+		Address:            addr,
+		SnapshotConnection: snapshot,
+	})
+}
+
 func (nh *NodeHost) createTransport() error {
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.serverCtx, nh.nodes, getSnapshotDirFunc, nh.fs)
+		nh.serverCtx, nh.nodes, getSnapshotDirFunc, &transportEvent{nh: nh}, nh.fs)
 	if err != nil {
 		return err
 	}
@@ -1719,19 +1747,25 @@ func (nh *NodeHost) tickWorkerMain() {
 	server.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
 }
 
-func (nh *NodeHost) handleLeaderUpdatedEvents() {
+func (nh *NodeHost) handleListenerEvents() {
+	var lic chan struct{}
+	if nh.liQueue != nil {
+		lic = nh.liQueue.workReady()
+	}
 	for {
 		select {
 		case <-nh.stopper.ShouldStop():
 			return
-		case <-nh.liQueue.workReady():
+		case <-lic:
 			for {
 				v, ok := nh.liQueue.getLeaderInfo()
 				if !ok {
 					break
 				}
-				nh.userListener.LeaderUpdated(v)
+				nh.raftUserListener.LeaderUpdated(v)
 			}
+		case e := <-nh.sysUserListener.events:
+			nh.sysUserListener.handle(e)
 		}
 	}
 }
@@ -1776,6 +1810,12 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
 			}
 		}
+		nh.sysUserListener.Publish(server.SystemEvent{
+			Type:      server.SendSnapshotStarted,
+			ClusterID: msg.ClusterId,
+			NodeID:    msg.To,
+			From:      msg.From,
+		})
 	}
 }
 
@@ -2074,6 +2114,19 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) {
 	tick := h.nh.getTick()
+	if failed {
+		h.nh.sysUserListener.Publish(server.SystemEvent{
+			Type:      server.SendSnapshotAborted,
+			ClusterID: clusterID,
+			NodeID:    nodeID,
+		})
+	} else {
+		h.nh.sysUserListener.Publish(server.SystemEvent{
+			Type:      server.SendSnapshotCompleted,
+			ClusterID: clusterID,
+			NodeID:    nodeID,
+		})
+	}
 	h.nh.snapshotStatus.addStatus(clusterID, nodeID, failed, tick)
 }
 
@@ -2110,6 +2163,12 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 	}
 	h.nh.sendMessage(msg)
 	plog.Infof("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
+	h.nh.sysUserListener.Publish(server.SystemEvent{
+		Type:      server.SnapshotReceived,
+		ClusterID: clusterID,
+		NodeID:    nodeID,
+		From:      from,
+	})
 }
 
 func (h *messageHandler) HandlePingMessage(msg pb.Message) {

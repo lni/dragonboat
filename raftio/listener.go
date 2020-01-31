@@ -33,3 +33,42 @@ type LeaderInfo struct {
 type IRaftEventListener interface {
 	LeaderUpdated(info LeaderInfo)
 }
+
+// EntryInfo contains info on log entries.
+type EntryInfo struct {
+	ClusterID uint64
+	NodeID    uint64
+	Index     uint64
+}
+
+// SnapshotInfo contains info of the snapshot.
+type SnapshotInfo struct {
+	ClusterID uint64
+	NodeID    uint64
+	From      uint64
+	Index     uint64
+}
+
+type ConnectionInfo struct {
+	Address            string
+	SnapshotConnection bool
+}
+
+// ISystemEventListener is the system event listener used by the NodeHost.
+type ISystemEventListener interface {
+	NodeHostShuttingDown()
+	NodeUnloaded(info NodeInfo)
+	NodeReady(info NodeInfo)
+	MembershipChanged(info NodeInfo)
+	ConnectionEstablished(info ConnectionInfo)
+	ConnectionFailed(info ConnectionInfo)
+	SendSnapshotStarted(info SnapshotInfo)
+	SendSnapshotCompleted(info SnapshotInfo)
+	SendSnapshotAborted(info SnapshotInfo)
+	SnapshotReceived(info SnapshotInfo)
+	SnapshotRecovered(info SnapshotInfo)
+	SnapshotCreated(info SnapshotInfo)
+	SnapshotCompacted(info SnapshotInfo)
+	LogCompacted(info EntryInfo)
+	LogDBCompacted(info EntryInfo)
+}

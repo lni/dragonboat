@@ -320,6 +320,10 @@ type NodeHostConfig struct {
 	// FS is the filesystem used by tests. Dragonboat applications are not
 	// required to explicitly set this field.
 	FS IFS
+	// SystemEventsListener allows users to be notified for system events such
+	// as snapshot creation, log compaction and snapshot streaming. It is usually
+	// used for testing purposes or for other advanced usages.
+	SystemEventListener raftio.ISystemEventListener
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
