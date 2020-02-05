@@ -525,8 +525,8 @@ clean-binding:
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/cpp internal/rsm internal/settings internal/tests internal/server   \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
-	plugin/pebble plugin/rocksdb raftpb tools binding logger raftio config       \
-	statemachine client plugin/leveldb internal/utils/dio internal/vfs
+	plugin/pebble plugin/rocksdb plugin/leveldb plugin/chan raftpb tools binding \
+	logger raftio config statemachine client internal/utils/dio internal/vfs
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
@@ -558,8 +558,8 @@ cpp-static-check:
 GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
-	plugin/rocksdb plugin/leveldb plugin/pebble internal/settings internal/tests \
-	internal/logdb/kv internal/utils/dio internal/vfs
+	plugin/rocksdb plugin/leveldb plugin/pebble plugin/chan internal/settings    \
+	internal/tests internal/logdb/kv internal/utils/dio internal/vfs
 
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \

@@ -58,6 +58,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
+	ct "github.com/lni/dragonboat/v3/plugin/chan"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/logutil"
@@ -619,6 +620,8 @@ func createTransportRPC(nhConfig config.NodeHostConfig,
 	var factory config.RaftRPCFactoryFunc
 	if nhConfig.RaftRPCFactory != nil {
 		factory = nhConfig.RaftRPCFactory
+	} else if memfs_test {
+		factory = ct.NewChanTransport
 	} else {
 		factory = NewTCPTransport
 	}

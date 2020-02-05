@@ -730,8 +730,6 @@ func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	var index uint64
-	var err error
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
 		plog.Infof("%s all disk SM is beng initialized", n.id())
 		idx, err := n.sm.OpenOnDiskStateMachine()
@@ -747,7 +745,7 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 			plog.Panicf("Open returned index %d (>0) on new node %s", idx, n.id())
 		}
 	}
-	index, err = n.sm.RecoverFromSnapshot(rec)
+	index, err := n.sm.RecoverFromSnapshot(rec)
 	if err == sm.ErrSnapshotStopped {
 		plog.Infof("%s aborted its RecoverFromSnapshot", n.id())
 		return 0, err
