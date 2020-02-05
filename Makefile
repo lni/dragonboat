@@ -166,7 +166,7 @@ TESTTAGS="$(TESTTAGVALS)"
 $(info build tags are set to $(GOBUILDTAGS))
 LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
-all:
+all: unit-test-bin
 rebuild-all: clean unit-test-bin
 
 cross-rebuild: LOGDB_TAG=dragonboat_no_rocksdb
