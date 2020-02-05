@@ -36,6 +36,7 @@ type INodeRegistry interface {
 	AddNode(clusterID uint64, nodeID uint64, url string)
 	RemoveNode(clusterID uint64, nodeID uint64)
 	RemoveCluster(clusterID uint64)
+	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
 }
 
 type addr struct {
