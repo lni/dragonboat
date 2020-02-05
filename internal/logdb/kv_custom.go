@@ -28,7 +28,7 @@ const (
 	DefaultKVStoreTypeName = "custom"
 )
 
-func newDefaultKVStore(dir string, wal string, fs vfs.fs) (kv.IKVStore, error) {
+func newDefaultKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if v := flag.Lookup("test.v"); v == nil || v.Value.String() != "true" {
 		panic("not suppose to be called")
 	} else {

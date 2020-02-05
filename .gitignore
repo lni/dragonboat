@@ -27,6 +27,7 @@ coverage.out
 *.a
 *-fuzz.zip
 *.bin
+*.win
 gitversion.go
 drummer-lcm.edn
 drummer-lcm.jepsen
