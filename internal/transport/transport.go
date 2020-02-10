@@ -620,7 +620,7 @@ func createTransportRPC(nhConfig config.NodeHostConfig,
 	var factory config.RaftRPCFactoryFunc
 	if nhConfig.RaftRPCFactory != nil {
 		factory = nhConfig.RaftRPCFactory
-	} else if memfs_test {
+	} else if memfsTest {
 		factory = ct.NewChanTransport
 	} else {
 		factory = NewTCPTransport

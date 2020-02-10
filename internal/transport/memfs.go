@@ -17,5 +17,5 @@
 package transport
 
 const (
-	memfs_test = true
+	memfsTest = true
 )
