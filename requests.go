@@ -29,6 +29,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -40,8 +41,12 @@ const (
 )
 
 var (
-	defaultGCTick uint64 = 2
-	plog                 = logger.GetLogger("dragonboat")
+	defaultGCTick         uint64 = 2
+	pendingProposalShards        = settings.Soft.PendingProposalShards
+)
+
+var (
+	plog = logger.GetLogger("dragonboat")
 )
 
 var (
@@ -883,7 +888,7 @@ func getRandomGenerator(clusterID uint64,
 
 func newPendingProposal(cfg config.Config,
 	pool *sync.Pool, proposals *entryQueue, raftAddress string) *pendingProposal {
-	ps := uint64(16)
+	ps := pendingProposalShards
 	p := &pendingProposal{
 		shards: make([]*proposalShard, ps),
 		keyg:   make([]*keyGenerator, ps),
