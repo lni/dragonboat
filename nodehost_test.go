@@ -141,6 +141,9 @@ func TestLogDBCanBeExtended(t *testing.T) {
 }
 
 func TestTCPTransportIsUsedByDefault(t *testing.T) {
+	if vfs.GetTestFS() != vfs.DefaultFS {
+		t.Skip("memfs test mode, skipped")
+	}
 	fs := vfs.GetTestFS()
 	tf := func() {
 		c := getTestNodeHostConfig(fs)
@@ -3405,6 +3408,9 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 
 func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	fs := vfs.GetTestFS()
+	if fs != vfs.DefaultFS {
+		t.Skip("memfs test mode, skipped")
+	}
 	tf := func() {
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
