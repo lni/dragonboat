@@ -21,6 +21,7 @@ package config
 import (
 	"crypto/tls"
 	"errors"
+	"time"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -322,8 +323,13 @@ type NodeHostConfig struct {
 	FS IFS
 	// SystemEventsListener allows users to be notified for system events such
 	// as snapshot creation, log compaction and snapshot streaming. It is usually
-	// used for testing purposes or for other advanced usages.
+	// used for testing purposes or for other advanced usages, Dragonboat
+	// applications are not required to explicitly set this field.
 	SystemEventListener raftio.ISystemEventListener
+	// SystemTickerPercision is the precision of the system ticker. This value is
+	// usually set in tests. Dragonboat applications are not required to
+	// explicitly set this field.
+	SystemTickerPercision time.Duration
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -362,6 +368,20 @@ func (c *NodeHostConfig) Validate() error {
 		return errors.New("MaxReceiveSize value is too small")
 	}
 	return nil
+}
+
+// Prepare sets the default value for NodeHostConfig.
+func (c *NodeHostConfig) Prepare() {
+	if c.FS == nil {
+		c.FS = vfs.DefaultFS
+	}
+	if c.SystemTickerPercision == 0 {
+		plog.Infof("system ticker precision is set to 1ms (default)")
+		c.SystemTickerPercision = time.Millisecond
+	} else {
+		tms := c.SystemTickerPercision.Milliseconds()
+		plog.Infof("system ticker precision is set to %dms", tms)
+	}
 }
 
 // GetListenAddress returns the actual address the RPC module is going to

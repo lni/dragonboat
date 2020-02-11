@@ -281,9 +281,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Validate(); err != nil {
 		return nil, err
 	}
-	if nhConfig.FS == nil {
-		nhConfig.FS = vfs.DefaultFS
-	}
+	nhConfig.Prepare()
 	serverCtx, err := server.NewContext(nhConfig, nhConfig.FS)
 	if err != nil {
 		return nil, err
@@ -1734,17 +1732,22 @@ func (nh *NodeHost) tickWorkerMain() {
 	idx := uint64(0)
 	nodes := make([]*node, 0)
 	qs := make(map[uint64]*server.MessageQueue)
-	tf := func() bool {
-		count++
-		nh.increaseTick()
-		if count%nh.nhConfig.RTTMillisecond == 0 {
+	tf := func(usec uint64) bool {
+		tms := usec / 1000
+		count += tms
+		for i := uint64(0); i < tms; i++ {
+			nh.increaseTick()
+		}
+		if count >= nh.nhConfig.RTTMillisecond {
+			count -= nh.nhConfig.RTTMillisecond
 			idx, nodes, qs = nh.getCurrentClusters(idx, nodes, qs)
 			nh.snapshotStatus.pushReady(nh.getTick())
 			nh.sendTickMessage(nodes, qs)
 		}
 		return false
 	}
-	server.RunTicker(time.Millisecond, tf, nh.stopper.ShouldStop(), nil)
+	server.StartTicker(nh.nhConfig.SystemTickerPercision,
+		tf, nh.stopper.ShouldStop())
 }
 
 func (nh *NodeHost) handleListenerEvents() {
@@ -1881,13 +1884,11 @@ func (nh *NodeHost) closeStoppedClusters() {
 }
 
 func (nh *NodeHost) nodeMonitorMain(nhConfig config.NodeHostConfig) {
-	count := uint64(0)
-	tf := func() bool {
-		count++
+	tf := func(usec uint64) bool {
 		nh.closeStoppedClusters()
 		return false
 	}
-	server.RunTicker(monitorInterval, tf, nh.stopper.ShouldStop(), nil)
+	server.StartTicker(monitorInterval, tf, nh.stopper.ShouldStop())
 }
 
 func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,

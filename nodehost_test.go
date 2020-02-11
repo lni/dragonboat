@@ -366,6 +366,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 		return nil, nil, err
 	}
 	rnhc := nh.NodeHostConfig()
+	rnhc.SystemTickerPercision = 0
 	if !reflect.DeepEqual(&nhc, &rnhc) {
 		panic("configuration changed")
 	}

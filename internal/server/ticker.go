@@ -21,27 +21,25 @@ import (
 // TickerFunc is type of the function that will be called by the RunTicker
 // function after each tick. The returned boolean value indicates whether the
 // ticker should stop.
-type TickerFunc func() bool
+type TickerFunc func(usec uint64) bool
 
-// RunTicker runs a ticker at the specified interval, the provided TickerFunc
+// StartTicker runs a ticker at the specified interval, the provided TickerFunc
 // will be called after each tick. The ticker will be stopped when the
 // TickerFunc return a true value or when any of the two specified stop
 // channels is signalled.
-func RunTicker(td time.Duration,
-	tf TickerFunc, stopc1 <-chan struct{}, stopc2 <-chan struct{}) {
+func StartTicker(td time.Duration, tf TickerFunc, stopc <-chan struct{}) {
 	tms := td.Nanoseconds() / 1000000
 	if tms == 0 {
 		panic("invalid duration")
 	}
 	if tms == 1 {
-		run1MSTicker(tf, stopc1, stopc2)
+		run1MSTicker(tf, stopc)
 	} else {
-		runLFTicker(td, tf, stopc1, stopc2)
+		runLFTicker(td, tf, stopc)
 	}
 }
 
-func run1MSTicker(tf TickerFunc,
-	stopc1 <-chan struct{}, stopc2 <-chan struct{}) {
+func run1MSTicker(tf TickerFunc, stopc <-chan struct{}) {
 	ticker := time.NewTicker(time.Millisecond)
 	defer ticker.Stop()
 	count := 0
@@ -49,32 +47,27 @@ func run1MSTicker(tf TickerFunc,
 		count++
 		if count%10 == 0 {
 			select {
-			case <-stopc1:
-				return
-			case <-stopc2:
+			case <-stopc:
 				return
 			default:
 			}
 		}
-		if tf() {
+		if tf(1000) {
 			return
 		}
 	}
 }
 
-func runLFTicker(td time.Duration,
-	tf TickerFunc, stopc1 <-chan struct{}, stopc2 <-chan struct{}) {
+func runLFTicker(td time.Duration, tf TickerFunc, stopc <-chan struct{}) {
 	ticker := time.NewTicker(td)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if tf() {
+			if tf(uint64(td.Microseconds())) {
 				return
 			}
-		case <-stopc1:
-			return
-		case <-stopc2:
+		case <-stopc:
 			return
 		}
 	}
