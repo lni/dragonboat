@@ -378,9 +378,6 @@ func (c *NodeHostConfig) Prepare() {
 	if c.SystemTickerPrecision == 0 {
 		plog.Infof("system ticker precision is set to 1ms (default)")
 		c.SystemTickerPrecision = time.Millisecond
-	} else {
-		tms := c.SystemTickerPrecision.Milliseconds()
-		plog.Infof("system ticker precision is set to %dms", tms)
 	}
 }
 
