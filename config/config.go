@@ -326,10 +326,10 @@ type NodeHostConfig struct {
 	// used for testing purposes or for other advanced usages, Dragonboat
 	// applications are not required to explicitly set this field.
 	SystemEventListener raftio.ISystemEventListener
-	// SystemTickerPercision is the precision of the system ticker. This value is
+	// SystemTickerPrecision is the precision of the system ticker. This value is
 	// usually set in tests. Dragonboat applications are not required to
 	// explicitly set this field.
-	SystemTickerPercision time.Duration
+	SystemTickerPrecision time.Duration
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -375,11 +375,11 @@ func (c *NodeHostConfig) Prepare() {
 	if c.FS == nil {
 		c.FS = vfs.DefaultFS
 	}
-	if c.SystemTickerPercision == 0 {
+	if c.SystemTickerPrecision == 0 {
 		plog.Infof("system ticker precision is set to 1ms (default)")
-		c.SystemTickerPercision = time.Millisecond
+		c.SystemTickerPrecision = time.Millisecond
 	} else {
-		tms := c.SystemTickerPercision.Milliseconds()
+		tms := c.SystemTickerPrecision.Milliseconds()
 		plog.Infof("system ticker precision is set to %dms", tms)
 	}
 }

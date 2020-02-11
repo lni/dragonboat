@@ -1746,7 +1746,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		return false
 	}
-	server.StartTicker(nh.nhConfig.SystemTickerPercision,
+	server.StartTicker(nh.nhConfig.SystemTickerPrecision,
 		tf, nh.stopper.ShouldStop())
 }
 
