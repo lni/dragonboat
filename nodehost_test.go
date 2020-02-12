@@ -992,6 +992,18 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	runNodeHostTest(t, tf, fs)
 }
 
+func TestInvalidAddressIsRejected(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
+		if err != ErrInvalidAddress {
+			t.Errorf("failed to return ErrInvalidAddress, %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf, vfs.GetTestFS())
+}
+
 func TestInvalidContextDeadlineIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
@@ -1029,11 +1041,11 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
-		err = nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
+		err = nh.SyncRequestAddNode(ctx, 2, 100, "a1.com:12345", 0)
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
-		err = nh.SyncRequestAddObserver(ctx, 2, 100, "a1", 0)
+		err = nh.SyncRequestAddObserver(ctx, 2, 100, "a1.com:12345", 0)
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
@@ -4137,16 +4149,16 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		if _, err := nh2.ReadIndex(1, time.Second); err != ErrInvalidOperation {
 			t.Fatalf("sync read not rejected on witness")
 		}
-		if _, err := nh2.RequestAddNode(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddNode(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
 			t.Fatalf("add node not rejected on witness")
 		}
 		if _, err := nh2.RequestDeleteNode(1, 3, 0, time.Second); err != ErrInvalidOperation {
 			t.Fatalf("delete node not rejected on witness")
 		}
-		if _, err := nh2.RequestAddObserver(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddObserver(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
 			t.Fatalf("add observer not rejected on witness")
 		}
-		if _, err := nh2.RequestAddWitness(1, 3, "a3", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddWitness(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
 			t.Fatalf("add witness not rejected on witness")
 		}
 		if err := nh2.RequestLeaderTransfer(1, 3); err != ErrInvalidOperation {

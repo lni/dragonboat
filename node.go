@@ -31,6 +31,7 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 )
 
@@ -427,6 +428,9 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, addr string, orderID uint64,
 	timeoutTick uint64) (*RequestState, error) {
+	if cct != pb.RemoveNode && !stringutil.IsValidAddress(addr) {
+		return nil, ErrInvalidAddress
+	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
