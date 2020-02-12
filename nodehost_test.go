@@ -869,11 +869,11 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
-		err = nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
+		err = nh.SyncRequestAddNode(ctx, 2, 100, "a1.com:12345", 0)
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
-		err = nh.SyncRequestAddObserver(ctx, 2, 100, "a1", 0)
+		err = nh.SyncRequestAddObserver(ctx, 2, 100, "a1.com:12345", 0)
 		if err != ErrTimeoutTooSmall {
 			t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 		}
@@ -3370,4 +3370,16 @@ func TestV2DataCanBeHandled(t *testing.T) {
 	if rs.EntryCount != 3 || rs.State.Commit != 3 {
 		t.Errorf("unexpected rs value")
 	}
+}
+
+func TestInvalidAddressIsRejected(t *testing.T) {
+	tf := func(t *testing.T, nh *NodeHost) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		err := nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
+		if err != ErrInvalidAddress {
+			t.Errorf("failed to return ErrInvalidAddress, %v", err)
+		}
+	}
+	singleNodeHostTest(t, tf)
 }

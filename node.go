@@ -34,6 +34,7 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/stringutil"
 )
 
 var (
@@ -392,6 +393,9 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, addr string, orderID uint64,
 	timeout time.Duration) (*RequestState, error) {
+	if cct != pb.RemoveNode && !stringutil.IsValidAddress(addr) {
+		return nil, ErrInvalidAddress
+	}
 	cc := pb.ConfigChange{
 		Type:           cct,
 		NodeID:         nodeID,
@@ -403,20 +407,17 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 
 func (n *node) requestDeleteNodeWithOrderID(nodeID uint64,
 	orderID uint64, timeout time.Duration) (*RequestState, error) {
-	return n.requestConfigChange(pb.RemoveNode,
-		nodeID, "", orderID, timeout)
+	return n.requestConfigChange(pb.RemoveNode, nodeID, "", orderID, timeout)
 }
 
 func (n *node) requestAddNodeWithOrderID(nodeID uint64,
 	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddNode,
-		nodeID, addr, orderID, timeout)
+	return n.requestConfigChange(pb.AddNode, nodeID, addr, orderID, timeout)
 }
 
 func (n *node) requestAddObserverWithOrderID(nodeID uint64,
 	addr string, orderID uint64, timeout time.Duration) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddObserver,
-		nodeID, addr, orderID, timeout)
+	return n.requestConfigChange(pb.AddObserver, nodeID, addr, orderID, timeout)
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
