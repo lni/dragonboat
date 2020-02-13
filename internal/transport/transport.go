@@ -203,7 +203,7 @@ type Transport struct {
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	lanes               uint32
+	jobs                uint32
 	metrics             *transportMetrics
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
@@ -275,7 +275,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		return float64(len(t.mu.queues))
 	}
 	ssCount := func() float64 {
-		return float64(atomic.LoadUint32(&t.lanes))
+		return float64(atomic.LoadUint32(&t.jobs))
 	}
 	t.metrics = newTransportMetrics(true, msgConn, ssCount)
 	return t, nil

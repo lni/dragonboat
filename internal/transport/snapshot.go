@@ -79,8 +79,8 @@ func (t *Transport) getStreamConnection(clusterID uint64, nodeID uint64) *Sink {
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	if c := t.tryCreateLane(key, addr, true, 0); c != nil {
-		return &Sink{l: c}
+	if c := t.tryCreateJob(key, addr, true, 0); c != nil {
+		return &Sink{j: c}
 	}
 	return nil
 }
@@ -101,7 +101,7 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	c := t.tryCreateLane(key, addr, false, len(chunks))
+	c := t.tryCreateJob(key, addr, false, len(chunks))
 	if c == nil {
 		return false
 	}
@@ -109,25 +109,24 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
-func (t *Transport) tryCreateLane(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *lane {
-	if v := atomic.AddUint32(&t.lanes, 1); v > maxConnectionCount {
-		r := atomic.AddUint32(&t.lanes, ^uint32(0))
-		plog.Errorf("lane count is rate limited %d", r)
+func (t *Transport) tryCreateJob(key raftio.NodeInfo,
+	addr string, streaming bool, sz int) *job {
+	if v := atomic.AddUint32(&t.jobs, 1); v > maxConnectionCount {
+		r := atomic.AddUint32(&t.jobs, ^uint32(0))
+		plog.Errorf("job count is rate limited %d", r)
 		return nil
 	}
 	return t.createConnection(key, addr, streaming, sz)
 }
 
 func (t *Transport) createConnection(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *lane {
-	c := newLane(t.ctx, key.ClusterID, key.NodeID,
-		t.getDeploymentID(), streaming, sz, t.raftRPC,
-		t.stopper.ShouldStop(), t.fs)
+	addr string, streaming bool, sz int) *job {
+	c := newJob(t.ctx, key.ClusterID, key.NodeID,
+		t.getDeploymentID(), streaming, sz, t.raftRPC, t.stopper.ShouldStop(), t.fs)
 	c.streamChunkSent = t.streamChunkSent
 	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {
-		atomic.AddUint32(&t.lanes, ^uint32(0))
+		atomic.AddUint32(&t.jobs, ^uint32(0))
 	}
 	t.stopper.RunWorker(func() {
 		t.connectAndProcessSnapshot(c, addr)
@@ -136,7 +135,7 @@ func (t *Transport) createConnection(key raftio.NodeInfo,
 	return c
 }
 
-func (t *Transport) connectAndProcessSnapshot(c *lane, addr string) {
+func (t *Transport) connectAndProcessSnapshot(c *job, addr string) {
 	breaker := t.GetCircuitBreaker(addr)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()

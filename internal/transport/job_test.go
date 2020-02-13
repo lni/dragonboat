@@ -24,21 +24,21 @@ import (
 	"github.com/lni/goutils/syncutil"
 )
 
-func TestSnapshotLaneCanBeCreatedInSavedMode(t *testing.T) {
+func TestSnapshotJobCanBeCreatedInSavedMode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, false, 201, transport, nil, fs)
+	c := newJob(context.Background(), 1, 1, 1, false, 201, transport, nil, fs)
 	if cap(c.ch) != 201 {
 		t.Errorf("unexpected chan length %d, want 201", cap(c.ch))
 	}
 }
 
-func TestSnapshotLaneCanBeCreatedInStreamingMode(t *testing.T) {
+func TestSnapshotJobCanBeCreatedInStreamingMode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 201, transport, nil, fs)
+	c := newJob(context.Background(), 1, 1, 1, true, 201, transport, nil, fs)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -54,7 +54,7 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 	}
 	chunks := splitSnapshotMessage(m, fs)
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, false, len(chunks), transport, nil, fs)
+	c := newJob(context.Background(), 1, 1, 1, false, len(chunks), transport, nil, fs)
 	if cap(c.ch) != len(chunks) {
 		t.Errorf("unexpected chan length %d", cap(c.ch))
 	}
@@ -64,11 +64,11 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 	}
 }
 
-func TestKeepSendingChunksUsingFailedLaneWillNotBlock(t *testing.T) {
+func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 	fs := vfs.GetTestFS()
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
+	c := newJob(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
 	if cap(c.ch) != streamingChanLength {
 		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
 	}
@@ -111,7 +111,7 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
 	tt uint64, experr error, fs vfs.IFS) {
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
-	c := newLane(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
+	c := newJob(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
 	if err := c.connect("a1"); err != nil {
 		t.Fatalf("connect failed %v", err)
 	}

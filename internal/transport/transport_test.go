@@ -959,10 +959,10 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		}
 	}
 	for _, v := range conns {
-		close(v.l.ch)
+		close(v.j.ch)
 	}
 	for {
-		if atomic.LoadUint32(&trans.lanes) != 0 {
+		if atomic.LoadUint32(&trans.jobs) != 0 {
 			time.Sleep(time.Millisecond)
 		} else {
 			break

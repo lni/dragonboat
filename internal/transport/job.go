@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2019 Lei Ni (nilei81@gmaij.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,12 +39,12 @@ var (
 
 // Sink is the chunk sink for receiving generated snapshot chunk.
 type Sink struct {
-	l *lane
+	j *job
 }
 
 // Receive receives a snapshot chunk.
 func (s *Sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
-	return s.l.SendChunk(chunk)
+	return s.j.SendChunk(chunk)
 }
 
 // Stop stops the sink processing.
@@ -54,16 +54,16 @@ func (s *Sink) Stop() {
 
 // ClusterID returns the cluster ID of the source node.
 func (s *Sink) ClusterID() uint64 {
-	return s.l.clusterID
+	return s.j.clusterID
 }
 
 // ToNodeID returns the node ID of the node intended to get and handle the
 // received snapshot chunk.
 func (s *Sink) ToNodeID() uint64 {
-	return s.l.nodeID
+	return s.j.nodeID
 }
 
-type lane struct {
+type job struct {
 	clusterID          uint64
 	nodeID             uint64
 	deploymentID       uint64
@@ -79,11 +79,11 @@ type lane struct {
 	fs                 vfs.IFS
 }
 
-func newLane(ctx context.Context,
+func newJob(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	did uint64, streaming bool, sz int, rpc raftio.IRaftRPC,
-	stopc chan struct{}, fs vfs.IFS) *lane {
-	l := &lane{
+	stopc chan struct{}, fs vfs.IFS) *job {
+	j := &job{
 		clusterID:    clusterID,
 		nodeID:       nodeID,
 		deploymentID: did,
@@ -100,81 +100,81 @@ func newLane(ctx context.Context,
 	} else {
 		chsz = sz
 	}
-	l.ch = make(chan pb.SnapshotChunk, chsz)
-	return l
+	j.ch = make(chan pb.SnapshotChunk, chsz)
+	return j
 }
 
-func (l *lane) close() {
-	if l.conn != nil {
-		l.conn.Close()
+func (j *job) close() {
+	if j.conn != nil {
+		j.conn.Close()
 	}
 }
 
-func (l *lane) connect(addr string) error {
-	conn, err := l.rpc.GetSnapshotConnection(l.ctx, addr)
+func (j *job) connect(addr string) error {
+	conn, err := j.rpc.GetSnapshotConnection(j.ctx, addr)
 	if err != nil {
-		plog.Errorf("failed to get a lane to %s, %v", addr, err)
+		plog.Errorf("failed to get a job to %s, %v", addr, err)
 		return err
 	}
-	l.conn = conn
+	j.conn = conn
 	return nil
 }
 
-func (l *lane) sendSavedSnapshot(m pb.Message) {
-	chunks := splitSnapshotMessage(m, l.fs)
-	if len(chunks) != cap(l.ch) {
-		plog.Panicf("cap of ch is %d, want %d", cap(l.ch), len(chunks))
+func (j *job) sendSavedSnapshot(m pb.Message) {
+	chunks := splitSnapshotMessage(m, j.fs)
+	if len(chunks) != cap(j.ch) {
+		plog.Panicf("cap of ch is %d, want %d", cap(j.ch), len(chunks))
 	}
 	for _, chunk := range chunks {
-		l.ch <- chunk
+		j.ch <- chunk
 	}
 }
 
-func (l *lane) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
+func (j *job) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
 		plog.Infof("node %d is sending chunk %d to %s",
 			chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
 	} else {
-		plog.Infof("sending a poison chunk to %s", dn(l.clusterID, l.nodeID))
+		plog.Infof("sending a poison chunk to %s", dn(j.clusterID, j.nodeID))
 	}
 
 	select {
-	case l.ch <- chunk:
+	case j.ch <- chunk:
 		return true, false
-	case <-l.failed:
-		plog.Infof("stream snapshot to %s failed", dn(l.clusterID, l.nodeID))
+	case <-j.failed:
+		plog.Infof("stream snapshot to %s failed", dn(j.clusterID, j.nodeID))
 		return false, false
-	case <-l.stopc:
+	case <-j.stopc:
 		return false, true
 	}
 }
 
-func (l *lane) process() error {
-	if l.conn == nil {
+func (j *job) process() error {
+	if j.conn == nil {
 		panic("trying to process on nil ch, not connected?")
 	}
-	if l.streaming {
-		err := l.streamSnapshot()
+	if j.streaming {
+		err := j.streamSnapshot()
 		if err != nil {
-			close(l.failed)
+			close(j.failed)
 		}
 		return err
 	}
-	return l.processSavedSnapshot()
+	return j.processSavedSnapshot()
 }
 
-func (l *lane) streamSnapshot() error {
+func (j *job) streamSnapshot() error {
 	for {
 		select {
-		case <-l.stopc:
-			plog.Infof("stream snapshot to %s stopped", dn(l.clusterID, l.nodeID))
+		case <-j.stopc:
+			plog.Infof("stream snapshot to %s stopped", dn(j.clusterID, j.nodeID))
 			return ErrStopped
-		case chunk := <-l.ch:
-			chunk.DeploymentId = l.deploymentID
+		case chunk := <-j.ch:
+			chunk.DeploymentId = j.deploymentID
 			if chunk.IsPoisonChunk() {
 				return ErrStreamSnapshot
 			}
-			if err := l.sendChunk(chunk, l.conn); err != nil {
+			if err := j.sendChunk(chunk, j.conn); err != nil {
 				plog.Errorf("streaming snapshot chunk to %s failed",
 					dn(chunk.ClusterId, chunk.NodeId))
 				return err
@@ -188,50 +188,50 @@ func (l *lane) streamSnapshot() error {
 	}
 }
 
-func (l *lane) processSavedSnapshot() error {
+func (j *job) processSavedSnapshot() error {
 	chunks := make([]pb.SnapshotChunk, 0)
 	for {
 		select {
-		case <-l.stopc:
+		case <-j.stopc:
 			return ErrStopped
-		case chunk := <-l.ch:
+		case chunk := <-j.ch:
 			if len(chunks) == 0 && chunk.ChunkId != 0 {
 				panic("chunk alignment error")
 			}
 			chunks = append(chunks, chunk)
 			if chunk.ChunkId+1 == chunk.ChunkCount {
-				return l.sendSavedChunks(chunks)
+				return j.sendSavedChunks(chunks)
 			}
 		}
 	}
 }
 
-func (l *lane) sendSavedChunks(chunks []pb.SnapshotChunk) error {
+func (j *job) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 	for _, chunk := range chunks {
 		chunkData := make([]byte, snapshotChunkSize)
-		chunk.DeploymentId = l.deploymentID
+		chunk.DeploymentId = j.deploymentID
 		if !chunk.Witness {
-			data, err := loadSnapshotChunkData(chunk, chunkData, l.fs)
+			data, err := loadSnapshotChunkData(chunk, chunkData, j.fs)
 			if err != nil {
 				plog.Errorf("failed to read the snapshot chunk, %v", err)
 				return err
 			}
 			chunk.Data = data
 		}
-		if err := l.sendChunk(chunk, l.conn); err != nil {
+		if err := j.sendChunk(chunk, j.conn); err != nil {
 			plog.Debugf("send chunk to %s failed", dn(chunk.ClusterId, chunk.NodeId))
 			return err
 		}
-		if v := l.streamChunkSent.Load(); v != nil {
+		if v := j.streamChunkSent.Load(); v != nil {
 			v.(func(pb.SnapshotChunk))(chunk)
 		}
 	}
 	return nil
 }
 
-func (l *lane) sendChunk(c pb.SnapshotChunk,
+func (j *job) sendChunk(c pb.SnapshotChunk,
 	conn raftio.ISnapshotConnection) error {
-	if v := l.preStreamChunkSend.Load(); v != nil {
+	if v := j.preStreamChunkSend.Load(); v != nil {
 		plog.Infof("pre stream chunk send set")
 		updated, shouldSend := v.(StreamChunkSendFunc)(c)
 		plog.Infof("shoudSend: %t", shouldSend)
