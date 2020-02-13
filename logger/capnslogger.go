@@ -23,12 +23,13 @@ const (
 	RepoName = "github.com/lni/dragonboat/v3"
 )
 
+var _ ILogger = &capnsLog{}
+
 // CreateCapnsLog creates an ILogger instance based on capnslog.
 func CreateCapnsLog(pkgName string) ILogger {
-	c := &capnsLog{
+	return &capnsLog{
 		logger: capnslog.NewPackageLogger(RepoName, pkgName),
 	}
-	return c
 }
 
 type capnsLog struct {

@@ -84,42 +84,37 @@ type dragonboatLogger struct {
 	pkgName string
 }
 
-func (d *dragonboatLogger) createILogger() {
+func (d *dragonboatLogger) get() ILogger {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.logger == nil {
 		d.logger = _loggers.createILogger(d.pkgName)
 	}
+	return d.logger
 }
 
 func (d *dragonboatLogger) SetLevel(l LogLevel) {
-	d.createILogger()
-	d.logger.SetLevel(l)
+	d.get().SetLevel(l)
 }
 
 func (d *dragonboatLogger) Debugf(format string, args ...interface{}) {
-	d.createILogger()
-	d.logger.Debugf(format, args...)
+	d.get().Debugf(format, args...)
 }
 
 func (d *dragonboatLogger) Infof(format string, args ...interface{}) {
-	d.createILogger()
-	d.logger.Infof(format, args...)
+	d.get().Infof(format, args...)
 }
 
 func (d *dragonboatLogger) Warningf(format string, args ...interface{}) {
-	d.createILogger()
-	d.logger.Warningf(format, args...)
+	d.get().Warningf(format, args...)
 }
 
 func (d *dragonboatLogger) Errorf(format string, args ...interface{}) {
-	d.createILogger()
-	d.logger.Errorf(format, args...)
+	d.get().Errorf(format, args...)
 }
 
 func (d *dragonboatLogger) Panicf(format string, args ...interface{}) {
-	d.createILogger()
-	d.logger.Panicf(format, args...)
+	d.get().Panicf(format, args...)
 }
 
 type sysLoggers struct {
