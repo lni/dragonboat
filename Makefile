@@ -1,4 +1,4 @@
-# Copyright 2017-2019 Lei Ni (nilei81@gmail.com)
+# Copyright 2017-2020 Lei Ni (nilei81@gmail.com)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -298,9 +298,9 @@ TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
 	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-config test-client test-server test-tools
+	test-multiraft test-config test-client test-server test-tools test-fs
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-config test-client test-server test-tests test-tools
+  test-config test-client test-server test-tests test-tools test-fs
 test: dragonboat-test test-plugins test-tests
 dev-test: test
 
@@ -311,12 +311,13 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
-	test-tests
+	test-tests test-fs
 
-cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)       \
+cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)     \
   -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
-cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport      \
-  test-multiraft test-config test-client test-server test-tools test-tests
+cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport    \
+  test-multiraft test-config test-client test-server test-tools test-tests   \
+	test-fs
 
 ###############################################################################
 # fast tests executed for every git push
@@ -350,6 +351,8 @@ test-multiraft:
 	$(GOTEST) $(PKGNAME)
 test-tests:
 	$(GOTEST) $(PKGNAME)/internal/tests
+test-fs:
+	$(GOTEST) $(PKGNAME)/internal/fileutil
 test-tools:
 	$(GOTEST) $(PKGNAME)/tools
 

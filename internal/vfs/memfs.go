@@ -25,5 +25,5 @@ func GetFS() IFS {
 }
 
 func GetTestFS() IFS {
-	return gvfs.NewMem()
+	return gvfs.NewStrictMem()
 }

@@ -21,6 +21,7 @@ package config
 import (
 	"crypto/tls"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -338,6 +339,9 @@ func (c *NodeHostConfig) Validate() error {
 	if c.RTTMillisecond == 0 {
 		return errors.New("invalid RTTMillisecond")
 	}
+	if len(c.NodeHostDir) == 0 {
+		return errors.New("NodeHostConfig.NodeHostDir is empty")
+	}
 	if !stringutil.IsValidAddress(c.RaftAddress) {
 		return errors.New("invalid NodeHost address")
 	}
@@ -371,7 +375,18 @@ func (c *NodeHostConfig) Validate() error {
 }
 
 // Prepare sets the default value for NodeHostConfig.
-func (c *NodeHostConfig) Prepare() {
+func (c *NodeHostConfig) Prepare() error {
+	var err error
+	c.NodeHostDir, err = filepath.Abs(c.NodeHostDir)
+	if err != nil {
+		return err
+	}
+	if len(c.WALDir) > 0 {
+		c.WALDir, err = filepath.Abs(c.WALDir)
+		if err != nil {
+			return err
+		}
+	}
 	if c.FS == nil {
 		c.FS = vfs.DefaultFS
 	}
@@ -379,6 +394,7 @@ func (c *NodeHostConfig) Prepare() {
 		plog.Infof("system ticker precision is set to 1ms (default)")
 		c.SystemTickerPrecision = time.Millisecond
 	}
+	return nil
 }
 
 // GetListenAddress returns the actual address the RPC module is going to

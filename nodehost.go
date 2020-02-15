@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -281,7 +281,9 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Validate(); err != nil {
 		return nil, err
 	}
-	nhConfig.Prepare()
+	if err := nhConfig.Prepare(); err != nil {
+		return nil, err
+	}
 	serverCtx, err := server.NewContext(nhConfig, nhConfig.FS)
 	if err != nil {
 		return nil, err
@@ -1478,8 +1480,7 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
 // 3. the bootstrap record is used as a marker record in our default Log DB
 //    implementation to indicate that a certain node exists there
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
-	join bool,
-	cfg config.Config,
+	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {

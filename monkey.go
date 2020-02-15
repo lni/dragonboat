@@ -27,6 +27,8 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
+type MemFS = vfs.MemFS
+
 func GetTestFS() config.IFS {
 	return vfs.GetTestFS()
 }

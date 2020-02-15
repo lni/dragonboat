@@ -137,6 +137,9 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if nhConfig.FS == nil {
 		nhConfig.FS = vfs.DefaultFS
 	}
+	if err := nhConfig.Prepare(); err != nil {
+		return err
+	}
 	fs := nhConfig.FS
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
@@ -145,8 +148,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err != nil {
 		return err
 	}
-	oldss, err := getSnapshotRecord(srcDir,
-		server.SnapshotMetadataFilename, fs)
+	oldss, err := getSnapshotRecord(srcDir, server.SnapshotMetadataFilename, fs)
 	if err != nil {
 		return err
 	}
@@ -198,8 +200,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	env := server.NewSSEnv(getSnapshotDir,
-		oldss.ClusterId, nodeID, oldss.Index, nodeID,
-		server.SnapshottingMode, fs)
+		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshottingMode, fs)
 	if err := env.CreateTempDir(); err != nil {
 		return err
 	}

@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -361,12 +362,14 @@ func createSingleNodeTestNodeHostCfg(addr string,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
 	}
+	if err := nhc.Prepare(); err != nil {
+		return nil, nil, err
+	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
 		return nil, nil, err
 	}
 	rnhc := nh.NodeHostConfig()
-	rnhc.SystemTickerPrecision = 0
 	if !reflect.DeepEqual(&nhc, &rnhc) {
 		panic("configuration changed")
 	}
@@ -3517,7 +3520,6 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		nff := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 			return logdb.NewDefaultLogDB(dirs, lldirs, fs)
 		}
-
 		nhc := config.NodeHostConfig{
 			WALDir:         singleNodeHostTestDir,
 			NodeHostDir:    singleNodeHostTestDir,
@@ -3526,7 +3528,6 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 			LogDBFactory:   bff,
 			FS:             fs,
 		}
-		plog.Infof("going to create nh using batched logdb")
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
@@ -3536,22 +3537,22 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 			t.Errorf("unexpected logdb bin ver %d", bf)
 		}
 		nh.Stop()
-		plog.Infof("node host 1 stopped")
 		nhc.LogDBFactory = nff
 		func() {
-			plog.Infof("going to create nh using plain logdb")
 			nh, err := NewNodeHost(nhc)
 			plog.Infof("err : %v", err)
 			if err != server.ErrLogDBBrokenChange {
 				if err == nil && nh != nil {
-					plog.Infof("going to stop nh")
 					nh.Stop()
 				}
 				t.Fatalf("didn't return the expected error")
 			}
 		}()
-		fs.RemoveAll(singleNodeHostTestDir)
-		plog.Infof("going to create nh using plain logdb with existing data deleted")
+		fp, err := filepath.Abs(singleNodeHostTestDir)
+		if err != nil {
+			t.Fatalf("failed to get abs %v", err)
+		}
+		fs.RemoveAll(fp)
 		nh, err = NewNodeHost(nhc)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)

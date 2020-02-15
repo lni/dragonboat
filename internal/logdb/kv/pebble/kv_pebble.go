@@ -22,6 +22,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -133,7 +134,13 @@ func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 		FS:                          vfs.NewPebbleFS(fs),
 	}
 	if len(walDir) > 0 {
+		if err := fileutil.MkdirAll(walDir, fs); err != nil {
+			return nil, err
+		}
 		opts.WALDir = walDir
+	}
+	if err := fileutil.MkdirAll(dir, fs); err != nil {
+		return nil, err
 	}
 	pdb, err := pebble.Open(dir, opts)
 	if err != nil {

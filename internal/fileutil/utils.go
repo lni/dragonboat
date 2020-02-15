@@ -43,9 +43,32 @@ const (
 	deleteFilename       = "DELETED.dragonboat"
 )
 
+// DirExist returns whether the specified filesystem entry exists.
+func DirExist(name string, fs vfs.IFS) (bool, error) {
+	if name == "." || name == "/" {
+		return true, nil
+	}
+	f, err := fs.OpenDir(name)
+	if err != nil && vfs.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	s, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !s.IsDir() {
+		panic("not a dir")
+	}
+	return true, nil
+}
+
 // Exist returns whether the specified filesystem entry exists.
 func Exist(name string, fs vfs.IFS) (bool, error) {
-	if name == "." {
+	if name == "." || name == "/" {
 		return true, nil
 	}
 	_, err := fs.Stat(name)
@@ -60,7 +83,7 @@ func Exist(name string, fs vfs.IFS) (bool, error) {
 
 // MkdirAll creates the specified dir along with any necessary parents.
 func MkdirAll(dir string, fs vfs.IFS) error {
-	exist, err := Exist(dir, fs)
+	exist, err := DirExist(dir, fs)
 	if err != nil {
 		return err
 	}
@@ -68,7 +91,7 @@ func MkdirAll(dir string, fs vfs.IFS) error {
 		return nil
 	}
 	parent := fs.PathDir(dir)
-	exist, err = Exist(parent, fs)
+	exist, err = DirExist(parent, fs)
 	if err != nil {
 		return err
 	}
@@ -83,7 +106,7 @@ func MkdirAll(dir string, fs vfs.IFS) error {
 // Mkdir creates the specified dir.
 func Mkdir(dir string, fs vfs.IFS) error {
 	parent := fs.PathDir(dir)
-	exist, err := Exist(parent, fs)
+	exist, err := DirExist(parent, fs)
 	if err != nil {
 		return err
 	}
@@ -104,14 +127,19 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 	if dir == "." {
 		return nil
 	}
-	fileInfo, err := fs.Stat(dir)
+	f, err := fs.OpenDir(dir)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	fileInfo, err := f.Stat()
 	if err != nil {
 		return err
 	}
 	if !fileInfo.IsDir() {
 		panic("not a dir")
 	}
-	df, err := fs.Open(vfs.Clean(dir))
+	df, err := fs.OpenDir(vfs.Clean(dir))
 	if err != nil {
 		return err
 	}
