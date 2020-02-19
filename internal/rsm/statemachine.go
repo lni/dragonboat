@@ -373,10 +373,21 @@ func (s *StateMachine) ReadyToStreamSnapshot() bool {
 	return s.GetLastApplied() >= s.onDiskInitIndex
 }
 
+func (s *StateMachine) tryInjectTestFS() {
+	nsm, ok := s.sm.(*NativeSM)
+	if ok {
+		odsm, ok := nsm.sm.(*OnDiskStateMachine)
+		if ok {
+			odsm.SetTestFS(s.fs)
+		}
+	}
+}
+
 // OpenOnDiskStateMachine opens the on disk state machine.
 func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.tryInjectTestFS()
 	index, err := s.sm.Open()
 	if err != nil {
 		plog.Errorf("%s failed to open on disk SM", s.id())

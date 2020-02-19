@@ -49,6 +49,7 @@ type SnapshotInfo struct {
 	Index     uint64
 }
 
+// ConnectionInfo contains info of the connection.
 type ConnectionInfo struct {
 	Address            string
 	SnapshotConnection bool

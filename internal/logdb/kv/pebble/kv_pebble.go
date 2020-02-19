@@ -122,6 +122,7 @@ func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 	if inMonkeyTesting {
 		writeBufferSize = 1024 * 1024 * 4
 	}
+	cache := pebble.NewCache(0)
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,
@@ -130,7 +131,7 @@ func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 		LBaseMaxBytes:               maxBytesForLevelBase,
 		L0CompactionThreshold:       l0FileNumCompactionTrigger,
 		L0StopWritesThreshold:       l0StopWritesTrigger,
-		Cache:                       pebble.NewCache(0),
+		Cache:                       cache,
 		FS:                          vfs.NewPebbleFS(fs),
 	}
 	if len(walDir) > 0 {
@@ -146,6 +147,7 @@ func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	// cache.Unref()
 	ro := &pebble.IterOptions{}
 	wo := &pebble.WriteOptions{Sync: true}
 	return &KV{

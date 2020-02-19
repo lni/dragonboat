@@ -17,6 +17,7 @@ package rsm
 import (
 	"io"
 
+	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -246,6 +247,11 @@ func (s *ConcurrentStateMachine) StateMachineType() pb.StateMachineType {
 	return pb.ConcurrentStateMachine
 }
 
+// ITestFS is an interface implemented by test SMs.
+type ITestFS interface {
+	SetTestFS(fs config.IFS)
+}
+
 // OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
 	sm     sm.IOnDiskStateMachine
@@ -266,6 +272,15 @@ func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
 		r.na = na
 	}
 	return r
+}
+
+// SetTestFS injects the specified fs to the test SM.
+func (s *OnDiskStateMachine) SetTestFS(fs config.IFS) {
+	tfs, ok := s.sm.(ITestFS)
+	if ok {
+		plog.Infof("the underlying SM support test fs injection")
+		tfs.SetTestFS(fs)
+	}
 }
 
 // Open opens the state machine.
