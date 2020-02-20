@@ -147,7 +147,7 @@ func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	// cache.Unref()
+	cache.Unref()
 	ro := &pebble.IterOptions{}
 	wo := &pebble.WriteOptions{Sync: true}
 	return &KV{
@@ -209,12 +209,18 @@ func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 }
 
 // GetValue ...
-func (r *KV) GetValue(key []byte,
-	op func([]byte) error) error {
-	val, err := r.db.Get(key)
+func (r *KV) GetValue(key []byte, op func([]byte) error) (err error) {
+	val, closer, err := r.db.Get(key)
 	if err != nil && err != pebble.ErrNotFound {
 		return err
 	}
+	defer func() {
+		if closer != nil {
+			if cerr := closer.Close(); err == nil {
+				err = cerr
+			}
+		}
+	}()
 	return op(val)
 }
 
