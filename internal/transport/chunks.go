@@ -123,21 +123,30 @@ func (c *Chunks) Tick() {
 
 // Close closes the chunks instance.
 func (c *Chunks) Close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, t := range c.tracked {
-		c.removeTempDir(t.firstChunk)
+	tracked := c.getTracked()
+	for key, td := range tracked {
+		func() {
+			l := c.getSnapshotLock(key)
+			l.lock()
+			defer l.unlock()
+			c.removeTempDir(td.firstChunk)
+			c.reset(key)
+		}()
 	}
 }
 
 func (c *Chunks) gc() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	tracked := c.getTracked()
 	tick := c.getTick()
-	for k, td := range c.tracked {
+	for key, td := range tracked {
 		if tick-td.tick >= c.timeoutTick {
-			c.removeTempDir(td.firstChunk)
-			c.resetLocked(k)
+			func() {
+				l := c.getSnapshotLock(key)
+				l.lock()
+				defer l.unlock()
+				c.removeTempDir(td.firstChunk)
+				c.reset(key)
+			}()
 		}
 	}
 }
@@ -150,6 +159,16 @@ func (c *Chunks) reset(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.resetLocked(key)
+}
+
+func (c *Chunks) getTracked() map[string]*tracked {
+	m := make(map[string]*tracked)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, v := range c.tracked {
+		m[k] = v
+	}
+	return m
 }
 
 func (c *Chunks) resetLocked(key string) {
