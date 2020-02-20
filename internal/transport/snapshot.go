@@ -14,7 +14,7 @@
 //
 //
 //
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -176,10 +176,6 @@ func (t *Transport) sendSnapshotNotification(clusterID uint64,
 	} else {
 		t.metrics.snapshotSendSuccess()
 	}
-	if t.handlerRemoved() {
-		plog.Warningf("snapshot notification to %s ignored", dn(clusterID, nodeID))
-		return
-	}
 	handler := t.handler.Load()
 	if handler != nil {
 		h := handler.(IRaftMessageHandler)
@@ -195,12 +191,10 @@ func splitBySnapshotFile(msg pb.Message,
 	filepath string, filesize uint64, startChunkID uint64,
 	sf *pb.SnapshotFile) []pb.SnapshotChunk {
 	if filesize == 0 {
-		panic("empty file included in snapshot")
+		panic("empty file")
 	}
 	results := make([]pb.SnapshotChunk, 0)
 	chunkCount := uint64((filesize-1)/snapshotChunkSize + 1)
-	plog.Infof("splitBySnapshotFile called, chunkCount %d, filesize %d",
-		chunkCount, filesize)
 	for i := uint64(0); i < chunkCount; i++ {
 		var csz uint64
 		if i == chunkCount-1 {
@@ -305,7 +299,7 @@ func loadSnapshotChunkData(chunk pb.SnapshotChunk,
 		return nil, err
 	}
 	if uint64(n) != chunk.ChunkSize {
-		return nil, errors.New("failed to read the chunk from snapshot file")
+		return nil, errors.New("failed to read the snapshot chunk")
 	}
 	return data, nil
 }

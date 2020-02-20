@@ -780,9 +780,9 @@ func testSnapshotCanBeSent(t *testing.T,
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
-	snapDir := chunks.getSnapshotDir(100, 2)
+	chunks := NewChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.folder, fs)
+	snapDir := chunks.folder(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -894,9 +894,9 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
-	snapDir := chunks.getSnapshotDir(100, 2)
+	chunks := NewChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.folder, fs)
+	snapDir := chunks.folder(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -1114,10 +1114,10 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	trans.SetDeploymentID(12345)
-	chunks := NewSnapshotChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID, trans.snapshotLocator, fs)
+	chunks := NewChunks(trans.handleRequest,
+		trans.snapshotReceived, getTestDeploymentID, trans.folder, fs)
 	ts := getTestChunks()
-	snapDir := chunks.getSnapshotDir(ts[0].ClusterId, ts[0].NodeId)
+	snapDir := chunks.folder(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}

@@ -39,7 +39,7 @@ var (
 	maxConcurrentSlot        = settings.Soft.MaxConcurrentStreamingSnapshot
 )
 
-func snapshotKey(c pb.SnapshotChunk) string {
+func chunkKey(c pb.SnapshotChunk) string {
 	return fmt.Sprintf("%d:%d:%d", c.ClusterId, c.NodeId, c.Index)
 }
 
@@ -51,15 +51,15 @@ type tracked struct {
 	tick       uint64
 }
 
-type snapshotLock struct {
+type ssLock struct {
 	mu sync.Mutex
 }
 
-func (l *snapshotLock) lock() {
+func (l *ssLock) lock() {
 	l.mu.Lock()
 }
 
-func (l *snapshotLock) unlock() {
+func (l *ssLock) unlock() {
 	l.mu.Unlock()
 }
 
@@ -67,34 +67,32 @@ func (l *snapshotLock) unlock() {
 type Chunks struct {
 	currentTick     uint64
 	validate        bool
-	getSnapshotDir  server.GetSnapshotDirFunc
+	folder          server.GetSnapshotDirFunc
 	onReceive       func(pb.MessageBatch)
 	confirm         func(uint64, uint64, uint64)
 	getDeploymentID func() uint64
 	tracked         map[string]*tracked
-	locks           map[string]*snapshotLock
+	locks           map[string]*ssLock
 	timeoutTick     uint64
 	gcTick          uint64
 	fs              vfs.IFS
 	mu              sync.Mutex
 }
 
-// NewSnapshotChunks creates and returns a new snapshot chunks instance.
-func NewSnapshotChunks(onReceive func(pb.MessageBatch),
-	confirm func(uint64, uint64, uint64),
-	getDeploymentID func() uint64,
-	getSnapshotDirFunc server.GetSnapshotDirFunc,
-	fs vfs.IFS) *Chunks {
+// NewChunks creates and returns a new snapshot chunks instance.
+func NewChunks(onReceive func(pb.MessageBatch),
+	confirm func(uint64, uint64, uint64), getDeploymentID func() uint64,
+	folder server.GetSnapshotDirFunc, fs vfs.IFS) *Chunks {
 	return &Chunks{
 		validate:        true,
 		onReceive:       onReceive,
 		confirm:         confirm,
 		getDeploymentID: getDeploymentID,
 		tracked:         make(map[string]*tracked),
-		locks:           make(map[string]*snapshotLock),
+		locks:           make(map[string]*ssLock),
 		timeoutTick:     snapshotChunkTimeoutTick,
 		gcTick:          gcIntervalTick,
-		getSnapshotDir:  getSnapshotDirFunc,
+		folder:          folder,
 		fs:              fs,
 	}
 }
@@ -108,7 +106,11 @@ func (c *Chunks) AddChunk(chunk pb.SnapshotChunk) bool {
 			chunk.DeploymentId, did, chunk.BinVer, raftio.RPCBinVersion)
 		return false
 	}
-	return c.addChunk(chunk)
+	key := chunkKey(chunk)
+	lock := c.getSnapshotLock(key)
+	lock.lock()
+	defer lock.unlock()
+	return c.addLocked(chunk)
 }
 
 // Tick moves the internal logical clock forward.
@@ -124,63 +126,63 @@ func (c *Chunks) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, t := range c.tracked {
-		c.deleteTempChunkDir(t.firstChunk)
+		c.removeTempDir(t.firstChunk)
 	}
 }
 
 func (c *Chunks) gc() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	tick := c.getCurrentTick()
+	tick := c.getTick()
 	for k, td := range c.tracked {
 		if tick-td.tick >= c.timeoutTick {
-			c.deleteTempChunkDir(td.firstChunk)
-			c.resetSnapshotLocked(k)
+			c.removeTempDir(td.firstChunk)
+			c.resetLocked(k)
 		}
 	}
 }
 
-func (c *Chunks) getCurrentTick() uint64 {
+func (c *Chunks) getTick() uint64 {
 	return atomic.LoadUint64(&c.currentTick)
 }
 
-func (c *Chunks) resetSnapshot(key string) {
+func (c *Chunks) reset(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.resetSnapshotLocked(key)
+	c.resetLocked(key)
 }
 
-func (c *Chunks) resetSnapshotLocked(key string) {
+func (c *Chunks) resetLocked(key string) {
 	delete(c.tracked, key)
 }
 
-func (c *Chunks) getOrCreateSnapshotLock(key string) *snapshotLock {
+func (c *Chunks) getSnapshotLock(key string) *ssLock {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	l, ok := c.locks[key]
 	if !ok {
-		l = &snapshotLock{}
+		l = &ssLock{}
 		c.locks[key] = l
 	}
 	return l
 }
 
-func (c *Chunks) canAddNewTracked() bool {
-	return uint64(len(c.tracked)) < maxConcurrentSlot
+func (c *Chunks) full() bool {
+	return uint64(len(c.tracked)) >= maxConcurrentSlot
 }
 
-func (c *Chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
+func (c *Chunks) record(chunk pb.SnapshotChunk) *tracked {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := snapshotKey(chunk)
+	key := chunkKey(chunk)
 	td := c.tracked[key]
 	if chunk.ChunkId == 0 {
-		plog.Infof("received the first chunk of a snapshot, key %s", key)
+		plog.Infof("first chunk of a snapshot %s received", key)
 		if td != nil {
 			plog.Warningf("removing unclaimed chunks %s", key)
-			c.deleteTempChunkDir(td.firstChunk)
+			c.removeTempDir(td.firstChunk)
 		} else {
-			if !c.canAddNewTracked() {
+			if c.full() {
 				plog.Errorf("max slot count reached, dropped a chunk %s", key)
 				return nil
 			}
@@ -200,18 +202,20 @@ func (c *Chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 		c.tracked[key] = td
 	} else {
 		if td == nil {
-			plog.Errorf("ignored a not tracked chunk %s, chunk id %d",
-				key, chunk.ChunkId)
+			plog.Errorf("not tracked chunk %s ignored, id %d", key, chunk.ChunkId)
 			return nil
 		}
 		if td.nextChunk != chunk.ChunkId {
-			plog.Errorf("ignored out of order chunk %s, want chunk id %d, got %d",
+			plog.Errorf("out of order, %s, want %d, got %d",
 				key, td.nextChunk, chunk.ChunkId)
 			return nil
 		}
-		if td.firstChunk.From != chunk.From {
-			plog.Errorf("ignored chunk %s, expected from %d, from %d",
-				key, td.firstChunk.From, chunk.From)
+		from := chunk.From
+		want := td.firstChunk.From
+		if want != from {
+			from := chunk.From
+			want := td.firstChunk.From
+			plog.Errorf("ignored %s, from %d, want %d", key, from, want)
 			return nil
 		}
 		td.nextChunk = chunk.ChunkId + 1
@@ -219,56 +223,53 @@ func (c *Chunks) onNewChunk(chunk pb.SnapshotChunk) *tracked {
 	if chunk.FileChunkId == 0 && chunk.HasFileInfo {
 		td.extraFiles = append(td.extraFiles, &chunk.FileInfo)
 	}
-	td.tick = c.getCurrentTick()
+	td.tick = c.getTick()
 	return td
 }
 
-func (c *Chunks) shouldUpdateValidator(chunk pb.SnapshotChunk) bool {
+func (c *Chunks) shouldValidate(chunk pb.SnapshotChunk) bool {
 	return c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0
 }
 
-func (c *Chunks) addChunk(chunk pb.SnapshotChunk) bool {
-	key := snapshotKey(chunk)
-	lock := c.getOrCreateSnapshotLock(key)
-	lock.lock()
-	defer lock.unlock()
-	td := c.onNewChunk(chunk)
+func (c *Chunks) addLocked(chunk pb.SnapshotChunk) bool {
+	key := chunkKey(chunk)
+	td := c.record(chunk)
 	if td == nil {
 		plog.Warningf("ignored a chunk belongs to %s", key)
 		return false
-	}
-	if c.shouldUpdateValidator(chunk) {
-		if !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
-			plog.Warningf("ignored a invalid chunk %s", key)
-			return false
-		}
 	}
 	removed, err := c.nodeRemoved(chunk)
 	if err != nil {
 		panic(err)
 	}
 	if removed {
-		c.deleteTempChunkDir(chunk)
+		c.removeTempDir(chunk)
 		plog.Warningf("node removed, ignored chunk %s", key)
 		return false
 	}
-	if err := c.saveChunk(chunk); err != nil {
+	if c.shouldValidate(chunk) {
+		if !td.validator.AddChunk(chunk.Data, chunk.ChunkId) {
+			plog.Warningf("ignored a invalid chunk %s", key)
+			return false
+		}
+	}
+	if err := c.save(chunk); err != nil {
 		plog.Errorf("failed to save a chunk %s, %v", key, err)
-		c.deleteTempChunkDir(chunk)
+		c.removeTempDir(chunk)
 		panic(err)
 	}
 	if chunk.IsLastChunk() {
 		plog.Infof("last chunk %s received", key)
-		defer c.resetSnapshot(key)
+		defer c.reset(key)
 		if c.validate {
 			if !td.validator.Validate() {
 				plog.Warningf("dropped an invalid snapshot %s", key)
-				c.deleteTempChunkDir(chunk)
+				c.removeTempDir(chunk)
 				return false
 			}
 		}
-		if err := c.finalizeSnapshot(chunk, td); err != nil {
-			c.deleteTempChunkDir(chunk)
+		if err := c.finalize(chunk, td); err != nil {
+			c.removeTempDir(chunk)
 			if err != ErrSnapshotOutOfDate {
 				plog.Panicf("%s failed when finalizing, %v", key, err)
 			}
@@ -289,7 +290,7 @@ func (c *Chunks) nodeRemoved(chunk pb.SnapshotChunk) (bool, error) {
 	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
-func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) (err error) {
+func (c *Chunks) save(chunk pb.SnapshotChunk) (err error) {
 	env := c.getSSEnv(chunk)
 	if chunk.ChunkId == 0 {
 		if err := env.CreateTempDir(); err != nil {
@@ -328,12 +329,11 @@ func (c *Chunks) saveChunk(chunk pb.SnapshotChunk) (err error) {
 }
 
 func (c *Chunks) getSSEnv(chunk pb.SnapshotChunk) *server.SSEnv {
-	return server.NewSSEnv(c.getSnapshotDir,
-		chunk.ClusterId, chunk.NodeId, chunk.Index, chunk.From,
-		server.ReceivingMode, c.fs)
+	return server.NewSSEnv(c.folder, chunk.ClusterId, chunk.NodeId,
+		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }
 
-func (c *Chunks) finalizeSnapshot(chunk pb.SnapshotChunk, td *tracked) error {
+func (c *Chunks) finalize(chunk pb.SnapshotChunk, td *tracked) error {
 	env := c.getSSEnv(chunk)
 	msg := c.toMessage(td.firstChunk, td.extraFiles)
 	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
@@ -347,7 +347,7 @@ func (c *Chunks) finalizeSnapshot(chunk pb.SnapshotChunk, td *tracked) error {
 	return err
 }
 
-func (c *Chunks) deleteTempChunkDir(chunk pb.SnapshotChunk) {
+func (c *Chunks) removeTempDir(chunk pb.SnapshotChunk) {
 	env := c.getSSEnv(chunk)
 	env.MustRemoveTempDir()
 }
@@ -355,7 +355,7 @@ func (c *Chunks) deleteTempChunkDir(chunk pb.SnapshotChunk) {
 func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
 	files []*pb.SnapshotFile) pb.MessageBatch {
 	if chunk.ChunkId != 0 {
-		panic("first chunk must be used to reconstruct the snapshot")
+		panic("not first chunk")
 	}
 	env := c.getSSEnv(chunk)
 	snapDir := env.GetFinalDir()

@@ -365,9 +365,6 @@ func (nh *NodeHost) Stop() {
 	nh.clusterMu.Lock()
 	nh.clusterMu.stopped = true
 	nh.clusterMu.Unlock()
-	if nh.transport != nil {
-		nh.transport.RemoveMessageHandler()
-	}
 	allNodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodeInfo := raftio.NodeInfo{
@@ -1702,15 +1699,15 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 	if !ok {
 		return ErrClusterNotFound
 	}
-	cluster := v.(*node)
-	if nodeCheck && cluster.nodeID != nodeID {
+	n := v.(*node)
+	if nodeCheck && n.nodeID != nodeID {
 		return ErrClusterNotFound
 	}
 	nh.clusterMu.clusters.Delete(clusterID)
 	delete(nh.clusterMu.requests, clusterID)
 	nh.clusterMu.csi++
-	cluster.close()
-	cluster.notifyOffloaded(rsm.FromNodeHost)
+	n.close()
+	n.notifyOffloaded(rsm.FromNodeHost)
 	return nil
 }
 

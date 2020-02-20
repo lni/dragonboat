@@ -3332,7 +3332,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewSnapshotChunks(c.onReceive,
+	cks := transport.NewChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc, fs)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSSMeta()
@@ -3369,7 +3369,7 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewSnapshotChunks(c.onReceive,
+	cks := transport.NewChunks(c.onReceive,
 		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc, fs)
 	sink := &testSink2{receiver: cks}
 	meta := getTestSSMeta()

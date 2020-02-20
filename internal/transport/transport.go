@@ -14,7 +14,7 @@
 //
 //
 //
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,7 +113,6 @@ type ITransport interface {
 	SetUnmanagedDeploymentID()
 	SetDeploymentID(uint64)
 	SetMessageHandler(IRaftMessageHandler)
-	RemoveMessageHandler()
 	ASyncSend(pb.Message) bool
 	ASyncSendSnapshot(pb.Message) bool
 	GetStreamConnection(clusterID uint64, nodeID uint64) *Sink
@@ -210,10 +209,8 @@ type Transport struct {
 	sourceAddress       string
 	resolver            INodeAddressResolver
 	stopper             *syncutil.Stopper
-	cstopper            *syncutil.Stopper
-	snapshotLocator     server.GetSnapshotDirFunc
+	folder              server.GetSnapshotDirFunc
 	raftRPC             raftio.IRaftRPC
-	handlerRemovedFlag  uint32
 	handler             atomic.Value
 	streamChunkSent     atomic.Value
 	preStreamChunkSend  atomic.Value // StreamChunkSendFunc
@@ -228,7 +225,7 @@ type Transport struct {
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
 	ctx *server.Context, resolver INodeAddressResolver,
-	locator server.GetSnapshotDirFunc, sysEvents ITransportEvent,
+	folder server.GetSnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	t := &Transport{
@@ -237,14 +234,13 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		sourceAddress:     address,
 		resolver:          resolver,
 		stopper:           syncutil.NewStopper(),
-		cstopper:          syncutil.NewStopper(),
-		snapshotLocator:   locator,
+		folder:            folder,
 		streamConnections: streamConnections,
 		sysEvents:         sysEvents,
 		fs:                fs,
 	}
-	chunks := NewSnapshotChunks(t.handleRequest,
-		t.snapshotReceived, t.getDeploymentID, t.snapshotLocator, fs)
+	chunks := NewChunks(t.handleRequest,
+		t.snapshotReceived, t.getDeploymentID, t.folder, fs)
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, chunks)
 	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC
@@ -253,14 +249,14 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		t.raftRPC.Stop()
 		return nil, err
 	}
-	t.cstopper.RunWorker(func() {
+	t.stopper.RunWorker(func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				chunks.Tick()
-			case <-t.cstopper.ShouldStop():
+			case <-t.stopper.ShouldStop():
 				chunks.Close()
 				return
 			}
@@ -308,7 +304,6 @@ func (t *Transport) Stop() {
 	t.cancel()
 	t.stopper.Stop()
 	t.raftRPC.Stop()
-	t.cstopper.Stop()
 }
 
 // GetCircuitBreaker returns the circuit breaker used for the specified
@@ -334,15 +329,7 @@ func (t *Transport) SetMessageHandler(handler IRaftMessageHandler) {
 	t.handler.Store(handler)
 }
 
-// RemoveMessageHandler removes the raft message handler.
-func (t *Transport) RemoveMessageHandler() {
-	atomic.StoreUint32(&t.handlerRemovedFlag, 1)
-}
-
 func (t *Transport) handleRequest(req pb.MessageBatch) {
-	if t.handlerRemoved() {
-		return
-	}
 	did := t.getDeploymentID()
 	if req.DeploymentId != did {
 		plog.Warningf("deployment id does not match %d vs %d, message dropped",
@@ -373,9 +360,6 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 
 func (t *Transport) snapshotReceived(clusterID uint64,
 	nodeID uint64, from uint64) {
-	if t.handlerRemoved() {
-		return
-	}
 	handler := t.handler.Load()
 	if handler == nil {
 		return
@@ -384,10 +368,7 @@ func (t *Transport) snapshotReceived(clusterID uint64,
 }
 
 func (t *Transport) sendUnreachableNotification(addr string) {
-	if t.handlerRemoved() {
-		return
-	}
-	handler := t.handler.Load().(IRaftMessageHandler)
+	handler := t.handler.Load()
 	if handler == nil {
 		return
 	}
@@ -600,10 +581,6 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 	}
 	t.metrics.messageSendSuccess(uint64(len(batch.Requests)))
 	return nil
-}
-
-func (t *Transport) handlerRemoved() bool {
-	return atomic.LoadUint32(&t.handlerRemovedFlag) == 1
 }
 
 func getDialTimeoutSecond() uint64 {

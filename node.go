@@ -298,6 +298,7 @@ func (n *node) startRaft(cc config.Config,
 func (n *node) close() {
 	n.requestRemoval()
 	n.raftEvents.stop()
+	n.mq.Close()
 	n.pendingReadIndexes.close()
 	n.pendingProposals.close()
 	n.pendingConfigChange.close()

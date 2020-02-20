@@ -549,7 +549,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 				return
 			}
 			if !g.chunkHandler.AddChunk(chunk) {
-				plog.Errorf("chunk rejected %s", snapshotKey(chunk))
+				plog.Errorf("chunk rejected %s", chunkKey(chunk))
 				return
 			}
 		}
