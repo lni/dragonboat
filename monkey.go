@@ -19,19 +19,11 @@ package dragonboat
 import (
 	"sync/atomic"
 
-	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
-
-type MemFS = vfs.MemFS
-
-func GetTestFS() config.IFS {
-	return vfs.GetTestFS()
-}
 
 func ApplyMonkeySettings() {
 	transport.ApplyMonkeySettings()
