@@ -139,15 +139,15 @@ func (c *Chunks) gc() {
 	tracked := c.getTracked()
 	tick := c.getTick()
 	for key, td := range tracked {
-		if tick-td.tick >= c.timeoutTick {
-			func() {
-				l := c.getSnapshotLock(key)
-				l.lock()
-				defer l.unlock()
+		func() {
+			l := c.getSnapshotLock(key)
+			l.lock()
+			defer l.unlock()
+			if tick-td.tick >= c.timeoutTick {
 				c.removeTempDir(td.firstChunk)
 				c.reset(key)
-			}()
-		}
+			}
+		}()
 	}
 }
 
