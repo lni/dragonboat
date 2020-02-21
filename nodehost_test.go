@@ -68,6 +68,233 @@ func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 	}
 }
 
+type testSysEventListener struct {
+	mu                    sync.Mutex
+	nodeHostShuttingdown  uint64
+	nodeUnloaded          []raftio.NodeInfo
+	nodeReady             []raftio.NodeInfo
+	membershipChanged     []raftio.NodeInfo
+	snapshotCreated       []raftio.SnapshotInfo
+	snapshotRecovered     []raftio.SnapshotInfo
+	snapshotReceived      []raftio.SnapshotInfo
+	sendSnapshotStarted   []raftio.SnapshotInfo
+	sendSnapshotCompleted []raftio.SnapshotInfo
+	snapshotCompacted     []raftio.SnapshotInfo
+	logCompacted          []raftio.EntryInfo
+	logdbCompacted        []raftio.EntryInfo
+	connectionEstablished uint64
+}
+
+func copyNodeInfo(info []raftio.NodeInfo) []raftio.NodeInfo {
+	return append([]raftio.NodeInfo{}, info...)
+}
+
+func (t *testSysEventListener) NodeHostShuttingDown() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nodeHostShuttingdown++
+}
+
+func (t *testSysEventListener) getNodeHostShuttingDown() uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.nodeHostShuttingdown
+}
+
+func (t *testSysEventListener) NodeReady(info raftio.NodeInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nodeReady = append(t.nodeReady, info)
+}
+
+func (t *testSysEventListener) getNodeReady() []raftio.NodeInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyNodeInfo(t.nodeReady)
+}
+
+func (t *testSysEventListener) NodeUnloaded(info raftio.NodeInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nodeUnloaded = append(t.nodeUnloaded, info)
+}
+
+func (t *testSysEventListener) getNodeUnloaded() []raftio.NodeInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyNodeInfo(t.nodeUnloaded)
+}
+
+func (t *testSysEventListener) MembershipChanged(info raftio.NodeInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.membershipChanged = append(t.membershipChanged, info)
+}
+
+func (t *testSysEventListener) getMembershipChanged() []raftio.NodeInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyNodeInfo(t.membershipChanged)
+}
+
+func (t *testSysEventListener) ConnectionEstablished(info raftio.ConnectionInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.connectionEstablished++
+}
+
+func (t *testSysEventListener) getConnectionEstablished() uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.connectionEstablished
+}
+
+func (t *testSysEventListener) ConnectionFailed(info raftio.ConnectionInfo) {}
+
+func copySnapshotInfo(info []raftio.SnapshotInfo) []raftio.SnapshotInfo {
+	return append([]raftio.SnapshotInfo{}, info...)
+}
+
+func (t *testSysEventListener) SendSnapshotStarted(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sendSnapshotStarted = append(t.sendSnapshotStarted, info)
+}
+
+func (t *testSysEventListener) getSendSnapshotStarted() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.sendSnapshotStarted)
+}
+
+func (t *testSysEventListener) SendSnapshotCompleted(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sendSnapshotCompleted = append(t.sendSnapshotCompleted, info)
+}
+
+func (t *testSysEventListener) getSendSnapshotCompleted() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.sendSnapshotCompleted)
+}
+
+func (t *testSysEventListener) SendSnapshotAborted(info raftio.SnapshotInfo) {}
+func (t *testSysEventListener) SnapshotReceived(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.snapshotReceived = append(t.snapshotReceived, info)
+}
+
+func (t *testSysEventListener) getSnapshotReceived() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.snapshotReceived)
+}
+
+func (t *testSysEventListener) SnapshotRecovered(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.snapshotRecovered = append(t.snapshotRecovered, info)
+}
+
+func (t *testSysEventListener) getSnapshotRecovered() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.snapshotRecovered)
+}
+
+func (t *testSysEventListener) SnapshotCreated(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.snapshotCreated = append(t.snapshotCreated, info)
+}
+
+func (t *testSysEventListener) getSnapshotCreated() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.snapshotCreated)
+}
+
+func (t *testSysEventListener) SnapshotCompacted(info raftio.SnapshotInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.snapshotCompacted = append(t.snapshotCompacted, info)
+}
+
+func (t *testSysEventListener) getSnapshotCompacted() []raftio.SnapshotInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copySnapshotInfo(t.snapshotCompacted)
+}
+
+func copyEntryInfo(info []raftio.EntryInfo) []raftio.EntryInfo {
+	return append([]raftio.EntryInfo{}, info...)
+}
+
+func (t *testSysEventListener) LogCompacted(info raftio.EntryInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logCompacted = append(t.logCompacted, info)
+}
+
+func (t *testSysEventListener) getLogCompacted() []raftio.EntryInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyEntryInfo(t.logCompacted)
+}
+
+func (t *testSysEventListener) LogDBCompacted(info raftio.EntryInfo) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logdbCompacted = append(t.logdbCompacted, info)
+}
+
+func (t *testSysEventListener) getLogDBCompacted() []raftio.EntryInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyEntryInfo(t.logdbCompacted)
+}
+
+type TimeoutStateMachine struct {
+	updateDelay   uint64
+	lookupDelay   uint64
+	snapshotDelay uint64
+}
+
+func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
+	if t.updateDelay > 0 {
+		time.Sleep(time.Duration(t.updateDelay) * time.Millisecond)
+	}
+	return sm.Result{}, nil
+}
+
+func (t *TimeoutStateMachine) Lookup(data interface{}) (interface{}, error) {
+	if t.lookupDelay > 0 {
+		plog.Infof("---------> Lookup called!")
+		time.Sleep(time.Duration(t.lookupDelay) * time.Millisecond)
+	}
+	return data, nil
+}
+
+func (t *TimeoutStateMachine) SaveSnapshot(w io.Writer,
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
+	if t.snapshotDelay > 0 {
+		time.Sleep(time.Duration(t.snapshotDelay) * time.Millisecond)
+	}
+	_, err := w.Write([]byte("done"))
+	return err
+}
+
+func (t *TimeoutStateMachine) RecoverFromSnapshot(r io.Reader,
+	fc []sm.SnapshotFile, stopc <-chan struct{}) error {
+	return nil
+}
+
+func (t *TimeoutStateMachine) Close() error {
+	return nil
+}
+
 type noopLogDB struct {
 }
 
@@ -4170,233 +4397,6 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		}
 	}
 	testWitnessIO(t, tf, fs)
-}
-
-type testSysEventListener struct {
-	mu                    sync.Mutex
-	nodeHostShuttingdown  uint64
-	nodeUnloaded          []raftio.NodeInfo
-	nodeReady             []raftio.NodeInfo
-	membershipChanged     []raftio.NodeInfo
-	snapshotCreated       []raftio.SnapshotInfo
-	snapshotRecovered     []raftio.SnapshotInfo
-	snapshotReceived      []raftio.SnapshotInfo
-	sendSnapshotStarted   []raftio.SnapshotInfo
-	sendSnapshotCompleted []raftio.SnapshotInfo
-	snapshotCompacted     []raftio.SnapshotInfo
-	logCompacted          []raftio.EntryInfo
-	logdbCompacted        []raftio.EntryInfo
-	connectionEstablished uint64
-}
-
-func copyNodeInfo(info []raftio.NodeInfo) []raftio.NodeInfo {
-	return append([]raftio.NodeInfo{}, info...)
-}
-
-func (t *testSysEventListener) NodeHostShuttingDown() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.nodeHostShuttingdown++
-}
-
-func (t *testSysEventListener) getNodeHostShuttingDown() uint64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.nodeHostShuttingdown
-}
-
-func (t *testSysEventListener) NodeReady(info raftio.NodeInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.nodeReady = append(t.nodeReady, info)
-}
-
-func (t *testSysEventListener) getNodeReady() []raftio.NodeInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyNodeInfo(t.nodeReady)
-}
-
-func (t *testSysEventListener) NodeUnloaded(info raftio.NodeInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.nodeUnloaded = append(t.nodeUnloaded, info)
-}
-
-func (t *testSysEventListener) getNodeUnloaded() []raftio.NodeInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyNodeInfo(t.nodeUnloaded)
-}
-
-func (t *testSysEventListener) MembershipChanged(info raftio.NodeInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.membershipChanged = append(t.membershipChanged, info)
-}
-
-func (t *testSysEventListener) getMembershipChanged() []raftio.NodeInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyNodeInfo(t.membershipChanged)
-}
-
-func (t *testSysEventListener) ConnectionEstablished(info raftio.ConnectionInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.connectionEstablished++
-}
-
-func (t *testSysEventListener) getConnectionEstablished() uint64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.connectionEstablished
-}
-
-func (t *testSysEventListener) ConnectionFailed(info raftio.ConnectionInfo) {}
-
-func copySnapshotInfo(info []raftio.SnapshotInfo) []raftio.SnapshotInfo {
-	return append([]raftio.SnapshotInfo{}, info...)
-}
-
-func (t *testSysEventListener) SendSnapshotStarted(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.sendSnapshotStarted = append(t.sendSnapshotStarted, info)
-}
-
-func (t *testSysEventListener) getSendSnapshotStarted() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.sendSnapshotStarted)
-}
-
-func (t *testSysEventListener) SendSnapshotCompleted(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.sendSnapshotCompleted = append(t.sendSnapshotCompleted, info)
-}
-
-func (t *testSysEventListener) getSendSnapshotCompleted() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.sendSnapshotCompleted)
-}
-
-func (t *testSysEventListener) SendSnapshotAborted(info raftio.SnapshotInfo) {}
-func (t *testSysEventListener) SnapshotReceived(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.snapshotReceived = append(t.snapshotReceived, info)
-}
-
-func (t *testSysEventListener) getSnapshotReceived() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.snapshotReceived)
-}
-
-func (t *testSysEventListener) SnapshotRecovered(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.snapshotRecovered = append(t.snapshotRecovered, info)
-}
-
-func (t *testSysEventListener) getSnapshotRecovered() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.snapshotRecovered)
-}
-
-func (t *testSysEventListener) SnapshotCreated(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.snapshotCreated = append(t.snapshotCreated, info)
-}
-
-func (t *testSysEventListener) getSnapshotCreated() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.snapshotCreated)
-}
-
-func (t *testSysEventListener) SnapshotCompacted(info raftio.SnapshotInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.snapshotCompacted = append(t.snapshotCompacted, info)
-}
-
-func (t *testSysEventListener) getSnapshotCompacted() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.snapshotCompacted)
-}
-
-func copyEntryInfo(info []raftio.EntryInfo) []raftio.EntryInfo {
-	return append([]raftio.EntryInfo{}, info...)
-}
-
-func (t *testSysEventListener) LogCompacted(info raftio.EntryInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.logCompacted = append(t.logCompacted, info)
-}
-
-func (t *testSysEventListener) getLogCompacted() []raftio.EntryInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyEntryInfo(t.logCompacted)
-}
-
-func (t *testSysEventListener) LogDBCompacted(info raftio.EntryInfo) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.logdbCompacted = append(t.logdbCompacted, info)
-}
-
-func (t *testSysEventListener) getLogDBCompacted() []raftio.EntryInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyEntryInfo(t.logdbCompacted)
-}
-
-type TimeoutStateMachine struct {
-	updateDelay   uint64
-	lookupDelay   uint64
-	snapshotDelay uint64
-}
-
-func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
-	if t.updateDelay > 0 {
-		time.Sleep(time.Duration(t.updateDelay) * time.Millisecond)
-	}
-	return sm.Result{}, nil
-}
-
-func (t *TimeoutStateMachine) Lookup(data interface{}) (interface{}, error) {
-	if t.lookupDelay > 0 {
-		plog.Infof("---------> Lookup called!")
-		time.Sleep(time.Duration(t.lookupDelay) * time.Millisecond)
-	}
-	return data, nil
-}
-
-func (t *TimeoutStateMachine) SaveSnapshot(w io.Writer,
-	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
-	if t.snapshotDelay > 0 {
-		time.Sleep(time.Duration(t.snapshotDelay) * time.Millisecond)
-	}
-	_, err := w.Write([]byte("done"))
-	return err
-}
-
-func (t *TimeoutStateMachine) RecoverFromSnapshot(r io.Reader,
-	fc []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return nil
-}
-
-func (t *TimeoutStateMachine) Close() error {
-	return nil
 }
 
 func TestTimeoutCanBeReturned(t *testing.T) {

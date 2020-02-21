@@ -795,12 +795,12 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 }
 
 type testSink struct {
-	chunks     []pb.SnapshotChunk
+	chunks     []pb.Chunk
 	sendFailed bool
 	stopped    bool
 }
 
-func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+func (s *testSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.sendFailed || s.stopped {
 		return !s.sendFailed, s.stopped
 	}
@@ -809,7 +809,7 @@ func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 }
 
 func (s *testSink) Stop() {
-	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 func (s *testSink) ClusterID() uint64 {
@@ -854,7 +854,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		Ctx:     ctx,
 	}
 	sink := testSink{
-		chunks:     make([]pb.SnapshotChunk, 0),
+		chunks:     make([]pb.Chunk, 0),
 		sendFailed: false,
 		stopped:    false,
 	}

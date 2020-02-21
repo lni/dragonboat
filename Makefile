@@ -161,10 +161,8 @@ DUMMY_TEST_BIN=test.bin
 GOBUILDTAGVALS+=$(LOGDB_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
 TESTTAGVALS+=$(GOBUILDTAGVALS)
-TESTTAGVALS+=$(LOGDB_TEST_BUILDTAGS)
 TESTTAGS="$(TESTTAGVALS)"
 $(info build tags are set to $(GOBUILDTAGS))
-LOGDB_TEST_BUILDTAGS=dragonboat_logdbtesthelper
 
 all: unit-test-bin
 rebuild-all: clean unit-test-bin
@@ -294,8 +292,12 @@ docker-test-no-rocksdb: clean
 ###############################################################################
 # tests
 ###############################################################################
-TEST_OPTIONS=test -tags=$(TESTTAGS) -count=1 $(VERBOSE) \
-	$(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
+ifneq ($(TESTTAGS),"")
+GOCMDTAGS=-tags=$(TESTTAGS)
+endif
+
+TEST_OPTIONS=test $(GOCMDTAGS) -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) \
+	$(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-multiraft test-config test-client test-server test-tools test-fs
@@ -307,13 +309,13 @@ dev-test: test
 ###############################################################################
 # build unit tests
 ###############################################################################
-unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
+unit-test-bin: TEST_OPTIONS=test -c -o $@.bin $(GOCMDTAGS) 						       \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
 	test-tests test-fs
 
-cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)     \
+cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) $(GOCMDTAGS)          \
   -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport    \
   test-multiraft test-config test-client test-server test-tools test-tests   \
@@ -355,14 +357,6 @@ test-fs:
 	$(GOTEST) $(PKGNAME)/internal/fileutil
 test-tools:
 	$(GOTEST) $(PKGNAME)/tools
-
-###############################################################################
-# snapshot benchmark test to check actual bandwidth achieved when streaming
-# snapshot images
-###############################################################################
-snapshot-benchmark-test:
-	$(GO) build -v -o $(SNAPSHOT_BENCHMARK_TESTING_BIN) \
-		$(PKGNAME)/internal/tests/snapshotbench
 
 ###############################################################################
 # language bindings
@@ -535,10 +529,7 @@ static-check:
 	$(GO) vet -tests=false $(PKGNAME)
 	golint $(PKGNAME)
 	@for p in $(CHECKED_PKGS); do \
-		if [ $$p = "internal/logdb" ] ; \
-		then \
-			$(GO) vet -tags="$(LOGDB_TEST_BUILDTAGS)" $(PKGNAME)/$$p; \
-		elif [ $$p = "binding" ] ; \
+		if [ $$p = "binding" ] ; \
     then \
       $(GO) vet -tags="$(BINDING_TAG)" $(PKGNAME)/$$p; \
 		else \
@@ -562,7 +553,8 @@ GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
 	plugin/rocksdb plugin/leveldb plugin/pebble plugin/chan internal/settings    \
-	internal/tests internal/logdb/kv internal/utils/dio internal/vfs
+	internal/tests internal/logdb/kv internal/utils/dio internal/vfs             \
+	internal/logdb
 
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \
@@ -570,7 +562,6 @@ golangci-lint-check:
 	done;
 	@golangci-lint run .
 	@golangci-lint run --build-tags=dragonboat_language_binding binding
-	@golangci-lint run --build-tags=dragonboat_logdbtesthelper internal/logdb
 
 ###############################################################################
 # clean
@@ -590,7 +581,7 @@ clean: clean-binding
 	test test-raft test-rsm test-logdb test-tools test-transport test-multiraft \
 	test-client test-server test-config test-tests static-check clean \
 	logdb-checker golangci-lint-check \
-	gen-test-docker-images docker-test dragonboat-test snapshot-benchmark-test \
+	gen-test-docker-images docker-test dragonboat-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
 	docker-test-no-rocksdb travis-ci-test dev-test \
