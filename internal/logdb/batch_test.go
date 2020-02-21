@@ -318,7 +318,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].readMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedRDB).shards[0].getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
@@ -370,7 +370,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].readMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedRDB).shards[0].getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}

@@ -175,7 +175,7 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			t.Fatalf("failed to save raft state %v", err)
 		}
 		p := db.(*ShardedRDB).shards
-		maxIndex, err := p[3].readMaxIndex(3, 4)
+		maxIndex, err := p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -191,7 +191,7 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to save raft state %v", err)
 		}
-		maxIndex, err = p[3].readMaxIndex(3, 4)
+		maxIndex, err = p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -295,14 +295,14 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 			t.Errorf("snapshot index %d, want %d", v[0].Index, snapshot2.Index)
 		}
 		p := db.(*ShardedRDB).shards
-		maxIndex, err := p[3].readMaxIndex(3, 3)
+		maxIndex, err := p[3].getMaxIndex(3, 3)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
 		if maxIndex != 20 {
 			t.Errorf("max index %d, want 20", maxIndex)
 		}
-		maxIndex, err = p[3].readMaxIndex(3, 4)
+		maxIndex, err = p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -609,7 +609,7 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			t.Errorf("failed to save single de rec")
 		}
 		p := db.(*ShardedRDB).shards
-		maxIndex, err := p[3].readMaxIndex(3, 4)
+		maxIndex, err := p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -632,7 +632,7 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
-		maxIndex, err = p[3].readMaxIndex(3, 4)
+		maxIndex, err = p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -1451,7 +1451,7 @@ func TestImportSnapshot(t *testing.T) {
 		}
 		rdb := db.(*ShardedRDB).shards[2]
 		rdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
-		maxIndex, err := rdb.readMaxIndex(clusterID, nodeID)
+		maxIndex, err := rdb.getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
