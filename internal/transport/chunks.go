@@ -39,12 +39,12 @@ var (
 	maxConcurrentSlot        = settings.Soft.MaxConcurrentStreamingSnapshot
 )
 
-func chunkKey(c pb.SnapshotChunk) string {
+func chunkKey(c pb.Chunk) string {
 	return fmt.Sprintf("%d:%d:%d", c.ClusterId, c.NodeId, c.Index)
 }
 
 type tracked struct {
-	firstChunk pb.SnapshotChunk
+	firstChunk pb.Chunk
 	extraFiles []*pb.SnapshotFile
 	validator  *rsm.SnapshotValidator
 	nextChunk  uint64
@@ -98,7 +98,7 @@ func NewChunks(onReceive func(pb.MessageBatch),
 }
 
 // AddChunk adds an received trunk to chunks.
-func (c *Chunks) AddChunk(chunk pb.SnapshotChunk) bool {
+func (c *Chunks) AddChunk(chunk pb.Chunk) bool {
 	did := c.getDeploymentID()
 	if chunk.DeploymentId != did ||
 		chunk.BinVer != raftio.RPCBinVersion {
@@ -190,7 +190,7 @@ func (c *Chunks) full() bool {
 	return uint64(len(c.tracked)) >= maxConcurrentSlot
 }
 
-func (c *Chunks) record(chunk pb.SnapshotChunk) *tracked {
+func (c *Chunks) record(chunk pb.Chunk) *tracked {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := chunkKey(chunk)
@@ -246,11 +246,11 @@ func (c *Chunks) record(chunk pb.SnapshotChunk) *tracked {
 	return td
 }
 
-func (c *Chunks) shouldValidate(chunk pb.SnapshotChunk) bool {
+func (c *Chunks) shouldValidate(chunk pb.Chunk) bool {
 	return c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0
 }
 
-func (c *Chunks) addLocked(chunk pb.SnapshotChunk) bool {
+func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 	key := chunkKey(chunk)
 	td := c.record(chunk)
 	if td == nil {
@@ -303,13 +303,13 @@ func (c *Chunks) addLocked(chunk pb.SnapshotChunk) bool {
 	return true
 }
 
-func (c *Chunks) nodeRemoved(chunk pb.SnapshotChunk) (bool, error) {
+func (c *Chunks) nodeRemoved(chunk pb.Chunk) (bool, error) {
 	env := c.getSSEnv(chunk)
 	dir := env.GetRootDir()
 	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
-func (c *Chunks) save(chunk pb.SnapshotChunk) (err error) {
+func (c *Chunks) save(chunk pb.Chunk) (err error) {
 	env := c.getSSEnv(chunk)
 	if chunk.ChunkId == 0 {
 		if err := env.CreateTempDir(); err != nil {
@@ -347,12 +347,12 @@ func (c *Chunks) save(chunk pb.SnapshotChunk) (err error) {
 	return nil
 }
 
-func (c *Chunks) getSSEnv(chunk pb.SnapshotChunk) *server.SSEnv {
+func (c *Chunks) getSSEnv(chunk pb.Chunk) *server.SSEnv {
 	return server.NewSSEnv(c.folder, chunk.ClusterId, chunk.NodeId,
 		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }
 
-func (c *Chunks) finalize(chunk pb.SnapshotChunk, td *tracked) error {
+func (c *Chunks) finalize(chunk pb.Chunk, td *tracked) error {
 	env := c.getSSEnv(chunk)
 	msg := c.toMessage(td.firstChunk, td.extraFiles)
 	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
@@ -366,12 +366,12 @@ func (c *Chunks) finalize(chunk pb.SnapshotChunk, td *tracked) error {
 	return err
 }
 
-func (c *Chunks) removeTempDir(chunk pb.SnapshotChunk) {
+func (c *Chunks) removeTempDir(chunk pb.Chunk) {
 	env := c.getSSEnv(chunk)
 	env.MustRemoveTempDir()
 }
 
-func (c *Chunks) toMessage(chunk pb.SnapshotChunk,
+func (c *Chunks) toMessage(chunk pb.Chunk,
 	files []*pb.SnapshotFile) pb.MessageBatch {
 	if chunk.ChunkId != 0 {
 		panic("not first chunk")

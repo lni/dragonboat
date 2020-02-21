@@ -43,13 +43,13 @@ type Sink struct {
 }
 
 // Receive receives a snapshot chunk.
-func (s *Sink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+func (s *Sink) Receive(chunk pb.Chunk) (bool, bool) {
 	return s.j.SendChunk(chunk)
 }
 
 // Stop stops the sink processing.
 func (s *Sink) Stop() {
-	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 // ClusterID returns the cluster ID of the source node.
@@ -71,7 +71,7 @@ type job struct {
 	ctx                context.Context
 	rpc                raftio.IRaftRPC
 	conn               raftio.ISnapshotConnection
-	ch                 chan pb.SnapshotChunk
+	ch                 chan pb.Chunk
 	stopc              chan struct{}
 	failed             chan struct{}
 	streamChunkSent    atomic.Value
@@ -100,7 +100,7 @@ func newJob(ctx context.Context,
 	} else {
 		chsz = sz
 	}
-	j.ch = make(chan pb.SnapshotChunk, chsz)
+	j.ch = make(chan pb.Chunk, chsz)
 	return j
 }
 
@@ -130,7 +130,7 @@ func (j *job) sendSavedSnapshot(m pb.Message) {
 	}
 }
 
-func (j *job) SendChunk(chunk pb.SnapshotChunk) (bool, bool) {
+func (j *job) SendChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
 		plog.Infof("node %d is sending chunk %d to %s",
 			chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
@@ -189,7 +189,7 @@ func (j *job) streamSnapshot() error {
 }
 
 func (j *job) processSavedSnapshot() error {
-	chunks := make([]pb.SnapshotChunk, 0)
+	chunks := make([]pb.Chunk, 0)
 	for {
 		select {
 		case <-j.stopc:
@@ -206,12 +206,12 @@ func (j *job) processSavedSnapshot() error {
 	}
 }
 
-func (j *job) sendSavedChunks(chunks []pb.SnapshotChunk) error {
+func (j *job) sendSavedChunks(chunks []pb.Chunk) error {
 	for _, chunk := range chunks {
 		chunkData := make([]byte, snapshotChunkSize)
 		chunk.DeploymentId = j.deploymentID
 		if !chunk.Witness {
-			data, err := loadSnapshotChunkData(chunk, chunkData, j.fs)
+			data, err := loadChunkData(chunk, chunkData, j.fs)
 			if err != nil {
 				plog.Errorf("failed to read the snapshot chunk, %v", err)
 				return err
@@ -223,13 +223,13 @@ func (j *job) sendSavedChunks(chunks []pb.SnapshotChunk) error {
 			return err
 		}
 		if v := j.streamChunkSent.Load(); v != nil {
-			v.(func(pb.SnapshotChunk))(chunk)
+			v.(func(pb.Chunk))(chunk)
 		}
 	}
 	return nil
 }
 
-func (j *job) sendChunk(c pb.SnapshotChunk,
+func (j *job) sendChunk(c pb.Chunk,
 	conn raftio.ISnapshotConnection) error {
 	if v := j.preStreamChunkSend.Load(); v != nil {
 		plog.Infof("pre stream chunk send set")
@@ -239,7 +239,7 @@ func (j *job) sendChunk(c pb.SnapshotChunk,
 			plog.Infof("not sending the chunk!")
 			return errChunkSendSkipped
 		}
-		return conn.SendSnapshotChunk(updated)
+		return conn.SendChunk(updated)
 	}
-	return conn.SendSnapshotChunk(c)
+	return conn.SendChunk(c)
 }

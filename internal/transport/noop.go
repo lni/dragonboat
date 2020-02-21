@@ -111,8 +111,8 @@ type NOOPSnapshotConnection struct {
 func (c *NOOPSnapshotConnection) Close() {
 }
 
-// SendSnapshotChunk returns ErrRequestedToFail when requested.
-func (c *NOOPSnapshotConnection) SendSnapshotChunk(chunk raftpb.SnapshotChunk) error {
+// SendChunk returns ErrRequestedToFail when requested.
+func (c *NOOPSnapshotConnection) SendChunk(chunk raftpb.Chunk) error {
 	if c.req.Fail() {
 		return ErrRequestedToFail
 	}

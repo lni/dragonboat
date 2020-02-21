@@ -323,7 +323,7 @@ func GetEntrySliceInMemSize(ents []Entry) uint64 {
 // streamed.
 type IChunkSink interface {
 	// return (sent, stopped)
-	Receive(chunk SnapshotChunk) (bool, bool)
+	Receive(chunk Chunk) (bool, bool)
 	Stop()
 	ClusterID() uint64
 	ToNodeID() uint64
@@ -340,18 +340,18 @@ var (
 
 // IsLastChunk returns a boolean value indicating whether the chunk is the last
 // chunk of a snapshot.
-func (c SnapshotChunk) IsLastChunk() bool {
+func (c Chunk) IsLastChunk() bool {
 	return c.ChunkCount == LastChunkCount || c.ChunkCount == c.ChunkId+1
 }
 
 // IsLastFileChunk returns a boolean value indicating whether the chunk is the
 // last chunk of a snapshot file.
-func (c SnapshotChunk) IsLastFileChunk() bool {
+func (c Chunk) IsLastFileChunk() bool {
 	return c.FileChunkId+1 == c.FileChunkCount
 }
 
 // IsPoisonChunk returns a boolean value indicating whether the chunk is a
 // special poison chunk.
-func (c SnapshotChunk) IsPoisonChunk() bool {
+func (c Chunk) IsPoisonChunk() bool {
 	return c.ChunkCount == PoisonChunkCount
 }

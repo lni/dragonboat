@@ -85,7 +85,7 @@ func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 		t.Fatalf("failed to get noopConn")
 	}
 	noopConn.req.SetToFail(true)
-	sent, stopped := c.SendChunk(pb.SnapshotChunk{})
+	sent, stopped := c.SendChunk(pb.Chunk{})
 	if !sent {
 		t.Fatalf("failed to send")
 	}
@@ -97,7 +97,7 @@ func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 		t.Fatalf("error didn't return from process()")
 	}
 	for i := 0; i < streamingChanLength*10; i++ {
-		c.SendChunk(pb.SnapshotChunk{})
+		c.SendChunk(pb.Chunk{})
 	}
 	select {
 	case <-c.failed:
@@ -120,7 +120,7 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
 	stopper.RunWorker(func() {
 		perr = c.process()
 	})
-	poison := pb.SnapshotChunk{
+	poison := pb.Chunk{
 		ChunkCount: tt,
 	}
 	sent, stopped := c.SendChunk(poison)

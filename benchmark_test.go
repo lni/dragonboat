@@ -618,12 +618,12 @@ func BenchmarkStateMachineStep1024(b *testing.B) {
 
 type noopSink struct{}
 
-func (n *noopSink) Receive(pb.SnapshotChunk) (bool, bool) { return true, false }
-func (n *noopSink) Stop()                                 {}
-func (n *noopSink) ClusterID() uint64                     { return 1 }
-func (n *noopSink) ToNodeID() uint64                      { return 1 }
+func (n *noopSink) Receive(pb.Chunk) (bool, bool) { return true, false }
+func (n *noopSink) Stop()                         {}
+func (n *noopSink) ClusterID() uint64             { return 1 }
+func (n *noopSink) ToNodeID() uint64              { return 1 }
 
-func BenchmarkSnapshotChunkWriter(b *testing.B) {
+func BenchmarkChunkWriter(b *testing.B) {
 	sink := &noopSink{}
 	meta := &rsm.SSMeta{}
 	cw := rsm.NewChunkWriter(sink, meta)
@@ -640,7 +640,7 @@ func BenchmarkSnapshotChunkWriter(b *testing.B) {
 	}
 }
 
-func BenchmarkSnappyCompressedSnapshotChunkWriter(b *testing.B) {
+func BenchmarkSnappyCompressedChunkWriter(b *testing.B) {
 	sink := &noopSink{}
 	meta := &rsm.SSMeta{}
 	cw := rsm.NewChunkWriter(sink, meta)

@@ -99,7 +99,7 @@ func (cw *ChunkWriter) onNewBlock(data []byte, crc []byte) error {
 	return cw.onNewChunk(chunk)
 }
 
-func (cw *ChunkWriter) onNewChunk(chunk pb.SnapshotChunk) error {
+func (cw *ChunkWriter) onNewChunk(chunk pb.Chunk) error {
 	sent, stopped := cw.sink.Receive(chunk)
 	if stopped {
 		cw.stopped = true
@@ -138,8 +138,8 @@ func (cw *ChunkWriter) getHeader() []byte {
 	return result
 }
 
-func (cw *ChunkWriter) getChunk() pb.SnapshotChunk {
-	return pb.SnapshotChunk{
+func (cw *ChunkWriter) getChunk() pb.Chunk {
+	return pb.Chunk{
 		ClusterId:   cw.sink.ClusterID(),
 		NodeId:      cw.sink.ToNodeID(),
 		From:        cw.meta.From,
@@ -154,7 +154,7 @@ func (cw *ChunkWriter) getChunk() pb.SnapshotChunk {
 	}
 }
 
-func (cw *ChunkWriter) getTailChunk() pb.SnapshotChunk {
+func (cw *ChunkWriter) getTailChunk() pb.Chunk {
 	tailChunk := cw.getChunk()
 	tailChunk.ChunkCount = pb.LastChunkCount
 	tailChunk.FileChunkCount = pb.LastChunkCount

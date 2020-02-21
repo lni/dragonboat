@@ -2195,7 +2195,7 @@ func TestStreamSnapshot(t *testing.T) {
 	}
 	sm.members.members.Addresses[1] = "a1"
 	ts := &testSink{
-		chunks: make([]pb.SnapshotChunk, 0),
+		chunks: make([]pb.Chunk, 0),
 	}
 	if err := sm.StreamSnapshot(ts); err != nil {
 		t.Errorf("stream snapshot failed %v", err)

@@ -3270,13 +3270,13 @@ type testSink2 struct {
 	receiver chunkReceiver
 }
 
-func (s *testSink2) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+func (s *testSink2) Receive(chunk pb.Chunk) (bool, bool) {
 	s.receiver.AddChunk(chunk)
 	return true, false
 }
 
 func (s *testSink2) Stop() {
-	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 func (s *testSink2) ClusterID() uint64 {
@@ -3292,7 +3292,7 @@ type dataCorruptionSink struct {
 	enabled  bool
 }
 
-func (s *dataCorruptionSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.enabled && len(chunk.Data) > 0 {
 		idx := rand.Uint64() % uint64(len(chunk.Data))
 		chunk.Data[idx] = byte(chunk.Data[idx] + 1)
@@ -3302,7 +3302,7 @@ func (s *dataCorruptionSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 }
 
 func (s *dataCorruptionSink) Stop() {
-	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 func (s *dataCorruptionSink) ClusterID() uint64 {
@@ -3314,7 +3314,7 @@ func (s *dataCorruptionSink) ToNodeID() uint64 {
 }
 
 type chunkReceiver interface {
-	AddChunk(chunk pb.SnapshotChunk) bool
+	AddChunk(chunk pb.Chunk) bool
 }
 
 func getTestSSMeta() *rsm.SSMeta {
@@ -4358,4 +4358,93 @@ func (t *testSysEventListener) getLogDBCompacted() []raftio.EntryInfo {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return copyEntryInfo(t.logdbCompacted)
+}
+
+type TimeoutStateMachine struct {
+	updateDelay   uint64
+	lookupDelay   uint64
+	snapshotDelay uint64
+}
+
+func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
+	if t.updateDelay > 0 {
+		time.Sleep(time.Duration(t.updateDelay) * time.Millisecond)
+	}
+	return sm.Result{}, nil
+}
+
+func (t *TimeoutStateMachine) Lookup(data interface{}) (interface{}, error) {
+	if t.lookupDelay > 0 {
+		plog.Infof("---------> Lookup called!")
+		time.Sleep(time.Duration(t.lookupDelay) * time.Millisecond)
+	}
+	return data, nil
+}
+
+func (t *TimeoutStateMachine) SaveSnapshot(w io.Writer,
+	fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
+	if t.snapshotDelay > 0 {
+		time.Sleep(time.Duration(t.snapshotDelay) * time.Millisecond)
+	}
+	_, err := w.Write([]byte("done"))
+	return err
+}
+
+func (t *TimeoutStateMachine) RecoverFromSnapshot(r io.Reader,
+	fc []sm.SnapshotFile, stopc <-chan struct{}) error {
+	return nil
+}
+
+func (t *TimeoutStateMachine) Close() error {
+	return nil
+}
+
+func TestTimeoutCanBeReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	nhc := getTestNodeHostConfig(fs)
+	rc := config.Config{
+		NodeID:       1,
+		ClusterID:    1,
+		ElectionRTT:  3,
+		HeartbeatRTT: 1,
+		CheckQuorum:  true,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = nhc.RaftAddress
+	nh, err := NewNodeHost(*nhc)
+	if err != nil {
+		t.Fatalf("failed to create node host %v", err)
+	}
+	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer nh.Stop()
+	newSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		return &TimeoutStateMachine{
+			updateDelay:   20,
+			lookupDelay:   20,
+			snapshotDelay: 20,
+		}
+	}
+	if err := nh.StartCluster(peers, false, newSM, rc); err != nil {
+		t.Fatalf("failed to start cluster %v", err)
+	}
+	waitForLeaderToBeElected(t, nh, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
+	session := nh.GetNoOPSession(1)
+	_, err = nh.SyncPropose(ctx, session, []byte("test"))
+	cancel()
+	if err != ErrTimeout {
+		t.Errorf("failed to return ErrTimeout, %v", err)
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Millisecond)
+	_, err = nh.SyncRead(ctx, 1, []byte("test"))
+	cancel()
+	if err != ErrTimeout {
+		t.Errorf("failed to return ErrTimeout, %v", err)
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Millisecond)
+	_, err = nh.SyncRequestSnapshot(ctx, 1, SnapshotOption{})
+	cancel()
+	if err != ErrTimeout {
+		t.Errorf("failed to return ErrTimeout, %v", err)
+	}
 }

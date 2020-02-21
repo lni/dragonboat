@@ -24,12 +24,12 @@ import (
 )
 
 type testSink struct {
-	chunks     []pb.SnapshotChunk
+	chunks     []pb.Chunk
 	sendFailed bool
 	stopped    bool
 }
 
-func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
+func (s *testSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.sendFailed || s.stopped {
 		return !s.sendFailed, s.stopped
 	}
@@ -38,7 +38,7 @@ func (s *testSink) Receive(chunk pb.SnapshotChunk) (bool, bool) {
 }
 
 func (s *testSink) Stop() {
-	s.Receive(pb.SnapshotChunk{ChunkCount: pb.PoisonChunkCount})
+	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
 }
 
 func (s *testSink) ClusterID() uint64 {

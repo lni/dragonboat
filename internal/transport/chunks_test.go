@@ -32,10 +32,10 @@ const (
 	testDeploymentID uint64 = 0
 )
 
-func getTestChunks() []pb.SnapshotChunk {
-	result := make([]pb.SnapshotChunk, 0)
+func getTestChunks() []pb.Chunk {
+	result := make([]pb.Chunk, 0)
 	for chunkID := uint64(0); chunkID < 10; chunkID++ {
-		c := pb.SnapshotChunk{
+		c := pb.Chunk{
 			BinVer:         raftio.RPCBinVersion,
 			ClusterId:      100,
 			NodeId:         2,
@@ -58,7 +58,7 @@ func getTestChunks() []pb.SnapshotChunk {
 	return result
 }
 
-func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
+func hasSnapshotTempFile(cs *Chunks, c pb.Chunk) bool {
 	env := cs.getSSEnv(c)
 	fp := env.GetTempFilepath()
 	if _, err := cs.fs.Stat(fp); vfs.IsNotExist(err) {
@@ -68,7 +68,7 @@ func hasSnapshotTempFile(cs *Chunks, c pb.SnapshotChunk) bool {
 }
 
 func hasExternalFile(cs *Chunks,
-	c pb.SnapshotChunk, fn string, sz uint64, ifs vfs.IFS) bool {
+	c pb.Chunk, fn string, sz uint64, ifs vfs.IFS) bool {
 	env := cs.getSSEnv(c)
 	efp := ifs.PathJoin(env.GetFinalDir(), fn)
 	fs, err := cs.fs.Stat(efp)
@@ -233,7 +233,7 @@ func TestShouldUpdateValidator(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		c := &Chunks{validate: tt.validate}
-		input := pb.SnapshotChunk{ChunkId: tt.chunkID, HasFileInfo: tt.hasFileInfo}
+		input := pb.Chunk{ChunkId: tt.chunkID, HasFileInfo: tt.hasFileInfo}
 		if result := c.shouldValidate(input); result != tt.result {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.result)
 		}
@@ -353,7 +353,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 }
 
 // when there is no flag file
-func TestOutOfDateSnapshotChunksCanBeHandled(t *testing.T) {
+func TestOutOfDateChunksCanBeHandled(t *testing.T) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
 		env := chunks.getSSEnv(inputs[0])
@@ -421,7 +421,7 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 }
 
 func checkTestSnapshotFile(chunks *Chunks,
-	chunk pb.SnapshotChunk, size uint64) bool {
+	chunk pb.Chunk, size uint64) bool {
 	env := chunks.getSSEnv(chunk)
 	finalFp := env.GetFilepath()
 	f, err := chunks.fs.Open(finalFp)
@@ -731,7 +731,7 @@ func TestGetMessageFromChunk(t *testing.T) {
 			Metadata: make([]byte, 32),
 		}
 		files := []*pb.SnapshotFile{sf1, sf2}
-		chunk := pb.SnapshotChunk{
+		chunk := pb.Chunk{
 			ClusterId:    123,
 			NodeId:       3,
 			From:         2,

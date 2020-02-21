@@ -189,11 +189,11 @@ func (t *Transport) sendSnapshotNotification(clusterID uint64,
 
 func splitBySnapshotFile(msg pb.Message,
 	filepath string, filesize uint64, startChunkID uint64,
-	sf *pb.SnapshotFile) []pb.SnapshotChunk {
+	sf *pb.SnapshotFile) []pb.Chunk {
 	if filesize == 0 {
 		panic("empty file")
 	}
-	results := make([]pb.SnapshotChunk, 0)
+	results := make([]pb.Chunk, 0)
 	chunkCount := uint64((filesize-1)/snapshotChunkSize + 1)
 	for i := uint64(0); i < chunkCount; i++ {
 		var csz uint64
@@ -202,7 +202,7 @@ func splitBySnapshotFile(msg pb.Message,
 		} else {
 			csz = snapshotChunkSize
 		}
-		c := pb.SnapshotChunk{
+		c := pb.Chunk{
 			BinVer:         raftio.RPCBinVersion,
 			ClusterId:      msg.ClusterId,
 			NodeId:         msg.To,
@@ -228,7 +228,7 @@ func splitBySnapshotFile(msg pb.Message,
 	return results
 }
 
-func getChunks(m pb.Message) []pb.SnapshotChunk {
+func getChunks(m pb.Message) []pb.Chunk {
 	startChunkID := uint64(0)
 	results := splitBySnapshotFile(m,
 		m.Snapshot.Filepath, m.Snapshot.FileSize, startChunkID, nil)
@@ -245,13 +245,13 @@ func getChunks(m pb.Message) []pb.SnapshotChunk {
 	return results
 }
 
-func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
+func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.Chunk {
 	ss, err := rsm.GetWitnessSnapshot(fs)
 	if err != nil {
 		panic(err)
 	}
-	results := make([]pb.SnapshotChunk, 0)
-	results = append(results, pb.SnapshotChunk{
+	results := make([]pb.Chunk, 0)
+	results = append(results, pb.Chunk{
 		BinVer:         raftio.RPCBinVersion,
 		ClusterId:      m.ClusterId,
 		NodeId:         m.To,
@@ -273,7 +273,7 @@ func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
 	return results
 }
 
-func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
+func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.Chunk {
 	if m.Type != pb.InstallSnapshot {
 		panic("not a snapshot message")
 	}
@@ -283,7 +283,7 @@ func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.SnapshotChunk {
 	return getChunks(m)
 }
 
-func loadSnapshotChunkData(chunk pb.SnapshotChunk,
+func loadChunkData(chunk pb.Chunk,
 	data []byte, fs vfs.IFS) ([]byte, error) {
 	f, err := OpenChunkFileForRead(chunk.Filepath, fs)
 	if err != nil {

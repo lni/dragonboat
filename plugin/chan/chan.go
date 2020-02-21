@@ -85,8 +85,8 @@ func (csc *ChanSSConnection) Close() {
 	close(csc.cc.senderClosed)
 }
 
-// SendSnapshotChunk ...
-func (csc *ChanSSConnection) SendSnapshotChunk(chunk pb.SnapshotChunk) error {
+// SendChunk ...
+func (csc *ChanSSConnection) SendChunk(chunk pb.Chunk) error {
 	if !csc.cc.snapshot {
 		panic("sending snapshot data on regular cc")
 	}
@@ -203,7 +203,7 @@ func (ct *ChanTransport) GetSnapshotConnection(ctx context.Context,
 
 func (ct *ChanTransport) process(data []byte, cc chanConn) bool {
 	if cc.snapshot {
-		chunk := pb.SnapshotChunk{}
+		chunk := pb.Chunk{}
 		if err := chunk.Unmarshal(data); err != nil {
 			return false
 		}

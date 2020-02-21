@@ -392,8 +392,8 @@ func (c *TCPSnapshotConnection) Close() {
 	waitPoisonAck(c.conn)
 }
 
-// SendSnapshotChunk sends the specified snapshot chunk to remote node.
-func (c *TCPSnapshotConnection) SendSnapshotChunk(chunk pb.SnapshotChunk) error {
+// SendChunk sends the specified snapshot chunk to remote node.
+func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 	header := requestHeader{method: snapshotType}
 	sz := chunk.Size()
 	buf := make([]byte, sz)
@@ -544,7 +544,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 			}
 			g.requestHandler(batch)
 		} else {
-			chunk := pb.SnapshotChunk{}
+			chunk := pb.Chunk{}
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}

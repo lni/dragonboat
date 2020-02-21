@@ -125,7 +125,7 @@ type ITransport interface {
 
 // StreamChunkSendFunc is a func type that is used to determine whether a
 // snapshot chunk should indeed be sent. This func is used in test only.
-type StreamChunkSendFunc func(pb.SnapshotChunk) (pb.SnapshotChunk, bool)
+type StreamChunkSendFunc func(pb.Chunk) (pb.Chunk, bool)
 
 // SendMessageBatchFunc is a func type that is used to determine whether the
 // specified message batch should be sent. This func is used in test only.

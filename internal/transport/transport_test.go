@@ -863,7 +863,7 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 func TestSnapshotWithNotMatchedDeploymentIDWillBeDropped(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
+	f := func(c raftpb.Chunk) (raftpb.Chunk, bool) {
 		c.DeploymentId = 1
 		return c, true
 	}
@@ -874,7 +874,7 @@ func TestSnapshotWithNotMatchedDeploymentIDWillBeDropped(t *testing.T) {
 func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
+	f := func(c raftpb.Chunk) (raftpb.Chunk, bool) {
 		c.BinVer = raftio.RPCBinVersion + 1
 		return c, true
 	}
@@ -901,7 +901,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 		t.Fatalf("%v", err)
 	}
 	nodes.AddNode(100, 2, serverAddress)
-	onStreamChunkSent := func(c raftpb.SnapshotChunk) {
+	onStreamChunkSent := func(c raftpb.Chunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 		fp := fs.PathJoin(snapDir, "testsnapshot.gbsnap")
 		err := fs.Remove(fp)
@@ -1047,7 +1047,7 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.I
 	nodes.AddNode(100, 2, serverAddress)
 	nodes.AddNode(100, 3, serverAddress)
 	snapshotSent := uint32(0)
-	f := func(c raftpb.SnapshotChunk) (raftpb.SnapshotChunk, bool) {
+	f := func(c raftpb.Chunk) (raftpb.Chunk, bool) {
 		for atomic.LoadUint32(&snapshotSent) == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}

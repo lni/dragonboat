@@ -1446,7 +1446,7 @@ func (m *MessageBatch) GetBinVer() uint32 {
 }
 
 // field id 11 was used for optional string filename
-type SnapshotChunk struct {
+type Chunk struct {
 	ClusterId      uint64       `protobuf:"varint,1,opt,name=cluster_id,json=clusterId" json:"cluster_id"`
 	NodeId         uint64       `protobuf:"varint,2,opt,name=node_id,json=nodeId" json:"node_id"`
 	From           uint64       `protobuf:"varint,3,opt,name=from" json:"from"`
@@ -1469,18 +1469,18 @@ type SnapshotChunk struct {
 	Witness        bool         `protobuf:"varint,21,opt,name=witness" json:"witness"`
 }
 
-func (m *SnapshotChunk) Reset()         { *m = SnapshotChunk{} }
-func (m *SnapshotChunk) String() string { return proto.CompactTextString(m) }
-func (*SnapshotChunk) ProtoMessage()    {}
-func (*SnapshotChunk) Descriptor() ([]byte, []int) {
+func (m *Chunk) Reset()         { *m = Chunk{} }
+func (m *Chunk) String() string { return proto.CompactTextString(m) }
+func (*Chunk) ProtoMessage()    {}
+func (*Chunk) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b042552c306ae59b, []int{13}
 }
-func (m *SnapshotChunk) XXX_Unmarshal(b []byte) error {
+func (m *Chunk) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *SnapshotChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *Chunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_SnapshotChunk.Marshal(b, m, deterministic)
+		return xxx_messageInfo_Chunk.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalTo(b)
@@ -1490,152 +1490,152 @@ func (m *SnapshotChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (m *SnapshotChunk) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SnapshotChunk.Merge(m, src)
+func (m *Chunk) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Chunk.Merge(m, src)
 }
-func (m *SnapshotChunk) XXX_Size() int {
+func (m *Chunk) XXX_Size() int {
 	return m.Size()
 }
-func (m *SnapshotChunk) XXX_DiscardUnknown() {
-	xxx_messageInfo_SnapshotChunk.DiscardUnknown(m)
+func (m *Chunk) XXX_DiscardUnknown() {
+	xxx_messageInfo_Chunk.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SnapshotChunk proto.InternalMessageInfo
+var xxx_messageInfo_Chunk proto.InternalMessageInfo
 
-func (m *SnapshotChunk) GetClusterId() uint64 {
+func (m *Chunk) GetClusterId() uint64 {
 	if m != nil {
 		return m.ClusterId
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetNodeId() uint64 {
+func (m *Chunk) GetNodeId() uint64 {
 	if m != nil {
 		return m.NodeId
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetFrom() uint64 {
+func (m *Chunk) GetFrom() uint64 {
 	if m != nil {
 		return m.From
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetChunkId() uint64 {
+func (m *Chunk) GetChunkId() uint64 {
 	if m != nil {
 		return m.ChunkId
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetChunkSize() uint64 {
+func (m *Chunk) GetChunkSize() uint64 {
 	if m != nil {
 		return m.ChunkSize
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetChunkCount() uint64 {
+func (m *Chunk) GetChunkCount() uint64 {
 	if m != nil {
 		return m.ChunkCount
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetData() []byte {
+func (m *Chunk) GetData() []byte {
 	if m != nil {
 		return m.Data
 	}
 	return nil
 }
 
-func (m *SnapshotChunk) GetIndex() uint64 {
+func (m *Chunk) GetIndex() uint64 {
 	if m != nil {
 		return m.Index
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetTerm() uint64 {
+func (m *Chunk) GetTerm() uint64 {
 	if m != nil {
 		return m.Term
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetMembership() Membership {
+func (m *Chunk) GetMembership() Membership {
 	if m != nil {
 		return m.Membership
 	}
 	return Membership{}
 }
 
-func (m *SnapshotChunk) GetFilepath() string {
+func (m *Chunk) GetFilepath() string {
 	if m != nil {
 		return m.Filepath
 	}
 	return ""
 }
 
-func (m *SnapshotChunk) GetFileSize() uint64 {
+func (m *Chunk) GetFileSize() uint64 {
 	if m != nil {
 		return m.FileSize
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetDeploymentId() uint64 {
+func (m *Chunk) GetDeploymentId() uint64 {
 	if m != nil {
 		return m.DeploymentId
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetFileChunkId() uint64 {
+func (m *Chunk) GetFileChunkId() uint64 {
 	if m != nil {
 		return m.FileChunkId
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetFileChunkCount() uint64 {
+func (m *Chunk) GetFileChunkCount() uint64 {
 	if m != nil {
 		return m.FileChunkCount
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetHasFileInfo() bool {
+func (m *Chunk) GetHasFileInfo() bool {
 	if m != nil {
 		return m.HasFileInfo
 	}
 	return false
 }
 
-func (m *SnapshotChunk) GetFileInfo() SnapshotFile {
+func (m *Chunk) GetFileInfo() SnapshotFile {
 	if m != nil {
 		return m.FileInfo
 	}
 	return SnapshotFile{}
 }
 
-func (m *SnapshotChunk) GetBinVer() uint32 {
+func (m *Chunk) GetBinVer() uint32 {
 	if m != nil {
 		return m.BinVer
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetOnDiskIndex() uint64 {
+func (m *Chunk) GetOnDiskIndex() uint64 {
 	if m != nil {
 		return m.OnDiskIndex
 	}
 	return 0
 }
 
-func (m *SnapshotChunk) GetWitness() bool {
+func (m *Chunk) GetWitness() bool {
 	if m != nil {
 		return m.Witness
 	}
@@ -1667,7 +1667,7 @@ func init() {
 	proto.RegisterType((*SnapshotHeader)(nil), "raftpb.SnapshotHeader")
 	proto.RegisterType((*Response)(nil), "raftpb.Response")
 	proto.RegisterType((*MessageBatch)(nil), "raftpb.MessageBatch")
-	proto.RegisterType((*SnapshotChunk)(nil), "raftpb.SnapshotChunk")
+	proto.RegisterType((*Chunk)(nil), "raftpb.Chunk")
 }
 
 func init() { proto.RegisterFile("raft.proto", fileDescriptor_b042552c306ae59b) }
@@ -2442,7 +2442,7 @@ func (m *MessageBatch) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *SnapshotChunk) Marshal() (dAtA []byte, err error) {
+func (m *Chunk) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -2452,7 +2452,7 @@ func (m *SnapshotChunk) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SnapshotChunk) MarshalTo(dAtA []byte) (int, error) {
+func (m *Chunk) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -2841,7 +2841,7 @@ func (m *MessageBatch) Size() (n int) {
 	return n
 }
 
-func (m *SnapshotChunk) Size() (n int) {
+func (m *Chunk) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5797,7 +5797,7 @@ func (m *MessageBatch) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }*/
-func (m *SnapshotChunk) Unmarshal(dAtA []byte) error {
+func (m *Chunk) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -5820,10 +5820,10 @@ func (m *SnapshotChunk) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SnapshotChunk: wiretype end group for non-group")
+			return fmt.Errorf("proto: Chunk: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SnapshotChunk: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: Chunk: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

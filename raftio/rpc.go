@@ -43,7 +43,7 @@ type IChunkHandler interface {
 	// AddChunk adds a new snapshot chunk to the snapshot chunk sink. All chunks
 	// belong to the snapshot will be combined into the snapshot image and then
 	// be passed to Dragonboat once all member chunks are received.
-	AddChunk(chunk pb.SnapshotChunk) bool
+	AddChunk(chunk pb.Chunk) bool
 }
 
 // IChunkSink is the interface of snapshot chunk sink. IChunkSink is used to
@@ -77,11 +77,11 @@ type IConnection interface {
 type ISnapshotConnection interface {
 	// Close closes the ISnapshotConnection instance.
 	Close()
-	// SendSnapshotChunk sends the snapshot chunk to the target. It is
+	// SendChunk sends the snapshot chunk to the target. It is
 	// recommended to have the snapshot chunk delivered in order for the best
 	// performance, but out of order delivery is allowed at the cost of reduced
 	// performance.
-	SendSnapshotChunk(chunk pb.SnapshotChunk) error
+	SendChunk(chunk pb.Chunk) error
 }
 
 // IRaftRPC is the interface to be implemented by a customized Raft RPC

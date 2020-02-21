@@ -203,7 +203,7 @@ message MessageBatch {
 }
 
 // field id 11 was used for optional string filename
-message SnapshotChunk {
+message Chunk {
   optional uint64 cluster_id        = 1 [(gogoproto.nullable) = false];
   optional uint64 node_id           = 2 [(gogoproto.nullable) = false];
   optional uint64 from              = 3 [(gogoproto.nullable) = false];
