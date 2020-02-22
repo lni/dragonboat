@@ -29,10 +29,6 @@ import (
 	"github.com/lni/goutils/random"
 )
 
-const (
-	testTickInMillisecond uint64 = 50
-)
-
 func TestPendingLeaderTransferCanBeCreated(t *testing.T) {
 	p := newPendingLeaderTransfer()
 	if len(p.leaderTransferC) != 0 || p.leaderTransferC == nil {
@@ -69,7 +65,9 @@ func TestCanGetExitingLeaderTransferRequest(t *testing.T) {
 	if ok {
 		t.Errorf("unexpectedly returned request")
 	}
-	p.request(1)
+	if err := p.request(1); err != nil {
+		t.Errorf("failed to request leadership transfer %v", err)
+	}
 	v, ok := p.get()
 	if !ok || v != 1 {
 		t.Errorf("failed to get request")

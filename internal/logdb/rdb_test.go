@@ -71,7 +71,9 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 }
 
 func deleteTestDB(fs vfs.IFS) {
-	fs.RemoveAll(RDBTestDirectory)
+	if err := fs.RemoveAll(RDBTestDirectory); err != nil {
+		panic(err)
+	}
 }
 
 func runLogDBTestAs(t *testing.T,
@@ -81,8 +83,12 @@ func runLogDBTestAs(t *testing.T,
 	lldir := "wal-db-dir"
 	d := fs.PathJoin(RDBTestDirectory, dir)
 	lld := fs.PathJoin(RDBTestDirectory, lldir)
-	fs.RemoveAll(d)
-	fs.RemoveAll(lld)
+	if err := fs.RemoveAll(d); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := fs.RemoveAll(lld); err != nil {
+		t.Fatalf("%v", err)
+	}
 	db := getNewTestDB(dir, lldir, batched, fs)
 	defer deleteTestDB(fs)
 	defer db.Close()
@@ -1078,9 +1084,17 @@ func TestRemoveEntriesTo(t *testing.T) {
 	lldir := "wal-db-dir"
 	d := fs.PathJoin(RDBTestDirectory, dir)
 	lld := fs.PathJoin(RDBTestDirectory, lldir)
-	fs.RemoveAll(d)
-	fs.RemoveAll(lld)
-	defer fs.RemoveAll(RDBTestDirectory)
+	if err := fs.RemoveAll(d); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := fs.RemoveAll(lld); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		if err := fs.RemoveAll(RDBTestDirectory); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	clusterID := uint64(0)
 	nodeID := uint64(4)
 	ents := make([]pb.Entry, 0)

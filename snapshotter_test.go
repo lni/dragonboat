@@ -53,7 +53,9 @@ func getNewTestDB(dir string, lldir string, fs vfs.IFS) raftio.ILogDB {
 }
 
 func deleteTestRDB(fs vfs.IFS) {
-	fs.RemoveAll(rdbTestDirectory)
+	if err := fs.RemoveAll(rdbTestDirectory); err != nil {
+		panic(err)
+	}
 }
 
 func getTestSnapshotter(ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {

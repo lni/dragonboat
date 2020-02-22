@@ -166,9 +166,7 @@ func (w *ssWorker) workerMain() {
 }
 
 func (w *ssWorker) completed() {
-	select {
-	case w.completedC <- struct{}{}:
-	}
+	w.completedC <- struct{}{}
 }
 
 func (w *ssWorker) handle(req tsn) {
@@ -482,10 +480,7 @@ func (p *workerPool) canStream(clusterID uint64) bool {
 		return false
 	}
 	_, ok = p.recovering[clusterID]
-	if ok {
-		return false
-	}
-	return true
+	return !ok
 }
 
 func (p *workerPool) canSave(clusterID uint64) bool {

@@ -19,41 +19,49 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-func NewLog(logdb ILogDB) *entryLog {
-	return newEntryLog(logdb, server.NewRateLimiter(0))
+// LogTestHelper is a helper type used for testing logEntry.
+type LogTestHelper struct {
+	el *entryLog
 }
 
-func (l *entryLog) GetConflictIndex(ents []pb.Entry) uint64 {
-	return l.getConflictIndex(ents)
+// NewLog creates and returns a new LogTestHelper instance used for testing purpose.
+func NewLog(logdb ILogDB) *LogTestHelper {
+	return &LogTestHelper{
+		el: newEntryLog(logdb, server.NewRateLimiter(0)),
+	}
 }
 
-func (l *entryLog) Term(index uint64) (uint64, error) {
-	return l.term(index)
+func (l *LogTestHelper) GetConflictIndex(ents []pb.Entry) uint64 {
+	return l.el.getConflictIndex(ents)
 }
 
-func (l *entryLog) MatchTerm(index uint64, term uint64) bool {
-	return l.matchTerm(index, term)
+func (l *LogTestHelper) Term(index uint64) (uint64, error) {
+	return l.el.term(index)
 }
 
-func (l *entryLog) FirstIndex() uint64 {
-	return l.firstIndex()
+func (l *LogTestHelper) MatchTerm(index uint64, term uint64) bool {
+	return l.el.matchTerm(index, term)
 }
 
-func (l *entryLog) LastIndex() uint64 {
-	return l.lastIndex()
+func (l *LogTestHelper) FirstIndex() uint64 {
+	return l.el.firstIndex()
 }
 
-func (l *entryLog) UpToDate(index uint64, term uint64) bool {
-	return l.upToDate(index, term)
+func (l *LogTestHelper) LastIndex() uint64 {
+	return l.el.lastIndex()
 }
 
-func (l *entryLog) Append(ents []pb.Entry) error {
-	l.append(ents)
+func (l *LogTestHelper) UpToDate(index uint64, term uint64) bool {
+	return l.el.upToDate(index, term)
+}
+
+func (l *LogTestHelper) Append(ents []pb.Entry) error {
+	l.el.append(ents)
 	return nil
 }
 
-func (l *entryLog) AllEntries() []pb.Entry {
-	ents, err := l.entries(l.firstIndex(), noLimit)
+func (l *LogTestHelper) AllEntries() []pb.Entry {
+	ents, err := l.el.entries(l.el.firstIndex(), noLimit)
 	if err == nil {
 		return ents
 	}
@@ -63,58 +71,59 @@ func (l *entryLog) AllEntries() []pb.Entry {
 	panic(err)
 }
 
-func (l *entryLog) Entries(start uint64, maxsize uint64) ([]pb.Entry, error) {
-	return l.entries(start, maxsize)
+func (l *LogTestHelper) Entries(start uint64,
+	maxsize uint64) ([]pb.Entry, error) {
+	return l.el.entries(start, maxsize)
 }
 
-func (l *entryLog) EntriesToSave() []pb.Entry {
-	return l.entriesToSave()
+func (l *LogTestHelper) EntriesToSave() []pb.Entry {
+	return l.el.entriesToSave()
 }
 
-func (l *entryLog) UnstableOffset() uint64 {
-	return l.inmem.markerIndex
+func (l *LogTestHelper) UnstableOffset() uint64 {
+	return l.el.inmem.markerIndex
 }
 
-func (l *entryLog) SetCommitted(v uint64) {
-	l.committed = v
+func (l *LogTestHelper) SetCommitted(v uint64) {
+	l.el.committed = v
 }
 
-func (l *entryLog) GetCommitted() uint64 {
-	return l.committed
+func (l *LogTestHelper) GetCommitted() uint64 {
+	return l.el.committed
 }
 
-func (l *entryLog) TryAppend(index uint64, logTerm uint64, committed uint64,
-	ents []pb.Entry) (uint64, bool) {
-	if l.matchTerm(index, logTerm) {
-		l.tryAppend(index, ents)
+func (l *LogTestHelper) TryAppend(index uint64, logTerm uint64,
+	committed uint64, ents []pb.Entry) (uint64, bool) {
+	if l.el.matchTerm(index, logTerm) {
+		l.el.tryAppend(index, ents)
 		lastIndex := index + uint64(len(ents))
-		l.commitTo(min(lastIndex, committed))
+		l.el.commitTo(min(lastIndex, committed))
 		return lastIndex, true
 	}
 	return 0, false
 }
 
-func (l *entryLog) GetEntries(low uint64, high uint64,
+func (l *LogTestHelper) GetEntries(low uint64, high uint64,
 	maxsize uint64) ([]pb.Entry, error) {
-	return l.getEntries(low, high, maxsize)
+	return l.el.getEntries(low, high, maxsize)
 }
 
-func (l *entryLog) TryCommit(index uint64, term uint64) bool {
-	return l.tryCommit(index, term)
+func (l *LogTestHelper) TryCommit(index uint64, term uint64) bool {
+	return l.el.tryCommit(index, term)
 }
 
-func (l *entryLog) AppliedTo(index uint64) {
-	l.commitUpdate(pb.UpdateCommit{Processed: index})
+func (l *LogTestHelper) AppliedTo(index uint64) {
+	l.el.commitUpdate(pb.UpdateCommit{Processed: index})
 }
 
-func (l *entryLog) HasEntriesToApply() bool {
-	return l.hasEntriesToApply()
+func (l *LogTestHelper) HasEntriesToApply() bool {
+	return l.el.hasEntriesToApply()
 }
 
-func (l *entryLog) EntriesToApply() []pb.Entry {
-	return l.entriesToApply()
+func (l *LogTestHelper) EntriesToApply() []pb.Entry {
+	return l.el.entriesToApply()
 }
 
-func (l *entryLog) CheckBound(low uint64, high uint64) error {
-	return l.checkBound(low, high)
+func (l *LogTestHelper) CheckBound(low uint64, high uint64) error {
+	return l.el.checkBound(low, high)
 }

@@ -84,7 +84,11 @@ func getTestDeploymentID() uint64 {
 
 func runChunkTest(t *testing.T,
 	fn func(*testing.T, *Chunks, *testMessageHandler), fs vfs.IFS) {
-	defer fs.RemoveAll(snapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(snapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer leaktest.AfterTest(t)()
 	trans, _, stopper, tt := newTestTransport(false, fs)
 	defer trans.serverCtx.Stop()
@@ -106,7 +110,11 @@ func runChunkTest(t *testing.T,
 
 func TestMaxSlotIsEnforced(t *testing.T) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
-		defer chunks.fs.RemoveAll(snapshotDir)
+		defer func() {
+			if err := chunks.fs.RemoveAll(snapshotDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		inputs := getTestChunks()
 		chunks.validate = false
 		v := uint64(1)

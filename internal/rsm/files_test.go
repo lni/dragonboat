@@ -66,7 +66,9 @@ func TestPrepareFiles(t *testing.T) {
 		t.Errorf("failed to make dir %v", err)
 	}
 	defer func() {
-		fs.RemoveAll(rdbTestDirectory)
+		if err := fs.RemoveAll(rdbTestDirectory); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	f1, err := fs.Create(fs.PathJoin(rdbTestDirectory, "test1.data"))
 	if err != nil {

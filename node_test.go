@@ -150,7 +150,9 @@ func (r *testMessageRouter) addChannel(nodeID uint64, q *server.MessageQueue) {
 }
 
 func cleanupTestDir(fs vfs.IFS) {
-	fs.RemoveAll(raftTestTopDir)
+	if err := fs.RemoveAll(raftTestTopDir); err != nil {
+		panic(err)
+	}
 }
 
 func getTestRaftNodes(count int, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
@@ -489,10 +491,6 @@ func closeProposalTestClient(n *node,
 	case <-n.stopc:
 		return
 	}
-}
-
-func getTestTimeout(timeoutInMillisecond uint64) time.Duration {
-	return time.Duration(timeoutInMillisecond) * time.Millisecond
 }
 
 func makeCheckedTestProposal(t *testing.T, session *client.Session,

@@ -95,12 +95,6 @@ func (t *testSysEventListener) NodeHostShuttingDown() {
 	t.nodeHostShuttingdown++
 }
 
-func (t *testSysEventListener) getNodeHostShuttingDown() uint64 {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.nodeHostShuttingdown
-}
-
 func (t *testSysEventListener) NodeReady(info raftio.NodeInfo) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -342,8 +336,14 @@ func runNodeHostTest(t *testing.T, f func(), fs vfs.IFS) {
 		logdb.RDBContextValueSize = ovs
 	}()
 	defer leaktest.AfterTest(t)()
-	defer fs.RemoveAll(singleNodeHostTestDir)
-	fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	f()
 	reportLeakedFD(fs, t)
 }
@@ -708,14 +708,20 @@ func createFakeDiskTestNodeHost(addr string,
 
 func snapshotCompressedTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost), fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
 			logdb.RDBContextValueSize = ovs
 		}()
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, err := createSnapshotCompressedTestNodeHost(singleNodeHostTestAddr,
 			singleNodeHostTestDir, fs)
 		if err != nil {
@@ -733,14 +739,20 @@ func snapshotCompressedTest(t *testing.T,
 func singleConcurrentNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost),
 	snapshotEntry uint64, concurrent bool, fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
 			logdb.RDBContextValueSize = ovs
 		}()
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, err := createConcurrentTestNodeHost(singleNodeHostTestAddr,
 			singleNodeHostTestDir, snapshotEntry, concurrent, fs)
 		if err != nil {
@@ -759,14 +771,20 @@ func singleConcurrentNodeHostTest(t *testing.T,
 func singleFakeDiskNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost, initialApplied uint64),
 	initialApplied uint64, compressed bool, fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
 			logdb.RDBContextValueSize = ovs
 		}()
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, _, err := createFakeDiskTestNodeHost(singleNodeHostTestAddr,
 			singleNodeHostTestDir, initialApplied, false, compressed, fs)
 		if err != nil {
@@ -783,7 +801,11 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 
 func twoFakeDiskNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost), fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
@@ -792,7 +814,9 @@ func twoFakeDiskNodeHostTest(t *testing.T,
 		defer leaktest.AfterTest(t)()
 		nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh1, nh2, err := createFakeDiskTwoTestNodeHosts(nodeHostTestAddr1,
 			nodeHostTestAddr2, nh1dir, nh2dir, fs)
 		if err != nil {
@@ -948,7 +972,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 
 func rateLimitedTwoNodeHostTest(t *testing.T,
 	tf func(t *testing.T, leaderNh *NodeHost, followerNh *NodeHost), fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
@@ -957,7 +985,9 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 		nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh1, nh2, err := createRateLimitedTwoTestNodeHosts(nodeHostTestAddr1,
 			nodeHostTestAddr2, nh1dir, nh2dir, fs)
 		if err != nil {
@@ -974,14 +1004,20 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 
 func rateLimitedNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost), fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
 			logdb.RDBContextValueSize = ovs
 		}()
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, err := createRateLimitedTestNodeHost(singleNodeHostTestAddr,
 			singleNodeHostTestDir, fs)
 		if err != nil {
@@ -1154,7 +1190,11 @@ func TestSnapshotCanBeStopped(t *testing.T) {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		waitForLeaderToBeElected(t, nh, 2)
-		defer fs.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		createProposalsToTriggerSnapshot(t, nh, 50, true)
 		nh.Stop()
 		time.Sleep(100 * time.Millisecond)
@@ -1175,7 +1215,11 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		waitForLeaderToBeElected(t, nh, 2)
-		defer fs.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		createProposalsToTriggerSnapshot(t, nh, 25, false)
 		logdb := nh.logdb
 		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
@@ -1438,7 +1482,11 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 }
 
 func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName string, fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
 			singleNodeHostTestDir, false, false, fs)
@@ -1482,7 +1530,11 @@ func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
 
 func runSingleNodeHostTest(t *testing.T,
 	tf func(t *testing.T, nh *NodeHost), cfg config.Config, compressed bool, fs vfs.IFS) {
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		osv := delaySampleRatio
 		defer func() {
@@ -1494,7 +1546,9 @@ func runSingleNodeHostTest(t *testing.T,
 		}()
 		delaySampleRatio = 1
 		defer leaktest.AfterTest(t)()
-		fs.RemoveAll(singleNodeHostTestDir)
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, _, err := createSingleNodeTestNodeHostCfg(singleNodeHostTestAddr,
 			singleNodeHostTestDir, false, cfg, compressed, fs)
 		if err != nil {
@@ -1905,7 +1959,11 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		testSM := fakeDiskSM.(*tests.FakeDiskSM)
-		defer fs.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		defer func() {
 			nh.Stop()
 		}()
@@ -2619,11 +2677,17 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 			t.Errorf("unexpected index %d", idx)
 		}
 		sspath := "exported_snapshot_safe_to_delete"
-		fs.RemoveAll(sspath)
+		if err := fs.RemoveAll(sspath); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := fs.MkdirAll(sspath, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer fs.RemoveAll(sspath)
+		defer func() {
+			if err := fs.RemoveAll(sspath); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		opt := SnapshotOption{
 			Exported:   true,
 			ExportPath: sspath,
@@ -2683,9 +2747,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			op, err := nh.RequestCompaction(2)
 			if err == nil {
-				select {
-				case <-op.CompletedC():
-				}
+				<-op.CompletedC()
 			}
 			ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 12, 14, math.MaxUint64)
 			if err != nil {
@@ -2767,7 +2829,11 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		pst.slowSave = true
-		defer fs.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		defer nh.Stop()
 		waitForLeaderToBeElected(t, nh, 2)
 		session := nh.GetNoOPSession(2)
@@ -3000,11 +3066,17 @@ func TestSnapshotCanBeExported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		sspath := "exported_snapshot_safe_to_delete"
-		fs.RemoveAll(sspath)
+		if err := fs.RemoveAll(sspath); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := fs.MkdirAll(sspath, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer fs.RemoveAll(sspath)
+		defer func() {
+			if err := fs.RemoveAll(sspath); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		session := nh.GetNoOPSession(2)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		cmd := make([]byte, 1518)
@@ -3093,11 +3165,17 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			t.Fatalf("failed to make proposal")
 		}
 		sspath := "exported_snapshot_safe_to_delete"
-		fs.RemoveAll(sspath)
+		if err := fs.RemoveAll(sspath); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := fs.MkdirAll(sspath, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer fs.RemoveAll(sspath)
+		defer func() {
+			if err := fs.RemoveAll(sspath); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		opt := SnapshotOption{
 			Exported:   true,
 			ExportPath: sspath,
@@ -3220,11 +3298,17 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		}
 		makeProposals(nh)
 		sspath := "exported_snapshot_safe_to_delete"
-		fs.RemoveAll(sspath)
+		if err := fs.RemoveAll(sspath); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := fs.MkdirAll(sspath, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer fs.RemoveAll(sspath)
+		defer func() {
+			if err := fs.RemoveAll(sspath); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		opt := SnapshotOption{
 			Exported:   true,
 			ExportPath: sspath,
@@ -3381,7 +3465,11 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
-		defer fs.RemoveAll(singleNodeHostTestDir)
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		defer once.Do(func() {
 			nh1.Stop()
 			nh2.Stop()
@@ -3406,11 +3494,17 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		}
 		mkproposal(nh1)
 		sspath := "exported_snapshot_safe_to_delete"
-		fs.RemoveAll(sspath)
+		if err := fs.RemoveAll(sspath); err != nil {
+			t.Fatalf("%v", err)
+		}
 		if err := fs.MkdirAll(sspath, 0755); err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer fs.RemoveAll(sspath)
+		defer func() {
+			if err := fs.RemoveAll(sspath); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		opt := SnapshotOption{
 			Exported:   true,
 			ExportPath: sspath,
@@ -3554,7 +3648,9 @@ func getTestSSMeta() *rsm.SSMeta {
 
 func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	enabled bool, exp uint64, fs vfs.IFS) {
-	fs.RemoveAll(testSnapshotDir)
+	if err := fs.RemoveAll(testSnapshotDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	c := &chunks{}
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
@@ -3564,7 +3660,11 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSSMeta()
 	cw := rsm.NewChunkWriter(sink, meta)
-	defer fs.RemoveAll(testSnapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.ChunkSize)
 		rand.Read(data)
@@ -3591,7 +3691,9 @@ func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 
 func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testSnapshotDir)
+	if err := fs.RemoveAll(testSnapshotDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	c := &chunks{}
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
@@ -3604,7 +3706,11 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if _, err := cw.Write(rsm.GetEmptyLRUSession()); err != nil {
 		t.Fatalf("write failed %v", err)
 	}
-	defer fs.RemoveAll(testSnapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	payload := make([]byte, 0)
 	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
@@ -3779,7 +3885,9 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get abs %v", err)
 		}
-		fs.RemoveAll(fp)
+		if err := fs.RemoveAll(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
 		nh, err = NewNodeHost(nhc)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
@@ -4074,7 +4182,9 @@ func TestRaftEventsAreReported(t *testing.T) {
 		logdb.RDBContextValueSize = ovs
 	}()
 	defer leaktest.AfterTest(t)()
-	fs.RemoveAll(singleNodeHostTestDir)
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	rel := &testRaftEventListener{
 		received: make([]raftio.LeaderInfo, 0),
 	}
@@ -4098,7 +4208,11 @@ func TestRaftEventsAreReported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create node host")
 	}
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer nh.Stop()
 	var pst *PST
 	newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
@@ -4165,8 +4279,14 @@ func TestV2DataCanBeHandled(t *testing.T) {
 	}
 	v2datafp := "internal/logdb/testdata/v2-rocksdb-batched.tar.bz2"
 	targetDir := "test-v2-data-safe-to-remove"
-	fs.RemoveAll(targetDir)
-	defer fs.RemoveAll(targetDir)
+	if err := fs.RemoveAll(targetDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		if err := fs.RemoveAll(targetDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	topDirName := "single_nodehost_test_dir_safe_to_delete"
 	testHostname := "lindfield.local"
 	if err := fileutil.ExtractTarBz2(v2datafp, targetDir, fs); err != nil {
@@ -4415,7 +4535,11 @@ func TestTimeoutCanBeReturned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create node host %v", err)
 	}
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer nh.Stop()
 	newSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
 		return &TimeoutStateMachine{

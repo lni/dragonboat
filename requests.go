@@ -15,7 +15,7 @@
 package dragonboat
 
 import (
-	"crypto/md5"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -207,12 +207,6 @@ func (c RequestResultCode) String() string {
 func getTerminatedResult() RequestResult {
 	return RequestResult{
 		code: requestTerminated,
-	}
-}
-
-func getAbortedResult() RequestResult {
-	return RequestResult{
-		code: requestAborted,
 	}
 }
 
@@ -880,12 +874,12 @@ func getRandomGenerator(clusterID uint64,
 	nano := time.Now().UnixNano()
 	seedStr := fmt.Sprintf("%d-%d-%d-%d-%s-%d",
 		pid, nano, clusterID, nodeID, addr, partition)
-	m := md5.New()
+	m := sha512.New()
 	if _, err := io.WriteString(m, seedStr); err != nil {
 		panic(err)
 	}
-	md5sum := m.Sum(nil)
-	seed := binary.LittleEndian.Uint64(md5sum)
+	sum := m.Sum(nil)
+	seed := binary.LittleEndian.Uint64(sum)
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}
 }
 

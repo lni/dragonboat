@@ -165,20 +165,23 @@ type ClusterInfo struct {
 	ClusterID uint64
 	// NodeID is the node ID of the Raft cluster node.
 	NodeID uint64
-	// IsLeader indicates whether this is a leader node.
-	IsLeader bool
-	// IsObserver indicates whether this is a non-voting observer node.
-	IsObserver bool
-	// IsWitness indicates whether this is a witness node without actual log.
-	IsWitness bool
-	// StateMachineType is the type of the state machine.
-	StateMachineType sm.Type
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
 	// ConfigChangeIndex is the current config change index of the Raft node.
 	// ConfigChangeIndex is Raft Log index of the last applied membership
 	// change entry.
 	ConfigChangeIndex uint64
+	// StateMachineType is the type of the state machine.
+	StateMachineType sm.Type
+	// Pending is a boolean flag indicating whether details of the cluster node
+	// is not available. The Pending flag is set to true usually because the node
+	// has not had anything applied yet.
+	// IsLeader indicates whether this is a leader node.
+	IsLeader bool
+	// IsObserver indicates whether this is a non-voting observer node.
+	IsObserver bool
+	// IsWitness indicates whether this is a witness node without actual log.
+	IsWitness bool
 	// Pending is a boolean flag indicating whether details of the cluster node
 	// is not available. The Pending flag is set to true usually because the node
 	// has not had anything applied yet.
@@ -211,25 +214,25 @@ var DefaultNodeHostInfoOption NodeHostInfoOption
 // SnapshotOption is the options users can specify when requesting a snapshot
 // to be generated.
 type SnapshotOption struct {
+	// CompactionOverhead is the compaction overhead value to use for the request
+	// snapshot operation when OverrideCompactionOverhead is true. This field is
+	// ignored when exporting a snapshot, that is when Exported is true.
+	CompactionOverhead uint64
+	// ExportPath is the path where the exported snapshot should be stored, it
+	// must point to an existing directory for which the current user has write
+	// permission to it.
+	ExportPath string
 	// Exported is a boolean flag indicating whether the snapshot requested to
 	// be generated should be exported. For an exported snapshot, it is users'
 	// responsibility to manage the snapshot files. By default, a requested
 	// snapshot is not considered as exported, such a regular snapshot is managed
 	// the system.
 	Exported bool
-	// ExportPath is the path where the exported snapshot should be stored, it
-	// must point to an existing directory for which the current user has write
-	// permission to it.
-	ExportPath string
 	// OverrideCompactionOverhead defines whether the requested snapshot operation
 	// should override the compaction overhead setting specified in node's config.
 	// This field is ignored by the system when exporting a snapshot, that is when
 	// Exported is true.
 	OverrideCompactionOverhead bool
-	// CompactionOverhead is the compaction overhead value to use for the request
-	// snapshot operation when OverrideCompactionOverhead is true. This field is
-	// ignored when exporting a snapshot, that is when Exported is true.
-	CompactionOverhead uint64
 }
 
 // DefaultSnapshotOption is the default SnapshotOption value to use when

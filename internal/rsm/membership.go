@@ -25,8 +25,8 @@ import (
 )
 
 func addressEqual(addr1 string, addr2 string) bool {
-	return strings.ToLower(strings.TrimSpace(addr1)) ==
-		strings.ToLower(strings.TrimSpace(addr2))
+	return strings.EqualFold(strings.TrimSpace(addr1),
+		strings.TrimSpace(addr2))
 }
 
 func deepCopyMembership(m pb.Membership) pb.Membership {
@@ -263,9 +263,7 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 	switch cc.Type {
 	case pb.AddNode:
 		nodeAddr := string(cc.Address)
-		if _, ok := m.members.Observers[cc.NodeID]; ok {
-			delete(m.members.Observers, cc.NodeID)
-		}
+		delete(m.members.Observers, cc.NodeID)
 		if _, ok := m.members.Witnesses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}

@@ -28,7 +28,9 @@ import (
 )
 
 func removeTestLogdbDir(fs vfs.IFS) {
-	fs.RemoveAll(RDBTestDirectory)
+	if err := fs.RemoveAll(RDBTestDirectory); err != nil {
+		panic(err)
+	}
 }
 
 func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {

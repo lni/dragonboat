@@ -555,13 +555,14 @@ GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	plugin/rocksdb plugin/leveldb plugin/pebble plugin/chan internal/settings    \
 	internal/tests internal/logdb/kv internal/utils/dio internal/vfs             \
 	internal/logdb
+EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
 
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \
 		golangci-lint run $$p; \
 	done;
-	@golangci-lint run .
-	@golangci-lint run --build-tags=dragonboat_language_binding binding
+	@golangci-lint run $(EXTRA_LINTERS) .
+	@golangci-lint run $(EXTRA_LINTERS) --build-tags=dragonboat_language_binding binding
 
 ###############################################################################
 # clean

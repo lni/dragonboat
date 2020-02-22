@@ -334,7 +334,11 @@ func TestCppWrapperSnapshotWorks(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.Remove(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ds := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
@@ -405,7 +409,11 @@ func TestRegularSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.Remove(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateRegularStateMachine",
@@ -480,7 +488,11 @@ func TestConcurrentSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.Remove(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateConcurrentStateMachine",
@@ -662,7 +674,11 @@ func TestOnDiskSMCanRecoverFromExportedSnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fs := vfs.GetTestFS()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.RemoveAll(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	initialApplied := uint64(123)
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
@@ -750,7 +766,11 @@ func TestOnDiskSMCanSaveDummySnapshot(t *testing.T) {
 	defer leaktest.AfterTest(t)
 	fs := vfs.GetTestFS()
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.Remove(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ds1 := NewStateMachineWrapperFromPlugin(1, 1,
 		"./dragonboat-cpp-plugin-example.so",
 		"CreateOnDiskStateMachine",
@@ -868,7 +888,11 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		t.Fatalf("failed to close the snapshot writer %v", err)
 	}
 	fp := "cpp_test_snapshot_file_safe_to_delete.snap"
-	defer fs.Remove(fp)
+	defer func() {
+		if err := fs.RemoveAll(fp); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	f, err := fs.Create(fp)
 	if err != nil {
 		t.Errorf("failed to create temp snapshot file")
