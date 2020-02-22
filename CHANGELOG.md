@@ -24,7 +24,7 @@ Dragonboat v3.2 comes with new features and improvements. All v3.1.x users are r
 
 ### Breaking changes
 
-There is no breanking change for regular users. However, 
+There is no breaking change for regular users. However, 
 
  - If you have built customized transport module implementing the raftio.IRaftRPC interface, there is minor change to the config.RaftRPCFactoryFunc type. See github.com/lni/dragoboat/config/config.go for details.
  - The default transport module has been updated, it is no longer compatible with earlier versions of dragonboat. 
