@@ -162,7 +162,6 @@ GOBUILDTAGVALS+=$(LOGDB_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
 TESTTAGVALS+=$(GOBUILDTAGVALS)
 TESTTAGS="$(TESTTAGVALS)"
-$(info build tags are set to $(GOBUILDTAGS))
 
 all: unit-test-bin
 rebuild-all: clean unit-test-bin
@@ -178,6 +177,7 @@ cross-rebuild-darwin: cross-rebuild
 cross-rebuild-freebsd: EXTNAME=freebsd
 cross-rebuild-freebsd: GO=GOOS=freebsd $(GOCMD)
 cross-rebuild-freebsd: cross-rebuild
+
 ###############################################################################
 # download and install rocksdb
 ###############################################################################
@@ -309,13 +309,13 @@ dev-test: test
 ###############################################################################
 # build unit tests
 ###############################################################################
-unit-test-bin: TEST_OPTIONS=test -c -o $@.bin $(GOCMDTAGS) 						       \
+unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
 	test-tests test-fs
 
-cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) $(GOCMDTAGS)          \
+cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)     \
   -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport    \
   test-multiraft test-config test-client test-server test-tools test-tests   \
@@ -585,5 +585,5 @@ clean: clean-binding
 	gen-test-docker-images docker-test dragonboat-test \
 	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
 	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb travis-ci-test dev-test \
+	docker-test-no-rocksdb travis-ci-test dev-test cross-rebuild-bin \
 	cross-rebuild cross-rebuild-win cross-rebuild-darwin cross-rebuild-freebsd
