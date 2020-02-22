@@ -146,7 +146,9 @@ func (g *testSnapshotDir) generateSnapshotFile(clusterID uint64,
 }
 
 func (g *testSnapshotDir) cleanup() {
-	g.fs.RemoveAll(snapshotDir)
+	if err := g.fs.RemoveAll(snapshotDir); err != nil {
+		panic(err)
+	}
 }
 
 type testMessageHandler struct {
@@ -767,7 +769,11 @@ func getTestSnapshotFileSize(sz uint64) uint64 {
 func testSnapshotCanBeSent(t *testing.T,
 	sz uint64, maxWait uint64, mutualTLS bool, fs vfs.IFS) {
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
-	defer fs.RemoveAll(snapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(snapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -886,7 +892,11 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	mutualTLS bool, fs vfs.IFS) {
 	snapshotSize := uint64(snapshotChunkSize) * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
-	defer fs.RemoveAll(snapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(snapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()
@@ -1106,7 +1116,11 @@ func TestFailedSnapshotSendWillBeReported(t *testing.T) {
 func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	sz uint64, maxWait uint64, mutualTLS bool, fs vfs.IFS) {
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
-	defer fs.RemoveAll(snapshotDir)
+	defer func() {
+		if err := fs.RemoveAll(snapshotDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer trans.serverCtx.Stop()
 	defer tt.cleanup()
 	defer trans.Stop()

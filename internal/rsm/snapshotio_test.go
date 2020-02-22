@@ -43,13 +43,21 @@ func TestSnapshotWriterCanBeCreated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	defer w.Close()
 }
 
 func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	fs := vfs.GetTestFS()
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		w, err := NewSnapshotWriter(testSnapshotFilename,
 			SnapshotVersion, pb.NoCompression, fs)
@@ -99,7 +107,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 
 func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	psz uint64, v SSVersion, fs vfs.IFS) (*SnapshotWriter, []byte, []byte) {
-	fs.RemoveAll(testSnapshotFilename)
+	if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+		t.Fatalf("%v", err)
+	}
 	w, err := NewSnapshotWriter(testSnapshotFilename, v, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
@@ -151,7 +161,11 @@ func createTestSnapshotFile(t *testing.T,
 }
 
 func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		createTestSnapshotFile(t, v, fs)
 		corruptSnapshotPayload(t, fs)
@@ -193,7 +207,11 @@ func TestCorruptedPayloadWillBeDetected(t *testing.T) {
 }
 
 func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) {
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		_, sessionData, storeData := createTestSnapshotFile(t, v, fs)
 		r, err := NewSnapshotReader(testSnapshotFilename, fs)
@@ -248,7 +266,11 @@ func readTestSnapshot(fn string, sz uint64, fs vfs.IFS) ([]byte, error) {
 
 func testSingleBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 	createTestSnapshotFile(t, sv, fs)
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024, fs)
 	if err != nil {
 		t.Fatalf("failed to get snapshot data %v", err)
@@ -283,7 +305,11 @@ func TestSingleBlockSnapshotValidation(t *testing.T) {
 
 func testMultiBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 	makeTestSnapshotFile(t, 1024*1024, 1024*1024*8, sv, fs)
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024*10, fs)
 	if err != nil {
 		t.Fatalf("failed to get snapshot data %v", err)
@@ -357,7 +383,9 @@ func TestShrinkSnapshot(t *testing.T) {
 		t.Fatalf("failed to get writer %v", err)
 	}
 	defer func() {
-		fs.RemoveAll(snapshotFilename)
+		if err := fs.RemoveAll(snapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, uint64(0))
@@ -385,7 +413,9 @@ func TestShrinkSnapshot(t *testing.T) {
 		t.Errorf("failed to shrink snapshot %v", err)
 	}
 	defer func() {
-		fs.RemoveAll(shrunkFilename)
+		if err := fs.RemoveAll(shrunkFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	shrunk, err = IsShrinkedSnapshotFile(snapshotFilename, fs)
 	if err != nil {
@@ -442,8 +472,12 @@ func TestReplaceSnapshotFile(t *testing.T) {
 	createFile(f1name, 1024)
 	createFile(f2name, 2048)
 	defer func() {
-		fs.RemoveAll(f1name)
-		fs.RemoveAll(f2name)
+		if err := fs.RemoveAll(f1name); err != nil {
+			t.Fatalf("%v", err)
+		}
+		if err := fs.RemoveAll(f2name); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}()
 	if err := ReplaceSnapshotFile(f2name, f1name, fs); err != nil {
 		t.Fatalf("failed to replace file %v", err)
@@ -462,7 +496,11 @@ func TestReplaceSnapshotFile(t *testing.T) {
 }
 
 func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
-	defer fs.RemoveAll(testSnapshotFilename)
+	defer func() {
+		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		makeTestSnapshotFile(t, 0, sz, V2SnapshotVersion, fs)
 		reader, err := NewSnapshotReader(testSnapshotFilename, fs)

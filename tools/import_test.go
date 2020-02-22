@@ -51,11 +51,17 @@ func TestCheckImportSettings(t *testing.T) {
 
 func TestGetSnapshotFilenames(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testDataDir)
+	if err := fs.RemoveAll(testDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(testDataDir)
+	defer func() {
+		if err := fs.RemoveAll(testDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	for i := 0; i < 16; i++ {
 		fn := fmt.Sprintf("%d.%s", i, server.SnapshotFileSuffix)
 		dst := fs.PathJoin(testDataDir, fn)
@@ -89,11 +95,17 @@ func TestGetSnapshotFilenames(t *testing.T) {
 
 func TestSnapshotFilepath(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testDataDir)
+	if err := fs.RemoveAll(testDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(testDataDir)
+	defer func() {
+		if err := fs.RemoveAll(testDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	fn := fmt.Sprintf("testdata.%s", server.SnapshotFileSuffix)
 	dst := fs.PathJoin(testDataDir, fn)
 	f, err := fs.Create(dst)
@@ -152,16 +164,28 @@ func createTestDataFile(path string, sz uint64, fs vfs.IFS) error {
 
 func TestCopySnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testDataDir)
-	fs.RemoveAll(testDstDataDir)
+	if err := fs.RemoveAll(testDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := fs.RemoveAll(testDstDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
 	if err := fs.MkdirAll(testDstDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(testDataDir)
-	defer fs.RemoveAll(testDstDataDir)
+	defer func() {
+		if err := fs.RemoveAll(testDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	defer func() {
+		if err := fs.RemoveAll(testDstDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	src := fs.PathJoin(testDataDir, "test.gbsnap")
 	if err := createTestDataFile(src, 1024, fs); err != nil {
 		t.Fatalf("failed to create test file %v", err)
@@ -197,11 +221,17 @@ func TestCopySnapshot(t *testing.T) {
 
 func TestCopySnapshotFile(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testDataDir)
+	if err := fs.RemoveAll(testDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(testDataDir)
+	defer func() {
+		if err := fs.RemoveAll(testDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	src := fs.PathJoin(testDataDir, "test.data")
 	dst := fs.PathJoin(testDataDir, "test.data.copied")
 	f, err := fs.Create(src)
@@ -226,7 +256,9 @@ func TestCopySnapshotFile(t *testing.T) {
 		t.Fatalf("failed to open %v", err)
 	}
 	defer dstf.Close()
-	io.Copy(buf, dstf)
+	if _, err := io.Copy(buf, dstf); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if !bytes.Equal(buf.Bytes(), data) {
 		t.Fatalf("content changed")
 	}
@@ -234,11 +266,17 @@ func TestCopySnapshotFile(t *testing.T) {
 
 func TestMissingMetadataFileIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(testDataDir)
+	if err := fs.RemoveAll(testDataDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(testDataDir)
+	defer func() {
+		if err := fs.RemoveAll(testDataDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	_, err := getSnapshotRecord(testDataDir, "test.data", fs)
 	if err == nil {
 		t.Fatalf("failed to report error")

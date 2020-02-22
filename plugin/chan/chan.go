@@ -236,12 +236,14 @@ func (ct *ChanTransport) serveConn(cc chanConn) {
 			break
 		}
 	}
-	for len(cc.dataChan) > 0 {
+	for {
 		select {
 		case data := <-cc.dataChan:
 			if !ct.process(data, cc) {
 				return
 			}
+		default:
+			return
 		}
 	}
 }

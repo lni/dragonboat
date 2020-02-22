@@ -43,7 +43,6 @@ var (
 	writeBufferSize            = int(settings.Soft.KVWriteBufferSize)
 	maxWriteBufferNumber       = int(settings.Soft.KVMaxWriteBufferNumber)
 	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
-	l0SlowdownWritesTrigger    = int(settings.Soft.KVLevel0SlowdownWritesTrigger)
 	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
 	maxBytesForLevelBase       = int64(settings.Soft.KVMaxBytesForLevelBase)
 	targetFileSizeBase         = int64(settings.Soft.KVTargetFileSizeBase)

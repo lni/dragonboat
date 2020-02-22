@@ -45,7 +45,11 @@ func getTestNodeHostConfig() config.NodeHostConfig {
 
 func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	fs := vfs.GetTestFS()
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		c := getTestNodeHostConfig()
 		defer func() {
@@ -86,7 +90,11 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	addr string, hostname string, binVer uint32, name string,
 	hardHashMismatch bool, expErr error, fs vfs.IFS) {
 	c := getTestNodeHostConfig()
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ctx, err := NewContext(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
@@ -155,7 +163,11 @@ func TestCanDetectMismatchedHardHash(t *testing.T) {
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	fs := vfs.GetTestFS()
 	c := getTestNodeHostConfig()
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	ctx, err := NewContext(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new context %v", err)
@@ -172,11 +184,17 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 
 func TestRemoveSavedSnapshots(t *testing.T) {
 	fs := vfs.GetTestFS()
-	fs.RemoveAll(singleNodeHostTestDir)
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
 	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	defer fs.RemoveAll(singleNodeHostTestDir)
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	for i := 0; i < 16; i++ {
 		ssdir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))
 		if err := fs.MkdirAll(ssdir, 0755); err != nil {

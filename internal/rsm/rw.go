@@ -68,32 +68,6 @@ func getChecksumedBlockSize(sz uint64, blockSize uint64) uint64 {
 	return uint64(math.Ceil(float64(sz)/float64(blockSize)))*checksumSize + sz
 }
 
-func validateHeaderRecord(header pb.SnapshotHeader) bool {
-	checksum := header.HeaderChecksum
-	header.HeaderChecksum = nil
-	if header.ChecksumType != pb.CRC32IEEE {
-		plog.Errorf("unsupported checksum type %d", header.ChecksumType)
-		return false
-	}
-	version := SSVersion(header.Version)
-	if version != V1SnapshotVersion && version != V2SnapshotVersion {
-		plog.Errorf("unsupported version %d", header.Version)
-		return false
-	}
-	data, err := header.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	headerHash, ok := getChecksum(header.ChecksumType)
-	if !ok {
-		return false
-	}
-	if _, err := headerHash.Write(data); err != nil {
-		panic(err)
-	}
-	return bytes.Equal(headerHash.Sum(nil), checksum)
-}
-
 func validateBlock(block []byte, h hash.Hash) bool {
 	if uint64(len(block)) <= checksumSize {
 		return false

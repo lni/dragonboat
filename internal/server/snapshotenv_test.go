@@ -114,7 +114,11 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 
 func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv), fs vfs.IFS) {
 	rd := "server-pkg-test-data-safe-to-delete"
-	defer fs.RemoveAll(rd)
+	defer func() {
+		if err := fs.RemoveAll(rd); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
 	func() {
 		ff := func(cid uint64, nid uint64) string {
 			return rd

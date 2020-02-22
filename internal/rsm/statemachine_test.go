@@ -42,7 +42,9 @@ const (
 )
 
 func removeTestDir(fs vfs.IFS) {
-	fs.RemoveAll(testSnapshotterDir)
+	if err := fs.RemoveAll(testSnapshotterDir); err != nil {
+		panic(err)
+	}
 }
 
 func createTestDir(fs vfs.IFS) {
@@ -1929,9 +1931,15 @@ func TestRecoverSMRequired(t *testing.T) {
 	ssIndex := uint64(200)
 	for idx, tt := range tests {
 		fs := vfs.GetTestFS()
-		defer fs.RemoveAll(testSnapshotterDir)
+		defer func() {
+			if err := fs.RemoveAll(testSnapshotterDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
 		func() {
-			fs.RemoveAll(testSnapshotterDir)
+			if err := fs.RemoveAll(testSnapshotterDir); err != nil {
+				t.Fatalf("%v", err)
+			}
 			if err := fs.MkdirAll(testSnapshotterDir, 0755); err != nil {
 				t.Fatalf("mkdir failed %v", err)
 			}
@@ -2425,5 +2433,8 @@ func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
 			t.Fatalf("failed to trigger panic")
 		}
 	}()
-	sm.SaveSnapshot(SSRequest{})
+	_, _, err := sm.SaveSnapshot(SSRequest{})
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 }

@@ -15,7 +15,7 @@
 package dragonboat
 
 import (
-	"crypto/md5"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -67,8 +67,8 @@ var (
 	ErrSystemBusy = errors.New("system is too busy try again later")
 	// ErrClusterClosed indicates that the requested cluster is being shut down.
 	ErrClusterClosed = errors.New("raft cluster already closed")
-	// ErrClusterNotInitialized indicates that the requested cluster has not been
-	// initialized yet.
+	// ErrClusterNotInitialized indicates that the requested operation can not be
+	// completed as the involved raft cluster has not been initialized yet.
 	ErrClusterNotInitialized = errors.New("raft cluster not initialized yet")
 	// ErrBadKey indicates that the key is bad, retry the request is recommended.
 	ErrBadKey = errors.New("bad key try again later")
@@ -87,7 +87,8 @@ var (
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
 	// ErrClusterNotReady indicates that the request has been dropped as the
-	// raft cluster is not ready.
+	// specified raft cluster is not ready to handle the request. Unknown leader
+	// is the most common cause of this error.
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
@@ -206,12 +207,6 @@ func (c RequestResultCode) String() string {
 func getTerminatedResult() RequestResult {
 	return RequestResult{
 		code: requestTerminated,
-	}
-}
-
-func getAbortedResult() RequestResult {
-	return RequestResult{
-		code: requestAborted,
 	}
 }
 
@@ -879,12 +874,12 @@ func getRandomGenerator(clusterID uint64,
 	nano := time.Now().UnixNano()
 	seedStr := fmt.Sprintf("%d-%d-%d-%d-%s-%d",
 		pid, nano, clusterID, nodeID, addr, partition)
-	m := md5.New()
+	m := sha512.New()
 	if _, err := io.WriteString(m, seedStr); err != nil {
 		panic(err)
 	}
-	md5sum := m.Sum(nil)
-	seed := binary.LittleEndian.Uint64(md5sum)
+	sum := m.Sum(nil)
+	seed := binary.LittleEndian.Uint64(sum)
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}
 }
 

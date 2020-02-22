@@ -317,8 +317,7 @@ func (sc *Context) compatible(dir string,
 	ldbBinVer uint32, name string, dbto bool) error {
 	fp := sc.fs.PathJoin(dir, addressFilename)
 	se := func(s1 string, s2 string) bool {
-		return strings.ToLower(strings.TrimSpace(s1)) ==
-			strings.ToLower(strings.TrimSpace(s2))
+		return strings.EqualFold(strings.TrimSpace(s1), strings.TrimSpace(s2))
 	}
 	if _, err := sc.fs.Stat(fp); vfs.IsNotExist(err) {
 		if dbto {
