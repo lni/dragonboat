@@ -18,6 +18,8 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lni/goutils/logutil"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -81,6 +83,10 @@ func newSnapshotter(clusterID uint64,
 
 func (s *snapshotter) id() string {
 	return dn(s.clusterID, s.nodeID)
+}
+
+func (s *snapshotter) ssid(index uint64) string {
+	return logutil.DescribeSS(s.clusterID, s.nodeID, index)
 }
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,
@@ -242,7 +248,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 			env := s.getSSEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
-			plog.Infof("%s shrinking snapshot %d, %d", s.id(), ss.Index, idx)
+			plog.Infof("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp, s.fs); err != nil {
 				return err
 			}
@@ -265,7 +271,7 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
 	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
 	for idx, ss := range selected {
-		plog.Infof("%s compacting snapshot %d, %d", s.id(), ss.Index, idx)
+		plog.Infof("%s compacting %s, %d", s.id(), s.ssid(ss.Index), idx)
 		if err := s.logdb.DeleteSnapshot(s.clusterID,
 			s.nodeID, ss.Index); err != nil {
 			return err
@@ -319,16 +325,15 @@ func (s *snapshotter) ProcessOrphans() error {
 			}
 			env := s.getSSEnv(ss.Index)
 			if deleteDir {
-				plog.Infof("going to delete orphan dir %s", fdir)
+				plog.Infof("going to delete orphan %s in %s", s.ssid(ss.Index), fdir)
 				if err := env.RemoveFinalDir(); err != nil {
 					return err
 				}
 			} else {
-				plog.Infof("will keep the dir with flag file removed, %s", fdir)
+				plog.Infof("keep %s, %s", s.ssid(ss.Index), fdir)
 				if err := env.RemoveFlagFile(); err != nil {
 					return err
 				}
-				plog.Infof("flag file removed")
 			}
 		} else if s.isZombieDir(fi.Name()) {
 			plog.Infof("going to delete a zombie dir %s", fdir)

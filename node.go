@@ -31,6 +31,7 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 )
@@ -541,14 +542,13 @@ func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) bool {
 	return n.pushTask(rec)
 }
 
-func (n *node) pushSnapshot(snapshot pb.Snapshot,
-	lastApplied uint64) bool {
+func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) bool {
 	if pb.IsEmptySnapshot(snapshot) {
 		return true
 	}
 	if snapshot.Index < n.pushedIndex ||
 		snapshot.Index < n.ss.getSnapshotIndex() ||
-		snapshot.Index < lastApplied {
+		snapshot.Index < applied {
 		panic("got a snapshot older than current applied state")
 	}
 	rec := rsm.Task{
@@ -571,7 +571,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	}
 	if snapshot.Index > 0 {
 		if err = n.logreader.ApplySnapshot(snapshot); err != nil {
-			plog.Errorf("failed to apply snapshot %v", err)
+			plog.Errorf("failed to apply snapshot, %v", err)
 			return false, err
 		}
 	}
@@ -595,21 +595,21 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	return newNode, nil
 }
 
-func (n *node) saveSnapshotRequired(lastApplied uint64) bool {
+func (n *node) saveSnapshotRequired(applied uint64) bool {
 	if n.config.SnapshotEntries == 0 {
 		return false
 	}
 	si := n.ss.getSnapshotIndex()
 	if n.pushedIndex <= n.config.SnapshotEntries+si ||
-		lastApplied <= n.config.SnapshotEntries+si ||
-		lastApplied <= n.config.SnapshotEntries+n.ss.getReqSnapshotIndex() {
+		applied <= n.config.SnapshotEntries+si ||
+		applied <= n.config.SnapshotEntries+n.ss.getReqSnapshotIndex() {
 		return false
 	}
 	if n.isBusySnapshotting() {
 		return false
 	}
-	plog.Infof("%s requested snapshot at index %d", n.id(), lastApplied)
-	n.ss.setReqSnapshotIndex(lastApplied)
+	plog.Infof("%s requested to create %s", n.id(), n.ssid(applied))
+	n.ss.setReqSnapshotIndex(applied)
 	return true
 }
 
@@ -660,8 +660,8 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	if tests.ReadyToReturnTestKnob(n.stopc, true, "snapshotter.Commit") {
 		return 0, nil
 	}
-	plog.Infof("%s snapshotted, index %d, term %d, file count %d",
-		n.id(), ss.Index, ss.Term, len(ss.Files))
+	plog.Infof("%s snapshotted, %s, term %d, file count %d",
+		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
 	if err := n.snapshotter.Commit(*ss, req); err != nil {
 		plog.Errorf("%s Commit failed %v", n.id(), err)
 		if err == errSnapshotOutOfDate {
@@ -747,7 +747,7 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 			return 0, err
 		}
 		if idx > 0 && rec.NewNode {
-			plog.Panicf("Open returned index %d (>0) on new node %s", idx, n.id())
+			plog.Panicf("%s, Open returned index %d (>0)", n.id(), idx)
 		}
 	}
 	index, err := n.sm.RecoverFromSnapshot(rec)
@@ -760,18 +760,19 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 		return 0, err
 	}
 	if index > 0 {
+		plog.Infof("%s recovered from %s", n.id(), n.ssid(index))
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
-				plog.Errorf("sm.Sync failed %v", err)
+				plog.Errorf("%s sm.Sync failed %v", n.id(), err)
 				return 0, err
 			}
 			if err := n.snapshotter.Shrink(index); err != nil {
-				plog.Errorf("snapshotter.Shrink snapshot failed %v", err)
+				plog.Errorf("%s snapshotter.Shrink failed %v", n.id(), err)
 				return 0, err
 			}
 		}
 		if err := n.snapshotter.Compact(index); err != nil {
-			plog.Errorf("snapshotter.Compact failed %v", err)
+			plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
 			return 0, err
 		}
 	}
@@ -1523,6 +1524,10 @@ func (n *node) getClusterInfo() *ClusterInfo {
 
 func (n *node) id() string {
 	return dn(n.clusterID, n.nodeID)
+}
+
+func (n *node) ssid(index uint64) string {
+	return logutil.DescribeSS(n.clusterID, n.nodeID, index)
 }
 
 func (n *node) isLeader() bool {

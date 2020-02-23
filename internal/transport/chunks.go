@@ -21,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lni/goutils/logutil"
+
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -196,7 +198,7 @@ func (c *Chunks) record(chunk pb.Chunk) *tracked {
 	key := chunkKey(chunk)
 	td := c.tracked[key]
 	if chunk.ChunkId == 0 {
-		plog.Infof("first chunk of a snapshot %s received", key)
+		plog.Infof("first chunk of %s received", c.ssid(chunk))
 		if td != nil {
 			plog.Warningf("removing unclaimed chunks %s", key)
 			c.removeTempDir(td.firstChunk)
@@ -295,8 +297,8 @@ func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 			return false
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
-		plog.Infof("%s received snapshot from %d, idx %d, term %d",
-			dn(chunk.ClusterId, chunk.NodeId), chunk.From, chunk.Index, chunk.Term)
+		plog.Infof("%s received from %d, term %d",
+			c.ssid(chunk), chunk.From, chunk.Term)
 		c.onReceive(snapshotMessage)
 		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)
 	}
@@ -403,4 +405,8 @@ func (c *Chunks) toMessage(chunk pb.Chunk,
 		DeploymentId: chunk.DeploymentId,
 		Requests:     []pb.Message{m},
 	}
+}
+
+func (c *Chunks) ssid(chunk pb.Chunk) string {
+	return logutil.DescribeSS(chunk.ClusterId, chunk.NodeId, chunk.Index)
 }

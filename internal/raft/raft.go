@@ -314,7 +314,8 @@ func (r *raft) describe() string {
 	if err != nil && err != ErrCompacted {
 		plog.Panicf("%s failed to get term, %v", dn(r.clusterID, r.nodeID), err)
 	}
-	fmtstr := "[first:%d,last:%d,term:%d,commit:%d,applied:%d] %s term %d"
+	// first, last, term, committed, applied
+	fmtstr := "[f:%d,l:%d,t:%d,c:%d,a:%d] %s t%d"
 	return fmt.Sprintf(fmtstr,
 		r.log.firstIndex(), r.log.lastIndex(), t, r.log.committed,
 		r.log.processed, dn(r.clusterID, r.nodeID), r.term)
