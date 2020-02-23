@@ -272,12 +272,7 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
 	for idx, ss := range selected {
 		plog.Infof("%s compacting %s, %d", s.id(), s.ssid(ss.Index), idx)
-		if err := s.logdb.DeleteSnapshot(s.clusterID,
-			s.nodeID, ss.Index); err != nil {
-			return err
-		}
-		env := s.getSSEnv(ss.Index)
-		if err := env.RemoveFinalDir(); err != nil {
+		if err := s.removeSnapshot(ss.Index); err != nil {
 			return err
 		}
 	}
@@ -288,6 +283,15 @@ func (s *snapshotter) ProcessOrphans() error {
 	files, err := s.fs.List(s.dir)
 	if err != nil {
 		return err
+	}
+	noss := false
+	mrss, err := s.GetMostRecentSnapshot()
+	if err != nil {
+		if err == ErrNoSnapshot {
+			noss = true
+		} else {
+			return err
+		}
 	}
 	for _, n := range files {
 		fi, err := s.fs.Stat(s.fs.PathJoin(s.dir, n))
@@ -308,29 +312,24 @@ func (s *snapshotter) ProcessOrphans() error {
 			if pb.IsEmptySnapshot(ss) {
 				plog.Panicf("empty snapshot found in %s", fdir)
 			}
-			deleteDir := false
-			mrss, err := s.GetMostRecentSnapshot()
-			plog.Infof("most recent snapshot: %d, ss index %d", mrss.Index, ss.Index)
-			if err != nil {
-				if err == ErrNoSnapshot {
-					plog.Infof("no snapshot in logdb, delete the folder")
-					deleteDir = true
-				} else {
-					return err
-				}
+			remove := false
+			if noss {
+				plog.Infof("no snapshot in logdb, delete the folder")
+				remove = true
 			} else {
+				plog.Infof("most recent: %s, cur: %d", s.ssid(mrss.Index), ss.Index)
 				if mrss.Index != ss.Index {
-					deleteDir = true
+					remove = true
 				}
 			}
-			env := s.getSSEnv(ss.Index)
-			if deleteDir {
+			if remove {
 				plog.Infof("going to delete orphan %s in %s", s.ssid(ss.Index), fdir)
-				if err := env.RemoveFinalDir(); err != nil {
+				if err := s.removeSnapshot(ss.Index); err != nil {
 					return err
 				}
 			} else {
 				plog.Infof("keep %s, %s", s.ssid(ss.Index), fdir)
+				env := s.getSSEnv(ss.Index)
 				if err := env.RemoveFlagFile(); err != nil {
 					return err
 				}
@@ -347,6 +346,15 @@ func (s *snapshotter) ProcessOrphans() error {
 		}
 	}
 	return nil
+}
+
+func (s *snapshotter) removeSnapshot(index uint64) error {
+	if err := s.logdb.DeleteSnapshot(s.clusterID,
+		s.nodeID, index); err != nil {
+		return err
+	}
+	env := s.getSSEnv(index)
+	return env.RemoveFinalDir()
 }
 
 func (s *snapshotter) removeFlagFile(index uint64) error {
