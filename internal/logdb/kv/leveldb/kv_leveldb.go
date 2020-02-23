@@ -16,11 +16,17 @@ package leveldb
 
 import (
 	"bytes"
+	"sync"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/leveldb/levigo"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
+)
+
+var (
+	plog = logger.GetLogger("leveldbkv")
 )
 
 type levelDBWriteBatch struct {
@@ -62,6 +68,7 @@ func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 var _ kv.IKVStore = &KV{}
 
 // KV is a leveldb based IKVStore type.
+// This module has been deprecated, it will be removed in a future release.
 type KV struct {
 	db   *levigo.DB
 	opts *levigo.Options
@@ -70,7 +77,12 @@ type KV struct {
 	fp   *levigo.FilterPolicy
 }
 
+var wonce sync.Once
+
 func openLevelDB(dir string, wal string) (kv.IKVStore, error) {
+	wonce.Do(func() {
+		plog.Infof("leveldb based LogDB has been deprecated")
+	})
 	opts := levigo.NewOptions()
 	opts.SetCreateIfMissing(true)
 	filter := levigo.NewBloomFilter(10)

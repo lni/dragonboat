@@ -15,7 +15,7 @@
 /*
 Package leveldb provides factory functions for creating LevelDB based Log DB.
 
-LevelDB support is in BETA status, it is recommended to use the RocksDB based
+LevelDB support has been deprecated, it is recommended to use the RocksDB based
 Log DB in production.
 */
 package leveldb
@@ -30,6 +30,8 @@ import (
 // NewLogDB is the factory function for creating LevelDB based Log DB instances.
 // Raft entries are stored in its plain format, it uses less memory than the
 // batched alternative implementation but comes at the cost of lower throughput.
+//
+// Deprecated: please use the default RocksDB based LogDB.
 func NewLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
 	return logdb.NewLogDB(dirs, lldirs, false, false, fs, leveldb.NewKVStore)
@@ -38,6 +40,8 @@ func NewLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 // NewBatchedLogDB is the factory function for creating LevelDB based Log DB
 // instances. Raft entries are batched before they get stored into LevelDB, it
 // uses more memory and provides better throughput performance.
+//
+// Deprecated: please use the default RocksDB based LogDB.
 func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
 	return logdb.NewLogDB(dirs, lldirs, true, false, fs, leveldb.NewKVStore)
