@@ -51,6 +51,8 @@ github.com/lni/goutils v0.0.0-20200127103218-6790055847c8 h1:HAzfB9/MvlUe6O54etH
 github.com/lni/goutils v0.0.0-20200127103218-6790055847c8/go.mod h1:NDD+zR5cMNH2OsJj+r/X7zBSzBlmxytUUot268gtOOw=
 github.com/lni/goutils v0.0.0-20200222081325-abff41629bcd h1:wPZua40rgWetd1JL3v1QLPwrvPO79FJQE1wFj+by8Jg=
 github.com/lni/goutils v0.0.0-20200222081325-abff41629bcd/go.mod h1:NDD+zR5cMNH2OsJj+r/X7zBSzBlmxytUUot268gtOOw=
+github.com/lni/goutils v0.0.0-20200223142840-ed28551955fe h1:eTqyFgwppCd9KvhHjZgAXFjboi6rKAOxtr/05kVB8VE=
+github.com/lni/goutils v0.0.0-20200223142840-ed28551955fe/go.mod h1:NDD+zR5cMNH2OsJj+r/X7zBSzBlmxytUUot268gtOOw=
 github.com/lni/goutils v1.0.0 h1:6WZd06gJ8Z5D/xsfo/0Vjvpka4CnsfFEqA46jEa+QtY=
 github.com/lni/goutils v1.0.0/go.mod h1:YXJ/qxCzsqyfhiMd8eVZ+8EP+BZfzC3mbMIY5lJdqOg=
 github.com/lni/goutils v1.0.1 h1:b0RTWAg84viMYUy9zJZGATzyXZlCLra3HqMgzydCx8I=

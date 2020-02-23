@@ -6,7 +6,7 @@ require (
 	github.com/golang/protobuf v1.3.3
 	github.com/golang/snappy v0.0.1
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
-	github.com/lni/goutils v0.0.0-20200222081325-abff41629bcd
+	github.com/lni/goutils v0.0.0-20200223142840-ed28551955fe
 )
 
 go 1.13
