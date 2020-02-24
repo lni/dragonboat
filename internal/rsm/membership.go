@@ -291,6 +291,8 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 	}
 }
 
+var nid = logutil.NodeID
+
 func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	// order id requested by user
 	ccid := cc.ConfigChangeId
@@ -318,50 +320,50 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		// current entry index, it will be recorded as the conf change id of the members
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
-			plog.Infof("%s applied ConfChange Add ccid %d (%d), node %s (%s)",
-				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
+			plog.Infof("%s applied ADD ccid %d (%d), %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
 		} else if cc.Type == pb.RemoveNode {
-			plog.Infof("%s applied ConfChange Remove ccid %d (%d), node %s",
-				m.id(), ccid, index, logutil.NodeID(cc.NodeID))
+			plog.Infof("%s applied REMOVE ccid %d (%d), %s",
+				m.id(), ccid, index, nid(cc.NodeID))
 		} else if cc.Type == pb.AddObserver {
-			plog.Infof("%s applied ConfChange Add Observer ccid %d (%d), node %s (%s)",
-				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
+			plog.Infof("%s applied ADD OBSERVER ccid %d (%d), %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
 		} else if cc.Type == pb.AddWitness {
-			plog.Infof("%s applied ConfChange Add Witness ccid %d (%d), node %s (%s)",
-				m.id(), ccid, index, logutil.NodeID(cc.NodeID), string(cc.Address))
+			plog.Infof("%s applied ADD WITNESS ccid %d (%d), %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
 		} else {
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}
 	} else {
 		if !upToDateCC {
-			plog.Warningf("%s rejected out-of-order ConfChange ccid %d (%d), type %s",
+			plog.Warningf("%s rej out-of-order ConfChange ccid %d (%d), type %s",
 				m.id(), ccid, index, cc.Type)
 		} else if addRemovedNode {
-			plog.Warningf("%s rejected adding removed node ccid %d (%d), node id %d",
-				m.id(), ccid, index, cc.NodeID)
+			plog.Warningf("%s rej add removed ccid %d (%d), %s",
+				m.id(), ccid, index, nid(cc.NodeID))
 		} else if alreadyMember {
-			plog.Warningf("%s rejected adding existing member ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add exist ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if nodeBecomingObserver {
-			plog.Warningf("%s rejected adding existing member as observer ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add exist as observer ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if nodeBecomingWitness {
-			plog.Warningf("%s rejected adding existing member as witness ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add exist as witness ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if witnessBecomingNode {
-			plog.Warningf("%s rejected adding witness as node ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add witness as node ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if witnessBecomingObserver {
-			plog.Warningf("%s rejected adding witness as observer ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add witness as observer ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if observerBecomingWitness {
-			plog.Warningf("%s rejected adding observer as witness ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej add observer as witness ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if deleteOnlyNode {
-			plog.Warningf("%s rejected removing the only node %d", m.id(), cc.NodeID)
+			plog.Warningf("%s rej remove the only node %s", m.id(), nid(cc.NodeID))
 		} else if invalidPromotion {
-			plog.Warningf("%s rejected invalid observer promotion change ccid %d (%d) node id %d (%s)",
-				m.id(), ccid, index, cc.NodeID, cc.Address)
+			plog.Warningf("%s rej invalid observer promotion ccid %d (%d) %s (%s)",
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else {
 			plog.Panicf("config change rejected for unknown reasons")
 		}

@@ -65,7 +65,7 @@ func Launch(config *config.Config,
 	logdb ILogDB, events server.IRaftEventListener,
 	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
-	plog.Infof("%s created, initial: %t, new %t",
+	plog.Infof("%s created, initial: %t, new: %t",
 		dn(config.ClusterID, config.NodeID), initial, newNode)
 	r := newRaft(config, logdb)
 	p := &Peer{raft: r}
@@ -323,7 +323,8 @@ func (p *Peer) entryLog() *entryLog {
 	return p.raft.log
 }
 
-func (p *Peer) getUpdate(moreEntriesToApply bool, lastApplied uint64) pb.Update {
+func (p *Peer) getUpdate(moreEntriesToApply bool,
+	lastApplied uint64) pb.Update {
 	ud := pb.Update{
 		ClusterID:     p.raft.clusterID,
 		NodeID:        p.raft.nodeID,
@@ -380,7 +381,7 @@ func bootstrap(r *raft, addresses []PeerAddress) {
 	})
 	ents := make([]pb.Entry, len(addresses))
 	for i, peer := range addresses {
-		plog.Infof("%s inserting a bootstrap ConfigChangeAddNode, %d, %s",
+		plog.Infof("%s added bootstrap ConfigChangeAddNode, %d, %s",
 			r.describe(), peer.NodeID, string(peer.Address))
 		cc := pb.ConfigChange{
 			Type:       pb.AddNode,

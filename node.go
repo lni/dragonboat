@@ -1382,7 +1382,7 @@ func (n *node) processSnapshotStatusTransition() bool {
 
 func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
-		plog.Infof("%s is checking initial snapshot", n.id())
+		plog.Infof("%s checking initial snapshot", n.id())
 		return rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,
@@ -1402,7 +1402,7 @@ func (n *node) processRecoverSnapshotStatus() bool {
 			panic("got a completed.SnapshotRequested")
 		}
 		if rec.InitialSnapshot {
-			plog.Infof("%s handled initial snapshot, index %d", n.id(), rec.Index)
+			plog.Infof("%s initialized using %s", n.id(), n.ssid(rec.Index))
 			n.setInitialStatus(rec.Index)
 			n.sysEvents.Publish(server.SystemEvent{
 				Type:      server.NodeReady,

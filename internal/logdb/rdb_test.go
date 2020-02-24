@@ -870,6 +870,16 @@ func TestIterateEntries(t *testing.T) {
 	runLogDBTest(t, tf, fs)
 }
 
+func TestDeleteNotExistSnapshotIsAllowed(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		if err := db.DeleteSnapshot(1, 2, 1); err != nil {
+			t.Errorf("delete snapshot failed %v", err)
+		}
+	}
+	fs := vfs.GetTestFS()
+	runLogDBTest(t, tf, fs)
+}
+
 func TestSaveSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		snapshotList, err := db.ListSnapshots(1, 2, math.MaxUint64)

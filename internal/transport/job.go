@@ -19,6 +19,8 @@ import (
 	"errors"
 	"sync/atomic"
 
+	"github.com/lni/goutils/logutil"
+
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -132,8 +134,9 @@ func (j *job) sendSavedSnapshot(m pb.Message) {
 
 func (j *job) SendChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
-		plog.Infof("node %d is sending chunk %d to %s",
-			chunk.From, chunk.ChunkId, dn(chunk.ClusterId, chunk.NodeId))
+		plog.Infof("%s is sending chunk %d to %s",
+			logutil.NodeID(chunk.From), chunk.ChunkId,
+			dn(chunk.ClusterId, chunk.NodeId))
 	} else {
 		plog.Infof("sending a poison chunk to %s", dn(j.clusterID, j.nodeID))
 	}

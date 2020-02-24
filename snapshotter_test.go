@@ -262,6 +262,71 @@ func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
 	runSnapshotterTest(t, fn, fs)
 }
 
+func TestOrphanedSnapshotRecordIsRemoved(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
+		s1 := pb.Snapshot{
+			FileSize: 1234,
+			Filepath: "f2",
+			Index:    100,
+			Term:     200,
+		}
+		s2 := pb.Snapshot{
+			FileSize: 1234,
+			Filepath: "f2",
+			Index:    200,
+			Term:     200,
+		}
+		env1 := s.getSSEnv(s1.Index)
+		env2 := s.getSSEnv(s2.Index)
+		fd1 := env1.GetFinalDir()
+		fd2 := env2.GetFinalDir()
+		if err := fs.MkdirAll(fd1, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := fs.MkdirAll(fd2, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := fileutil.CreateFlagFile(fd1, fileutil.SnapshotFlagFilename, &s1, fs); err != nil {
+			t.Errorf("failed to create flag file %s", err)
+		}
+		if err := fileutil.CreateFlagFile(fd2, fileutil.SnapshotFlagFilename, &s2, fs); err != nil {
+			t.Errorf("failed to create flag file %s", err)
+		}
+		if err := s.saveToLogDB(s1); err != nil {
+			t.Errorf("failed to save snapshot to logdb")
+		}
+		if err := s.saveToLogDB(s2); err != nil {
+			t.Errorf("failed to save snapshot to logdb")
+		}
+		// two orphane snapshots, kept the most recent one, and remove the older
+		// one including its logdb record.
+		if err := s.ProcessOrphans(); err != nil {
+			t.Errorf("failed to process orphaned snapshtos %s", err)
+		}
+		if _, err := fs.Stat(fd1); vfs.IsExist(err) {
+			t.Errorf("failed to remove fd1")
+		}
+		if _, err := fs.Stat(fd2); vfs.IsNotExist(err) {
+			t.Errorf("unexpectedly removed fd2")
+		}
+		if fileutil.HasFlagFile(fd2, fileutil.SnapshotFlagFilename, fs) {
+			t.Errorf("flag for fd2 not removed")
+		}
+		snapshots, err := s.logdb.ListSnapshots(1, 1, 200)
+		if err != nil {
+			t.Fatalf("failed to list snapshot %v", err)
+		}
+		if len(snapshots) != 1 {
+			t.Fatalf("unexpected number of records %d", len(snapshots))
+		}
+		if snapshots[0].Index != 200 {
+			t.Fatalf("unexpected record %v", snapshots[0])
+		}
+	}
+	runSnapshotterTest(t, fn, fs)
+}
+
 func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {

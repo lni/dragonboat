@@ -24,7 +24,8 @@ type LogTestHelper struct {
 	el *entryLog
 }
 
-// NewLog creates and returns a new LogTestHelper instance used for testing purpose.
+// NewLog creates and returns a new LogTestHelper instance used for testing
+// purpose.
 func NewLog(logdb ILogDB) *LogTestHelper {
 	return &LogTestHelper{
 		el: newEntryLog(logdb, server.NewRateLimiter(0)),

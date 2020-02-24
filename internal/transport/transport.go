@@ -374,8 +374,7 @@ func (t *Transport) sendUnreachableNotification(addr string) {
 	}
 	h := handler.(IRaftMessageHandler)
 	edp := t.resolver.ReverseResolve(addr)
-	plog.Infof("node %s becomes unreachable, affecting %d raft nodes, %s",
-		addr, len(edp), sampleNodeInfoList(edp))
+	plog.Infof("%s became unreachable, affecting %d raft nodes", addr, len(edp))
 	for _, rec := range edp {
 		h.HandleUnreachable(rec.ClusterID, rec.NodeID)
 	}
@@ -535,7 +534,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 				batch.Requests = requests[:len(requests)-1]
 			}
 			if err := t.sendMessageBatch(conn, batch); err != nil {
-				plog.Errorf("send batch failed, target node %s (%v), %d",
+				plog.Errorf("send batch failed, target %s (%v), %d",
 					dn(clusterID, toNodeID), err, len(batch.Requests))
 				return err
 			}
@@ -603,28 +602,4 @@ func createTransportRPC(nhConfig config.NodeHostConfig,
 		factory = NewTCPTransport
 	}
 	return factory(nhConfig, requestHandler, chunkHandler)
-}
-
-func sampleNodeInfoList(l []raftio.NodeInfo) string {
-	if len(l) <= 32 {
-		return strings.Join(nodeInfoListToString(l), ",")
-	}
-	other := len(l) - 32
-	fp := l[:16]
-	lp := l[len(l)-16:]
-	return fmt.Sprintf("%s ... and other %d nodes ... %s",
-		strings.Join(nodeInfoListToString(fp), ","), other,
-		strings.Join(nodeInfoListToString(lp), ","))
-}
-
-func nodeInfoListToString(l []raftio.NodeInfo) []string {
-	result := make([]string, 0)
-	for _, rec := range l {
-		s := dn(rec.ClusterID, rec.NodeID)
-		result = append(result, s)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return strings.Compare(result[i], result[j]) < 0
-	})
-	return result
 }

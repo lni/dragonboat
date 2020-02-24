@@ -270,8 +270,8 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	}
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
 	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
-	for idx, ss := range selected {
-		plog.Infof("%s compacting %s, %d", s.id(), s.ssid(ss.Index), idx)
+	for _, ss := range selected {
+		plog.Infof("%s compacting %s", s.id(), s.ssid(ss.Index))
 		if err := s.removeSnapshot(ss.Index); err != nil {
 			return err
 		}

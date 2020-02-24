@@ -229,14 +229,14 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate(s.fs)
-	plog.Infof("%s called RecoverFromSnapshot, idx %d, on disk idx %d",
-		s.id(), ss.Index, ss.OnDiskIndex)
+	plog.Infof("%s called RecoverFromSnapshot, %s, on disk idx %d",
+		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
 		return idx, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
-	plog.Infof("%s snapshot %d restored", s.id(), ss.Index)
+	plog.Infof("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
 
@@ -255,7 +255,7 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	}
 	snapshot, err := s.snapshotter.GetMostRecentSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
-		plog.Infof("%s no snapshot available during node launch", s.id())
+		plog.Infof("%s no snapshot available during launch", s.id())
 		return pb.Snapshot{}, nil
 	}
 	return snapshot, nil
@@ -305,16 +305,15 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
 		return 0, sm.ErrSnapshotStopped
 	}
 	if s.recoverSMRequired(ss, init) {
-		plog.Infof("%s recovering from snapshot, term %d, index %d, init %t",
-			s.id(), ss.Term, index, init)
-		logMembership("members", index, ss.Membership.Addresses)
-		logMembership("observers", index, ss.Membership.Observers)
-		logMembership("witnesses", index, ss.Membership.Witnesses)
+		plog.Infof("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
+		s.logMembership("members", index, ss.Membership.Addresses)
+		s.logMembership("observers", index, ss.Membership.Observers)
+		s.logMembership("witnesses", index, ss.Membership.Witnesses)
 		fs := getSnapshotFiles(ss)
 		fn := s.snapshotter.GetFilePath(index)
 		s.canRecoverOnDiskSnapshot(ss, init)
 		if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
-			plog.Errorf("failed to load snapshot, %s, %v", s.id(), err)
+			plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
 			if err == sm.ErrSnapshotStopped {
 				// no more lookup allowed
 				s.aborted = true
@@ -532,7 +531,7 @@ func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
 		panic("invalid snapshot request")
 	}
 	if s.isWitness {
-		plog.Panicf("witness node %s is trying to save snapshot", s.id())
+		plog.Panicf("witness %s saving snapshot", s.id())
 	}
 	if s.Concurrent() {
 		return s.saveConcurrentSnapshot(req)
@@ -633,10 +632,11 @@ func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
 	return false
 }
 
-func logMembership(name string, index uint64, members map[uint64]string) {
-	plog.Infof("%d %s included in snapshot %d", len(members), name, index)
+func (s *StateMachine) logMembership(name string,
+	index uint64, members map[uint64]string) {
+	plog.Infof("%d %s included in %s", len(members), name, s.ssid(index))
 	for nid, addr := range members {
-		plog.Infof("\t%d:%s", nid, addr)
+		plog.Infof("\t%s : %s", logutil.NodeID(nid), addr)
 	}
 }
 
@@ -662,8 +662,8 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		Type:            s.sm.StateMachineType(),
 		CompressionType: ct,
 	}
-	plog.Infof("%s generating a snapshot at index %d", s.id(), meta.Index)
-	logMembership("members", meta.Index, meta.Membership.Addresses)
+	plog.Infof("%s generating %s", s.id(), s.ssid(meta.Index))
+	s.logMembership("members", meta.Index, meta.Membership.Addresses)
 	if err := s.sessions.SaveSessions(meta.Session); err != nil {
 		return nil, err
 	}
@@ -1056,6 +1056,10 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 
 func (s *StateMachine) id() string {
 	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
+}
+
+func (s *StateMachine) ssid(index uint64) string {
+	return logutil.DescribeSS(s.node.ClusterID(), s.node.NodeID(), index)
 }
 
 func getSnapshotFiles(snapshot pb.Snapshot) []sm.SnapshotFile {
