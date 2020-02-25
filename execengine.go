@@ -390,9 +390,7 @@ func (p *workerPool) workerPoolMain() {
 			plog.Panicf("chosen %d, unexpected case", chosen)
 		}
 		if toSchedule {
-			if cci == 0 || len(nodes) == 0 {
-				cci, nodes = p.loadNodes(cci, nodes)
-			}
+			cci, nodes = p.loadNodes(cci, nodes)
 			p.schedule(nodes)
 		}
 	}
