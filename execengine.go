@@ -39,6 +39,7 @@ var (
 )
 
 type nodeLoader interface {
+	id() string
 	getClusterSetIndex() uint64
 	forEachClusterRun(bf func() bool,
 		af func() bool, f func(uint64, *node) bool)
@@ -124,16 +125,39 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 	return readyMap.getReadyClusters()
 }
 
-type tsn struct {
+type jobType uint64
+
+const (
+	snapshotAvailable jobType = iota
+	snapshotRequested
+	streamSnapshot
+)
+
+var jobTypeNames = [...]string{
+	"snapshotAvailable",
+	"snapshotRequested",
+	"streamSnapshot",
+}
+
+func (jt jobType) String() string {
+	return jobTypeNames[uint64(jt)]
+}
+
+type pendingJob struct {
+	jt        jobType
+	clusterID uint64
+}
+
+type job struct {
 	task rsm.Task
-	sink getSink
 	node *node
+	sink getSink
 }
 
 type ssWorker struct {
 	workerID   uint64
 	stopper    *syncutil.Stopper
-	requestC   chan tsn
+	requestC   chan job
 	completedC chan struct{}
 }
 
@@ -141,7 +165,7 @@ func newSSWorker(workerID uint64, stopper *syncutil.Stopper) *ssWorker {
 	w := &ssWorker{
 		workerID:   workerID,
 		stopper:    stopper,
-		requestC:   make(chan tsn, 1),
+		requestC:   make(chan job, 1),
 		completedC: make(chan struct{}, 1),
 	}
 	stopper.RunWorker(func() {
@@ -155,11 +179,11 @@ func (w *ssWorker) workerMain() {
 		select {
 		case <-w.stopper.ShouldStop():
 			return
-		case req := <-w.requestC:
-			if req.node == nil {
+		case job := <-w.requestC:
+			if job.node == nil {
 				panic("req.node == nil")
 			}
-			w.handle(req)
+			w.handle(job)
 			w.completed()
 		}
 	}
@@ -169,44 +193,41 @@ func (w *ssWorker) completed() {
 	w.completedC <- struct{}{}
 }
 
-func (w *ssWorker) handle(req tsn) {
-	if !req.task.IsSnapshotTask() {
-		panic("not a snapshot task")
-	}
-	if req.task.SnapshotAvailable {
-		w.recoverFromSnapshot(req)
-	} else if req.task.SnapshotRequested {
-		w.saveSnapshot(req)
-	} else if req.task.StreamSnapshot {
-		w.streamSnapshot(req)
+func (w *ssWorker) handle(j job) {
+	if j.task.SnapshotAvailable {
+		w.recoverFromSnapshot(j)
+	} else if j.task.SnapshotRequested {
+		w.saveSnapshot(j)
+	} else if j.task.StreamSnapshot {
+		w.streamSnapshot(j)
 	} else {
 		panic("unknown snapshot task type")
 	}
 }
 
-func (w *ssWorker) recoverFromSnapshot(rec tsn) {
-	if index, err := rec.node.recoverFromSnapshot(rec.task); err != nil {
+func (w *ssWorker) recoverFromSnapshot(j job) {
+	if index, err := j.node.recoverFromSnapshot(j.task); err != nil {
 		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
 			panic(err)
 		}
 	} else {
-		rec.node.recoverFromSnapshotDone(index)
+		j.node.recoverFromSnapshotDone(index)
 	}
 }
 
-func (w *ssWorker) saveSnapshot(rec tsn) {
-	if err := rec.node.saveSnapshot(rec.task); err != nil {
+func (w *ssWorker) saveSnapshot(j job) {
+	if err := j.node.saveSnapshot(j.task); err != nil {
 		panic(err)
 	} else {
-		rec.node.saveSnapshotDone()
+		j.node.saveSnapshotDone()
 	}
 }
 
-func (w *ssWorker) streamSnapshot(rec tsn) {
-	if err := rec.node.streamSnapshot(rec.sink()); err != nil {
+func (w *ssWorker) streamSnapshot(j job) {
+	if err := j.node.streamSnapshot(j.sink()); err != nil {
 		panic(err)
 	} else {
-		rec.node.streamSnapshotDone()
+		j.node.streamSnapshotDone()
 	}
 }
 
@@ -221,7 +242,7 @@ type workerPool struct {
 	saving        map[uint64]struct{} // map of clusterID
 	recovering    map[uint64]struct{} // map of clusterID
 	streaming     map[uint64]uint64   // map of clusterID -> target count
-	pending       []tsn
+	pending       []pendingJob
 	workerStopper *syncutil.Stopper
 	poolStopper   *syncutil.Stopper
 }
@@ -238,7 +259,7 @@ func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
 		saving:        make(map[uint64]struct{}, snapshotWorkerCount),
 		recovering:    make(map[uint64]struct{}, snapshotWorkerCount),
 		streaming:     make(map[uint64]uint64, snapshotWorkerCount),
-		pending:       make([]tsn, 0),
+		pending:       make([]pendingJob, 0),
 		workerStopper: syncutil.NewStopper(),
 		poolStopper:   syncutil.NewStopper(),
 	}
@@ -315,55 +336,28 @@ func (p *workerPool) workerPoolMain() {
 			}
 			return
 		} else if chosen == 1 {
-			cci, nodes = p.loadNodes(cci, nodes)
 			clusters := p.saveReady.getReadyMap(1)
 			for cid := range clusters {
-				n, ok := nodes[cid]
-				if ok {
-					req, ok := n.ss.getSaveSnapshotReq()
-					if !ok {
-						continue
-					}
-					req.ClusterID = cid
-					tr := tsn{task: req}
-					p.pending = append(p.pending, tr)
-					toSchedule = true
-				}
+				pj := pendingJob{clusterID: cid, jt: snapshotRequested}
+				plog.Infof("%s snapshotRequested for %d", p.nh.id(), cid)
+				p.pending = append(p.pending, pj)
+				toSchedule = true
 			}
 		} else if chosen == 2 {
-			cci, nodes = p.loadNodes(cci, nodes)
 			clusters := p.recoverReady.getReadyMap(1)
 			for cid := range clusters {
-				n, ok := nodes[cid]
-				if ok {
-					if n.clusterID != cid {
-						plog.Panicf("n.clusterID != cid")
-					}
-					req, ok := n.ss.getRecoverFromSnapshotReq()
-					if !ok {
-						continue
-					}
-					req.ClusterID = cid
-					tr := tsn{task: req}
-					p.pending = append(p.pending, tr)
-					toSchedule = true
-				}
+				pj := pendingJob{clusterID: cid, jt: snapshotAvailable}
+				plog.Infof("%s snapshotAvailable for %d", p.nh.id(), cid)
+				p.pending = append(p.pending, pj)
+				toSchedule = true
 			}
 		} else if chosen == 3 {
-			cci, nodes = p.loadNodes(cci, nodes)
 			clusters := p.streamReady.getReadyMap(1)
 			for cid := range clusters {
-				n, ok := nodes[cid]
-				if ok {
-					req, sinkFn, ok := n.ss.getStreamSnapshotReq()
-					if !ok {
-						continue
-					}
-					req.ClusterID = cid
-					tr := tsn{task: req, sink: sinkFn}
-					p.pending = append(p.pending, tr)
-					toSchedule = true
-				}
+				pj := pendingJob{clusterID: cid, jt: streamSnapshot}
+				plog.Infof("%s streamSnapshot for %d", p.nh.id(), cid)
+				p.pending = append(p.pending, pj)
+				toSchedule = true
 			}
 		} else if chosen >= 4 && chosen <= 4+len(p.workers)-1 {
 			workerID := uint64(chosen - 4)
@@ -390,7 +384,7 @@ func (p *workerPool) workerPoolMain() {
 			plog.Panicf("chosen %d, unexpected case", chosen)
 		}
 		if toSchedule {
-			cci, nodes = p.loadNodes(cci, nodes)
+			cci, nodes = p.loadNodes(0, nodes)
 			p.schedule(nodes)
 		}
 	}
@@ -408,6 +402,7 @@ func (p *workerPool) doLoadNodes(cci uint64,
 	newCCI := p.nh.getClusterSetIndex()
 	if newCCI != cci {
 		newNodes := make(map[uint64]*node)
+		// busy nodes should never be offloaded
 		for _, n := range p.busy {
 			newNodes[n.clusterID] = n
 		}
@@ -444,16 +439,19 @@ func (p *workerPool) completed(workerID uint64) {
 	delete(p.busy, workerID)
 	_, ok1 := p.saving[n.clusterID]
 	if ok1 {
+		plog.Infof("%s completed snapshotRequested", n.id())
 		delete(p.saving, n.clusterID)
 	}
 	_, ok2 := p.recovering[n.clusterID]
 	if ok2 {
+		plog.Infof("%s completed snapshotAvailable", n.id())
 		delete(p.recovering, n.clusterID)
 	}
 	count, ok3 := p.streaming[n.clusterID]
 	if ok3 {
+		plog.Infof("%s completed streamSnapshot", n.id())
 		if count == 0 {
-			plog.Panicf("node is not streaming, but it just completed streaming")
+			plog.Panicf("node completed streaming when not streaming")
 		} else if count == 1 {
 			delete(p.streaming, n.clusterID)
 		} else {
@@ -489,17 +487,18 @@ func (p *workerPool) canRecover(clusterID uint64) bool {
 	return !p.inProgress(clusterID)
 }
 
-func (p *workerPool) canSchedule(rec tsn) bool {
-	if rec.task.SnapshotAvailable {
-		v := p.canRecover(rec.task.ClusterID)
-		return v
-	} else if rec.task.SnapshotRequested {
-		return p.canSave(rec.task.ClusterID)
-	} else if rec.task.StreamSnapshot {
-		return p.canStream(rec.task.ClusterID)
+func (p *workerPool) canSchedule(j pendingJob) bool {
+	switch j.jt {
+	case snapshotAvailable:
+		return p.canRecover(j.clusterID)
+	case snapshotRequested:
+		return p.canSave(j.clusterID)
+	case streamSnapshot:
+		return p.canStream(j.clusterID)
+	default:
+		plog.Panicf("unknown job type %d", j.jt)
 	}
-	plog.Panicf("unknown task type %v", rec.task)
-	return false
+	panic("not suppose to reach here")
 }
 
 func (p workerPool) setBusy(node *node, workerID uint64) {
@@ -535,16 +534,17 @@ func (p *workerPool) startRecovering(node *node, workerID uint64) {
 	p.recovering[node.clusterID] = struct{}{}
 }
 
-func (p *workerPool) start(rec tsn, node *node, workerID uint64) {
+func (p *workerPool) start(jt jobType, node *node, workerID uint64) {
 	p.setBusy(node, workerID)
-	if rec.task.SnapshotAvailable {
+	switch jt {
+	case snapshotAvailable:
 		p.startRecovering(node, workerID)
-	} else if rec.task.SnapshotRequested {
+	case snapshotRequested:
 		p.startSaving(node, workerID)
-	} else if rec.task.StreamSnapshot {
+	case streamSnapshot:
 		p.startStreaming(node, workerID)
-	} else {
-		plog.Panicf("unknown task type %v", rec.task)
+	default:
+		plog.Panicf("unknown task type %d", jt)
 	}
 }
 
@@ -562,21 +562,21 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 	}
 	w := p.getWorker()
 	if w == nil {
+		plog.Infof("%s no more worker", p.nh.id())
 		return false
 	}
-	for idx, ct := range p.pending {
-		n, ok := nodes[ct.task.ClusterID]
+	for idx, pj := range p.pending {
+		n, ok := nodes[pj.clusterID]
 		if !ok {
 			p.removeFromPending(idx)
 			return true
 		}
-		if n.clusterID != ct.task.ClusterID {
-			plog.Panicf("n.clusterID != ct.task.ClusterID")
-		}
-		if p.canSchedule(ct) {
-			p.scheduleTask(ct, n, w)
-			p.removeFromPending(idx)
-			return true
+		if p.canSchedule(pj) {
+			if p.scheduleTask(pj.jt, n, w) {
+				plog.Infof("%s scheduled for %s", n.id(), pj.jt)
+				p.removeFromPending(idx)
+				return true
+			}
 		}
 	}
 	return false
@@ -591,14 +591,37 @@ func (p *workerPool) removeFromPending(idx int) {
 	}
 }
 
-func (p *workerPool) scheduleTask(rec tsn, n *node, w *ssWorker) {
-	p.start(rec, n, w.workerID)
-	req := tsn{task: rec.task, sink: rec.sink, node: n}
+func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
+	var j job
+	switch jt {
+	case snapshotRequested:
+		req, ok := n.ss.getSaveSnapshotReq()
+		if !ok {
+			return false
+		}
+		j = job{task: req, node: n}
+	case snapshotAvailable:
+		req, ok := n.ss.getRecoverFromSnapshotReq()
+		if !ok {
+			return false
+		}
+		j = job{task: req, node: n}
+	case streamSnapshot:
+		req, sinkFn, ok := n.ss.getStreamSnapshotReq()
+		if !ok {
+			return false
+		}
+		j = job{task: req, node: n, sink: sinkFn}
+	default:
+		panic("unknown job type")
+	}
+	p.start(jt, n, w.workerID)
 	select {
-	case w.requestC <- req:
+	case w.requestC <- j:
 	default:
 		panic("worker busy")
 	}
+	return true
 }
 
 type execEngine struct {
