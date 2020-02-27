@@ -711,8 +711,7 @@ func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
 
 func (n *node) streamSnapshot(sink pb.IChunkSink) error {
 	if sink != nil {
-		target := sink.ToNodeID
-		plog.Infof("%s called streamSnapshot to node %d", n.id(), target)
+		plog.Infof("%s called streamSnapshot to node %d", n.id(), sink.ToNodeID())
 		if err := n.doStreamSnapshot(sink); err != nil {
 			return err
 		}
