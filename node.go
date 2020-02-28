@@ -18,6 +18,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lni/goutils/logutil"
+	"github.com/lni/goutils/stringutil"
+	"github.com/lni/goutils/syncutil"
+
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -31,9 +35,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/stringutil"
-	"github.com/lni/goutils/syncutil"
 )
 
 var (

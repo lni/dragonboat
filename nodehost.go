@@ -86,11 +86,15 @@ package dragonboat // github.com/lni/dragonboat/v3
 import (
 	"context"
 	"errors"
+	"math"
 	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/lni/goutils/logutil"
+	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -103,8 +107,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/syncutil"
 )
 
 const (
@@ -963,20 +965,31 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 }
 
 // RequestCompaction requests a compaction operation to be asynchronously
-// executed in the background to reclaim disk spaces from Raft entries that have
-// been included in created snapshots.
+// executed in the background to reclaim disk spaces used by Raft Log entries
+// that are no longer required. This includes Raft Log entries that have already
+// been included in created snapshots and Raft Log entries that belong to nodes
+// already permanently removed via NodeHost.RemoveData().
 //
 // By default, auto compaction is automatically issued after each snapshot is
 // captured. RequestCompaction is usually used to manually trigger such
-// compaction when the above mentioned auto compaction is disabled by the
+// compaction when such auto compaction is disabled by the
 // DisableAutoCompactions option in config.Config.
 //
 // The returned *SysOpState can be used to get notified when the requested
 // compaction is completed. ErrRejected is returned when there is nothing to be
 // reclaimed.
-func (nh *NodeHost) RequestCompaction(clusterID uint64) (*SysOpState, error) {
+func (nh *NodeHost) RequestCompaction(clusterID uint64,
+	nodeID uint64) (*SysOpState, error) {
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
+		// assume this is a node that has already been removed via RemoveData
+		done, err := nh.logdb.CompactEntriesTo(clusterID, nodeID, math.MaxUint64)
+		if err != nil {
+			return nil, err
+		}
+		return &SysOpState{completedC: done}, nil
+	}
+	if v.nodeID != nodeID {
 		return nil, ErrClusterNotFound
 	}
 	op, err := v.requestCompaction()

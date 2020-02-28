@@ -447,10 +447,7 @@ func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 		return err
 	}
 	r.cs.setMaxIndex(clusterID, nodeID, 0)
-	if err := r.removeEntriesTo(clusterID, nodeID, math.MaxUint64); err != nil {
-		return err
-	}
-	return r.compaction(clusterID, nodeID, math.MaxUint64)
+	return r.removeEntriesTo(clusterID, nodeID, math.MaxUint64)
 }
 
 func (r *rdb) saveRemoveNodeData(wb kv.IWriteBatch,

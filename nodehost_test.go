@@ -31,6 +31,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
+	"github.com/lni/goutils/syncutil"
+	gvfs "github.com/lni/goutils/vfs"
+
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -46,10 +51,6 @@ import (
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/dragonboat/v3/tools"
 	"github.com/lni/dragonboat/v3/tools/upgrade310"
-	"github.com/lni/goutils/leaktest"
-	"github.com/lni/goutils/random"
-	"github.com/lni/goutils/syncutil"
-	gvfs "github.com/lni/goutils/vfs"
 )
 
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
@@ -1140,7 +1141,7 @@ func TestCompactionCanBeRequested(t *testing.T) {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
 		for i := 0; i < 100; i++ {
-			op, err := nh.RequestCompaction(2)
+			op, err := nh.RequestCompaction(2, 1)
 			if err == ErrRejected {
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -1156,7 +1157,7 @@ func TestCompactionCanBeRequested(t *testing.T) {
 			}
 			break
 		}
-		_, err = nh.RequestCompaction(2)
+		_, err = nh.RequestCompaction(2, 1)
 		if err != ErrRejected {
 			t.Fatalf("not rejected")
 		}
@@ -2745,7 +2746,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 				t.Fatalf("failed to compact the entries")
 			}
 			time.Sleep(10 * time.Millisecond)
-			op, err := nh.RequestCompaction(2)
+			op, err := nh.RequestCompaction(2, 1)
 			if err == nil {
 				<-op.CompletedC()
 			}
@@ -3058,6 +3059,11 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != raftio.ErrNoSavedLog {
 			t.Fatalf("raft state not deleted %v", err)
 		}
+		sysop, err := nh.RequestCompaction(2, 1)
+		if err != nil {
+			t.Fatalf("failed to request compaction %v", err)
+		}
+		<-sysop.CompletedC()
 	}
 	singleNodeHostTest(t, tf, fs)
 }
