@@ -104,11 +104,11 @@ type Config struct {
 	// snapshot.
 	//
 	// Once a snapshot is generated, Raft log entries covered by the new snapshot
-	// can be compacted. See the godoc on CompactionOverhead to see what log
-	// entries are actually compacted after taking a snapshot.
-	//
-	// NodeHost.RequestSnapshot can be called to manually request a snapshot to
-	// be created to capture current node state.
+	// can be compacted. This involves two steps, redundant log entries are first
+	// marked as deleted, then they are physically removed from the underlying
+	// storage when a LogDB compaction is issued at a later stage. See the godoc
+	// on CompactionOverhead for details on what log entries are actually removed
+	// and compacted after generating a snapshot.
 	//
 	// Once automatic snapshotting is disabled by setting the SnapshotEntries
 	// field to 0, users can still use NodeHost's RequestSnapshot or

@@ -232,8 +232,7 @@ type SnapshotOption struct {
 	Exported bool
 	// OverrideCompactionOverhead defines whether the requested snapshot operation
 	// should override the compaction overhead setting specified in node's config.
-	// This field is ignored by the system when exporting a snapshot, that is when
-	// Exported is true.
+	// This field is ignored by the system when exporting a snapshot.
 	OverrideCompactionOverhead bool
 }
 
@@ -966,18 +965,18 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 
 // RequestCompaction requests a compaction operation to be asynchronously
 // executed in the background to reclaim disk spaces used by Raft Log entries
-// that are no longer required. This includes Raft Log entries that have already
-// been included in created snapshots and Raft Log entries that belong to nodes
-// already permanently removed via NodeHost.RemoveData().
+// that have already been marked as removed. This includes Raft Log entries
+// that have already been included in created snapshots and Raft Log entries
+// that belong to nodes already permanently removed via NodeHost.RemoveData().
 //
-// By default, auto compaction is automatically issued after each snapshot is
-// captured. RequestCompaction is usually used to manually trigger such
-// compaction when such auto compaction is disabled by the
-// DisableAutoCompactions option in config.Config.
+// By default, compaction is automatically issued after each snapshot is
+// captured. RequestCompaction can be used to manually trigger such compaction
+// when auto compaction is disabled by the DisableAutoCompactions option in
+// config.Config.
 //
-// The returned *SysOpState can be used to get notified when the requested
-// compaction is completed. ErrRejected is returned when there is nothing to be
-// reclaimed.
+// The returned *SysOpState instance can be used to get notified when the
+// requested compaction is completed. ErrRejected is returned when there is
+// nothing to be reclaimed.
 func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	nodeID uint64) (*SysOpState, error) {
 	v, ok := nh.getCluster(clusterID)
