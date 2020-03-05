@@ -32,35 +32,43 @@ func NewLog(logdb ILogDB) *LogTestHelper {
 	}
 }
 
+// GetConflictIndex ...
 func (l *LogTestHelper) GetConflictIndex(ents []pb.Entry) uint64 {
 	return l.el.getConflictIndex(ents)
 }
 
+// Term ...
 func (l *LogTestHelper) Term(index uint64) (uint64, error) {
 	return l.el.term(index)
 }
 
+// MatchTerm ...
 func (l *LogTestHelper) MatchTerm(index uint64, term uint64) bool {
 	return l.el.matchTerm(index, term)
 }
 
+// FirstIndex ...
 func (l *LogTestHelper) FirstIndex() uint64 {
 	return l.el.firstIndex()
 }
 
+// LastIndex ...
 func (l *LogTestHelper) LastIndex() uint64 {
 	return l.el.lastIndex()
 }
 
+// UpToDate ...
 func (l *LogTestHelper) UpToDate(index uint64, term uint64) bool {
 	return l.el.upToDate(index, term)
 }
 
+// Append ...
 func (l *LogTestHelper) Append(ents []pb.Entry) error {
 	l.el.append(ents)
 	return nil
 }
 
+// AllEntries ...
 func (l *LogTestHelper) AllEntries() []pb.Entry {
 	ents, err := l.el.entries(l.el.firstIndex(), noLimit)
 	if err == nil {
@@ -72,27 +80,33 @@ func (l *LogTestHelper) AllEntries() []pb.Entry {
 	panic(err)
 }
 
+// Entries ...
 func (l *LogTestHelper) Entries(start uint64,
 	maxsize uint64) ([]pb.Entry, error) {
 	return l.el.entries(start, maxsize)
 }
 
+// EntriesToSave ...
 func (l *LogTestHelper) EntriesToSave() []pb.Entry {
 	return l.el.entriesToSave()
 }
 
+// UnstableOffset ...
 func (l *LogTestHelper) UnstableOffset() uint64 {
 	return l.el.inmem.markerIndex
 }
 
+// SetCommitted ...
 func (l *LogTestHelper) SetCommitted(v uint64) {
 	l.el.committed = v
 }
 
+// GetCommitted ...
 func (l *LogTestHelper) GetCommitted() uint64 {
 	return l.el.committed
 }
 
+// TryAppend ...
 func (l *LogTestHelper) TryAppend(index uint64, logTerm uint64,
 	committed uint64, ents []pb.Entry) (uint64, bool) {
 	if l.el.matchTerm(index, logTerm) {
@@ -104,27 +118,33 @@ func (l *LogTestHelper) TryAppend(index uint64, logTerm uint64,
 	return 0, false
 }
 
+// GetEntries ...
 func (l *LogTestHelper) GetEntries(low uint64, high uint64,
 	maxsize uint64) ([]pb.Entry, error) {
 	return l.el.getEntries(low, high, maxsize)
 }
 
+// TryCommit ...
 func (l *LogTestHelper) TryCommit(index uint64, term uint64) bool {
 	return l.el.tryCommit(index, term)
 }
 
+// AppliedTo ...
 func (l *LogTestHelper) AppliedTo(index uint64) {
 	l.el.commitUpdate(pb.UpdateCommit{Processed: index})
 }
 
+// HasEntriesToApply ...
 func (l *LogTestHelper) HasEntriesToApply() bool {
 	return l.el.hasEntriesToApply()
 }
 
+// EntriesToApply ...
 func (l *LogTestHelper) EntriesToApply() []pb.Entry {
 	return l.el.entriesToApply()
 }
 
+// CheckBound ...
 func (l *LogTestHelper) CheckBound(low uint64, high uint64) error {
 	return l.el.checkBound(low, high)
 }

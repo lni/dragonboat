@@ -21,6 +21,7 @@ Dragonboat v3.2 comes with new features and improvements. All v3.1.x users are r
 - Re-enabled the range delete support in LogDB.
 - Better handling of concurrent snapshot streams.
 - Extensive testing have been done on a high performance native Go KV store called Pebble.
+- TolerateCorruptedTailRecords is now the default WAL recovery mode in the RocksDB based LogDB.
 
 ### Breaking changes
 

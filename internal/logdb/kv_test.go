@@ -15,6 +15,7 @@
 package logdb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -406,6 +407,30 @@ func getDataFilePathList(dir string, wal bool, fs vfs.IFS) ([]string, error) {
 	return result, nil
 }
 
+func cutDataFile(fp string, fs vfs.IFS) (bool, error) {
+	buf := bytes.NewBuffer(nil)
+	f, err := fs.Open(fp)
+	if err != nil {
+		return false, err
+	}
+	_, err = io.Copy(buf, f)
+	if err != nil {
+		return false, err
+	}
+	f.Close()
+	data := buf.Bytes()
+	f, err = fs.Create(fp)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	_, err = f.Write(data[:len(data)-1])
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 	tmpFp := fs.PathJoin(fs.PathDir(fp), "tmp")
 	if err := func() error {
@@ -448,7 +473,7 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 	return true, nil
 }
 
-func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
+func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	deleteTestDB(fs)
 	defer deleteTestDB(fs)
 	func() {
@@ -457,6 +482,9 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 			t.Fatalf("failed to open kv store %v", err)
 		}
 		defer kvs.Close()
+		if cut && !wal {
+			t.Fatalf("cut && !wal")
+		}
 		if wal && kvs.Name() != "rocksdb" {
 			t.Skip("test skipped, WAL hardware corruption is not handled")
 		}
@@ -470,7 +498,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 		for i := 0; i < 16; i++ {
 			data = append(data, []byte(flagContent)...)
 		}
-		for i := uint64(1); i <= 1024; i++ {
+		for i := uint64(1); i <= 1; i++ {
 			key := newKey(entryKeySize, nil)
 			key.SetEntryKey(100, 1, i)
 			wb.Put(key.Key(), data)
@@ -490,7 +518,13 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 	}
 	corrupted := false
 	for _, fp := range files {
-		done, err := modifyDataFile(fp, fs)
+		var done bool
+		var err error
+		if cut {
+			done, err = cutDataFile(fp, fs)
+		} else {
+			done, err = modifyDataFile(fp, fs)
+		}
 		if err != nil {
 			t.Fatalf("failed to modify data file %v", err)
 		}
@@ -506,10 +540,12 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 	if err == nil {
 		defer kvs.Close()
 	}
-	if wal && err == nil {
-		t.Fatalf("corrupted WAL not reported")
-	} else {
-		return
+	if !cut {
+		if wal && err == nil {
+			t.Fatalf("corrupted WAL not reported")
+		} else {
+			return
+		}
 	}
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
@@ -523,18 +559,33 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, fs vfs.IFS) {
 		count++
 		return true, nil
 	}
-	if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err == nil {
-		t.Fatalf("no checksum error returned")
+	err = kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+	if !cut {
+		if err == nil {
+			t.Fatalf("no checksum error returned")
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("failed to iterate the db: %v", err)
+		}
+		if count != 0 {
+			t.Fatalf("unexpected count: %d", count)
+		}
 	}
+}
+
+func TestTailCorruptionIsIgnored(t *testing.T) {
+	fs := vfs.GetTestFS()
+	testDiskCorruptionIsHandled(t, true, true, fs)
 }
 
 func TestSSTCorruptionIsHandled(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testDiskCorruptionIsHandled(t, false, fs)
+	testDiskCorruptionIsHandled(t, false, false, fs)
 }
 
 // see testDiskCorruptionIsHandled's comments for more details
 func TestWALCorruptionIsHandled(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testDiskCorruptionIsHandled(t, true, fs)
+	testDiskCorruptionIsHandled(t, true, false, fs)
 }
