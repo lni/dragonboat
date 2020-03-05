@@ -1762,6 +1762,7 @@ TEST_F(NodeHostTest, OnDiskSMSnapshotCanBeStreamed)
     },
     config2);
   EXPECT_TRUE(s.OK());
+  waitForElectionToComplete(true);
   for (uint64_t i = 0; i < 10; i++) {
     s = nh2_->SyncRead(1, query, &result, timeout);
     std::cout << "try read iteration " << i << std::endl;
