@@ -413,7 +413,10 @@ func cutDataFile(fp string, fs vfs.IFS) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	io.Copy(buf, f)
+	_, err = io.Copy(buf, f)
+	if err != nil {
+		return false, err
+	}
 	f.Close()
 	data := buf.Bytes()
 	f, err = fs.Create(fp)
