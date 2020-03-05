@@ -1,4 +1,4 @@
-## v3.2 (TBD)
+## v3.2 (2020-03-05)
 
 Dragonboat v3.2 comes with new features and improvements. All v3.1.x users are recommended to upgrade. 
 
