@@ -2252,7 +2252,10 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 		})
 		stopper.RunWorker(func() {
 			for i := 0; i < 10000; i++ {
-				rs, err := nh.ReadIndex(clusterID, 200*time.Millisecond)
+				if i%5 == 0 {
+					time.Sleep(time.Millisecond)
+				}
+				rs, err := nh.ReadIndex(clusterID, 500*time.Millisecond)
 				if err != nil {
 					continue
 				}
@@ -3438,14 +3441,14 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		nhc1 := config.NodeHostConfig{
 			WALDir:         nh1dir,
 			NodeHostDir:    nh1dir,
-			RTTMillisecond: 2,
+			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
-			RTTMillisecond: 2,
+			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr2,
 			FS:             fs,
 		}
@@ -4391,7 +4394,7 @@ func testWitnessIO(t *testing.T,
 		peers[1] = nodeHostTestAddr1
 		nhc1 := config.NodeHostConfig{
 			NodeHostDir:    fs.PathJoin(singleNodeHostTestDir, "nh1"),
-			RTTMillisecond: 2,
+			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 		}

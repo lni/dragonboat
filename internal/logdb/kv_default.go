@@ -14,7 +14,6 @@
 
 // +build !dragonboat_no_rocksdb
 // +build !dragonboat_pebble_test
-// +build !dragonboat_leveldb_test
 // +build !dragonboat_memfs_test
 
 package logdb

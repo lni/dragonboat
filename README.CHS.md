@@ -76,7 +76,7 @@ __Master是用于开发的非稳定branch。生产环境请使用已发布版本
 
 首先请确保Go 1.12或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
-请首先选择使用[RocksDB还是LevelDB](docs/storage.CHS.md)来存储Raft日志数据，建议使用RocksDB。
+请首先选择使用[RocksDB还是Pebble](docs/storage.CHS.md)来存储Raft日志数据，建议使用RocksDB。
 
 ### 安装RocksDB ###
 如果RocksDB 5.13.4或者更新版本尚未安装，可按下列步骤安装。首先下载Dragonboat库至$HOME/src并将RocksDB安装到/usr/local/lib和/usr/local/include位置：
@@ -104,8 +104,10 @@ CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lro
 
 具体使用可可参考[示例](https://github.com/lni/dragonboat-example)。
 
-### LevelDB ###
-使用LevelDB无额外安装步骤。在应用中使用基于LevelDB的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为leveldb.NewLogDB这一在github.com/lni/dragonboat/plugin/leveldb包中提供的factory函数。
+### Pebble ###
+Pebble支持仍旧属BETA测试阶段。
+
+使用Pebble无额外安装步骤。在应用中使用基于Pebble的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为pebble.NewLogDB这一在github.com/lni/dragonboat/plugin/pebble包中提供的factory函数。
 
 编译应用时可用如下方法避免对RocksDB库的依赖:
 ```

@@ -17,6 +17,7 @@ package tests
 import (
 	"encoding/binary"
 	"io"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -31,7 +32,7 @@ type TestUpdate struct {
 // Update updates the state machine.
 func (c *TestUpdate) Update(data []byte) (sm.Result, error) {
 	atomic.StoreUint32(&c.val, 1)
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 	atomic.StoreUint32(&c.val, 0)
@@ -80,7 +81,7 @@ func (c *ConcurrentUpdate) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	if c.UpdateCount == 0 {
 		c.UpdateCount = len(entries)
 	}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 40; i++ {
 		atomic.AddUint32(&c.val, 1)
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -90,6 +91,8 @@ func (c *ConcurrentUpdate) Update(entries []sm.Entry) ([]sm.Entry, error) {
 
 // Lookup queries the state machine.
 func (c *ConcurrentUpdate) Lookup(query interface{}) (interface{}, error) {
+	st := time.Duration(rand.Uint64()%10) * time.Millisecond
+	time.Sleep(st)
 	result := make([]byte, 4)
 	v := atomic.LoadUint32(&c.val)
 	binary.LittleEndian.PutUint32(result, v)

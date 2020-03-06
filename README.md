@@ -75,7 +75,7 @@ __Master is our unstable branch for development. Please use released versions fo
 
 Make sure Go 1.12 or above has been installed. Instructions below require [Go module](https://github.com/golang/go/wiki/Modules) support.
 
-You need to decide whether to use [RocksDB or LevelDB](docs/storage.md) to store Raft logs. RocksDB is recommended. 
+You need to decide whether to use [RocksDB or Pebble](docs/storage.md) to store Raft logs. RocksDB is recommended. 
 
 ### Install RocksDB ###
 If RocksDB 5.13.4 or above has not already been installed, follow the steps below to install it first.
@@ -103,10 +103,12 @@ CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lro
 ```
 You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat.
 
-### Use LevelDB ###
-No extra dependency is required when choosing to use LevelDB based Raft log storage.
+### Use Pebble ###
+Pebble support is still in BETA stage. 
 
-To use LevelDB based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function leveldb.NewLogDB provided in the github.com/lni/dragonboat/v3/plugin/leveldb package.
+No extra installation steps is required when choosing to use Pebble based Raft log storage.
+
+To use Pebble based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function pebble.NewLogDB provided in the github.com/lni/dragonboat/v3/plugin/pebble package.
 
 To build the your application when you don't have RocksDB installed:
 ```

@@ -1,1 +1,0 @@
-deps/snappy/snappy-sinksource.cc

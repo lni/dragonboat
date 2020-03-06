@@ -23,11 +23,7 @@ PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 PKGNAME=github.com/lni/dragonboat/v3
 # set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
 # LogDB implementation. 
-ifeq ($(DRAGONBOAT_LOGDB),leveldb)
-$(info using leveldb based log storage)
-GOCMD=$(GOEXEC)
-LOGDB_TAG=dragonboat_leveldb_test
-else ifeq ($(DRAGONBOAT_LOGDB),pebble)
+ifeq ($(DRAGONBOAT_LOGDB),pebble)
 GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_pebble_test
 else ifeq ($(DRAGONBOAT_LOGDB),pebble_memfs)
@@ -296,8 +292,8 @@ ifneq ($(TESTTAGS),"")
 GOCMDTAGS=-tags=$(TESTTAGS)
 endif
 
-TEST_OPTIONS=test $(GOCMDTAGS) -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) \
-	$(SELECTED_TEST_OPTION)
+TEST_OPTIONS=test $(GOCMDTAGS) -timeout=1200s -count=1 $(VERBOSE) \
+  $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-multiraft test-config test-client test-server test-tools test-fs
@@ -521,9 +517,9 @@ clean-binding:
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/cpp internal/rsm internal/settings internal/tests internal/server   \
-	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
-	plugin/pebble plugin/rocksdb plugin/leveldb plugin/chan raftpb tools binding \
-	logger raftio config statemachine client internal/utils/dio internal/vfs
+	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/pebble             \
+	plugin/rocksdb plugin/chan raftpb tools binding logger raftio config         \
+	statemachine client internal/utils/dio internal/vfs
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
@@ -551,10 +547,9 @@ cpp-static-check:
 
 GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
-	internal/logdb/kv/rocksdb internal/logdb/kv/pebble internal/logdb/kv/leveldb \
-	plugin/rocksdb plugin/leveldb plugin/pebble plugin/chan internal/settings    \
-	internal/tests internal/logdb/kv internal/utils/dio internal/vfs             \
-	internal/logdb
+	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/rocksdb            \
+	plugin/pebble plugin/chan internal/settings internal/tests internal/logdb/kv \
+	internal/utils/dio internal/vfs internal/logdb
 EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
 
 golangci-lint-check:
