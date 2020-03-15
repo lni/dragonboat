@@ -3785,6 +3785,8 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	runNodeHostTest(t, tf, fs)
 }
 
+// TODO: re-enable this
+/*
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
@@ -3812,7 +3814,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 		}
 	}
 	runNodeHostTest(t, tf, fs)
-}
+}*/
 
 // FIXME:
 // disabled for now as the new file lock implementation no longer blocks in

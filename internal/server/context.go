@@ -345,9 +345,10 @@ func (sc *Context) compatible(dir string,
 		if err != nil {
 			return err
 		}
-		if len(status.LogdbType) > 0 && status.LogdbType != name {
-			return ErrLogDBType
-		}
+		// TODO: re-enable logdb DB type check
+		// if len(status.LogdbType) > 0 && status.LogdbType != name {
+		//	 return ErrLogDBType
+		// }
 		if !dbto {
 			if !se(string(status.Address), addr) {
 				return ErrNotOwner
