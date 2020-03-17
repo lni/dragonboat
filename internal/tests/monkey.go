@@ -31,13 +31,7 @@ var (
 // ReadyToReturnTestKnob is a test knob that returns a boolean value indicating
 // whether the system is being shutdown. In production, this function always
 // return false without check the stopC chan.
-func ReadyToReturnTestKnob(stopC <-chan struct{}, delay bool, pos string) bool {
-	if stopC == nil {
-		return false
-	}
-	if delay {
-		time.Sleep(1000 * time.Millisecond)
-	}
+func ReadyToReturnTestKnob(stopC <-chan struct{}, pos string) bool {
 	select {
 	case <-stopC:
 		plog.Infof("test knob set, returning early before %s", pos)
