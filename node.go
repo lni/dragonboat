@@ -658,7 +658,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		plog.Errorf("%s SaveSnapshot failed %v", n.id(), err)
 		return 0, err
 	}
-	if tests.ReadyToReturnTestKnob(n.stopc, true, "snapshotter.Commit") {
+	if tests.ReadyToReturnTestKnob(n.stopc, "snapshotter.Commit") {
 		return 0, nil
 	}
 	plog.Infof("%s snapshotted, %s, term %d, file count %d",

@@ -26,11 +26,11 @@ func TestMonkeyFlagIsNotSet(t *testing.T) {
 
 func TestReadyToReturnTestKnobAlwaysReturnFalse(t *testing.T) {
 	ch := make(chan struct{})
-	if ReadyToReturnTestKnob(ch, false, "") {
+	if ReadyToReturnTestKnob(ch, "") {
 		t.Fatalf("didn't return false")
 	}
 	close(ch)
-	if ReadyToReturnTestKnob(ch, false, "") {
+	if ReadyToReturnTestKnob(ch, "") {
 		t.Fatalf("didn't return false")
 	}
 }

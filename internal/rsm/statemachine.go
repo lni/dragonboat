@@ -711,7 +711,7 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	}(); err != nil {
 		return err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "snapshotter.Stream") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "snapshotter.Stream") {
 		return ErrTestKnobReturn
 	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
@@ -729,13 +729,13 @@ func (s *StateMachine) saveConcurrentSnapshot(req SSRequest) (*pb.Snapshot,
 	}(); err != nil {
 		return nil, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.sync") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.sync") {
 		return nil, nil, ErrTestKnobReturn
 	}
 	if err := s.sync(); err != nil {
 		return nil, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.doSaveSnapshot") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
 		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
@@ -750,7 +750,7 @@ func (s *StateMachine) saveSnapshot(req SSRequest) (*pb.Snapshot,
 		plog.Errorf("prepare snapshot failed %v", err)
 		return nil, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), true, "s.doSaveSnapshot") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
 		return nil, nil, ErrTestKnobReturn
 	}
 	return s.doSaveSnapshot(meta)
