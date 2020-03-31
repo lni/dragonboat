@@ -70,14 +70,13 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 * x86_64 Linux or MacOS, Go 1.14 or 1.13
 
 ## Getting Started ##
-__Master is our unstable branch for development. Please use released versions for any production purposes.__ For Dragonboat v3.2.x, please follow the instructions in v3.2.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.2/README.md). 
+__Master is our unstable branch for development. Please use the latest released versions for any production purposes.__ For Dragonboat v3.2.x, please follow the instructions in v3.2.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.2/README.md). 
 
-Make sure Go 1.13 or above has been installed. Instructions below require [Go module](https://github.com/golang/go/wiki/Modules) support.
+Go 1.13 or above with [Go module](https://github.com/golang/go/wiki/Modules) support is required.
 
-### Use Dragonboat ###
-To use dragonboat in your application, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.1.3" to the __require__ section of your project's go.mod file.
+To use Dragonboat, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.2.0" to the __require__ section of your project's go.mod file.
 
-By default, [Pebble](https://github.com/cockroachdb/pebble) is used for store Raft Logs in Dragonboat. RocksDB and other storage engines are also supported, more info [here](docs/storage.md).
+By default, [Pebble](https://github.com/cockroachdb/pebble) is used for storing Raft Logs in Dragonboat. RocksDB and other storage engines are also supported, more info [here](docs/storage.md).
 
 You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat. 
 

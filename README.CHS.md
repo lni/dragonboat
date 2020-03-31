@@ -75,8 +75,7 @@ __Master是用于开发的非稳定branch。生产环境请使用已发布版本
 
 首先请确保Go 1.13或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
-### 使用Dragonboat ###
-在您的应用中使用dragonboat库，请确保在Go程序代码中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.1.3"添加到您的Go应用的go.mod文件的__require__部分。
+请在Go程序中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.2.0"添加到您的Go应用的go.mod文件的__require__部分。
 
 [Pebble](https://github.com/cockroachdb/pebble)是默认的用于存储Raft Log的存储引擎。RocksDB与自定义存储引擎的使用方法可参考[这里](docs/storage.CHS.md)。
 
