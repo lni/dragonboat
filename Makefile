@@ -23,21 +23,9 @@ PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 PKGNAME=github.com/lni/dragonboat/v3
 # set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
 # LogDB implementation. 
-ifeq ($(DRAGONBOAT_LOGDB),pebble)
+ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
 GOCMD=$(GOEXEC)
-LOGDB_TAG=dragonboat_pebble_test
-else ifeq ($(DRAGONBOAT_LOGDB),pebble_memfs)
-$(error invalid DRAGONBOAT_LOGDB pebble_memfs)
-else ifeq ($(DRAGONBOAT_LOGDB),custom)
-$(info using custom lodb)
-GOCMD=$(GOEXEC)
-LOGDB_TAG=dragonboat_no_rocksdb
-else ifeq ($(DRAGONBOAT_LOGDB),)
-GOCMD=$(GOEXEC)
-ifneq ($(DRAGONBOAT_MEMFS_TEST),)
-$(info using memfs based pebble)
-LOGDB_TAG=dragonboat_memfs_test
-else
+LOGDB_TAG=dragonboat_rocksdb_test
 $(info using rocksdb based log storage)
 ifeq ($(OS),Darwin)
 ROCKSDB_SO_FILE=librocksdb.dylib
@@ -51,8 +39,7 @@ else ifneq (,$(findstring MSYS, $(OS)))
 $(info running on Windows/MSYS)
 else
 $(error OS type $(OS) not supported)
-endif
-endif
+endif ## ifeq ($(OS),Darwin)
 
 # RocksDB version 5 or 6 are required
 ROCKSDB_INC_PATH ?=
@@ -105,6 +92,23 @@ endif
 
 CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
 GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) $(GOEXEC)
+
+## ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
+else ifeq ($(DRAGONBOAT_LOGDB),pebble_memfs)
+$(error invalid DRAGONBOAT_LOGDB pebble_memfs)
+else ifeq ($(DRAGONBOAT_LOGDB),custom)
+$(info using custom lodb)
+GOCMD=$(GOEXEC)
+LOGDB_TAG=dragonboat_no_rocksdb
+else ifeq ($(DRAGONBOAT_LOGDB),)
+GOCMD=$(GOEXEC)
+ifneq ($(DRAGONBOAT_MEMFS_TEST),)
+$(info using memfs based pebble)
+LOGDB_TAG=dragonboat_memfs_test
+else
+$(info using pebble based log storage)
+endif
+
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
@@ -299,8 +303,8 @@ dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
 	test-multiraft test-config test-client test-server test-tools test-fs
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
   test-config test-client test-server test-tests test-tools test-fs
-test: dragonboat-test test-plugins test-tests
-dev-test: test
+test: dragonboat-test test-tests
+dev-test: test test-plugins
 
 ###############################################################################
 # build unit tests
