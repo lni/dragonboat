@@ -45,7 +45,7 @@ Diego Ongaro的[Raft博士学位论文](https://ramcloud.stanford.edu/~ongaro/th
 ## 性能 ##
 Dragonboat是目前Github网站上最快的开源多组Raft实现。
 
-在三节点系统上，使用中端硬件（具体信息[在此](/docs/test.md)）与基于内存的状态机，在16字节的荷载下，Dragonboat可持续每秒900万次写或在9:1的高读写比场景下提供每秒1100万次的混合读写操作。高吞吐在跨地域分布环境依旧被保持，在使用更多的clients的情况下，在RTT为30ms时依旧能实现200万次每秒的IO操作。
+在三节点系统上，使用中端硬件（具体信息[在此](/docs/test.md)）与基于内存的状态机，在16字节的荷载下，当使用RocksDB做为存储引擎，Dragonboat可持续每秒900万次写或在9:1的高读写比场景下提供每秒1100万次的混合读写操作。高吞吐在跨地域分布环境依旧被保持，在使用更多的clients的情况下，在RTT为30ms时依旧能实现200万次每秒的IO操作。
 ![throughput](./docs/throughput.png)
 
 每个服务器上可轻易承载数千Raft组。并发的活跃Raft组数量对吞吐有直接影响，而大量的闲置Raft组对系统性能并无巨大影响。
@@ -68,51 +68,19 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 ![stw](./docs/stw.png)
 
 ## 系统需求 ##
-* x86_64 Linux或MacOS, Go 1.14或1.13，支持C++11的近期版本GCC或Clang
-* [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4或更新的版本
+* x86_64 Linux或MacOS, Go 1.14或1.13
 
 ## 开始使用 ##
-__Master是用于开发的非稳定branch。生产环境请使用已发布版本。__
+__Master是用于开发的非稳定branch。生产环境请使用已发布版本。__如您使用v3.2.x版本，请参考v3.2.x版本的[README.CHS.md](https://github.com/lni/dragonboat/blob/release-3.2/README.CHS.md)。
 
-首先请确保Go 1.12或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
-
-请首先选择使用[RocksDB还是Pebble](docs/storage.CHS.md)来存储Raft日志数据，建议使用RocksDB。
-
-### 安装RocksDB ###
-如果RocksDB 5.13.4或者更新版本尚未安装，可按下列步骤安装。首先下载Dragonboat库至$HOME/src并将RocksDB安装到/usr/local/lib和/usr/local/include位置：
-```
-$ cd $HOME/src
-$ git clone https://github.com/lni/dragonboat
-$ cd $HOME/src/dragonboat
-$ make install-rocksdb-ull
-```
-运行下列命令检查安装是否正确：
-```
-$ cd $HOME/src/dragonboat
-$ GO111MODULE=on make dragonboat-test
-```
-
-请注意，如果RocksDB事先已经安装，上述步骤可直接跳过。如果您仅希望使用dragonboat库，至此可以安全的删除$HOME/src/dragonboat目录了。
+首先请确保Go 1.13或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
 ### 使用Dragonboat ###
 在您的应用中使用dragonboat库，请确保在Go程序代码中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.1.3"添加到您的Go应用的go.mod文件的__require__部分。
 
-编译您的应用的时候，如有需要，可将RocksDB安装位置告知Go:
-```
-CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
-```
+[Pebble](https://github.com/cockroachdb/pebble)是默认的用于存储Raft Log的存储引擎。RocksDB与自定义存储引擎的使用方法可参考[这里](docs/storage.CHS.md)。
 
-具体使用可可参考[示例](https://github.com/lni/dragonboat-example)。
-
-### Pebble ###
-Pebble支持仍旧属BETA测试阶段。
-
-使用Pebble无额外安装步骤。在应用中使用基于Pebble的Raft log storage，需将您的config.NodeHostConfig的LogDBFactory项设为pebble.NewLogDB这一在github.com/lni/dragonboat/plugin/pebble包中提供的factory函数。
-
-编译应用时可用如下方法避免对RocksDB库的依赖:
-```
-go build -v -tags="dragonboat_no_rocksdb" pkgname
-```
+同时可参考[例程](https://github.com/lni/dragonboat-example)以了解更多Dragonboat使用信息。
 
 ## 文档与资料 ##
 

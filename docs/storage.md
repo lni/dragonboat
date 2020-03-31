@@ -1,30 +1,22 @@
 # Raft Log Storage #
 
-Dragonboat uses RocksDB to store Raft logs, it also has experimental support for [Pebble](https://github.com/cockroachdb/pebble). 
+Dragonboat uses [Pebble](https://github.com/cockroachdb/pebble) to store Raft logs, it also support RocksDB.
 
-## Important Notice ##
+## Compatibility ##
 
-RocksDB is storage option for production purposes.
+Pebble is a new Key-Value store implemented in Go with bidirectional compatibility with RocksDB.
 
-## RocksDB ##
-
-When using RocksDB for storage, you need to install RocksDB first, see the [Getting Started](https://github.com/lni/dragonboat/blob/master/README.md) section of the README.md for details. You may also need to set the CGO_CFLAGS and CGO_LDFLAGS environmental variables to point to your RocksDB installation location when building your own applications, see [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details.
+You can choose to use RocksDB for production purposes if that makes you more confortable. You can switch back to Pebble in the future any time you want. 
 
 ## Pebble ##
 
-[Pebble](https://github.com/cockroachdb/pebble) is a native Go key-value store currently being developed by [cockroachdb](https://github.com/cockroachdb) developers. Pebble is not production ready yet, it is [expected](https://github.com/cockroachdb/pebble/issues/233) to be production ready by Spring 2020.
+Pebble is used by default, no configuration is required.
 
-Dragonboat can already use Pebble to store Raft logs, the pebble support is experimental and not recommended for any production use. As a Go storage engine, Pebble avoids all CGO related issues and concerns mentioned above. We plan to eventually switch to use Pebble as the default storage engine once it is stable.
+## RocksDB ##
 
-When RocksDB is not install, the dragonboat_no_rocksdb build tag must be set when building your application.
+To use RocksDB as Dragonboat's storage engine, you need to install RocksDB first. You may also need to set the CGO_CFLAGS and CGO_LDFLAGS environmental variables to point to your RocksDB installation location when building your own applications.
 
-```
-go build -tags dragonboat_no_rocksdb pkg_name
-```
-
-To use Pebble based Raft Log Storage, set the NewLogDB function from the plugin/pebble package to the config.NodeHostConfig.LogDBFactory field.
-
-See [README.md](https://github.com/lni/dragonboat/blob/master/README.md) for details on how to run all built-in tests using Pebble.
+Switch to RocksDB only involves one extra line of code, just set the LogDBFactory field of your config.NodeHostConfig to function rocksdb.NewLogDB available in the github.com/lni/dragonboat/v3/plugin/rocksdb.
 
 ## Use custom storage solution ##
 
@@ -32,4 +24,3 @@ You can extend Dragonboat to use your preferred storage solution to store Raft l
 
 * implement the ILogDB interface defined in the github.com/lni/dragonboat/raftio package
 * pass a factory function that creates such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig instance
-* when building your applications, set the build tag named dragonboat_no_rocksdb so RocksDB won't be required. You don't have to set this build tag if RocksDB is available on your system.

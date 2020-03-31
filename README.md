@@ -44,7 +44,7 @@ Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.
 ## Performance ##
 Dragonboat is the __fastest__ open source multi-group Raft implementation on Github. 
 
-For 3-nodes system using mid-range hardware (details [here](docs/test.md)) and in-memory state machine, Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
+For 3-nodes system using mid-range hardware (details [here](docs/test.md)) and in-memory state machine, when RocksDB is used as the storage engine, Dragonboat can sustain at 9 million writes per second when the payload is 16bytes each or 11 million mixed I/O per second at 9:1 read:write ratio. High throughput is maintained in geographically distributed environment. When the RTT between nodes is 30ms, 2 million I/O per second can still be achieved using a much larger number of clients.
 ![throughput](./docs/throughput.png)
 
 The number of concurrent active Raft groups affects the overall throughput as requests become harder to be batched. On the other hand, having thousands of idle Raft groups has a much smaller impact on throughput.
@@ -67,53 +67,19 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 ![stw](./docs/stw.png)
 
 ## Requirements ##
-* x86_64 Linux or MacOS, Go 1.14 or 1.13, GCC or Clang with C++11 support
-* [RocksDB](https://github.com/facebook/rocksdb/blob/master/INSTALL.md) 5.13.4 or above when using RocksDB for storing Raft logs 
+* x86_64 Linux or MacOS, Go 1.14 or 1.13
 
 ## Getting Started ##
-__Master is our unstable branch for development. Please use released versions for any production purposes.__ 
+__Master is our unstable branch for development. Please use released versions for any production purposes.__ For Dragonboat v3.2.x, please follow the instructions in v3.2.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.2/README.md). 
 
-Make sure Go 1.12 or above has been installed. Instructions below require [Go module](https://github.com/golang/go/wiki/Modules) support.
-
-You need to decide whether to use [RocksDB or Pebble](docs/storage.md) to store Raft logs. RocksDB is recommended. 
-
-### Install RocksDB ###
-If RocksDB 5.13.4 or above has not already been installed, follow the steps below to install it first.
-
-To download Dragonboat to $HOME/src and install RocksDB to /usr/local/lib and /usr/local/include:
-```
-$ cd $HOME/src
-$ git clone https://github.com/lni/dragonboat
-$ cd $HOME/src/dragonboat
-$ make install-rocksdb-ull
-```
-Run built-in tests to check the installation:
-```
-$ cd $HOME/src/dragonboat
-$ GO111MODULE=on make dragonboat-test
-```
-Once completed, $HOME/src/dragonboat can be safely deleted if you just plan to use dragonboat in your application.
+Make sure Go 1.13 or above has been installed. Instructions below require [Go module](https://github.com/golang/go/wiki/Modules) support.
 
 ### Use Dragonboat ###
 To use dragonboat in your application, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.1.3" to the __require__ section of your project's go.mod file.
 
-When building your application, you may need to tell Go where is the installed RocksDB library:
-```
-CGO_CFLAGS="-I/path/to/rocksdb/include" CGO_LDFLAGS="-L/path/to/rocksdb/lib -lrocksdb" go build -v pkgname
-```
-You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat.
+By default, [Pebble](https://github.com/cockroachdb/pebble) is used for store Raft Logs in Dragonboat. RocksDB and other storage engines are also supported, more info [here](docs/storage.md).
 
-### Use Pebble ###
-Pebble support is still in BETA stage. 
-
-No extra installation steps is required when choosing to use Pebble based Raft log storage.
-
-To use Pebble based Raft log storage in your application, set the LogDBFactory field of your config.NodeHostConfig to the factory function pebble.NewLogDB provided in the github.com/lni/dragonboat/v3/plugin/pebble package.
-
-To build the your application when you don't have RocksDB installed:
-```
-go build -v -tags="dragonboat_no_rocksdb" pkgname
-```
+You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat. 
 
 ## Documents ##
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
