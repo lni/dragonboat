@@ -4,7 +4,7 @@ Dragonboat v3.2 comes with new features and improvements. All v3.1.x users are r
 
 ### New features
 
-- Added snappy compression support for Raft entires and snapshots.
+- Added snappy compression support for Raft entries and snapshots.
 - Added experimental witness support.
 - Added new API to allow LogDB compaction to be manually triggered.
 - Added event listener support to allow users to be notified for certain Raft events.

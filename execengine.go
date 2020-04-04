@@ -963,8 +963,7 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 			panic(err)
 		}
 		if !cont || !node.applyRaftUpdates(ud) {
-			plog.Infof("raft update and snapshot not published, %s stopped",
-				node.id())
+			plog.Infof("raft update not applied, %s stopped", node.id())
 		}
 	}
 }

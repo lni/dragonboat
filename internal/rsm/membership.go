@@ -82,28 +82,7 @@ func (m *membership) set(n pb.Membership) {
 	m.members = &cm
 }
 
-func (m *membership) get() (map[uint64]string,
-	map[uint64]string, map[uint64]string, map[uint64]struct{}, uint64) {
-	members := make(map[uint64]string)
-	observers := make(map[uint64]string)
-	removed := make(map[uint64]struct{})
-	witnesses := make(map[uint64]string)
-	for nid, addr := range m.members.Addresses {
-		members[nid] = addr
-	}
-	for nid, addr := range m.members.Observers {
-		observers[nid] = addr
-	}
-	for nid := range m.members.Removed {
-		removed[nid] = struct{}{}
-	}
-	for nid, addr := range m.members.Witnesses {
-		witnesses[nid] = addr
-	}
-	return members, observers, witnesses, removed, m.members.ConfigChangeId
-}
-
-func (m *membership) getMembership() pb.Membership {
+func (m *membership) get() pb.Membership {
 	return deepCopyMembership(*m.members)
 }
 

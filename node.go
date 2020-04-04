@@ -926,8 +926,8 @@ func isFreeOrderMessage(m pb.Message) bool {
 }
 
 func (n *node) sendEnterQuiesceMessages() {
-	nodes, _, _, _, _ := n.sm.GetMembership()
-	for nodeID := range nodes {
+	m := n.sm.GetMembership()
+	for nodeID := range m.Addresses {
 		if nodeID != n.nodeID {
 			msg := pb.Message{
 				Type:      pb.Quiesce,
@@ -1466,20 +1466,20 @@ func (n *node) tick() {
 }
 
 func (n *node) notifyConfigChange() {
-	nodes, observers, witnesses, _, index := n.sm.GetMembership()
-	if len(nodes) == 0 {
+	m := n.sm.GetMembership()
+	if len(m.Addresses) == 0 {
 		plog.Panicf("empty nodes %s", n.id())
 	}
-	_, isObserver := observers[n.nodeID]
-	_, isWitness := witnesses[n.nodeID]
+	_, isObserver := m.Observers[n.nodeID]
+	_, isWitness := m.Witnesses[n.nodeID]
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,
 		IsLeader:          n.isLeader(),
 		IsObserver:        isObserver,
 		IsWitness:         isWitness,
-		ConfigChangeIndex: index,
-		Nodes:             nodes,
+		ConfigChangeIndex: m.ConfigChangeId,
+		Nodes:             m.Addresses,
 	}
 	n.clusterInfo.Store(ci)
 	n.sysEvents.Publish(server.SystemEvent{

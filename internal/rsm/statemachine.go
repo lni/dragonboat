@@ -45,12 +45,10 @@ var (
 	// ErrTestKnobReturn is the error returned when returned earlier due to test
 	// knob.
 	ErrTestKnobReturn = errors.New("returned earlier due to test knob")
-	// ErrSaveSnapshot indicates there is error when trying to save a snapshot
-	ErrSaveSnapshot = errors.New("failed to save snapshot")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
 	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
-	batchedEntryApply       bool   = settings.Soft.BatchedEntryApply
+	batchedEntryApply              = settings.Soft.BatchedEntryApply
 	sessionBufferInitialCap uint64 = 128 * 1024
 )
 
@@ -231,8 +229,8 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	ss.Validate(s.fs)
 	plog.Infof("%s called RecoverFromSnapshot, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
-	if idx, err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
-		return idx, err
+	if err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
+		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
@@ -262,17 +260,6 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 }
 
 func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
-	if ss.Witness {
-		return false
-	}
-	if !s.OnDiskStateMachine() {
-		return true
-	}
-	if ss.Dummy {
-		return false
-	}
-	// just a self test to see whether it is trying to recover from a shrunk
-	// snapshot
 	fn := s.snapshotter.GetFilePath(ss.Index)
 	shrunk, err := IsShrinkedSnapshotFile(fn, s.fs)
 	if err != nil {
@@ -293,49 +280,7 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 	return ss.OnDiskIndex > s.onDiskIndex
 }
 
-func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot,
-	init bool) (uint64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	index := ss.Index
-	if s.index >= index {
-		return s.index, raft.ErrSnapshotOutOfDate
-	}
-	if s.aborted {
-		return 0, sm.ErrSnapshotStopped
-	}
-	if s.recoverSMRequired(ss, init) {
-		plog.Infof("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
-		s.logMembership("members", index, ss.Membership.Addresses)
-		s.logMembership("observers", index, ss.Membership.Observers)
-		s.logMembership("witnesses", index, ss.Membership.Witnesses)
-		fs := getSnapshotFiles(ss)
-		fn := s.snapshotter.GetFilePath(index)
-		s.canRecoverOnDiskSnapshot(ss, init)
-		if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
-			plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
-			if err == sm.ErrSnapshotStopped {
-				// no more lookup allowed
-				s.aborted = true
-				return 0, err
-			}
-			return 0, ErrRestoreSnapshot
-		}
-		s.recoverFromOnDiskSnapshot(ss, init)
-	} else {
-		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
-			s.id(), index, s.onDiskInitIndex)
-	}
-	s.index = index
-	s.term = ss.Term
-	s.members.set(ss.Membership)
-	return 0, nil
-}
-
 func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
-	if !s.OnDiskStateMachine() {
-		return
-	}
 	if ss.Imported && init {
 		return
 	}
@@ -349,10 +294,65 @@ func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
 	}
 }
 
-func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
-	if !s.OnDiskStateMachine() {
-		return
+func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := ss.Index
+	if s.index >= index {
+		return raft.ErrSnapshotOutOfDate
 	}
+	if s.aborted {
+		return sm.ErrSnapshotStopped
+	}
+	if ss.Witness || ss.Dummy {
+		s.setSnapshot(ss)
+		return nil
+	}
+	if !s.OnDiskStateMachine() {
+		return s.recover(ss, init)
+	} else {
+		if s.recoverSMRequired(ss, init) {
+			s.canRecoverOnDiskSnapshot(ss, init)
+			if err := s.recover(ss, init); err != nil {
+				return err
+			}
+			s.recoverFromOnDiskSnapshot(ss, init)
+		}
+		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
+			s.id(), index, s.onDiskInitIndex)
+		s.setSnapshot(ss)
+	}
+	return nil
+}
+
+func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
+	index := ss.Index
+	plog.Infof("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
+	s.logMembership("members", index, ss.Membership.Addresses)
+	s.logMembership("observers", index, ss.Membership.Observers)
+	s.logMembership("witnesses", index, ss.Membership.Witnesses)
+	fs := getSnapshotFiles(ss)
+	fn := s.snapshotter.GetFilePath(index)
+	if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
+		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
+		if err == sm.ErrSnapshotStopped {
+			// no more lookup allowed
+			s.aborted = true
+			return err
+		}
+		return ErrRestoreSnapshot
+	}
+	s.setSnapshot(ss)
+	return nil
+}
+
+func (s *StateMachine) setSnapshot(ss pb.Snapshot) {
+	s.index = ss.Index
+	s.term = ss.Term
+	s.members.set(ss.Membership)
+}
+
+func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
 	s.onDiskIndex = ss.OnDiskIndex
 	if ss.Imported && init {
 		s.onDiskInitIndex = ss.OnDiskIndex
@@ -362,7 +362,7 @@ func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
 
 // ReadyToStreamSnapshot returns a boolean flag to indicate whether the state
-// machine is ready to stream snasphot. It can not stream a full snapshot when
+// machine is ready to stream snapshot. It can not stream a full snapshot when
 // membership state is catching up with the all disk SM state. however, meta
 // only snapshot can be taken at any time.
 func (s *StateMachine) ReadyToStreamSnapshot() bool {
@@ -505,8 +505,7 @@ func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
 }
 
 // GetMembership returns the membership info maintained by the state machine.
-func (s *StateMachine) GetMembership() (map[uint64]string,
-	map[uint64]string, map[uint64]string, map[uint64]struct{}, uint64) {
+func (s *StateMachine) GetMembership() pb.Membership {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.members.get()
@@ -579,7 +578,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	defer func() {
 		// give the node worker a chance to run when
 		//  - batched applied value has been updated
-		//  - taskC has been poped
+		//  - taskC has been popped
 		if processed {
 			s.node.NodeReady()
 		}
@@ -623,13 +622,8 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 }
 
 func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
-	if s.OnDiskStateMachine() {
-		if r.IsExportedSnapshot() || r.IsStreamingSnapshot() {
-			return false
-		}
-		return true
-	}
-	return false
+	return s.OnDiskStateMachine() &&
+		!r.IsExportedSnapshot() && !r.IsStreamingSnapshot()
 }
 
 func (s *StateMachine) logMembership(name string,
@@ -658,7 +652,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		OnDiskIndex:     s.onDiskIndex,
 		Request:         r,
 		Session:         buf,
-		Membership:      s.members.getMembership(),
+		Membership:      s.members.get(),
 		Type:            s.sm.StateMachineType(),
 		CompressionType: ct,
 	}

@@ -615,11 +615,12 @@ func TestGetMembership(t *testing.T) {
 			},
 			ConfigChangeId: 12345,
 		}
-		m, o, w, r, cid := sm.GetMembership()
-		if cid != 12345 {
+		m := sm.GetMembership()
+		if m.ConfigChangeId != 12345 {
 			t.Errorf("unexpected cid value")
 		}
-		if len(m) != 2 || len(o) != 2 || len(r) != 3 || len(w) != 1 {
+		if len(m.Addresses) != 2 || len(m.Observers) != 2 ||
+			len(m.Removed) != 3 || len(m.Witnesses) != 1 {
 			t.Errorf("len changed")
 		}
 	}
@@ -645,7 +646,8 @@ func TestGetMembershipNodes(t *testing.T) {
 			},
 			ConfigChangeId: 12345,
 		}
-		n, _, _, _, _ := sm.GetMembership()
+		m := sm.GetMembership()
+		n := m.Addresses
 		if len(n) != 2 {
 			t.Errorf("unexpected len")
 		}
@@ -1895,38 +1897,24 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 
 func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
-		dummy           bool
 		shrunk          bool
 		init            bool
 		onDiskIndex     uint64
 		onDiskInitIndex uint64
 		required        bool
 	}{
-		{true, true, true, 100, 100, false},
-		{true, true, true, 200, 100, false},
-		{true, true, true, 100, 200, false},
-		{true, true, false, 100, 100, false},
-		{true, true, false, 200, 100, false},
-		{true, true, false, 100, 200, false},
-		{true, false, true, 100, 100, false},
-		{true, false, true, 200, 100, false},
-		{true, false, true, 100, 200, false},
-		{true, false, false, 100, 100, false},
-		{true, false, false, 200, 100, false},
-		{true, false, false, 100, 200, false},
-
-		{false, true, true, 100, 100, false},
-		{false, true, true, 200, 100, false},
-		{false, true, true, 100, 200, false},
-		{false, true, false, 100, 100, false},
-		{false, true, false, 200, 100, false},
-		{false, true, false, 100, 200, false},
-		{false, false, true, 100, 100, false},
-		{false, false, true, 200, 100, true},
-		{false, false, true, 100, 200, false},
-		{false, false, false, 100, 100, false},
-		{false, false, false, 200, 100, true},
-		{false, false, false, 100, 200, false},
+		{true, true, 100, 100, false},
+		{true, true, 200, 100, false},
+		{true, true, 100, 200, false},
+		{true, false, 100, 100, false},
+		{true, false, 200, 100, false},
+		{true, false, 100, 200, false},
+		{false, true, 100, 100, false},
+		{false, true, 200, 100, true},
+		{false, true, 100, 200, false},
+		{false, false, 100, 100, false},
+		{false, false, 200, 100, true},
+		{false, false, 100, 200, false},
 	}
 	ssIndex := uint64(200)
 	for idx, tt := range tests {
@@ -1981,12 +1969,11 @@ func TestRecoverSMRequired(t *testing.T) {
 				}
 			}
 			ss := pb.Snapshot{
-				Dummy:       tt.dummy,
 				Index:       ssIndex,
 				OnDiskIndex: tt.onDiskIndex,
 			}
 			defer func() {
-				if !tt.dummy && !tt.init && tt.shrunk {
+				if !tt.init && tt.shrunk {
 					if r := recover(); r == nil {
 						t.Fatalf("not panic")
 					}

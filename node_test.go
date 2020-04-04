@@ -51,9 +51,9 @@ const (
 )
 
 func getMemberNodes(r *rsm.StateMachine) []uint64 {
-	m, _, _, _, _ := r.GetMembership()
+	m := r.GetMembership()
 	n := make([]uint64, 0)
-	for nid := range m {
+	for nid := range m.Addresses {
 		n = append(n, nid)
 	}
 	return n
@@ -647,7 +647,8 @@ func TestMembershipCanBeLocallyRead(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		v, _, _, _, _ := n.sm.GetMembership()
+		m := n.sm.GetMembership()
+		v := m.Addresses
 		if len(v) != 3 {
 			t.Errorf("unexpected member count %d", len(v))
 		}
@@ -1278,7 +1279,8 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 			t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
-	_, _, _, _, ccid := n.sm.GetMembership()
+	m := n.sm.GetMembership()
+	ccid := m.ConfigChangeId
 	rs, err = n.requestAddNodeWithOrderID(5, "a5:5", ccid, 10)
 	if err != nil {
 		t.Fatalf("request to add node failed")
@@ -1321,7 +1323,8 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 			t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
-	_, _, _, _, ccid := n.sm.GetMembership()
+	m := n.sm.GetMembership()
+	ccid := m.ConfigChangeId
 	rs, err = n.requestDeleteNodeWithOrderID(2, ccid, 10)
 	if err != nil {
 		t.Fatalf("request to add node failed")
