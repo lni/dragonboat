@@ -1809,32 +1809,6 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 	runSMTest2(t, tf, fs)
 }
 
-func TestGetSnapshotFilesReturnFiles(t *testing.T) {
-	sf1 := &pb.SnapshotFile{
-		Filepath: "test.data1",
-		FileId:   1,
-		Metadata: make([]byte, 16),
-	}
-	sf2 := &pb.SnapshotFile{
-		Filepath: "test.data2",
-		FileId:   2,
-		Metadata: make([]byte, 32),
-	}
-	ss := pb.Snapshot{
-		Files: []*pb.SnapshotFile{sf1, sf2},
-	}
-	sl := getSnapshotFiles(ss)
-	if len(sl) != 2 {
-		t.Errorf("unexpected file list size %d", len(sl))
-	}
-	if sl[0].FileID != 1 || len(sl[0].Metadata) != 16 || sl[0].Filepath != "test.data1" {
-		t.Errorf("unexpected file value")
-	}
-	if sl[1].FileID != 2 || len(sl[1].Metadata) != 32 || sl[1].Filepath != "test.data2" {
-		t.Errorf("unexpected file value")
-	}
-}
-
 func TestNoOPEntryIsNotBatched(t *testing.T) {
 	updates, _ := getEntryTypes([]pb.Entry{{}})
 	if updates {

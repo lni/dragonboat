@@ -259,7 +259,14 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	return snapshot, nil
 }
 
+func (s *StateMachine) mustBeOnDiskSM() {
+	if !s.OnDiskStateMachine() {
+		panic("not an on disk sm")
+	}
+}
+
 func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
+	s.mustBeOnDiskSM()
 	fn := s.snapshotter.GetFilePath(ss.Index)
 	shrunk, err := IsShrinkedSnapshotFile(fn, s.fs)
 	if err != nil {
@@ -281,6 +288,7 @@ func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
 }
 
 func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
+	s.mustBeOnDiskSM()
 	if ss.Imported && init {
 		return
 	}
@@ -305,7 +313,7 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
 		return sm.ErrSnapshotStopped
 	}
 	if ss.Witness || ss.Dummy {
-		s.setSnapshot(ss)
+		s.applySnapshot(ss)
 		return nil
 	}
 	if !s.OnDiskStateMachine() {
@@ -316,11 +324,12 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
 			if err := s.recover(ss, init); err != nil {
 				return err
 			}
-			s.recoverFromOnDiskSnapshot(ss, init)
+			s.applyOnDiskSnapshot(ss, init)
+		} else {
+			plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
+				s.id(), index, s.onDiskInitIndex)
+			s.applySnapshot(ss)
 		}
-		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
-			s.id(), index, s.onDiskInitIndex)
-		s.setSnapshot(ss)
 	}
 	return nil
 }
@@ -331,32 +340,41 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	s.logMembership("members", index, ss.Membership.Addresses)
 	s.logMembership("observers", index, ss.Membership.Observers)
 	s.logMembership("witnesses", index, ss.Membership.Witnesses)
-	fs := getSnapshotFiles(ss)
+	fs := make([]sm.SnapshotFile, 0)
+	for _, f := range ss.Files {
+		f := sm.SnapshotFile{
+			FileID:   f.FileId,
+			Filepath: f.Filepath,
+			Metadata: f.Metadata,
+		}
+		fs = append(fs, f)
+	}
 	fn := s.snapshotter.GetFilePath(index)
 	if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
 		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
 		if err == sm.ErrSnapshotStopped {
-			// no more lookup allowed
 			s.aborted = true
 			return err
 		}
 		return ErrRestoreSnapshot
 	}
-	s.setSnapshot(ss)
+	s.applySnapshot(ss)
 	return nil
 }
 
-func (s *StateMachine) setSnapshot(ss pb.Snapshot) {
+func (s *StateMachine) applySnapshot(ss pb.Snapshot) {
 	s.index = ss.Index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
 }
 
-func (s *StateMachine) recoverFromOnDiskSnapshot(ss pb.Snapshot, init bool) {
+func (s *StateMachine) applyOnDiskSnapshot(ss pb.Snapshot, init bool) {
+	s.mustBeOnDiskSM()
 	s.onDiskIndex = ss.OnDiskIndex
 	if ss.Imported && init {
 		s.onDiskInitIndex = ss.OnDiskIndex
 	}
+	s.applySnapshot(ss)
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
@@ -384,6 +402,7 @@ func (s *StateMachine) tryInjectTestFS() {
 
 // OpenOnDiskStateMachine opens the on disk state machine.
 func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
+	s.mustBeOnDiskSM()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tryInjectTestFS()
@@ -446,14 +465,14 @@ func (s *StateMachine) setBatchedLastApplied(index uint64) {
 	s.batchedIndex.Unlock()
 }
 
-// Offloaded marks the state machine as offloaded from the specified component.
+// Offloaded marks the state machine as offloaded from the specified compone.
 // It returns a boolean value indicating whether the node has been fully
-// unloaded after unloading from the specified component.
+// unloaded after unloading from the specified compone.
 func (s *StateMachine) Offloaded(from From) bool {
 	return s.sm.Offloaded(from)
 }
 
-// Loaded marks the state machine as loaded from the specified component.
+// Loaded marks the state machine as loaded from the specified compone.
 func (s *StateMachine) Loaded(from From) {
 	s.sm.Loaded(from)
 }
@@ -857,55 +876,55 @@ func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
 	s.onDiskIndex = lastIndex
 }
 
-func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
-	if ent.IsConfigChange() {
-		accepted := s.handleConfigChange(ent)
-		s.node.ConfigChangeProcessed(ent.Key, accepted)
+func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
+	if e.IsConfigChange() {
+		accepted := s.handleConfigChange(e)
+		s.node.ConfigChangeProcessed(e.Key, accepted)
 	} else {
-		if !ent.IsSessionManaged() {
-			if ent.IsEmpty() {
-				s.handleNoOP(ent)
-				s.node.ApplyUpdate(ent, sm.Result{}, false, true, last)
+		if !e.IsSessionManaged() {
+			if e.IsEmpty() {
+				s.handleNoOP(e)
+				s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
 			} else {
 				panic("not session managed, not empty")
 			}
 		} else {
-			if ent.IsNewSessionRequest() {
-				smResult := s.handleRegisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
-			} else if ent.IsEndOfSessionRequest() {
-				smResult := s.handleUnregisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
+			if e.IsNewSessionRequest() {
+				smResult := s.handleRegisterSession(e)
+				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
+			} else if e.IsEndOfSessionRequest() {
+				smResult := s.handleUnregisterSession(e)
+				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
 			} else {
-				if !s.entryInInitDiskSM(ent.Index) {
-					smResult, ignored, rejected, err := s.handleUpdate(ent)
+				if !s.entryInInitDiskSM(e.Index) {
+					smResult, ignored, rejected, err := s.handleUpdate(e)
 					if err != nil {
 						return err
 					}
 					if !ignored {
-						s.node.ApplyUpdate(ent, smResult, rejected, ignored, last)
+						s.node.ApplyUpdate(e, smResult, rejected, ignored, last)
 					}
 				} else {
 					// treat it as a NoOP entry
-					s.handleNoOP(pb.Entry{Index: ent.Index, Term: ent.Term})
+					s.handleNoOP(pb.Entry{Index: e.Index, Term: e.Term})
 				}
 			}
 		}
 	}
 	index := s.GetLastApplied()
-	if index != ent.Index {
-		plog.Panicf("unexpected last applied value, %d, %d", index, ent.Index)
+	if index != e.Index {
+		plog.Panicf("unexpected last applied value, %d, %d", index, e.Index)
 	}
 	if last {
-		s.setBatchedLastApplied(ent.Index)
+		s.setBatchedLastApplied(e.Index)
 	}
 	return nil
 }
 
-func (s *StateMachine) onUpdateApplied(ent pb.Entry,
+func (s *StateMachine) onUpdateApplied(e pb.Entry,
 	result sm.Result, ignored bool, rejected bool, last bool) {
 	if !ignored {
-		s.node.ApplyUpdate(ent, result, rejected, ignored, last)
+		s.node.ApplyUpdate(e, result, rejected, ignored, last)
 	}
 }
 
@@ -916,17 +935,17 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	skipped := 0
-	for _, ent := range input {
-		if !s.entryInInitDiskSM(ent.Index) {
-			e := sm.Entry{
-				Index: ent.Index,
-				Cmd:   getEntryPayload(ent),
+	for _, e := range input {
+		if !s.entryInInitDiskSM(e.Index) {
+			rec := sm.Entry{
+				Index: e.Index,
+				Cmd:   getEntryPayload(e),
 			}
-			ents = append(ents, e)
+			ents = append(ents, rec)
 		} else {
 			skipped++
 		}
-		s.updateLastApplied(ent.Index, ent.Term)
+		s.updateLastApplied(e.Index, e.Term)
 	}
 	if len(ents) > 0 {
 		firstIndex := ents[0].Index
@@ -936,15 +955,15 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		if err != nil {
 			return err
 		}
-		for idx, ent := range results {
+		for idx, e := range results {
 			ce := input[skipped+idx]
-			if ce.Index != ent.Index {
+			if ce.Index != e.Index {
 				// probably because user modified the Index value in results
 				plog.Panicf("%s alignment error, %d, %d, %d",
-					s.id(), ce.Index, ent.Index, skipped)
+					s.id(), ce.Index, e.Index, skipped)
 			}
 			last := ce.Index == input[len(input)-1].Index
-			s.onUpdateApplied(ce, ent.Result, false, false, last)
+			s.onUpdateApplied(ce, e.Result, false, false, last)
 		}
 	}
 	if len(input) > 0 {
@@ -953,9 +972,9 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	return nil
 }
 
-func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
+func (s *StateMachine) handleConfigChange(e pb.Entry) bool {
 	var cc pb.ConfigChange
-	if err := cc.Unmarshal(ent.Cmd); err != nil {
+	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
 	}
 	if cc.Type == pb.AddNode && len(cc.Address) == 0 {
@@ -963,60 +982,60 @@ func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.updateLastApplied(ent.Index, ent.Term)
-	if s.members.handleConfigChange(cc, ent.Index) {
+	s.updateLastApplied(e.Index, e.Term)
+	if s.members.handleConfigChange(cc, e.Index) {
 		s.node.ApplyConfigChange(cc)
 		return true
 	}
 	return false
 }
 
-func (s *StateMachine) handleRegisterSession(ent pb.Entry) sm.Result {
+func (s *StateMachine) handleRegisterSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sessions.RegisterClientID(ent.ClientID)
+	smResult := s.sessions.RegisterClientID(e.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("%s register client failed %v", s.id(), ent)
+		plog.Errorf("%s register client failed %v", s.id(), e)
 	}
-	s.updateLastApplied(ent.Index, ent.Term)
+	s.updateLastApplied(e.Index, e.Term)
 	return smResult
 }
 
-func (s *StateMachine) handleUnregisterSession(ent pb.Entry) sm.Result {
+func (s *StateMachine) handleUnregisterSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sessions.UnregisterClientID(ent.ClientID)
+	smResult := s.sessions.UnregisterClientID(e.ClientID)
 	if isEmptyResult(smResult) {
-		plog.Errorf("%s unregister %d failed %v", s.id(), ent.ClientID, ent)
+		plog.Errorf("%s unregister %d failed %v", s.id(), e.ClientID, e)
 	}
-	s.updateLastApplied(ent.Index, ent.Term)
+	s.updateLastApplied(e.Index, e.Term)
 	return smResult
 }
 
-func (s *StateMachine) handleNoOP(ent pb.Entry) {
+func (s *StateMachine) handleNoOP(e pb.Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !ent.IsEmpty() || ent.IsSessionManaged() {
+	if !e.IsEmpty() || e.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
-	s.updateLastApplied(ent.Index, ent.Term)
+	s.updateLastApplied(e.Index, e.Term)
 }
 
 // result a tuple of (result, should ignore, rejected)
-func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error) {
+func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ok bool
 	var session *Session
-	s.updateLastApplied(ent.Index, ent.Term)
-	if !ent.IsNoOPSession() {
-		session, ok = s.sessions.ClientRegistered(ent.ClientID)
+	s.updateLastApplied(e.Index, e.Term)
+	if !e.IsNoOPSession() {
+		session, ok = s.sessions.ClientRegistered(e.ClientID)
 		if !ok {
 			// client is expected to crash
 			return sm.Result{}, false, true, nil
 		}
-		s.sessions.UpdateRespondedTo(session, ent.RespondedTo)
-		v, responded, toUpdate := s.sessions.UpdateRequired(session, ent.SeriesID)
+		s.sessions.UpdateRespondedTo(session, e.RespondedTo)
+		v, responded, toUpdate := s.sessions.UpdateRequired(session, e.SeriesID)
 		if responded {
 			// should ignore. client is expected to timeout
 			return sm.Result{}, true, false, nil
@@ -1028,22 +1047,22 @@ func (s *StateMachine) handleUpdate(ent pb.Entry) (sm.Result, bool, bool, error)
 			return v, false, false, nil
 		}
 	}
-	if !ent.IsNoOPSession() && session == nil {
+	if !e.IsNoOPSession() && session == nil {
 		panic("session not found")
 	}
 	if session != nil {
-		if _, ok := session.getResponse(RaftSeriesID(ent.SeriesID)); ok {
+		if _, ok := session.getResponse(RaftSeriesID(e.SeriesID)); ok {
 			panic("already has response in session")
 		}
 	}
-	s.updateOnDiskIndex(ent.Index, ent.Index)
-	cmd := getEntryPayload(ent)
-	result, err := s.sm.Update(sm.Entry{Index: ent.Index, Cmd: cmd})
+	s.updateOnDiskIndex(e.Index, e.Index)
+	cmd := getEntryPayload(e)
+	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: cmd})
 	if err != nil {
 		return sm.Result{}, false, false, err
 	}
 	if session != nil {
-		session.addResponse(RaftSeriesID(ent.SeriesID), result)
+		session.addResponse(RaftSeriesID(e.SeriesID), result)
 	}
 	return result, false, false, nil
 }
@@ -1054,17 +1073,4 @@ func (s *StateMachine) id() string {
 
 func (s *StateMachine) ssid(index uint64) string {
 	return logutil.DescribeSS(s.node.ClusterID(), s.node.NodeID(), index)
-}
-
-func getSnapshotFiles(snapshot pb.Snapshot) []sm.SnapshotFile {
-	sfl := make([]sm.SnapshotFile, 0)
-	for _, f := range snapshot.Files {
-		sf := sm.SnapshotFile{
-			FileID:   f.FileId,
-			Filepath: f.Filepath,
-			Metadata: f.Metadata,
-		}
-		sfl = append(sfl, sf)
-	}
-	return sfl
 }
