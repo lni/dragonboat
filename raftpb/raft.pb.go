@@ -1642,6 +1642,7 @@ func (m *Chunk) GetWitness() bool {
 	return false
 }
 
+/*
 func init() {
 	proto.RegisterEnum("raftpb.MessageType", MessageType_name, MessageType_value)
 	proto.RegisterEnum("raftpb.EntryType", EntryType_name, EntryType_value)
@@ -1671,6 +1672,7 @@ func init() {
 }
 
 func init() { proto.RegisterFile("raft.proto", fileDescriptor_b042552c306ae59b) }
+*/
 
 var fileDescriptor_b042552c306ae59b = []byte{
 	// 2059 bytes of a gzipped FileDescriptorProto
