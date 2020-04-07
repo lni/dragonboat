@@ -17,7 +17,7 @@ package server
 import (
 	"sync"
 
-	"github.com/lni/dragonboat/v3/raftpb"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 // MessageQueue is the queue used to hold Raft messages.
@@ -25,9 +25,9 @@ type MessageQueue struct {
 	size          uint64
 	ch            chan struct{}
 	rl            *RateLimiter
-	left          []raftpb.Message
-	right         []raftpb.Message
-	snapshot      []raftpb.Message
+	left          []pb.Message
+	right         []pb.Message
+	nodrop        []pb.Message
 	leftInWrite   bool
 	stopped       bool
 	idx           uint64
@@ -44,9 +44,9 @@ func NewMessageQueue(size uint64,
 		rl:            NewRateLimiter(maxMemorySize),
 		size:          size,
 		lazyFreeCycle: lazyFreeCycle,
-		left:          make([]raftpb.Message, size),
-		right:         make([]raftpb.Message, size),
-		snapshot:      make([]raftpb.Message, 0),
+		left:          make([]pb.Message, size),
+		right:         make([]pb.Message, size),
+		nodrop:        make([]pb.Message, 0),
 	}
 	if ch {
 		q.ch = make(chan struct{}, 1)
@@ -77,8 +77,8 @@ func (q *MessageQueue) Ch() <-chan struct{} {
 	return q.ch
 }
 
-func (q *MessageQueue) targetQueue() []raftpb.Message {
-	var t []raftpb.Message
+func (q *MessageQueue) targetQueue() []pb.Message {
+	var t []pb.Message
 	if q.leftInWrite {
 		t = q.left
 	} else {
@@ -88,7 +88,7 @@ func (q *MessageQueue) targetQueue() []raftpb.Message {
 }
 
 // Add adds the specified message to the queue.
-func (q *MessageQueue) Add(msg raftpb.Message) (bool, bool) {
+func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 	q.mu.Lock()
 	if q.idx >= q.size {
 		q.mu.Unlock()
@@ -108,29 +108,29 @@ func (q *MessageQueue) Add(msg raftpb.Message) (bool, bool) {
 	return true, false
 }
 
-// AddSnapshot adds the specified snapshot to the queue.
-func (q *MessageQueue) AddSnapshot(msg raftpb.Message) bool {
-	if msg.Type != raftpb.InstallSnapshot {
-		panic("not a snapshot message")
+// MustAdd adds the specified message to the queue.
+func (q *MessageQueue) MustAdd(msg pb.Message) bool {
+	if msg.Type != pb.InstallSnapshot && msg.Type != pb.Unreachable {
+		panic("not a snapshot or unreachable message")
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.stopped {
 		return false
 	}
-	q.snapshot = append(q.snapshot, msg)
+	q.nodrop = append(q.nodrop, msg)
 	return true
 }
 
-func (q *MessageQueue) tryAdd(msg raftpb.Message) bool {
-	if !q.rl.Enabled() || msg.Type != raftpb.Replicate {
+func (q *MessageQueue) tryAdd(msg pb.Message) bool {
+	if !q.rl.Enabled() || msg.Type != pb.Replicate {
 		return true
 	}
 	if q.rl.RateLimited() {
 		plog.Warningf("rate limited dropped a replicate msg from %d", msg.ClusterId)
 		return false
 	}
-	q.rl.Increase(raftpb.GetEntrySliceInMemSize(msg.Entries))
+	q.rl.Increase(pb.GetEntrySliceInMemSize(msg.Entries))
 	return true
 }
 
@@ -150,7 +150,7 @@ func (q *MessageQueue) gc() {
 }
 
 // Get returns everything current in the queue.
-func (q *MessageQueue) Get() []raftpb.Message {
+func (q *MessageQueue) Get() []pb.Message {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.cycle++
@@ -163,10 +163,10 @@ func (q *MessageQueue) Get() []raftpb.Message {
 	if q.rl.Enabled() {
 		q.rl.Set(0)
 	}
-	if len(q.snapshot) == 0 {
+	if len(q.nodrop) == 0 {
 		return t[:sz]
 	}
-	ssm := q.snapshot
-	q.snapshot = make([]raftpb.Message, 0)
+	ssm := q.nodrop
+	q.nodrop = make([]pb.Message, 0)
 	return append(ssm, t[:sz]...)
 }

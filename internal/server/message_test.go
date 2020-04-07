@@ -64,7 +64,7 @@ func TestMessageCanBeAddedAndGet(t *testing.T) {
 	}
 }
 
-func TestNonSnapshotMsgByCallingAddSnapshotWillPanic(t *testing.T) {
+func TestNonSnapshotMsgByCallingMustAddWillPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			return
@@ -72,21 +72,38 @@ func TestNonSnapshotMsgByCallingAddSnapshotWillPanic(t *testing.T) {
 		t.Errorf("didn't panic")
 	}()
 	q := NewMessageQueue(8, false, 0, 0)
-	q.AddSnapshot(raftpb.Message{})
+	q.MustAdd(raftpb.Message{})
 }
 
 func TestSnapshotCanAlwaysBeAdded(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 1024; i++ {
-		if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
+		n := len(q.nodrop)
+		if !q.MustAdd(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 			t.Errorf("failed to add snapshot")
+		}
+		if len(q.nodrop) != n+1 {
+			t.Errorf("unexpected count")
+		}
+	}
+}
+
+func TestUnreachableMsgCanAlwaysBeAdded(t *testing.T) {
+	q := NewMessageQueue(8, false, 0, 0)
+	for i := 0; i < 1024; i++ {
+		n := len(q.nodrop)
+		if !q.MustAdd(raftpb.Message{Type: raftpb.Unreachable}) {
+			t.Errorf("failed to add snapshot")
+		}
+		if len(q.nodrop) != n+1 {
+			t.Errorf("unexpected count")
 		}
 	}
 }
 
 func TestAddedSnapshotWillBeReturned(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
-	if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
+	if !q.MustAdd(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("failed to add snapshot")
 	}
 	for i := 0; i < 4; i++ {
@@ -95,7 +112,7 @@ func TestAddedSnapshotWillBeReturned(t *testing.T) {
 			t.Errorf("failed to add")
 		}
 	}
-	if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
+	if !q.MustAdd(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("failed to add snapshot")
 	}
 	for i := 0; i < 4; i++ {
@@ -104,7 +121,7 @@ func TestAddedSnapshotWillBeReturned(t *testing.T) {
 			t.Errorf("failed to add")
 		}
 	}
-	if !q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
+	if !q.MustAdd(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("failed to add snapshot")
 	}
 	msgs := q.Get()
@@ -120,7 +137,7 @@ func TestAddedSnapshotWillBeReturned(t *testing.T) {
 	if count != 3 {
 		t.Errorf("failed to get all snapshot messages")
 	}
-	if len(q.snapshot) != 0 {
+	if len(q.nodrop) != 0 {
 		t.Errorf("snapshot list not empty")
 	}
 }
@@ -134,7 +151,7 @@ func TestMessageQueueCanBeStopped(t *testing.T) {
 			t.Errorf("unexpectedly added msg")
 		}
 	}
-	if q.AddSnapshot(raftpb.Message{Type: raftpb.InstallSnapshot}) {
+	if q.MustAdd(raftpb.Message{Type: raftpb.InstallSnapshot}) {
 		t.Errorf("unexpectedly added snapshot")
 	}
 }

@@ -2111,7 +2111,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		_, q, ok := nh.getClusterAndQueueNotLocked(req.ClusterId)
 		if ok {
 			if req.Type == pb.InstallSnapshot {
-				q.AddSnapshot(req)
+				q.MustAdd(req)
 				snapshotCount++
 			} else {
 				if added, stopped := q.Add(req); !added || stopped {
@@ -2146,24 +2146,9 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 }
 
 func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
-	// this is called from a worker thread that is no longer serving anything
-	cluster, q, ok := h.nh.getClusterAndQueueNotLocked(clusterID)
+	_, q, ok := h.nh.getClusterAndQueueNotLocked(clusterID)
 	if ok {
-		m := pb.Message{Type: pb.Unreachable, From: nodeID}
-		for {
-			added, stopped := q.Add(m)
-			if added || stopped {
-				break
-			}
-			select {
-			case <-h.nh.stopper.ShouldStop():
-				return
-			case <-cluster.shouldStop():
-				return
-			default:
-			}
-			time.Sleep(time.Millisecond)
-		}
+		q.MustAdd(pb.Message{Type: pb.Unreachable, From: nodeID})
 		h.nh.execEngine.setNodeReady(clusterID)
 	}
 }
