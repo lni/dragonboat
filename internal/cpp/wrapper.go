@@ -247,22 +247,29 @@ func NewStateMachineWrapper(clusterID uint64, nodeID uint64,
 	cNodeID := C.uint64_t(nodeID)
 	cFactory := factory
 	cStyle := C.uint64_t(style)
+	destroyedC := make(chan struct{})
 	switch smType {
 	case pb.RegularStateMachine:
-		return &RegularStateMachineWrapper{
+		w := &RegularStateMachineWrapper{
 			dataStore: C.CreateDBRegularStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
+		w.OffloadedStatus.DestroyedC = destroyedC
+		return w
 	case pb.ConcurrentStateMachine:
-		return &ConcurrentStateMachineWrapper{
+		w := &ConcurrentStateMachineWrapper{
 			dataStore: C.CreateDBConcurrentStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
+		w.OffloadedStatus.DestroyedC = destroyedC
+		return w
 	case pb.OnDiskStateMachine:
-		return &OnDiskStateMachineWrapper{
+		w := &OnDiskStateMachineWrapper{
 			dataStore: C.CreateDBOnDiskStateMachine(cClusterID, cNodeID, cFactory, cStyle),
 			done:      done,
 		}
+		w.OffloadedStatus.DestroyedC = destroyedC
+		return w
 	default:
 		panic("unknown statemachine type")
 	}
@@ -304,6 +311,12 @@ func (ds *RegularStateMachineWrapper) Loaded(from rsm.From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
+}
+
+// DestroyedC returns a chan struct{} used to indicate whether the SM has been
+// fully offloaded.
+func (ds *RegularStateMachineWrapper) DestroyedC() <-chan struct{} {
+	return ds.OffloadedStatus.DestroyedC
 }
 
 // Update updates the data store.
@@ -486,6 +499,12 @@ func (ds *ConcurrentStateMachineWrapper) Lookup(query interface{}) (interface{},
 	return result, nil
 }
 
+// DestroyedC returns a chan struct{} used to indicate whether the SM has been
+// fully offloaded.
+func (ds *ConcurrentStateMachineWrapper) DestroyedC() <-chan struct{} {
+	return ds.OffloadedStatus.DestroyedC
+}
+
 // NALookup ...
 func (ds *ConcurrentStateMachineWrapper) NALookup(query []byte) ([]byte, error) {
 	panic("NALookup not supported in C++ state machine")
@@ -632,6 +651,12 @@ func (ds *OnDiskStateMachineWrapper) Update(e sm.Entry) (sm.Result, error) {
 		return sm.Result{}, err
 	}
 	return results[0].Result, nil
+}
+
+// DestroyedC returns a chan struct{} used to indicate whether the SM has been
+// fully offloaded.
+func (ds *OnDiskStateMachineWrapper) DestroyedC() <-chan struct{} {
+	return ds.OffloadedStatus.DestroyedC
 }
 
 // BatchedUpdate ...

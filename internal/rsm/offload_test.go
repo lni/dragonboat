@@ -20,6 +20,7 @@ import (
 
 func TestOffloadedStatusReadyToDestroy(t *testing.T) {
 	o := OffloadedStatus{}
+	o.DestroyedC = make(chan struct{})
 	if o.ReadyToDestroy() {
 		t.Errorf("ready to destroy, not expected")
 	}
@@ -34,6 +35,7 @@ func TestOffloadedStatusReadyToDestroy(t *testing.T) {
 
 func TestOffloadedStatusAllOffloadedWillMakeItReadyToDestroy(t *testing.T) {
 	o := OffloadedStatus{}
+	o.DestroyedC = make(chan struct{})
 	o.SetOffloaded(FromStepWorker)
 	o.SetOffloaded(FromCommitWorker)
 	o.SetOffloaded(FromSnapshotWorker)
@@ -48,6 +50,7 @@ func TestOffloadedStatusAllOffloadedWillMakeItReadyToDestroy(t *testing.T) {
 
 func TestOffloadedStatusOffloadedFromNodeHostIsHandled(t *testing.T) {
 	o := OffloadedStatus{}
+	o.DestroyedC = make(chan struct{})
 	o.SetOffloaded(FromNodeHost)
 	if !o.ReadyToDestroy() {
 		t.Errorf("not ready to destroy, not expected")

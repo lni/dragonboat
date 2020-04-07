@@ -1251,22 +1251,10 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
 	}
-	// TODO:
-	// remove the ticker below
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-	for {
+	destroyedC := nh.execEngine.destroyedC(clusterID, nodeID)
+	if destroyedC != nil {
 		select {
-		case <-ticker.C:
-			// TODO (lni):
-			// polling below is not cool
-			if err := nh.RemoveData(clusterID, nodeID); err != nil {
-				if err == ErrClusterNotStopped {
-					continue
-				}
-				panic(err)
-			}
-			return nil
+		case <-destroyedC:
 		case <-ctx.Done():
 			if ctx.Err() == context.Canceled {
 				return ErrCanceled
@@ -1275,6 +1263,11 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 			}
 		}
 	}
+	err := nh.RemoveData(clusterID, nodeID)
+	if err == ErrClusterNotStopped {
+		panic("node not stopped")
+	}
+	return err
 }
 
 // RemoveData tries to remove all data associated with the specified node. This

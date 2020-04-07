@@ -68,6 +68,7 @@ type IManagedStateMachine interface {
 	StreamSnapshot(interface{}, io.Writer) error
 	Offloaded(From) bool
 	Loaded(From)
+	DestroyedC() <-chan struct{}
 	ConcurrentSnapshot() bool
 	OnDiskStateMachine() bool
 	StateMachineType() pb.StateMachineType
@@ -116,6 +117,7 @@ func NewNativeSM(config config.Config, ism IStateMachine,
 		done:   done,
 		ue:     make([]sm.Entry, 1),
 	}
+	s.OffloadedStatus.DestroyedC = make(chan struct{})
 	s.OffloadedStatus.clusterID = config.ClusterID
 	s.OffloadedStatus.nodeID = config.NodeID
 	return s
@@ -146,6 +148,12 @@ func (ds *NativeSM) Loaded(from From) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
+}
+
+// DestroyedC returns a chan struct{} used to indicate whether the SM has been
+// fully offloaded.
+func (ds *NativeSM) DestroyedC() <-chan struct{} {
+	return ds.OffloadedStatus.DestroyedC
 }
 
 // ConcurrentSnapshot returns a boolean flag to indicate whether the managed

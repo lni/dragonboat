@@ -62,15 +62,19 @@ func newLoadedNodes() *loadedNodes {
 }
 
 func (l *loadedNodes) loaded(clusterID uint64, nodeID uint64) bool {
+	return l.get(clusterID, nodeID) != nil
+}
+
+func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, m := range l.nodes {
 		n, ok := m[clusterID]
 		if ok && n.nodeID == nodeID {
-			return true
+			return n
 		}
 	}
-	return false
+	return nil
 }
 
 func (l *loadedNodes) update(workerID uint64,
@@ -701,7 +705,14 @@ func (s *execEngine) logProfileStats() {
 }
 
 func (s *execEngine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
-	return s.loaded.loaded(clusterID, nodeID)
+	return s.loaded.get(clusterID, nodeID) != nil
+}
+
+func (s *execEngine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{} {
+	if n := s.loaded.get(clusterID, nodeID); n != nil {
+		return n.sm.DestroyedC()
+	}
+	return nil
 }
 
 func (s *execEngine) taskWorkerMain(workerID uint64) {

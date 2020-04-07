@@ -49,7 +49,6 @@ type OffloadedStatus struct {
 	clusterID                   uint64
 	nodeID                      uint64
 	readyToDestroy              bool
-	destroyed                   bool
 	offloadedFromNodeHost       bool
 	offloadedFromStepWorker     bool
 	offloadedFromCommitWorker   bool
@@ -57,6 +56,7 @@ type OffloadedStatus struct {
 	loadedByStepWorker          bool
 	loadedByCommitWorker        bool
 	loadedBySnapshotWorker      bool
+	DestroyedC                  chan struct{}
 }
 
 // ReadyToDestroy returns a boolean value indicating whether the the managed data
@@ -68,12 +68,17 @@ func (o *OffloadedStatus) ReadyToDestroy() bool {
 // Destroyed returns a boolean value indicating whether the belonging object
 // has been destroyed.
 func (o *OffloadedStatus) Destroyed() bool {
-	return o.destroyed
+	select {
+	case <-o.DestroyedC:
+		return true
+	default:
+		return false
+	}
 }
 
 // SetDestroyed set the destroyed flag to be true
 func (o *OffloadedStatus) SetDestroyed() {
-	o.destroyed = true
+	close(o.DestroyedC)
 }
 
 // SetLoaded marks the managed data store as loaded from the specified

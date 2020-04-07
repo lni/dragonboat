@@ -217,6 +217,12 @@ func (s *StateMachine) TaskChanBusy() bool {
 	return sz*2 > taskQueueBusyCap
 }
 
+// DestroyedC return a chan struct{} used to indicate whether the SM has been
+// fully unloaded.
+func (s *StateMachine) DestroyedC() <-chan struct{} {
+	return s.sm.DestroyedC()
+}
+
 // RecoverFromSnapshot applies the snapshot.
 func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	ss, err := s.getSnapshot(t)
@@ -318,18 +324,17 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
 	}
 	if !s.OnDiskStateMachine() {
 		return s.recover(ss, init)
-	} else {
-		if s.recoverSMRequired(ss, init) {
-			s.canRecoverOnDiskSnapshot(ss, init)
-			if err := s.recover(ss, init); err != nil {
-				return err
-			}
-			s.applyOnDiskSnapshot(ss, init)
-		} else {
-			plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
-				s.id(), index, s.onDiskInitIndex)
-			s.applySnapshot(ss)
+	}
+	if s.recoverSMRequired(ss, init) {
+		s.canRecoverOnDiskSnapshot(ss, init)
+		if err := s.recover(ss, init); err != nil {
+			return err
 		}
+		s.applyOnDiskSnapshot(ss, init)
+	} else {
+		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
+			s.id(), index, s.onDiskInitIndex)
+		s.applySnapshot(ss)
 	}
 	return nil
 }
