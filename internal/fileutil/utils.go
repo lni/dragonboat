@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
@@ -42,6 +40,15 @@ const (
 	defaultDirFileMode   = 0750
 	deleteFilename       = "DELETED.dragonboat"
 )
+
+// Marshaler is the interface for types that can be Marshaled.
+type Marshaler interface {
+	Marshal() ([]byte, error)
+}
+
+type Unmarshaler interface {
+	Unmarshal([]byte) error
+}
 
 // DirExist returns whether the specified filesystem entry exists.
 func DirExist(name string, fs vfs.IFS) (bool, error) {
@@ -152,7 +159,7 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 }
 
 // MarkDirAsDeleted marks the specified directory as deleted.
-func MarkDirAsDeleted(dir string, msg proto.Message, fs vfs.IFS) error {
+func MarkDirAsDeleted(dir string, msg Marshaler, fs vfs.IFS) error {
 	return CreateFlagFile(dir, deleteFilename, msg, fs)
 }
 
@@ -175,7 +182,7 @@ func getHash(data []byte) []byte {
 // CreateFlagFile creates a flag file in the specific location. The flag file
 // contains the marshaled data of the specified protobuf message.
 func CreateFlagFile(dir string,
-	filename string, msg proto.Message, fs vfs.IFS) (err error) {
+	filename string, msg Marshaler, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
 	f, err := fs.Create(fp)
 	if err != nil {
@@ -189,7 +196,7 @@ func CreateFlagFile(dir string,
 			err = cerr
 		}
 	}()
-	data, err := proto.Marshal(msg)
+	data, err := msg.Marshal()
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +222,7 @@ func CreateFlagFile(dir string,
 // location. The data of the flag file will be unmarshaled into the specified
 // protobuf message.
 func GetFlagFileContent(dir string,
-	filename string, msg proto.Message, fs vfs.IFS) (err error) {
+	filename string, msg Unmarshaler, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
 	f, err := fs.Open(vfs.Clean(fp))
 	if err != nil {
@@ -239,7 +246,7 @@ func GetFlagFileContent(dir string,
 	if !bytes.Equal(h, expectedHash) {
 		panic("corrupted flag file content")
 	}
-	return proto.Unmarshal(buf, msg)
+	return msg.Unmarshal(buf)
 }
 
 // HasFlagFile returns a boolean value indicating whether flag file can be
