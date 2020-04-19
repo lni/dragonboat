@@ -27,7 +27,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -89,7 +88,7 @@ func (s *ConcurrentKVTest) Lookup(key interface{}) (interface{}, error) {
 func (s *ConcurrentKVTest) Update(ents []sm.Entry) ([]sm.Entry, error) {
 	for i := 0; i < len(ents); i++ {
 		dataKv := &kvpb.PBKV{}
-		err := proto.Unmarshal(ents[i].Cmd, dataKv)
+		err := dataKv.Unmarshal(ents[i].Cmd)
 		if err != nil {
 			panic(err)
 		}
