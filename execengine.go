@@ -396,14 +396,18 @@ func (p *workerPool) workerPoolMain() {
 
 func (p *workerPool) loadNodes(cci uint64,
 	nodes map[uint64]*node) (uint64, map[uint64]*node) {
-	newCCI, newNodes := p.doLoadNodes(cci, nodes)
+	newCCI, newNodes, offloaded := p.doLoadNodes(cci, nodes)
 	p.loaded.update(1, rsm.FromSnapshotWorker, newNodes)
+	for _, n := range offloaded {
+		n.notifyOffloaded(rsm.FromSnapshotWorker)
+	}
 	return newCCI, newNodes
 }
 
 func (p *workerPool) doLoadNodes(cci uint64,
-	nodes map[uint64]*node) (uint64, map[uint64]*node) {
+	nodes map[uint64]*node) (uint64, map[uint64]*node, []*node) {
 	newCCI := p.nh.getClusterSetIndex()
+	var offloaded []*node
 	if newCCI != cci {
 		newNodes := make(map[uint64]*node)
 		// busy nodes should never be offloaded
@@ -415,7 +419,7 @@ func (p *workerPool) doLoadNodes(cci uint64,
 				for cid, node := range nodes {
 					_, ok := newNodes[cid]
 					if !ok {
-						node.notifyOffloaded(rsm.FromSnapshotWorker)
+						offloaded = append(offloaded, node)
 					}
 					// TODO:
 					// check instanceID change issue
@@ -430,9 +434,9 @@ func (p *workerPool) doLoadNodes(cci uint64,
 				}
 				return true
 			})
-		return newCCI, newNodes
+		return newCCI, newNodes, offloaded
 	}
-	return cci, nodes
+	return cci, nodes, offloaded
 }
 
 func (p *workerPool) completed(workerID uint64) {
@@ -744,9 +748,12 @@ func (s *execEngine) taskWorkerMain(workerID uint64) {
 
 func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	result, cci := s.loadBucketNodes(workerID, cci, nodes,
+	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
 		s.taskWorkReady.getPartitioner(), rsm.FromCommitWorker)
 	s.loaded.update(workerID, rsm.FromCommitWorker, result)
+	for _, n := range offloaded {
+		n.notifyOffloaded(rsm.FromCommitWorker)
+	}
 	return result, cci
 }
 
@@ -819,17 +826,21 @@ func (s *execEngine) nodeWorkerMain(workerID uint64) {
 
 func (s *execEngine) loadNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	result, cci := s.loadBucketNodes(workerID, cci, nodes,
+	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
 		s.nodeWorkReady.getPartitioner(), rsm.FromStepWorker)
 	s.loaded.update(workerID, rsm.FromStepWorker, result)
+	for _, n := range offloaded {
+		n.notifyOffloaded(rsm.FromStepWorker)
+	}
 	return result, cci
 }
 
 func (s *execEngine) loadBucketNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
-	from rsm.From) (map[uint64]*node, uint64) {
+	from rsm.From) (map[uint64]*node, []*node, uint64) {
 	bucket := workerID - 1
 	newCCI := s.nh.getClusterSetIndex()
+	var offloaded []*node
 	if newCCI != cci {
 		newNodes := make(map[uint64]*node)
 		s.nh.forEachClusterRun(nil,
@@ -837,10 +848,10 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 				for cid, node := range nodes {
 					nv, ok := newNodes[cid]
 					if !ok {
-						node.notifyOffloaded(from)
+						offloaded = append(offloaded, node)
 					} else {
 						if nv.instanceID != node.instanceID {
-							node.notifyOffloaded(from)
+							offloaded = append(offloaded, node)
 						}
 					}
 				}
@@ -853,9 +864,9 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 				}
 				return true
 			})
-		return newNodes, newCCI
+		return newNodes, offloaded, newCCI
 	}
-	return nodes, cci
+	return nodes, offloaded, cci
 }
 
 func (s *execEngine) execNodes(workerID uint64,
