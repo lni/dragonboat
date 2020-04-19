@@ -34,7 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/lni/dragonboat/v3/internal/tests/kvpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/random"
@@ -153,7 +152,7 @@ func (s *KVTest) Update(data []byte) (sm.Result, error) {
 	}
 	generateRandomDelay()
 	dataKv := s.pbkvPool.Get().(*kvpb.PBKV)
-	err := proto.Unmarshal(data, dataKv)
+	err := dataKv.Unmarshal(data)
 	if err != nil {
 		panic(err)
 	}

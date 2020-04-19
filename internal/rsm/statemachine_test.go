@@ -21,8 +21,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/raft"
@@ -1261,7 +1259,7 @@ func genTestKVData(k, d string) []byte {
 		Key: k,
 		Val: d,
 	}
-	data, err := proto.Marshal(&u)
+	data, err := u.Marshal()
 	if err != nil {
 		panic(err)
 	}

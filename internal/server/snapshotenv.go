@@ -24,8 +24,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
@@ -186,7 +184,7 @@ func (se *SSEnv) MustRemoveTempDir() {
 }
 
 // FinalizeSnapshot finalizes the snapshot.
-func (se *SSEnv) FinalizeSnapshot(msg proto.Message) error {
+func (se *SSEnv) FinalizeSnapshot(msg fileutil.Marshaler) error {
 	finalizeLock.Lock()
 	defer finalizeLock.Unlock()
 	if err := se.createFlagFile(msg); err != nil {
@@ -209,7 +207,7 @@ func (se *SSEnv) RemoveFinalDir() error {
 }
 
 // SaveSSMetadata saves the metadata of the snapshot file.
-func (se *SSEnv) SaveSSMetadata(msg proto.Message) error {
+func (se *SSEnv) SaveSSMetadata(msg fileutil.Marshaler) error {
 	err := fileutil.CreateFlagFile(se.tmpDir,
 		SnapshotMetadataFilename, msg, se.fs)
 	return err
@@ -278,7 +276,7 @@ func (se *SSEnv) renameTempDirToFinalDir() error {
 	return fileutil.SyncDir(se.rootDir, se.fs)
 }
 
-func (se *SSEnv) createFlagFile(msg proto.Message) error {
+func (se *SSEnv) createFlagFile(msg fileutil.Marshaler) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		fileutil.SnapshotFlagFilename, msg, se.fs)
 }

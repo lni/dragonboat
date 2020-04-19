@@ -9,9 +9,6 @@ notifications:
   on_success: never
   on_failure: never
 
-before_install:
-  - go get -u google.golang.org/grpc
-
 script:
   - GO111MODULE=on make travis-ci-test
   - GO111MODULE=on go test -v -coverprofile=coverage.txt -covermode=atomic
