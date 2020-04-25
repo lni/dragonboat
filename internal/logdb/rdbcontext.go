@@ -27,7 +27,7 @@ const (
 // rdbcontext is an IContext implementation suppose to be owned and used
 // by a single thread throughout its life time.
 type rdbcontext struct {
-	valSize uint64
+	size    uint64
 	eb      pb.EntryBatch
 	lb      pb.EntryBatch
 	key     *PooledKey
@@ -37,11 +37,11 @@ type rdbcontext struct {
 }
 
 // newRDBContext creates a new RDB context instance.
-func newRDBContext(valSize uint64, wb kv.IWriteBatch) *rdbcontext {
+func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbcontext {
 	ctx := &rdbcontext{
-		valSize: valSize,
+		size:    size,
 		key:     newKey(maxKeySize, nil),
-		val:     make([]byte, valSize),
+		val:     make([]byte, size),
 		updates: make([]pb.Update, 0, updateSliceLen),
 		wb:      wb,
 	}
@@ -67,10 +67,15 @@ func (c *rdbcontext) GetKey() raftio.IReusableKey {
 }
 
 func (c *rdbcontext) GetValueBuffer(sz uint64) []byte {
-	if sz <= c.valSize {
+	if sz <= c.size {
 		return c.val
 	}
-	return make([]byte, sz)
+	val := make([]byte, sz)
+	if sz < RDBContextValueSize {
+		c.size = sz
+		c.val = val
+	}
+	return val
 }
 
 func (c *rdbcontext) GetUpdates() []pb.Update {

@@ -31,8 +31,10 @@ import (
 var (
 	numOfStepEngineWorker = settings.Hard.StepEngineWorkerCount
 	numOfRocksDBInstance  = settings.Hard.LogDBPoolSize
-	// RDBContextValueSize defines the size of byte array managed in RDB context.
-	RDBContextValueSize uint64 = 1024 * 1024 * 64
+	// InitRDBContextValueSize defines the initial size of RDB buffer.
+	InitRDBContextValueSize uint64 = 32 * 1024
+	// RDBContextValueSize defines the max size of RDB buffer to be retained.
+	RDBContextValueSize uint64 = 64 * 1024 * 1024
 )
 
 var _ raftio.ILogDB = &ShardedRDB{}
@@ -145,7 +147,7 @@ func (mw *ShardedRDB) SelfCheckFailed() (bool, error) {
 // GetLogDBThreadContext return a IContext instance.
 func (mw *ShardedRDB) GetLogDBThreadContext() raftio.IContext {
 	wb := mw.shards[0].getWriteBatch()
-	return newRDBContext(RDBContextValueSize, wb)
+	return newRDBContext(InitRDBContextValueSize, wb)
 }
 
 // SaveRaftState saves the raft state and logs found in the raft.Update list
