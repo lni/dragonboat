@@ -161,13 +161,6 @@ type soft struct {
 	SnapshotChunkTimeoutTick uint64
 
 	//
-	// Drummer/node scheduling
-	//
-	// NodeHostInfoReportSecond defines how often in seconds nodehost report it
-	// details to Drummer servers.
-	NodeHostInfoReportSecond uint64
-
-	//
 	// LogDB
 	//
 	KVKeepLogFileNum                   uint64
@@ -204,7 +197,6 @@ func getSoftSettings() soft {
 }
 
 func getDefaultSoftSettings() soft {
-	NodeHostInfoReportSecond := uint64(20)
 	return soft{
 		MaxConcurrentStreamingSnapshot:     128,
 		MaxSnapshotConnections:             64,
@@ -236,7 +228,6 @@ func getDefaultSoftSettings() soft {
 		PerConnectionRecvBufSize:           2 * 1024 * 1024,
 		SnapshotGCTick:                     30,
 		SnapshotChunkTimeoutTick:           900,
-		NodeHostInfoReportSecond:           NodeHostInfoReportSecond,
 		KVMaxBackgroundCompactions:         2,
 		KVMaxBackgroundFlushes:             2,
 		KVLRUCacheSize:                     0,
