@@ -22,9 +22,9 @@ import (
 
 	"github.com/cockroachdb/pebble"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -36,16 +36,6 @@ var (
 
 const (
 	maxLogFileSize = 1024 * 1024 * 128
-	blockSize      = 1024 * 32
-)
-
-var (
-	writeBufferSize            = int(settings.Soft.KVWriteBufferSize)
-	maxWriteBufferNumber       = int(settings.Soft.KVMaxWriteBufferNumber)
-	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
-	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
-	maxBytesForLevelBase       = int64(settings.Soft.KVMaxBytesForLevelBase)
-	targetFileSizeBase         = int64(settings.Soft.KVTargetFileSizeBase)
 )
 
 type pebbleWriteBatch struct {
@@ -84,8 +74,9 @@ func (w *pebbleWriteBatch) Count() int {
 }
 
 // NewKVStore returns a pebble based IKVStore instance.
-func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
-	return openPebbleDB(dir, wal, fs)
+func NewKVStore(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	return openPebbleDB(config, dir, wal, fs)
 }
 
 var _ kv.IKVStore = &KV{}
@@ -100,28 +91,42 @@ type KV struct {
 
 var pebbleWarning sync.Once
 
-func openPebbleDB(dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
+func openPebbleDB(config config.LogDBConfig,
+	dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
+	if config.IsEmpty() {
+		panic("invalid LogDBConfig")
+	}
 	pebbleWarning.Do(func() {
 		plog.Warningf("pebble support is experimental, DO NOT USE IN PRODUCTION")
 		if fs == vfs.MemStrictFS {
 			plog.Warningf("running in pebble memfs test mode")
 		}
 	})
+	blockSize := int(config.KVBlockSize)
+	writeBufferSize := int(config.KVWriteBufferSize)
+	maxWriteBufferNumber := int(config.KVMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger := int(config.KVLevel0FileNumCompactionTrigger)
+	l0StopWritesTrigger := int(config.KVLevel0StopWritesTrigger)
+	maxBytesForLevelBase := int64(config.KVMaxBytesForLevelBase)
+	targetFileSizeBase := int64(config.KVTargetFileSizeBase)
+	cacheSize := int64(config.KVLRUCacheSize)
+	levelSizeMultiplier := int64(config.KVTargetFileSizeMultiplier)
+	numOfLevels := int64(config.KVNumOfLevels)
 	lopts := make([]pebble.LevelOptions, 0)
 	sz := targetFileSizeBase
-	for l := 0; l < 7; l++ {
+	for l := int64(0); l < numOfLevels; l++ {
 		opt := pebble.LevelOptions{
 			Compression:    pebble.NoCompression,
 			BlockSize:      blockSize,
 			TargetFileSize: sz,
 		}
-		sz = sz * 2
+		sz = sz * levelSizeMultiplier
 		lopts = append(lopts, opt)
 	}
 	if inMonkeyTesting {
 		writeBufferSize = 1024 * 1024 * 4
 	}
-	cache := pebble.NewCache(0)
+	cache := pebble.NewCache(cacheSize)
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,

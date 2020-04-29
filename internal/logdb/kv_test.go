@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -33,7 +34,8 @@ import (
 func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+	cfg := config.GetDefaultLogDBConfig()
+	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -46,7 +48,8 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB(fs)
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+	cfg := config.GetDefaultLogDBConfig()
+	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -334,8 +337,9 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	lk := newKey(entryKeySize, nil)
 	fk.SetEntryKey(100, 1, 1)
 	lk.SetEntryKey(100, 1, maxIndex+1)
+	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+		kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -360,7 +364,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	if sz < 1024*1024*8 {
 		t.Errorf("unexpected size %d", sz)
 	}
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -476,8 +480,9 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	deleteTestDB(fs)
 	defer deleteTestDB(fs)
+	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+		kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -536,7 +541,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	if !corrupted {
 		t.Fatalf("failed to corrupt data files")
 	}
-	kvs, err := newDefaultKVStore(RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
 	if err == nil {
 		defer kvs.Close()
 	}

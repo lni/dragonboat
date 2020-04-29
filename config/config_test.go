@@ -118,3 +118,14 @@ func TestWitnessCanNotTakeSnapshot(t *testing.T) {
 		t.Fatalf("witness node can not take snapshot")
 	}
 }
+
+func TestLogDBConfigIsEmpty(t *testing.T) {
+	cfg := LogDBConfig{}
+	if !cfg.IsEmpty() {
+		t.Fatalf("not empty")
+	}
+	cfg.KVMaxBackgroundCompactions = 1
+	if cfg.IsEmpty() {
+		t.Fatalf("still empty")
+	}
+}

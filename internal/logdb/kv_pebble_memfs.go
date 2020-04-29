@@ -17,6 +17,7 @@
 package logdb
 
 import (
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -29,8 +30,8 @@ const (
 	DefaultKVStoreTypeName = "pebble"
 )
 
-func newDefaultKVStore(dir string,
-	wal string, fs vfs.IFS) (kv.IKVStore, error) {
+func newDefaultKVStore(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs == nil {
 		panic("nil fs")
 	}
@@ -38,5 +39,5 @@ func newDefaultKVStore(dir string,
 	if !ok {
 		panic("invalid fs")
 	}
-	return pebble.NewKVStore(dir, wal, fs)
+	return pebble.NewKVStore(config, dir, wal, fs)
 }

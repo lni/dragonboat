@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb/gorocksdb"
@@ -36,37 +37,16 @@ const (
 	maxLogFileSize = 1024 * 1024 * 128
 )
 
-var (
-	blockSize                  = int(settings.Soft.KVBlockSize)
-	logDBLRUCacheSize          = int(settings.Soft.KVLRUCacheSize)
-	maxBackgroundCompactions   = int(settings.Soft.KVMaxBackgroundCompactions)
-	maxBackgroundFlushes       = int(settings.Soft.KVMaxBackgroundFlushes)
-	keepLogFileNum             = int(settings.Soft.KVKeepLogFileNum)
-	writeBufferSize            = int(settings.Soft.KVWriteBufferSize)
-	maxWriteBufferNumber       = int(settings.Soft.KVMaxWriteBufferNumber)
-	l0FileNumCompactionTrigger = int(settings.Soft.KVLevel0FileNumCompactionTrigger)
-	l0SlowdownWritesTrigger    = int(settings.Soft.KVLevel0SlowdownWritesTrigger)
-	l0StopWritesTrigger        = int(settings.Soft.KVLevel0StopWritesTrigger)
-	numOfLevels                = int(settings.Soft.KVNumOfLevels)
-	useUniversalCompaction     = settings.Soft.KVUseUniversalCompaction
-	maxBytesForLevelBase       = settings.Soft.KVMaxBytesForLevelBase
-	maxBytesForLevelMultiplier = float64(settings.Soft.KVMaxBytesForLevelMultiplier)
-	targetFileSizeBase         = settings.Soft.KVTargetFileSizeBase
-	targetFileSizeMultiplier   = int(settings.Soft.KVTargetFileSizeMultiplier)
-	dynamicLevelBytes          = settings.Soft.KVLevelCompactionDynamicLevelBytes
-	recycleLogFileNum          = int(settings.Soft.KVRecycleLogFileNum)
-	tolerateTailCorruption     = settings.Soft.KVTolerateCorruptedTailRecords
-)
-
 var versionWarning sync.Once
 
 // NewKVStore returns a RocksDB based IKVStore instance.
-func NewKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+func NewKVStore(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs != vfs.DefaultFS {
 		panic("only vfs.DefaultFS is supported")
 	}
 	checkRocksDBVersion()
-	return openRocksDB(dir, wal, fs)
+	return openRocksDB(config, dir, wal, fs)
 }
 
 func checkRocksDBVersion() {
@@ -96,9 +76,31 @@ type KV struct {
 var tolerateTailCorruptionWarning uint32
 var useUniversalCompactionWarning uint32
 
-func getRocksDBOptions(directory string,
-	walDirectory string) (*gorocksdb.Options,
+func getRocksDBOptions(config config.LogDBConfig,
+	directory string, walDirectory string) (*gorocksdb.Options,
 	*gorocksdb.BlockBasedTableOptions, *gorocksdb.Cache) {
+	// TODO:
+	// log the settings
+	blockSize := int(config.KVBlockSize)
+	logDBLRUCacheSize := int(config.KVLRUCacheSize)
+	maxBackgroundCompactions := int(config.KVMaxBackgroundCompactions)
+	maxBackgroundFlushes := int(config.KVMaxBackgroundFlushes)
+	keepLogFileNum := int(config.KVKeepLogFileNum)
+	writeBufferSize := int(config.KVWriteBufferSize)
+	maxWriteBufferNumber := int(config.KVMaxWriteBufferNumber)
+	l0FileNumCompactionTrigger := int(config.KVLevel0FileNumCompactionTrigger)
+	l0SlowdownWritesTrigger := int(config.KVLevel0SlowdownWritesTrigger)
+	l0StopWritesTrigger := int(config.KVLevel0StopWritesTrigger)
+	numOfLevels := int(config.KVNumOfLevels)
+	maxBytesForLevelBase := config.KVMaxBytesForLevelBase
+	maxBytesForLevelMultiplier := float64(config.KVMaxBytesForLevelMultiplier)
+	targetFileSizeBase := config.KVTargetFileSizeBase
+	targetFileSizeMultiplier := int(config.KVTargetFileSizeMultiplier)
+	dynamicLevelBytes := config.KVLevelCompactionDynamicLevelBytes
+	recycleLogFileNum := int(config.KVRecycleLogFileNum)
+	tolerateTailCorruption := settings.Soft.KVTolerateCorruptedTailRecords
+	useUniversalCompaction := settings.Soft.KVUseUniversalCompaction
+	// generate the options
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetWholeKeyFiltering(true)
 	bbto.SetBlockSize(blockSize)
@@ -172,13 +174,17 @@ func getRocksDBOptions(directory string,
 	return opts, bbto, cache
 }
 
-func openRocksDB(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+func openRocksDB(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+	if config.IsEmpty() {
+		panic("invalid LogDBConfig")
+	}
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
 	if err := fileutil.MkdirAll(wal, fs); err != nil {
 		panic(err)
 	}
-	opts, bbto, cache := getRocksDBOptions(dir, wal)
+	opts, bbto, cache := getRocksDBOptions(config, dir, wal)
 	db, err := gorocksdb.OpenDb(opts, dir)
 	if err != nil {
 		return nil, err

@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -44,8 +45,8 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
-type LogDBFactoryFunc func(dirs []string,
-	lowLatencyDirs []string) (raftio.ILogDB, error)
+type LogDBFactoryFunc func(config LogDBConfig,
+	dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error)
 
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
@@ -331,6 +332,12 @@ type NodeHostConfig struct {
 	// usually set in tests. Dragonboat applications are not required to
 	// explicitly set this field.
 	SystemTickerPrecision time.Duration
+	// LogDBConfig is the configuration object for the LogDB storage engine. LogDB
+	// is used for storing Raft Logs and other metadata. This is an option for
+	// advanced users when tuning the balance of I/O performance and memory
+	// consumption. Regular users are recommdned not to set this field to use it
+	// default value.
+	LogDBConfig LogDBConfig
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -394,6 +401,10 @@ func (c *NodeHostConfig) Prepare() error {
 		plog.Infof("system ticker precision is set to 1ms (default)")
 		c.SystemTickerPrecision = time.Millisecond
 	}
+	if c.LogDBConfig.IsEmpty() {
+		plog.Infof("using default LogDBConfig")
+		c.LogDBConfig = GetDefaultLogDBConfig()
+	}
 	return nil
 }
 
@@ -440,4 +451,73 @@ func (c *NodeHostConfig) GetClientTLSConfig(target string) (*tls.Config, error) 
 // IsValidAddress returns whether the input address is valid.
 func IsValidAddress(addr string) bool {
 	return stringutil.IsValidAddress(addr)
+}
+
+// LogDBConfig is the configuration object for the LogDB storage engine. This
+// config option is only for advanced users when tuning the balance of I/O
+// performance and memory consumption.
+//
+// All KV* fields in LogDBConfig had their names derived from RocksDB options,
+// please check RocksDB Tuning Guide wiki for more details.
+//
+// KVWriteBufferSize and KVMaxWriteBufferNumber are two parameters that directly
+// affect the upper bound of memory size used by the built-in LogDB storage
+// engine.
+type LogDBConfig struct {
+	KVKeepLogFileNum                   uint64
+	KVMaxBackgroundCompactions         uint64
+	KVMaxBackgroundFlushes             uint64
+	KVLRUCacheSize                     uint64
+	KVWriteBufferSize                  uint64
+	KVMaxWriteBufferNumber             uint64
+	KVLevel0FileNumCompactionTrigger   uint64
+	KVLevel0SlowdownWritesTrigger      uint64
+	KVLevel0StopWritesTrigger          uint64
+	KVMaxBytesForLevelBase             uint64
+	KVMaxBytesForLevelMultiplier       uint64
+	KVTargetFileSizeBase               uint64
+	KVTargetFileSizeMultiplier         uint64
+	KVLevelCompactionDynamicLevelBytes uint64
+	KVRecycleLogFileNum                uint64
+	KVNumOfLevels                      uint64
+	KVBlockSize                        uint64
+}
+
+// GetDefaultLogDBConfig returns the default configurations for the LogDB
+// storage engine.
+func GetDefaultLogDBConfig() LogDBConfig {
+	return LogDBConfig{
+		KVMaxBackgroundCompactions:         2,
+		KVMaxBackgroundFlushes:             2,
+		KVLRUCacheSize:                     0,
+		KVKeepLogFileNum:                   16,
+		KVWriteBufferSize:                  256 * 1024 * 1024,
+		KVMaxWriteBufferNumber:             8,
+		KVLevel0FileNumCompactionTrigger:   8,
+		KVLevel0SlowdownWritesTrigger:      17,
+		KVLevel0StopWritesTrigger:          24,
+		KVMaxBytesForLevelBase:             4 * 1024 * 1024 * 1024,
+		KVMaxBytesForLevelMultiplier:       2,
+		KVTargetFileSizeBase:               16 * 1024 * 1024,
+		KVTargetFileSizeMultiplier:         2,
+		KVLevelCompactionDynamicLevelBytes: 0,
+		KVRecycleLogFileNum:                0,
+		KVNumOfLevels:                      7,
+		KVBlockSize:                        32 * 1024,
+	}
+}
+
+// MemorySize returns the estimated upper bound memory size used by the LogDB
+// storage engine. The returned value is in MBytes.
+func (cfg *LogDBConfig) MemorySizeMB() uint64 {
+	ss := cfg.KVWriteBufferSize * cfg.KVMaxWriteBufferNumber
+	bs := ss * settings.Hard.LogDBPoolSize
+	return bs / (1024 * 1024)
+}
+
+// IsEmpty returns a boolean value indicating whether the LogDBConfig instance
+// is empty.
+func (cfg *LogDBConfig) IsEmpty() bool {
+	empty := LogDBConfig{}
+	return reflect.DeepEqual(cfg, &empty)
 }

@@ -36,28 +36,28 @@ var (
 	plog = logger.GetLogger("logdb")
 )
 
-type kvFactory func(string, string, vfs.IFS) (kv.IKVStore, error)
+type kvFactory func(config.LogDBConfig, string, string, vfs.IFS) (kv.IKVStore, error)
 
 // NewDefaultLogDB creates a Log DB instance using the default KV store
 // implementation. The created Log DB tries to store entry records in
 // plain format but it switches to the batched mode if there is already
 // batched entries saved in the existing DB.
-func NewDefaultLogDB(dirs []string,
+func NewDefaultLogDB(config config.LogDBConfig, dirs []string,
 	lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
-	return NewLogDB(dirs, lldirs, false, true, fs, newDefaultKVStore)
+	return NewLogDB(config, dirs, lldirs, false, true, fs, newDefaultKVStore)
 }
 
 // NewDefaultBatchedLogDB creates a Log DB instance using the default KV store
 // implementation with batched entry support.
-func NewDefaultBatchedLogDB(dirs []string,
+func NewDefaultBatchedLogDB(config config.LogDBConfig, dirs []string,
 	lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
-	return NewLogDB(dirs, lldirs, true, false, fs, newDefaultKVStore)
+	return NewLogDB(config, dirs, lldirs, true, false, fs, newDefaultKVStore)
 }
 
 // NewLogDB creates a Log DB instance based on provided configuration
 // parameters. The underlying KV store used by the Log DB instance is created
 // by the provided factory function.
-func NewLogDB(dirs []string, lldirs []string,
+func NewLogDB(config config.LogDBConfig, dirs []string, lldirs []string,
 	batched bool, check bool, fs vfs.IFS, f kvFactory) (raftio.ILogDB, error) {
 	checkDirs(dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
@@ -69,7 +69,7 @@ func NewLogDB(dirs []string, lldirs []string,
 			}
 		}
 	}
-	return OpenShardedRDB(dirs, lldirs, batched, check, fs, f)
+	return OpenShardedRDB(config, dirs, lldirs, batched, check, fs, f)
 }
 
 func checkDirs(dirs []string, lldirs []string) {
@@ -94,6 +94,7 @@ func checkDirs(dirs []string, lldirs []string) {
 
 // GetLogDBInfo returns logdb type name.
 func GetLogDBInfo(f config.LogDBFactoryFunc,
+	config config.LogDBConfig,
 	nhDirs []string, fs vfs.IFS) (name string, err error) {
 	tmpDirs := make([]string, 0)
 	for _, dir := range nhDirs {
@@ -104,7 +105,7 @@ func GetLogDBInfo(f config.LogDBFactoryFunc,
 		}
 		tmpDirs = append(tmpDirs, td)
 	}
-	ldb, err := f(tmpDirs, tmpDirs)
+	ldb, err := f(config, tmpDirs, tmpDirs)
 	if err != nil {
 		return "", err
 	}

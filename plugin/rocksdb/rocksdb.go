@@ -18,6 +18,7 @@ Package rocksdb provides factory functions for creating RocksDB based Log DB.
 package rocksdb
 
 import (
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -27,16 +28,18 @@ import (
 // NewLogDB is the factory function for creating RocksDB based Log DB instances.
 // Raft entries are stored in its plain format, it uses less memory than the
 // batched alternative implementation but comes at the cost of lower throughput.
-func NewLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+func NewLogDB(cfg config.LogDBConfig,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
-	return logdb.NewLogDB(dirs, lldirs, false, false, fs, rocksdb.NewKVStore)
+	return logdb.NewLogDB(cfg, dirs, lldirs, false, false, fs, rocksdb.NewKVStore)
 }
 
 // NewBatchedLogDB is the factory function for creating RocksDB based Log DB
 // instances. Raft entries are batched before they get stored into RocksDB, it
 // uses more memory than the default RocksDB based Log DB and provides better
 // throughput performance.
-func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+func NewBatchedLogDB(cfg config.LogDBConfig,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
-	return logdb.NewLogDB(dirs, lldirs, true, false, fs, rocksdb.NewKVStore)
+	return logdb.NewLogDB(cfg, dirs, lldirs, true, false, fs, rocksdb.NewKVStore)
 }

@@ -1636,8 +1636,9 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		return err
 	}
 	var factory config.LogDBFactoryFunc
-	df := func(dirs []string, lows []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(dirs, lows, nh.fs)
+	df := func(config config.LogDBConfig,
+		dirs []string, lows []string) (raftio.ILogDB, error) {
+		return logdb.NewDefaultLogDB(config, dirs, lows, nh.fs)
 	}
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
@@ -1645,14 +1646,14 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		factory = df
 	}
 	// create a tmp logdb to get LogDB type info
-	name, err := logdb.GetLogDBInfo(factory, nhDirs, nh.fs)
+	name, err := logdb.GetLogDBInfo(factory, nh.nhConfig.LogDBConfig, nhDirs, nh.fs)
 	if err != nil {
 		return err
 	}
 	if err := nh.serverCtx.CheckLogDBType(did, name); err != nil {
 		return err
 	}
-	ldb, err := factory(nhDirs, walDirs)
+	ldb, err := factory(nh.nhConfig.LogDBConfig, nhDirs, walDirs)
 	if err != nil {
 		return err
 	}
@@ -1671,6 +1672,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 			return server.ErrLogDBBrokenChange
 		}
 	}
+	plog.Infof("logdb memory limit: %dMBytes", cfg.LogDBConfig.MemorySizeMB())
 	return nil
 }
 

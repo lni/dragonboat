@@ -19,6 +19,7 @@ package logdb
 import (
 	"flag"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
@@ -28,7 +29,8 @@ const (
 	DefaultKVStoreTypeName = "custom"
 )
 
-func newDefaultKVStore(dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
+func newDefaultKVStore(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if v := flag.Lookup("test.v"); v == nil || v.Value.String() != "true" {
 		panic("not suppose to be called")
 	} else {

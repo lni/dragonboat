@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"math"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -74,9 +75,9 @@ func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 	return located, nil
 }
 
-func hasBatchedRecord(dir string,
-	wal string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	kvs, err := kvf(dir, wal, fs)
+func hasBatchedRecord(config config.LogDBConfig,
+	dir string, wal string, fs vfs.IFS, kvf kvFactory) (bool, error) {
+	kvs, err := kvf(config, dir, wal, fs)
 	if err != nil {
 		return false, err
 	}
@@ -88,9 +89,10 @@ func hasBatchedRecord(dir string,
 	return hasEntryRecord(kvs, true)
 }
 
-func openRDB(dir string, wal string,
-	batched bool, fs vfs.IFS, kvf kvFactory) (*rdb, error) {
-	kvs, err := kvf(dir, wal, fs)
+func openRDB(config config.LogDBConfig,
+	dir string, wal string, batched bool,
+	fs vfs.IFS, kvf kvFactory) (*rdb, error) {
+	kvs, err := kvf(config, dir, wal, fs)
 	if err != nil {
 		return nil, err
 	}

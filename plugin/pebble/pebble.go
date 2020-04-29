@@ -20,6 +20,7 @@ Pebble support is in ALPHA status, it is NOT ready for production use.
 package pebble
 
 import (
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -29,7 +30,8 @@ import (
 // NewBatchedLogDB is the factory function for creating Pebble based Log DB
 // instances. Raft entries are batched before they get stored into Pebble, it
 // uses more memory and provides better throughput performance.
-func NewBatchedLogDB(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+func NewBatchedLogDB(cfg config.LogDBConfig,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
-	return logdb.NewLogDB(dirs, lldirs, true, false, fs, pebble.NewKVStore)
+	return logdb.NewLogDB(cfg, dirs, lldirs, true, false, fs, pebble.NewKVStore)
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/lni/goutils/syncutil"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -49,15 +50,15 @@ type ShardedRDB struct {
 	stopper              *syncutil.Stopper
 }
 
-func checkAllShards(dirs []string,
-	lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
+func checkAllShards(config config.LogDBConfig,
+	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
 	for i := uint64(0); i < numOfRocksDBInstance; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lls) > 0 {
 			lldir = fs.PathJoin(lls[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := hasBatchedRecord(dir, lldir, fs, kvf)
+		batched, err := hasBatchedRecord(config, dir, lldir, fs, kvf)
 		if err != nil {
 			return false, err
 		}
@@ -69,7 +70,7 @@ func checkAllShards(dirs []string,
 }
 
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(dirs []string, lldirs []string,
+func OpenShardedRDB(config config.LogDBConfig, dirs []string, lldirs []string,
 	batched bool, check bool, fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
@@ -83,7 +84,7 @@ func OpenShardedRDB(dirs []string, lldirs []string,
 	var err error
 	if check {
 		plog.Infof("checking all LogDB shards...")
-		batched, err = checkAllShards(dirs, lldirs, fs, kvf)
+		batched, err = checkAllShards(config, dirs, lldirs, fs, kvf)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +96,7 @@ func OpenShardedRDB(dirs []string, lldirs []string,
 		if len(lldirs) > 0 {
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		db, err := openRDB(dir, lldir, batched, fs, kvf)
+		db, err := openRDB(config, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()

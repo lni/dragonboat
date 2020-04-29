@@ -57,7 +57,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		return false, err
 	}
 	nhDir, walDir := serverCtx.GetLogDBDirs(nhConfig.DeploymentID)
-	logdb, err := logdb.NewDefaultLogDB(nhDir, walDir, fs)
+	logdb, err := logdb.NewDefaultLogDB(nhConfig.LogDBConfig, nhDir, walDir, fs)
 	if err != nil {
 		return false, err
 	}

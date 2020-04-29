@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -62,8 +63,9 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 	if err := fileutil.MkdirAll(lld, fs); err != nil {
 		panic(err)
 	}
-	db, err := NewLogDB([]string{d},
-		[]string{lld}, batched, false, fs, newDefaultKVStore)
+	cfg := config.GetDefaultLogDBConfig()
+	db, err := NewLogDB(cfg,
+		[]string{d}, []string{lld}, batched, false, fs, newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}
