@@ -3282,6 +3282,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			RTTMillisecond: 2,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
+			LogDBConfig:    config.GetDefaultLogDBConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
