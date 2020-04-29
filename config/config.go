@@ -486,13 +486,17 @@ type LogDBConfig struct {
 // GetDefaultLogDBConfig returns the default configurations for the LogDB
 // storage engine.
 func GetDefaultLogDBConfig() LogDBConfig {
+	return getDefaultLogDBConfig()
+}
+
+func getDefaultLogDBConfig() LogDBConfig {
 	return LogDBConfig{
 		KVMaxBackgroundCompactions:         2,
 		KVMaxBackgroundFlushes:             2,
 		KVLRUCacheSize:                     0,
 		KVKeepLogFileNum:                   16,
-		KVWriteBufferSize:                  256 * 1024 * 1024,
-		KVMaxWriteBufferNumber:             8,
+		KVWriteBufferSize:                  128 * 1024 * 1024,
+		KVMaxWriteBufferNumber:             4,
 		KVLevel0FileNumCompactionTrigger:   8,
 		KVLevel0SlowdownWritesTrigger:      17,
 		KVLevel0StopWritesTrigger:          24,
