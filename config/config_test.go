@@ -129,3 +129,26 @@ func TestLogDBConfigIsEmpty(t *testing.T) {
 		t.Fatalf("still empty")
 	}
 }
+
+func TestLogDBConfigMemSize(t *testing.T) {
+	c := GetDefaultLogDBConfig()
+	if c.MemorySizeMB() != 8192 {
+		t.Errorf("unexpected default memory size")
+	}
+	c1 := GetTinyMemLogDBConfig()
+	if c1.MemorySizeMB() != 256 {
+		t.Errorf("size %d, want 256", c1.MemorySizeMB())
+	}
+	c2 := GetSmallMemLogDBConfig()
+	if c2.MemorySizeMB() != 1024 {
+		t.Errorf("size %d, want 1024", c2.MemorySizeMB())
+	}
+	c3 := GetMediumMemLogDBConfig()
+	if c3.MemorySizeMB() != 4096 {
+		t.Errorf("size %d, want 4096", c3.MemorySizeMB())
+	}
+	c4 := GetLargeMemLogDBConfig()
+	if c4.MemorySizeMB() != 8192 {
+		t.Errorf("size %d, want 8192", c4.MemorySizeMB())
+	}
+}

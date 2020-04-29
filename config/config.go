@@ -484,8 +484,43 @@ type LogDBConfig struct {
 }
 
 // GetDefaultLogDBConfig returns the default configurations for the LogDB
-// storage engine.
+// storage engine. The default LogDB can use up to 8GBytes memory.
 func GetDefaultLogDBConfig() LogDBConfig {
+	return getDefaultLogDBConfig()
+}
+
+// GetTinyMemLogDBConfig returns a LogDB config aimed for minimizing memory
+// size. When using the returned config, LogDB takes up to 256MBytes memory.
+func GetTinyMemLogDBConfig() LogDBConfig {
+	cfg := getDefaultLogDBConfig()
+	cfg.KVWriteBufferSize = 4 * 1024 * 1024
+	cfg.KVMaxWriteBufferNumber = 4
+	return cfg
+}
+
+// GetSmallMemLogDBConfig returns a LogDB config aimed to keep memory size at
+// low level. When using the returned config, LogDB takes up to 1GBytes memory.
+func GetSmallMemLogDBConfig() LogDBConfig {
+	cfg := getDefaultLogDBConfig()
+	cfg.KVWriteBufferSize = 16 * 1024 * 1024
+	cfg.KVMaxWriteBufferNumber = 4
+	return cfg
+}
+
+// GetMediumMemLogDBConfig returns a LogDB config aimed to keep memory size at
+// medium level. When using the returned config, LogDB takes up to 4GBytes
+// memory.
+func GetMediumMemLogDBConfig() LogDBConfig {
+	cfg := getDefaultLogDBConfig()
+	cfg.KVWriteBufferSize = 64 * 1024 * 1024
+	cfg.KVMaxWriteBufferNumber = 4
+	return cfg
+}
+
+// GetLargeMemLogDBConfig returns a LogDB config aimed to keep memory size to be
+// large for good I/O performance. It is the default setting used by the system.
+// When using the returned config, LogDB takes up to 8GBytes memory.
+func GetLargeMemLogDBConfig() LogDBConfig {
 	return getDefaultLogDBConfig()
 }
 
