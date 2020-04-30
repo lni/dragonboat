@@ -207,7 +207,7 @@ func getDefaultSoftSettings() soft {
 		SendQueueLength:                1024 * 2,
 		ReceiveQueueLength:             1024,
 		StreamConnections:              4,
-		PerConnectionSendBufSize:       LargeEntitySize,
+		PerConnectionSendBufSize:       2 * 1024 * 1024,
 		PerConnectionRecvBufSize:       2 * 1024 * 1024,
 		SnapshotGCTick:                 30,
 		SnapshotChunkTimeoutTick:       900,
