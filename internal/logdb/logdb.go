@@ -62,7 +62,7 @@ func NewLogDB(config config.LogDBConfig, dirs []string, lldirs []string,
 	checkDirs(dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
 	if len(dirs) == 1 {
-		for i := uint64(1); i < numOfRocksDBInstance; i++ {
+		for i := uint64(1); i < numOfShards; i++ {
 			dirs = append(dirs, dirs[0])
 			if llDirRequired {
 				lldirs = append(lldirs, lldirs[0])
@@ -78,9 +78,9 @@ func checkDirs(dirs []string, lldirs []string) {
 			plog.Panicf("only 1 regular dir but %d low latency dirs", len(lldirs))
 		}
 	} else if len(dirs) > 1 {
-		if uint64(len(dirs)) != numOfRocksDBInstance {
+		if uint64(len(dirs)) != numOfShards {
 			plog.Panicf("%d regular dirs, but expect to have %d rdb instances",
-				len(dirs), numOfRocksDBInstance)
+				len(dirs), numOfShards)
 		}
 		if len(lldirs) > 0 {
 			if len(dirs) != len(lldirs) {

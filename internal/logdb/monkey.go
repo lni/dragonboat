@@ -19,6 +19,6 @@ package logdb
 // ApplyMonkeySettings applies monkey settings
 func ApplyMonkeySettings() {
 	batchSize = 4
-	numOfRocksDBInstance = 1
+	numOfShards = 1
 	RDBContextValueSize = 1
 }

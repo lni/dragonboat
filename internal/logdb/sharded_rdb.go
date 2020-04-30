@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	numOfStepEngineWorker = settings.Hard.StepEngineWorkerCount
-	numOfRocksDBInstance  = settings.Hard.LogDBPoolSize
+	numOfWorkers = settings.Hard.StepEngineWorkerCount
+	numOfShards  = settings.Hard.LogDBPoolSize
 	// InitRDBContextValueSize defines the initial size of RDB buffer.
 	InitRDBContextValueSize uint64 = 32 * 1024
 	// RDBContextValueSize defines the max size of RDB buffer to be retained.
@@ -52,7 +52,7 @@ type ShardedRDB struct {
 
 func checkAllShards(config config.LogDBConfig,
 	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	for i := uint64(0); i < numOfRocksDBInstance; i++ {
+	for i := uint64(0); i < numOfShards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lls) > 0 {
@@ -70,8 +70,9 @@ func checkAllShards(config config.LogDBConfig,
 }
 
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(config config.LogDBConfig, dirs []string, lldirs []string,
-	batched bool, check bool, fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
+func OpenShardedRDB(config config.LogDBConfig,
+	dirs []string, lldirs []string, batched bool, check bool,
+	fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("using batched ShardedRDB")
@@ -90,7 +91,7 @@ func OpenShardedRDB(config config.LogDBConfig, dirs []string, lldirs []string,
 		}
 		plog.Infof("all shards checked, batched: %t", batched)
 	}
-	for i := uint64(0); i < numOfRocksDBInstance; i++ {
+	for i := uint64(0); i < numOfShards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lldirs) > 0 {
@@ -105,8 +106,7 @@ func OpenShardedRDB(config config.LogDBConfig, dirs []string, lldirs []string,
 		}
 		shards = append(shards, db)
 	}
-	partitioner := server.NewDoubleFixedPartitioner(numOfRocksDBInstance,
-		numOfStepEngineWorker)
+	partitioner := server.NewDoubleFixedPartitioner(numOfShards, numOfWorkers)
 	mw := &ShardedRDB{
 		shards:       shards,
 		partitioner:  partitioner,
