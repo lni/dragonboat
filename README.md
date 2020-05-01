@@ -14,14 +14,14 @@
 * 2019-02-20 Dragonboat v2.1 has been released.
 
 ## About ##
-Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/) with [C++11 binding](/binding) support.
+Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/).
 
 Consensus algorithms such as Raft provides fault-tolerance by alllowing a system continue to operate as long as the majority member servers are available. For example, a Raft cluster of 5 servers can make progress even if 2 servers fail. It also appears to clients as a single node with strong data consistency always provided. All running servers can be used to initiate read requests for aggregated read throughput.
 
 Dragonboat handles all technical difficulties associated with Raft to allow users to just focus on their application domains. It is also very easy to use, our step-by-step [examples](https://github.com/lni/dragonboat-example) can help new users to master it in half an hour.
 
 ## Features ##
-* Easy to use API for building Raft based applications in Go or C++
+* Easy to use API for building Raft based applications
 * Feature complete and scalable multi-group Raft implementation
 * Disk based and memory based state machine support
 * Fully pipelined and TLS mutual authentication support, ready for high latency open environment
@@ -82,8 +82,6 @@ You can also follow our [examples](https://github.com/lni/dragonboat-example) on
 
 ## Documents ##
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
-
-C++ Binding info can be found [here](https://github.com/lni/dragonboat/blob/master/binding/README.md).
 
 ## Examples ##
 Dragonboat examples are [here](https://github.com/lni/dragonboat-example).

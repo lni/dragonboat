@@ -206,9 +206,11 @@ get-rocksdb:
 		tar xzvf $(RDBTMPDIR)/v$(ROCKSDB_VER).tar.gz -C $(RDBTMPDIR); \
 	}
 make-rocksdb:
-	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
+	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C \
+		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
 make-rocksdb-static:
-	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
+	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C \
+		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
 ldconfig-rocksdb-lib-ull:
 	if [ $(OS) = Linux ]; then \
 		sudo sh -c "if [ ! -f $(LIBCONF_PATH) ]; \
@@ -359,195 +361,22 @@ test-tools:
 	$(GOTEST) $(PKGNAME)/tools
 
 ###############################################################################
-# language bindings
-###############################################################################
-ifneq ($(TESTBUILD),)
-$(info TESTBUILD flag set, doing a DEBUG build)
-# TODO:
-# re-enable the following option when g++ 7 is fixed in ubuntu 16.04
-# https://stackoverflow.com/questions/50024731/ld-unrecognized-option-push-state-no-as-needed
-# -fsanitize=undefined
-# note that -fsanitize=thread is not used here because we can't have the
-# dragonboat library in Go instrumented.
-# https://github.com/google/sanitizers/wiki/ThreadSanitizerCppManual
-ifeq ($(OS),Darwin)
-SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=undefined
-else ifeq ($(OS),Linux)
-SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=leak
-else ifeq ($(OS),FreeBSD)
-SANITIZER_FLAGS ?= -fsanitize=address -fsanitize=leak
-else
-$(error OS type $(OS) not supported)
-endif
-BINDING_STATIC_LIB_TEST_CXXFLAGS=-g $(SANITIZER_FLAGS)
-endif
-
-CXXSTD=-std=c++11
-CFLAGS=-Wall -fPIC -O3 -Ibinding/include
-CXXFLAGS=$(CXXSTD) -Wall -fPIC -O3 -Ibinding/include
-TEST_CXXFLAGS=$(CXXFLAGS) -g $(SANITIZER_FLAGS)
-TEST_LDFLAGS=$(SANITIZER_FLAGS)
-LIBNAME=libdragonboat
-PLATFORM_SHARED_EXT=so
-BINDING_DIR=binding
-BINDING_TAG=dragonboat_language_binding
-BINDINGTAGS="$(GOBUILDTAGVALS) $(BINDING_TAG)"
-SHARED_MAJOR=$(shell egrep "DragonboatMajor = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED_MINOR=$(shell egrep "DragonboatMinor = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED_PATCH=$(shell egrep "DragonboatPatch = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED1=${LIBNAME}.$(PLATFORM_SHARED_EXT)
-SHARED2=$(SHARED1).$(SHARED_MAJOR)
-SHARED3=$(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR)
-SHARED4=$(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
-BINDING_SRCS=binding/cpp/dragonboat.cpp binding/c/binding.c
-BINDING_OBJS=binding/cpp/dragonboat.o binding/c/binding.o
-BINDING_INC_PATH=binding/include/dragonboat
-BINDING_STATIC_LIB=libdragonboatcpp.a
-BINDING_BIN=$(BINDING_DIR)/$(SHARED1)
-BINDING_BIN_HEADER=$(BINDING_DIR)/include/dragonboat/libdragonboat.h
-BINDING_STATIC_LIB_CXXFLAGS=$(CXXFLAGS) $(BINDING_STATIC_LIB_TEST_CXXFLAGS)
-BINDING_STATIC_LIB_CFLAGS=$(CFLAGS) $(BINDING_STATIC_LIB_TEST_CXXFLAGS)
-
-binding/cpp/%.o: binding/cpp/%.cpp
-	$(CXX) $(BINDING_STATIC_LIB_CXXFLAGS) -c -o $@ $<
-binding/c/%.o: binding/c/%.c
-	$(CC) $(BINDING_STATIC_LIB_CFLAGS) -c -o $@ $<
-$(SHARED4):
-	$(GO) build -tags=$(BINDINGTAGS) -o $(BINDING_BIN) -buildmode=c-shared \
-		$(PKGNAME)/binding
-	if [ $(OS) = "Darwin" ] ; \
-  then \
-    install_name_tool -id "@rpath/$(SHARED1)" $(BINDING_BIN); \
-  fi
-	ln -f -s $(PKGROOT)/binding/libdragonboat.h \
-    $(BINDING_INC_PATH)/libdragonboat.h
-	mv $(BINDING_BIN) $(SHARED4)
-$(BINDING_OBJS): $(SHARED4)
-$(BINDING_STATIC_LIB): $(SHARED4) $(BINDING_OBJS)
-	ar rcs $(BINDING_STATIC_LIB) $(BINDING_OBJS)
-$(SHARED1): $(SHARED4)
-	ln -fs $(SHARED4) $(SHARED1)
-$(SHARED2): $(SHARED4)
-	ln -fs $(SHARED4) $(SHARED2)
-$(SHARED3): $(SHARED4)
-	ln -fs $(SHARED4) $(SHARED3)
-binding: $(SHARED1) $(SHARED2) $(SHARED3) $(BINDING_STATIC_LIB)
-
-install-headers:
-	install -d $(INSTALL_PATH)/lib
-	for header_dir in `cd $(BINDING_INC_PATH)/..; \
-		find "dragonboat" -type l -o -type d`; do \
-			install -d $(INSTALL_PATH)/include/$$header_dir; \
-	done
-	for header in `cd $(BINDING_INC_PATH)/..; \
-		find "dragonboat" -type l -o -type f -name "*.h"`; do \
-			install -C -m 644 $(BINDING_INC_PATH)/../$$header \
-				$(INSTALL_PATH)/include/$$header; \
-	done
-install-cpp-binding: $(BINDING_STATIC_LIB)
-	install -C -m 755 $(BINDING_STATIC_LIB) $(INSTALL_PATH)/lib
-install-binding: binding install-headers install-cpp-binding
-	install -C -m 755 $(SHARED4) $(INSTALL_PATH)/lib && \
-    ln -fs $(SHARED4) $(INSTALL_PATH)/lib/$(SHARED3) && \
-    ln -fs $(SHARED4) $(INSTALL_PATH)/lib/$(SHARED2) && \
-    ln -fs $(SHARED4) $(INSTALL_PATH)/lib/$(SHARED1)
-uninstall-binding:
-	rm -rf $(INSTALL_PATH)/include/dragonboat \
-    $(INSTALL_PATH)/lib/$(BINDING_STATIC_LIB) \
-    $(INSTALL_PATH)/lib/$(SHARED4) \
-    $(INSTALL_PATH)/lib/$(SHARED3) \
-    $(INSTALL_PATH)/lib/$(SHARED2) \
-    $(INSTALL_PATH)/lib/$(SHARED1)
-
-# tests for the C++11 binding
-PLUGIN_CPP_EXAMPLE_BIN=dragonboat-cpp-plugin-example.so
-ifeq ($(OS),Darwin)
-CPPTEST_LDFLAGS=-bundle -undefined dynamic_lookup \
-  -Wl,-install_name,$(PLUGIN_CPP_EXAMPLE_BIN)
-else ifeq ($(OS),Linux)
-CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-else ifeq ($(OS),FreeBSD)
-CPPTEST_LDFLAGS=-shared -Wl,-soname,$(PLUGIN_CPP_EXAMPLE_BIN)
-else ifneq (,$(findstring MINGW,$(OS)))
-else ifneq (,$(findstring MSYS, $(OS)))
-else
-$(error OS type $(OS) not supported)
-endif
-
-TEST_LDFLAGS=$(SANITIZER_FLAGS)
-CPPTEST_SRC=internal/tests/cpptest/example.cpp \
-  internal/tests/cpptest/exampleplugin.cpp
-CPPTEST_OBJS=$(subst .cpp,.o,$(CPPTEST_SRC))
-CPPWRAPPER_TEST_SRC=binding/tests/nodehost_tests.cpp \
-  binding/tests/dragonboat_tests.cpp binding/tests/zupply.cpp
-CPPWRAPPER_TEST_OBJS=$(subst .cpp,.o,$(CPPWRAPPER_TEST_SRC))
-CPPWRAPPER_TEST_BIN=dragonboat-cppwrapper-tests
-WRAPPER_TESTING_BIN=cpp-wrapper-test.bin
-ASAN_OPTIONS ?= ASAN_OPTIONS=leak_check_at_exit=0:detect_container_overflow=0
-
-internal/tests/cpptest/%.o: internal/tests/cpptest/%.cpp
-	$(CXX) $(TEST_CXXFLAGS) -Iinternal/tests -Ibinding/include -c -o $@ $<
-$(PLUGIN_CPP_EXAMPLE_BIN): $(CPPTEST_OBJS)
-	$(CXX) $(TEST_LDFLAGS) $(CPPTEST_LDFLAGS) \
-		-o $(PLUGIN_CPP_EXAMPLE_BIN) $(CPPTEST_OBJS)
-binding/tests/%.o: binding/tests/%.cpp
-	$(CXX) $(TEST_CXXFLAGS) -c -o $@ $<
-
-$(CPPWRAPPER_TEST_BIN): binding $(PLUGIN_CPP_EXAMPLE_BIN) $(CPPWRAPPER_TEST_OBJS)
-	$(CXX) $(TEST_LDFLAGS) -o $@ $(CPPWRAPPER_TEST_OBJS) \
-    -lgtest -lgtest_main -L$(PKGROOT) -ldragonboatcpp \
-    -L$(PKGROOT) -ldragonboat -lpthread -Wl,-rpath,.
-
-# TODO:
-# for libasan.so.2 and libasan.so.3, leak_check_at_exit used with go1.10/go1.11
-# will cause Segfault
-# the go part of the program doesn't have the std::vector instrumented, set
-# detect_container_overflow=0 to avoid false positive
-test-cppwrapper: $(CPPWRAPPER_TEST_BIN)
-	$(ASAN_OPTIONS) ./$(CPPWRAPPER_TEST_BIN)
-
-test-wrapper: $(PLUGIN_CPP_EXAMPLE_BIN)
-	$(GOTEST) -o $(WRAPPER_TESTING_BIN) -c $(PKGNAME)/internal/cpp
-	./$(WRAPPER_TESTING_BIN) -test.v
-
-clean-binding:
-	@rm -f $(SHARED1) $(SHARED2) $(SHARED3) $(SHARED4) \
-		$(BINDING_BIN) $(BINDING_OBJS) $(BINDING_STATIC_LIB) \
-		$(CPPWRAPPER_TEST_BIN) $(PLUGIN_CPP_EXAMPLE_BIN) $(CPPWRAPPER_TEST_OBJS) \
-		$(CPPTEST_OBJS) $(WRAPPER_TESTING_BIN)
-
-###############################################################################
 # static checks
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/cpp internal/rsm internal/settings internal/tests internal/server   \
 	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/pebble             \
-	plugin/rocksdb plugin/chan raftpb tools binding logger raftio config         \
-	statemachine client internal/utils/dio internal/vfs
+	plugin/rocksdb plugin/chan raftpb tools logger raftio config statemachine    \
+	client internal/utils/dio internal/vfs
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
 	golint $(PKGNAME)
 	@for p in $(CHECKED_PKGS); do \
-		if [ $$p = "binding" ] ; \
-    then \
-      $(GO) vet -tags="$(BINDING_TAG)" $(PKGNAME)/$$p; \
-		else \
-			$(GO) vet $(PKGNAME)/$$p; \
-		fi; \
+		$(GO) vet $(PKGNAME)/$$p; \
 		golint $$p; \
 		ineffassign $$p; \
 	done;
-
-cpp-static-check:
-	@for d in $(CPP_CHECKED_DIRS); do \
-    for f in `ls $$d`; do \
-      if [ $$f != "$(BINDING_INC_PATH)/libdragonboat.h" ] ; \
-      then \
-        python scripts/cpplint.py --quiet $(CPPLINT_FILTERS) $$f; \
-      fi; \
-    done; \
-  done;
 
 GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/cpp internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
@@ -561,12 +390,11 @@ golangci-lint-check:
 		golangci-lint run $$p; \
 	done;
 	@golangci-lint run $(EXTRA_LINTERS) .
-	@golangci-lint run $(EXTRA_LINTERS) --build-tags=dragonboat_language_binding binding
 
 ###############################################################################
 # clean
 ###############################################################################
-clean: clean-binding
+clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
 	@rm -f test-*.bin test-*.freebsd test-*.win test-*.darwin

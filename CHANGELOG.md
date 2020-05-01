@@ -2,7 +2,9 @@
 
 ### Breaking changes
 
-The signature of config.LogDBFactoryFunc has been changed. Your application is not affected unless it uses a custom LogDB implementation.
+- The signature of config.LogDBFactoryFunc has been changed. Your application is not affected unless it uses a custom LogDB implementation.
+- C++ binding is no longer supported.
+
 
 ## v3.2 (2020-03-05)
 
