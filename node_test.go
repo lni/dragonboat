@@ -163,8 +163,9 @@ func getTestRaftNodes(count int, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 type dummyEngine struct {
 }
 
-func (d *dummyEngine) setNodeReady(clusterID uint64)              {}
-func (d *dummyEngine) setTaskReady(clusterID uint64)              {}
+func (d *dummyEngine) setStepReady(clusterID uint64)              {}
+func (d *dummyEngine) setCommitReady(clusterID uint64)            {}
+func (d *dummyEngine) setApplyReady(clusterID uint64)             {}
 func (d *dummyEngine) setStreamReady(clusterID uint64)            {}
 func (d *dummyEngine) setRequestedSnapshotReady(clusterID uint64) {}
 func (d *dummyEngine) setAvailableSnapshotReady(clusterID uint64) {}
@@ -253,6 +254,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			nr,
 			requestStatePool,
 			config,
+			false,
 			false,
 			tickMillisecond,
 			ldb,
@@ -1666,7 +1668,7 @@ func TestGetCompactionOverhead(t *testing.T) {
 
 type testDummyNodeProxy struct{}
 
-func (np *testDummyNodeProxy) NodeReady()                                        {}
+func (np *testDummyNodeProxy) StepReady()                                        {}
 func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
 func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
 func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange)                 {}

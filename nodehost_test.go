@@ -571,11 +571,25 @@ func createSingleNodeTestNodeHost(addr string,
 		SnapshotEntries:    10,
 		CompactionOverhead: 5,
 	}
-	return createSingleNodeTestNodeHostCfg(addr, datadir, slowSave, rc, compress, fs)
+	return createSingleNodeTestNodeHostCfg(addr, datadir, slowSave, false, rc, compress, fs)
+}
+
+func createNotifyCommitNodeHost(addr string,
+	datadir string, slowSave bool, compress bool, fs vfs.IFS) (*NodeHost, *PST, error) {
+	rc := config.Config{
+		NodeID:             uint64(1),
+		ClusterID:          2,
+		ElectionRTT:        3,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    10,
+		CompactionOverhead: 5,
+	}
+	return createSingleNodeTestNodeHostCfg(addr, datadir, slowSave, true, rc, compress, fs)
 }
 
 func createSingleNodeTestNodeHostCfg(addr string,
-	datadir string, slowSave bool, rc config.Config,
+	datadir string, slowSave bool, notifyCommit bool, rc config.Config,
 	compress bool, fs vfs.IFS) (*NodeHost, *PST, error) {
 	if compress {
 		rc.EntryCompressionType = config.Snappy
@@ -589,6 +603,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 		RaftAddress:         peers[1],
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
+		NotifyCommit:        notifyCommit,
 	}
 	if err := nhc.Prepare(); err != nil {
 		return nil, nil, err
@@ -654,7 +669,7 @@ func createConcurrentTestNodeHost(addr string,
 			return &tests.TestSnapshot{}
 		}
 	}
-	rc.ClusterID = 1 + taskWorkerCount
+	rc.ClusterID = 1 + applyWorkerCount
 	if err := nh.StartConcurrentCluster(peers, false, newConcurrentSM, rc); err != nil {
 		return nil, err
 	}
@@ -763,7 +778,7 @@ func singleConcurrentNodeHostTest(t *testing.T,
 			nh.Stop()
 		}()
 		waitForLeaderToBeElected(t, nh, 1)
-		waitForLeaderToBeElected(t, nh, 1+taskWorkerCount)
+		waitForLeaderToBeElected(t, nh, 1+applyWorkerCount)
 		tf(t, nh)
 	}()
 	reportLeakedFD(fs, t)
@@ -1551,7 +1566,7 @@ func runSingleNodeHostTest(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 		nh, _, err := createSingleNodeTestNodeHostCfg(singleNodeHostTestAddr,
-			singleNodeHostTestDir, false, cfg, compressed, fs)
+			singleNodeHostTestDir, false, false, cfg, compressed, fs)
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
@@ -2229,7 +2244,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 
 func TestConcurrentStateMachineLookup(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + taskWorkerCount
+	clusterID := 1 + applyWorkerCount
 	done := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
 		count := uint32(0)
@@ -2288,7 +2303,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 
 func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + taskWorkerCount
+	clusterID := 1 + applyWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
@@ -2323,7 +2338,7 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 
 func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + taskWorkerCount
+	clusterID := 1 + applyWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
 		for i := 0; i < 100; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -2822,6 +2837,37 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		}
 	}
 	singleNodeHostTest(t, tf, fs)
+}
+
+func TestClientCanBeNotifiedOnCommittedProposals(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func() {
+		nh, _, err := createNotifyCommitNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, false, false, fs)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		waitForLeaderToBeElected(t, nh, 2)
+		session := nh.GetNoOPSession(2)
+		cmd := make([]byte, 1518)
+		rs, err := nh.Propose(session, cmd, time.Second)
+		if err != nil {
+			t.Fatalf("failed to make proposal %v", err)
+		}
+		if rs.committedC == nil {
+			t.Fatalf("committedC not set")
+		}
+		cn := <-rs.ResultC()
+		if !cn.Committed() {
+			t.Fatalf("failed to get committed notification")
+		}
+		cn = <-rs.ResultC()
+		if !cn.Completed() {
+			t.Fatalf("failed to get completed notification")
+		}
+	}
+	runNodeHostTest(t, tf, fs)
 }
 
 func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {

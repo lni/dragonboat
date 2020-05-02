@@ -338,6 +338,10 @@ type NodeHostConfig struct {
 	// consumption. Regular users are recommdned not to set this field to use it
 	// default value.
 	LogDBConfig LogDBConfig
+	// NotifyCommit specifies whether clients should be notified when their
+	// proposals are committed. By default, commits are not notified, clients are
+	// only notified when their proposals are both committed and applied.
+	NotifyCommit bool
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -546,7 +550,7 @@ func getDefaultLogDBConfig() LogDBConfig {
 	}
 }
 
-// MemorySize returns the estimated upper bound memory size used by the LogDB
+// MemorySizeMB returns the estimated upper bound memory size used by the LogDB
 // storage engine. The returned value is in MBytes.
 func (cfg *LogDBConfig) MemorySizeMB() uint64 {
 	ss := cfg.KVWriteBufferSize * cfg.KVMaxWriteBufferNumber

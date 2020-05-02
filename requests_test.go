@@ -560,17 +560,20 @@ func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
 // pending proposal
 //
 
-func getPendingProposal() (*pendingProposal, *entryQueue) {
+func getPendingProposal(notifyCommit bool) (*pendingProposal, *entryQueue) {
 	c := newEntryQueue(5, 0)
 	p := &sync.Pool{}
 	p.New = func() interface{} {
 		obj := &RequestState{}
 		obj.pool = p
 		obj.CompletedC = make(chan RequestResult, 1)
+		if notifyCommit {
+			obj.committedC = make(chan RequestResult, 1)
+		}
 		return obj
 	}
 	cfg := config.Config{ClusterID: 100, NodeID: 120}
-	return newPendingProposal(cfg, p, c, "nodehost:12345"), c
+	return newPendingProposal(cfg, notifyCommit, p, c, "nodehost:12345"), c
 }
 
 func getBlankTestSession() *client.Session {
@@ -578,7 +581,7 @@ func getBlankTestSession() *client.Session {
 }
 
 func TestPendingProposalCanBeCreatedAndClosed(t *testing.T) {
-	pp, c := getPendingProposal()
+	pp, c := getPendingProposal(false)
 	if len(c.get(false)) > 0 {
 		t.Errorf("unexpected item in entry queue")
 	}
@@ -625,7 +628,7 @@ func TestLargeProposalCanBeProposed(t *testing.T) {
 }*/
 
 func TestProposalCanBeProposed(t *testing.T) {
-	pp, c := getPendingProposal()
+	pp, c := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -654,7 +657,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 }
 
 func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	pp.close()
 	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != ErrClusterClosed {
@@ -663,7 +666,7 @@ func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 }
 
 func TestProposalCanBeCompleted(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -692,7 +695,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 }
 
 func TestProposalCanBeDropped(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -714,7 +717,7 @@ func TestProposalCanBeDropped(t *testing.T) {
 }
 
 func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -740,7 +743,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 }
 
 func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -769,7 +772,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 }
 
 func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
@@ -797,8 +800,37 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	}
 }
 
+func TestProposalCanBeCommitted(t *testing.T) {
+	pp, _ := getPendingProposal(true)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	if err != nil {
+		t.Errorf("failed to make proposal, %v", err)
+	}
+	pp.committed(rs.clientID, rs.seriesID, rs.key)
+	select {
+	case <-rs.committedC:
+	default:
+		t.Errorf("not committed")
+	}
+	if countPendingProposal(pp) == 0 {
+		t.Errorf("pending is empty")
+	}
+	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
+	select {
+	case v := <-rs.CompletedC:
+		if !v.Completed() {
+			t.Errorf("get %v, want %d", v, requestCompleted)
+		}
+	default:
+		t.Errorf("expect to get complete signal")
+	}
+	if countPendingProposal(pp) != 0 {
+		t.Errorf("pending is not empty")
+	}
+}
+
 func TestProposalCanBeExpired(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	tickCount := uint64(100)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, tickCount)
 	if err != nil {
@@ -830,7 +862,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 }
 
 func TestProposalErrorsAreReported(t *testing.T) {
-	pp, c := getPendingProposal()
+	pp, c := getPendingProposal(false)
 	for i := 0; i < 5; i++ {
 		_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
 		if err != nil {
@@ -859,7 +891,7 @@ func TestProposalErrorsAreReported(t *testing.T) {
 }
 
 func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
-	pp, _ := getPendingProposal()
+	pp, _ := getPendingProposal(false)
 	session := &client.Session{
 		ClientID:    100,
 		SeriesID:    200,
@@ -1114,7 +1146,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
-	pp := newPendingProposal(cfg, p, q, "localhost:9090")
+	pp := newPendingProposal(cfg, false, p, q, "localhost:9090")
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)

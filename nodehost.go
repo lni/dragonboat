@@ -327,7 +327,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
-	nh.execEngine = newExecEngine(nh, nh.serverCtx, nh.logdb)
+	nh.execEngine = newExecEngine(nh,
+		nh.nhConfig.NotifyCommit, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
 	})
@@ -804,7 +805,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.proposeSession(session, nil, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(session.ClusterID)
+	nh.execEngine.setStepReady(session.ClusterID)
 	return req, err
 }
 
@@ -965,7 +966,7 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, err
 }
 
@@ -998,7 +999,7 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	op, err := v.requestCompaction()
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return op, err
 }
 
@@ -1109,7 +1110,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	}
 	tt := nh.getTimeoutTick(timeout)
 	req, err := v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, err
 }
 
@@ -1145,7 +1146,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	}
 	req, err := v.requestAddNodeWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, err
 }
 
@@ -1181,7 +1182,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	}
 	req, err := v.requestAddObserverWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, err
 }
 
@@ -1215,7 +1216,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	}
 	req, err := v.requestAddWitnessWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, err
 }
 
@@ -1234,7 +1235,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 		clusterID, targetNodeID)
 	err := v.requestLeaderTransfer(targetNodeID)
 	if err == nil {
-		nh.execEngine.setNodeReady(clusterID)
+		nh.execEngine.setStepReady(clusterID)
 	}
 	return err
 }
@@ -1315,7 +1316,7 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 	nu := &nodeUser{
 		nh:           nh,
 		node:         v,
-		setNodeReady: nh.execEngine.setNodeReady,
+		setStepReady: nh.execEngine.setStepReady,
 	}
 	return nu, nil
 }
@@ -1367,7 +1368,7 @@ func (nh *NodeHost) propose(s *client.Session,
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.propose(s, cmd, handler, nh.getTimeoutTick(timeout))
-	nh.execEngine.setNodeReady(s.ClusterID)
+	nh.execEngine.setStepReady(s.ClusterID)
 	if sampled {
 		nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
@@ -1385,7 +1386,7 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 	if err != nil {
 		return nil, nil, err
 	}
-	nh.execEngine.setNodeReady(clusterID)
+	nh.execEngine.setStepReady(clusterID)
 	return req, n, err
 }
 
@@ -1600,6 +1601,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		nh.rsPool[nodeID%rsPoolSize],
 		config,
 		nh.nhConfig.EnableMetrics,
+		nh.nhConfig.NotifyCommit,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb,
 		nh.sysUserListener)
@@ -1609,7 +1611,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	nh.clusterMu.clusters.Store(clusterID, rn)
 	nh.clusterMu.requests[clusterID] = queue
 	nh.clusterMu.csi++
-	nh.execEngine.setTaskReady(clusterID)
+	nh.execEngine.setApplyReady(clusterID)
 	return nil
 }
 
@@ -1621,6 +1623,9 @@ func (nh *NodeHost) createPools() {
 			obj := &RequestState{}
 			obj.CompletedC = make(chan RequestResult, 1)
 			obj.pool = p
+			if nh.nhConfig.NotifyCommit {
+				obj.committedC = make(chan RequestResult, 1)
+			}
 			return obj
 		}
 		nh.rsPool[i] = p
@@ -1847,7 +1852,7 @@ func (nh *NodeHost) sendTickMessage(clusters []*node,
 			continue
 		}
 		q.Add(m)
-		nh.execEngine.setNodeReady(n.clusterID)
+		nh.execEngine.setStepReady(n.clusterID)
 	}
 }
 
@@ -1918,7 +1923,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 		}
 		added, stopped := q.Add(m)
 		if added {
-			nh.execEngine.setNodeReady(clusterID)
+			nh.execEngine.setStepReady(clusterID)
 			plog.Infof("%s just got snapshot status", dn(clusterID, nodeID))
 			return true
 		}
@@ -2033,7 +2038,7 @@ func delaySampled(s *client.Session) bool {
 type nodeUser struct {
 	nh           *NodeHost
 	node         *node
-	setNodeReady func(clusterID uint64)
+	setStepReady func(clusterID uint64)
 }
 
 func (nu *nodeUser) Propose(s *client.Session,
@@ -2044,7 +2049,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 		st = time.Now()
 	}
 	req, err := nu.node.propose(s, cmd, nil, nu.nh.getTimeoutTick(timeout))
-	nu.setNodeReady(s.ClusterID)
+	nu.setStepReady(s.ClusterID)
 	if sampled {
 		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
 	}
@@ -2122,7 +2127,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					msgCount++
 				}
 			}
-			nh.execEngine.setNodeReady(req.ClusterId)
+			nh.execEngine.setStepReady(req.ClusterId)
 		}
 	}
 	return snapshotCount, msgCount
@@ -2151,7 +2156,7 @@ func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
 	_, q, ok := h.nh.getClusterAndQueueNotLocked(clusterID)
 	if ok {
 		q.MustAdd(pb.Message{Type: pb.Unreachable, From: nodeID})
-		h.nh.execEngine.setNodeReady(clusterID)
+		h.nh.execEngine.setStepReady(clusterID)
 	}
 }
 

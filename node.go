@@ -45,8 +45,9 @@ var (
 )
 
 type engine interface {
-	setNodeReady(clusterID uint64)
-	setTaskReady(clusterID uint64)
+	setStepReady(clusterID uint64)
+	setCommitReady(clusterID uint64)
+	setApplyReady(clusterID uint64)
 	setStreamReady(clusterID uint64)
 	setRequestedSnapshotReady(clusterID uint64)
 	setAvailableSnapshotReady(clusterID uint64)
@@ -62,7 +63,8 @@ type node struct {
 	config                config.Config
 	confChangeC           <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
-	taskQ                 *rsm.TaskQueue
+	toApplyQ              *rsm.TaskQueue
+	toCommitQ             *rsm.TaskQueue
 	mq                    *server.MessageQueue
 	smAppliedIndex        uint64
 	confirmedIndex        uint64
@@ -92,6 +94,7 @@ type node struct {
 	expireNotified        uint64
 	tickMillisecond       uint64
 	syncTask              *task
+	notifyCommit          bool
 	rateLimited           bool
 	new                   bool
 	closeOnce             sync.Once
@@ -125,6 +128,7 @@ func newNode(raftAddress string,
 	requestStatePool *sync.Pool,
 	config config.Config,
 	useMetrics bool,
+	notifyCommit bool,
 	tickMillisecond uint64,
 	ldb raftio.ILogDB,
 	sysEvents *sysEventListener) (*node, error) {
@@ -132,7 +136,8 @@ func newNode(raftAddress string,
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	confChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SSRequest, 1)
-	pp := newPendingProposal(config, requestStatePool, proposals, raftAddress)
+	pp := newPendingProposal(config,
+		notifyCommit, requestStatePool, proposals, raftAddress)
 	leaderTransfer := newPendingLeaderTransfer()
 	pscr := newPendingReadIndex(requestStatePool, readIndexes)
 	pcc := newPendingConfigChange(confChangeC)
@@ -167,6 +172,7 @@ func newNode(raftAddress string,
 		syncTask:              newTask(syncTaskInterval),
 		smType:                smType,
 		sysEvents:             sysEvents,
+		notifyCommit:          notifyCommit,
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
@@ -175,7 +181,10 @@ func newNode(raftAddress string,
 		},
 	}
 	sm := rsm.NewStateMachine(dataStore, snapshotter, config, rn, snapshotter.fs)
-	rn.taskQ = sm.TaskQ()
+	if notifyCommit {
+		rn.toCommitQ = rsm.NewTaskQueue()
+	}
+	rn.toApplyQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
 		config.NodeID, &rn.leaderID, useMetrics, liQueue)
@@ -199,8 +208,8 @@ func (n *node) ShouldStop() <-chan struct{} {
 	return n.stopc
 }
 
-func (n *node) NodeReady() {
-	n.engine.setNodeReady(n.clusterID)
+func (n *node) StepReady() {
+	n.engine.setStepReady(n.clusterID)
 }
 
 func (n *node) ApplyUpdate(entry pb.Entry,
@@ -512,8 +521,13 @@ func (n *node) entriesToApply(ents []pb.Entry) (newents []pb.Entry) {
 }
 
 func (n *node) pushTask(rec rsm.Task) bool {
-	n.taskQ.Add(rec)
-	n.engine.setTaskReady(n.clusterID)
+	if !n.notifyCommit {
+		n.toApplyQ.Add(rec)
+		n.engine.setApplyReady(n.clusterID)
+	} else {
+		n.toCommitQ.Add(rec)
+		n.engine.setCommitReady(n.clusterID)
+	}
 	return !n.stopped()
 }
 
@@ -787,12 +801,12 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 
 func (n *node) streamSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, false, true, false, 0)
-	n.engine.setTaskReady(n.clusterID)
+	n.engine.setApplyReady(n.clusterID)
 }
 
 func (n *node) saveSnapshotDone() {
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.engine.setTaskReady(n.clusterID)
+	n.engine.setApplyReady(n.clusterID)
 }
 
 func (n *node) recoverFromSnapshotDone(index uint64) {
@@ -805,12 +819,12 @@ func (n *node) recoverFromSnapshotDone(index uint64) {
 
 func (n *node) initialSnapshotDone(index uint64) {
 	n.ss.notifySnapshotStatus(false, true, false, true, index)
-	n.engine.setTaskReady(n.clusterID)
+	n.engine.setApplyReady(n.clusterID)
 }
 
 func (n *node) doRecoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
-	n.engine.setTaskReady(n.clusterID)
+	n.engine.setApplyReady(n.clusterID)
 }
 
 func (n *node) handleTask(ts []rsm.Task, es []sm.Entry) (rsm.Task, error) {
@@ -998,6 +1012,17 @@ func (n *node) processDroppedEntries(ud pb.Update) {
 	}
 }
 
+func (n *node) notifyCommittedEntries() {
+	tasks := n.toCommitQ.GetAll()
+	for _, t := range tasks {
+		for _, e := range t.Entries {
+			n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
+		}
+		n.toApplyQ.Add(t)
+		n.engine.setApplyReady(n.clusterID)
+	}
+}
+
 func (n *node) processReadyToRead(ud pb.Update) {
 	if len(ud.ReadyToReads) > 0 {
 		n.pendingReadIndexes.addReadyToRead(ud.ReadyToReads)
@@ -1058,7 +1083,7 @@ func (n *node) commitRaftUpdate(ud pb.Update) {
 }
 
 func (n *node) canHaveMoreEntriesToApply() bool {
-	return n.taskQ.MoreEntryToApply()
+	return n.toApplyQ.MoreEntryToApply()
 }
 
 func (n *node) hasEntryToApply() bool {

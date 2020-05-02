@@ -135,7 +135,7 @@ type SMFactoryFunc func(clusterID uint64,
 
 // INode is the interface of a dragonboat node.
 type INode interface {
-	NodeReady()
+	StepReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
 	ApplyConfigChange(pb.ConfigChange)
@@ -604,7 +604,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 		//  - batched applied value has been updated
 		//  - taskC has been popped
 		if processed {
-			s.node.NodeReady()
+			s.node.StepReady()
 		}
 	}()
 	rec, ok := s.taskQ.Get()

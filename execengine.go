@@ -30,8 +30,9 @@ import (
 )
 
 var (
-	workerCount         = settings.Hard.StepEngineWorkerCount
-	taskWorkerCount     = settings.Soft.StepEngineTaskWorkerCount
+	stepWorkerCount     = settings.Hard.StepEngineWorkerCount
+	commitWorkerCount   = settings.Soft.StepEngineCommitWorkerCount
+	applyWorkerCount    = settings.Soft.StepEngineTaskWorkerCount
 	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
 	reloadTime          = settings.Soft.NodeReloadMillisecond
 	nodeReloadInterval  = time.Millisecond * time.Duration(reloadTime)
@@ -633,48 +634,62 @@ func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
 }
 
 type execEngine struct {
-	nodeStopper   *syncutil.Stopper
-	taskStopper   *syncutil.Stopper
-	nh            nodeLoader
-	loaded        *loadedNodes
-	ctx           *server.Context
-	logdb         raftio.ILogDB
-	ctxs          []raftio.IContext
-	profilers     []*profiler
-	nodeWorkReady *workReady
-	taskWorkReady *workReady
-	wp            *workerPool
+	nodeStopper     *syncutil.Stopper
+	commitStopper   *syncutil.Stopper
+	taskStopper     *syncutil.Stopper
+	nh              nodeLoader
+	loaded          *loadedNodes
+	ctx             *server.Context
+	logdb           raftio.ILogDB
+	ctxs            []raftio.IContext
+	profilers       []*profiler
+	stepWorkReady   *workReady
+	commitWorkReady *workReady
+	applyWorkReady  *workReady
+	wp              *workerPool
+	notifyCommit    bool
 }
 
-func newExecEngine(nh nodeLoader,
+func newExecEngine(nh nodeLoader, notifyCommit bool,
 	ctx *server.Context, logdb raftio.ILogDB) *execEngine {
 	loaded := newLoadedNodes()
 	s := &execEngine{
-		nh:            nh,
-		ctx:           ctx,
-		logdb:         logdb,
-		loaded:        loaded,
-		nodeStopper:   syncutil.NewStopper(),
-		taskStopper:   syncutil.NewStopper(),
-		nodeWorkReady: newWorkReady(workerCount),
-		taskWorkReady: newWorkReady(taskWorkerCount),
-		ctxs:          make([]raftio.IContext, workerCount),
-		profilers:     make([]*profiler, workerCount),
-		wp:            newWorkerPool(nh, loaded),
+		nh:              nh,
+		ctx:             ctx,
+		logdb:           logdb,
+		loaded:          loaded,
+		nodeStopper:     syncutil.NewStopper(),
+		commitStopper:   syncutil.NewStopper(),
+		taskStopper:     syncutil.NewStopper(),
+		stepWorkReady:   newWorkReady(stepWorkerCount),
+		commitWorkReady: newWorkReady(commitWorkerCount),
+		applyWorkReady:  newWorkReady(applyWorkerCount),
+		ctxs:            make([]raftio.IContext, stepWorkerCount),
+		profilers:       make([]*profiler, stepWorkerCount),
+		wp:              newWorkerPool(nh, loaded),
+		notifyCommit:    notifyCommit,
 	}
 	sampleRatio := int64(delaySampleRatio / 10)
-	for i := uint64(1); i <= workerCount; i++ {
+	for i := uint64(1); i <= stepWorkerCount; i++ {
 		workerID := i
 		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
 		s.profilers[i-1] = newProfiler(sampleRatio)
 		s.nodeStopper.RunWorker(func() {
-			s.nodeWorkerMain(workerID)
+			s.stepWorkerMain(workerID)
 		})
 	}
-	for i := uint64(1); i <= taskWorkerCount; i++ {
-		taskWorkerID := i
+	if notifyCommit {
+		for i := uint64(1); i <= commitWorkerCount; i++ {
+			commitWorkerID := i
+			s.commitStopper.RunWorker(func() {
+				s.commitWorkerMain(commitWorkerID)
+			})
+		}
+	}
+	for i := uint64(1); i <= applyWorkerCount; i++ {
+		applyWorkerID := i
 		s.taskStopper.RunWorker(func() {
-			s.taskWorkerMain(taskWorkerID)
+			s.applyWorkerMain(applyWorkerID)
 		})
 	}
 	return s
@@ -682,6 +697,7 @@ func newExecEngine(nh nodeLoader,
 
 func (s *execEngine) stop() {
 	s.nodeStopper.Stop()
+	s.commitStopper.Stop()
 	s.taskStopper.Stop()
 	s.wp.stop()
 	for _, ctx := range s.ctxs {
@@ -719,7 +735,63 @@ func (s *execEngine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{}
 	return nil
 }
 
-func (s *execEngine) taskWorkerMain(workerID uint64) {
+func (s *execEngine) load(workerID uint64,
+	cci uint64, nodes map[uint64]*node,
+	from rsm.From, ready *workReady) (map[uint64]*node, uint64) {
+	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
+		ready.getPartitioner(), from)
+	s.loaded.update(workerID, from, result)
+	for _, n := range offloaded {
+		n.notifyOffloaded(from)
+	}
+	return result, cci
+}
+
+func (s *execEngine) commitWorkerMain(workerID uint64) {
+	nodes := make(map[uint64]*node)
+	ticker := time.NewTicker(nodeReloadInterval)
+	defer ticker.Stop()
+	cci := uint64(0)
+	for {
+		select {
+		case <-s.commitStopper.ShouldStop():
+			s.offloadNodeMap(nodes, rsm.FromCommitWorker)
+			return
+		case <-ticker.C:
+			nodes, cci = s.loadCommitNodes(workerID, cci, nodes)
+			s.processCommits(workerID, make(map[uint64]struct{}), nodes)
+		case <-s.commitWorkReady.waitCh(workerID):
+			if cci == 0 || len(nodes) == 0 {
+				nodes, cci = s.loadCommitNodes(workerID, cci, nodes)
+			}
+			clusterIDMap := s.commitWorkReady.getReadyMap(workerID)
+			s.processCommits(workerID, clusterIDMap, nodes)
+		}
+	}
+}
+
+func (s *execEngine) loadCommitNodes(workerID uint64, cci uint64,
+	nodes map[uint64]*node) (map[uint64]*node, uint64) {
+	return s.load(workerID, cci, nodes, rsm.FromCommitWorker, s.commitWorkReady)
+}
+
+func (s *execEngine) processCommits(workerID uint64,
+	idmap map[uint64]struct{}, nodes map[uint64]*node) {
+	if len(idmap) == 0 {
+		for k := range nodes {
+			idmap[k] = struct{}{}
+		}
+	}
+	for clusterID := range idmap {
+		node, ok := nodes[clusterID]
+		if !ok || node.stopped() {
+			continue
+		}
+		node.notifyCommittedEntries()
+	}
+}
+
+func (s *execEngine) applyWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
@@ -729,32 +801,26 @@ func (s *execEngine) taskWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-s.taskStopper.ShouldStop():
-			s.offloadNodeMap(nodes, rsm.FromCommitWorker)
+			s.offloadNodeMap(nodes, rsm.FromApplyWorker)
 			return
 		case <-ticker.C:
-			nodes, cci = s.loadSMs(workerID, cci, nodes)
-			s.execSMs(workerID, make(map[uint64]struct{}), nodes, batch, entries)
+			nodes, cci = s.loadApplyNodes(workerID, cci, nodes)
+			s.processApplies(workerID, make(map[uint64]struct{}), nodes, batch, entries)
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
-		case <-s.taskWorkReady.waitCh(workerID):
+		case <-s.applyWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
-				nodes, cci = s.loadSMs(workerID, cci, nodes)
+				nodes, cci = s.loadApplyNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := s.taskWorkReady.getReadyMap(workerID)
-			s.execSMs(workerID, clusterIDMap, nodes, batch, entries)
+			clusterIDMap := s.applyWorkReady.getReadyMap(workerID)
+			s.processApplies(workerID, clusterIDMap, nodes, batch, entries)
 		}
 	}
 }
 
-func (s *execEngine) loadSMs(workerID uint64, cci uint64,
+func (s *execEngine) loadApplyNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
-		s.taskWorkReady.getPartitioner(), rsm.FromCommitWorker)
-	s.loaded.update(workerID, rsm.FromCommitWorker, result)
-	for _, n := range offloaded {
-		n.notifyOffloaded(rsm.FromCommitWorker)
-	}
-	return result, cci
+	return s.load(workerID, cci, nodes, rsm.FromApplyWorker, s.applyWorkReady)
 }
 
 // T: take snapshot
@@ -762,10 +828,10 @@ func (s *execEngine) loadSMs(workerID uint64, cci uint64,
 // existing op, new op, action
 // T, T, ignore the new op
 // T, R, R is queued as node state, will be handled when T is done
-// R, R, won't happen, when in R state, execSMs will not process the node
-// R, T, won't happen, when in R state, execSMs will not process the node
+// R, R, won't happen, when in R state, processApplies will not process the node
+// R, T, won't happen, when in R state, processApplies will not process the node
 
-func (s *execEngine) execSMs(workerID uint64,
+func (s *execEngine) processApplies(workerID uint64,
 	idmap map[uint64]struct{},
 	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
 	if len(idmap) == 0 {
@@ -774,7 +840,7 @@ func (s *execEngine) execSMs(workerID uint64,
 		}
 	}
 	var p *profiler
-	if workerCount == taskWorkerCount {
+	if stepWorkerCount == applyWorkerCount {
 		p = s.profilers[workerID-1]
 		p.newCommitIteration()
 		p.exec.start()
@@ -800,7 +866,7 @@ func (s *execEngine) execSMs(workerID uint64,
 	}
 }
 
-func (s *execEngine) nodeWorkerMain(workerID uint64) {
+func (s *execEngine) stepWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
@@ -812,27 +878,21 @@ func (s *execEngine) nodeWorkerMain(workerID uint64) {
 			s.offloadNodeMap(nodes, rsm.FromStepWorker)
 			return
 		case <-ticker.C:
-			nodes, cci = s.loadNodes(workerID, cci, nodes)
-			s.execNodes(workerID, make(map[uint64]struct{}), nodes, stopC)
-		case <-s.nodeWorkReady.waitCh(workerID):
+			nodes, cci = s.loadStepNodes(workerID, cci, nodes)
+			s.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
+		case <-s.stepWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
-				nodes, cci = s.loadNodes(workerID, cci, nodes)
+				nodes, cci = s.loadStepNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := s.nodeWorkReady.getReadyMap(workerID)
-			s.execNodes(workerID, clusterIDMap, nodes, stopC)
+			clusterIDMap := s.stepWorkReady.getReadyMap(workerID)
+			s.processSteps(workerID, clusterIDMap, nodes, stopC)
 		}
 	}
 }
 
-func (s *execEngine) loadNodes(workerID uint64,
+func (s *execEngine) loadStepNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
-		s.nodeWorkReady.getPartitioner(), rsm.FromStepWorker)
-	s.loaded.update(workerID, rsm.FromStepWorker, result)
-	for _, n := range offloaded {
-		n.notifyOffloaded(rsm.FromStepWorker)
-	}
-	return result, cci
+	return s.load(workerID, cci, nodes, rsm.FromStepWorker, s.stepWorkReady)
 }
 
 func (s *execEngine) loadBucketNodes(workerID uint64,
@@ -869,7 +929,7 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 	return nodes, offloaded, cci
 }
 
-func (s *execEngine) execNodes(workerID uint64,
+func (s *execEngine) processSteps(workerID uint64,
 	clusterIDMap map[uint64]struct{},
 	nodes map[uint64]*node, stopC chan struct{}) {
 	if len(nodes) == 0 {
@@ -969,7 +1029,7 @@ func resetNodeUpdate(nodeUpdates []pb.Update) {
 
 func (s *execEngine) processMoreCommittedEntries(ud pb.Update) {
 	if ud.MoreCommittedEntries {
-		s.setNodeReady(ud.ClusterID)
+		s.setStepReady(ud.ClusterID)
 	}
 }
 
@@ -1006,12 +1066,16 @@ func (s *execEngine) onSnapshotSaved(updates []pb.Update,
 	return nil
 }
 
-func (s *execEngine) setNodeReady(clusterID uint64) {
-	s.nodeWorkReady.clusterReady(clusterID)
+func (s *execEngine) setStepReady(clusterID uint64) {
+	s.stepWorkReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setTaskReady(clusterID uint64) {
-	s.taskWorkReady.clusterReady(clusterID)
+func (s *execEngine) setCommitReady(clusterID uint64) {
+	s.commitWorkReady.clusterReady(clusterID)
+}
+
+func (s *execEngine) setApplyReady(clusterID uint64) {
+	s.applyWorkReady.clusterReady(clusterID)
 }
 
 func (s *execEngine) setStreamReady(clusterID uint64) {
@@ -1027,7 +1091,7 @@ func (s *execEngine) setAvailableSnapshotReady(clusterID uint64) {
 }
 
 func (s *execEngine) proposeDelay(clusterID uint64, startTime time.Time) {
-	p := s.nodeWorkReady.getPartitioner()
+	p := s.stepWorkReady.getPartitioner()
 	idx := p.GetPartitionID(clusterID)
 	profiler := s.profilers[idx]
 	profiler.propose.record(startTime)

@@ -76,7 +76,7 @@ func newTestNodeProxy() *testNodeProxy {
 	return &testNodeProxy{}
 }
 
-func (p *testNodeProxy) NodeReady() { p.nodeReady++ }
+func (p *testNodeProxy) StepReady() { p.nodeReady++ }
 
 func (p *testNodeProxy) ShouldStop() <-chan struct{} {
 	return nil

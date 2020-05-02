@@ -127,7 +127,13 @@ func (rr *RequestResult) Timeout() bool {
 	return rr.code == requestTimeout
 }
 
-// Completed returns a boolean value indicating the request request completed
+// Committed returns a boolean value indicating whether the request has been
+// committed by Raft.
+func (rr *RequestResult) Committed() bool {
+	return rr.code == requestCompleted || rr.code == requestCommitted
+}
+
+// Completed returns a boolean value indicating whether the request completed
 // successfully. For proposals, it means the proposal has been committed by the
 // Raft cluster and applied on the local node. For ReadIndex operation, it means
 // the cluster is now ready for a local read.
@@ -189,6 +195,7 @@ const (
 	requestRejected
 	requestDropped
 	requestAborted
+	requestCommitted
 )
 
 var requestResultCodeName = [...]string{
@@ -198,6 +205,7 @@ var requestResultCodeName = [...]string{
 	"RequestRejected",
 	"RequestDropped",
 	"RequestAborted",
+	"RequestCommitted",
 }
 
 func (c RequestResultCode) String() string {
@@ -282,10 +290,56 @@ type RequestState struct {
 	readyToRead     ready
 	readyToRelease  ready
 	completeHandler ICompleteHandler
+	aggrC           chan RequestResult
+	committedC      chan RequestResult
 	// CompletedC is a channel for delivering request result to users.
 	CompletedC chan RequestResult
 	node       *node
 	pool       *sync.Pool
+}
+
+// ResultC returns a channel of RequestResult for delivering request
+// results to users.
+func (r *RequestState) ResultC() chan RequestResult {
+	if r.committedC == nil {
+		return r.CompletedC
+	}
+	if r.aggrC != nil {
+		return r.aggrC
+	}
+	r.aggrC = make(chan RequestResult, 2)
+	go func() {
+		select {
+		case cn := <-r.committedC:
+			if cn.code != requestCommitted {
+				plog.Panicf("unknown code, %s", cn.code)
+			}
+			r.aggrC <- cn
+			cc := <-r.CompletedC
+			r.aggrC <- cc
+		case cc := <-r.CompletedC:
+			if cc.Completed() || cc.Terminated() || cc.Timeout() {
+				select {
+				case ccn := <-r.committedC:
+					r.aggrC <- ccn
+				default:
+				}
+				r.aggrC <- cc
+			}
+		}
+	}()
+	return r.aggrC
+}
+
+func (r *RequestState) committed() {
+	if r.committedC == nil {
+		plog.Panicf("notify commit not enabled")
+	}
+	select {
+	case r.committedC <- RequestResult{code: requestCommitted}:
+	default:
+		plog.Panicf("RequestState.committedC is full")
+	}
 }
 
 func (r *RequestState) notify(result RequestResult) {
@@ -320,6 +374,7 @@ func (r *RequestState) Release() {
 		r.node = nil
 		r.readyToRead.clear()
 		r.readyToRelease.clear()
+		r.aggrC = nil
 		r.pool.Put(r)
 	}
 }
@@ -343,6 +398,7 @@ type proposalShard struct {
 	pool           *sync.Pool
 	cfg            config.Config
 	stopped        bool
+	notifyCommit   bool
 	expireNotified uint64
 	logicalClock
 }
@@ -883,7 +939,7 @@ func getRandomGenerator(clusterID uint64,
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}
 }
 
-func newPendingProposal(cfg config.Config,
+func newPendingProposal(cfg config.Config, notifyCommit bool,
 	pool *sync.Pool, proposals *entryQueue, raftAddress string) *pendingProposal {
 	ps := pendingProposalShards
 	p := &pendingProposal{
@@ -892,7 +948,7 @@ func newPendingProposal(cfg config.Config,
 		ps:     ps,
 	}
 	for i := uint64(0); i < ps; i++ {
-		p.shards[i] = newPendingProposalShard(cfg, pool, proposals)
+		p.shards[i] = newPendingProposalShard(cfg, notifyCommit, pool, proposals)
 		p.keyg[i] = getRandomGenerator(cfg.ClusterID, cfg.NodeID, raftAddress, i)
 	}
 	return p
@@ -910,6 +966,12 @@ func (p *pendingProposal) close() {
 	for _, pp := range p.shards {
 		pp.close()
 	}
+}
+
+func (p *pendingProposal) committed(clientID uint64,
+	seriesID uint64, key uint64) {
+	pp := p.shards[key%p.ps]
+	pp.committed(clientID, seriesID, key)
 }
 
 func (p *pendingProposal) dropped(clientID uint64,
@@ -941,8 +1003,8 @@ func (p *pendingProposal) gc() {
 	}
 }
 
-func newPendingProposalShard(cfg config.Config, pool *sync.Pool,
-	proposals *entryQueue) *proposalShard {
+func newPendingProposalShard(cfg config.Config,
+	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *proposalShard {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
@@ -954,6 +1016,7 @@ func newPendingProposalShard(cfg config.Config, pool *sync.Pool,
 		logicalClock: lcu,
 		pool:         pool,
 		cfg:          cfg,
+		notifyCommit: notifyCommit,
 	}
 	return p
 }
@@ -985,8 +1048,18 @@ func (p *proposalShard) propose(session *client.Session,
 	req.completeHandler = handler
 	req.key = entry.Key
 	req.deadline = p.getTick() + timeoutTick
+	if req.aggrC != nil {
+		plog.Panicf("aggrC not nil")
+	}
 	if len(req.CompletedC) > 0 {
 		req.CompletedC = make(chan RequestResult, 1)
+	}
+	if p.notifyCommit {
+		if len(req.committedC) > 0 {
+			req.committedC = make(chan RequestResult, 1)
+		}
+	} else {
+		req.committedC = nil
 	}
 
 	p.mu.Lock()
@@ -1035,6 +1108,16 @@ func (p *proposalShard) close() {
 
 func (p *proposalShard) getProposal(clientID uint64,
 	seriesID uint64, key uint64, now uint64) *RequestState {
+	return p.takeProposal(clientID, seriesID, key, now, true)
+}
+
+func (p *proposalShard) borrowProposal(clientID uint64,
+	seriesID uint64, key uint64, now uint64) *RequestState {
+	return p.takeProposal(clientID, seriesID, key, now, false)
+}
+
+func (p *proposalShard) takeProposal(clientID uint64,
+	seriesID uint64, key uint64, now uint64, remove bool) *RequestState {
 	p.mu.Lock()
 	if p.stopped {
 		p.mu.Unlock()
@@ -1043,13 +1126,23 @@ func (p *proposalShard) getProposal(clientID uint64,
 	ps, ok := p.pending[key]
 	if ok && ps.deadline >= now {
 		if ps.clientID == clientID && ps.seriesID == seriesID {
-			delete(p.pending, key)
+			if remove {
+				delete(p.pending, key)
+			}
 			p.mu.Unlock()
 			return ps
 		}
 	}
 	p.mu.Unlock()
 	return nil
+}
+
+func (p *proposalShard) committed(clientID uint64, seriesID uint64, key uint64) {
+	tick := p.getTick()
+	ps := p.borrowProposal(clientID, seriesID, key, tick)
+	if ps != nil {
+		ps.committed()
+	}
 }
 
 func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
