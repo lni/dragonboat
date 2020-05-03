@@ -1379,11 +1379,11 @@ func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
 		cs := nh.GetNoOPSession(1234)
-		_, err = nh.propose(cs, make([]byte, 1), nil, 5*time.Second)
+		_, err = nh.propose(cs, make([]byte, 1), 5*time.Second)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, _, err = nh.readIndex(1234, nil, 5*time.Second)
+		_, _, err = nh.readIndex(1234, 5*time.Second)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}

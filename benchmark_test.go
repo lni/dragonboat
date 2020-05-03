@@ -135,7 +135,7 @@ func benchmarkProposeN(b *testing.B, sz int) {
 		for pb.Next() {
 			v := atomic.AddUint64(&total, 1)
 			b.SetBytes(int64(sz))
-			rs, err := pp.propose(session, data, nil, 100)
+			rs, err := pp.propose(session, data, 100)
 			if err != nil {
 				b.Errorf("%v", err)
 			}
@@ -197,7 +197,7 @@ func BenchmarkReadIndexRead(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			v := atomic.AddUint64(&total, 1)
-			rs, err := pri.read(nil, 100)
+			rs, err := pri.read(100)
 			if err != nil {
 				b.Errorf("%v", err)
 			}

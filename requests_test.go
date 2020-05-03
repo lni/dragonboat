@@ -645,7 +645,7 @@ func TestLargeProposalCanBeProposed(t *testing.T) {
 
 func TestProposalCanBeProposed(t *testing.T) {
 	pp, c := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -675,7 +675,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	pp.close()
-	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != ErrClusterClosed {
 		t.Errorf("unexpected err %v", err)
 	}
@@ -683,7 +683,7 @@ func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 
 func TestProposalCanBeCompleted(t *testing.T) {
 	pp, _ := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -712,7 +712,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 
 func TestProposalCanBeDropped(t *testing.T) {
 	pp, _ := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -734,7 +734,7 @@ func TestProposalCanBeDropped(t *testing.T) {
 
 func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	pp, _ := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -760,7 +760,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 
 func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -789,7 +789,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 
 func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal(false)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -818,7 +818,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 
 func TestProposalCanBeCommitted(t *testing.T) {
 	pp, _ := getPendingProposal(true)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -848,7 +848,7 @@ func TestProposalCanBeCommitted(t *testing.T) {
 func TestProposalCanBeExpired(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	tickCount := uint64(100)
-	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, tickCount)
+	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), tickCount)
 	if err != nil {
 		t.Errorf("failed to make proposal, %v", err)
 	}
@@ -880,7 +880,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 func TestProposalErrorsAreReported(t *testing.T) {
 	pp, c := getPendingProposal(false)
 	for i := 0; i < 5; i++ {
-		_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+		_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 		if err != nil {
 			t.Errorf("propose failed")
 		}
@@ -892,7 +892,7 @@ func TestProposalErrorsAreReported(t *testing.T) {
 		cq = c.right
 	}
 	sz := len(cq)
-	_, err := pp.propose(getBlankTestSession(), []byte("test data"), nil, 100)
+	_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
 	if err != ErrSystemBusy {
 		t.Errorf("suppose to return ErrSystemBusy")
 	}
@@ -913,7 +913,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 		SeriesID:    200,
 		RespondedTo: 199,
 	}
-	rs, _ := pp.propose(session, nil, nil, 100)
+	rs, _ := pp.propose(session, nil, 100)
 	select {
 	case <-rs.ResultC():
 		t.Fatalf("completedC is already signalled")
@@ -955,7 +955,7 @@ func TestPendingSCReadCanBeCreatedAndClosed(t *testing.T) {
 
 func TestPendingSCReadCanRead(t *testing.T) {
 	pp, c := getPendingSCRead()
-	rs, err := pp.read(nil, 100)
+	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -992,7 +992,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 
 func TestPendingSCReadCanComplete(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, 100)
+	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1031,7 +1031,7 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 
 func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, 100)
+	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1053,7 +1053,7 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 
 func TestPendingSCReadCanExpire(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, 100)
+	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1081,7 +1081,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 
 func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(nil, 100)
+	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
@@ -1166,7 +1166,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)
-		rs, err := pp.propose(session, data, nil, 100)
+		rs, err := pp.propose(session, data, 100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -1196,7 +1196,7 @@ func TestReadIndexAllocationCount(t *testing.T) {
 	pri := newPendingReadIndex(p, q)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)
-		rs, err := pri.read(nil, 100)
+		rs, err := pri.read(100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}

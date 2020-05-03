@@ -353,14 +353,14 @@ func (n *node) OnDiskStateMachine() bool {
 }
 
 func (n *node) proposeSession(session *client.Session,
-	handler ICompleteHandler, timeoutTick uint64) (*RequestState, error) {
+	timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
 	if !session.ValidForSessionOp(n.clusterID) {
 		return nil, ErrInvalidSession
 	}
-	return n.pendingProposals.propose(session, nil, handler, timeoutTick)
+	return n.pendingProposals.propose(session, nil, timeoutTick)
 }
 
 func (n *node) payloadTooBig(sz int) bool {
@@ -371,8 +371,7 @@ func (n *node) payloadTooBig(sz int) bool {
 }
 
 func (n *node) propose(session *client.Session,
-	cmd []byte, handler ICompleteHandler,
-	timeoutTick uint64) (*RequestState, error) {
+	cmd []byte, timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -382,15 +381,14 @@ func (n *node) propose(session *client.Session,
 	if n.payloadTooBig(len(cmd)) {
 		return nil, ErrPayloadTooBig
 	}
-	return n.pendingProposals.propose(session, cmd, handler, timeoutTick)
+	return n.pendingProposals.propose(session, cmd, timeoutTick)
 }
 
-func (n *node) read(handler ICompleteHandler,
-	timeoutTick uint64) (*RequestState, error) {
+func (n *node) read(timeoutTick uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	rs, err := n.pendingReadIndexes.read(handler, timeoutTick)
+	rs, err := n.pendingReadIndexes.read(timeoutTick)
 	if err == nil {
 		rs.node = n
 	}

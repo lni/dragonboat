@@ -456,7 +456,7 @@ func getProposalTestClient(n *node,
 	router *testMessageRouter) (*client.Session, bool) {
 	cs := client.NewSession(n.clusterID, random.NewLockedRand())
 	cs.PrepareForRegister()
-	rs, err := n.pendingProposals.propose(cs, nil, nil, 50)
+	rs, err := n.pendingProposals.propose(cs, nil, 50)
 	if err != nil {
 		plog.Errorf("error: %v", err)
 		return nil, false
@@ -481,7 +481,7 @@ func closeProposalTestClient(n *node,
 	nodes []*node, smList []*rsm.StateMachine,
 	router *testMessageRouter, session *client.Session) {
 	session.PrepareForUnregister()
-	rs, err := n.pendingProposals.propose(session, nil, nil, 50)
+	rs, err := n.pendingProposals.propose(session, nil, 50)
 	if err != nil {
 		return
 	}
@@ -502,7 +502,7 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 	expectedCode RequestResultCode, checkResult bool, expectedResult uint64) {
 	n := mustHasLeaderNode(nodes, t)
 	tick := uint64(50)
-	rs, err := n.propose(session, data, nil, tick)
+	rs, err := n.propose(session, data, tick)
 	if err != nil {
 		t.Fatalf("failed to make proposal")
 	}
@@ -691,7 +691,7 @@ func TestReadOnWitnessWillBeRejected(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		n.config.IsWitness = true
-		_, err := n.read(nil, 10)
+		_, err := n.read(10)
 		if err != ErrInvalidOperation {
 			t.Errorf("read not rejected")
 		}
@@ -706,7 +706,7 @@ func TestMakingProposalOnWitnessNodeWillBeRejected(t *testing.T) {
 		n := nodes[0]
 		n.config.IsWitness = true
 		cs := client.NewNoOPSession(n.clusterID, random.NewLockedRand())
-		_, err := n.propose(cs, make([]byte, 1), nil, 10)
+		_, err := n.propose(cs, make([]byte, 1), 10)
 		if err != ErrInvalidOperation {
 			t.Errorf("making proposal not rejected")
 		}
@@ -720,7 +720,7 @@ func TestProposingSessionOnWitnessNodeWillBeRejected(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		n.config.IsWitness = true
-		_, err := n.proposeSession(nil, nil, 10)
+		_, err := n.proposeSession(nil, 10)
 		if err != ErrInvalidOperation {
 			t.Errorf("proposing session not rejected")
 		}
@@ -828,7 +828,7 @@ func TestReproposeRespondedDataWillTimeout(t *testing.T) {
 		}
 		data := []byte("test-data")
 		maxLastApplied := getMaxLastApplied(smList)
-		_, err := n.propose(session, data, nil, 10)
+		_, err := n.propose(session, data, 10)
 		if err != nil {
 			t.Fatalf("failed to make proposal")
 		}
@@ -847,7 +847,7 @@ func TestReproposeRespondedDataWillTimeout(t *testing.T) {
 		session.SeriesID = respondedSeriesID
 		plog.Infof("series id %d, responded to %d",
 			session.SeriesID, session.RespondedTo)
-		rs, _ := n.propose(session, data, nil, 10)
+		rs, _ := n.propose(session, data, 10)
 		stepNodes(nodes, smList, router, 10)
 		select {
 		case v := <-rs.ResultC():
@@ -868,27 +868,27 @@ func TestProposalsWithIllFormedSessionAreChecked(t *testing.T) {
 		n := nodes[0]
 		s1 := client.NewSession(n.clusterID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForRegister
-		_, err := n.propose(s1, nil, nil, 10)
+		_, err := n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
 		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForUnregister
-		_, err = n.propose(s1, nil, nil, 10)
+		_, err = n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
 		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
 		s1.SeriesID = 100
 		s1.ClusterID = 123456
-		_, err = n.propose(s1, nil, nil, 10)
+		_, err = n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
 		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
 		s1.SeriesID = 1
 		s1.ClientID = 0
-		_, err = n.propose(s1, nil, nil, 10)
+		_, err = n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
@@ -910,7 +910,7 @@ func TestProposalsWithCorruptedSessionWillPanic(t *testing.T) {
 				t.Errorf("panic not triggered")
 			}
 		}()
-		_, err := n.propose(s1, nil, nil, 10)
+		_, err := n.propose(s1, nil, 10)
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
@@ -1027,7 +1027,7 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 			}
 		}
 		n := nodes[0]
-		rs, err := n.read(nil, 10)
+		rs, err := n.read(10)
 		if err != nil {
 			t.Errorf("failed to read")
 		}
@@ -1116,14 +1116,14 @@ func TestLinearizableReadCanBeMade(t *testing.T) {
 			t.Errorf("failed to get session")
 			return
 		}
-		rs, err := n.propose(session, []byte("test-data"), nil, 10)
+		rs, err := n.propose(session, []byte("test-data"), 10)
 		if err != nil {
 			t.Fatalf("failed to make proposal")
 		}
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		closeProposalTestClient(n, nodes, smList, router, session)
-		rs, err = n.read(nil, 10)
+		rs, err = n.read(10)
 		if err != nil {
 			t.Fatalf("")
 		}
@@ -1214,7 +1214,7 @@ func TestNodeCanBeAdded2(t *testing.T) {
 			return
 		}
 		for i := 0; i < 5; i++ {
-			rs, err := n.propose(session, []byte("test-data"), nil, 10)
+			rs, err := n.propose(session, []byte("test-data"), 10)
 			if err != nil {
 				t.Fatalf("")
 			}
@@ -1379,7 +1379,7 @@ func TestSnapshotCanBeMade(t *testing.T) {
 		proposalCount := 50
 		for i := 0; i < proposalCount; i++ {
 			data := fmt.Sprintf("test-data-%d", i)
-			rs, err := n.propose(session, []byte(data), nil, 10)
+			rs, err := n.propose(session, []byte(data), 10)
 			if err != nil {
 				t.Fatalf("failed to make proposal")
 			}
@@ -1420,7 +1420,7 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		proposalCount := 50
 		for i := 0; i < proposalCount; i++ {
 			data := fmt.Sprintf("test-data-%d", i)
-			rs, err := n.propose(session, []byte(data), nil, 10)
+			rs, err := n.propose(session, []byte(data), 10)
 			if err != nil {
 				t.Fatalf("failed to make proposal")
 			}
@@ -1463,7 +1463,7 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	}
 	maxLastApplied := getMaxLastApplied(smList)
 	for i := 0; i < 25; i++ {
-		rs, err := n.propose(session, []byte("test-data"), nil, 10)
+		rs, err := n.propose(session, []byte("test-data"), 10)
 		if err != nil {
 			t.Fatalf("")
 		}

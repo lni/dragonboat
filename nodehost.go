@@ -786,7 +786,7 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 // session ready to be used in future proposals.
 func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 	timeout time.Duration) (*RequestState, error) {
-	return nh.propose(session, cmd, nil, timeout)
+	return nh.propose(session, cmd, timeout)
 }
 
 // ProposeSession starts an asynchronous proposal on the specified cluster
@@ -804,7 +804,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 	if !v.supportClientSession() && !session.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	req, err := v.proposeSession(session, nil, nh.getTimeoutTick(timeout))
+	req, err := v.proposeSession(session, nh.getTimeoutTick(timeout))
 	nh.execEngine.setStepReady(session.ClusterID)
 	return req, err
 }
@@ -819,7 +819,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 // guarantee.
 func (nh *NodeHost) ReadIndex(clusterID uint64,
 	timeout time.Duration) (*RequestState, error) {
-	rs, _, err := nh.readIndex(clusterID, nil, timeout)
+	rs, _, err := nh.readIndex(clusterID, timeout)
 	return rs, err
 }
 
@@ -1353,8 +1353,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 }
 
 func (nh *NodeHost) propose(s *client.Session,
-	cmd []byte, handler ICompleteHandler,
-	timeout time.Duration) (*RequestState, error) {
+	cmd []byte, timeout time.Duration) (*RequestState, error) {
 	var st time.Time
 	sampled := delaySampled(s)
 	if sampled {
@@ -1367,7 +1366,7 @@ func (nh *NodeHost) propose(s *client.Session,
 	if !v.supportClientSession() && !s.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	req, err := v.propose(s, cmd, handler, nh.getTimeoutTick(timeout))
+	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
 	nh.execEngine.setStepReady(s.ClusterID)
 	if sampled {
 		nh.execEngine.proposeDelay(s.ClusterID, st)
@@ -1376,13 +1375,12 @@ func (nh *NodeHost) propose(s *client.Session,
 }
 
 func (nh *NodeHost) readIndex(clusterID uint64,
-	handler ICompleteHandler,
 	timeout time.Duration) (*RequestState, *node, error) {
 	n, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
 		return nil, nil, ErrClusterNotFound
 	}
-	req, err := n.read(handler, nh.getTimeoutTick(timeout))
+	req, err := n.read(nh.getTimeoutTick(timeout))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1397,7 +1395,7 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	rs, node, err := nh.readIndex(clusterID, nil, timeout)
+	rs, node, err := nh.readIndex(clusterID, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -2048,7 +2046,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 	if sampled {
 		st = time.Now()
 	}
-	req, err := nu.node.propose(s, cmd, nil, nu.nh.getTimeoutTick(timeout))
+	req, err := nu.node.propose(s, cmd, nu.nh.getTimeoutTick(timeout))
 	nu.setStepReady(s.ClusterID)
 	if sampled {
 		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
@@ -2057,7 +2055,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 }
 
 func (nu *nodeUser) ReadIndex(timeout time.Duration) (*RequestState, error) {
-	rs, err := nu.node.read(nil, nu.nh.getTimeoutTick(timeout))
+	rs, err := nu.node.read(nu.nh.getTimeoutTick(timeout))
 	return rs, err
 }
 

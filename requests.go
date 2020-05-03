@@ -244,14 +244,6 @@ func (p *logicalClock) getTick() uint64 {
 	return atomic.LoadUint64(&p.ltick)
 }
 
-// ICompleteHandler is a handler interface that will be invoked when the request
-// in completed. This interface is used by the language bindings, applications
-// are not expected to directly use this interface.
-type ICompleteHandler interface {
-	Notify(RequestResult)
-	Release()
-}
-
 type ready struct {
 	val uint32
 }
@@ -290,16 +282,15 @@ func (o *SysOpState) ResultC() <-chan struct{} {
 
 // RequestState is the object used to provide request result to users.
 type RequestState struct {
-	key             uint64
-	clientID        uint64
-	seriesID        uint64
-	respondedTo     uint64
-	deadline        uint64
-	readyToRead     ready
-	readyToRelease  ready
-	completeHandler ICompleteHandler
-	aggrC           chan RequestResult
-	committedC      chan RequestResult
+	key            uint64
+	clientID       uint64
+	seriesID       uint64
+	respondedTo    uint64
+	deadline       uint64
+	readyToRead    ready
+	readyToRelease ready
+	aggrC          chan RequestResult
+	committedC     chan RequestResult
 	// CompletedC is a channel for delivering request result to users.
 	//
 	// Deprecated: CompletedC has been deprecated. Use ResultC() or AppliedC()
@@ -376,16 +367,10 @@ func (r *RequestState) committed() {
 
 func (r *RequestState) notify(result RequestResult) {
 	r.readyToRelease.set()
-	if r.completeHandler == nil {
-		select {
-		case r.CompletedC <- result:
-		default:
-			plog.Panicf("RequestState.CompletedC is full")
-		}
-	} else {
-		r.completeHandler.Notify(result)
-		r.completeHandler.Release()
-		r.Release()
+	select {
+	case r.CompletedC <- result:
+	default:
+		plog.Panicf("RequestState.CompletedC is full")
 	}
 }
 
@@ -402,7 +387,6 @@ func (r *RequestState) Release() {
 		r.seriesID = 0
 		r.clientID = 0
 		r.respondedTo = 0
-		r.completeHandler = nil
 		r.node = nil
 		r.readyToRead.clear()
 		r.readyToRelease.clear()
@@ -790,13 +774,11 @@ func (p *pendingReadIndex) close() {
 	}
 }
 
-func (p *pendingReadIndex) read(handler ICompleteHandler,
-	timeoutTick uint64) (*RequestState, error) {
+func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
 	req := p.pool.Get().(*RequestState)
-	req.completeHandler = handler
 	req.key = p.nextUserCtx()
 	req.deadline = p.getTick() + timeoutTick
 	if len(req.CompletedC) > 0 {
@@ -1004,11 +986,10 @@ func newPendingProposal(cfg config.Config, notifyCommit bool,
 }
 
 func (p *pendingProposal) propose(session *client.Session,
-	cmd []byte, handler ICompleteHandler,
-	timeoutTick uint64) (*RequestState, error) {
+	cmd []byte, timeoutTick uint64) (*RequestState, error) {
 	key := p.nextKey(session.ClientID)
 	pp := p.shards[key%p.ps]
-	return pp.propose(session, cmd, key, handler, timeoutTick)
+	return pp.propose(session, cmd, key, timeoutTick)
 }
 
 func (p *pendingProposal) close() {
@@ -1071,8 +1052,7 @@ func newPendingProposalShard(cfg config.Config,
 }
 
 func (p *proposalShard) propose(session *client.Session,
-	cmd []byte, key uint64, handler ICompleteHandler,
-	timeoutTick uint64) (*RequestState, error) {
+	cmd []byte, key uint64, timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
@@ -1094,7 +1074,6 @@ func (p *proposalShard) propose(session *client.Session,
 	req := p.pool.Get().(*RequestState)
 	req.clientID = session.ClientID
 	req.seriesID = session.SeriesID
-	req.completeHandler = handler
 	req.key = entry.Key
 	req.deadline = p.getTick() + timeoutTick
 	if req.aggrC != nil {
