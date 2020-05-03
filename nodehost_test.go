@@ -1165,7 +1165,7 @@ func TestCompactionCanBeRequested(t *testing.T) {
 				t.Fatalf("failed to request compaction %v", err)
 			}
 			select {
-			case <-op.CompletedC():
+			case <-op.ResultC():
 				break
 			case <-ctx.Done():
 				t.Fatalf("failed to complete the compaction")
@@ -1422,7 +1422,7 @@ func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to propose client session %v", err)
 		}
-		r := <-rs.CompletedC
+		r := <-rs.ResultC()
 		if !r.Rejected() {
 			t.Errorf("failed to reject the cs registeration")
 		}
@@ -1617,7 +1617,7 @@ func testNodeHostReadIndex(t *testing.T, fs vfs.IFS) {
 		if rs.node == nil {
 			t.Fatal("rs.node not set")
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete read index")
 		}
@@ -1641,7 +1641,7 @@ func TestNALookupCanReturnErrNotImplemented(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete read index")
 		}
@@ -1788,7 +1788,7 @@ func TestNodeHostAddNode(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to add node %v", err)
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete add node")
 		}
@@ -1829,7 +1829,7 @@ func TestNodeHostNodeUserPropose(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to make propose %v", err)
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete proposal")
 		}
@@ -1848,7 +1848,7 @@ func TestNodeHostNodeUserRead(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete read index")
 		}
@@ -1863,7 +1863,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to add node %v", err)
 		}
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete add node")
 		}
@@ -1888,7 +1888,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to remove node %v", err)
 		}
-		v = <-rs.CompletedC
+		v = <-rs.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete remove node")
 		}
@@ -2143,7 +2143,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
-		s := <-rs.CompletedC
+		s := <-rs.ResultC()
 		if !s.Completed() {
 			t.Fatalf("failed to complete the add node request")
 		}
@@ -2274,7 +2274,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				s := <-rs.CompletedC
+				s := <-rs.ResultC()
 				if !s.Completed() {
 					continue
 				}
@@ -2594,7 +2594,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to add observer %v", err)
 		}
-		<-rs.CompletedC
+		<-rs.ResultC()
 		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
 			t.Errorf("failed to start observer %v", err)
 		}
@@ -2628,7 +2628,7 @@ func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
 				t.Fatalf("no panic")
 			}
 		}()
-		v := <-rs.CompletedC
+		v := <-rs.ResultC()
 		plog.Infof("%d", v.SnapshotIndex())
 	}
 	singleNodeHostTest(t, tf, fs)
@@ -2751,7 +2751,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2766,7 +2766,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			op, err := nh.RequestCompaction(2, 1)
 			if err == nil {
-				<-op.CompletedC()
+				<-op.ResultC()
 			}
 			ents, _, err := logdb.IterateEntries(nil, 0, 2, 1, 12, 14, math.MaxUint64)
 			if err != nil {
@@ -2798,7 +2798,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2808,7 +2808,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
-		v = <-sr.CompletedC
+		v = <-sr.ResultC()
 		if !v.Rejected() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -2899,7 +2899,7 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		plog.Infof("going to wait for snapshot request to complete")
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Timeout() {
 			t.Errorf("failed to report timeout")
 		}
@@ -2997,7 +2997,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Completed() {
 			t.Errorf("failed to complete the requested snapshot")
 		}
@@ -3112,7 +3112,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to request compaction %v", err)
 		}
-		<-sysop.CompletedC()
+		<-sysop.ResultC()
 	}
 	singleNodeHostTest(t, tf, fs)
 }
@@ -3149,7 +3149,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			t.Errorf("failed to request snapshot")
 		}
 		var index uint64
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
@@ -3242,7 +3242,7 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
-			v := <-sr.CompletedC
+			v := <-sr.ResultC()
 			if v.Aborted() {
 				aborted = true
 				continue
@@ -3378,7 +3378,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			if err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
-			v := <-sr.CompletedC
+			v := <-sr.ResultC()
 			if v.Rejected() {
 				time.Sleep(10 * time.Millisecond)
 				continue
@@ -3570,7 +3570,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
 		var index uint64
-		v := <-sr.CompletedC
+		v := <-sr.ResultC()
 		if !v.Completed() {
 			t.Fatalf("failed to complete the requested snapshot")
 		}

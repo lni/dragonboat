@@ -132,7 +132,7 @@ func main() {
 					if err != nil {
 						panic(err)
 					}
-					v := <-rs.CompletedC
+					v := <-rs.ResultC()
 					if v.Completed() {
 						results[workerID] = results[workerID] + 1
 						rs.Release()

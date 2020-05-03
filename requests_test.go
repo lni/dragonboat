@@ -118,7 +118,7 @@ func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 		t.Errorf("pending not cleared")
 	}
 	select {
-	case v := <-pending.CompletedC:
+	case v := <-pending.ResultC():
 		if !v.Terminated() {
 			t.Errorf("unexpected code")
 		}
@@ -207,7 +207,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 		t.Errorf("pending is not cleared")
 	}
 	select {
-	case v := <-ss.CompletedC:
+	case v := <-ss.ResultC():
 		if !v.Timeout() {
 			t.Errorf("not timeout")
 		}
@@ -228,7 +228,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	}
 	ps.apply(ss.key, false, false, 123)
 	select {
-	case v := <-ss.CompletedC:
+	case v := <-ss.ResultC():
 		if v.SnapshotIndex() != 123 {
 			t.Errorf("index value not returned")
 		}
@@ -252,7 +252,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	}
 	ps.apply(ss.key, true, false, 123)
 	select {
-	case v := <-ss.CompletedC:
+	case v := <-ss.ResultC():
 		if v.SnapshotIndex() != 0 {
 			t.Errorf("index value incorrectly set")
 		}
@@ -282,7 +282,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 		t.Errorf("pending unexpectedly cleared")
 	}
 	select {
-	case <-ss.CompletedC:
+	case <-ss.ResultC():
 		t.Fatalf("unexpectedly notified")
 	default:
 	}
@@ -416,7 +416,7 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 	}
 	pcc.close()
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Terminated() {
 			t.Errorf("returned %v, want %d", v, requestTerminated)
 		}
@@ -438,7 +438,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 		pcc.gc()
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to has anything at this stage")
 	default:
 	}
@@ -447,7 +447,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 		pcc.gc()
 	}
 	select {
-	case v, ok := <-rs.CompletedC:
+	case v, ok := <-rs.ResultC():
 		if ok {
 			if !v.Timeout() {
 				t.Errorf("v: %v, expect %d", v, requestTimeout)
@@ -466,13 +466,13 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything yet")
 	default:
 	}
 	pcc.apply(rs.key, false)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("returned %v, want %d", v, requestCompleted)
 		}
@@ -492,13 +492,13 @@ func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything yet")
 	default:
 	}
 	pcc.apply(rs.key+1, false)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("unexpectedly notified")
 	default:
 	}
@@ -515,13 +515,13 @@ func TestConfigChangeCanBeDropped(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything yet")
 	default:
 	}
 	pcc.dropped(rs.key)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Dropped() {
 			t.Errorf("Dropped() is false")
 		}
@@ -541,13 +541,13 @@ func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything yet")
 	default:
 	}
 	pcc.dropped(rs.key + 1)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("CompletedC unexpectedly set")
 	default:
 	}
@@ -637,7 +637,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 		t.Errorf("len(pending)=%d, want 1", countPendingProposal(pp))
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to have anything completed")
 	default:
 	}
@@ -647,7 +647,7 @@ func TestProposalCanBeProposed(t *testing.T) {
 	}
 	pp.close()
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Terminated() {
 			t.Errorf("get %v, want %d", v, requestTerminated)
 		}
@@ -673,7 +673,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key+1, sm.Result{}, false)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("unexpected applied proposal with invalid client ID")
 	default:
 	}
@@ -682,7 +682,7 @@ func TestProposalCanBeCompleted(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
@@ -702,7 +702,7 @@ func TestProposalCanBeDropped(t *testing.T) {
 	}
 	pp.dropped(rs.clientID, rs.seriesID, rs.key)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Dropped() {
 			t.Errorf("not dropped")
 		}
@@ -729,7 +729,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	rand.Read(result.Data)
 	pp.applied(rs.clientID, rs.seriesID, rs.key, result, false)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
@@ -750,7 +750,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	}
 	pp.applied(rs.clientID+1, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("unexpected applied proposal with invalid client ID")
 	default:
 	}
@@ -759,7 +759,7 @@ func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
@@ -779,7 +779,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID+1, rs.key, sm.Result{}, false)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("unexpected applied proposal with invalid client ID")
 	default:
 	}
@@ -788,7 +788,7 @@ func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
@@ -817,6 +817,8 @@ func TestProposalCanBeCommitted(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
+	// can't use ResultC() here, as it is basically testing the internal mechanism
+	// of ResultC()
 	case v := <-rs.CompletedC:
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
@@ -841,7 +843,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 		pp.gc()
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything")
 	default:
 	}
@@ -850,7 +852,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 		pp.gc()
 	}
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Timeout() {
 			t.Errorf("got %v, want %d", v, requestTimeout)
 		}
@@ -899,7 +901,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	}
 	rs, _ := pp.propose(session, nil, nil, 100)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Fatalf("completedC is already signalled")
 	default:
 	}
@@ -908,7 +910,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{Value: 1}, false)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Fatalf("completedC unexpectedly signaled")
 	default:
 	}
@@ -944,7 +946,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 		t.Errorf("failed to do read")
 	}
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not suppose to return anything")
 	default:
 	}
@@ -965,7 +967,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 	}
 	pp.close()
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Terminated() {
 			t.Errorf("got %v, want %d", v, requestTerminated)
 		}
@@ -986,7 +988,7 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	pp.addReadyToRead([]pb.ReadyToRead{readState})
 	pp.applied(499)
 	select {
-	case <-rs.CompletedC:
+	case <-rs.ResultC():
 		t.Errorf("not expected to be signaled")
 	default:
 	}
@@ -998,7 +1000,7 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 		t.Errorf("ready not set")
 	}
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Errorf("got %v, want %d", v, requestCompleted)
 		}
@@ -1023,7 +1025,7 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	pp.addPendingRead(s, []*RequestState{rs})
 	pp.dropped(s)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Dropped() {
 			t.Errorf("got %v, want %d", v, requestDropped)
 		}
@@ -1051,7 +1053,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 		pp.applied(499)
 	}
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Timeout() {
 			t.Errorf("got %v, want %d", v, requestTimeout)
 		}
@@ -1077,7 +1079,7 @@ func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 		pp.applied(499)
 	}
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Timeout() {
 			t.Errorf("got %v, want %d", v, requestTimeout)
 		}

@@ -769,12 +769,12 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 // immediate after the return of this method.
 //
 // This method returns a RequestState instance or an error immediately.
-// Application can wait on the CompletedC member channel of the returned
-// RequestState instance to get notified for the outcome of the proposal and
-// access to the result of the proposal.
+// Application can wait on the ResultC() channel of the returned RequestState
+// instance to get notified for the outcome of the proposal and access to the
+// result of the proposal.
 //
 // After the proposal is completed, i.e. RequestResult is received from the
-// CompletedC channel of the returned RequestState, unless NO-OP client session
+// ResultC() channel of the returned RequestState, unless NO-OP client session
 // is used, it is caller's responsibility to update the Session instance
 // accordingly based on the RequestResult.Code value. Basically, when
 // RequestTimeout is returned, you can retry the same proposal without updating
@@ -792,9 +792,9 @@ func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 // ProposeSession starts an asynchronous proposal on the specified cluster
 // for client session related operations. Depending on the state of the specified
 // client session object, the supported operations are for registering or
-// unregistering a client session. Application can select on the CompletedC
-// member channel of the returned RequestState instance to get notified for the
-// outcome of the operation.
+// unregistering a client session. Application can select on the ResultC()
+// channel of the returned RequestState instance to get notified for the
+// completion (RequestResult.Completed() is true) of the operation.
 func (nh *NodeHost) ProposeSession(session *client.Session,
 	timeout time.Duration) (*RequestState, error) {
 	v, ok := nh.getCluster(session.ClusterID)
@@ -811,7 +811,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 
 // ReadIndex starts the asynchronous ReadIndex protocol used for linearizable
 // read on the specified cluster. This method returns a RequestState instance
-// or an error immediately. Application should wait on the CompletedC channel
+// or an error immediately. Application should wait on the ResultC() channel
 // of the returned RequestState object to get notified on the outcome of the
 // ReadIndex operation. On a successful completion, the ReadLocal method can
 // then be invoked to query the state of the IStateMachine or
@@ -907,7 +907,7 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 		return 0, err
 	}
 	select {
-	case r := <-rs.CompletedC:
+	case r := <-rs.ResultC():
 		if r.Completed() {
 			return r.GetResult().Value, nil
 		} else if r.Rejected() {
@@ -950,12 +950,12 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // nodes are typically used to trigger Raft log and snapshot compactions.
 //
 // RequestSnapshot returns a RequestState instance or an error immediately.
-// Applications can wait on the CompletedC member channel of the returned
-// RequestState instance to get notified for the outcome of the create snasphot
-// operation. The RequestResult instance returned by the CompletedC channel
-// tells the outcome of the snapshot operation, when successful, the
-// SnapshotIndex method of the returned RequestResult instance reports the index
-// of the created snapshot.
+// Applications can wait on the ResultC() channel of the returned RequestState
+// instance to get notified for the outcome of the create snasphot operation.
+// The RequestResult instance returned by the ResultC() channel tells the
+// outcome of the snapshot operation, when successful, the SnapshotIndex method
+// of the returned RequestResult instance reports the index of the created
+// snapshot.
 //
 // Requested snapshot operation will be rejected if there is already an existing
 // snapshot in the system at the same Raft log index.
@@ -1084,7 +1084,7 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 // RequestDeleteNode is a Raft cluster membership change method for requesting
 // the specified node to be removed from the specified Raft cluster. It starts
 // an asynchronous request to remove the node from the Raft cluster membership
-// list. Application can wait on the CompletedC member of the returned
+// list. Application can wait on the ResultC() channel of the returned
 // RequestState instance to get notified for the outcome.
 //
 // It is not guaranteed that deleted node will automatically close itself and
@@ -1117,7 +1117,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // RequestAddNode is a Raft cluster membership change method for requesting the
 // specified node to be added to the specified Raft cluster. It starts an
 // asynchronous request to add the node to the Raft cluster membership list.
-// Application can wait on the CompletedC member of the returned RequestState
+// Application can wait on the ResultC() channel of the returned RequestState
 // instance to get notified for the outcome.
 //
 // If there is already an observer with the same nodeID in the cluster, it will
@@ -1402,7 +1402,7 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 		return nil, err
 	}
 	select {
-	case s := <-rs.CompletedC:
+	case s := <-rs.ResultC():
 		if s.Timeout() {
 			return nil, ErrTimeout
 		} else if s.Completed() {
@@ -1987,7 +1987,7 @@ func (nh *NodeHost) logTransportLatency() {
 func checkRequestState(ctx context.Context,
 	rs *RequestState) (sm.Result, error) {
 	select {
-	case r := <-rs.CompletedC:
+	case r := <-rs.ResultC():
 		if r.Completed() {
 			return r.GetResult(), nil
 		} else if r.Rejected() {

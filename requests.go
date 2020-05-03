@@ -276,7 +276,15 @@ type SysOpState struct {
 
 // CompletedC returns a struct{} chan that is closed when the requested
 // operation is completed.
+//
+// // Depreciated: CompletedC() has been deprecated. Use ResultC() instead.
 func (o *SysOpState) CompletedC() <-chan struct{} {
+	return o.completedC
+}
+
+// ResultC returns a struct{} chan that is closed when the requested
+// operation is completed.
+func (o *SysOpState) ResultC() <-chan struct{} {
 	return o.completedC
 }
 
@@ -293,13 +301,18 @@ type RequestState struct {
 	aggrC           chan RequestResult
 	committedC      chan RequestResult
 	// CompletedC is a channel for delivering request result to users.
+	//
+	// Depreciated: CompletedC has been deprecated. Use ResultC() instead.
 	CompletedC chan RequestResult
 	node       *node
 	pool       *sync.Pool
 }
 
 // ResultC returns a channel of RequestResult for delivering request
-// results to users.
+// results to users. When NotifyCommit is not enabled, a single RequestResult
+// value will be received from the returned channel. When NotifyCommit is
+// enabled up to two RequestResult values can be received from the returned
+// channel.
 func (r *RequestState) ResultC() chan RequestResult {
 	if r.committedC == nil {
 		return r.CompletedC
@@ -358,8 +371,8 @@ func (r *RequestState) notify(result RequestResult) {
 }
 
 // Release puts the RequestState instance back to an internal pool so it can be
-// reused. Release should only be called after RequestResult has been received
-// from the CompletedC channel.
+// reused. Release is normally called after RequestResult has been received
+// from the ResultC() channel.
 func (r *RequestState) Release() {
 	if r.pool != nil {
 		if !r.readyToRelease.ready() {

@@ -67,7 +67,7 @@ type testMessageRouter struct {
 
 func mustComplete(rs *RequestState, t *testing.T) {
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Completed() {
 			t.Fatalf("got %v, want %d", v, requestCompleted)
 		}
@@ -78,7 +78,7 @@ func mustComplete(rs *RequestState, t *testing.T) {
 
 func mustReject(rs *RequestState, t *testing.T) {
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if !v.Rejected() {
 			t.Errorf("got %v, want %d", v, requestRejected)
 		}
@@ -463,7 +463,7 @@ func getProposalTestClient(n *node,
 	}
 	stepNodes(nodes, smList, router, 50)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if v.Completed() && v.GetResult().Value == cs.ClientID {
 			cs.PrepareForPropose()
 			return cs, true
@@ -487,7 +487,7 @@ func closeProposalTestClient(n *node,
 	}
 	stepNodes(nodes, smList, router, 50)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if v.Completed() && v.GetResult().Value == session.ClientID {
 			return
 		}
@@ -508,7 +508,7 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 	}
 	stepNodes(nodes, smList, router, tick)
 	select {
-	case v := <-rs.CompletedC:
+	case v := <-rs.ResultC():
 		if v.code != expectedCode {
 			t.Errorf("got %v, want %d", v, expectedCode)
 		}
@@ -850,7 +850,7 @@ func TestReproposeRespondedDataWillTimeout(t *testing.T) {
 		rs, _ := n.propose(session, data, nil, 10)
 		stepNodes(nodes, smList, router, 10)
 		select {
-		case v := <-rs.CompletedC:
+		case v := <-rs.ResultC():
 			if !v.Timeout() {
 				t.Errorf("didn't timeout, v: %d", v.code)
 			}
@@ -1035,7 +1035,7 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 		for i := uint64(0); i <= 5; i++ {
 			singleStepNodes(nodes, smList, router)
 			select {
-			case <-rs.CompletedC:
+			case <-rs.ResultC():
 				done = true
 			default:
 			}
@@ -1077,7 +1077,7 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 			for i := uint64(0); i < 25; i++ {
 				singleStepNodes(nodes, smList, router)
 				select {
-				case v := <-rs.CompletedC:
+				case v := <-rs.ResultC():
 					if v.Completed() {
 						done = true
 					}
