@@ -302,17 +302,36 @@ type RequestState struct {
 	committedC      chan RequestResult
 	// CompletedC is a channel for delivering request result to users.
 	//
-	// Deprecated: CompletedC has been deprecated. Use ResultC() instead.
+	// Deprecated: CompletedC has been deprecated. Use ResultC() or AppliedC()
+	// instead.
 	CompletedC chan RequestResult
 	node       *node
 	pool       *sync.Pool
 }
 
-// ResultC returns a channel of RequestResult for delivering request
-// results to users. When NotifyCommit is not enabled, a single RequestResult
-// value will be received from the returned channel. When NotifyCommit is
-// enabled up to two RequestResult values can be received from the returned
-// channel.
+// AppliedC returns a channel of RequestResult for delivering request result.
+// The returned channel reports the final outcomes of proposals and config
+// changes, the return value can be of one of the Completed(), Dropped(),
+// Timeout(), Rejected(), Terminated() or Aborted() values.
+//
+// Use ResultC() when the client wants to be notified when proposals or config
+// changes are committed.
+func (r *RequestState) AppliedC() chan RequestResult {
+	return r.CompletedC
+}
+
+// ResultC returns a channel of RequestResult for delivering request results to
+// users. When NotifyCommit is not enabled, the behaviour of the returned
+// channel is the same as the one returned by the AppliedC() method. When
+// NotifyCommit is enabled, up to two RequestResult values can be received from
+// the returned channel. For example, for a successfully proposal that is
+// eventually committed and applied, the returned chan RequestResult will return
+// a RequestResult value to indicate the proposal is committed first, it will be
+// followed by another RequestResult value indicating the proposal has been
+// applied into the state machine.
+//
+// Use AppliedC() when your client don't need extra notification when proposals
+// and config changes are committed.
 func (r *RequestState) ResultC() chan RequestResult {
 	if r.committedC == nil {
 		return r.CompletedC

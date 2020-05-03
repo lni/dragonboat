@@ -833,9 +833,7 @@ func TestProposalCanBeCommitted(t *testing.T) {
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
-	// can't use ResultC() here, as it is basically testing the internal mechanism
-	// of ResultC()
-	case v := <-rs.CompletedC:
+	case v := <-rs.AppliedC():
 		if !v.Completed() {
 			t.Errorf("get %v, want %d", v, requestCompleted)
 		}
