@@ -318,9 +318,10 @@ func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
 	}
 }
 
-func getPendingConfigChange() (*pendingConfigChange, chan configChangeRequest) {
+func getPendingConfigChange(notifyCommit bool) (*pendingConfigChange,
+	chan configChangeRequest) {
 	c := make(chan configChangeRequest, 1)
-	return newPendingConfigChange(c), c
+	return newPendingConfigChange(c, notifyCommit), c
 }
 
 func TestRequestStateRelease(t *testing.T) {
@@ -374,7 +375,7 @@ func TestReleasingNotReadyRequestStateWillPanic(t *testing.T) {
 }
 
 func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
-	pcc, c := getPendingConfigChange()
+	pcc, c := getPendingConfigChange(false)
 	select {
 	case <-c:
 		t.Errorf("unexpected content in confChangeC")
@@ -392,7 +393,7 @@ func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
 }
 
 func TestConfigChangeCanBeRequested(t *testing.T) {
-	pcc, c := getPendingConfigChange()
+	pcc, c := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
 	if err != nil {
@@ -426,7 +427,7 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 }
 
 func TestConfigChangeCanExpire(t *testing.T) {
-	pcc, _ := getPendingConfigChange()
+	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	tickCount := uint64(100)
 	rs, err := pcc.request(cc, tickCount)
@@ -458,8 +459,23 @@ func TestConfigChangeCanExpire(t *testing.T) {
 	}
 }
 
+func TestCommittedConfigChangeRequestCanBeNotified(t *testing.T) {
+	pcc, _ := getPendingConfigChange(true)
+	var cc pb.ConfigChange
+	rs, err := pcc.request(cc, 100)
+	if err != nil {
+		t.Errorf("RequestConfigChange failed: %v", err)
+	}
+	pcc.committed(rs.key)
+	select {
+	case <-rs.committedC:
+	default:
+		t.Fatalf("committedC not signalled")
+	}
+}
+
 func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
-	pcc, _ := getPendingConfigChange()
+	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
 	if err != nil {
@@ -485,7 +501,7 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 }
 
 func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
-	pcc, _ := getPendingConfigChange()
+	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
 	if err != nil {
@@ -508,7 +524,7 @@ func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 }
 
 func TestConfigChangeCanBeDropped(t *testing.T) {
-	pcc, _ := getPendingConfigChange()
+	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
 	if err != nil {
@@ -534,7 +550,7 @@ func TestConfigChangeCanBeDropped(t *testing.T) {
 }
 
 func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
-	pcc, _ := getPendingConfigChange()
+	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
 	if err != nil {

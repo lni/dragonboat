@@ -339,8 +339,9 @@ type NodeHostConfig struct {
 	// default value.
 	LogDBConfig LogDBConfig
 	// NotifyCommit specifies whether clients should be notified when their
-	// proposals are committed. By default, commits are not notified, clients are
-	// only notified when their proposals are both committed and applied.
+	// regular proposals and config change requests are committed. By default,
+	// commits are not notified, clients are only notified when their proposals
+	// are both committed and applied.
 	NotifyCommit bool
 }
 

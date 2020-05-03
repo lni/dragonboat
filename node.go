@@ -140,7 +140,7 @@ func newNode(raftAddress string,
 		notifyCommit, requestStatePool, proposals, raftAddress)
 	leaderTransfer := newPendingLeaderTransfer()
 	pscr := newPendingReadIndex(requestStatePool, readIndexes)
-	pcc := newPendingConfigChange(confChangeC)
+	pcc := newPendingConfigChange(confChangeC, notifyCommit)
 	ps := newPendingSnapshot(snapshotC)
 	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
 	rn := &node{
@@ -1016,9 +1016,19 @@ func (n *node) notifyCommittedEntries() {
 	tasks := n.toCommitQ.GetAll()
 	for _, t := range tasks {
 		for _, e := range t.Entries {
-			n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
+			if e.Type == pb.ApplicationEntry ||
+				e.Type == pb.EncodedEntry ||
+				e.Type == pb.MetadataEntry {
+				n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
+			} else if e.Type == pb.ConfigChangeEntry {
+				n.pendingConfigChange.committed(e.Key)
+			} else {
+				plog.Panicf("unknown committed entry type %s", e.Type)
+			}
 		}
 		n.toApplyQ.Add(t)
+	}
+	if len(tasks) > 0 {
 		n.engine.setApplyReady(n.clusterID)
 	}
 }

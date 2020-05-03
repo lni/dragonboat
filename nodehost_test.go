@@ -2839,6 +2839,35 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 	singleNodeHostTest(t, tf, fs)
 }
 
+func TestClientCanBeNotifiedOnCommittedConfigChange(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func() {
+		nh, _, err := createNotifyCommitNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, false, false, fs)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		defer nh.Stop()
+		waitForLeaderToBeElected(t, nh, 2)
+		rs, err := nh.RequestAddNode(2, 2, "localhost:3456", 0, time.Second)
+		if err != nil {
+			t.Fatalf("failed to request add node")
+		}
+		if rs.committedC == nil {
+			t.Fatalf("committedC not set")
+		}
+		cn := <-rs.ResultC()
+		if !cn.Committed() {
+			t.Fatalf("failed to get committed notification")
+		}
+		cn = <-rs.ResultC()
+		if !cn.Completed() {
+			t.Fatalf("failed to get completed notification")
+		}
+	}
+	runNodeHostTest(t, tf, fs)
+}
+
 func TestClientCanBeNotifiedOnCommittedProposals(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {

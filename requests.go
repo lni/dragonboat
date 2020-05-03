@@ -463,9 +463,10 @@ type configChangeRequest struct {
 }
 
 type pendingConfigChange struct {
-	mu          sync.Mutex
-	pending     *RequestState
-	confChangeC chan<- configChangeRequest
+	mu           sync.Mutex
+	pending      *RequestState
+	confChangeC  chan<- configChangeRequest
+	notifyCommit bool
 	logicalClock
 }
 
@@ -611,7 +612,8 @@ func (p *pendingSnapshot) apply(key uint64,
 	}
 }
 
-func newPendingConfigChange(confChangeC chan<- configChangeRequest) *pendingConfigChange {
+func newPendingConfigChange(confChangeC chan<- configChangeRequest,
+	notifyCommit bool) *pendingConfigChange {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
 		panic("invalid gcTick")
@@ -620,6 +622,7 @@ func newPendingConfigChange(confChangeC chan<- configChangeRequest) *pendingConf
 	return &pendingConfigChange{
 		confChangeC:  confChangeC,
 		logicalClock: lcu,
+		notifyCommit: notifyCommit,
 	}
 }
 
@@ -662,6 +665,9 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 		deadline:   p.getTick() + timeoutTick,
 		CompletedC: make(chan RequestResult, 1),
 	}
+	if p.notifyCommit {
+		req.committedC = make(chan RequestResult, 1)
+	}
 	select {
 	case p.confChangeC <- ccreq:
 		p.pending = req
@@ -685,6 +691,17 @@ func (p *pendingConfigChange) gc() {
 	if p.pending.deadline < now {
 		p.pending.notify(getTimeoutResult())
 		p.pending = nil
+	}
+}
+
+func (p *pendingConfigChange) committed(key uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending == nil {
+		return
+	}
+	if p.pending.key == key {
+		p.pending.committed()
 	}
 }
 
