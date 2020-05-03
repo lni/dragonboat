@@ -21,7 +21,6 @@ import (
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/vfs"
-	"github.com/lni/dragonboat/v3/plugin/pebble"
 	"github.com/lni/dragonboat/v3/plugin/rocksdb"
 )
 
@@ -49,5 +48,4 @@ func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactoryFunc) {
 func TestLogDBPluginsCanBeUsed(t *testing.T) {
 	testLogDBPluginCanBeUsed(t, rocksdb.NewLogDB)
 	testLogDBPluginCanBeUsed(t, rocksdb.NewBatchedLogDB)
-	testLogDBPluginCanBeUsed(t, pebble.NewBatchedLogDB)
 }

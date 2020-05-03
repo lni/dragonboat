@@ -38,6 +38,8 @@ func NewLogDB(cfg config.LogDBConfig,
 // instances. Raft entries are batched before they get stored into RocksDB, it
 // uses more memory than the default RocksDB based Log DB and provides better
 // throughput performance.
+//
+// Deprecated: NewBatchedLogDB has been deprecated, use NewLogDB instead.
 func NewBatchedLogDB(cfg config.LogDBConfig,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS

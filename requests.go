@@ -277,7 +277,7 @@ type SysOpState struct {
 // CompletedC returns a struct{} chan that is closed when the requested
 // operation is completed.
 //
-// // Depreciated: CompletedC() has been deprecated. Use ResultC() instead.
+// Deprecated: CompletedC() has been deprecated. Use ResultC() instead.
 func (o *SysOpState) CompletedC() <-chan struct{} {
 	return o.completedC
 }
@@ -302,7 +302,7 @@ type RequestState struct {
 	committedC      chan RequestResult
 	// CompletedC is a channel for delivering request result to users.
 	//
-	// Depreciated: CompletedC has been deprecated. Use ResultC() instead.
+	// Deprecated: CompletedC has been deprecated. Use ResultC() instead.
 	CompletedC chan RequestResult
 	node       *node
 	pool       *sync.Pool
