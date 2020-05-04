@@ -907,7 +907,7 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 		return 0, err
 	}
 	select {
-	case r := <-rs.ResultC():
+	case r := <-rs.AppliedC():
 		if r.Completed() {
 			return r.GetResult().Value, nil
 		} else if r.Rejected() {
@@ -1400,7 +1400,7 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 		return nil, err
 	}
 	select {
-	case s := <-rs.ResultC():
+	case s := <-rs.AppliedC():
 		if s.Timeout() {
 			return nil, ErrTimeout
 		} else if s.Completed() {
@@ -1985,7 +1985,7 @@ func (nh *NodeHost) logTransportLatency() {
 func checkRequestState(ctx context.Context,
 	rs *RequestState) (sm.Result, error) {
 	select {
-	case r := <-rs.ResultC():
+	case r := <-rs.AppliedC():
 		if r.Completed() {
 			return r.GetResult(), nil
 		} else if r.Rejected() {
