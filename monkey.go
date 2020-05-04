@@ -149,25 +149,20 @@ func (n *node) dumpRaftInfoToLog() {
 	}
 }
 
-// Set how many snapshot worker to use in step engine. This function is
-// expected to be called only during monkeytest, it doesn't exist when the
-// monkeytest tag is not set.
+// SetSnapshotWorkerCount sets how many snapshot workers to use in during
+// monkeytest.
 func SetSnapshotWorkerCount(count uint64) {
 	snapshotWorkerCount = count
 }
 
-// Set how many worker to use in step engine. This function is
-// expected to be called only during monkeytest, it doesn't exist when the
-// monkeytest tag is not set.
-func SetWorkerCount(count uint64) {
-	workerCount = count
+// SetStepWorkerCount sets how many step workers to use during monkeytest.
+func SetStepWorkerCount(count uint64) {
+	stepWorkerCount = count
 }
 
-// Set how many task worker to use in step engine. This function is
-// expected to be called only during monkeytest, it doesn't exist when the
-// monkeytest tag is not set.
-func SetTaskWorkerCount(count uint64) {
-	taskWorkerCount = count
+// SetApplyWorkerCount sets how many apply workers to use during monkeytest.
+func SetApplyWorkerCount(count uint64) {
+	applyWorkerCount = count
 }
 
 // testParitionState struct is used to manage the state whether nodehost is in
