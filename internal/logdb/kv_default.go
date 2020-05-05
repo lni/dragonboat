@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !dragonboat_no_rocksdb
 // +build !dragonboat_rocksdb_test
 // +build !dragonboat_memfs_test
 

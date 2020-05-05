@@ -99,7 +99,6 @@ $(error invalid DRAGONBOAT_LOGDB pebble_memfs)
 else ifeq ($(DRAGONBOAT_LOGDB),custom)
 $(info using custom lodb)
 GOCMD=$(GOEXEC)
-LOGDB_TAG=dragonboat_no_rocksdb
 else ifeq ($(DRAGONBOAT_LOGDB),)
 GOCMD=$(GOEXEC)
 ifneq ($(DRAGONBOAT_MEMFS_TEST),)
@@ -166,7 +165,6 @@ TESTTAGS="$(TESTTAGVALS)"
 all: unit-test-bin
 rebuild-all: clean unit-test-bin
 
-cross-rebuild: LOGDB_TAG=dragonboat_no_rocksdb
 cross-rebuild: cross-build-bin
 cross-rebuild-win: EXTNAME=win
 cross-rebuild-win: GO=GOOS=windows $(GOCMD)
