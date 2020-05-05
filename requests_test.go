@@ -356,7 +356,7 @@ func TestRequestStateSetToReadyToReleaseOnceNotified(t *testing.T) {
 	}
 }
 
-func TestReleasingNotReadyRequestStateWillPanic(t *testing.T) {
+func TestReleasingNotReadyRequestStateWillBeIgnored(t *testing.T) {
 	rs := RequestState{
 		key:         100,
 		clientID:    200,
@@ -366,12 +366,10 @@ func TestReleasingNotReadyRequestStateWillPanic(t *testing.T) {
 		node:        &node{},
 		pool:        &sync.Pool{},
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("no panic")
-		}
-	}()
 	rs.Release()
+	if rs.key != 100 || rs.deadline != 500 {
+		t.Fatalf("unexpectedly released")
+	}
 }
 
 func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {

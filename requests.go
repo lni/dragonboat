@@ -176,7 +176,7 @@ func (rr *RequestResult) Dropped() bool {
 // RequestResult instances not related to snapshots will cause panic.
 func (rr *RequestResult) SnapshotIndex() uint64 {
 	if !rr.snapshotResult {
-		panic("not a snapshot request result")
+		plog.Panicf("not a snapshot request result")
 	}
 	return rr.result.Value
 }
@@ -295,9 +295,10 @@ type RequestState struct {
 	//
 	// Deprecated: CompletedC has been deprecated. Use ResultC() or AppliedC()
 	// instead.
-	CompletedC chan RequestResult
-	node       *node
-	pool       *sync.Pool
+	CompletedC   chan RequestResult
+	node         *node
+	pool         *sync.Pool
+	notifyCommit bool
 }
 
 // AppliedC returns a channel of RequestResult for delivering request result.
@@ -324,8 +325,11 @@ func (r *RequestState) AppliedC() chan RequestResult {
 // Use AppliedC() when your client don't need extra notification when proposals
 // and config changes are committed.
 func (r *RequestState) ResultC() chan RequestResult {
-	if r.committedC == nil {
+	if !r.notifyCommit {
 		return r.CompletedC
+	}
+	if r.committedC == nil {
+		plog.Panicf("committedC is nil")
 	}
 	if r.aggrC != nil {
 		return r.aggrC
@@ -355,8 +359,11 @@ func (r *RequestState) ResultC() chan RequestResult {
 }
 
 func (r *RequestState) committed() {
-	if r.committedC == nil {
+	if !r.notifyCommit {
 		plog.Panicf("notify commit not enabled")
+	}
+	if r.committedC == nil {
+		plog.Panicf("committedC is nil")
 	}
 	select {
 	case r.committedC <- RequestResult{code: requestCommitted}:
@@ -366,22 +373,23 @@ func (r *RequestState) committed() {
 }
 
 func (r *RequestState) notify(result RequestResult) {
-	r.readyToRelease.set()
 	select {
 	case r.CompletedC <- result:
+		r.readyToRelease.set()
 	default:
 		plog.Panicf("RequestState.CompletedC is full")
 	}
 }
 
 // Release puts the RequestState instance back to an internal pool so it can be
-// reused. Release is normally called after RequestResult has been received
-// from the ResultC() channel.
+// reused. Release is normally called after all RequestResult values have been
+// received from the ResultC() channel.
 func (r *RequestState) Release() {
 	if r.pool != nil {
 		if !r.readyToRelease.ready() {
-			panic("RequestState released when never notified")
+			return
 		}
+		r.notifyCommit = false
 		r.deadline = 0
 		r.key = 0
 		r.seriesID = 0
@@ -397,13 +405,13 @@ func (r *RequestState) Release() {
 
 func (r *RequestState) mustBeReadyForLocalRead() {
 	if r.node == nil {
-		panic("invalid rs")
+		plog.Panicf("invalid rs")
 	}
 	if !r.node.initialized() {
 		plog.Panicf("%s not initialized", r.node.id())
 	}
 	if !r.readyToRead.ready() {
-		panic("not ready for local read")
+		plog.Panicf("not ready for local read")
 	}
 }
 
@@ -514,7 +522,7 @@ func (l *pendingLeaderTransfer) get() (uint64, bool) {
 func newPendingSnapshot(snapshotC chan<- rsm.SSRequest) *pendingSnapshot {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
-		panic("invalid gcTick")
+		plog.Panicf("invalid gcTick")
 	}
 	lcu := logicalClock{gcTick: gcTick}
 	return &pendingSnapshot{
@@ -560,9 +568,10 @@ func (p *pendingSnapshot) request(st rsm.SSReqType,
 		CompactionOverhead: overhead,
 	}
 	req := &RequestState{
-		key:        ssreq.Key,
-		deadline:   p.getTick() + timeoutTick,
-		CompletedC: make(chan RequestResult, 1),
+		key:          ssreq.Key,
+		deadline:     p.getTick() + timeoutTick,
+		CompletedC:   make(chan RequestResult, 1),
+		notifyCommit: false,
 	}
 	select {
 	case p.snapshotC <- ssreq:
@@ -593,7 +602,7 @@ func (p *pendingSnapshot) gc() {
 func (p *pendingSnapshot) apply(key uint64,
 	ignored bool, aborted bool, index uint64) {
 	if ignored && aborted {
-		panic("ignored && aborted")
+		plog.Panicf("ignored && aborted")
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -619,7 +628,7 @@ func newPendingConfigChange(confChangeC chan<- configChangeRequest,
 	notifyCommit bool) *pendingConfigChange {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
-		panic("invalid gcTick")
+		plog.Panicf("invalid gcTick")
 	}
 	lcu := logicalClock{gcTick: gcTick}
 	return &pendingConfigChange{
@@ -657,16 +666,17 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 	}
 	data, err := cc.Marshal()
 	if err != nil {
-		panic(err)
+		plog.Panicf("%v", err)
 	}
 	ccreq := configChangeRequest{
 		key:  random.LockGuardedRand.Uint64(),
 		data: data,
 	}
 	req := &RequestState{
-		key:        ccreq.key,
-		deadline:   p.getTick() + timeoutTick,
-		CompletedC: make(chan RequestResult, 1),
+		key:          ccreq.key,
+		deadline:     p.getTick() + timeoutTick,
+		CompletedC:   make(chan RequestResult, 1),
+		notifyCommit: p.notifyCommit,
 	}
 	if p.notifyCommit {
 		req.committedC = make(chan RequestResult, 1)
@@ -742,7 +752,7 @@ func newPendingReadIndex(pool *sync.Pool,
 	requests *readIndexQueue) *pendingReadIndex {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
-		panic("invalid gcTick")
+		plog.Panicf("invalid gcTick")
 	}
 	lcu := logicalClock{gcTick: gcTick}
 	p := &pendingReadIndex{
@@ -779,6 +789,7 @@ func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 		return nil, ErrTimeoutTooSmall
 	}
 	req := p.pool.Get().(*RequestState)
+	req.notifyCommit = false
 	req.key = p.nextUserCtx()
 	req.deadline = p.getTick() + timeoutTick
 	if len(req.CompletedC) > 0 {
@@ -850,7 +861,7 @@ func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
 	}
 	for _, req := range reqs {
 		if _, ok := p.pending[req.key]; ok {
-			panic("key already in the pending map")
+			plog.Panicf("key already in the pending map")
 		}
 		p.pending[req.key] = req
 		p.mapping[req.key] = system
@@ -868,7 +879,7 @@ func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
 		if val == system {
 			req, ok := p.pending[key]
 			if !ok {
-				panic("inconsistent data")
+				plog.Panicf("inconsistent data")
 			}
 			req.notify(getDroppedResult())
 			delete(p.pending, key)
@@ -897,7 +908,7 @@ func (p *pendingReadIndex) applied(applied uint64) {
 	for userKey, req := range p.pending {
 		systemCtx, ok := p.mapping[userKey]
 		if !ok {
-			panic("mapping is missing")
+			plog.Panicf("mapping is missing")
 		}
 		bindex, bok := p.batches[systemCtx]
 		if !bok || bindex > applied {
@@ -963,7 +974,7 @@ func getRandomGenerator(clusterID uint64,
 		pid, nano, clusterID, nodeID, addr, partition)
 	m := sha512.New()
 	if _, err := io.WriteString(m, seedStr); err != nil {
-		panic(err)
+		plog.Panicf("%v", err)
 	}
 	sum := m.Sum(nil)
 	seed := binary.LittleEndian.Uint64(sum)
@@ -1037,7 +1048,7 @@ func newPendingProposalShard(cfg config.Config,
 	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *proposalShard {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
-		panic("invalid gcTick")
+		plog.Panicf("invalid gcTick")
 	}
 	lcu := logicalClock{gcTick: gcTick}
 	p := &proposalShard{
@@ -1076,6 +1087,7 @@ func (p *proposalShard) propose(session *client.Session,
 	req.seriesID = session.SeriesID
 	req.key = entry.Key
 	req.deadline = p.getTick() + timeoutTick
+	req.notifyCommit = p.notifyCommit
 	if req.aggrC != nil {
 		plog.Panicf("aggrC not nil")
 	}
@@ -1083,7 +1095,7 @@ func (p *proposalShard) propose(session *client.Session,
 		req.CompletedC = make(chan RequestResult, 1)
 	}
 	if p.notifyCommit {
-		if len(req.committedC) > 0 {
+		if len(req.committedC) > 0 || req.committedC == nil {
 			req.committedC = make(chan RequestResult, 1)
 		}
 	} else {
