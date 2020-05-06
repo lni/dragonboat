@@ -161,6 +161,7 @@ GOBUILDTAGVALS+=$(LOGDB_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
 TESTTAGVALS+=$(GOBUILDTAGVALS)
 TESTTAGS="$(TESTTAGVALS)"
+EXTNAME=linux
 
 all: unit-test-bin
 rebuild-all: clean unit-test-bin
@@ -394,7 +395,7 @@ golangci-lint-check:
 clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
-	@rm -f test-*.bin test-*.freebsd test-*.win test-*.darwin
+	@rm -f test-*.*
 	@rm -f $(SEQUENCE_TESTING_BIN) \
 		$(DUMMY_TEST_BIN) \
 		$(DUMMY_TEST_BIN) \
