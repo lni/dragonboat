@@ -212,24 +212,6 @@ func (c RequestResultCode) String() string {
 	return requestResultCodeName[uint64(c)]
 }
 
-func getTerminatedResult() RequestResult {
-	return RequestResult{
-		code: requestTerminated,
-	}
-}
-
-func getTimeoutResult() RequestResult {
-	return RequestResult{
-		code: requestTimeout,
-	}
-}
-
-func getDroppedResult() RequestResult {
-	return RequestResult{
-		code: requestDropped,
-	}
-}
-
 type logicalClock struct {
 	ltick      uint64
 	lastGcTime uint64
@@ -373,11 +355,24 @@ func (r *RequestState) committed() {
 }
 
 func (r *RequestState) timeout() {
-	r.notify(getTimeoutResult())
+	rr := RequestResult{
+		code: requestTimeout,
+	}
+	r.notify(rr)
 }
 
 func (r *RequestState) terminated() {
-	r.notify(getTerminatedResult())
+	rr := RequestResult{
+		code: requestTerminated,
+	}
+	r.notify(rr)
+}
+
+func (r *RequestState) dropped() {
+	rr := RequestResult{
+		code: requestDropped,
+	}
+	r.notify(rr)
 }
 
 func (r *RequestState) notify(result RequestResult) {
@@ -733,7 +728,7 @@ func (p *pendingConfigChange) dropped(key uint64) {
 		return
 	}
 	if p.pending.key == key {
-		p.pending.notify(getDroppedResult())
+		p.pending.dropped()
 		p.pending = nil
 	}
 }
@@ -889,7 +884,7 @@ func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
 			if !ok {
 				plog.Panicf("inconsistent data")
 			}
-			req.notify(getDroppedResult())
+			req.dropped()
 			delete(p.pending, key)
 			toDelete = append(toDelete, key)
 		}
@@ -1197,7 +1192,7 @@ func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
 	tick := p.getTick()
 	ps := p.getProposal(clientID, seriesID, key, tick)
 	if ps != nil {
-		ps.notify(getDroppedResult())
+		ps.dropped()
 	}
 }
 
