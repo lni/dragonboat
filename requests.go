@@ -372,6 +372,14 @@ func (r *RequestState) committed() {
 	}
 }
 
+func (r *RequestState) timeout() {
+	r.notify(getTimeoutResult())
+}
+
+func (r *RequestState) terminated() {
+	r.notify(getTerminatedResult())
+}
+
 func (r *RequestState) notify(result RequestResult) {
 	select {
 	case r.CompletedC <- result:
@@ -541,7 +549,7 @@ func (p *pendingSnapshot) close() {
 	defer p.mu.Unlock()
 	p.snapshotC = nil
 	if p.pending != nil {
-		p.notify(getTerminatedResult())
+		p.pending.terminated()
 		p.pending = nil
 	}
 }
@@ -594,7 +602,7 @@ func (p *pendingSnapshot) gc() {
 	}
 	p.logicalClock.lastGcTime = now
 	if p.pending.deadline < now {
-		p.notify(getTimeoutResult())
+		p.pending.timeout()
 		p.pending = nil
 	}
 }
@@ -643,7 +651,7 @@ func (p *pendingConfigChange) close() {
 	defer p.mu.Unlock()
 	if p.confChangeC != nil {
 		if p.pending != nil {
-			p.pending.notify(getTerminatedResult())
+			p.pending.terminated()
 			p.pending = nil
 		}
 		close(p.confChangeC)
@@ -702,7 +710,7 @@ func (p *pendingConfigChange) gc() {
 	}
 	p.logicalClock.lastGcTime = now
 	if p.pending.deadline < now {
-		p.pending.notify(getTimeoutResult())
+		p.pending.timeout()
 		p.pending = nil
 	}
 }
@@ -775,12 +783,12 @@ func (p *pendingReadIndex) close() {
 	if p.requests != nil {
 		p.requests.close()
 		tmp := p.requests.get()
-		for _, v := range tmp {
-			v.notify(getTerminatedResult())
+		for _, rec := range tmp {
+			rec.terminated()
 		}
 	}
-	for _, v := range p.pending {
-		v.notify(getTerminatedResult())
+	for _, rec := range p.pending {
+		rec.terminated()
 	}
 }
 
@@ -955,7 +963,7 @@ func (p *pendingReadIndex) gc(now uint64) {
 		toDelete := make([]uint64, 0)
 		for userKey, req := range p.pending {
 			if req.deadline < now {
-				req.notify(getTimeoutResult())
+				req.timeout()
 				toDelete = append(toDelete, userKey)
 			}
 		}
@@ -1141,8 +1149,8 @@ func (p *proposalShard) close() {
 	if p.proposals != nil {
 		p.proposals.close()
 	}
-	for _, c := range p.pending {
-		c.notify(getTerminatedResult())
+	for _, rec := range p.pending {
+		rec.terminated()
 	}
 }
 
@@ -1228,9 +1236,9 @@ func (p *proposalShard) gcAt(now uint64) {
 	}
 	p.lastGcTime = now
 	deletedKeys := make(map[uint64]bool)
-	for key, pRec := range p.pending {
-		if pRec.deadline < now {
-			pRec.notify(getTimeoutResult())
+	for key, rec := range p.pending {
+		if rec.deadline < now {
+			rec.timeout()
 			deletedKeys[key] = true
 		}
 	}
