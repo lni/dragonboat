@@ -32,7 +32,7 @@ type TestUpdate struct {
 // Update updates the state machine.
 func (c *TestUpdate) Update(data []byte) (sm.Result, error) {
 	atomic.StoreUint32(&c.val, 1)
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 20; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 	atomic.StoreUint32(&c.val, 0)
