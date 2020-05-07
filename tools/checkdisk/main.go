@@ -15,24 +15,43 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v3/raftio"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/syncutil"
+	gvfs "github.com/lni/goutils/vfs"
 )
 
 const (
 	dataDirectoryName = "checkdisk-data-safe-to-delete"
 )
 
-type dummyStateMachine struct {
+var batched = flag.Bool("batched-logdb", false, "use batched logdb")
+var cpupprof = flag.Bool("cpu-profiling", false, "run CPU profiling")
+var mempprof = flag.Bool("mem-profiling", false, "run mem profiling")
+var inmemfs = flag.Bool("inmem-fs", false, "use in-memory filesystem")
+
+func newBatchedLogDB(cfg config.LogDBConfig,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	fs := vfs.DefaultFS
+	return logdb.NewLogDB(cfg, dirs, lldirs, true, false, fs, pebble.NewKVStore)
 }
+
+type dummyStateMachine struct{}
 
 func newDummyStateMachine(clusterID uint64, nodeID uint64) sm.IStateMachine {
 	return &dummyStateMachine{}
@@ -60,7 +79,40 @@ func (s *dummyStateMachine) RecoverFromSnapshot(r io.Reader,
 func (s *dummyStateMachine) Close() error { return nil }
 
 func main() {
-	os.RemoveAll(dataDirectoryName)
+	flag.Parse()
+	fs := gvfs.Default
+	if *inmemfs {
+		log.Println("using in-memory fs")
+		fs = gvfs.NewMem()
+	}
+	if *cpupprof {
+		f, err := os.Create("cpu.pprof")
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+		log.Println("cpu profile will be saved into file cpu.pprof")
+	}
+	if *mempprof {
+		defer func() {
+			f, err := os.Create("mem.pprof")
+			if err != nil {
+				log.Fatal("could not create memory profile: ", err)
+			}
+			defer f.Close()
+			runtime.GC()
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile: ", err)
+			}
+		}()
+		log.Println("memory profile will be saved into file mem.pprof")
+	}
+	fs.RemoveAll(dataDirectoryName)
+	defer fs.RemoveAll(dataDirectoryName)
 	logger.GetLogger("raft").SetLevel(logger.WARNING)
 	logger.GetLogger("rsm").SetLevel(logger.WARNING)
 	logger.GetLogger("logdb").SetLevel(logger.WARNING)
@@ -70,6 +122,11 @@ func main() {
 		NodeHostDir:    dataDirectoryName,
 		RTTMillisecond: 200,
 		RaftAddress:    "localhost:26000",
+		FS:             fs,
+	}
+	if *batched {
+		log.Println("using batched logdb")
+		nhc.LogDBFactory = newBatchedLogDB
 	}
 	nh, err := dragonboat.NewNodeHost(nhc)
 	if err != nil {
