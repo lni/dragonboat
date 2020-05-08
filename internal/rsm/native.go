@@ -251,7 +251,7 @@ func (ds *NativeSM) SaveSnapshot(meta *SSMeta,
 }
 
 func (ds *NativeSM) saveDummySnapshot(w io.Writer, session []byte) error {
-	if !ds.sm.OnDiskStateMachine() {
+	if !ds.config.IsWitness && !ds.sm.OnDiskStateMachine() {
 		panic("saveDummySnapshot called on non OnDiskStateMachine")
 	}
 	if _, err := w.Write(session); err != nil {
