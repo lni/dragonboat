@@ -404,13 +404,13 @@ func (n *node) requestLeaderTransfer(nodeID uint64) error {
 
 func (n *node) requestSnapshot(opt SnapshotOption,
 	timeoutTick uint64) (*RequestState, error) {
-	st := rsm.UserRequestedSnapshot
+	st := rsm.UserRequested
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
 	if opt.Exported {
 		plog.Infof("%s called export snapshot", n.id())
-		st = rsm.ExportedSnapshot
+		st = rsm.Exported
 		exist, err := fileutil.Exist(opt.ExportPath, n.snapshotter.fs)
 		if err != nil {
 			return nil, err
@@ -651,8 +651,7 @@ func saveSnapshotAborted(err error) bool {
 func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	if !req.IsExportedSnapshot() &&
-		n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
+	if !req.Exported() && n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
 		// a snapshot has been pushed to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
 		return 0, nil
@@ -687,7 +686,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, err
 	}
-	if req.IsExportedSnapshot() {
+	if req.Exported() {
 		return ss.Index, nil
 	}
 	if !ss.Validate(n.snapshotter.fs) {
@@ -1180,7 +1179,7 @@ func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
 		return false
 	}
 	si := n.ss.getReqSnapshotIndex()
-	if !req.IsExportedSnapshot() && lastApplied == si {
+	if !req.Exported() && lastApplied == si {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}

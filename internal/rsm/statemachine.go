@@ -56,14 +56,14 @@ var (
 type SSReqType uint64
 
 const (
-	// PeriodicSnapshot is the value to indicate periodic snapshot.
-	PeriodicSnapshot SSReqType = iota
-	// UserRequestedSnapshot is the value to indicate user requested snapshot.
-	UserRequestedSnapshot
-	// ExportedSnapshot is the value to indicate exported snapshot.
-	ExportedSnapshot
-	// StreamSnapshot is the value to indicate snapshot streaming.
-	StreamSnapshot
+	// Periodic is the value to indicate periodic snapshot.
+	Periodic SSReqType = iota
+	// UserRequested is the value to indicate user requested snapshot.
+	UserRequested
+	// Exported is the value to indicate exported snapshot.
+	Exported
+	// Streaming is the value to indicate snapshot streaming.
+	Streaming
 )
 
 // SSRequest is the type for describing the details of a snapshot request.
@@ -75,16 +75,16 @@ type SSRequest struct {
 	CompactionOverhead uint64
 }
 
-// IsExportedSnapshot returns a boolean value indicating whether the snapshot
-// request is to create an exported snapshot.
-func (r *SSRequest) IsExportedSnapshot() bool {
-	return r.Type == ExportedSnapshot
+// Exported returns a boolean value indicating whether the snapshot request
+// is to create an exported snapshot.
+func (r *SSRequest) Exported() bool {
+	return r.Type == Exported
 }
 
-// IsStreamingSnapshot returns a boolean value indicating whether the snapshot
-// request is to stream snapshot.
-func (r *SSRequest) IsStreamingSnapshot() bool {
-	return r.Type == StreamSnapshot
+// Streaming returns a boolean value indicating whether the snapshot request
+// is to stream snapshot.
+func (r *SSRequest) Streaming() bool {
+	return r.Type == Streaming
 }
 
 // SSMeta is the metadata of a snapshot.
@@ -152,7 +152,7 @@ type ISnapshotter interface {
 	GetFilePath(uint64) string
 	Stream(IStreamable, *SSMeta, pb.IChunkSink) error
 	Save(ISavable, *SSMeta) (*pb.Snapshot, *server.SSEnv, error)
-	Load(ILoadableSessions, ILoadableSM, string, []sm.SnapshotFile) error
+	Load(ILoadable, IRecoverable, string, []sm.SnapshotFile) error
 	IsNoSnapshotError(error) bool
 }
 
@@ -194,7 +194,7 @@ func NewStateMachine(sm IManagedStateMachine,
 	return &StateMachine{
 		snapshotter: snapshotter,
 		sm:          sm,
-		onDiskSM:    sm.OnDiskStateMachine(),
+		onDiskSM:    sm.OnDisk(),
 		taskQ:       NewTaskQueue(),
 		node:        node,
 		sessions:    NewSessionManager(),
@@ -538,7 +538,7 @@ func (s *StateMachine) GetMembership() pb.Membership {
 // Concurrent returns a boolean flag indicating whether the state machine is
 // capable of taking concurrent snapshot.
 func (s *StateMachine) Concurrent() bool {
-	return s.sm.ConcurrentSnapshot()
+	return s.sm.Concurrent()
 }
 
 // OnDiskStateMachine returns a boolean flag indicating whether it is an on
@@ -550,7 +550,7 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 // SaveSnapshot creates a snapshot.
 func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
 	*server.SSEnv, error) {
-	if req.IsStreamingSnapshot() {
+	if req.Streaming() {
 		panic("invalid snapshot request")
 	}
 	if s.isWitness {
@@ -646,8 +646,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 }
 
 func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
-	return s.OnDiskStateMachine() &&
-		!r.IsExportedSnapshot() && !r.IsStreamingSnapshot()
+	return s.OnDiskStateMachine() && !r.Exported() && !r.Streaming()
 }
 
 func (s *StateMachine) logMembership(name string,
@@ -677,7 +676,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		Request:         r,
 		Session:         buf,
 		Membership:      s.members.get(),
-		Type:            s.sm.StateMachineType(),
+		Type:            s.sm.Type(),
 		CompressionType: ct,
 	}
 	plog.Infof("%s generating %s", s.id(), s.ssid(meta.Index))
@@ -710,8 +709,7 @@ func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 		panic("s.index < s.snapshotIndex")
 	}
 	if !s.OnDiskStateMachine() {
-		if !req.IsExportedSnapshot() &&
-			s.index > 0 && s.index == s.snapshotIndex {
+		if !req.Exported() && s.index > 0 && s.index == s.snapshotIndex {
 			return raft.ErrSnapshotOutOfDate
 		}
 	}
@@ -724,7 +722,7 @@ func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot(SSRequest{Type: StreamSnapshot})
+		meta, err = s.prepareSnapshot(SSRequest{Type: Streaming})
 		return err
 	}(); err != nil {
 		return err
@@ -781,7 +779,7 @@ func (s *StateMachine) prepareSnapshot(req SSRequest) (*SSMeta, error) {
 	var err error
 	var ctx interface{}
 	if s.Concurrent() {
-		ctx, err = s.sm.PrepareSnapshot()
+		ctx, err = s.sm.Prepare()
 		if err != nil {
 			return nil, err
 		}

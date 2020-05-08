@@ -190,7 +190,7 @@ func (s *testSnapshotter) Stream(streamable IStreamable,
 			panic(err)
 		}
 	}()
-	return streamable.StreamSnapshot(meta.Ctx, writer)
+	return streamable.Stream(meta.Ctx, writer)
 }
 
 func (s *testSnapshotter) Save(savable ISavable,
@@ -216,7 +216,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	if _, err := savable.SaveSnapshot(&SSMeta{}, cw, session, nil); err != nil {
+	if _, err := savable.Save(&SSMeta{}, cw, session, nil); err != nil {
 		return nil, env, err
 	}
 	ss = &pb.Snapshot{
@@ -228,9 +228,8 @@ func (s *testSnapshotter) Save(savable ISavable,
 	return ss, env, nil
 }
 
-func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
-	loadableSM ILoadableSM,
-	fp string, fs []sm.SnapshotFile) error {
+func (s *testSnapshotter) Load(loadable ILoadable,
+	recoverable IRecoverable, fp string, fs []sm.SnapshotFile) error {
 	reader, err := NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
@@ -243,10 +242,10 @@ func (s *testSnapshotter) Load(loadableSessions ILoadableSessions,
 		return err
 	}
 	v := SSVersion(header.Version)
-	if err := loadableSessions.LoadSessions(reader, v); err != nil {
+	if err := loadable.LoadSessions(reader, v); err != nil {
 		return err
 	}
-	if err := loadableSM.RecoverFromSnapshot(reader, fs); err != nil {
+	if err := recoverable.Recover(reader, fs); err != nil {
 		return err
 	}
 	reader.ValidatePayload(header)
@@ -2066,22 +2065,22 @@ func (t *testManagedStateMachine) Sync() error {
 	t.synced = true
 	return nil
 }
-func (t *testManagedStateMachine) GetHash() (uint64, error)              { return 0, nil }
-func (t *testManagedStateMachine) PrepareSnapshot() (interface{}, error) { return nil, nil }
-func (t *testManagedStateMachine) SaveSnapshot(*SSMeta,
+func (t *testManagedStateMachine) GetHash() (uint64, error)      { return 0, nil }
+func (t *testManagedStateMachine) Prepare() (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) Save(*SSMeta,
 	io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error) {
 	return false, nil
 }
-func (t *testManagedStateMachine) RecoverFromSnapshot(io.Reader, []sm.SnapshotFile) error {
+func (t *testManagedStateMachine) Recover(io.Reader, []sm.SnapshotFile) error {
 	return nil
 }
-func (t *testManagedStateMachine) StreamSnapshot(interface{}, io.Writer) error { return nil }
-func (t *testManagedStateMachine) Offloaded(From) bool                         { return false }
-func (t *testManagedStateMachine) Loaded(From)                                 {}
-func (t *testManagedStateMachine) DestroyedC() <-chan struct{}                 { return nil }
-func (t *testManagedStateMachine) ConcurrentSnapshot() bool                    { return false }
-func (t *testManagedStateMachine) OnDiskStateMachine() bool                    { return false }
-func (t *testManagedStateMachine) StateMachineType() pb.StateMachineType       { return 0 }
+func (t *testManagedStateMachine) Stream(interface{}, io.Writer) error { return nil }
+func (t *testManagedStateMachine) Offloaded(From) bool                 { return false }
+func (t *testManagedStateMachine) Loaded(From)                         {}
+func (t *testManagedStateMachine) DestroyedC() <-chan struct{}         { return nil }
+func (t *testManagedStateMachine) Concurrent() bool                    { return false }
+func (t *testManagedStateMachine) OnDisk() bool                        { return false }
+func (t *testManagedStateMachine) Type() pb.StateMachineType           { return 0 }
 func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 	if !t.corruptIndex {
 		t.first = ents[0].Index
@@ -2351,12 +2350,12 @@ func TestIsDummySnapshot(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		s := &StateMachine{onDiskSM: tt.onDisk}
-		r := SSRequest{Type: PeriodicSnapshot}
+		r := SSRequest{Type: Periodic}
 		if tt.exported {
-			r.Type = ExportedSnapshot
+			r.Type = Exported
 		}
 		if tt.streaming {
-			r.Type = StreamSnapshot
+			r.Type = Streaming
 		}
 		if s.isDummySnapshot(r) != tt.dummy {
 			t.Errorf("%d, is dummy test failed", idx)

@@ -93,7 +93,7 @@ func (s *snapshotter) Stream(streamable rsm.IStreamable,
 	meta *rsm.SSMeta, sink pb.IChunkSink) error {
 	ct := compressionType(meta.CompressionType)
 	cw := dio.NewCompressor(ct, rsm.NewChunkWriter(sink, meta))
-	if err := streamable.StreamSnapshot(meta.Ctx, cw); err != nil {
+	if err := streamable.Stream(meta.Ctx, cw); err != nil {
 		sink.Stop()
 		return err
 	}
@@ -127,7 +127,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	dummy, err := savable.SaveSnapshot(meta, sw, session, files)
+	dummy, err := savable.Save(meta, sw, session, files)
 	if err != nil {
 		return nil, env, err
 	}
@@ -149,8 +149,8 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	return ss, env, nil
 }
 
-func (s *snapshotter) Load(sessions rsm.ILoadableSessions,
-	asm rsm.ILoadableSM, fp string, fs []sm.SnapshotFile) (err error) {
+func (s *snapshotter) Load(sessions rsm.ILoadable,
+	asm rsm.IRecoverable, fp string, fs []sm.SnapshotFile) (err error) {
 	reader, err := rsm.NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
@@ -171,7 +171,7 @@ func (s *snapshotter) Load(sessions rsm.ILoadableSessions,
 	if err := sessions.LoadSessions(cr, v); err != nil {
 		return err
 	}
-	if err := asm.RecoverFromSnapshot(cr, fs); err != nil {
+	if err := asm.Recover(cr, fs); err != nil {
 		return err
 	}
 	reader.ValidatePayload(header)
@@ -193,7 +193,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot, req rsm.SSRequest) error {
 		}
 		return err
 	}
-	if !req.IsExportedSnapshot() {
+	if !req.Exported() {
 		if err := s.saveToLogDB(snapshot); err != nil {
 			return err
 		}
@@ -368,7 +368,7 @@ func (s *snapshotter) getSSEnv(index uint64) *server.SSEnv {
 }
 
 func (s *snapshotter) getCustomSSEnv(meta *rsm.SSMeta) *server.SSEnv {
-	if meta.Request.IsExportedSnapshot() {
+	if meta.Request.Exported() {
 		if len(meta.Request.Path) == 0 {
 			plog.Panicf("Path is empty when exporting snapshot")
 		}

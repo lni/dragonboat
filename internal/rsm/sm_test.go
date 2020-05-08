@@ -80,7 +80,7 @@ func TestRecoverFromSnapshotCanComplete(t *testing.T) {
 	buf := make([]byte, 16)
 	reader := bytes.NewBuffer(buf)
 	stopc := make(chan struct{})
-	if err := od.RecoverFromSnapshot(reader, nil, stopc); err != nil {
+	if err := od.Recover(reader, nil, stopc); err != nil {
 		t.Errorf("recover from snapshot failed %v", err)
 	}
 }
