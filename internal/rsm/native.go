@@ -249,7 +249,7 @@ func (ds *NativeSM) Save(meta *SSMeta,
 }
 
 func (ds *NativeSM) saveDummy(w io.Writer, session []byte) error {
-	if !ds.sm.OnDisk() {
+	if !ds.config.IsWitness && !ds.sm.OnDisk() {
 		panic("saveDummySnapshot called on non OnDiskStateMachine")
 	}
 	if _, err := w.Write(session); err != nil {
