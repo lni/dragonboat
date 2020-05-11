@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"sync/atomic"
 	"time"
 
 	"github.com/lni/dragonboat/v3"
@@ -40,6 +41,7 @@ const (
 	dataDirectoryName = "checkdisk-data-safe-to-delete"
 )
 
+var read = flag.Bool("enable-read", false, "enable read")
 var batched = flag.Bool("batched-logdb", false, "use batched logdb")
 var cpupprof = flag.Bool("cpu-profiling", false, "run CPU profiling")
 var mempprof = flag.Bool("mem-profiling", false, "run mem profiling")
@@ -218,10 +220,38 @@ func main() {
 			}
 		}, i)
 	}
+	reads := uint64(0)
+	if *read {
+		for i := uint64(0); i < uint64(*clientcount); i++ {
+			stopper.RunPWorker(func(arg interface{}) {
+				workerID := arg.(uint64)
+				clusterID := (workerID % 48) + 1
+				for {
+					for j := 0; j < 32; j++ {
+						rs, err := nh.ReadIndex(clusterID, 4*time.Second)
+						if err != nil {
+							panic(err)
+						}
+						v := <-rs.ResultC()
+						if v.Completed() {
+							atomic.AddUint64(&reads, 1)
+						}
+					}
+					select {
+					case <-doneCh:
+						return
+					default:
+					}
+				}
+			}, i)
+		}
+	}
 	stopper.Stop()
 	total := uint64(0)
 	for _, v := range results {
 		total = total + v
 	}
+	rv := atomic.LoadUint64(&reads)
+	fmt.Printf("read %d, %d reads per second\n", rv, rv/uint64(*seconds))
 	fmt.Printf("total %d, %d proposals per second\n", total, total/uint64(*seconds))
 }
