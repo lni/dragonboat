@@ -44,6 +44,10 @@ var batched = flag.Bool("batched-logdb", false, "use batched logdb")
 var cpupprof = flag.Bool("cpu-profiling", false, "run CPU profiling")
 var mempprof = flag.Bool("mem-profiling", false, "run mem profiling")
 var inmemfs = flag.Bool("inmem-fs", false, "use in-memory filesystem")
+var clientcount = flag.Int("num-of-clients", 10000, "number of clients to use")
+var seconds = flag.Int("seconds-to-run", 60, "number of seconds to run")
+var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
+var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
 
 func newBatchedLogDB(cfg config.LogDBConfig,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
@@ -67,13 +71,20 @@ func (s *dummyStateMachine) Update(data []byte) (sm.Result, error) {
 
 func (s *dummyStateMachine) SaveSnapshot(w io.Writer,
 	fc sm.ISnapshotFileCollection, done <-chan struct{}) error {
-	panic("not implemented")
+	v := make([]byte, 4)
+	if _, err := w.Write(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *dummyStateMachine) RecoverFromSnapshot(r io.Reader,
-	files []sm.SnapshotFile,
-	done <-chan struct{}) error {
-	panic("not implemented")
+	files []sm.SnapshotFile, done <-chan struct{}) error {
+	v := make([]byte, 4)
+	if _, err := r.Read(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *dummyStateMachine) Close() error { return nil }
@@ -124,6 +135,10 @@ func main() {
 		RaftAddress:    "localhost:26000",
 		FS:             fs,
 	}
+	if *tiny {
+		log.Println("using tiny LogDB memory limit")
+		nhc.LogDBConfig = config.GetTinyMemLogDBConfig()
+	}
 	if *batched {
 		log.Println("using batched logdb")
 		nhc.LogDBFactory = newBatchedLogDB
@@ -139,7 +154,7 @@ func main() {
 		ElectionRTT:     10,
 		HeartbeatRTT:    1,
 		CheckQuorum:     true,
-		SnapshotEntries: 0,
+		SnapshotEntries: uint64(*ckpt),
 	}
 	nodes := make(map[uint64]string)
 	nodes[1] = nhc.RaftAddress
@@ -165,9 +180,9 @@ func main() {
 			}
 		}
 	}
-	fmt.Printf("all clusters are ready, will keep making proposals for 60 seconds\n")
+	fmt.Printf("clusters are ready, will run for %d seconds\n", *seconds)
 	doneCh := make(chan struct{}, 1)
-	timer := time.NewTimer(60 * time.Second)
+	timer := time.NewTimer(time.Duration(*seconds) * time.Second)
 	defer timer.Stop()
 	go func() {
 		<-timer.C
@@ -175,8 +190,8 @@ func main() {
 	}()
 	// keep proposing for 60 seconds
 	stopper := syncutil.NewStopper()
-	results := make([]uint64, 10000)
-	for i := uint64(0); i < 10000; i++ {
+	results := make([]uint64, *clientcount)
+	for i := uint64(0); i < uint64(*clientcount); i++ {
 		stopper.RunPWorker(func(arg interface{}) {
 			workerID := arg.(uint64)
 			clusterID := (workerID % 48) + 1
@@ -208,5 +223,5 @@ func main() {
 	for _, v := range results {
 		total = total + v
 	}
-	fmt.Printf("total %d, %d proposals per second\n", total, total/60)
+	fmt.Printf("total %d, %d proposals per second\n", total, total/uint64(*seconds))
 }
