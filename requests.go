@@ -832,7 +832,7 @@ func (p *pendingReadIndex) nextCtx() pb.SystemCtx {
 	p.systemGcTime = append(p.systemGcTime,
 		systemCtxGcTime{
 			ctx:        v,
-			expireTime: p.getTick() + 1000,
+			expireTime: p.getTick() + 30,
 		})
 	return v
 }
@@ -908,6 +908,7 @@ func (p *pendingReadIndex) applied(applied uint64) {
 	}
 	now := p.getTick()
 	toDelete := make([]uint64, 0)
+	batchDelete := make(map[pb.SystemCtx]struct{})
 	for userKey, req := range p.pending {
 		systemCtx, ok := p.mapping[userKey]
 		if !ok {
@@ -918,6 +919,7 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			continue
 		} else {
 			toDelete = append(toDelete, userKey)
+			batchDelete[systemCtx] = struct{}{}
 			var v RequestResult
 			if req.deadline > now {
 				req.readyToRead.set()
@@ -927,6 +929,25 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			}
 			req.notify(v)
 		}
+	}
+	toDeleteCount := 0
+	for _, v := range p.systemGcTime {
+		index, ok := p.batches[v.ctx]
+		if ok {
+			if index < applied {
+				toDeleteCount++
+			} else {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if toDeleteCount > 0 {
+		p.systemGcTime = p.systemGcTime[toDeleteCount:]
+	}
+	for v := range batchDelete {
+		delete(p.batches, v)
 	}
 	for _, v := range toDelete {
 		delete(p.pending, v)

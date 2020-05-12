@@ -1022,8 +1022,11 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	if len(pp.mapping) != 0 {
 		t.Errorf("leaking records")
 	}
-	if len(pp.batches) == 0 {
-		t.Errorf("batches is not suppose to be empty")
+	if len(pp.batches) != 0 {
+		t.Errorf("batches is not empty")
+	}
+	if len(pp.systemGcTime) != 0 {
+		t.Errorf("systemGcTime is not empty")
 	}
 }
 
@@ -1108,7 +1111,7 @@ func TestExpiredSystemGcWillBeCollected(t *testing.T) {
 	if len(pp.systemGcTime) != 0 {
 		t.Fatalf("systemGcTime is not empty")
 	}
-	expireTick := uint64(1000)
+	expireTick := uint64(30)
 	for i := uint64(0); i < expireTick+1; i++ {
 		pp.nextCtx()
 		pp.tick()
