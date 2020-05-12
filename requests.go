@@ -448,11 +448,6 @@ type pendingProposal struct {
 	ps     uint64
 }
 
-type systemCtxGcTime struct {
-	ctx        pb.SystemCtx
-	expireTime uint64
-}
-
 type pendingReadIndex struct {
 	seqKey uint64
 	mu     sync.Mutex
@@ -461,13 +456,11 @@ type pendingReadIndex struct {
 	// system ctx->appliedIndex
 	batches map[pb.SystemCtx]uint64
 	// user generated ctx->batched system ctx
-	mapping map[uint64]pb.SystemCtx
-	// cached system ctx used to call node.ReadIndex
-	system       pb.SystemCtx
-	systemGcTime []systemCtxGcTime
-	requests     *readIndexQueue
-	stopped      bool
-	pool         *sync.Pool
+	mapping  map[uint64]pb.SystemCtx
+	system   *pb.SystemCtx
+	requests *readIndexQueue
+	stopped  bool
+	pool     *sync.Pool
 	logicalClock
 }
 
@@ -760,14 +753,12 @@ func newPendingReadIndex(pool *sync.Pool,
 	lcu := logicalClock{gcTick: gcTick}
 	p := &pendingReadIndex{
 		pending:      make(map[uint64]*RequestState),
-		batches:      make(map[pb.SystemCtx]uint64),
 		mapping:      make(map[uint64]pb.SystemCtx),
-		systemGcTime: make([]systemCtxGcTime, 0),
+		batches:      make(map[pb.SystemCtx]uint64),
 		requests:     requests,
 		logicalClock: lcu,
 		pool:         pool,
 	}
-	p.system = p.nextSystemCtx()
 	return p
 }
 
@@ -813,34 +804,39 @@ func (p *pendingReadIndex) nextUserCtx() uint64 {
 }
 
 func (p *pendingReadIndex) nextSystemCtx() pb.SystemCtx {
+	et := p.getTick() + 30
 	for {
 		v := pb.SystemCtx{
 			Low:  random.LockGuardedRand.Uint64(),
-			High: random.LockGuardedRand.Uint64(),
+			High: et,
 		}
-		if v.Low != 0 && v.High != 0 {
+		if v.Low != 0 {
 			return v
 		}
 	}
 }
 
+func (p *pendingReadIndex) getSystemCtx() pb.SystemCtx {
+	if p.system == nil {
+		sysCtx := p.nextSystemCtx()
+		p.system = &sysCtx
+	}
+	return *p.system
+}
+
 func (p *pendingReadIndex) nextCtx() pb.SystemCtx {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	v := p.system
-	p.system = p.nextSystemCtx()
-	p.systemGcTime = append(p.systemGcTime,
-		systemCtxGcTime{
-			ctx:        v,
-			expireTime: p.getTick() + 30,
-		})
+	v := p.getSystemCtx()
+	sysCtx := p.nextSystemCtx()
+	p.system = &sysCtx
 	return v
 }
 
 func (p *pendingReadIndex) peepNextCtx() pb.SystemCtx {
 	p.mu.Lock()
-	v := p.system
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	v := p.getSystemCtx()
 	return v
 }
 
@@ -849,10 +845,10 @@ func (p *pendingReadIndex) addReadyToRead(readStates []pb.ReadyToRead) {
 		return
 	}
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	for _, v := range readStates {
 		p.batches[v.SystemCtx] = v.Index
 	}
-	p.mu.Unlock()
 }
 
 func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
@@ -897,13 +893,11 @@ func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
 
 func (p *pendingReadIndex) applied(applied uint64) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.stopped {
-		p.mu.Unlock()
 		return
 	}
-	if len(p.pending) == 0 &&
-		uint64(len(p.systemGcTime)) < 1000 {
-		p.mu.Unlock()
+	if len(p.pending) == 0 && len(p.mapping) == 0 {
 		return
 	}
 	now := p.getTick()
@@ -930,22 +924,6 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			req.notify(v)
 		}
 	}
-	toDeleteCount := 0
-	for _, v := range p.systemGcTime {
-		index, ok := p.batches[v.ctx]
-		if ok {
-			if index < applied {
-				toDeleteCount++
-			} else {
-				break
-			}
-		} else {
-			break
-		}
-	}
-	if toDeleteCount > 0 {
-		p.systemGcTime = p.systemGcTime[toDeleteCount:]
-	}
 	for v := range batchDelete {
 		delete(p.batches, v)
 	}
@@ -954,27 +932,14 @@ func (p *pendingReadIndex) applied(applied uint64) {
 		delete(p.mapping, v)
 	}
 	if now-p.logicalClock.lastGcTime < p.gcTick {
-		p.mu.Unlock()
 		return
 	}
 	p.logicalClock.lastGcTime = now
 	p.gc(now)
-	p.mu.Unlock()
 }
 
 func (p *pendingReadIndex) gc(now uint64) {
-	toDeleteCount := 0
-	for _, v := range p.systemGcTime {
-		if v.expireTime < now {
-			delete(p.batches, v.ctx)
-			toDeleteCount++
-		} else {
-			break
-		}
-	}
-	if toDeleteCount > 0 {
-		p.systemGcTime = p.systemGcTime[toDeleteCount:]
-	}
+	// user request timeout
 	if len(p.pending) > 0 {
 		toDelete := make([]uint64, 0)
 		for userKey, req := range p.pending {
@@ -986,6 +951,27 @@ func (p *pendingReadIndex) gc(now uint64) {
 		for _, v := range toDelete {
 			delete(p.pending, v)
 			delete(p.mapping, v)
+		}
+	}
+	// batch timeout
+	if len(p.mapping) > 0 {
+		sysDelete := make(map[pb.SystemCtx]struct{})
+		keyDelete := make([]uint64, 0)
+		for key, sysCtx := range p.mapping {
+			if sysCtx.High < now {
+				sysDelete[sysCtx] = struct{}{}
+				keyDelete = append(keyDelete, key)
+				if req, ok := p.pending[key]; ok {
+					req.timeout()
+				}
+			}
+		}
+		for _, v := range keyDelete {
+			delete(p.pending, v)
+			delete(p.mapping, v)
+		}
+		for sysCtx := range sysDelete {
+			delete(p.batches, sysCtx)
 		}
 	}
 }

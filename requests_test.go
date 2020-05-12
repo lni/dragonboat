@@ -1025,9 +1025,6 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	if len(pp.batches) != 0 {
 		t.Errorf("batches is not empty")
 	}
-	if len(pp.systemGcTime) != 0 {
-		t.Errorf("systemGcTime is not empty")
-	}
 }
 
 func TestPendingReadIndexCanBeDropped(t *testing.T) {
@@ -1103,50 +1100,6 @@ func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	}
 	if len(pp.pending) != 0 || len(pp.mapping) != 0 {
 		t.Errorf("leaking records")
-	}
-}
-
-func TestExpiredSystemGcWillBeCollected(t *testing.T) {
-	pp, _ := getPendingSCRead()
-	if len(pp.systemGcTime) != 0 {
-		t.Fatalf("systemGcTime is not empty")
-	}
-	expireTick := uint64(30)
-	for i := uint64(0); i < expireTick+1; i++ {
-		pp.nextCtx()
-		pp.tick()
-	}
-	if uint64(len(pp.systemGcTime)) != expireTick+1 {
-		t.Errorf("unexpected system gc time length")
-	}
-	et := pp.systemGcTime[1].expireTime
-	ctx := pp.systemGcTime[1].ctx
-	now := pp.getTick()
-	pp.gc(now)
-	if uint64(len(pp.systemGcTime)) != expireTick {
-		t.Errorf("unexpected system gc time length")
-	}
-	if pp.systemGcTime[0].expireTime != et ||
-		pp.systemGcTime[0].ctx != ctx {
-		t.Errorf("unexpected systemGcTime rec")
-	}
-}
-
-func TestSystemGcTimeInSCReadCanBeCleanedUp(t *testing.T) {
-	pp, _ := getPendingSCRead()
-	for i := 0; i < 100000; i++ {
-		pp.nextCtx()
-	}
-	if len(pp.systemGcTime) < 100000 {
-		t.Errorf("len(pp.systemGcTime)=%d, want >100000", len(pp.systemGcTime))
-	}
-	for i := 0; i < 100000; i++ {
-		pp.tick()
-		pp.applied(499)
-	}
-	pp.applied(499)
-	if len(pp.systemGcTime) != 0 {
-		t.Errorf("not cleaning up systemGcTime")
 	}
 }
 

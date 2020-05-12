@@ -69,7 +69,7 @@ func mustComplete(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.ResultC():
 		if !v.Completed() {
-			t.Fatalf("got %v, want %d", v, requestCompleted)
+			t.Fatalf("got %v, want %v", v.code, requestCompleted)
 		}
 	default:
 		t.Fatalf("failed to complete the proposal")
