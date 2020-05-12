@@ -38,7 +38,10 @@ import (
 )
 
 const (
-	dataDirectoryName = "checkdisk-data-safe-to-delete"
+	dataDirectoryName  = "checkdisk-data-safe-to-delete/data1"
+	dataDirectoryName2 = "checkdisk-data-safe-to-delete/data2"
+	raftAddress        = "localhost:26000"
+	raftAddress2       = "localhost:26001"
 )
 
 var read = flag.Bool("enable-read", false, "enable read")
@@ -50,6 +53,7 @@ var clientcount = flag.Int("num-of-clients", 10000, "number of clients to use")
 var seconds = flag.Int("seconds-to-run", 60, "number of seconds to run")
 var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
 var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
+var twonh = flag.Bool("two-nodehost", false, "use two nodehosts")
 
 func newBatchedLogDB(cfg config.LogDBConfig,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
@@ -125,7 +129,9 @@ func main() {
 		log.Println("memory profile will be saved into file mem.pprof")
 	}
 	fs.RemoveAll(dataDirectoryName)
+	fs.RemoveAll(dataDirectoryName2)
 	defer fs.RemoveAll(dataDirectoryName)
+	defer fs.RemoveAll(dataDirectoryName2)
 	logger.GetLogger("raft").SetLevel(logger.WARNING)
 	logger.GetLogger("rsm").SetLevel(logger.WARNING)
 	logger.GetLogger("logdb").SetLevel(logger.WARNING)
@@ -134,7 +140,7 @@ func main() {
 	nhc := config.NodeHostConfig{
 		NodeHostDir:    dataDirectoryName,
 		RTTMillisecond: 200,
-		RaftAddress:    "localhost:26000",
+		RaftAddress:    raftAddress,
 		FS:             fs,
 	}
 	if *tiny {
@@ -150,6 +156,16 @@ func main() {
 		panic(err)
 	}
 	defer nh.Stop()
+	var nh2 *dragonboat.NodeHost
+	if *twonh {
+		nhc.NodeHostDir = dataDirectoryName2
+		nhc.RaftAddress = raftAddress2
+		nh2, err = dragonboat.NewNodeHost(nhc)
+		if err != nil {
+			panic(err)
+		}
+		defer nh2.Stop()
+	}
 	rc := config.Config{
 		ClusterID:       1,
 		NodeID:          1,
@@ -159,12 +175,22 @@ func main() {
 		SnapshotEntries: uint64(*ckpt),
 	}
 	nodes := make(map[uint64]string)
-	nodes[1] = nhc.RaftAddress
+	nodes[1] = raftAddress
+	if *twonh {
+		nodes[2] = raftAddress2
+	}
 	// use 48 clusters, each with only 1 node
 	for i := uint64(1); i <= uint64(48); i++ {
 		rc.ClusterID = i
 		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
+		}
+		if *twonh {
+			rc2 := rc
+			rc2.NodeID = 2
+			if err := nh2.StartCluster(nodes, false, newDummyStateMachine, rc2); err != nil {
+				panic(err)
+			}
 		}
 	}
 	for i := uint64(1); i <= uint64(48); i++ {
@@ -173,8 +199,14 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			if ok && leaderID == 1 {
-				break
+			if !*twonh {
+				if ok && leaderID == 1 {
+					break
+				}
+			} else {
+				if ok && (leaderID == 1 || leaderID == 2) {
+					break
+				}
 			}
 			time.Sleep(time.Millisecond)
 			if j == 9999 {
@@ -195,14 +227,18 @@ func main() {
 	results := make([]uint64, *clientcount)
 	for i := uint64(0); i < uint64(*clientcount); i++ {
 		stopper.RunPWorker(func(arg interface{}) {
+			mynh := nh
 			workerID := arg.(uint64)
 			clusterID := (workerID % 48) + 1
 			cs := nh.GetNoOPSession(clusterID)
 			cmd := make([]byte, 16)
 			results[workerID] = 0
+			if *twonh && workerID%2 == 1 {
+				mynh = nh2
+			}
 			for {
 				for j := 0; j < 32; j++ {
-					rs, err := nh.Propose(cs, cmd, 4*time.Second)
+					rs, err := mynh.Propose(cs, cmd, 4*time.Second)
 					if err != nil {
 						panic(err)
 					}
@@ -224,11 +260,15 @@ func main() {
 	if *read {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			stopper.RunPWorker(func(arg interface{}) {
+				mynh := nh
 				workerID := arg.(uint64)
 				clusterID := (workerID % 48) + 1
+				if *twonh && workerID%2 == 1 {
+					mynh = nh2
+				}
 				for {
 					for j := 0; j < 32; j++ {
-						rs, err := nh.ReadIndex(clusterID, 4*time.Second)
+						rs, err := mynh.ReadIndex(clusterID, 4*time.Second)
 						if err != nil {
 							panic(err)
 						}
