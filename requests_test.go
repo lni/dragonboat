@@ -974,7 +974,7 @@ func TestPendingSCReadCanRead(t *testing.T) {
 	if pp.requests.pendingSize() != 1 {
 		t.Errorf("req not recorded in temp")
 	}
-	if len(pp.pending) != 0 {
+	if len(pp.batches) != 0 {
 		t.Errorf("pending is expected to be empty")
 	}
 	pp.close()
@@ -1019,11 +1019,8 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	default:
 		t.Errorf("expect to complete")
 	}
-	if len(pp.mapping) != 0 {
-		t.Errorf("leaking records")
-	}
 	if len(pp.batches) != 0 {
-		t.Errorf("batches is not empty")
+		t.Errorf("leaking records")
 	}
 }
 
@@ -1044,7 +1041,7 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	default:
 		t.Errorf("expect to complete")
 	}
-	if len(pp.pending) > 0 || len(pp.batches) > 0 || len(pp.mapping) > 0 {
+	if len(pp.batches) > 0 {
 		t.Errorf("not cleared")
 	}
 }
@@ -1072,7 +1069,7 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 	default:
 		t.Errorf("expect to complete")
 	}
-	if len(pp.pending) != 0 || len(pp.mapping) != 0 {
+	if len(pp.batches) != 0 {
 		t.Errorf("leaking records")
 	}
 }
@@ -1098,7 +1095,7 @@ func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
 	default:
 		t.Errorf("expect to complete")
 	}
-	if len(pp.pending) != 0 || len(pp.mapping) != 0 {
+	if len(pp.batches) != 0 {
 		t.Errorf("leaking records")
 	}
 }
