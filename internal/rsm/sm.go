@@ -242,7 +242,7 @@ func (s *ConcurrentStateMachine) OnDisk() bool {
 	return false
 }
 
-// StateMachineType returns the type of the state machine.
+// Type returns the type of the state machine.
 func (s *ConcurrentStateMachine) Type() pb.StateMachineType {
 	return pb.ConcurrentStateMachine
 }
