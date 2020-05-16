@@ -288,6 +288,27 @@ type RequestState struct {
 	pool       *sync.Pool
 }
 
+func (r *RequestState) timeout() {
+	rr := RequestResult{
+		code: requestTimeout,
+	}
+	r.notify(rr)
+}
+
+func (r *RequestState) terminated() {
+	rr := RequestResult{
+		code: requestTerminated,
+	}
+	r.notify(rr)
+}
+
+func (r *RequestState) dropped() {
+	rr := RequestResult{
+		code: requestDropped,
+	}
+	r.notify(rr)
+}
+
 func (r *RequestState) notify(result RequestResult) {
 	r.readyToRelease.set()
 	if r.completeHandler == nil {
@@ -365,26 +386,18 @@ type pendingProposal struct {
 	ps     uint64
 }
 
-type systemCtxGcTime struct {
-	ctx        pb.SystemCtx
-	expireTime uint64
+type readBatch struct {
+	index    uint64
+	requests []*RequestState
 }
 
 type pendingReadIndex struct {
-	seqKey uint64
-	mu     sync.Mutex
-	// user generated ctx->requestState
-	pending map[uint64]*RequestState
-	// system ctx->appliedIndex
-	batches map[pb.SystemCtx]uint64
-	// user generated ctx->batched system ctx
-	mapping map[uint64]pb.SystemCtx
-	// cached system ctx used to call node.ReadIndex
-	system       pb.SystemCtx
-	systemGcTime []systemCtxGcTime
-	requests     *readIndexQueue
-	stopped      bool
-	pool         *sync.Pool
+	mu       sync.Mutex
+	batches  map[pb.SystemCtx]readBatch
+	system   *pb.SystemCtx
+	requests *readIndexQueue
+	stopped  bool
+	pool     *sync.Pool
 	logicalClock
 }
 
@@ -653,19 +666,15 @@ func newPendingReadIndex(pool *sync.Pool,
 	requests *readIndexQueue) *pendingReadIndex {
 	gcTick := defaultGCTick
 	if gcTick == 0 {
-		panic("invalid gcTick")
+		plog.Panicf("invalid gcTick")
 	}
 	lcu := logicalClock{gcTick: gcTick}
 	p := &pendingReadIndex{
-		pending:      make(map[uint64]*RequestState),
-		batches:      make(map[pb.SystemCtx]uint64),
-		mapping:      make(map[uint64]pb.SystemCtx),
-		systemGcTime: make([]systemCtxGcTime, 0),
+		batches:      make(map[pb.SystemCtx]readBatch),
 		requests:     requests,
 		logicalClock: lcu,
 		pool:         pool,
 	}
-	p.system = p.nextSystemCtx()
 	return p
 }
 
@@ -675,13 +684,17 @@ func (p *pendingReadIndex) close() {
 	p.stopped = true
 	if p.requests != nil {
 		p.requests.close()
-		tmp := p.requests.get()
-		for _, v := range tmp {
-			v.notify(getTerminatedResult())
+		reqs := p.requests.get()
+		for _, rec := range reqs {
+			rec.terminated()
 		}
 	}
-	for _, v := range p.pending {
-		v.notify(getTerminatedResult())
+	for _, rb := range p.batches {
+		for _, req := range rb.requests {
+			if req != nil {
+				req.terminated()
+			}
+		}
 	}
 }
 
@@ -692,7 +705,6 @@ func (p *pendingReadIndex) read(handler ICompleteHandler,
 	}
 	req := p.pool.Get().(*RequestState)
 	req.completeHandler = handler
-	req.key = p.nextUserCtx()
 	req.deadline = p.getTick() + timeoutTick
 	if len(req.CompletedC) > 0 {
 		req.CompletedC = make(chan RequestResult, 1)
@@ -707,39 +719,39 @@ func (p *pendingReadIndex) read(handler ICompleteHandler,
 	return req, nil
 }
 
-func (p *pendingReadIndex) nextUserCtx() uint64 {
-	return atomic.AddUint64(&p.seqKey, 1)
-}
-
 func (p *pendingReadIndex) nextSystemCtx() pb.SystemCtx {
+	et := p.getTick() + 30
 	for {
 		v := pb.SystemCtx{
 			Low:  random.LockGuardedRand.Uint64(),
-			High: random.LockGuardedRand.Uint64(),
+			High: et,
 		}
-		if v.Low != 0 && v.High != 0 {
+		if v.Low != 0 {
 			return v
 		}
 	}
 }
 
+func (p *pendingReadIndex) getSystemCtx() pb.SystemCtx {
+	if p.system == nil {
+		sysCtx := p.nextSystemCtx()
+		p.system = &sysCtx
+	}
+	return *p.system
+}
+
 func (p *pendingReadIndex) nextCtx() pb.SystemCtx {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	v := p.system
-	p.system = p.nextSystemCtx()
-	p.systemGcTime = append(p.systemGcTime,
-		systemCtxGcTime{
-			ctx:        v,
-			expireTime: p.getTick() + 1000,
-		})
+	v := p.getSystemCtx()
+	p.system = nil
 	return v
 }
 
 func (p *pendingReadIndex) peepNextCtx() pb.SystemCtx {
 	p.mu.Lock()
-	v := p.system
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	v := p.getSystemCtx()
 	return v
 }
 
@@ -748,10 +760,13 @@ func (p *pendingReadIndex) addReadyToRead(readStates []pb.ReadyToRead) {
 		return
 	}
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	for _, v := range readStates {
-		p.batches[v.SystemCtx] = v.Index
+		if rb, ok := p.batches[v.SystemCtx]; ok {
+			rb.index = v.Index
+			p.batches[v.SystemCtx] = rb
+		}
 	}
-	p.mu.Unlock()
 }
 
 func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
@@ -761,12 +776,15 @@ func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
 	if p.stopped {
 		return
 	}
-	for _, req := range reqs {
-		if _, ok := p.pending[req.key]; ok {
-			panic("key already in the pending map")
+	if rb, ok := p.batches[system]; ok {
+		rb.requests = append(rb.requests, reqs...)
+		p.batches[system] = rb
+	} else {
+		rs := make([]*RequestState, len(reqs))
+		copy(rs, reqs)
+		p.batches[system] = readBatch{
+			requests: rs,
 		}
-		p.pending[req.key] = req
-		p.mapping[req.key] = system
 	}
 }
 
@@ -776,94 +794,68 @@ func (p *pendingReadIndex) dropped(system pb.SystemCtx) {
 	if p.stopped {
 		return
 	}
-	var toDelete []uint64
-	for key, val := range p.mapping {
-		if val == system {
-			req, ok := p.pending[key]
-			if !ok {
-				panic("inconsistent data")
+	if rb, ok := p.batches[system]; ok {
+		for _, req := range rb.requests {
+			if req != nil {
+				req.dropped()
 			}
-			req.notify(getDroppedResult())
-			delete(p.pending, key)
-			toDelete = append(toDelete, key)
 		}
+		delete(p.batches, system)
 	}
-	for _, key := range toDelete {
-		delete(p.mapping, key)
-	}
-	delete(p.batches, system)
 }
 
 func (p *pendingReadIndex) applied(applied uint64) {
 	p.mu.Lock()
-	if p.stopped {
-		p.mu.Unlock()
-		return
-	}
-	if len(p.pending) == 0 &&
-		uint64(len(p.systemGcTime)) < 1000 {
-		p.mu.Unlock()
+	defer p.mu.Unlock()
+	if p.stopped || len(p.batches) == 0 {
 		return
 	}
 	now := p.getTick()
-	toDelete := make([]uint64, 0)
-	for userKey, req := range p.pending {
-		systemCtx, ok := p.mapping[userKey]
-		if !ok {
-			panic("mapping is missing")
-		}
-		bindex, bok := p.batches[systemCtx]
-		if !bok || bindex > applied {
-			continue
-		} else {
-			toDelete = append(toDelete, userKey)
-			var v RequestResult
-			if req.deadline > now {
-				req.readyToRead.set()
-				v.code = requestCompleted
-			} else {
-				v.code = requestTimeout
+	for sys, rb := range p.batches {
+		if rb.index > 0 && rb.index <= applied {
+			for _, req := range rb.requests {
+				if req != nil {
+					var v RequestResult
+					if req.deadline > now {
+						req.readyToRead.set()
+						v.code = requestCompleted
+					} else {
+						v.code = requestTimeout
+					}
+					req.notify(v)
+				}
 			}
-			req.notify(v)
+			delete(p.batches, sys)
 		}
-	}
-	for _, v := range toDelete {
-		delete(p.pending, v)
-		delete(p.mapping, v)
 	}
 	if now-p.logicalClock.lastGcTime < p.gcTick {
-		p.mu.Unlock()
 		return
 	}
 	p.logicalClock.lastGcTime = now
 	p.gc(now)
-	p.mu.Unlock()
 }
 
 func (p *pendingReadIndex) gc(now uint64) {
-	toDeleteCount := 0
-	for _, v := range p.systemGcTime {
-		if v.expireTime < now {
-			delete(p.batches, v.ctx)
-			toDeleteCount++
-		} else {
-			break
-		}
+	if len(p.batches) == 0 {
+		return
 	}
-	if toDeleteCount > 0 {
-		p.systemGcTime = p.systemGcTime[toDeleteCount:]
-	}
-	if len(p.pending) > 0 {
-		toDelete := make([]uint64, 0)
-		for userKey, req := range p.pending {
-			if req.deadline < now {
-				req.notify(getTimeoutResult())
-				toDelete = append(toDelete, userKey)
+	for sys, rb := range p.batches {
+		if sys.High < now {
+			for _, req := range rb.requests {
+				if req != nil {
+					req.timeout()
+				}
 			}
+			delete(p.batches, sys)
 		}
-		for _, v := range toDelete {
-			delete(p.pending, v)
-			delete(p.mapping, v)
+	}
+	for sys, rb := range p.batches {
+		for idx, req := range rb.requests {
+			if req != nil && req.deadline < now {
+				req.timeout()
+				rb.requests[idx] = nil
+				p.batches[sys] = rb
+			}
 		}
 	}
 }
