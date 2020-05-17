@@ -920,21 +920,25 @@ func (p *pendingReadIndex) gc(now uint64) {
 		return
 	}
 	for sys, rb := range p.batches {
-		if sys.High < now {
-			for _, req := range rb.requests {
-				if req != nil {
-					req.timeout()
-				}
-			}
-			delete(p.batches, sys)
-		}
-	}
-	for sys, rb := range p.batches {
 		for idx, req := range rb.requests {
 			if req != nil && req.deadline < now {
 				req.timeout()
 				rb.requests[idx] = nil
 				p.batches[sys] = rb
+			}
+		}
+	}
+	for sys, rb := range p.batches {
+		if sys.High < now {
+			empty := true
+			for _, req := range rb.requests {
+				if req != nil {
+					empty = false
+					break
+				}
+			}
+			if empty {
+				delete(p.batches, sys)
 			}
 		}
 	}
