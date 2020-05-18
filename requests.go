@@ -456,7 +456,6 @@ type readBatch struct {
 type pendingReadIndex struct {
 	mu       sync.Mutex
 	batches  map[pb.SystemCtx]readBatch
-	system   *pb.SystemCtx
 	requests *readIndexQueue
 	stopped  bool
 	pool     *sync.Pool
@@ -799,7 +798,7 @@ func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 	return req, nil
 }
 
-func (p *pendingReadIndex) nextSystemCtx() pb.SystemCtx {
+func (p *pendingReadIndex) genCtx() pb.SystemCtx {
 	et := p.getTick() + 30
 	for {
 		v := pb.SystemCtx{
@@ -812,36 +811,19 @@ func (p *pendingReadIndex) nextSystemCtx() pb.SystemCtx {
 	}
 }
 
-func (p *pendingReadIndex) getSystemCtx() pb.SystemCtx {
-	if p.system == nil {
-		sysCtx := p.nextSystemCtx()
-		p.system = &sysCtx
-	}
-	return *p.system
-}
-
 func (p *pendingReadIndex) nextCtx() pb.SystemCtx {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	v := p.getSystemCtx()
-	p.system = nil
-	return v
+	return p.genCtx()
 }
 
-func (p *pendingReadIndex) peepNextCtx() pb.SystemCtx {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	v := p.getSystemCtx()
-	return v
-}
-
-func (p *pendingReadIndex) addReadyToRead(readStates []pb.ReadyToRead) {
-	if len(readStates) == 0 {
+func (p *pendingReadIndex) addReady(reads []pb.ReadyToRead) {
+	if len(reads) == 0 {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, v := range readStates {
+	for _, v := range reads {
 		if rb, ok := p.batches[v.SystemCtx]; ok {
 			rb.index = v.Index
 			p.batches[v.SystemCtx] = rb
@@ -849,20 +831,18 @@ func (p *pendingReadIndex) addReadyToRead(readStates []pb.ReadyToRead) {
 	}
 }
 
-func (p *pendingReadIndex) addPendingRead(system pb.SystemCtx,
-	reqs []*RequestState) {
+func (p *pendingReadIndex) add(sys pb.SystemCtx, reqs []*RequestState) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.stopped {
 		return
 	}
-	if rb, ok := p.batches[system]; ok {
-		rb.requests = append(rb.requests, reqs...)
-		p.batches[system] = rb
+	if _, ok := p.batches[sys]; ok {
+		plog.Panicf("same system ctx added again %v", sys)
 	} else {
 		rs := make([]*RequestState, len(reqs))
 		copy(rs, reqs)
-		p.batches[system] = readBatch{
+		p.batches[sys] = readBatch{
 			requests: rs,
 		}
 	}

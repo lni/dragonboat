@@ -56,7 +56,6 @@ type engine interface {
 var _ rsm.INode = &node{}
 
 type node struct {
-	readReqCount          uint64
 	leaderID              uint64
 	instanceID            uint64
 	raftAddress           string
@@ -1032,7 +1031,7 @@ func (n *node) notifyCommittedEntries() {
 
 func (n *node) processReadyToRead(ud pb.Update) {
 	if len(ud.ReadyToReads) > 0 {
-		n.pendingReadIndexes.addReadyToRead(ud.ReadyToReads)
+		n.pendingReadIndexes.addReady(ud.ReadyToReads)
 		n.pendingReadIndexes.applied(ud.LastApplied)
 	}
 }
@@ -1206,9 +1205,9 @@ func (n *node) handleReadIndexRequests() bool {
 	reqs := n.incomingReadIndexes.get()
 	if len(reqs) > 0 {
 		n.recordActivity(pb.ReadIndex)
-		ctx := n.pendingReadIndexes.peepNextCtx()
-		n.pendingReadIndexes.addPendingRead(ctx, reqs)
-		n.increaseReadReqCount()
+		ctx := n.pendingReadIndexes.nextCtx()
+		n.pendingReadIndexes.add(ctx, reqs)
+		n.p.ReadIndex(ctx)
 		return true
 	}
 	return false
@@ -1268,7 +1267,6 @@ func (n *node) tryRecordNodeActivity(m pb.Message) {
 func (n *node) handleReceivedMessages() bool {
 	hasEvent := false
 	ltCount := uint64(0)
-	scCount := n.getReadReqCount()
 	busy := n.isBusySnapshotting()
 	msgs := n.mq.Get()
 	for _, m := range msgs {
@@ -1288,9 +1286,6 @@ func (n *node) handleReceivedMessages() bool {
 			n.tryRecordNodeActivity(m)
 			n.p.Handle(m)
 		}
-	}
-	if scCount > 0 {
-		n.batchedReadIndex()
 	}
 	if lazyFreeCycle > 0 {
 		for i := range msgs {
@@ -1578,14 +1573,6 @@ func (n *node) isFollower() bool {
 		}
 	}
 	return false
-}
-
-func (n *node) increaseReadReqCount() {
-	atomic.AddUint64(&n.readReqCount, 1)
-}
-
-func (n *node) getReadReqCount() uint64 {
-	return atomic.SwapUint64(&n.readReqCount, 0)
 }
 
 func (n *node) initialized() bool {

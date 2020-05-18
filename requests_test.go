@@ -994,10 +994,10 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
-	s := pp.peepNextCtx()
-	pp.addPendingRead(s, []*RequestState{rs})
+	s := pp.nextCtx()
+	pp.add(s, []*RequestState{rs})
 	readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
-	pp.addReadyToRead([]pb.ReadyToRead{readState})
+	pp.addReady([]pb.ReadyToRead{readState})
 	pp.applied(499)
 	select {
 	case <-rs.ResultC():
@@ -1030,8 +1030,8 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
-	s := pp.peepNextCtx()
-	pp.addPendingRead(s, []*RequestState{rs})
+	s := pp.nextCtx()
+	pp.add(s, []*RequestState{rs})
 	pp.dropped(s)
 	select {
 	case v := <-rs.ResultC():
@@ -1046,16 +1046,18 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	}
 }
 
-func TestPendingSCReadCanExpire(t *testing.T) {
+func testPendingSCReadCanExpire(t *testing.T, addReady bool) {
 	pp, _ := getPendingSCRead()
 	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
-	s := pp.peepNextCtx()
-	pp.addPendingRead(s, []*RequestState{rs})
-	readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
-	pp.addReadyToRead([]pb.ReadyToRead{readState})
+	s := pp.nextCtx()
+	pp.add(s, []*RequestState{rs})
+	if addReady {
+		readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
+		pp.addReady([]pb.ReadyToRead{readState})
+	}
 	tickToWait := 100 + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick()
@@ -1074,29 +1076,32 @@ func TestPendingSCReadCanExpire(t *testing.T) {
 	}
 }
 
-func TestPendingSCReadCanExpireWithoutCallingAddReadyToRead(t *testing.T) {
+func TestPendingSCReadCanExpire(t *testing.T) {
+	testPendingSCReadCanExpire(t, true)
+}
+
+func TestPendingSCReadCanExpireWithoutCallingAddReady(t *testing.T) {
+	testPendingSCReadCanExpire(t, false)
+}
+
+func TestNonEmptyReadBatchIsNeverExpired(t *testing.T) {
 	pp, _ := getPendingSCRead()
-	rs, err := pp.read(100)
+	rs, err := pp.read(10000)
 	if err != nil {
 		t.Errorf("failed to do read")
 	}
-	s := pp.peepNextCtx()
-	pp.addPendingRead(s, []*RequestState{rs})
-	tickToWait := 100 + defaultGCTick + 1
+	s := pp.nextCtx()
+	pp.add(s, []*RequestState{rs})
+	if len(pp.batches) != 1 {
+		t.Fatalf("unexpected batch count")
+	}
+	tickToWait := defaultGCTick * 10
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick()
 		pp.applied(499)
 	}
-	select {
-	case v := <-rs.ResultC():
-		if !v.Timeout() {
-			t.Errorf("got %v, want %d", v, requestTimeout)
-		}
-	default:
-		t.Errorf("expect to complete")
-	}
-	if len(pp.batches) != 0 {
-		t.Errorf("leaking records")
+	if len(pp.batches) == 0 {
+		t.Fatalf("unexpectedly removed batch")
 	}
 }
 
