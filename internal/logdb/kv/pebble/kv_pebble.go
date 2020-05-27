@@ -18,6 +18,7 @@ package pebble
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -71,6 +72,21 @@ func (w *pebbleWriteBatch) Clear() {
 
 func (w *pebbleWriteBatch) Count() int {
 	return w.count
+}
+
+type pebbleLogger struct{}
+
+// PebbleLogger is the logger used by pebble
+var PebbleLogger pebbleLogger
+var _ pebble.Logger = &pebbleLogger{}
+
+func (pebbleLogger) Infof(format string, args ...interface{}) {
+	pebble.DefaultLogger.Infof(format, args...)
+}
+
+func (pebbleLogger) Fatalf(format string, args ...interface{}) {
+	pebble.DefaultLogger.Infof(format, args...)
+	panic(fmt.Errorf(format, args...))
 }
 
 // NewKVStore returns a pebble based IKVStore instance.
@@ -137,6 +153,7 @@ func openPebbleDB(config config.LogDBConfig,
 		L0StopWritesThreshold:       l0StopWritesTrigger,
 		Cache:                       cache,
 		FS:                          vfs.NewPebbleFS(fs),
+		Logger:                      PebbleLogger,
 	}
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {

@@ -364,8 +364,9 @@ test-tools:
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/vfs internal/rsm internal/settings internal/tests internal/server   \
-	internal/logdb/kv/rocksdb plugin/rocksdb plugin/chan raftpb tools logger     \
-	raftio config statemachine client internal/utils/dio
+	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/rocksdb            \
+	plugin/chan raftpb tools logger raftio config statemachine client 					 \
+	internal/utils/dio
 
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)

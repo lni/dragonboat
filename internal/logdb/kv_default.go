@@ -32,7 +32,9 @@ const (
 func newDefaultKVStore(config config.LogDBConfig,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs != vfs.DefaultFS {
-		panic("invalid fs")
+		if _, ok := fs.(*vfs.ErrorFS); !ok {
+			panic("invalid fs")
+		}
 	}
 	return pebble.NewKVStore(config, dir, wal, fs)
 }

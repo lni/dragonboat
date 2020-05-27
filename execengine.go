@@ -647,11 +647,12 @@ type execEngine struct {
 	commitWorkReady *workReady
 	applyWorkReady  *workReady
 	wp              *workerPool
+	ec              chan error
 	notifyCommit    bool
 }
 
 func newExecEngine(nh nodeLoader, notifyCommit bool,
-	ctx *server.Context, logdb raftio.ILogDB) *execEngine {
+	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *execEngine {
 	loaded := newLoadedNodes()
 	s := &execEngine{
 		nh:              nh,
@@ -669,12 +670,24 @@ func newExecEngine(nh nodeLoader, notifyCommit bool,
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
 	}
+	if errorInjection {
+		s.ec = make(chan error, 1)
+	}
 	sampleRatio := int64(delaySampleRatio / 10)
 	for i := uint64(1); i <= stepWorkerCount; i++ {
 		workerID := i
 		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
 		s.profilers[i-1] = newProfiler(sampleRatio)
 		s.nodeStopper.RunWorker(func() {
+			if errorInjection {
+				defer func() {
+					if r := recover(); r != nil {
+						if ce, ok := r.(error); ok {
+							s.crash(ce)
+						}
+					}
+				}()
+			}
 			s.stepWorkerMain(workerID)
 		})
 	}
@@ -693,6 +706,13 @@ func newExecEngine(nh nodeLoader, notifyCommit bool,
 		})
 	}
 	return s
+}
+
+func (s *execEngine) crash(err error) {
+	select {
+	case s.ec <- err:
+	default:
+	}
 }
 
 func (s *execEngine) stop() {

@@ -35,9 +35,10 @@ func newDefaultKVStore(config config.LogDBConfig,
 	if fs == nil {
 		panic("nil fs")
 	}
-	_, ok := fs.(*gvfs.MemFS)
-	if !ok {
-		panic("invalid fs")
+	if _, ok := fs.(*gvfs.MemFS); !ok {
+		if _, ok := fs.(*gvfs.ErrorFS); !ok {
+			panic("invalid fs")
+		}
 	}
 	return pebble.NewKVStore(config, dir, wal, fs)
 }

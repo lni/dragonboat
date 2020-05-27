@@ -327,8 +327,13 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
+	errorInjection := false
+	if nhConfig.FS != nil {
+		_, errorInjection = nhConfig.FS.(*vfs.ErrorFS)
+		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
+	}
 	nh.execEngine = newExecEngine(nh,
-		nh.nhConfig.NotifyCommit, nh.serverCtx, nh.logdb)
+		nh.nhConfig.NotifyCommit, errorInjection, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain(nhConfig)
 	})

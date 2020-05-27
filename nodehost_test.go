@@ -4669,3 +4669,59 @@ func TestTimeoutCanBeReturned(t *testing.T) {
 		t.Errorf("failed to return ErrTimeout, %v", err)
 	}
 }
+
+func TestIOErrorIsHandled(t *testing.T) {
+	run := func(op vfs.Op) {
+		inj := vfs.OnIndex(-1, op)
+		fs := vfs.Wrap(vfs.GetTestFS(), inj)
+		nhc := getTestNodeHostConfig(fs)
+		rc := config.Config{
+			NodeID:       1,
+			ClusterID:    1,
+			ElectionRTT:  3,
+			HeartbeatRTT: 1,
+			CheckQuorum:  true,
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nhc.RaftAddress
+		nh, err := NewNodeHost(*nhc)
+		if err != nil {
+			t.Fatalf("failed to create node host %v", err)
+		}
+		defer func() {
+			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}()
+		defer nh.Stop()
+		newSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			return &TimeoutStateMachine{
+				updateDelay:   0,
+				lookupDelay:   0,
+				snapshotDelay: 0,
+			}
+		}
+		if err := nh.StartCluster(peers, false, newSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		inj.SetIndex(0)
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		session := nh.GetNoOPSession(1)
+		_, err = nh.SyncPropose(ctx, session, []byte("test"))
+		cancel()
+		if err != ErrTimeout {
+			t.Fatalf("proposal unexpectedly completed, %v", err)
+		}
+		select {
+		case e := <-nh.execEngine.ec:
+			if e != vfs.ErrInjected && e.Error() != vfs.ErrInjected.Error() {
+				t.Fatalf("failed to return the expected error, %v", e)
+			}
+		default:
+			t.Fatalf("failed to trigger error")
+		}
+	}
+	run(vfs.OpWrite)
+	run(vfs.OpSync)
+}
