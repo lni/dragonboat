@@ -120,8 +120,7 @@ else
 GO=$(GOCMD)
 endif
 # golang race detector
-# set the RACE environmental variable to 1 to enable it, e.g.
-# RACE=1 make test
+# set the RACE environmental variable to 1 to enable it, e.g. RACE=1 make test
 ifeq ($(RACE),1)
 RACE_DETECTOR_FLAG=-race
 $(warning "data race detector enabled, this is a DEBUG build")
@@ -139,22 +138,9 @@ else
 SELECTED_BENCH_OPTION=-run ^$$ -bench=.
 endif
 
-INSTALL_PATH ?= /usr/local
-# shared lib and version number related
-LIBNAME=libdragonboat
-PLATFORM_SHARED_EXT=so
-SHARED_MAJOR=$(shell egrep "DragonboatMajor = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED_MINOR=$(shell egrep "DragonboatMinor = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED_PATCH=$(shell egrep "DragonboatPatch = [0-9]" nodehost.go | cut -d ' ' -f 3)
-SHARED1=${LIBNAME}.$(PLATFORM_SHARED_EXT)
-SHARED2=$(SHARED1).$(SHARED_MAJOR)
-SHARED3=$(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR)
-SHARED4=$(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
-
 # testing bin
 SNAPSHOT_BENCHMARK_TESTING_BIN=snapbench
 LOGDB_CHECKER_BIN=logdb-checker-bin
-DUMMY_TEST_BIN=test.bin
 
 # go build tags
 GOBUILDTAGVALS+=$(LOGDB_TAG)
@@ -255,40 +241,6 @@ install-dragonboat: gen-gitversion
 gen-gitversion:
 	@echo "package dragonboat\n" > gitversion.go
 	@echo "const GITVERSION = \"$(shell git rev-parse HEAD)\"" >> gitversion.go
-
-GOBUILD=$(GO) build $(VERBOSE) -tags=$(GOBUILDTAGS) -o $@
-
-###############################################################################
-# docker tests
-###############################################################################
-gen-test-docker-images:
-	docker build -t dragonboat-ubuntu-test:18.04 -f scripts/Dockerfile-ubuntu-18.04 .
-	docker build -t dragonboat-debian-test:9.4 -f scripts/Dockerfile-debian-9.4 .
-	docker build -t dragonboat-debian-test:testing -f scripts/Dockerfile-debian-testing .
-	docker build -t dragonboat-centos-test:7.5 -f scripts/Dockerfile-centos-7.5 .
-	docker build -t dragonboat-go-test:1.9 -f scripts/Dockerfile-go-1.9 .
-	docker build -t dragonboat-mindeps-test:1.9 -f scripts/Dockerfile-min-deps .
-	docker build -t dragonboat-ubuntu-no-rocksdb:18.04 -f scripts/Dockerfile-no-rocksdb .
-
-DOCKERROOTDIR="/go/src/github.com/lni/dragonboat"
-DOCKERRUN=docker run --rm -v $(PKGROOT):$(DOCKERROOTDIR)
-docker-test: docker-test-ubuntu-stable docker-test-debian-testing \
-	docker-test-debian-stable docker-test-centos-stable docker-test-go-old \
-	docker-test-min-deps docker-test-no-rocksdb
-docker-test-ubuntu-stable: clean
-	$(DOCKERRUN) -t dragonboat-ubuntu-test:18.04
-docker-test-centos-stable: clean
-	$(DOCKERRUN) -t dragonboat-centos-test:7.5
-docker-test-debian-testing: clean
-	$(DOCKERRUN) -t dragonboat-debian-test:testing
-docker-test-debian-stable: clean
-	$(DOCKERRUN) -t dragonboat-debian-test:9.4
-docker-test-go-old: clean
-	$(DOCKERRUN) -t dragonboat-go-test:1.9
-docker-test-min-deps: clean
-	$(DOCKERRUN) -t dragonboat-mindeps-test:1.9
-docker-test-no-rocksdb: clean
-	$(DOCKERRUN) -t dragonboat-ubuntu-no-rocksdb:18.04
 
 ###############################################################################
 # tests
@@ -398,8 +350,6 @@ clean:
 	@rm -f gitversion.go 
 	@rm -f test-*.*
 	@rm -f $(SEQUENCE_TESTING_BIN) \
-		$(DUMMY_TEST_BIN) \
-		$(DUMMY_TEST_BIN) \
 		$(SNAPSHOT_BENCHMARK_TESTING_BIN) \
 		$(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) \
 		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
