@@ -32,9 +32,6 @@ const (
 	// Snappy is the CompressionType value used to indicate that google snappy
 	// is used for data compression.
 	Snappy
-	// CompactSnappy compresses the entry cmd using snappy and makes sure that
-	// no wasted space is kept.
-	CompactSnappy
 )
 
 // CountedWriter is a io.WriteCloser wrapper that keeps the total number of bytes
@@ -103,6 +100,9 @@ func (c *Compressor) Write(data []byte) (int, error) {
 
 // Close closes the compressor.
 func (c *Compressor) Close() error {
+	if c.ct == NoCompression {
+		panic("not suppose to reach here")
+	}
 	if err := c.wc.Close(); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (dc *Decompressor) Read(data []byte) (int, error) {
 // Close closes the decompressor.
 func (dc *Decompressor) Close() error {
 	if dc.ct == NoCompression {
-		panic("no suppose to reach here")
+		panic("not suppose to reach here")
 	} else if dc.ct == Snappy {
 		return dc.ur.Close()
 	} else {

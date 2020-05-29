@@ -252,10 +252,12 @@ endif
 TEST_OPTIONS=test $(GOCMDTAGS) -timeout=1200s -count=1 $(VERBOSE) \
   $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 BUILD_TEST_ONLY=-c -o test.bin 
-dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-	test-multiraft test-config test-client test-server test-tools test-fs
-travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport \
-  test-config test-client test-server test-tests test-tools test-fs
+dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
+	test-multiraft test-config test-client test-server test-tools test-fs   	 \
+	test-utils
+travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
+  test-config test-client test-server test-tests test-tools test-fs 				 \
+	test-utils
 test: dragonboat-test test-tests
 dev-test: test test-plugins
 
@@ -266,13 +268,13 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
-	test-tests test-fs
+	test-tests test-fs test-utils
 
 cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)     \
   -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport    \
   test-multiraft test-config test-client test-server test-tools test-tests   \
-	test-fs
+	test-fs test-utils
 
 ###############################################################################
 # fast tests executed for every git push
@@ -310,6 +312,8 @@ test-fs:
 	$(GOTEST) $(PKGNAME)/internal/fileutil
 test-tools:
 	$(GOTEST) $(PKGNAME)/tools
+test-utils:
+	$(GOTEST) $(PKGNAME)/internal/utils/dio
 
 ###############################################################################
 # static checks
