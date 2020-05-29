@@ -19,11 +19,13 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -331,7 +333,7 @@ func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 	return nil
 }
 
-func runNodeHostTest(t *testing.T, f func(), fs vfs.IFS) {
+func runNodeHostTestDC(t *testing.T, f func(), removeDir bool, fs vfs.IFS) {
 	logdb.RDBContextValueSize = 1024 * 1024
 	defer func() {
 		logdb.RDBContextValueSize = ovs
@@ -342,11 +344,17 @@ func runNodeHostTest(t *testing.T, f func(), fs vfs.IFS) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-		t.Fatalf("%v", err)
+	if removeDir {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
 	f()
 	reportLeakedFD(fs, t)
+}
+
+func runNodeHostTest(t *testing.T, f func(), fs vfs.IFS) {
+	runNodeHostTestDC(t, f, true, fs)
 }
 
 func TestLogDBCanBeExtended(t *testing.T) {
@@ -3861,12 +3869,11 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	runNodeHostTest(t, tf, fs)
 }
 
-// TODO: re-enable this
-/*
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		f := func(dirs []string, lldirs []string) (raftio.ILogDB, error) {
+		f := func(config config.LogDBConfig,
+			dirs []string, lldirs []string) (raftio.ILogDB, error) {
 			return &noopLogDB{}, nil
 		}
 		nhc := config.NodeHostConfig{
@@ -3890,46 +3897,53 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 		}
 	}
 	runNodeHostTest(t, tf, fs)
-}*/
+}
 
-// FIXME:
-// disabled for now as the new file lock implementation no longer blocks in
-// the same process
-/*
-func TestNodeHostReturnsErrorWhenLogDBCanNotBeCreated(t *testing.T) {
+var spawnChild = flag.Bool("spawn-child", false, "spawned child")
+
+func spawn(execName string) ([]byte, error) {
+	return exec.Command(execName, "-spawn-child",
+		"-test.v", "-test.run=TestNodeHostFileLock$").CombinedOutput()
+}
+
+func TestNodeHostFileLock(t *testing.T) {
+	fs := vfs.GetTestFS()
+	if fs != vfs.DefaultFS {
+		t.Skip("not using the default fs, skipped")
+	}
 	tf := func() {
+		child := *spawnChild
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
-			LogDBFactory:   pebble.NewLogDB,
 		}
-		func() {
+		if !child {
 			nh, err := NewNodeHost(nhc)
 			if err != nil {
 				t.Fatalf("failed to create nodehost %v", err)
 			}
 			defer nh.Stop()
-			nhc.RaftAddress = nodeHostTestAddr2
-			_, err = NewNodeHost(nhc)
-			if err != server.ErrLockDirectory {
-				t.Fatalf("failed to return ErrLockDirectory")
+			out, err := spawn(os.Args[0])
+			if err == nil {
+				t.Fatalf("file lock didn't prevent the second nh to start, %s", out)
 			}
-		}()
-		_, err := NewNodeHost(nhc)
-		if err != server.ErrNotOwner {
-			t.Fatalf("failed to return ErrNotOwner")
-		}
-		nhc.RaftAddress = nodeHostTestAddr1
-		nhc.LogDBFactory = pebble.NewBatchedLogDB
-		_, err = NewNodeHost(nhc)
-		if err != server.ErrIncompatibleData {
-			t.Fatalf("failed to return ErrIncompatibleData")
+			if !bytes.Contains(out, []byte("returned ErrLockDirectory")) {
+				t.Fatalf("unexpected output: %s", out)
+			}
+		} else {
+			nhc.RaftAddress = nodeHostTestAddr2
+			cnh, err := NewNodeHost(nhc)
+			if err == server.ErrLockDirectory {
+				t.Fatalf("returned ErrLockDirectory")
+			}
+			if err == nil {
+				defer cnh.Stop()
+			}
 		}
 	}
-	runNodeHostTest(t, tf)
+	runNodeHostTestDC(t, tf, false, fs)
 }
-*/
 
 func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 	fs := vfs.GetTestFS()

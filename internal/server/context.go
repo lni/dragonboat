@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -298,10 +297,7 @@ func (sc *Context) tryLockNodeHostDir(dir string) error {
 	if !ok {
 		c, err := sc.fs.Lock(fp)
 		if err != nil {
-			if err == syscall.EAGAIN {
-				return ErrLockDirectory
-			}
-			panic(fmt.Sprintf("Unknown error from lock %v", err))
+			return ErrLockDirectory
 		}
 		sc.flocks[fp] = c
 	}
@@ -345,10 +341,12 @@ func (sc *Context) compatible(dir string,
 		if err != nil {
 			return err
 		}
-		// TODO: re-enable logdb DB type check
-		// if len(status.LogdbType) > 0 && status.LogdbType != name {
-		//	 return ErrLogDBType
-		// }
+		if len(status.LogdbType) > 0 && status.LogdbType != name {
+			if !((status.LogdbType == "rocksdb" && name == "pebble") ||
+				(status.LogdbType == "pebble" && name == "rocksdb")) {
+				return ErrLogDBType
+			}
+		}
 		if !dbto {
 			if !se(string(status.Address), addr) {
 				return ErrNotOwner
