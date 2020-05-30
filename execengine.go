@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,39 +200,39 @@ func (w *ssWorker) completed() {
 
 func (w *ssWorker) handle(j job) {
 	if j.task.SnapshotAvailable {
-		w.recoverFromSnapshot(j)
+		w.recover(j)
 	} else if j.task.SnapshotRequested {
-		w.saveSnapshot(j)
+		w.save(j)
 	} else if j.task.StreamSnapshot {
-		w.streamSnapshot(j)
+		w.stream(j)
 	} else {
 		panic("unknown snapshot task type")
 	}
 }
 
-func (w *ssWorker) recoverFromSnapshot(j job) {
-	if index, err := j.node.recoverFromSnapshot(j.task); err != nil {
+func (w *ssWorker) recover(j job) {
+	if index, err := j.node.recover(j.task); err != nil {
 		if err != sm.ErrOpenStopped && err != sm.ErrSnapshotStopped {
 			panic(err)
 		}
 	} else {
-		j.node.recoverFromSnapshotDone(index)
+		j.node.recoverDone(index)
 	}
 }
 
-func (w *ssWorker) saveSnapshot(j job) {
-	if err := j.node.saveSnapshot(j.task); err != nil {
+func (w *ssWorker) save(j job) {
+	if err := j.node.save(j.task); err != nil {
 		panic(err)
 	} else {
-		j.node.saveSnapshotDone()
+		j.node.saveDone()
 	}
 }
 
-func (w *ssWorker) streamSnapshot(j job) {
-	if err := j.node.streamSnapshot(j.sink()); err != nil {
+func (w *ssWorker) stream(j job) {
+	if err := j.node.stream(j.sink()); err != nil {
 		panic(err)
 	} else {
-		j.node.streamSnapshotDone()
+		j.node.streamDone()
 	}
 }
 
@@ -337,7 +337,7 @@ func (p *workerPool) workerPoolMain() {
 		if chosen == 0 {
 			p.workerStopper.Stop()
 			for _, node := range nodes {
-				node.notifyOffloaded(rsm.FromSnapshotWorker)
+				node.offloaded(rsm.FromSnapshotWorker)
 			}
 			return
 		} else if chosen == 1 {
@@ -400,7 +400,7 @@ func (p *workerPool) loadNodes(cci uint64,
 	newCCI, newNodes, offloaded := p.doLoadNodes(cci, nodes)
 	p.loaded.update(1, rsm.FromSnapshotWorker, newNodes)
 	for _, n := range offloaded {
-		n.notifyOffloaded(rsm.FromSnapshotWorker)
+		n.offloaded(rsm.FromSnapshotWorker)
 	}
 	return newCCI, newNodes
 }
@@ -428,7 +428,7 @@ func (p *workerPool) doLoadNodes(cci uint64,
 				return true
 			},
 			func(cid uint64, v *node) bool {
-				v.notifyLoaded(rsm.FromSnapshotWorker)
+				v.loaded(rsm.FromSnapshotWorker)
 				_, ok := newNodes[cid]
 				if !ok {
 					newNodes[cid] = v
@@ -604,19 +604,19 @@ func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
 	var j job
 	switch jt {
 	case snapshotRequested:
-		req, ok := n.ss.getSaveSnapshotReq()
+		req, ok := n.ss.getSaveReq()
 		if !ok {
 			return false
 		}
 		j = job{task: req, node: n}
 	case snapshotAvailable:
-		req, ok := n.ss.getRecoverFromSnapshotReq()
+		req, ok := n.ss.getRecoverReq()
 		if !ok {
 			return false
 		}
 		j = job{task: req, node: n}
 	case streamSnapshot:
-		req, sinkFn, ok := n.ss.getStreamSnapshotReq()
+		req, sinkFn, ok := n.ss.getStreamReq()
 		if !ok {
 			return false
 		}
@@ -762,7 +762,7 @@ func (s *execEngine) load(workerID uint64,
 		ready.getPartitioner(), from)
 	s.loaded.update(workerID, from, result)
 	for _, n := range offloaded {
-		n.notifyOffloaded(from)
+		n.offloaded(from)
 	}
 	return result, cci
 }
@@ -870,7 +870,7 @@ func (s *execEngine) processApplies(workerID uint64,
 		if !ok || node.stopped() {
 			continue
 		}
-		if node.processSnapshotStatusTransition() {
+		if node.processStatusTransition() {
 			continue
 		}
 		task, err := node.handleTask(batch, entries)
@@ -939,7 +939,7 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 			},
 			func(cid uint64, v *node) bool {
 				if partitioner.GetPartitionID(cid) == bucket {
-					v.notifyLoaded(from)
+					v.loaded(from)
 					newNodes[cid] = v
 				}
 				return true
@@ -1120,6 +1120,6 @@ func (s *execEngine) proposeDelay(clusterID uint64, startTime time.Time) {
 func (s *execEngine) offloadNodeMap(nodes map[uint64]*node,
 	from rsm.From) {
 	for _, node := range nodes {
-		node.notifyOffloaded(from)
+		node.offloaded(from)
 	}
 }

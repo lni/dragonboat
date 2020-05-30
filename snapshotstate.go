@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,70 +62,70 @@ func (sr *snapshotTask) getTask() (rsm.Task, bool) {
 }
 
 type snapshotState struct {
-	takingSnapshotFlag         uint32
-	recoveringFromSnapshotFlag uint32
-	streamingSnapshotFlag      uint32
-	snapshotIndex              uint64
-	reqSnapshotIndex           uint64
-	compactLogTo               uint64
-	compactedTo                uint64
-	recoverReady               snapshotTask
-	saveSnapshotReady          snapshotTask
-	streamSnapshotReady        snapshotTask
-	recoverCompleted           snapshotTask
-	saveSnapshotCompleted      snapshotTask
-	streamSnapshotCompleted    snapshotTask
+	savingFlag              uint32
+	recoveringFlag          uint32
+	streamingFlag           uint32
+	snapshotIndex           uint64
+	reqSnapshotIndex        uint64
+	compactLogTo            uint64
+	compactedTo             uint64
+	recoverReady            snapshotTask
+	saveSnapshotReady       snapshotTask
+	streamSnapshotReady     snapshotTask
+	recoverCompleted        snapshotTask
+	saveSnapshotCompleted   snapshotTask
+	streamSnapshotCompleted snapshotTask
 }
 
-func (rs *snapshotState) recoveringFromSnapshot() bool {
-	return atomic.LoadUint32(&rs.recoveringFromSnapshotFlag) == 1
+func (rs *snapshotState) recovering() bool {
+	return atomic.LoadUint32(&rs.recoveringFlag) == 1
 }
 
-func (rs *snapshotState) setRecoveringFromSnapshot() {
-	atomic.StoreUint32(&rs.recoveringFromSnapshotFlag, 1)
+func (rs *snapshotState) setRecovering() {
+	atomic.StoreUint32(&rs.recoveringFlag, 1)
 }
 
-func (rs *snapshotState) clearRecoveringFromSnapshot() {
-	atomic.StoreUint32(&rs.recoveringFromSnapshotFlag, 0)
+func (rs *snapshotState) clearRecovering() {
+	atomic.StoreUint32(&rs.recoveringFlag, 0)
 }
 
-func (rs *snapshotState) streamingSnapshot() bool {
-	return atomic.LoadUint32(&rs.streamingSnapshotFlag) == 1
+func (rs *snapshotState) streaming() bool {
+	return atomic.LoadUint32(&rs.streamingFlag) == 1
 }
 
-func (rs *snapshotState) setStreamingSnapshot() {
-	atomic.StoreUint32(&rs.streamingSnapshotFlag, 1)
+func (rs *snapshotState) setStreaming() {
+	atomic.StoreUint32(&rs.streamingFlag, 1)
 }
 
-func (rs *snapshotState) clearStreamingSnapshot() {
-	atomic.StoreUint32(&rs.streamingSnapshotFlag, 0)
+func (rs *snapshotState) clearStreaming() {
+	atomic.StoreUint32(&rs.streamingFlag, 0)
 }
 
-func (rs *snapshotState) takingSnapshot() bool {
-	return atomic.LoadUint32(&rs.takingSnapshotFlag) == 1
+func (rs *snapshotState) saving() bool {
+	return atomic.LoadUint32(&rs.savingFlag) == 1
 }
 
-func (rs *snapshotState) setTakingSnapshot() {
-	atomic.StoreUint32(&rs.takingSnapshotFlag, 1)
+func (rs *snapshotState) setSaving() {
+	atomic.StoreUint32(&rs.savingFlag, 1)
 }
 
-func (rs *snapshotState) clearTakingSnapshot() {
-	atomic.StoreUint32(&rs.takingSnapshotFlag, 0)
+func (rs *snapshotState) clearSaving() {
+	atomic.StoreUint32(&rs.savingFlag, 0)
 }
 
-func (rs *snapshotState) setSnapshotIndex(index uint64) {
+func (rs *snapshotState) setIndex(index uint64) {
 	atomic.StoreUint64(&rs.snapshotIndex, index)
 }
 
-func (rs *snapshotState) getSnapshotIndex() uint64 {
+func (rs *snapshotState) getIndex() uint64 {
 	return atomic.LoadUint64(&rs.snapshotIndex)
 }
 
-func (rs *snapshotState) getReqSnapshotIndex() uint64 {
+func (rs *snapshotState) getReqIndex() uint64 {
 	return atomic.LoadUint64(&rs.reqSnapshotIndex)
 }
 
-func (rs *snapshotState) setReqSnapshotIndex(idx uint64) {
+func (rs *snapshotState) setReqIndex(idx uint64) {
 	atomic.StoreUint64(&rs.reqSnapshotIndex, idx)
 }
 
@@ -153,27 +153,27 @@ func (rs *snapshotState) hasCompactedTo() bool {
 	return atomic.LoadUint64(&rs.compactedTo) > 0
 }
 
-func (rs *snapshotState) setStreamSnapshotReq(t rsm.Task, getSinkFn getSink) {
+func (rs *snapshotState) setStreamReq(t rsm.Task, getSinkFn getSink) {
 	rs.streamSnapshotReady.setStreamTask(t, getSinkFn)
 }
 
-func (rs *snapshotState) setRecoverFromSnapshotReq(t rsm.Task) {
+func (rs *snapshotState) setRecoverReq(t rsm.Task) {
 	rs.recoverReady.setTask(t)
 }
 
-func (rs *snapshotState) getRecoverFromSnapshotReq() (rsm.Task, bool) {
+func (rs *snapshotState) getRecoverReq() (rsm.Task, bool) {
 	return rs.recoverReady.getTask()
 }
 
-func (rs *snapshotState) setSaveSnapshotReq(t rsm.Task) {
+func (rs *snapshotState) setSaveReq(t rsm.Task) {
 	rs.saveSnapshotReady.setTask(t)
 }
 
-func (rs *snapshotState) getSaveSnapshotReq() (rsm.Task, bool) {
+func (rs *snapshotState) getSaveReq() (rsm.Task, bool) {
 	return rs.saveSnapshotReady.getTask()
 }
 
-func (rs *snapshotState) getStreamSnapshotReq() (rsm.Task, getSink, bool) {
+func (rs *snapshotState) getStreamReq() (rsm.Task, getSink, bool) {
 	r, ok := rs.streamSnapshotReady.getTask()
 	if !ok {
 		return rsm.Task{}, nil, false
@@ -214,7 +214,7 @@ func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
 	}
 }
 
-func (rs *snapshotState) getStreamSnapshotCompleted() (rsm.Task, bool) {
+func (rs *snapshotState) getStreamCompleted() (rsm.Task, bool) {
 	return rs.streamSnapshotCompleted.getTask()
 }
 
@@ -222,7 +222,7 @@ func (rs *snapshotState) getRecoverCompleted() (rsm.Task, bool) {
 	return rs.recoverCompleted.getTask()
 }
 
-func (rs *snapshotState) getSaveSnapshotCompleted() (rsm.Task, bool) {
+func (rs *snapshotState) getSaveCompleted() (rsm.Task, bool) {
 	return rs.saveSnapshotCompleted.getTask()
 }
 

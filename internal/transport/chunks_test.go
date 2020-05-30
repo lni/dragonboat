@@ -59,7 +59,7 @@ func getTestChunks() []pb.Chunk {
 }
 
 func hasSnapshotTempFile(cs *Chunks, c pb.Chunk) bool {
-	env := cs.getSSEnv(c)
+	env := cs.getEnv(c)
 	fp := env.GetTempFilepath()
 	if _, err := cs.fs.Stat(fp); vfs.IsNotExist(err) {
 		return false
@@ -69,7 +69,7 @@ func hasSnapshotTempFile(cs *Chunks, c pb.Chunk) bool {
 
 func hasExternalFile(cs *Chunks,
 	c pb.Chunk, fn string, sz uint64, ifs vfs.IFS) bool {
-	env := cs.getSSEnv(c)
+	env := cs.getEnv(c)
 	efp := ifs.PathJoin(env.GetFinalDir(), fn)
 	fs, err := cs.fs.Stat(efp)
 	if vfs.IsNotExist(err) {
@@ -331,7 +331,7 @@ func TestReceivedCompleteChunksWillBeMergedIntoSnapshotFile(t *testing.T) {
 func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
-		env := chunks.getSSEnv(inputs[0])
+		env := chunks.getEnv(inputs[0])
 		chunks.validate = false
 		if !chunks.addLocked(inputs[0]) {
 			t.Fatalf("failed to add chunk")
@@ -364,7 +364,7 @@ func TestChunksAreIgnoredWhenNodeIsRemoved(t *testing.T) {
 func TestOutOfDateChunksCanBeHandled(t *testing.T) {
 	fn := func(t *testing.T, chunks *Chunks, handler *testMessageHandler) {
 		inputs := getTestChunks()
-		env := chunks.getSSEnv(inputs[0])
+		env := chunks.getEnv(inputs[0])
 		snapDir := env.GetFinalDir()
 		if err := chunks.fs.MkdirAll(snapDir, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
@@ -430,7 +430,7 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 
 func checkTestSnapshotFile(chunks *Chunks,
 	chunk pb.Chunk, size uint64) bool {
-	env := chunks.getSSEnv(chunk)
+	env := chunks.getEnv(chunk)
 	finalFp := env.GetFilepath()
 	f, err := chunks.fs.Open(finalFp)
 	if err != nil {

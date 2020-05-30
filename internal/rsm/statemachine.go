@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -223,7 +223,7 @@ func (s *StateMachine) DestroyedC() <-chan struct{} {
 	return s.sm.DestroyedC()
 }
 
-// RecoverFromSnapshot applies the snapshot.
+// Recover applies the snapshot.
 func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	ss, err := s.getSnapshot(t)
 	if err != nil {
@@ -235,7 +235,7 @@ func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
 	ss.Validate(s.fs)
 	plog.Infof("%s called RecoverFromSnapshot, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
-	if err := s.recoverFromSnapshot(ss, t.InitialSnapshot); err != nil {
+	if err := s.recover(ss, t.InitialSnapshot); err != nil {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
@@ -308,7 +308,7 @@ func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
 	}
 }
 
-func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
+func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index := ss.Index
@@ -319,27 +319,27 @@ func (s *StateMachine) recoverFromSnapshot(ss pb.Snapshot, init bool) error {
 		return sm.ErrSnapshotStopped
 	}
 	if ss.Witness || ss.Dummy {
-		s.applySnapshot(ss)
+		s.apply(ss)
 		return nil
 	}
 	if !s.OnDiskStateMachine() {
-		return s.recover(ss, init)
+		return s.doRecover(ss, init)
 	}
 	if s.recoverSMRequired(ss, init) {
 		s.canRecoverOnDiskSnapshot(ss, init)
-		if err := s.recover(ss, init); err != nil {
+		if err := s.doRecover(ss, init); err != nil {
 			return err
 		}
-		s.applyOnDiskSnapshot(ss, init)
+		s.applyOnDisk(ss, init)
 	} else {
 		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
 			s.id(), index, s.onDiskInitIndex)
-		s.applySnapshot(ss)
+		s.apply(ss)
 	}
 	return nil
 }
 
-func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
+func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 	index := ss.Index
 	plog.Infof("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
 	s.logMembership("members", index, ss.Membership.Addresses)
@@ -363,32 +363,32 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		}
 		return ErrRestoreSnapshot
 	}
-	s.applySnapshot(ss)
+	s.apply(ss)
 	return nil
 }
 
-func (s *StateMachine) applySnapshot(ss pb.Snapshot) {
+func (s *StateMachine) apply(ss pb.Snapshot) {
 	s.index = ss.Index
 	s.term = ss.Term
 	s.members.set(ss.Membership)
 }
 
-func (s *StateMachine) applyOnDiskSnapshot(ss pb.Snapshot, init bool) {
+func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
 	s.mustBeOnDiskSM()
 	s.onDiskIndex = ss.OnDiskIndex
 	if ss.Imported && init {
 		s.onDiskInitIndex = ss.OnDiskIndex
 	}
-	s.applySnapshot(ss)
+	s.apply(ss)
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
 
-// ReadyToStreamSnapshot returns a boolean flag to indicate whether the state
-// machine is ready to stream snapshot. It can not stream a full snapshot when
+// ReadyToStream returns a boolean flag to indicate whether the state machine
+// is ready to stream snapshot. It can not stream a full snapshot when
 // membership state is catching up with the all disk SM state. however, meta
 // only snapshot can be taken at any time.
-func (s *StateMachine) ReadyToStreamSnapshot() bool {
+func (s *StateMachine) ReadyToStream() bool {
 	if !s.OnDiskStateMachine() {
 		return true
 	}
@@ -547,8 +547,8 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 	return s.onDiskSM && !s.isWitness
 }
 
-// SaveSnapshot creates a snapshot.
-func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
+// Save creates a snapshot.
+func (s *StateMachine) Save(req SSRequest) (*pb.Snapshot,
 	*server.SSEnv, error) {
 	if req.Streaming() {
 		panic("invalid snapshot request")
@@ -557,15 +557,15 @@ func (s *StateMachine) SaveSnapshot(req SSRequest) (*pb.Snapshot,
 		plog.Panicf("witness %s saving snapshot", s.id())
 	}
 	if s.Concurrent() {
-		return s.saveConcurrentSnapshot(req)
+		return s.concurrentSave(req)
 	}
-	return s.saveSnapshot(req)
+	return s.save(req)
 }
 
-// StreamSnapshot starts to stream snapshot from the current SM to a remote
-// node targeted by the provided sink.
-func (s *StateMachine) StreamSnapshot(sink pb.IChunkSink) error {
-	return s.streamSnapshot(sink)
+// Stream starts to stream snapshot from the current SM to a remote node
+// targeted by the provided sink.
+func (s *StateMachine) Stream(sink pb.IChunkSink) error {
+	return s.stream(sink)
 }
 
 // Sync synchronizes state machine's in-core state with that on disk.
@@ -687,7 +687,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	return meta, nil
 }
 
-func (s *StateMachine) updateLastApplied(index uint64, term uint64) {
+func (s *StateMachine) setLastApplied(index uint64, term uint64) {
 	if s.index+1 != index {
 		plog.Panicf("%s invalid index %d, applied %d", s.id(), index, s.index)
 	}
@@ -716,31 +716,31 @@ func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 	return nil
 }
 
-func (s *StateMachine) streamSnapshot(sink pb.IChunkSink) error {
+func (s *StateMachine) stream(sink pb.IChunkSink) error {
 	var err error
 	var meta *SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot(SSRequest{Type: Streaming})
+		meta, err = s.prepare(SSRequest{Type: Streaming})
 		return err
 	}(); err != nil {
 		return err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "snapshotter.Stream") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.stream") {
 		return ErrTestKnobReturn
 	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
-func (s *StateMachine) saveConcurrentSnapshot(req SSRequest) (*pb.Snapshot,
+func (s *StateMachine) concurrentSave(req SSRequest) (*pb.Snapshot,
 	*server.SSEnv, error) {
 	var err error
 	var meta *SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepareSnapshot(req)
+		meta, err = s.prepare(req)
 		return err
 	}(); err != nil {
 		return nil, nil, err
@@ -751,28 +751,28 @@ func (s *StateMachine) saveConcurrentSnapshot(req SSRequest) (*pb.Snapshot,
 	if err := s.sync(); err != nil {
 		return nil, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.concurrentSave") {
 		return nil, nil, ErrTestKnobReturn
 	}
-	return s.doSaveSnapshot(meta)
+	return s.doSave(meta)
 }
 
-func (s *StateMachine) saveSnapshot(req SSRequest) (*pb.Snapshot,
+func (s *StateMachine) save(req SSRequest) (*pb.Snapshot,
 	*server.SSEnv, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	meta, err := s.prepareSnapshot(req)
+	meta, err := s.prepare(req)
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
 		return nil, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.doSaveSnapshot") {
+	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.save") {
 		return nil, nil, ErrTestKnobReturn
 	}
-	return s.doSaveSnapshot(meta)
+	return s.doSave(meta)
 }
 
-func (s *StateMachine) prepareSnapshot(req SSRequest) (*SSMeta, error) {
+func (s *StateMachine) prepare(req SSRequest) (*SSMeta, error) {
 	if err := s.checkSnapshotStatus(req); err != nil {
 		return nil, err
 	}
@@ -801,7 +801,7 @@ func (s *StateMachine) sync() error {
 	return nil
 }
 
-func (s *StateMachine) doSaveSnapshot(meta *SSMeta) (*pb.Snapshot,
+func (s *StateMachine) doSave(meta *SSMeta) (*pb.Snapshot,
 	*server.SSEnv, error) {
 	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
@@ -948,7 +948,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		} else {
 			skipped++
 		}
-		s.updateLastApplied(e.Index, e.Term)
+		s.setLastApplied(e.Index, e.Term)
 	}
 	if len(ents) > 0 {
 		firstIndex := ents[0].Index
@@ -985,7 +985,7 @@ func (s *StateMachine) handleConfigChange(e pb.Entry) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.updateLastApplied(e.Index, e.Term)
+	s.setLastApplied(e.Index, e.Term)
 	if s.members.handleConfigChange(cc, e.Index) {
 		s.node.ApplyConfigChange(cc)
 		return true
@@ -1000,7 +1000,7 @@ func (s *StateMachine) handleRegisterSession(e pb.Entry) sm.Result {
 	if isEmptyResult(smResult) {
 		plog.Errorf("%s register client failed %v", s.id(), e)
 	}
-	s.updateLastApplied(e.Index, e.Term)
+	s.setLastApplied(e.Index, e.Term)
 	return smResult
 }
 
@@ -1011,7 +1011,7 @@ func (s *StateMachine) handleUnregisterSession(e pb.Entry) sm.Result {
 	if isEmptyResult(smResult) {
 		plog.Errorf("%s unregister %d failed %v", s.id(), e.ClientID, e)
 	}
-	s.updateLastApplied(e.Index, e.Term)
+	s.setLastApplied(e.Index, e.Term)
 	return smResult
 }
 
@@ -1021,7 +1021,7 @@ func (s *StateMachine) handleNoOP(e pb.Entry) {
 	if !e.IsEmpty() || e.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
-	s.updateLastApplied(e.Index, e.Term)
+	s.setLastApplied(e.Index, e.Term)
 }
 
 // result a tuple of (result, should ignore, rejected)
@@ -1030,7 +1030,7 @@ func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 	defer s.mu.Unlock()
 	var ok bool
 	var session *Session
-	s.updateLastApplied(e.Index, e.Term)
+	s.setLastApplied(e.Index, e.Term)
 	if !e.IsNoOPSession() {
 		session, ok = s.sessions.ClientRegistered(e.ClientID)
 		if !ok {

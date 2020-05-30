@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 			Index:    100,
 			Term:     200,
 		}
-		env := s.getSSEnv(ss.Index)
+		env := s.getEnv(ss.Index)
 		finalSnapDir := env.GetFinalDir()
 		if err := fs.MkdirAll(finalSnapDir, 0755); err != nil {
 			t.Errorf("failed to create final snap dir")
@@ -116,7 +116,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 			Index:    100,
 			Term:     200,
 		}
-		env := s.getSSEnv(ss.Index)
+		env := s.getEnv(ss.Index)
 		finalSnapDir := env.GetFinalDir()
 		tmpDir := env.GetTempDir()
 		err := env.CreateTempDir()
@@ -211,8 +211,8 @@ func TestSnapshotCanBeSavedToLogDB(t *testing.T) {
 func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 	fs := vfs.GetTestFS()
 	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
-		env1 := s.getSSEnv(100)
-		env2 := s.getSSEnv(200)
+		env1 := s.getEnv(100)
+		env2 := s.getEnv(200)
 		fd1 := env1.GetFinalDir()
 		fd2 := env2.GetFinalDir()
 		fd1 = fs.PathJoin(fd1, tmpSnapshotDirSuffix)
@@ -223,7 +223,7 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 		if err := fs.MkdirAll(fd2, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
 		}
-		if err := s.ProcessOrphans(); err != nil {
+		if err := s.processOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
 		if _, err := fs.Stat(fd1); vfs.IsNotExist(err) {
@@ -245,7 +245,7 @@ func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
 			Index:    100,
 			Term:     200,
 		}
-		env := s.getSSEnv(100)
+		env := s.getEnv(100)
 		fd1 := env.GetFinalDir()
 		if err := fs.MkdirAll(fd1, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
@@ -253,7 +253,7 @@ func TestFirstSnapshotBecomeOrphanedIsHandled(t *testing.T) {
 		if err := fileutil.CreateFlagFile(fd1, fileutil.SnapshotFlagFilename, &s1, fs); err != nil {
 			t.Errorf("failed to create flag file %s", err)
 		}
-		if err := s.ProcessOrphans(); err != nil {
+		if err := s.processOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
 		if _, err := fs.Stat(fd1); !vfs.IsNotExist(err) {
@@ -278,8 +278,8 @@ func TestOrphanedSnapshotRecordIsRemoved(t *testing.T) {
 			Index:    200,
 			Term:     200,
 		}
-		env1 := s.getSSEnv(s1.Index)
-		env2 := s.getSSEnv(s2.Index)
+		env1 := s.getEnv(s1.Index)
+		env2 := s.getEnv(s2.Index)
 		fd1 := env1.GetFinalDir()
 		fd2 := env2.GetFinalDir()
 		if err := fs.MkdirAll(fd1, 0755); err != nil {
@@ -302,7 +302,7 @@ func TestOrphanedSnapshotRecordIsRemoved(t *testing.T) {
 		}
 		// two orphane snapshots, kept the most recent one, and remove the older
 		// one including its logdb record.
-		if err := s.ProcessOrphans(); err != nil {
+		if err := s.processOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
 		if _, err := fs.Stat(fd1); vfs.IsExist(err) {
@@ -349,9 +349,9 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 			Index:    300,
 			Term:     200,
 		}
-		env1 := s.getSSEnv(s1.Index)
-		env2 := s.getSSEnv(s2.Index)
-		env3 := s.getSSEnv(s3.Index)
+		env1 := s.getEnv(s1.Index)
+		env2 := s.getEnv(s2.Index)
+		env3 := s.getEnv(s3.Index)
 		fd1 := env1.GetFinalDir()
 		fd2 := env2.GetFinalDir()
 		fd3 := env3.GetFinalDir()
@@ -381,7 +381,7 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 		// foler is expected to be kept
 		// fd2 doesn't has its record in logdb, while the most recent snapshot record
 		// in logdb is not for fd2, fd2 will be entirely removed
-		if err := s.ProcessOrphans(); err != nil {
+		if err := s.processOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
 		if fileutil.HasFlagFile(fd1, fileutil.SnapshotFlagFilename, fs) {
@@ -425,7 +425,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 				Index:    i,
 				Term:     2,
 			}
-			env := snapshotter.getSSEnv(s.Index)
+			env := snapshotter.getEnv(s.Index)
 			if err := env.CreateTempDir(); err != nil {
 				t.Errorf("failed to create snapshot dir")
 			}
@@ -447,13 +447,13 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			t.Errorf("didn't return %d snapshot records", total)
 		}
 		for i := uint64(1); i < removed; i++ {
-			env := snapshotter.getSSEnv(i)
+			env := snapshotter.getEnv(i)
 			snapDir := env.GetFinalDir()
 			if _, err = fs.Stat(snapDir); vfs.IsNotExist(err) {
 				t.Errorf("snapshot dir didn't get created, %s", snapDir)
 			}
 		}
-		if err = snapshotter.Compact(upTo); err != nil {
+		if err = snapshotter.compact(upTo); err != nil {
 			t.Errorf("failed to remove unused snapshots, %v", err)
 		}
 		snapshots, err = ldb.ListSnapshots(1, 1, math.MaxUint64)
@@ -474,7 +474,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			if _, err := fs.Stat(fp); !vfs.IsNotExist(err) {
 				t.Errorf("snapshot file didn't get deleted")
 			}
-			env := snapshotter.getSSEnv(i)
+			env := snapshotter.getEnv(i)
 			snapDir := env.GetFinalDir()
 			if _, err := fs.Stat(snapDir); !vfs.IsNotExist(err) {
 				t.Errorf("snapshot dir didn't get removed")
@@ -489,7 +489,7 @@ func TestShrinkSnapshots(t *testing.T) {
 	fn := func(t *testing.T, ldb raftio.ILogDB, snapshotter *snapshotter) {
 		for i := uint64(1); i <= 3; i++ {
 			index := i * 10
-			env := snapshotter.getSSEnv(index)
+			env := snapshotter.getEnv(index)
 			fp := env.GetFilepath()
 			s := pb.Snapshot{
 				Index:    index,
@@ -524,12 +524,12 @@ func TestShrinkSnapshots(t *testing.T) {
 				t.Fatalf("close failed %v", err)
 			}
 		}
-		if err := snapshotter.Shrink(20); err != nil {
+		if err := snapshotter.shrink(20); err != nil {
 			t.Fatalf("shrink snapshots failed %v", err)
 		}
-		env1 := snapshotter.getSSEnv(10)
-		env2 := snapshotter.getSSEnv(20)
-		env3 := snapshotter.getSSEnv(30)
+		env1 := snapshotter.getEnv(10)
+		env2 := snapshotter.getEnv(20)
+		env3 := snapshotter.getEnv(30)
 		cf := func(p string, esz uint64) {
 			fi, err := fs.Stat(p)
 			if err != nil {
@@ -568,7 +568,7 @@ func TestSnapshotDirNameMatchWorks(t *testing.T) {
 			{"snapshot-", false},
 		}
 		for idx, tt := range tests {
-			v := s.dirNameMatch(tt.dirName)
+			v := s.dirMatch(tt.dirName)
 			if v != tt.valid {
 				t.Errorf("dir name %s (%d) failed to match", tt.dirName, idx)
 			}
@@ -602,7 +602,7 @@ func TestZombieSnapshotDirNameMatchWorks(t *testing.T) {
 			{"dsnapshot-AB.generating", false},
 		}
 		for idx, tt := range tests {
-			v := s.isZombieDir(tt.dirName)
+			v := s.isZombie(tt.dirName)
 			if v != tt.valid {
 				t.Errorf("dir name %s (%d) failed to match", tt.dirName, idx)
 			}

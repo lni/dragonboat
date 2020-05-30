@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1366,7 +1366,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.index = 3
 		hash1, _ := sm.GetHash()
-		ss, _, err := sm.SaveSnapshot(SSRequest{})
+		ss, _, err := sm.Save(SSRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
 		}
@@ -1420,7 +1420,7 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
-		ss, _, err := sm.SaveSnapshot(SSRequest{})
+		ss, _, err := sm.Save(SSRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
@@ -1459,11 +1459,11 @@ func TestSnapshotTwiceIsHandled(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		_, _, err := sm.SaveSnapshot(SSRequest{})
+		_, _, err := sm.Save(SSRequest{})
 		if err != nil {
 			t.Errorf("failed to make snapshot %v", err)
 		}
-		_, _, err = sm.SaveSnapshot(SSRequest{})
+		_, _, err = sm.Save(SSRequest{})
 		if err != raft.ErrSnapshotOutOfDate {
 			t.Errorf("snapshot twice completed, %v", err)
 		}
@@ -1978,7 +1978,7 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 			index:           tt.index,
 			onDiskInitIndex: tt.onDiskInitIndex,
 		}
-		if result := sm.ReadyToStreamSnapshot(); result != tt.ready {
+		if result := sm.ReadyToStream(); result != tt.ready {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
 		}
 	}
@@ -2010,7 +2010,7 @@ func TestUpdateLastApplied(t *testing.T) {
 					}
 				}()
 			}
-			sm.updateLastApplied(tt.index, tt.term)
+			sm.setLastApplied(tt.index, tt.term)
 			if sm.index != tt.index {
 				t.Errorf("%d, index not updated", idx)
 			}
@@ -2132,7 +2132,7 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 		fs:          fs,
 	}
 	sm.members.members.Addresses[1] = "a1"
-	ss, _, err := sm.saveConcurrentSnapshot(SSRequest{})
+	ss, _, err := sm.concurrentSave(SSRequest{})
 	if err != nil {
 		t.Fatalf("concurrent snapshot failed %v", err)
 	}
@@ -2164,7 +2164,7 @@ func TestStreamSnapshot(t *testing.T) {
 	ts := &testSink{
 		chunks: make([]pb.Chunk, 0),
 	}
-	if err := sm.StreamSnapshot(ts); err != nil {
+	if err := sm.Stream(ts); err != nil {
 		t.Errorf("stream snapshot failed %v", err)
 	}
 	if len(ts.chunks) != 3 {
@@ -2392,7 +2392,7 @@ func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
 			t.Fatalf("failed to trigger panic")
 		}
 	}()
-	_, _, err := sm.SaveSnapshot(SSRequest{})
+	_, _, err := sm.Save(SSRequest{})
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

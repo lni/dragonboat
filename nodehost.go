@@ -1584,7 +1584,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
 		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc, nh.fs)
-	if err := snapshotter.ProcessOrphans(); err != nil {
+	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
@@ -1733,7 +1733,7 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 	delete(nh.clusterMu.requests, clusterID)
 	nh.clusterMu.csi++
 	n.close()
-	n.notifyOffloaded(rsm.FromNodeHost)
+	n.offloaded(rsm.FromNodeHost)
 	return nil
 }
 

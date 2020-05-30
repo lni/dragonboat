@@ -306,13 +306,13 @@ func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 }
 
 func (c *Chunks) nodeRemoved(chunk pb.Chunk) (bool, error) {
-	env := c.getSSEnv(chunk)
+	env := c.getEnv(chunk)
 	dir := env.GetRootDir()
 	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
 func (c *Chunks) save(chunk pb.Chunk) (err error) {
-	env := c.getSSEnv(chunk)
+	env := c.getEnv(chunk)
 	if chunk.ChunkId == 0 {
 		if err := env.CreateTempDir(); err != nil {
 			return err
@@ -349,13 +349,13 @@ func (c *Chunks) save(chunk pb.Chunk) (err error) {
 	return nil
 }
 
-func (c *Chunks) getSSEnv(chunk pb.Chunk) *server.SSEnv {
+func (c *Chunks) getEnv(chunk pb.Chunk) *server.SSEnv {
 	return server.NewSSEnv(c.folder, chunk.ClusterId, chunk.NodeId,
 		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }
 
 func (c *Chunks) finalize(chunk pb.Chunk, td *tracked) error {
-	env := c.getSSEnv(chunk)
+	env := c.getEnv(chunk)
 	msg := c.toMessage(td.firstChunk, td.extraFiles)
 	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
 		panic("invalid message")
@@ -369,7 +369,7 @@ func (c *Chunks) finalize(chunk pb.Chunk, td *tracked) error {
 }
 
 func (c *Chunks) removeTempDir(chunk pb.Chunk) {
-	env := c.getSSEnv(chunk)
+	env := c.getEnv(chunk)
 	env.MustRemoveTempDir()
 }
 
@@ -378,7 +378,7 @@ func (c *Chunks) toMessage(chunk pb.Chunk,
 	if chunk.ChunkId != 0 {
 		panic("not first chunk")
 	}
-	env := c.getSSEnv(chunk)
+	env := c.getEnv(chunk)
 	snapDir := env.GetFinalDir()
 	m := pb.Message{}
 	m.Type = pb.InstallSnapshot

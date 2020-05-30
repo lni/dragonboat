@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -480,7 +480,7 @@ func (n *node) getLeaderID() (uint64, bool) {
 	return v, v != raft.NoLeader
 }
 
-func (n *node) notifyOffloaded(from rsm.From) {
+func (n *node) offloaded(from rsm.From) {
 	if n.sm.Offloaded(from) {
 		n.sysEvents.Publish(server.SystemEvent{
 			Type:      server.NodeUnloaded,
@@ -490,15 +490,12 @@ func (n *node) notifyOffloaded(from rsm.From) {
 	}
 }
 
-func (n *node) notifyLoaded(from rsm.From) {
+func (n *node) loaded(from rsm.From) {
 	n.sm.Loaded(from)
 }
 
 func (n *node) entriesToApply(ents []pb.Entry) (newents []pb.Entry) {
-	if len(ents) == 0 {
-		return
-	}
-	if n.stopped() {
+	if len(ents) == 0 || n.stopped() {
 		return
 	}
 	lastIdx := ents[len(ents)-1].Index
@@ -559,7 +556,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) bool {
 		return true
 	}
 	if snapshot.Index < n.pushedIndex ||
-		snapshot.Index < n.ss.getSnapshotIndex() ||
+		snapshot.Index < n.ss.getIndex() ||
 		snapshot.Index < applied {
 		panic("got a snapshot older than current applied state")
 	}
@@ -570,7 +567,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) bool {
 	if !n.pushTask(rec) {
 		return false
 	}
-	n.ss.setSnapshotIndex(snapshot.Index)
+	n.ss.setIndex(snapshot.Index)
 	n.pushedIndex = snapshot.Index
 	return true
 }
@@ -611,17 +608,17 @@ func (n *node) saveSnapshotRequired(applied uint64) bool {
 	if n.config.SnapshotEntries == 0 {
 		return false
 	}
-	si := n.ss.getSnapshotIndex()
+	si := n.ss.getIndex()
 	if n.pushedIndex <= n.config.SnapshotEntries+si ||
 		applied <= n.config.SnapshotEntries+si ||
-		applied <= n.config.SnapshotEntries+n.ss.getReqSnapshotIndex() {
+		applied <= n.config.SnapshotEntries+n.ss.getReqIndex() {
 		return false
 	}
 	if n.isBusySnapshotting() {
 		return false
 	}
 	plog.Infof("%s requested to create %s", n.id(), n.ssid(applied))
-	n.ss.setReqSnapshotIndex(applied)
+	n.ss.setReqIndex(applied)
 	return true
 }
 
@@ -629,8 +626,8 @@ func isSoftSnapshotError(err error) bool {
 	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
 }
 
-func (n *node) saveSnapshot(rec rsm.Task) error {
-	index, err := n.doSaveSnapshot(rec.SSRequest)
+func (n *node) save(rec rsm.Task) error {
+	index, err := n.doSave(rec.SSRequest)
 	if err != nil {
 		return err
 	}
@@ -643,21 +640,21 @@ func (n *node) saveSnapshot(rec rsm.Task) error {
 	return nil
 }
 
-func saveSnapshotAborted(err error) bool {
+func saveAborted(err error) bool {
 	return err == sm.ErrSnapshotStopped || err == sm.ErrSnapshotAborted
 }
 
-func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
+func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	if !req.Exported() && n.sm.GetLastApplied() <= n.ss.getSnapshotIndex() {
+	if !req.Exported() && n.sm.GetLastApplied() <= n.ss.getIndex() {
 		// a snapshot has been pushed to the sm but not applied yet
 		// or the snapshot has been applied and there is no further progress
 		return 0, nil
 	}
-	ss, ssenv, err := n.sm.SaveSnapshot(req)
+	ss, ssenv, err := n.sm.Save(req)
 	if err != nil {
-		if saveSnapshotAborted(err) {
+		if saveAborted(err) {
 			ssenv.MustRemoveTempDir()
 			n.pendingSnapshot.apply(req.Key, false, true, 0)
 			plog.Infof("%s aborted SaveSnapshot", n.id())
@@ -680,7 +677,7 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 			return 0, nil
 		}
 		// this can only happen in monkey test
-		if saveSnapshotAborted(err) {
+		if saveAborted(err) {
 			return 0, nil
 		}
 		return 0, err
@@ -698,42 +695,42 @@ func (n *node) doSaveSnapshot(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, nil
 	}
-	if err := n.compactSnapshot(req, ss.Index); err != nil {
+	if err := n.compact(req, ss.Index); err != nil {
 		return 0, err
 	}
-	n.ss.setSnapshotIndex(ss.Index)
+	n.ss.setIndex(ss.Index)
 	return ss.Index, nil
 }
 
-func (n *node) compactSnapshot(req rsm.SSRequest, index uint64) error {
-	compactionOverhead := n.getCompactionOverhead(req)
-	if index > compactionOverhead {
-		n.ss.setCompactLogTo(index - compactionOverhead)
+func (n *node) compact(req rsm.SSRequest, index uint64) error {
+	overhead := n.compactionOverhead(req)
+	if index > overhead {
+		n.ss.setCompactLogTo(index - overhead)
 	}
-	return n.snapshotter.Compact(index)
+	return n.snapshotter.compact(index)
 }
 
-func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
+func (n *node) compactionOverhead(req rsm.SSRequest) uint64 {
 	if req.OverrideCompaction {
 		return req.CompactionOverhead
 	}
 	return n.config.CompactionOverhead
 }
 
-func (n *node) streamSnapshot(sink pb.IChunkSink) error {
+func (n *node) stream(sink pb.IChunkSink) error {
 	if sink != nil {
 		plog.Infof("%s called streamSnapshot to node %d", n.id(), sink.ToNodeID())
-		if err := n.doStreamSnapshot(sink); err != nil {
+		if err := n.doStream(sink); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
-	if err := n.sm.StreamSnapshot(sink); err != nil {
+func (n *node) doStream(sink pb.IChunkSink) error {
+	if err := n.sm.Stream(sink); err != nil {
 		plog.Errorf("%s StreamSnapshot failed %v", n.id(), err)
-		if !saveSnapshotAborted(err) &&
+		if !saveAborted(err) &&
 			err != sm.ErrSnapshotStreaming &&
 			err != rsm.ErrTestKnobReturn {
 			return err
@@ -742,7 +739,7 @@ func (n *node) doStreamSnapshot(sink pb.IChunkSink) error {
 	return nil
 }
 
-func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
+func (n *node) recover(rec rsm.Task) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
@@ -776,12 +773,12 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 				plog.Errorf("%s sm.Sync failed %v", n.id(), err)
 				return 0, err
 			}
-			if err := n.snapshotter.Shrink(index); err != nil {
+			if err := n.snapshotter.shrink(index); err != nil {
 				plog.Errorf("%s snapshotter.Shrink failed %v", n.id(), err)
 				return 0, err
 			}
 		}
-		if err := n.snapshotter.Compact(index); err != nil {
+		if err := n.snapshotter.compact(index); err != nil {
 			plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
 			return 0, err
 		}
@@ -795,17 +792,17 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 	return index, nil
 }
 
-func (n *node) streamSnapshotDone() {
+func (n *node) streamDone() {
 	n.ss.notifySnapshotStatus(false, false, true, false, 0)
 	n.engine.setApplyReady(n.clusterID)
 }
 
-func (n *node) saveSnapshotDone() {
+func (n *node) saveDone() {
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.engine.setApplyReady(n.clusterID)
 }
 
-func (n *node) recoverFromSnapshotDone(index uint64) {
+func (n *node) recoverDone(index uint64) {
 	if !n.initialized() {
 		n.initialSnapshotDone(index)
 	} else {
@@ -846,20 +843,20 @@ func (n *node) runSyncTask() (bool, error) {
 		}
 	}
 	syncedIndex := n.sm.GetSyncedIndex()
-	if err := n.shrinkSnapshots(syncedIndex); err != nil {
+	if err := n.shrink(syncedIndex); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (n *node) shrinkSnapshots(index uint64) error {
+func (n *node) shrink(index uint64) error {
 	if n.snapshotLock.TryLock() {
 		defer n.snapshotLock.Unlock()
 		if !n.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
 		plog.Infof("%s will shrink snapshots up to %d", n.id(), index)
-		if err := n.snapshotter.Shrink(index); err != nil {
+		if err := n.snapshotter.shrink(index); err != nil {
 			return err
 		}
 	}
@@ -869,7 +866,7 @@ func (n *node) shrinkSnapshots(index uint64) error {
 func (n *node) compactSnapshots(index uint64) error {
 	if n.snapshotLock.TryLock() {
 		defer n.snapshotLock.Unlock()
-		if err := n.snapshotter.Compact(index); err != nil {
+		if err := n.snapshotter.compact(index); err != nil {
 			return err
 		}
 		n.sysEvents.Publish(server.SystemEvent{
@@ -1125,25 +1122,25 @@ func (n *node) handleEvents() bool {
 	if n.hasEntryToApply() {
 		hasEvent = true
 	}
-	if n.handleReadIndexRequests() {
+	if n.handleReadIndex() {
 		hasEvent = true
 	}
 	if n.handleReceivedMessages() {
 		hasEvent = true
 	}
-	if n.handleConfigChangeMessage() {
+	if n.handleConfigChange() {
 		hasEvent = true
 	}
 	if n.handleProposals() {
 		hasEvent = true
 	}
-	if n.handleLeaderTransferRequest() {
+	if n.handleLeaderTransfer() {
 		hasEvent = true
 	}
-	if n.handleSnapshotRequest(lastApplied) {
+	if n.handleSnapshot(lastApplied) {
 		hasEvent = true
 	}
-	if n.handleCompactionRequest() {
+	if n.handleCompaction() {
 		hasEvent = true
 	}
 	if hasEvent {
@@ -1158,11 +1155,11 @@ func (n *node) handleEvents() bool {
 	return hasEvent
 }
 
-func (n *node) handleCompactionRequest() bool {
+func (n *node) handleCompaction() bool {
 	return n.ss.hasCompactedTo() || n.ss.hasCompactLogTo()
 }
 
-func (n *node) handleLeaderTransferRequest() bool {
+func (n *node) handleLeaderTransfer() bool {
 	target, ok := n.pendingLeaderTransfer.get()
 	if ok {
 		n.p.RequestLeaderTransfer(target)
@@ -1170,19 +1167,19 @@ func (n *node) handleLeaderTransferRequest() bool {
 	return ok
 }
 
-func (n *node) handleSnapshotRequest(lastApplied uint64) bool {
+func (n *node) handleSnapshot(lastApplied uint64) bool {
 	var req rsm.SSRequest
 	select {
 	case req = <-n.snapshotC:
 	default:
 		return false
 	}
-	si := n.ss.getReqSnapshotIndex()
+	si := n.ss.getReqIndex()
 	if !req.Exported() && lastApplied == si {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}
-	n.ss.setReqSnapshotIndex(lastApplied)
+	n.ss.setReqIndex(lastApplied)
 	n.pushTakeSnapshotRequest(req)
 	return true
 }
@@ -1201,7 +1198,7 @@ func (n *node) handleProposals() bool {
 	return false
 }
 
-func (n *node) handleReadIndexRequests() bool {
+func (n *node) handleReadIndex() bool {
 	reqs := n.incomingReadIndexes.get()
 	if len(reqs) > 0 {
 		n.recordActivity(pb.ReadIndex)
@@ -1213,7 +1210,7 @@ func (n *node) handleReadIndexRequests() bool {
 	return false
 }
 
-func (n *node) handleConfigChangeMessage() bool {
+func (n *node) handleConfigChange() bool {
 	if len(n.confChangeC) == 0 {
 		return false
 	}
@@ -1238,14 +1235,14 @@ func (n *node) handleConfigChangeMessage() bool {
 }
 
 func (n *node) isBusySnapshotting() bool {
-	snapshotting := n.ss.recoveringFromSnapshot()
+	snapshotting := n.ss.recovering()
 	if !n.concurrentSnapshot() {
-		snapshotting = snapshotting || n.ss.takingSnapshot()
+		snapshotting = snapshotting || n.ss.saving()
 	}
 	return snapshotting && n.sm.TaskChanBusy()
 }
 
-func (n *node) handleLocalTickMessage(count uint64) {
+func (n *node) handleLocalTick(count uint64) {
 	if count > n.config.ElectionRTT {
 		count = n.config.ElectionRTT
 	}
@@ -1292,7 +1289,7 @@ func (n *node) handleReceivedMessages() bool {
 			msgs[i].Entries = nil
 		}
 	}
-	n.handleLocalTickMessage(ltCount)
+	n.handleLocalTick(ltCount)
 	return hasEvent
 }
 
@@ -1317,26 +1314,26 @@ func (n *node) setInitialStatus(index uint64) {
 		panic("setInitialStatus called twice")
 	}
 	plog.Infof("%s initial index set to %d", n.id(), index)
-	n.ss.setSnapshotIndex(index)
+	n.ss.setIndex(index)
 	n.pushedIndex = index
 	n.setInitialized()
 }
 
 func (n *node) handleSnapshotTask(task rsm.Task) {
-	if n.ss.recoveringFromSnapshot() {
-		plog.Panicf("%s is recovering from snapshot again", n.id())
+	if n.ss.recovering() {
+		plog.Panicf("%s recovering from snapshot again", n.id())
 	}
 	if task.SnapshotAvailable {
 		n.reportAvailableSnapshot(task)
 	} else if task.SnapshotRequested {
-		if n.ss.takingSnapshot() {
-			plog.Infof("%s is taking snapshot, ignored new snapshot req", n.id())
+		if n.ss.saving() {
+			plog.Infof("%s taking snapshot, ignored new snapshot req", n.id())
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
 		n.reportRequestedSnapshot(task)
 	} else if task.StreamSnapshot {
-		if !n.canStreamSnapshot() {
+		if !n.canStream() {
 			n.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
 			return
 		}
@@ -1352,7 +1349,7 @@ func (n *node) reportSnapshotStatus(clusterID uint64,
 }
 
 func (n *node) reportStreamSnapshot(rec rsm.Task) {
-	n.ss.setStreamingSnapshot()
+	n.ss.setStreaming()
 	getSinkFn := func() pb.IChunkSink {
 		conn := n.getStreamConnection(rec.ClusterID, rec.NodeID)
 		if conn == nil {
@@ -1361,16 +1358,16 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 		}
 		return conn
 	}
-	n.ss.setStreamSnapshotReq(rec, getSinkFn)
+	n.ss.setStreamReq(rec, getSinkFn)
 	n.engine.setStreamReady(n.clusterID)
 }
 
-func (n *node) canStreamSnapshot() bool {
-	if n.ss.streamingSnapshot() {
+func (n *node) canStream() bool {
+	if n.ss.streaming() {
 		plog.Infof("%s ignored task.StreamSnapshot", n.id())
 		return false
 	}
-	if !n.sm.ReadyToStreamSnapshot() {
+	if !n.sm.ReadyToStream() {
 		plog.Infof("%s is not ready to stream snapshot", n.id())
 		return false
 	}
@@ -1378,36 +1375,36 @@ func (n *node) canStreamSnapshot() bool {
 }
 
 func (n *node) reportRequestedSnapshot(rec rsm.Task) {
-	n.ss.setTakingSnapshot()
-	n.ss.setSaveSnapshotReq(rec)
+	n.ss.setSaving()
+	n.ss.setSaveReq(rec)
 	n.engine.setRequestedSnapshotReady(n.clusterID)
 }
 
 func (n *node) reportAvailableSnapshot(rec rsm.Task) {
-	n.ss.setRecoveringFromSnapshot()
-	n.ss.setRecoverFromSnapshotReq(rec)
+	n.ss.setRecovering()
+	n.ss.setRecoverReq(rec)
 	n.engine.setAvailableSnapshotReady(n.clusterID)
 }
 
-func (n *node) processSnapshotStatusTransition() bool {
-	if n.processTakeSnapshotStatus() {
+func (n *node) processStatusTransition() bool {
+	if n.processSaveStatus() {
 		return true
 	}
-	if n.processStreamSnapshotStatus() {
+	if n.processStreamStatus() {
 		return true
 	}
-	if n.processRecoverSnapshotStatus() {
+	if n.processRecoverStatus() {
 		return true
 	}
-	if task, ok := n.getUninitializedNodeTask(); ok {
-		n.ss.setRecoveringFromSnapshot()
+	if task, ok := n.uninitializedNodeTask(); ok {
+		n.ss.setRecovering()
 		n.reportAvailableSnapshot(task)
 		return true
 	}
 	return false
 }
 
-func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
+func (n *node) uninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
 		plog.Infof("%s checking initial snapshot", n.id())
 		return rsm.Task{
@@ -1419,8 +1416,8 @@ func (n *node) getUninitializedNodeTask() (rsm.Task, bool) {
 	return rsm.Task{}, false
 }
 
-func (n *node) processRecoverSnapshotStatus() bool {
-	if n.ss.recoveringFromSnapshot() {
+func (n *node) processRecoverStatus() bool {
+	if n.ss.recovering() {
 		rec, ok := n.ss.getRecoverCompleted()
 		if !ok {
 			return true
@@ -1437,35 +1434,35 @@ func (n *node) processRecoverSnapshotStatus() bool {
 				NodeID:    n.nodeID,
 			})
 		}
-		n.ss.clearRecoveringFromSnapshot()
+		n.ss.clearRecovering()
 	}
 	return false
 }
 
-func (n *node) processTakeSnapshotStatus() bool {
-	if n.ss.takingSnapshot() {
-		rec, ok := n.ss.getSaveSnapshotCompleted()
+func (n *node) processSaveStatus() bool {
+	if n.ss.saving() {
+		rec, ok := n.ss.getSaveCompleted()
 		if !ok {
 			return !n.concurrentSnapshot()
 		}
 		if rec.SnapshotRequested && !n.initialized() {
 			plog.Panicf("%s taking snapshot when uninitialized", n.id())
 		}
-		n.ss.clearTakingSnapshot()
+		n.ss.clearSaving()
 	}
 	return false
 }
 
-func (n *node) processStreamSnapshotStatus() bool {
-	if n.ss.streamingSnapshot() {
+func (n *node) processStreamStatus() bool {
+	if n.ss.streaming() {
 		if !n.OnDiskStateMachine() {
 			panic("non-on disk sm is streaming snapshot")
 		}
-		_, ok := n.ss.getStreamSnapshotCompleted()
+		_, ok := n.ss.getStreamCompleted()
 		if !ok {
 			return false
 		}
-		n.ss.clearStreamingSnapshot()
+		n.ss.clearStreaming()
 	}
 	return false
 }

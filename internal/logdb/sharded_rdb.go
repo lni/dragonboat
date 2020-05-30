@@ -295,7 +295,7 @@ func (mw *ShardedRDB) compactionWorkerMain() {
 		case <-mw.stopper.ShouldStop():
 			return
 		case <-mw.compactionCh:
-			mw.compaction()
+			mw.compact()
 		}
 		select {
 		case <-mw.stopper.ShouldStop():
@@ -320,12 +320,12 @@ func (mw *ShardedRDB) addCompaction(clusterID uint64,
 	return done
 }
 
-func (mw *ShardedRDB) compaction() {
+func (mw *ShardedRDB) compact() {
 	for {
 		if t, hasTask := mw.compactions.getTask(); hasTask {
 			idx := mw.partitioner.GetPartitionID(t.clusterID)
 			shard := mw.shards[idx]
-			if err := shard.compaction(t.clusterID, t.nodeID, t.index); err != nil {
+			if err := shard.compact(t.clusterID, t.nodeID, t.index); err != nil {
 				panic(err)
 			}
 			atomic.AddUint64(&mw.completedCompactions, 1)

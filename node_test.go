@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -328,8 +328,8 @@ func step(nodes []*node) bool {
 			panic(err)
 		}
 		node.commitRaftUpdate(ud)
-		if ud.LastApplied-node.ss.getReqSnapshotIndex() > node.config.SnapshotEntries {
-			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+		if ud.LastApplied-node.ss.getReqIndex() > node.config.SnapshotEntries {
+			if err := node.save(rsm.Task{}); err != nil {
 				panic(err)
 			}
 		}
@@ -344,7 +344,7 @@ func step(nodes []*node) bool {
 						panic(err)
 					}
 				} else if rec.SnapshotRequested {
-					if err := node.saveSnapshot(rsm.Task{}); err != nil {
+					if err := node.save(rsm.Task{}); err != nil {
 						panic(err)
 					}
 				}
@@ -1434,10 +1434,10 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+			if err := node.save(rsm.Task{}); err != nil {
 				t.Fatalf("%v", err)
 			}
-			if err := node.saveSnapshot(rsm.Task{}); err != nil {
+			if err := node.save(rsm.Task{}); err != nil {
 				t.Fatalf("%v", err)
 			}
 		}
@@ -1568,13 +1568,13 @@ func TestPayloadTooBig(t *testing.T) {
 
 func TestProcessUninitilizedNode(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
-	_, ok := n.getUninitializedNodeTask()
+	_, ok := n.uninitializedNodeTask()
 	if !ok {
 		t.Errorf("failed to returned the recover request")
 	}
 	n2 := &node{ss: &snapshotState{}}
 	n2.initializedMu.initialized = true
-	_, ok = n2.getUninitializedNodeTask()
+	_, ok = n2.uninitializedNodeTask()
 	if ok {
 		t.Errorf("unexpected recover from snapshot request")
 	}
@@ -1582,26 +1582,26 @@ func TestProcessUninitilizedNode(t *testing.T) {
 
 func TestProcessRecoveringNodeCanBeSkipped(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
-	if n.processRecoverSnapshotStatus() {
+	if n.processRecoverStatus() {
 		t.Errorf("processRecoveringNode not skipped")
 	}
 }
 
 func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
-	if n.processTakeSnapshotStatus() {
+	if n.processSaveStatus() {
 		t.Errorf("processTakingSnapshotNode not skipped")
 	}
 }
 
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
-	n.ss.setRecoveringFromSnapshot()
+	n.ss.setRecovering()
 	n.ss.notifySnapshotStatus(false, true, false, true, 100)
-	if n.processRecoverSnapshotStatus() {
+	if n.processRecoverStatus() {
 		t.Errorf("node unexpectedly skipped")
 	}
-	if n.ss.recoveringFromSnapshot() {
+	if n.ss.recovering() {
 		t.Errorf("still recovering")
 	}
 	if !n.initialized() {
@@ -1614,21 +1614,21 @@ func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 
 func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
 	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
-	n.ss.setRecoveringFromSnapshot()
-	if !n.processRecoverSnapshotStatus() {
+	n.ss.setRecovering()
+	if !n.processRecoverStatus() {
 		t.Errorf("not skipped")
 	}
 }
 
 func TestTakingSnapshotNodeCanComplete(t *testing.T) {
 	n := &node{ss: &snapshotState{}}
-	n.ss.setTakingSnapshot()
+	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.initializedMu.initialized = true
-	if n.processTakeSnapshotStatus() {
+	if n.processSaveStatus() {
 		t.Errorf("node unexpectedly skipped")
 	}
-	if n.ss.takingSnapshot() {
+	if n.ss.saving() {
 		t.Errorf("still taking snapshot")
 	}
 }
@@ -1640,9 +1640,9 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 		}
 	}()
 	n := &node{ss: &snapshotState{}}
-	n.ss.setTakingSnapshot()
+	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.processTakeSnapshotStatus()
+	n.processSaveStatus()
 }
 
 func TestGetCompactionOverhead(t *testing.T) {
@@ -1658,10 +1658,10 @@ func TestGetCompactionOverhead(t *testing.T) {
 		OverrideCompaction: false,
 		CompactionOverhead: 456,
 	}
-	if v := n.getCompactionOverhead(req1); v != 123 {
+	if v := n.compactionOverhead(req1); v != 123 {
 		t.Errorf("snapshot overhead override not applied")
 	}
-	if v := n.getCompactionOverhead(req2); v != 234 {
+	if v := n.compactionOverhead(req2); v != 234 {
 		t.Errorf("snapshot overhead override unexpectedly applied")
 	}
 }
@@ -1686,9 +1686,9 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 	if n.concurrentSnapshot() {
 		t.Errorf("concurrency not suppose to be supported")
 	}
-	n.ss.setTakingSnapshot()
+	n.ss.setSaving()
 	n.initializedMu.initialized = true
-	if !n.processTakeSnapshotStatus() {
+	if !n.processSaveStatus() {
 		t.Fatalf("node not skipped")
 	}
 }
@@ -1702,9 +1702,9 @@ func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *tes
 	if !n.concurrentSnapshot() {
 		t.Errorf("concurrency not supported")
 	}
-	n.ss.setTakingSnapshot()
+	n.ss.setSaving()
 	n.initializedMu.initialized = true
-	if n.processTakeSnapshotStatus() {
+	if n.processSaveStatus() {
 		t.Fatalf("node unexpectedly skipped")
 	}
 }
@@ -1732,7 +1732,7 @@ func TestSaveSnapshotAborted(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		if saveSnapshotAborted(tt.err) != tt.aborted {
+		if saveAborted(tt.err) != tt.aborted {
 			t.Errorf("%d, saveSnapshotAborted failed", idx)
 		}
 	}

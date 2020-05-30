@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ func (s *snapshotter) Stream(streamable rsm.IStreamable,
 
 func (s *snapshotter) Save(savable rsm.ISavable,
 	meta *rsm.SSMeta) (ss *pb.Snapshot, env *server.SSEnv, err error) {
-	env = s.getCustomSSEnv(meta)
+	env = s.getCustomEnv(meta)
 	if err := env.CreateTempDir(); err != nil {
 		return nil, env, err
 	}
@@ -183,7 +183,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot, req rsm.SSRequest) error {
 		Index:   snapshot.Index,
 		Request: req,
 	}
-	env := s.getCustomSSEnv(meta)
+	env := s.getCustomEnv(meta)
 	if err := env.SaveSSMetadata(&snapshot); err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot, req rsm.SSRequest) error {
 }
 
 func (s *snapshotter) GetFilePath(index uint64) string {
-	env := s.getSSEnv(index)
+	env := s.getEnv(index)
 	return env.GetFilepath()
 }
 
@@ -234,7 +234,7 @@ func (s *snapshotter) IsNoSnapshotError(e error) bool {
 	return e == ErrNoSnapshot
 }
 
-func (s *snapshotter) Shrink(shrinkTo uint64) error {
+func (s *snapshotter) shrink(shrinkTo uint64) error {
 	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, shrinkTo)
 	if err != nil {
 		return err
@@ -245,7 +245,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
 		}
 		if !ss.Dummy && !ss.Witness {
-			env := s.getSSEnv(ss.Index)
+			env := s.getEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
 			plog.Infof("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
@@ -260,7 +260,7 @@ func (s *snapshotter) Shrink(shrinkTo uint64) error {
 	return nil
 }
 
-func (s *snapshotter) Compact(removeUpTo uint64) error {
+func (s *snapshotter) compact(removeUpTo uint64) error {
 	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, removeUpTo)
 	if err != nil {
 		return err
@@ -272,14 +272,14 @@ func (s *snapshotter) Compact(removeUpTo uint64) error {
 	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
 	for _, ss := range selected {
 		plog.Infof("%s compacting %s", s.id(), s.ssid(ss.Index))
-		if err := s.removeSnapshot(ss.Index); err != nil {
+		if err := s.remove(ss.Index); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *snapshotter) ProcessOrphans() error {
+func (s *snapshotter) processOrphans() error {
 	files, err := s.fs.List(s.dir)
 	if err != nil {
 		return err
@@ -302,7 +302,7 @@ func (s *snapshotter) ProcessOrphans() error {
 			continue
 		}
 		fdir := s.fs.PathJoin(s.dir, fi.Name())
-		if s.isOrphanDir(fi.Name()) {
+		if s.isOrphan(fi.Name()) {
 			plog.Infof("found a orphan snapshot dir %s, %s", fi.Name(), fdir)
 			var ss pb.Snapshot
 			if err := fileutil.GetFlagFileContent(fdir,
@@ -324,17 +324,17 @@ func (s *snapshotter) ProcessOrphans() error {
 			}
 			if remove {
 				plog.Infof("going to delete orphan %s in %s", s.ssid(ss.Index), fdir)
-				if err := s.removeSnapshot(ss.Index); err != nil {
+				if err := s.remove(ss.Index); err != nil {
 					return err
 				}
 			} else {
 				plog.Infof("keep %s, %s", s.ssid(ss.Index), fdir)
-				env := s.getSSEnv(ss.Index)
+				env := s.getEnv(ss.Index)
 				if err := env.RemoveFlagFile(); err != nil {
 					return err
 				}
 			}
-		} else if s.isZombieDir(fi.Name()) {
+		} else if s.isZombie(fi.Name()) {
 			plog.Infof("going to delete a zombie dir %s", fdir)
 			if err := s.fs.RemoveAll(fdir); err != nil {
 				return err
@@ -348,26 +348,26 @@ func (s *snapshotter) ProcessOrphans() error {
 	return nil
 }
 
-func (s *snapshotter) removeSnapshot(index uint64) error {
+func (s *snapshotter) remove(index uint64) error {
 	if err := s.logdb.DeleteSnapshot(s.clusterID,
 		s.nodeID, index); err != nil {
 		return err
 	}
-	env := s.getSSEnv(index)
+	env := s.getEnv(index)
 	return env.RemoveFinalDir()
 }
 
 func (s *snapshotter) removeFlagFile(index uint64) error {
-	env := s.getSSEnv(index)
+	env := s.getEnv(index)
 	return env.RemoveFlagFile()
 }
 
-func (s *snapshotter) getSSEnv(index uint64) *server.SSEnv {
+func (s *snapshotter) getEnv(index uint64) *server.SSEnv {
 	return server.NewSSEnv(s.rootDirFunc,
 		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshottingMode, s.fs)
 }
 
-func (s *snapshotter) getCustomSSEnv(meta *rsm.SSMeta) *server.SSEnv {
+func (s *snapshotter) getCustomEnv(meta *rsm.SSMeta) *server.SSEnv {
 	if meta.Request.Exported() {
 		if len(meta.Request.Path) == 0 {
 			plog.Panicf("Path is empty when exporting snapshot")
@@ -378,7 +378,7 @@ func (s *snapshotter) getCustomSSEnv(meta *rsm.SSMeta) *server.SSEnv {
 		return server.NewSSEnv(getPath,
 			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode, s.fs)
 	}
-	return s.getSSEnv(meta.Index)
+	return s.getEnv(meta.Index)
 }
 
 func (s *snapshotter) saveToLogDB(snapshot pb.Snapshot) error {
@@ -390,17 +390,17 @@ func (s *snapshotter) saveToLogDB(snapshot pb.Snapshot) error {
 	return s.logdb.SaveSnapshots([]pb.Update{rec})
 }
 
-func (s *snapshotter) dirNameMatch(dir string) bool {
+func (s *snapshotter) dirMatch(dir string) bool {
 	return server.SnapshotDirNameRe.Match([]byte(dir))
 }
 
-func (s *snapshotter) isZombieDir(dir string) bool {
+func (s *snapshotter) isZombie(dir string) bool {
 	return server.GenSnapshotDirNameRe.Match([]byte(dir)) ||
 		server.RecvSnapshotDirNameRe.Match([]byte(dir))
 }
 
-func (s *snapshotter) isOrphanDir(dir string) bool {
-	if !s.dirNameMatch(dir) {
+func (s *snapshotter) isOrphan(dir string) bool {
+	if !s.dirMatch(dir) {
 		return false
 	}
 	fdir := s.fs.PathJoin(s.dir, dir)

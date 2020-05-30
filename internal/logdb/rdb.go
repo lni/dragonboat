@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -470,7 +470,7 @@ func (r *rdb) saveRemoveNodeData(wb kv.IWriteBatch,
 	}
 }
 
-func (r *rdb) compaction(clusterID uint64, nodeID uint64, index uint64) error {
+func (r *rdb) compact(clusterID uint64, nodeID uint64, index uint64) error {
 	op := func(fk *PooledKey, lk *PooledKey) error {
 		return r.kvs.CompactEntries(fk.Key(), lk.Key())
 	}
@@ -479,9 +479,6 @@ func (r *rdb) compaction(clusterID uint64, nodeID uint64, index uint64) error {
 
 func (r *rdb) saveEntries(updates []pb.Update,
 	wb kv.IWriteBatch, ctx raftio.IContext) {
-	if len(updates) == 0 {
-		return
-	}
 	for _, ud := range updates {
 		clusterID := ud.ClusterID
 		nodeID := ud.NodeID
