@@ -74,7 +74,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 			Hostname:     ctx.hostname,
 			DeploymentId: testDeploymentID,
 		}
-		err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
+		err = fileutil.CreateFlagFile(dirs[0], flagFilename, &status, fs)
 		if err != nil {
 			t.Errorf("failed to create flag file %v", err)
 		}
@@ -113,7 +113,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if hardHashMismatch {
 		status.HardHash = 1
 	}
-	err = fileutil.CreateFlagFile(dirs[0], addressFilename, &status, fs)
+	err = fileutil.CreateFlagFile(dirs[0], flagFilename, &status, fs)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -229,4 +229,18 @@ func TestRemoveSavedSnapshots(t *testing.T) {
 		}
 	}
 	reportLeakedFD(fs, t)
+}
+
+func TestCompatibleLogDBType(t *testing.T) {
+	sc := &Context{}
+	if !sc.compatibleLogDBType("rocksdb", "pebble") ||
+		!sc.compatibleLogDBType("pebble", "rocksdb") {
+		t.Errorf("rocksdb/pebble marked as not compatible")
+	}
+	if sc.compatibleLogDBType("rocksdb", "1") ||
+		sc.compatibleLogDBType("pebble", "2") ||
+		sc.compatibleLogDBType("1", "rocksdb") ||
+		sc.compatibleLogDBType("2", "pebble") {
+		t.Errorf("unexpectedly marked as compatible")
+	}
 }

@@ -53,19 +53,19 @@ var (
 	// directory failed.
 	ErrLockDirectory = errors.New("failed to lock data directory")
 	// ErrHardSettingsChanged indicates that hard settings changed.
-	ErrHardSettingsChanged = errors.New("settings in internal/settings/hard.go changed")
-	// ErrIncompatibleData indicates that the configured data directory contains
+	ErrHardSettingsChanged = errors.New("internal/settings/hard.go settings changed")
+	// ErrIncompatibleData indicates that the specified data directory contains
 	// incompatible data.
-	ErrIncompatibleData = errors.New("Incompatible LogDB data format")
-	// ErrLogDBBrokenChange indicates that you NodeHost failed to be created as
-	// your code is hit by the LogDB broken change introduced in v3.0. Set your
+	ErrIncompatibleData = errors.New("incompatible LogDB data format")
+	// ErrLogDBBrokenChange indicates that your NodeHost failed to be created as
+	// your code is hit by the LogDB breaking change introduced in v3.0. Set your
 	// NodeHostConfig.LogDBFactory to rocksdb.OpenBatchedLogDB to continue.
-	ErrLogDBBrokenChange = errors.New("Using new LogDB implementation on existing Raft Log")
+	ErrLogDBBrokenChange = errors.New("using new LogDB on existing Raft Log")
 )
 
 const (
-	addressFilename = "dragonboat.ds"
-	lockFilename    = "LOCK"
+	flagFilename = "dragonboat.ds"
+	lockFilename = "LOCK"
 )
 
 // Context is the server context for NodeHost.
@@ -281,10 +281,10 @@ func (sc *Context) checkNodeHostDir(did uint64,
 	addr string, hostname string, binVer uint32, name string, dbto bool) error {
 	dirs, lldirs := sc.getDataDirs()
 	for i := 0; i < len(dirs); i++ {
-		if err := sc.compatible(dirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
+		if err := sc.check(dirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
 			return err
 		}
-		if err := sc.compatible(lldirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
+		if err := sc.check(lldirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
 			return err
 		}
 	}
@@ -308,10 +308,21 @@ func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
 
-func (sc *Context) compatible(dir string,
+func (sc *Context) compatibleLogDBType(saved string, name string) bool {
+	if len(saved) > 0 && saved != name {
+		if !((saved == "rocksdb" && name == "pebble") ||
+			(saved == "pebble" && name == "rocksdb")) {
+			return false
+		}
+	}
+	return true
+}
+
+func (sc *Context) check(dir string,
 	did uint64, addr string, hostname string,
-	ldbBinVer uint32, name string, dbto bool) error {
-	fp := sc.fs.PathJoin(dir, addressFilename)
+	binVer uint32, name string, dbto bool) error {
+	fn := flagFilename
+	fp := sc.fs.PathJoin(dir, fn)
 	se := func(s1 string, s2 string) bool {
 		return strings.EqualFold(strings.TrimSpace(s1), strings.TrimSpace(s2))
 	}
@@ -319,66 +330,63 @@ func (sc *Context) compatible(dir string,
 		if dbto {
 			return nil
 		}
-		status := raftpb.RaftDataStatus{
-			Address:         addr,
-			BinVer:          ldbBinVer,
-			HardHash:        0,
-			LogdbType:       name,
-			Hostname:        hostname,
-			DeploymentId:    did,
-			StepWorkerCount: settings.Hard.StepEngineWorkerCount,
-			LogdbShardCount: settings.Hard.LogDBPoolSize,
-			MaxSessionCount: settings.Hard.LRUMaxSessionCount,
-			EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
-		}
-		err = fileutil.CreateFlagFile(dir, addressFilename, &status, sc.fs)
-		if err != nil {
-			return err
-		}
+		return sc.createFlagFile(dir, did, addr, hostname, binVer, name)
 	} else {
-		status := raftpb.RaftDataStatus{}
-		err := fileutil.GetFlagFileContent(dir, addressFilename, &status, sc.fs)
-		if err != nil {
+		s := raftpb.RaftDataStatus{}
+		if err := fileutil.GetFlagFileContent(dir, fn, &s, sc.fs); err != nil {
 			return err
 		}
-		if len(status.LogdbType) > 0 && status.LogdbType != name {
-			if !((status.LogdbType == "rocksdb" && name == "pebble") ||
-				(status.LogdbType == "pebble" && name == "rocksdb")) {
-				return ErrLogDBType
-			}
+		if !sc.compatibleLogDBType(s.LogdbType, name) {
+			return ErrLogDBType
 		}
 		if !dbto {
-			if !se(string(status.Address), addr) {
+			if !se(string(s.Address), addr) {
 				return ErrNotOwner
 			}
-			if len(status.Hostname) > 0 && !se(status.Hostname, hostname) {
+			if len(s.Hostname) > 0 && !se(s.Hostname, hostname) {
 				return ErrHostnameChanged
 			}
-			if status.DeploymentId != 0 && status.DeploymentId != did {
+			if s.DeploymentId != 0 && s.DeploymentId != did {
 				return ErrDeploymentIDChanged
 			}
-			if status.BinVer != ldbBinVer {
-				if status.BinVer == raftio.LogDBBinVersion &&
-					ldbBinVer == raftio.PlainLogDBBinVersion {
+			if s.BinVer != binVer {
+				if s.BinVer == raftio.LogDBBinVersion &&
+					binVer == raftio.PlainLogDBBinVersion {
 					return ErrLogDBBrokenChange
 				}
-				plog.Errorf("binary compatibility version - data dir %d, software %d",
-					status.BinVer, ldbBinVer)
+				plog.Errorf("logdb binary ver changed, %d vs %d", s.BinVer, binVer)
 				return ErrIncompatibleData
 			}
-			if status.HardHash != 0 {
-				if status.HardHash != settings.Hard.Hash() {
+			if s.HardHash != 0 {
+				if s.HardHash != settings.Hard.Hash() {
 					return ErrHardSettingsChanged
 				}
 			} else {
-				if status.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
-					status.LogdbShardCount != settings.Hard.LogDBPoolSize ||
-					status.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
-					status.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
+				if s.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
+					s.LogdbShardCount != settings.Hard.LogDBPoolSize ||
+					s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
+					s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
 					return ErrHardSettingChanged
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func (sc *Context) createFlagFile(dir string,
+	did uint64, addr string, hostname string, ver uint32, name string) error {
+	s := raftpb.RaftDataStatus{
+		Address:         addr,
+		BinVer:          ver,
+		HardHash:        0,
+		LogdbType:       name,
+		Hostname:        hostname,
+		DeploymentId:    did,
+		StepWorkerCount: settings.Hard.StepEngineWorkerCount,
+		LogdbShardCount: settings.Hard.LogDBPoolSize,
+		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
+		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
+	}
+	return fileutil.CreateFlagFile(dir, flagFilename, &s, sc.fs)
 }
