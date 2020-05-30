@@ -1470,11 +1470,6 @@ func (n *node) processStreamSnapshotStatus() bool {
 	return false
 }
 
-func (n *node) batchedReadIndex() {
-	ctx := n.pendingReadIndexes.nextCtx()
-	n.p.ReadIndex(ctx)
-}
-
 func (n *node) tick() {
 	if n.p == nil {
 		panic("rc node is still nil")
