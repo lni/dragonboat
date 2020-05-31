@@ -757,7 +757,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 			plog.Panicf("%s, Open returned index %d (>0)", n.id(), idx)
 		}
 	}
-	index, err := n.sm.RecoverFromSnapshot(rec)
+	index, err := n.sm.Recover(rec)
 	if err == sm.ErrSnapshotStopped {
 		plog.Infof("%s aborted its RecoverFromSnapshot", n.id())
 		return 0, err

@@ -280,7 +280,7 @@ func step(nodes []*node) bool {
 			commit := rsm.Task{
 				InitialSnapshot: true,
 			}
-			index, _ := node.sm.RecoverFromSnapshot(commit)
+			index, _ := node.sm.Recover(commit)
 			node.setInitialStatus(index)
 		}
 		if node.initialized() {
@@ -340,7 +340,7 @@ func step(nodes []*node) bool {
 			}
 			if rec.IsSnapshotTask() {
 				if rec.SnapshotAvailable || rec.InitialSnapshot {
-					if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
+					if _, err := node.sm.Recover(rec); err != nil {
 						panic(err)
 					}
 				} else if rec.SnapshotRequested {

@@ -224,7 +224,7 @@ func (s *StateMachine) DestroyedC() <-chan struct{} {
 }
 
 // Recover applies the snapshot.
-func (s *StateMachine) RecoverFromSnapshot(t Task) (uint64, error) {
+func (s *StateMachine) Recover(t Task) (uint64, error) {
 	ss, err := s.getSnapshot(t)
 	if err != nil {
 		return 0, err

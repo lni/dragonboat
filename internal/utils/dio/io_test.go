@@ -115,7 +115,7 @@ func TestCompressorDecompressor(t *testing.T) {
 		d := NewDecompressor(Snappy, buf)
 		for {
 			r := make([]byte, 1024)
-			n, err = d.Read(r)
+			_, err = d.Read(r)
 			if err != nil {
 				t.Fatalf("failed to read %v", err)
 			}

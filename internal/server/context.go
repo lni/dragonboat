@@ -331,43 +331,42 @@ func (sc *Context) check(dir string,
 			return nil
 		}
 		return sc.createFlagFile(dir, did, addr, hostname, binVer, name)
-	} else {
-		s := raftpb.RaftDataStatus{}
-		if err := fileutil.GetFlagFileContent(dir, fn, &s, sc.fs); err != nil {
-			return err
+	}
+	s := raftpb.RaftDataStatus{}
+	if err := fileutil.GetFlagFileContent(dir, fn, &s, sc.fs); err != nil {
+		return err
+	}
+	if !sc.compatibleLogDBType(s.LogdbType, name) {
+		return ErrLogDBType
+	}
+	if !dbto {
+		if !se(string(s.Address), addr) {
+			return ErrNotOwner
 		}
-		if !sc.compatibleLogDBType(s.LogdbType, name) {
-			return ErrLogDBType
+		if len(s.Hostname) > 0 && !se(s.Hostname, hostname) {
+			return ErrHostnameChanged
 		}
-		if !dbto {
-			if !se(string(s.Address), addr) {
-				return ErrNotOwner
+		if s.DeploymentId != 0 && s.DeploymentId != did {
+			return ErrDeploymentIDChanged
+		}
+		if s.BinVer != binVer {
+			if s.BinVer == raftio.LogDBBinVersion &&
+				binVer == raftio.PlainLogDBBinVersion {
+				return ErrLogDBBrokenChange
 			}
-			if len(s.Hostname) > 0 && !se(s.Hostname, hostname) {
-				return ErrHostnameChanged
+			plog.Errorf("logdb binary ver changed, %d vs %d", s.BinVer, binVer)
+			return ErrIncompatibleData
+		}
+		if s.HardHash != 0 {
+			if s.HardHash != settings.Hard.Hash() {
+				return ErrHardSettingsChanged
 			}
-			if s.DeploymentId != 0 && s.DeploymentId != did {
-				return ErrDeploymentIDChanged
-			}
-			if s.BinVer != binVer {
-				if s.BinVer == raftio.LogDBBinVersion &&
-					binVer == raftio.PlainLogDBBinVersion {
-					return ErrLogDBBrokenChange
-				}
-				plog.Errorf("logdb binary ver changed, %d vs %d", s.BinVer, binVer)
-				return ErrIncompatibleData
-			}
-			if s.HardHash != 0 {
-				if s.HardHash != settings.Hard.Hash() {
-					return ErrHardSettingsChanged
-				}
-			} else {
-				if s.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
-					s.LogdbShardCount != settings.Hard.LogDBPoolSize ||
-					s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
-					s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
-					return ErrHardSettingChanged
-				}
+		} else {
+			if s.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
+				s.LogdbShardCount != settings.Hard.LogDBPoolSize ||
+				s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
+				s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
+				return ErrHardSettingChanged
 			}
 		}
 	}
