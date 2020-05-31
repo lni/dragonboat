@@ -1,4 +1,4 @@
-# Copyright 2017-2020 Lei Ni (nilei81@gmail.com)
+# Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -138,10 +138,6 @@ else
 SELECTED_BENCH_OPTION=-run ^$$ -bench=.
 endif
 
-# testing bin
-SNAPSHOT_BENCHMARK_TESTING_BIN=snapbench
-LOGDB_CHECKER_BIN=logdb-checker-bin
-
 # go build tags
 GOBUILDTAGVALS+=$(LOGDB_TAG)
 GOBUILDTAGS="$(GOBUILDTAGVALS)"
@@ -251,7 +247,6 @@ endif
 
 TEST_OPTIONS=test $(GOCMDTAGS) -timeout=1200s -count=1 $(VERBOSE) \
   $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
-BUILD_TEST_ONLY=-c -o test.bin 
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
 	test-utils
@@ -353,17 +348,11 @@ clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
 	@rm -f test-*.*
-	@rm -f $(SEQUENCE_TESTING_BIN) \
-		$(SNAPSHOT_BENCHMARK_TESTING_BIN) \
-		$(MULTIRAFT_ERROR_INJECTION_TESTING_BIN) \
-		$(PORCUPINE_CHECKER_BIN) $(LOGDB_CHECKER_BIN)
+	@$(GO) clean -i -cache -modcache -testcache $(PKG)
 
-.PHONY: gen-gitversion install-dragonboat install-rocksdb \
-	test test-raft test-rsm test-logdb test-tools test-transport test-multiraft \
-	test-client test-server test-config test-tests static-check clean \
-	logdb-checker golangci-lint-check \
-	gen-test-docker-images docker-test dragonboat-test \
-	docker-test-ubuntu-stable docker-test-go-old docker-test-debian-testing \
-	docker-test-debian-stable docker-test-centos-stable docker-test-min-deps \
-	docker-test-no-rocksdb travis-ci-test dev-test cross-rebuild-bin \
-	cross-rebuild cross-rebuild-win cross-rebuild-darwin cross-rebuild-freebsd
+.PHONY: gen-gitversion install-dragonboat install-rocksdb test test-plugins    \
+	test-raft test-rsm test-logdb test-tools test-transport test-multiraft 			 \
+	test-raftpb test-client test-server test-config test-tests test-fs 					 \
+	test-utils dev-test static-check clean golangci-lint-check dragonboat-test 	 \
+	travis-ci-test cross-rebuild-bin cross-rebuild cross-rebuild-win 						 \
+	cross-rebuild-darwin cross-rebuild-freebsd benchmark benchmark-fsync
