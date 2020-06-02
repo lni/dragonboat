@@ -3829,6 +3829,7 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get a snapshot reader %v", err)
 	}
+	defer reader.Close()
 	if _, err = reader.GetHeader(); err != nil {
 		t.Fatalf("failed to get header %v", err)
 	}
