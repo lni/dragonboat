@@ -124,7 +124,7 @@ func (sc *Context) getSnapshotDirParts(did uint64,
 	dd := sc.getDeploymentIDSubDirName(did)
 	pd := fmt.Sprintf("snapshot-part-%d", sc.partitioner.GetPartitionID(clusterID))
 	sd := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
-	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
+	dirs := strings.Split(sc.nhConfig.NodeHostDir, ";")
 	parts := make([]string, 0)
 	toBeCreated := make([]string, 0)
 	return append(parts, dirs[0], sc.hostname, dd, pd, sd),
@@ -148,8 +148,8 @@ func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
 }
 
 func (sc *Context) getDataDirs() ([]string, []string) {
-	lldirs := strings.Split(sc.nhConfig.WALDir, ":")
-	dirs := strings.Split(sc.nhConfig.NodeHostDir, ":")
+	lldirs := strings.Split(sc.nhConfig.WALDir, ";")
+	dirs := strings.Split(sc.nhConfig.NodeHostDir, ";")
 	if len(sc.nhConfig.WALDir) > 0 {
 		if len(dirs) != len(lldirs) {
 			plog.Panicf("%d low latency dirs specified, but there are %d regular dirs",
