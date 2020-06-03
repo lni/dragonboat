@@ -348,7 +348,7 @@ clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
 	@rm -f test-*.*
-	@$(GO) clean -i -cache -modcache -testcache $(PKG)
+	@$(GO) clean -i -testcache $(PKG)
 
 .PHONY: gen-gitversion install-dragonboat install-rocksdb test test-plugins    \
 	test-raft test-rsm test-logdb test-tools test-transport test-multiraft 			 \
