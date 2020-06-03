@@ -453,6 +453,14 @@ func (c *NodeHostConfig) GetClientTLSConfig(target string) (*tls.Config, error) 
 	return nil, nil
 }
 
+// GetDeploymentID returns the deployment ID to be used.
+func (c *NodeHostConfig) GetDeploymentID() uint64 {
+	if c.DeploymentID == 0 {
+		return settings.UnmanagedDeploymentID
+	}
+	return c.DeploymentID
+}
+
 // IsValidAddress returns whether the input address is valid.
 func IsValidAddress(addr string) bool {
 	return stringutil.IsValidAddress(addr)

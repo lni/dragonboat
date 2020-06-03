@@ -1,19 +1,3 @@
-// Copyright 2014 The Cockroach Authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-// implied. See the License for the specific language governing
-// permissions and limitations under the License.
-//
-//
-//
 // Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +17,19 @@
 // pattern used in ASyncSend/connectAndProcess/connectAndProcess is similar
 // to the one used in CockroachDB.
 //
+// Copyright 2014 The Cockroach Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied. See the License for the specific language governing
+// permissions and limitations under the License.
 
 /*
 Package transport implements the transport component used for exchanging
@@ -66,9 +63,6 @@ import (
 
 const (
 	maxMsgBatchSize = settings.MaxMessageBatchSize
-	// UnmanagedDeploymentID is the special DeploymentID used when the system is
-	// not managed by master servers.
-	UnmanagedDeploymentID = uint64(1)
 )
 
 var (
@@ -107,8 +101,6 @@ type IRaftMessageHandler interface {
 // Raft messages.
 type ITransport interface {
 	Name() string
-	SetUnmanagedDeploymentID()
-	SetDeploymentID(uint64)
 	SetMessageHandler(IRaftMessageHandler)
 	ASyncSend(pb.Message) bool
 	ASyncSendSnapshot(pb.Message) bool
@@ -127,37 +119,6 @@ type StreamChunkSendFunc func(pb.Chunk) (pb.Chunk, bool)
 // SendMessageBatchFunc is a func type that is used to determine whether the
 // specified message batch should be sent. This func is used in test only.
 type SendMessageBatchFunc func(pb.MessageBatch) (pb.MessageBatch, bool)
-
-// DeploymentID struct is the manager type used to manage the deployment id
-// value.
-type DeploymentID struct {
-	deploymentID uint64
-}
-
-func (d *DeploymentID) deploymentIDSet() bool {
-	v := atomic.LoadUint64(&d.deploymentID)
-	return v != 0
-}
-
-// SetUnmanagedDeploymentID sets the deployment id to indicate that the user
-// is not managed.
-func (d *DeploymentID) SetUnmanagedDeploymentID() {
-	d.SetDeploymentID(UnmanagedDeploymentID)
-}
-
-// SetDeploymentID sets the deployment id to the specified value.
-func (d *DeploymentID) SetDeploymentID(x uint64) {
-	v := atomic.LoadUint64(&d.deploymentID)
-	if v != 0 {
-		panic("trying to set deployment id again")
-	} else {
-		atomic.StoreUint64(&d.deploymentID, x)
-	}
-}
-
-func (d *DeploymentID) getDeploymentID() uint64 {
-	return atomic.LoadUint64(&d.deploymentID)
-}
 
 type sendQueue struct {
 	ch chan pb.Message
@@ -192,7 +153,6 @@ var _ ITransport = &Transport{}
 
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
-	DeploymentID
 	mu struct {
 		sync.Mutex
 		// each (cluster id, node id) pair has its own queue and breaker
@@ -237,7 +197,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		fs:                fs,
 	}
 	chunks := NewChunks(t.handleRequest,
-		t.snapshotReceived, t.getDeploymentID, t.folder, fs)
+		t.snapshotReceived, t.folder, t.nhConfig.GetDeploymentID(), fs)
 	raftRPC := createTransportRPC(nhConfig, t.handleRequest, chunks)
 	plog.Infof("transport type: %s", raftRPC.Name())
 	t.raftRPC = raftRPC
@@ -327,7 +287,7 @@ func (t *Transport) SetMessageHandler(handler IRaftMessageHandler) {
 }
 
 func (t *Transport) handleRequest(req pb.MessageBatch) {
-	did := t.getDeploymentID()
+	did := t.nhConfig.GetDeploymentID()
 	if req.DeploymentId != did {
 		plog.Warningf("deployment id does not match %d vs %d, message dropped",
 			req.DeploymentId, did)
@@ -482,18 +442,10 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 		SourceAddress: t.sourceAddress,
 		BinVer:        raftio.RPCBinVersion,
 	}
+	did := t.nhConfig.GetDeploymentID()
 	requests := make([]pb.Message, 0)
-	var deploymentIDSet bool
-	var deploymentID uint64
 	for {
 		idleTimer.Reset(idleTimeout)
-		// drop the message if deployment id is not set.
-		if !deploymentIDSet {
-			if t.deploymentIDSet() {
-				deploymentIDSet = true
-				deploymentID = t.getDeploymentID()
-			}
-		}
 		select {
 		case <-t.stopper.ShouldStop():
 			return nil
@@ -515,14 +467,7 @@ func (t *Transport) processQueue(clusterID uint64, toNodeID uint64,
 					done = true
 				}
 			}
-			// loaded enough requests, check whether we have the deployment id
-			if deploymentIDSet {
-				batch.DeploymentId = deploymentID
-			} else {
-				plog.Warningf("Messages dropped as no valid deployment id set")
-				requests = requests[:0]
-				continue
-			}
+			batch.DeploymentId = did
 			twoBatch := false
 			if sz < maxMsgBatchSize || len(requests) == 1 {
 				batch.Requests = requests

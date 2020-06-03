@@ -425,12 +425,10 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
-	t1.SetUnmanagedDeploymentID()
 	t2, err := transport.NewTransport(nhc2, ctx2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
-	t2.SetUnmanagedDeploymentID()
 	defer t2.Stop()
 	defer t1.Stop()
 	handler1 := &benchmarkMessageHandler{

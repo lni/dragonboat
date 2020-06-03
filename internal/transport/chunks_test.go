@@ -36,6 +36,7 @@ func getTestChunks() []pb.Chunk {
 	result := make([]pb.Chunk, 0)
 	for chunkID := uint64(0); chunkID < 10; chunkID++ {
 		c := pb.Chunk{
+			DeploymentId:   settings.UnmanagedDeploymentID,
 			BinVer:         raftio.RPCBinVersion,
 			ClusterId:      100,
 			NodeId:         2,
@@ -98,8 +99,7 @@ func runChunkTest(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	chunks := NewChunks(trans.handleRequest,
-		trans.snapshotReceived, getTestDeploymentID,
-		trans.folder, fs)
+		trans.snapshotReceived, trans.folder, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunks()
 	snapDir := chunks.folder(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
@@ -510,6 +510,7 @@ func testSnapshotWithExternalFilesAreHandledByChunks(t *testing.T,
 		}
 		inputs := splitSnapshotMessage(msg, chunks.fs)
 		for _, c := range inputs {
+			c.DeploymentId = settings.UnmanagedDeploymentID
 			c.Data = make([]byte, c.ChunkSize)
 			added := chunks.addLocked(c)
 			if snapshotCount == 0 && added {
@@ -570,6 +571,7 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 			if len(c.Data) == 0 {
 				t.Errorf("data is empty")
 			}
+			c.DeploymentId = settings.UnmanagedDeploymentID
 			added := chunks.addLocked(c)
 			if !added {
 				t.Errorf("failed to add chunk")

@@ -32,7 +32,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -44,7 +44,7 @@ var (
 )
 
 var (
-	unmanagedDeploymentID = transport.UnmanagedDeploymentID
+	unmanagedDeploymentID = settings.UnmanagedDeploymentID
 	// ErrInvalidMembers indicates that the provided member nodes is invalid.
 	ErrInvalidMembers = errors.New("invalid members")
 	// ErrPathNotExist indicates that the specified exported snapshot directory

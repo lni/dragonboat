@@ -102,6 +102,9 @@ const (
 	// transport
 	//
 
+	// UnmanagedDeploymentID is the special deployment ID value used when no user
+	// deployment ID is specified.
+	UnmanagedDeploymentID uint64 = 1
 	// MaxMessageBatchSize is the max size for a single message batch sent between
 	// nodehosts.
 	MaxMessageBatchSize uint64 = LargeEntitySize

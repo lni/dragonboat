@@ -122,7 +122,8 @@ func (t *Transport) tryCreateJob(key raftio.NodeInfo,
 func (t *Transport) createConnection(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *job {
 	c := newJob(t.ctx, key.ClusterID, key.NodeID,
-		t.getDeploymentID(), streaming, sz, t.raftRPC, t.stopper.ShouldStop(), t.fs)
+		t.nhConfig.GetDeploymentID(), streaming, sz,
+		t.raftRPC, t.stopper.ShouldStop(), t.fs)
 	c.streamChunkSent = t.streamChunkSent
 	c.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {

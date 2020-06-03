@@ -110,7 +110,6 @@ import (
 )
 
 const (
-	unmanagedDeploymentID = transport.UnmanagedDeploymentID
 	// DragonboatMajor is the major version number
 	DragonboatMajor = 3
 	// DragonboatMinor is the minor version number
@@ -262,7 +261,6 @@ type NodeHost struct {
 	stopper          *syncutil.Stopper
 	duStopper        *syncutil.Stopper
 	nodes            *transport.Nodes
-	deploymentID     uint64
 	rsPool           []*sync.Pool
 	execEngine       *execEngine
 	logdb            raftio.ILogDB
@@ -312,17 +310,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
-	did := unmanagedDeploymentID
-	if nhConfig.DeploymentID == 0 {
-		plog.Warningf("DeploymentID not set in NodeHostConfig, default to %d",
-			transport.UnmanagedDeploymentID)
-		nh.transport.SetUnmanagedDeploymentID()
-	} else {
-		did = nhConfig.DeploymentID
-		nh.transport.SetDeploymentID(did)
-	}
+	did := nh.nhConfig.GetDeploymentID()
 	plog.Infof("DeploymentID set to %d", did)
-	nh.deploymentID = did
 	if err := nh.createLogDB(nhConfig, did); err != nil {
 		nh.Stop()
 		return nil, err
@@ -1302,7 +1291,7 @@ func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
 		panic(err)
 	}
 	// mark the snapshot dir as removed
-	did := nh.deploymentID
+	did := nh.nhConfig.GetDeploymentID()
 	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
 		panic(err)
 	}
@@ -1562,7 +1551,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 			nh.nodes.AddNode(clusterID, k, v)
 		}
 	}
-	if err := nh.serverCtx.CreateSnapshotDir(nh.deploymentID,
+	if err := nh.serverCtx.CreateSnapshotDir(nh.nhConfig.GetDeploymentID(),
 		clusterID, nodeID); err != nil {
 		if err == server.ErrDirMarkedAsDeleted {
 			return ErrNodeRemoved
@@ -1570,7 +1559,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		panic(err)
 	}
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
-		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
+		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	getStreamConn := func(cid uint64, nid uint64) pb.IChunkSink {
 		conn := nh.transport.GetStreamConnection(cid, nid)
@@ -1706,7 +1695,7 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 
 func (nh *NodeHost) createTransport() error {
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
-		return nh.serverCtx.GetSnapshotDir(nh.deploymentID, cid, nid)
+		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
 		nh.serverCtx, nh.nodes, getSnapshotDirFunc, &transportEvent{nh: nh}, nh.fs)

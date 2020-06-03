@@ -443,7 +443,7 @@ func TestDeploymentIDCanBeSetUsingNodeHostConfig(t *testing.T) {
 			t.Fatalf("failed to create NodeHost %v", err)
 		}
 		defer nh.Stop()
-		if nh.deploymentID != 100 {
+		if nh.nhConfig.GetDeploymentID() != 100 {
 			t.Errorf("deployment id not set")
 		}
 	}
@@ -1517,10 +1517,10 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 		if err != nil {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
-		if err = nh.serverCtx.CreateSnapshotDir(nh.deploymentID, 2, 1); err != nil {
+		if err = nh.serverCtx.CreateSnapshotDir(nh.nhConfig.GetDeploymentID(), 2, 1); err != nil {
 			t.Fatalf("failed to get snap dir")
 		}
-		snapDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
+		snapDir := nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), 2, 1)
 		z1 := fs.PathJoin(snapDir, dirName)
 		plog.Infof("creating %s", z1)
 		if err = fs.MkdirAll(z1, 0755); err != nil {
@@ -3049,7 +3049,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 		if len(snapshots) == 0 {
 			t.Fatalf("failed to save snapshots")
 		}
-		snapshotDir := nh.serverCtx.GetSnapshotDir(nh.deploymentID, 2, 1)
+		snapshotDir := nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), 2, 1)
 		exist, err := fileutil.Exist(snapshotDir, fs)
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -3749,7 +3749,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 		t.Fatalf("%v", err)
 	}
 	cks := transport.NewChunks(c.onReceive,
-		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc, fs)
+		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSSMeta()
 	cw := rsm.NewChunkWriter(sink, meta)
@@ -3792,7 +3792,7 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	cks := transport.NewChunks(c.onReceive,
-		c.confirm, c.getDeploymentID, c.getSnapshotDirFunc, fs)
+		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &testSink2{receiver: cks}
 	meta := getTestSSMeta()
 	cw := rsm.NewChunkWriter(sink, meta)

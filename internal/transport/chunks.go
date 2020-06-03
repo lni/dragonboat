@@ -67,45 +67,44 @@ func (l *ssLock) unlock() {
 
 // Chunks managed on the receiving side
 type Chunks struct {
-	currentTick     uint64
-	validate        bool
-	folder          server.GetSnapshotDirFunc
-	onReceive       func(pb.MessageBatch)
-	confirm         func(uint64, uint64, uint64)
-	getDeploymentID func() uint64
-	tracked         map[string]*tracked
-	locks           map[string]*ssLock
-	timeoutTick     uint64
-	gcTick          uint64
-	fs              vfs.IFS
-	mu              sync.Mutex
+	did         uint64
+	currentTick uint64
+	validate    bool
+	folder      server.GetSnapshotDirFunc
+	onReceive   func(pb.MessageBatch)
+	confirm     func(uint64, uint64, uint64)
+	tracked     map[string]*tracked
+	locks       map[string]*ssLock
+	timeoutTick uint64
+	gcTick      uint64
+	fs          vfs.IFS
+	mu          sync.Mutex
 }
 
 // NewChunks creates and returns a new snapshot chunks instance.
 func NewChunks(onReceive func(pb.MessageBatch),
-	confirm func(uint64, uint64, uint64), getDeploymentID func() uint64,
-	folder server.GetSnapshotDirFunc, fs vfs.IFS) *Chunks {
+	confirm func(uint64, uint64, uint64), folder server.GetSnapshotDirFunc,
+	did uint64, fs vfs.IFS) *Chunks {
 	return &Chunks{
-		validate:        true,
-		onReceive:       onReceive,
-		confirm:         confirm,
-		getDeploymentID: getDeploymentID,
-		tracked:         make(map[string]*tracked),
-		locks:           make(map[string]*ssLock),
-		timeoutTick:     snapshotChunkTimeoutTick,
-		gcTick:          gcIntervalTick,
-		folder:          folder,
-		fs:              fs,
+		did:         did,
+		validate:    true,
+		onReceive:   onReceive,
+		confirm:     confirm,
+		tracked:     make(map[string]*tracked),
+		locks:       make(map[string]*ssLock),
+		timeoutTick: snapshotChunkTimeoutTick,
+		gcTick:      gcIntervalTick,
+		folder:      folder,
+		fs:          fs,
 	}
 }
 
 // AddChunk adds an received trunk to chunks.
 func (c *Chunks) AddChunk(chunk pb.Chunk) bool {
-	did := c.getDeploymentID()
-	if chunk.DeploymentId != did ||
+	if chunk.DeploymentId != c.did ||
 		chunk.BinVer != raftio.RPCBinVersion {
 		plog.Errorf("invalid did or binver, %d, %d, %d, %d",
-			chunk.DeploymentId, did, chunk.BinVer, raftio.RPCBinVersion)
+			chunk.DeploymentId, c.did, chunk.BinVer, raftio.RPCBinVersion)
 		return false
 	}
 	key := chunkKey(chunk)
