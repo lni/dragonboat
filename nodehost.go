@@ -306,6 +306,12 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
 	nh.createPools()
+	defer func() {
+		if r := recover(); r != nil {
+			nh.Stop()
+			plog.Panicf("failed to create NodeHost: %v", r)
+		}
+	}()
 	if err := nh.createTransport(); err != nil {
 		nh.Stop()
 		return nil, err
