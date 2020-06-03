@@ -124,54 +124,44 @@ func (sc *Context) getSnapshotDirParts(did uint64,
 	dd := sc.getDeploymentIDSubDirName(did)
 	pd := fmt.Sprintf("snapshot-part-%d", sc.partitioner.GetPartitionID(clusterID))
 	sd := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
-	dirs := strings.Split(sc.nhConfig.NodeHostDir, ";")
+	dir := sc.nhConfig.NodeHostDir
 	parts := make([]string, 0)
 	toBeCreated := make([]string, 0)
-	return append(parts, dirs[0], sc.hostname, dd, pd, sd),
-		sc.fs.PathJoin(dirs[0], sc.hostname, dd), append(toBeCreated, pd, sd)
+	return append(parts, dir, sc.hostname, dd, pd, sd),
+		sc.fs.PathJoin(dir, sc.hostname, dd), append(toBeCreated, pd, sd)
 }
 
 // GetLogDBDirs returns the directory names for LogDB
-func (sc *Context) GetLogDBDirs(did uint64) ([]string, []string) {
-	dirs, lldirs := sc.getDataDirs()
+func (sc *Context) GetLogDBDirs(did uint64) (string, string) {
+	dir, lldir := sc.getDataDirs()
 	didStr := sc.getDeploymentIDSubDirName(did)
-	for i := 0; i < len(dirs); i++ {
-		dirs[i] = sc.fs.PathJoin(dirs[i], sc.hostname, didStr)
-	}
+	dir = sc.fs.PathJoin(dir, sc.hostname, didStr)
 	if len(sc.nhConfig.WALDir) > 0 {
-		for i := 0; i < len(dirs); i++ {
-			lldirs[i] = sc.fs.PathJoin(lldirs[i], sc.hostname, didStr)
-		}
-		return dirs, lldirs
+		lldir = sc.fs.PathJoin(lldir, sc.hostname, didStr)
+		return dir, lldir
 	}
-	return dirs, dirs
+	return dir, dir
 }
 
-func (sc *Context) getDataDirs() ([]string, []string) {
-	lldirs := strings.Split(sc.nhConfig.WALDir, ";")
-	dirs := strings.Split(sc.nhConfig.NodeHostDir, ";")
+func (sc *Context) getDataDirs() (string, string) {
+	lldir := sc.nhConfig.WALDir
+	dir := sc.nhConfig.NodeHostDir
 	if len(sc.nhConfig.WALDir) > 0 {
-		if len(dirs) != len(lldirs) {
-			plog.Panicf("%d low latency dirs specified, but there are %d regular dirs",
-				len(lldirs), len(dirs))
-		}
-		return dirs, lldirs
+		return dir, lldir
 	}
-	return dirs, dirs
+	return dir, dir
 }
 
 // CreateNodeHostDir creates the top level dirs used by nodehost.
-func (sc *Context) CreateNodeHostDir(did uint64) ([]string, []string, error) {
-	dirs, lldirs := sc.GetLogDBDirs(did)
-	for i := 0; i < len(dirs); i++ {
-		if err := fileutil.MkdirAll(dirs[i], sc.fs); err != nil {
-			return nil, nil, err
-		}
-		if err := fileutil.MkdirAll(lldirs[i], sc.fs); err != nil {
-			return nil, nil, err
-		}
+func (sc *Context) CreateNodeHostDir(did uint64) (string, string, error) {
+	dir, lldir := sc.GetLogDBDirs(did)
+	if err := fileutil.MkdirAll(dir, sc.fs); err != nil {
+		return "", "", err
 	}
-	return dirs, lldirs, nil
+	if err := fileutil.MkdirAll(lldir, sc.fs); err != nil {
+		return "", "", err
+	}
+	return dir, lldir, nil
 }
 
 // CreateSnapshotDir creates the snapshot directory for the specified node.
@@ -215,14 +205,12 @@ func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
 func (sc *Context) LockNodeHostDir() error {
-	dirs, lldirs := sc.getDataDirs()
-	for i := 0; i < len(dirs); i++ {
-		if err := sc.tryLockNodeHostDir(dirs[i]); err != nil {
-			return err
-		}
-		if err := sc.tryLockNodeHostDir(lldirs[i]); err != nil {
-			return err
-		}
+	dir, lldir := sc.getDataDirs()
+	if err := sc.tryLockNodeHostDir(dir); err != nil {
+		return err
+	}
+	if err := sc.tryLockNodeHostDir(lldir); err != nil {
+		return err
 	}
 	return nil
 }
@@ -279,14 +267,12 @@ func removeSavedSnapshots(dir string, fs vfs.IFS) error {
 
 func (sc *Context) checkNodeHostDir(did uint64,
 	addr string, hostname string, binVer uint32, name string, dbto bool) error {
-	dirs, lldirs := sc.getDataDirs()
-	for i := 0; i < len(dirs); i++ {
-		if err := sc.check(dirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
-			return err
-		}
-		if err := sc.check(lldirs[i], did, addr, hostname, binVer, name, dbto); err != nil {
-			return err
-		}
+	dir, lldir := sc.getDataDirs()
+	if err := sc.check(dir, did, addr, hostname, binVer, name, dbto); err != nil {
+		return err
+	}
+	if err := sc.check(lldir, did, addr, hostname, binVer, name, dbto); err != nil {
+		return err
 	}
 	return nil
 }

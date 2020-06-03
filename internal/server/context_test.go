@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -64,7 +65,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
 			t.Fatalf("%v", err)
 		}
-		dirs, _ := ctx.getDataDirs()
+		dir, _ := ctx.getDataDirs()
 		testName := "test-name"
 		status := raftpb.RaftDataStatus{
 			Address:      testAddress,
@@ -74,7 +75,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 			Hostname:     ctx.hostname,
 			DeploymentId: testDeploymentID,
 		}
-		err = fileutil.CreateFlagFile(dirs[0], flagFilename, &status, fs)
+		err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
 		if err != nil {
 			t.Errorf("failed to create flag file %v", err)
 		}
@@ -102,7 +103,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
 		t.Fatalf("%v", err)
 	}
-	dirs, _ := ctx.getDataDirs()
+	dir, _ := ctx.getDataDirs()
 	status := raftpb.RaftDataStatus{
 		Address:   addr,
 		BinVer:    binVer,
@@ -113,7 +114,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if hardHashMismatch {
 		status.HardHash = 1
 	}
-	err = fileutil.CreateFlagFile(dirs[0], flagFilename, &status, fs)
+	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
@@ -132,14 +133,12 @@ func TestCanDetectMismatchedHostname(t *testing.T) {
 		testLogDBName, false, ErrHostnameChanged, fs)
 }
 
-// TODO: re-enable this
-/*
 func TestCanDetectMismatchedLogDBName(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "", raftio.LogDBBinVersion,
 		"incorrect name", false, ErrLogDBType, fs)
-}*/
+}
 
 func TestCanDetectMismatchedBinVer(t *testing.T) {
 	fs := vfs.GetTestFS()
@@ -242,5 +241,28 @@ func TestCompatibleLogDBType(t *testing.T) {
 		sc.compatibleLogDBType("1", "rocksdb") ||
 		sc.compatibleLogDBType("2", "pebble") {
 		t.Errorf("unexpectedly marked as compatible")
+	}
+}
+
+func TestWALDirIsCanBeSet(t *testing.T) {
+	nhConfig := config.NodeHostConfig{
+		NodeHostDir: "d1",
+		WALDir:      "d2",
+	}
+	fs := vfs.GetTestFS()
+	c, err := NewContext(nhConfig, fs)
+	if err != nil {
+		t.Fatalf("failed to get context %v", err)
+	}
+	defer c.Stop()
+	dir, lldir := c.GetLogDBDirs(12345)
+	if dir == lldir {
+		t.Errorf("wal dir not considered")
+	}
+	if !strings.Contains(lldir, "d2") {
+		t.Errorf("wal dir not used")
+	}
+	if strings.Contains(dir, "d2") {
+		t.Errorf("wal dir appeared in node host dir")
 	}
 }

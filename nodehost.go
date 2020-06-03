@@ -1636,7 +1636,7 @@ func (nh *NodeHost) createPools() {
 }
 
 func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
-	nhDirs, walDirs, err := nh.serverCtx.CreateNodeHostDir(did)
+	nhDir, walDir, err := nh.serverCtx.CreateNodeHostDir(did)
 	if err != nil {
 		return err
 	}
@@ -1654,14 +1654,15 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		factory = df
 	}
 	// create a tmp logdb to get LogDB type info
-	name, err := logdb.GetLogDBInfo(factory, nh.nhConfig.LogDBConfig, nhDirs, nh.fs)
+	name, err := logdb.GetLogDBInfo(factory, nh.nhConfig.LogDBConfig,
+		[]string{nhDir}, nh.fs)
 	if err != nil {
 		return err
 	}
 	if err := nh.serverCtx.CheckLogDBType(did, name); err != nil {
 		return err
 	}
-	ldb, err := factory(nh.nhConfig.LogDBConfig, nhDirs, walDirs)
+	ldb, err := factory(nh.nhConfig.LogDBConfig, []string{nhDir}, []string{walDir})
 	if err != nil {
 		return err
 	}
