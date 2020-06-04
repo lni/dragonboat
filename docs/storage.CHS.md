@@ -4,7 +4,7 @@ Dragonboat使用[Pebble](https://github.com/cockroachdb/pebble)来存储Raft协�
 
 ## 兼容性 ##
 
-Pebble是一个全新的以Go事先的Key-Value store，它提供与RocksDB的双向数据文件格式兼容。
+Pebble是一个全新的以Go实现的Key-Value store，它提供与RocksDB的双向数据文件格式兼容。
 
 如有必要，您可选择使用RocksDB来存储生产环境的Dragonboat数据，在未来任何时候您都可以轻松切换回使用Pebble。
 
