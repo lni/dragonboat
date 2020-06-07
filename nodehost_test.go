@@ -268,7 +268,6 @@ func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
 
 func (t *TimeoutStateMachine) Lookup(data interface{}) (interface{}, error) {
 	if t.lookupDelay > 0 {
-		plog.Infof("---------> Lookup called!")
 		time.Sleep(time.Duration(t.lookupDelay) * time.Millisecond)
 	}
 	return data, nil
@@ -980,11 +979,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			if leaderID == 1 {
 				leaderNh = nh1
 				followerNh = nh2
-				sm2.MillisecondToSleep = 20
+				sm2.MillisecondToSleep = 3
 			} else {
 				leaderNh = nh2
 				followerNh = nh1
-				sm1.MillisecondToSleep = 20
+				sm1.MillisecondToSleep = 3
 			}
 			return leaderNh, followerNh, nil
 		}
@@ -1070,7 +1069,7 @@ func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, clusterID uint64) {
 func createProposalsToTriggerSnapshot(t *testing.T,
 	nh *NodeHost, count uint64, timeoutExpected bool) {
 	for i := uint64(0); i < count; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			if err == ErrTimeout {
@@ -2375,6 +2374,7 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				t.Errorf("unexpected IsObserver value")
 			}
 		}
+		plog.Infof("going to run tests")
 		stopper := syncutil.NewStopper()
 		stopper.RunWorker(func() {
 			for i := 0; i < 100; i++ {
