@@ -4,8 +4,14 @@ Dragonboat v3.3 comes with new features and improvements. All v3.2.x users are r
 
 ### New features
 
-- Pebble has been made the default LogDB storage engine.
+- Pebble has been made the default LogDB storage engine. Dragonboat can now be used with CGO disabled.
 - Added the option to get notified when proposals and config changes are committed.
+
+### Improvements
+
+- Optimized the read index implementation.
+- Made LogDB configurations accessible programmatically.
+- Added protobuf workaround to allow Dragonboat and etcd to be used in the same project.
 
 ### Breaking changes
 
