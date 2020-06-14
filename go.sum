@@ -37,6 +37,8 @@ github.com/cockroachdb/pebble v0.0.0-20200520133530-1977fd885276 h1:y1NIJVnpWF4u
 github.com/cockroachdb/pebble v0.0.0-20200520133530-1977fd885276/go.mod h1:4htqGJZBuuX7YR/S8KKD6GBBC0Ibl+wvy6VEuiGAb6c=
 github.com/cockroachdb/pebble v0.0.0-20200526130908-5f17be9b9e37 h1:7qhw0jV114RAEtjJnxz1SeCj1+CbDSQrRqwTIcjD3OI=
 github.com/cockroachdb/pebble v0.0.0-20200526130908-5f17be9b9e37/go.mod h1:4htqGJZBuuX7YR/S8KKD6GBBC0Ibl+wvy6VEuiGAb6c=
+github.com/cockroachdb/pebble v0.0.0-20200610190225-7928b15b5c54 h1:iGyf6RJEktWPuF4Y8u5+4xwYljB9ROhvtRhsCK6MAcQ=
+github.com/cockroachdb/pebble v0.0.0-20200610190225-7928b15b5c54/go.mod h1:4htqGJZBuuX7YR/S8KKD6GBBC0Ibl+wvy6VEuiGAb6c=
 github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd/go.mod h1:sE/e/2PUdi/liOCUjSTXgM1o87ZssimdTWN964YiIeI=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
