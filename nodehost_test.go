@@ -1747,14 +1747,14 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 		}
 		retry := 0
 		for retry < 10000 {
-			if len(listener.getMembershipChanged()) != 1 {
+			if len(listener.getMembershipChanged()) != 2 {
 				time.Sleep(time.Millisecond)
 				retry++
 			} else {
 				break
 			}
 		}
-		ni := listener.getMembershipChanged()[0]
+		ni := listener.getMembershipChanged()[1]
 		if ni.ClusterID != 2 || ni.NodeID != 1 {
 			t.Fatalf("incorrect node ready info")
 		}
@@ -3276,6 +3276,9 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		index := uint64(0)
 		for {
 			sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
+			if err == ErrRejected {
+				continue
+			}
 			if err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
