@@ -21,7 +21,7 @@ import (
 
 	pvfs "github.com/cockroachdb/pebble/vfs"
 
-	gvfs "github.com/lni/goutils/vfs"
+	gvfs "github.com/cockroachdb/pebble/vfs"
 )
 
 // IFS is the vfs interface used by dragonboat.

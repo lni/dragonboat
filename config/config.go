@@ -29,8 +29,8 @@ import (
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/lni/dragonboat/v3/statemachine"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 )
