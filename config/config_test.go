@@ -15,6 +15,7 @@
 package config
 
 import (
+	"github.com/lni/dragonboat/v3/statemachine"
 	"testing"
 )
 
@@ -150,5 +151,12 @@ func TestLogDBConfigMemSize(t *testing.T) {
 	c4 := GetLargeMemLogDBConfig()
 	if c4.MemorySizeMB() != 8192 {
 		t.Errorf("size %d, want 8192", c4.MemorySizeMB())
+	}
+}
+
+func TestNonObserverCanNotSetAutoPromote(t *testing.T) {
+	cfg := Config{IsObserver: false, AutoPromoteCallback: func(result statemachine.Result) {}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("non-observer node can not use auto promote")
 	}
 }

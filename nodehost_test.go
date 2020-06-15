@@ -2623,6 +2623,73 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 	twoFakeDiskNodeHostTest(t, tf, fs)
 }
 
+func TestObserverCouldAutoPromote(t *testing.T) {
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		rc := config.Config{
+			ClusterID:               1,
+			NodeID:                  1,
+			ElectionRTT:             3,
+			HeartbeatRTT:            1,
+			CheckQuorum:             true,
+			SnapshotEntries:         5,
+			CompactionOverhead:      2,
+			SnapshotCompressionType: config.NoCompression,
+		}
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewFakeDiskSM(0)
+		}
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
+			t.Errorf("failed to start observer %v", err)
+		}
+		waitForLeaderToBeElected(t, nh1, 1)
+		promoted := false
+		rc = config.Config{
+			ClusterID:    1,
+			NodeID:       2,
+			ElectionRTT:  20, // need a larger election timeout to avoid read index expiration
+			HeartbeatRTT: 1,
+			IsObserver:   true,
+			AutoPromoteCallback: func(result sm.Result) {
+				promoted = true
+			},
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return tests.NewFakeDiskSM(0)
+		}
+		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, 2000*time.Millisecond)
+		if err != nil {
+			t.Fatalf("failed to add observer %v", err)
+		}
+		<-rs.CompletedC
+		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
+			t.Errorf("failed to start observer %v", err)
+		}
+		for i := 0; i < 10000; i++ {
+			if promoted {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		nhi := nh2.GetNodeHostInfo(DefaultNodeHostInfoOption)
+		for _, ci := range nhi.ClusterInfoList {
+			if ci.Pending {
+				continue
+			}
+			if ci.IsFollower && ci.NodeID == 2 {
+				return
+			}
+		}
+		t.Errorf("failed to get is follower flag")
+	}
+	twoFakeDiskNodeHostTest(t, tf)
+}
+
 func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
