@@ -245,9 +245,10 @@ func TestCompatibleLogDBType(t *testing.T) {
 }
 
 func TestWALDirCanBeSet(t *testing.T) {
+	walDir := "d2-wal-dir-name"
 	nhConfig := config.NodeHostConfig{
 		NodeHostDir: "d1",
-		WALDir:      "d2",
+		WALDir:      walDir,
 	}
 	fs := vfs.GetTestFS()
 	c, err := NewContext(nhConfig, fs)
@@ -259,10 +260,10 @@ func TestWALDirCanBeSet(t *testing.T) {
 	if dir == lldir {
 		t.Errorf("wal dir not considered")
 	}
-	if !strings.Contains(lldir, "d2") {
+	if !strings.Contains(lldir, walDir) {
 		t.Errorf("wal dir not used, %s", lldir)
 	}
-	if strings.Contains(dir, "d2") {
+	if strings.Contains(dir, walDir) {
 		t.Errorf("wal dir appeared in node host dir, %s", dir)
 	}
 }
