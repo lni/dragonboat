@@ -642,7 +642,6 @@ type execEngine struct {
 	ctx             *server.Context
 	logdb           raftio.ILogDB
 	ctxs            []raftio.IContext
-	profilers       []*profiler
 	stepWorkReady   *workReady
 	commitWorkReady *workReady
 	applyWorkReady  *workReady
@@ -666,18 +665,15 @@ func newExecEngine(nh nodeLoader, notifyCommit bool,
 		commitWorkReady: newWorkReady(commitWorkerCount),
 		applyWorkReady:  newWorkReady(applyWorkerCount),
 		ctxs:            make([]raftio.IContext, stepWorkerCount),
-		profilers:       make([]*profiler, stepWorkerCount),
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
 	}
 	if errorInjection {
 		s.ec = make(chan error, 1)
 	}
-	sampleRatio := int64(delaySampleRatio / 10)
 	for i := uint64(1); i <= stepWorkerCount; i++ {
 		workerID := i
 		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
-		s.profilers[i-1] = newProfiler(sampleRatio)
 		s.nodeStopper.RunWorker(func() {
 			if errorInjection {
 				defer func() {
@@ -724,23 +720,6 @@ func (s *execEngine) stop() {
 		if ctx != nil {
 			ctx.Destroy()
 		}
-	}
-	s.logProfileStats()
-}
-
-func (s *execEngine) logProfileStats() {
-	for _, p := range s.profilers {
-		if p.ratio == 0 {
-			continue
-		}
-		plog.Infof("prop %d,%dμs step %d,%dμs save %d,%dμs ec %d,%d cs %d,%dμs exec %d,%dμs %d",
-			p.propose.median(), p.propose.p999(),
-			p.step.median(), p.step.p999(),
-			p.save.median(), p.save.p999(),
-			p.ec.median(), p.ec.p999(),
-			p.cs.median(), p.cs.p999(),
-			p.exec.median(), p.exec.p999(),
-			p.sampleCount)
 	}
 }
 
@@ -859,12 +838,6 @@ func (s *execEngine) processApplies(workerID uint64,
 			idmap[k] = struct{}{}
 		}
 	}
-	var p *profiler
-	if stepWorkerCount == applyWorkerCount {
-		p = s.profilers[workerID-1]
-		p.newCommitIteration()
-		p.exec.start()
-	}
 	for clusterID := range idmap {
 		node, ok := nodes[clusterID]
 		if !ok || node.stopped() {
@@ -880,9 +853,6 @@ func (s *execEngine) processApplies(workerID uint64,
 		if task.IsSnapshotTask() {
 			node.handleSnapshotTask(task)
 		}
-	}
-	if p != nil {
-		p.exec.end()
 	}
 }
 
@@ -960,9 +930,6 @@ func (s *execEngine) processSteps(workerID uint64,
 	}
 	nodeCtx := s.ctxs[workerID-1]
 	nodeCtx.Reset()
-	p := s.profilers[workerID-1]
-	p.newIteration()
-	p.step.start()
 	if len(clusterIDMap) == 0 {
 		for cid := range nodes {
 			clusterIDMap[cid] = struct{}{}
@@ -992,16 +959,12 @@ func (s *execEngine) processSteps(workerID uint64,
 		node.processDroppedEntries(ud)
 		node.processDroppedReadIndexes(ud)
 	}
-	p.step.end()
-	p.recordEntryCount(nodeUpdates)
 	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
 		return
 	}
-	p.save.start()
 	if err := s.logdb.SaveRaftState(nodeUpdates, nodeCtx); err != nil {
 		panic(err)
 	}
-	p.save.end()
 	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {
 		return
 	}
@@ -1015,7 +978,6 @@ func (s *execEngine) processSteps(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, "processing raft updates") {
 		return
 	}
-	p.cs.start()
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
 		cont, err := node.processRaftUpdate(ud)
@@ -1031,7 +993,6 @@ func (s *execEngine) processSteps(workerID uint64,
 		}
 		node.commitRaftUpdate(ud)
 	}
-	p.cs.end()
 	if lazyFreeCycle > 0 {
 		resetNodeUpdate(nodeUpdates)
 	}
@@ -1108,13 +1069,6 @@ func (s *execEngine) setRequestedSnapshotReady(clusterID uint64) {
 
 func (s *execEngine) setAvailableSnapshotReady(clusterID uint64) {
 	s.wp.recoverReady.clusterReady(clusterID)
-}
-
-func (s *execEngine) proposeDelay(clusterID uint64, startTime time.Time) {
-	p := s.stepWorkReady.getPartitioner()
-	idx := p.GetPartitionID(clusterID)
-	profiler := s.profilers[idx]
-	profiler.propose.record(startTime)
 }
 
 func (s *execEngine) offloadNodeMap(nodes map[uint64]*node,

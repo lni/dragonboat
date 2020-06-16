@@ -96,9 +96,6 @@ type soft struct {
 	TaskQueueInitialCap uint64
 	// NodeHostSyncPoolSize defines the number of sync pools.
 	NodeHostSyncPoolSize uint64
-	// LatencySampleRatio defines the ratio how often latency is sampled.
-	// It samples roughly every LatencySampleRatio ops.
-	LatencySampleRatio uint64
 	// LazyFreeCycle defines how often should entry queue and message queue
 	// to be freed.
 	LazyFreeCycle uint64
@@ -189,7 +186,6 @@ func getDefaultSoftSettings() soft {
 		SyncTaskInterval:               180000,
 		PanicOnSizeMismatch:            true,
 		LazyFreeCycle:                  1,
-		LatencySampleRatio:             0,
 		BatchedEntryApply:              true,
 		GetConnectedTimeoutSecond:      5,
 		MaxEntrySize:                   MaxMessageBatchSize,

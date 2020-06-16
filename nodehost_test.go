@@ -1559,15 +1559,10 @@ func runSingleNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		osv := delaySampleRatio
-		defer func() {
-			delaySampleRatio = osv
-		}()
 		logdb.RDBContextValueSize = 1024 * 1024
 		defer func() {
 			logdb.RDBContextValueSize = ovs
 		}()
-		delaySampleRatio = 1
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -4418,15 +4413,10 @@ func TestV2DataCanBeHandled(t *testing.T) {
 			t.Fatalf("failed to rename the dir %v", err)
 		}
 	}
-	osv := delaySampleRatio
-	defer func() {
-		delaySampleRatio = osv
-	}()
 	logdb.RDBContextValueSize = 1024 * 1024
 	defer func() {
 		logdb.RDBContextValueSize = ovs
 	}()
-	delaySampleRatio = 1
 	defer leaktest.AfterTest(t)()
 	v2dataDir := fs.PathJoin(targetDir, topDirName)
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,

@@ -122,7 +122,6 @@ const (
 
 var (
 	receiveQueueLen   = settings.Soft.ReceiveQueueLength
-	delaySampleRatio  = settings.Soft.LatencySampleRatio
 	rsPoolSize        = settings.Soft.NodeHostSyncPoolSize
 	streamConnections = settings.Soft.StreamConnections
 	monitorInterval   = 100 * time.Millisecond
@@ -269,7 +268,6 @@ type NodeHost struct {
 	liQueue          *leaderInfoQueue
 	raftUserListener raftio.IRaftEventListener
 	sysUserListener  *sysEventListener
-	transportLatency *sample
 	fs               vfs.IFS
 }
 
@@ -296,7 +294,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		stopper:          syncutil.NewStopper(),
 		duStopper:        syncutil.NewStopper(),
 		nodes:            transport.NewNodes(streamConnections),
-		transportLatency: newSample(),
 		raftUserListener: nhConfig.RaftEventListener,
 		fs:               nhConfig.FS,
 	}
@@ -409,9 +406,6 @@ func (nh *NodeHost) Stop() {
 	plog.Debugf("logdb closed, %s is now stopped", nh.id())
 	nh.serverCtx.Stop()
 	plog.Debugf("serverCtx stopped on %s", nh.id())
-	if delaySampleRatio > 0 {
-		nh.logTransportLatency()
-	}
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -1354,11 +1348,6 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 
 func (nh *NodeHost) propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
-	var st time.Time
-	sampled := delaySampled(s)
-	if sampled {
-		st = time.Now()
-	}
 	v, ok := nh.getClusterNotLocked(s.ClusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1368,9 +1357,6 @@ func (nh *NodeHost) propose(s *client.Session,
 	}
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
 	nh.execEngine.setStepReady(s.ClusterID)
-	if sampled {
-		nh.execEngine.proposeDelay(s.ClusterID, st)
-	}
 	return req, err
 }
 
@@ -1820,7 +1806,6 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 	}
 	if msg.Type != pb.InstallSnapshot {
 		nh.transport.ASyncSend(msg)
-		nh.checkTransportLatency(msg.ClusterId, msg.To, msg.From, msg.Term)
 	} else {
 		witness := msg.Snapshot.Witness
 		plog.Infof("%s is sending snapshot to %s, witness %t, index %d, size %d",
@@ -1852,22 +1837,6 @@ func (nh *NodeHost) sendTickMessage(clusters []*node,
 		}
 		q.Add(m)
 		nh.execEngine.setStepReady(n.clusterID)
-	}
-}
-
-func (nh *NodeHost) checkTransportLatency(clusterID uint64,
-	to uint64, from uint64, term uint64) {
-	v := atomic.AddUint64(&nh.msgCount, 1)
-	if delaySampleRatio > 0 && v%delaySampleRatio == 0 {
-		msg := pb.Message{
-			Type:      pb.Ping,
-			To:        to,
-			From:      from,
-			ClusterId: clusterID,
-			Term:      term,
-			Hint:      uint64(time.Now().UnixNano()),
-		}
-		nh.transport.ASyncSend(msg)
 	}
 }
 
@@ -1976,13 +1945,6 @@ func (nh *NodeHost) logNodeHostDetails() {
 	plog.Infof("nodehost address: %s", nh.nhConfig.RaftAddress)
 }
 
-func (nh *NodeHost) logTransportLatency() {
-	plog.Infof("transport latency p999 %dμs, p99 %dμs, median %dμs, %d",
-		nh.transportLatency.p999(),
-		nh.transportLatency.p99(),
-		nh.transportLatency.median(), len(nh.transportLatency.samples))
-}
-
 func checkRequestState(ctx context.Context,
 	rs *RequestState) (sm.Result, error) {
 	select {
@@ -2027,13 +1989,6 @@ type INodeUser interface {
 
 var _ INodeUser = &nodeUser{}
 
-func delaySampled(s *client.Session) bool {
-	if delaySampleRatio == 0 {
-		return false
-	}
-	return s.ClientID%delaySampleRatio == 0
-}
-
 type nodeUser struct {
 	nh           *NodeHost
 	node         *node
@@ -2042,16 +1997,8 @@ type nodeUser struct {
 
 func (nu *nodeUser) Propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
-	var st time.Time
-	sampled := delaySampled(s)
-	if sampled {
-		st = time.Now()
-	}
 	req, err := nu.node.propose(s, cmd, nu.nh.getTimeoutTick(timeout))
 	nu.setStepReady(s.ClusterID)
-	if sampled {
-		nu.nh.execEngine.proposeDelay(s.ClusterID, st)
-	}
 	return req, err
 }
 
@@ -2104,14 +2051,6 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			plog.Infof("MsgSnapshotReceived received, cluster id %d, node id %d",
 				req.ClusterId, req.From)
 			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
-			continue
-		}
-		if req.Type == pb.Ping {
-			h.HandlePingMessage(req)
-			continue
-		}
-		if req.Type == pb.Pong {
-			h.HandlePongMessage(req)
 			continue
 		}
 		_, q, ok := nh.getClusterAndQueueNotLocked(req.ClusterId)
@@ -2175,27 +2114,6 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 		NodeID:    nodeID,
 		From:      from,
 	})
-}
-
-func (h *messageHandler) HandlePingMessage(msg pb.Message) {
-	resp := pb.Message{
-		Type:      pb.Pong,
-		To:        msg.From,
-		From:      msg.To,
-		ClusterId: msg.ClusterId,
-		Term:      msg.Term,
-		Hint:      msg.Hint,
-	}
-	h.nh.transport.ASyncSend(resp)
-}
-
-func (h *messageHandler) HandlePongMessage(msg pb.Message) {
-	// not using the monotonic clock here
-	// it is probably ok for now as we just want to get a rough idea of the
-	// transport latency for manual code analysis/optimization purposes
-	ts := h.nh.transportLatency
-	startTime := time.Unix(0, int64(msg.Hint))
-	ts.record(startTime)
 }
 
 func logBuildTagsAndVersion() {
