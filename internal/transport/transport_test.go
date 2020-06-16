@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/netutil"
+	"github.com/lni/goutils/syncutil"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -32,9 +36,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/leaktest"
-	"github.com/lni/goutils/netutil"
-	"github.com/lni/goutils/syncutil"
 )
 
 const (
@@ -1349,7 +1350,6 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	failedSnapshotReported := false
 	for i := 0; i < 10000; i++ {
 		count := handler.getFailedSnapshotCount(100, 2)
-		plog.Infof("count: %d, want %d", count)
 		if count != uint64(2*maxConnectionCount) {
 			time.Sleep(time.Millisecond)
 			continue

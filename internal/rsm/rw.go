@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Reusee (https://github.com/reusee)
+// Copyright 2017-2020 Reusee (https://github.com/reusee)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.

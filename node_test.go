@@ -24,6 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lni/goutils/leaktest"
+	"github.com/lni/goutils/random"
+
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
@@ -37,8 +40,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/leaktest"
-	"github.com/lni/goutils/random"
 )
 
 const (
@@ -469,7 +470,7 @@ func getProposalTestClient(n *node,
 			return cs, true
 		}
 		plog.Infof("unknown result/code: %v", v)
-	case <-n.stopc:
+	case <-n.stopC:
 		plog.Errorf("stopc triggered")
 		return nil, false
 	}
@@ -491,7 +492,7 @@ func closeProposalTestClient(n *node,
 		if v.Completed() && v.GetResult().Value == session.ClientID {
 			return
 		}
-	case <-n.stopc:
+	case <-n.stopC:
 		return
 	}
 }
@@ -1572,8 +1573,8 @@ func TestProcessUninitilizedNode(t *testing.T) {
 	if !ok {
 		t.Errorf("failed to returned the recover request")
 	}
-	n2 := &node{ss: &snapshotState{}}
-	n2.initializedMu.initialized = true
+	n2 := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
+	n2.setInitialized()
 	_, ok = n2.uninitializedNodeTask()
 	if ok {
 		t.Errorf("unexpected recover from snapshot request")
@@ -1595,7 +1596,11 @@ func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 }
 
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
-	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
+	n := &node{
+		ss:           &snapshotState{},
+		sysEvents:    newSysEventListener(nil, nil),
+		initializedC: make(chan struct{}),
+	}
 	n.ss.setRecovering()
 	n.ss.notifySnapshotStatus(false, true, false, true, 100)
 	if n.processRecoverStatus() {
@@ -1621,10 +1626,10 @@ func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
 }
 
 func TestTakingSnapshotNodeCanComplete(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
 	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.initializedMu.initialized = true
+	n.setInitialized()
 	if n.processSaveStatus() {
 		t.Errorf("node unexpectedly skipped")
 	}
@@ -1679,7 +1684,7 @@ func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                      
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.RegularStateMachine{}, nil), nil, config, &testDummyNodeProxy{}, fs)
@@ -1687,7 +1692,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 		t.Errorf("concurrency not suppose to be supported")
 	}
 	n.ss.setSaving()
-	n.initializedMu.initialized = true
+	n.setInitialized()
 	if !n.processSaveStatus() {
 		t.Fatalf("node not skipped")
 	}
@@ -1695,7 +1700,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 
 func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil), nil, config, &testDummyNodeProxy{}, fs)
@@ -1703,7 +1708,7 @@ func TestNotReadyTakingSnapshotNodeIsNotSkippedWhenConcurrencyIsSupported(t *tes
 		t.Errorf("concurrency not supported")
 	}
 	n.ss.setSaving()
-	n.initializedMu.initialized = true
+	n.setInitialized()
 	if n.processSaveStatus() {
 		t.Fatalf("node unexpectedly skipped")
 	}

@@ -25,6 +25,8 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/lni/goutils/logutil"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -34,7 +36,6 @@ import (
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/logutil"
 )
 
 var (

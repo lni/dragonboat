@@ -18,10 +18,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lni/goutils/syncutil"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	"github.com/lni/goutils/syncutil"
 )
 
 func TestSnapshotJobCanBeCreatedInSavedMode(t *testing.T) {

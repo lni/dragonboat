@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@ import (
 	"encoding/json"
 	"io"
 
-	sm "github.com/lni/dragonboat/v3/statemachine"
 	"github.com/lni/goutils/cache/biogo/store/llrb"
+
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 // RaftClientID is the type used as client id in sessions.

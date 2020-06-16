@@ -244,7 +244,7 @@ func TestCompatibleLogDBType(t *testing.T) {
 	}
 }
 
-func TestWALDirIsCanBeSet(t *testing.T) {
+func TestWALDirCanBeSet(t *testing.T) {
 	nhConfig := config.NodeHostConfig{
 		NodeHostDir: "d1",
 		WALDir:      "d2",
@@ -260,9 +260,9 @@ func TestWALDirIsCanBeSet(t *testing.T) {
 		t.Errorf("wal dir not considered")
 	}
 	if !strings.Contains(lldir, "d2") {
-		t.Errorf("wal dir not used")
+		t.Errorf("wal dir not used, %s", lldir)
 	}
 	if strings.Contains(dir, "d2") {
-		t.Errorf("wal dir appeared in node host dir")
+		t.Errorf("wal dir appeared in node host dir, %s", dir)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
+	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -35,7 +36,6 @@ import (
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/random"
 )
 
 func benchmarkAllocs(b *testing.B, sz uint64) {

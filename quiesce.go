@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ func (q *quiesceManager) quiesced() bool {
 	return q.quiescedSince > 0
 }
 
-func (q *quiesceManager) recordActivity(msgType pb.MessageType) {
+func (q *quiesceManager) record(msgType pb.MessageType) {
 	if !q.enabled {
 		return
 	}

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"sort"
 	"strings"
 
-	pb "github.com/lni/dragonboat/v3/raftpb"
 	"github.com/lni/goutils/logutil"
+
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func addressEqual(addr1 string, addr2 string) bool {

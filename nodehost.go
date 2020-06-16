@@ -122,7 +122,7 @@ const (
 
 var (
 	receiveQueueLen   = settings.Soft.ReceiveQueueLength
-	rsPoolSize        = settings.Soft.NodeHostSyncPoolSize
+	rsPoolShards      = settings.Soft.NodeHostRequestStatePoolShards
 	streamConnections = settings.Soft.StreamConnections
 	monitorInterval   = 100 * time.Millisecond
 )
@@ -244,8 +244,7 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
-	tick     uint64
-	msgCount uint64
+	tick uint64
 	testPartitionState
 	clusterMu struct {
 		sync.RWMutex
@@ -254,21 +253,21 @@ type NodeHost struct {
 		clusters sync.Map
 		requests map[uint64]*server.MessageQueue
 	}
-	snapshotStatus   *snapshotFeedback
-	serverCtx        *server.Context
-	nhConfig         config.NodeHostConfig
-	stopper          *syncutil.Stopper
-	duStopper        *syncutil.Stopper
-	nodes            *transport.Nodes
-	rsPool           []*sync.Pool
-	execEngine       *execEngine
-	logdb            raftio.ILogDB
-	transport        transport.ITransport
-	msgHandler       *messageHandler
-	liQueue          *leaderInfoQueue
-	raftUserListener raftio.IRaftEventListener
-	sysUserListener  *sysEventListener
-	fs               vfs.IFS
+	snapshotStatus *snapshotFeedback
+	serverCtx      *server.Context
+	nhConfig       config.NodeHostConfig
+	stopper        *syncutil.Stopper
+	duStopper      *syncutil.Stopper
+	nodes          *transport.Nodes
+	rsPool         []*sync.Pool
+	execEngine     *execEngine
+	logdb          raftio.ILogDB
+	transport      transport.ITransport
+	msgHandler     *messageHandler
+	liQueue        *leaderInfoQueue
+	raftListener   raftio.IRaftEventListener
+	sysListener    *sysEventListener
+	fs             vfs.IFS
 }
 
 var dn = logutil.DescribeNode
@@ -289,15 +288,15 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		return nil, err
 	}
 	nh := &NodeHost{
-		serverCtx:        serverCtx,
-		nhConfig:         nhConfig,
-		stopper:          syncutil.NewStopper(),
-		duStopper:        syncutil.NewStopper(),
-		nodes:            transport.NewNodes(streamConnections),
-		raftUserListener: nhConfig.RaftEventListener,
-		fs:               nhConfig.FS,
+		serverCtx:    serverCtx,
+		nhConfig:     nhConfig,
+		stopper:      syncutil.NewStopper(),
+		duStopper:    syncutil.NewStopper(),
+		nodes:        transport.NewNodes(streamConnections),
+		raftListener: nhConfig.RaftEventListener,
+		fs:           nhConfig.FS,
 	}
-	nh.sysUserListener = newSysEventListener(nhConfig.SystemEventListener,
+	nh.sysListener = newSysEventListener(nhConfig.SystemEventListener,
 		nh.stopper.ShouldStop())
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
@@ -361,7 +360,7 @@ func (nh *NodeHost) RaftAddress() string {
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
 // transport and persistent storage modules.
 func (nh *NodeHost) Stop() {
-	nh.sysUserListener.Publish(server.SystemEvent{
+	nh.sysListener.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
 	nh.clusterMu.Lock()
@@ -1582,13 +1581,13 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		queue,
 		stopc,
 		nh.nodes,
-		nh.rsPool[nodeID%rsPoolSize],
+		nh.rsPool[nodeID%rsPoolShards],
 		config,
 		nh.nhConfig.EnableMetrics,
 		nh.nhConfig.NotifyCommit,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb,
-		nh.sysUserListener)
+		nh.sysListener)
 	if err != nil {
 		panic(err)
 	}
@@ -1600,8 +1599,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 }
 
 func (nh *NodeHost) createPools() {
-	nh.rsPool = make([]*sync.Pool, rsPoolSize)
-	for i := uint64(0); i < rsPoolSize; i++ {
+	nh.rsPool = make([]*sync.Pool, rsPoolShards)
+	for i := uint64(0); i < rsPoolShards; i++ {
 		p := &sync.Pool{}
 		p.New = func() interface{} {
 			obj := &RequestState{}
@@ -1671,14 +1670,14 @@ type transportEvent struct {
 }
 
 func (te *transportEvent) ConnectionEstablished(addr string, snapshot bool) {
-	te.nh.sysUserListener.Publish(server.SystemEvent{
+	te.nh.sysListener.Publish(server.SystemEvent{
 		Type:               server.ConnectionEstablished,
 		Address:            addr,
 		SnapshotConnection: snapshot,
 	})
 }
 func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
-	te.nh.sysUserListener.Publish(server.SystemEvent{
+	te.nh.sysListener.Publish(server.SystemEvent{
 		Type:               server.ConnectionFailed,
 		Address:            addr,
 		SnapshotConnection: snapshot,
@@ -1771,10 +1770,10 @@ func (nh *NodeHost) handleListenerEvents() {
 				if !ok {
 					break
 				}
-				nh.raftUserListener.LeaderUpdated(v)
+				nh.raftListener.LeaderUpdated(v)
 			}
-		case e := <-nh.sysUserListener.events:
-			nh.sysUserListener.handle(e)
+		case e := <-nh.sysListener.events:
+			nh.sysListener.handle(e)
 		}
 	}
 }
@@ -1818,7 +1817,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
 			}
 		}
-		nh.sysUserListener.Publish(server.SystemEvent{
+		nh.sysListener.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotStarted,
 			ClusterID: msg.ClusterId,
 			NodeID:    msg.To,
@@ -2075,13 +2074,13 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) {
 	tick := h.nh.getTick()
 	if failed {
-		h.nh.sysUserListener.Publish(server.SystemEvent{
+		h.nh.sysListener.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotAborted,
 			ClusterID: clusterID,
 			NodeID:    nodeID,
 		})
 	} else {
-		h.nh.sysUserListener.Publish(server.SystemEvent{
+		h.nh.sysListener.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotCompleted,
 			ClusterID: clusterID,
 			NodeID:    nodeID,
@@ -2108,7 +2107,7 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 	}
 	h.nh.sendMessage(msg)
 	plog.Infof("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
-	h.nh.sysUserListener.Publish(server.SystemEvent{
+	h.nh.sysListener.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
 		ClusterID: clusterID,
 		NodeID:    nodeID,

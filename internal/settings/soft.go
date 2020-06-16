@@ -94,8 +94,8 @@ type soft struct {
 	TaskQueueTargetLength uint64
 	// TaskQueueInitialCap defines the initial capcity of a task queue.
 	TaskQueueInitialCap uint64
-	// NodeHostSyncPoolSize defines the number of sync pools.
-	NodeHostSyncPoolSize uint64
+	// NodeHostRequestStatePoolShards defines the number of sync pools.
+	NodeHostRequestStatePoolShards uint64
 	// LazyFreeCycle defines how often should entry queue and message queue
 	// to be freed.
 	LazyFreeCycle uint64
@@ -198,7 +198,7 @@ func getDefaultSoftSettings() soft {
 		PendingProposalShards:          16,
 		TaskQueueInitialCap:            64,
 		TaskQueueTargetLength:          1024,
-		NodeHostSyncPoolSize:           8,
+		NodeHostRequestStatePoolShards: 8,
 		TaskBatchSize:                  512,
 		NodeReloadMillisecond:          200,
 		StepEngineCommitWorkerCount:    16,

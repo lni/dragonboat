@@ -89,12 +89,12 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	}
 	r1 := &RequestState{}
 	r2 := &RequestState{node: &node{}}
-	r3 := &RequestState{node: &node{}}
+	r3 := &RequestState{node: &node{initializedC: make(chan struct{})}}
 	r3.node.setInitialized()
 	fn(r1)
 	fn(r2)
 	fn(r3)
-	r4 := &RequestState{node: &node{}}
+	r4 := &RequestState{node: &node{initializedC: make(chan struct{})}}
 	r4.node.setInitialized()
 	r4.readyToRead.set()
 	r4.mustBeReadyForLocalRead()

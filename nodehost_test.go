@@ -1183,7 +1183,7 @@ func TestCompactionCanBeRequested(t *testing.T) {
 		if err != ErrRejected {
 			t.Fatalf("not rejected")
 		}
-		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -1678,7 +1678,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 		if err := nh.StopCluster(2); err != nil {
 			t.Errorf("failed to stop cluster 2 %v", err)
 		}
-		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -1736,7 +1736,7 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to delete node %v", err)
 		}
-		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2211,7 +2211,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
-		listener, ok := nh2.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh2.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2227,7 +2227,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if len(listener.getLogCompacted()) == 0 {
 			t.Fatalf("log compaction not notified")
 		}
-		listener, ok = nh1.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok = nh1.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2657,7 +2657,7 @@ func TestSyncRequestSnapshot(t *testing.T) {
 		if idx == 0 {
 			t.Errorf("unexpected index %d", idx)
 		}
-		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2950,7 +2950,7 @@ func TestSyncRemoveData(t *testing.T) {
 		if err := nh.SyncRemoveData(ctx, 2, 1); err != nil {
 			t.Fatalf("sync remove data fail %v", err)
 		}
-		listener, ok := nh.sysUserListener.userListener.(*testSysEventListener)
+		listener, ok := nh.sysListener.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -3668,10 +3668,6 @@ func (c *chunks) onReceive(pb.MessageBatch) {
 
 func (c *chunks) confirm(clusterID uint64, nodeID uint64, index uint64) {
 	c.confirmed++
-}
-
-func (c *chunks) getDeploymentID() uint64 {
-	return 0
 }
 
 func (c *chunks) getSnapshotDirFunc(clusterID uint64, nodeID uint64) string {
