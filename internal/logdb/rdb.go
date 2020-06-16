@@ -162,12 +162,11 @@ func (r *rdb) readRaftState(clusterID uint64,
 	if err != nil {
 		return nil, err
 	}
-	rs := &raftio.RaftState{
+	return &raftio.RaftState{
 		State:      state,
 		FirstIndex: firstIndex,
 		EntryCount: length,
-	}
-	return rs, nil
+	}, nil
 }
 
 func (r *rdb) getRange(clusterID uint64,
@@ -480,10 +479,8 @@ func (r *rdb) compact(clusterID uint64, nodeID uint64, index uint64) error {
 func (r *rdb) saveEntries(updates []pb.Update,
 	wb kv.IWriteBatch, ctx raftio.IContext) {
 	for _, ud := range updates {
-		clusterID := ud.ClusterID
-		nodeID := ud.NodeID
 		if len(ud.EntriesToSave) > 0 {
-			mi := r.entries.record(wb, clusterID, nodeID, ctx, ud.EntriesToSave)
+			mi := r.entries.record(wb, ud.ClusterID, ud.NodeID, ctx, ud.EntriesToSave)
 			if mi > 0 {
 				r.setMaxIndex(wb, ud, mi, ctx)
 			}

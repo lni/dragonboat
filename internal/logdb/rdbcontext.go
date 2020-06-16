@@ -24,9 +24,9 @@ const (
 	updateSliceLen = 256
 )
 
-// rdbcontext is an IContext implementation suppose to be owned and used
+// rdbContext is an IContext implementation suppose to be owned and used
 // by a single thread throughout its life time.
-type rdbcontext struct {
+type rdbContext struct {
 	size    uint64
 	eb      pb.EntryBatch
 	lb      pb.EntryBatch
@@ -37,8 +37,8 @@ type rdbcontext struct {
 }
 
 // newRDBContext creates a new RDB context instance.
-func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbcontext {
-	ctx := &rdbcontext{
+func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbContext {
+	ctx := &rdbContext{
 		size:    size,
 		key:     newKey(maxKeySize, nil),
 		val:     make([]byte, size),
@@ -50,23 +50,23 @@ func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbcontext {
 	return ctx
 }
 
-func (c *rdbcontext) Destroy() {
+func (c *rdbContext) Destroy() {
 	if c.wb != nil {
 		c.wb.Destroy()
 	}
 }
 
-func (c *rdbcontext) Reset() {
+func (c *rdbContext) Reset() {
 	if c.wb != nil {
 		c.wb.Clear()
 	}
 }
 
-func (c *rdbcontext) GetKey() raftio.IReusableKey {
+func (c *rdbContext) GetKey() raftio.IReusableKey {
 	return c.key
 }
 
-func (c *rdbcontext) GetValueBuffer(sz uint64) []byte {
+func (c *rdbContext) GetValueBuffer(sz uint64) []byte {
 	if sz <= c.size {
 		return c.val
 	}
@@ -78,18 +78,18 @@ func (c *rdbcontext) GetValueBuffer(sz uint64) []byte {
 	return val
 }
 
-func (c *rdbcontext) GetUpdates() []pb.Update {
+func (c *rdbContext) GetUpdates() []pb.Update {
 	return c.updates
 }
 
-func (c *rdbcontext) GetEntryBatch() pb.EntryBatch {
+func (c *rdbContext) GetEntryBatch() pb.EntryBatch {
 	return c.eb
 }
 
-func (c *rdbcontext) GetLastEntryBatch() pb.EntryBatch {
+func (c *rdbContext) GetLastEntryBatch() pb.EntryBatch {
 	return c.lb
 }
 
-func (c *rdbcontext) GetWriteBatch() interface{} {
+func (c *rdbContext) GetWriteBatch() interface{} {
 	return c.wb
 }

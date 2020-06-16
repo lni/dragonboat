@@ -20,6 +20,8 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
+var _ entryManager = &plainEntries{}
+
 type plainEntries struct {
 	cs   *rdbcache
 	keys *logdbKeyPool
