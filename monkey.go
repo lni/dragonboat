@@ -19,9 +19,11 @@ package dragonboat
 import (
 	"sync/atomic"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -33,6 +35,16 @@ func ApplyMonkeySettings() {
 //
 // code here is used in testing only.
 //
+
+// MemFS is a in memory vfs intended to be used in testing. User applications
+// can usually ignore such vfs related types and fields.
+type MemFS = vfs.MemFS
+
+// GetTestFS returns a vfs instance that can be used in testing. User
+// applications can usually ignore such vfs related types and fields.
+func GetTestFS() config.IFS {
+	return vfs.GetTestFS()
+}
 
 // Clusters returns a list of raft nodes managed by the nodehost instance.
 func (nh *NodeHost) Clusters() []*node {
