@@ -51,9 +51,9 @@ var (
 	maxConnectionCount uint32 = uint32(settings.Soft.MaxSnapshotConnections)
 )
 
-// ASyncSendSnapshot sends raft snapshot message to its target.
-func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
-	if !t.asyncSendSnapshot(m) {
+// SendSnapshot asynchronously sends raft snapshot message to its target.
+func (t *Transport) SendSnapshot(m pb.Message) bool {
+	if !t.sendSnapshot(m) {
 		plog.Errorf("failed to send snapshot to %s", dn(m.ClusterId, m.To))
 		t.sendSnapshotNotification(m.ClusterId, m.To, true)
 		return false
@@ -61,16 +61,17 @@ func (t *Transport) ASyncSendSnapshot(m pb.Message) bool {
 	return true
 }
 
-// GetStreamConnection returns a connection used for streaming snapshot.
-func (t *Transport) GetStreamConnection(clusterID uint64, nodeID uint64) *Sink {
-	s := t.getStreamConnection(clusterID, nodeID)
+// GetStreamSink returns a connection used for streaming snapshot.
+func (t *Transport) GetStreamSink(clusterID uint64, nodeID uint64) *Sink {
+	s := t.getStreamSink(clusterID, nodeID)
 	if s == nil {
+		plog.Errorf("failed to connect to %s", dn(clusterID, nodeID))
 		t.sendSnapshotNotification(clusterID, nodeID, true)
 	}
 	return s
 }
 
-func (t *Transport) getStreamConnection(clusterID uint64, nodeID uint64) *Sink {
+func (t *Transport) getStreamSink(clusterID uint64, nodeID uint64) *Sink {
 	addr, _, err := t.resolver.Resolve(clusterID, nodeID)
 	if err != nil {
 		return nil
@@ -79,13 +80,13 @@ func (t *Transport) getStreamConnection(clusterID uint64, nodeID uint64) *Sink {
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	if c := t.tryCreateJob(key, addr, true, 0); c != nil {
-		return &Sink{j: c}
+	if job := t.createJob(key, addr, true, 0); job != nil {
+		return &Sink{j: job}
 	}
 	return nil
 }
 
-func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
+func (t *Transport) sendSnapshot(m pb.Message) bool {
 	toNodeID := m.To
 	clusterID := m.ClusterId
 	if m.Type != pb.InstallSnapshot {
@@ -101,42 +102,36 @@ func (t *Transport) asyncSendSnapshot(m pb.Message) bool {
 		return false
 	}
 	key := raftio.GetNodeInfo(clusterID, toNodeID)
-	c := t.tryCreateJob(key, addr, false, len(chunks))
-	if c == nil {
+	job := t.createJob(key, addr, false, len(chunks))
+	if job == nil {
 		return false
 	}
-	c.sendSavedSnapshot(m)
+	job.addSnapshot(m)
 	return true
 }
 
-func (t *Transport) tryCreateJob(key raftio.NodeInfo,
+func (t *Transport) createJob(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *job {
 	if v := atomic.AddUint32(&t.jobs, 1); v > maxConnectionCount {
 		r := atomic.AddUint32(&t.jobs, ^uint32(0))
 		plog.Errorf("job count is rate limited %d", r)
 		return nil
 	}
-	return t.createConnection(key, addr, streaming, sz)
-}
-
-func (t *Transport) createConnection(key raftio.NodeInfo,
-	addr string, streaming bool, sz int) *job {
-	c := newJob(t.ctx, key.ClusterID, key.NodeID,
-		t.nhConfig.GetDeploymentID(), streaming, sz,
-		t.raftRPC, t.stopper.ShouldStop(), t.fs)
-	c.streamChunkSent = t.streamChunkSent
-	c.preStreamChunkSend = t.preStreamChunkSend
+	job := newJob(t.ctx, key.ClusterID, key.NodeID, t.nhConfig.GetDeploymentID(),
+		streaming, sz, t.trans, t.stopper.ShouldStop(), t.fs)
+	job.streamChunkSent = t.streamChunkSent
+	job.preStreamChunkSend = t.preStreamChunkSend
 	shutdown := func() {
 		atomic.AddUint32(&t.jobs, ^uint32(0))
 	}
 	t.stopper.RunWorker(func() {
-		t.connectAndProcessSnapshot(c, addr)
+		t.processSnapshot(job, addr)
 		shutdown()
 	})
-	return c
+	return job
 }
 
-func (t *Transport) connectAndProcessSnapshot(c *job, addr string) {
+func (t *Transport) processSnapshot(c *job, addr string) {
 	breaker := t.GetCircuitBreaker(addr)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -144,7 +139,7 @@ func (t *Transport) connectAndProcessSnapshot(c *job, addr string) {
 	nodeID := c.nodeID
 	if err := func() error {
 		if err := c.connect(addr); err != nil {
-			plog.Warningf("failed to get snapshot client to %s", dn(clusterID, nodeID))
+			plog.Warningf("failed to get snapshot conn to %s", dn(clusterID, nodeID))
 			t.sendSnapshotNotification(clusterID, nodeID, true)
 			close(c.failed)
 			t.metrics.snapshotCnnectionFailure()
@@ -164,7 +159,7 @@ func (t *Transport) connectAndProcessSnapshot(c *job, addr string) {
 		t.sendSnapshotNotification(clusterID, nodeID, err != nil)
 		return err
 	}(); err != nil {
-		plog.Warningf("connectAndProcessSnapshot failed: %v", err)
+		plog.Warningf("processSnapshot failed: %v", err)
 		breaker.Fail()
 		t.sysEvents.ConnectionFailed(addr, true)
 	}

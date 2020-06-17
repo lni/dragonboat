@@ -319,11 +319,11 @@ func newNOOPTestTransport(fs vfs.IFS) (*Transport,
 	if err != nil {
 		panic(err)
 	}
-	raftRPC, ok := transport.raftRPC.(*NOOPTransport)
+	trans, ok := transport.trans.(*NOOPTransport)
 	if !ok {
 		panic("not a noop transport")
 	}
-	return transport, nodes, raftRPC, raftRPC.req, raftRPC.connReq
+	return transport, nodes, trans, trans.req, trans.connReq
 }
 
 func newTestTransport(mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
@@ -358,14 +358,14 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	for i := 0; i < 20; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Heartbeat,
 			To:        2,
 			ClusterId: 100,
 		}
-		done := trans.ASyncSend(msg)
+		done := trans.Send(msg)
 		if !done {
 			t.Errorf("failed to send message")
 		}
@@ -396,7 +396,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 			},
 		},
 	}
-	ok := trans.ASyncSend(m)
+	ok := trans.Send(m)
 	if !ok {
 		t.Errorf("failed to send the large msg")
 	}
@@ -447,7 +447,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	for i := 0; i < 128; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Replicate,
@@ -455,7 +455,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 			ClusterId: 100,
 			Entries:   []raftpb.Entry{{Cmd: make([]byte, 2*1024*1024)}},
 		}
-		done := trans.ASyncSend(msg)
+		done := trans.Send(msg)
 		if !done {
 			t.Errorf("failed to send message")
 		}
@@ -489,7 +489,7 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	trans.SetPreSendMessageBatchHook(f)
 	for i := 0; i < 100; i++ {
 		msg := raftpb.Message{
@@ -498,7 +498,7 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 			ClusterId: 100,
 		}
 		// silently drop
-		done := trans.ASyncSend(msg)
+		done := trans.Send(msg)
 		if !done {
 			t.Errorf("failed to send message")
 		}
@@ -555,13 +555,13 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, "nosuchhost:39001")
+	nodes.Add(100, 2, "nosuchhost:39001")
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
 		ClusterId: 100,
 	}
-	done := trans.ASyncSend(msg)
+	done := trans.Send(msg)
 	if !done {
 		t.Errorf("not suppose to fail")
 	}
@@ -632,14 +632,14 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
 		From:      200,
 		ClusterId: 100,
 	}
-	done := trans.ASyncSend(msg)
+	done := trans.Send(msg)
 	if !done {
 		t.Errorf("not suppose to fail")
 	}
@@ -744,7 +744,7 @@ func testSnapshotCanBeSent(t *testing.T,
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
@@ -757,7 +757,7 @@ func testSnapshotCanBeSent(t *testing.T,
 	}
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
+	done := trans.SendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
@@ -802,7 +802,7 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", 1024, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(1024)
@@ -810,7 +810,7 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	trans.SetPreStreamChunkSendHook(f)
-	done := trans.ASyncSendSnapshot(m)
+	done := trans.SendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
@@ -871,7 +871,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	onStreamChunkSent := func(c raftpb.Chunk) {
 		snapDir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 		fp := fs.PathJoin(snapDir, "testsnapshot.gbsnap")
@@ -890,7 +890,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
+	done := trans.SendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
@@ -913,17 +913,17 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	conns := make([]*Sink, 0)
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := trans.GetStreamConnection(100, 2)
+		sink := trans.GetStreamSink(100, 2)
 		if sink == nil {
 			t.Errorf("failed to get sink")
 		}
 		conns = append(conns, sink)
 	}
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := trans.GetStreamConnection(100, 2)
+		sink := trans.GetStreamSink(100, 2)
 		if sink != nil {
 			t.Errorf("connection is not limited")
 		}
@@ -946,7 +946,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		}
 	}
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := trans.GetStreamConnection(100, 2)
+		sink := trans.GetStreamSink(100, 2)
 		if sink == nil {
 			t.Errorf("failed to get sink again %d", i)
 		}
@@ -971,14 +971,14 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	// invalid address
-	nodes.AddNode(100, 2, "localhost:12345")
+	nodes.Add(100, 2, "localhost:12345")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, fs)
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
+	done := trans.SendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
@@ -1012,8 +1012,8 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.I
 	defer stopper.Stop()
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
-	nodes.AddNode(100, 3, serverAddress)
+	nodes.Add(100, 2, serverAddress)
+	nodes.Add(100, 3, serverAddress)
 	snapshotSent := uint32(0)
 	f := func(c raftpb.Chunk) (raftpb.Chunk, bool) {
 		for atomic.LoadUint32(&snapshotSent) == 0 {
@@ -1029,25 +1029,25 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.I
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
-	trans.ASyncSendSnapshot(m)
+	trans.SendSnapshot(m)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot2.gbsnap", snapshotSize, fs)
 	m2 := getTestSnapshotMessage(2)
 	m2.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m2.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot1.gbsnap")
 	// send the snapshot file
-	trans.ASyncSendSnapshot(m2)
+	trans.SendSnapshot(m2)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot3.gbsnap", snapshotSize, fs)
 	m3 := getTestSnapshotMessage(3)
 	m3.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m3.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
-	trans.ASyncSendSnapshot(m3)
+	trans.SendSnapshot(m3)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot4.gbsnap", snapshotSize, fs)
 	m4 := getTestSnapshotMessage(2)
 	m4.Snapshot.FileSize = getTestSnapshotFileSize(snapshotSize)
 	m4.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot2.gbsnap")
 	// send the snapshot file
-	trans.ASyncSendSnapshot(m4)
+	trans.SendSnapshot(m4)
 	atomic.StoreUint32(&snapshotSent, 1)
 	waitForTotalSnapshotStatusUpdateCount(handler, 1000, 4)
 	if handler.getSnapshotCount(100, 2) != 0 {
@@ -1092,7 +1092,7 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external2.data", sz)
@@ -1112,7 +1112,7 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	}
 	m.Snapshot.Files = []*raftpb.SnapshotFile{f1, f2}
 	// send the snapshot file
-	done := trans.ASyncSendSnapshot(m)
+	done := trans.SendSnapshot(m)
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
@@ -1169,7 +1169,7 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1177,7 +1177,7 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
-	ok := tt.ASyncSend(msg)
+	ok := tt.Send(msg)
 	if !ok {
 		t.Errorf("send failed")
 	}
@@ -1204,7 +1204,7 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1212,12 +1212,12 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
-	ok := tt.ASyncSend(msg)
+	ok := tt.Send(msg)
 	if !ok {
 		t.Errorf("send failed")
 	}
 	req.SetToFail(true)
-	ok = tt.ASyncSend(msg)
+	ok = tt.Send(msg)
 	if !ok {
 		t.Errorf("send failed")
 	}
@@ -1239,7 +1239,7 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
 		Type:      raftpb.Heartbeat,
 		To:        2,
@@ -1247,12 +1247,12 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
-	ok := tt.ASyncSend(msg)
+	ok := tt.Send(msg)
 	if !ok {
 		t.Errorf("send failed")
 	}
 	req.SetToFail(true)
-	ok = tt.ASyncSend(msg)
+	ok = tt.Send(msg)
 	if !ok {
 		t.Errorf("send failed")
 	}
@@ -1265,7 +1265,7 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	}
 	req.SetToFail(false)
 	for i := 0; i < 20; i++ {
-		ok = tt.ASyncSend(msg)
+		ok = tt.Send(msg)
 		if ok {
 			t.Errorf("send unexpectedly returned ok")
 		}
@@ -1289,8 +1289,8 @@ func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
-	sink := tt.GetStreamConnection(100, 3)
+	nodes.Add(100, 2, serverAddress)
+	sink := tt.GetStreamSink(100, 3)
 	if sink != nil {
 		t.Errorf("unexpectedly returned a sink")
 	}
@@ -1309,10 +1309,10 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	connReq.SetToFail(true)
 	req.SetToFail(true)
-	tt.GetStreamConnection(100, 2)
+	tt.GetStreamSink(100, 2)
 	failedSnapshotReported := false
 	for i := 0; i < 10000; i++ {
 		if handler.getFailedSnapshotCount(100, 2) != 1 {
@@ -1334,15 +1334,15 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := tt.GetStreamConnection(100, 2)
+		sink := tt.GetStreamSink(100, 2)
 		if sink == nil {
 			t.Errorf("failed to connect")
 		}
 	}
 	for i := uint32(0); i < 2*maxConnectionCount; i++ {
-		sink := tt.GetStreamConnection(100, 2)
+		sink := tt.GetStreamSink(100, 2)
 		if sink != nil {
 			t.Errorf("stream connection not limited")
 		}
@@ -1368,7 +1368,7 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
 	msg := raftpb.Message{
 		ClusterId: 100,
@@ -1391,7 +1391,7 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 		}
 	}
 	for i := 0; i < 100; i++ {
-		sent := tt.ASyncSend(msg)
+		sent := tt.Send(msg)
 		if !sent {
 			rled(true)
 			break
@@ -1402,7 +1402,7 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	}
 	req.SetBlocked(false)
 	for i := 0; i < 1000; i++ {
-		sent := tt.ASyncSend(msg)
+		sent := tt.Send(msg)
 		if sent {
 			rled(false)
 			break
@@ -1420,7 +1420,7 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 	defer tt.Stop()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
-	nodes.AddNode(100, 2, serverAddress)
+	nodes.Add(100, 2, serverAddress)
 	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
 	msg := raftpb.Message{
 		ClusterId: 100,
@@ -1432,7 +1432,7 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to resolve the addr")
 	}
-	if !tt.ASyncSend(msg) {
+	if !tt.Send(msg) {
 		t.Errorf("first send failed")
 	}
 	sq, ok := tt.mu.queues[key]
@@ -1443,7 +1443,7 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		sent := tt.ASyncSend(msg)
+		sent := tt.Send(msg)
 		if !sent {
 			t.Errorf("failed to send2")
 		}

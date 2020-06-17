@@ -69,7 +69,7 @@ type node struct {
 	confirmedIndex        uint64
 	pushedIndex           uint64
 	engine                engine
-	getStreamConnection   func(uint64, uint64) pb.IChunkSink
+	getStreamSink         func(uint64, uint64) *transport.Sink
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
 	sm                    *rsm.StateMachine
@@ -115,7 +115,7 @@ func newNode(raftAddress string,
 	smType pb.StateMachineType,
 	engine engine,
 	liQueue *leaderInfoQueue,
-	getStreamConnection func(uint64, uint64) pb.IChunkSink,
+	getStreamSink func(uint64, uint64) *transport.Sink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
 	mq *server.MessageQueue,
@@ -149,7 +149,7 @@ func newNode(raftAddress string,
 		configChangeC:         configChangeC,
 		snapshotC:             snapshotC,
 		engine:                engine,
-		getStreamConnection:   getStreamConnection,
+		getStreamSink:         getStreamSink,
 		handleSnapshotStatus:  handleSnapshotStatus,
 		stopC:                 stopC,
 		pendingProposals:      pp,
@@ -232,18 +232,18 @@ func (n *node) ApplyConfigChange(cc pb.ConfigChange) {
 	n.p.ApplyConfigChange(cc)
 	switch cc.Type {
 	case pb.AddNode:
-		n.nodeRegistry.AddNode(n.clusterID, cc.NodeID, string(cc.Address))
+		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
 	case pb.AddObserver:
-		n.nodeRegistry.AddNode(n.clusterID, cc.NodeID, string(cc.Address))
+		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
 	case pb.AddWitness:
-		n.nodeRegistry.AddNode(n.clusterID, cc.NodeID, string(cc.Address))
+		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
 	case pb.RemoveNode:
 		if cc.NodeID == n.nodeID {
 			plog.Infof("%s applied ConfChange Remove for itself", n.id())
 			n.nodeRegistry.RemoveCluster(n.clusterID)
 			n.requestRemoval()
 		} else {
-			n.nodeRegistry.RemoveNode(n.clusterID, cc.NodeID)
+			n.nodeRegistry.Remove(n.clusterID, cc.NodeID)
 		}
 	default:
 		panic("unknown config change type")
@@ -257,13 +257,13 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
 	for nid, addr := range snapshot.Membership.Addresses {
-		n.nodeRegistry.AddNode(n.clusterID, nid, addr)
+		n.nodeRegistry.Add(n.clusterID, nid, addr)
 	}
 	for nid, addr := range snapshot.Membership.Observers {
-		n.nodeRegistry.AddNode(n.clusterID, nid, addr)
+		n.nodeRegistry.Add(n.clusterID, nid, addr)
 	}
 	for nid, addr := range snapshot.Membership.Witnesses {
-		n.nodeRegistry.AddNode(n.clusterID, nid, addr)
+		n.nodeRegistry.Add(n.clusterID, nid, addr)
 	}
 	for nid := range snapshot.Membership.Removed {
 		if nid == n.nodeID {
@@ -1344,7 +1344,7 @@ func (n *node) reportSnapshotStatus(clusterID uint64,
 func (n *node) reportStreamSnapshot(rec rsm.Task) {
 	n.ss.setStreaming()
 	getSinkFn := func() pb.IChunkSink {
-		conn := n.getStreamConnection(rec.ClusterID, rec.NodeID)
+		conn := n.getStreamSink(rec.ClusterID, rec.NodeID)
 		if conn == nil {
 			plog.Errorf("failed to connect to %s", dn(rec.ClusterID, rec.NodeID))
 			return nil

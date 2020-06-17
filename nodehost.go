@@ -259,7 +259,7 @@ type NodeHost struct {
 	stopper        *syncutil.Stopper
 	duStopper      *syncutil.Stopper
 	nodes          *transport.Nodes
-	rsPool         []*sync.Pool
+	rsPools        []*sync.Pool
 	execEngine     *execEngine
 	logdb          raftio.ILogDB
 	transport      transport.ITransport
@@ -1539,7 +1539,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
 	for k, v := range peers {
 		if k != nodeID {
-			nh.nodes.AddNode(clusterID, k, v)
+			nh.nodes.Add(clusterID, k, v)
 		}
 	}
 	if err := nh.serverCtx.CreateSnapshotDir(nh.nhConfig.GetDeploymentID(),
@@ -1551,16 +1551,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	}
 	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
-	}
-	getStreamConn := func(cid uint64, nid uint64) pb.IChunkSink {
-		conn := nh.transport.GetStreamConnection(cid, nid)
-		if conn == nil {
-			return nil
-		}
-		return conn
-	}
-	handleSnapshotStatus := func(cid uint64, nid uint64, failed bool) {
-		nh.msgHandler.HandleSnapshotStatus(cid, nid, failed)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
 		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc, nh.fs)
@@ -1575,13 +1565,13 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		smType,
 		nh.execEngine,
 		nh.liQueue,
-		getStreamConn,
-		handleSnapshotStatus,
+		nh.transport.GetStreamSink,
+		nh.msgHandler.HandleSnapshotStatus,
 		nh.sendMessage,
 		queue,
 		stopc,
 		nh.nodes,
-		nh.rsPool[nodeID%rsPoolShards],
+		nh.rsPools[nodeID%rsPoolShards],
 		config,
 		nh.nhConfig.EnableMetrics,
 		nh.nhConfig.NotifyCommit,
@@ -1599,7 +1589,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 }
 
 func (nh *NodeHost) createPools() {
-	nh.rsPool = make([]*sync.Pool, rsPoolShards)
+	nh.rsPools = make([]*sync.Pool, rsPoolShards)
 	for i := uint64(0); i < rsPoolShards; i++ {
 		p := &sync.Pool{}
 		p.New = func() interface{} {
@@ -1611,7 +1601,7 @@ func (nh *NodeHost) createPools() {
 			}
 			return obj
 		}
-		nh.rsPool[i] = p
+		nh.rsPools[i] = p
 	}
 }
 
@@ -1804,7 +1794,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 		return
 	}
 	if msg.Type != pb.InstallSnapshot {
-		nh.transport.ASyncSend(msg)
+		nh.transport.Send(msg)
 	} else {
 		witness := msg.Snapshot.Witness
 		plog.Infof("%s is sending snapshot to %s, witness %t, index %d, size %d",
@@ -1812,7 +1802,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 			witness, msg.Snapshot.Index, msg.Snapshot.FileSize)
 		if n, ok := nh.getCluster(msg.ClusterId); ok {
 			if witness || !n.OnDiskStateMachine() {
-				nh.transport.ASyncSendSnapshot(msg)
+				nh.transport.SendSnapshot(msg)
 			} else {
 				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
 			}

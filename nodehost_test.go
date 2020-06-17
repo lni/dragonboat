@@ -389,9 +389,9 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 		}
 		defer nh.Stop()
 		tt := nh.transport.(*transport.Transport)
-		if tt.GetRaftRPC().Name() != transport.TCPRaftRPCName {
+		if tt.GetTrans().Name() != transport.TCPRaftRPCName {
 			t.Errorf("raft rpc type name %s, expect %s",
-				tt.GetRaftRPC().Name(), transport.TCPRaftRPCName)
+				tt.GetTrans().Name(), transport.TCPRaftRPCName)
 		}
 	}
 	runNodeHostTest(t, tf, fs)
@@ -408,9 +408,9 @@ func TestRaftRPCCanBeExtended(t *testing.T) {
 		}
 		defer nh.Stop()
 		tt := nh.transport.(*transport.Transport)
-		if tt.GetRaftRPC().Name() != transport.NOOPRaftName {
+		if tt.GetTrans().Name() != transport.NOOPRaftName {
 			t.Errorf("raft rpc type name %s, expect %s",
-				tt.GetRaftRPC().Name(), transport.NOOPRaftName)
+				tt.GetTrans().Name(), transport.NOOPRaftName)
 		}
 	}
 	runNodeHostTest(t, tf, fs)

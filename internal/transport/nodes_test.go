@@ -27,7 +27,7 @@ func TestPeerCanBeAdded(t *testing.T) {
 	if err == nil {
 		t.Fatalf("error not reported")
 	}
-	nodes.AddNode(100, 2, "a2:2")
+	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
 	if err != nil {
 		t.Errorf("failed to resolve address")
@@ -39,9 +39,9 @@ func TestPeerCanBeAdded(t *testing.T) {
 
 func TestPeerAddressCanNotBeUpdated(t *testing.T) {
 	nodes := NewNodes(settings.Soft.StreamConnections)
-	nodes.AddNode(100, 2, "a2:2")
-	nodes.AddNode(100, 2, "a2:3")
-	nodes.AddNode(100, 2, "a2:4")
+	nodes.Add(100, 2, "a2:2")
+	nodes.Add(100, 2, "a2:3")
+	nodes.Add(100, 2, "a2:4")
 	url, _, err := nodes.Resolve(100, 2)
 	if err != nil {
 		t.Errorf("failed to resolve address")
@@ -53,7 +53,7 @@ func TestPeerAddressCanNotBeUpdated(t *testing.T) {
 
 func TestPeerCanBeRemoved(t *testing.T) {
 	nodes := NewNodes(settings.Soft.StreamConnections)
-	nodes.AddNode(100, 2, "a2:2")
+	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
 	if err != nil {
 		t.Errorf("failed to resolve address")
@@ -61,7 +61,7 @@ func TestPeerCanBeRemoved(t *testing.T) {
 	if url != "a2:2" {
 		t.Errorf("got %s, want %s", url, "a2:2")
 	}
-	nodes.RemoveNode(100, 2)
+	nodes.Remove(100, 2)
 	_, _, err = nodes.Resolve(100, 2)
 	if err == nil {
 		t.Fatalf("error not reported")
@@ -70,9 +70,9 @@ func TestPeerCanBeRemoved(t *testing.T) {
 
 func TestRemoveCluster(t *testing.T) {
 	nodes := NewNodes(settings.Soft.StreamConnections)
-	nodes.AddNode(100, 2, "a2:2")
-	nodes.AddNode(100, 3, "a2:3")
-	nodes.AddNode(200, 2, "a3:2")
+	nodes.Add(100, 2, "a2:2")
+	nodes.Add(100, 3, "a2:3")
+	nodes.Add(200, 2, "a3:2")
 	nodes.RemoveCluster(100)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
@@ -90,7 +90,7 @@ func TestRemoteAddressCanBeUsed(t *testing.T) {
 	if err == nil {
 		t.Errorf("unexpected result")
 	}
-	nodes.AddRemoteAddress(100, 2, "a3:2")
+	nodes.AddRemote(100, 2, "a3:2")
 	v, _, err := nodes.Resolve(100, 2)
 	if err != nil {
 		t.Errorf("failed to return the remote address")
@@ -119,7 +119,7 @@ func testInvalidAddressWillPanic(t *testing.T, addr string) {
 			t.Errorf("failed to panic on invalid address")
 		}
 	}()
-	nodes.AddNode(100, 2, addr)
+	nodes.Add(100, 2, addr)
 }
 
 func TestInvalidAddressWillPanic(t *testing.T) {

@@ -59,7 +59,7 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 	if cap(c.ch) != len(chunks) {
 		t.Errorf("unexpected chan length %d", cap(c.ch))
 	}
-	c.sendSavedSnapshot(m)
+	c.addSnapshot(m)
 	if len(c.ch) != len(chunks) {
 		t.Errorf("not all chunks pushed to ch")
 	}
@@ -86,7 +86,7 @@ func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 		t.Fatalf("failed to get noopConn")
 	}
 	noopConn.req.SetToFail(true)
-	sent, stopped := c.SendChunk(pb.Chunk{})
+	sent, stopped := c.AddChunk(pb.Chunk{})
 	if !sent {
 		t.Fatalf("failed to send")
 	}
@@ -98,7 +98,7 @@ func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 		t.Fatalf("error didn't return from process()")
 	}
 	for i := 0; i < streamingChanLength*10; i++ {
-		c.SendChunk(pb.Chunk{})
+		c.AddChunk(pb.Chunk{})
 	}
 	select {
 	case <-c.failed:
@@ -124,7 +124,7 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
 	poison := pb.Chunk{
 		ChunkCount: tt,
 	}
-	sent, stopped := c.SendChunk(poison)
+	sent, stopped := c.AddChunk(poison)
 	if !sent {
 		t.Fatalf("failed to send")
 	}

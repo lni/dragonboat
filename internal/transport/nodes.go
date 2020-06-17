@@ -17,12 +17,10 @@ package transport
 import (
 	"errors"
 	"fmt"
-	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/lni/goutils/logutil"
+	"github.com/lni/goutils/stringutil"
 
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -34,38 +32,10 @@ var _ INodeAddressResolver = &Nodes{}
 // INodeRegistry is the local registry interface used to keep all known
 // nodes in the system..
 type INodeRegistry interface {
-	AddNode(clusterID uint64, nodeID uint64, url string)
-	RemoveNode(clusterID uint64, nodeID uint64)
+	Add(clusterID uint64, nodeID uint64, url string)
+	Remove(clusterID uint64, nodeID uint64)
 	RemoveCluster(clusterID uint64)
 	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
-}
-
-type addr struct {
-	network string
-	address string
-	port    int
-}
-
-func newAddr(v string) (*addr, error) {
-	in := strings.TrimSpace(v)
-	parts := strings.Split(in, ":")
-	if len(parts) != 2 || len(parts[0]) == 0 || len(parts[1]) == 0 {
-		plog.Panicf("invalid address, %s", v)
-	}
-	p, err := strconv.Atoi(parts[1])
-	if err != nil || p < 0 || p > 65535 {
-		plog.Panicf("invalid port %s", parts[1])
-	}
-	a := &addr{
-		network: "tcp",
-		address: parts[0],
-		port:    p,
-	}
-	return a, nil
-}
-
-func (a *addr) String() string {
-	return fmt.Sprintf("%s:%d", a.address, a.port)
 }
 
 type record struct {
@@ -98,28 +68,24 @@ func NewNodes(streamConnections uint64) *Nodes {
 	return n
 }
 
-// AddRemoteAddress remembers the specified address obtained from the source
-// of the incoming message.
-func (n *Nodes) AddRemoteAddress(clusterID uint64,
-	nodeID uint64, address string) {
-	if len(address) == 0 {
-		panic("empty address")
-	}
-	if nodeID == 0 {
-		panic("invalid node id")
+// AddRemote remembers the specified address obtained from the source of the
+// incoming message.
+func (n *Nodes) AddRemote(clusterID uint64, nodeID uint64, addr string) {
+	if !stringutil.IsValidAddress(addr) {
+		plog.Panicf("invalid address %s", addr)
 	}
 	n.nmu.Lock()
+	defer n.nmu.Unlock()
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	v, ok := n.nmu.nodes[key]
 	if !ok {
-		n.nmu.nodes[key] = address
+		n.nmu.nodes[key] = addr
 	} else {
-		if v != address {
+		if v != addr {
 			plog.Panicf("inconsistent addr for %s, %s:%s",
-				logutil.DescribeNode(clusterID, nodeID), v, address)
+				logutil.DescribeNode(clusterID, nodeID), v, addr)
 		}
 	}
-	n.nmu.Unlock()
 }
 
 func (n *Nodes) getConnectionKey(addr string, clusterID uint64) string {
@@ -130,64 +96,68 @@ func (n *Nodes) getConnectionKey(addr string, clusterID uint64) string {
 	return fmt.Sprintf("%s-%d", addr, idx)
 }
 
-func (n *Nodes) getAddressFromRemoteList(clusterID uint64,
-	nodeID uint64) (string, error) {
+func (n *Nodes) getFromRemote(clusterID uint64, nodeID uint64) (string, error) {
 	n.nmu.Lock()
 	defer n.nmu.Unlock()
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	v, ok := n.nmu.nodes[key]
 	if !ok {
-		return "", errors.New("no address")
+		return "", errors.New("addr not found")
 	}
 	return v, nil
 }
 
-// AddNode add a new node.
-func (n *Nodes) AddNode(clusterID uint64, nodeID uint64, url string) {
+// Add add a new node.
+func (n *Nodes) Add(clusterID uint64, nodeID uint64, addr string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if !stringutil.IsValidAddress(addr) {
+		plog.Panicf("invalid address %s", addr)
+	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	if v, err := newAddr(url); err != nil {
-		panic(err)
-	} else {
-		if _, ok := n.mu.addr[key]; !ok {
-			rec := record{
-				address: v.String(),
-				key:     n.getConnectionKey(v.String(), clusterID),
-			}
-			n.mu.addr[key] = rec
+	if _, ok := n.mu.addr[key]; !ok {
+		n.mu.addr[key] = record{
+			address: addr,
+			key:     n.getConnectionKey(addr, clusterID),
 		}
 	}
 }
 
-// RemoveNode removes a remote from the node registry.
-func (n *Nodes) RemoveNode(clusterID uint64, nodeID uint64) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+// Remove removes a remote from the node registry.
+func (n *Nodes) Remove(clusterID uint64, nodeID uint64) {
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	delete(n.mu.addr, key)
+	func() {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		delete(n.mu.addr, key)
+	}()
+	func() {
+		n.nmu.Lock()
+		defer n.nmu.Unlock()
+		delete(n.nmu.nodes, key)
+	}()
 }
 
 // RemoveCluster removes all nodes info associated with the specified cluster
 func (n *Nodes) RemoveCluster(clusterID uint64) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	toRemove := make([]raftio.NodeInfo, 0)
-	for k := range n.mu.addr {
-		if k.ClusterID == clusterID {
-			toRemove = append(toRemove, k)
+	func() {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		for k := range n.mu.addr {
+			if k.ClusterID == clusterID {
+				delete(n.mu.addr, k)
+			}
 		}
-	}
-	for _, key := range toRemove {
-		delete(n.mu.addr, key)
-	}
-}
-
-// RemoveAllPeers removes all remotes.
-func (n *Nodes) RemoveAllPeers() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.mu.addr = make(map[raftio.NodeInfo]record)
+	}()
+	func() {
+		n.nmu.Lock()
+		defer n.nmu.Unlock()
+		for k := range n.nmu.nodes {
+			if k.ClusterID == clusterID {
+				delete(n.nmu.nodes, k)
+			}
+		}
+	}()
 }
 
 // Resolve looks up the Addr of the specified node.
@@ -197,11 +167,11 @@ func (n *Nodes) Resolve(clusterID uint64, nodeID uint64) (string, string, error)
 	addr, ok := n.mu.addr[key]
 	n.mu.Unlock()
 	if !ok {
-		na, err := n.getAddressFromRemoteList(clusterID, nodeID)
+		na, err := n.getFromRemote(clusterID, nodeID)
 		if err != nil {
-			return "", "", errors.New("cluster id/node id not found")
+			return "", "", errors.New("addr not found")
 		}
-		n.AddNode(clusterID, nodeID, na)
+		n.Add(clusterID, nodeID, na)
 		return na, n.getConnectionKey(na, clusterID), nil
 	}
 	return addr.address, addr.key, nil
@@ -214,12 +184,7 @@ func (n *Nodes) ReverseResolve(addr string) []raftio.NodeInfo {
 	defer n.mu.Unlock()
 	affected := make([]raftio.NodeInfo, 0)
 	for k, v := range n.mu.addr {
-		altV := ""
-		u, err := url.Parse(v.address)
-		if err == nil {
-			altV = u.Host
-		}
-		if v.address == addr || (len(altV) > 0 && altV == addr) {
+		if v.address == addr {
 			affected = append(affected, k)
 		}
 	}

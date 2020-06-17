@@ -46,7 +46,7 @@ type Sink struct {
 
 // Receive receives a snapshot chunk.
 func (s *Sink) Receive(chunk pb.Chunk) (bool, bool) {
-	return s.j.SendChunk(chunk)
+	return s.j.AddChunk(chunk)
 }
 
 // Stop stops the sink processing.
@@ -122,7 +122,7 @@ func (j *job) connect(addr string) error {
 	return nil
 }
 
-func (j *job) sendSavedSnapshot(m pb.Message) {
+func (j *job) addSnapshot(m pb.Message) {
 	chunks := splitSnapshotMessage(m, j.fs)
 	if len(chunks) != cap(j.ch) {
 		plog.Panicf("cap of ch is %d, want %d", cap(j.ch), len(chunks))
@@ -132,7 +132,7 @@ func (j *job) sendSavedSnapshot(m pb.Message) {
 	}
 }
 
-func (j *job) SendChunk(chunk pb.Chunk) (bool, bool) {
+func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
 		plog.Infof("%s is sending chunk %d to %s",
 			logutil.NodeID(chunk.From), chunk.ChunkId,
@@ -163,7 +163,7 @@ func (j *job) process() error {
 		}
 		return err
 	}
-	return j.processSavedSnapshot()
+	return j.sendSnapshot()
 }
 
 func (j *job) streamSnapshot() error {
@@ -191,7 +191,7 @@ func (j *job) streamSnapshot() error {
 	}
 }
 
-func (j *job) processSavedSnapshot() error {
+func (j *job) sendSnapshot() error {
 	chunks := make([]pb.Chunk, 0)
 	for {
 		select {
@@ -203,13 +203,13 @@ func (j *job) processSavedSnapshot() error {
 			}
 			chunks = append(chunks, chunk)
 			if chunk.ChunkId+1 == chunk.ChunkCount {
-				return j.sendSavedChunks(chunks)
+				return j.sendChunks(chunks)
 			}
 		}
 	}
 }
 
-func (j *job) sendSavedChunks(chunks []pb.Chunk) error {
+func (j *job) sendChunks(chunks []pb.Chunk) error {
 	for _, chunk := range chunks {
 		chunkData := make([]byte, snapshotChunkSize)
 		chunk.DeploymentId = j.deploymentID

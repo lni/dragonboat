@@ -420,7 +420,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 	}
 	nodes1 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes2 := transport.NewNodes(settings.Soft.StreamConnections)
-	nodes1.AddRemoteAddress(1, 2, addr2)
+	nodes1.AddRemote(1, 2, addr2)
 	t1, err := transport.NewTransport(nhc1, ctx1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
@@ -472,7 +472,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 	for i := 0; i < b.N; i++ {
 		handler1.reset()
 		for _, msg := range msgs {
-			t1.ASyncSend(msg)
+			t1.Send(msg)
 		}
 		handler1.wait()
 	}
