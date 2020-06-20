@@ -83,9 +83,8 @@ type entryLog struct {
 	processed uint64
 }
 
-func newEntryLog(logdb ILogDB, rl *server.RateLimiter) *entryLog {
+func newEntryLog(logdb ILogDB, rl *server.InMemRateLimiter) *entryLog {
 	firstIndex, lastIndex := logdb.GetRange()
-
 	l := &entryLog{
 		logdb:     logdb,
 		inmem:     newInMemory(lastIndex, rl),

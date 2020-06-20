@@ -826,7 +826,7 @@ func TestDuelingCandidates(t *testing.T) {
 	}{
 		{a, follower, 2, wlog},
 		{b, follower, 2, wlog},
-		{c, follower, 2, newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))},
+		{c, follower, 2, newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))},
 	}
 
 	for i, tt := range tests {
@@ -1043,7 +1043,7 @@ func TestProposal(t *testing.T) {
 		send(pb.Message{From: 1, To: 1, Type: pb.Election})
 		send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: data}}})
 
-		wantLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+		wantLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 		if tt.success {
 			wantLog = &entryLog{
 				logdb: &TestLogDB{

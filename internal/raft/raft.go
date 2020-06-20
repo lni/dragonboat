@@ -202,7 +202,7 @@ type raft struct {
 	term                      uint64
 	vote                      uint64
 	log                       *entryLog
-	rl                        *server.RateLimiter
+	rl                        *server.InMemRateLimiter
 	remotes                   map[uint64]*remote
 	observers                 map[uint64]*remote
 	witnesses                 map[uint64]*remote
@@ -239,7 +239,7 @@ func newRaft(c *config.Config, logdb ILogDB) *raft {
 	if logdb == nil {
 		panic("logdb is nil")
 	}
-	rl := server.NewRateLimiter(c.MaxInMemLogSize)
+	rl := server.NewInMemRateLimiter(c.MaxInMemLogSize)
 	r := &raft{
 		clusterID:        c.ClusterID,
 		nodeID:           c.NodeID,
@@ -572,7 +572,7 @@ func (r *raft) nonLeaderTick() {
 	r.electionTick++
 	if r.timeForRateLimitCheck() {
 		if r.rl.Enabled() {
-			r.rl.HeartbeatTick()
+			r.rl.Tick()
 			r.sendRateLimitMessage()
 		}
 	}
@@ -596,7 +596,7 @@ func (r *raft) leaderTick() {
 	r.electionTick++
 	if r.timeForRateLimitCheck() {
 		if r.rl.Enabled() {
-			r.rl.HeartbeatTick()
+			r.rl.Tick()
 		}
 	}
 	timeToAbortLeaderTransfer := r.timeToAbortLeaderTransfer()
@@ -994,7 +994,7 @@ func (r *raft) reset(term uint64) {
 		r.vote = NoLeader
 	}
 	if r.rl.Enabled() {
-		r.rl.ResetFollowerState()
+		r.rl.Reset()
 	}
 	r.votes = make(map[uint64]bool)
 	r.electionTick = 0

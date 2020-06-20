@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	gcTick uint64 = 2
+	gcTick               uint64 = 3
+	ChangeTickThreashold uint64 = 10
 )
 
 type followerState struct {
@@ -28,19 +29,16 @@ type followerState struct {
 	inMemLogSize uint64
 }
 
-// RateLimiter is the struct used to keep tracking the in memory rate log size.
+// RateLimiter is the struct used to keep tracking consumed memory size.
 type RateLimiter struct {
-	size          uint64
-	tick          uint64
-	maxSize       uint64
-	followerSizes map[uint64]followerState
+	size    uint64
+	maxSize uint64
 }
 
 // NewRateLimiter creates and returns a rate limiter instance.
-func NewRateLimiter(maxSize uint64) *RateLimiter {
+func NewRateLimiter(max uint64) *RateLimiter {
 	return &RateLimiter{
-		maxSize:       maxSize,
-		followerSizes: make(map[uint64]followerState),
+		maxSize: max,
 	}
 }
 
@@ -48,16 +46,6 @@ func NewRateLimiter(maxSize uint64) *RateLimiter {
 // enabled.
 func (r *RateLimiter) Enabled() bool {
 	return r.maxSize > 0 && r.maxSize != math.MaxUint64
-}
-
-// HeartbeatTick advances the internal logical clock.
-func (r *RateLimiter) HeartbeatTick() {
-	r.tick++
-}
-
-// GetHeartbeatTick returns the internal logical clock value.
-func (r *RateLimiter) GetHeartbeatTick() uint64 {
-	return r.tick
 }
 
 // Increase increases the recorded in memory log size by sz bytes.
@@ -80,27 +68,97 @@ func (r *RateLimiter) Get() uint64 {
 	return atomic.LoadUint64(&r.size)
 }
 
-// ResetFollowerState clears all recorded follower states.
-func (r *RateLimiter) ResetFollowerState() {
+// RateLimited returns a boolean flag indicating whether the node is rate
+// limited.
+func (r *RateLimiter) RateLimited() bool {
+	if !r.Enabled() {
+		return false
+	}
+	return r.Get() > r.maxSize
+}
+
+// InMemRateLimiter is the struct used to keep tracking the in memory rate log size.
+type InMemRateLimiter struct {
+	tick          uint64
+	tickLimited   uint64
+	rl            RateLimiter
+	followerSizes map[uint64]followerState
+	limited       bool
+}
+
+// NewInMemRateLimiter creates and returns a rate limiter instance.
+func NewInMemRateLimiter(maxSize uint64) *InMemRateLimiter {
+	return &InMemRateLimiter{
+		// so tickLimited won't be 0
+		tick:          1,
+		rl:            RateLimiter{maxSize: maxSize},
+		followerSizes: make(map[uint64]followerState),
+	}
+}
+
+// Enabled returns a boolean flag indicating whether the rate limiter is
+// enabled.
+func (r *InMemRateLimiter) Enabled() bool {
+	return r.rl.Enabled()
+}
+
+// Tick advances the internal logical clock.
+func (r *InMemRateLimiter) Tick() {
+	r.tick++
+}
+
+// GetTick returns the internal logical clock value.
+func (r *InMemRateLimiter) GetTick() uint64 {
+	return r.tick
+}
+
+// Increase increases the recorded in memory log size by sz bytes.
+func (r *InMemRateLimiter) Increase(sz uint64) {
+	r.rl.Increase(sz)
+}
+
+// Decrease decreases the recorded in memory log size by sz bytes.
+func (r *InMemRateLimiter) Decrease(sz uint64) {
+	r.rl.Decrease(sz)
+}
+
+// Set sets the recorded in memory log size to sz bytes.
+func (r *InMemRateLimiter) Set(sz uint64) {
+	r.rl.Set(sz)
+}
+
+// Get returns the recorded in memory log size.
+func (r *InMemRateLimiter) Get() uint64 {
+	return r.rl.Get()
+}
+
+// Reset clears all recorded follower states.
+func (r *InMemRateLimiter) Reset() {
 	r.followerSizes = make(map[uint64]followerState)
 }
 
 // SetFollowerState sets the follower rate identiified by nodeID to sz bytes.
-func (r *RateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
-	state := followerState{
+func (r *InMemRateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
+	r.followerSizes[nodeID] = followerState{
 		tick:         r.tick,
 		inMemLogSize: sz,
 	}
-	r.followerSizes[nodeID] = state
 }
 
 // RateLimited returns a boolean flag indicating whether the node is rate
 // limited.
-func (r *RateLimiter) RateLimited() bool {
-	return r.limitedByInMemSize()
+func (r *InMemRateLimiter) RateLimited() bool {
+	limited := r.limitedByInMemSize()
+	if limited != r.limited {
+		if r.tickLimited == 0 || r.tick-r.tickLimited > ChangeTickThreashold {
+			r.limited = limited
+			r.tickLimited = r.tick
+		}
+	}
+	return r.limited
 }
 
-func (r *RateLimiter) limitedByInMemSize() bool {
+func (r *InMemRateLimiter) limitedByInMemSize() bool {
 	if !r.Enabled() {
 		return false
 	}
@@ -122,10 +180,13 @@ func (r *RateLimiter) limitedByInMemSize() bool {
 	if gc {
 		r.gc()
 	}
-	return maxInMemSize > r.maxSize
+	if !r.limited {
+		return maxInMemSize > r.rl.maxSize
+	}
+	return maxInMemSize >= (r.rl.maxSize * 7 / 10)
 }
 
-func (r *RateLimiter) gc() {
+func (r *InMemRateLimiter) gc() {
 	followerStates := make(map[uint64]followerState)
 	for nid, v := range r.followerSizes {
 		if r.tick-v.tick > gcTick {

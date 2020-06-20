@@ -64,7 +64,7 @@ func TestFindConflict(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		raftLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+		raftLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 		raftLog.append(previousEnts)
 
 		gconflict := raftLog.getConflictIndex(tt.ents)
@@ -76,7 +76,7 @@ func TestFindConflict(t *testing.T) {
 
 func TestIsUpToDate(t *testing.T) {
 	previousEnts := []pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}
-	raftLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+	raftLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 	raftLog.append(previousEnts)
 	tests := []struct {
 		lastIndex uint64
@@ -146,7 +146,7 @@ func TestAppend(t *testing.T) {
 		if err := storage.Append(previousEnts); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+		raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 
 		raftLog.append(tt.ents)
 		index := raftLog.lastIndex()
@@ -258,7 +258,7 @@ func TestLogMaybeAppend(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		raftLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+		raftLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 		raftLog.append(previousEnts)
 		raftLog.committed = commit
 		func() {
@@ -324,7 +324,7 @@ func TestHasNextEnts(t *testing.T) {
 		if err := storage.ApplySnapshot(snap); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+		raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 		raftLog.append(ents)
 		raftLog.tryCommit(5, 1)
 		raftLog.commitUpdate(pb.UpdateCommit{Processed: tt.applied})
@@ -359,7 +359,7 @@ func TestNextEnts(t *testing.T) {
 		if err := storage.ApplySnapshot(snap); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+		raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 		raftLog.append(ents)
 		raftLog.tryCommit(5, 1)
 		raftLog.commitUpdate(pb.UpdateCommit{Processed: tt.applied})
@@ -392,7 +392,7 @@ func TestCommitTo(t *testing.T) {
 					}
 				}
 			}()
-			raftLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+			raftLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 			raftLog.append(previousEnts)
 			raftLog.committed = commit
 			raftLog.commitTo(tt.commit)
@@ -434,7 +434,7 @@ func TestCompaction(t *testing.T) {
 					t.Fatalf("%v", err)
 				}
 			}
-			raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+			raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 			raftLog.tryCommit(tt.lastIndex, 0)
 			raftLog.commitUpdate(pb.UpdateCommit{Processed: raftLog.committed})
 
@@ -461,7 +461,7 @@ func TestLogRestore(t *testing.T) {
 	if err := storage.ApplySnapshot(pb.Snapshot{Index: index, Term: term}); err != nil {
 		t.Fatalf("%v", err)
 	}
-	raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+	raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 
 	if len(getAllEntries(raftLog)) != 0 {
 		t.Errorf("len = %d, want 0", len(getAllEntries(raftLog)))
@@ -487,7 +487,7 @@ func TestIsOutOfBounds(t *testing.T) {
 	if err := storage.ApplySnapshot(pb.Snapshot{Index: offset}); err != nil {
 		t.Fatalf("%v", err)
 	}
-	l := newEntryLog(storage, server.NewRateLimiter(0))
+	l := newEntryLog(storage, server.NewInMemRateLimiter(0))
 	for i := uint64(1); i <= num; i++ {
 		l.append([]pb.Entry{{Index: i + offset}})
 	}
@@ -572,7 +572,7 @@ func TestTerm(t *testing.T) {
 	if err := storage.ApplySnapshot(pb.Snapshot{Index: offset, Term: 1}); err != nil {
 		t.Fatalf("%v", err)
 	}
-	l := newEntryLog(storage, server.NewRateLimiter(0))
+	l := newEntryLog(storage, server.NewInMemRateLimiter(0))
 	for i = 1; i < num; i++ {
 		l.append([]pb.Entry{{Index: offset + i, Term: i}})
 	}
@@ -604,7 +604,7 @@ func TestTermWithUnstableSnapshot(t *testing.T) {
 	if err := storage.ApplySnapshot(pb.Snapshot{Index: storagesnapi, Term: 1}); err != nil {
 		t.Fatalf("%v", err)
 	}
-	l := newEntryLog(storage, server.NewRateLimiter(0))
+	l := newEntryLog(storage, server.NewInMemRateLimiter(0))
 	l.restore(pb.Snapshot{Index: unstablesnapi, Term: 1})
 
 	tests := []struct {
@@ -645,7 +645,7 @@ func TestSlice(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}
-	l := newEntryLog(storage, server.NewRateLimiter(0))
+	l := newEntryLog(storage, server.NewInMemRateLimiter(0))
 	for i = num / 2; i < num; i++ {
 		l.append([]pb.Entry{{Index: offset + i, Term: offset + i}})
 	}
@@ -720,7 +720,7 @@ func TestCompactionSideEffects(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}
-	raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+	raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 	for i = unstableIndex; i < lastIndex; i++ {
 		raftLog.append([]pb.Entry{{Term: uint64(i + 1), Index: uint64(i + 1)}})
 	}
@@ -795,7 +795,7 @@ func TestUnstableEnts(t *testing.T) {
 		}
 
 		// append unstable entries to raftlog
-		raftLog := newEntryLog(storage, server.NewRateLimiter(0))
+		raftLog := newEntryLog(storage, server.NewInMemRateLimiter(0))
 		raftLog.append(previousEnts[tt.unstable-1:])
 		ents := raftLog.entriesToSave()
 		if l := len(ents); l > 0 {
@@ -835,7 +835,7 @@ func TestStableTo(t *testing.T) {
 		{3, 1, 0, 1}, // bad index
 	}
 	for i, tt := range tests {
-		raftLog := newEntryLog(NewTestLogDB(), server.NewRateLimiter(0))
+		raftLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
 		raftLog.append([]pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}})
 		cu := pb.UpdateCommit{
 			StableLogTo:   tt.stablei,
@@ -881,7 +881,7 @@ func TestStableToWithSnap(t *testing.T) {
 		if err := s.ApplySnapshot(pb.Snapshot{Index: snapi, Term: snapt}); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog := newEntryLog(s, server.NewRateLimiter(0))
+		raftLog := newEntryLog(s, server.NewInMemRateLimiter(0))
 		raftLog.append(tt.newEnts)
 		cu := pb.UpdateCommit{
 			StableLogTo:   tt.stablei,

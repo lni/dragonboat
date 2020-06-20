@@ -22,6 +22,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -2814,13 +2815,13 @@ func testNodeUpdatesItsRateLimiterHeartbeat(isLeader bool, t *testing.T) {
 	} else {
 		r.becomeFollower(0, 2)
 	}
-	hbt := r.rl.GetHeartbeatTick()
+	hbt := r.rl.GetTick()
 	for i := uint64(0); i < r.electionTimeout; i++ {
 		r.tick()
 	}
-	if r.rl.GetHeartbeatTick() != hbt+1 {
+	if r.rl.GetTick() != hbt+1 {
 		t.Errorf("rl heartbeat not updated, %d want %d",
-			r.rl.GetHeartbeatTick(), hbt+1)
+			r.rl.GetTick(), hbt+1)
 	}
 }
 
@@ -2840,6 +2841,9 @@ func TestResetClearsFollowerRateLimitState(t *testing.T) {
 		t.Errorf("not rate limited")
 	}
 	r.reset(2)
+	for i := uint64(0); i <= server.ChangeTickThreashold; i++ {
+		rl.Tick()
+	}
 	if rl.RateLimited() {
 		t.Errorf("still rate limited")
 	}

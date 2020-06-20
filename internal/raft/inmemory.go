@@ -35,10 +35,10 @@ type inMemory struct {
 	appliedToIndex uint64
 	appliedToTerm  uint64
 	savedTo        uint64
-	rl             *server.RateLimiter
+	rl             *server.InMemRateLimiter
 }
 
-func newInMemory(lastIndex uint64, rl *server.RateLimiter) inMemory {
+func newInMemory(lastIndex uint64, rl *server.InMemRateLimiter) inMemory {
 	if minEntrySliceSize >= entrySliceSize {
 		panic("minEntrySliceSize >= entrySliceSize")
 	}

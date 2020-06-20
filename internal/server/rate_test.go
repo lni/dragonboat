@@ -30,7 +30,7 @@ func TestRateLimiterCanBeEnabled(t *testing.T) {
 		{math.MaxUint64 - 1, true},
 	}
 	for idx, tt := range tests {
-		r := NewRateLimiter(tt.maxSize)
+		r := NewInMemRateLimiter(tt.maxSize)
 		if r.Enabled() != tt.enabled {
 			t.Errorf("%d, enabled %t, want %t", idx, r.Enabled(), tt.enabled)
 		}
@@ -38,7 +38,7 @@ func TestRateLimiterCanBeEnabled(t *testing.T) {
 }
 
 func TestInMemLogSizeIsAccessible(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	if r.Get() != 0 {
 		t.Errorf("sz %d, want 0", r.Get())
 	}
@@ -57,21 +57,21 @@ func TestInMemLogSizeIsAccessible(t *testing.T) {
 }
 
 func TestRateLimiterTick(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	for i := 0; i < 100; i++ {
-		r.HeartbeatTick()
-		if r.tick != uint64(i+1) {
-			t.Errorf("tick %d, want %d", r.tick, i+1)
+		r.Tick()
+		if r.tick != uint64(i+2) {
+			t.Errorf("tick %d, want %d", r.tick, i+2)
 		}
 	}
 }
 
 func TestFollowerStateCanBeSet(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	r.SetFollowerState(100, 1)
 	r.SetFollowerState(101, 2)
-	r.HeartbeatTick()
-	r.HeartbeatTick()
+	r.Tick()
+	r.Tick()
 	r.SetFollowerState(101, 4)
 	r.SetFollowerState(102, 200)
 	if len(r.followerSizes) != 3 {
@@ -94,24 +94,25 @@ func TestFollowerStateCanBeSet(t *testing.T) {
 		if rec.inMemLogSize != tt.v {
 			t.Errorf("%d, v %d, want %d", idx, rec.inMemLogSize, tt.v)
 		}
-		if rec.tick != tt.tick {
-			t.Errorf("%d, tick %d, want %d", idx, rec.tick, tt.tick)
+		if rec.tick != tt.tick+1 {
+			t.Errorf("%d, tick %d, want %d", idx, rec.tick, tt.tick+1)
 		}
 	}
 }
 
 func TestGCRemoveOutOfDateFollowerState(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	r.SetFollowerState(101, 1)
-	r.HeartbeatTick()
+	r.Tick()
 	r.SetFollowerState(102, 2)
 	r.SetFollowerState(103, 3)
 	r.gc()
 	if len(r.followerSizes) != 3 {
 		t.Errorf("count %d, want 3", len(r.followerSizes))
 	}
-	r.HeartbeatTick()
-	r.HeartbeatTick()
+	for i := uint64(0); i < gcTick; i++ {
+		r.Tick()
+	}
 	r.gc()
 	if len(r.followerSizes) != 2 {
 		t.Errorf("count %d, want 2", len(r.followerSizes))
@@ -120,7 +121,7 @@ func TestGCRemoveOutOfDateFollowerState(t *testing.T) {
 	if ok {
 		t.Errorf("old follower state not removed")
 	}
-	r.HeartbeatTick()
+	r.Tick()
 	r.gc()
 	if len(r.followerSizes) != 0 {
 		t.Errorf("count %d, want 0", len(r.followerSizes))
@@ -128,7 +129,7 @@ func TestGCRemoveOutOfDateFollowerState(t *testing.T) {
 }
 
 func TestRateLimited(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
@@ -140,7 +141,7 @@ func TestRateLimited(t *testing.T) {
 }
 
 func TestRateLimitedWhenFollowerIsRateLimited(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
@@ -153,17 +154,17 @@ func TestRateLimitedWhenFollowerIsRateLimited(t *testing.T) {
 }
 
 func TestRateNotLimitedWhenOutOfDateFollowerStateIsLimited(t *testing.T) {
-	r := NewRateLimiter(100)
+	r := NewInMemRateLimiter(100)
 	r.Increase(100)
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
 	r.SetFollowerState(1, 100)
 	r.SetFollowerState(2, 101)
-	r.HeartbeatTick()
-	r.HeartbeatTick()
-	r.HeartbeatTick()
-	r.HeartbeatTick()
+	r.Tick()
+	r.Tick()
+	r.Tick()
+	r.Tick()
 	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
@@ -173,7 +174,7 @@ func TestRateNotLimitedWhenOutOfDateFollowerStateIsLimited(t *testing.T) {
 }
 
 func TestNotEnabledRateLimitNeverLimitRates(t *testing.T) {
-	r := NewRateLimiter(0)
+	r := NewInMemRateLimiter(0)
 	for i := 0; i < 10000; i++ {
 		r.Increase(math.MaxUint64 / 2)
 		if r.RateLimited() {
@@ -183,13 +184,60 @@ func TestNotEnabledRateLimitNeverLimitRates(t *testing.T) {
 }
 
 func TestResetFollowerState(t *testing.T) {
-	rl := NewRateLimiter(1024)
+	rl := NewInMemRateLimiter(1024)
 	rl.SetFollowerState(1, 1025)
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited as expected")
 	}
-	rl.ResetFollowerState()
+	rl.Reset()
+	for i := uint64(0); i <= ChangeTickThreashold; i++ {
+		rl.Tick()
+	}
 	if rl.RateLimited() {
+		t.Errorf("unexpectedly rate limited")
+	}
+}
+
+func TestUnlimitedThreshild(t *testing.T) {
+	r := NewInMemRateLimiter(100)
+	r.Increase(101)
+	if !r.RateLimited() {
+		t.Errorf("unexpectedly not rate limited")
+	}
+	for i := uint64(0); i <= ChangeTickThreashold; i++ {
+		r.Tick()
+	}
+	r.Set(99)
+	if !r.RateLimited() {
+		t.Errorf("unexpectedly not rate limited")
+	}
+	r.Set(70)
+	if !r.RateLimited() {
+		t.Errorf("unexpectedly not rate limited")
+	}
+	r.Set(69)
+	if r.RateLimited() {
+		t.Errorf("unexpectedly rate limited")
+	}
+}
+
+func TestRateLimitChangeCantChangeVeryOften(t *testing.T) {
+	r := NewInMemRateLimiter(100)
+	r.Increase(101)
+	for i := uint64(0); i <= ChangeTickThreashold; i++ {
+		r.Tick()
+	}
+	if !r.RateLimited() {
+		t.Errorf("unexpectedly not rate limited")
+	}
+	r.Set(69)
+	if !r.RateLimited() {
+		t.Errorf("unexpectedly not rate limited")
+	}
+	for i := uint64(0); i <= ChangeTickThreashold; i++ {
+		r.Tick()
+	}
+	if r.RateLimited() {
 		t.Errorf("unexpectedly rate limited")
 	}
 }
