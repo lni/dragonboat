@@ -119,7 +119,7 @@ func (n *node) GetMembershipHash() uint64 {
 	return n.getMembershipHash()
 }
 
-func (n *node) GetRateLimiter() *server.RateLimiter {
+func (n *node) GetRateLimiter() *server.InMemRateLimiter {
 	return n.p.GetRateLimiter()
 }
 

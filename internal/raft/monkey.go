@@ -30,6 +30,6 @@ func (rc *Peer) GetInMemLogSize() uint64 {
 	return getEntrySliceInMemSize(ents)
 }
 
-func (rc *Peer) GetRateLimiter() *server.RateLimiter {
+func (rc *Peer) GetRateLimiter() *server.InMemRateLimiter {
 	return rc.raft.log.inmem.rl
 }
