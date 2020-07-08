@@ -128,6 +128,8 @@ var (
 )
 
 var (
+	// ErrClosed is returned when a request is made on closed NodeHost instance.
+	ErrClosed = errors.New("dragonboat: closed")
 	// ErrNodeRemoved indictes that the requested node has been removed.
 	ErrNodeRemoved = errors.New("node removed")
 	// ErrClusterNotFound indicates that the specified cluster is not found.
@@ -244,7 +246,8 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
-	tick uint64
+	closed int32
+	tick   uint64
 	testPartitionState
 	clusterMu struct {
 		sync.RWMutex
@@ -360,6 +363,8 @@ func (nh *NodeHost) RaftAddress() string {
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
 // transport and persistent storage modules.
 func (nh *NodeHost) Stop() {
+	nh.ensureNotClosed()
+	atomic.StoreInt32(&nh.closed, 1)
 	nh.sysListener.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
@@ -376,7 +381,7 @@ func (nh *NodeHost) Stop() {
 		return true
 	})
 	for _, node := range allNodes {
-		if err := nh.StopNode(node.ClusterID, node.NodeID); err != nil {
+		if err := nh.stopNode(node.ClusterID, node.NodeID, true); err != nil {
 			plog.Errorf("failed to remove cluster %s",
 				logutil.ClusterID(node.ClusterID))
 		}
@@ -441,6 +446,7 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IStateMachine,
 	config config.Config) error {
+	nh.ensureNotClosed()
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -457,6 +463,7 @@ func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IConcurrentStateMachine,
 	config config.Config) error {
+	nh.ensureNotClosed()
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -473,6 +480,7 @@ func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
 	join bool,
 	createStateMachine func(uint64, uint64) sm.IOnDiskStateMachine,
 	config config.Config) error {
+	nh.ensureNotClosed()
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -490,6 +498,7 @@ func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
 // Note that this is not the membership change operation to remove the node
 // from the Raft cluster.
 func (nh *NodeHost) StopCluster(clusterID uint64) error {
+	nh.ensureNotClosed()
 	return nh.stopNode(clusterID, 0, false)
 }
 
@@ -499,6 +508,7 @@ func (nh *NodeHost) StopCluster(clusterID uint64) error {
 // Note that this is not the membership change operation to remove the node
 // from the Raft cluster.
 func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
+	nh.ensureNotClosed()
 	return nh.stopNode(clusterID, nodeID, true)
 }
 
@@ -633,6 +643,7 @@ func (nh *NodeHost) GetClusterMembership(ctx context.Context,
 // on local node's knowledge. The returned boolean value indicates whether the
 // leader information is available.
 func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return 0, false, ErrClusterNotFound
@@ -822,6 +833,7 @@ func (nh *NodeHost) ReadIndex(clusterID uint64,
 // method. See ReadIndex's example for more details.
 func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	query interface{}) (interface{}, error) {
+	nh.ensureNotClosed()
 	rs.mustBeReadyForLocalRead()
 	// translate the rsm.ErrClusterClosed to ErrClusterClosed
 	// internally, the IManagedStateMachine might obtain a RLock before performing
@@ -845,6 +857,7 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 // implement the statemachine.IExtended interface.
 func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
 	query []byte) ([]byte, error) {
+	nh.ensureNotClosed()
 	rs.mustBeReadyForLocalRead()
 	data, err := rs.node.sm.NALookup(query)
 	if err == rsm.ErrClusterClosed {
@@ -862,6 +875,7 @@ var staleReadCalled uint32
 // ReadIndex and ReadLocalNode method to achieve linearizable read.
 func (nh *NodeHost) StaleRead(clusterID uint64,
 	query interface{}) (interface{}, error) {
+	nh.ensureNotClosed()
 	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
 		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
@@ -954,6 +968,7 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // snapshot in the system at the same Raft log index.
 func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	opt SnapshotOption, timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -979,6 +994,7 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 // nothing to be reclaimed.
 func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	nodeID uint64) (*SysOpState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		// assume this is a node that has already been removed via RemoveData
@@ -1097,6 +1113,7 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	nodeID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1133,6 +1150,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1169,6 +1187,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1203,6 +1222,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	nodeID uint64, address string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1220,6 +1240,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 // fail after a successful return of the RequestLeaderTransfer method.
 func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	targetNodeID uint64) error {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return ErrClusterNotFound
@@ -1286,6 +1307,7 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 }
 
 func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
+	nh.ensureNotClosed()
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
 		panic(err)
 	}
@@ -1302,6 +1324,7 @@ func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
 // the NodeHost. A possible use case is when loading a large data set say with
 // billions of proposals into the dragonboat based system.
 func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1317,6 +1340,7 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 // HasNodeInfo returns a boolean value indicating whether the specified node
 // has been bootstrapped on the current NodeHost instance.
 func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
+	nh.ensureNotClosed()
 	_, err := nh.logdb.GetBootstrapInfo(clusterID, nodeID)
 	if err == raftio.ErrNoBootstrapInfo {
 		return false
@@ -1331,6 +1355,7 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 // of the NodeHost, this includes details of all Raft clusters managed by the
 // the NodeHost instance.
 func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
+	nh.ensureNotClosed()
 	nhi := &NodeHostInfo{
 		RaftAddress:     nh.RaftAddress(),
 		ClusterInfoList: nh.getClusterInfo(),
@@ -1347,6 +1372,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 
 func (nh *NodeHost) propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
+	nh.ensureNotClosed()
 	v, ok := nh.getClusterNotLocked(s.ClusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
@@ -1361,6 +1387,7 @@ func (nh *NodeHost) propose(s *client.Session,
 
 func (nh *NodeHost) readIndex(clusterID uint64,
 	timeout time.Duration) (*RequestState, *node, error) {
+	nh.ensureNotClosed()
 	n, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
 		return nil, nil, ErrClusterNotFound
@@ -1855,7 +1882,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 		clusterID := keys[chosen]
 		nodeID := nodeIDs[chosen]
 		plog.Infof("%s will be stopped by the node monitor", dn(clusterID, nodeID))
-		if err := nh.StopNode(clusterID, nodeID); err != nil {
+		if err := nh.stopNode(clusterID, nodeID, true); err != nil {
 			plog.Errorf("failed to remove cluster %d", clusterID)
 		}
 	}
@@ -1932,6 +1959,12 @@ func (nh *NodeHost) logNodeHostDetails() {
 		plog.Infof("logdb type: %s", nh.logdb.Name())
 	}
 	plog.Infof("nodehost address: %s", nh.nhConfig.RaftAddress)
+}
+
+func (nh *NodeHost) ensureNotClosed() {
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		panic(ErrClosed)
+	}
 }
 
 func checkRequestState(ctx context.Context,
