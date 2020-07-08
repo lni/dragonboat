@@ -32,8 +32,6 @@ func WriteHealthMetrics(w io.Writer) {
 	metrics.WritePrometheus(w, false)
 }
 
-var _ server.IRaftEventListener = &raftEventListener{}
-
 type raftEventListener struct {
 	clusterID           uint64
 	nodeID              uint64
@@ -50,6 +48,8 @@ type raftEventListener struct {
 	proposalDropped     *metrics.Counter
 	readIndexDropped    *metrics.Counter
 }
+
+var _ server.IRaftEventListener = (*raftEventListener)(nil)
 
 func newRaftEventListener(clusterID uint64, nodeID uint64,
 	leaderID *uint64, useMetrics bool,

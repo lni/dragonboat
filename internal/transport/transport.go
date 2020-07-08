@@ -150,8 +150,6 @@ type ITransportEvent interface {
 	ConnectionFailed(string, bool)
 }
 
-var _ ITransport = &Transport{}
-
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
 	mu struct {
@@ -179,6 +177,8 @@ type Transport struct {
 	sysEvents           ITransportEvent
 	fs                  vfs.IFS
 }
+
+var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,

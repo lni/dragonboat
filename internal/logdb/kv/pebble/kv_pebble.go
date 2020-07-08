@@ -76,9 +76,10 @@ func (w *pebbleWriteBatch) Count() int {
 
 type pebbleLogger struct{}
 
+var _ pebble.Logger = (*pebbleLogger)(nil)
+
 // PebbleLogger is the logger used by pebble
 var PebbleLogger pebbleLogger
-var _ pebble.Logger = &pebbleLogger{}
 
 func (pebbleLogger) Infof(format string, args ...interface{}) {
 	pebble.DefaultLogger.Infof(format, args...)
@@ -95,8 +96,6 @@ func NewKVStore(config config.LogDBConfig,
 	return openPebbleDB(config, dir, wal, fs)
 }
 
-var _ kv.IKVStore = &KV{}
-
 // KV is a pebble based IKVStore type.
 type KV struct {
 	db   *pebble.DB
@@ -104,6 +103,8 @@ type KV struct {
 	ro   *pebble.IterOptions
 	wo   *pebble.WriteOptions
 }
+
+var _ kv.IKVStore = (*KV)(nil)
 
 var pebbleWarning sync.Once
 

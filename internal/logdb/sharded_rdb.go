@@ -38,8 +38,6 @@ var (
 	RDBContextValueSize uint64 = 64 * 1024 * 1024
 )
 
-var _ raftio.ILogDB = &ShardedRDB{}
-
 // ShardedRDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedRDB struct {
 	completedCompactions uint64
@@ -49,6 +47,8 @@ type ShardedRDB struct {
 	compactions          *compactions
 	stopper              *syncutil.Stopper
 }
+
+var _ raftio.ILogDB = (*ShardedRDB)(nil)
 
 func checkAllShards(config config.LogDBConfig,
 	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {

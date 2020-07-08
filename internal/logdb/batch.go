@@ -131,13 +131,13 @@ func getMergedFirstBatch(eb pb.EntryBatch, lb pb.EntryBatch) pb.EntryBatch {
 	return eb
 }
 
-var _ entryManager = &batchedEntries{}
-
 type batchedEntries struct {
 	cs   *rdbcache
 	keys *logdbKeyPool
 	kvs  kv.IKVStore
 }
+
+var _ entryManager = (*batchedEntries)(nil)
 
 func newBatchedEntries(cs *rdbcache,
 	keys *logdbKeyPool, kvs kv.IKVStore) entryManager {

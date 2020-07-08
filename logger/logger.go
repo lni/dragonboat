@@ -41,8 +41,6 @@ const (
 // specified package.
 type Factory func(pkgName string) ILogger
 
-var _ ILogger = &dragonboatLogger{}
-
 // ILogger is the interface implemented by loggers that can be used by
 // dragonboat. You can implement your own ILogger implementation by building
 // wrapper struct on top of your favourite logging library.
@@ -83,6 +81,8 @@ type dragonboatLogger struct {
 	logger  ILogger
 	pkgName string
 }
+
+var _ ILogger = (*dragonboatLogger)(nil)
 
 func (d *dragonboatLogger) get() ILogger {
 	d.mu.Lock()

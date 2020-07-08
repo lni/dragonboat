@@ -91,10 +91,6 @@ func (cw *countedWriter) Write(data []byte) (int, error) {
 type ManagedStateMachineFactory func(clusterID uint64,
 	nodeID uint64, stopc <-chan struct{}) IManagedStateMachine
 
-var _ IManagedStateMachine = &NativeSM{}
-var _ ISavable = &NativeSM{}
-var _ IStreamable = &NativeSM{}
-
 // NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
 type NativeSM struct {
@@ -105,6 +101,11 @@ type NativeSM struct {
 	mu     sync.RWMutex
 	OffloadedStatus
 }
+
+var _ IManagedStateMachine = (*NativeSM)(nil)
+var _ ISavable = (*NativeSM)(nil)
+var _ IStreamable = (*NativeSM)(nil)
+var _ IRecoverable = (*NativeSM)(nil)
 
 // NewNativeSM creates and returns a new NativeSM object.
 func NewNativeSM(config config.Config, ism IStateMachine,

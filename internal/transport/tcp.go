@@ -316,10 +316,6 @@ func (c *connection) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
-var _ raftio.IRaftRPC = &TCPTransport{}
-var _ raftio.IConnection = &TCPConnection{}
-var _ raftio.ISnapshotConnection = &TCPSnapshotConnection{}
-
 // TCPConnection is the connection used for sending raft messages to remote
 // nodes.
 type TCPConnection struct {
@@ -328,6 +324,8 @@ type TCPConnection struct {
 	payload   []byte
 	encrypted bool
 }
+
+var _ raftio.IConnection = (*TCPConnection)(nil)
 
 // NewTCPConnection creates and returns a new TCPConnection instance.
 func NewTCPConnection(conn net.Conn,
@@ -372,6 +370,8 @@ type TCPSnapshotConnection struct {
 	encrypted bool
 }
 
+var _ raftio.ISnapshotConnection = (*TCPSnapshotConnection)(nil)
+
 // NewTCPSnapshotConnection creates and returns a new snapshot connection.
 func NewTCPSnapshotConnection(conn net.Conn,
 	rb *ratelimit.Bucket, wb *ratelimit.Bucket,
@@ -415,6 +415,8 @@ type TCPTransport struct {
 	readBucket     *ratelimit.Bucket
 	writeBucket    *ratelimit.Bucket
 }
+
+var _ raftio.IRaftRPC = (*TCPTransport)(nil)
 
 // NewTCPTransport creates and returns a new TCP transport module.
 func NewTCPTransport(nhConfig config.NodeHostConfig,

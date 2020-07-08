@@ -60,8 +60,6 @@ func checkRocksDBVersion() {
 	})
 }
 
-var _ kv.IKVStore = &KV{}
-
 // KV is a RocksDB based IKVStore type.
 type KV struct {
 	directory string
@@ -72,6 +70,8 @@ type KV struct {
 	wo        *gorocksdb.WriteOptions
 	opts      *gorocksdb.Options
 }
+
+var _ kv.IKVStore = (*KV)(nil)
 
 var tolerateTailCorruptionWarning uint32
 var useUniversalCompactionWarning uint32

@@ -52,8 +52,6 @@ var (
 	errSnapshotOutOfDate = errors.New("snapshot being generated is out of date")
 )
 
-var _ rsm.ISnapshotter = &snapshotter{}
-
 type snapshotter struct {
 	rootDirFunc server.GetSnapshotDirFunc
 	nhConfig    config.NodeHostConfig
@@ -64,6 +62,8 @@ type snapshotter struct {
 	stopc       chan struct{}
 	fs          vfs.IFS
 }
+
+var _ rsm.ISnapshotter = (*snapshotter)(nil)
 
 func newSnapshotter(clusterID uint64,
 	nodeID uint64,

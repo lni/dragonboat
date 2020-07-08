@@ -273,6 +273,8 @@ type NodeHost struct {
 	fs             vfs.IFS
 }
 
+var _ nodeLoader = (*NodeHost)(nil)
+
 var dn = logutil.DescribeNode
 
 // NewNodeHost creates a new NodeHost instance. The returned NodeHost instance
@@ -2009,13 +2011,13 @@ type INodeUser interface {
 	ReadIndex(timeout time.Duration) (*RequestState, error)
 }
 
-var _ INodeUser = &nodeUser{}
-
 type nodeUser struct {
 	nh           *NodeHost
 	node         *node
 	setStepReady func(clusterID uint64)
 }
+
+var _ INodeUser = (*nodeUser)(nil)
 
 func (nu *nodeUser) Propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
@@ -2041,11 +2043,11 @@ func getTimeoutFromContext(ctx context.Context) (time.Duration, error) {
 	return d.Sub(now), nil
 }
 
-var _ transport.IRaftMessageHandler = &messageHandler{}
-
 type messageHandler struct {
 	nh *NodeHost
 }
+
+var _ transport.IRaftMessageHandler = (*messageHandler)(nil)
 
 func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 	return &messageHandler{nh: nh}
@@ -2152,5 +2154,3 @@ func logBuildTagsAndVersion() {
 			runtime.GOOS)
 	}
 }
-
-var _ nodeLoader = &NodeHost{}

@@ -53,8 +53,6 @@ type engine interface {
 	setAvailableSnapshotReady(clusterID uint64)
 }
 
-var _ rsm.INode = &node{}
-
 type node struct {
 	leaderID              uint64
 	instanceID            uint64
@@ -104,6 +102,8 @@ type node struct {
 	initializedC          chan struct{}
 	quiesceManager
 }
+
+var _ rsm.INode = (*node)(nil)
 
 var instanceID uint64
 

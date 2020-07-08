@@ -43,8 +43,6 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-var _ raft.ILogDB = &LogReader{}
-
 // LogReader is the struct used to manage logs that have already been persisted
 // into LogDB. This implementation is influenced by CockroachDB's
 // replicaRaftStorage.
@@ -59,6 +57,8 @@ type LogReader struct {
 	markerTerm  uint64
 	length      uint64
 }
+
+var _ raft.ILogDB = (*LogReader)(nil)
 
 // NewLogReader creates and returns a new LogReader instance.
 func NewLogReader(clusterID uint64,

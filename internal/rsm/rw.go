@@ -82,8 +82,6 @@ func validateBlock(block []byte, h hash.Hash) bool {
 	return bytes.Equal(crc, h.Sum(nil))
 }
 
-var _ IBlockWriter = &BlockWriter{}
-
 // BlockWriter is a writer type that writes the input data to the underlying
 // storage with checksum appended at the end of each block.
 type BlockWriter struct {
@@ -97,6 +95,8 @@ type BlockWriter struct {
 	total      uint64
 	flushed    bool
 }
+
+var _ IBlockWriter = (*BlockWriter)(nil)
 
 // IBlockWriter is the interface for writing checksumed data blocks.
 type IBlockWriter interface {
@@ -261,11 +261,6 @@ func (br *blockReader) readBlock() (int, error) {
 	return len(br.block), nil
 }
 
-var _ IVWriter = &v1writer{}
-var _ IVWriter = &v2writer{}
-var _ IVReader = &v1reader{}
-var _ IVReader = &v2reader{}
-
 // IVWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
 	Write(data []byte) (int, error)
@@ -285,6 +280,8 @@ type v1writer struct {
 	f io.Writer
 	h hash.Hash
 }
+
+var _ IVWriter = (*v1writer)(nil)
 
 func newV1Wrtier(f io.Writer) *v1writer {
 	// v1 is hard coded to use pb.CRC32IEEE
@@ -317,6 +314,8 @@ type v1reader struct {
 	h hash.Hash
 }
 
+var _ IVReader = (*v1reader)(nil)
+
 func newV1Reader(r io.Reader) *v1reader {
 	// v1 is hard coded to use pb.CRC32IEEE
 	h := mustGetChecksum(pb.CRC32IEEE)
@@ -337,6 +336,8 @@ func (v1r *v1reader) Sum() []byte {
 type v2writer struct {
 	bw *BlockWriter
 }
+
+var _ IVWriter = (*v2writer)(nil)
 
 func newV2Writer(fw io.Writer, t pb.ChecksumType) *v2writer {
 	onBlock := func(data []byte, crc []byte) error {
@@ -375,6 +376,8 @@ type v2reader struct {
 	br *blockReader
 }
 
+var _ IVReader = (*v2reader)(nil)
+
 func newV2Reader(fr io.Reader, t pb.ChecksumType) *v2reader {
 	return &v2reader{br: newBlockReader(fr, snapshotBlockSize, t)}
 }
@@ -400,9 +403,6 @@ func getHeaderFromFirstChunk(data []byte) ([]byte, []byte, bool) {
 	return header, crc, true
 }
 
-var _ IVValidator = &v1validator{}
-var _ IVValidator = &v2validator{}
-
 // IVValidator is the interface for versioned validator.
 type IVValidator interface {
 	AddChunk(data []byte, chunkID uint64) bool
@@ -413,6 +413,8 @@ type v1validator struct {
 	header pb.SnapshotHeader
 	h      hash.Hash
 }
+
+var _ IVValidator = (*v1validator)(nil)
 
 func newV1Validator(header pb.SnapshotHeader) *v1validator {
 	return &v1validator{
@@ -443,6 +445,8 @@ type v2validator struct {
 	total int
 	h     hash.Hash
 }
+
+var _ IVValidator = (*v2validator)(nil)
 
 func newV2Validator(h hash.Hash) *v2validator {
 	return &v2validator{

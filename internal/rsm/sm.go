@@ -41,8 +41,6 @@ type IStateMachine interface {
 	Type() pb.StateMachineType
 }
 
-var _ IStateMachine = &RegularStateMachine{}
-
 // RegularStateMachine is a regular state machine not capable of taking
 // concurrent snapshots.
 type RegularStateMachine struct {
@@ -50,6 +48,8 @@ type RegularStateMachine struct {
 	h  sm.IHash
 	na sm.IExtended
 }
+
+var _ IStateMachine = (*RegularStateMachine)(nil)
 
 // NewRegularStateMachine creates a new RegularStateMachine instance.
 func NewRegularStateMachine(s sm.IStateMachine) *RegularStateMachine {

@@ -39,12 +39,12 @@ var MemStrictFS IFS = gvfs.NewStrictMem()
 // File is the file interface returned by IFS.
 type File = gvfs.File
 
-var _ pvfs.FS = &PebbleFS{}
-
 // PebbleFS is a wrapper struct that implements the pebble/vfs.FS interface.
 type PebbleFS struct {
 	fs IFS
 }
+
+var _ pvfs.FS = (*PebbleFS)(nil)
 
 // NewPebbleFS creates a new pebble/vfs.FS instance.
 func NewPebbleFS(fs IFS) pvfs.FS {

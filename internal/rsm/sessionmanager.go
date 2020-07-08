@@ -20,13 +20,13 @@ import (
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
-var _ ILoadable = &SessionManager{}
-
 // SessionManager is the wrapper struct that implements client session related
 // functionalites used in the IManagedStateMachine interface.
 type SessionManager struct {
 	sessions *lrusession
 }
+
+var _ ILoadable = (*SessionManager)(nil)
 
 // NewSessionManager returns a new SessionManager instance.
 func NewSessionManager() *SessionManager {
