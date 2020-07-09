@@ -40,10 +40,9 @@ const (
 )
 
 type pebbleWriteBatch struct {
-	wb    *pebble.Batch
-	db    *pebble.DB
-	wo    *pebble.WriteOptions
-	count int
+	wb *pebble.Batch
+	db *pebble.DB
+	wo *pebble.WriteOptions
 }
 
 func (w *pebbleWriteBatch) Destroy() {
@@ -54,24 +53,20 @@ func (w *pebbleWriteBatch) Put(key []byte, val []byte) {
 	if err := w.wb.Set(key, val, w.wo); err != nil {
 		panic(err)
 	}
-	w.count++
 }
 
 func (w *pebbleWriteBatch) Delete(key []byte) {
 	if err := w.wb.Delete(key, w.wo); err != nil {
 		panic(err)
 	}
-	w.count++
 }
 
 func (w *pebbleWriteBatch) Clear() {
-	// TODO: reuse the write batch
-	w.wb = w.db.NewBatch()
-	w.count = 0
+	w.wb.Reset()
 }
 
 func (w *pebbleWriteBatch) Count() int {
-	return w.count
+	return int(w.wb.Count())
 }
 
 type pebbleLogger struct{}
