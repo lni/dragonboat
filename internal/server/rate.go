@@ -74,7 +74,12 @@ func (r *RateLimiter) RateLimited() bool {
 	if !r.Enabled() {
 		return false
 	}
-	return r.Get() > r.maxSize
+	v := r.Get()
+	if v > r.maxSize {
+		plog.Infof("rate limited, v: %d, maxSize %d", v, r.maxSize)
+		return true
+	}
+	return false
 }
 
 // InMemRateLimiter is the struct used to keep tracking the in memory rate log size.
