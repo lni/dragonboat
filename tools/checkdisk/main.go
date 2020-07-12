@@ -55,10 +55,11 @@ var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
 var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
 var twonh = flag.Bool("two-nodehost", false, "use two nodehosts")
 
-func newBatchedLogDB(cfg config.LogDBConfig,
+func newBatchedLogDB(cfg config.LogDBConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
-	return logdb.NewLogDB(cfg, dirs, lldirs, true, false, fs, pebble.NewKVStore)
+	return logdb.NewLogDB(cfg,
+		cb, dirs, lldirs, true, false, fs, pebble.NewKVStore)
 }
 
 type dummyStateMachine struct{}

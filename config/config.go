@@ -39,6 +39,16 @@ var (
 	plog = logger.GetLogger("config")
 )
 
+// LogDBInfo is the info provided when LogDBCallback is invoked.
+type LogDBInfo struct {
+	Shard uint64
+	Busy  bool
+}
+
+// LogDBCallback is called by the LogDB layer whenever NodeHost is required to
+// be notified for the status change of the LogDB.
+type LogDBCallback func(LogDBInfo)
+
 // RaftRPCFactoryFunc is the factory function that creates the Raft RPC module
 // instance for exchanging Raft messages between NodeHosts.
 type RaftRPCFactoryFunc func(NodeHostConfig,
@@ -47,6 +57,7 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
 type LogDBFactoryFunc func(config LogDBConfig,
+	callback LogDBCallback,
 	dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error)
 
 // CompressionType is the type of the compression.

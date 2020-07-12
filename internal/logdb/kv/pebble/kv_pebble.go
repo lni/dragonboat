@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -38,6 +39,39 @@ var (
 const (
 	maxLogFileSize = 1024 * 1024 * 128
 )
+
+type eventListener struct {
+	kv      *KV
+	stopper *syncutil.Stopper
+}
+
+func (l *eventListener) close() {
+	l.stopper.Stop()
+}
+
+func (l *eventListener) notify() {
+	select {
+	case <-l.kv.dbSet:
+		if l.kv.callback != nil {
+			m := l.kv.db.Metrics()
+			busy := uint64(m.MemTable.Count) >= l.kv.config.KVMaxWriteBufferNumber
+			l.kv.callback(busy)
+		}
+	default:
+	}
+}
+
+func (l *eventListener) onFlushEnd(pebble.FlushInfo) {
+	l.stopper.RunWorker(func() {
+		l.notify()
+	})
+}
+
+func (l *eventListener) onWALCreated(pebble.WALCreateInfo) {
+	l.stopper.RunWorker(func() {
+		l.notify()
+	})
+}
 
 type pebbleWriteBatch struct {
 	wb *pebble.Batch
@@ -86,24 +120,28 @@ func (pebbleLogger) Fatalf(format string, args ...interface{}) {
 }
 
 // NewKVStore returns a pebble based IKVStore instance.
-func NewKVStore(config config.LogDBConfig,
+func NewKVStore(config config.LogDBConfig, callback kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
-	return openPebbleDB(config, dir, wal, fs)
+	return openPebbleDB(config, callback, dir, wal, fs)
 }
 
 // KV is a pebble based IKVStore type.
 type KV struct {
-	db   *pebble.DB
-	opts *pebble.Options
-	ro   *pebble.IterOptions
-	wo   *pebble.WriteOptions
+	db       *pebble.DB
+	dbSet    chan struct{}
+	opts     *pebble.Options
+	ro       *pebble.IterOptions
+	wo       *pebble.WriteOptions
+	event    *eventListener
+	callback kv.LogDBCallback
+	config   config.LogDBConfig
 }
 
 var _ kv.IKVStore = (*KV)(nil)
 
 var pebbleWarning sync.Once
 
-func openPebbleDB(config config.LogDBConfig,
+func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	dir string, walDir string, fs vfs.IFS) (kv.IKVStore, error) {
 	if config.IsEmpty() {
 		panic("invalid LogDBConfig")
@@ -139,6 +177,8 @@ func openPebbleDB(config config.LogDBConfig,
 		writeBufferSize = 1024 * 1024 * 4
 	}
 	cache := pebble.NewCache(cacheSize)
+	ro := &pebble.IterOptions{}
+	wo := &pebble.WriteOptions{Sync: true}
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,
@@ -150,6 +190,22 @@ func openPebbleDB(config config.LogDBConfig,
 		Cache:                       cache,
 		FS:                          vfs.NewPebbleFS(fs),
 		Logger:                      PebbleLogger,
+	}
+	kv := &KV{
+		ro:       ro,
+		wo:       wo,
+		opts:     opts,
+		config:   config,
+		callback: callback,
+		dbSet:    make(chan struct{}),
+	}
+	el := &eventListener{
+		kv:      kv,
+		stopper: syncutil.NewStopper(),
+	}
+	opts.EventListener = pebble.EventListener{
+		WALCreated: el.onWALCreated,
+		FlushEnd:   el.onFlushEnd,
 	}
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {
@@ -165,14 +221,20 @@ func openPebbleDB(config config.LogDBConfig,
 		return nil, err
 	}
 	cache.Unref()
-	ro := &pebble.IterOptions{}
-	wo := &pebble.WriteOptions{Sync: true}
-	return &KV{
-		db:   pdb,
-		ro:   ro,
-		wo:   wo,
-		opts: opts,
-	}, nil
+	kv.db = pdb
+	kv.setEventListener(el)
+	return kv, nil
+}
+
+func (r *KV) setEventListener(el *eventListener) {
+	if r.db == nil || r.event != nil {
+		panic("unexpected kv state")
+	}
+	r.event = el
+	close(r.dbSet)
+	// force a WALCreated event as the one issued when opening the DB didn't get
+	// handled
+	el.onWALCreated(pebble.WALCreateInfo{})
 }
 
 // Name returns the IKVStore type name.
@@ -182,6 +244,7 @@ func (r *KV) Name() string {
 
 // Close closes the RDB object.
 func (r *KV) Close() error {
+	r.event.close()
 	if r.db != nil {
 		r.db.Close()
 	}

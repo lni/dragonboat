@@ -40,13 +40,13 @@ const (
 var versionWarning sync.Once
 
 // NewKVStore returns a RocksDB based IKVStore instance.
-func NewKVStore(config config.LogDBConfig,
+func NewKVStore(config config.LogDBConfig, callback kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs != vfs.DefaultFS {
 		panic("only vfs.DefaultFS is supported")
 	}
 	checkRocksDBVersion()
-	return openRocksDB(config, dir, wal, fs)
+	return openRocksDB(config, callback, dir, wal, fs)
 }
 
 func checkRocksDBVersion() {
@@ -174,7 +174,7 @@ func getRocksDBOptions(config config.LogDBConfig,
 	return opts, bbto, cache
 }
 
-func openRocksDB(config config.LogDBConfig,
+func openRocksDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if config.IsEmpty() {
 		panic("invalid LogDBConfig")

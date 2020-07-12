@@ -249,11 +249,12 @@ type NodeHost struct {
 	closed int32
 	tick   uint64
 	testPartitionState
-	clusterMu struct {
+	mu struct {
 		sync.RWMutex
 		stopped  bool
 		csi      uint64
-		clusters sync.Map
+		clusters sync.Map // clusterID -> *node
+		lm       sync.Map // shardID -> *logDBMetrics
 		requests map[uint64]*server.MessageQueue
 	}
 	snapshotStatus *snapshotFeedback
@@ -305,7 +306,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.stopper.ShouldStop())
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
-	nh.clusterMu.requests = make(map[uint64]*server.MessageQueue)
+	nh.mu.requests = make(map[uint64]*server.MessageQueue)
 	nh.createPools()
 	defer func() {
 		if r := recover(); r != nil {
@@ -370,9 +371,9 @@ func (nh *NodeHost) Stop() {
 	nh.sysListener.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
-	nh.clusterMu.Lock()
-	nh.clusterMu.stopped = true
-	nh.clusterMu.Unlock()
+	nh.mu.Lock()
+	nh.mu.stopped = true
+	nh.mu.Unlock()
 	allNodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodeInfo := raftio.NodeInfo{
@@ -1299,8 +1300,8 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
 	}
-	nh.clusterMu.Lock()
-	defer nh.clusterMu.Unlock()
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
@@ -1437,7 +1438,7 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 }
 
 func (nh *NodeHost) getClusterNotLocked(clusterID uint64) (*node, bool) {
-	v, ok := nh.clusterMu.clusters.Load(clusterID)
+	v, ok := nh.mu.clusters.Load(clusterID)
 	if !ok {
 		return nil, false
 	}
@@ -1446,13 +1447,13 @@ func (nh *NodeHost) getClusterNotLocked(clusterID uint64) (*node, bool) {
 
 func (nh *NodeHost) getClusterAndQueueNotLocked(clusterID uint64) (*node,
 	*server.MessageQueue, bool) {
-	nh.clusterMu.RLock()
-	defer nh.clusterMu.RUnlock()
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
 	v, ok := nh.getClusterNotLocked(clusterID)
 	if !ok {
 		return nil, nil, false
 	}
-	q, ok := nh.clusterMu.requests[clusterID]
+	q, ok := nh.mu.requests[clusterID]
 	if !ok {
 		return nil, nil, false
 	}
@@ -1460,9 +1461,9 @@ func (nh *NodeHost) getClusterAndQueueNotLocked(clusterID uint64) (*node,
 }
 
 func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
-	nh.clusterMu.RLock()
-	v, ok := nh.clusterMu.clusters.Load(clusterID)
-	nh.clusterMu.RUnlock()
+	nh.mu.RLock()
+	v, ok := nh.mu.clusters.Load(clusterID)
+	nh.mu.RUnlock()
 	if !ok {
 		return nil, false
 	}
@@ -1471,14 +1472,14 @@ func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
 
 func (nh *NodeHost) forEachClusterRun(bf func() bool,
 	af func() bool, f func(uint64, *node) bool) {
-	nh.clusterMu.RLock()
-	defer nh.clusterMu.RUnlock()
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
 	if bf != nil {
 		if !bf() {
 			return
 		}
 	}
-	nh.clusterMu.clusters.Range(func(k, v interface{}) bool {
+	nh.mu.clusters.Range(func(k, v interface{}) bool {
 		return f(k.(uint64), v.(*node))
 	})
 	if af != nil {
@@ -1543,12 +1544,12 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
-	nh.clusterMu.Lock()
-	defer nh.clusterMu.Unlock()
-	if nh.clusterMu.stopped {
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
+	if nh.mu.stopped {
 		return ErrSystemStopped
 	}
-	if _, ok := nh.clusterMu.clusters.Load(clusterID); ok {
+	if _, ok := nh.mu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
@@ -1586,6 +1587,15 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
+	p := nh.execEngine.stepWorkReady.getPartitioner()
+	shard := p.GetPartitionID(clusterID)
+	var lm *logDBMetrics
+	if metrics, ok := nh.mu.lm.Load(shard); !ok {
+		lm = &logDBMetrics{busy: 0}
+		nh.mu.lm.Store(p, lm)
+	} else {
+		lm = metrics.(*logDBMetrics)
+	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
 		peers,
 		im,
@@ -1606,13 +1616,14 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		nh.nhConfig.NotifyCommit,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb,
+		lm,
 		nh.sysListener)
 	if err != nil {
 		panic(err)
 	}
-	nh.clusterMu.clusters.Store(clusterID, rn)
-	nh.clusterMu.requests[clusterID] = queue
-	nh.clusterMu.csi++
+	nh.mu.clusters.Store(clusterID, rn)
+	nh.mu.requests[clusterID] = queue
+	nh.mu.csi++
 	nh.execEngine.setApplyReady(clusterID)
 	return nil
 }
@@ -1643,9 +1654,9 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 		return err
 	}
 	var factory config.LogDBFactoryFunc
-	df := func(config config.LogDBConfig,
+	df := func(config config.LogDBConfig, cb config.LogDBCallback,
 		dirs []string, lows []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(config, dirs, lows, nh.fs)
+		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
 	}
 	if cfg.LogDBFactory != nil {
 		factory = cfg.LogDBFactory
@@ -1661,7 +1672,8 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	if err := nh.serverCtx.CheckLogDBType(did, name); err != nil {
 		return err
 	}
-	ldb, err := factory(nh.nhConfig.LogDBConfig, []string{nhDir}, []string{walDir})
+	ldb, err := factory(nh.nhConfig.LogDBConfig,
+		nh.handleLogDBInfo, []string{nhDir}, []string{walDir})
 	if err != nil {
 		return err
 	}
@@ -1682,6 +1694,19 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig, did uint64) error {
 	}
 	plog.Infof("logdb memory limit: %dMBytes", cfg.LogDBConfig.MemorySizeMB())
 	return nil
+}
+
+func (nh *NodeHost) handleLogDBInfo(info config.LogDBInfo) {
+	plog.Infof("LogDB info received, shard %d, busy %t", info.Shard, info.Busy)
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
+	if v, ok := nh.mu.lm.Load(info.Shard); ok {
+		v.(*logDBMetrics).update(info.Busy)
+	} else {
+		lm := &logDBMetrics{}
+		lm.update(info.Busy)
+		nh.mu.lm.Store(info.Shard, lm)
+	}
 }
 
 type transportEvent struct {
@@ -1719,9 +1744,9 @@ func (nh *NodeHost) createTransport() error {
 
 func (nh *NodeHost) stopNode(clusterID uint64,
 	nodeID uint64, nodeCheck bool) error {
-	nh.clusterMu.Lock()
-	defer nh.clusterMu.Unlock()
-	v, ok := nh.clusterMu.clusters.Load(clusterID)
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
+	v, ok := nh.mu.clusters.Load(clusterID)
 	if !ok {
 		return ErrClusterNotFound
 	}
@@ -1729,9 +1754,9 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 	if nodeCheck && n.nodeID != nodeID {
 		return ErrClusterNotFound
 	}
-	nh.clusterMu.clusters.Delete(clusterID)
-	delete(nh.clusterMu.requests, clusterID)
-	nh.clusterMu.csi++
+	nh.mu.clusters.Delete(clusterID)
+	delete(nh.mu.requests, clusterID)
+	nh.mu.csi++
 	n.close()
 	n.offloaded(rsm.FromNodeHost)
 	return nil
@@ -1808,7 +1833,7 @@ func (nh *NodeHost) getCurrentClusters(index uint64,
 	newQueues := make(map[uint64]*server.MessageQueue)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		newClusters = append(newClusters, node)
-		v, ok := nh.clusterMu.requests[cid]
+		v, ok := nh.mu.requests[cid]
 		if !ok {
 			panic("inconsistent received messageC map")
 		}
@@ -1943,9 +1968,9 @@ func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 }
 
 func (nh *NodeHost) getClusterSetIndex() uint64 {
-	nh.clusterMu.RLock()
-	v := nh.clusterMu.csi
-	nh.clusterMu.RUnlock()
+	nh.mu.RLock()
+	v := nh.mu.csi
+	nh.mu.RUnlock()
 	return v
 }
 

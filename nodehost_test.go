@@ -361,7 +361,8 @@ func TestLogDBCanBeExtended(t *testing.T) {
 	tf := func() {
 		c := getTestNodeHostConfig(fs)
 		ldb := &noopLogDB{}
-		c.LogDBFactory = func(config.LogDBConfig, []string, []string) (raftio.ILogDB, error) {
+		c.LogDBFactory = func(config.LogDBConfig,
+			config.LogDBCallback, []string, []string) (raftio.ILogDB, error) {
 			return ldb, nil
 		}
 		nh, err := NewNodeHost(*c)
@@ -886,6 +887,43 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	return nh1, nh2, nil
 }
 
+func createLogDBRateLimitedTestNodeHost(addr string,
+	datadir string, fs vfs.IFS) (*NodeHost, error) {
+	// config for raft
+	rc := config.Config{
+		NodeID:          uint64(1),
+		ClusterID:       1,
+		ElectionRTT:     3,
+		HeartbeatRTT:    1,
+		CheckQuorum:     true,
+		MaxInMemLogSize: 1024 * 3,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = addr
+	logDBConfig := config.GetDefaultLogDBConfig()
+	logDBConfig.KVMaxWriteBufferNumber = 2
+	logDBConfig.KVWriteBufferSize = 1024
+	nhc := config.NodeHostConfig{
+		WALDir:         datadir,
+		NodeHostDir:    datadir,
+		RTTMillisecond: 10,
+		RaftAddress:    peers[1],
+		FS:             fs,
+		LogDBConfig:    logDBConfig,
+	}
+	nh, err := NewNodeHost(nhc)
+	if err != nil {
+		return nil, err
+	}
+	newRSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		return &tests.NoOP{}
+	}
+	if err := nh.StartCluster(peers, false, newRSM, rc); err != nil {
+		return nil, err
+	}
+	return nh, nil
+}
+
 func createRateLimitedTestNodeHost(addr string,
 	datadir string, fs vfs.IFS) (*NodeHost, error) {
 	// config for raft
@@ -1021,6 +1059,36 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 			nh2.Stop()
 		}()
 		tf(t, nh1, nh2)
+	}()
+	reportLeakedFD(fs, t)
+}
+
+func logDBRateLimitedNodeHostTest(t *testing.T,
+	tf func(t *testing.T, nh *NodeHost), fs vfs.IFS) {
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	func() {
+		logdb.RDBContextValueSize = 1024 * 1024
+		defer func() {
+			logdb.RDBContextValueSize = ovs
+		}()
+		defer leaktest.AfterTest(t)()
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+		nh, err := createLogDBRateLimitedTestNodeHost(singleNodeHostTestAddr,
+			singleNodeHostTestDir, fs)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		waitForLeaderToBeElected(t, nh, 1)
+		defer func() {
+			nh.Stop()
+		}()
+		tf(t, nh)
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -2428,6 +2496,23 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 		}
 	}
 	singleConcurrentNodeHostTest(t, tf, 10, false, fs)
+}
+
+func TestLogDBRateLimit(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func(t *testing.T, nh *NodeHost) {
+		for i := 0; i < 1024; i++ {
+			session := nh.GetNoOPSession(1)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_, err := nh.SyncPropose(ctx, session, make([]byte, 512))
+			cancel()
+			if err == ErrSystemBusy {
+				return
+			}
+		}
+		t.Fatalf("failed to return ErrSystemBusy")
+	}
+	logDBRateLimitedNodeHostTest(t, tf, fs)
 }
 
 func TestTooBigPayloadIsRejectedWhenRateLimited(t *testing.T) {
@@ -3867,7 +3952,7 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		f := func(config config.LogDBConfig,
+		f := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
 			return &noopLogDB{}, nil
 		}
@@ -3943,13 +4028,13 @@ func TestNodeHostFileLock(t *testing.T) {
 func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		bff := func(config config.LogDBConfig,
+		bff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultBatchedLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
 		}
-		nff := func(config config.LogDBConfig,
+		nff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 		}
 		nhc := config.NodeHostConfig{
 			WALDir:         singleNodeHostTestDir,
@@ -4002,13 +4087,13 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		bff := func(config config.LogDBConfig,
+		bff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultBatchedLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
 		}
-		nff := func(config config.LogDBConfig,
+		nff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
@@ -4069,13 +4154,13 @@ func getLogDBTestFunc(t *testing.T, nhc config.NodeHostConfig) func() {
 func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		bff := func(config config.LogDBConfig,
+		bff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultBatchedLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
 		}
-		nff := func(config config.LogDBConfig,
+		nff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
@@ -4098,13 +4183,13 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	fs := vfs.GetTestFS()
 	xf := func() {
-		bff := func(config config.LogDBConfig,
+		bff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultBatchedLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
 		}
-		nff := func(config config.LogDBConfig,
+		nff := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewDefaultLogDB(config, dirs, lldirs, fs)
+			return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
@@ -4124,9 +4209,9 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		pf := func(config config.LogDBConfig,
+		pf := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewLogDB(config, dirs, lldirs, false, false, fs, pebble.NewKVStore)
+			return logdb.NewLogDB(config, cb, dirs, lldirs, false, false, fs, pebble.NewKVStore)
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
@@ -4155,9 +4240,9 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func() {
-		pf := func(config config.LogDBConfig,
+		pf := func(config config.LogDBConfig, cb config.LogDBCallback,
 			dirs []string, lldirs []string) (raftio.ILogDB, error) {
-			return logdb.NewLogDB(config, dirs, lldirs, false, false, fs, pebble.NewKVStore)
+			return logdb.NewLogDB(config, cb, dirs, lldirs, false, false, fs, pebble.NewKVStore)
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,

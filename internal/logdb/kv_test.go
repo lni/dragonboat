@@ -36,7 +36,7 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	cfg := config.GetDefaultLogDBConfig()
-	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -50,7 +50,7 @@ func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore), fs vfs.IFS)
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB(fs)
 	cfg := config.GetDefaultLogDBConfig()
-	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -340,7 +340,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	lk.SetEntryKey(100, 1, maxIndex+1)
 	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -365,7 +365,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	if sz < 1024*1024*8 {
 		t.Errorf("unexpected size %d", sz)
 	}
-	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
@@ -483,7 +483,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	defer deleteTestDB(fs)
 	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
@@ -542,7 +542,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	if !corrupted {
 		t.Fatalf("failed to corrupt data files")
 	}
-	kvs, err := newDefaultKVStore(cfg, RDBTestDirectory, RDBTestDirectory, fs)
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 	if err == nil {
 		defer kvs.Close()
 	}

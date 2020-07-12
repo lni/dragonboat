@@ -65,7 +65,7 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 		panic(err)
 	}
 	cfg := config.GetDefaultLogDBConfig()
-	db, err := NewLogDB(cfg,
+	db, err := NewLogDB(cfg, nil,
 		[]string{d}, []string{lld}, batched, false, fs, newDefaultKVStore)
 	if err != nil {
 		panic(err)

@@ -69,8 +69,19 @@ func checkAllShards(config config.LogDBConfig,
 	return false, nil
 }
 
+type shardCallback struct {
+	shard uint64
+	f     config.LogDBCallback
+}
+
+func (sc *shardCallback) callback(busy bool) {
+	if sc.f != nil {
+		sc.f(config.LogDBInfo{Shard: sc.shard, Busy: busy})
+	}
+}
+
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(config config.LogDBConfig,
+func OpenShardedRDB(config config.LogDBConfig, callback config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
 	fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
@@ -97,7 +108,8 @@ func OpenShardedRDB(config config.LogDBConfig,
 		if len(lldirs) > 0 {
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		db, err := openRDB(config, dir, lldir, batched, fs, kvf)
+		sc := shardCallback{shard: i, f: callback}
+		db, err := openRDB(config, sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()

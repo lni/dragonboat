@@ -469,5 +469,5 @@ func getLogDB(ctx server.Context,
 	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
 	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
 	return logdb.NewDefaultLogDB(nhConfig.LogDBConfig,
-		[]string{nhDir}, []string{walDir}, fs)
+		nil, []string{nhDir}, []string{walDir}, fs)
 }

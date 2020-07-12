@@ -53,6 +53,22 @@ type engine interface {
 	setAvailableSnapshotReady(clusterID uint64)
 }
 
+type logDBMetrics struct {
+	busy int32
+}
+
+func (l *logDBMetrics) update(busy bool) {
+	v := int32(0)
+	if busy {
+		v = int32(1)
+	}
+	atomic.StoreInt32(&l.busy, v)
+}
+
+func (l *logDBMetrics) isBusy() bool {
+	return atomic.LoadInt32(&l.busy) != 0
+}
+
 type node struct {
 	leaderID              uint64
 	instanceID            uint64
@@ -93,12 +109,14 @@ type node struct {
 	syncTask              *task
 	notifyCommit          bool
 	rateLimited           bool
+	logDBLimited          bool
 	new                   bool
 	closeOnce             sync.Once
 	ss                    *snapshotState
 	snapshotLock          *syncutil.Lock
 	raftEvents            *raftEventListener
 	sysEvents             *sysEventListener
+	metrics               *logDBMetrics
 	initializedC          chan struct{}
 	quiesceManager
 }
@@ -127,6 +145,7 @@ func newNode(raftAddress string,
 	notifyCommit bool,
 	tickMillisecond uint64,
 	ldb raftio.ILogDB,
+	metrics *logDBMetrics,
 	sysEvents *sysEventListener) (*node, error) {
 	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
@@ -169,6 +188,7 @@ func newNode(raftAddress string,
 		smType:                smType,
 		sysEvents:             sysEvents,
 		notifyCommit:          notifyCommit,
+		metrics:               metrics,
 		initializedC:          make(chan struct{}),
 		quiesceManager: quiesceManager{
 			electionTick: config.ElectionRTT * 2,
@@ -1187,7 +1207,13 @@ func (n *node) handleProposals() bool {
 		n.rateLimited = rateLimited
 		plog.Infof("%s new rate limit state is %t", n.id(), rateLimited)
 	}
-	if entries := n.incomingProposals.get(n.rateLimited); len(entries) > 0 {
+	logDBBusy := n.logDBBusy()
+	if n.logDBLimited != logDBBusy {
+		n.logDBLimited = logDBBusy
+		plog.Infof("%s new LogDB busy state is %t", n.id(), logDBBusy)
+	}
+	paused := logDBBusy || n.rateLimited
+	if entries := n.incomingProposals.get(paused); len(entries) > 0 {
 		n.p.ProposeEntries(entries)
 		return true
 	}
@@ -1531,6 +1557,14 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		Nodes:             ci.Nodes,
 		StateMachineType:  n.getStateMachineType(),
 	}
+}
+
+func (n *node) logDBBusy() bool {
+	if n.metrics == nil {
+		// only happens in tests
+		return false
+	}
+	return n.metrics.isBusy()
 }
 
 func (n *node) id() string {

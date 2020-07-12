@@ -77,7 +77,7 @@ func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 
 func hasBatchedRecord(config config.LogDBConfig,
 	dir string, wal string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	kvs, err := kvf(config, dir, wal, fs)
+	kvs, err := kvf(config, nil, dir, wal, fs)
 	if err != nil {
 		return false, err
 	}
@@ -90,9 +90,9 @@ func hasBatchedRecord(config config.LogDBConfig,
 }
 
 func openRDB(config config.LogDBConfig,
-	dir string, wal string, batched bool,
+	callback kv.LogDBCallback, dir string, wal string, batched bool,
 	fs vfs.IFS, kvf kvFactory) (*rdb, error) {
-	kvs, err := kvf(config, dir, wal, fs)
+	kvs, err := kvf(config, callback, dir, wal, fs)
 	if err != nil {
 		return nil, err
 	}

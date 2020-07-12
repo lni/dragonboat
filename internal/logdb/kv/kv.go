@@ -23,6 +23,8 @@ const (
 	MaxKeyLength uint64 = 1024
 )
 
+type LogDBCallback func(busy bool)
+
 // IKVStore is the interface used by the RDB struct to access the underlying
 // Key-Value store.
 type IKVStore interface {

@@ -203,7 +203,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			panic(err)
 		}
 		ldb, err = logdb.NewDefaultLogDB(config.GetDefaultLogDBConfig(),
-			[]string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
+			nil, []string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
 		if err != nil {
 			plog.Panicf("failed to open logdb, %v", err)
 		}
@@ -259,6 +259,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			false,
 			tickMillisecond,
 			ldb,
+			nil,
 			newSysEventListener(nil, nil))
 		if err != nil {
 			panic(err)
@@ -1740,5 +1741,17 @@ func TestSaveSnapshotAborted(t *testing.T) {
 		if saveAborted(tt.err) != tt.aborted {
 			t.Errorf("%d, saveSnapshotAborted failed", idx)
 		}
+	}
+}
+
+func TestLogDBMetrics(t *testing.T) {
+	l := logDBMetrics{}
+	l.update(true)
+	if !l.isBusy() {
+		t.Errorf("unexpected value")
+	}
+	l.update(false)
+	if l.isBusy() {
+		t.Errorf("unexpected value")
 	}
 }

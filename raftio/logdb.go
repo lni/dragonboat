@@ -27,6 +27,13 @@ var (
 	ErrNoBootstrapInfo = errors.New("no bootstrap info")
 )
 
+// Metrics is the metrics of the LogDB.
+type Metrics struct {
+	// Busy indicates whether the LogDB is busy and not suitable for saving new
+	// data into the store.
+	Busy bool
+}
+
 // NodeInfo is used to identify a Raft node.
 type NodeInfo struct {
 	ClusterID uint64

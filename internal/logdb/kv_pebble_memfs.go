@@ -31,6 +31,7 @@ const (
 )
 
 func newDefaultKVStore(config config.LogDBConfig,
+	callback kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs == nil {
 		panic("nil fs")
@@ -40,5 +41,5 @@ func newDefaultKVStore(config config.LogDBConfig,
 			panic("invalid fs")
 		}
 	}
-	return pebble.NewKVStore(config, dir, wal, fs)
+	return pebble.NewKVStore(config, callback, dir, wal, fs)
 }
