@@ -5,6 +5,7 @@
 *safe-to-delete*
 out.txt
 coverage.out
+coverage.txt
 *.pprof
 *.swp
 *.tmp
@@ -16,4 +17,3 @@ coverage.out
 gitversion.go
 drummer-data
 nodehost-data
-/snapbench

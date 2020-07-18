@@ -21,11 +21,11 @@ matrix:
     - name: "go1.14.x-windows"
       go: 1.14.x
       os: windows
-      script: go build -v ./...
+      script: go test -v 
     - name: "go1.14.x-freebsd"
       go: 1.14.x
-      os: linux
-      script: GOOS=freebsd go build -v ./...
+      os: freebsd
+      script: go test -v
 
 notifications:
   recipients:
