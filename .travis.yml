@@ -1,17 +1,37 @@
 language: go
-sudo: required
 
-go:
-  - 1.13.x
-  - 1.14.x
+branches:
+  only:
+  - master
+
+matrix:
+  include:
+    - name: "go1.13.x-linux"
+      go: 1.13.x
+      os: linux
+      script: make travis-test
+    - name: "go1.14.x-linux"
+      go: 1.14.x
+      os: linux
+      script: make travis-test
+    - name: "go1.14.x-darwin"
+      go: 1.14.x
+      os: osx
+      script: make travis-test
+    - name: "go1.14.x-windows"
+      go: 1.14.x
+      os: windows
+      script: go build -v ./...
+    - name: "go1.14.x-freebsd"
+      go: 1.14.x
+      os: linux
+      script: GOOS=freebsd go build -v ./...
 
 notifications:
+  recipients:
+    - nilei81@gmail.com
   on_success: never
-  on_failure: never
-
-script:
-  - GO111MODULE=on make travis-ci-test
-  - GO111MODULE=on go test -v -coverprofile=coverage.txt -covermode=atomic
+  on_failure: always
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)

@@ -255,6 +255,7 @@ travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
 	test-utils
 test: dragonboat-test test-tests
 dev-test: test test-plugins
+travis-test: travis-ci-test test-cov
 
 ###############################################################################
 # build unit tests
@@ -309,6 +310,8 @@ test-tools:
 	$(GOTEST) $(PKGNAME)/tools
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/dio
+test-cov:
+	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic
 
 ###############################################################################
 # static checks
