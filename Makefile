@@ -145,98 +145,10 @@ TESTTAGVALS+=$(GOBUILDTAGVALS)
 TESTTAGS="$(TESTTAGVALS)"
 EXTNAME=linux
 
+.PHONY: all
 all: unit-test-bin
+.PHONY: rebuild-all
 rebuild-all: clean unit-test-bin
-
-cross-rebuild: cross-build-bin
-cross-rebuild-win: EXTNAME=win
-cross-rebuild-win: GO=GOOS=windows $(GOCMD)
-cross-rebuild-win: cross-rebuild
-cross-rebuild-darwin: EXTNAME=darwin
-cross-rebuild-darwin: GO=GOOS=darwin $(GOCMD)
-cross-rebuild-darwin: cross-rebuild
-cross-rebuild-freebsd: EXTNAME=freebsd
-cross-rebuild-freebsd: GO=GOOS=freebsd $(GOCMD)
-cross-rebuild-freebsd: cross-rebuild
-
-###############################################################################
-# download and install rocksdb
-###############################################################################
-LIBCONF_PATH=/etc/ld.so.conf.d/usr_local_lib.conf
-# set the variables below to tell the Makefile which version of rocksdb you
-# want to install. rocksdb v5.13.4 is the version we used in production, it is
-# used here as the default, feel free to change to the version number you like
-#
-# rocksdb 6.3.x or 6.4.x is required
-ROCKSDB_MAJOR_VER=6
-ROCKSDB_MINOR_VER=4
-ROCKSDB_PATCH_VER=6
-ROCKSDB_VER ?= $(ROCKSDB_MAJOR_VER).$(ROCKSDB_MINOR_VER).$(ROCKSDB_PATCH_VER)
-
-RDBTMPDIR=$(PKGROOT)/build/rocksdbtmp
-RDBURL=https://github.com/facebook/rocksdb/archive/v$(ROCKSDB_VER).tar.gz
-build-rocksdb: get-rocksdb make-rocksdb
-build-rocksdb-static: get-rocksdb make-rocksdb-static
-build-original-rocksdb : get-rocksdb make-rocksdb
-get-rocksdb:
-	@{ \
-		set -e; \
-		rm -rf $(RDBTMPDIR); \
-		mkdir -p $(RDBTMPDIR); \
-		wget $(RDBURL) -P $(RDBTMPDIR); \
-		tar xzvf $(RDBTMPDIR)/v$(ROCKSDB_VER).tar.gz -C $(RDBTMPDIR); \
-	}
-make-rocksdb:
-	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C \
-		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 shared_lib
-make-rocksdb-static:
-	@EXTRA_CXXFLAGS=-DROCKSDB_NO_DYNAMIC_EXTENSION make -C \
-		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) -j8 static_lib
-ldconfig-rocksdb-lib-ull:
-	if [ $(OS) = Linux ]; then \
-		sudo sh -c "if [ ! -f $(LIBCONF_PATH) ]; \
-			then touch $(LIBCONF_PATH); \
-			fi"; \
-		sudo sh -c "if ! egrep -q '/usr/local/lib' $(LIBCONF_PATH); \
-			then echo '/usr/local/lib' >> $(LIBCONF_PATH); \
-			fi"; \
-		sudo ldconfig; \
-  fi
-install-rocksdb-lib-ull:
-	@{ \
-		set -e; \
-		sudo INSTALL_PATH=/usr/local make -C \
-			$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-shared; \
-		rm -rf $(RDBTMPDIR); \
-	}
-install-rocksdb-lib-ull-static:
-	@{ \
-    set -e; \
-    sudo INSTALL_PATH=/usr/local make -C \
-      $(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-static; \
-    rm -rf $(RDBTMPDIR); \
-  }
-do-install-rocksdb-ull: install-rocksdb-lib-ull ldconfig-rocksdb-lib-ull
-do-install-rocksdb:
-	@(INSTALL_PATH=$(PKGROOT)/build make -C \
-		$(RDBTMPDIR)/rocksdb-$(ROCKSDB_VER) install-shared && rm -rf $(RDBTMPDIR))
-
-install-rocksdb-ull-darwin: build-rocksdb install-rocksdb-ull
-install-rocksdb-ull: build-rocksdb do-install-rocksdb-ull
-install-rocksdb-ull-static: build-rocksdb-static install-rocksdb-lib-ull-static
-install-rocksdb: build-rocksdb do-install-rocksdb
-install-original-rocksdb-ull: build-original-rocksdb do-install-rocksdb-ull
-install-original-rocksdb: build-original-rocksdb do-install-rocksdb
-
-###############################################################################
-# builds
-###############################################################################
-install-dragonboat: gen-gitversion
-	$(GO) install $(VERBOSE) -tags=$(GOBUILDTAGS) $(PKGNAME)
-
-gen-gitversion:
-	@echo "package dragonboat\n" > gitversion.go
-	@echo "const GITVERSION = \"$(shell git rev-parse HEAD)\"" >> gitversion.go
 
 ###############################################################################
 # tests
@@ -247,69 +159,87 @@ endif
 
 TEST_OPTIONS=test $(GOCMDTAGS) -timeout=1200s -count=1 $(VERBOSE) \
   $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
+.PHONY: dragonboat-test
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
 	test-utils
+.PHONY: travis-ci-test
 travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-config test-client test-server test-tests test-tools test-fs 				 \
 	test-utils
+.PHONY: test
 test: dragonboat-test test-tests
+.PHONY: dev-test
 dev-test: test test-plugins
+.PHONY: travis-test
 travis-test: travis-ci-test test-cov
 
 ###############################################################################
 # build unit tests
 ###############################################################################
+.PHONY: unit-test-bin
 unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
+.PHONY: unit-test-bin
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
 	test-tests test-fs test-utils
 
-cross-build-bin: TEST_OPTIONS=test -c -o $@.$(EXTNAME) -tags=$(TESTTAGS)     \
-  -count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
-cross-build-bin: test-raft test-raftpb test-rsm test-logdb test-transport    \
-  test-multiraft test-config test-client test-server test-tools test-tests   \
-	test-fs test-utils
-
 ###############################################################################
 # fast tests executed for every git push
 ###############################################################################
+.PHONY: benchmark
 benchmark:
 	$(GOTEST) $(SELECTED_BENCH_OPTION)
 
+.PHONY: benchmark-fsync
 benchmark-fsync:
 	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
 
 GOTEST=$(GO) $(TEST_OPTIONS)
+.PHONY: test-plugins
 test-plugins:
 	$(GOTEST) $(PKGNAME)/plugin
+.PHONY: test-server
 test-server:
 	$(GOTEST) $(PKGNAME)/internal/server
+.PHONY: test-config
 test-config:
 	$(GOTEST) $(PKGNAME)/config
+.PHONY: test-client
 test-client:
 	$(GOTEST) $(PKGNAME)/client
+.PHONY: test-raft
 test-raft:
 	$(GOTEST) $(PKGNAME)/internal/raft
+.PHONY: test-raftpb
 test-raftpb:
 	$(GOTEST) $(PKGNAME)/raftpb
+.PHONY: test-rsm
 test-rsm:
 	$(GOTEST) $(PKGNAME)/internal/rsm
+.PHONY: test-logdb
 test-logdb:
 	$(GOTEST) $(PKGNAME)/internal/logdb
+.PHONY: test-transport
 test-transport:
 	$(GOTEST) $(PKGNAME)/internal/transport
+.PHONY: test-multiraft
 test-multiraft:
 	$(GOTEST) $(PKGNAME)
+.PHONY: test-tests
 test-tests:
 	$(GOTEST) $(PKGNAME)/internal/tests
+.PHONY: test-fs
 test-fs:
 	$(GOTEST) $(PKGNAME)/internal/fileutil
+.PHONY: test-tools
 test-tools:
 	$(GOTEST) $(PKGNAME)/tools
+.PHONY: test-utils
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/dio
+.PHONY: test-cov
 test-cov:
 	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic
 
@@ -322,6 +252,7 @@ CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	plugin/chan raftpb tools logger raftio config statemachine client 					 \
 	internal/utils/dio
 
+.PHONY: static-check
 static-check:
 	$(GO) vet -tests=false $(PKGNAME)
 	golint $(PKGNAME)
@@ -338,6 +269,7 @@ GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/vfs internal/transport  \
 	internal/utils/dio internal/logdb
 EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
 
+.PHONY: golangci-lint-check
 golangci-lint-check:
 	@for p in $(GOLANGCI_LINT_PKGS); do \
 		golangci-lint run $$p; \
@@ -347,15 +279,9 @@ golangci-lint-check:
 ###############################################################################
 # clean
 ###############################################################################
+.PHONY: clean
 clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
 	@rm -f test-*.*
 	@$(GO) clean -i -testcache $(PKG)
-
-.PHONY: gen-gitversion install-dragonboat install-rocksdb test test-plugins    \
-	test-raft test-rsm test-logdb test-tools test-transport test-multiraft 			 \
-	test-raftpb test-client test-server test-config test-tests test-fs 					 \
-	test-utils dev-test static-check clean golangci-lint-check dragonboat-test 	 \
-	travis-ci-test cross-rebuild-bin cross-rebuild cross-rebuild-win 						 \
-	cross-rebuild-darwin cross-rebuild-freebsd benchmark benchmark-fsync
