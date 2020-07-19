@@ -25,7 +25,7 @@ matrix:
     - name: "go1.14.x-freebsd"
       go: 1.14.x
       os: freebsd
-      script: go test -v $(go list ./... | grep -v rocksdb)
+      script: gmake travis-test
 
 notifications:
   recipients:
