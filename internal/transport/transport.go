@@ -150,6 +150,16 @@ type ITransportEvent interface {
 	ConnectionFailed(string, bool)
 }
 
+type failedSend uint64
+
+const (
+	success failedSend = iota
+	circuitBreakerNotReady
+	unknownTarget
+	rateLimited
+	chanIsFull
+)
+
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
 	mu struct {
@@ -342,14 +352,14 @@ func (t *Transport) sendUnreachableNotification(addr string) {
 // The generic async send Go pattern used in Send() is found in CockroachDB's
 // codebase.
 func (t *Transport) Send(req pb.Message) bool {
-	v := t.send(req)
+	v, _ := t.send(req)
 	if !v {
 		t.metrics.messageSendFailure(1)
 	}
 	return v
 }
 
-func (t *Transport) send(req pb.Message) bool {
+func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	if req.Type == pb.InstallSnapshot {
 		panic("snapshot message must be sent via its own channel.")
 	}
@@ -360,12 +370,12 @@ func (t *Transport) send(req pb.Message) bool {
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
 			t.sourceAddress, dn(clusterID, toNodeID))
-		return false
+		return false, unknownTarget
 	}
 	// fail fast
 	if !t.GetCircuitBreaker(addr).Ready() {
 		t.metrics.messageConnectionFailure()
-		return false
+		return false, circuitBreakerNotReady
 	}
 	// get the channel, create it in case it is not in the queue map
 	t.mu.Lock()
@@ -391,14 +401,14 @@ func (t *Transport) send(req pb.Message) bool {
 		})
 	}
 	if sq.rateLimited() {
-		return false
+		return false, rateLimited
 	}
 	select {
 	case sq.ch <- req:
 		sq.increase(req)
-		return true
+		return true, success
 	default:
-		return false
+		return false, chanIsFull
 	}
 }
 

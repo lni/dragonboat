@@ -1365,7 +1365,10 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tt, nodes, _, req, _ := newNOOPTestTransport(fs)
-	defer tt.Stop()
+	defer func() {
+		req.SetBlocked(false)
+		tt.Stop()
+	}()
 	handler := newTestMessageHandler()
 	tt.SetMessageHandler(handler)
 	nodes.Add(100, 2, serverAddress)
@@ -1377,39 +1380,16 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 		Entries:   []raftpb.Entry{e},
 	}
 	req.SetBlocked(true)
-	rled := func(exp bool) {
-		_, key, err := nodes.Resolve(100, 2)
-		if err != nil {
-			t.Fatalf("failed to resolve the addr")
-		}
-		sq, ok := tt.mu.queues[key]
-		if !ok {
-			t.Fatalf("failed to get sq")
-		}
-		if sq.rateLimited() != exp {
-			t.Errorf("rate limited unexpected, exp %t", exp)
-		}
-	}
-	for i := 0; i < 100; i++ {
-		sent := tt.Send(msg)
-		if !sent {
-			rled(true)
-			break
-		}
-		if i == 99 {
-			t.Errorf("no message rejected")
-		}
-	}
-	req.SetBlocked(false)
 	for i := 0; i < 1000; i++ {
-		sent := tt.Send(msg)
-		if sent {
-			rled(false)
+		sent, reason := tt.send(msg)
+		if !sent {
+			if reason != rateLimited {
+				t.Errorf("not due to rate limit")
+			}
 			break
 		}
-		time.Sleep(5 * time.Millisecond)
 		if i == 999 {
-			t.Errorf("no message buffered")
+			t.Errorf("no message rejected")
 		}
 	}
 }
