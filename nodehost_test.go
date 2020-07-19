@@ -902,7 +902,7 @@ func createLogDBRateLimitedTestNodeHost(addr string,
 	peers[1] = addr
 	logDBConfig := config.GetDefaultLogDBConfig()
 	logDBConfig.KVMaxWriteBufferNumber = 2
-	logDBConfig.KVWriteBufferSize = 1024
+	logDBConfig.KVWriteBufferSize = 1024 * 32
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
