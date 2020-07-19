@@ -2536,7 +2536,7 @@ func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
 		session := nh.GetNoOPSession(1)
 		for i := 0; i < 16; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			_, err := nh.SyncPropose(ctx, session, make([]byte, 2500))
+			_, err := nh.SyncPropose(ctx, session, make([]byte, 16))
 			cancel()
 			if err != nil {
 				t.Fatalf("failed to make proposal %v", err)
