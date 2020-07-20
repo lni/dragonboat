@@ -134,13 +134,13 @@ func (g *testSnapshotDir) generateSnapshotFile(clusterID uint64,
 	if err != nil {
 		panic(err)
 	}
-	n, err = writer.Write(data)
+	/*n, err = writer.Write(data)
 	if n != len(data) {
 		panic("short write")
 	}
 	if err != nil {
 		panic(err)
-	}
+	}*/
 	if err := writer.Close(); err != nil {
 		panic(err)
 	}
@@ -621,8 +621,7 @@ func TestSnapshotCanBeSent(t *testing.T) {
 func TestLargeSnapshotCanBeSent(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testSnapshotCanBeSent(t, 64*1024*1024, 20000, true, fs)
-	testSnapshotCanBeSent(t, 256*1024*1024+5, 20000, false, fs)
+	testSnapshotCanBeSent(t, 128*1024*1024+5, 30000, true, fs)
 }
 
 func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs vfs.IFS) {
@@ -722,9 +721,9 @@ func waitForSnapshotCountUpdate(handler *testMessageHandler, maxWait uint64) {
 
 func getTestSnapshotFileSize(sz uint64) uint64 {
 	if rsm.SnapshotVersion == rsm.V1SnapshotVersion {
-		return sz*2 + rsm.SnapshotHeaderSize
+		return sz + rsm.SnapshotHeaderSize
 	} else if rsm.SnapshotVersion == rsm.V2SnapshotVersion {
-		return rsm.GetV2PayloadSize(sz*2) + rsm.SnapshotHeaderSize
+		return rsm.GetV2PayloadSize(sz) + rsm.SnapshotHeaderSize
 	} else {
 		panic("unknown snapshot version")
 	}
