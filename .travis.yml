@@ -14,6 +14,12 @@ matrix:
       go: 1.14.x
       os: linux
       script: make travis-test
+    - name: "go1.14.x-linux-arm64"
+      go: 1.14.x
+      os: linux
+      arch: arm64
+      dist: bionic
+      script: make test
     - name: "go1.14.x-linux-race"
       go: 1.14.x
       os: linux
