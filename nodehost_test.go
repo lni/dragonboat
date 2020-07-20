@@ -55,6 +55,12 @@ import (
 	"github.com/lni/dragonboat/v3/tools/upgrade310"
 )
 
+func getTestExpertConfig() config.ExpertConfig {
+	cfg := config.GetDefaultExpertConfig()
+	cfg.LogDBShards = 4
+	return cfg
+}
+
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 	gvfs.ReportLeakedFD(fs, t)
 }
@@ -64,8 +70,9 @@ func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 		WALDir:         singleNodeHostTestDir,
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 2,
-		RaftAddress:    "localhost:1111",
+		RaftAddress:    "localhost:26001",
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 }
 
@@ -548,6 +555,7 @@ func createSnapshotCompressedTestNodeHost(addr string,
 		RTTMillisecond: 100,
 		RaftAddress:    peers[1],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -606,6 +614,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
 		NotifyCommit:        notifyCommit,
+		Expert:              getTestExpertConfig(),
 	}
 	if err := nhc.Prepare(); err != nil {
 		return nil, nil, err
@@ -649,6 +658,7 @@ func createConcurrentTestNodeHost(addr string,
 		RTTMillisecond: 1,
 		RaftAddress:    peers[1],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -706,6 +716,7 @@ func createFakeDiskTestNodeHost(addr string,
 		RTTMillisecond: 1,
 		RaftAddress:    peers[1],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -844,6 +855,7 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		RaftAddress:         addr1,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
+		Expert:              getTestExpertConfig(),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:              datadir2,
@@ -852,6 +864,7 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		RaftAddress:         addr2,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
+		Expert:              getTestExpertConfig(),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -888,6 +901,7 @@ func createLogDBRateLimitedTestNodeHost(addr string,
 		RaftAddress:    peers[1],
 		FS:             fs,
 		LogDB:          logDBConfig,
+		Expert:         getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -921,6 +935,7 @@ func createRateLimitedTestNodeHost(addr string,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[1],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -953,6 +968,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[1],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:         datadir2,
@@ -960,6 +976,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		RTTMillisecond: 10,
 		RaftAddress:    peers[2],
 		FS:             fs,
+		Expert:         getTestExpertConfig(),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -1148,6 +1165,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 			RTTMillisecond: 50,
 			RaftAddress:    singleNodeHostTestAddr,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -3410,6 +3428,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 			LogDB:          config.GetDefaultLogDBConfig(),
+			Expert:         getTestExpertConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -3572,6 +3591,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
@@ -3579,6 +3599,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr2,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once
@@ -3900,6 +3921,7 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 			RTTMillisecond: 2,
 			RaftAddress:    "microsoft.com:12345",
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err == nil {
@@ -3923,6 +3945,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   f,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -3958,6 +3981,7 @@ func TestNodeHostFileLock(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: 200,
 			RaftAddress:    nodeHostTestAddr1,
+			Expert:         getTestExpertConfig(),
 		}
 		if !child {
 			nh, err := NewNodeHost(nhc)
@@ -4004,6 +4028,7 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -4062,6 +4087,7 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -4129,6 +4155,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   nff,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		xf := getLogDBTestFunc(t, nhc)
 		xf()
@@ -4158,6 +4185,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		tf := getLogDBTestFunc(t, nhc)
 		tf()
@@ -4181,6 +4209,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 			LogDBFactory:   pf,
 			DeploymentID:   100,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		func() {
 			nh, err := NewNodeHost(nhc)
@@ -4211,6 +4240,7 @@ func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -4351,6 +4381,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 		RaftAddress:       peers[1],
 		RaftEventListener: rel,
 		FS:                fs,
+		Expert:            getTestExpertConfig(),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -4527,6 +4558,7 @@ func testWitnessIO(t *testing.T,
 			RTTMillisecond: 50,
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
+			Expert:         getTestExpertConfig(),
 		}
 		nh1, err := NewNodeHost(nhc1)
 		if err != nil {

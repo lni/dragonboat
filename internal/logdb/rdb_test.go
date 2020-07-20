@@ -64,8 +64,10 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 	if err := fileutil.MkdirAll(lld, fs); err != nil {
 		panic(err)
 	}
+	expert := config.GetDefaultExpertConfig()
+	expert.LogDBShards = 4
 	cfg := config.NodeHostConfig{
-		Expert: config.GetDefaultExpertConfig(),
+		Expert: expert,
 		LogDB:  config.GetDefaultLogDBConfig(),
 	}
 
