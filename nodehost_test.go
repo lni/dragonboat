@@ -2302,11 +2302,12 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				session := nh.GetNoOPSession(clusterID)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
+				if err == ErrTimeout {
+					continue
+				}
 				if err != nil {
-					plog.Infof("write failed %v", err)
 					t.Fatalf("failed to make proposal %v", err)
 				}
-				plog.Infof("write completed")
 				cancel()
 				if atomic.LoadUint32(&count) > 0 {
 					return
