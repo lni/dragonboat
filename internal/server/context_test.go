@@ -67,10 +67,17 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		}
 		dir, _ := ctx.getDataDirs()
 		testName := "test-name"
+		cfg := config.NodeHostConfig{
+			Expert:       config.GetDefaultExpertConfig(),
+			RaftAddress:  testAddress,
+			DeploymentID: testDeploymentID,
+		}
 		status := raftpb.RaftDataStatus{
-			Address:      testAddress,
-			BinVer:       raftio.LogDBBinVersion,
-			HardHash:     settings.Hard.Hash(),
+			Address: testAddress,
+			BinVer:  raftio.LogDBBinVersion,
+			HardHash: settings.HardHash(cfg.Expert.ExecShards,
+				cfg.Expert.LogDBShards, settings.Hard.LRUMaxSessionCount,
+				settings.Hard.LogDBEntryBatchSize),
 			LogdbType:    testName,
 			Hostname:     ctx.hostname,
 			DeploymentId: testDeploymentID,
@@ -79,8 +86,8 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to create flag file %v", err)
 		}
-		if err := ctx.CheckNodeHostDir(testDeploymentID,
-			testAddress, raftio.LogDBBinVersion, testName); err != nil {
+		if err := ctx.CheckNodeHostDir(cfg,
+			raftio.LogDBBinVersion, testName); err != nil {
 			t.Fatalf("check node host dir failed %v", err)
 		}
 	}()
@@ -104,10 +111,18 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		t.Fatalf("%v", err)
 	}
 	dir, _ := ctx.getDataDirs()
+	cfg := config.NodeHostConfig{
+		Expert:       config.GetDefaultExpertConfig(),
+		DeploymentID: testDeploymentID,
+		RaftAddress:  testAddress,
+	}
+
 	status := raftpb.RaftDataStatus{
-		Address:   addr,
-		BinVer:    binVer,
-		HardHash:  settings.Hard.Hash(),
+		Address: addr,
+		BinVer:  binVer,
+		HardHash: settings.HardHash(cfg.Expert.ExecShards,
+			cfg.Expert.LogDBShards, settings.Hard.LRUMaxSessionCount,
+			settings.Hard.LogDBEntryBatchSize),
 		LogdbType: name,
 		Hostname:  hostname,
 	}
@@ -118,7 +133,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	err = ctx.CheckNodeHostDir(testDeploymentID, testAddress, testBinVer, testLogDBName)
+	err = ctx.CheckNodeHostDir(cfg, testBinVer, testLogDBName)
 	plog.Infof("err: %v", err)
 	if err != expErr {
 		t.Errorf("expect err %v, got %v", expErr, err)

@@ -194,14 +194,15 @@ func (sc *Context) CreateSnapshotDir(did uint64,
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (sc *Context) CheckNodeHostDir(did uint64,
-	addr string, binVer uint32, dbType string) error {
-	return sc.checkNodeHostDir(did, addr, sc.hostname, binVer, dbType, false)
+func (sc *Context) CheckNodeHostDir(config config.NodeHostConfig,
+	binVer uint32, dbType string) error {
+	return sc.checkNodeHostDir(config, binVer, dbType, false)
 }
 
 // CheckLogDBType checks whether LogDB type is compatible.
-func (sc *Context) CheckLogDBType(did uint64, dbType string) error {
-	return sc.checkNodeHostDir(did, "", "", 0, dbType, true)
+func (sc *Context) CheckLogDBType(config config.NodeHostConfig,
+	dbType string) error {
+	return sc.checkNodeHostDir(config, 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
@@ -266,13 +267,13 @@ func removeSavedSnapshots(dir string, fs vfs.IFS) error {
 	return fileutil.SyncDir(dir, fs)
 }
 
-func (sc *Context) checkNodeHostDir(did uint64,
-	addr string, hostname string, binVer uint32, name string, dbto bool) error {
+func (sc *Context) checkNodeHostDir(config config.NodeHostConfig,
+	binVer uint32, name string, dbto bool) error {
 	dir, lldir := sc.getDataDirs()
-	if err := sc.check(dir, did, addr, hostname, binVer, name, dbto); err != nil {
+	if err := sc.check(config, dir, binVer, name, dbto); err != nil {
 		return err
 	}
-	if err := sc.check(lldir, did, addr, hostname, binVer, name, dbto); err != nil {
+	if err := sc.check(config, lldir, binVer, name, dbto); err != nil {
 		return err
 	}
 	return nil
@@ -305,9 +306,8 @@ func (sc *Context) compatibleLogDBType(saved string, name string) bool {
 	return true
 }
 
-func (sc *Context) check(dir string,
-	did uint64, addr string, hostname string,
-	binVer uint32, name string, dbto bool) error {
+func (sc *Context) check(config config.NodeHostConfig,
+	dir string, binVer uint32, name string, dbto bool) error {
 	fn := flagFilename
 	fp := sc.fs.PathJoin(dir, fn)
 	se := func(s1 string, s2 string) bool {
@@ -317,7 +317,7 @@ func (sc *Context) check(dir string,
 		if dbto {
 			return nil
 		}
-		return sc.createFlagFile(dir, did, addr, hostname, binVer, name)
+		return sc.createFlagFile(config, dir, binVer, name)
 	}
 	s := raftpb.RaftDataStatus{}
 	if err := fileutil.GetFlagFileContent(dir, fn, &s, sc.fs); err != nil {
@@ -327,13 +327,13 @@ func (sc *Context) check(dir string,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !se(string(s.Address), addr) {
+		if !se(string(s.Address), config.RaftAddress) {
 			return ErrNotOwner
 		}
-		if len(s.Hostname) > 0 && !se(s.Hostname, hostname) {
+		if len(s.Hostname) > 0 && !se(s.Hostname, sc.hostname) {
 			return ErrHostnameChanged
 		}
-		if s.DeploymentId != 0 && s.DeploymentId != did {
+		if s.DeploymentId != 0 && s.DeploymentId != config.GetDeploymentID() {
 			return ErrDeploymentIDChanged
 		}
 		if s.BinVer != binVer {
@@ -345,12 +345,14 @@ func (sc *Context) check(dir string,
 			return ErrIncompatibleData
 		}
 		if s.HardHash != 0 {
-			if s.HardHash != settings.Hard.Hash() {
+			if s.HardHash != settings.HardHash(config.Expert.ExecShards,
+				config.Expert.LogDBShards, settings.Hard.LRUMaxSessionCount,
+				settings.Hard.LogDBEntryBatchSize) {
 				return ErrHardSettingsChanged
 			}
 		} else {
-			if s.StepWorkerCount != settings.Hard.StepEngineWorkerCount ||
-				s.LogdbShardCount != settings.Hard.LogDBPoolSize ||
+			if s.StepWorkerCount != config.Expert.ExecShards ||
+				s.LogdbShardCount != config.Expert.LogDBShards ||
 				s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
 				s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
 				return ErrHardSettingChanged
@@ -360,17 +362,17 @@ func (sc *Context) check(dir string,
 	return nil
 }
 
-func (sc *Context) createFlagFile(dir string,
-	did uint64, addr string, hostname string, ver uint32, name string) error {
+func (sc *Context) createFlagFile(config config.NodeHostConfig,
+	dir string, ver uint32, name string) error {
 	s := raftpb.RaftDataStatus{
-		Address:         addr,
+		Address:         config.RaftAddress,
 		BinVer:          ver,
 		HardHash:        0,
 		LogdbType:       name,
-		Hostname:        hostname,
-		DeploymentId:    did,
-		StepWorkerCount: settings.Hard.StepEngineWorkerCount,
-		LogdbShardCount: settings.Hard.LogDBPoolSize,
+		Hostname:        sc.hostname,
+		DeploymentId:    config.GetDeploymentID(),
+		StepWorkerCount: config.Expert.ExecShards,
+		LogdbShardCount: config.Expert.LogDBShards,
 		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
 		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 	}

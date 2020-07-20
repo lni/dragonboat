@@ -176,8 +176,8 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	}
 	defer logdb.Close()
 
-	if err := serverCtx.CheckNodeHostDir(nhConfig.DeploymentID,
-		nhConfig.RaftAddress, logdb.BinaryFormat(), logdb.Name()); err != nil {
+	if err := serverCtx.CheckNodeHostDir(nhConfig,
+		logdb.BinaryFormat(), logdb.Name()); err != nil {
 		return err
 	}
 	ssDir := serverCtx.GetSnapshotDir(nhConfig.DeploymentID,
@@ -468,6 +468,6 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 func getLogDB(ctx server.Context,
 	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
 	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
-	return logdb.NewDefaultLogDB(nhConfig.LogDBConfig,
+	return logdb.NewDefaultLogDB(nhConfig,
 		nil, []string{nhDir}, []string{walDir}, fs)
 }

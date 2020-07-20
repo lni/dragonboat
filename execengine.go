@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	stepWorkerCount     = settings.Hard.StepEngineWorkerCount
 	commitWorkerCount   = settings.Soft.StepEngineCommitWorkerCount
 	applyWorkerCount    = settings.Soft.StepEngineTaskWorkerCount
 	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
@@ -651,7 +650,7 @@ type execEngine struct {
 	notifyCommit    bool
 }
 
-func newExecEngine(nh nodeLoader, notifyCommit bool,
+func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *execEngine {
 	loaded := newLoadedNodes()
 	s := &execEngine{
@@ -662,17 +661,17 @@ func newExecEngine(nh nodeLoader, notifyCommit bool,
 		nodeStopper:     syncutil.NewStopper(),
 		commitStopper:   syncutil.NewStopper(),
 		taskStopper:     syncutil.NewStopper(),
-		stepWorkReady:   newWorkReady(stepWorkerCount),
+		stepWorkReady:   newWorkReady(execShards),
 		commitWorkReady: newWorkReady(commitWorkerCount),
 		applyWorkReady:  newWorkReady(applyWorkerCount),
-		ctxs:            make([]raftio.IContext, stepWorkerCount),
+		ctxs:            make([]raftio.IContext, execShards),
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
 	}
 	if errorInjection {
 		s.ec = make(chan error, 1)
 	}
-	for i := uint64(1); i <= stepWorkerCount; i++ {
+	for i := uint64(1); i <= execShards; i++ {
 		workerID := i
 		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
 		s.nodeStopper.RunWorker(func() {

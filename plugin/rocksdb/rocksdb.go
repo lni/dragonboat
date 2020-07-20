@@ -28,7 +28,7 @@ import (
 // NewLogDB is the factory function for creating RocksDB based Log DB instances.
 // Raft entries are stored in its plain format, it uses less memory than the
 // batched alternative implementation but comes at the cost of lower throughput.
-func NewLogDB(cfg config.LogDBConfig, cb config.LogDBCallback,
+func NewLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,
@@ -41,7 +41,7 @@ func NewLogDB(cfg config.LogDBConfig, cb config.LogDBCallback,
 // throughput performance.
 //
 // Deprecated: NewBatchedLogDB has been deprecated, use NewLogDB instead.
-func NewBatchedLogDB(cfg config.LogDBConfig, cb config.LogDBCallback,
+func NewBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,

@@ -71,17 +71,4 @@ func overwriteSettings(cfg map[string]interface{}, rd reflect.Value) {
 	}
 }
 
-func logHardChange(key string, newVal uint64) {
-	if key == "StepEngineWorkerCount" || key == "LogDBPoolSize" {
-		plog.Warningf("StepEngineWorkerCount or LogDBPoolSize changed, " +
-			"see comments in the internal/settings package")
-		if key == "LogDBPoolSize" && newVal < defaultLogDBPoolSize/2 {
-			plog.Warningf("Using a very small LogDBPoolSize value, " +
-				"see comments in the internal/settings package")
-		}
-		if key == "StepEngineWorkerCount" && newVal < defaultStepEngineWorkerCount/2 {
-			plog.Warningf("Using a very small StepEngineWorkerCount value, " +
-				"see comments in the internal/settings package")
-		}
-	}
-}
+func logHardChange(key string, newVal uint64) {}

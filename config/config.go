@@ -39,6 +39,12 @@ var (
 	plog = logger.GetLogger("config")
 )
 
+const (
+	// don't change these, see the comments on ExpertConfig.
+	defaultExecShards  uint64 = 16
+	defaultLogDBShards uint64 = 16
+)
+
 // LogDBInfo is the info provided when LogDBCallback is invoked.
 type LogDBInfo struct {
 	Shard uint64
@@ -56,9 +62,8 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
-type LogDBFactoryFunc func(config LogDBConfig,
-	callback LogDBCallback,
-	dirs []string, lowLatencyDirs []string) (raftio.ILogDB, error)
+type LogDBFactoryFunc func(NodeHostConfig,
+	LogDBCallback, []string, []string) (raftio.ILogDB, error)
 
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
@@ -344,12 +349,18 @@ type NodeHostConfig struct {
 	// usually set in tests. Dragonboat applications are not required to
 	// explicitly set this field.
 	SystemTickerPrecision time.Duration
-	// LogDBConfig is the configuration object for the LogDB storage engine. LogDB
+	// LogDB is the configuration object for the LogDB storage engine. LogDB
 	// is used for storing Raft Logs and other metadata. This is an option for
 	// advanced users when tuning the balance of I/O performance and memory
 	// consumption. Regular users are recommdned not to set this field to use it
 	// default value.
-	LogDBConfig LogDBConfig
+	LogDB LogDBConfig
+	// Expert contains configuration options for expert users who are familiar
+	// with the internal of the Dragonboat library. Regular users are expected
+	// not to use ExpertConfig. It is important to understand that any change
+	// to the ExpertConfig may cause an existing Dragonboat setup unable to
+	// restart.
+	Expert ExpertConfig
 	// NotifyCommit specifies whether clients should be notified when their
 	// regular proposals and config change requests are committed. By default,
 	// commits are not notified, clients are only notified when their proposals
@@ -418,10 +429,15 @@ func (c *NodeHostConfig) Prepare() error {
 		plog.Infof("system ticker precision is set to 1ms (default)")
 		c.SystemTickerPrecision = time.Millisecond
 	}
-	if c.LogDBConfig.IsEmpty() {
+	if c.LogDB.IsEmpty() {
 		plog.Infof("using default LogDBConfig")
-		c.LogDBConfig = GetDefaultLogDBConfig()
+		c.LogDB = GetDefaultLogDBConfig()
 	}
+	if c.Expert.IsEmpty() {
+		plog.Infof("using default ExpertConfig")
+		c.Expert = GetDefaultExpertConfig()
+	}
+	c.LogDB.expert = c.Expert
 	return nil
 }
 
@@ -489,6 +505,7 @@ func IsValidAddress(addr string) bool {
 // affect the upper bound of memory size used by the built-in LogDB storage
 // engine.
 type LogDBConfig struct {
+	expert                             ExpertConfig
 	KVKeepLogFileNum                   uint64
 	KVMaxBackgroundCompactions         uint64
 	KVMaxBackgroundFlushes             uint64
@@ -574,8 +591,11 @@ func getDefaultLogDBConfig() LogDBConfig {
 // MemorySizeMB returns the estimated upper bound memory size used by the LogDB
 // storage engine. The returned value is in MBytes.
 func (cfg *LogDBConfig) MemorySizeMB() uint64 {
+	if cfg.expert.IsEmpty() {
+		panic("uninitialized expert config")
+	}
 	ss := cfg.KVWriteBufferSize * cfg.KVMaxWriteBufferNumber
-	bs := ss * settings.Hard.LogDBPoolSize
+	bs := ss * cfg.expert.LogDBShards
 	return bs / (1024 * 1024)
 }
 
@@ -584,4 +604,29 @@ func (cfg *LogDBConfig) MemorySizeMB() uint64 {
 func (cfg *LogDBConfig) IsEmpty() bool {
 	empty := LogDBConfig{}
 	return reflect.DeepEqual(cfg, &empty)
+}
+
+// GetDefaultExpertConfig returns the default ExpertConfig.
+func GetDefaultExpertConfig() ExpertConfig {
+	return ExpertConfig{
+		ExecShards:  defaultExecShards,
+		LogDBShards: defaultLogDBShards,
+	}
+}
+
+// ExpertConfig contains configuration options for expert users who are familiar
+// with the internal of the Dragonboat library. Regular users are expected not
+// to use ExpertConfig.
+type ExpertConfig struct {
+	// ExecShards is the number of execution shards in the first stage of the
+	// execution engine. Default value is 16.
+	ExecShards uint64
+	// LogDBShards is the number of LogDB shards. Default value is 16.
+	LogDBShards uint64
+}
+
+// IsEmpty returns a boolean value indicating whether the ExpertConfig instance
+// is a default one with all zero values.
+func (e *ExpertConfig) IsEmpty() bool {
+	return e.ExecShards == 0 && e.LogDBShards == 0
 }

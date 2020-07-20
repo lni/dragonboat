@@ -23,15 +23,12 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (
-	numOfWorkers = settings.Hard.StepEngineWorkerCount
-	numOfShards  = settings.Hard.LogDBPoolSize
 	// InitRDBContextValueSize defines the initial size of RDB buffer.
 	InitRDBContextValueSize uint64 = 32 * 1024
 	// RDBContextValueSize defines the max size of RDB buffer to be retained.
@@ -50,15 +47,15 @@ type ShardedRDB struct {
 
 var _ raftio.ILogDB = (*ShardedRDB)(nil)
 
-func checkAllShards(config config.LogDBConfig,
+func checkAllShards(config config.NodeHostConfig,
 	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	for i := uint64(0); i < numOfShards; i++ {
+	for i := uint64(0); i < config.Expert.LogDBShards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lls) > 0 {
 			lldir = fs.PathJoin(lls[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := hasBatchedRecord(config, dir, lldir, fs, kvf)
+		batched, err := hasBatchedRecord(config.LogDB, dir, lldir, fs, kvf)
 		if err != nil {
 			return false, err
 		}
@@ -81,7 +78,7 @@ func (sc *shardCallback) callback(busy bool) {
 }
 
 // OpenShardedRDB creates a ShardedRDB instance.
-func OpenShardedRDB(config config.LogDBConfig, callback config.LogDBCallback,
+func OpenShardedRDB(config config.NodeHostConfig, callback config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
 	fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
 	shards := make([]*rdb, 0)
@@ -102,14 +99,14 @@ func OpenShardedRDB(config config.LogDBConfig, callback config.LogDBCallback,
 		}
 		plog.Infof("all shards checked, batched: %t", batched)
 	}
-	for i := uint64(0); i < numOfShards; i++ {
+	for i := uint64(0); i < config.Expert.LogDBShards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lldirs) > 0 {
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
 		sc := shardCallback{shard: i, f: callback}
-		db, err := openRDB(config, sc.callback, dir, lldir, batched, fs, kvf)
+		db, err := openRDB(config.LogDB, sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()
@@ -118,7 +115,8 @@ func OpenShardedRDB(config config.LogDBConfig, callback config.LogDBCallback,
 		}
 		shards = append(shards, db)
 	}
-	partitioner := server.NewDoubleFixedPartitioner(numOfShards, numOfWorkers)
+	partitioner := server.NewDoubleFixedPartitioner(config.Expert.ExecShards,
+		config.Expert.LogDBShards)
 	mw := &ShardedRDB{
 		shards:       shards,
 		partitioner:  partitioner,

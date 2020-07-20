@@ -44,7 +44,7 @@ type kvFactory func(config.LogDBConfig,
 // implementation. The created Log DB tries to store entry records in
 // plain format but it switches to the batched mode if there is already
 // batched entries saved in the existing DB.
-func NewDefaultLogDB(config config.LogDBConfig,
+func NewDefaultLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback,
 	dirs []string, lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
 	return NewLogDB(config,
@@ -53,7 +53,7 @@ func NewDefaultLogDB(config config.LogDBConfig,
 
 // NewDefaultBatchedLogDB creates a Log DB instance using the default KV store
 // implementation with batched entry support.
-func NewDefaultBatchedLogDB(config config.LogDBConfig,
+func NewDefaultBatchedLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback,
 	dirs []string, lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
 	return NewLogDB(config,
@@ -63,13 +63,13 @@ func NewDefaultBatchedLogDB(config config.LogDBConfig,
 // NewLogDB creates a Log DB instance based on provided configuration
 // parameters. The underlying KV store used by the Log DB instance is created
 // by the provided factory function.
-func NewLogDB(config config.LogDBConfig,
+func NewLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback, dirs []string, lldirs []string,
 	batched bool, check bool, fs vfs.IFS, f kvFactory) (raftio.ILogDB, error) {
-	checkDirs(dirs, lldirs)
+	checkDirs(config.Expert.LogDBShards, dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
 	if len(dirs) == 1 {
-		for i := uint64(1); i < numOfShards; i++ {
+		for i := uint64(1); i < config.Expert.LogDBShards; i++ {
 			dirs = append(dirs, dirs[0])
 			if llDirRequired {
 				lldirs = append(lldirs, lldirs[0])
@@ -79,7 +79,7 @@ func NewLogDB(config config.LogDBConfig,
 	return OpenShardedRDB(config, callback, dirs, lldirs, batched, check, fs, f)
 }
 
-func checkDirs(dirs []string, lldirs []string) {
+func checkDirs(numOfShards uint64, dirs []string, lldirs []string) {
 	if len(dirs) == 1 {
 		if len(lldirs) != 0 && len(lldirs) != 1 {
 			plog.Panicf("only 1 regular dir but %d low latency dirs", len(lldirs))
@@ -101,7 +101,7 @@ func checkDirs(dirs []string, lldirs []string) {
 
 // GetLogDBInfo returns logdb type name.
 func GetLogDBInfo(f config.LogDBFactoryFunc,
-	config config.LogDBConfig,
+	config config.NodeHostConfig,
 	nhDirs []string, fs vfs.IFS) (name string, err error) {
 	tmpDirs := make([]string, 0)
 	for _, dir := range nhDirs {

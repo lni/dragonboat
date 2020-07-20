@@ -46,7 +46,10 @@ func getNewTestDB(dir string, lldir string, fs vfs.IFS) raftio.ILogDB {
 	if err := fs.MkdirAll(lld, 0777); err != nil {
 		panic(err)
 	}
-	cfg := config.GetDefaultLogDBConfig()
+	cfg := config.NodeHostConfig{
+		LogDB:  config.GetDefaultLogDBConfig(),
+		Expert: config.GetDefaultExpertConfig(),
+	}
 	db, err := logdb.NewDefaultLogDB(cfg, nil, []string{d}, []string{lld}, fs)
 	if err != nil {
 		panic(err.Error())

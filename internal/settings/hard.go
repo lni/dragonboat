@@ -32,11 +32,6 @@ var (
 	plog = logger.GetLogger("settings")
 )
 
-const (
-	defaultStepEngineWorkerCount uint64 = 16
-	defaultLogDBPoolSize         uint64 = 16
-)
-
 //
 // Parameters in both hard.go and soft.go are _NOT_ a part of the public API.
 // There is no guarantee that any of these parameters are going to be available
@@ -54,10 +49,10 @@ const (
 // following content -
 //
 // {
-//   "StepEngineWorkerCount": 32,
+//   "LRUMaxSessionCount": 32,
 // }
 //
-// hard.StepEngineWorkerCount will be set to 32
+// hard.LRUMaxSessionCount will be set to 32
 //
 // The application need to be restarted to apply such configuration changes.
 // Again - tuning these hard parameters using the above described json file
@@ -70,16 +65,6 @@ const (
 var Hard = getHardSettings()
 
 type hard struct {
-	// StepEngineWorkerCount defines number of workers to use to process raft node
-	// changes. Together with the LogDBPoolSize parameters below, they determine
-	// the content of each logdb shards. You will have to build your own tools to
-	// move logdb data around to be able to change StepEngineWorkerCount and
-	// LogDBPoolSize after your system is deployed.
-	StepEngineWorkerCount uint64
-	// LogDBPoolSize defines the number of logdb shards to use. When you get slow
-	// performance when using the default LogDBPoolSize value, it typically means
-	// your disk is not good enough for concurrent write acdesses.
-	LogDBPoolSize uint64
 	// LRUMaxSessionCount is the max number of client sessions that can be
 	// concurrently held and managed by each raft cluster.
 	LRUMaxSessionCount uint64
@@ -108,32 +93,23 @@ const (
 	// MaxMessageBatchSize is the max size for a single message batch sent between
 	// nodehosts.
 	MaxMessageBatchSize uint64 = LargeEntitySize
-	// SnapshotChunkSize is the snapshot chunk size sent by the gRPC transport
-	// module.
+	// SnapshotChunkSize is the snapshot chunk size.
 	SnapshotChunkSize uint64 = 2 * 1024 * 1024
-
-	//
-	// Drummer DB
-	//
-
-	// LaunchDeadlineTick defines the number of ticks allowed for the bootstrap
-	// process to complete.
-	LaunchDeadlineTick uint64 = 24
 )
 
-func (h *hard) Hash() uint64 {
+func HardHash(execShards uint64,
+	logDBShards uint64, sessionCount uint64, batchSize uint64) uint64 {
 	hashstr := fmt.Sprintf("%d-%d-%t-%d-%d",
-		h.StepEngineWorkerCount,
-		h.LogDBPoolSize,
+		execShards,
+		logDBShards,
 		false, // was the UseRangeDelete option
-		h.LRUMaxSessionCount,
-		h.LogDBEntryBatchSize)
+		sessionCount,
+		batchSize)
 	mh := md5.New()
 	if _, err := io.WriteString(mh, hashstr); err != nil {
 		panic(err)
 	}
-	md5hash := mh.Sum(nil)
-	return binary.LittleEndian.Uint64(md5hash)
+	return binary.LittleEndian.Uint64(mh.Sum(nil))
 }
 
 func getHardSettings() hard {
@@ -144,9 +120,7 @@ func getHardSettings() hard {
 
 func getDefaultHardSettings() hard {
 	return hard{
-		StepEngineWorkerCount: defaultStepEngineWorkerCount,
-		LogDBPoolSize:         defaultLogDBPoolSize,
-		LRUMaxSessionCount:    4096,
-		LogDBEntryBatchSize:   48,
+		LRUMaxSessionCount:  4096,
+		LogDBEntryBatchSize: 48,
 	}
 }
