@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	serverAddress     = "localhost:5601"
+	serverAddress     = "localhost:26001"
 	snapshotDir       = "gtransport_test_data_safe_to_delete"
 	caFile            = "tests/test-root-ca.crt"
 	certFile          = "tests/localhost.crt"
