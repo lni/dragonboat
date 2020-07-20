@@ -609,7 +609,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:              datadir,
 		NodeHostDir:         datadir,
-		RTTMillisecond:      2,
+		RTTMillisecond:      10,
 		RaftAddress:         peers[1],
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
@@ -1363,7 +1363,7 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get regular session")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Millisecond)
 		defer cancel()
 		cs := nh.GetNoOPSession(2)
 		_, err = nh.SyncPropose(ctx, cs, make([]byte, 1))
