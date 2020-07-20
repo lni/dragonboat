@@ -59,8 +59,6 @@ func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 	gvfs.ReportLeakedFD(fs, t)
 }
 
-var ovs = logdb.RDBContextValueSize
-
 func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 	return &config.NodeHostConfig{
 		WALDir:         singleNodeHostTestDir,
@@ -333,10 +331,6 @@ func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 }
 
 func runNodeHostTestDC(t *testing.T, f func(), removeDir bool, fs vfs.IFS) {
-	logdb.RDBContextValueSize = 1024 * 1024
-	defer func() {
-		logdb.RDBContextValueSize = ovs
-	}()
 	defer leaktest.AfterTest(t)()
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
@@ -738,10 +732,6 @@ func snapshotCompressedTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -769,10 +759,6 @@ func singleConcurrentNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -801,10 +787,6 @@ func singleFakeDiskNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -831,10 +813,6 @@ func twoFakeDiskNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
@@ -1039,10 +1017,6 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
 		defer leaktest.AfterTest(t)()
@@ -1071,10 +1045,6 @@ func logDBRateLimitedNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -1101,10 +1071,6 @@ func rateLimitedNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -1610,10 +1576,6 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 
 func TestZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T) {
 	fs := vfs.GetTestFS()
-	logdb.RDBContextValueSize = 1024 * 1024
-	defer func() {
-		logdb.RDBContextValueSize = ovs
-	}()
 	defer leaktest.AfterTest(t)()
 	testZombieSnapshotDirWillBeDeletedDuringAddCluster(t, "snapshot-AB-01.receiving", fs)
 	testZombieSnapshotDirWillBeDeletedDuringAddCluster(t, "snapshot-AB-10.generating", fs)
@@ -1627,10 +1589,6 @@ func runSingleNodeHostTest(t *testing.T,
 		}
 	}()
 	func() {
-		logdb.RDBContextValueSize = 1024 * 1024
-		defer func() {
-			logdb.RDBContextValueSize = ovs
-		}()
 		defer leaktest.AfterTest(t)()
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -3367,6 +3325,9 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 				aborted = true
 				continue
 			}
+			if v.code == requestRejected {
+				continue
+			}
 			if !v.Completed() {
 				t.Fatalf("failed to complete the requested snapshot, %s", v.code)
 			}
@@ -4368,10 +4329,6 @@ func (rel *testRaftEventListener) get() []raftio.LeaderInfo {
 
 func TestRaftEventsAreReported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	logdb.RDBContextValueSize = 1024 * 1024
-	defer func() {
-		logdb.RDBContextValueSize = ovs
-	}()
 	defer leaktest.AfterTest(t)()
 	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 		t.Fatalf("%v", err)
@@ -4494,10 +4451,6 @@ func TestV2DataCanBeHandled(t *testing.T) {
 			t.Fatalf("failed to rename the dir %v", err)
 		}
 	}
-	logdb.RDBContextValueSize = 1024 * 1024
-	defer func() {
-		logdb.RDBContextValueSize = ovs
-	}()
 	defer leaktest.AfterTest(t)()
 	v2dataDir := fs.PathJoin(targetDir, topDirName)
 	nh, _, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
