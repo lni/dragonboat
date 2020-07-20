@@ -1295,17 +1295,19 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 				t.Fatalf("%v", err)
 			}
 		}()
-		createProposalsToTriggerSnapshot(t, nh, 25, false)
 		logdb := nh.logdb
-		snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		if len(snapshots) == 0 {
-			t.Fatalf("failed to save snapshots")
-		}
-		if snapshots[0].Dummy {
-			t.Errorf("regular snapshot created dummy snapshot")
+		for i := 0; i < 10; i++ {
+			createProposalsToTriggerSnapshot(t, nh, 25, false)
+			snapshots, err := logdb.ListSnapshots(2, 1, math.MaxUint64)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			if len(snapshots) > 0 {
+				break
+			}
+			if i == 9 {
+				t.Fatalf("failed to create a snapshot")
+			}
 		}
 		nh.Stop()
 		nh, pst, err := createSingleNodeTestNodeHost(singleNodeHostTestAddr,
