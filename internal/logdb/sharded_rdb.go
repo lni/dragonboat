@@ -81,6 +81,9 @@ func (sc *shardCallback) callback(busy bool) {
 func OpenShardedRDB(config config.NodeHostConfig, callback config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
 	fs vfs.IFS, kvf kvFactory) (*ShardedRDB, error) {
+	if config.LogDB.IsEmpty() || config.Expert.IsEmpty() {
+		panic("config.LogDB.IsEmpty() || config.Expert.IsEmpty()")
+	}
 	shards := make([]*rdb, 0)
 	if batched {
 		plog.Infof("using batched ShardedRDB")

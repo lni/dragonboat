@@ -652,6 +652,9 @@ type execEngine struct {
 
 func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *execEngine {
+	if execShards == 0 {
+		panic("execShards == 0")
+	}
 	loaded := newLoadedNodes()
 	s := &execEngine{
 		nh:              nh,

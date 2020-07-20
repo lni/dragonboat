@@ -47,6 +47,9 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 	if nhConfig.DeploymentID == 0 {
 		nhConfig.DeploymentID = 1
 	}
+	if err := nhConfig.Prepare(); err != nil {
+		return false, err
+	}
 	fs := vfs.DefaultFS
 	serverCtx, err := server.NewContext(nhConfig, fs)
 	if err != nil {
