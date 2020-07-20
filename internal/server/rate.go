@@ -20,7 +20,9 @@ import (
 )
 
 const (
-	gcTick               uint64 = 3
+	gcTick uint64 = 3
+	// ChangeTickThreashold is the minimum number of ticks required to update
+	// the state of the rate limiter.
 	ChangeTickThreashold uint64 = 10
 )
 

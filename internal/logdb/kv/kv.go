@@ -23,6 +23,7 @@ const (
 	MaxKeyLength uint64 = 1024
 )
 
+// LogDBCallback is a callback function called by the LogDB
 type LogDBCallback func(busy bool)
 
 // IKVStore is the interface used by the RDB struct to access the underlying
