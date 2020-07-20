@@ -54,6 +54,10 @@ func (c *rdbContext) Destroy() {
 	if c.wb != nil {
 		c.wb.Destroy()
 	}
+	c.val = nil
+	c.updates = nil
+	c.lb.Entries = nil
+	c.eb.Entries = nil
 }
 
 func (c *rdbContext) Reset() {
