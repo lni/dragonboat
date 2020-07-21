@@ -19,7 +19,7 @@ matrix:
       os: linux
       arch: arm64
       dist: bionic
-      script: DRAGONBOAT_MEMFS_TEST=1 make test
+      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_MEMFS_TEST=1 make test
     - name: "go1.14.x-linux-race"
       go: 1.14.x
       os: linux
