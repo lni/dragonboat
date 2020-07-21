@@ -2328,13 +2328,13 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				session := nh.GetNoOPSession(clusterID)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
+				cancel()
 				if err == ErrTimeout {
 					continue
 				}
 				if err != nil {
 					t.Fatalf("failed to make proposal %v", err)
 				}
-				cancel()
 				if atomic.LoadUint32(&count) > 0 {
 					return
 				}
@@ -4893,9 +4893,9 @@ func getRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 	testFile := fs.PathJoin(dir, ".dragonboat_test_file_safe_to_delete")
 	defer func() {
-		fs.RemoveAll(testFile)
+		_ = fs.RemoveAll(testFile)
 	}()
-	fs.MkdirAll(dir, 0755)
+	_ = fs.MkdirAll(dir, 0755)
 	f, err := fs.Create(testFile)
 	if err != nil {
 		panic(err)
@@ -4921,9 +4921,8 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 		if rttValues[i] > rtt {
 			if i == 0 {
 				return rttValues[0]
-			} else {
-				return rttValues[i-1]
 			}
+			return rttValues[i-1]
 		}
 	}
 	return rttValues[len(rttValues)-1]

@@ -97,6 +97,7 @@ const (
 	SnapshotChunkSize uint64 = 2 * 1024 * 1024
 )
 
+// HardHash returns the hash value of the Hard setting.
 func HardHash(execShards uint64,
 	logDBShards uint64, sessionCount uint64, batchSize uint64) uint64 {
 	hashstr := fmt.Sprintf("%d-%d-%t-%d-%d",
