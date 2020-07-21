@@ -20,7 +20,7 @@ matrix:
       before_script:
         - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.23.8
         - go get -u golang.org/x/lint/golint 
-        - go get -u https://github.com/gordonklaus/ineffassign
+        - go get -u github.com/gordonklaus/ineffassign
       script:
         - make golangci-lint-check
         - make static-check
