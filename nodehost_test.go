@@ -69,7 +69,7 @@ func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 	return &config.NodeHostConfig{
 		WALDir:         singleNodeHostTestDir,
 		NodeHostDir:    singleNodeHostTestDir,
-		RTTMillisecond: 2,
+		RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 		RaftAddress:    "localhost:26001",
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -552,7 +552,7 @@ func createSnapshotCompressedTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 100,
+		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -609,7 +609,7 @@ func createSingleNodeTestNodeHostCfg(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:              datadir,
 		NodeHostDir:         datadir,
-		RTTMillisecond:      10,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir),
 		RaftAddress:         peers[1],
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
@@ -655,7 +655,7 @@ func createConcurrentTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 1,
+		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -713,7 +713,7 @@ func createFakeDiskTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 1,
+		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -851,7 +851,7 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	nhc1 := config.NodeHostConfig{
 		WALDir:              datadir1,
 		NodeHostDir:         datadir1,
-		RTTMillisecond:      10,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
@@ -860,7 +860,7 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 	nhc2 := config.NodeHostConfig{
 		WALDir:              datadir2,
 		NodeHostDir:         datadir2,
-		RTTMillisecond:      10,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
 		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
@@ -897,7 +897,7 @@ func createLogDBRateLimitedTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 10,
+		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		LogDB:          logDBConfig,
@@ -932,7 +932,7 @@ func createRateLimitedTestNodeHost(addr string,
 	nhc := config.NodeHostConfig{
 		WALDir:         datadir,
 		NodeHostDir:    datadir,
-		RTTMillisecond: 10,
+		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -965,7 +965,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	nhc1 := config.NodeHostConfig{
 		WALDir:         datadir1,
 		NodeHostDir:    datadir1,
-		RTTMillisecond: 10,
+		RTTMillisecond: getRTTMillisecond(fs, datadir1),
 		RaftAddress:    peers[1],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -973,7 +973,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	nhc2 := config.NodeHostConfig{
 		WALDir:         datadir2,
 		NodeHostDir:    datadir2,
-		RTTMillisecond: 10,
+		RTTMillisecond: getRTTMillisecond(fs, datadir2),
 		RaftAddress:    peers[2],
 		FS:             fs,
 		Expert:         getTestExpertConfig(),
@@ -1012,11 +1012,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			if leaderID == 1 {
 				leaderNh = nh1
 				followerNh = nh2
-				sm2.MillisecondToSleep = 10
+				sm2.MillisecondToSleep = nhc1.RTTMillisecond * 10
 			} else {
 				leaderNh = nh2
 				followerNh = nh1
-				sm1.MillisecondToSleep = 10
+				sm1.MillisecondToSleep = nhc1.RTTMillisecond * 10
 			}
 			return leaderNh, followerNh, nil
 		}
@@ -1120,7 +1120,8 @@ func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, clusterID uint64) {
 func createProposalsToTriggerSnapshot(t *testing.T,
 	nh *NodeHost, count uint64, timeoutExpected bool) {
 	for i := uint64(0); i < count; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			if err == ErrTimeout {
@@ -1162,7 +1163,7 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 		nhc := config.NodeHostConfig{
 			WALDir:         datadir,
 			NodeHostDir:    datadir,
-			RTTMillisecond: 50,
+			RTTMillisecond: getRTTMillisecond(fs, datadir),
 			RaftAddress:    singleNodeHostTestAddr,
 			FS:             fs,
 			Expert:         getTestExpertConfig(),
@@ -1200,8 +1201,9 @@ func TestJoinedClusterCanBeRestartedOrJoinedAgain(t *testing.T) {
 func TestCompactionCanBeRequested(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := lpto(nh)
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 		if err != nil {
@@ -1345,7 +1347,8 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 
 func TestInvalidAddressIsRejected(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		err := nh.SyncRequestAddNode(ctx, 2, 100, "a1", 0)
 		if err != ErrInvalidAddress {
@@ -1359,12 +1362,14 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		plog.Infof("nh is ready")
-		rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pto := lpto(nh)
+		rctx, rcancel := context.WithTimeout(context.Background(), pto)
 		rcs, err := nh.SyncGetSession(rctx, 2)
 		rcancel()
 		if err != nil {
 			t.Fatalf("failed to get regular session")
 		}
+		// 8 * time.Millisecond is smaller than the smallest possible RTTMillisecond
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Millisecond)
 		defer cancel()
 		cs := nh.GetNoOPSession(2)
@@ -1407,6 +1412,7 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := lpto(nh)
 		_, _, err := nh.GetLeaderID(1234)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
@@ -1415,19 +1421,19 @@ func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, err = nh.RequestSnapshot(1234, DefaultSnapshotOption, 5*time.Second)
+		_, err = nh.RequestSnapshot(1234, DefaultSnapshotOption, pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, err = nh.RequestDeleteNode(1234, 10, 0, 5*time.Second)
+		_, err = nh.RequestDeleteNode(1234, 10, 0, pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, err = nh.RequestAddNode(1234, 10, "a1", 0, 5*time.Second)
+		_, err = nh.RequestAddNode(1234, 10, "a1", 0, pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, err = nh.RequestAddObserver(1234, 10, "a1", 0, 5*time.Second)
+		_, err = nh.RequestAddObserver(1234, 10, "a1", 0, pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
@@ -1440,11 +1446,11 @@ func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
 		cs := nh.GetNoOPSession(1234)
-		_, err = nh.propose(cs, make([]byte, 1), 5*time.Second)
+		_, err = nh.propose(cs, make([]byte, 1), pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
-		_, _, err = nh.readIndex(1234, 5*time.Second)
+		_, _, err = nh.readIndex(1234, pto)
 		if err != ErrClusterNotFound {
 			t.Errorf("failed to return ErrClusterNotFound, %v", err)
 		}
@@ -1459,7 +1465,8 @@ func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 func TestGetClusterMembership(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		_, err := nh.GetClusterMembership(ctx, 2)
 		if err != nil {
@@ -1472,14 +1479,15 @@ func TestGetClusterMembership(t *testing.T) {
 func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
 			t.Errorf("failed to get client session %v", err)
 		}
 		cs.PrepareForRegister()
-		rs, err := nh.ProposeSession(cs, 5*time.Second)
+		rs, err := nh.ProposeSession(cs, pto)
 		if err != nil {
 			t.Errorf("failed to propose client session %v", err)
 		}
@@ -1494,7 +1502,8 @@ func TestRegisterASessionTwiceWillBeReported(t *testing.T) {
 func TestUnregisterNotRegisterClientSessionWillBeReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		cs, err := nh.SyncGetSession(ctx, 2)
 		if err != nil {
@@ -1520,7 +1529,8 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 		snapshotted := false
 		var snapshot pb.Snapshot
 		for i := 0; i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, cs, []byte("test-data"))
 			cancel()
 			if err != nil {
@@ -1658,7 +1668,8 @@ func singleNodeHostCompressionTest(t *testing.T,
 
 func testNodeHostReadIndex(t *testing.T, fs vfs.IFS) {
 	tf := func(t *testing.T, nh *NodeHost) {
-		rs, err := nh.ReadIndex(2, time.Second)
+		pto := lpto(nh)
+		rs, err := nh.ReadIndex(2, pto)
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
@@ -1685,7 +1696,8 @@ func TestNodeHostReadIndex(t *testing.T) {
 func TestNALookupCanReturnErrNotImplemented(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		rs, err := nh.ReadIndex(2, time.Second)
+		pto := lpto(nh)
+		rs, err := nh.ReadIndex(2, pto)
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
@@ -1705,7 +1717,8 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		cs := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		v, err := nh.SyncPropose(ctx, cs, make([]byte, 128))
 		if err != nil {
@@ -1744,7 +1757,8 @@ func TestEntryCompression(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		cs := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		_, err := nh.SyncPropose(ctx, cs, make([]byte, 1024))
 		if err != nil {
@@ -1776,7 +1790,8 @@ func TestEntryCompression(t *testing.T) {
 func TestSyncRequestDeleteNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		err := nh.SyncRequestDeleteNode(ctx, 2, 2, 0)
 		if err != nil {
@@ -1806,7 +1821,8 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 func TestSyncRequestAddNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		err := nh.SyncRequestAddNode(ctx, 2, 2, "localhost:25000", 0)
 		if err != nil {
@@ -1819,7 +1835,8 @@ func TestSyncRequestAddNode(t *testing.T) {
 func TestSyncRequestAddObserver(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		err := nh.SyncRequestAddObserver(ctx, 2, 2, "localhost:25000", 0)
 		if err != nil {
@@ -1832,7 +1849,8 @@ func TestSyncRequestAddObserver(t *testing.T) {
 func TestNodeHostAddNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		rs, err := nh.RequestAddNode(2, 2, "localhost:25000", 0, time.Second)
+		pto := pto(nh)
+		rs, err := nh.RequestAddNode(2, 2, "localhost:25000", 0, pto)
 		if err != nil {
 			t.Errorf("failed to add node %v", err)
 		}
@@ -1868,12 +1886,13 @@ func TestNodeHostGetNodeUser(t *testing.T) {
 func TestNodeHostNodeUserPropose(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := pto(nh)
 		n, err := nh.GetNodeUser(2)
 		if err != nil {
 			t.Errorf("failed to get NodeUser")
 		}
 		cs := nh.GetNoOPSession(2)
-		rs, err := n.Propose(cs, make([]byte, 16), time.Second)
+		rs, err := n.Propose(cs, make([]byte, 16), pto)
 		if err != nil {
 			t.Errorf("failed to make propose %v", err)
 		}
@@ -1888,11 +1907,12 @@ func TestNodeHostNodeUserPropose(t *testing.T) {
 func TestNodeHostNodeUserRead(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := pto(nh)
 		n, err := nh.GetNodeUser(2)
 		if err != nil {
 			t.Errorf("failed to get NodeUser")
 		}
-		rs, err := n.ReadIndex(time.Second)
+		rs, err := n.ReadIndex(pto)
 		if err != nil {
 			t.Errorf("failed to read index %v", err)
 		}
@@ -1907,7 +1927,8 @@ func TestNodeHostNodeUserRead(t *testing.T) {
 func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		rs, err := nh.RequestAddObserver(2, 2, "localhost:25000", 0, time.Second)
+		pto := pto(nh)
+		rs, err := nh.RequestAddObserver(2, 2, "localhost:25000", 0, pto)
 		if err != nil {
 			t.Errorf("failed to add node %v", err)
 		}
@@ -1915,7 +1936,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		if !v.Completed() {
 			t.Errorf("failed to complete add node")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		membership, err := nh.SyncGetClusterMembership(ctx, 2)
 		if err != nil {
@@ -1932,7 +1953,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 			t.Errorf("node 2 not added")
 		}
 		// remove it
-		rs, err = nh.RequestDeleteNode(2, 2, 0, time.Second)
+		rs, err = nh.RequestDeleteNode(2, 2, 0, pto)
 		if err != nil {
 			t.Errorf("failed to remove node %v", err)
 		}
@@ -1940,7 +1961,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 		if !v.Completed() {
 			t.Errorf("failed to complete remove node")
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		membership, err = nh.SyncGetClusterMembership(ctx, 2)
 		if err != nil {
@@ -2004,7 +2025,8 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 				t.Fatalf("no panic when proposing session on disk SM")
 			}
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err := nh.SyncGetSession(ctx, 1)
 		cancel()
 		if err != nil {
@@ -2062,7 +2084,8 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, f
 		snapshotted := false
 		var ss pb.Snapshot
 		for i := uint64(2); i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
 			if err != nil {
@@ -2165,7 +2188,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		snapshotted := false
 		session := nh1.GetNoOPSession(1)
 		for i := uint64(2); i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			pto := pto(nh1)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh1.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
 			if err != nil {
@@ -2187,7 +2211,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
-		rs, err := nh1.RequestAddNode(1, 2, nodeHostTestAddr2, 0, time.Second)
+		pto := pto(nh1)
+		rs, err := nh1.RequestAddNode(1, 2, nodeHostTestAddr2, 0, pto)
 		if err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
@@ -2217,7 +2242,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		logdb = nh2.logdb
 		waitForLeaderToBeElected(t, nh2, 1)
 		for i := uint64(2); i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh2.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
 			if err != nil {
@@ -2297,9 +2322,10 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		count := uint32(0)
 		stopper := syncutil.NewStopper()
+		pto := pto(nh)
 		stopper.RunWorker(func() {
 			for i := 0; i < 10000; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				session := nh.GetNoOPSession(clusterID)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
 				if err == ErrTimeout {
@@ -2319,7 +2345,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				if i%5 == 0 {
 					time.Sleep(time.Millisecond)
 				}
-				rs, err := nh.ReadIndex(clusterID, 500*time.Millisecond)
+				rs, err := nh.ReadIndex(clusterID, pto)
 				if err != nil {
 					continue
 				}
@@ -2367,8 +2393,9 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 		}
 		result := make(map[uint64]struct{})
 		session := nh.GetNoOPSession(clusterID)
+		pto := pto(nh)
 		for i := 0; i < 10000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			v, err := nh.SyncPropose(ctx, session, []byte("test"))
 			cancel()
 			if err != nil {
@@ -2390,7 +2417,8 @@ func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 	clusterID := 1 + applyWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
 		for i := 0; i < 100; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncRead(ctx, clusterID, []byte("test"))
 			cancel()
 			if err != sm.ErrSnapshotStopped {
@@ -2418,9 +2446,10 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 		}
 		plog.Infof("going to run tests")
 		stopper := syncutil.NewStopper()
+		pto := pto(nh)
 		stopper.RunWorker(func() {
 			for i := 0; i < 100; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				session := nh.GetNoOPSession(1)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
 				if err != nil {
@@ -2434,7 +2463,7 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 		})
 		stopper.RunWorker(func() {
 			for i := 0; i < 100; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				result, err := nh.SyncRead(ctx, 1, []byte("test"))
 				cancel()
 				if err != nil {
@@ -2461,8 +2490,9 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		result := make(map[uint64]struct{})
 		session := nh.GetNoOPSession(1)
+		pto := pto(nh)
 		for i := 0; i < 50; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			v, err := nh.SyncPropose(ctx, session, []byte("test"))
 			cancel()
 			if err != nil {
@@ -2481,8 +2511,9 @@ func TestLogDBRateLimit(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		for i := 0; i < 1024; i++ {
+			pto := pto(nh)
 			session := nh.GetNoOPSession(1)
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, session, make([]byte, 512))
 			cancel()
 			if err == ErrSystemBusy {
@@ -2499,7 +2530,8 @@ func TestTooBigPayloadIsRejectedWhenRateLimited(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		bigPayload := make([]byte, 1024*1024)
 		session := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err := nh.SyncPropose(ctx, session, bigPayload)
 		cancel()
 		if err != ErrPayloadTooBig {
@@ -2514,9 +2546,13 @@ func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(1)
 		for i := 0; i < 16; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, session, make([]byte, 16))
 			cancel()
+			if err == ErrTimeout {
+				continue
+			}
 			if err != nil {
 				t.Fatalf("failed to make proposal %v", err)
 			}
@@ -2528,7 +2564,8 @@ func TestProposalsCanBeMadeWhenRateLimited(t *testing.T) {
 func makeTestProposal(nh *NodeHost, count int) bool {
 	session := nh.GetNoOPSession(1)
 	for i := 0; i < count; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
 		cancel()
 		if err == nil {
@@ -2544,6 +2581,7 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 	limited := uint64(0)
 	stopper := syncutil.NewStopper()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := pto(nh)
 		session := nh.GetNoOPSession(1)
 		for i := 0; i < 10; i++ {
 			stopper.RunWorker(func() {
@@ -2551,7 +2589,7 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 					if atomic.LoadUint64(&limited) == 1 {
 						return
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+					ctx, cancel := context.WithTimeout(context.Background(), pto)
 					_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
 					cancel()
 					if err == ErrSystemBusy {
@@ -2579,7 +2617,8 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 		session := nh1.GetNoOPSession(1)
 		limited := false
 		for i := 0; i < 1000; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			pto := pto(nh1)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
 			cancel()
 			if err == ErrClusterNotReady {
@@ -2604,7 +2643,8 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		rand.Read(cmd)
 		result, err := nh.SyncPropose(ctx, session, cmd)
@@ -2657,7 +2697,8 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewFakeDiskSM(0)
 		}
-		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, 2000*time.Millisecond)
+		pto := pto(nh1)
+		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, pto)
 		if err != nil {
 			t.Fatalf("failed to add observer %v", err)
 		}
@@ -2686,7 +2727,8 @@ func TestSnapshotIndexWillPanicOnRegularRequestResult(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		cs := nh.GetNoOPSession(2)
-		rs, err := nh.Propose(cs, make([]byte, 1), 2*time.Second)
+		pto := pto(nh)
+		rs, err := nh.Propose(cs, make([]byte, 1), pto)
 		if err != nil {
 			t.Fatalf("propose failed %v", err)
 		}
@@ -2705,14 +2747,15 @@ func TestSyncRequestSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err := nh.SyncPropose(ctx, session, cmd)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), pto)
 		idx, err := nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
 		cancel()
 		if err != nil {
@@ -2746,14 +2789,15 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err := nh.SyncPropose(ctx, session, cmd)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), pto)
 		idx, err := nh.SyncRequestSnapshot(ctx, 2, DefaultSnapshotOption)
 		cancel()
 		if err != nil {
@@ -2779,7 +2823,7 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 			ExportPath: sspath,
 		}
 		plog.Infof("going to export snapshot")
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), pto)
 		exportIdx, err := nh.SyncRequestSnapshot(ctx, 2, opt)
 		cancel()
 		if err != nil {
@@ -2797,8 +2841,9 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
 		cmd := make([]byte, 1)
+		pto := pto(nh)
 		for i := 0; i < 16; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, session, cmd)
 			cancel()
 			if err != nil {
@@ -2814,7 +2859,8 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 			OverrideCompactionOverhead: true,
 			CompactionOverhead:         0,
 		}
-		sr, err := nh.RequestSnapshot(2, opt, 2*time.Second)
+		lpto := lpto(nh)
+		sr, err := nh.RequestSnapshot(2, opt, lpto)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
@@ -2852,15 +2898,16 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 func TestSnapshotCanBeRequested(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
+		pto := lpto(nh)
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err := nh.SyncPropose(ctx, session, cmd)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, pto)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -2871,7 +2918,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 		}
 		index = v.SnapshotIndex()
 		plog.Infof("going to request snapshot again")
-		sr, err = nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
+		sr, err = nh.RequestSnapshot(2, SnapshotOption{}, pto)
 		if err != nil {
 			t.Fatalf("failed to request snapshot")
 		}
@@ -2915,8 +2962,9 @@ func TestClientCanBeNotifiedOnCommittedConfigChange(t *testing.T) {
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		defer nh.Stop()
+		pto := pto(nh)
 		waitForLeaderToBeElected(t, nh, 2)
-		rs, err := nh.RequestAddNode(2, 2, "localhost:3456", 0, time.Second)
+		rs, err := nh.RequestAddNode(2, 2, "localhost:3456", 0, pto)
 		if err != nil {
 			t.Fatalf("failed to request add node")
 		}
@@ -2947,7 +2995,8 @@ func TestClientCanBeNotifiedOnCommittedProposals(t *testing.T) {
 		waitForLeaderToBeElected(t, nh, 2)
 		session := nh.GetNoOPSession(2)
 		cmd := make([]byte, 1518)
-		rs, err := nh.Propose(session, cmd, time.Second)
+		pto := pto(nh)
+		rs, err := nh.Propose(session, cmd, pto)
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
@@ -2983,14 +3032,15 @@ func TestRequestSnapshotTimeoutWillBeReported(t *testing.T) {
 		defer nh.Stop()
 		waitForLeaderToBeElected(t, nh, 2)
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err = nh.SyncPropose(ctx, session, cmd)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 200*time.Millisecond)
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, pto)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -3009,7 +3059,8 @@ func TestSyncRemoveData(t *testing.T) {
 		if err := nh.StopCluster(2); err != nil {
 			t.Fatalf("failed to remove cluster %v", err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		if err := nh.SyncRemoveData(ctx, 2, 1); err != nil {
 			t.Fatalf("sync remove data fail %v", err)
@@ -3082,14 +3133,15 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err := nh.SyncPropose(ctx, session, cmd)
 		cancel()
 		if err != nil {
 			t.Fatalf("failed to make proposal %v", err)
 		}
-		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, 3*time.Second)
+		sr, err := nh.RequestSnapshot(2, SnapshotOption{}, pto)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -3229,7 +3281,8 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			}
 		}()
 		session := nh.GetNoOPSession(2)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		cmd := make([]byte, 1518)
 		_, err := nh.SyncPropose(ctx, session, cmd)
 		cancel()
@@ -3240,7 +3293,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			Exported:   true,
 			ExportPath: sspath,
 		}
-		sr, err := nh.RequestSnapshot(2, opt, 3*time.Second)
+		sr, err := nh.RequestSnapshot(2, opt, pto)
 		if err != nil {
 			t.Errorf("failed to request snapshot")
 		}
@@ -3302,7 +3355,8 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		session := nh.GetNoOPSession(1)
 		proposed := false
 		for i := 0; i < 16; i++ {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
 			if err == nil {
@@ -3333,8 +3387,9 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 		}
 		aborted := false
 		index := uint64(0)
+		pto := lpto(nh)
 		for {
-			sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
+			sr, err := nh.RequestSnapshot(1, opt, pto)
 			if err == ErrRejected {
 				continue
 			}
@@ -3427,7 +3482,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		peers[1] = nodeHostTestAddr1
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 			LogDB:          config.GetDefaultLogDBConfig(),
@@ -3437,6 +3492,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
 		}
+		pto := lpto(nh)
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewSimDiskSM(0)
 		}
@@ -3447,7 +3503,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		makeProposals := func(nn *NodeHost) {
 			session := nh.GetNoOPSession(1)
 			for i := 0; i < 16; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				_, err := nn.SyncPropose(ctx, session, []byte("test-data"))
 				cancel()
 				if err != nil {
@@ -3477,7 +3533,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			if i == 999 {
 				t.Fatalf("failed to export snapshot")
 			}
-			sr, err := nh.RequestSnapshot(1, opt, 3*time.Second)
+			sr, err := nh.RequestSnapshot(1, opt, pto)
 			if err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
@@ -3493,7 +3549,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		}
 		plog.Infof("index of exported snapshot %d", index)
 		makeProposals(nh)
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		rv, err := nh.SyncRead(ctx, 1, nil)
 		cancel()
 		if err != nil {
@@ -3503,7 +3559,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		if applied <= index {
 			t.Fatalf("invalid applied value %d", applied)
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx, cancel = context.WithTimeout(context.Background(), pto)
 		if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
@@ -3538,7 +3594,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 				t.Fatalf("failed to start cluster %v", err)
 			}
 			waitForLeaderToBeElected(t, rnh, 1)
-			ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel = context.WithTimeout(context.Background(), pto)
 			rv, err = rnh.SyncRead(ctx, 1, nil)
 			cancel()
 			if err != nil {
@@ -3591,7 +3647,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		nhc1 := config.NodeHostConfig{
 			WALDir:         nh1dir,
 			NodeHostDir:    nh1dir,
-			RTTMillisecond: 50,
+			RTTMillisecond: getRTTMillisecond(fs, nh1dir),
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 			Expert:         getTestExpertConfig(),
@@ -3599,7 +3655,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
-			RTTMillisecond: 50,
+			RTTMillisecond: getRTTMillisecond(fs, nh2dir),
 			RaftAddress:    nodeHostTestAddr2,
 			FS:             fs,
 			Expert:         getTestExpertConfig(),
@@ -3638,8 +3694,9 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		session := nh1.GetNoOPSession(1)
 		mkproposal := func(nh *NodeHost) {
 			done := false
+			pto := pto(nh)
 			for i := 0; i < 100; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 				cancel()
 				if err == nil {
@@ -3670,7 +3727,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			Exported:   true,
 			ExportPath: sspath,
 		}
-		sr, err := nh1.RequestSnapshot(1, opt, 3*time.Second)
+		pto := lpto(nh1)
+		sr, err := nh1.RequestSnapshot(1, opt, pto)
 		if err != nil {
 			t.Fatalf("failed to request snapshot %v", err)
 		}
@@ -3921,7 +3979,7 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 	tf := func() {
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    "microsoft.com:12345",
 			FS:             fs,
 			Expert:         getTestExpertConfig(),
@@ -3944,7 +4002,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   f,
 			FS:             fs,
@@ -3982,7 +4040,7 @@ func TestNodeHostFileLock(t *testing.T) {
 		child := *spawnChild
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 200,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			Expert:         getTestExpertConfig(),
 		}
@@ -4027,7 +4085,7 @@ func TestBatchedAndPlainEntriesAreNotCompatible(t *testing.T) {
 		nhc := config.NodeHostConfig{
 			WALDir:         singleNodeHostTestDir,
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
@@ -4086,7 +4144,7 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
@@ -4121,6 +4179,7 @@ func getLogDBTestFunc(t *testing.T, nhc config.NodeHostConfig) func() {
 			ElectionRTT:  3,
 			HeartbeatRTT: 1,
 		}
+		pto := pto(nh)
 		peers := make(map[uint64]string)
 		peers[1] = nodeHostTestAddr1
 		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
@@ -4131,7 +4190,7 @@ func getLogDBTestFunc(t *testing.T, nhc config.NodeHostConfig) func() {
 		}
 		waitForLeaderToBeElected(t, nh, 1)
 		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
 		cancel()
 		if err != nil {
@@ -4154,7 +4213,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   nff,
 			FS:             fs,
@@ -4184,7 +4243,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   bff,
 			FS:             fs,
@@ -4207,7 +4266,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 			DeploymentID:   100,
@@ -4239,7 +4298,7 @@ func TestNodeHostUsingPebbleCanBeCreated(t *testing.T) {
 		}
 		nhc := config.NodeHostConfig{
 			NodeHostDir:    singleNodeHostTestDir,
-			RTTMillisecond: 2,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
 			LogDBFactory:   pf,
 			FS:             fs,
@@ -4267,7 +4326,8 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 		if !nhi.ClusterInfoList[0].IsLeader {
 			t.Errorf("not leader")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := pto(nh1)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		if err := nh1.SyncRequestAddNode(ctx, 2, 2, "noidea:8080", 0); err != nil {
 			t.Fatalf("failed to add node %v", err)
@@ -4291,7 +4351,8 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 func TestDroppedRequestsAreReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		defer cancel()
 		if err := nh.SyncRequestAddNode(ctx, 2, 2, "noidea:8080", 0); err != nil {
 			t.Fatalf("failed to add node %v", err)
@@ -4309,8 +4370,9 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 				t.Fatalf("leader failed to step down")
 			}
 		}
+		unlimited := 30 * time.Minute
 		func() {
-			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			nctx, ncancel := context.WithTimeout(context.Background(), unlimited)
 			defer ncancel()
 			cs := nh.GetNoOPSession(2)
 			for i := 0; i < 10; i++ {
@@ -4320,7 +4382,7 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 			}
 		}()
 		func() {
-			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			nctx, ncancel := context.WithTimeout(context.Background(), unlimited)
 			defer ncancel()
 			for i := 0; i < 10; i++ {
 				if err := nh.SyncRequestAddNode(nctx, 2, 3, "noidea:8080", 0); err != ErrClusterNotReady {
@@ -4329,7 +4391,7 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 			}
 		}()
 		func() {
-			nctx, ncancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			nctx, ncancel := context.WithTimeout(context.Background(), unlimited)
 			defer ncancel()
 			for i := 0; i < 10; i++ {
 				if _, err := nh.SyncRead(nctx, 2, nil); err != ErrClusterNotReady {
@@ -4380,7 +4442,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 	peers[1] = nodeHostTestAddr1
 	nhc := config.NodeHostConfig{
 		NodeHostDir:       singleNodeHostTestDir,
-		RTTMillisecond:    2,
+		RTTMillisecond:    getRTTMillisecond(fs, singleNodeHostTestDir),
 		RaftAddress:       peers[1],
 		RaftEventListener: rel,
 		FS:                fs,
@@ -4405,7 +4467,8 @@ func TestRaftEventsAreReported(t *testing.T) {
 		t.Fatalf("failed to start cluster")
 	}
 	waitForLeaderToBeElected(t, nh, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	pto := pto(nh)
+	ctx, cancel := context.WithTimeout(context.Background(), pto)
 	if err := nh.SyncRequestAddNode(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
 		t.Fatalf("add node failed %v", err)
 	}
@@ -4506,7 +4569,8 @@ func TestV2DataCanBeHandled(t *testing.T) {
 func TestSnapshotCanBeCompressed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pto := lpto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err := nh.SyncRequestSnapshot(ctx, 1, DefaultSnapshotOption)
 		cancel()
 		if err != nil {
@@ -4533,8 +4597,9 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 
 func makeProposals(nh *NodeHost) {
 	session := nh.GetNoOPSession(1)
+	pto := pto(nh)
 	for i := 0; i < 16; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 		cancel()
 		if err != nil {
@@ -4556,9 +4621,10 @@ func testWitnessIO(t *testing.T,
 		}
 		peers := make(map[uint64]string)
 		peers[1] = nodeHostTestAddr1
+		dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nhc1 := config.NodeHostConfig{
-			NodeHostDir:    fs.PathJoin(singleNodeHostTestDir, "nh1"),
-			RTTMillisecond: 50,
+			NodeHostDir:    dir,
+			RTTMillisecond: getRTTMillisecond(fs, dir),
 			RaftAddress:    nodeHostTestAddr1,
 			FS:             fs,
 			Expert:         getTestExpertConfig(),
@@ -4577,14 +4643,16 @@ func testWitnessIO(t *testing.T,
 		waitForLeaderToBeElected(t, nh1, 1)
 		for i := 0; i < 8; i++ {
 			makeProposals(nh1)
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			pto := lpto(nh1)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
 			if _, err := nh1.SyncRequestSnapshot(ctx, 1, opt); err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
 			cancel()
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		pto := pto(nh1)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		if err := nh1.SyncRequestAddWitness(ctx, 1, 2, nodeHostTestAddr2, 0); err != nil {
 			t.Fatalf("failed to add witness %v", err)
 		}
@@ -4655,32 +4723,33 @@ func TestWitnessCanReplicateEntries(t *testing.T) {
 func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(nh1 *NodeHost, nh2 *NodeHost, witness *tests.SimDiskSM) {
+		pto := lpto(nh1)
 		opt := SnapshotOption{OverrideCompactionOverhead: true, CompactionOverhead: 1}
-		if _, err := nh2.RequestSnapshot(1, opt, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestSnapshot(1, opt, pto); err != ErrInvalidOperation {
 			t.Fatalf("requesting snapshot on witness not rejected")
 		}
 		session := nh2.GetNoOPSession(1)
-		if _, err := nh2.Propose(session, []byte("test-data"), time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.Propose(session, []byte("test-data"), pto); err != ErrInvalidOperation {
 			t.Fatalf("proposal not rejected on witness")
 		}
 		session = client.NewSession(1, nh2.serverCtx.GetRandomSource())
 		session.PrepareForRegister()
-		if _, err := nh2.ProposeSession(session, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.ProposeSession(session, pto); err != ErrInvalidOperation {
 			t.Fatalf("propose session not rejected on witness")
 		}
-		if _, err := nh2.ReadIndex(1, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.ReadIndex(1, pto); err != ErrInvalidOperation {
 			t.Fatalf("sync read not rejected on witness")
 		}
-		if _, err := nh2.RequestAddNode(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddNode(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("add node not rejected on witness")
 		}
-		if _, err := nh2.RequestDeleteNode(1, 3, 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestDeleteNode(1, 3, 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("delete node not rejected on witness")
 		}
-		if _, err := nh2.RequestAddObserver(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddObserver(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("add observer not rejected on witness")
 		}
-		if _, err := nh2.RequestAddWitness(1, 3, "a3.com:12345", 0, time.Second); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddWitness(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("add witness not rejected on witness")
 		}
 		if err := nh2.RequestLeaderTransfer(1, 3); err != ErrInvalidOperation {
@@ -4715,31 +4784,33 @@ func TestTimeoutCanBeReturned(t *testing.T) {
 		}
 	}()
 	defer nh.Stop()
+	rtt := nhc.RTTMillisecond
 	newSM := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
 		return &TimeoutStateMachine{
-			updateDelay:   20,
-			lookupDelay:   20,
-			snapshotDelay: 20,
+			updateDelay:   rtt * 10,
+			lookupDelay:   rtt * 10,
+			snapshotDelay: rtt * 10,
 		}
 	}
 	if err := nh.StartCluster(peers, false, newSM, rc); err != nil {
 		t.Fatalf("failed to start cluster %v", err)
 	}
 	waitForLeaderToBeElected(t, nh, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
+	timeout := time.Duration(rtt*5) * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	session := nh.GetNoOPSession(1)
 	_, err = nh.SyncPropose(ctx, session, []byte("test"))
 	cancel()
 	if err != ErrTimeout {
 		t.Errorf("failed to return ErrTimeout, %v", err)
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	_, err = nh.SyncRead(ctx, 1, []byte("test"))
 	cancel()
 	if err != ErrTimeout {
 		t.Errorf("failed to return ErrTimeout, %v", err)
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	_, err = nh.SyncRequestSnapshot(ctx, 1, SnapshotOption{})
 	cancel()
 	if err != ErrTimeout {
@@ -4783,7 +4854,8 @@ func TestIOErrorIsHandled(t *testing.T) {
 		}
 		waitForLeaderToBeElected(t, nh, 1)
 		inj.SetIndex(0)
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		pto := pto(nh)
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		session := nh.GetNoOPSession(1)
 		_, err = nh.SyncPropose(ctx, session, []byte("test"))
 		cancel()
@@ -4801,4 +4873,69 @@ func TestIOErrorIsHandled(t *testing.T) {
 	}
 	run(vfs.OpWrite)
 	run(vfs.OpSync)
+}
+
+var rttMillisecond uint64
+var mu sync.Mutex
+
+var rttValues = []uint64{10, 20, 30, 50, 100, 200, 500}
+
+func getRTTMillisecond(fs vfs.IFS, dir string) uint64 {
+	mu.Lock()
+	defer mu.Unlock()
+	if rttMillisecond > 0 {
+		return rttMillisecond
+	}
+	rttMillisecond = calcRTTMillisecond(fs, dir)
+	return rttMillisecond
+}
+
+func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
+	testFile := fs.PathJoin(dir, ".dragonboat_test_file_safe_to_delete")
+	defer func() {
+		fs.RemoveAll(testFile)
+	}()
+	fs.MkdirAll(dir, 0755)
+	f, err := fs.Create(testFile)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		f.Close()
+	}()
+	data := make([]byte, 512)
+	total := uint64(0)
+	repeat := 5
+	for i := 0; i < repeat; i++ {
+		if _, err := f.Write(data); err != nil {
+			panic(err)
+		}
+		start := time.Now()
+		if err := f.Sync(); err != nil {
+			panic(err)
+		}
+		total += uint64(time.Since(start).Nanoseconds() / 1000000)
+	}
+	rtt := total / uint64(repeat)
+	for i := range rttValues {
+		if rttValues[i] > rtt {
+			if i == 0 {
+				return rttValues[0]
+			} else {
+				return rttValues[i-1]
+			}
+		}
+	}
+	return rttValues[len(rttValues)-1]
+}
+
+// typical proposal timeout
+func pto(nh *NodeHost) time.Duration {
+	rtt := nh.NodeHostConfig().RTTMillisecond
+	return time.Duration(rtt*15) * time.Millisecond
+}
+
+func lpto(nh *NodeHost) time.Duration {
+	rtt := nh.NodeHostConfig().RTTMillisecond
+	return time.Duration(rtt*100) * time.Millisecond
 }
