@@ -248,9 +248,8 @@ test-cov:
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
 	internal/vfs internal/rsm internal/settings internal/tests internal/server   \
-	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/rocksdb            \
-	plugin/chan raftpb tools logger raftio config statemachine client 					 \
-	internal/utils/dio
+	internal/logdb/kv/pebble plugin/chan raftpb tools logger raftio config       \
+	statemachine client internal/utils/dio
 
 .PHONY: static-check
 static-check:
@@ -264,9 +263,8 @@ static-check:
 
 GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/vfs internal/transport  \
 	internal/server statemachine tools raftpb raftio client tools logger config  \
-	internal/logdb/kv/rocksdb internal/logdb/kv/pebble plugin/rocksdb            \
-	plugin/chan internal/settings internal/tests internal/logdb/kv               \
-	internal/utils/dio internal/logdb
+	internal/logdb/kv/pebble plugin/chan internal/settings internal/tests        \
+	internal/logdb/kv internal/utils/dio internal/logdb
 EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
 
 .PHONY: golangci-lint-check
