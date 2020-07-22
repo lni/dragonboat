@@ -20,7 +20,6 @@ import (
 	"sync/atomic"
 
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -29,7 +28,6 @@ import (
 
 func ApplyMonkeySettings() {
 	transport.ApplyMonkeySettings()
-	logdb.ApplyMonkeySettings()
 }
 
 //
@@ -49,13 +47,12 @@ func GetTestFS() config.IFS {
 // Clusters returns a list of raft nodes managed by the nodehost instance.
 func (nh *NodeHost) Clusters() []*node {
 	result := make([]*node, 0)
-	nh.clusterMu.RLock()
-	nh.clusterMu.clusters.Range(func(k, v interface{}) bool {
+	nh.mu.RLock()
+	nh.mu.clusters.Range(func(k, v interface{}) bool {
 		result = append(result, v.(*node))
 		return true
 	})
-	nh.clusterMu.RUnlock()
-
+	nh.mu.RUnlock()
 	return result
 }
 
@@ -165,11 +162,6 @@ func (n *node) dumpRaftInfoToLog() {
 // monkeytest.
 func SetSnapshotWorkerCount(count uint64) {
 	snapshotWorkerCount = count
-}
-
-// SetStepWorkerCount sets how many step workers to use during monkeytest.
-func SetStepWorkerCount(count uint64) {
-	stepWorkerCount = count
 }
 
 // SetApplyWorkerCount sets how many apply workers to use during monkeytest.
