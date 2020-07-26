@@ -304,6 +304,15 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	}
 	nh.sysListener = newSysEventListener(nhConfig.SystemEventListener,
 		nh.stopper.ShouldStop())
+	if nhConfig.RaftEventListener != nil || nhConfig.SystemEventListener != nil {
+		if nhConfig.RaftEventListener != nil {
+			nh.liQueue = newLeaderInfoQueue()
+		}
+		nh.stopper.RunWorker(func() {
+			nh.handleListenerEvents()
+		})
+	}
+
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.mu.requests = make(map[uint64]*server.MessageQueue)
@@ -337,14 +346,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
 	})
-	if nhConfig.RaftEventListener != nil || nhConfig.SystemEventListener != nil {
-		if nhConfig.RaftEventListener != nil {
-			nh.liQueue = newLeaderInfoQueue()
-		}
-		nh.stopper.RunWorker(func() {
-			nh.handleListenerEvents()
-		})
-	}
 	nh.logNodeHostDetails()
 	return nh, nil
 }
