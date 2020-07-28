@@ -494,7 +494,7 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 				t.Fatalf("%v", err)
 			}
 		}()
-		fs.RemoveAll(singleNodeHostTestDir)
+		_ = fs.RemoveAll(singleNodeHostTestDir)
 		if to.bt != nil {
 			to.bt()
 		}
@@ -3981,55 +3981,21 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 	}
 	to := &testOption{
-		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = bff
-			return c
-		},
-		noElection: true,
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
 			nhc.LogDBFactory = nff
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrLogDBBrokenChange {
-				t.Errorf("failed to return ErrIncompatibleData")
+				t.Errorf("failed to return ErrLogDBBrokenChange")
 			}
 		},
+		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
+			c.LogDBFactory = bff
+			return c
+		},
+		noElection: true,
 	}
 	runNodeHostTest(t, to, fs)
-}
-
-func getLogDBTestFunc(t *testing.T, nhc config.NodeHostConfig) func() {
-	tf := func() {
-		nh, err := NewNodeHost(nhc)
-		if err != nil {
-			t.Fatalf("failed to create nodehost %v", err)
-		}
-		defer nh.Stop()
-		rc := config.Config{
-			NodeID:       1,
-			ClusterID:    1,
-			ElectionRTT:  3,
-			HeartbeatRTT: 1,
-		}
-		pto := pto(nh)
-		peers := make(map[uint64]string)
-		peers[1] = nodeHostTestAddr1
-		newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-			return &PST{}
-		}
-		if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
-		}
-		waitForLeaderToBeElected(t, nh, 1)
-		cs := nh.GetNoOPSession(1)
-		ctx, cancel := context.WithTimeout(context.Background(), pto)
-		_, err = nh.SyncPropose(ctx, cs, []byte("test-data"))
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
-	}
-	return tf
 }
 
 func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
@@ -4150,7 +4116,7 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 				}
 			}
 			t.Fatalf("no leader info change")
-			panic("I have to be here to make the golang complier happy")
+			panic("I have to be here to make the golang compiler happy")
 		},
 	}
 	runNodeHostTest(t, to, fs)
