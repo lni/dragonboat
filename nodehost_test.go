@@ -2389,7 +2389,6 @@ func TestLogDBRateLimit(t *testing.T) {
 				}
 			}
 			t.Fatalf("failed to return ErrSystemBusy")
-			panic("I am here to make the golang compiler happy")
 		},
 	}
 	runNodeHostTest(t, to, fs)
@@ -2503,7 +2502,6 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 				return
 			}
 			t.Fatalf("failed to make proposal again")
-			panic("I have to be here to make the golang compiler happy")
 		},
 	}
 	runNodeHostTest(t, to, fs)
@@ -4116,7 +4114,6 @@ func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
 				}
 			}
 			t.Fatalf("no leader info change")
-			panic("I have to be here to make the golang compiler happy")
 		},
 	}
 	runNodeHostTest(t, to, fs)
