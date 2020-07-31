@@ -108,7 +108,11 @@ func (w *pebbleWriteBatch) Delete(key []byte) {
 }
 
 func (w *pebbleWriteBatch) Clear() {
-	w.wb.Reset()
+	// TODO:
+	// we can't reuse the batch now as pebble's Batch.Reset() is still buggy
+	// see https://github.com/cockroachdb/pebble/pull/849 for details
+	w.wb.Close()
+	w.wb = w.db.NewBatch()
 }
 
 func (w *pebbleWriteBatch) Count() int {
