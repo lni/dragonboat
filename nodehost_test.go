@@ -4553,7 +4553,6 @@ func TestTimeoutCanBeReturned(t *testing.T) {
 		createSM: func(uint64, uint64) sm.IStateMachine {
 			return &TimeoutStateMachine{
 				updateDelay:   rtt * 10,
-				lookupDelay:   rtt * 10,
 				snapshotDelay: rtt * 10,
 			}
 		},
@@ -4562,12 +4561,6 @@ func TestTimeoutCanBeReturned(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			session := nh.GetNoOPSession(1)
 			_, err := nh.SyncPropose(ctx, session, []byte("test"))
-			cancel()
-			if err != ErrTimeout {
-				t.Errorf("failed to return ErrTimeout, %v", err)
-			}
-			ctx, cancel = context.WithTimeout(context.Background(), timeout)
-			_, err = nh.SyncRead(ctx, 1, []byte("test"))
 			cancel()
 			if err != ErrTimeout {
 				t.Errorf("failed to return ErrTimeout, %v", err)
