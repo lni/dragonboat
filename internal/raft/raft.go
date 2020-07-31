@@ -1464,7 +1464,6 @@ func (r *raft) hasConfigChangeToApply() bool {
 	// this is a hack to make it easier to port etcd raft tests
 	// check those *_etcd_test.go for details
 	if r.hasNotAppliedConfigChange != nil {
-		plog.Warningf("using test-only hasConfigChangeToApply()")
 		return r.hasNotAppliedConfigChange()
 	}
 	// TODO:
