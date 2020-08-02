@@ -197,7 +197,7 @@ func (c *Chunks) record(chunk pb.Chunk) *tracked {
 	key := chunkKey(chunk)
 	td := c.tracked[key]
 	if chunk.ChunkId == 0 {
-		plog.Infof("first chunk of %s received", c.ssid(chunk))
+		plog.Debugf("first chunk of %s received", c.ssid(chunk))
 		if td != nil {
 			plog.Warningf("removing unclaimed chunks %s", key)
 			c.removeTempDir(td.firstChunk)
@@ -279,7 +279,7 @@ func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 		panic(err)
 	}
 	if chunk.IsLastChunk() {
-		plog.Infof("last chunk %s received", key)
+		plog.Debugf("last chunk %s received", key)
 		defer c.reset(key)
 		if c.validate {
 			if !td.validator.Validate() {
@@ -296,7 +296,7 @@ func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 			return false
 		}
 		snapshotMessage := c.toMessage(td.firstChunk, td.extraFiles)
-		plog.Infof("%s received from %d, term %d",
+		plog.Debugf("%s received from %d, term %d",
 			c.ssid(chunk), chunk.From, chunk.Term)
 		c.onReceive(snapshotMessage)
 		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)

@@ -166,7 +166,7 @@ func (bw *BlockWriter) Flush() error {
 	if len(bw.block) > 0 {
 		bw.total += uint64(len(bw.block)) + checksumSize
 		if err := bw.processNewBlock(bw.block, bw.h.Sum(nil)); err != nil {
-			plog.Infof("onNewBlock failed %v", err)
+			plog.Errorf("onNewBlock failed %v", err)
 			return err
 		}
 	}
@@ -174,7 +174,7 @@ func (bw *BlockWriter) Flush() error {
 	binary.LittleEndian.PutUint64(totalbs, uint64(bw.total))
 	tailBlock := append(totalbs, writerMagicNumber...)
 	if err := bw.processNewBlock(tailBlock, nil); err != nil {
-		plog.Infof("process tail block failed %v", err)
+		plog.Errorf("process tail block failed %v", err)
 		return err
 	}
 	return nil

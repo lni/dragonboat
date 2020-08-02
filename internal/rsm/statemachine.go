@@ -234,14 +234,14 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 		return 0, nil
 	}
 	ss.Validate(s.fs)
-	plog.Infof("%s called RecoverFromSnapshot, %s, on disk idx %d",
+	plog.Debugf("%s called RecoverFromSnapshot, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	if err := s.recover(ss, t.InitialSnapshot); err != nil {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
 	s.setBatchedLastApplied(ss.Index)
-	plog.Infof("%s restored %s", s.id(), s.ssid(ss.Index))
+	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
 
@@ -333,7 +333,7 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		}
 		s.applyOnDisk(ss, init)
 	} else {
-		plog.Infof("%s is on disk SM, %d vs %d, SM not restored",
+		plog.Debugf("%s is on disk SM, %d vs %d, SM not restored",
 			s.id(), index, s.onDiskInitIndex)
 		s.apply(ss)
 	}
@@ -342,7 +342,7 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 
 func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 	index := ss.Index
-	plog.Infof("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
+	plog.Debugf("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
 	s.logMembership("members", index, ss.Membership.Addresses)
 	s.logMembership("observers", index, ss.Membership.Observers)
 	s.logMembership("witnesses", index, ss.Membership.Witnesses)
@@ -652,9 +652,9 @@ func (s *StateMachine) isDummySnapshot(r SSRequest) bool {
 
 func (s *StateMachine) logMembership(name string,
 	index uint64, members map[uint64]string) {
-	plog.Infof("%d %s included in %s", len(members), name, s.ssid(index))
+	plog.Debugf("%d %s included in %s", len(members), name, s.ssid(index))
 	for nid, addr := range members {
-		plog.Infof("\t%s : %s", logutil.NodeID(nid), addr)
+		plog.Debugf("\t%s : %s", logutil.NodeID(nid), addr)
 	}
 }
 
@@ -680,7 +680,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		Type:            s.sm.Type(),
 		CompressionType: ct,
 	}
-	plog.Infof("%s generating %s", s.id(), s.ssid(meta.Index))
+	plog.Debugf("%s generating %s", s.id(), s.ssid(meta.Index))
 	s.logMembership("members", meta.Index, meta.Membership.Addresses)
 	if err := s.sessions.SaveSessions(meta.Session); err != nil {
 		return nil, err
@@ -794,7 +794,7 @@ func (s *StateMachine) sync() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	plog.Infof("%s is being synchronized, index %d", s.id(), s.index)
+	plog.Debugf("%s is being synchronized, index %d", s.id(), s.index)
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}

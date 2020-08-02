@@ -291,7 +291,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 			n.requestRemoval()
 		}
 	}
-	plog.Infof("%s is restoring remotes", n.id())
+	plog.Debugf("%s is restoring remotes", n.id())
 	n.p.RestoreRemotes(snapshot)
 	n.notifyConfigChange()
 }
@@ -346,7 +346,7 @@ func (n *node) requestRemoval() {
 	n.closeOnce.Do(func() {
 		close(n.stopC)
 	})
-	plog.Infof("%s called requestRemoval()", n.id())
+	plog.Debugf("%s called requestRemoval()", n.id())
 }
 
 func (n *node) shouldStop() <-chan struct{} {
@@ -426,7 +426,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 		return nil, ErrInvalidOperation
 	}
 	if opt.Exported {
-		plog.Infof("%s called export snapshot", n.id())
+		plog.Debugf("%s called export snapshot", n.id())
 		st = rsm.Exported
 		exist, err := fileutil.Exist(opt.ExportPath, n.snapshotter.fs)
 		if err != nil {
@@ -635,7 +635,7 @@ func (n *node) saveSnapshotRequired(applied uint64) bool {
 	if n.isBusySnapshotting() {
 		return false
 	}
-	plog.Infof("%s requested to create %s", n.id(), n.ssid(applied))
+	plog.Debugf("%s requested to create %s", n.id(), n.ssid(applied))
 	n.ss.setReqIndex(applied)
 	return true
 }
@@ -761,7 +761,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	if rec.InitialSnapshot && n.OnDiskStateMachine() {
-		plog.Infof("%s all disk SM is beng initialized", n.id())
+		plog.Debugf("%s on disk SM is beng initialized", n.id())
 		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
 			plog.Infof("%s aborted OpenOnDiskStateMachine", n.id())
@@ -873,7 +873,7 @@ func (n *node) shrink(index uint64) error {
 		if !n.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
-		plog.Infof("%s will shrink snapshots up to %d", n.id(), index)
+		plog.Debugf("%s will shrink snapshots up to %d", n.id(), index)
 		if err := n.snapshotter.shrink(index); err != nil {
 			return err
 		}
@@ -912,7 +912,7 @@ func (n *node) removeLog() error {
 			n.nodeID, compactTo); err != nil {
 			return err
 		}
-		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
+		plog.Debugf("%s compacted log up to index %d", n.id(), compactTo)
 		n.ss.setCompactedTo(compactTo)
 		n.sysEvents.Publish(server.SystemEvent{
 			Type:      server.LogCompacted,
@@ -922,7 +922,7 @@ func (n *node) removeLog() error {
 		})
 		if !n.config.DisableAutoCompactions {
 			if _, err := n.requestCompaction(); err == nil {
-				plog.Infof("auto compaction for %s up to index %d", n.id(), compactTo)
+				plog.Debugf("auto compaction for %s up to index %d", n.id(), compactTo)
 			}
 		}
 	}
@@ -1059,7 +1059,7 @@ func (n *node) processSnapshot(ud pb.Update) (bool, error) {
 		if err != nil && !isSoftSnapshotError(err) {
 			return false, err
 		}
-		plog.Infof("%s, snapshot %d ready to be pushed", n.id(), ud.Snapshot.Index)
+		plog.Debugf("%s, snapshot %d ready to be pushed", n.id(), ud.Snapshot.Index)
 		if !n.pushSnapshot(ud.Snapshot, ud.LastApplied) {
 			return false, nil
 		}
@@ -1346,7 +1346,7 @@ func (n *node) handleSnapshotTask(task rsm.Task) {
 		n.reportAvailableSnapshot(task)
 	} else if task.SnapshotRequested {
 		if n.ss.saving() {
-			plog.Infof("%s taking snapshot, ignored new snapshot req", n.id())
+			plog.Warningf("%s taking snapshot, ignored new snapshot req", n.id())
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
@@ -1383,11 +1383,11 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 
 func (n *node) canStream() bool {
 	if n.ss.streaming() {
-		plog.Infof("%s ignored task.StreamSnapshot", n.id())
+		plog.Warningf("%s ignored task.StreamSnapshot", n.id())
 		return false
 	}
 	if !n.sm.ReadyToStream() {
-		plog.Infof("%s is not ready to stream snapshot", n.id())
+		plog.Warningf("%s is not ready to stream snapshot", n.id())
 		return false
 	}
 	return true
@@ -1425,7 +1425,7 @@ func (n *node) processStatusTransition() bool {
 
 func (n *node) uninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
-		plog.Infof("%s checking initial snapshot", n.id())
+		plog.Debugf("%s checking initial snapshot", n.id())
 		return rsm.Task{
 			SnapshotAvailable: true,
 			InitialSnapshot:   true,

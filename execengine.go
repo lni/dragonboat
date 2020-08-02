@@ -344,7 +344,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.saveReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotRequested}
-				plog.Infof("%s snapshotRequested for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotRequested for %d", p.nh.id(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -352,7 +352,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.recoverReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotAvailable}
-				plog.Infof("%s snapshotAvailable for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotAvailable for %d", p.nh.id(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -360,7 +360,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.streamReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: streamSnapshot}
-				plog.Infof("%s streamSnapshot for %d", p.nh.id(), cid)
+				plog.Debugf("%s streamSnapshot for %d", p.nh.id(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -448,17 +448,17 @@ func (p *workerPool) completed(workerID uint64) {
 	delete(p.busy, workerID)
 	_, ok1 := p.saving[n.clusterID]
 	if ok1 {
-		plog.Infof("%s completed snapshotRequested", n.id())
+		plog.Debugf("%s completed snapshotRequested", n.id())
 		delete(p.saving, n.clusterID)
 	}
 	_, ok2 := p.recovering[n.clusterID]
 	if ok2 {
-		plog.Infof("%s completed snapshotAvailable", n.id())
+		plog.Debugf("%s completed snapshotAvailable", n.id())
 		delete(p.recovering, n.clusterID)
 	}
 	count, ok3 := p.streaming[n.clusterID]
 	if ok3 {
-		plog.Infof("%s completed streamSnapshot", n.id())
+		plog.Debugf("%s completed streamSnapshot", n.id())
 		if count == 0 {
 			plog.Panicf("node completed streaming when not streaming")
 		} else if count == 1 {
@@ -571,7 +571,7 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 	}
 	w := p.getWorker()
 	if w == nil {
-		plog.Infof("%s no more worker", p.nh.id())
+		plog.Debugf("%s no more worker", p.nh.id())
 		return false
 	}
 	for idx, pj := range p.pending {
@@ -582,7 +582,7 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 		}
 		if p.canSchedule(pj) {
 			if p.scheduleTask(pj.jt, n, w) {
-				plog.Infof("%s scheduled for %s", n.id(), pj.jt)
+				plog.Debugf("%s scheduled for %s", n.id(), pj.jt)
 				p.removeFromPending(idx)
 				return true
 			}
@@ -988,7 +988,7 @@ func (s *execEngine) processSteps(workerID uint64,
 			panic(err)
 		}
 		if !cont {
-			plog.Infof("process update failed, %s is ready to exit", node.id())
+			plog.Warningf("process update failed, %s is ready to exit", node.id())
 		}
 		s.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
@@ -1029,7 +1029,7 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 			panic(err)
 		}
 		if !cont || !node.applyRaftUpdates(ud) {
-			plog.Infof("raft update not applied, %s stopped", node.id())
+			plog.Warningf("raft update not applied, %s stopped", node.id())
 		}
 	}
 }

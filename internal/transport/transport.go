@@ -341,7 +341,7 @@ func (t *Transport) sendUnreachableNotification(addr string) {
 	}
 	h := handler.(IRaftMessageHandler)
 	edp := t.resolver.ReverseResolve(addr)
-	plog.Infof("%s became unreachable, affecting %d raft nodes", addr, len(edp))
+	plog.Warningf("%s became unreachable, affecting %d raft nodes", addr, len(edp))
 	for _, rec := range edp {
 		h.HandleUnreachable(rec.ClusterID, rec.NodeID)
 	}
@@ -418,8 +418,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
 	if err := func() error {
-		plog.Infof("%s is trying to connect to %s",
-			t.sourceAddress, remoteHost)
+		plog.Debugf("%s is trying to connect to %s", t.sourceAddress, remoteHost)
 		conn, err := t.trans.GetConnection(t.ctx, remoteHost)
 		if err != nil {
 			plog.Errorf("Nodehost %s failed to get a connection to %s, %v",

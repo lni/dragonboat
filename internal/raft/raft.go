@@ -440,7 +440,7 @@ func (r *raft) loadState(st pb.State) {
 
 func (r *raft) restore(ss pb.Snapshot) bool {
 	if ss.Index <= r.log.committed {
-		plog.Infof("%s, ss.Index <= committed", r.describe())
+		plog.Warningf("%s, restore aborted, ss.Index <= committed", r.describe())
 		return false
 	}
 	if !r.isObserver() {
@@ -487,7 +487,7 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 			match = next - 1
 		}
 		r.setRemote(id, match, next)
-		plog.Infof("%s restored remote progress of %s [%s]",
+		plog.Debugf("%s restored remote progress of %s [%s]",
 			r.describe(), NodeID(id), r.remotes[id])
 	}
 	if r.selfRemoved() && r.isLeader() {
@@ -501,7 +501,7 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 			match = next - 1
 		}
 		r.setObserver(id, match, next)
-		plog.Infof("%s restored observer progress of %s [%s]",
+		plog.Debugf("%s restored observer progress of %s [%s]",
 			r.describe(), NodeID(id), r.observers[id])
 	}
 	r.witnesses = make(map[uint64]*remote)
@@ -512,7 +512,7 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 			match = next - 1
 		}
 		r.setWitness(id, match, next)
-		plog.Infof("%s restored witness progress of %s [%s]",
+		plog.Debugf("%s restored witness progress of %s [%s]",
 			r.describe(), NodeID(id), r.witnesses[id])
 	}
 	r.resetMatchValueArray()
@@ -1061,10 +1061,10 @@ func (r *raft) resetWitnesses() {
 
 func (r *raft) handleVoteResp(from uint64, rejected bool) int {
 	if rejected {
-		plog.Infof("%s received RequestVoteResp rejection from %s",
+		plog.Debugf("%s received RequestVoteResp rejection from %s",
 			r.describe(), NodeID(from))
 	} else {
-		plog.Infof("%s received RequestVoteResp from %s",
+		plog.Debugf("%s received RequestVoteResp from %s",
 			r.describe(), NodeID(from))
 	}
 	votedFor := 0
@@ -1112,7 +1112,7 @@ func (r *raft) campaign() {
 			LogTerm:  r.log.lastTerm(),
 			Hint:     hint,
 		})
-		plog.Infof("%s sent RequestVote to %s", r.describe(), NodeID(k))
+		plog.Debugf("%s sent RequestVote to %s", r.describe(), NodeID(k))
 	}
 }
 
@@ -1211,7 +1211,7 @@ func (r *raft) deleteWitness(nodeID uint64) {
 }
 
 func (r *raft) setRemote(nodeID uint64, match uint64, next uint64) {
-	plog.Infof("%s set remote %s, match %d, next %d",
+	plog.Debugf("%s set remote %s, match %d, next %d",
 		r.describe(), NodeID(nodeID), match, next)
 	r.remotes[nodeID] = &remote{
 		next:  next,
@@ -1220,7 +1220,7 @@ func (r *raft) setRemote(nodeID uint64, match uint64, next uint64) {
 }
 
 func (r *raft) setObserver(nodeID uint64, match uint64, next uint64) {
-	plog.Infof("%s set observer %s, match %d, next %d",
+	plog.Debugf("%s set observer %s, match %d, next %d",
 		r.describe(), NodeID(nodeID), match, next)
 	r.observers[nodeID] = &remote{
 		next:  next,
@@ -1229,7 +1229,7 @@ func (r *raft) setObserver(nodeID uint64, match uint64, next uint64) {
 }
 
 func (r *raft) setWitness(nodeID uint64, match uint64, next uint64) {
-	plog.Infof("%s set witness %s, match %d, next %d",
+	plog.Debugf("%s set witness %s, match %d, next %d",
 		r.describe(), NodeID(nodeID), match, next)
 	r.witnesses[nodeID] = &remote{
 		next:  next,
@@ -1310,7 +1310,7 @@ func (r *raft) handleHeartbeatMessage(m pb.Message) {
 }
 
 func (r *raft) handleInstallSnapshotMessage(m pb.Message) {
-	plog.Infof("%s called handleInstallSnapshotMessage with snapshot from %s",
+	plog.Debugf("%s called handleInstallSnapshotMessage with snapshot from %s",
 		r.describe(), NodeID(m.From))
 	index, term := m.Snapshot.Index, m.Snapshot.Term
 	resp := pb.Message{
@@ -1318,10 +1318,10 @@ func (r *raft) handleInstallSnapshotMessage(m pb.Message) {
 		Type: pb.ReplicateResp,
 	}
 	if r.restore(m.Snapshot) {
-		plog.Infof("%s restored snapshot %d term %d", r.describe(), index, term)
+		plog.Debugf("%s restored snapshot %d term %d", r.describe(), index, term)
 		resp.LogIndex = r.log.lastIndex()
 	} else {
-		plog.Infof("%s rejected snapshot %d term %d", r.describe(), index, term)
+		plog.Debugf("%s rejected snapshot %d term %d", r.describe(), index, term)
 		resp.LogIndex = r.log.committed
 		if r.events != nil {
 			info := server.SnapshotInfo{
@@ -1353,7 +1353,7 @@ func (r *raft) handleReplicateMessage(m pb.Message) {
 		r.log.commitTo(min(lastIdx, m.Commit))
 		resp.LogIndex = lastIdx
 	} else {
-		plog.Warningf("%s rejected Replicate index %d term %d from %s",
+		plog.Debugf("%s rejected Replicate index %d term %d from %s",
 			r.describe(), m.LogIndex, m.Term, NodeID(m.From))
 		resp.Reject = true
 		resp.LogIndex = m.LogIndex
@@ -1391,7 +1391,7 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 	}
 	// see p42 of the raft thesis
 	if m.Hint == m.From {
-		plog.Infof("%s, RequestVote with leader transfer hint received from %d",
+		plog.Debugf("%s, RequestVote with leader transfer hint received from %d",
 			r.describe(), m.From)
 		return false
 	}
@@ -1506,10 +1506,10 @@ func (r *raft) handleNodeElection(m pb.Message) {
 			}
 			return
 		}
-		plog.Infof("%s will campaign", r.describe())
+		plog.Debugf("%s will campaign", r.describe())
 		r.campaign()
 	} else {
-		plog.Infof("%s is leader, ignored Election", r.describe())
+		plog.Debugf("%s is leader, ignored Election", r.describe())
 	}
 }
 
@@ -1523,12 +1523,12 @@ func (r *raft) handleNodeRequestVote(m pb.Message) {
 	// 2nd paragraph section 5.4 of the raft paper
 	isUpToDate := r.log.upToDate(m.LogIndex, m.LogTerm)
 	if canGrant && isUpToDate {
-		plog.Infof("%s cast vote from %s index %d term %d, log term: %d",
+		plog.Debugf("%s cast vote from %s index %d term %d, log term: %d",
 			r.describe(), NodeID(m.From), m.LogIndex, m.Term, m.LogTerm)
 		r.electionTick = 0
 		r.vote = m.From
 	} else {
-		plog.Infof("%s rejected vote %s index%d term%d,logterm%d,grant%v,utd%v",
+		plog.Debugf("%s rejected vote %s index%d term%d,logterm%d,grant%v,utd%v",
 			r.describe(), NodeID(m.From), m.LogIndex, m.Term,
 			m.LogTerm, canGrant, isUpToDate)
 		resp.Reject = true
@@ -1715,7 +1715,7 @@ func (r *raft) handleLeaderHeartbeatResp(m pb.Message, rp *remote) {
 func (r *raft) handleLeaderTransfer(m pb.Message, rp *remote) {
 	r.mustBeLeader()
 	target := m.Hint
-	plog.Infof("%s called handleLeaderTransfer, target %d", r.describe(), target)
+	plog.Debugf("%s called handleLeaderTransfer, target %d", r.describe(), target)
 	if target == NoNode {
 		plog.Panicf("%s leader transfer target not set", r.describe())
 	}
@@ -1764,17 +1764,17 @@ func (r *raft) handleLeaderSnapshotStatus(m pb.Message, rp *remote) {
 	}
 	if m.Reject {
 		rp.clearPendingSnapshot()
-		plog.Infof("%s snapshot failed, %s is now in wait state",
+		plog.Warningf("%s snapshot failed, %s is now in wait state",
 			r.describe(), NodeID(m.From))
 	} else {
-		plog.Infof("%s snapshot succeeded, %s in wait state now, next %d",
+		plog.Debugf("%s snapshot succeeded, %s in wait state now, next %d",
 			r.describe(), NodeID(m.From), rp.next)
 	}
 	rp.becomeWait()
 }
 
 func (r *raft) handleLeaderUnreachable(m pb.Message, rp *remote) {
-	plog.Infof("%s received Unreachable, %s entered retry state",
+	plog.Debugf("%s received Unreachable, %s entered retry state",
 		r.describe(), NodeID(m.From))
 	r.enterRetryState(rp)
 }
@@ -1909,7 +1909,7 @@ func (r *raft) handleFollowerInstallSnapshot(m pb.Message) {
 func (r *raft) handleFollowerTimeoutNow(m pb.Message) {
 	// the last paragraph, p29 of the raft thesis mentions that this is nothing
 	// different from the clock moving forward quickly
-	plog.Infof("%s TimeoutNow received", r.describe())
+	plog.Debugf("%s TimeoutNow received", r.describe())
 	r.electionTick = r.randomizedElectionTimeout
 	r.isLeaderTransferTarget = true
 	r.tick()
@@ -1970,7 +1970,7 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 		return
 	}
 	count := r.handleVoteResp(m.From, m.Reject)
-	plog.Infof("%s received %d votes and %d rejections, quorum is %d",
+	plog.Debugf("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
 	// 3rd paragraph section 5.2 of the raft paper
 	if count == r.quorum() {
@@ -2023,7 +2023,7 @@ func lw(r *raft, f func(m pb.Message, rp *remote)) handlerFunc {
 		} else if wob, ok := r.witnesses[nm.From]; ok {
 			f(nm, wob)
 		} else {
-			plog.Infof("%s no remote for %s", r.describe(), NodeID(nm.From))
+			plog.Warningf("%s no remote for %s", r.describe(), NodeID(nm.From))
 			return
 		}
 	}

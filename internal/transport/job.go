@@ -134,18 +134,18 @@ func (j *job) addSnapshot(m pb.Message) {
 
 func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
-		plog.Infof("%s is sending chunk %d to %s",
+		plog.Debugf("%s is sending chunk %d to %s",
 			logutil.NodeID(chunk.From), chunk.ChunkId,
 			dn(chunk.ClusterId, chunk.NodeId))
 	} else {
-		plog.Infof("sending a poison chunk to %s", dn(j.clusterID, j.nodeID))
+		plog.Debugf("sending a poison chunk to %s", dn(j.clusterID, j.nodeID))
 	}
 
 	select {
 	case j.ch <- chunk:
 		return true, false
 	case <-j.failed:
-		plog.Infof("stream snapshot to %s failed", dn(j.clusterID, j.nodeID))
+		plog.Warningf("stream snapshot to %s failed", dn(j.clusterID, j.nodeID))
 		return false, false
 	case <-j.stopc:
 		return false, true
@@ -170,7 +170,7 @@ func (j *job) streamSnapshot() error {
 	for {
 		select {
 		case <-j.stopc:
-			plog.Infof("stream snapshot to %s stopped", dn(j.clusterID, j.nodeID))
+			plog.Warningf("stream snapshot to %s stopped", dn(j.clusterID, j.nodeID))
 			return ErrStopped
 		case chunk := <-j.ch:
 			chunk.DeploymentId = j.deploymentID
@@ -183,7 +183,7 @@ func (j *job) streamSnapshot() error {
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
-				plog.Infof("node %d just sent all chunks to %s",
+				plog.Debugf("node %d just sent all chunks to %s",
 					chunk.From, dn(chunk.ClusterId, chunk.NodeId))
 				return nil
 			}
@@ -235,11 +235,11 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 func (j *job) sendChunk(c pb.Chunk,
 	conn raftio.ISnapshotConnection) error {
 	if v := j.preStreamChunkSend.Load(); v != nil {
-		plog.Infof("pre stream chunk send set")
+		plog.Debugf("pre stream chunk send set")
 		updated, shouldSend := v.(StreamChunkSendFunc)(c)
-		plog.Infof("shoudSend: %t", shouldSend)
+		plog.Debugf("shoudSend: %t", shouldSend)
 		if !shouldSend {
-			plog.Infof("not sending the chunk!")
+			plog.Debugf("not sending the chunk!")
 			return errChunkSendSkipped
 		}
 		return conn.SendChunk(updated)

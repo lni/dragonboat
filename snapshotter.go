@@ -239,7 +239,7 @@ func (s *snapshotter) shrink(shrinkTo uint64) error {
 	if err != nil {
 		return err
 	}
-	plog.Infof("%s has %d snapshots to shrink", s.id(), len(snapshots))
+	plog.Debugf("%s has %d snapshots to shrink", s.id(), len(snapshots))
 	for idx, ss := range snapshots {
 		if ss.Index > shrinkTo {
 			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
@@ -248,7 +248,7 @@ func (s *snapshotter) shrink(shrinkTo uint64) error {
 			env := s.getEnv(ss.Index)
 			fp := env.GetFilepath()
 			shrinkedFp := env.GetShrinkedFilepath()
-			plog.Infof("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
+			plog.Debugf("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp, s.fs); err != nil {
 				return err
 			}
@@ -269,9 +269,9 @@ func (s *snapshotter) compact(removeUpTo uint64) error {
 		return nil
 	}
 	selected := snapshots[:len(snapshots)-snapshotsToKeep]
-	plog.Infof("%s has %d snapshots to compact", s.id(), len(selected))
+	plog.Debugf("%s has %d snapshots to compact", s.id(), len(selected))
 	for _, ss := range selected {
-		plog.Infof("%s compacting %s", s.id(), s.ssid(ss.Index))
+		plog.Debugf("%s compacting %s", s.id(), s.ssid(ss.Index))
 		if err := s.remove(ss.Index); err != nil {
 			return err
 		}

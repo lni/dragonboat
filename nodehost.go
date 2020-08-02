@@ -1249,7 +1249,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	if !ok {
 		return ErrClusterNotFound
 	}
-	plog.Infof("RequestLeaderTransfer called on cluster %d target nodeid %d",
+	plog.Debugf("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
 	err := v.requestLeaderTransfer(targetNodeID)
 	if err == nil {
@@ -1306,7 +1306,7 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
-	plog.Infof("%s called RemoveData", dn(clusterID, nodeID))
+	plog.Debugf("%s called RemoveData", dn(clusterID, nodeID))
 	return nh.removeData(clusterID, nodeID)
 }
 
@@ -1851,7 +1851,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 		nh.transport.Send(msg)
 	} else {
 		witness := msg.Snapshot.Witness
-		plog.Infof("%s is sending snapshot to %s, witness %t, index %d, size %d",
+		plog.Debugf("%s is sending snapshot to %s, witness %t, index %d, size %d",
 			dn(msg.ClusterId, msg.From), dn(msg.ClusterId, msg.To),
 			witness, msg.Snapshot.Index, msg.Snapshot.FileSize)
 		if n, ok := nh.getCluster(msg.ClusterId); ok {
@@ -1908,7 +1908,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 	if !ok && chosen < len(keys) {
 		clusterID := keys[chosen]
 		nodeID := nodeIDs[chosen]
-		plog.Infof("%s will be stopped by the node monitor", dn(clusterID, nodeID))
+		plog.Debugf("%s will be stopped by the node monitor", dn(clusterID, nodeID))
 		if err := nh.stopNode(clusterID, nodeID, true); err != nil {
 			plog.Errorf("failed to remove cluster %d", clusterID)
 		}
@@ -1935,7 +1935,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 		added, stopped := q.Add(m)
 		if added {
 			nh.execEngine.setStepReady(clusterID)
-			plog.Infof("%s just got snapshot status", dn(clusterID, nodeID))
+			plog.Debugf("%s just got snapshot status", dn(clusterID, nodeID))
 			return true
 		}
 		if stopped {
@@ -2097,7 +2097,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 	}
 	for _, req := range msg.Requests {
 		if req.Type == pb.SnapshotReceived {
-			plog.Infof("MsgSnapshotReceived received, cluster id %d, node id %d",
+			plog.Debugf("MsgSnapshotReceived received, cluster id %d, node id %d",
 				req.ClusterId, req.From)
 			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
 			continue
@@ -2156,7 +2156,7 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 		Type:      pb.SnapshotReceived,
 	}
 	h.nh.sendMessage(msg)
-	plog.Infof("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
+	plog.Debugf("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
 	h.nh.sysListener.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
 		ClusterID: clusterID,
