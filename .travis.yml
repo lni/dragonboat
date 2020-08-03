@@ -46,7 +46,46 @@ matrix:
       go: 1.14.x
       os: freebsd
       script: gmake test
-
+    - name: "nightly test - monkey test"
+      go: 1.14.x
+      os: linux
+      before_script:
+        - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
+        - git clone https://github.com/lni/drummer2 drummer
+      script:
+        - cd drummer
+        - go get github.com/lni/dragonboat/v3@master
+        - make monkey-test-travis
+    - name: "nightly test - monkey test ondisk"
+      go: 1.14.x
+      os: linux
+      before_script:
+        - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
+        - git clone https://github.com/lni/drummer2 drummer
+      script:
+        - cd drummer
+        - go get github.com/lni/dragonboat/v3@master
+        - make ondisk-monkey-test-travis
+    - name: "nightly test - monkey test memfs"
+      go: 1.14.x
+      os: linux
+      before_script:
+        - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
+        - git clone https://github.com/lni/drummer2 drummer
+      script:
+        - cd drummer
+        - go get github.com/lni/dragonboat/v3@master
+        - DRAGONBOAT_MEMFS_TEST=1 make monkey-test-travis
+    - name: "nightly test - monkey test race"
+      go: 1.14.x
+      os: linux
+      before_script:
+        - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
+        - git clone https://github.com/lni/drummer2 drummer
+      script:
+        - cd drummer
+        - go get github.com/lni/dragonboat/v3@master
+        - make race-monkey-test-travis
 notifications:
   recipients:
     - nilei81@gmail.com
