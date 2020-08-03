@@ -81,8 +81,6 @@ var (
 	ErrPendingSnapshotRequestExist = errors.New("pending snapshot request exist")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
-	// ErrSystemStopped indicates that the system is being shut down.
-	ErrSystemStopped = errors.New("system stopped")
 	// ErrCanceled indicates that the request has been canceled.
 	ErrCanceled = errors.New("request canceled")
 	// ErrRejected indicates that the request has been rejected.
@@ -105,7 +103,7 @@ func IsTempError(err error) bool {
 		err == ErrBadKey ||
 		err == ErrPendingConfigChangeExist ||
 		err == ErrClusterClosed ||
-		err == ErrSystemStopped
+		err == ErrClosed
 }
 
 // RequestResultCode is the result code returned to the client to indicate the
