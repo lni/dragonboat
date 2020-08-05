@@ -329,7 +329,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	}
 	did := nh.nhConfig.GetDeploymentID()
 	plog.Infof("DeploymentID set to %d", did)
-	if err := nh.createLogDB(nhConfig); err != nil {
+	if err := nh.createLogDB(); err != nil {
 		nh.Stop()
 		return nil, err
 	}
@@ -341,7 +341,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.execEngine = newExecEngine(nh, nhConfig.Expert.ExecShards,
 		nh.nhConfig.NotifyCommit, errorInjection, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
-		nh.nodeMonitorMain(nhConfig)
+		nh.nodeMonitorMain()
 	})
 	nh.stopper.RunWorker(func() {
 		nh.tickWorkerMain()
@@ -1683,8 +1683,8 @@ func (nh *NodeHost) createPools() {
 	}
 }
 
-func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig) error {
-	did := cfg.GetDeploymentID()
+func (nh *NodeHost) createLogDB() error {
+	did := nh.nhConfig.GetDeploymentID()
 	nhDir, walDir, err := nh.serverCtx.CreateNodeHostDir(did)
 	if err != nil {
 		return err
@@ -1697,8 +1697,8 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig) error {
 		dirs []string, lows []string) (raftio.ILogDB, error) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
 	}
-	if cfg.LogDBFactory != nil {
-		factory = cfg.LogDBFactory
+	if nh.nhConfig.LogDBFactory != nil {
+		factory = nh.nhConfig.LogDBFactory
 	} else {
 		factory = df
 	}
@@ -1707,7 +1707,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := nh.serverCtx.CheckLogDBType(cfg, name); err != nil {
+	if err := nh.serverCtx.CheckLogDBType(nh.nhConfig, name); err != nil {
 		return err
 	}
 	ldb, err := factory(nh.nhConfig,
@@ -1717,7 +1717,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig) error {
 	}
 	nh.logdb = ldb
 	ver := ldb.BinaryFormat()
-	if err := nh.serverCtx.CheckNodeHostDir(cfg, ver, name); err != nil {
+	if err := nh.serverCtx.CheckNodeHostDir(nh.nhConfig, ver, name); err != nil {
 		return err
 	}
 	if shardedrdb, ok := ldb.(*logdb.ShardedRDB); ok {
@@ -1729,7 +1729,7 @@ func (nh *NodeHost) createLogDB(cfg config.NodeHostConfig) error {
 			return server.ErrLogDBBrokenChange
 		}
 	}
-	plog.Infof("logdb memory limit: %dMBytes", cfg.LogDB.MemorySizeMB())
+	plog.Infof("logdb memory limit: %dMBytes", nh.nhConfig.LogDB.MemorySizeMB())
 	return nil
 }
 
@@ -1952,7 +1952,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 	}
 }
 
-func (nh *NodeHost) nodeMonitorMain(nhConfig config.NodeHostConfig) {
+func (nh *NodeHost) nodeMonitorMain() {
 	tf := func(usec uint64) bool {
 		nh.closeStoppedClusters()
 		return false
