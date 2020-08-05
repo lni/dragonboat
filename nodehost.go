@@ -1625,7 +1625,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
-	p := nh.execEngine.stepWorkReady.getPartitioner()
+	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.ExecShards,
+		nh.nhConfig.Expert.LogDBShards)
 	shard := p.GetPartitionID(clusterID)
 	var lm *logDBMetrics
 	if metrics, ok := nh.mu.lm.Load(shard); !ok {
