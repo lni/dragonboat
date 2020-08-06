@@ -1629,11 +1629,11 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		nh.nhConfig.Expert.LogDBShards)
 	shard := p.GetPartitionID(clusterID)
 	var lm *logDBMetrics
-	if metrics, ok := nh.mu.lm.Load(shard); !ok {
-		lm = &logDBMetrics{busy: 0}
-		nh.mu.lm.Store(p, lm)
+	if v, ok := nh.mu.lm.Load(shard); ok {
+		lm = v.(*logDBMetrics)
 	} else {
-		lm = metrics.(*logDBMetrics)
+		lm = &logDBMetrics{busy: 0}
+		nh.mu.lm.Store(shard, lm)
 	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
 		peers,
@@ -1736,8 +1736,8 @@ func (nh *NodeHost) createLogDB() error {
 
 func (nh *NodeHost) handleLogDBInfo(info config.LogDBInfo) {
 	plog.Infof("LogDB info received, shard %d, busy %t", info.Shard, info.Busy)
-	nh.mu.RLock()
-	defer nh.mu.RUnlock()
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
 	if v, ok := nh.mu.lm.Load(info.Shard); ok {
 		v.(*logDBMetrics).update(info.Busy)
 	} else {
