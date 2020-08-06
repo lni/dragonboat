@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/lni/goutils/syncutil"
@@ -44,6 +45,43 @@ type eventListener struct {
 	kv      *KV
 	stopper *syncutil.Stopper
 	stopped chan struct{}
+}
+
+func (l *eventListener) start() {
+	l.stopper.RunWorker(func() {
+		l.flushWorker()
+	})
+}
+
+// this is to workaround a pebble bug that the number of memtables can keep
+// growing while background flush is never issued.
+func (l *eventListener) flushWorker() {
+	select {
+	case <-l.kv.dbSet:
+	case <-l.stopper.ShouldStop():
+		return
+	}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m := l.kv.db.Metrics()
+			if uint64(m.MemTable.Count) >= l.kv.config.KVMaxWriteBufferNumber {
+				done, err := l.kv.db.AsyncFlush()
+				if err != nil {
+					continue
+				}
+				select {
+				case <-done:
+				case <-l.stopper.ShouldStop():
+					return
+				}
+			}
+		case <-l.stopper.ShouldStop():
+			return
+		}
+	}
 }
 
 func (l *eventListener) close() {
@@ -215,14 +253,15 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		callback: callback,
 		dbSet:    make(chan struct{}),
 	}
-	el := &eventListener{
+	event := &eventListener{
 		kv:      kv,
 		stopper: syncutil.NewStopper(),
 		stopped: make(chan struct{}),
 	}
+	event.start()
 	opts.EventListener = pebble.EventListener{
-		WALCreated: el.onWALCreated,
-		FlushEnd:   el.onFlushEnd,
+		WALCreated: event.onWALCreated,
+		FlushEnd:   event.onFlushEnd,
 	}
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {
@@ -239,19 +278,19 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	}
 	cache.Unref()
 	kv.db = pdb
-	kv.setEventListener(el)
+	kv.setEventListener(event)
 	return kv, nil
 }
 
-func (r *KV) setEventListener(el *eventListener) {
+func (r *KV) setEventListener(event *eventListener) {
 	if r.db == nil || r.event != nil {
 		panic("unexpected kv state")
 	}
-	r.event = el
+	r.event = event
 	close(r.dbSet)
 	// force a WALCreated event as the one issued when opening the DB didn't get
 	// handled
-	el.onWALCreated(pebble.WALCreateInfo{})
+	event.onWALCreated(pebble.WALCreateInfo{})
 }
 
 // Name returns the IKVStore type name.
