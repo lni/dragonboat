@@ -90,12 +90,11 @@ func (q *MessageQueue) targetQueue() []pb.Message {
 // Add adds the specified message to the queue.
 func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	if q.idx >= q.size {
-		q.mu.Unlock()
 		return false, q.stopped
 	}
 	if q.stopped {
-		q.mu.Unlock()
 		return false, true
 	}
 	if !q.tryAdd(msg) {
@@ -104,7 +103,6 @@ func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 	w := q.targetQueue()
 	w[q.idx] = msg
 	q.idx++
-	q.mu.Unlock()
 	return true, false
 }
 
