@@ -700,7 +700,7 @@ func (n *node) compactSnapshot(req rsm.SSRequest, index uint64) error {
 	if index > compactionOverhead {
 		n.ss.setCompactLogTo(index - compactionOverhead)
 	}
-	return n.snapshotter.Compact(index)
+	return n.compactSnapshots(index)
 }
 
 func (n *node) getCompactionOverhead(req rsm.SSRequest) uint64 {
@@ -771,7 +771,7 @@ func (n *node) recoverFromSnapshot(rec rsm.Task) (uint64, error) {
 				return 0, err
 			}
 		}
-		if err := n.snapshotter.Compact(index); err != nil {
+		if err := n.compactSnapshots(index); err != nil {
 			plog.Errorf("%s snapshotter.Compact failed %v", n.id(), err)
 			return 0, err
 		}
@@ -857,18 +857,15 @@ func (n *node) shrinkSnapshots(index uint64) error {
 }
 
 func (n *node) compactSnapshots(index uint64) error {
-	if n.snapshotLock.TryLock() {
-		defer n.snapshotLock.Unlock()
-		if err := n.snapshotter.Compact(index); err != nil {
-			return err
-		}
-		n.sysEvents.Publish(server.SystemEvent{
-			Type:      server.SnapshotCompacted,
-			ClusterID: n.clusterID,
-			NodeID:    n.nodeID,
-			Index:     index,
-		})
+	if err := n.snapshotter.Compact(index); err != nil {
+		return err
 	}
+	n.sysEvents.Publish(server.SystemEvent{
+		Type:      server.SnapshotCompacted,
+		ClusterID: n.clusterID,
+		NodeID:    n.nodeID,
+		Index:     index,
+	})
 	return nil
 }
 
