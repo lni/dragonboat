@@ -121,6 +121,8 @@ func (n *node) GetRateLimiter() *server.InMemRateLimiter {
 }
 
 func (n *node) GetInMemLogSize() uint64 {
+	n.raftMu.Lock()
+	defer n.raftMu.Unlock()
 	return n.p.GetInMemLogSize()
 }
 
