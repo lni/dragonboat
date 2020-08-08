@@ -77,6 +77,7 @@ func (t *Transport) getStreamSink(clusterID uint64, nodeID uint64) *Sink {
 		return nil
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
+		plog.Errorf("circuit breaker for %s is not ready", addr)
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)

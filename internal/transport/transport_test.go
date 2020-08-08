@@ -374,6 +374,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	for i := 0; i < 200; i++ {
 		time.Sleep(100 * time.Millisecond)
 		count := handler.getRequestCount(100, 2)
+		plog.Infof("%d test messages received", count)
 		if count == 20 {
 			done = true
 			break
@@ -385,6 +386,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 		t.Errorf("failed to get all 20 sent messages")
 	}
 	// test to ensure a single big message can be sent/received.
+	plog.Infof("sending a test msg with payload sz %d", sz)
 	payload := make([]byte, sz)
 	m := raftpb.Message{
 		Type:      raftpb.Replicate,
@@ -396,12 +398,13 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 			},
 		},
 	}
+	plog.Infof("msg ready to be sent")
 	ok := trans.Send(m)
 	if !ok {
 		t.Errorf("failed to send the large msg")
 	}
 	received := false
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 400; i++ {
 		time.Sleep(100 * time.Millisecond)
 		if handler.getRequestCount(100, 2) == 21 {
 			received = true
@@ -944,6 +947,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 			break
 		}
 	}
+	plog.Infof("circuit breaker for %s is now ready", serverAddress)
 	for i := uint32(0); i < maxConnectionCount; i++ {
 		sink := trans.GetStreamSink(100, 2)
 		if sink == nil {
