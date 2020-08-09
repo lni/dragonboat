@@ -93,6 +93,8 @@ func (n *node) GetLastApplied() uint64 {
 }
 
 func (n *node) DumpRaftInfoToLog() {
+	n.raftMu.Lock()
+	defer n.raftMu.Unlock()
 	n.dumpRaftInfoToLog()
 }
 
