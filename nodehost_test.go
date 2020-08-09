@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"reflect"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -41,6 +42,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -53,6 +55,20 @@ import (
 	"github.com/lni/dragonboat/v3/tools"
 	"github.com/lni/dragonboat/v3/tools/upgrade310"
 )
+
+const defaultTestPort = 26001
+
+func getTestPort() int {
+	pv := os.Getenv("DRAGONBOAT_TEST_PORT")
+	if len(pv) > 0 {
+		port, err := strconv.Atoi(pv)
+		if err != nil {
+			panic(err)
+		}
+		return port
+	}
+	return defaultTestPort
+}
 
 var rttMillisecond uint64
 var mu sync.Mutex
@@ -132,7 +148,7 @@ func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 		WALDir:              singleNodeHostTestDir,
 		NodeHostDir:         singleNodeHostTestDir,
 		RTTMillisecond:      getRTTMillisecond(fs, singleNodeHostTestDir),
-		RaftAddress:         "localhost:26001",
+		RaftAddress:         singleNodeHostTestAddr,
 		FS:                  fs,
 		Expert:              getTestExpertConfig(),
 		SystemEventListener: &testSysEventListener{},
@@ -686,9 +702,9 @@ func TestDeploymentIDCanBeSetUsingNodeHostConfig(t *testing.T) {
 }
 
 var (
-	singleNodeHostTestAddr = "localhost:26000"
-	nodeHostTestAddr1      = "localhost:26000"
-	nodeHostTestAddr2      = "localhost:26001"
+	singleNodeHostTestAddr = fmt.Sprintf("localhost:%d", getTestPort())
+	nodeHostTestAddr1      = fmt.Sprintf("localhost:%d", getTestPort())
+	nodeHostTestAddr2      = fmt.Sprintf("localhost:%d", getTestPort()+1)
 	singleNodeHostTestDir  = "single_nodehost_test_dir_safe_to_delete"
 )
 
@@ -2363,6 +2379,9 @@ func TestRegularStateMachineDoesNotAllowConcurrentSaveSnapshot(t *testing.T) {
 }
 
 func TestLogDBRateLimit(t *testing.T) {
+	if invariants.DragonboatRocksDBTest {
+		t.Skip("not supported on rocksdb")
+	}
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
@@ -4605,6 +4624,9 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 }
 
 func TestIOErrorIsHandled(t *testing.T) {
+	if invariants.DragonboatRocksDBTest {
+		t.Skip("not supported on rocksdb")
+	}
 	testIOErrorIsHandled(t, vfs.OpWrite)
 	testIOErrorIsHandled(t, vfs.OpSync)
 }
