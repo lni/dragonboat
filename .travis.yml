@@ -20,7 +20,7 @@ matrix:
       dist: bionic
       before_script:
         - sudo apt-get install librocksdb-dev
-      script: DRAGONBOAT_TEST_PORT=36000 DRAGONBOAT_LOGDB=rocksdb make test
+      script: DRAGONBOAT_LOGDB=rocksdb make test-logdb
     - name: "go1.14.x-linux-static-check"
       go: 1.14.x
       os: linux
@@ -44,7 +44,7 @@ matrix:
       arch: arm64
       before_script:
         - sudo apt-get install librocksdb-dev
-      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_TEST_PORT=36000 DRAGONBOAT_LOGDB=rocksdb make test-multiraft
+      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_LOGDB=rocksdb make test-logdb
     - name: "go1.14.x-linux-race"
       go: 1.14.x
       os: linux
