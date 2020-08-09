@@ -22,7 +22,7 @@ import (
 )
 
 func TestRDBContextCanBeCreated(t *testing.T) {
-	ctx := newRDBContext(128, kv.NewSimpleWriteBatch())
+	ctx := newContext(128, kv.NewSimpleWriteBatch())
 	if ctx.key == nil || len(ctx.val) != 128 {
 		t.Errorf("unexpected key/value")
 	}
@@ -32,12 +32,12 @@ func TestRDBContextCanBeCreated(t *testing.T) {
 }
 
 func TestRDBContextCaBeDestroyed(t *testing.T) {
-	ctx := newRDBContext(128, kv.NewSimpleWriteBatch())
+	ctx := newContext(128, kv.NewSimpleWriteBatch())
 	ctx.Destroy()
 }
 
 func TestRDBContextCaBeReset(t *testing.T) {
-	ctx := newRDBContext(128, kv.NewSimpleWriteBatch())
+	ctx := newContext(128, kv.NewSimpleWriteBatch())
 	ctx.wb.Put([]byte("key"), []byte("val"))
 	if ctx.wb.Count() != 1 {
 		t.Errorf("unexpected count")
@@ -49,7 +49,7 @@ func TestRDBContextCaBeReset(t *testing.T) {
 }
 
 func TestGetValueBuffer(t *testing.T) {
-	ctx := newRDBContext(128, kv.NewSimpleWriteBatch())
+	ctx := newContext(128, kv.NewSimpleWriteBatch())
 	buf := ctx.GetValueBuffer(100)
 	if cap(buf) != 128 {
 		t.Errorf("didn't return the default buffer")
@@ -61,7 +61,7 @@ func TestGetValueBuffer(t *testing.T) {
 }
 
 func TestGetUpdates(t *testing.T) {
-	ctx := newRDBContext(128, kv.NewSimpleWriteBatch())
+	ctx := newContext(128, kv.NewSimpleWriteBatch())
 	v := ctx.GetUpdates()
 	if cap(v) != updateSliceLen {
 		t.Errorf("unexpected updates cap")

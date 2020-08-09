@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	RDBTestDirectory = "rdb_test_dir_safe_to_delete"
+	RDBTestDirectory = "db_test_dir_safe_to_delete"
 )
 
 func getDirSize(path string, includeLogSize bool, fs vfs.IFS) (int64, error) {
@@ -185,11 +185,11 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud1}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud1}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save raft state %v", err)
 		}
-		p := db.(*ShardedRDB).shards
+		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
@@ -202,7 +202,7 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			NodeID:    4,
 			Snapshot:  pb.Snapshot{Index: 3},
 		}
-		err = db.SaveRaftState([]pb.Update{ud2}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud2}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save raft state %v", err)
 		}
@@ -226,7 +226,7 @@ func TestSaveSnapshotTogetherWithUnexpectedEntriesWillPanic(t *testing.T) {
 			NodeID:        4,
 			Snapshot:      pb.Snapshot{Index: 5},
 		}
-		err := db.SaveRaftState([]pb.Update{ud1}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud1}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save raft state %v", err)
 		}
@@ -291,7 +291,7 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 			Snapshot:      snapshot2,
 		}
 		uds := []pb.Update{ud1, ud2}
-		err := db.SaveRaftState(uds, newRDBContext(1, nil))
+		err := db.SaveRaftState(uds, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -309,7 +309,7 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		if v[0].Index != snapshot2.Index {
 			t.Errorf("snapshot index %d, want %d", v[0].Index, snapshot2.Index)
 		}
-		p := db.(*ShardedRDB).shards
+		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 3)
 		if err != nil {
 			t.Errorf("%v", err)
@@ -346,7 +346,7 @@ func TestSnapshotOnlyNodeIsHandledByReadRaftState(t *testing.T) {
 			NodeID:    4,
 			Snapshot:  ss,
 		}
-		if err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+		if err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil)); err != nil {
 			t.Fatalf("failed to save single de rec")
 		}
 		rs, err := db.ReadRaftState(3, 4, ss.Index)
@@ -372,7 +372,7 @@ func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) 
 			NodeID:    4,
 			Snapshot:  ss,
 		}
-		if err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+		if err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil)); err != nil {
 			t.Fatalf("failed to save single de rec")
 		}
 		_, err := db.ReadRaftState(3, 4, ss.Index)
@@ -409,7 +409,7 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -419,7 +419,7 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -462,7 +462,7 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -516,7 +516,7 @@ func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 		}
 		ud.EntriesToSave = append(ud.EntriesToSave, e)
 	}
-	err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+	err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 	if err != nil {
 		t.Errorf("failed to save single de rec")
 	}
@@ -558,7 +558,7 @@ func TestStateIsUpdated(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -582,7 +582,7 @@ func TestStateIsUpdated(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err = db.SaveRaftState([]pb.Update{ud2}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud2}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("save raft state failed %v", err)
 		}
@@ -619,11 +619,11 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
-		p := db.(*ShardedRDB).shards
+		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 4)
 		if err != nil {
 			t.Errorf("%v", err)
@@ -643,7 +643,7 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -684,7 +684,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -697,7 +697,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 		}
 		// save the same data but with different node id
 		ud.NodeID = 5
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -711,7 +711,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 		// save the same data but with different cluster id
 		ud.NodeID = 4
 		ud.ClusterID = 4
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -762,13 +762,13 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
 		// save the same data again but under a different node id
 		ud.NodeID = 5
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save updated de rec")
 		}
@@ -779,7 +779,7 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 		// save the same data again but under a different cluster id
 		ud.NodeID = 4
 		ud.ClusterID = 4
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save updated de rec")
 		}
@@ -827,7 +827,7 @@ func TestIterateEntries(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -861,7 +861,7 @@ func TestIterateEntries(t *testing.T) {
 			ClusterID:     3,
 			NodeID:        4,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
@@ -984,7 +984,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -1003,7 +1003,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -1061,7 +1061,7 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
@@ -1121,7 +1121,7 @@ func TestRemoveEntriesTo(t *testing.T) {
 	skipSizeCheck := false
 	func() {
 		db := getNewTestDB(dir, lldir, false, fs)
-		sdb, ok := db.(*ShardedRDB)
+		sdb, ok := db.(*ShardedDB)
 		if !ok {
 			t.Fatalf("failed to get sdb")
 		}
@@ -1148,7 +1148,7 @@ func TestRemoveEntriesTo(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
@@ -1259,7 +1259,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				ClusterID:     clusterID,
 				NodeID:        nodeID,
 			}
-			err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+			err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 			if err != nil {
 				t.Fatalf("failed to save recs")
 			}
@@ -1312,7 +1312,7 @@ func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
@@ -1362,7 +1362,7 @@ func TestRemoveNodeData(t *testing.T) {
 			NodeID:        nodeID,
 			Snapshot:      ss,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
@@ -1442,7 +1442,7 @@ func TestImportSnapshot(t *testing.T) {
 			NodeID:        nodeID,
 			Snapshot:      ss,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
@@ -1482,9 +1482,9 @@ func TestImportSnapshot(t *testing.T) {
 		if state.State.Commit != snapshots[0].Index {
 			t.Errorf("unexpected commit value")
 		}
-		rdb := db.(*ShardedRDB).shards[2]
-		rdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
-		maxIndex, err := rdb.getMaxIndex(clusterID, nodeID)
+		sdb := db.(*ShardedDB).shards[2]
+		sdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
+		maxIndex, err := sdb.getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}

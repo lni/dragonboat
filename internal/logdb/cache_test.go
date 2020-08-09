@@ -23,7 +23,7 @@ import (
 )
 
 func TestCachedNodeInfoCanBeSet(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	if len(c.nodeInfo) != 0 {
 		t.Errorf("unexpected map len")
 	}
@@ -49,7 +49,7 @@ func TestCachedNodeInfoCanBeSet(t *testing.T) {
 }
 
 func TestCachedStateCanBeSet(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	if len(c.ps) != 0 {
 		t.Errorf("unexpected savedState len %d", len(c.ps))
 	}
@@ -88,7 +88,7 @@ func TestCachedStateCanBeSet(t *testing.T) {
 }
 
 func TestLastEntryBatchCanBeSetAndGet(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	eb := pb.EntryBatch{Entries: make([]pb.Entry, 0)}
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: i})
@@ -105,7 +105,7 @@ func TestLastEntryBatchCanBeSetAndGet(t *testing.T) {
 }
 
 func TestLastEntryBatchCanBeUpdated(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	eb := pb.EntryBatch{Entries: make([]pb.Entry, 0)}
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: i})
@@ -119,7 +119,7 @@ func TestLastEntryBatchCanBeUpdated(t *testing.T) {
 }
 
 func TestChangeReturnedLastBatchWillNotAffectTheCache(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	eb := pb.EntryBatch{Entries: make([]pb.Entry, 0)}
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: 1})
@@ -141,7 +141,7 @@ func TestChangeReturnedLastBatchWillNotAffectTheCache(t *testing.T) {
 }
 
 func TestMaxIndexCanBeSetAndGet(t *testing.T) {
-	c := newRDBCache()
+	c := newCache()
 	c.setMaxIndex(10, 10, 100)
 	v, ok := c.getMaxIndex(10, 10)
 	if !ok {

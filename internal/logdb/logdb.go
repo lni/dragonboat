@@ -76,7 +76,7 @@ func NewLogDB(config config.NodeHostConfig,
 			}
 		}
 	}
-	return OpenShardedRDB(config, callback, dirs, lldirs, batched, check, fs, f)
+	return OpenShardedDB(config, callback, dirs, lldirs, batched, check, fs, f)
 }
 
 func checkDirs(numOfShards uint64, dirs []string, lldirs []string) {

@@ -21,7 +21,7 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-type rdbcache struct {
+type cache struct {
 	nodeInfo       map[raftio.NodeInfo]struct{}
 	ps             map[raftio.NodeInfo]pb.State
 	lastEntryBatch map[raftio.NodeInfo]pb.EntryBatch
@@ -29,8 +29,8 @@ type rdbcache struct {
 	mu             sync.Mutex
 }
 
-func newRDBCache() *rdbcache {
-	return &rdbcache{
+func newCache() *cache {
+	return &cache{
 		nodeInfo:       make(map[raftio.NodeInfo]struct{}),
 		ps:             make(map[raftio.NodeInfo]pb.State),
 		lastEntryBatch: make(map[raftio.NodeInfo]pb.EntryBatch),
@@ -38,7 +38,7 @@ func newRDBCache() *rdbcache {
 	}
 }
 
-func (r *rdbcache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
+func (r *cache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
 	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -49,7 +49,7 @@ func (r *rdbcache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
 	return !ok
 }
 
-func (r *rdbcache) setState(clusterID uint64,
+func (r *cache) setState(clusterID uint64,
 	nodeID uint64, st pb.State) bool {
 	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
 	r.mu.Lock()
@@ -66,7 +66,7 @@ func (r *rdbcache) setState(clusterID uint64,
 	return true
 }
 
-func (r *rdbcache) setMaxIndex(clusterID uint64,
+func (r *cache) setMaxIndex(clusterID uint64,
 	nodeID uint64, maxIndex uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -74,7 +74,7 @@ func (r *rdbcache) setMaxIndex(clusterID uint64,
 	r.maxIndex[key] = maxIndex
 }
 
-func (r *rdbcache) getMaxIndex(clusterID uint64,
+func (r *cache) getMaxIndex(clusterID uint64,
 	nodeID uint64) (uint64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -86,7 +86,7 @@ func (r *rdbcache) getMaxIndex(clusterID uint64,
 	return v, true
 }
 
-func (r *rdbcache) setLastEntryBatch(clusterID uint64,
+func (r *cache) setLastEntryBatch(clusterID uint64,
 	nodeID uint64, eb pb.EntryBatch) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -101,7 +101,7 @@ func (r *rdbcache) setLastEntryBatch(clusterID uint64,
 	r.lastEntryBatch[key] = oeb
 }
 
-func (r *rdbcache) getLastEntryBatch(clusterID uint64,
+func (r *cache) getLastEntryBatch(clusterID uint64,
 	nodeID uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

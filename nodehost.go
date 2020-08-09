@@ -1721,7 +1721,7 @@ func (nh *NodeHost) createLogDB() error {
 	if err := nh.serverCtx.CheckNodeHostDir(nh.nhConfig, ver, name); err != nil {
 		return err
 	}
-	if shardedrdb, ok := ldb.(*logdb.ShardedRDB); ok {
+	if shardedrdb, ok := ldb.(*logdb.ShardedDB); ok {
 		failed, err := shardedrdb.SelfCheckFailed()
 		if err != nil {
 			return err

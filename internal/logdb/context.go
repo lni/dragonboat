@@ -24,21 +24,21 @@ const (
 	updateSliceLen = 256
 )
 
-// rdbContext is an IContext implementation suppose to be owned and used
+// context is an IContext implementation suppose to be owned and used
 // by a single thread throughout its life time.
-type rdbContext struct {
+type context struct {
 	size    uint64
 	eb      pb.EntryBatch
 	lb      pb.EntryBatch
-	key     *PooledKey
+	key     *Key
 	val     []byte
 	updates []pb.Update
 	wb      kv.IWriteBatch
 }
 
-// newRDBContext creates a new RDB context instance.
-func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbContext {
-	ctx := &rdbContext{
+// newContext creates a new RDB context instance.
+func newContext(size uint64, wb kv.IWriteBatch) *context {
+	ctx := &context{
 		size:    size,
 		key:     newKey(maxKeySize, nil),
 		val:     make([]byte, size),
@@ -50,7 +50,7 @@ func newRDBContext(size uint64, wb kv.IWriteBatch) *rdbContext {
 	return ctx
 }
 
-func (c *rdbContext) Destroy() {
+func (c *context) Destroy() {
 	if c.wb != nil {
 		c.wb.Destroy()
 	}
@@ -60,17 +60,17 @@ func (c *rdbContext) Destroy() {
 	c.eb.Entries = nil
 }
 
-func (c *rdbContext) Reset() {
+func (c *context) Reset() {
 	if c.wb != nil {
 		c.wb.Clear()
 	}
 }
 
-func (c *rdbContext) GetKey() raftio.IReusableKey {
+func (c *context) GetKey() raftio.IReusableKey {
 	return c.key
 }
 
-func (c *rdbContext) GetValueBuffer(sz uint64) []byte {
+func (c *context) GetValueBuffer(sz uint64) []byte {
 	if sz <= c.size {
 		return c.val
 	}
@@ -82,18 +82,18 @@ func (c *rdbContext) GetValueBuffer(sz uint64) []byte {
 	return val
 }
 
-func (c *rdbContext) GetUpdates() []pb.Update {
+func (c *context) GetUpdates() []pb.Update {
 	return c.updates
 }
 
-func (c *rdbContext) GetEntryBatch() pb.EntryBatch {
+func (c *context) GetEntryBatch() pb.EntryBatch {
 	return c.eb
 }
 
-func (c *rdbContext) GetLastEntryBatch() pb.EntryBatch {
+func (c *context) GetLastEntryBatch() pb.EntryBatch {
 	return c.lb
 }
 
-func (c *rdbContext) GetWriteBatch() interface{} {
+func (c *context) GetWriteBatch() interface{} {
 	return c.wb
 }

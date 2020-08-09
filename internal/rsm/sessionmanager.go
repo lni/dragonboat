@@ -23,7 +23,7 @@ import (
 // SessionManager is the wrapper struct that implements client session related
 // functionalites used in the IManagedStateMachine interface.
 type SessionManager struct {
-	sessions *lrusession
+	lru *lrusession
 }
 
 var _ ILoadable = (*SessionManager)(nil)
@@ -31,14 +31,14 @@ var _ ILoadable = (*SessionManager)(nil)
 // NewSessionManager returns a new SessionManager instance.
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
-		sessions: newLRUSession(LRUMaxSessionCount),
+		lru: newLRUSession(LRUMaxSessionCount),
 	}
 }
 
 // GetSessionHash returns an uint64 integer representing the state of the
 // session manager.
 func (ds *SessionManager) GetSessionHash() uint64 {
-	return ds.sessions.getHash()
+	return ds.lru.getHash()
 }
 
 // UpdateRespondedTo updates the responded to value of the specified
@@ -52,7 +52,7 @@ func (ds *SessionManager) UpdateRespondedTo(session *Session,
 // if it is previously unknown, or 0 when the client has already been
 // registered.
 func (ds *SessionManager) RegisterClientID(clientID uint64) sm.Result {
-	es, ok := ds.sessions.getSession(RaftClientID(clientID))
+	es, ok := ds.lru.getSession(RaftClientID(clientID))
 	if ok {
 		if es.ClientID != RaftClientID(clientID) {
 			plog.Panicf("returned an expected session, got id %d, want %d",
@@ -62,7 +62,7 @@ func (ds *SessionManager) RegisterClientID(clientID uint64) sm.Result {
 		return sm.Result{}
 	}
 	s := newSession(RaftClientID(clientID))
-	ds.sessions.addSession(RaftClientID(clientID), *s)
+	ds.lru.addSession(RaftClientID(clientID), *s)
 	return sm.Result{Value: clientID}
 }
 
@@ -70,7 +70,7 @@ func (ds *SessionManager) RegisterClientID(clientID uint64) sm.Result {
 // It returns the client id if the client is successfully removed, or 0
 // if the client session does not exist.
 func (ds *SessionManager) UnregisterClientID(clientID uint64) sm.Result {
-	es, ok := ds.sessions.getSession(RaftClientID(clientID))
+	es, ok := ds.lru.getSession(RaftClientID(clientID))
 	if !ok {
 		return sm.Result{}
 	}
@@ -78,13 +78,13 @@ func (ds *SessionManager) UnregisterClientID(clientID uint64) sm.Result {
 		plog.Panicf("returned an expected session, got id %d, want %d",
 			es.ClientID, clientID)
 	}
-	ds.sessions.delSession(RaftClientID(clientID))
+	ds.lru.delSession(RaftClientID(clientID))
 	return sm.Result{Value: clientID}
 }
 
 // ClientRegistered returns whether the specified client exists in the system.
 func (ds *SessionManager) ClientRegistered(clientID uint64) (*Session, bool) {
-	es, ok := ds.sessions.getSession(RaftClientID(clientID))
+	es, ok := ds.lru.getSession(RaftClientID(clientID))
 	if ok {
 		if es.ClientID != RaftClientID(clientID) {
 			plog.Panicf("returned an expected session, got id %d, want %d",
@@ -126,10 +126,10 @@ func (ds *SessionManager) AddResponse(session *Session,
 
 // SaveSessions saves the sessions to the provided io.writer.
 func (ds *SessionManager) SaveSessions(writer io.Writer) error {
-	return ds.sessions.save(writer)
+	return ds.lru.save(writer)
 }
 
 // LoadSessions loads and restores sessions from io.Reader.
 func (ds *SessionManager) LoadSessions(reader io.Reader, v SSVersion) error {
-	return ds.sessions.load(reader, v)
+	return ds.lru.load(reader, v)
 }

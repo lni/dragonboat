@@ -40,27 +40,27 @@ var (
 	entryBatchKeyHeader      = [2]byte{0x7, 0x7}
 )
 
-// PooledKey represents keys that are managed by a sync.Pool to be reused.
-type PooledKey struct {
+// Key represents keys that are managed by a sync.Pool to be reused.
+type Key struct {
 	data []byte
 	key  []byte
 	pool *sync.Pool
 }
 
-// NewKey creates and returns a new PooledKey instance.
-func NewKey(sz uint64, pool *sync.Pool) *PooledKey {
+// NewKey creates and returns a new Key instance.
+func NewKey(sz uint64, pool *sync.Pool) *Key {
 	return newKey(sz, pool)
 }
 
-func newKey(sz uint64, pool *sync.Pool) *PooledKey {
-	return &PooledKey{
+func newKey(sz uint64, pool *sync.Pool) *Key {
+	return &Key{
 		data: make([]byte, sz),
 		pool: pool,
 	}
 }
 
 // Release puts the key back to the pool.
-func (k *PooledKey) Release() {
+func (k *Key) Release() {
 	k.key = nil
 	if k.pool != nil {
 		k.pool.Put(k)
@@ -68,12 +68,12 @@ func (k *PooledKey) Release() {
 }
 
 // Key returns the []byte of the key.
-func (k *PooledKey) Key() []byte {
+func (k *Key) Key() []byte {
 	return k.key
 }
 
 // SetMinimumKey sets the key to the minimum possible value.
-func (k *PooledKey) SetMinimumKey() {
+func (k *Key) SetMinimumKey() {
 	k.key = k.data
 	for i := 0; i < len(k.key); i++ {
 		k.key[i] = byte(0)
@@ -81,7 +81,7 @@ func (k *PooledKey) SetMinimumKey() {
 }
 
 // SetMaximumKey sets the key to the maximum possible value.
-func (k *PooledKey) SetMaximumKey() {
+func (k *Key) SetMaximumKey() {
 	k.key = k.data
 	for i := 0; i < len(k.key); i++ {
 		k.key[i] = byte(0xFF)
@@ -89,7 +89,7 @@ func (k *PooledKey) SetMaximumKey() {
 }
 
 // SetEntryBatchKey sets the key value opf the entry batch.
-func (k *PooledKey) SetEntryBatchKey(clusterID uint64,
+func (k *Key) SetEntryBatchKey(clusterID uint64,
 	nodeID uint64, batchID uint64) {
 	k.useAsEntryKey()
 	k.key[0] = entryBatchKeyHeader[0]
@@ -102,7 +102,7 @@ func (k *PooledKey) SetEntryBatchKey(clusterID uint64,
 }
 
 // SetEntryKey sets the key value to the specified entry key.
-func (k *PooledKey) SetEntryKey(clusterID uint64, nodeID uint64, index uint64) {
+func (k *Key) SetEntryKey(clusterID uint64, nodeID uint64, index uint64) {
 	k.useAsEntryKey()
 	k.key[0] = entryKeyHeader[0]
 	k.key[1] = entryKeyHeader[1]
@@ -119,7 +119,7 @@ func (k *PooledKey) SetEntryKey(clusterID uint64, nodeID uint64, index uint64) {
 }
 
 // SetStateKey sets the key value to the specified State.
-func (k *PooledKey) SetStateKey(clusterID uint64, nodeID uint64) {
+func (k *Key) SetStateKey(clusterID uint64, nodeID uint64) {
 	k.useAsStateKey()
 	k.key[0] = persistentStateKeyHeader[0]
 	k.key[1] = persistentStateKeyHeader[1]
@@ -130,7 +130,7 @@ func (k *PooledKey) SetStateKey(clusterID uint64, nodeID uint64) {
 }
 
 // SetMaxIndexKey sets the key value to the max index record key.
-func (k *PooledKey) SetMaxIndexKey(clusterID uint64, nodeID uint64) {
+func (k *Key) SetMaxIndexKey(clusterID uint64, nodeID uint64) {
 	k.useAsMaxIndexKey()
 	k.key[0] = maxIndexKeyHeader[0]
 	k.key[1] = maxIndexKeyHeader[1]
@@ -140,27 +140,27 @@ func (k *PooledKey) SetMaxIndexKey(clusterID uint64, nodeID uint64) {
 	binary.BigEndian.PutUint64(k.key[12:], nodeID)
 }
 
-func (k *PooledKey) useAsEntryKey() {
+func (k *Key) useAsEntryKey() {
 	k.key = k.data
 }
 
-func (k *PooledKey) useAsSnapshotKey() {
+func (k *Key) useAsSnapshotKey() {
 	k.key = k.data
 }
 
-func (k *PooledKey) useAsStateKey() {
+func (k *Key) useAsStateKey() {
 	k.key = k.data[:persistentStateKeySize]
 }
 
-func (k *PooledKey) useAsMaxIndexKey() {
+func (k *Key) useAsMaxIndexKey() {
 	k.key = k.data[:maxIndexKeySize]
 }
 
-func (k *PooledKey) useAsNodeInfoKey() {
+func (k *Key) useAsNodeInfoKey() {
 	k.key = k.data[:nodeInfoKeySize]
 }
 
-func (k *PooledKey) useAsBootstrapKey() {
+func (k *Key) useAsBootstrapKey() {
 	k.key = k.data[:bootstrapKeySize]
 }
 
@@ -173,7 +173,7 @@ func parseNodeInfoKey(data []byte) (uint64, uint64) {
 	return cid, nid
 }
 
-func (k *PooledKey) setNodeInfoKey(clusterID uint64, nodeID uint64) {
+func (k *Key) setNodeInfoKey(clusterID uint64, nodeID uint64) {
 	k.useAsNodeInfoKey()
 	k.key[0] = nodeInfoKeyHeader[0]
 	k.key[1] = nodeInfoKeyHeader[1]
@@ -183,7 +183,7 @@ func (k *PooledKey) setNodeInfoKey(clusterID uint64, nodeID uint64) {
 	binary.BigEndian.PutUint64(k.key[12:], nodeID)
 }
 
-func (k *PooledKey) setBootstrapKey(clusterID uint64, nodeID uint64) {
+func (k *Key) setBootstrapKey(clusterID uint64, nodeID uint64) {
 	k.useAsBootstrapKey()
 	k.key[0] = bootstrapKeyHeader[0]
 	k.key[1] = bootstrapKeyHeader[1]
@@ -193,7 +193,7 @@ func (k *PooledKey) setBootstrapKey(clusterID uint64, nodeID uint64) {
 	binary.BigEndian.PutUint64(k.key[12:], nodeID)
 }
 
-func (k *PooledKey) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64) {
+func (k *Key) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64) {
 	k.useAsSnapshotKey()
 	k.key[0] = snapshotKeyHeader[0]
 	k.key[1] = snapshotKeyHeader[1]
@@ -204,20 +204,20 @@ func (k *PooledKey) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64
 	binary.BigEndian.PutUint64(k.key[20:], index)
 }
 
-type logdbKeyPool struct {
+type keyPool struct {
 	pool *sync.Pool
 }
 
-func newLogdbKeyPool() *logdbKeyPool {
+func newLogdbKeyPool() *keyPool {
 	p := &sync.Pool{}
 	p.New = func() interface{} {
 		return newKey(dataSize, p)
 	}
-	return &logdbKeyPool{
+	return &keyPool{
 		pool: p,
 	}
 }
 
-func (p *logdbKeyPool) get() *PooledKey {
-	return p.pool.Get().(*PooledKey)
+func (p *keyPool) get() *Key {
+	return p.pool.Get().(*Key)
 }

@@ -54,10 +54,10 @@ func TestRegisteriAndUnregisterClient(t *testing.T) {
 }
 
 func TestSessionSaveOrderWithEviction(t *testing.T) {
-	sm1 := &SessionManager{sessions: newLRUSession(4)}
-	sm2 := &SessionManager{sessions: newLRUSession(4)}
+	sm1 := &SessionManager{lru: newLRUSession(4)}
+	sm2 := &SessionManager{lru: newLRUSession(4)}
 
-	for i := uint64(0); i < sm1.sessions.size; i++ {
+	for i := uint64(0); i < sm1.lru.size; i++ {
 		sm1.RegisterClientID(i)
 	}
 	// touch the oldest session to make it the most recently accessed
@@ -75,10 +75,10 @@ func TestSessionSaveOrderWithEviction(t *testing.T) {
 		t.Fatalf("failed to restore snapshot %v", err)
 	}
 	// client with the same client id (1 and 2 here) expected to be evicted
-	sm1.RegisterClientID(sm1.sessions.size)
-	sm2.RegisterClientID(sm1.sessions.size)
-	sm1.RegisterClientID(sm1.sessions.size + 1)
-	sm2.RegisterClientID(sm1.sessions.size + 1)
+	sm1.RegisterClientID(sm1.lru.size)
+	sm2.RegisterClientID(sm1.lru.size)
+	sm1.RegisterClientID(sm1.lru.size + 1)
+	sm2.RegisterClientID(sm1.lru.size + 1)
 	s1 := &bytes.Buffer{}
 	if err := sm1.SaveSessions(s1); err != nil {
 		t.Fatalf("failed to save snapshot %v", err)
@@ -106,6 +106,6 @@ func TestSessionSaveOrderWithEviction(t *testing.T) {
 			t.Errorf("client 2 unexpectedly still in the session list")
 		}
 	}
-	check(sm1.sessions.sessions)
-	check(sm2.sessions.sessions)
+	check(sm1.lru.sessions)
+	check(sm2.lru.sessions)
 }

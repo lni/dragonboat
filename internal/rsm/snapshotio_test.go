@@ -561,7 +561,7 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 	if err := sm.LoadSessions(reader, v); err != nil {
 		t.Fatalf("failed to load sessions %v", err)
 	}
-	sessions := sm.sessions
+	sessions := sm.lru
 	s1, ok := sessions.getSession(15771809973567514624)
 	if !ok {
 		t.Fatalf("failed to get session")

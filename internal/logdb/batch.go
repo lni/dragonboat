@@ -132,15 +132,15 @@ func getMergedFirstBatch(eb pb.EntryBatch, lb pb.EntryBatch) pb.EntryBatch {
 }
 
 type batchedEntries struct {
-	cs   *rdbcache
-	keys *logdbKeyPool
+	cs   *cache
+	keys *keyPool
 	kvs  kv.IKVStore
 }
 
 var _ entryManager = (*batchedEntries)(nil)
 
-func newBatchedEntries(cs *rdbcache,
-	keys *logdbKeyPool, kvs kv.IKVStore) entryManager {
+func newBatchedEntries(cs *cache,
+	keys *keyPool, kvs kv.IKVStore) entryManager {
 	return &batchedEntries{
 		cs:   cs,
 		keys: keys,
@@ -265,8 +265,7 @@ func (be *batchedEntries) getRange(clusterID uint64,
 }
 
 func (be *batchedEntries) rangedOp(clusterID uint64,
-	nodeID uint64, index uint64,
-	op func(fk *PooledKey, lk *PooledKey) error) error {
+	nodeID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
 	fk := be.keys.get()
 	lk := be.keys.get()
 	defer fk.Release()

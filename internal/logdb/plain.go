@@ -21,15 +21,14 @@ import (
 )
 
 type plainEntries struct {
-	cs   *rdbcache
-	keys *logdbKeyPool
+	cs   *cache
+	keys *keyPool
 	kvs  kv.IKVStore
 }
 
 var _ entryManager = (*plainEntries)(nil)
 
-func newPlainEntries(cs *rdbcache,
-	keys *logdbKeyPool, kvs kv.IKVStore) entryManager {
+func newPlainEntries(cs *cache, keys *keyPool, kvs kv.IKVStore) entryManager {
 	return &plainEntries{
 		cs:   cs,
 		keys: keys,
@@ -161,8 +160,7 @@ func (pe *plainEntries) getRange(clusterID uint64,
 }
 
 func (pe *plainEntries) rangedOp(clusterID uint64,
-	nodeID uint64, index uint64,
-	op func(fk *PooledKey, lk *PooledKey) error) error {
+	nodeID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
 	fk := pe.keys.get()
 	lk := pe.keys.get()
 	defer fk.Release()

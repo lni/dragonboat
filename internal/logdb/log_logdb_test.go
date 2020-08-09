@@ -68,7 +68,7 @@ func TestRLLTFindConflict(t *testing.T) {
 	}
 	stable := getTestLogReaderWithoutCache(previousEnts)
 	defer removeTestLogdbDir(vfs.GetTestFS())
-	defer stable.logdb.(*ShardedRDB).Close()
+	defer stable.logdb.(*ShardedDB).Close()
 	for i, tt := range tests {
 		raftLog := raft.NewLog(stable)
 		gconflict := raftLog.GetConflictIndex(tt.ents)
@@ -82,7 +82,7 @@ func TestRLLTIsUpToDate(t *testing.T) {
 	previousEnts := []pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}
 	stable := getTestLogReaderWithoutCache(previousEnts)
 	defer removeTestLogdbDir(vfs.GetTestFS())
-	defer stable.logdb.(*ShardedRDB).Close()
+	defer stable.logdb.(*ShardedDB).Close()
 	raftLog := raft.NewLog(stable)
 	tests := []struct {
 		lastIndex uint64
@@ -168,7 +168,7 @@ func TestRLLTAppend(t *testing.T) {
 		if goff := raftLog.UnstableOffset(); goff != tt.wunstable {
 			t.Errorf("#%d: unstable = %d, want %d", i, goff, tt.wunstable)
 		}
-		stable.logdb.(*ShardedRDB).Close()
+		stable.logdb.(*ShardedDB).Close()
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -298,7 +298,7 @@ func TestRLLTLogMaybeAppend(t *testing.T) {
 				}
 			}
 		}()
-		stable.logdb.(*ShardedRDB).Close()
+		stable.logdb.(*ShardedDB).Close()
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -372,7 +372,7 @@ func TestRLLTCompactionSideEffects(t *testing.T) {
 		t.Errorf("len(entries) = %d, want = %d", len(ents), 1)
 	}
 
-	stable.logdb.(*ShardedRDB).Close()
+	stable.logdb.(*ShardedDB).Close()
 	removeTestLogdbDir()
 }
 */
@@ -412,7 +412,7 @@ func TestRLLTHasNextEnts(t *testing.T) {
 			t.Errorf("#%d: hasNext = %v, want %v", i, hasNext, tt.hasNext)
 		}
 
-		stable.logdb.(*ShardedRDB).Close()
+		stable.logdb.(*ShardedDB).Close()
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -452,7 +452,7 @@ func TestRLLTNextEnts(t *testing.T) {
 			t.Errorf("#%d: nents = %+v, want %+v", i, nents, tt.wents)
 		}
 
-		stable.logdb.(*ShardedRDB).Close()
+		stable.logdb.(*ShardedDB).Close()
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -527,7 +527,7 @@ func TestRLLTCompaction(t *testing.T) {
 				}
 			}
 		}()
-		stable.logdb.(*ShardedRDB).Close()
+		stable.logdb.(*ShardedDB).Close()
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -557,7 +557,7 @@ func TestRLLTLogRestore(t *testing.T) {
 		t.Errorf("term = %d, want %d", mustTerm(raftLog.Term(index)), term)
 	}
 
-	stable.logdb.(*ShardedRDB).Close()
+	stable.logdb.(*ShardedDB).Close()
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -647,7 +647,7 @@ func TestRLLTIsOutOfBounds(t *testing.T) {
 		}()
 	}
 
-	stable.logdb.(*ShardedRDB).Close()
+	stable.logdb.(*ShardedDB).Close()
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -685,7 +685,7 @@ func TestRLLTTerm(t *testing.T) {
 		}
 	}
 
-	stable.logdb.(*ShardedRDB).Close()
+	stable.logdb.(*ShardedDB).Close()
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -716,7 +716,7 @@ func TestRLLTSlice(t *testing.T) {
 			NodeID:        LogReaderTestNodeID,
 			EntriesToSave: []pb.Entry{{Index: offset + i, Term: offset + i}},
 		}
-		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil)); err != nil {
+		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, newContext(1, nil)); err != nil {
 			t.Fatalf("%v", err)
 		}
 	}
@@ -775,7 +775,7 @@ func TestRLLTSlice(t *testing.T) {
 		}()
 	}
 
-	stable.logdb.(*ShardedRDB).Close()
+	stable.logdb.(*ShardedDB).Close()
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 

@@ -1534,7 +1534,7 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 		if sm.GetLastApplied() != 789 {
 			t.Errorf("last applied %d, want 789", sm.GetLastApplied())
 		}
-		sessionManager := sm.sessions.sessions
+		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(clientID))
 		if !ok {
 			t.Errorf("session not found")
@@ -1576,7 +1576,7 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		sessionManager := sm.sessions.sessions
+		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
 		if !ok {
 			t.Errorf("session not found")
@@ -1623,7 +1623,7 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 			t.Errorf("last applied %d, want %d",
 				sm.GetLastApplied(), e.Index)
 		}
-		sessionManager := sm.sessions.sessions
+		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
 		if ok {
 			t.Errorf("session not suppose to be there")
@@ -1744,7 +1744,7 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
-		sessionManager := sm.sessions.sessions
+		sessionManager := sm.sessions.lru
 		session, _ := sessionManager.getSession(RaftClientID(12345))
 		if session.RespondedUpTo != RaftSeriesID(1) {
 			t.Errorf("responded to %d, want 1", session.RespondedUpTo)

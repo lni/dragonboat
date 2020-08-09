@@ -42,14 +42,13 @@ type entryManager interface {
 		nodeID uint64, snapshotIndex uint64,
 		maxIndex uint64) (uint64, uint64, error)
 	rangedOp(clusterID uint64,
-		nodeID uint64, index uint64,
-		op func(fk *PooledKey, lk *PooledKey) error) error
+		nodeID uint64, index uint64, op func(*Key, *Key) error) error
 }
 
-// rdb is the struct used to manage Raft log DB.
-type rdb struct {
-	cs      *rdbcache
-	keys    *logdbKeyPool
+// db is the struct used to manage log DB.
+type db struct {
+	cs      *cache
+	keys    *keyPool
 	kvs     kv.IKVStore
 	entries entryManager
 }
@@ -91,12 +90,12 @@ func hasBatchedRecord(config config.LogDBConfig,
 
 func openRDB(config config.LogDBConfig,
 	callback kv.LogDBCallback, dir string, wal string, batched bool,
-	fs vfs.IFS, kvf kvFactory) (*rdb, error) {
+	fs vfs.IFS, kvf kvFactory) (*db, error) {
 	kvs, err := kvf(config, callback, dir, wal, fs)
 	if err != nil {
 		return nil, err
 	}
-	cs := newRDBCache()
+	cs := newCache()
 	pool := newLogdbKeyPool()
 	var em entryManager
 	if batched {
@@ -104,7 +103,7 @@ func openRDB(config config.LogDBConfig,
 	} else {
 		em = newPlainEntries(cs, pool, kvs)
 	}
-	return &rdb{
+	return &db{
 		cs:      cs,
 		keys:    pool,
 		kvs:     kvs,
@@ -112,30 +111,30 @@ func openRDB(config config.LogDBConfig,
 	}, nil
 }
 
-func (r *rdb) name() string {
+func (r *db) name() string {
 	return r.kvs.Name()
 }
 
-func (r *rdb) selfCheckFailed() (bool, error) {
+func (r *db) selfCheckFailed() (bool, error) {
 	_, batched := r.entries.(*batchedEntries)
 	return hasEntryRecord(r.kvs, !batched)
 }
 
-func (r *rdb) binaryFormat() uint32 {
+func (r *db) binaryFormat() uint32 {
 	return r.entries.binaryFormat()
 }
 
-func (r *rdb) close() {
+func (r *db) close() {
 	if err := r.kvs.Close(); err != nil {
 		panic(err)
 	}
 }
 
-func (r *rdb) getWriteBatch() kv.IWriteBatch {
+func (r *db) getWriteBatch() kv.IWriteBatch {
 	return r.kvs.GetWriteBatch(nil)
 }
 
-func (r *rdb) listNodeInfo() ([]raftio.NodeInfo, error) {
+func (r *db) listNodeInfo() ([]raftio.NodeInfo, error) {
 	fk := newKey(bootstrapKeySize, nil)
 	lk := newKey(bootstrapKeySize, nil)
 	fk.setBootstrapKey(0, 0)
@@ -152,7 +151,7 @@ func (r *rdb) listNodeInfo() ([]raftio.NodeInfo, error) {
 	return ni, nil
 }
 
-func (r *rdb) readRaftState(clusterID uint64,
+func (r *db) readRaftState(clusterID uint64,
 	nodeID uint64, snapshotIndex uint64) (*raftio.RaftState, error) {
 	firstIndex, length, err := r.getRange(clusterID, nodeID, snapshotIndex)
 	if err != nil {
@@ -169,7 +168,7 @@ func (r *rdb) readRaftState(clusterID uint64,
 	}, nil
 }
 
-func (r *rdb) getRange(clusterID uint64,
+func (r *db) getRange(clusterID uint64,
 	nodeID uint64, snapshotIndex uint64) (uint64, uint64, error) {
 	maxIndex, err := r.getMaxIndex(clusterID, nodeID)
 	if err == raftio.ErrNoSavedLog {
@@ -184,7 +183,7 @@ func (r *rdb) getRange(clusterID uint64,
 	return r.entries.getRange(clusterID, nodeID, snapshotIndex, maxIndex)
 }
 
-func (r *rdb) saveRaftState(updates []pb.Update,
+func (r *db) saveRaftState(updates []pb.Update,
 	ctx raftio.IContext) error {
 	wb := r.kvs.GetWriteBatch(ctx)
 	for _, ud := range updates {
@@ -209,7 +208,7 @@ func (r *rdb) saveRaftState(updates []pb.Update,
 	return nil
 }
 
-func (r *rdb) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
+func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	if ss.Type == pb.UnknownStateMachine {
 		panic("Unknown state machine type")
 	}
@@ -236,13 +235,13 @@ func (r *rdb) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	return r.kvs.CommitWriteBatch(wb)
 }
 
-func (r *rdb) setMaxIndex(wb kv.IWriteBatch,
+func (r *db) setMaxIndex(wb kv.IWriteBatch,
 	ud pb.Update, maxIndex uint64, ctx raftio.IContext) {
 	r.cs.setMaxIndex(ud.ClusterID, ud.NodeID, maxIndex)
 	r.saveMaxIndex(wb, ud.ClusterID, ud.NodeID, maxIndex, ctx)
 }
 
-func (r *rdb) saveBootstrap(wb kv.IWriteBatch,
+func (r *db) saveBootstrap(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, bsrec pb.Bootstrap) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
@@ -253,7 +252,7 @@ func (r *rdb) saveBootstrap(wb kv.IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
+func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 	if pb.IsEmptySnapshot(ud.Snapshot) {
 		return
 	}
@@ -266,7 +265,7 @@ func (r *rdb) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) saveMaxIndex(wb kv.IWriteBatch,
+func (r *db) saveMaxIndex(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, index uint64, ctx raftio.IContext) {
 	var data []byte
 	var k raftio.IReusableKey
@@ -286,7 +285,7 @@ func (r *rdb) saveMaxIndex(wb kv.IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) saveStateAllocs(wb kv.IWriteBatch,
+func (r *db) saveStateAllocs(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, st pb.State) {
 	data, err := st.Marshal()
 	if err != nil {
@@ -297,7 +296,7 @@ func (r *rdb) saveStateAllocs(wb kv.IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) saveState(clusterID uint64,
+func (r *db) saveState(clusterID uint64,
 	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx raftio.IContext) {
 	if pb.IsEmptyState(st) {
 		return
@@ -316,14 +315,14 @@ func (r *rdb) saveState(clusterID uint64,
 	wb.Put(k.Key(), data)
 }
 
-func (r *rdb) saveBootstrapInfo(clusterID uint64,
+func (r *db) saveBootstrapInfo(clusterID uint64,
 	nodeID uint64, bootstrap pb.Bootstrap) error {
 	wb := r.getWriteBatch()
 	r.saveBootstrap(wb, clusterID, nodeID, bootstrap)
 	return r.kvs.CommitWriteBatch(wb)
 }
 
-func (r *rdb) getBootstrapInfo(clusterID uint64,
+func (r *db) getBootstrapInfo(clusterID uint64,
 	nodeID uint64) (*pb.Bootstrap, error) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
@@ -342,7 +341,7 @@ func (r *rdb) getBootstrapInfo(clusterID uint64,
 	return bootstrap, nil
 }
 
-func (r *rdb) saveSnapshots(updates []pb.Update) error {
+func (r *db) saveSnapshots(updates []pb.Update) error {
 	wb := r.kvs.GetWriteBatch(nil)
 	defer wb.Destroy()
 	toSave := false
@@ -358,7 +357,7 @@ func (r *rdb) saveSnapshots(updates []pb.Update) error {
 	return nil
 }
 
-func (r *rdb) deleteSnapshot(clusterID uint64,
+func (r *db) deleteSnapshot(clusterID uint64,
 	nodeID uint64, snapshotIndex uint64) error {
 	k := r.keys.get()
 	defer k.Release()
@@ -366,7 +365,7 @@ func (r *rdb) deleteSnapshot(clusterID uint64,
 	return r.kvs.DeleteValue(k.Key())
 }
 
-func (r *rdb) listSnapshots(clusterID uint64,
+func (r *db) listSnapshots(clusterID uint64,
 	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
 	fk := r.keys.get()
 	lk := r.keys.get()
@@ -389,7 +388,7 @@ func (r *rdb) listSnapshots(clusterID uint64,
 	return snapshots, nil
 }
 
-func (r *rdb) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
+func (r *db) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	if v, ok := r.cs.getMaxIndex(clusterID, nodeID); ok {
 		return v, nil
 	}
@@ -409,7 +408,7 @@ func (r *rdb) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	return maxIndex, nil
 }
 
-func (r *rdb) getState(clusterID uint64, nodeID uint64) (*pb.State, error) {
+func (r *db) getState(clusterID uint64, nodeID uint64) (*pb.State, error) {
 	k := r.keys.get()
 	defer k.Release()
 	k.SetStateKey(clusterID, nodeID)
@@ -428,15 +427,15 @@ func (r *rdb) getState(clusterID uint64, nodeID uint64) (*pb.State, error) {
 	return hs, nil
 }
 
-func (r *rdb) removeEntriesTo(clusterID uint64,
+func (r *db) removeEntriesTo(clusterID uint64,
 	nodeID uint64, index uint64) error {
-	op := func(fk *PooledKey, lk *PooledKey) error {
+	op := func(fk *Key, lk *Key) error {
 		return r.kvs.BulkRemoveEntries(fk.Key(), lk.Key())
 	}
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }
 
-func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
+func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
 	wb := r.getWriteBatch()
 	defer wb.Clear()
 	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
@@ -451,7 +450,7 @@ func (r *rdb) removeNodeData(clusterID uint64, nodeID uint64) error {
 	return r.removeEntriesTo(clusterID, nodeID, math.MaxUint64)
 }
 
-func (r *rdb) saveRemoveNodeData(wb kv.IWriteBatch,
+func (r *db) saveRemoveNodeData(wb kv.IWriteBatch,
 	snapshots []pb.Snapshot, clusterID uint64, nodeID uint64) {
 	stateKey := newKey(maxKeySize, nil)
 	stateKey.SetStateKey(clusterID, nodeID)
@@ -469,14 +468,14 @@ func (r *rdb) saveRemoveNodeData(wb kv.IWriteBatch,
 	}
 }
 
-func (r *rdb) compact(clusterID uint64, nodeID uint64, index uint64) error {
-	op := func(fk *PooledKey, lk *PooledKey) error {
+func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
+	op := func(fk *Key, lk *Key) error {
 		return r.kvs.CompactEntries(fk.Key(), lk.Key())
 	}
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }
 
-func (r *rdb) saveEntries(updates []pb.Update,
+func (r *db) saveEntries(updates []pb.Update,
 	wb kv.IWriteBatch, ctx raftio.IContext) {
 	for _, ud := range updates {
 		if len(ud.EntriesToSave) > 0 {
@@ -488,7 +487,7 @@ func (r *rdb) saveEntries(updates []pb.Update,
 	}
 }
 
-func (r *rdb) iterateEntries(ents []pb.Entry,
+func (r *db) iterateEntries(ents []pb.Entry,
 	size uint64, clusterID uint64, nodeID uint64, low uint64, high uint64,
 	maxSize uint64) ([]pb.Entry, uint64, error) {
 	maxIndex, err := r.getMaxIndex(clusterID, nodeID)

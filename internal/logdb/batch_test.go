@@ -299,7 +299,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -314,18 +314,18 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].getMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
 		if maxIndex != nextIndex {
 			t.Errorf("unexpected max index")
 		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
 		if !ok {
 			t.Errorf("failed to get the eb")
 		}
@@ -353,7 +353,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			e := pb.Entry{Index: i, Term: 1}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -366,18 +366,18 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			e := pb.Entry{Index: i, Term: 2}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedRDB).shards[0].getMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(clusterID, nodeID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
 		if maxIndex != batchSize+2 {
 			t.Errorf("unexpected max index")
 		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 0)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 0)
 		if !ok {
 			t.Errorf("failed to get the eb")
 		}
@@ -418,7 +418,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -432,7 +432,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -448,7 +448,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newRDBContext(1, nil))
+		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, nil))
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -460,7 +460,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 		if uint64(len(ents)) != batchSize+1 {
 			t.Errorf("ents sz %d, want %d", len(ents), batchSize+1)
 		}
-		eb, ok := db.(*ShardedRDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
 		if !ok {
 			t.Errorf("failed to get first batch")
 		}
