@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/lni/goutils/syncutil"
@@ -47,43 +46,6 @@ type eventListener struct {
 	stopped chan struct{}
 }
 
-func (l *eventListener) start() {
-	l.stopper.RunWorker(func() {
-		l.flushWorker()
-	})
-}
-
-// this is to workaround a pebble bug that the number of memtables can keep
-// growing while background flush is never issued.
-func (l *eventListener) flushWorker() {
-	select {
-	case <-l.kv.dbSet:
-	case <-l.stopper.ShouldStop():
-		return
-	}
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			m := l.kv.db.Metrics()
-			if uint64(m.MemTable.Count) >= l.kv.config.KVMaxWriteBufferNumber {
-				done, err := l.kv.db.AsyncFlush()
-				if err != nil {
-					continue
-				}
-				select {
-				case <-done:
-				case <-l.stopper.ShouldStop():
-					return
-				}
-			}
-		case <-l.stopper.ShouldStop():
-			return
-		}
-	}
-}
-
 func (l *eventListener) close() {
 	close(l.stopped)
 	l.stopper.Stop()
@@ -91,36 +53,37 @@ func (l *eventListener) close() {
 
 func (l *eventListener) notify() {
 	select {
-	case <-l.kv.dbSet:
-		if l.kv.callback != nil {
-			m := l.kv.db.Metrics()
-			busy := uint64(m.MemTable.Count) >= l.kv.config.KVMaxWriteBufferNumber
-			l.kv.callback(busy)
-		}
+	case <-l.stopped:
+		return
 	default:
 	}
+	l.stopper.RunWorker(func() {
+		select {
+		case <-l.kv.dbSet:
+			if l.kv.callback != nil {
+				memSizeThreshold := l.kv.config.KVWriteBufferSize *
+					l.kv.config.KVMaxWriteBufferNumber * 19 / 20
+				l0FileNumThreshold := l.kv.config.KVLevel0StopWritesTrigger - 1
+				m := l.kv.db.Metrics()
+				busy := uint64(m.MemTable.Size) >= memSizeThreshold ||
+					uint64(m.Levels[0].NumFiles) >= l0FileNumThreshold
+				l.kv.callback(busy)
+			}
+		default:
+		}
+	})
+}
+
+func (l *eventListener) onCompactionEnd(pebble.CompactionInfo) {
+	l.notify()
 }
 
 func (l *eventListener) onFlushEnd(pebble.FlushInfo) {
-	select {
-	case <-l.stopped:
-		return
-	default:
-	}
-	l.stopper.RunWorker(func() {
-		l.notify()
-	})
+	l.notify()
 }
 
 func (l *eventListener) onWALCreated(pebble.WALCreateInfo) {
-	select {
-	case <-l.stopped:
-		return
-	default:
-	}
-	l.stopper.RunWorker(func() {
-		l.notify()
-	})
+	l.notify()
 }
 
 type pebbleWriteBatch struct {
@@ -258,10 +221,10 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		stopper: syncutil.NewStopper(),
 		stopped: make(chan struct{}),
 	}
-	event.start()
 	opts.EventListener = pebble.EventListener{
-		WALCreated: event.onWALCreated,
-		FlushEnd:   event.onFlushEnd,
+		WALCreated:    event.onWALCreated,
+		FlushEnd:      event.onFlushEnd,
+		CompactionEnd: event.onCompactionEnd,
 	}
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {
