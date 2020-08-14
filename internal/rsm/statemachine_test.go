@@ -106,24 +106,27 @@ func (p *testNodeProxy) RestoreRemotes(s pb.Snapshot) {
 	}
 }
 
-func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange) {
-	p.applyConfChange = true
-	if cc.Type == pb.AddNode {
-		p.addPeer = true
-		p.addPeerCount++
-	} else if cc.Type == pb.AddObserver {
-		p.addObserver = true
-		p.addObserverCount++
-	} else if cc.Type == pb.RemoveNode {
-		p.removePeer = true
+func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, rejected bool) {
+	if !rejected {
+		p.applyConfChange = true
+		if cc.Type == pb.AddNode {
+			p.addPeer = true
+			p.addPeerCount++
+		} else if cc.Type == pb.AddObserver {
+			p.addObserver = true
+			p.addObserverCount++
+		} else if cc.Type == pb.RemoveNode {
+			p.removePeer = true
+		}
 	}
+	p.configChangeProcessed(key, rejected)
 }
 
-func (p *testNodeProxy) ConfigChangeProcessed(index uint64, accept bool) {
-	if accept {
-		p.accept = true
-	} else {
+func (p *testNodeProxy) configChangeProcessed(index uint64, rejected bool) {
+	if rejected {
 		p.reject = true
+	} else {
+		p.accept = true
 	}
 }
 

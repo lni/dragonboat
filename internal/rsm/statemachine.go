@@ -140,8 +140,7 @@ type INode interface {
 	NodeReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
-	ApplyConfigChange(pb.ConfigChange)
-	ConfigChangeProcessed(uint64, bool)
+	ApplyConfigChange(pb.ConfigChange, uint64, bool)
 	NodeID() uint64
 	ClusterID() uint64
 	ShouldStop() <-chan struct{}
@@ -863,47 +862,46 @@ func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
 	s.onDiskIndex = lastIndex
 }
 
-func (s *StateMachine) handleEntry(ent pb.Entry, last bool) error {
-	if ent.IsConfigChange() {
-		accepted := s.handleConfigChange(ent)
-		s.node.ConfigChangeProcessed(ent.Key, accepted)
+func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
+	if e.IsConfigChange() {
+		s.handleConfigChange(e)
 	} else {
-		if !ent.IsSessionManaged() {
-			if ent.IsEmpty() {
-				s.handleNoOP(ent)
-				s.node.ApplyUpdate(ent, sm.Result{}, false, true, last)
+		if !e.IsSessionManaged() {
+			if e.IsEmpty() {
+				s.handleNoOP(e)
+				s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
 			} else {
 				panic("not session managed, not empty")
 			}
 		} else {
-			if ent.IsNewSessionRequest() {
-				smResult := s.handleRegisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
-			} else if ent.IsEndOfSessionRequest() {
-				smResult := s.handleUnregisterSession(ent)
-				s.node.ApplyUpdate(ent, smResult, isEmptyResult(smResult), false, last)
+			if e.IsNewSessionRequest() {
+				smResult := s.handleRegisterSession(e)
+				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
+			} else if e.IsEndOfSessionRequest() {
+				smResult := s.handleUnregisterSession(e)
+				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
 			} else {
-				if !s.entryInInitDiskSM(ent.Index) {
-					smResult, ignored, rejected, err := s.handleUpdate(ent)
+				if !s.entryInInitDiskSM(e.Index) {
+					smResult, ignored, rejected, err := s.handleUpdate(e)
 					if err != nil {
 						return err
 					}
 					if !ignored {
-						s.node.ApplyUpdate(ent, smResult, rejected, ignored, last)
+						s.node.ApplyUpdate(e, smResult, rejected, ignored, last)
 					}
 				} else {
 					// treat it as a NoOP entry
-					s.handleNoOP(pb.Entry{Index: ent.Index, Term: ent.Term})
+					s.handleNoOP(pb.Entry{Index: e.Index, Term: e.Term})
 				}
 			}
 		}
 	}
 	index := s.GetLastApplied()
-	if index != ent.Index {
-		plog.Panicf("unexpected last applied value, %d, %d", index, ent.Index)
+	if index != e.Index {
+		plog.Panicf("unexpected last applied value, %d, %d", index, e.Index)
 	}
 	if last {
-		s.setBatchedLastApplied(ent.Index)
+		s.setBatchedLastApplied(e.Index)
 	}
 	return nil
 }
@@ -959,22 +957,24 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	return nil
 }
 
-func (s *StateMachine) handleConfigChange(ent pb.Entry) bool {
+func (s *StateMachine) handleConfigChange(e pb.Entry) {
 	var cc pb.ConfigChange
-	if err := cc.Unmarshal(ent.Cmd); err != nil {
+	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
 	}
 	if cc.Type == pb.AddNode && len(cc.Address) == 0 {
 		panic("empty address in AddNode request")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.updateLastApplied(ent.Index, ent.Term)
-	if s.members.handleConfigChange(cc, ent.Index) {
-		s.node.ApplyConfigChange(cc)
-		return true
-	}
-	return false
+	rejected := true
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.updateLastApplied(e.Index, e.Term)
+		if s.members.handleConfigChange(cc, e.Index) {
+			rejected = false
+		}
+	}()
+	s.node.ApplyConfigChange(cc, e.Key, rejected)
 }
 
 func (s *StateMachine) handleRegisterSession(ent pb.Entry) sm.Result {

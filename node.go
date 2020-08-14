@@ -220,9 +220,17 @@ func (n *node) ApplyUpdate(entry pb.Entry,
 	}
 }
 
-func (n *node) ApplyConfigChange(cc pb.ConfigChange) {
+func (n *node) ApplyConfigChange(cc pb.ConfigChange,
+	key uint64, rejected bool) {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
+	if !rejected {
+		n.applyConfigChange(cc)
+	}
+	n.configChangeProcessed(key, rejected)
+}
+
+func (n *node) applyConfigChange(cc pb.ConfigChange) {
 	n.p.ApplyConfigChange(cc)
 	switch cc.Type {
 	case pb.AddNode:
@@ -241,6 +249,19 @@ func (n *node) ApplyConfigChange(cc pb.ConfigChange) {
 		}
 	default:
 		panic("unknown config change type")
+	}
+}
+
+func (n *node) configChangeProcessed(key uint64, rejected bool) {
+	if n.isWitness() {
+		return
+	}
+	if rejected {
+		n.p.RejectConfigChange()
+		n.pendingConfigChange.apply(key, rejected)
+	} else {
+		n.pendingConfigChange.apply(key, rejected)
+		n.notifyConfigChange()
 	}
 }
 
@@ -268,19 +289,6 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 	plog.Infof("%s is restoring remotes", n.id())
 	n.p.RestoreRemotes(snapshot)
 	n.notifyConfigChange()
-}
-
-func (n *node) ConfigChangeProcessed(key uint64, accepted bool) {
-	if n.isWitness() {
-		return
-	}
-	if accepted {
-		n.pendingConfigChange.apply(key, false)
-		n.notifyConfigChange()
-	} else {
-		n.p.RejectConfigChange()
-		n.pendingConfigChange.apply(key, true)
-	}
 }
 
 func (n *node) startRaft(cc config.Config,

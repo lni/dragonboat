@@ -1665,8 +1665,7 @@ type testDummyNodeProxy struct{}
 func (np *testDummyNodeProxy) NodeReady()                                        {}
 func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
 func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
-func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange)                 {}
-func (np *testDummyNodeProxy) ConfigChangeProcessed(uint64, bool)                {}
+func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool)   {}
 func (np *testDummyNodeProxy) NodeID() uint64                                    { return 1 }
 func (np *testDummyNodeProxy) ClusterID() uint64                                 { return 1 }
 func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                       { return nil }
