@@ -139,8 +139,7 @@ type INode interface {
 	StepReady()
 	RestoreRemotes(pb.Snapshot)
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
-	ApplyConfigChange(pb.ConfigChange)
-	ConfigChangeProcessed(uint64, bool)
+	ApplyConfigChange(pb.ConfigChange, uint64, bool)
 	NodeID() uint64
 	ClusterID() uint64
 	ShouldStop() <-chan struct{}
@@ -882,8 +881,7 @@ func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
 
 func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 	if e.IsConfigChange() {
-		accepted := s.handleConfigChange(e)
-		s.node.ConfigChangeProcessed(e.Key, accepted)
+		s.handleConfigChange(e)
 	} else {
 		if !e.IsSessionManaged() {
 			if e.IsEmpty() {
@@ -976,7 +974,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	return nil
 }
 
-func (s *StateMachine) handleConfigChange(e pb.Entry) bool {
+func (s *StateMachine) handleConfigChange(e pb.Entry) {
 	var cc pb.ConfigChange
 	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
@@ -984,14 +982,16 @@ func (s *StateMachine) handleConfigChange(e pb.Entry) bool {
 	if cc.Type == pb.AddNode && len(cc.Address) == 0 {
 		panic("empty address in AddNode request")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.setLastApplied(e.Index, e.Term)
-	if s.members.handleConfigChange(cc, e.Index) {
-		s.node.ApplyConfigChange(cc)
-		return true
-	}
-	return false
+	rejected := true
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.setLastApplied(e.Index, e.Term)
+		if s.members.handleConfigChange(cc, e.Index) {
+			rejected = false
+		}
+	}()
+	s.node.ApplyConfigChange(cc, e.Key, rejected)
 }
 
 func (s *StateMachine) handleRegisterSession(e pb.Entry) sm.Result {
