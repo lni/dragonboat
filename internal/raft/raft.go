@@ -971,7 +971,7 @@ func (r *raft) becomeCandidate() {
 	r.reset(r.term + 1)
 	r.setLeaderID(NoLeader)
 	r.vote = r.nodeID
-	plog.Infof("%s became candidate", r.describe())
+	plog.Warningf("%s became candidate", r.describe())
 }
 
 func (r *raft) becomeLeader() {
@@ -1061,10 +1061,10 @@ func (r *raft) resetWitnesses() {
 
 func (r *raft) handleVoteResp(from uint64, rejected bool) int {
 	if rejected {
-		plog.Debugf("%s received RequestVoteResp rejection from %s",
+		plog.Warningf("%s received RequestVoteResp rejection from %s",
 			r.describe(), NodeID(from))
 	} else {
-		plog.Debugf("%s received RequestVoteResp from %s",
+		plog.Warningf("%s received RequestVoteResp from %s",
 			r.describe(), NodeID(from))
 	}
 	votedFor := 0
@@ -1112,7 +1112,7 @@ func (r *raft) campaign() {
 			LogTerm:  r.log.lastTerm(),
 			Hint:     hint,
 		})
-		plog.Debugf("%s sent RequestVote to %s", r.describe(), NodeID(k))
+		plog.Warningf("%s sent RequestVote to %s", r.describe(), NodeID(k))
 	}
 }
 
@@ -1418,23 +1418,24 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		return false
 	}
 	if r.dropRequestVoteFromHighTermNode(m) {
-		plog.Infof("dropped RequestVote at term %d from %d, leader available",
+		plog.Warningf("dropped RequestVote at term %d from %d, leader available",
 			m.Term, m.From)
 		return true
 	}
 	if m.Term > r.term {
-		plog.Infof("%s received %s with higher term (%d) from %s",
+		plog.Warningf("%s received %s with higher term (%d) from %s",
 			r.describe(), m.Type, m.Term, NodeID(m.From))
 		leaderID := NoLeader
 		if isLeaderMessage(m.Type) {
 			leaderID = m.From
 		}
-
 		if r.isObserver() {
 			r.becomeObserver(m.Term, leaderID)
 		} else if r.isWitness() {
 			r.becomeWitness(m.Term, leaderID)
 		} else {
+			plog.Warningf("%s become a follower after receiving higher term from %d",
+				r.describe(), NodeID(m.From))
 			r.becomeFollower(m.Term, leaderID)
 		}
 	} else if m.Term < r.term {
@@ -1523,12 +1524,12 @@ func (r *raft) handleNodeRequestVote(m pb.Message) {
 	// 2nd paragraph section 5.4 of the raft paper
 	isUpToDate := r.log.upToDate(m.LogIndex, m.LogTerm)
 	if canGrant && isUpToDate {
-		plog.Debugf("%s cast vote from %s index %d term %d, log term: %d",
+		plog.Warningf("%s cast vote from %s index %d term %d, log term: %d",
 			r.describe(), NodeID(m.From), m.LogIndex, m.Term, m.LogTerm)
 		r.electionTick = 0
 		r.vote = m.From
 	} else {
-		plog.Debugf("%s rejected vote %s index%d term%d,logterm%d,grant%v,utd%v",
+		plog.Warningf("%s rejected vote %s index%d term%d,logterm%d,grant%v,utd%v",
 			r.describe(), NodeID(m.From), m.LogIndex, m.Term,
 			m.LogTerm, canGrant, isUpToDate)
 		resp.Reject = true
@@ -1970,7 +1971,7 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 		return
 	}
 	count := r.handleVoteResp(m.From, m.Reject)
-	plog.Debugf("%s received %d votes and %d rejections, quorum is %d",
+	plog.Warningf("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
 	// 3rd paragraph section 5.2 of the raft paper
 	if count == r.quorum() {
