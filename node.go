@@ -990,9 +990,6 @@ func (n *node) getUpdate() (pb.Update, bool) {
 				n.confirmedIndex, n.smAppliedIndex)
 		}
 		ud := n.p.GetUpdate(moreEntriesToApply, n.smAppliedIndex)
-		for idx := range ud.Messages {
-			ud.Messages[idx].ClusterId = n.clusterID
-		}
 		n.confirmedIndex = n.smAppliedIndex
 		return ud, true
 	}

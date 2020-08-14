@@ -250,8 +250,17 @@ func (p *Peer) RateLimited() bool {
 
 // HasUpdate returns a boolean value indicating whether there is any Update
 // ready to be processed.
-func (p *Peer) HasUpdate(moreEntriesToApply bool) bool {
+func (p *Peer) HasUpdate(moreToApply bool) bool {
 	r := p.raft
+	if len(r.log.entriesToSave()) > 0 {
+		return true
+	}
+	if len(r.msgs) > 0 {
+		return true
+	}
+	if moreToApply && r.log.hasEntriesToApply() {
+		return true
+	}
 	if pst := r.raftState(); !pb.IsEmptyState(pst) &&
 		!pb.IsStateEqual(pst, p.prevState) {
 		return true
@@ -260,19 +269,13 @@ func (p *Peer) HasUpdate(moreEntriesToApply bool) bool {
 		!pb.IsEmptySnapshot(*r.log.inmem.snapshot) {
 		return true
 	}
-	if len(r.msgs) > 0 {
-		return true
-	}
-	if len(r.log.entriesToSave()) > 0 {
-		return true
-	}
-	if moreEntriesToApply && r.log.hasEntriesToApply() {
-		return true
-	}
 	if len(r.readyToRead) != 0 {
 		return true
 	}
-	if len(r.droppedEntries) > 0 || len(r.droppedReadIndexes) > 0 {
+	if len(r.droppedEntries) > 0 {
+		return true
+	}
+	if len(r.droppedReadIndexes) > 0 {
 		return true
 	}
 	return false
@@ -323,7 +326,7 @@ func (p *Peer) entryLog() *entryLog {
 	return p.raft.log
 }
 
-func (p *Peer) getUpdate(moreEntriesToApply bool,
+func (p *Peer) getUpdate(moreToApply bool,
 	lastApplied uint64) pb.Update {
 	ud := pb.Update{
 		ClusterID:     p.raft.clusterID,
@@ -333,7 +336,10 @@ func (p *Peer) getUpdate(moreEntriesToApply bool,
 		LastApplied:   lastApplied,
 		FastApply:     true,
 	}
-	if moreEntriesToApply {
+	for idx := range ud.Messages {
+		ud.Messages[idx].ClusterId = p.raft.clusterID
+	}
+	if moreToApply {
 		ud.CommittedEntries = p.entryLog().entriesToApply()
 	}
 	if len(ud.CommittedEntries) > 0 {
