@@ -1418,8 +1418,8 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		return false
 	}
 	if r.dropRequestVoteFromHighTermNode(m) {
-		plog.Warningf("dropped RequestVote at term %d from %d, leader available",
-			m.Term, m.From)
+		plog.Warningf("%s dropped RequestVote at term %d from %d, leader available",
+			r.describe(), m.Term, m.From)
 		return true
 	}
 	if m.Term > r.term {
@@ -1434,7 +1434,7 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		} else if r.isWitness() {
 			r.becomeWitness(m.Term, leaderID)
 		} else {
-			plog.Warningf("%s become a follower after receiving higher term from %d",
+			plog.Warningf("%s become a follower after receiving higher term from %s",
 				r.describe(), NodeID(m.From))
 			r.becomeFollower(m.Term, leaderID)
 		}
@@ -1457,7 +1457,8 @@ func (r *raft) Handle(m pb.Message) {
 		r.doubleCheckTermMatched(m.Term)
 		r.handle(r, m)
 	} else {
-		plog.Infof("dropped %s from %d, term not matched", m.Type, m.From)
+		plog.Infof("%s dropped %s from %d, term not matched",
+			r.describe(), m.Type, m.From)
 	}
 }
 
