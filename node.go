@@ -1265,15 +1265,6 @@ func (n *node) isBusySnapshotting() bool {
 	return snapshotting && n.sm.TaskChanBusy()
 }
 
-func (n *node) handleLocalTick(count uint64) {
-	if count > n.config.ElectionRTT {
-		count = n.config.ElectionRTT
-	}
-	for i := uint64(0); i < count; i++ {
-		n.tick()
-	}
-}
-
 func (n *node) recordMessage(m pb.Message) {
 	if (m.Type == pb.Heartbeat || m.Type == pb.HeartbeatResp) && m.Hint > 0 {
 		n.record(pb.ReadIndex)
@@ -1283,39 +1274,35 @@ func (n *node) recordMessage(m pb.Message) {
 }
 
 func (n *node) handleReceivedMessages() bool {
-	hasEvent := false
-	ltCount := uint64(0)
+	count := uint64(0)
 	busy := n.isBusySnapshotting()
 	msgs := n.mq.Get()
 	for _, m := range msgs {
-		hasEvent = true
 		if m.Type == pb.LocalTick {
-			ltCount++
-			continue
-		}
-		if m.Type == pb.Replicate && busy {
+			count++
+		} else if m.Type == pb.Replicate && busy {
 			continue
 		}
 		if done := n.handleMessage(m); !done {
-			if m.ClusterId != n.clusterID {
-				plog.Panicf("received message for cluster %d on %d",
-					m.ClusterId, n.clusterID)
-			}
 			n.recordMessage(m)
 			n.p.Handle(m)
 		}
+	}
+	if count > n.config.ElectionRTT/2 {
+		plog.Warningf("%s had %d LockTick msg in one batch", n.id, count)
 	}
 	if lazyFreeCycle > 0 {
 		for i := range msgs {
 			msgs[i].Entries = nil
 		}
 	}
-	n.handleLocalTick(ltCount)
-	return hasEvent
+	return len(msgs) > 0
 }
 
 func (n *node) handleMessage(m pb.Message) bool {
 	switch m.Type {
+	case pb.LocalTick:
+		n.tick()
 	case pb.Quiesce:
 		n.tryEnterQuiesce()
 	case pb.SnapshotStatus:
