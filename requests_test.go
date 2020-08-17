@@ -54,7 +54,7 @@ func TestInvalidLeaderTransferIsNotAllowed(t *testing.T) {
 	if err := p.request(1); err != nil {
 		t.Errorf("failed to request %v", err)
 	}
-	if err := p.request(2); err != ErrPendingLeaderTransferExist {
+	if err := p.request(2); err != ErrSystemBusy {
 		t.Errorf("failed to reject")
 	}
 }
@@ -173,7 +173,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 		t.Errorf("nil ss returned")
 	}
 	ss, err = ps.request(rsm.UserRequested, "", false, 0, 100)
-	if err != ErrPendingSnapshotRequestExist {
+	if err != ErrSystemBusy {
 		t.Errorf("request not rejected")
 	}
 	if ss != nil {
@@ -410,7 +410,7 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 	if err == nil {
 		t.Errorf("not expect to be success")
 	}
-	if err != ErrPendingConfigChangeExist {
+	if err != ErrSystemBusy {
 		t.Errorf("expected ErrSystemBusy, %v", err)
 	}
 	pcc.close()

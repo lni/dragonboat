@@ -64,7 +64,9 @@ var (
 	ErrPayloadTooBig = errors.New("payload is too big")
 	// ErrSystemBusy indicates that the system is too busy to handle the request.
 	// This might be caused when the Raft node reached its MaxInMemLogSize limit
-	// or other system limits.
+	// or other system limits. For a requested snapshot, leadership transfer or
+	// Raft config change operation, ErrSystemBusy means there is already such a
+	// request waiting to be processed.
 	ErrSystemBusy = errors.New("system is too busy try again later")
 	// ErrClusterClosed indicates that the requested cluster is being shut down.
 	ErrClusterClosed = errors.New("raft cluster already closed")
@@ -73,12 +75,6 @@ var (
 	ErrClusterNotInitialized = errors.New("raft cluster not initialized yet")
 	// ErrBadKey indicates that the key is bad, retry the request is recommended.
 	ErrBadKey = errors.New("bad key try again later")
-	// ErrPendingConfigChangeExist indicates that there is already a pending
-	// membership change exist in the system.
-	ErrPendingConfigChangeExist = errors.New("pending config change request exist")
-	// ErrPendingSnapshotRequestExist indicates that there is already a pending
-	// snapshot request exist in the system.
-	ErrPendingSnapshotRequestExist = errors.New("pending snapshot request exist")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
 	// ErrCanceled indicates that the request has been canceled.
@@ -91,8 +87,18 @@ var (
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
-	// ErrPendingLeaderTransferExist indicates that leader transfer request exist.
-	ErrPendingLeaderTransferExist = errors.New("pending leader transfer exist")
+)
+
+var (
+	// ErrPendingLeaderTransferExist has been depredicated, use ErrSystemBusy.
+	// Depreciated: ErrPendingLeaderTransferExist is depreciated.
+	ErrPendingLeaderTransferExist = ErrSystemBusy
+	// ErrPendingConfigChangeExist has been deprecicated, use ErrSystemBusy.
+	// Depreciated: ErrPendingConfigChangeExist is depreciated.
+	ErrPendingConfigChangeExist = ErrSystemBusy
+	// ErrPendingSnapshotRequestExist has been depreciated, use ErrSystemBusy.
+	// Depreciated: ErrPendingSnapshotRequestExist is depreciated.
+	ErrPendingSnapshotRequestExist = ErrSystemBusy
 )
 
 // IsTempError returns a boolean value indicating whether the specified error
@@ -101,7 +107,6 @@ var (
 func IsTempError(err error) bool {
 	return err == ErrSystemBusy ||
 		err == ErrBadKey ||
-		err == ErrPendingConfigChangeExist ||
 		err == ErrClusterClosed ||
 		err == ErrClosed
 }
@@ -498,7 +503,7 @@ func (l *pendingLeaderTransfer) request(target uint64) error {
 	select {
 	case l.leaderTransferC <- target:
 	default:
-		return ErrPendingLeaderTransferExist
+		return ErrSystemBusy
 	}
 	return nil
 }
@@ -548,7 +553,7 @@ func (p *pendingSnapshot) request(st rsm.SSReqType,
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.pending != nil {
-		return nil, ErrPendingSnapshotRequestExist
+		return nil, ErrSystemBusy
 	}
 	if p.snapshotC == nil {
 		return nil, ErrClusterClosed
@@ -652,7 +657,7 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.pending != nil {
-		return nil, ErrPendingConfigChangeExist
+		return nil, ErrSystemBusy
 	}
 	if p.confChangeC == nil {
 		return nil, ErrClusterClosed
