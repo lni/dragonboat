@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lni/goutils/logutil"
 
@@ -159,31 +160,25 @@ type ISnapshotter interface {
 // StateMachine is a manager class that manages application state
 // machine
 type StateMachine struct {
-	mu              sync.RWMutex
-	snapshotter     ISnapshotter
-	node            INode
-	sm              IManagedStateMachine
-	sessions        *SessionManager
-	members         *membership
-	index           uint64
-	term            uint64
-	snapshotIndex   uint64
-	onDiskInitIndex uint64
-	onDiskIndex     uint64
-	taskQ           *TaskQueue
-	onDiskSM        bool
-	aborted         bool
-	isWitness       bool
-	sct             config.CompressionType
-	fs              vfs.IFS
-	syncedIndex     struct {
-		sync.Mutex
-		index uint64
-	}
-	batchedIndex struct {
-		sync.Mutex
-		index uint64
-	}
+	mu                 sync.RWMutex
+	snapshotter        ISnapshotter
+	node               INode
+	sm                 IManagedStateMachine
+	sessions           *SessionManager
+	members            *membership
+	index              uint64
+	term               uint64
+	snapshotIndex      uint64
+	onDiskInitIndex    uint64
+	onDiskIndex        uint64
+	syncedIndex        uint64
+	batchedLastApplied uint64
+	taskQ              *TaskQueue
+	onDiskSM           bool
+	aborted            bool
+	isWitness          bool
+	sct                config.CompressionType
+	fs                 vfs.IFS
 }
 
 // NewStateMachine creates a new application state machine object.
@@ -239,7 +234,7 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
-	s.setBatchedLastApplied(ss.Index)
+	s.SetBatchedLastApplied(ss.Index)
 	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
@@ -435,39 +430,29 @@ func (s *StateMachine) GetLastApplied() uint64 {
 
 // GetBatchedLastApplied returns the batched last applied value.
 func (s *StateMachine) GetBatchedLastApplied() uint64 {
-	s.batchedIndex.Lock()
-	v := s.batchedIndex.index
-	s.batchedIndex.Unlock()
-	return v
+	return atomic.LoadUint64(&s.batchedLastApplied)
 }
 
 // GetSyncedIndex returns the index value that is known to have been
 // synchronized.
 func (s *StateMachine) GetSyncedIndex() uint64 {
-	s.syncedIndex.Lock()
-	defer s.syncedIndex.Unlock()
-	return s.syncedIndex.index
+	return atomic.LoadUint64(&s.syncedIndex)
 }
 
 // SetBatchedLastApplied sets the batched last applied value. This method
 // is mostly used in tests.
 func (s *StateMachine) SetBatchedLastApplied(index uint64) {
-	s.setBatchedLastApplied(index)
+	if s.GetBatchedLastApplied() > index {
+		panic("batched applied index moving backward")
+	}
+	atomic.StoreUint64(&s.batchedLastApplied, index)
 }
 
 func (s *StateMachine) setSyncedIndex(index uint64) {
-	s.syncedIndex.Lock()
-	defer s.syncedIndex.Unlock()
-	if s.syncedIndex.index > index {
-		panic("s.syncedIndex.index > index")
+	if s.GetSyncedIndex() > index {
+		panic("synced index moving backward")
 	}
-	s.syncedIndex.index = index
-}
-
-func (s *StateMachine) setBatchedLastApplied(index uint64) {
-	s.batchedIndex.Lock()
-	s.batchedIndex.index = index
-	s.batchedIndex.Unlock()
+	atomic.StoreUint64(&s.syncedIndex, index)
 }
 
 // Offloaded marks the state machine as offloaded from the specified compone.
@@ -918,7 +903,7 @@ func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 		plog.Panicf("unexpected last applied value, %d, %d", index, e.Index)
 	}
 	if last {
-		s.setBatchedLastApplied(e.Index)
+		s.SetBatchedLastApplied(e.Index)
 	}
 	return nil
 }
@@ -969,7 +954,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		}
 	}
 	if len(input) > 0 {
-		s.setBatchedLastApplied(input[len(input)-1].Index)
+		s.SetBatchedLastApplied(input[len(input)-1].Index)
 	}
 	return nil
 }

@@ -571,7 +571,7 @@ func applyConfigChangeEntry(sm *StateMachine,
 
 func TestBatchedLastAppliedValue(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.setBatchedLastApplied(12345)
+		sm.SetBatchedLastApplied(12345)
 		if sm.GetBatchedLastApplied() != 12345 {
 			t.Errorf("batched last applied value can not be set/get")
 		}
@@ -2223,8 +2223,8 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if msm.last != tt.lastApplied {
 			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
 		}
-		if sm.batchedIndex.index != tt.last {
-			t.Errorf("%d, index %d, last %d", idx, sm.batchedIndex.index, tt.last)
+		if sm.GetBatchedLastApplied() != tt.last {
+			t.Errorf("%d, index %d, last %d", idx, sm.GetBatchedLastApplied(), tt.last)
 		}
 		if np.firstIndex != tt.firstApplied {
 			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
