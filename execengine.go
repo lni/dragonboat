@@ -869,11 +869,10 @@ func (s *execEngine) execNodes(workerID uint64,
 	nodeUpdates := nodeCtx.GetUpdates()
 	for cid := range clusterIDMap {
 		node, ok := nodes[cid]
-		if !ok {
+		if !ok || node.stopped() {
 			continue
 		}
-		ud, hasUpdate := node.stepNode()
-		if hasUpdate {
+		if ud, hasUpdate := node.stepNode(); hasUpdate {
 			nodeUpdates = append(nodeUpdates, ud)
 		}
 	}
@@ -916,12 +915,8 @@ func (s *execEngine) execNodes(workerID uint64,
 	p.cs.start()
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
-		cont, err := node.processRaftUpdate(ud)
-		if err != nil {
+		if err := node.processRaftUpdate(ud); err != nil {
 			panic(err)
-		}
-		if !cont {
-			plog.Infof("process update failed, %s is ready to exit", node.id())
 		}
 		s.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
@@ -958,14 +953,10 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 			continue
 		}
 		node := nodes[ud.ClusterID]
-		cont, err := node.processSnapshot(ud)
-		if err != nil {
+		if err := node.processSnapshot(ud); err != nil {
 			panic(err)
 		}
-		if !cont || !node.applyRaftUpdates(ud) {
-			plog.Infof("raft update and snapshot not published, %s stopped",
-				node.id())
-		}
+		node.applyRaftUpdates(ud)
 	}
 }
 

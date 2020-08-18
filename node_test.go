@@ -301,7 +301,7 @@ func step(nodes []*node) bool {
 	}
 	for idx, ud := range nodeUpdates {
 		node := activeNodes[idx]
-		if _, err := node.processSnapshot(ud); err != nil {
+		if err := node.processSnapshot(ud); err != nil {
 			panic(err)
 		}
 		node.applyRaftUpdates(ud)
@@ -320,8 +320,7 @@ func step(nodes []*node) bool {
 	}
 	for idx, ud := range nodeUpdates {
 		node := activeNodes[idx]
-		running, err := node.processRaftUpdate(ud)
-		if err != nil {
+		if err := node.processRaftUpdate(ud); err != nil {
 			panic(err)
 		}
 		node.commitRaftUpdate(ud)
@@ -330,20 +329,18 @@ func step(nodes []*node) bool {
 				panic(err)
 			}
 		}
-		if running {
-			rec, err := node.sm.Handle(make([]rsm.Task, 0), nil)
-			if err != nil {
-				panic(err)
-			}
-			if rec.IsSnapshotTask() {
-				if rec.SnapshotAvailable || rec.InitialSnapshot {
-					if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
-						panic(err)
-					}
-				} else if rec.SnapshotRequested {
-					if err := node.saveSnapshot(rsm.Task{}); err != nil {
-						panic(err)
-					}
+		rec, err := node.sm.Handle(make([]rsm.Task, 0), nil)
+		if err != nil {
+			panic(err)
+		}
+		if rec.IsSnapshotTask() {
+			if rec.SnapshotAvailable || rec.InitialSnapshot {
+				if _, err := node.sm.RecoverFromSnapshot(rec); err != nil {
+					panic(err)
+				}
+			} else if rec.SnapshotRequested {
+				if err := node.saveSnapshot(rsm.Task{}); err != nil {
+					panic(err)
 				}
 			}
 		}
