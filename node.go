@@ -520,27 +520,27 @@ func (n *node) loaded(from rsm.From) {
 	n.sm.Loaded(from)
 }
 
-func (n *node) entriesToApply(ents []pb.Entry) (newents []pb.Entry) {
-	if len(ents) == 0 || n.stopped() {
-		return
+func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
+	if len(ents) == 0 {
+		return nil
 	}
-	lastIdx := ents[len(ents)-1].Index
-	if lastIdx < n.pushedIndex {
+	lastIndex := ents[len(ents)-1].Index
+	if lastIndex < n.pushedIndex {
 		plog.Panicf("%s got entries [%d-%d] older than current state %d",
-			n.id(), ents[0].Index, lastIdx, n.pushedIndex)
+			n.id(), ents[0].Index, lastIndex, n.pushedIndex)
 	}
-	firstIdx := ents[0].Index
-	if firstIdx > n.pushedIndex+1 {
+	firstIndex := ents[0].Index
+	if firstIndex > n.pushedIndex+1 {
 		plog.Panicf("%s has hole in to be applied logs, found: %d, want: %d",
-			n.id(), firstIdx, n.pushedIndex+1)
+			n.id(), firstIndex, n.pushedIndex+1)
 	}
-	if n.pushedIndex-firstIdx+1 < uint64(len(ents)) {
-		newents = ents[n.pushedIndex-firstIdx+1:]
+	if n.pushedIndex-firstIndex+1 < uint64(len(ents)) {
+		return ents[n.pushedIndex-firstIndex+1:]
 	}
-	return
+	return nil
 }
 
-func (n *node) pushTask(rec rsm.Task) bool {
+func (n *node) pushTask(rec rsm.Task) {
 	if !n.notifyCommit {
 		n.toApplyQ.Add(rec)
 		n.engine.setApplyReady(n.clusterID)
@@ -548,54 +548,46 @@ func (n *node) pushTask(rec rsm.Task) bool {
 		n.toCommitQ.Add(rec)
 		n.engine.setCommitReady(n.clusterID)
 	}
-	return !n.stopped()
 }
 
-func (n *node) pushEntries(ents []pb.Entry) bool {
+func (n *node) pushEntries(ents []pb.Entry) {
 	if len(ents) == 0 {
-		return true
+		return
 	}
-	rec := rsm.Task{Entries: ents}
-	if !n.pushTask(rec) {
-		return false
-	}
+	n.pushTask(rsm.Task{Entries: ents})
 	n.pushedIndex = ents[len(ents)-1].Index
-	return true
 }
 
-func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) bool {
-	rec := rsm.Task{
+func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) {
+	n.pushTask(rsm.Task{
 		ClusterID:      clusterID,
 		NodeID:         nodeID,
 		StreamSnapshot: true,
-	}
-	return n.pushTask(rec)
+	})
 }
 
-func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) bool {
-	rec := rsm.Task{SnapshotRequested: true, SSRequest: req}
-	return n.pushTask(rec)
+func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
+	n.pushTask(rsm.Task{
+		SnapshotRequested: true,
+		SSRequest:         req,
+	})
 }
 
-func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) bool {
+func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
 	if pb.IsEmptySnapshot(snapshot) {
-		return true
+		return
 	}
 	if snapshot.Index < n.pushedIndex ||
 		snapshot.Index < n.ss.getIndex() ||
 		snapshot.Index < applied {
 		panic("got a snapshot older than current applied state")
 	}
-	rec := rsm.Task{
+	n.pushTask(rsm.Task{
 		SnapshotAvailable: true,
 		Index:             snapshot.Index,
-	}
-	if !n.pushTask(rec) {
-		return false
-	}
+	})
 	n.ss.setIndex(snapshot.Index)
 	n.pushedIndex = snapshot.Index
-	return true
 }
 
 func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
@@ -854,25 +846,22 @@ func (n *node) removeSnapshotFlagFile(index uint64) error {
 	return n.snapshotter.removeFlagFile(index)
 }
 
-func (n *node) runSyncTask() (bool, error) {
+func (n *node) runSyncTask() error {
 	if !n.sm.OnDiskStateMachine() {
-		return true, nil
+		return nil
 	}
 	if n.syncTask == nil ||
 		!n.syncTask.timeToRun(n.millisecondSinceStart()) {
-		return true, nil
+		return nil
 	}
 	if !n.sm.TaskChanBusy() {
-		task := rsm.Task{PeriodicSync: true}
-		if !n.pushTask(task) {
-			return false, nil
-		}
+		n.pushTask(rsm.Task{PeriodicSync: true})
 	}
 	syncedIndex := n.sm.GetSyncedIndex()
 	if err := n.shrink(syncedIndex); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 func (n *node) shrink(index uint64) error {
@@ -1052,50 +1041,37 @@ func (n *node) processReadyToRead(ud pb.Update) {
 	}
 }
 
-func (n *node) processSnapshot(ud pb.Update) (bool, error) {
+func (n *node) processSnapshot(ud pb.Update) error {
 	if !pb.IsEmptySnapshot(ud.Snapshot) {
-		if n.stopped() {
-			return false, nil
-		}
 		err := n.logReader.ApplySnapshot(ud.Snapshot)
 		if err != nil && !isSoftSnapshotError(err) {
-			return false, err
+			return err
 		}
 		plog.Debugf("%s, snapshot %d ready to be pushed", n.id(), ud.Snapshot.Index)
-		if !n.pushSnapshot(ud.Snapshot, ud.LastApplied) {
-			return false, nil
-		}
+		n.pushSnapshot(ud.Snapshot, ud.LastApplied)
 	}
-	return true, nil
+	return nil
 }
 
-func (n *node) applyRaftUpdates(ud pb.Update) bool {
-	toApply := n.entriesToApply(ud.CommittedEntries)
-	if ok := n.pushEntries(toApply); !ok {
-		return false
-	}
-	return true
+func (n *node) applyRaftUpdates(ud pb.Update) {
+	n.pushEntries(n.entriesToApply(ud.CommittedEntries))
 }
 
-func (n *node) processRaftUpdate(ud pb.Update) (bool, error) {
+func (n *node) processRaftUpdate(ud pb.Update) error {
 	if err := n.logReader.Append(ud.EntriesToSave); err != nil {
-		return false, err
+		return err
 	}
 	n.sendMessages(ud.Messages)
 	if err := n.removeLog(); err != nil {
-		return false, err
+		return err
 	}
-	cont, err := n.runSyncTask()
-	if err != nil {
-		return false, err
-	}
-	if !cont {
-		return false, nil
+	if err := n.runSyncTask(); err != nil {
+		return err
 	}
 	if n.saveSnapshotRequired(ud.LastApplied) {
-		return n.pushTakeSnapshotRequest(rsm.SSRequest{}), nil
+		n.pushTakeSnapshotRequest(rsm.SSRequest{})
 	}
-	return true, nil
+	return nil
 }
 
 func (n *node) commitRaftUpdate(ud pb.Update) {
