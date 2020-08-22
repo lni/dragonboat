@@ -1189,18 +1189,11 @@ func (p *proposalShard) gcAt(now uint64) {
 		return
 	}
 	p.lastGcTime = now
-	deletedKeys := make(map[uint64]bool)
 	for key, rec := range p.pending {
 		if rec.deadline < now {
 			rec.timeout()
-			deletedKeys[key] = true
+			delete(p.pending, key)
 		}
-	}
-	if len(deletedKeys) == 0 {
-		return
-	}
-	for key := range deletedKeys {
-		delete(p.pending, key)
 	}
 }
 
