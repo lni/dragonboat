@@ -923,6 +923,17 @@ func (r *raft) appendEntries(entries []pb.Entry) {
 // state transition related functions
 //
 
+func (r *raft) toFollowerState(term uint64, leaderID uint64,
+	resetElectionTimeout bool) {
+	if r.isWitness() {
+		panic("transitioning to follower from witness state")
+	}
+	r.state = follower
+	r.reset(term, resetElectionTimeout)
+	r.setLeaderID(leaderID)
+	plog.Infof("%s became follower", r.describe())
+}
+
 func (r *raft) becomeObserver(term uint64, leaderID uint64) {
 	if !r.isObserver() {
 		panic("transitioning to observer state from non-observer")
@@ -930,7 +941,7 @@ func (r *raft) becomeObserver(term uint64, leaderID uint64) {
 	if r.isWitness() {
 		panic("transitioning to observer from witness state")
 	}
-	r.reset(term)
+	r.reset(term, true)
 	r.setLeaderID(leaderID)
 	plog.Infof("%s became observer", r.describe())
 }
@@ -939,19 +950,17 @@ func (r *raft) becomeWitness(term uint64, leaderID uint64) {
 	if !r.isWitness() {
 		panic("transitioning to witness state from non-witness")
 	}
-	r.reset(term)
+	r.reset(term, true)
 	r.setLeaderID(leaderID)
 	plog.Infof("%s became witness", r.describe())
 }
 
 func (r *raft) becomeFollower(term uint64, leaderID uint64) {
-	if r.isWitness() {
-		panic("transitioning to follower from witness state")
-	}
-	r.state = follower
-	r.reset(term)
-	r.setLeaderID(leaderID)
-	plog.Infof("%s became follower", r.describe())
+	r.toFollowerState(term, leaderID, true)
+}
+
+func (r *raft) becomeFollowerKE(term uint64, leaderID uint64) {
+	r.toFollowerState(term, leaderID, false)
 }
 
 func (r *raft) becomeCandidate() {
@@ -966,7 +975,7 @@ func (r *raft) becomeCandidate() {
 	}
 	r.state = candidate
 	// 2nd paragraph section 5.2 of the raft paper
-	r.reset(r.term + 1)
+	r.reset(r.term+1, true)
 	r.setLeaderID(NoLeader)
 	r.vote = r.nodeID
 	plog.Warningf("%s became candidate", r.describe())
@@ -978,7 +987,7 @@ func (r *raft) becomeLeader() {
 		plog.Panicf("transitioning to leader state from %v", r.state.String())
 	}
 	r.state = leader
-	r.reset(r.term)
+	r.reset(r.term, true)
 	r.setLeaderID(r.nodeID)
 	r.preLeaderPromotionHandleConfigChange()
 	// p72 of the raft thesis
@@ -986,7 +995,7 @@ func (r *raft) becomeLeader() {
 	plog.Infof("%s became leader", r.describe())
 }
 
-func (r *raft) reset(term uint64) {
+func (r *raft) reset(term uint64, resetElectionTimeout bool) {
 	if r.term != term {
 		r.term = term
 		r.vote = NoLeader
@@ -994,10 +1003,12 @@ func (r *raft) reset(term uint64) {
 	if r.rl.Enabled() {
 		r.rl.Reset()
 	}
+	if resetElectionTimeout {
+		r.electionTick = 0
+		r.setRandomizedElectionTimeout()
+	}
 	r.votes = make(map[uint64]bool)
-	r.electionTick = 0
 	r.heartbeatTick = 0
-	r.setRandomizedElectionTimeout()
 	r.readIndex = newReadIndex()
 	r.clearPendingConfigChange()
 	r.abortLeaderTransfer()
@@ -1432,9 +1443,20 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		} else if r.isWitness() {
 			r.becomeWitness(m.Term, leaderID)
 		} else {
-			plog.Warningf("%s become follower after receiving higher term from %s",
-				r.describe(), NodeID(m.From))
-			r.becomeFollower(m.Term, leaderID)
+			if m.Type == pb.RequestVote {
+				plog.Warningf("%s become followerKE after receiving higher term from %s",
+					r.describe(), NodeID(m.From))
+				// not to reset the electionTick value to avoid the risk of having the
+				// local node not being to campaign at all. if the local node generates
+				// the tick much slower than other nodes (e.g. bad config, hardware
+				// clock issue, bad scheduling, overloaded etc), it may lose the chance
+				// to ever start a campaign unless we keep its electionTick value here.
+				r.becomeFollowerKE(m.Term, leaderID)
+			} else {
+				plog.Warningf("%s become follower after receiving higher term from %s",
+					r.describe(), NodeID(m.From))
+				r.becomeFollower(m.Term, leaderID)
+			}
 		}
 	} else if m.Term < r.term {
 		if isLeaderMessage(m.Type) && r.checkQuorum {

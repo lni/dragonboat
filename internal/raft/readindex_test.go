@@ -167,7 +167,7 @@ func TestReadIndexIsResetAfterRaftStateChange(t *testing.T) {
 	if len(r.readIndex.queue) != 1 || len(r.readIndex.pending) != 1 {
 		t.Errorf("add request failed")
 	}
-	r.reset(2)
+	r.reset(2, true)
 	if len(r.readIndex.queue) != 0 || len(r.readIndex.pending) != 0 {
 		t.Errorf("readIndex not reset after raft reset")
 	}

@@ -2799,7 +2799,7 @@ func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
 		configFunc(cfg)
 	}
 	sm := newRaft(cfg, storage)
-	sm.reset(terms[len(terms)-1])
+	sm.reset(terms[len(terms)-1], true)
 	return sm
 }
 
@@ -2814,7 +2814,7 @@ func votedWithConfig(configFunc func(*config.Config), vote, term uint64) *raft {
 		configFunc(cfg)
 	}
 	sm := newRaft(cfg, storage)
-	sm.reset(term)
+	sm.reset(term, true)
 	return sm
 }
 
@@ -2878,7 +2878,7 @@ func newNetworkWithConfig(configFunc func(*config.Config), peers ...stateMachine
 					v.remotes[peerAddrs[i]] = &remote{}
 				}
 			}
-			v.reset(v.term)
+			v.reset(v.term, true)
 			npeers[id] = v
 		case *blackHole:
 			npeers[id] = v

@@ -251,6 +251,7 @@ func TestRaftHelperMethods(t *testing.T) {
 
 func TestBecomeFollowerDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	r.electionTick = 100
 	r.becomeFollower(2, 3)
 	if r.term != 2 {
 		t.Errorf("term not set")
@@ -260,6 +261,31 @@ func TestBecomeFollowerDragonboat(t *testing.T) {
 	}
 	if r.state != follower {
 		t.Errorf("not become follower")
+	}
+	if r.electionTick != 0 {
+		t.Errorf("election tick not reset, %d", r.electionTick)
+	}
+}
+
+func TestBecomeFollowerKE(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	r.electionTick = 100
+	r.electionTimeout = 101
+	r.becomeFollowerKE(2, 3)
+	if r.term != 2 {
+		t.Errorf("term not set")
+	}
+	if r.leaderID != 3 {
+		t.Errorf("leader id not set")
+	}
+	if r.state != follower {
+		t.Errorf("not become follower")
+	}
+	if r.electionTick != 100 {
+		t.Errorf("election tick changed, %d", r.electionTick)
+	}
+	if r.electionTimeout != 101 {
+		t.Errorf("election timeout changed, %d", r.electionTimeout)
 	}
 }
 
@@ -302,6 +328,7 @@ func TestBecomeLeaderPanicWhenNodeIsFollower(t *testing.T) {
 func TestBecomeCandidateDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)
+	r.electionTick = 100
 	term := r.term
 	r.becomeCandidate()
 	if r.term != term+1 {
@@ -312,6 +339,9 @@ func TestBecomeCandidateDragonboat(t *testing.T) {
 	}
 	if r.vote != r.nodeID {
 		t.Errorf("vote not set")
+	}
+	if r.electionTick != 0 {
+		t.Errorf("election tick not reset, %d", r.electionTick)
 	}
 }
 
@@ -1745,6 +1775,25 @@ func TestCanGrantVote(t *testing.T) {
 	}
 }
 
+func TestElectionTickResetAfterGrantVote(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.becomeFollower(2, 2)
+	r.electionTick = 101
+	m := pb.Message{
+		Type: pb.RequestVote,
+		From: 2,
+		To:   1,
+		Term: 3,
+	}
+	r.Handle(m)
+	if r.vote != 2 {
+		t.Fatalf("failed to grant the vote")
+	}
+	if r.electionTick != 0 {
+		t.Errorf("electionTick not reset")
+	}
+}
+
 func TestHasConfigChangeToApply(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.hasNotAppliedConfigChange = nil
@@ -2428,7 +2477,7 @@ func TestElectionIgnoredWhenConfigChangeIsPending(t *testing.T) {
 	}
 }
 
-func TestHandlegElection(t *testing.T) {
+func TestHandleElection(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeFollower(2, 2)
 	msg := pb.Message{
@@ -2443,6 +2492,31 @@ func TestHandlegElection(t *testing.T) {
 	}
 	if r.state != candidate {
 		t.Errorf("not a candidate")
+	}
+}
+
+func TestRequestVoteMessageWontResetElectionTick(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.becomeFollower(2, 2)
+	r.electionTick = 101
+	r.electionTimeout = 102
+	msg := pb.Message{
+		Type: pb.RequestVote,
+		From: 2,
+		To:   1,
+		Term: 3,
+	}
+	r.onMessageTermNotMatched(msg)
+	if r.electionTick != 101 || r.electionTimeout != 102 {
+		t.Errorf("election tick changed")
+	}
+	msg = pb.Message{
+		Type: pb.Replicate,
+		Term: 5,
+	}
+	r.onMessageTermNotMatched(msg)
+	if r.electionTick != 0 {
+		t.Fatalf("election tick not reset")
 	}
 }
 
@@ -2839,7 +2913,7 @@ func TestResetClearsFollowerRateLimitState(t *testing.T) {
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
 	}
-	r.reset(2)
+	r.reset(2, true)
 	for i := uint64(0); i <= server.ChangeTickThreashold; i++ {
 		rl.Tick()
 	}
