@@ -353,15 +353,6 @@ func TestRaftAPINotifyRaftLastApplied(t *testing.T) {
 	}
 }
 
-func TestRaftAPIDumpRaftInfoToLog(t *testing.T) {
-	s := NewTestLogDB()
-	p := Launch(newTestConfig(1, 10, 1),
-		s, nil, []PeerAddress{{NodeID: 1, Address: "1"}}, true, true)
-	m := make(map[uint64]string)
-	m[1] = "1"
-	p.DumpRaftInfoToLog(m)
-}
-
 func TestRaftAPIReadIndex(t *testing.T) {
 	msgs := []pb.Message{}
 	appendStep := func(r *raft, m pb.Message) {

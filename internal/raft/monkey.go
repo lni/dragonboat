@@ -18,7 +18,17 @@ package raft
 
 import (
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/logger"
 )
+
+var (
+	mplog = logger.GetLogger("raft-mt")
+)
+
+// DumpRaftInfoToLog prints the raft state to log for debugging purposes.
+func (p *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
+	p.raft.dumpRaftInfoToLog(addrMap)
+}
 
 func (rc *Peer) GetInMemLogSize() uint64 {
 	ents := rc.raft.log.inmem.entries
@@ -32,4 +42,24 @@ func (rc *Peer) GetInMemLogSize() uint64 {
 
 func (rc *Peer) GetRateLimiter() *server.InMemRateLimiter {
 	return rc.raft.log.inmem.rl
+}
+
+func (r *raft) dumpRaftInfoToLog(addrs map[uint64]string) {
+	var flag string
+	if r.leaderID == r.nodeID {
+		flag = "***"
+	} else {
+		flag = "###"
+	}
+	mplog.Infof("%s Raft node %s, %d remote nodes",
+		flag, r.describe(), len(r.remotes))
+	for id, rp := range r.remotes {
+		if v, ok := addrs[id]; !ok {
+			v = "!missing!"
+		} else {
+			mplog.Infof(" %s,addr:%s,match:%d,next:%d,state:%s,paused:%v,ra:%v,ps:%d",
+				NodeID(id), v, rp.match, rp.next, rp.state, rp.isPaused(),
+				rp.isActive(), rp.snapshotIndex)
+		}
+	}
 }

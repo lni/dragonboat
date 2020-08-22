@@ -243,7 +243,6 @@ func TestRaftHelperMethods(t *testing.T) {
 	addrMap[1] = "address1"
 	addrMap[2] = "address2"
 	addrMap[3] = "address3"
-	r.dumpRaftInfoToLog(addrMap)
 	status := getLocalStatus(r)
 	if status.IsLeader() || !status.IsFollower() || status.NodeID != 1 {
 		t.Errorf("unexpected status value")

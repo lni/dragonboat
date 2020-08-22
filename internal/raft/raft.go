@@ -340,7 +340,7 @@ func (r *raft) isWitness() bool {
 
 func (r *raft) mustBeLeader() {
 	if !r.isLeader() {
-		plog.Panicf("%s is not a leader", r.describe())
+		plog.Panicf("%s is not leader", r.describe())
 	}
 }
 
@@ -794,9 +794,7 @@ func (r *raft) sendReplicateMessage(to uint64) {
 }
 
 func (r *raft) broadcastReplicateMessage() {
-	if !r.isLeader() {
-		panic("non-leader broadcasting replication msg")
-	}
+	r.mustBeLeader()
 	for nid := range r.observers {
 		if nid == r.nodeID {
 			plog.Panicf("%s observer is broadcasting Replicate msg", r.describe())
@@ -1136,7 +1134,7 @@ func (r *raft) selfRemoved() bool {
 func (r *raft) addNode(nodeID uint64) {
 	r.clearPendingConfigChange()
 	if nodeID == r.nodeID && r.isWitness() {
-		plog.Panicf("%s is a witness", r.describe())
+		plog.Panicf("%s is witness", r.describe())
 	}
 	if _, ok := r.remotes[nodeID]; ok {
 		// already a voting member
@@ -1151,7 +1149,7 @@ func (r *raft) addNode(nodeID uint64) {
 			r.becomeFollower(r.term, r.leaderID)
 		}
 	} else if _, ok := r.witnesses[nodeID]; ok {
-		panic("could not promote witness to a full member")
+		panic("could not promote witness to full member")
 	} else {
 		r.setRemote(nodeID, 0, r.log.lastIndex()+1)
 	}
@@ -1160,7 +1158,7 @@ func (r *raft) addNode(nodeID uint64) {
 func (r *raft) addObserver(nodeID uint64) {
 	r.clearPendingConfigChange()
 	if nodeID == r.nodeID && !r.isObserver() {
-		plog.Panicf("%s iks not an observer", r.describe())
+		plog.Panicf("%s is not an observer", r.describe())
 	}
 	if _, ok := r.observers[nodeID]; ok {
 		return
@@ -1171,7 +1169,7 @@ func (r *raft) addObserver(nodeID uint64) {
 func (r *raft) addWitness(nodeID uint64) {
 	r.clearPendingConfigChange()
 	if nodeID == r.nodeID && !r.isWitness() {
-		plog.Panicf("%s is not a witness", r.describe())
+		plog.Panicf("%s is not witness", r.describe())
 	}
 	if _, ok := r.witnesses[nodeID]; ok {
 		return
@@ -1391,8 +1389,8 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 	}
 	// see p42 of the raft thesis
 	if m.Hint == m.From {
-		plog.Debugf("%s, RequestVote with leader transfer hint received from %d",
-			r.describe(), m.From)
+		plog.Debugf("%s, RequestVote with leader transfer hint received from %s",
+			r.describe(), NodeID(m.From))
 		return false
 	}
 	if r.isLeader() && !r.quiesce && r.electionTick >= r.electionTimeout {
@@ -1418,8 +1416,8 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		return false
 	}
 	if r.dropRequestVoteFromHighTermNode(m) {
-		plog.Warningf("%s dropped RequestVote at term %d from %d, leader available",
-			r.describe(), m.Term, m.From)
+		plog.Warningf("%s dropped RequestVote at term %d from %s, leader available",
+			r.describe(), m.Term, NodeID(m.From))
 		return true
 	}
 	if m.Term > r.term {
@@ -1434,7 +1432,7 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		} else if r.isWitness() {
 			r.becomeWitness(m.Term, leaderID)
 		} else {
-			plog.Warningf("%s become a follower after receiving higher term from %s",
+			plog.Warningf("%s become follower after receiving higher term from %s",
 				r.describe(), NodeID(m.From))
 			r.becomeFollower(m.Term, leaderID)
 		}
@@ -1444,7 +1442,7 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 			// TestFreeStuckCandidateWithCheckQuorum
 			r.send(pb.Message{To: m.From, Type: pb.NoOP})
 		} else {
-			plog.Infof("%s ignored a %s with lower term (%d) from %s",
+			plog.Infof("%s ignored %s with lower term (%d) from %s",
 				r.describe(), m.Type, m.Term, NodeID(m.From))
 		}
 		return true
@@ -1457,8 +1455,8 @@ func (r *raft) Handle(m pb.Message) {
 		r.doubleCheckTermMatched(m.Term)
 		r.handle(r, m)
 	} else {
-		plog.Infof("%s dropped %s from %d, term not matched",
-			r.describe(), m.Type, m.From)
+		plog.Infof("%s dropped %s from %s, term not matched",
+			r.describe(), m.Type, NodeID(m.From))
 	}
 }
 
@@ -1968,7 +1966,7 @@ func (r *raft) handleCandidateHeartbeat(m pb.Message) {
 
 func (r *raft) handleCandidateRequestVoteResp(m pb.Message) {
 	if _, ok := r.observers[m.From]; ok {
-		plog.Warningf("dropped a RequestVoteResp from observer")
+		plog.Warningf("dropped RequestVoteResp from observer")
 		return
 	}
 	count := r.handleVoteResp(m.From, m.Reject)
@@ -2138,28 +2136,5 @@ func (r *raft) checkHandlerMap() {
 		if f != nil {
 			panic("unexpected msg handler")
 		}
-	}
-}
-
-//
-// debugging related functions
-//
-func (r *raft) dumpRaftInfoToLog(addrMap map[uint64]string) {
-	var flag string
-	if r.leaderID != NoLeader && r.leaderID == r.nodeID {
-		flag = "***"
-	} else {
-		flag = "###"
-	}
-	plog.Infof("%s Raft node %s, %d remote nodes",
-		flag, r.describe(), len(r.remotes))
-	for id, rp := range r.remotes {
-		v, ok := addrMap[id]
-		if !ok {
-			v = "!missing!"
-		}
-		plog.Infof(" %s,addr:%s,match:%d,next:%d,state:%s,paused:%v,ra:%v,ps:%d",
-			NodeID(id), v, rp.match, rp.next, rp.state, rp.isPaused(),
-			rp.isActive(), rp.snapshotIndex)
 	}
 }

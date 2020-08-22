@@ -305,11 +305,6 @@ func (p *Peer) ReadIndex(ctx pb.SystemCtx) {
 	})
 }
 
-// DumpRaftInfoToLog prints the raft state to log for debugging purposes.
-func (p *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
-	p.raft.dumpRaftInfoToLog(addrMap)
-}
-
 // NotifyRaftLastApplied passes on the lastApplied index confirmed by the RSM to
 // the raft state machine.
 func (p *Peer) NotifyRaftLastApplied(lastApplied uint64) {
