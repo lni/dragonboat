@@ -6,27 +6,23 @@ branches:
 
 matrix:
   include:
-    - name: "go1.13.x-linux"
-      go: 1.13.x
+    - name: "go1.14.x-linux"
+      go: 1.14.x
       os: linux
       script: make test
     - name: "go1.15.x-linux"
       go: 1.15.x
       os: linux
-      script: make test
-    - name: "go1.14.x-linux"
-      go: 1.14.x
-      os: linux
       script: make travis-test
-    - name: "go1.14.x-linux (rocksdb)"
-      go: 1.14.x
+    - name: "go1.15.x-linux (rocksdb)"
+      go: 1.15.x
       os: linux
       dist: bionic
       before_script:
         - sudo apt-get install librocksdb-dev
       script: DRAGONBOAT_LOGDB=rocksdb make test-logdb
-    - name: "go1.14.x-linux-static-check"
-      go: 1.14.x
+    - name: "go1.15.x-linux-static-check"
+      go: 1.15.x
       os: linux
       before_script:
         - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.23.8
@@ -35,38 +31,38 @@ matrix:
       script:
         - make golangci-lint-check
         - make static-check
-    - name: "go1.14.x-linux-arm64"
-      go: 1.14.x
+    - name: "go1.15.x-linux-arm64"
+      go: 1.15.x
       os: linux
       arch: arm64
       dist: bionic
       script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_MEMFS_TEST=1 make test
-    - name: "go1.14.x-linux-arm64 (rocksdb)"
-      go: 1.14.x
+    - name: "go1.15.x-linux-arm64 (rocksdb)"
+      go: 1.15.x
       os: linux
       dist: bionic
       arch: arm64
       before_script:
         - sudo apt-get install librocksdb-dev
       script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_LOGDB=rocksdb make test-logdb
-    - name: "go1.14.x-linux-race"
-      go: 1.14.x
+    - name: "go1.15.x-linux-race"
+      go: 1.15.x
       os: linux
       script: RACE=1 make test
-    - name: "go1.14.x-darwin"
-      go: 1.14.x
+    - name: "go1.15.x-darwin"
+      go: 1.15.x
       os: osx
       script: make test
-    - name: "go1.14.x-windows"
-      go: 1.14.x
+    - name: "go1.15.x-windows"
+      go: 1.15.x
       os: windows
       script: go test -v
-    - name: "go1.14.x-freebsd"
-      go: 1.14.x
+    - name: "go1.15.x-freebsd"
+      go: 1.15.x
       os: freebsd
       script: gmake test
     - name: "nightly test - monkey test"
-      go: 1.14.x
+      go: 1.15.x
       os: linux
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
@@ -76,7 +72,7 @@ matrix:
         - go get github.com/lni/dragonboat/v3@master
         - make monkey-test-travis
     - name: "nightly test - monkey test ondisk"
-      go: 1.14.x
+      go: 1.15.x
       os: linux
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
@@ -86,7 +82,7 @@ matrix:
         - go get github.com/lni/dragonboat/v3@master
         - make ondisk-monkey-test-travis
     - name: "nightly test - monkey test memfs"
-      go: 1.14.x
+      go: 1.15.x
       os: linux
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
@@ -96,7 +92,7 @@ matrix:
         - go get github.com/lni/dragonboat/v3@master
         - DRAGONBOAT_MEMFS_TEST=1 make monkey-test-travis
     - name: "nightly test - monkey test race"
-      go: 1.14.x
+      go: 1.15.x
       os: linux
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
