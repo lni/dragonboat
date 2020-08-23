@@ -55,7 +55,7 @@ var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
 var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
 var twonh = flag.Bool("two-nodehost", false, "use two nodehosts")
 
-func newBatchedLogDB(cfg config.LogDBConfig, cb config.LogDBCallback,
+func newBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,
@@ -146,7 +146,7 @@ func main() {
 	}
 	if *tiny {
 		log.Println("using tiny LogDB memory limit")
-		nhc.LogDBConfig = config.GetTinyMemLogDBConfig()
+		nhc.LogDB = config.GetTinyMemLogDBConfig()
 	}
 	if *batched {
 		log.Println("using batched logdb")

@@ -244,6 +244,16 @@ test-cov:
 	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic
 
 ###############################################################################
+# tools
+###############################################################################
+.PHONY: tools
+tools: tools-checkdisk
+
+.PHONY: tools-checkdisk
+tools-checkdisk:
+	$(GO) build $(PKGNAME)/tools/checkdisk
+
+###############################################################################
 # static checks
 ###############################################################################
 CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
@@ -282,4 +292,5 @@ clean:
 	@find . -type d -name "*safe_to_delete" -print | xargs rm -rf
 	@rm -f gitversion.go 
 	@rm -f test-*.*
+	@rm -f checkdisk
 	@$(GO) clean -i -testcache $(PKG)

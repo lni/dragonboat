@@ -61,6 +61,10 @@ matrix:
       go: 1.15.x
       os: freebsd
       script: gmake test
+    - name: "build tools"
+      go: 1.15.x
+      os: linux
+      script: make tools
     - name: "nightly test - monkey test"
       go: 1.15.x
       os: linux
