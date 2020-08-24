@@ -138,11 +138,17 @@ func main() {
 	logger.GetLogger("logdb").SetLevel(logger.WARNING)
 	logger.GetLogger("transport").SetLevel(logger.WARNING)
 	logger.GetLogger("dragonboat").SetLevel(logger.WARNING)
+	lc := config.GetLargeMemLogDBConfig()
+	lc.SaveBufferSize = 64 * 1024 * 1024
+	lc.KVMaxWriteBufferNumber = 8
+	lc.KVWriteBufferSize = 256 * 1024 * 1024
+	lc.KVLevel0FileNumCompactionTrigger = 6
 	nhc := config.NodeHostConfig{
 		NodeHostDir:    dataDirectoryName,
 		RTTMillisecond: 200,
 		RaftAddress:    raftAddress,
 		FS:             fs,
+		LogDB:          lc,
 	}
 	if *tiny {
 		log.Println("using tiny LogDB memory limit")
