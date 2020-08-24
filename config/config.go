@@ -523,6 +523,8 @@ type LogDBConfig struct {
 	KVRecycleLogFileNum                uint64
 	KVNumOfLevels                      uint64
 	KVBlockSize                        uint64
+	SaveBufferSize                     uint64
+	MaxSaveBufferSize                  uint64
 }
 
 // GetDefaultLogDBConfig returns the default configurations for the LogDB
@@ -585,6 +587,8 @@ func getDefaultLogDBConfig() LogDBConfig {
 		KVRecycleLogFileNum:                0,
 		KVNumOfLevels:                      7,
 		KVBlockSize:                        32 * 1024,
+		SaveBufferSize:                     32 * 1024,
+		MaxSaveBufferSize:                  64 * 1024 * 1024,
 	}
 }
 

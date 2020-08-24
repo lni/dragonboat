@@ -28,6 +28,7 @@ const (
 // by a single thread throughout its life time.
 type context struct {
 	size    uint64
+	maxSize uint64
 	eb      pb.EntryBatch
 	lb      pb.EntryBatch
 	key     *Key
@@ -37,9 +38,10 @@ type context struct {
 }
 
 // newContext creates a new RDB context instance.
-func newContext(size uint64, wb kv.IWriteBatch) *context {
+func newContext(size uint64, maxSize uint64, wb kv.IWriteBatch) *context {
 	ctx := &context{
 		size:    size,
+		maxSize: maxSize,
 		key:     newKey(maxKeySize, nil),
 		val:     make([]byte, size),
 		updates: make([]pb.Update, 0, updateSliceLen),
@@ -75,7 +77,7 @@ func (c *context) GetValueBuffer(sz uint64) []byte {
 		return c.val
 	}
 	val := make([]byte, sz)
-	if sz < RDBContextValueSize {
+	if sz < c.maxSize {
 		c.size = sz
 		c.val = val
 	}

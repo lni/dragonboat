@@ -28,15 +28,9 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-var (
-	// InitRDBContextValueSize defines the initial size of RDB buffer.
-	InitRDBContextValueSize uint64 = 32 * 1024
-	// RDBContextValueSize defines the max size of RDB buffer to be retained.
-	RDBContextValueSize uint64 = 64 * 1024 * 1024
-)
-
 // ShardedDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedDB struct {
+	config               config.LogDBConfig
 	completedCompactions uint64
 	shards               []*db
 	partitioner          server.IPartitioner
@@ -121,6 +115,7 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 	partitioner := server.NewDoubleFixedPartitioner(config.Expert.ExecShards,
 		config.Expert.LogDBShards)
 	mw := &ShardedDB{
+		config:       config.LogDB,
 		shards:       shards,
 		partitioner:  partitioner,
 		compactions:  newCompactions(),
@@ -161,7 +156,7 @@ func (s *ShardedDB) SelfCheckFailed() (bool, error) {
 // GetLogDBThreadContext return a IContext instance.
 func (s *ShardedDB) GetLogDBThreadContext() raftio.IContext {
 	wb := s.shards[0].getWriteBatch()
-	return newContext(InitRDBContextValueSize, wb)
+	return newContext(s.config.SaveBufferSize, s.config.MaxSaveBufferSize, wb)
 }
 
 // SaveRaftState saves the raft state and logs found in the raft.Update list
