@@ -157,7 +157,7 @@ ifneq ($(TESTTAGS),"")
 GOCMDTAGS=-tags=$(TESTTAGS)
 endif
 
-TEST_OPTIONS=test $(GOCMDTAGS) -timeout=1200s -count=1 $(VERBOSE) \
+TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
   $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
 .PHONY: dragonboat-test
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
