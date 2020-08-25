@@ -76,6 +76,12 @@ func SetReceiveQueueLen(v uint64) {
 	receiveQueueLen = v
 }
 
+func (nh *NodeHost) Stopped() bool {
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
+	return nh.mu.stopped
+}
+
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {
 	nh.transport.(*transport.Transport).SetPreSendMessageBatchHook(f)
 }
