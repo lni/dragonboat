@@ -106,9 +106,12 @@ var (
 // input, potentially on a more suitable NodeHost instance.
 func IsTempError(err error) bool {
 	return err == ErrSystemBusy ||
+		err == ErrClusterNotInitialized ||
+		err == ErrTimeout ||
 		err == ErrBadKey ||
 		err == ErrClusterClosed ||
-		err == ErrClosed
+		err == ErrClosed ||
+		err == ErrClusterNotReady
 }
 
 // RequestResultCode is the result code returned to the client to indicate the
