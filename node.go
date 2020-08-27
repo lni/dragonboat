@@ -1265,7 +1265,7 @@ func (n *node) handleReceivedMessages() bool {
 		}
 	}
 	if count > n.config.ElectionRTT/2 {
-		plog.Warningf("%s had %d LockTick msg in one batch", n.id, count)
+		plog.Warningf("%s had %d LocalTick msgs in one batch", n.id(), count)
 	}
 	if lazyFreeCycle > 0 {
 		for i := range msgs {
