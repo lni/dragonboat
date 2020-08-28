@@ -107,7 +107,6 @@ func (p *Peer) RequestLeaderTransfer(target uint64) {
 	p.raft.Handle(pb.Message{
 		Type: pb.LeaderTransfer,
 		To:   p.raft.nodeID,
-		From: target,
 		Hint: target,
 	})
 }

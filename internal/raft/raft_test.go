@@ -2705,14 +2705,14 @@ func TestHandleLeaderTransfer(t *testing.T) {
 		if tt.transferring {
 			r.leaderTransferTarget = 3
 		}
-		rp, ok := r.remotes[2]
+		rp, ok := r.remotes[tt.target]
 		if !ok {
 			t.Fatalf("failed to get remote")
 		}
 		if tt.match {
 			rp.match = r.log.lastIndex()
 		}
-		r.handleLeaderTransfer(msg, rp)
+		r.handleLeaderTransfer(msg)
 		if tt.ignored {
 			if len(r.msgs) != 0 {
 				t.Errorf("unexpectedly sent msg")

@@ -1734,7 +1734,7 @@ func (r *raft) handleLeaderHeartbeatResp(m pb.Message, rp *remote) {
 	}
 }
 
-func (r *raft) handleLeaderTransfer(m pb.Message, rp *remote) {
+func (r *raft) handleLeaderTransfer(m pb.Message) {
 	r.mustBeLeader()
 	target := m.Hint
 	plog.Debugf("%s called handleLeaderTransfer, target %d", r.describe(), target)
@@ -1747,6 +1747,11 @@ func (r *raft) handleLeaderTransfer(m pb.Message, rp *remote) {
 	}
 	if r.nodeID == target {
 		plog.Warningf("received LeaderTransfer with target pointing to itself")
+		return
+	}
+	rp, ok := r.remotes[target]
+	if !ok {
+		plog.Warningf("unknown LeaderTransfer target")
 		return
 	}
 	r.leaderTransferTarget = target
@@ -2095,7 +2100,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.HeartbeatResp] = lw(r, r.handleLeaderHeartbeatResp)
 	r.handlers[leader][pb.SnapshotStatus] = lw(r, r.handleLeaderSnapshotStatus)
 	r.handlers[leader][pb.Unreachable] = lw(r, r.handleLeaderUnreachable)
-	r.handlers[leader][pb.LeaderTransfer] = lw(r, r.handleLeaderTransfer)
+	r.handlers[leader][pb.LeaderTransfer] = r.handleLeaderTransfer
 	r.handlers[leader][pb.Election] = r.handleNodeElection
 	r.handlers[leader][pb.RequestVote] = r.handleNodeRequestVote
 	r.handlers[leader][pb.ConfigChangeEvent] = r.handleNodeConfigChange
