@@ -255,7 +255,6 @@ type NodeHost struct {
 		csi      uint64
 		clusters sync.Map // clusterID -> *node
 		lm       sync.Map // shardID -> *logDBMetrics
-		requests map[uint64]*server.MessageQueue
 	}
 	snapshotStatus *snapshotFeedback
 	serverCtx      *server.Context
@@ -315,7 +314,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
-	nh.mu.requests = make(map[uint64]*server.MessageQueue)
 	nh.createPools()
 	defer func() {
 		if r := recover(); r != nil {
@@ -657,8 +655,8 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 	if !ok {
 		return 0, false, ErrClusterNotFound
 	}
-	nodeID, valid := v.getLeaderID()
-	return nodeID, valid, nil
+	leaderID, valid := v.getLeaderID()
+	return leaderID, valid, nil
 }
 
 // GetNoOPSession returns a NO-OP client session ready to be used for making
@@ -990,9 +988,8 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(clusterID)
-	return req, err
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 }
 
 // RequestCompaction requests a compaction operation to be asynchronously
@@ -1026,9 +1023,8 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	if v.nodeID != nodeID {
 		return nil, ErrClusterNotFound
 	}
-	op, err := v.requestCompaction()
-	nh.execEngine.setStepReady(clusterID)
-	return op, err
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestCompaction()
 }
 
 // SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode
@@ -1140,9 +1136,8 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	tt := nh.getTimeoutTick(timeout)
-	req, err := v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
-	nh.execEngine.setStepReady(clusterID)
-	return req, err
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
 }
 
 // RequestAddNode is a Raft cluster membership change method for requesting the
@@ -1178,10 +1173,9 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestAddNodeWithOrderID(nodeID,
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestAddNodeWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(clusterID)
-	return req, err
 }
 
 // RequestAddObserver is a Raft cluster membership change method for requesting
@@ -1217,10 +1211,9 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestAddObserverWithOrderID(nodeID,
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestAddObserverWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(clusterID)
-	return req, err
 }
 
 // RequestAddWitness is a Raft cluster membership change method for requesting
@@ -1254,10 +1247,9 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	req, err := v.requestAddWitnessWithOrderID(nodeID,
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestAddWitnessWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(clusterID)
-	return req, err
 }
 
 // RequestLeaderTransfer makes a request to transfer the leadership of the
@@ -1276,11 +1268,8 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	}
 	plog.Debugf("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
-	err := v.requestLeaderTransfer(targetNodeID)
-	if err == nil {
-		nh.execEngine.setStepReady(clusterID)
-	}
-	return err
+	defer nh.execEngine.setStepReady(clusterID)
+	return v.requestLeaderTransfer(targetNodeID)
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for
@@ -1291,14 +1280,12 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 // cluster member will corrupt the Raft cluster.
 func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	clusterID uint64, nodeID uint64) error {
-	n, ok := nh.getCluster(clusterID)
-	if ok && n.nodeID == nodeID {
+	if _, ok := nh.getCluster(clusterID); ok {
 		return ErrClusterNotStopped
 	}
-	destroyedC := nh.execEngine.destroyedC(clusterID, nodeID)
-	if destroyedC != nil {
+	if ch := nh.execEngine.destroyedC(clusterID, nodeID); ch != nil {
 		select {
-		case <-destroyedC:
+		case <-ch:
 		case <-ctx.Done():
 			if ctx.Err() == context.Canceled {
 				return ErrCanceled
@@ -1483,21 +1470,6 @@ func (nh *NodeHost) getClusterNotLocked(clusterID uint64) (*node, bool) {
 	return v.(*node), true
 }
 
-func (nh *NodeHost) getClusterAndQueueNotLocked(clusterID uint64) (*node,
-	*server.MessageQueue, bool) {
-	nh.mu.RLock()
-	defer nh.mu.RUnlock()
-	v, ok := nh.getClusterNotLocked(clusterID)
-	if !ok {
-		return nil, nil, false
-	}
-	q, ok := nh.mu.requests[clusterID]
-	if !ok {
-		return nil, nil, false
-	}
-	return v, q, true
-}
-
 func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
 	nh.mu.RLock()
 	v, ok := nh.mu.clusters.Load(clusterID)
@@ -1661,7 +1633,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		panic(err)
 	}
 	nh.mu.clusters.Store(clusterID, rn)
-	nh.mu.requests[clusterID] = queue
 	nh.mu.csi++
 	nh.execEngine.setApplyReady(clusterID)
 	return nil
@@ -1793,7 +1764,6 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 		return ErrClusterNotFound
 	}
 	nh.mu.clusters.Delete(clusterID)
-	delete(nh.mu.requests, clusterID)
 	nh.mu.csi++
 	n.close()
 	n.offloaded(rsm.FromNodeHost)
@@ -1818,7 +1788,6 @@ func (nh *NodeHost) tickWorkerMain() {
 	count := uint64(0)
 	idx := uint64(0)
 	nodes := make([]*node, 0)
-	qs := make(map[uint64]*server.MessageQueue)
 	tf := func(usec uint64) bool {
 		tms := usec / 1000
 		count += tms
@@ -1827,9 +1796,9 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		if count >= nh.nhConfig.RTTMillisecond {
 			count -= nh.nhConfig.RTTMillisecond
-			idx, nodes, qs = nh.getCurrentClusters(idx, nodes, qs)
+			idx, nodes = nh.getCurrentClusters(idx, nodes)
 			nh.snapshotStatus.pushReady(nh.getTick())
-			nh.sendTickMessage(nodes, qs)
+			nh.sendTickMessage(nodes)
 		}
 		return false
 	}
@@ -1861,24 +1830,17 @@ func (nh *NodeHost) handleListenerEvents() {
 }
 
 func (nh *NodeHost) getCurrentClusters(index uint64,
-	clusters []*node, queues map[uint64]*server.MessageQueue) (uint64,
-	[]*node, map[uint64]*server.MessageQueue) {
+	clusters []*node) (uint64, []*node) {
 	newIndex := nh.getClusterSetIndex()
 	if newIndex == index {
-		return index, clusters, queues
+		return index, clusters
 	}
 	newClusters := clusters[:0]
-	newQueues := make(map[uint64]*server.MessageQueue)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		newClusters = append(newClusters, node)
-		v, ok := nh.mu.requests[cid]
-		if !ok {
-			panic("inconsistent received messageC map")
-		}
-		newQueues[cid] = v
 		return true
 	})
-	return newIndex, newClusters, newQueues
+	return newIndex, newClusters
 }
 
 func (nh *NodeHost) sendMessage(msg pb.Message) {
@@ -1908,15 +1870,14 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 	}
 }
 
-func (nh *NodeHost) sendTickMessage(clusters []*node,
-	queues map[uint64]*server.MessageQueue) {
-	m := pb.Message{Type: pb.LocalTick}
+func (nh *NodeHost) sendTickMessage(clusters []*node) {
 	for _, n := range clusters {
-		q, ok := queues[n.clusterID]
-		if !ok || !n.initialized() {
-			continue
+		m := pb.Message{
+			Type: pb.LocalTick,
+			To:   n.nodeID,
+			From: n.nodeID,
 		}
-		q.Add(m)
+		n.mq.Add(m)
 		nh.execEngine.setStepReady(n.clusterID)
 	}
 }
@@ -1942,8 +1903,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 		}
 	}
 	cases[len(chans)] = reflect.SelectCase{Dir: reflect.SelectDefault}
-	chosen, _, ok := reflect.Select(cases)
-	if !ok && chosen < len(keys) {
+	if chosen, _, ok := reflect.Select(cases); !ok && chosen < len(keys) {
 		clusterID := keys[chosen]
 		nodeID := nodeIDs[chosen]
 		plog.Debugf("%s will be stopped by the node monitor", dn(clusterID, nodeID))
@@ -1963,14 +1923,14 @@ func (nh *NodeHost) nodeMonitorMain() {
 
 func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) bool {
-	cluster, q, ok := nh.getClusterAndQueueNotLocked(clusterID)
-	if ok {
+	if n, ok := nh.getClusterNotLocked(clusterID); ok {
 		m := pb.Message{
 			Type:   pb.SnapshotStatus,
 			From:   nodeID,
+			To:     nodeID,
 			Reject: failed,
 		}
-		added, stopped := q.Add(m)
+		added, stopped := n.mq.Add(m)
 		if added {
 			nh.execEngine.setStepReady(clusterID)
 			plog.Debugf("%s just got snapshot status", dn(clusterID, nodeID))
@@ -1982,7 +1942,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 		select {
 		case <-nh.stopper.ShouldStop():
 			return true
-		case <-cluster.shouldStop():
+		case <-n.shouldStop():
 			return true
 		default:
 			return false
@@ -2084,8 +2044,7 @@ func (nu *nodeUser) Propose(s *client.Session,
 }
 
 func (nu *nodeUser) ReadIndex(timeout time.Duration) (*RequestState, error) {
-	rs, err := nu.node.read(nu.nh.getTimeoutTick(timeout))
-	return rs, err
+	return nu.node.read(nu.nh.getTimeoutTick(timeout))
 }
 
 func getTimeoutFromContext(ctx context.Context) (time.Duration, error) {
@@ -2128,19 +2087,26 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		}
 	}
 	for _, req := range msg.Requests {
+		if req.To == 0 {
+			plog.Panicf("to field not set, %s", req.Type)
+		}
 		if req.Type == pb.SnapshotReceived {
 			plog.Debugf("MsgSnapshotReceived received, cluster id %d, node id %d",
 				req.ClusterId, req.From)
 			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
 			continue
 		}
-		_, q, ok := nh.getClusterAndQueueNotLocked(req.ClusterId)
-		if ok {
+		if n, ok := nh.getClusterNotLocked(req.ClusterId); ok {
+			if n.nodeID != req.To {
+				plog.Warningf("%s sent to node %d but received by node %d",
+					req.Type, req.To, n.nodeID)
+				continue
+			}
 			if req.Type == pb.InstallSnapshot {
-				q.MustAdd(req)
+				n.mq.MustAdd(req)
 				snapshotCount++
 			} else {
-				if added, stopped := q.Add(req); !added || stopped {
+				if added, stopped := n.mq.Add(req); !added || stopped {
 					plog.Warningf("dropped an incoming message")
 				} else {
 					msgCount++
@@ -2155,39 +2121,39 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) {
 	tick := h.nh.getTick()
+	eventType := server.SendSnapshotCompleted
 	if failed {
-		h.nh.sysListener.Publish(server.SystemEvent{
-			Type:      server.SendSnapshotAborted,
-			ClusterID: clusterID,
-			NodeID:    nodeID,
-		})
-	} else {
-		h.nh.sysListener.Publish(server.SystemEvent{
-			Type:      server.SendSnapshotCompleted,
-			ClusterID: clusterID,
-			NodeID:    nodeID,
-		})
+		eventType = server.SendSnapshotAborted
 	}
+	h.nh.sysListener.Publish(server.SystemEvent{
+		Type:      eventType,
+		ClusterID: clusterID,
+		NodeID:    nodeID,
+	})
 	h.nh.snapshotStatus.addStatus(clusterID, nodeID, failed, tick)
 }
 
 func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
-	_, q, ok := h.nh.getClusterAndQueueNotLocked(clusterID)
-	if ok {
-		q.MustAdd(pb.Message{Type: pb.Unreachable, From: nodeID})
+	if n, ok := h.nh.getClusterNotLocked(clusterID); ok {
+		m := pb.Message{
+			Type: pb.Unreachable,
+			From: nodeID,
+			To:   n.nodeID,
+		}
+		n.mq.MustAdd(m)
 		h.nh.execEngine.setStepReady(clusterID)
 	}
 }
 
 func (h *messageHandler) HandleSnapshot(clusterID uint64,
 	nodeID uint64, from uint64) {
-	msg := pb.Message{
+	m := pb.Message{
 		To:        from,
 		From:      nodeID,
 		ClusterId: clusterID,
 		Type:      pb.SnapshotReceived,
 	}
-	h.nh.sendMessage(msg)
+	h.nh.sendMessage(m)
 	plog.Debugf("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
 	h.nh.sysListener.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
