@@ -44,6 +44,7 @@ const (
 	raftAddress2       = "localhost:26001"
 )
 
+var clustercount = flag.Int("num-of-clusters", 48, "number of raft clusters")
 var read = flag.Bool("enable-read", false, "enable read")
 var batched = flag.Bool("batched-logdb", false, "use batched logdb")
 var cpupprof = flag.Bool("cpu-profiling", false, "run CPU profiling")
@@ -53,7 +54,7 @@ var clientcount = flag.Int("num-of-clients", 10000, "number of clients to use")
 var seconds = flag.Int("seconds-to-run", 60, "number of seconds to run")
 var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
 var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
-var twonh = flag.Bool("two-nodehost", false, "use two nodehosts")
+var twonh = flag.Bool("two-nodehosts", false, "use two nodehosts")
 
 func newBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
@@ -186,8 +187,8 @@ func main() {
 	if *twonh {
 		nodes[2] = raftAddress2
 	}
-	// use 48 clusters, each with only 1 node
-	for i := uint64(1); i <= uint64(48); i++ {
+	var mynh *dragonboat.NodeHost
+	for i := uint64(1); i <= uint64(*clustercount); i++ {
 		rc.ClusterID = i
 		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
@@ -200,7 +201,7 @@ func main() {
 			}
 		}
 	}
-	for i := uint64(1); i <= uint64(48); i++ {
+	for i := uint64(1); i <= uint64(*clustercount); i++ {
 		for j := 0; j < 10000; j++ {
 			leaderID, ok, err := nh.GetLeaderID(i)
 			if err != nil {
@@ -212,6 +213,11 @@ func main() {
 				}
 			} else {
 				if ok && (leaderID == 1 || leaderID == 2) {
+					if leaderID == 1 {
+						mynh = nh
+					} else {
+						mynh = nh2
+					}
 					break
 				}
 			}
@@ -234,15 +240,11 @@ func main() {
 	results := make([]uint64, *clientcount)
 	for i := uint64(0); i < uint64(*clientcount); i++ {
 		stopper.RunPWorker(func(arg interface{}) {
-			mynh := nh
 			workerID := arg.(uint64)
-			clusterID := (workerID % 48) + 1
+			clusterID := (workerID % uint64(*clustercount)) + 1
 			cs := nh.GetNoOPSession(clusterID)
 			cmd := make([]byte, 16)
 			results[workerID] = 0
-			if *twonh && workerID%2 == 1 {
-				mynh = nh2
-			}
 			for {
 				for j := 0; j < 32; j++ {
 					rs, err := mynh.Propose(cs, cmd, 4*time.Second)
@@ -267,12 +269,8 @@ func main() {
 	if *read {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			stopper.RunPWorker(func(arg interface{}) {
-				mynh := nh
 				workerID := arg.(uint64)
-				clusterID := (workerID % 48) + 1
-				if *twonh && workerID%2 == 1 {
-					mynh = nh2
-				}
+				clusterID := (workerID % uint64(*clustercount)) + 1
 				for {
 					for j := 0; j < 32; j++ {
 						rs, err := mynh.ReadIndex(clusterID, 4*time.Second)
