@@ -230,6 +230,7 @@ type raft struct {
 	matched                   []uint64
 	hasNotAppliedConfigChange func() bool
 	events                    server.IRaftEventListener
+	prevLeader                server.LeaderInfo
 }
 
 func newRaft(c *config.Config, logdb ILogDB) *raft {
@@ -347,13 +348,17 @@ func (r *raft) mustBeLeader() {
 func (r *raft) setLeaderID(leaderID uint64) {
 	r.leaderID = leaderID
 	if r.events != nil {
-		info := server.LeaderInfo{
-			ClusterID: r.clusterID,
-			NodeID:    r.nodeID,
-			LeaderID:  leaderID,
-			Term:      r.term,
+		if (r.term == 0 && leaderID == NoLeader) ||
+			leaderID != r.prevLeader.LeaderID || r.term != r.prevLeader.Term {
+			info := server.LeaderInfo{
+				ClusterID: r.clusterID,
+				NodeID:    r.nodeID,
+				LeaderID:  leaderID,
+				Term:      r.term,
+			}
+			r.prevLeader = info
+			r.events.LeaderUpdated(info)
 		}
-		r.events.LeaderUpdated(info)
 	}
 }
 
