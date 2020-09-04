@@ -35,12 +35,17 @@ package logdb
 import (
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+)
+
+const (
+	maxEntrySliceSize uint64 = 4 * 1024 * 1024
 )
 
 // LogReader is the struct used to manage logs that have already been persisted
@@ -120,6 +125,14 @@ func (lr *LogReader) entriesLocked(low uint64,
 		plog.Errorf("%s, low %d high %d, lastIndex %d",
 			lr.id(), low, high, lr.lastIndex())
 		return nil, 0, raft.ErrUnavailable
+	}
+	// limit the size the ents slice to handle the extreme situation in which
+	// high-low can be tens of millions, slice cap is > 50,000 when
+	// maxEntrySliceSize is 4MBytes
+	maxEntries := maxEntrySliceSize / uint64(unsafe.Sizeof(pb.Entry{}))
+	if high-low > maxEntries {
+		high = low + maxEntries
+		plog.Warningf("%s limited high to %d in logReader.entriesLocked", high)
 	}
 	ents := make([]pb.Entry, 0, high-low)
 	size := uint64(0)
