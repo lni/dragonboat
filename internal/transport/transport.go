@@ -169,6 +169,7 @@ type Transport struct {
 		breakers map[string]*circuit.Breaker
 	}
 	jobs                uint32
+	chunks              *Chunks
 	metrics             *transportMetrics
 	serverCtx           *server.Context
 	nhConfig            config.NodeHostConfig
@@ -210,6 +211,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	chunks := NewChunks(t.handleRequest,
 		t.snapshotReceived, t.folder, t.nhConfig.GetDeploymentID(), fs)
 	t.trans = createTransport(nhConfig, t.handleRequest, chunks)
+	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
 		plog.Errorf("transport rpc failed to start %v", err)
@@ -224,7 +226,6 @@ func NewTransport(nhConfig config.NodeHostConfig,
 			case <-ticker.C:
 				chunks.Tick()
 			case <-t.stopper.ShouldStop():
-				chunks.Close()
 				return
 			}
 		}
@@ -270,6 +271,7 @@ func (t *Transport) SetPreStreamChunkSendHook(h StreamChunkSendFunc) {
 func (t *Transport) Stop() {
 	t.cancel()
 	t.stopper.Stop()
+	t.chunks.Close()
 	t.trans.Stop()
 }
 
