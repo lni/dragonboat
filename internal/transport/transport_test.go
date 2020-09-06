@@ -629,19 +629,19 @@ func TestSnapshotCanBeSent(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	mutualTLSValues := []bool{true, false}
 	for _, v := range mutualTLSValues {
-		testSnapshotCanBeSent(t, snapshotChunkSize-1, 3000, v, fs)
-		testSnapshotCanBeSent(t, snapshotChunkSize/2, 3000, v, fs)
-		testSnapshotCanBeSent(t, snapshotChunkSize+1, 3000, v, fs)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3, 3000, v, fs)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 3000, v, fs)
-		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 3000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize-1, 10000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize/2, 10000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize+1, 10000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3, 10000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 10000, v, fs)
+		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 10000, v, fs)
 	}
 }
 
 func TestLargeSnapshotCanBeSent(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testSnapshotCanBeSent(t, 128*1024*1024+5, 30000, true, fs)
+	testSnapshotCanBeSent(t, 128*1024*1024+5, 300000, true, fs)
 }
 
 func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs vfs.IFS) {
@@ -764,7 +764,9 @@ func testSnapshotCanBeSent(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	nodes.Add(100, 2, serverAddress)
+	plog.Infof("going to generate snapshot file")
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
+	plog.Infof("snapshot file created")
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
@@ -776,12 +778,17 @@ func testSnapshotCanBeSent(t *testing.T,
 	}
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
+	plog.Infof("send snapshot will be called")
 	done := trans.SendSnapshot(m)
+	plog.Infof("send snapshot returned")
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
+	plog.Infof("waiting for snapshot status update")
 	waitForFirstSnapshotStatusUpdate(handler, maxWait)
+	plog.Infof("waiting for snapshot count update")
 	waitForSnapshotCountUpdate(handler, maxWait)
+	plog.Infof("snapshot count updated")
 	if handler.getSnapshotCount(100, 2) != 1 {
 		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
 	}
