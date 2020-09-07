@@ -123,7 +123,7 @@ func TestKVValueCanBeDeleted(t *testing.T) {
 
 func TestKVWriteBatch(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		wb := kvs.GetWriteBatch(nil)
+		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		wb.Put([]byte("test-key"), []byte("test-value"))
 		if wb.Count() != 1 {
@@ -188,7 +188,7 @@ func TestKVIterateValue(t *testing.T) {
 
 func TestWriteBatchCanBeCleared(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		wb := kvs.GetWriteBatch(nil)
+		wb := kvs.GetWriteBatch()
 		wb.Put([]byte("key-1"), []byte("val-1"))
 		wb.Put([]byte("key-2"), []byte("val-2"))
 		if wb.Count() != 2 {
@@ -283,7 +283,7 @@ func TestHasEntryRecord(t *testing.T) {
 
 func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		wb := kvs.GetWriteBatch(nil)
+		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		for i := uint64(1); i <= 100; i++ {
 			key := newKey(entryKeySize, nil)
@@ -345,7 +345,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			t.Fatalf("failed to open kv store %v", err)
 		}
 		defer kvs.Close()
-		wb := kvs.GetWriteBatch(nil)
+		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		for i := uint64(1); i <= maxIndex; i++ {
 			key := newKey(entryKeySize, nil)
@@ -498,7 +498,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 			!settings.Soft.KVTolerateCorruptedTailRecords {
 			t.Skip("test skipped, RocksDBTolerateCorruptedTailRecords disabled")
 		}
-		wb := kvs.GetWriteBatch(nil)
+		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		data := make([]byte, 0)
 		for i := 0; i < 16; i++ {

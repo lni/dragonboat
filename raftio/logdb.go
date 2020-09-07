@@ -95,6 +95,8 @@ type IContext interface {
 	GetUpdates() []pb.Update
 	// GetWriteBatch returns a write batch or transaction instance.
 	GetWriteBatch() interface{}
+	// SetWriteBatch adds the write batch to the IContext instance.
+	SetWriteBatch(wb interface{})
 	// GetEntryBatch returns an entry batch instance.
 	GetEntryBatch() pb.EntryBatch
 	// GetLastEntryBatch returns an entry batch instance.

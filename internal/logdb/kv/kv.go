@@ -14,10 +14,6 @@
 
 package kv
 
-import (
-	"github.com/lni/dragonboat/v3/raftio"
-)
-
 const (
 	// MaxKeyLength is the max length of keys allowed
 	MaxKeyLength uint64 = 1024
@@ -49,7 +45,7 @@ type IKVStore interface {
 	// DeleteValue deletes the key-value pair specified by the input key.
 	DeleteValue(key []byte) error
 	// GetWriteBatch returns an IWriteBatch object to be used by RDB.
-	GetWriteBatch(ctx raftio.IContext) IWriteBatch
+	GetWriteBatch() IWriteBatch
 	// CommitWriteBatch atomically writes everything included in the write batch
 	// to the underlying key-value store.
 	CommitWriteBatch(wb IWriteBatch) error

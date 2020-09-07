@@ -29,7 +29,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
-	"github.com/lni/dragonboat/v3/raftio"
 )
 
 var (
@@ -334,17 +333,12 @@ func (r *KV) DeleteValue(key []byte) error {
 }
 
 // GetWriteBatch ...
-func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
-	if ctx != nil {
-		wb := ctx.GetWriteBatch()
-		if wb != nil {
-			pwb := wb.(*pebbleWriteBatch)
-			if pwb.db == r.db {
-				return pwb
-			}
-		}
+func (r *KV) GetWriteBatch() kv.IWriteBatch {
+	return &pebbleWriteBatch{
+		wb: r.db.NewBatch(),
+		db: r.db,
+		wo: r.wo,
 	}
-	return &pebbleWriteBatch{wb: r.db.NewBatch(), db: r.db, wo: r.wo}
 }
 
 // CommitWriteBatch ...
@@ -352,6 +346,9 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 	pwb, ok := wb.(*pebbleWriteBatch)
 	if !ok {
 		panic("unknown type")
+	}
+	if pwb.db != r.db {
+		panic("pwb.db != r.db")
 	}
 	return r.db.Apply(pwb.wb, r.wo)
 }

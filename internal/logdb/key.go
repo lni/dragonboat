@@ -208,14 +208,12 @@ type keyPool struct {
 	pool *sync.Pool
 }
 
-func newLogdbKeyPool() *keyPool {
+func newLogDBKeyPool() *keyPool {
 	p := &sync.Pool{}
 	p.New = func() interface{} {
 		return newKey(dataSize, p)
 	}
-	return &keyPool{
-		pool: p,
-	}
+	return &keyPool{pool: p}
 }
 
 func (p *keyPool) get() *Key {

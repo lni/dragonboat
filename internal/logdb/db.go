@@ -96,7 +96,7 @@ func openRDB(config config.LogDBConfig,
 		return nil, err
 	}
 	cs := newCache()
-	pool := newLogdbKeyPool()
+	pool := newLogDBKeyPool()
 	var em entryManager
 	if batched {
 		em = newBatchedEntries(cs, pool, kvs)
@@ -130,8 +130,16 @@ func (r *db) close() {
 	}
 }
 
-func (r *db) getWriteBatch() kv.IWriteBatch {
-	return r.kvs.GetWriteBatch(nil)
+func (r *db) getWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
+	if ctx != nil {
+		wb := ctx.GetWriteBatch()
+		if wb == nil {
+			wb = r.kvs.GetWriteBatch()
+			ctx.SetWriteBatch(wb)
+			return wb.(kv.IWriteBatch)
+		}
+	}
+	return r.kvs.GetWriteBatch()
 }
 
 func (r *db) listNodeInfo() ([]raftio.NodeInfo, error) {
@@ -183,9 +191,8 @@ func (r *db) getRange(clusterID uint64,
 	return r.entries.getRange(clusterID, nodeID, snapshotIndex, maxIndex)
 }
 
-func (r *db) saveRaftState(updates []pb.Update,
-	ctx raftio.IContext) error {
-	wb := r.kvs.GetWriteBatch(ctx)
+func (r *db) saveRaftState(updates []pb.Update, ctx raftio.IContext) error {
+	wb := r.getWriteBatch(ctx)
 	for _, ud := range updates {
 		r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
 		if !pb.IsEmptySnapshot(ud.Snapshot) {
@@ -222,14 +229,22 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 			selectedss = append(selectedss, curss)
 		}
 	}
-	wb := r.getWriteBatch()
-	bsrec := pb.Bootstrap{Join: true, Type: ss.Type}
-	state := pb.State{Term: ss.Term, Commit: ss.Index}
+	wb := r.getWriteBatch(nil)
+	bsrec := pb.Bootstrap{
+		Join: true,
+		Type: ss.Type,
+	}
+	state := pb.State{
+		Term:   ss.Term,
+		Commit: ss.Index,
+	}
 	r.saveRemoveNodeData(wb, selectedss, ss.ClusterId, nodeID)
 	r.saveBootstrap(wb, ss.ClusterId, nodeID, bsrec)
 	r.saveStateAllocs(wb, ss.ClusterId, nodeID, state)
 	r.saveSnapshot(wb, pb.Update{
-		ClusterID: ss.ClusterId, NodeID: nodeID, Snapshot: ss,
+		ClusterID: ss.ClusterId,
+		NodeID:    nodeID,
+		Snapshot:  ss,
 	})
 	r.saveMaxIndex(wb, ss.ClusterId, nodeID, ss.Index, nil)
 	return r.kvs.CommitWriteBatch(wb)
@@ -242,10 +257,10 @@ func (r *db) setMaxIndex(wb kv.IWriteBatch,
 }
 
 func (r *db) saveBootstrap(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, bsrec pb.Bootstrap) {
+	clusterID uint64, nodeID uint64, bs pb.Bootstrap) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
-	data, err := bsrec.Marshal()
+	data, err := bs.Marshal()
 	if err != nil {
 		panic(err)
 	}
@@ -309,16 +324,15 @@ func (r *db) saveState(clusterID uint64,
 	if err != nil {
 		panic(err)
 	}
-	data = data[:ms]
 	k := ctx.GetKey()
 	k.SetStateKey(clusterID, nodeID)
-	wb.Put(k.Key(), data)
+	wb.Put(k.Key(), data[:ms])
 }
 
 func (r *db) saveBootstrapInfo(clusterID uint64,
-	nodeID uint64, bootstrap pb.Bootstrap) error {
-	wb := r.getWriteBatch()
-	r.saveBootstrap(wb, clusterID, nodeID, bootstrap)
+	nodeID uint64, bs pb.Bootstrap) error {
+	wb := r.getWriteBatch(nil)
+	r.saveBootstrap(wb, clusterID, nodeID, bs)
 	return r.kvs.CommitWriteBatch(wb)
 }
 
@@ -342,7 +356,7 @@ func (r *db) getBootstrapInfo(clusterID uint64,
 }
 
 func (r *db) saveSnapshots(updates []pb.Update) error {
-	wb := r.kvs.GetWriteBatch(nil)
+	wb := r.getWriteBatch(nil)
 	defer wb.Destroy()
 	toSave := false
 	for _, ud := range updates {
@@ -436,7 +450,7 @@ func (r *db) removeEntriesTo(clusterID uint64,
 }
 
 func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
-	wb := r.getWriteBatch()
+	wb := r.getWriteBatch(nil)
 	defer wb.Clear()
 	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
 	if err != nil {

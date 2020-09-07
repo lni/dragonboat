@@ -155,8 +155,7 @@ func (s *ShardedDB) SelfCheckFailed() (bool, error) {
 
 // GetLogDBThreadContext return a IContext instance.
 func (s *ShardedDB) GetLogDBThreadContext() raftio.IContext {
-	wb := s.shards[0].getWriteBatch()
-	return newContext(s.config.SaveBufferSize, s.config.MaxSaveBufferSize, wb)
+	return newContext(s.config.SaveBufferSize, s.config.MaxSaveBufferSize)
 }
 
 // SaveRaftState saves the raft state and logs found in the raft.Update list

@@ -22,7 +22,7 @@ import (
 )
 
 func TestEntryKeysOrdered(t *testing.T) {
-	p := newLogdbKeyPool()
+	p := newLogDBKeyPool()
 	for i := uint64(0); i < 65536+10; i++ {
 		k1 := p.get()
 		k1.SetEntryKey(100, 100, i)
@@ -44,7 +44,7 @@ func TestEntryKeysOrdered(t *testing.T) {
 }
 
 func TestSnapshotKeysOrdered(t *testing.T) {
-	p := newLogdbKeyPool()
+	p := newLogDBKeyPool()
 	for i := uint64(0); i < 65536+10; i++ {
 		k1 := p.get()
 		k1.setSnapshotKey(100, 100, i)
@@ -66,7 +66,7 @@ func TestSnapshotKeysOrdered(t *testing.T) {
 }
 
 func TestNodeInfoKeyCanBeParsed(t *testing.T) {
-	p := newLogdbKeyPool()
+	p := newLogDBKeyPool()
 	for i := 0; i < 1024; i++ {
 		k1 := p.get()
 		cid := rand.Uint64()

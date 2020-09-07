@@ -38,14 +38,13 @@ type context struct {
 }
 
 // newContext creates a new RDB context instance.
-func newContext(size uint64, maxSize uint64, wb kv.IWriteBatch) *context {
+func newContext(size uint64, maxSize uint64) *context {
 	ctx := &context{
 		size:    size,
 		maxSize: maxSize,
 		key:     newKey(maxKeySize, nil),
 		val:     make([]byte, size),
 		updates: make([]pb.Update, 0, updateSliceLen),
-		wb:      wb,
 	}
 	ctx.lb.Entries = make([]pb.Entry, 0, batchSize)
 	ctx.eb.Entries = make([]pb.Entry, 0, batchSize)
@@ -98,4 +97,8 @@ func (c *context) GetLastEntryBatch() pb.EntryBatch {
 
 func (c *context) GetWriteBatch() interface{} {
 	return c.wb
+}
+
+func (c *context) SetWriteBatch(wb interface{}) {
+	c.wb = wb.(kv.IWriteBatch)
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
-	"github.com/lni/dragonboat/v3/raftio"
 )
 
 var (
@@ -310,13 +309,7 @@ func (r *KV) DeleteValue(key []byte) error {
 }
 
 // GetWriteBatch returns a write batch instance.
-func (r *KV) GetWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
-	if ctx != nil {
-		wb := ctx.GetWriteBatch()
-		if wb != nil {
-			return ctx.GetWriteBatch().(*gorocksdb.WriteBatch)
-		}
-	}
+func (r *KV) GetWriteBatch() kv.IWriteBatch {
 	return gorocksdb.NewWriteBatch()
 }
 
