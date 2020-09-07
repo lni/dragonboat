@@ -21,12 +21,10 @@ import (
 
 func TestTaskQueueCanBeCreated(t *testing.T) {
 	tq := NewTaskQueue()
-	sz := tq.Size()
-	if sz != 0 {
+	if sz := tq.Size(); sz != 0 {
 		t.Errorf("unexpected len %d", sz)
 	}
-	_, ok := tq.Get()
-	if ok {
+	if _, ok := tq.Get(); ok {
 		t.Errorf("unexpectedly returned item from tq")
 	}
 }
@@ -39,8 +37,7 @@ func TestAddToTaskQueue(t *testing.T) {
 	tq.Add(t1)
 	tq.Add(t2)
 	tq.Add(t3)
-	sz := tq.Size()
-	if sz != 3 {
+	if sz := tq.Size(); sz != 3 {
 		t.Errorf("unexpected len %d", sz)
 	}
 	if !reflect.DeepEqual(&t1, &(tq.tasks[0])) ||
@@ -58,20 +55,16 @@ func TestGetCanReturnAddedTaskFromTaskQueue(t *testing.T) {
 	tq.Add(t1)
 	tq.Add(t2)
 	tq.Add(t3)
-	v1, ok := tq.Get()
-	if !ok || !reflect.DeepEqual(&t1, &v1) {
+	if v1, ok := tq.Get(); !ok || !reflect.DeepEqual(&t1, &v1) {
 		t.Errorf("unexpected result")
 	}
-	v2, ok := tq.Get()
-	if !ok || !reflect.DeepEqual(&t2, &v2) {
+	if v2, ok := tq.Get(); !ok || !reflect.DeepEqual(&t2, &v2) {
 		t.Errorf("unexpected result")
 	}
-	sz := tq.Size()
-	if sz != 1 {
+	if sz := tq.Size(); sz != 1 {
 		t.Errorf("unexpected size %d", sz)
 	}
-	v3, ok := tq.Get()
-	if !ok || !reflect.DeepEqual(&t3, &v3) {
+	if v3, ok := tq.Get(); !ok || !reflect.DeepEqual(&t3, &v3) {
 		t.Errorf("unexpected result")
 	}
 }
@@ -82,28 +75,25 @@ func TestTaskQueueResize(t *testing.T) {
 		task := Task{ClusterID: i}
 		tq.Add(task)
 	}
-	initCap := uint64(cap(tq.tasks))
-	if initCap < initialTaskQueueCap*3 {
+	if initCap := uint64(cap(tq.tasks)); initCap < initialTaskQueueCap*3 {
 		t.Errorf("unexpected init cap")
 	}
 	for {
-		_, ok := tq.Get()
-		if !ok {
+		if _, ok := tq.Get(); !ok {
 			break
 		}
 	}
 	if tq.Size() != 0 {
 		t.Errorf("unexpected size %d", tq.Size())
 	}
-	curCap := uint64(cap(tq.tasks))
-	if curCap > initialTaskQueueCap {
+	if curCap := uint64(cap(tq.tasks)); curCap > initialTaskQueueCap {
 		t.Errorf("not resized")
 	}
 }
 
 func TestMoreEntryToApply(t *testing.T) {
 	tq := NewTaskQueue()
-	for i := uint64(0); i < taskQueueBusyCap-snapshotTaskCSlots-1; i++ {
+	for i := uint64(0); i < taskQueueBusyCap-1; i++ {
 		task := Task{ClusterID: i}
 		tq.Add(task)
 		if !tq.MoreEntryToApply() {

@@ -21,10 +21,9 @@ import (
 )
 
 var (
-	initialTaskQueueCap        = settings.Soft.TaskQueueInitialCap
-	taskQueueBusyCap           = settings.Soft.TaskQueueTargetLength
-	snapshotTaskCSlots  uint64 = 4
-	emptyTask                  = Task{}
+	initialTaskQueueCap = settings.Soft.TaskQueueInitialCap
+	taskQueueBusyCap    = settings.Soft.TaskQueueTargetLength
+	emptyTask           = Task{}
 )
 
 // TaskQueue is a queue of tasks to be processed by the state machine.
@@ -47,15 +46,14 @@ func NewTaskQueue() *TaskQueue {
 func (tq *TaskQueue) MoreEntryToApply() bool {
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
-	sz := tq.size()
-	return sz+snapshotTaskCSlots < taskQueueBusyCap
+	return tq.size() < taskQueueBusyCap
 }
 
 // Add adds a new task to the queue.
 func (tq *TaskQueue) Add(task Task) {
 	tq.mu.Lock()
+	defer tq.mu.Unlock()
 	tq.tasks = append(tq.tasks, task)
-	tq.mu.Unlock()
 }
 
 // GetAll returns all tasks currently in the queue.
