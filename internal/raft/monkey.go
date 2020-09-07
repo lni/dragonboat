@@ -55,7 +55,7 @@ func (r *raft) dumpRaftInfoToLog(addrs map[uint64]string) {
 		flag, r.describe(), len(r.remotes))
 	for id, rp := range r.remotes {
 		if v, ok := addrs[id]; !ok {
-			v = "!missing!"
+			mplog.Infof("---> node %d is missing", id)
 		} else {
 			mplog.Infof(" %s,addr:%s,match:%d,next:%d,state:%s,paused:%v,ra:%v,ps:%d",
 				NodeID(id), v, rp.match, rp.next, rp.state, rp.isPaused(),

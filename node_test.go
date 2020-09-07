@@ -227,7 +227,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		snapshotter := newSnapshotter(testClusterID, i,
 			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, nil, fs)
 		// create the sm
-		sm := &tests.NoOP{}
+		noopSM := &tests.NoOP{}
 		config := config.Config{
 			NodeID:              uint64(i),
 			ClusterID:           testClusterID,
@@ -238,7 +238,8 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			CompactionOverhead:  10,
 			OrderedConfigChange: ordered,
 		}
-		ds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), make(chan struct{}))
+		ds := rsm.NewNativeSM(config,
+			rsm.NewRegularStateMachine(noopSM), make(chan struct{}))
 		// node registry
 		nr := transport.NewNodes(settings.Soft.StreamConnections)
 		addr := fmt.Sprintf("a%d", i)
@@ -248,7 +249,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			true,
 			snapshotter,
 			ds,
-			pb.RegularStateMachine,
+			sm.RegularStateMachine,
 			&dummyEngine{},
 			nil,
 			nil,

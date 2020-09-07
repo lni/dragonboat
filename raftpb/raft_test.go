@@ -24,6 +24,7 @@ import (
 	proto "github.com/golang/protobuf/proto"
 
 	"github.com/lni/dragonboat/v3/client"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 func TestCanUsedWithEtcd(t *testing.T) {
@@ -42,17 +43,26 @@ func TestCanUsedWithEtcd(t *testing.T) {
 	proto.RegisterEnum("raftpb.EntryType", names, values)
 }
 
+func TestStateMachineTypeHaveExpectedValues(t *testing.T) {
+	if sm.Type(UnknownStateMachine) != 0 ||
+		sm.Type(RegularStateMachine) != sm.RegularStateMachine ||
+		sm.Type(ConcurrentStateMachine) != sm.ConcurrentStateMachine ||
+		sm.Type(OnDiskStateMachine) != sm.OnDiskStateMachine {
+		t.Errorf("unexpected sm type value")
+	}
+}
+
 func TestBootstrapValidateHandlesJoiningNode(t *testing.T) {
 	bootstrap := Bootstrap{Join: true}
-	if !bootstrap.Validate(nil, true, UnknownStateMachine) {
+	if !bootstrap.Validate(nil, true, sm.Type(UnknownStateMachine)) {
 		t.Errorf("incorrect result")
 	}
-	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
+	if !bootstrap.Validate(nil, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("incorrect result")
 	}
 	bootstrap = Bootstrap{Join: false, Addresses: make(map[uint64]string)}
 	bootstrap.Addresses[100] = "address1"
-	if bootstrap.Validate(nil, true, UnknownStateMachine) {
+	if bootstrap.Validate(nil, true, sm.Type(UnknownStateMachine)) {
 		t.Errorf("incorrect result not reported")
 	}
 }
@@ -65,7 +75,7 @@ func TestCorruptedBootstrapValueIsChecked(t *testing.T) {
 		t.Errorf("didn't panic")
 	}()
 	bootstrap := Bootstrap{Join: false, Addresses: make(map[uint64]string)}
-	bootstrap.Validate(nil, true, UnknownStateMachine)
+	bootstrap.Validate(nil, true, sm.Type(UnknownStateMachine))
 }
 
 func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
@@ -73,24 +83,24 @@ func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
 	bootstrap.Addresses[100] = "address1"
 	bootstrap.Addresses[200] = "address2"
 	bootstrap.Addresses[300] = "address3"
-	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
+	if !bootstrap.Validate(nil, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("unexpected validation result")
 	}
 	nodes1 := make(map[uint64]string)
-	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
+	if !bootstrap.Validate(nodes1, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("restarting node should be allowed")
 	}
 	nodes1[100] = "address1"
-	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
+	if bootstrap.Validate(nodes1, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("inconsistent members not reported")
 	}
 	nodes1[200] = "address2"
 	nodes1[300] = "address3"
-	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
+	if !bootstrap.Validate(nodes1, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("correct members incorrected flagged")
 	}
 	nodes1[300] = "address4"
-	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
+	if bootstrap.Validate(nodes1, false, sm.Type(UnknownStateMachine)) {
 		t.Errorf("inconsistent members not reported")
 	}
 }
@@ -119,7 +129,7 @@ func TestInconsistentStateMachineTypeIsDetected(t *testing.T) {
 		addr := make(map[uint64]string)
 		addr[100] = "addr1"
 		bs := Bootstrap{Type: tt.bt, Addresses: addr}
-		if bs.Validate(nil, false, tt.ct) != tt.result {
+		if bs.Validate(nil, false, sm.Type(tt.ct)) != tt.result {
 			t.Errorf("%d, validation failed", idx)
 		}
 	}

@@ -320,8 +320,7 @@ func (p *Peer) entryLog() *entryLog {
 	return p.raft.log
 }
 
-func (p *Peer) getUpdate(moreToApply bool,
-	lastApplied uint64) pb.Update {
+func (p *Peer) getUpdate(moreToApply bool, lastApplied uint64) pb.Update {
 	ud := pb.Update{
 		ClusterID:     p.raft.clusterID,
 		NodeID:        p.raft.nodeID,

@@ -457,7 +457,7 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
 		return rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, pb.RegularStateMachine)
+		join, cf, stopc, config, sm.RegularStateMachine)
 }
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
@@ -473,7 +473,7 @@ func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 		return rsm.NewNativeSM(config, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, pb.ConcurrentStateMachine)
+		join, cf, stopc, config, sm.ConcurrentStateMachine)
 }
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
@@ -489,7 +489,7 @@ func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
 		return rsm.NewNativeSM(config, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, pb.OnDiskStateMachine)
+		join, cf, stopc, config, sm.OnDiskStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
@@ -1518,7 +1518,7 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
 //    implementation to indicate that a certain node exists there
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 	join bool, cfg config.Config,
-	smType pb.StateMachineType) (map[uint64]string, bool, error) {
+	smType sm.Type) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {
 		if !join && len(initialMembers) == 0 {
@@ -1547,11 +1547,8 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 }
 
 func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
-	join bool,
-	createStateMachine rsm.ManagedStateMachineFactory,
-	stopc chan struct{},
-	config config.Config,
-	smType pb.StateMachineType) error {
+	join bool, createStateMachine rsm.ManagedStateMachineFactory,
+	stopc chan struct{}, config config.Config, smType sm.Type) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
 	nh.mu.Lock()

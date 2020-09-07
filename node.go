@@ -79,7 +79,7 @@ type node struct {
 	toApplyQ              *rsm.TaskQueue
 	toCommitQ             *rsm.TaskQueue
 	mq                    *server.MessageQueue
-	smAppliedIndex        uint64
+	appliedIndex          uint64
 	confirmedIndex        uint64
 	pushedIndex           uint64
 	engine                engine
@@ -87,7 +87,7 @@ type node struct {
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
 	sm                    *rsm.StateMachine
-	smType                pb.StateMachineType
+	smType                sm.Type
 	incomingProposals     *entryQueue
 	incomingReadIndexes   *readIndexQueue
 	pendingProposals      *pendingProposal
@@ -103,8 +103,8 @@ type node struct {
 	nodeRegistry          transport.INodeRegistry
 	stopC                 chan struct{}
 	clusterInfo           atomic.Value
-	tickCount             uint64
-	expireNotified        uint64
+	currentTick           uint64
+	gcTick                uint64
 	tickMillisecond       uint64
 	syncTask              *task
 	notifyCommit          bool
@@ -130,7 +130,7 @@ func newNode(raftAddress string,
 	initialMember bool,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
-	smType pb.StateMachineType,
+	smType sm.Type,
 	engine engine,
 	liQueue *leaderInfoQueue,
 	getStreamSink func(uint64, uint64) *transport.Sink,
@@ -978,16 +978,16 @@ func (n *node) sendReplicateMessages(ud pb.Update) {
 }
 
 func (n *node) getUpdate() (pb.Update, bool) {
-	moreEntriesToApply := n.canHaveMoreEntriesToApply()
-	if n.p.HasUpdate(moreEntriesToApply) ||
-		n.confirmedIndex != n.smAppliedIndex ||
+	moreEntries := n.moreEntriesToApply()
+	if n.p.HasUpdate(moreEntries) ||
+		n.confirmedIndex != n.appliedIndex ||
 		n.ss.hasCompactLogTo() || n.ss.hasCompactedTo() {
-		if n.smAppliedIndex < n.confirmedIndex {
+		if n.appliedIndex < n.confirmedIndex {
 			plog.Panicf("last applied value moving backwards, %d, now %d",
-				n.confirmedIndex, n.smAppliedIndex)
+				n.confirmedIndex, n.appliedIndex)
 		}
-		ud := n.p.GetUpdate(moreEntriesToApply, n.smAppliedIndex)
-		n.confirmedIndex = n.smAppliedIndex
+		ud := n.p.GetUpdate(moreEntries, n.appliedIndex)
+		n.confirmedIndex = n.appliedIndex
 		return ud, true
 	}
 	return pb.Update{}, false
@@ -1001,9 +1001,7 @@ func (n *node) processDroppedReadIndexes(ud pb.Update) {
 
 func (n *node) processDroppedEntries(ud pb.Update) {
 	for _, e := range ud.DroppedEntries {
-		if e.Type == pb.ApplicationEntry ||
-			e.Type == pb.EncodedEntry ||
-			e.Type == pb.MetadataEntry {
+		if e.IsProposal() {
 			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
@@ -1017,9 +1015,7 @@ func (n *node) notifyCommittedEntries() {
 	tasks := n.toCommitQ.GetAll()
 	for _, t := range tasks {
 		for _, e := range t.Entries {
-			if e.Type == pb.ApplicationEntry ||
-				e.Type == pb.EncodedEntry ||
-				e.Type == pb.MetadataEntry {
+			if e.IsProposal() {
 				n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
 			} else if e.Type == pb.ConfigChangeEntry {
 				n.pendingConfigChange.committed(e.Key)
@@ -1080,7 +1076,7 @@ func (n *node) commitRaftUpdate(ud pb.Update) {
 	n.raftMu.Unlock()
 }
 
-func (n *node) canHaveMoreEntriesToApply() bool {
+func (n *node) moreEntriesToApply() bool {
 	return n.toApplyQ.MoreEntryToApply()
 }
 
@@ -1089,9 +1085,9 @@ func (n *node) hasEntryToApply() bool {
 }
 
 func (n *node) updateBatchedLastApplied() uint64 {
-	n.smAppliedIndex = n.sm.GetBatchedLastApplied()
-	n.p.NotifyRaftLastApplied(n.smAppliedIndex)
-	return n.smAppliedIndex
+	n.appliedIndex = n.sm.GetBatchedLastApplied()
+	n.p.NotifyRaftLastApplied(n.appliedIndex)
+	return n.appliedIndex
 }
 
 func (n *node) stepNode() (pb.Update, bool) {
@@ -1139,11 +1135,11 @@ func (n *node) handleEvents() bool {
 		hasEvent = true
 	}
 	if hasEvent {
-		if n.expireNotified != n.tickCount {
+		if n.gcTick != n.currentTick {
 			n.pendingProposals.gc()
 			n.pendingConfigChange.gc()
 			n.pendingSnapshot.gc()
-			n.expireNotified = n.tickCount
+			n.gcTick = n.currentTick
 		}
 		n.pendingReadIndexes.applied(lastApplied)
 	}
@@ -1454,7 +1450,7 @@ func (n *node) tick() {
 	if n.p == nil {
 		panic("rc node is still nil")
 	}
-	n.tickCount++
+	n.currentTick++
 	n.increaseQuiesceTick()
 	if n.quiesced() {
 		n.p.QuiescedTick()
@@ -1491,17 +1487,6 @@ func (n *node) notifyConfigChange() {
 	})
 }
 
-func (n *node) getStateMachineType() sm.Type {
-	if n.smType == pb.RegularStateMachine {
-		return sm.RegularStateMachine
-	} else if n.smType == pb.ConcurrentStateMachine {
-		return sm.ConcurrentStateMachine
-	} else if n.smType == pb.OnDiskStateMachine {
-		return sm.OnDiskStateMachine
-	}
-	panic("unknown type")
-}
-
 func (n *node) getClusterInfo() *ClusterInfo {
 	v := n.clusterInfo.Load()
 	if v == nil {
@@ -1509,7 +1494,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 			ClusterID:        n.clusterID,
 			NodeID:           n.nodeID,
 			Pending:          true,
-			StateMachineType: n.getStateMachineType(),
+			StateMachineType: n.smType,
 		}
 	}
 	ci := v.(*ClusterInfo)
@@ -1520,7 +1505,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		IsObserver:        ci.IsObserver,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
-		StateMachineType:  n.getStateMachineType(),
+		StateMachineType:  n.smType,
 	}
 }
 
@@ -1575,5 +1560,5 @@ func (n *node) setInitialized() {
 }
 
 func (n *node) millisecondSinceStart() uint64 {
-	return n.tickMillisecond * n.tickCount
+	return n.tickMillisecond * n.currentTick
 }
