@@ -136,8 +136,8 @@ func (r *db) getWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
 		if wb == nil {
 			wb = r.kvs.GetWriteBatch()
 			ctx.SetWriteBatch(wb)
-			return wb.(kv.IWriteBatch)
 		}
+		return wb.(kv.IWriteBatch)
 	}
 	return r.kvs.GetWriteBatch()
 }

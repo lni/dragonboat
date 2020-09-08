@@ -275,8 +275,6 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	return nodes, smList, router, ldb
 }
 
-var rtc raftio.IContext
-
 func step(nodes []*node) bool {
 	hasEvent := false
 	nodeUpdates := make([]pb.Update, 0)
@@ -318,13 +316,9 @@ func step(nodes []*node) bool {
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 	}
-	if rtc == nil {
-		rtc = nodes[0].logdb.GetLogDBThreadContext()
-	} else {
-		rtc.Reset()
-	}
+	rtc := nodes[0].logdb.GetLogDBThreadContext()
 	// persistent state and entries are saved first
-	// then the snapshot. order can not be change.
+	// then the snapshot. order can not be changed.
 	if err := nodes[0].logdb.SaveRaftState(nodeUpdates, rtc); err != nil {
 		panic(err)
 	}

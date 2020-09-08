@@ -100,5 +100,8 @@ func (c *context) GetWriteBatch() interface{} {
 }
 
 func (c *context) SetWriteBatch(wb interface{}) {
+	if c.wb != nil {
+		panic("c.wb is not nil")
+	}
 	c.wb = wb.(kv.IWriteBatch)
 }
