@@ -397,9 +397,10 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 			t.mu.Unlock()
 		}
 		t.stopper.RunWorker(func() {
-			t.connectAndProcess(clusterID, toNodeID, addr, sq, from)
+			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from) {
+				t.sendUnreachableNotification(addr)
+			}
 			shutdownQueue()
-			t.sendUnreachableNotification(addr)
 		})
 	}
 	if sq.rateLimited() {
@@ -414,8 +415,10 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	}
 }
 
+// connectAndProcess returns a boolean value indicating whether it is stopped
+// gracefully when the system is being shutdown
 func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
-	remoteHost string, sq sendQueue, from uint64) {
+	remoteHost string, sq sendQueue, from uint64) bool {
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -441,7 +444,9 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 		breaker.Fail()
 		t.metrics.messageConnectionFailure()
 		t.sysEvents.ConnectionFailed(remoteHost, false)
+		return false
 	}
+	return true
 }
 
 func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
