@@ -404,9 +404,9 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
 }
 
-// TCPTransport is a TCP based RPC module for exchanging raft messages and
+// TCP is a TCP based RPC module for exchanging raft messages and
 // snapshots between NodeHost instances.
-type TCPTransport struct {
+type TCP struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
 	requestHandler raftio.RequestHandler
@@ -416,13 +416,13 @@ type TCPTransport struct {
 	writeBucket    *ratelimit.Bucket
 }
 
-var _ raftio.IRaftRPC = (*TCPTransport)(nil)
+var _ raftio.IRaftRPC = (*TCP)(nil)
 
 // NewTCPTransport creates and returns a new TCP transport module.
 func NewTCPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
 	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
-	t := &TCPTransport{
+	t := &TCP{
 		nhConfig:       nhConfig,
 		stopper:        syncutil.NewStopper(),
 		requestHandler: requestHandler,
@@ -441,18 +441,18 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 }
 
 // Start starts the TCP transport module.
-func (g *TCPTransport) Start() error {
-	address := g.nhConfig.GetListenAddress()
-	tlsConfig, err := g.nhConfig.GetServerTLSConfig()
+func (t *TCP) Start() error {
+	address := t.nhConfig.GetListenAddress()
+	tlsConfig, err := t.nhConfig.GetServerTLSConfig()
 	if err != nil {
 		return err
 	}
 	listener, err := netutil.NewStoppableListener(address,
-		tlsConfig, g.stopper.ShouldStop())
+		tlsConfig, t.stopper.ShouldStop())
 	if err != nil {
 		return err
 	}
-	g.stopper.RunWorker(func() {
+	t.stopper.RunWorker(func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -469,12 +469,12 @@ func (g *TCPTransport) Start() error {
 					}
 				})
 			}
-			g.stopper.RunWorker(func() {
-				<-g.stopper.ShouldStop()
+			t.stopper.RunWorker(func() {
+				<-t.stopper.ShouldStop()
 				closeFn()
 			})
-			g.stopper.RunWorker(func() {
-				g.serveConn(conn)
+			t.stopper.RunWorker(func() {
+				t.serveConn(conn)
 				closeFn()
 			})
 		}
@@ -483,38 +483,38 @@ func (g *TCPTransport) Start() error {
 }
 
 // Stop stops the TCP transport module.
-func (g *TCPTransport) Stop() {
-	g.stopper.Stop()
+func (t *TCP) Stop() {
+	t.stopper.Stop()
 }
 
 // GetConnection returns a new raftio.IConnection for sending raft messages.
-func (g *TCPTransport) GetConnection(ctx context.Context,
+func (t *TCP) GetConnection(ctx context.Context,
 	target string) (raftio.IConnection, error) {
-	conn, err := g.getConnection(ctx, target)
+	conn, err := t.getConnection(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPConnection(conn, nil, nil, g.encrypted), nil
+	return NewTCPConnection(conn, nil, nil, t.encrypted), nil
 }
 
 // GetSnapshotConnection returns a new raftio.IConnection for sending raft
 // snapshots.
-func (g *TCPTransport) GetSnapshotConnection(ctx context.Context,
+func (t *TCP) GetSnapshotConnection(ctx context.Context,
 	target string) (raftio.ISnapshotConnection, error) {
-	conn, err := g.getConnection(ctx, target)
+	conn, err := t.getConnection(ctx, target)
 	if err != nil {
 		return nil, err
 	}
 	return NewTCPSnapshotConnection(conn,
-		g.readBucket, g.writeBucket, g.encrypted), nil
+		t.readBucket, t.writeBucket, t.encrypted), nil
 }
 
 // Name returns a human readable name of the TCP transport module.
-func (g *TCPTransport) Name() string {
+func (t *TCP) Name() string {
 	return TCPRaftRPCName
 }
 
-func (g *TCPTransport) serveConn(conn net.Conn) {
+func (t *TCP) serveConn(conn net.Conn) {
 	magicNum := make([]byte, len(magicNumber))
 	header := make([]byte, requestHeaderSize)
 	tbuf := make([]byte, payloadBufferSize)
@@ -535,7 +535,7 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 				return
 			}
 		}
-		rheader, buf, err := readMessage(conn, header, tbuf, g.encrypted)
+		rheader, buf, err := readMessage(conn, header, tbuf, t.encrypted)
 		if err != nil {
 			return
 		}
@@ -544,13 +544,13 @@ func (g *TCPTransport) serveConn(conn net.Conn) {
 			if err := batch.Unmarshal(buf); err != nil {
 				return
 			}
-			g.requestHandler(batch)
+			t.requestHandler(batch)
 		} else {
 			chunk := pb.Chunk{}
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}
-			if !g.chunkHandler.AddChunk(chunk) {
+			if !t.chunkHandler.AddChunk(chunk) {
 				plog.Errorf("chunk rejected %s", chunkKey(chunk))
 				return
 			}
@@ -568,7 +568,7 @@ func setTCPConn(conn *net.TCPConn) error {
 	return conn.SetKeepAlivePeriod(keepAlivePeriod)
 }
 
-func (g *TCPTransport) getConnection(ctx context.Context,
+func (t *TCP) getConnection(ctx context.Context,
 	target string) (net.Conn, error) {
 	timeout := time.Duration(getDialTimeoutSecond()) * time.Second
 	conn, err := net.DialTimeout("tcp", target, timeout)
@@ -581,7 +581,7 @@ func (g *TCPTransport) getConnection(ctx context.Context,
 			return nil, err
 		}
 	}
-	tlsConfig, err := g.nhConfig.GetClientTLSConfig(target)
+	tlsConfig, err := t.nhConfig.GetClientTLSConfig(target)
 	if err != nil {
 		return nil, err
 	}

@@ -1143,16 +1143,14 @@ func (p *proposalShard) takeProposal(clientID uint64,
 }
 
 func (p *proposalShard) committed(clientID uint64, seriesID uint64, key uint64) {
-	tick := p.getTick()
-	ps := p.borrowProposal(clientID, seriesID, key, tick)
+	ps := p.borrowProposal(clientID, seriesID, key, p.getTick())
 	if ps != nil {
 		ps.committed()
 	}
 }
 
 func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
-	tick := p.getTick()
-	ps := p.getProposal(clientID, seriesID, key, tick)
+	ps := p.getProposal(clientID, seriesID, key, p.getTick())
 	if ps != nil {
 		ps.dropped()
 	}
@@ -1178,8 +1176,7 @@ func (p *proposalShard) applied(clientID uint64,
 }
 
 func (p *proposalShard) gc() {
-	now := p.getTick()
-	p.gcAt(now)
+	p.gcAt(p.getTick())
 }
 
 func (p *proposalShard) gcAt(now uint64) {
@@ -1201,6 +1198,5 @@ func (p *proposalShard) gcAt(now uint64) {
 }
 
 func prepareProposalPayload(ct config.CompressionType, cmd []byte) []byte {
-	dct := rsm.ToDioCompressionType(ct)
-	return rsm.GetEncodedPayload(dct, cmd, nil)
+	return rsm.GetEncodedPayload(rsm.ToDioType(ct), cmd, nil)
 }

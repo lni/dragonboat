@@ -479,7 +479,7 @@ func TestReplaceSnapshotFile(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	if err := ReplaceSnapshotFile(f2name, f1name, fs); err != nil {
+	if err := ReplaceSnapshot(f2name, f1name, fs); err != nil {
 		t.Fatalf("failed to replace file %v", err)
 	}
 	_, err := fs.Stat(f2name)

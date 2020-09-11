@@ -303,7 +303,7 @@ func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 		meb = eb
 	}
 	if lastBatchID == batchID {
-		be.cs.setLastEntryBatch(clusterID, nodeID, meb)
+		be.cs.setLastBatch(clusterID, nodeID, meb)
 	}
 	if len(meb.Entries) > 1 {
 		meb = compactBatchFields(meb)
@@ -379,7 +379,7 @@ func (be *batchedEntries) getBatchFromDB(clusterID uint64,
 func (be *batchedEntries) getLastBatch(clusterID uint64,
 	nodeID uint64, firstIndex uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
 	batchID := getBatchID(firstIndex)
-	lb, ok := be.cs.getLastEntryBatch(clusterID, nodeID, lb)
+	lb, ok := be.cs.getLastBatch(clusterID, nodeID, lb)
 	if !ok || batchID < getBatchID(lb.Entries[0].Index) {
 		lb, ok = be.getBatchFromDB(clusterID, nodeID, batchID)
 		if !ok {

@@ -66,19 +66,19 @@ func (s *Sink) ToNodeID() uint64 {
 }
 
 type job struct {
-	clusterID          uint64
-	nodeID             uint64
-	deploymentID       uint64
-	streaming          bool
-	ctx                context.Context
-	rpc                raftio.IRaftRPC
-	conn               raftio.ISnapshotConnection
-	ch                 chan pb.Chunk
-	stopc              chan struct{}
-	failed             chan struct{}
-	streamChunkSent    atomic.Value
-	preStreamChunkSend atomic.Value
-	fs                 vfs.IFS
+	clusterID    uint64
+	nodeID       uint64
+	deploymentID uint64
+	streaming    bool
+	ctx          context.Context
+	rpc          raftio.IRaftRPC
+	conn         raftio.ISnapshotConnection
+	ch           chan pb.Chunk
+	stopc        chan struct{}
+	failed       chan struct{}
+	postSend     atomic.Value
+	preSend      atomic.Value
+	fs           vfs.IFS
 }
 
 func newJob(ctx context.Context,
@@ -225,8 +225,8 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 			plog.Debugf("send chunk to %s failed", dn(chunk.ClusterId, chunk.NodeId))
 			return err
 		}
-		if v := j.streamChunkSent.Load(); v != nil {
-			v.(func(pb.Chunk))(chunk)
+		if f := j.postSend.Load(); f != nil {
+			f.(func(pb.Chunk))(chunk)
 		}
 	}
 	return nil
@@ -234,9 +234,9 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 
 func (j *job) sendChunk(c pb.Chunk,
 	conn raftio.ISnapshotConnection) error {
-	if v := j.preStreamChunkSend.Load(); v != nil {
+	if f := j.preSend.Load(); f != nil {
 		plog.Debugf("pre stream chunk send set")
-		updated, shouldSend := v.(StreamChunkSendFunc)(c)
+		updated, shouldSend := f.(StreamChunkSendFunc)(c)
 		plog.Debugf("shoudSend: %t", shouldSend)
 		if !shouldSend {
 			plog.Debugf("not sending the chunk!")

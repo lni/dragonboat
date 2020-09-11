@@ -92,9 +92,9 @@ func runChunkTest(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	chunks := NewChunks(trans.handleRequest,
-		trans.snapshotReceived, trans.folder, trans.nhConfig.GetDeploymentID(), fs)
+		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunks()
-	snapDir := chunks.folder(ts[0].ClusterId, ts[0].NodeId)
+	snapDir := chunks.dir(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -115,7 +115,7 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 		for i := uint64(0); i < maxConcurrentSlot; i++ {
 			v++
 			c.ClusterId = v
-			snapDir := chunks.folder(v, c.NodeId)
+			snapDir := chunks.dir(v, c.NodeId)
 			if err := chunks.fs.MkdirAll(snapDir, 0755); err != nil {
 				t.Fatalf("%v", err)
 			}
@@ -146,13 +146,13 @@ func TestOutOfOrderChunkWillBeIgnored(t *testing.T) {
 		chunks.addLocked(inputs[0])
 		key := chunkKey(inputs[0])
 		td := chunks.tracked[key]
-		next := td.nextChunk
-		td.nextChunk = next + 10
+		next := td.next
+		td.next = next + 10
 		if chunks.record(inputs[1]) != nil {
 			t.Fatalf("out of order chunk is not rejected")
 		}
 		td = chunks.tracked[key]
-		if next+10 != td.nextChunk {
+		if next+10 != td.next {
 			t.Fatalf("next chunk id unexpected moved")
 		}
 	}
@@ -167,13 +167,13 @@ func TestChunkFromANewLeaderIsIgnored(t *testing.T) {
 		chunks.addLocked(inputs[0])
 		key := chunkKey(inputs[0])
 		td := chunks.tracked[key]
-		next := td.nextChunk
-		td.firstChunk.From = td.firstChunk.From + 1
+		next := td.next
+		td.first.From = td.first.From + 1
 		if chunks.record(inputs[1]) != nil {
 			t.Fatalf("chunk from a different leader is not rejected")
 		}
 		td = chunks.tracked[key]
-		if next != td.nextChunk {
+		if next != td.next {
 			t.Fatalf("next chunk id unexpected moved")
 		}
 	}
@@ -259,7 +259,7 @@ func TestAddFirstChunkRecordsTheSnapshotAndCreatesTheTempFile(t *testing.T) {
 			t.Errorf("failed to record chunk")
 		}
 		expectedChunk := inputs[0]
-		if !reflect.DeepEqual(&expectedChunk, &recordedChunk.firstChunk) {
+		if !reflect.DeepEqual(&expectedChunk, &recordedChunk.first) {
 			t.Errorf("chunk changed")
 		}
 		if !hasSnapshotTempFile(chunks, inputs[0]) {
@@ -278,7 +278,7 @@ func TestGcRemovesRecordAndTempFile(t *testing.T) {
 		if !chunks.addLocked(inputs[0]) {
 			t.Fatalf("failed to add chunk")
 		}
-		count := chunks.timeoutTick + chunks.gcTick
+		count := chunks.timeout + chunks.gcTick
 		for i := uint64(0); i < count; i++ {
 			chunks.Tick()
 		}
@@ -386,7 +386,7 @@ func TestSignificantlyDelayedNonFirstChunksAreIgnored(t *testing.T) {
 		inputs := getTestChunks()
 		chunks.validate = false
 		chunks.addLocked(inputs[0])
-		count := chunks.timeoutTick + chunks.gcTick
+		count := chunks.timeout + chunks.gcTick
 		for i := uint64(0); i < count; i++ {
 			chunks.Tick()
 		}

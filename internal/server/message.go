@@ -125,7 +125,7 @@ func (q *MessageQueue) tryAdd(msg pb.Message) bool {
 		return true
 	}
 	if q.rl.RateLimited() {
-		plog.Warningf("rate limited dropped a replicate msg from %d", msg.ClusterId)
+		plog.Warningf("rate limited dropped a Replicate msg from %d", msg.ClusterId)
 		return false
 	}
 	q.rl.Increase(pb.GetEntrySliceInMemSize(msg.Entries))

@@ -148,7 +148,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err != nil {
 		return err
 	}
-	oldss, err := getSnapshotRecord(srcDir, server.SnapshotMetadataFilename, fs)
+	oldss, err := getSnapshotRecord(srcDir, server.MetadataFilename, fs)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	env := server.NewSSEnv(getSnapshotDir,
-		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshottingMode, fs)
+		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshotMode, fs)
 	if err := env.CreateTempDir(); err != nil {
 		return err
 	}

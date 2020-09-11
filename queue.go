@@ -36,13 +36,12 @@ type entryQueue struct {
 }
 
 func newEntryQueue(size uint64, lazyFreeCycle uint64) *entryQueue {
-	e := &entryQueue{
+	return &entryQueue{
 		size:          size,
 		lazyFreeCycle: lazyFreeCycle,
 		left:          make([]pb.Entry, size),
 		right:         make([]pb.Entry, size),
 	}
-	return e
 }
 
 func (q *entryQueue) close() {
@@ -52,29 +51,24 @@ func (q *entryQueue) close() {
 }
 
 func (q *entryQueue) targetQueue() []pb.Entry {
-	var t []pb.Entry
 	if q.leftInWrite {
-		t = q.left
-	} else {
-		t = q.right
+		return q.left
 	}
-	return t
+	return q.right
 }
 
 func (q *entryQueue) add(ent pb.Entry) (bool, bool) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	if q.paused || q.idx >= q.size {
-		q.mu.Unlock()
 		return false, q.stopped
 	}
 	if q.stopped {
-		q.mu.Unlock()
 		return false, true
 	}
 	w := q.targetQueue()
 	w[q.idx] = ent
 	q.idx++
-	q.mu.Unlock()
 	return true, false
 }
 
@@ -118,12 +112,11 @@ type readIndexQueue struct {
 }
 
 func newReadIndexQueue(size uint64) *readIndexQueue {
-	e := &readIndexQueue{
+	return &readIndexQueue{
 		size:  size,
 		left:  make([]*RequestState, size),
 		right: make([]*RequestState, size),
 	}
-	return e
 }
 
 func (q *readIndexQueue) pendingSize() uint64 {
@@ -139,29 +132,24 @@ func (q *readIndexQueue) close() {
 }
 
 func (q *readIndexQueue) targetQueue() []*RequestState {
-	var t []*RequestState
 	if q.leftInWrite {
-		t = q.left
-	} else {
-		t = q.right
+		return q.left
 	}
-	return t
+	return q.right
 }
 
 func (q *readIndexQueue) add(rs *RequestState) (bool, bool) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	if q.idx >= q.size {
-		q.mu.Unlock()
 		return false, q.stopped
 	}
 	if q.stopped {
-		q.mu.Unlock()
 		return false, true
 	}
 	w := q.targetQueue()
 	w[q.idx] = rs
 	q.idx++
-	q.mu.Unlock()
 	return true, false
 }
 
@@ -217,11 +205,10 @@ type leaderInfoQueue struct {
 }
 
 func newLeaderInfoQueue() *leaderInfoQueue {
-	q := &leaderInfoQueue{
+	return &leaderInfoQueue{
 		workCh:        make(chan struct{}, 1),
 		notifications: make([]raftio.LeaderInfo, 0),
 	}
-	return q
 }
 
 func (li *leaderInfoQueue) workReady() chan struct{} {

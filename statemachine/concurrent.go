@@ -174,3 +174,7 @@ type IConcurrentStateMachine interface {
 	// Lookup method.
 	Close() error
 }
+
+// CreateConcurrentStateMachineFunc is a factory function type for creating an
+// IConcurrentStateMachine instance.
+type CreateConcurrentStateMachineFunc func(uint64, uint64) IConcurrentStateMachine

@@ -194,7 +194,7 @@ func TestSnapshotCanBeSavedToLogDB(t *testing.T) {
 			Index:    1,
 			Term:     2,
 		}
-		if err := s.saveToLogDB(s1); err != nil {
+		if err := s.saveSnapshot(s1); err != nil {
 			t.Errorf("failed to save snapshot record %v", err)
 		}
 		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
@@ -298,10 +298,10 @@ func TestOrphanedSnapshotRecordIsRemoved(t *testing.T) {
 		if err := fileutil.CreateFlagFile(fd2, fileutil.SnapshotFlagFilename, &s2, fs); err != nil {
 			t.Errorf("failed to create flag file %s", err)
 		}
-		if err := s.saveToLogDB(s1); err != nil {
+		if err := s.saveSnapshot(s1); err != nil {
 			t.Errorf("failed to save snapshot to logdb")
 		}
-		if err := s.saveToLogDB(s2); err != nil {
+		if err := s.saveSnapshot(s2); err != nil {
 			t.Errorf("failed to save snapshot to logdb")
 		}
 		// two orphane snapshots, kept the most recent one, and remove the older
@@ -378,7 +378,7 @@ func TestOrphanedSnapshotsCanBeProcessed(t *testing.T) {
 		if err := fileutil.CreateFlagFile(fd4, fileutil.SnapshotFlagFilename, &s3, fs); err != nil {
 			t.Errorf("failed to create flag file %s", err)
 		}
-		if err := s.saveToLogDB(s1); err != nil {
+		if err := s.saveSnapshot(s1); err != nil {
 			t.Errorf("failed to save snapshot to logdb")
 		}
 		// fd1 has record in logdb. flag file expected to be removed while the fd1

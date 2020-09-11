@@ -31,13 +31,13 @@ func TestGetEntryPayload(t *testing.T) {
 		Type: pb.EncodedEntry,
 		Cmd:  GetEncodedPayload(dio.Snappy, e3payload, make([]byte, 512)),
 	}
-	if !bytes.Equal(e1.Cmd, getEntryPayload(e1)) {
+	if !bytes.Equal(e1.Cmd, getPayload(e1)) {
 		t.Errorf("e1 payload changed")
 	}
-	if !bytes.Equal(e2.Cmd, getEntryPayload(e2)) {
+	if !bytes.Equal(e2.Cmd, getPayload(e2)) {
 		t.Errorf("e2 payload changed")
 	}
-	if !bytes.Equal(e3payload, getEntryPayload(e3)) {
+	if !bytes.Equal(e3payload, getPayload(e3)) {
 		t.Errorf("e3 payload changed")
 	}
 }
@@ -77,7 +77,7 @@ func TestGetV0EncodedPayload(t *testing.T) {
 			dst = make([]byte, tt.dst)
 		}
 		result := GetEncodedPayload(tt.ct, src, dst)
-		ver, ct, hasSession := parseEncodedEntryHeader(result)
+		ver, ct, hasSession := parseEncodedHeader(result)
 		if ver != EEV0 {
 			t.Errorf("invalid version number %d", ver)
 		}

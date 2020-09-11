@@ -31,8 +31,8 @@ import (
 var (
 	// ErrSnapshotOutOfDate is the error to indicate that snapshot is out of date.
 	ErrSnapshotOutOfDate = errors.New("snapshot out of date")
-	// SnapshotMetadataFilename is the filename of a snapshot's metadata file.
-	SnapshotMetadataFilename = "snapshot.metadata"
+	// MetadataFilename is the filename of a snapshot's metadata file.
+	MetadataFilename = "snapshot.metadata"
 	// SnapshotFileSuffix is the filename suffix of a snapshot file.
 	SnapshotFileSuffix = "gbsnap"
 	// SnapshotDirNameRe is the regex of snapshot names.
@@ -53,16 +53,16 @@ var (
 
 var finalizeLock sync.Mutex
 
-// GetSnapshotDirFunc is the function type that returns the snapshot dir
+// SnapshotDirFunc is the function type that returns the snapshot dir
 // for the specified raft node.
-type GetSnapshotDirFunc func(clusterID uint64, nodeID uint64) string
+type SnapshotDirFunc func(clusterID uint64, nodeID uint64) string
 
 // Mode is the snapshot env mode.
 type Mode uint64
 
 const (
-	// SnapshottingMode is the mode used when taking snapshotting.
-	SnapshottingMode Mode = iota
+	// SnapshotMode is the mode used when taking snapshotting.
+	SnapshotMode Mode = iota
 	// ReceivingMode is the mode used when receiving snapshots from remote nodes.
 	ReceivingMode
 )
@@ -70,12 +70,12 @@ const (
 // GetSnapshotDirName returns the snapshot dir name for the snapshot captured
 // at the specified index.
 func GetSnapshotDirName(index uint64) string {
-	return getSnapshotDirName(index)
+	return getDirName(index)
 }
 
 // GetSnapshotFilename returns the filename of the snapshot file.
 func GetSnapshotFilename(index uint64) string {
-	return getSnapshotFilename(index)
+	return getFilename(index)
 }
 
 func mustBeChild(parent string, child string) {
@@ -89,26 +89,26 @@ func mustBeChild(parent string, child string) {
 	}
 }
 
-func getSnapshotDirName(index uint64) string {
+func getDirName(index uint64) string {
 	return fmt.Sprintf("snapshot-%016X", index)
 }
 
-func getSnapshotFilename(index uint64) string {
+func getFilename(index uint64) string {
 	return fmt.Sprintf("snapshot-%016X.%s", index, SnapshotFileSuffix)
 }
 
-func getShrinkedSnapshotFilename(index uint64) string {
+func getShrinkedFilename(index uint64) string {
 	return fmt.Sprintf("snapshot-%016X.%s", index, shrunkSuffix)
 }
 
-func getTempSnapshotDirName(rootDir string,
+func getTempDirName(rootDir string,
 	suffix string, index uint64, from uint64) string {
-	dir := fmt.Sprintf("%s-%d.%s", getSnapshotDirName(index), from, suffix)
+	dir := fmt.Sprintf("%s-%d.%s", getDirName(index), from, suffix)
 	return filepath.Join(rootDir, dir)
 }
 
-func getFinalSnapshotDirName(rootDir string, index uint64) string {
-	return filepath.Join(rootDir, getSnapshotDirName(index))
+func getFinalDirName(rootDir string, index uint64) string {
+	return filepath.Join(rootDir, getDirName(index))
 }
 
 // SSEnv is the struct used to manage involved directories for taking or
@@ -125,23 +125,22 @@ type SSEnv struct {
 }
 
 // NewSSEnv creates and returns a new SSEnv instance.
-func NewSSEnv(f GetSnapshotDirFunc,
+func NewSSEnv(f SnapshotDirFunc,
 	clusterID uint64, nodeID uint64, index uint64,
 	from uint64, mode Mode, fs vfs.IFS) *SSEnv {
 	var tmpSuffix string
-	if mode == SnapshottingMode {
+	if mode == SnapshotMode {
 		tmpSuffix = genTmpDirSuffix
 	} else {
 		tmpSuffix = recvTmpDirSuffix
 	}
 	rootDir := f(clusterID, nodeID)
-	fp := fs.PathJoin(getFinalSnapshotDirName(rootDir, index),
-		getSnapshotFilename(index))
+	fp := fs.PathJoin(getFinalDirName(rootDir, index), getFilename(index))
 	return &SSEnv{
 		index:    index,
 		rootDir:  rootDir,
-		tmpDir:   getTempSnapshotDirName(rootDir, tmpSuffix, index, from),
-		finalDir: getFinalSnapshotDirName(rootDir, index),
+		tmpDir:   getTempDirName(rootDir, tmpSuffix, index, from),
+		finalDir: getFinalDirName(rootDir, index),
 		filepath: fp,
 		fs:       fs,
 	}
@@ -193,7 +192,7 @@ func (se *SSEnv) FinalizeSnapshot(msg fileutil.Marshaler) error {
 	if se.finalDirExists() {
 		return ErrSnapshotOutOfDate
 	}
-	return se.renameTempDirToFinalDir()
+	return se.renameToFinalDir()
 }
 
 // CreateTempDir creates the temp snapshot directory.
@@ -208,9 +207,7 @@ func (se *SSEnv) RemoveFinalDir() error {
 
 // SaveSSMetadata saves the metadata of the snapshot file.
 func (se *SSEnv) SaveSSMetadata(msg fileutil.Marshaler) error {
-	err := fileutil.CreateFlagFile(se.tmpDir,
-		SnapshotMetadataFilename, msg, se.fs)
-	return err
+	return fileutil.CreateFlagFile(se.tmpDir, MetadataFilename, msg, se.fs)
 }
 
 // HasFlagFile returns a boolean flag indicating whether the flag file is
@@ -231,22 +228,22 @@ func (se *SSEnv) RemoveFlagFile() error {
 
 // GetFilename returns the snapshot filename.
 func (se *SSEnv) GetFilename() string {
-	return getSnapshotFilename(se.index)
+	return getFilename(se.index)
 }
 
 // GetFilepath returns the snapshot file path.
 func (se *SSEnv) GetFilepath() string {
-	return se.fs.PathJoin(se.finalDir, getSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.finalDir, getFilename(se.index))
 }
 
 // GetShrinkedFilepath returns the file path of the shrunk snapshot.
 func (se *SSEnv) GetShrinkedFilepath() string {
-	return se.fs.PathJoin(se.finalDir, getShrinkedSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.finalDir, getShrinkedFilename(se.index))
 }
 
 // GetTempFilepath returns the temp snapshot file path.
 func (se *SSEnv) GetTempFilepath() string {
-	return se.fs.PathJoin(se.tmpDir, getSnapshotFilename(se.index))
+	return se.fs.PathJoin(se.tmpDir, getFilename(se.index))
 }
 
 func (se *SSEnv) createDir(dir string) error {
@@ -269,7 +266,7 @@ func (se *SSEnv) finalDirExists() bool {
 	return true
 }
 
-func (se *SSEnv) renameTempDirToFinalDir() error {
+func (se *SSEnv) renameToFinalDir() error {
 	if err := se.fs.Rename(se.tmpDir, se.finalDir); err != nil {
 		return err
 	}

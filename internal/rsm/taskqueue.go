@@ -35,10 +35,9 @@ type TaskQueue struct {
 
 // NewTaskQueue creates and returns a new task queue.
 func NewTaskQueue() *TaskQueue {
-	tq := &TaskQueue{
+	return &TaskQueue{
 		tasks: make([]Task, 0, initialTaskQueueCap),
 	}
-	return tq
 }
 
 // MoreEntryToApply returns a boolean value indicating whether it is ok to

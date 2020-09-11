@@ -24,8 +24,10 @@ import (
 
 // Entry Cmd format when Type = pb.EncodedEntry
 //
+// -------------------------------------
 // |Version|CompressionFlag|SessionFlag|
 // | 4Bits |     3Bits     |   1Bit    |
+// -------------------------------------
 const (
 	EEHeaderSize uint8 = 1
 	EEVersion    uint8 = 0 << 4
@@ -45,17 +47,16 @@ const (
 // GetMaxBlockSize returns the maximum block length supported by the specified
 // compression type.
 func GetMaxBlockSize(ct config.CompressionType) uint64 {
-	dct := ToDioCompressionType(ct)
-	return dio.MaxBlockLen(dct)
+	return dio.MaxBlockLen(ToDioType(ct))
 }
 
-// GetEntryPayload returns the payload of the entry ready to be applied into
-// the state machine.
-func GetEntryPayload(e pb.Entry) []byte {
-	return getEntryPayload(e)
+// GetPayload returns the payload of the entry ready to be applied into the
+// state machine.
+func GetPayload(e pb.Entry) []byte {
+	return getPayload(e)
 }
 
-func getEntryPayload(e pb.Entry) []byte {
+func getPayload(e pb.Entry) []byte {
 	if e.Type == pb.ApplicationEntry || e.Type == pb.ConfigChangeEntry {
 		return e.Cmd
 	} else if e.Type == pb.EncodedEntry {
@@ -64,9 +65,9 @@ func getEntryPayload(e pb.Entry) []byte {
 	panic("unknown entry type")
 }
 
-// ToDioCompressionType converts the CompressionType type defined in the
-// config package to the CompressionType value defined in the dio package.
-func ToDioCompressionType(ct config.CompressionType) dio.CompressionType {
+// ToDioType converts the CompressionType type defined in the config package to
+// the CompressionType value defined in the dio package.
+func ToDioType(ct config.CompressionType) dio.CompressionType {
 	if ct == config.NoCompression {
 		return dio.NoCompression
 	} else if ct == config.Snappy {
@@ -90,7 +91,7 @@ func getV0EncodedPayload(ct dio.CompressionType, cmd []byte, dst []byte) []byte 
 		if len(dst) < len(cmd)+1 {
 			dst = make([]byte, len(cmd)+1)
 		}
-		dst[0] = getEncodedEntryHeader(EEV0, EENoCompression, false)
+		dst[0] = getEncodedHeader(EEV0, EENoCompression, false)
 		copy(dst[1:], cmd)
 		return dst[:len(cmd)+1]
 	} else if ct == dio.Snappy {
@@ -103,7 +104,7 @@ func getV0EncodedPayload(ct dio.CompressionType, cmd []byte, dst []byte) []byte 
 		if uint64(len(dst)) < maxSize {
 			dst = make([]byte, maxSize)
 		}
-		dst[0] = getEncodedEntryHeader(EEV0, EESnappy, false)
+		dst[0] = getEncodedHeader(EEV0, EESnappy, false)
 		dstLen := dio.CompressSnappyBlock(cmd, dst[1:])
 		result := make([]byte, dstLen+1)
 		copy(result, dst[:dstLen+1])
@@ -112,7 +113,7 @@ func getV0EncodedPayload(ct dio.CompressionType, cmd []byte, dst []byte) []byte 
 	panic("unknown compression type")
 }
 
-func getEncodedEntryHeader(version uint8, cf uint8, session bool) uint8 {
+func getEncodedHeader(version uint8, cf uint8, session bool) uint8 {
 	result := uint8(0)
 	result = result | version
 	result = result | cf
@@ -124,7 +125,7 @@ func getEncodedEntryHeader(version uint8, cf uint8, session bool) uint8 {
 	return result
 }
 
-func parseEncodedEntryHeader(cmd []byte) (uint8, uint8, bool) {
+func parseEncodedHeader(cmd []byte) (uint8, uint8, bool) {
 	vermask := uint8(15 << 4)
 	ctmask := uint8(7 << 1)
 	sesmask := uint8(1)
@@ -133,7 +134,7 @@ func parseEncodedEntryHeader(cmd []byte) (uint8, uint8, bool) {
 }
 
 func getDecodedPayload(cmd []byte, buf []byte) []byte {
-	ver, ct, hasSession := parseEncodedEntryHeader(cmd)
+	ver, ct, hasSession := parseEncodedHeader(cmd)
 	if ver == EEV0 {
 		if hasSession {
 			plog.Panicf("v0 cmd has session info")

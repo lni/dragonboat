@@ -342,12 +342,11 @@ func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 	s.logMembership("witnesses", index, ss.Membership.Witnesses)
 	fs := make([]sm.SnapshotFile, 0)
 	for _, f := range ss.Files {
-		f := sm.SnapshotFile{
+		fs = append(fs, sm.SnapshotFile{
 			FileID:   f.FileId,
 			Filepath: f.Filepath,
 			Metadata: f.Metadata,
-		}
-		fs = append(fs, f)
+		})
 	}
 	fn := s.snapshotter.GetFilePath(index)
 	if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
@@ -391,10 +390,8 @@ func (s *StateMachine) ReadyToStream() bool {
 }
 
 func (s *StateMachine) tryInjectTestFS() {
-	nsm, ok := s.sm.(*NativeSM)
-	if ok {
-		odsm, ok := nsm.sm.(*OnDiskStateMachine)
-		if ok {
+	if nsm, ok := s.sm.(*NativeSM); ok {
+		if odsm, ok := nsm.sm.(*OnDiskStateMachine); ok {
 			odsm.SetTestFS(s.fs)
 		}
 	}
@@ -477,13 +474,11 @@ func (s *StateMachine) Lookup(query interface{}) (interface{}, error) {
 
 func (s *StateMachine) lookup(query interface{}) (interface{}, error) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.aborted {
-		s.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
-	result, err := s.sm.Lookup(query)
-	s.mu.RUnlock()
-	return result, err
+	return s.sm.Lookup(query)
 }
 
 func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) {
@@ -500,13 +495,11 @@ func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
 
 func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.aborted {
-		s.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
-	result, err := s.sm.NALookup(query)
-	s.mu.RUnlock()
-	return result, err
+	return s.sm.NALookup(query)
 }
 
 func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
@@ -592,8 +585,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 			s.node.StepReady()
 		}
 	}()
-	rec, ok := s.taskQ.Get()
-	if ok {
+	if rec, ok := s.taskQ.Get(); ok {
 		processed = true
 		if rec.IsSnapshotTask() {
 			return rec, nil
@@ -607,8 +599,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 		}
 		done := false
 		for !done {
-			rec, ok := s.taskQ.Get()
-			if ok {
+			if rec, ok := s.taskQ.Get(); ok {
 				if rec.IsSnapshotTask() {
 					if err := s.handle(batch, apply); err != nil {
 						return Task{}, err
@@ -924,11 +915,10 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	skipped := 0
 	for _, e := range input {
 		if !s.entryInInitDiskSM(e.Index) {
-			rec := sm.Entry{
+			ents = append(ents, sm.Entry{
 				Index: e.Index,
-				Cmd:   getEntryPayload(e),
-			}
-			ents = append(ents, rec)
+				Cmd:   getPayload(e),
+			})
 		} else {
 			skipped++
 		}
@@ -1045,7 +1035,7 @@ func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 		}
 	}
 	s.updateOnDiskIndex(e.Index, e.Index)
-	cmd := getEntryPayload(e)
+	cmd := getPayload(e)
 	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: cmd})
 	if err != nil {
 		return sm.Result{}, false, false, err

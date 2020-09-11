@@ -53,31 +53,31 @@ var (
 )
 
 type snapshotter struct {
-	rootDirFunc server.GetSnapshotDirFunc
-	nhConfig    config.NodeHostConfig
-	dir         string
-	clusterID   uint64
-	nodeID      uint64
-	logdb       raftio.ILogDB
-	stopc       chan struct{}
-	fs          vfs.IFS
+	root      server.SnapshotDirFunc
+	nhConfig  config.NodeHostConfig
+	dir       string
+	clusterID uint64
+	nodeID    uint64
+	logdb     raftio.ILogDB
+	stopc     chan struct{}
+	fs        vfs.IFS
 }
 
 var _ rsm.ISnapshotter = (*snapshotter)(nil)
 
 func newSnapshotter(clusterID uint64,
 	nodeID uint64,
-	nhConfig config.NodeHostConfig, rootDirFunc server.GetSnapshotDirFunc,
+	nhConfig config.NodeHostConfig, root server.SnapshotDirFunc,
 	ldb raftio.ILogDB, stopc chan struct{}, fs vfs.IFS) *snapshotter {
 	return &snapshotter{
-		rootDirFunc: rootDirFunc,
-		nhConfig:    nhConfig,
-		dir:         rootDirFunc(clusterID, nodeID),
-		logdb:       ldb,
-		clusterID:   clusterID,
-		nodeID:      nodeID,
-		stopc:       stopc,
-		fs:          fs,
+		root:      root,
+		nhConfig:  nhConfig,
+		dir:       root(clusterID, nodeID),
+		logdb:     ldb,
+		clusterID: clusterID,
+		nodeID:    nodeID,
+		stopc:     stopc,
+		fs:        fs,
 	}
 }
 
@@ -178,23 +178,22 @@ func (s *snapshotter) Load(sessions rsm.ILoadable,
 	return nil
 }
 
-func (s *snapshotter) Commit(snapshot pb.Snapshot, req rsm.SSRequest) error {
-	meta := &rsm.SSMeta{
-		Index:   snapshot.Index,
+func (s *snapshotter) Commit(ss pb.Snapshot, req rsm.SSRequest) error {
+	env := s.getCustomEnv(&rsm.SSMeta{
+		Index:   ss.Index,
 		Request: req,
-	}
-	env := s.getCustomEnv(meta)
-	if err := env.SaveSSMetadata(&snapshot); err != nil {
+	})
+	if err := env.SaveSSMetadata(&ss); err != nil {
 		return err
 	}
-	if err := env.FinalizeSnapshot(&snapshot); err != nil {
+	if err := env.FinalizeSnapshot(&ss); err != nil {
 		if err == server.ErrSnapshotOutOfDate {
 			return errSnapshotOutOfDate
 		}
 		return err
 	}
 	if !req.Exported() {
-		if err := s.saveToLogDB(snapshot); err != nil {
+		if err := s.saveSnapshot(ss); err != nil {
 			return err
 		}
 	}
@@ -202,8 +201,7 @@ func (s *snapshotter) Commit(snapshot pb.Snapshot, req rsm.SSRequest) error {
 }
 
 func (s *snapshotter) GetFilePath(index uint64) string {
-	env := s.getEnv(index)
-	return env.GetFilepath()
+	return s.getEnv(index).GetFilepath()
 }
 
 func (s *snapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
@@ -220,12 +218,12 @@ func (s *snapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 }
 
 func (s *snapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
-	snaps, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, math.MaxUint64)
+	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, math.MaxUint64)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
-	if len(snaps) > 0 {
-		return snaps[len(snaps)-1], nil
+	if len(snapshots) > 0 {
+		return snapshots[len(snapshots)-1], nil
 	}
 	return pb.Snapshot{}, ErrNoSnapshot
 }
@@ -252,7 +250,7 @@ func (s *snapshotter) shrink(shrinkTo uint64) error {
 			if err := rsm.ShrinkSnapshot(fp, shrinkedFp, s.fs); err != nil {
 				return err
 			}
-			if err := rsm.ReplaceSnapshotFile(shrinkedFp, fp, s.fs); err != nil {
+			if err := rsm.ReplaceSnapshot(shrinkedFp, fp, s.fs); err != nil {
 				return err
 			}
 		}
@@ -303,7 +301,6 @@ func (s *snapshotter) processOrphans() error {
 		}
 		fdir := s.fs.PathJoin(s.dir, fi.Name())
 		if s.isOrphan(fi.Name()) {
-			plog.Infof("found a orphan snapshot dir %s, %s", fi.Name(), fdir)
 			var ss pb.Snapshot
 			if err := fileutil.GetFlagFileContent(fdir,
 				fileutil.SnapshotFlagFilename, &ss, s.fs); err != nil {
@@ -314,32 +311,25 @@ func (s *snapshotter) processOrphans() error {
 			}
 			remove := false
 			if noss {
-				plog.Infof("no snapshot in logdb, delete the folder")
 				remove = true
 			} else {
-				plog.Infof("most recent: %s, cur: %d", s.ssid(mrss.Index), ss.Index)
 				if mrss.Index != ss.Index {
 					remove = true
 				}
 			}
 			if remove {
-				plog.Infof("going to delete orphan %s in %s", s.ssid(ss.Index), fdir)
 				if err := s.remove(ss.Index); err != nil {
 					return err
 				}
 			} else {
-				plog.Infof("keep %s, %s", s.ssid(ss.Index), fdir)
-				env := s.getEnv(ss.Index)
-				if err := env.RemoveFlagFile(); err != nil {
+				if err := s.getEnv(ss.Index).RemoveFlagFile(); err != nil {
 					return err
 				}
 			}
 		} else if s.isZombie(fi.Name()) {
-			plog.Infof("going to delete a zombie dir %s", fdir)
 			if err := s.fs.RemoveAll(fdir); err != nil {
 				return err
 			}
-			plog.Infof("going to sync the folder %s", s.dir)
 			if err := fileutil.SyncDir(s.dir, s.fs); err != nil {
 				return err
 			}
@@ -349,22 +339,19 @@ func (s *snapshotter) processOrphans() error {
 }
 
 func (s *snapshotter) remove(index uint64) error {
-	if err := s.logdb.DeleteSnapshot(s.clusterID,
-		s.nodeID, index); err != nil {
+	if err := s.logdb.DeleteSnapshot(s.clusterID, s.nodeID, index); err != nil {
 		return err
 	}
-	env := s.getEnv(index)
-	return env.RemoveFinalDir()
+	return s.getEnv(index).RemoveFinalDir()
 }
 
 func (s *snapshotter) removeFlagFile(index uint64) error {
-	env := s.getEnv(index)
-	return env.RemoveFlagFile()
+	return s.getEnv(index).RemoveFlagFile()
 }
 
 func (s *snapshotter) getEnv(index uint64) *server.SSEnv {
-	return server.NewSSEnv(s.rootDirFunc,
-		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshottingMode, s.fs)
+	return server.NewSSEnv(s.root,
+		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshotMode, s.fs)
 }
 
 func (s *snapshotter) getCustomEnv(meta *rsm.SSMeta) *server.SSEnv {
@@ -376,18 +363,17 @@ func (s *snapshotter) getCustomEnv(meta *rsm.SSMeta) *server.SSEnv {
 			return meta.Request.Path
 		}
 		return server.NewSSEnv(getPath,
-			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshottingMode, s.fs)
+			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshotMode, s.fs)
 	}
 	return s.getEnv(meta.Index)
 }
 
-func (s *snapshotter) saveToLogDB(snapshot pb.Snapshot) error {
-	rec := pb.Update{
+func (s *snapshotter) saveSnapshot(snapshot pb.Snapshot) error {
+	return s.logdb.SaveSnapshots([]pb.Update{pb.Update{
 		ClusterID: s.clusterID,
 		NodeID:    s.nodeID,
 		Snapshot:  snapshot,
-	}
-	return s.logdb.SaveSnapshots([]pb.Update{rec})
+	}})
 }
 
 func (s *snapshotter) dirMatch(dir string) bool {

@@ -74,7 +74,7 @@ func TestTempSuffix(t *testing.T) {
 		return "/data"
 	}
 	fs := vfs.GetTestFS()
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshotMode, fs)
 	dir := env.GetTempDir()
 	if !strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
@@ -92,7 +92,7 @@ func TestFinalSnapshotDirDoesNotContainTempSuffix(t *testing.T) {
 		return "/data"
 	}
 	fs := vfs.GetTestFS()
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshotMode, fs)
 	dir := env.GetFinalDir()
 	if strings.Contains(dir, ".generating") {
 		t.Errorf("unexpected suffix")
@@ -104,7 +104,7 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 		return "/data"
 	}
 	fs := vfs.GetTestFS()
-	env := NewSSEnv(f, 1, 1, 1, 2, SnapshottingMode, fs)
+	env := NewSSEnv(f, 1, 1, 1, 2, SnapshotMode, fs)
 	tmpDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
 	rootDir := env.GetRootDir()
@@ -124,7 +124,7 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv), fs vfs.IFS) {
 		ff := func(cid uint64, nid uint64) string {
 			return rd
 		}
-		env := NewSSEnv(ff, 1, 1, 1, 2, SnapshottingMode, fs)
+		env := NewSSEnv(ff, 1, 1, 1, 2, SnapshotMode, fs)
 		tmpDir := env.GetTempDir()
 		if err := fs.MkdirAll(tmpDir, 0755); err != nil {
 			t.Fatalf("%v", err)
@@ -136,7 +136,7 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv), fs vfs.IFS) {
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
 	tf := func(t *testing.T, env *SSEnv) {
-		if err := env.renameTempDirToFinalDir(); err != nil {
+		if err := env.renameToFinalDir(); err != nil {
 			t.Errorf("failed to rename dir, %v", err)
 		}
 	}
@@ -149,7 +149,7 @@ func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 		if env.finalDirExists() {
 			t.Errorf("final dir already exist")
 		}
-		err := env.renameTempDirToFinalDir()
+		err := env.renameToFinalDir()
 		if err != nil {
 			t.Errorf("rename tmp dir to final dir failed %v", err)
 		}
@@ -173,7 +173,7 @@ func TestFlagFileExists(t *testing.T) {
 		if err := env.createFlagFile(msg); err != nil {
 			t.Errorf("failed to create flag file")
 		}
-		err := env.renameTempDirToFinalDir()
+		err := env.renameToFinalDir()
 		if err != nil {
 			t.Errorf("rename tmp dir to final dir failed %v", err)
 		}

@@ -246,10 +246,10 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
+	testPartitionState
 	closed int32
 	tick   uint64
-	testPartitionState
-	mu struct {
+	mu     struct {
 		sync.RWMutex
 		stopped  bool
 		csi      uint64
@@ -311,7 +311,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			nh.handleListenerEvents()
 		})
 	}
-
 	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.createPools()
@@ -375,16 +374,15 @@ func (nh *NodeHost) Stop() {
 	nh.mu.Lock()
 	nh.mu.stopped = true
 	nh.mu.Unlock()
-	allNodes := make([]raftio.NodeInfo, 0)
+	nodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
-		nodeInfo := raftio.NodeInfo{
+		nodes = append(nodes, raftio.NodeInfo{
 			ClusterID: node.clusterID,
 			NodeID:    node.nodeID,
-		}
-		allNodes = append(allNodes, nodeInfo)
+		})
 		return true
 	})
-	for _, node := range allNodes {
+	for _, node := range nodes {
 		if err := nh.stopNode(node.ClusterID, node.NodeID, true); err != nil {
 			plog.Errorf("failed to remove cluster %s",
 				logutil.ClusterID(node.ClusterID))
@@ -407,8 +405,6 @@ func (nh *NodeHost) Stop() {
 	if nh.logdb != nil {
 		nh.logdb.Close()
 	} else {
-		// in standalone mode, when Stop() is called in the same goroutine as
-		// NewNodeHost, is nh.longdb == nil above is not going to happen
 		plog.Warningf("logdb is nil")
 	}
 	plog.Debugf("logdb closed, %s is now stopped", nh.id())
@@ -426,12 +422,11 @@ func (nh *NodeHost) Stop() {
 // initialMembers map should be specified when starting its initial member nodes
 // on distributed NodeHost instances.
 //
-// The join flag indicates whether the node
-// is a new node joining an existing cluster. createStateMachine is a factory
-// function for creating the IStateMachine instance, config is the configuration
-// instance that will be passed to the underlying Raft node object, the cluster
-// ID and node ID of the involved node is given in the ClusterID and NodeID
-// fields of the specified config parameter.
+// The join flag indicates whether the node is a new node joining an existing
+// cluster. create is a factory function for creating the IStateMachine instance,
+// cfg is the configuration instance that will be passed to the underlying Raft
+// node object, the cluster ID and node ID of the involved node are specified in
+// the ClusterID and NodeID fields of the provided cfg parameter.
 //
 // Note that this method is not for changing the membership of the specified
 // Raft cluster, it launches a node that is already a member of the Raft
@@ -447,49 +442,43 @@ func (nh *NodeHost) Stop() {
 //    initialMembers map to be empty. This applies to both initial member nodes
 //    and those joined later.
 func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
-	join bool,
-	createStateMachine func(uint64, uint64) sm.IStateMachine,
-	config config.Config) error {
+	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(config, rsm.NewRegularStateMachine(sm), done)
+		sm := create(clusterID, nodeID)
+		return rsm.NewNativeSM(cfg, rsm.NewRegularStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, sm.RegularStateMachine)
+		join, cf, stopc, cfg, sm.RegularStateMachine)
 }
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
 // to start a Raft node backed by a concurrent state machine.
 func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
-	join bool,
-	createStateMachine func(uint64, uint64) sm.IConcurrentStateMachine,
-	config config.Config) error {
+	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(config, rsm.NewConcurrentStateMachine(sm), done)
+		sm := create(clusterID, nodeID)
+		return rsm.NewNativeSM(cfg, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, sm.ConcurrentStateMachine)
+		join, cf, stopc, cfg, sm.ConcurrentStateMachine)
 }
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
 // start a Raft node backed by an IOnDiskStateMachine.
 func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
-	join bool,
-	createStateMachine func(uint64, uint64) sm.IOnDiskStateMachine,
-	config config.Config) error {
+	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
 	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := createStateMachine(clusterID, nodeID)
-		return rsm.NewNativeSM(config, rsm.NewOnDiskStateMachine(sm), done)
+		sm := create(clusterID, nodeID)
+		return rsm.NewNativeSM(cfg, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, config, sm.OnDiskStateMachine)
+		join, cf, stopc, cfg, sm.OnDiskStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
@@ -1579,18 +1568,18 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 			nh.nodes.Add(clusterID, k, v)
 		}
 	}
-	if err := nh.serverCtx.CreateSnapshotDir(nh.nhConfig.GetDeploymentID(),
-		clusterID, nodeID); err != nil {
+	did := nh.nhConfig.GetDeploymentID()
+	if err := nh.serverCtx.CreateSnapshotDir(did, clusterID, nodeID); err != nil {
 		if err == server.ErrDirMarkedAsDeleted {
 			return ErrNodeRemoved
 		}
 		panic(err)
 	}
-	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
-		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
+	getSnapshotDir := func(cid uint64, nid uint64) string {
+		return nh.serverCtx.GetSnapshotDir(did, cid, nid)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
-		nh.nhConfig, getSnapshotDirFunc, nh.logdb, stopc, nh.fs)
+		nh.nhConfig, getSnapshotDir, nh.logdb, stopc, nh.fs)
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
@@ -1671,7 +1660,6 @@ func (nh *NodeHost) createLogDB() error {
 	} else {
 		factory = df
 	}
-	// create a tmp logdb to get LogDB type info
 	name, err := logdb.GetLogDBInfo(factory, nh.nhConfig, []string{nhDir}, nh.fs)
 	if err != nil {
 		return err
@@ -1698,7 +1686,7 @@ func (nh *NodeHost) createLogDB() error {
 			return server.ErrLogDBBrokenChange
 		}
 	}
-	plog.Infof("logdb memory limit: %dMBytes", nh.nhConfig.LogDB.MemorySizeMB())
+	plog.Infof("logdb memory limit: %d MBytes", nh.nhConfig.LogDB.MemorySizeMB())
 	return nil
 }
 
@@ -1726,6 +1714,7 @@ func (te *transportEvent) ConnectionEstablished(addr string, snapshot bool) {
 		SnapshotConnection: snapshot,
 	})
 }
+
 func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 	te.nh.sysListener.Publish(server.SystemEvent{
 		Type:               server.ConnectionFailed,
@@ -1735,11 +1724,11 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 }
 
 func (nh *NodeHost) createTransport() error {
-	getSnapshotDirFunc := func(cid uint64, nid uint64) string {
+	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.serverCtx, nh.nodes, getSnapshotDirFunc, &transportEvent{nh: nh}, nh.fs)
+		nh.serverCtx, nh.nodes, getSnapshotDir, &transportEvent{nh: nh}, nh.fs)
 	if err != nil {
 		return err
 	}
@@ -1748,8 +1737,7 @@ func (nh *NodeHost) createTransport() error {
 	return nil
 }
 
-func (nh *NodeHost) stopNode(clusterID uint64,
-	nodeID uint64, nodeCheck bool) error {
+func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error {
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
 	v, ok := nh.mu.clusters.Load(clusterID)
@@ -1757,7 +1745,7 @@ func (nh *NodeHost) stopNode(clusterID uint64,
 		return ErrClusterNotFound
 	}
 	n := v.(*node)
-	if nodeCheck && n.nodeID != nodeID {
+	if check && n.nodeID != nodeID {
 		return ErrClusterNotFound
 	}
 	nh.mu.clusters.Delete(clusterID)
@@ -2088,7 +2076,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			plog.Panicf("to field not set, %s", req.Type)
 		}
 		if req.Type == pb.SnapshotReceived {
-			plog.Debugf("MsgSnapshotReceived received, cluster id %d, node id %d",
+			plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
 				req.ClusterId, req.From)
 			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
 			continue
@@ -2151,7 +2139,7 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 		Type:      pb.SnapshotReceived,
 	}
 	h.nh.sendMessage(m)
-	plog.Debugf("%s sent MsgSnapshotReceived to %d", dn(clusterID, nodeID), from)
+	plog.Debugf("%s sent SnapshotReceived to %d", dn(clusterID, nodeID), from)
 	h.nh.sysListener.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
 		ClusterID: clusterID,

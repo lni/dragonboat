@@ -510,7 +510,7 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	nodes.Add(100, 2, serverAddress)
-	trans.SetPreSendMessageBatchHook(f)
+	trans.SetPreSendBatchHook(f)
 	for i := 0; i < 100; i++ {
 		msg := raftpb.Message{
 			Type:      raftpb.Heartbeat,
@@ -771,8 +771,8 @@ func testSnapshotCanBeSent(t *testing.T,
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
 	chunks := NewChunks(trans.handleRequest,
-		trans.snapshotReceived, trans.folder, trans.nhConfig.GetDeploymentID(), fs)
-	snapDir := chunks.folder(100, 2)
+		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
+	snapDir := chunks.dir(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -892,8 +892,8 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	chunks := NewChunks(trans.handleRequest,
-		trans.snapshotReceived, trans.folder, trans.nhConfig.GetDeploymentID(), fs)
-	snapDir := chunks.folder(100, 2)
+		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
+	snapDir := chunks.dir(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -908,7 +908,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 			plog.Infof("test file removed: %s", fp)
 		}
 	}
-	trans.streamChunkSent.Store(onStreamChunkSent)
+	trans.postSend.Store(onStreamChunkSent)
 	tt.generateSnapshotFile(100,
 		12, testSnapshotIndex, "testsnapshot.gbsnap", snapshotSize, fs)
 	m := getTestSnapshotMessage(2)
@@ -1113,9 +1113,9 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans.SetMessageHandler(handler)
 	chunks := NewChunks(trans.handleRequest,
-		trans.snapshotReceived, trans.folder, trans.nhConfig.GetDeploymentID(), fs)
+		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunks()
-	snapDir := chunks.folder(ts[0].ClusterId, ts[0].NodeId)
+	snapDir := chunks.dir(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}

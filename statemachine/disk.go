@@ -238,3 +238,7 @@ type IOnDiskStateMachine interface {
 	// allowed to update the state of IOnDiskStateMachine visible to the outside.
 	Close() error
 }
+
+// CreateOnDiskStateMachineFunc is a factory function type for creating
+// IOnDiskStateMachine instances.
+type CreateOnDiskStateMachineFunc func(uint64, uint64) IOnDiskStateMachine

@@ -168,25 +168,25 @@ type Transport struct {
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	jobs                uint32
-	chunks              *Chunks
-	metrics             *transportMetrics
-	serverCtx           *server.Context
-	nhConfig            config.NodeHostConfig
-	sourceAddress       string
-	resolver            INodeAddressResolver
-	stopper             *syncutil.Stopper
-	folder              server.GetSnapshotDirFunc
-	trans               raftio.IRaftRPC
-	handler             atomic.Value
-	streamChunkSent     atomic.Value
-	preStreamChunkSend  atomic.Value // StreamChunkSendFunc
-	preSendMessageBatch atomic.Value // SendMessageBatchFunc
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	streamConnections   uint64
-	sysEvents           ITransportEvent
-	fs                  vfs.IFS
+	jobs              uint32
+	chunks            *Chunks
+	metrics           *transportMetrics
+	serverCtx         *server.Context
+	nhConfig          config.NodeHostConfig
+	sourceAddress     string
+	resolver          INodeAddressResolver
+	stopper           *syncutil.Stopper
+	dir               server.SnapshotDirFunc
+	trans             raftio.IRaftRPC
+	handler           atomic.Value
+	postSend          atomic.Value
+	preSend           atomic.Value
+	preSendBatch      atomic.Value
+	ctx               context.Context
+	cancel            context.CancelFunc
+	streamConnections uint64
+	sysEvents         ITransportEvent
+	fs                vfs.IFS
 }
 
 var _ ITransport = (*Transport)(nil)
@@ -194,7 +194,7 @@ var _ ITransport = (*Transport)(nil)
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
 	ctx *server.Context, resolver INodeAddressResolver,
-	folder server.GetSnapshotDirFunc, sysEvents ITransportEvent,
+	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	t := &Transport{
@@ -203,13 +203,13 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		sourceAddress:     address,
 		resolver:          resolver,
 		stopper:           syncutil.NewStopper(),
-		folder:            folder,
+		dir:               dir,
 		streamConnections: streamConnections,
 		sysEvents:         sysEvents,
 		fs:                fs,
 	}
 	chunks := NewChunks(t.handleRequest,
-		t.snapshotReceived, t.folder, t.nhConfig.GetDeploymentID(), fs)
+		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
 	t.trans = createTransport(nhConfig, t.handleRequest, chunks)
 	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
@@ -255,16 +255,16 @@ func (t *Transport) GetTrans() raftio.IRaftRPC {
 	return t.trans
 }
 
-// SetPreSendMessageBatchHook set the SendMessageBatch hook.
+// SetPreSendBatchHook set the SendMessageBatch hook.
 // This function is only expected to be used in monkey testing.
-func (t *Transport) SetPreSendMessageBatchHook(h SendMessageBatchFunc) {
-	t.preSendMessageBatch.Store(h)
+func (t *Transport) SetPreSendBatchHook(h SendMessageBatchFunc) {
+	t.preSendBatch.Store(h)
 }
 
 // SetPreStreamChunkSendHook sets the StreamChunkSend hook function that will
 // be called before each snapshot chunk is sent.
 func (t *Transport) SetPreStreamChunkSendHook(h StreamChunkSendFunc) {
-	t.preStreamChunkSend.Store(h)
+	t.preSend.Store(h)
 }
 
 // Stop stops the Transport object.
@@ -329,23 +329,20 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 
 func (t *Transport) snapshotReceived(clusterID uint64,
 	nodeID uint64, from uint64) {
-	handler := t.handler.Load()
-	if handler == nil {
-		return
+	if handler := t.handler.Load(); handler != nil {
+		handler.(IRaftMessageHandler).HandleSnapshot(clusterID, nodeID, from)
 	}
-	handler.(IRaftMessageHandler).HandleSnapshot(clusterID, nodeID, from)
 }
 
 func (t *Transport) sendUnreachableNotification(addr string) {
-	handler := t.handler.Load()
-	if handler == nil {
-		return
-	}
-	h := handler.(IRaftMessageHandler)
-	edp := t.resolver.ReverseResolve(addr)
-	plog.Warningf("%s became unreachable, affecting %d raft nodes", addr, len(edp))
-	for _, rec := range edp {
-		h.HandleUnreachable(rec.ClusterID, rec.NodeID)
+	if handler := t.handler.Load(); handler != nil {
+		h := handler.(IRaftMessageHandler)
+		edp := t.resolver.ReverseResolve(addr)
+		plog.Warningf("%s became unreachable, affecting %d raft nodes",
+			addr, len(edp))
+		for _, rec := range edp {
+			h.HandleUnreachable(rec.ClusterID, rec.NodeID)
+		}
 	}
 }
 
@@ -524,9 +521,8 @@ func lazyFree(reqs []pb.Message,
 
 func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 	batch pb.MessageBatch) error {
-	v := t.preSendMessageBatch.Load()
-	if v != nil {
-		updated, shouldSend := v.(SendMessageBatchFunc)(batch)
+	if f := t.preSendBatch.Load(); f != nil {
+		updated, shouldSend := f.(SendMessageBatchFunc)(batch)
 		if !shouldSend {
 			return errBatchSendSkipped
 		}

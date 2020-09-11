@@ -431,9 +431,6 @@ type updateNodeHostConfig func(*config.NodeHostConfig) *config.NodeHostConfig
 type testFunc func(*NodeHost)
 type beforeTest func()
 type afterTest func()
-type createStateMachine func(uint64, uint64) sm.IStateMachine
-type createConcurrentSM func(uint64, uint64) sm.IConcurrentStateMachine
-type createOnDiskSM func(uint64, uint64) sm.IOnDiskStateMachine
 
 type testOption struct {
 	updateConfig         updateConfig
@@ -445,9 +442,9 @@ type testOption struct {
 	defaultTestNode      bool
 	fakeDiskNode         bool
 	fakeDiskInitialIndex uint64
-	createSM             createStateMachine
-	createConcurrentSM   createConcurrentSM
-	createOnDiskSM       createOnDiskSM
+	createSM             sm.CreateStateMachineFunc
+	createConcurrentSM   sm.CreateConcurrentStateMachineFunc
+	createOnDiskSM       sm.CreateOnDiskStateMachineFunc
 	join                 bool
 	newNodeHostToFail    bool
 	restartNodeHost      bool
@@ -1601,7 +1598,7 @@ func TestEntryCompression(t *testing.T) {
 			for _, e := range ents {
 				if e.Type == pb.EncodedEntry {
 					hasEncodedEntry = true
-					payload := rsm.GetEntryPayload(e)
+					payload := rsm.GetPayload(e)
 					plog.Infof("compressed size: %d, original size: %d", len(e.Cmd), len(payload))
 					if !bytes.Equal(payload, make([]byte, 1024)) {
 						t.Errorf("payload changed")

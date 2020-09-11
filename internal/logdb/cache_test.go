@@ -93,9 +93,9 @@ func TestLastEntryBatchCanBeSetAndGet(t *testing.T) {
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: i})
 	}
-	c.setLastEntryBatch(10, 2, eb)
+	c.setLastBatch(10, 2, eb)
 	lb := pb.EntryBatch{}
-	reb, ok := c.getLastEntryBatch(10, 2, lb)
+	reb, ok := c.getLastBatch(10, 2, lb)
 	if !ok {
 		t.Errorf("last batch not returned")
 	}
@@ -114,8 +114,8 @@ func TestLastEntryBatchCanBeUpdated(t *testing.T) {
 	for i := uint64(100); i < uint64(116); i++ {
 		eb2.Entries = append(eb2.Entries, pb.Entry{Index: i, Term: i})
 	}
-	c.setLastEntryBatch(10, 2, eb)
-	c.setLastEntryBatch(10, 2, eb2)
+	c.setLastBatch(10, 2, eb)
+	c.setLastBatch(10, 2, eb2)
 }
 
 func TestChangeReturnedLastBatchWillNotAffectTheCache(t *testing.T) {
@@ -124,15 +124,15 @@ func TestChangeReturnedLastBatchWillNotAffectTheCache(t *testing.T) {
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: 1})
 	}
-	c.setLastEntryBatch(10, 2, eb)
-	v, _ := c.getLastEntryBatch(10, 2, pb.EntryBatch{})
+	c.setLastBatch(10, 2, eb)
+	v, _ := c.getLastBatch(10, 2, pb.EntryBatch{})
 	if len(v.Entries) != 15 {
 		t.Errorf("unexpected entry count")
 	}
 	for i := uint64(0); i < uint64(15); i++ {
 		v.Entries[i].Term = 2
 	}
-	v2, _ := c.getLastEntryBatch(10, 2, pb.EntryBatch{})
+	v2, _ := c.getLastBatch(10, 2, pb.EntryBatch{})
 	for i := uint64(0); i < uint64(15); i++ {
 		if v2.Entries[i].Term == 2 {
 			t.Errorf("cache content changed")

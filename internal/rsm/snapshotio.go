@@ -152,8 +152,7 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 	}
 	defer df.Close()
 	buf := &bytes.Buffer{}
-	_, err = io.Copy(buf, df)
-	if err != nil {
+	if _, err = io.Copy(buf, df); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -511,9 +510,9 @@ func ShrinkSnapshot(fp string, newFp string, fs vfs.IFS) (err error) {
 	return nil
 }
 
-// ReplaceSnapshotFile replace the specified snapshot file with the shrunk
+// ReplaceSnapshot replace the specified snapshot file with the shrunk
 // version atomically.
-func ReplaceSnapshotFile(newFp string, fp string, fs vfs.IFS) error {
+func ReplaceSnapshot(newFp string, fp string, fs vfs.IFS) error {
 	mustInSameDir(fp, newFp, fs)
 	if err := fs.Rename(newFp, fp); err != nil {
 		return err

@@ -203,7 +203,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
 	}
-	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshottingMode, s.fs)
+	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshotMode, s.fs)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, s.fs)

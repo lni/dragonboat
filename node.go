@@ -230,11 +230,11 @@ func (n *node) StepReady() {
 }
 
 func (n *node) ApplyUpdate(entry pb.Entry,
-	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	result sm.Result, rejected bool, ignored bool, notifyRead bool) {
 	if n.isWitness() {
 		return
 	}
-	if notifyReadClient {
+	if notifyRead {
 		n.pendingReadIndexes.applied(entry.Index)
 	}
 	if !ignored {
@@ -259,11 +259,7 @@ func (n *node) ApplyConfigChange(cc pb.ConfigChange,
 func (n *node) applyConfigChange(cc pb.ConfigChange) {
 	n.p.ApplyConfigChange(cc)
 	switch cc.Type {
-	case pb.AddNode:
-		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
-	case pb.AddObserver:
-		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
-	case pb.AddWitness:
+	case pb.AddNode, pb.AddObserver, pb.AddWitness:
 		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
 	case pb.RemoveNode:
 		if cc.NodeID == n.nodeID {
@@ -284,11 +280,10 @@ func (n *node) configChangeProcessed(key uint64, rejected bool) {
 	}
 	if rejected {
 		n.p.RejectConfigChange()
-		n.pendingConfigChange.apply(key, rejected)
 	} else {
-		n.pendingConfigChange.apply(key, rejected)
 		n.notifyConfigChange()
 	}
+	n.pendingConfigChange.apply(key, rejected)
 }
 
 func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
@@ -479,26 +474,23 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 }
 
 func (n *node) requestDeleteNodeWithOrderID(nodeID uint64,
-	orderID uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.RemoveNode, nodeID, "", orderID, timeoutTick)
+	order uint64, timeoutTick uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.RemoveNode, nodeID, "", order, timeoutTick)
 }
 
 func (n *node) requestAddNodeWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddNode,
-		nodeID, addr, orderID, timeoutTick)
+	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddNode, nodeID, addr, order, timeoutTick)
 }
 
 func (n *node) requestAddObserverWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddObserver,
-		nodeID, addr, orderID, timeoutTick)
+	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddObserver, nodeID, addr, order, timeoutTick)
 }
 
 func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
-	addr string, orderID uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddWitness,
-		nodeID, addr, orderID, timeoutTick)
+	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddWitness, nodeID, addr, order, timeoutTick)
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
@@ -524,10 +516,9 @@ func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
 	if len(ents) == 0 {
 		return nil
 	}
-	lastIndex := ents[len(ents)-1].Index
-	if lastIndex < n.pushedIndex {
+	if ents[len(ents)-1].Index < n.pushedIndex {
 		plog.Panicf("%s got entries [%d-%d] older than current state %d",
-			n.id(), ents[0].Index, lastIndex, n.pushedIndex)
+			n.id(), ents[0].Index, ents[len(ents)-1].Index, n.pushedIndex)
 	}
 	firstIndex := ents[0].Index
 	if firstIndex > n.pushedIndex+1 {
@@ -615,11 +606,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		n.logReader.SetState(*rs.State)
 	}
 	n.logReader.SetRange(rs.FirstIndex, rs.EntryCount)
-	newNode := true
-	if snapshot.Index > 0 || rs.EntryCount > 0 || rs.State != nil {
-		newNode = false
-	}
-	return newNode, nil
+	return !(snapshot.Index > 0 || rs.EntryCount > 0 || rs.State != nil), nil
 }
 
 func (n *node) saveSnapshotRequired(applied uint64) bool {
@@ -857,11 +844,7 @@ func (n *node) runSyncTask() error {
 	if !n.sm.TaskChanBusy() {
 		n.pushTask(rsm.Task{PeriodicSync: true})
 	}
-	syncedIndex := n.sm.GetSyncedIndex()
-	if err := n.shrink(syncedIndex); err != nil {
-		return err
-	}
-	return nil
+	return n.shrink(n.sm.GetSyncedIndex())
 }
 
 func (n *node) shrink(index uint64) error {
@@ -945,8 +928,7 @@ func isFreeOrderMessage(m pb.Message) bool {
 }
 
 func (n *node) sendEnterQuiesceMessages() {
-	m := n.sm.GetMembership()
-	for nodeID := range m.Addresses {
+	for nodeID := range n.sm.GetMembership().Addresses {
 		if nodeID != n.nodeID {
 			msg := pb.Message{
 				Type:      pb.Quiesce,
@@ -1165,8 +1147,7 @@ func (n *node) handleSnapshot(lastApplied uint64) bool {
 	default:
 		return false
 	}
-	si := n.ss.getReqIndex()
-	if !req.Exported() && lastApplied == si {
+	if !req.Exported() && lastApplied == n.ss.getReqIndex() {
 		n.reportIgnoredSnapshotRequest(req.Key)
 		return false
 	}
@@ -1527,29 +1508,24 @@ func (n *node) ssid(index uint64) string {
 
 func (n *node) isLeader() bool {
 	if n.p != nil {
-		leaderID, _ := n.getLeaderID()
-		return n.nodeID == leaderID
+		leaderID, ok := n.getLeaderID()
+		return ok && n.nodeID == leaderID
 	}
 	return false
 }
 
 func (n *node) isFollower() bool {
 	if n.p != nil {
-		leaderID, _ := n.getLeaderID()
-		if leaderID != n.nodeID && leaderID != raft.NoLeader {
-			return true
-		}
+		leaderID, ok := n.getLeaderID()
+		return ok && n.nodeID != leaderID
 	}
 	return false
 }
 
 func (n *node) initialized() bool {
 	select {
-	case _, ok := <-n.initializedC:
-		if !ok {
-			return true
-		}
-		plog.Panicf("not suppose to reach here")
+	case <-n.initializedC:
+		return true
 	default:
 	}
 	return false

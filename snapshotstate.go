@@ -63,19 +63,19 @@ func (sr *snapshotTask) getTask() (rsm.Task, bool) {
 }
 
 type snapshotState struct {
-	savingFlag              uint32
-	recoveringFlag          uint32
-	streamingFlag           uint32
-	snapshotIndex           uint64
-	reqSnapshotIndex        uint64
-	compactLogTo            uint64
-	compactedTo             uint64
-	recoverReady            snapshotTask
-	saveSnapshotReady       snapshotTask
-	streamSnapshotReady     snapshotTask
-	recoverCompleted        snapshotTask
-	saveSnapshotCompleted   snapshotTask
-	streamSnapshotCompleted snapshotTask
+	savingFlag       uint32
+	recoveringFlag   uint32
+	streamingFlag    uint32
+	snapshotIndex    uint64
+	reqSnapshotIndex uint64
+	compactLogTo     uint64
+	compactedTo      uint64
+	recoverReady     snapshotTask
+	saveReady        snapshotTask
+	streamReady      snapshotTask
+	recoverCompleted snapshotTask
+	saveCompleted    snapshotTask
+	streamCompleted  snapshotTask
 }
 
 func (rs *snapshotState) recovering() bool {
@@ -154,8 +154,8 @@ func (rs *snapshotState) hasCompactedTo() bool {
 	return atomic.LoadUint64(&rs.compactedTo) > 0
 }
 
-func (rs *snapshotState) setStreamReq(t rsm.Task, getSinkFn getSink) {
-	rs.streamSnapshotReady.setStreamTask(t, getSinkFn)
+func (rs *snapshotState) setStreamReq(t rsm.Task, fn getSink) {
+	rs.streamReady.setStreamTask(t, fn)
 }
 
 func (rs *snapshotState) setRecoverReq(t rsm.Task) {
@@ -167,56 +167,55 @@ func (rs *snapshotState) getRecoverReq() (rsm.Task, bool) {
 }
 
 func (rs *snapshotState) setSaveReq(t rsm.Task) {
-	rs.saveSnapshotReady.setTask(t)
+	rs.saveReady.setTask(t)
 }
 
 func (rs *snapshotState) getSaveReq() (rsm.Task, bool) {
-	return rs.saveSnapshotReady.getTask()
+	return rs.saveReady.getTask()
 }
 
 func (rs *snapshotState) getStreamReq() (rsm.Task, getSink, bool) {
-	r, ok := rs.streamSnapshotReady.getTask()
+	r, ok := rs.streamReady.getTask()
 	if !ok {
 		return rsm.Task{}, nil, false
 	}
-	return r, rs.streamSnapshotReady.getSinkFn, true
+	return r, rs.streamReady.getSinkFn, true
 }
 
-func (rs *snapshotState) notifySnapshotStatus(saveSnapshot bool,
-	recoverFromSnapshot bool, streamSnapshot bool,
-	initialSnapshot bool, index uint64) {
+func (rs *snapshotState) notifySnapshotStatus(save bool,
+	recover bool, stream bool, initial bool, index uint64) {
 	count := 0
-	if saveSnapshot {
+	if save {
 		count++
 	}
-	if recoverFromSnapshot {
+	if recover {
 		count++
 	}
-	if streamSnapshot {
+	if stream {
 		count++
 	}
 	if count != 1 {
 		plog.Panicf("invalid request, save %t, recover %t, stream %t",
-			saveSnapshot, recoverFromSnapshot, streamSnapshot)
+			save, recover, stream)
 	}
 	t := rsm.Task{
-		SnapshotRequested: saveSnapshot,
-		SnapshotAvailable: recoverFromSnapshot,
-		StreamSnapshot:    streamSnapshot,
-		InitialSnapshot:   initialSnapshot,
+		SnapshotRequested: save,
+		SnapshotAvailable: recover,
+		StreamSnapshot:    stream,
+		InitialSnapshot:   initial,
 		Index:             index,
 	}
-	if saveSnapshot {
-		rs.saveSnapshotCompleted.setTask(t)
-	} else if recoverFromSnapshot {
+	if save {
+		rs.saveCompleted.setTask(t)
+	} else if recover {
 		rs.recoverCompleted.setTask(t)
 	} else {
-		rs.streamSnapshotCompleted.setTask(t)
+		rs.streamCompleted.setTask(t)
 	}
 }
 
 func (rs *snapshotState) getStreamCompleted() (rsm.Task, bool) {
-	return rs.streamSnapshotCompleted.getTask()
+	return rs.streamCompleted.getTask()
 }
 
 func (rs *snapshotState) getRecoverCompleted() (rsm.Task, bool) {
@@ -224,7 +223,7 @@ func (rs *snapshotState) getRecoverCompleted() (rsm.Task, bool) {
 }
 
 func (rs *snapshotState) getSaveCompleted() (rsm.Task, bool) {
-	return rs.saveSnapshotCompleted.getTask()
+	return rs.saveCompleted.getTask()
 }
 
 type task struct {

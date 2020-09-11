@@ -120,8 +120,8 @@ func (t *Transport) createJob(key raftio.NodeInfo,
 	}
 	job := newJob(t.ctx, key.ClusterID, key.NodeID, t.nhConfig.GetDeploymentID(),
 		streaming, sz, t.trans, t.stopper.ShouldStop(), t.fs)
-	job.streamChunkSent = t.streamChunkSent
-	job.preStreamChunkSend = t.preStreamChunkSend
+	job.postSend = t.postSend
+	job.preSend = t.preSend
 	shutdown := func() {
 		atomic.AddUint32(&t.jobs, ^uint32(0))
 	}
@@ -173,8 +173,7 @@ func (t *Transport) sendSnapshotNotification(clusterID uint64,
 	} else {
 		t.metrics.snapshotSendSuccess()
 	}
-	handler := t.handler.Load()
-	if handler != nil {
+	if handler := t.handler.Load(); handler != nil {
 		h := handler.(IRaftMessageHandler)
 		h.HandleSnapshotStatus(clusterID, nodeID, rejected)
 		plog.Debugf("snapshot notification to %s added, reject %t",
