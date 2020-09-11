@@ -560,9 +560,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	entries := make([]pb.Entry, 0)
 	batch := make([]rsm.Task, 0, 100000)
 	smEntries := make([]sm.Entry, 0)
-	task := rsm.Task{
-		SnapshotAvailable: false,
-	}
+	task := rsm.Task{Recover: false}
 	if !noopSession {
 		idx++
 		e.Index = idx

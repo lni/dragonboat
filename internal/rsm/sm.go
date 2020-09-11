@@ -54,12 +54,10 @@ var _ IStateMachine = (*RegularStateMachine)(nil)
 // NewRegularStateMachine creates a new RegularStateMachine instance.
 func NewRegularStateMachine(s sm.IStateMachine) *RegularStateMachine {
 	r := &RegularStateMachine{sm: s}
-	h, ok := s.(sm.IHash)
-	if ok {
+	if h, ok := s.(sm.IHash); ok {
 		r.h = h
 	}
-	na, ok := s.(sm.IExtended)
-	if ok {
+	if na, ok := s.(sm.IExtended); ok {
 		r.na = na
 	}
 	return r
@@ -160,12 +158,10 @@ type ConcurrentStateMachine struct {
 // NewConcurrentStateMachine creates a new ConcurrentStateMachine instance.
 func NewConcurrentStateMachine(s sm.IConcurrentStateMachine) *ConcurrentStateMachine {
 	r := &ConcurrentStateMachine{sm: s}
-	h, ok := s.(sm.IHash)
-	if ok {
+	if h, ok := s.(sm.IHash); ok {
 		r.h = h
 	}
-	na, ok := s.(sm.IExtended)
-	if ok {
+	if na, ok := s.(sm.IExtended); ok {
 		r.na = na
 	}
 	return r
@@ -263,12 +259,10 @@ type OnDiskStateMachine struct {
 // NewOnDiskStateMachine creates and returns an on disk state machine.
 func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
 	r := &OnDiskStateMachine{sm: s}
-	h, ok := s.(sm.IHash)
-	if ok {
+	if h, ok := s.(sm.IHash); ok {
 		r.h = h
 	}
-	na, ok := s.(sm.IExtended)
-	if ok {
+	if na, ok := s.(sm.IExtended); ok {
 		r.na = na
 	}
 	return r
@@ -276,8 +270,7 @@ func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
 
 // SetTestFS injects the specified fs to the test SM.
 func (s *OnDiskStateMachine) SetTestFS(fs config.IFS) {
-	tfs, ok := s.sm.(ITestFS)
-	if ok {
+	if tfs, ok := s.sm.(ITestFS); ok {
 		plog.Infof("the underlying SM support test fs injection")
 		tfs.SetTestFS(fs)
 	}

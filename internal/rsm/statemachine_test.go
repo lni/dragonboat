@@ -1954,7 +1954,7 @@ func TestRecoverSMRequired(t *testing.T) {
 					}
 				}
 			}()
-			if res := sm.recoverSMRequired(ss, tt.init); res != tt.required {
+			if res := sm.recoverRequired(ss, tt.init); res != tt.required {
 				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
 			}
 		}()

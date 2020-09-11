@@ -44,13 +44,13 @@ var (
 	lazyFreeCycle           = settings.Soft.LazyFreeCycle
 )
 
-type engine interface {
+type pipeline interface {
 	setStepReady(clusterID uint64)
 	setCommitReady(clusterID uint64)
 	setApplyReady(clusterID uint64)
 	setStreamReady(clusterID uint64)
-	setRequestedSnapshotReady(clusterID uint64)
-	setAvailableSnapshotReady(clusterID uint64)
+	setSaveReady(clusterID uint64)
+	setRecoverReady(clusterID uint64)
 }
 
 type logDBMetrics struct {
@@ -82,7 +82,7 @@ type node struct {
 	appliedIndex          uint64
 	confirmedIndex        uint64
 	pushedIndex           uint64
-	engine                engine
+	pipeline              pipeline
 	getStreamSink         func(uint64, uint64) *transport.Sink
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
@@ -131,7 +131,7 @@ func newNode(raftAddress string,
 	snapshotter *snapshotter,
 	dataStore rsm.IManagedStateMachine,
 	smType sm.Type,
-	engine engine,
+	pipeline pipeline,
 	liQueue *leaderInfoQueue,
 	getStreamSink func(uint64, uint64) *transport.Sink,
 	handleSnapshotStatus func(uint64, uint64, bool),
@@ -167,7 +167,7 @@ func newNode(raftAddress string,
 		incomingReadIndexes:   readIndexes,
 		configChangeC:         configChangeC,
 		snapshotC:             snapshotC,
-		engine:                engine,
+		pipeline:              pipeline,
 		getStreamSink:         getStreamSink,
 		handleSnapshotStatus:  handleSnapshotStatus,
 		stopC:                 stopC,
@@ -226,7 +226,7 @@ func (n *node) ShouldStop() <-chan struct{} {
 }
 
 func (n *node) StepReady() {
-	n.engine.setStepReady(n.clusterID)
+	n.pipeline.setStepReady(n.clusterID)
 }
 
 func (n *node) ApplyUpdate(entry pb.Entry,
@@ -534,10 +534,10 @@ func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
 func (n *node) pushTask(rec rsm.Task) {
 	if !n.notifyCommit {
 		n.toApplyQ.Add(rec)
-		n.engine.setApplyReady(n.clusterID)
+		n.pipeline.setApplyReady(n.clusterID)
 	} else {
 		n.toCommitQ.Add(rec)
-		n.engine.setCommitReady(n.clusterID)
+		n.pipeline.setCommitReady(n.clusterID)
 	}
 }
 
@@ -551,16 +551,16 @@ func (n *node) pushEntries(ents []pb.Entry) {
 
 func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) {
 	n.pushTask(rsm.Task{
-		ClusterID:      clusterID,
-		NodeID:         nodeID,
-		StreamSnapshot: true,
+		ClusterID: clusterID,
+		NodeID:    nodeID,
+		Stream:    true,
 	})
 }
 
 func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
 	n.pushTask(rsm.Task{
-		SnapshotRequested: true,
-		SSRequest:         req,
+		Save:      true,
+		SSRequest: req,
 	})
 }
 
@@ -574,8 +574,8 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
 		panic("got a snapshot older than current applied state")
 	}
 	n.pushTask(rsm.Task{
-		SnapshotAvailable: true,
-		Index:             snapshot.Index,
+		Recover: true,
+		Index:   snapshot.Index,
 	})
 	n.ss.setIndex(snapshot.Index)
 	n.pushedIndex = snapshot.Index
@@ -747,7 +747,7 @@ func (n *node) doStream(sink pb.IChunkSink) error {
 func (n *node) recover(rec rsm.Task) (uint64, error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
-	if rec.InitialSnapshot && n.OnDiskStateMachine() {
+	if rec.Initial && n.OnDiskStateMachine() {
 		plog.Debugf("%s on disk SM is beng initialized", n.id())
 		idx, err := n.sm.OpenOnDiskStateMachine()
 		if err == sm.ErrSnapshotStopped || err == sm.ErrOpenStopped {
@@ -799,12 +799,12 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 
 func (n *node) streamDone() {
 	n.ss.notifySnapshotStatus(false, false, true, false, 0)
-	n.engine.setApplyReady(n.clusterID)
+	n.pipeline.setApplyReady(n.clusterID)
 }
 
 func (n *node) saveDone() {
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.engine.setApplyReady(n.clusterID)
+	n.pipeline.setApplyReady(n.clusterID)
 }
 
 func (n *node) recoverDone(index uint64) {
@@ -817,12 +817,12 @@ func (n *node) recoverDone(index uint64) {
 
 func (n *node) initialSnapshotDone(index uint64) {
 	n.ss.notifySnapshotStatus(false, true, false, true, index)
-	n.engine.setApplyReady(n.clusterID)
+	n.pipeline.setApplyReady(n.clusterID)
 }
 
 func (n *node) doRecoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
-	n.engine.setApplyReady(n.clusterID)
+	n.pipeline.setApplyReady(n.clusterID)
 }
 
 func (n *node) handleTask(ts []rsm.Task, es []sm.Entry) (rsm.Task, error) {
@@ -1008,7 +1008,7 @@ func (n *node) notifyCommittedEntries() {
 		n.toApplyQ.Add(t)
 	}
 	if len(tasks) > 0 {
-		n.engine.setApplyReady(n.clusterID)
+		n.pipeline.setApplyReady(n.clusterID)
 	}
 }
 
@@ -1284,16 +1284,16 @@ func (n *node) handleSnapshotTask(task rsm.Task) {
 	if n.ss.recovering() {
 		plog.Panicf("%s recovering from snapshot again", n.id())
 	}
-	if task.SnapshotAvailable {
-		n.reportAvailableSnapshot(task)
-	} else if task.SnapshotRequested {
+	if task.Recover {
+		n.reportRecoverSnapshot(task)
+	} else if task.Save {
 		if n.ss.saving() {
 			plog.Warningf("%s taking snapshot, ignored new snapshot req", n.id())
 			n.reportIgnoredSnapshotRequest(task.SSRequest.Key)
 			return
 		}
-		n.reportRequestedSnapshot(task)
-	} else if task.StreamSnapshot {
+		n.reportSaveSnapshot(task)
+	} else if task.Stream {
 		if !n.canStream() {
 			n.reportSnapshotStatus(task.ClusterID, task.NodeID, true)
 			return
@@ -1320,7 +1320,7 @@ func (n *node) reportStreamSnapshot(rec rsm.Task) {
 		return conn
 	}
 	n.ss.setStreamReq(rec, getSinkFn)
-	n.engine.setStreamReady(n.clusterID)
+	n.pipeline.setStreamReady(n.clusterID)
 }
 
 func (n *node) canStream() bool {
@@ -1335,16 +1335,16 @@ func (n *node) canStream() bool {
 	return true
 }
 
-func (n *node) reportRequestedSnapshot(rec rsm.Task) {
+func (n *node) reportSaveSnapshot(rec rsm.Task) {
 	n.ss.setSaving()
 	n.ss.setSaveReq(rec)
-	n.engine.setRequestedSnapshotReady(n.clusterID)
+	n.pipeline.setSaveReady(n.clusterID)
 }
 
-func (n *node) reportAvailableSnapshot(rec rsm.Task) {
+func (n *node) reportRecoverSnapshot(rec rsm.Task) {
 	n.ss.setRecovering()
 	n.ss.setRecoverReq(rec)
-	n.engine.setAvailableSnapshotReady(n.clusterID)
+	n.pipeline.setRecoverReady(n.clusterID)
 }
 
 func (n *node) processStatusTransition() bool {
@@ -1359,7 +1359,7 @@ func (n *node) processStatusTransition() bool {
 	}
 	if task, ok := n.uninitializedNodeTask(); ok {
 		n.ss.setRecovering()
-		n.reportAvailableSnapshot(task)
+		n.reportRecoverSnapshot(task)
 		return true
 	}
 	return false
@@ -1369,9 +1369,9 @@ func (n *node) uninitializedNodeTask() (rsm.Task, bool) {
 	if !n.initialized() {
 		plog.Debugf("%s checking initial snapshot", n.id())
 		return rsm.Task{
-			SnapshotAvailable: true,
-			InitialSnapshot:   true,
-			NewNode:           n.new,
+			Recover: true,
+			Initial: true,
+			NewNode: n.new,
 		}, true
 	}
 	return rsm.Task{}, false
@@ -1383,10 +1383,10 @@ func (n *node) processRecoverStatus() bool {
 		if !ok {
 			return true
 		}
-		if rec.SnapshotRequested {
+		if rec.Save {
 			panic("got a completed.SnapshotRequested")
 		}
-		if rec.InitialSnapshot {
+		if rec.Initial {
 			plog.Infof("%s initialized using %s", n.id(), n.ssid(rec.Index))
 			n.setInitialStatus(rec.Index)
 			n.sysEvents.Publish(server.SystemEvent{
@@ -1406,7 +1406,7 @@ func (n *node) processSaveStatus() bool {
 		if !ok {
 			return !n.concurrentSnapshot()
 		}
-		if rec.SnapshotRequested && !n.initialized() {
+		if rec.Save && !n.initialized() {
 			plog.Panicf("%s taking snapshot when uninitialized", n.id())
 		}
 		n.ss.clearSaving()

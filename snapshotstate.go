@@ -199,11 +199,11 @@ func (rs *snapshotState) notifySnapshotStatus(save bool,
 			save, recover, stream)
 	}
 	t := rsm.Task{
-		SnapshotRequested: save,
-		SnapshotAvailable: recover,
-		StreamSnapshot:    stream,
-		InitialSnapshot:   initial,
-		Index:             index,
+		Save:    save,
+		Recover: recover,
+		Stream:  stream,
+		Initial: initial,
+		Index:   index,
 	}
 	if save {
 		rs.saveCompleted.setTask(t)

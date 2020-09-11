@@ -4608,7 +4608,7 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 				t.Fatalf("proposal unexpectedly completed, %v", err)
 			}
 			select {
-			case e := <-nh.execEngine.ec:
+			case e := <-nh.engine.ec:
 				if e != vfs.ErrInjected && e.Error() != vfs.ErrInjected.Error() {
 					t.Fatalf("failed to return the expected error, %v", e)
 				}

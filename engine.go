@@ -199,11 +199,11 @@ func (w *ssWorker) completed() {
 }
 
 func (w *ssWorker) handle(j job) {
-	if j.task.SnapshotAvailable {
+	if j.task.Recover {
 		w.recover(j)
-	} else if j.task.SnapshotRequested {
+	} else if j.task.Save {
 		w.save(j)
-	} else if j.task.StreamSnapshot {
+	} else if j.task.Stream {
 		w.stream(j)
 	} else {
 		panic("unknown snapshot task type")
@@ -633,7 +633,7 @@ func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
 	return true
 }
 
-type execEngine struct {
+type engine struct {
 	nodeStopper     *syncutil.Stopper
 	commitStopper   *syncutil.Stopper
 	taskStopper     *syncutil.Stopper
@@ -651,12 +651,12 @@ type execEngine struct {
 }
 
 func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
-	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *execEngine {
+	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *engine {
 	if execShards == 0 {
 		panic("execShards == 0")
 	}
 	loaded := newLoadedNodes()
-	s := &execEngine{
+	s := &engine{
 		nh:              nh,
 		ctx:             ctx,
 		logdb:           logdb,
@@ -707,77 +707,77 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 	return s
 }
 
-func (s *execEngine) crash(err error) {
+func (e *engine) crash(err error) {
 	select {
-	case s.ec <- err:
+	case e.ec <- err:
 	default:
 	}
 }
 
-func (s *execEngine) stop() {
-	s.nodeStopper.Stop()
-	s.commitStopper.Stop()
-	s.taskStopper.Stop()
-	s.wp.stop()
-	for _, ctx := range s.ctxs {
+func (e *engine) stop() {
+	e.nodeStopper.Stop()
+	e.commitStopper.Stop()
+	e.taskStopper.Stop()
+	e.wp.stop()
+	for _, ctx := range e.ctxs {
 		if ctx != nil {
 			ctx.Destroy()
 		}
 	}
 }
 
-func (s *execEngine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
-	return s.loaded.get(clusterID, nodeID) != nil
+func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
+	return e.loaded.get(clusterID, nodeID) != nil
 }
 
-func (s *execEngine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{} {
-	if n := s.loaded.get(clusterID, nodeID); n != nil {
+func (e *engine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{} {
+	if n := e.loaded.get(clusterID, nodeID); n != nil {
 		return n.sm.DestroyedC()
 	}
 	return nil
 }
 
-func (s *execEngine) load(workerID uint64,
+func (e *engine) load(workerID uint64,
 	cci uint64, nodes map[uint64]*node,
 	from rsm.From, ready *workReady) (map[uint64]*node, uint64) {
-	result, offloaded, cci := s.loadBucketNodes(workerID, cci, nodes,
+	result, offloaded, cci := e.loadBucketNodes(workerID, cci, nodes,
 		ready.getPartitioner(), from)
-	s.loaded.update(workerID, from, result)
+	e.loaded.update(workerID, from, result)
 	for _, n := range offloaded {
 		n.offloaded(from)
 	}
 	return result, cci
 }
 
-func (s *execEngine) commitWorkerMain(workerID uint64) {
+func (e *engine) commitWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
 	cci := uint64(0)
 	for {
 		select {
-		case <-s.commitStopper.ShouldStop():
-			s.offloadNodeMap(nodes, rsm.FromCommitWorker)
+		case <-e.commitStopper.ShouldStop():
+			e.offloadNodeMap(nodes, rsm.FromCommitWorker)
 			return
 		case <-ticker.C:
-			nodes, cci = s.loadCommitNodes(workerID, cci, nodes)
-			s.processCommits(workerID, make(map[uint64]struct{}), nodes)
-		case <-s.commitWorkReady.waitCh(workerID):
+			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
+			e.processCommits(workerID, make(map[uint64]struct{}), nodes)
+		case <-e.commitWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
-				nodes, cci = s.loadCommitNodes(workerID, cci, nodes)
+				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := s.commitWorkReady.getReadyMap(workerID)
-			s.processCommits(workerID, clusterIDMap, nodes)
+			clusterIDMap := e.commitWorkReady.getReadyMap(workerID)
+			e.processCommits(workerID, clusterIDMap, nodes)
 		}
 	}
 }
 
-func (s *execEngine) loadCommitNodes(workerID uint64, cci uint64,
+func (e *engine) loadCommitNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.load(workerID, cci, nodes, rsm.FromCommitWorker, s.commitWorkReady)
+	return e.load(workerID, cci, nodes, rsm.FromCommitWorker, e.commitWorkReady)
 }
 
-func (s *execEngine) processCommits(workerID uint64,
+func (e *engine) processCommits(workerID uint64,
 	idmap map[uint64]struct{}, nodes map[uint64]*node) {
 	if len(idmap) == 0 {
 		for k := range nodes {
@@ -793,7 +793,7 @@ func (s *execEngine) processCommits(workerID uint64,
 	}
 }
 
-func (s *execEngine) applyWorkerMain(workerID uint64) {
+func (e *engine) applyWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
@@ -802,27 +802,27 @@ func (s *execEngine) applyWorkerMain(workerID uint64) {
 	cci := uint64(0)
 	for {
 		select {
-		case <-s.taskStopper.ShouldStop():
-			s.offloadNodeMap(nodes, rsm.FromApplyWorker)
+		case <-e.taskStopper.ShouldStop():
+			e.offloadNodeMap(nodes, rsm.FromApplyWorker)
 			return
 		case <-ticker.C:
-			nodes, cci = s.loadApplyNodes(workerID, cci, nodes)
-			s.processApplies(workerID, make(map[uint64]struct{}), nodes, batch, entries)
+			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
+			e.processApplies(workerID, make(map[uint64]struct{}), nodes, batch, entries)
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
-		case <-s.applyWorkReady.waitCh(workerID):
+		case <-e.applyWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
-				nodes, cci = s.loadApplyNodes(workerID, cci, nodes)
+				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := s.applyWorkReady.getReadyMap(workerID)
-			s.processApplies(workerID, clusterIDMap, nodes, batch, entries)
+			clusterIDMap := e.applyWorkReady.getReadyMap(workerID)
+			e.processApplies(workerID, clusterIDMap, nodes, batch, entries)
 		}
 	}
 }
 
-func (s *execEngine) loadApplyNodes(workerID uint64, cci uint64,
+func (e *engine) loadApplyNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.load(workerID, cci, nodes, rsm.FromApplyWorker, s.applyWorkReady)
+	return e.load(workerID, cci, nodes, rsm.FromApplyWorker, e.applyWorkReady)
 }
 
 // T: take snapshot
@@ -833,7 +833,7 @@ func (s *execEngine) loadApplyNodes(workerID uint64, cci uint64,
 // R, R, won't happen, when in R state, processApplies will not process the node
 // R, T, won't happen, when in R state, processApplies will not process the node
 
-func (s *execEngine) processApplies(workerID uint64,
+func (e *engine) processApplies(workerID uint64,
 	idmap map[uint64]struct{},
 	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
 	if len(idmap) == 0 {
@@ -859,44 +859,44 @@ func (s *execEngine) processApplies(workerID uint64,
 	}
 }
 
-func (s *execEngine) stepWorkerMain(workerID uint64) {
+func (e *engine) stepWorkerMain(workerID uint64) {
 	nodes := make(map[uint64]*node)
 	ticker := time.NewTicker(nodeReloadInterval)
 	defer ticker.Stop()
 	cci := uint64(0)
-	stopC := s.nodeStopper.ShouldStop()
+	stopC := e.nodeStopper.ShouldStop()
 	for {
 		select {
 		case <-stopC:
-			s.offloadNodeMap(nodes, rsm.FromStepWorker)
+			e.offloadNodeMap(nodes, rsm.FromStepWorker)
 			return
 		case <-ticker.C:
-			nodes, cci = s.loadStepNodes(workerID, cci, nodes)
-			s.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
-		case <-s.stepWorkReady.waitCh(workerID):
+			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
+			e.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
+		case <-e.stepWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
-				nodes, cci = s.loadStepNodes(workerID, cci, nodes)
+				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := s.stepWorkReady.getReadyMap(workerID)
-			s.processSteps(workerID, clusterIDMap, nodes, stopC)
+			clusterIDMap := e.stepWorkReady.getReadyMap(workerID)
+			e.processSteps(workerID, clusterIDMap, nodes, stopC)
 		}
 	}
 }
 
-func (s *execEngine) loadStepNodes(workerID uint64,
+func (e *engine) loadStepNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return s.load(workerID, cci, nodes, rsm.FromStepWorker, s.stepWorkReady)
+	return e.load(workerID, cci, nodes, rsm.FromStepWorker, e.stepWorkReady)
 }
 
-func (s *execEngine) loadBucketNodes(workerID uint64,
+func (e *engine) loadBucketNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
 	from rsm.From) (map[uint64]*node, []*node, uint64) {
 	bucket := workerID - 1
-	newCCI := s.nh.getClusterSetIndex()
+	newCCI := e.nh.getClusterSetIndex()
 	var offloaded []*node
 	if newCCI != cci {
 		newNodes := make(map[uint64]*node)
-		s.nh.forEachClusterRun(nil,
+		e.nh.forEachClusterRun(nil,
 			func() bool {
 				for cid, node := range nodes {
 					nv, ok := newNodes[cid]
@@ -922,7 +922,7 @@ func (s *execEngine) loadBucketNodes(workerID uint64,
 	return nodes, offloaded, cci
 }
 
-func (s *execEngine) processSteps(workerID uint64,
+func (e *engine) processSteps(workerID uint64,
 	clusterIDMap map[uint64]struct{},
 	nodes map[uint64]*node, stopC chan struct{}) {
 	if len(nodes) == 0 {
@@ -931,7 +931,7 @@ func (s *execEngine) processSteps(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, "") {
 		return
 	}
-	nodeCtx := s.ctxs[workerID-1]
+	nodeCtx := e.ctxs[workerID-1]
 	nodeCtx.Reset()
 	if len(clusterIDMap) == 0 {
 		for cid := range nodes {
@@ -948,7 +948,7 @@ func (s *execEngine) processSteps(workerID uint64,
 			nodeUpdates = append(nodeUpdates, ud)
 		}
 	}
-	s.applySnapshotAndUpdate(nodeUpdates, nodes, true)
+	e.applySnapshotAndUpdate(nodeUpdates, nodes, true)
 	if tests.ReadyToReturnTestKnob(stopC, "sending append msg") {
 		return
 	}
@@ -964,19 +964,19 @@ func (s *execEngine) processSteps(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
 		return
 	}
-	if err := s.logdb.SaveRaftState(nodeUpdates, nodeCtx); err != nil {
+	if err := e.logdb.SaveRaftState(nodeUpdates, nodeCtx); err != nil {
 		panic(err)
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {
 		return
 	}
-	if err := s.onSnapshotSaved(nodeUpdates, nodes); err != nil {
+	if err := e.onSnapshotSaved(nodeUpdates, nodes); err != nil {
 		panic(err)
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "applying updates") {
 		return
 	}
-	s.applySnapshotAndUpdate(nodeUpdates, nodes, false)
+	e.applySnapshotAndUpdate(nodeUpdates, nodes, false)
 	if tests.ReadyToReturnTestKnob(stopC, "processing raft updates") {
 		return
 	}
@@ -985,7 +985,7 @@ func (s *execEngine) processSteps(workerID uint64,
 		if err := node.processRaftUpdate(ud); err != nil {
 			panic(err)
 		}
-		s.processMoreCommittedEntries(ud)
+		e.processMoreCommittedEntries(ud)
 		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
 			return
 		}
@@ -1006,13 +1006,13 @@ func resetNodeUpdate(nodeUpdates []pb.Update) {
 	}
 }
 
-func (s *execEngine) processMoreCommittedEntries(ud pb.Update) {
+func (e *engine) processMoreCommittedEntries(ud pb.Update) {
 	if ud.MoreCommittedEntries {
-		s.setStepReady(ud.ClusterID)
+		e.setStepReady(ud.ClusterID)
 	}
 }
 
-func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
+func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 	nodes map[uint64]*node, fastApply bool) {
 	for _, ud := range updates {
 		if ud.FastApply != fastApply {
@@ -1026,7 +1026,7 @@ func (s *execEngine) applySnapshotAndUpdate(updates []pb.Update,
 	}
 }
 
-func (s *execEngine) onSnapshotSaved(updates []pb.Update,
+func (e *engine) onSnapshotSaved(updates []pb.Update,
 	nodes map[uint64]*node) error {
 	for _, ud := range updates {
 		node := nodes[ud.ClusterID]
@@ -1039,32 +1039,31 @@ func (s *execEngine) onSnapshotSaved(updates []pb.Update,
 	return nil
 }
 
-func (s *execEngine) setStepReady(clusterID uint64) {
-	s.stepWorkReady.clusterReady(clusterID)
+func (e *engine) setStepReady(clusterID uint64) {
+	e.stepWorkReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setCommitReady(clusterID uint64) {
-	s.commitWorkReady.clusterReady(clusterID)
+func (e *engine) setCommitReady(clusterID uint64) {
+	e.commitWorkReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setApplyReady(clusterID uint64) {
-	s.applyWorkReady.clusterReady(clusterID)
+func (e *engine) setApplyReady(clusterID uint64) {
+	e.applyWorkReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setStreamReady(clusterID uint64) {
-	s.wp.streamReady.clusterReady(clusterID)
+func (e *engine) setStreamReady(clusterID uint64) {
+	e.wp.streamReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setRequestedSnapshotReady(clusterID uint64) {
-	s.wp.saveReady.clusterReady(clusterID)
+func (e *engine) setSaveReady(clusterID uint64) {
+	e.wp.saveReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) setAvailableSnapshotReady(clusterID uint64) {
-	s.wp.recoverReady.clusterReady(clusterID)
+func (e *engine) setRecoverReady(clusterID uint64) {
+	e.wp.recoverReady.clusterReady(clusterID)
 }
 
-func (s *execEngine) offloadNodeMap(nodes map[uint64]*node,
-	from rsm.From) {
+func (e *engine) offloadNodeMap(nodes map[uint64]*node, from rsm.From) {
 	for _, node := range nodes {
 		node.offloaded(from)
 	}

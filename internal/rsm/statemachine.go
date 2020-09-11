@@ -105,23 +105,23 @@ type SSMeta struct {
 
 // Task describes a task that need to be handled by StateMachine.
 type Task struct {
-	ClusterID         uint64
-	NodeID            uint64
-	Index             uint64
-	SnapshotAvailable bool
-	InitialSnapshot   bool
-	SnapshotRequested bool
-	StreamSnapshot    bool
-	PeriodicSync      bool
-	NewNode           bool
-	SSRequest         SSRequest
-	Entries           []pb.Entry
+	ClusterID    uint64
+	NodeID       uint64
+	Index        uint64
+	Recover      bool
+	Initial      bool
+	Save         bool
+	Stream       bool
+	PeriodicSync bool
+	NewNode      bool
+	SSRequest    SSRequest
+	Entries      []pb.Entry
 }
 
 // IsSnapshotTask returns a boolean flag indicating whether it is a snapshot
 // task.
 func (t *Task) IsSnapshotTask() bool {
-	return t.SnapshotAvailable || t.SnapshotRequested || t.StreamSnapshot
+	return t.Recover || t.Save || t.Stream
 }
 
 func (t *Task) isSyncTask() bool {
@@ -230,7 +230,7 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 	ss.Validate(s.fs)
 	plog.Debugf("%s called RecoverFromSnapshot, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
-	if err := s.recover(ss, t.InitialSnapshot); err != nil {
+	if err := s.recover(ss, t.Initial); err != nil {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
@@ -240,7 +240,7 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 }
 
 func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
-	if !t.InitialSnapshot {
+	if !t.Initial {
 		snapshot, err := s.snapshotter.GetSnapshot(t.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
 			plog.Errorf("%s, get snapshot failed: %v", s.id(), err)
@@ -266,7 +266,7 @@ func (s *StateMachine) mustBeOnDiskSM() {
 	}
 }
 
-func (s *StateMachine) recoverSMRequired(ss pb.Snapshot, init bool) bool {
+func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	s.mustBeOnDiskSM()
 	fn := s.snapshotter.GetFilePath(ss.Index)
 	shrunk, err := IsShrinkedSnapshotFile(fn, s.fs)
@@ -320,7 +320,7 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	if !s.OnDiskStateMachine() {
 		return s.doRecover(ss, init)
 	}
-	if s.recoverSMRequired(ss, init) {
+	if s.recoverRequired(ss, init) {
 		s.canRecoverOnDiskSnapshot(ss, init)
 		if err := s.doRecover(ss, init); err != nil {
 			return err

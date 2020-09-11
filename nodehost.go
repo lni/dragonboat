@@ -263,7 +263,7 @@ type NodeHost struct {
 	duStopper      *syncutil.Stopper
 	nodes          *transport.Nodes
 	rsPools        []*sync.Pool
-	execEngine     *execEngine
+	engine         *engine
 	logdb          raftio.ILogDB
 	transport      transport.ITransport
 	msgHandler     *messageHandler
@@ -335,7 +335,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		_, errorInjection = nhConfig.FS.(*vfs.ErrorFS)
 		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
 	}
-	nh.execEngine = newExecEngine(nh, nhConfig.Expert.ExecShards,
+	nh.engine = newExecEngine(nh, nhConfig.Expert.ExecShards,
 		nh.nhConfig.NotifyCommit, errorInjection, nh.serverCtx, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain()
@@ -394,8 +394,8 @@ func (nh *NodeHost) Stop() {
 	}
 	nh.stopper.Stop()
 	plog.Debugf("%s is going to stop the exec engine", nh.id())
-	if nh.execEngine != nil {
-		nh.execEngine.stop()
+	if nh.engine != nil {
+		nh.engine.stop()
 	}
 	plog.Debugf("%s is going to stop the tranport module", nh.id())
 	if nh.transport != nil {
@@ -805,7 +805,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.proposeSession(session, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(session.ClusterID)
+	nh.engine.setStepReady(session.ClusterID)
 	return req, err
 }
 
@@ -977,7 +977,7 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 }
 
@@ -1012,7 +1012,7 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	if v.nodeID != nodeID {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestCompaction()
 }
 
@@ -1125,7 +1125,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	tt := nh.getTimeoutTick(timeout)
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
 }
 
@@ -1162,7 +1162,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestAddNodeWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
@@ -1200,7 +1200,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestAddObserverWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
@@ -1236,7 +1236,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestAddWitnessWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
@@ -1257,7 +1257,7 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	}
 	plog.Debugf("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
-	defer nh.execEngine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(clusterID)
 	return v.requestLeaderTransfer(targetNodeID)
 }
 
@@ -1272,7 +1272,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	if _, ok := nh.getCluster(clusterID); ok {
 		return ErrClusterNotStopped
 	}
-	if ch := nh.execEngine.destroyedC(clusterID, nodeID); ch != nil {
+	if ch := nh.engine.destroyedC(clusterID, nodeID); ch != nil {
 		select {
 		case <-ch:
 		case <-ctx.Done():
@@ -1304,7 +1304,7 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
-	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
+	if nh.engine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
 	plog.Debugf("%s called RemoveData", dn(clusterID, nodeID))
@@ -1341,7 +1341,7 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 	nu := &nodeUser{
 		nh:           nh,
 		node:         v,
-		setStepReady: nh.execEngine.setStepReady,
+		setStepReady: nh.engine.setStepReady,
 	}
 	return nu, nil
 }
@@ -1396,7 +1396,7 @@ func (nh *NodeHost) propose(s *client.Session,
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
-	nh.execEngine.setStepReady(s.ClusterID)
+	nh.engine.setStepReady(s.ClusterID)
 	return req, err
 }
 
@@ -1413,7 +1413,7 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 	if err != nil {
 		return nil, nil, err
 	}
-	nh.execEngine.setStepReady(clusterID)
+	nh.engine.setStepReady(clusterID)
 	return req, n, err
 }
 
@@ -1548,7 +1548,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if _, ok := nh.mu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
-	if nh.execEngine.nodeLoaded(clusterID, nodeID) {
+	if nh.engine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterAlreadyExist
 	}
 	if join && len(initialMembers) > 0 {
@@ -1599,7 +1599,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		snapshotter,
 		createStateMachine(clusterID, nodeID, stopc),
 		smType,
-		nh.execEngine,
+		nh.engine,
 		nh.liQueue,
 		nh.transport.GetStreamSink,
 		nh.msgHandler.HandleSnapshotStatus,
@@ -1620,7 +1620,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	}
 	nh.mu.clusters.Store(clusterID, rn)
 	nh.mu.csi++
-	nh.execEngine.setApplyReady(clusterID)
+	nh.engine.setApplyReady(clusterID)
 	return nil
 }
 
@@ -1863,7 +1863,7 @@ func (nh *NodeHost) sendTickMessage(clusters []*node) {
 			From: n.nodeID,
 		}
 		n.mq.Add(m)
-		nh.execEngine.setStepReady(n.clusterID)
+		nh.engine.setStepReady(n.clusterID)
 	}
 }
 
@@ -1917,7 +1917,7 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 		}
 		added, stopped := n.mq.Add(m)
 		if added {
-			nh.execEngine.setStepReady(clusterID)
+			nh.engine.setStepReady(clusterID)
 			plog.Debugf("%s just got snapshot status", dn(clusterID, nodeID))
 			return true
 		}
@@ -2096,7 +2096,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					msgCount++
 				}
 			}
-			nh.execEngine.setStepReady(req.ClusterId)
+			nh.engine.setStepReady(req.ClusterId)
 		}
 	}
 	return snapshotCount, msgCount
@@ -2125,7 +2125,7 @@ func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
 			To:   n.nodeID,
 		}
 		n.mq.MustAdd(m)
-		h.nh.execEngine.setStepReady(clusterID)
+		h.nh.engine.setStepReady(clusterID)
 	}
 }
 

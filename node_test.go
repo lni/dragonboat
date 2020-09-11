@@ -164,12 +164,12 @@ func getTestRaftNodes(count int, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 type dummyEngine struct {
 }
 
-func (d *dummyEngine) setStepReady(clusterID uint64)              {}
-func (d *dummyEngine) setCommitReady(clusterID uint64)            {}
-func (d *dummyEngine) setApplyReady(clusterID uint64)             {}
-func (d *dummyEngine) setStreamReady(clusterID uint64)            {}
-func (d *dummyEngine) setRequestedSnapshotReady(clusterID uint64) {}
-func (d *dummyEngine) setAvailableSnapshotReady(clusterID uint64) {}
+func (d *dummyEngine) setStepReady(clusterID uint64)    {}
+func (d *dummyEngine) setCommitReady(clusterID uint64)  {}
+func (d *dummyEngine) setApplyReady(clusterID uint64)   {}
+func (d *dummyEngine) setStreamReady(clusterID uint64)  {}
+func (d *dummyEngine) setSaveReady(clusterID uint64)    {}
+func (d *dummyEngine) setRecoverReady(clusterID uint64) {}
 
 func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	ldb raftio.ILogDB, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
@@ -282,9 +282,7 @@ func step(nodes []*node) bool {
 	// step the events, collect all ready structs
 	for _, node := range nodes {
 		if !node.initialized() {
-			commit := rsm.Task{
-				InitialSnapshot: true,
-			}
+			commit := rsm.Task{Initial: true}
 			index, _ := node.sm.Recover(commit)
 			node.setInitialStatus(index)
 		}
@@ -338,11 +336,11 @@ func step(nodes []*node) bool {
 			panic(err)
 		}
 		if rec.IsSnapshotTask() {
-			if rec.SnapshotAvailable || rec.InitialSnapshot {
+			if rec.Recover || rec.Initial {
 				if _, err := node.sm.Recover(rec); err != nil {
 					panic(err)
 				}
-			} else if rec.SnapshotRequested {
+			} else if rec.Save {
 				if err := node.save(rsm.Task{}); err != nil {
 					panic(err)
 				}
