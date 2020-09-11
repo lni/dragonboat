@@ -83,7 +83,7 @@ func (nh *NodeHost) Stopped() bool {
 }
 
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {
-	nh.transport.(*transport.Transport).SetPreSendMessageBatchHook(f)
+	nh.transport.(*transport.Transport).SetPreSendBatchHook(f)
 }
 
 func (nh *NodeHost) SetPreStreamChunkSendHook(f transport.StreamChunkSendFunc) {
