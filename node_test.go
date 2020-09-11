@@ -1516,7 +1516,7 @@ func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 	if err != nil {
 		t.Errorf("err %v, want nil", err)
 	}
-	timeout := v.Nanoseconds() / 1000000
+	timeout := v.Milliseconds()
 	if timeout <= 4500 || timeout > 5000 {
 		t.Errorf("v %d, want [4500,5000]", timeout)
 	}

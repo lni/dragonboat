@@ -28,8 +28,7 @@ type TickerFunc func(usec uint64) bool
 // TickerFunc return a true value or when any of the two specified stop
 // channels is signalled.
 func StartTicker(td time.Duration, tf TickerFunc, stopc <-chan struct{}) {
-	// FIXME: use Milliseconds() once go1.14 is released
-	tms := td.Nanoseconds() / 1000000
+	tms := td.Milliseconds()
 	if tms == 0 {
 		panic("invalid duration")
 	}
@@ -65,8 +64,7 @@ func runLFTicker(td time.Duration, tf TickerFunc, stopc <-chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			// FIXME: use Microseconds() once go1.14 is released
-			if tf(uint64(td.Nanoseconds() / 1000)) {
+			if tf(uint64(td.Microseconds())) {
 				return
 			}
 		case <-stopc:

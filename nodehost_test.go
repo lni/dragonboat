@@ -109,7 +109,7 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 		if err := f.Sync(); err != nil {
 			panic(err)
 		}
-		total += uint64(time.Since(start).Nanoseconds() / 1000000)
+		total += uint64(time.Since(start).Milliseconds())
 	}
 	rtt := total / uint64(repeat)
 	for i := range rttValues {

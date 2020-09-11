@@ -1946,8 +1946,7 @@ func (nh *NodeHost) getTick() uint64 {
 }
 
 func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
-	timeoutMs := uint64(timeout.Nanoseconds() / 1000000)
-	return timeoutMs / nh.nhConfig.RTTMillisecond
+	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
 
 func (nh *NodeHost) getClusterSetIndex() uint64 {
