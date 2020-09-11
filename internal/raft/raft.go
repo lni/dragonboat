@@ -1778,7 +1778,6 @@ func (r *raft) handleReadIndexLeaderConfirmation(m pb.Message) {
 		if s.from == NoNode || s.from == r.nodeID {
 			r.addReadyToRead(s.index, s.ctx)
 		} else {
-			// FIXME (lni): add tests for this case
 			r.send(pb.Message{
 				To:       s.from,
 				Type:     pb.ReadIndexResp,
