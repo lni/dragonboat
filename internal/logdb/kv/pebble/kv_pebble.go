@@ -254,10 +254,7 @@ func (r *KV) Name() string {
 
 // Close closes the RDB object.
 func (r *KV) Close() error {
-	if r.db != nil {
-		r.db.Close()
-	}
-	r.db = nil
+	r.db.Close()
 	r.event.close()
 	return nil
 }
