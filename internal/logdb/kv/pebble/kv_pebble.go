@@ -42,20 +42,13 @@ const (
 type eventListener struct {
 	kv      *KV
 	stopper *syncutil.Stopper
-	stopped chan struct{}
 }
 
 func (l *eventListener) close() {
-	close(l.stopped)
 	l.stopper.Stop()
 }
 
 func (l *eventListener) notify() {
-	select {
-	case <-l.stopped:
-		return
-	default:
-	}
 	l.stopper.RunWorker(func() {
 		select {
 		case <-l.kv.dbSet:
@@ -218,7 +211,6 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	event := &eventListener{
 		kv:      kv,
 		stopper: syncutil.NewStopper(),
-		stopped: make(chan struct{}),
 	}
 	opts.EventListener = pebble.EventListener{
 		WALCreated:    event.onWALCreated,
@@ -262,11 +254,11 @@ func (r *KV) Name() string {
 
 // Close closes the RDB object.
 func (r *KV) Close() error {
-	r.event.close()
 	if r.db != nil {
 		r.db.Close()
 	}
 	r.db = nil
+	r.event.close()
 	return nil
 }
 
