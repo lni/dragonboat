@@ -54,7 +54,7 @@ matrix:
       os: linux
       arch: arm64
       dist: bionic
-      script: GOPROXY=direct GOSUMDB=off RACE=1 make test
+      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_MEMFS_TEST=1 RACE=1 make test
     - name: "go1.15.x-darwin"
       go: 1.15.x
       os: osx
