@@ -409,6 +409,7 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 type TCP struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
+	connStopper    *syncutil.Stopper
 	requestHandler raftio.RequestHandler
 	chunkHandler   raftio.IChunkHandler
 	encrypted      bool
@@ -425,6 +426,7 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 	t := &TCP{
 		nhConfig:       nhConfig,
 		stopper:        syncutil.NewStopper(),
+		connStopper:    syncutil.NewStopper(),
 		requestHandler: requestHandler,
 		chunkHandler:   chunkHandler,
 		encrypted:      nhConfig.MutualTLS,
@@ -452,6 +454,15 @@ func (t *TCP) Start() error {
 	if err != nil {
 		return err
 	}
+	t.connStopper.RunWorker(func() {
+		// sync.WaitGroup's doc mentions that
+		// "Note that calls with a positive delta that occur when the counter is
+		//  zero must happen before a Wait."
+		// It is unclear that whether the stdlib is going complain in future
+		// releases when Wait() is called when the counter is zero and Add() with
+		// positive delta has never been called.
+		<-t.connStopper.ShouldStop()
+	})
 	t.stopper.RunWorker(func() {
 		for {
 			conn, err := listener.Accept()
@@ -469,11 +480,11 @@ func (t *TCP) Start() error {
 					}
 				})
 			}
-			t.stopper.RunWorker(func() {
+			t.connStopper.RunWorker(func() {
 				<-t.stopper.ShouldStop()
 				closeFn()
 			})
-			t.stopper.RunWorker(func() {
+			t.connStopper.RunWorker(func() {
 				t.serveConn(conn)
 				closeFn()
 			})
@@ -485,6 +496,7 @@ func (t *TCP) Start() error {
 // Stop stops the TCP transport module.
 func (t *TCP) Stop() {
 	t.stopper.Stop()
+	t.connStopper.Stop()
 }
 
 // GetConnection returns a new raftio.IConnection for sending raft messages.
