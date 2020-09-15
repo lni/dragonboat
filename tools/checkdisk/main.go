@@ -208,8 +208,8 @@ func main() {
 				panic(err)
 			}
 			if !*twonh {
-				nhList = append(nhList, nh)
 				if ok && leaderID == 1 {
+					nhList = append(nhList, nh)
 					break
 				}
 			} else {
@@ -229,7 +229,7 @@ func main() {
 		}
 	}
 	if len(nhList) != *clustercount {
-		panic("nhList len unexpected")
+		panic(fmt.Sprintf("nhList len unexpected, %d", len(nhList)))
 	}
 	fmt.Printf("clusters are ready, will run for %d seconds\n", *seconds)
 	doneCh := make(chan struct{}, 1)
