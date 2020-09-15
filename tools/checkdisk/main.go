@@ -187,7 +187,7 @@ func main() {
 	if *twonh {
 		nodes[2] = raftAddress2
 	}
-	var mynh *dragonboat.NodeHost
+	nhList := make([]*dragonboat.NodeHost, 0)
 	for i := uint64(1); i <= uint64(*clustercount); i++ {
 		rc.ClusterID = i
 		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
@@ -208,15 +208,16 @@ func main() {
 				panic(err)
 			}
 			if !*twonh {
+				nhList = append(nhList, nh)
 				if ok && leaderID == 1 {
 					break
 				}
 			} else {
 				if ok && (leaderID == 1 || leaderID == 2) {
 					if leaderID == 1 {
-						mynh = nh
+						nhList = append(nhList, nh)
 					} else {
-						mynh = nh2
+						nhList = append(nhList, nh2)
 					}
 					break
 				}
@@ -226,6 +227,9 @@ func main() {
 				panic("failed to elect leader")
 			}
 		}
+	}
+	if len(nhList) != *clustercount {
+		panic("nhList len unexpected")
 	}
 	fmt.Printf("clusters are ready, will run for %d seconds\n", *seconds)
 	doneCh := make(chan struct{}, 1)
@@ -242,12 +246,13 @@ func main() {
 		stopper.RunPWorker(func(arg interface{}) {
 			workerID := arg.(uint64)
 			clusterID := (workerID % uint64(*clustercount)) + 1
-			cs := mynh.GetNoOPSession(clusterID)
+			nh := nhList[clusterID-1]
+			cs := nh.GetNoOPSession(clusterID)
 			cmd := make([]byte, 16)
 			results[workerID] = 0
 			for {
 				for j := 0; j < 32; j++ {
-					rs, err := mynh.Propose(cs, cmd, 4*time.Second)
+					rs, err := nh.Propose(cs, cmd, 4*time.Second)
 					if err != nil {
 						panic(err)
 					}
@@ -271,9 +276,10 @@ func main() {
 			stopper.RunPWorker(func(arg interface{}) {
 				workerID := arg.(uint64)
 				clusterID := (workerID % uint64(*clustercount)) + 1
+				nh := nhList[clusterID-1]
 				for {
 					for j := 0; j < 32; j++ {
-						rs, err := mynh.ReadIndex(clusterID, 4*time.Second)
+						rs, err := nh.ReadIndex(clusterID, 4*time.Second)
 						if err != nil {
 							panic(err)
 						}
