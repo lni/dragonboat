@@ -242,7 +242,7 @@ func main() {
 		stopper.RunPWorker(func(arg interface{}) {
 			workerID := arg.(uint64)
 			clusterID := (workerID % uint64(*clustercount)) + 1
-			cs := nh.GetNoOPSession(clusterID)
+			cs := mynh.GetNoOPSession(clusterID)
 			cmd := make([]byte, 16)
 			results[workerID] = 0
 			for {
