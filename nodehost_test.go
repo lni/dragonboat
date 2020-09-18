@@ -1909,7 +1909,7 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 			return fakeDiskSM
 		},
 		tf: func(nh *NodeHost) {
-			n, ok := nh.getClusterNotLocked(1)
+			n, ok := nh.getCluster(1)
 			if !ok {
 				t.Fatalf("failed to get the node")
 			}

@@ -42,8 +42,7 @@ var (
 type nodeLoader interface {
 	id() string
 	getClusterSetIndex() uint64
-	forEachClusterRun(bf func() bool,
-		af func() bool, f func(uint64, *node) bool)
+	forEachCluster(f func(uint64, *node) bool) uint64
 }
 
 type nodeType struct {
@@ -405,39 +404,33 @@ func (p *workerPool) loadNodes(cci uint64,
 	return newCCI, newNodes
 }
 
-func (p *workerPool) doLoadNodes(cci uint64,
+func (p *workerPool) doLoadNodes(csi uint64,
 	nodes map[uint64]*node) (uint64, map[uint64]*node, []*node) {
-	newCCI := p.nh.getClusterSetIndex()
+	newCSI := p.nh.getClusterSetIndex()
 	var offloaded []*node
-	if newCCI != cci {
+	if newCSI != csi {
 		newNodes := make(map[uint64]*node)
 		// busy nodes should never be offloaded
 		for _, n := range p.busy {
 			newNodes[n.clusterID] = n
 		}
-		p.nh.forEachClusterRun(nil,
-			func() bool {
-				for cid, node := range nodes {
-					_, ok := newNodes[cid]
-					if !ok {
-						offloaded = append(offloaded, node)
-					}
-					// TODO:
-					// check instanceID change issue
-				}
-				return true
-			},
-			func(cid uint64, v *node) bool {
-				v.loaded(rsm.FromSnapshotWorker)
-				_, ok := newNodes[cid]
-				if !ok {
-					newNodes[cid] = v
-				}
-				return true
-			})
-		return newCCI, newNodes, offloaded
+		newCSI = p.nh.forEachCluster(func(cid uint64, n *node) bool {
+			n.loaded(rsm.FromSnapshotWorker)
+			if _, ok := newNodes[cid]; !ok {
+				newNodes[cid] = n
+			}
+			return true
+		})
+		for cid, node := range nodes {
+			if _, ok := newNodes[cid]; !ok {
+				offloaded = append(offloaded, node)
+			}
+			// TODO:
+			// check instanceID change issue
+		}
+		return newCSI, newNodes, offloaded
 	}
-	return cci, nodes, offloaded
+	return csi, nodes, offloaded
 }
 
 func (p *workerPool) completed(workerID uint64) {
@@ -889,27 +882,14 @@ func (e *engine) loadStepNodes(workerID uint64,
 }
 
 func (e *engine) loadBucketNodes(workerID uint64,
-	cci uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
+	csi uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
 	from rsm.From) (map[uint64]*node, []*node, uint64) {
 	bucket := workerID - 1
-	newCCI := e.nh.getClusterSetIndex()
+	newCSI := e.nh.getClusterSetIndex()
 	var offloaded []*node
-	if newCCI != cci {
+	if newCSI != csi {
 		newNodes := make(map[uint64]*node)
-		e.nh.forEachClusterRun(nil,
-			func() bool {
-				for cid, node := range nodes {
-					nv, ok := newNodes[cid]
-					if !ok {
-						offloaded = append(offloaded, node)
-					} else {
-						if nv.instanceID != node.instanceID {
-							offloaded = append(offloaded, node)
-						}
-					}
-				}
-				return true
-			},
+		newCSI = e.nh.forEachCluster(
 			func(cid uint64, v *node) bool {
 				if partitioner.GetPartitionID(cid) == bucket {
 					v.loaded(from)
@@ -917,9 +897,18 @@ func (e *engine) loadBucketNodes(workerID uint64,
 				}
 				return true
 			})
-		return newNodes, offloaded, newCCI
+		for cid, node := range nodes {
+			if nv, ok := newNodes[cid]; !ok {
+				offloaded = append(offloaded, node)
+			} else {
+				if nv.instanceID != node.instanceID {
+					offloaded = append(offloaded, node)
+				}
+			}
+		}
+		return newNodes, offloaded, newCSI
 	}
-	return nodes, offloaded, cci
+	return nodes, offloaded, csi
 }
 
 func (e *engine) processSteps(workerID uint64,

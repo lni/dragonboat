@@ -122,7 +122,7 @@ const (
 
 var (
 	receiveQueueLen   = settings.Soft.ReceiveQueueLength
-	rsPoolShards      = settings.Soft.NodeHostRequestStatePoolShards
+	requestPoolShards = settings.Soft.NodeHostRequestStatePoolShards
 	streamConnections = settings.Soft.StreamConnections
 	monitorInterval   = 100 * time.Millisecond
 )
@@ -251,7 +251,6 @@ type NodeHost struct {
 	tick   uint64
 	mu     struct {
 		sync.RWMutex
-		stopped  bool
 		csi      uint64
 		clusters sync.Map // clusterID -> *node
 		lm       sync.Map // shardID -> *logDBMetrics
@@ -262,7 +261,7 @@ type NodeHost struct {
 	stopper        *syncutil.Stopper
 	duStopper      *syncutil.Stopper
 	nodes          *transport.Nodes
-	rsPools        []*sync.Pool
+	requestPools   []*sync.Pool
 	engine         *engine
 	logdb          raftio.ILogDB
 	transport      transport.ITransport
@@ -371,9 +370,6 @@ func (nh *NodeHost) Stop() {
 	nh.sysListener.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
-	nh.mu.Lock()
-	nh.mu.stopped = true
-	nh.mu.Unlock()
 	nodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodes = append(nodes, raftio.NodeInfo{
@@ -534,7 +530,7 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 	if err != nil {
 		return sm.Result{}, err
 	}
-	result, err := checkRequestState(ctx, rs)
+	result, err := getRequestState(ctx, rs)
 	if err != nil {
 		return sm.Result{}, err
 	}
@@ -614,8 +610,7 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	r := v.(*Membership)
-	return r, nil
+	return v.(*Membership), nil
 }
 
 // GetClusterMembership returns the membership information from the specified
@@ -726,7 +721,7 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	result, err := checkRequestState(ctx, rs)
+	result, err := getRequestState(ctx, rs)
 	if err != nil {
 		return nil, err
 	}
@@ -754,7 +749,7 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	result, err := checkRequestState(ctx, rs)
+	result, err := getRequestState(ctx, rs)
 	if err != nil {
 		return err
 	}
@@ -797,16 +792,15 @@ func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 // completion (RequestResult.Completed() is true) of the operation.
 func (nh *NodeHost) ProposeSession(session *client.Session,
 	timeout time.Duration) (*RequestState, error) {
-	v, ok := nh.getCluster(session.ClusterID)
+	n, ok := nh.getCluster(session.ClusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	if !v.supportClientSession() && !session.IsNoOPSession() {
+	if !n.supportClientSession() && !session.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	req, err := v.proposeSession(session, nh.getTimeoutTick(timeout))
-	nh.engine.setStepReady(session.ClusterID)
-	return req, err
+	defer nh.engine.setStepReady(session.ClusterID)
+	return n.proposeSession(session, nh.getTimeoutTick(timeout))
 }
 
 // ReadIndex starts the asynchronous ReadIndex protocol used for linearizable
@@ -881,17 +875,17 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
 		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
-	v, ok := nh.getClusterNotLocked(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	if !v.initialized() {
+	if !n.initialized() {
 		return nil, ErrClusterNotInitialized
 	}
-	if v.isWitness() {
+	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	data, err := v.sm.Lookup(query)
+	data, err := n.sm.Lookup(query)
 	if err == rsm.ErrClusterClosed {
 		return nil, ErrClusterClosed
 	}
@@ -915,26 +909,11 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	select {
-	case r := <-rs.AppliedC():
-		if r.Completed() {
-			return r.GetResult().Value, nil
-		} else if r.Rejected() {
-			return 0, ErrRejected
-		} else if r.Timeout() {
-			return 0, ErrTimeout
-		} else if r.Terminated() {
-			return 0, ErrClusterClosed
-		}
-		plog.Panicf("unknown v code %v", r)
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			return 0, ErrCanceled
-		} else if ctx.Err() == context.DeadlineExceeded {
-			return 0, ErrTimeout
-		}
+	v, err := getRequestState(ctx, rs)
+	if err != nil {
+		return 0, err
 	}
-	panic("unknown state")
+	return v.Value, nil
 }
 
 // RequestSnapshot requests a snapshot to be created asynchronously for the
@@ -973,12 +952,12 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestSnapshot(opt, nh.getTimeoutTick(timeout))
+	return n.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 }
 
 // RequestCompaction requests a compaction operation to be asynchronously
@@ -1000,7 +979,7 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		// assume this is a node that has already been removed via RemoveData
 		done, err := nh.logdb.CompactEntriesTo(clusterID, nodeID, math.MaxUint64)
@@ -1009,11 +988,11 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 		}
 		return &SysOpState{completedC: done}, nil
 	}
-	if v.nodeID != nodeID {
+	if n.nodeID != nodeID {
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestCompaction()
+	return n.requestCompaction()
 }
 
 // SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode
@@ -1030,7 +1009,7 @@ func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	_, err = checkRequestState(ctx, rs)
+	_, err = getRequestState(ctx, rs)
 	return err
 }
 
@@ -1050,7 +1029,7 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	_, err = checkRequestState(ctx, rs)
+	_, err = getRequestState(ctx, rs)
 	return err
 }
 
@@ -1070,7 +1049,7 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	_, err = checkRequestState(ctx, rs)
+	_, err = getRequestState(ctx, rs)
 	return err
 }
 
@@ -1090,7 +1069,7 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	_, err = checkRequestState(ctx, rs)
+	_, err = getRequestState(ctx, rs)
 	return err
 }
 
@@ -1120,13 +1099,13 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	tt := nh.getTimeoutTick(timeout)
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
+	return n.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
 }
 
 // RequestAddNode is a Raft cluster membership change method for requesting the
@@ -1158,12 +1137,12 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestAddNodeWithOrderID(nodeID,
+	return n.requestAddNodeWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
@@ -1196,12 +1175,12 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestAddObserverWithOrderID(nodeID,
+	return n.requestAddObserverWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
@@ -1232,12 +1211,12 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestAddWitnessWithOrderID(nodeID,
+	return n.requestAddWitnessWithOrderID(nodeID,
 		address, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
@@ -1251,14 +1230,14 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return ErrClusterNotFound
 	}
 	plog.Debugf("RequestLeaderTransfer called on cluster %d target nodeid %d",
 		clusterID, targetNodeID)
 	defer nh.engine.setStepReady(clusterID)
-	return v.requestLeaderTransfer(targetNodeID)
+	return n.requestLeaderTransfer(targetNodeID)
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for
@@ -1334,16 +1313,15 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	nu := &nodeUser{
+	return &nodeUser{
 		nh:           nh,
-		node:         v,
+		node:         n,
 		setStepReady: nh.engine.setStepReady,
-	}
-	return nu, nil
+	}, nil
 }
 
 // HasNodeInfo returns a boolean value indicating whether the specified node
@@ -1352,11 +1330,10 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return false
 	}
-	_, err := nh.logdb.GetBootstrapInfo(clusterID, nodeID)
-	if err == raftio.ErrNoBootstrapInfo {
-		return false
-	}
-	if err != nil {
+	if _, err := nh.logdb.GetBootstrapInfo(clusterID, nodeID); err != nil {
+		if err == raftio.ErrNoBootstrapInfo {
+			return false
+		}
 		panic(err)
 	}
 	return true
@@ -1388,13 +1365,16 @@ func (nh *NodeHost) propose(s *client.Session,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getClusterNotLocked(s.ClusterID)
+	v, ok := nh.getCluster(s.ClusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	if !v.supportClientSession() && !s.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
+	// TODO:
+	// check whether using defer in this hot path is going to have noticeable
+	// impact on performance
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
 	nh.engine.setStepReady(s.ClusterID)
 	return req, err
@@ -1405,7 +1385,7 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, nil, ErrClosed
 	}
-	n, ok := nh.getClusterNotLocked(clusterID)
+	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, nil, ErrClusterNotFound
 	}
@@ -1418,8 +1398,7 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 }
 
 func (nh *NodeHost) linearizableRead(ctx context.Context,
-	clusterID uint64,
-	f func(n *node) (interface{}, error)) (interface{}, error) {
+	clusterID uint64, f func(n *node) (interface{}, error)) (interface{}, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -1428,68 +1407,34 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	select {
-	case s := <-rs.AppliedC():
-		if s.Timeout() {
-			return nil, ErrTimeout
-		} else if s.Completed() {
-			rs.Release()
-			return f(node)
-		} else if s.Terminated() {
-			return nil, ErrClusterClosed
-		} else if s.Dropped() {
-			return nil, ErrClusterNotReady
-		}
-		panic("unknown completedc code")
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			return nil, ErrCanceled
-		} else if ctx.Err() == context.DeadlineExceeded {
-			return nil, ErrTimeout
-		}
-		panic("unknown ctx error")
+	if _, err := getRequestState(ctx, rs); err != nil {
+		return nil, err
 	}
-}
-
-func (nh *NodeHost) getClusterNotLocked(clusterID uint64) (*node, bool) {
-	v, ok := nh.mu.clusters.Load(clusterID)
-	if !ok {
-		return nil, false
-	}
-	return v.(*node), true
+	rs.Release()
+	return f(node)
 }
 
 func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
-	nh.mu.RLock()
-	v, ok := nh.mu.clusters.Load(clusterID)
-	nh.mu.RUnlock()
+	n, ok := nh.mu.clusters.Load(clusterID)
 	if !ok {
 		return nil, false
 	}
-	return v.(*node), true
+	return n.(*node), true
 }
 
-func (nh *NodeHost) forEachClusterRun(bf func() bool,
-	af func() bool, f func(uint64, *node) bool) {
+func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) uint64 {
 	nh.mu.RLock()
 	defer nh.mu.RUnlock()
-	if bf != nil {
-		if !bf() {
-			return
-		}
-	}
 	nh.mu.clusters.Range(func(k, v interface{}) bool {
 		return f(k.(uint64), v.(*node))
 	})
-	if af != nil {
-		if !af() {
-			return
-		}
-	}
+	return nh.mu.csi
 }
 
-func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) {
-	nh.forEachClusterRun(nil, nil, f)
+func (nh *NodeHost) getClusterSetIndex() uint64 {
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
+	return nh.mu.csi
 }
 
 // there are three major reasons to bootstrap the cluster
@@ -1540,11 +1485,11 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	stopc chan struct{}, config config.Config, smType sm.Type) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
-	nh.mu.Lock()
-	defer nh.mu.Unlock()
-	if nh.mu.stopped {
+	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
 	if _, ok := nh.mu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
@@ -1586,13 +1531,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.ExecShards,
 		nh.nhConfig.Expert.LogDBShards)
 	shard := p.GetPartitionID(clusterID)
-	var lm *logDBMetrics
-	if v, ok := nh.mu.lm.Load(shard); ok {
-		lm = v.(*logDBMetrics)
-	} else {
-		lm = &logDBMetrics{busy: 0}
-		nh.mu.lm.Store(shard, lm)
-	}
 	rn, err := newNode(nh.nhConfig.RaftAddress,
 		peers,
 		im,
@@ -1607,13 +1545,13 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		queue,
 		stopc,
 		nh.nodes,
-		nh.rsPools[nodeID%rsPoolShards],
+		nh.requestPools[nodeID%requestPoolShards],
 		config,
 		nh.nhConfig.EnableMetrics,
 		nh.nhConfig.NotifyCommit,
 		nh.nhConfig.RTTMillisecond,
 		nh.logdb,
-		lm,
+		nh.getLogDBMetrics(shard),
 		nh.sysListener)
 	if err != nil {
 		panic(err)
@@ -1625,8 +1563,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 }
 
 func (nh *NodeHost) createPools() {
-	nh.rsPools = make([]*sync.Pool, rsPoolShards)
-	for i := uint64(0); i < rsPoolShards; i++ {
+	nh.requestPools = make([]*sync.Pool, requestPoolShards)
+	for i := uint64(0); i < requestPoolShards; i++ {
 		p := &sync.Pool{}
 		p.New = func() interface{} {
 			obj := &RequestState{}
@@ -1637,7 +1575,7 @@ func (nh *NodeHost) createPools() {
 			}
 			return obj
 		}
-		nh.rsPools[i] = p
+		nh.requestPools[i] = p
 	}
 }
 
@@ -1694,13 +1632,17 @@ func (nh *NodeHost) handleLogDBInfo(info config.LogDBInfo) {
 	plog.Infof("LogDB info received, shard %d, busy %t", info.Shard, info.Busy)
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
-	if v, ok := nh.mu.lm.Load(info.Shard); ok {
-		v.(*logDBMetrics).update(info.Busy)
-	} else {
-		lm := &logDBMetrics{}
-		lm.update(info.Busy)
-		nh.mu.lm.Store(info.Shard, lm)
+	lm := nh.getLogDBMetrics(info.Shard)
+	lm.update(info.Busy)
+}
+
+func (nh *NodeHost) getLogDBMetrics(shard uint64) *logDBMetrics {
+	if v, ok := nh.mu.lm.Load(shard); ok {
+		return v.(*logDBMetrics)
 	}
+	lm := &logDBMetrics{}
+	nh.mu.lm.Store(shard, lm)
+	return lm
 }
 
 type transportEvent struct {
@@ -1781,7 +1723,13 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		if count >= nh.nhConfig.RTTMillisecond {
 			count -= nh.nhConfig.RTTMillisecond
-			idx, nodes = nh.getCurrentClusters(idx, nodes)
+			if idx != nh.getClusterSetIndex() {
+				nodes = nodes[:0]
+				idx = nh.forEachCluster(func(cid uint64, n *node) bool {
+					nodes = append(nodes, n)
+					return true
+				})
+			}
 			nh.snapshotStatus.pushReady(nh.getTick())
 			nh.sendTickMessage(nodes)
 		}
@@ -1812,20 +1760,6 @@ func (nh *NodeHost) handleListenerEvents() {
 			nh.sysListener.handle(e)
 		}
 	}
-}
-
-func (nh *NodeHost) getCurrentClusters(index uint64,
-	clusters []*node) (uint64, []*node) {
-	newIndex := nh.getClusterSetIndex()
-	if newIndex == index {
-		return index, clusters
-	}
-	newClusters := clusters[:0]
-	nh.forEachCluster(func(cid uint64, node *node) bool {
-		newClusters = append(newClusters, node)
-		return true
-	})
-	return newIndex, newClusters
 }
 
 func (nh *NodeHost) sendMessage(msg pb.Message) {
@@ -1908,7 +1842,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 
 func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) bool {
-	if n, ok := nh.getClusterNotLocked(clusterID); ok {
+	if n, ok := nh.getCluster(clusterID); ok {
 		m := pb.Message{
 			Type:   pb.SnapshotStatus,
 			From:   nodeID,
@@ -1949,13 +1883,6 @@ func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
 
-func (nh *NodeHost) getClusterSetIndex() uint64 {
-	nh.mu.RLock()
-	v := nh.mu.csi
-	nh.mu.RUnlock()
-	return v
-}
-
 func (nh *NodeHost) id() string {
 	return nh.RaftAddress()
 }
@@ -1970,8 +1897,7 @@ func (nh *NodeHost) logNodeHostDetails() {
 	plog.Infof("nodehost address: %s", nh.nhConfig.RaftAddress)
 }
 
-func checkRequestState(ctx context.Context,
-	rs *RequestState) (sm.Result, error) {
+func getRequestState(ctx context.Context, rs *RequestState) (sm.Result, error) {
 	select {
 	case r := <-rs.AppliedC():
 		if r.Completed() {
@@ -2080,7 +2006,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
 			continue
 		}
-		if n, ok := nh.getClusterNotLocked(req.ClusterId); ok {
+		if n, ok := nh.getCluster(req.ClusterId); ok {
 			if n.nodeID != req.To {
 				plog.Warningf("%s sent to node %d but received by node %d",
 					req.Type, req.To, n.nodeID)
@@ -2118,7 +2044,7 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 }
 
 func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
-	if n, ok := h.nh.getClusterNotLocked(clusterID); ok {
+	if n, ok := h.nh.getCluster(clusterID); ok {
 		m := pb.Message{
 			Type: pb.Unreachable,
 			From: nodeID,
