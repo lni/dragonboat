@@ -77,9 +77,7 @@ func SetReceiveQueueLen(v uint64) {
 }
 
 func (nh *NodeHost) Stopped() bool {
-	nh.mu.Lock()
-	defer nh.mu.Unlock()
-	return nh.mu.stopped
+	return atomic.LoadInt32(&nh.closed) != 0
 }
 
 func (nh *NodeHost) SetTransportDropBatchHook(f transport.SendMessageBatchFunc) {
