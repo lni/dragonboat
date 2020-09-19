@@ -72,6 +72,7 @@ func (l *logDBMetrics) isBusy() bool {
 type node struct {
 	leaderID              uint64
 	instanceID            uint64
+	raftAddress           string
 	config                config.Config
 	configChangeC         <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
@@ -147,6 +148,7 @@ func newNode(peers map[uint64]string,
 	mq := server.NewMessageQueue(receiveQueueLen,
 		false, lazyFreeCycle, nhConfig.MaxReceiveQueueSize)
 	rn := &node{
+		raftAddress:           nhConfig.RaftAddress,
 		instanceID:            atomic.AddUint64(&instanceID, 1),
 		tickMillisecond:       nhConfig.RTTMillisecond,
 		config:                config,
@@ -1267,7 +1269,8 @@ func (n *node) setInitialStatus(index uint64) {
 
 func (n *node) handleSnapshotTask(task rsm.Task) {
 	if n.ss.recovering() {
-		plog.Panicf("%s recovering from snapshot again", n.id())
+		plog.Panicf("%s recovering from snapshot again on %s",
+			n.id(), n.getRaftAddress())
 	}
 	if task.Recover {
 		n.reportRecoverSnapshot(task)
@@ -1522,4 +1525,8 @@ func (n *node) setInitialized() {
 
 func (n *node) millisecondSinceStart() uint64 {
 	return n.tickMillisecond * n.currentTick
+}
+
+func (n *node) getRaftAddress() string {
+	return n.raftAddress
 }
