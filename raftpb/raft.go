@@ -26,7 +26,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
-	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var (
@@ -213,11 +212,11 @@ func (e *Entry) IsUpdateEntry() bool {
 
 // NewBootstrapInfo creates and returns a new bootstrap record.
 func NewBootstrapInfo(join bool,
-	smType sm.Type, nodes map[uint64]string) *Bootstrap {
+	smType StateMachineType, nodes map[uint64]string) *Bootstrap {
 	bootstrap := &Bootstrap{
 		Join:      join,
 		Addresses: make(map[uint64]string),
-		Type:      StateMachineType(smType),
+		Type:      smType,
 	}
 	for nid, addr := range nodes {
 		bootstrap.Addresses[nid] = stringutil.CleanAddress(addr)
@@ -228,8 +227,8 @@ func NewBootstrapInfo(join bool,
 // Validate checks whether the incoming nodes parameter and the join flag is
 // valid given the recorded bootstrap infomration in Log DB.
 func (b *Bootstrap) Validate(nodes map[uint64]string,
-	join bool, smType sm.Type) bool {
-	if b.Type != UnknownStateMachine && b.Type != StateMachineType(smType) {
+	join bool, smType StateMachineType) bool {
+	if b.Type != UnknownStateMachine && b.Type != smType {
 		plog.Errorf("recorded sm type %s, got %s", b.Type, smType)
 		return false
 	}

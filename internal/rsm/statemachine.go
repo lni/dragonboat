@@ -200,6 +200,11 @@ func NewStateMachine(sm IManagedStateMachine,
 	}
 }
 
+// Type returns the state machine type.
+func (s *StateMachine) Type() pb.StateMachineType {
+	return s.sm.Type()
+}
+
 // TaskQ returns the task queue.
 func (s *StateMachine) TaskQ() *TaskQueue {
 	return s.taskQ

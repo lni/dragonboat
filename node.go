@@ -87,7 +87,6 @@ type node struct {
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
 	sm                    *rsm.StateMachine
-	smType                sm.Type
 	incomingProposals     *entryQueue
 	incomingReadIndexes   *readIndexQueue
 	pendingProposals      *pendingProposal
@@ -125,25 +124,19 @@ var _ rsm.INode = (*node)(nil)
 
 var instanceID uint64
 
-func newNode(raftAddress string,
-	peers map[uint64]string,
+func newNode(peers map[uint64]string,
 	initialMember bool,
+	config config.Config,
+	nhConfig config.NodeHostConfig,
+	createSM rsm.ManagedStateMachineFactory,
 	snapshotter *snapshotter,
-	dataStore rsm.IManagedStateMachine,
-	smType sm.Type,
 	pipeline pipeline,
 	liQueue *leaderInfoQueue,
 	getStreamSink func(uint64, uint64) *transport.Sink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
-	mq *server.MessageQueue,
-	stopC chan struct{},
 	nodeRegistry transport.INodeRegistry,
-	requestStatePool *sync.Pool,
-	config config.Config,
-	useMetrics bool,
-	notifyCommit bool,
-	tickMillisecond uint64,
+	pool *sync.Pool,
 	ldb raftio.ILogDB,
 	metrics *logDBMetrics,
 	sysEvents *sysEventListener) (*node, error) {
@@ -151,18 +144,13 @@ func newNode(raftAddress string,
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	configChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SSRequest, 1)
-	pp := newPendingProposal(config,
-		notifyCommit, requestStatePool, proposals, raftAddress)
-	leaderTransfer := newPendingLeaderTransfer()
-	pscr := newPendingReadIndex(requestStatePool, readIndexes)
-	pcc := newPendingConfigChange(configChangeC, notifyCommit)
-	ps := newPendingSnapshot(snapshotC)
-	lr := logdb.NewLogReader(config.ClusterID, config.NodeID, ldb)
+	stopC := make(chan struct{})
+	mq := server.NewMessageQueue(receiveQueueLen,
+		false, lazyFreeCycle, nhConfig.MaxReceiveQueueSize)
 	rn := &node{
 		instanceID:            atomic.AddUint64(&instanceID, 1),
-		tickMillisecond:       tickMillisecond,
+		tickMillisecond:       nhConfig.RTTMillisecond,
 		config:                config,
-		raftAddress:           raftAddress,
 		incomingProposals:     proposals,
 		incomingReadIndexes:   readIndexes,
 		configChangeC:         configChangeC,
@@ -171,23 +159,22 @@ func newNode(raftAddress string,
 		getStreamSink:         getStreamSink,
 		handleSnapshotStatus:  handleSnapshotStatus,
 		stopC:                 stopC,
-		pendingProposals:      pp,
-		pendingReadIndexes:    pscr,
-		pendingConfigChange:   pcc,
-		pendingSnapshot:       ps,
-		pendingLeaderTransfer: leaderTransfer,
+		pendingProposals:      newPendingProposal(config, nhConfig.NotifyCommit, pool, proposals),
+		pendingReadIndexes:    newPendingReadIndex(pool, readIndexes),
+		pendingConfigChange:   newPendingConfigChange(configChangeC, nhConfig.NotifyCommit),
+		pendingSnapshot:       newPendingSnapshot(snapshotC),
+		pendingLeaderTransfer: newPendingLeaderTransfer(),
 		nodeRegistry:          nodeRegistry,
 		snapshotter:           snapshotter,
-		logReader:             lr,
+		logReader:             logdb.NewLogReader(config.ClusterID, config.NodeID, ldb),
 		sendRaftMessage:       sendMessage,
 		mq:                    mq,
 		logdb:                 ldb,
 		snapshotLock:          syncutil.NewLock(),
 		ss:                    &snapshotState{},
 		syncTask:              newTask(syncTaskInterval),
-		smType:                smType,
 		sysEvents:             sysEvents,
-		notifyCommit:          notifyCommit,
+		notifyCommit:          nhConfig.NotifyCommit,
 		metrics:               metrics,
 		initializedC:          make(chan struct{}),
 		quiesceManager: quiesceManager{
@@ -197,15 +184,16 @@ func newNode(raftAddress string,
 			nodeID:       config.NodeID,
 		},
 	}
-	sm := rsm.NewStateMachine(dataStore, snapshotter, config, rn, snapshotter.fs)
-	if notifyCommit {
+	ds := createSM(config.ClusterID, config.NodeID, stopC)
+	sm := rsm.NewStateMachine(ds, snapshotter, config, rn, snapshotter.fs)
+	if nhConfig.NotifyCommit {
 		rn.toCommitQ = rsm.NewTaskQueue()
 	}
 	rn.toApplyQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
-		config.NodeID, &rn.leaderID, useMetrics, liQueue)
-	new, err := rn.startRaft(config, lr, peers, initialMember)
+		config.NodeID, &rn.leaderID, nhConfig.EnableMetrics, liQueue)
+	new, err := rn.startRaft(config, peers, initialMember)
 	if err != nil {
 		return nil, err
 	}
@@ -312,9 +300,9 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 	n.notifyConfigChange()
 }
 
-func (n *node) startRaft(cc config.Config,
-	logdb raft.ILogDB, peers map[uint64]string, initial bool) (bool, error) {
-	newNode, err := n.replayLog(cc.ClusterID, cc.NodeID)
+func (n *node) startRaft(cfg config.Config,
+	peers map[uint64]string, initial bool) (bool, error) {
+	newNode, err := n.replayLog(cfg.ClusterID, cfg.NodeID)
 	if err != nil {
 		return false, err
 	}
@@ -322,7 +310,7 @@ func (n *node) startRaft(cc config.Config,
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	n.p = raft.Launch(&cc, logdb, n.raftEvents, pas, initial, newNode)
+	n.p = raft.Launch(&cfg, n.logReader, n.raftEvents, pas, initial, newNode)
 	return newNode, nil
 }
 
@@ -1202,8 +1190,6 @@ func (n *node) handleConfigChange() bool {
 			}
 			n.p.ProposeConfigChange(cc, req.key)
 		}
-	case <-n.stopC:
-		return false
 	default:
 		return false
 	}
@@ -1475,7 +1461,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 			ClusterID:        n.clusterID,
 			NodeID:           n.nodeID,
 			Pending:          true,
-			StateMachineType: n.smType,
+			StateMachineType: sm.Type(n.sm.Type()),
 		}
 	}
 	ci := v.(*ClusterInfo)
@@ -1486,7 +1472,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		IsObserver:        ci.IsObserver,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
-		StateMachineType:  n.smType,
+		StateMachineType:  sm.Type(n.sm.Type()),
 	}
 }
 

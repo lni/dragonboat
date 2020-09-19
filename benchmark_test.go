@@ -129,7 +129,7 @@ func benchmarkProposeN(b *testing.B, sz int) {
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
-	pp := newPendingProposal(cfg, false, p, q, "localhost:9090")
+	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -173,7 +173,7 @@ func BenchmarkPendingProposalNextKey(b *testing.B) {
 	}
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
-	pp := newPendingProposal(cfg, false, p, q, "localhost:9090")
+	pp := newPendingProposal(cfg, false, p, q)
 	b.RunParallel(func(pb *testing.PB) {
 		clientID := rand.Uint64()
 		for pb.Next() {

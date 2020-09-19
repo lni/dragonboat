@@ -587,7 +587,7 @@ func getPendingProposal(notifyCommit bool) (*pendingProposal, *entryQueue) {
 		return obj
 	}
 	cfg := config.Config{ClusterID: 100, NodeID: 120}
-	return newPendingProposal(cfg, notifyCommit, p, c, "nodehost:12345"), c
+	return newPendingProposal(cfg, notifyCommit, p, c), c
 }
 
 func getBlankTestSession() *client.Session {
@@ -1118,7 +1118,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	total := uint64(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
-	pp := newPendingProposal(cfg, false, p, q, "localhost:9090")
+	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
 		v := atomic.AddUint64(&total, 1)

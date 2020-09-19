@@ -931,12 +931,10 @@ func (p *pendingReadIndex) gc(now uint64) {
 	}
 }
 
-func getRandomGenerator(clusterID uint64,
-	nodeID uint64, addr string, partition uint64) *keyGenerator {
+func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
 	pid := os.Getpid()
 	nano := time.Now().UnixNano()
-	seedStr := fmt.Sprintf("%d-%d-%d-%d-%s-%d",
-		pid, nano, clusterID, nodeID, addr, partition)
+	seedStr := fmt.Sprintf("%d-%d-%d-%d-%d", pid, nano, clusterID, nodeID, shard)
 	m := sha512.New()
 	if _, err := io.WriteString(m, seedStr); err != nil {
 		plog.Panicf("%v", err)
@@ -946,8 +944,8 @@ func getRandomGenerator(clusterID uint64,
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}
 }
 
-func newPendingProposal(cfg config.Config, notifyCommit bool,
-	pool *sync.Pool, proposals *entryQueue, raftAddress string) *pendingProposal {
+func newPendingProposal(cfg config.Config,
+	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *pendingProposal {
 	ps := pendingProposalShards
 	p := &pendingProposal{
 		shards: make([]*proposalShard, ps),
@@ -956,7 +954,7 @@ func newPendingProposal(cfg config.Config, notifyCommit bool,
 	}
 	for i := uint64(0); i < ps; i++ {
 		p.shards[i] = newPendingProposalShard(cfg, notifyCommit, pool, proposals)
-		p.keyg[i] = getRandomGenerator(cfg.ClusterID, cfg.NodeID, raftAddress, i)
+		p.keyg[i] = getRng(cfg.ClusterID, cfg.NodeID, i)
 	}
 	return p
 }

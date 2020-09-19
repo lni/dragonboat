@@ -439,42 +439,38 @@ func (nh *NodeHost) Stop() {
 //    and those joined later.
 func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
-	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := create(clusterID, nodeID)
 		return rsm.NewNativeSM(cfg, rsm.NewRegularStateMachine(sm), done)
 	}
-	return nh.startCluster(initialMembers,
-		join, cf, stopc, cfg, sm.RegularStateMachine)
+	return nh.startCluster(initialMembers, join, cf, cfg, pb.RegularStateMachine)
 }
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
 // to start a Raft node backed by a concurrent state machine.
 func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
-	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := create(clusterID, nodeID)
 		return rsm.NewNativeSM(cfg, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, cfg, sm.ConcurrentStateMachine)
+		join, cf, cfg, pb.ConcurrentStateMachine)
 }
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
 // start a Raft node backed by an IOnDiskStateMachine.
 func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
 	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
-	stopc := make(chan struct{})
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := create(clusterID, nodeID)
 		return rsm.NewNativeSM(cfg, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
-		join, cf, stopc, cfg, sm.OnDiskStateMachine)
+		join, cf, cfg, pb.OnDiskStateMachine)
 }
 
 // StopCluster removes and stops the Raft node associated with the specified
@@ -1452,7 +1448,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 //    implementation to indicate that a certain node exists there
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 	join bool, cfg config.Config,
-	smType sm.Type) (map[uint64]string, bool, error) {
+	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {
 		if !join && len(initialMembers) == 0 {
@@ -1482,7 +1478,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 
 func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	join bool, createStateMachine rsm.ManagedStateMachineFactory,
-	stopc chan struct{}, config config.Config, smType sm.Type) error {
+	config config.Config, smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -1506,8 +1502,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if err != nil {
 		panic(err)
 	}
-	queue := server.NewMessageQueue(receiveQueueLen,
-		false, lazyFreeCycle, nh.nhConfig.MaxReceiveQueueSize)
 	for k, v := range peers {
 		if k != nodeID {
 			nh.nodes.Add(clusterID, k, v)
@@ -1524,32 +1518,26 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		return nh.serverCtx.GetSnapshotDir(did, cid, nid)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
-		nh.nhConfig, getSnapshotDir, nh.logdb, stopc, nh.fs)
+		nh.nhConfig, getSnapshotDir, nh.logdb, nh.fs)
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.ExecShards,
 		nh.nhConfig.Expert.LogDBShards)
 	shard := p.GetPartitionID(clusterID)
-	rn, err := newNode(nh.nhConfig.RaftAddress,
-		peers,
+	rn, err := newNode(peers,
 		im,
+		config,
+		nh.nhConfig,
+		createStateMachine,
 		snapshotter,
-		createStateMachine(clusterID, nodeID, stopc),
-		smType,
 		nh.engine,
 		nh.liQueue,
 		nh.transport.GetStreamSink,
 		nh.msgHandler.HandleSnapshotStatus,
 		nh.sendMessage,
-		queue,
-		stopc,
 		nh.nodes,
 		nh.requestPools[nodeID%requestPoolShards],
-		config,
-		nh.nhConfig.EnableMetrics,
-		nh.nhConfig.NotifyCommit,
-		nh.nhConfig.RTTMillisecond,
 		nh.logdb,
 		nh.getLogDBMetrics(shard),
 		nh.sysListener)

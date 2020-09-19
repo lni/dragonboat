@@ -225,10 +225,10 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			return snapdir
 		}
 		snapshotter := newSnapshotter(testClusterID, i,
-			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, nil, fs)
+			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, fs)
 		// create the sm
 		noopSM := &tests.NoOP{}
-		config := config.Config{
+		cfg := config.Config{
 			NodeID:              uint64(i),
 			ClusterID:           testClusterID,
 			ElectionRTT:         20,
@@ -238,37 +238,34 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			CompactionOverhead:  10,
 			OrderedConfigChange: ordered,
 		}
-		ds := rsm.NewNativeSM(config,
-			rsm.NewRegularStateMachine(noopSM), make(chan struct{}))
+		create := func(clusterID uint64, nodeID uint64,
+			done <-chan struct{}) rsm.IManagedStateMachine {
+			return rsm.NewNativeSM(cfg, rsm.NewRegularStateMachine(noopSM), done)
+		}
 		// node registry
 		nr := transport.NewNodes(settings.Soft.StreamConnections)
-		addr := fmt.Sprintf("a%d", i)
 		ch := router.getMessageReceiveChannel(testClusterID, uint64(i))
-		node, err := newNode(addr,
-			peers,
+		nhConfig := config.NodeHostConfig{RTTMillisecond: tickMillisecond}
+		node, err := newNode(peers,
 			true,
+			cfg,
+			nhConfig,
+			create,
 			snapshotter,
-			ds,
-			sm.RegularStateMachine,
 			&dummyEngine{},
 			nil,
 			nil,
 			nil,
 			router.sendMessage,
-			ch,
-			make(chan struct{}),
 			nr,
 			requestStatePool,
-			config,
-			false,
-			false,
-			tickMillisecond,
 			ldb,
 			nil,
 			newSysEventListener(nil, nil))
 		if err != nil {
 			panic(err)
 		}
+		node.mq = ch
 		nodes = append(nodes, node)
 		smList = append(smList, node.sm)
 	}
