@@ -72,7 +72,6 @@ func (l *logDBMetrics) isBusy() bool {
 type node struct {
 	leaderID              uint64
 	instanceID            uint64
-	raftAddress           string
 	config                config.Config
 	configChangeC         <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
