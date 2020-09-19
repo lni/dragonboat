@@ -233,7 +233,7 @@ type raft struct {
 	prevLeader                server.LeaderInfo
 }
 
-func newRaft(c *config.Config, logdb ILogDB) *raft {
+func newRaft(c config.Config, logdb ILogDB) *raft {
 	if err := c.Validate(); err != nil {
 		panic(err)
 	}

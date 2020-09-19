@@ -61,7 +61,7 @@ type Peer struct {
 }
 
 // Launch starts or restarts a Raft node.
-func Launch(config *config.Config,
+func Launch(config config.Config,
 	logdb ILogDB, events server.IRaftEventListener,
 	addresses []PeerAddress, initial bool, newNode bool) *Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
@@ -357,7 +357,7 @@ func (p *Peer) getUpdate(moreToApply bool, lastApplied uint64) pb.Update {
 	return ud
 }
 
-func checkLaunchRequest(config *config.Config,
+func checkLaunchRequest(config config.Config,
 	addresses []PeerAddress, initial bool, newNode bool) {
 	if config.NodeID == 0 {
 		panic("config.NodeID must not be zero")

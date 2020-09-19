@@ -99,7 +99,7 @@ func TestMustBeLeaderPanicWhenNotLeader(t *testing.T) {
 func TestConfigViolationWillPanic(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     *config.Config
+		config     config.Config
 		shouldFail bool
 	}{
 		{"Zero node id", newTestConfig(0, 10, 1), true},

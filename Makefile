@@ -123,7 +123,7 @@ endif
 # set the RACE environmental variable to 1 to enable it, e.g. RACE=1 make test
 ifeq ($(RACE),1)
 RACE_DETECTOR_FLAG=-race
-$(warning "data race detector enabled, this is a DEBUG build")
+$(warning "data race detector enabled")
 endif
 
 ifneq ($(TEST_TO_RUN),)

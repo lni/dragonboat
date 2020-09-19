@@ -428,7 +428,7 @@ func TestLeaderElectionPreVote(t *testing.T) {
 */
 
 func testLeaderElection(t *testing.T) {
-	var cfg func(*config.Config)
+	var cfg func(config.Config)
 	tests := []struct {
 		*network
 		state   State
@@ -473,7 +473,7 @@ func TestLeaderCycle(t *testing.T) {
 // pre-vote) work when not starting from a clean slate (as they do in
 // TestLeaderElection)
 func testLeaderCycle(t *testing.T) {
-	var cfg func(*config.Config)
+	var cfg func(config.Config)
 	n := newNetworkWithConfig(cfg, nil, nil, nil)
 	for campaignerID := uint64(1); campaignerID <= 3; campaignerID++ {
 		n.send(pb.Message{From: campaignerID, To: campaignerID, Type: pb.Election})
@@ -501,7 +501,7 @@ func TestLeaderElectionOverwriteNewerLogs(t *testing.T) {
 }
 
 func testLeaderElectionOverwriteNewerLogs(t *testing.T) {
-	var cfg func(*config.Config)
+	var cfg func(config.Config)
 	// This network represents the results of the following sequence of
 	// events:
 	// - Node 1 won the election in term 1.
@@ -2787,7 +2787,7 @@ func TestSnapshotAbort(t *testing.T) {
 	}
 }
 
-func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
+func entsWithConfig(configFunc func(config.Config), terms ...uint64) *raft {
 	storage := NewTestLogDB()
 	for i, term := range terms {
 		if err := storage.Append([]pb.Entry{{Index: uint64(i + 1), Term: term}}); err != nil {
@@ -2806,7 +2806,7 @@ func entsWithConfig(configFunc func(*config.Config), terms ...uint64) *raft {
 // votedWithConfig creates a raft state machine with Vote and Term set
 // to the given value but no log entries (indicating that it voted in
 // the given term but has not received any logs).
-func votedWithConfig(configFunc func(*config.Config), vote, term uint64) *raft {
+func votedWithConfig(configFunc func(config.Config), vote, term uint64) *raft {
 	storage := NewTestLogDB()
 	storage.SetState(pb.State{Vote: vote, Term: term})
 	cfg := newTestConfig(1, 5, 1)
@@ -2835,7 +2835,7 @@ func newNetwork(peers ...stateMachine) *network {
 
 // newNetworkWithConfig is like newNetwork but calls the given func to
 // modify the configuration of any state machines it creates.
-func newNetworkWithConfig(configFunc func(*config.Config), peers ...stateMachine) *network {
+func newNetworkWithConfig(configFunc func(config.Config), peers ...stateMachine) *network {
 	size := len(peers)
 	peerAddrs := idsBySize(size)
 
@@ -2978,12 +2978,12 @@ func setRandomizedElectionTimeout(r *raft, v uint64) {
 	r.randomizedElectionTimeout = v
 }
 
-func newTestConfig(id uint64, election, heartbeat int) *config.Config {
+func newTestConfig(id uint64, election, heartbeat int) config.Config {
 	return newRateLimitedTestConfig(id, election, heartbeat, 0)
 }
 
-func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) *config.Config {
-	return &config.Config{
+func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) config.Config {
+	return config.Config{
 		NodeID:          id,
 		ElectionRTT:     uint64(election),
 		HeartbeatRTT:    uint64(heartbeat),
@@ -3003,7 +3003,7 @@ func newTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogD
 }
 
 func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
-	cfg := &config.Config{
+	cfg := config.Config{
 		NodeID:          id,
 		ElectionRTT:     uint64(election),
 		HeartbeatRTT:    uint64(heartbeat),

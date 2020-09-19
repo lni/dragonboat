@@ -428,8 +428,7 @@ func TestRaftAPIInvalidNodeIDCausePanicInLaunch(t *testing.T) {
 		}
 		t.Errorf("panic not called")
 	}()
-	cfg := &config.Config{}
-	Launch(cfg, nil, nil, nil, true, true)
+	Launch(config.Config{}, nil, nil, nil, true, true)
 }
 
 func TestRaftAPIInvalidInputToLaunchCausePanic(t *testing.T) {
@@ -652,16 +651,16 @@ func TestCheckLaunchRequest(t *testing.T) {
 		f()
 	}
 	expectPanicFn(func() {
-		checkLaunchRequest(&config.Config{}, nil, false, false)
+		checkLaunchRequest(config.Config{}, nil, false, false)
 	})
 	expectPanicFn(func() {
-		checkLaunchRequest(&config.Config{NodeID: 1}, nil, true, true)
+		checkLaunchRequest(config.Config{NodeID: 1}, nil, true, true)
 	})
 	addr := make([]PeerAddress, 0)
 	addr = append(addr, PeerAddress{Address: "1"})
 	addr = append(addr, PeerAddress{Address: "1"})
 	expectPanicFn(func() {
-		checkLaunchRequest(&config.Config{NodeID: 1}, addr, false, false)
+		checkLaunchRequest(config.Config{NodeID: 1}, addr, false, false)
 	})
 }
 

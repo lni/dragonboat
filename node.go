@@ -311,7 +311,7 @@ func (n *node) startRaft(cfg config.Config,
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	n.p = raft.Launch(&cfg, n.logReader, n.raftEvents, pas, initial, newNode)
+	n.p = raft.Launch(cfg, n.logReader, n.raftEvents, pas, initial, newNode)
 	return newNode, nil
 }
 
