@@ -33,7 +33,9 @@ func newDefaultKVStore(config config.LogDBConfig,
 	callback kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if fs != vfs.DefaultFS {
-		if _, ok := fs.(*vfs.ErrorFS); !ok {
+		_, isErrorFS := fs.(*vfs.ErrorFS)
+		_, isMemFS := fs.(*vfs.MemFS)
+		if !isErrorFS && !isMemFS {
 			panic("invalid fs")
 		}
 	}
