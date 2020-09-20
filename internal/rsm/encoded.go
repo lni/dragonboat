@@ -53,10 +53,6 @@ func GetMaxBlockSize(ct config.CompressionType) uint64 {
 // GetPayload returns the payload of the entry ready to be applied into the
 // state machine.
 func GetPayload(e pb.Entry) []byte {
-	return getPayload(e)
-}
-
-func getPayload(e pb.Entry) []byte {
 	if e.Type == pb.ApplicationEntry || e.Type == pb.ConfigChangeEntry {
 		return e.Cmd
 	} else if e.Type == pb.EncodedEntry {
@@ -68,12 +64,7 @@ func getPayload(e pb.Entry) []byte {
 // ToDioType converts the CompressionType type defined in the config package to
 // the CompressionType value defined in the dio package.
 func ToDioType(ct config.CompressionType) dio.CompressionType {
-	if ct == config.NoCompression {
-		return dio.NoCompression
-	} else if ct == config.Snappy {
-		return dio.Snappy
-	}
-	panic("unknown compression type")
+	return dio.CompressionType(ct)
 }
 
 // GetEncodedPayload returns the encoded payload using the specified

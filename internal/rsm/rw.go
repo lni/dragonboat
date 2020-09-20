@@ -173,11 +173,7 @@ func (bw *BlockWriter) Flush() error {
 	totalbs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(totalbs, uint64(bw.total))
 	tailBlock := append(totalbs, writerMagicNumber...)
-	if err := bw.processNewBlock(tailBlock, nil); err != nil {
-		plog.Errorf("process tail block failed %v", err)
-		return err
-	}
-	return nil
+	return bw.processNewBlock(tailBlock, nil)
 }
 
 // GetPayloadChecksum returns the checksum for the entire payload.
@@ -398,9 +394,7 @@ func getHeaderFromFirstChunk(data []byte) ([]byte, []byte, bool) {
 	if sz > SnapshotHeaderSize-8 {
 		return nil, nil, false
 	}
-	header := data[8 : 8+sz]
-	crc := data[8+sz : 12+sz]
-	return header, crc, true
+	return data[8 : 8+sz], data[8+sz : 12+sz], true
 }
 
 // IVValidator is the interface for versioned validator.
@@ -490,25 +484,17 @@ func (v *v2validator) Validate() bool {
 			return false
 		}
 	}
-	if len(block) > 0 {
-		if !v.validateBlock(block) {
-			return false
-		}
-	}
-	return true
+	return len(block) == 0 || v.validateBlock(block)
 }
 
 func (v *v2validator) validateMagicSize(tail []byte) bool {
 	if uint64(len(tail)) != tailSize {
 		panic("invalid size")
 	}
-	total := tail[:8]
-	magic := tail[8:]
-	if !bytes.Equal(magic, writerMagicNumber) {
+	if !bytes.Equal(tail[8:], writerMagicNumber) {
 		return false
 	}
-	totalSz := binary.LittleEndian.Uint64(total)
-	return totalSz == uint64(v.total)-tailSize
+	return binary.LittleEndian.Uint64(tail[:8]) == uint64(v.total)-tailSize
 }
 
 func (v *v2validator) validateBlock(block []byte) bool {

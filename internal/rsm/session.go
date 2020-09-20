@@ -131,8 +131,7 @@ func (s *Session) recoverFromSnapshot(reader io.Reader, v SSVersion) error {
 	if n != len(lenbuf) {
 		return io.ErrUnexpectedEOF
 	}
-	sz := binary.LittleEndian.Uint64(lenbuf)
-	data := make([]byte, sz)
+	data := make([]byte, binary.LittleEndian.Uint64(lenbuf))
 	n, err = io.ReadFull(reader, data)
 	if err != nil {
 		return err

@@ -340,11 +340,10 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		if err != nil {
 			return empty, err
 		}
-		fileSz := st.Size()
-		payloadSz := fileSz - int64(SnapshotHeaderSize) - int64(tailSize)
+		payloadSz := st.Size() - int64(SnapshotHeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	t := (pb.ChecksumType)(sr.header.ChecksumType)
+	t := pb.ChecksumType(sr.header.ChecksumType)
 	sr.r = mustGetVersionedReader(reader, v, t)
 	return sr.header, nil
 }

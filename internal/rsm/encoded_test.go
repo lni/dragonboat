@@ -31,13 +31,13 @@ func TestGetEntryPayload(t *testing.T) {
 		Type: pb.EncodedEntry,
 		Cmd:  GetEncodedPayload(dio.Snappy, e3payload, make([]byte, 512)),
 	}
-	if !bytes.Equal(e1.Cmd, getPayload(e1)) {
+	if !bytes.Equal(e1.Cmd, GetPayload(e1)) {
 		t.Errorf("e1 payload changed")
 	}
-	if !bytes.Equal(e2.Cmd, getPayload(e2)) {
+	if !bytes.Equal(e2.Cmd, GetPayload(e2)) {
 		t.Errorf("e2 payload changed")
 	}
-	if !bytes.Equal(e3payload, getPayload(e3)) {
+	if !bytes.Equal(e3payload, GetPayload(e3)) {
 		t.Errorf("e3 payload changed")
 	}
 }

@@ -176,25 +176,25 @@ func (ds *NativeSM) Type() pb.StateMachineType {
 func (ds *NativeSM) Update(e sm.Entry) (sm.Result, error) {
 	ds.ue[0] = e
 	results, err := ds.sm.Update(ds.ue)
-	v := results[0].Result
-	ds.ue[0] = sm.Entry{}
 	if err != nil {
 		return sm.Result{}, err
 	}
 	if len(results) != 1 {
 		panic("len(results) != 1")
 	}
+	v := results[0].Result
+	ds.ue[0] = sm.Entry{}
 	return v, nil
 }
 
 // BatchedUpdate applies committed entries in a batch to hide latency.
 func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
-	il := len(ents)
+	inputLen := len(ents)
 	results, err := ds.sm.Update(ents)
 	if err != nil {
 		return nil, err
 	}
-	if len(results) != il {
+	if len(results) != inputLen {
 		panic("unexpected result length")
 	}
 	return results, nil
@@ -203,24 +203,22 @@ func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 // Lookup queries the data store.
 func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
+	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
-		ds.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
 	v, err := ds.sm.Lookup(query)
-	ds.mu.RUnlock()
 	return v, err
 }
 
 // NALookup queries the data store.
 func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
 	ds.mu.RLock()
+	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
-		ds.mu.RUnlock()
 		return nil, ErrClusterClosed
 	}
 	v, err := ds.sm.NALookup(query)
-	ds.mu.RUnlock()
 	return v, err
 }
 
@@ -242,8 +240,7 @@ func (ds *NativeSM) Prepare() (interface{}, error) {
 // Save saves the state of the data store to the specified writer.
 func (ds *NativeSM) Save(meta *SSMeta,
 	w io.Writer, session []byte, c sm.ISnapshotFileCollection) (bool, error) {
-	if ds.config.IsWitness ||
-		(ds.sm.OnDisk() && !meta.Request.Exported()) {
+	if ds.config.IsWitness || (ds.sm.OnDisk() && !meta.Request.Exported()) {
 		return true, ds.saveDummy(w, session)
 	}
 	return false, ds.save(meta.Ctx, w, session, c)
@@ -259,20 +256,20 @@ func (ds *NativeSM) saveDummy(w io.Writer, session []byte) error {
 	return nil
 }
 
-func (ds *NativeSM) save(ssctx interface{},
+func (ds *NativeSM) save(ctx interface{},
 	w io.Writer, session []byte, c sm.ISnapshotFileCollection) error {
 	if _, err := w.Write(session); err != nil {
 		return err
 	}
-	if err := ds.sm.Save(ssctx, w, c, ds.done); err != nil {
+	if err := ds.sm.Save(ctx, w, c, ds.done); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Stream creates and streams snapshot to a remote node.
-func (ds *NativeSM) Stream(ssctx interface{}, w io.Writer) error {
-	return ds.save(ssctx, w, GetEmptyLRUSession(), nil)
+func (ds *NativeSM) Stream(ctx interface{}, w io.Writer) error {
+	return ds.save(ctx, w, GetEmptyLRUSession(), nil)
 }
 
 // Recover recovers the state of the data store from the specified reader.

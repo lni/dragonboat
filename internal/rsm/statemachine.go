@@ -922,7 +922,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		if !s.entryInInitDiskSM(e.Index) {
 			ents = append(ents, sm.Entry{
 				Index: e.Index,
-				Cmd:   getPayload(e),
+				Cmd:   GetPayload(e),
 			})
 		} else {
 			skipped++
@@ -1040,8 +1040,7 @@ func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 		}
 	}
 	s.updateOnDiskIndex(e.Index, e.Index)
-	cmd := getPayload(e)
-	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: cmd})
+	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: GetPayload(e)})
 	if err != nil {
 		return sm.Result{}, false, false, err
 	}
