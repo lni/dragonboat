@@ -582,7 +582,7 @@ func setTCPConn(conn *net.TCPConn) error {
 
 func (t *TCP) getConnection(ctx context.Context,
 	target string) (net.Conn, error) {
-	timeout := time.Duration(getDialTimeoutSecond()) * time.Second
+	timeout := time.Duration(dialTimeoutSecond) * time.Second
 	conn, err := net.DialTimeout("tcp", target, timeout)
 	if err != nil {
 		return nil, err

@@ -536,14 +536,6 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 	return nil
 }
 
-func getDialTimeoutSecond() uint64 {
-	return atomic.LoadUint64(&dialTimeoutSecond)
-}
-
-func setDialTimeoutSecond(v uint64) {
-	atomic.StoreUint64(&dialTimeoutSecond, v)
-}
-
 func createTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
 	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {

@@ -1009,11 +1009,6 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	if !done {
 		t.Errorf("failed to send the snapshot")
 	}
-	savedTimeout := getDialTimeoutSecond()
-	defer func() {
-		setDialTimeoutSecond(savedTimeout)
-	}()
-	setDialTimeoutSecond(1)
 	waitForTotalSnapshotStatusUpdateCount(handler, 6000, 1)
 	if handler.getSnapshotCount(100, 2) != 0 {
 		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
@@ -1301,10 +1296,10 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	if tt.queueSize() != 0 {
 		t.Errorf("queue len %d, want 0", tt.queueSize())
 	}
-	if noopRPC.connected != 1 {
+	if atomic.LoadUint64(&noopRPC.connected) != 1 {
 		t.Errorf("connected %d, want 1", noopRPC.connected)
 	}
-	if noopRPC.tryConnect != 1 {
+	if atomic.LoadUint64(&noopRPC.tryConnect) != 1 {
 		t.Errorf("connected %d, want 1", noopRPC.tryConnect)
 	}
 }

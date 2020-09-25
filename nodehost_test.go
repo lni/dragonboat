@@ -2481,7 +2481,7 @@ func makeTestProposal(nh *NodeHost, count int) bool {
 
 func TestRateLimitCanBeTriggered(t *testing.T) {
 	fs := vfs.GetTestFS()
-	limited := uint64(0)
+	limited := uint32(0)
 	stopper := syncutil.NewStopper()
 	to := &testOption{
 		updateConfig: func(c *config.Config) *config.Config {
@@ -2497,21 +2497,21 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				stopper.RunWorker(func() {
 					for j := 0; j < 16; j++ {
-						if atomic.LoadUint64(&limited) == 1 {
+						if atomic.LoadUint32(&limited) == 1 {
 							return
 						}
 						ctx, cancel := context.WithTimeout(context.Background(), pto)
 						_, err := nh.SyncPropose(ctx, session, make([]byte, 1024))
 						cancel()
 						if err == ErrSystemBusy {
-							atomic.StoreUint64(&limited, 1)
+							atomic.StoreUint32(&limited, 1)
 							return
 						}
 					}
 				})
 			}
 			stopper.Stop()
-			if atomic.LoadUint64(&limited) != 1 {
+			if atomic.LoadUint32(&limited) != 1 {
 				t.Fatalf("failed to observe ErrSystemBusy")
 			}
 			if makeTestProposal(nh, 10000) {

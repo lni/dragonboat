@@ -63,13 +63,13 @@ func (sr *snapshotTask) getTask() (rsm.Task, bool) {
 }
 
 type snapshotState struct {
-	savingFlag       uint32
-	recoveringFlag   uint32
-	streamingFlag    uint32
 	snapshotIndex    uint64
 	reqSnapshotIndex uint64
 	compactLogTo     uint64
 	compactedTo      uint64
+	savingFlag       uint32
+	recoveringFlag   uint32
+	streamingFlag    uint32
 	recoverReady     snapshotTask
 	saveReady        snapshotTask
 	streamReady      snapshotTask

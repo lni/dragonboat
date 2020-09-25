@@ -101,13 +101,13 @@ func BenchmarkNoCompressionEncodedPayload4096Bytes(b *testing.B) {
 func BenchmarkAddToEntryQueue(b *testing.B) {
 	b.ReportAllocs()
 	q := newEntryQueue(1000000, 0)
-	total := uint64(0)
+	total := uint32(0)
 	entry := pb.Entry{}
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			t := atomic.AddUint64(&total, 1)
+			t := atomic.AddUint32(&total, 1)
 			if t%2048 == 0 {
-				atomic.StoreUint64(&total, 0)
+				atomic.StoreUint32(&total, 0)
 				q.get(false)
 			} else {
 				q.add(entry)
@@ -126,21 +126,21 @@ func benchmarkProposeN(b *testing.B, sz int) {
 		obj.pool = p
 		return obj
 	}
-	total := uint64(0)
+	total := uint32(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			v := atomic.AddUint64(&total, 1)
+			v := atomic.AddUint32(&total, 1)
 			b.SetBytes(int64(sz))
 			rs, err := pp.propose(session, data, 100)
 			if err != nil {
 				b.Errorf("%v", err)
 			}
 			if v%128 == 0 {
-				atomic.StoreUint64(&total, 0)
+				atomic.StoreUint32(&total, 0)
 				q.get(false)
 			}
 			pp.applied(rs.key, rs.clientID, rs.seriesID, sm.Result{Value: 1}, false)
@@ -191,18 +191,18 @@ func BenchmarkReadIndexRead(b *testing.B) {
 		obj.pool = p
 		return obj
 	}
-	total := uint64(0)
+	total := uint32(0)
 	q := newReadIndexQueue(2048)
 	pri := newPendingReadIndex(p, q)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			v := atomic.AddUint64(&total, 1)
+			v := atomic.AddUint32(&total, 1)
 			rs, err := pri.read(100)
 			if err != nil {
 				b.Errorf("%v", err)
 			}
 			if v%128 == 0 {
-				atomic.StoreUint64(&total, 0)
+				atomic.StoreUint32(&total, 0)
 				q.get()
 			}
 			rs.readyToRelease.set()
@@ -308,7 +308,7 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	db := getNewTestDB("db", "lldb", vfs.DefaultFS)
 	defer os.RemoveAll(rdbTestDirectory)
 	defer db.Close()
-	clusterID := uint64(1)
+	clusterID := uint32(1)
 	b.StartTimer()
 	b.RunParallel(func(pbt *testing.PB) {
 		rdbctx := db.GetLogDBThreadContext()
@@ -322,7 +322,7 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 			RespondedTo: 12843550,
 			Cmd:         make([]byte, sz),
 		}
-		cid := atomic.AddUint64(&clusterID, 1)
+		cid := uint64(atomic.AddUint32(&clusterID, 1))
 		bytes := e.Size() * 128
 		u := pb.Update{
 			ClusterID: cid,

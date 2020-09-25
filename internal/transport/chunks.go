@@ -46,11 +46,11 @@ func chunkKey(c pb.Chunk) string {
 }
 
 type tracked struct {
+	tick      uint64
+	next      uint64
 	first     pb.Chunk
 	files     []*pb.SnapshotFile
 	validator *rsm.SnapshotValidator
-	next      uint64
-	tick      uint64
 }
 
 type ssLock struct {

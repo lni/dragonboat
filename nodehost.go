@@ -246,9 +246,8 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
-	testPartitionState
-	closed int32
 	tick   uint64
+	closed int32
 	mu     struct {
 		sync.RWMutex
 		csi      uint64
@@ -270,6 +269,7 @@ type NodeHost struct {
 	raftListener   raftio.IRaftEventListener
 	sysListener    *sysEventListener
 	fs             vfs.IFS
+	testPartitionState
 }
 
 var _ nodeLoader = (*NodeHost)(nil)

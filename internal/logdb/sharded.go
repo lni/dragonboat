@@ -30,8 +30,8 @@ import (
 
 // ShardedDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedDB struct {
-	config               config.LogDBConfig
 	completedCompactions uint64
+	config               config.LogDBConfig
 	shards               []*db
 	partitioner          server.IPartitioner
 	compactionCh         chan struct{}

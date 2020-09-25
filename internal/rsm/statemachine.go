@@ -160,6 +160,8 @@ type ISnapshotter interface {
 // StateMachine is a manager class that manages application state
 // machine
 type StateMachine struct {
+	syncedIndex        uint64
+	batchedLastApplied uint64
 	mu                 sync.RWMutex
 	snapshotter        ISnapshotter
 	node               INode
@@ -171,8 +173,6 @@ type StateMachine struct {
 	snapshotIndex      uint64
 	onDiskInitIndex    uint64
 	onDiskIndex        uint64
-	syncedIndex        uint64
-	batchedLastApplied uint64
 	taskQ              *TaskQueue
 	onDiskSM           bool
 	aborted            bool

@@ -1115,19 +1115,19 @@ func TestProposalAllocationCount(t *testing.T) {
 		obj.pool = p
 		return obj
 	}
-	total := uint64(0)
+	total := uint32(0)
 	q := newEntryQueue(2048, 0)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(1000, func() {
-		v := atomic.AddUint64(&total, 1)
+		v := atomic.AddUint32(&total, 1)
 		rs, err := pp.propose(session, data, 100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
 		if v%128 == 0 {
-			atomic.StoreUint64(&total, 0)
+			atomic.StoreUint32(&total, 0)
 			q.get(false)
 		}
 		pp.applied(rs.key, rs.clientID, rs.seriesID, sm.Result{Value: 1}, false)
@@ -1147,17 +1147,17 @@ func TestReadIndexAllocationCount(t *testing.T) {
 		obj.pool = p
 		return obj
 	}
-	total := uint64(0)
+	total := uint32(0)
 	q := newReadIndexQueue(2048)
 	pri := newPendingReadIndex(p, q)
 	ac := testing.AllocsPerRun(1000, func() {
-		v := atomic.AddUint64(&total, 1)
+		v := atomic.AddUint32(&total, 1)
 		rs, err := pri.read(100)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
 		if v%128 == 0 {
-			atomic.StoreUint64(&total, 0)
+			atomic.StoreUint32(&total, 0)
 			q.get()
 		}
 		rs.readyToRelease.set()

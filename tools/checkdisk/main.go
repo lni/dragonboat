@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2018-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -270,7 +270,7 @@ func main() {
 			}
 		}, i)
 	}
-	reads := uint64(0)
+	reads := struct{ v uint64 }{}
 	if *read {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			stopper.RunPWorker(func(arg interface{}) {
@@ -285,7 +285,7 @@ func main() {
 						}
 						v := <-rs.ResultC()
 						if v.Completed() {
-							atomic.AddUint64(&reads, 1)
+							atomic.AddUint64(&reads.v, 1)
 						}
 					}
 					select {
@@ -302,7 +302,7 @@ func main() {
 	for _, v := range results {
 		total = total + v
 	}
-	rv := atomic.LoadUint64(&reads)
+	rv := atomic.LoadUint64(&reads.v)
 	fmt.Printf("read %d, %d reads per second\n", rv, rv/uint64(*seconds))
 	fmt.Printf("total %d, %d proposals per second\n", total, total/uint64(*seconds))
 }
