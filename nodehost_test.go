@@ -341,12 +341,6 @@ func (t *testSysEventListener) LogDBCompacted(info raftio.EntryInfo) {
 	t.logdbCompacted = append(t.logdbCompacted, info)
 }
 
-func (t *testSysEventListener) getLogDBCompacted() []raftio.EntryInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copyEntryInfo(t.logdbCompacted)
-}
-
 type TimeoutStateMachine struct {
 	updateDelay   uint64
 	lookupDelay   uint64
