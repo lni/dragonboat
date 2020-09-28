@@ -1114,16 +1114,8 @@ func TestCompactionCanBeRequested(t *testing.T) {
 				}
 				break
 			}
-			_, err = nh.RequestCompaction(1, 1)
-			if err != ErrRejected {
+			if _, err = nh.RequestCompaction(1, 1); err != ErrRejected {
 				t.Fatalf("not rejected")
-			}
-			listener, ok := nh.sysListener.userListener.(*testSysEventListener)
-			if !ok {
-				t.Fatalf("failed to get the system event listener")
-			}
-			if len(listener.getLogDBCompacted()) == 0 {
-				t.Fatalf("logdb compaction not notified")
 			}
 		},
 	}
