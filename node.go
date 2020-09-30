@@ -218,20 +218,19 @@ func (n *node) StepReady() {
 	n.pipeline.setStepReady(n.clusterID)
 }
 
-func (n *node) ApplyUpdate(entry pb.Entry,
+func (n *node) ApplyUpdate(e pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyRead bool) {
 	if n.isWitness() {
 		return
 	}
 	if notifyRead {
-		n.pendingReadIndexes.applied(entry.Index)
+		n.pendingReadIndexes.applied(e.Index)
 	}
 	if !ignored {
-		if entry.Key == 0 {
+		if e.Key == 0 {
 			panic("key is 0")
 		}
-		n.pendingProposals.applied(entry.ClientID,
-			entry.SeriesID, entry.Key, result, rejected)
+		n.pendingProposals.applied(e.ClientID, e.SeriesID, e.Key, result, rejected)
 	}
 }
 
@@ -602,9 +601,9 @@ func (n *node) saveSnapshotRequired(applied uint64) bool {
 	if n.config.SnapshotEntries == 0 {
 		return false
 	}
-	si := n.ss.getIndex()
-	if n.pushedIndex <= n.config.SnapshotEntries+si ||
-		applied <= n.config.SnapshotEntries+si ||
+	index := n.ss.getIndex()
+	if n.pushedIndex <= n.config.SnapshotEntries+index ||
+		applied <= n.config.SnapshotEntries+index ||
 		applied <= n.config.SnapshotEntries+n.ss.getReqIndex() {
 		return false
 	}
