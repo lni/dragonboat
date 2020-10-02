@@ -81,6 +81,7 @@ const (
 	FatalInfoLogLevel = InfoLogLevel(4)
 )
 
+// WALRecoveryMode is the WAL recovery mode type
 type WALRecoveryMode int
 
 // Recovery mode

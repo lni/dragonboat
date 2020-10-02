@@ -47,5 +47,4 @@ func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactoryFunc) {
 
 func TestLogDBPluginsCanBeUsed(t *testing.T) {
 	testLogDBPluginCanBeUsed(t, rocksdb.NewLogDB)
-	testLogDBPluginCanBeUsed(t, rocksdb.NewBatchedLogDB)
 }

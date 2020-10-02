@@ -16,4 +16,5 @@
 
 package invariants
 
+// DragonboatRocksDBTest is the flag indicating whether it is for rocksdb test
 const DragonboatRocksDBTest = false

@@ -1,4 +1,4 @@
-# Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+# Copyright 2018-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -256,30 +256,22 @@ tools-checkdisk:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=internal/raft internal/logdb internal/logdb/kv internal/transport \
-	internal/vfs internal/rsm internal/settings internal/tests internal/server   \
-	internal/logdb/kv/pebble plugin/chan raftpb tools logger raftio config       \
-	statemachine client internal/utils/dio
-
+CHECKED_PKGS=$(shell go list ./...)
+CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS)))
 .PHONY: static-check
 static-check:
-	$(GO) vet -tests=false $(PKGNAME)
-	golint $(PKGNAME)
 	@for p in $(CHECKED_PKGS); do \
-		$(GO) vet $(PKGNAME)/$$p; \
+		go vet -tests=false $$p; \
 		golint $$p; \
+	done;
+	@for p in $(CHECKED_DIRS); do \
 		ineffassign $$p; \
 	done;
 
-GOLANGCI_LINT_PKGS=internal/raft internal/rsm internal/vfs internal/transport  \
-	internal/server statemachine tools raftpb raftio client tools logger config  \
-	internal/logdb/kv/pebble plugin/chan internal/settings internal/tests        \
-	internal/logdb/kv internal/utils/dio internal/logdb
 EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
-
 .PHONY: golangci-lint-check
 golangci-lint-check:
-	@for p in $(GOLANGCI_LINT_PKGS); do \
+	@for p in $(CHECKED_DIRS); do \
 		golangci-lint run $$p; \
 	done;
 	@golangci-lint run $(EXTRA_LINTERS) .

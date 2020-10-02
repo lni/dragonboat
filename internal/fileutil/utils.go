@@ -46,6 +46,7 @@ type Marshaler interface {
 	Marshal() ([]byte, error)
 }
 
+// Unmarshaler is the interface for types that can be Unmarshaled.
 type Unmarshaler interface {
 	Unmarshal([]byte) error
 }
@@ -341,6 +342,7 @@ func nextRandom() string {
 	return strconv.Itoa(int(1e9 + r%1e9))[1:]
 }
 
+// TempFile returns a temp file.
 func TempFile(dir,
 	pattern string, fs vfs.IFS) (f vfs.File, name string, err error) {
 	if dir == "" {

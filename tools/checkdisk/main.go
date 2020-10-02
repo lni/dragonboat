@@ -130,10 +130,14 @@ func main() {
 		}()
 		log.Println("memory profile will be saved into file mem.pprof")
 	}
-	fs.RemoveAll(dataDirectoryName)
-	fs.RemoveAll(dataDirectoryName2)
-	defer fs.RemoveAll(dataDirectoryName)
-	defer fs.RemoveAll(dataDirectoryName2)
+	_ = fs.RemoveAll(dataDirectoryName)
+	_ = fs.RemoveAll(dataDirectoryName2)
+	defer func() {
+		_ = fs.RemoveAll(dataDirectoryName)
+	}()
+	defer func() {
+		_ = fs.RemoveAll(dataDirectoryName2)
+	}()
 	logger.GetLogger("raft").SetLevel(logger.WARNING)
 	logger.GetLogger("rsm").SetLevel(logger.WARNING)
 	logger.GetLogger("logdb").SetLevel(logger.WARNING)

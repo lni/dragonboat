@@ -27,9 +27,9 @@ func (b *BackupEngineInfo) GetTimestamp(index int) int64 {
 	return int64(C.rocksdb_backup_engine_info_timestamp(b.c, C.int(index)))
 }
 
-// GetBackupId gets an id that uniquely identifies a backup
+// GetBackupID gets an id that uniquely identifies a backup
 // regardless of its position.
-func (b *BackupEngineInfo) GetBackupId(index int) int64 {
+func (b *BackupEngineInfo) GetBackupID(index int) int64 {
 	return int64(C.rocksdb_backup_engine_info_backup_id(b.c, C.int(index)))
 }
 

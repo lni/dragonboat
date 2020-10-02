@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-// GetRocksdbVersionString returns the version string.
+// GetRocksDBVersionString returns the version string.
 func GetRocksDBVersionString() string {
 	major := int(C.get_rocksdb_major_version())
 	minor := int(C.get_rocksdb_minor_version())
