@@ -70,6 +70,8 @@ func (l *logDBMetrics) isBusy() bool {
 }
 
 type node struct {
+	clusterID             uint64
+	nodeID                uint64
 	leaderID              uint64
 	instanceID            uint64
 	raftAddress           string
@@ -112,12 +114,12 @@ type node struct {
 	new                   bool
 	closeOnce             sync.Once
 	ss                    *snapshotState
+	qs                    *quiesceState
 	snapshotLock          *syncutil.Lock
 	raftEvents            *raftEventListener
 	sysEvents             *sysEventListener
 	metrics               *logDBMetrics
 	initializedC          chan struct{}
-	quiesceManager
 }
 
 var _ rsm.INode = (*node)(nil)
@@ -148,6 +150,8 @@ func newNode(peers map[uint64]string,
 	mq := server.NewMessageQueue(receiveQueueLen,
 		false, lazyFreeCycle, nhConfig.MaxReceiveQueueSize)
 	rn := &node{
+		clusterID:             config.ClusterID,
+		nodeID:                config.NodeID,
 		raftAddress:           nhConfig.RaftAddress,
 		instanceID:            atomic.AddUint64(&instanceID, 1),
 		tickMillisecond:       nhConfig.RTTMillisecond,
@@ -172,13 +176,13 @@ func newNode(peers map[uint64]string,
 		mq:                    mq,
 		logdb:                 ldb,
 		snapshotLock:          syncutil.NewLock(),
-		ss:                    &snapshotState{},
 		syncTask:              newTask(syncTaskInterval),
 		sysEvents:             sysEvents,
 		notifyCommit:          nhConfig.NotifyCommit,
 		metrics:               metrics,
 		initializedC:          make(chan struct{}),
-		quiesceManager: quiesceManager{
+		ss:                    &snapshotState{},
+		qs: &quiesceState{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
 			clusterID:    config.ClusterID,
@@ -1065,7 +1069,7 @@ func (n *node) stepNode() (pb.Update, bool) {
 	defer n.raftMu.Unlock()
 	if n.initialized() {
 		if n.handleEvents() {
-			if n.newQuiesceState() {
+			if n.qs.newQuiesceState() {
 				n.sendEnterQuiesceMessages()
 			}
 			return n.getUpdate()
@@ -1165,7 +1169,7 @@ func (n *node) handleProposals() bool {
 
 func (n *node) handleReadIndex() bool {
 	if reqs := n.incomingReadIndexes.get(); len(reqs) > 0 {
-		n.record(pb.ReadIndex)
+		n.qs.record(pb.ReadIndex)
 		ctx := n.pendingReadIndexes.nextCtx()
 		n.pendingReadIndexes.add(ctx, reqs)
 		n.p.ReadIndex(ctx)
@@ -1183,7 +1187,7 @@ func (n *node) handleConfigChange() bool {
 		if !ok {
 			n.configChangeC = nil
 		} else {
-			n.record(pb.ConfigChangeEvent)
+			n.qs.record(pb.ConfigChangeEvent)
 			var cc pb.ConfigChange
 			if err := cc.Unmarshal(req.data); err != nil {
 				panic(err)
@@ -1206,9 +1210,9 @@ func (n *node) isBusySnapshotting() bool {
 
 func (n *node) recordMessage(m pb.Message) {
 	if (m.Type == pb.Heartbeat || m.Type == pb.HeartbeatResp) && m.Hint > 0 {
-		n.record(pb.ReadIndex)
+		n.qs.record(pb.ReadIndex)
 	} else {
-		n.record(m.Type)
+		n.qs.record(m.Type)
 	}
 }
 
@@ -1243,7 +1247,7 @@ func (n *node) handleMessage(m pb.Message) bool {
 	case pb.LocalTick:
 		n.tick()
 	case pb.Quiesce:
-		n.tryEnterQuiesce()
+		n.qs.tryEnterQuiesce()
 	case pb.SnapshotStatus:
 		plog.Debugf("%s got ReportSnapshot from %d, rejected %t",
 			n.id(), m.From, m.Reject)
@@ -1419,8 +1423,8 @@ func (n *node) tick() {
 		panic("rc node is still nil")
 	}
 	n.currentTick++
-	n.increaseQuiesceTick()
-	if n.quiesced() {
+	n.qs.tick()
+	if n.qs.quiesced() {
 		n.p.QuiescedTick()
 	} else {
 		n.p.Tick()

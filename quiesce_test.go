@@ -20,8 +20,8 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-func getTestQuiesce() quiesceManager {
-	return quiesceManager{
+func getTestQuiesce() quiesceState {
+	return quiesceState{
 		electionTick: 10,
 		enabled:      true,
 	}
@@ -29,7 +29,7 @@ func getTestQuiesce() quiesceManager {
 
 func TestIncreaseTickCanEnterQuiesce(t *testing.T) {
 	q := getTestQuiesce()
-	threshold := q.quiesceThreshold()
+	threshold := q.threshold()
 	tests := []struct {
 		tick     uint64
 		quiesced bool
@@ -41,7 +41,7 @@ func TestIncreaseTickCanEnterQuiesce(t *testing.T) {
 	for i, tt := range tests {
 		q := getTestQuiesce()
 		for k := uint64(0); k < tt.tick; k++ {
-			q.increaseQuiesceTick()
+			q.tick()
 		}
 		if q.quiesced() != tt.quiesced {
 			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), tt.quiesced)
@@ -51,7 +51,7 @@ func TestIncreaseTickCanEnterQuiesce(t *testing.T) {
 
 func TestQuiesceCanBeDisabled(t *testing.T) {
 	q := getTestQuiesce()
-	threshold := q.quiesceThreshold()
+	threshold := q.threshold()
 	tests := []struct {
 		tick     uint64
 		quiesced bool
@@ -65,7 +65,7 @@ func TestQuiesceCanBeDisabled(t *testing.T) {
 		// disable it
 		q.enabled = false
 		for k := uint64(0); k < tt.tick; k++ {
-			q.increaseQuiesceTick()
+			q.tick()
 		}
 		if q.quiesced() != tt.quiesced {
 			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), tt.quiesced)
@@ -86,8 +86,8 @@ func TestExitFromQuiesceWhenActivityIsRecorded(t *testing.T) {
 	}
 	for i, tt := range tests {
 		q := getTestQuiesce()
-		for k := uint64(0); k < q.quiesceThreshold()+1; k++ {
-			q.increaseQuiesceTick()
+		for k := uint64(0); k < q.threshold()+1; k++ {
+			q.tick()
 		}
 		if !q.quiesced() {
 			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), true)
@@ -96,15 +96,15 @@ func TestExitFromQuiesceWhenActivityIsRecorded(t *testing.T) {
 		if q.quiesced() {
 			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), false)
 		}
-		if q.noActivitySince != q.tick {
-			t.Errorf("i %d, q.noActivitySince %d, want %d", i, q.noActivitySince, q.tick)
+		if q.idleSince != q.currentTick {
+			t.Errorf("i %d, q.idleSince %d, want %d", i, q.idleSince, q.currentTick)
 		}
 	}
 }
 
 func TestMsgHeartbeatWillNotStopEnteringQuiesce(t *testing.T) {
 	q := getTestQuiesce()
-	threshold := q.quiesceThreshold()
+	threshold := q.threshold()
 	tests := []struct {
 		tick     uint64
 		quiesced bool
@@ -116,7 +116,7 @@ func TestMsgHeartbeatWillNotStopEnteringQuiesce(t *testing.T) {
 	for i, tt := range tests {
 		q := getTestQuiesce()
 		for k := uint64(0); k < tt.tick; k++ {
-			q.increaseQuiesceTick()
+			q.tick()
 			q.record(pb.Heartbeat)
 		}
 		if q.quiesced() != tt.quiesced {
@@ -127,8 +127,8 @@ func TestMsgHeartbeatWillNotStopEnteringQuiesce(t *testing.T) {
 
 func TestWillNotExitFromQuiesceForDelayedMsgHeartbeatMsg(t *testing.T) {
 	q := getTestQuiesce()
-	for k := uint64(0); k < q.quiesceThreshold()+1; k++ {
-		q.increaseQuiesceTick()
+	for k := uint64(0); k < q.threshold()+1; k++ {
+		q.tick()
 	}
 	if !q.quiesced() {
 		t.Errorf("got %t, want %t", q.quiesced(), true)
@@ -141,7 +141,7 @@ func TestWillNotExitFromQuiesceForDelayedMsgHeartbeatMsg(t *testing.T) {
 		if !q.quiesced() {
 			t.Errorf("got %t, want true", q.quiesced())
 		}
-		q.increaseQuiesceTick()
+		q.tick()
 	}
 	// no longer considered as recently entered quiesce
 	q.record(pb.Heartbeat)

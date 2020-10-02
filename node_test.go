@@ -292,7 +292,7 @@ func step(nodes []*node) bool {
 					activeNodes = append(activeNodes, node)
 				}
 				// quiesce state
-				if node.newQuiesceState() {
+				if node.qs.newQuiesceState() {
 					node.sendEnterQuiesceMessages()
 				}
 			}
@@ -515,10 +515,10 @@ func runRaftNodeTest(t *testing.T, quiesce bool,
 	nodes, smList, router, ldb := getTestRaftNodes(3, fs)
 	if quiesce {
 		for idx := range nodes {
-			(nodes[idx]).quiesceManager.enabled = true
+			(nodes[idx]).qs.enabled = true
 		}
 		for _, node := range nodes {
-			if node.quiesced() {
+			if node.qs.quiesced() {
 				t.Errorf("node quiesced on startup")
 			}
 		}
@@ -914,7 +914,7 @@ func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
 		t.Fatalf("failed to get 3 nodes")
 	}
 	for _, node := range nodes {
-		if node.quiesced() {
+		if node.qs.quiesced() {
 			t.Errorf("node quiesced on startup")
 		}
 	}
@@ -923,11 +923,11 @@ func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
 	defer ldb.Close()
 	// need to step more than quiesce.threshold() as the startup
 	// config change messages are going to be recorded as activities
-	for i := uint64(0); i <= nodes[0].quiesceThreshold()*2; i++ {
+	for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
 		singleStepNodes(nodes, smList, router)
 	}
 	for _, node := range nodes {
-		if node.quiesced() {
+		if node.qs.quiesced() {
 			t.Errorf("node is quiesced when quiesce is not enabled")
 		}
 	}
@@ -938,20 +938,20 @@ func TestNodesCanEnterQuiesce(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		// need to step more than quiesce.threshold() as the startup
 		// config change messages are going to be recorded as activities
-		for i := uint64(0); i <= nodes[0].quiesceThreshold()*2; i++ {
+		for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.quiesced() {
+			if !node.qs.quiesced() {
 				t.Errorf("node failed to enter quiesced")
 			}
 		}
 		// step more, nodes should stay in quiesce state.
-		for i := uint64(0); i <= nodes[0].quiesceThreshold()*3; i++ {
+		for i := uint64(0); i <= nodes[0].qs.threshold()*3; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.quiesced() {
+			if !node.qs.quiesced() {
 				t.Errorf("node failed to enter quiesced")
 			}
 		}
@@ -965,11 +965,11 @@ func TestNodesCanExitQuiesceByMakingProposal(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		// need to step more than quiesce.threshold() as the startup
 		// config change messages are going to be recorded as activities
-		for i := uint64(0); i <= nodes[0].quiesceThreshold()*2; i++ {
+		for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.quiesced() {
+			if !node.qs.quiesced() {
 				t.Errorf("node failed to enter quiesced")
 			}
 		}
@@ -989,7 +989,7 @@ func TestNodesCanExitQuiesceByMakingProposal(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if node.quiesced() {
+			if node.qs.quiesced() {
 				t.Errorf("node failed to exit from quiesced")
 			}
 		}
@@ -1003,11 +1003,11 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		// need to step more than quiesce.threshold() as the startup
 		// config change messages are going to be recorded as activities
-		for i := uint64(0); i <= nodes[0].quiesceThreshold()*2; i++ {
+		for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.quiesced() {
+			if !node.qs.quiesced() {
 				t.Errorf("node failed to enter quiesced")
 			}
 		}
@@ -1029,7 +1029,7 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 			}
 		}
 		for _, node := range nodes {
-			if node.quiesced() {
+			if node.qs.quiesced() {
 				t.Errorf("node failed to exit from quiesced")
 			}
 		}
@@ -1043,11 +1043,11 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 		smList []*rsm.StateMachine, router *testMessageRouter, ldb raftio.ILogDB) {
 		// need to step more than quiesce.threshold() as the startup
 		// config change messages are going to be recorded as activities
-		for i := uint64(0); i <= nodes[0].quiesceThreshold()*2; i++ {
+		for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.quiesced() {
+			if !node.qs.quiesced() {
 				t.Errorf("node failed to enter quiesced")
 			}
 		}
@@ -1083,7 +1083,7 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if node.quiesced() {
+			if node.qs.quiesced() {
 				t.Errorf("node failed to exit from quiesced")
 			}
 		}

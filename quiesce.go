@@ -20,48 +20,45 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-type quiesceManager struct {
+type quiesceState struct {
 	clusterID           uint64
 	nodeID              uint64
-	tick                uint64
+	currentTick         uint64
 	electionTick        uint64
 	quiescedSince       uint64
-	noActivitySince     uint64
+	idleSince           uint64
 	exitQuiesceTick     uint64
 	enabled             bool
 	newQuiesceStateFlag uint32
 }
 
-func (q *quiesceManager) setNewQuiesceStateFlag() {
+func (q *quiesceState) setNewQuiesceStateFlag() {
 	atomic.StoreUint32(&q.newQuiesceStateFlag, 1)
 }
 
-func (q *quiesceManager) newQuiesceState() bool {
+func (q *quiesceState) newQuiesceState() bool {
 	return atomic.SwapUint32(&q.newQuiesceStateFlag, 0) == 1
 }
 
-func (q *quiesceManager) increaseQuiesceTick() uint64 {
+func (q *quiesceState) tick() uint64 {
 	if !q.enabled {
 		return 0
 	}
-	threshold := q.quiesceThreshold()
-	q.tick++
+	threshold := q.threshold()
+	q.currentTick++
 	if !q.quiesced() {
-		if (q.tick - q.noActivitySince) > threshold {
+		if (q.currentTick - q.idleSince) > threshold {
 			q.enterQuiesce()
 		}
 	}
-	return q.tick
+	return q.currentTick
 }
 
-func (q *quiesceManager) quiesced() bool {
-	if !q.enabled {
-		return false
-	}
-	return q.quiescedSince > 0
+func (q *quiesceState) quiesced() bool {
+	return q.enabled && q.quiescedSince > 0
 }
 
-func (q *quiesceManager) record(msgType pb.MessageType) {
+func (q *quiesceState) record(msgType pb.MessageType) {
 	if !q.enabled {
 		return
 	}
@@ -73,33 +70,33 @@ func (q *quiesceManager) record(msgType pb.MessageType) {
 			return
 		}
 	}
-	q.noActivitySince = q.tick
+	q.idleSince = q.currentTick
 	if q.quiesced() {
 		q.exitQuiesce()
 		plog.Infof("%s exited from quiesce, msg type %s, current tick %d",
-			dn(q.clusterID, q.nodeID), msgType, q.tick)
+			dn(q.clusterID, q.nodeID), msgType, q.currentTick)
 	}
 }
 
-func (q *quiesceManager) quiesceThreshold() uint64 {
+func (q *quiesceState) threshold() uint64 {
 	return q.electionTick * 10
 }
 
-func (q *quiesceManager) newToQuiesce() bool {
+func (q *quiesceState) newToQuiesce() bool {
 	if !q.quiesced() {
 		return false
 	}
-	return q.tick-q.quiescedSince < q.electionTick
+	return q.currentTick-q.quiescedSince < q.electionTick
 }
 
-func (q *quiesceManager) justExitedQuiesce() bool {
+func (q *quiesceState) justExitedQuiesce() bool {
 	if q.quiesced() {
 		return false
 	}
-	return q.tick-q.exitQuiesceTick < q.quiesceThreshold()
+	return q.currentTick-q.exitQuiesceTick < q.threshold()
 }
 
-func (q *quiesceManager) tryEnterQuiesce() {
+func (q *quiesceState) tryEnterQuiesce() {
 	if q.justExitedQuiesce() {
 		return
 	}
@@ -110,14 +107,14 @@ func (q *quiesceManager) tryEnterQuiesce() {
 	}
 }
 
-func (q *quiesceManager) enterQuiesce() {
-	q.quiescedSince = q.tick
-	q.noActivitySince = q.tick
+func (q *quiesceState) enterQuiesce() {
+	q.quiescedSince = q.currentTick
+	q.idleSince = q.currentTick
 	q.setNewQuiesceStateFlag()
 	plog.Infof("%s entered quiesce", dn(q.clusterID, q.nodeID))
 }
 
-func (q *quiesceManager) exitQuiesce() {
+func (q *quiesceState) exitQuiesce() {
 	q.quiescedSince = 0
-	q.exitQuiesceTick = q.tick
+	q.exitQuiesceTick = q.currentTick
 }

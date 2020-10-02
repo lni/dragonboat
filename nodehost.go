@@ -246,9 +246,10 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
-	tick   uint64
-	closed int32
-	mu     struct {
+	tick        uint64
+	closed      int32
+	partitioned int32
+	mu          struct {
 		sync.RWMutex
 		csi      uint64
 		clusters sync.Map // clusterID -> *node
@@ -269,7 +270,6 @@ type NodeHost struct {
 	raftListener   raftio.IRaftEventListener
 	sysListener    *sysEventListener
 	fs             vfs.IFS
-	testPartitionState
 }
 
 var _ nodeLoader = (*NodeHost)(nil)
@@ -300,6 +300,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		raftListener: nhConfig.RaftEventListener,
 		fs:           nhConfig.FS,
 	}
+	// make static check happy
+	_ = nh.partitioned
 	nh.sysListener = newSysEventListener(nhConfig.SystemEventListener,
 		nh.stopper.ShouldStop())
 	if nhConfig.RaftEventListener != nil || nhConfig.SystemEventListener != nil {

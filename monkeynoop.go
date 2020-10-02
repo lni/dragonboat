@@ -16,9 +16,6 @@
 
 package dragonboat
 
-type testPartitionState struct {
-}
-
-func (p *testPartitionState) isPartitioned() bool {
+func (nh *NodeHost) isPartitioned() bool {
 	return false
 }

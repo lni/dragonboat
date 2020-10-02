@@ -177,37 +177,29 @@ func SetApplyWorkerCount(count uint64) {
 	applyWorkerCount = count
 }
 
-// testParitionState struct is used to manage the state whether nodehost is in
-// network partitioned state during testing. nodehost is in completely
-// isolated state without any connectivity to the outside world when in such
-// partitioned state. this is the actual implementation used in monkey tests.
-type testPartitionState struct {
-	testPartitioned uint32
-}
-
 // PartitionNode puts the node into test partition mode. All connectivity to
 // the outside world should be stopped.
-func (p *testPartitionState) PartitionNode() {
+func (nh *NodeHost) PartitionNode() {
 	plog.Infof("entered partition test mode")
-	atomic.StoreUint32(&p.testPartitioned, 1)
+	atomic.StoreInt32(&nh.partitioned, 1)
 }
 
 // RestorePartitionedNode removes the node from test partition mode. No other
 // change is going to be made on the local node. It is up to the local node it
 // self to repair/restore any other state.
-func (p *testPartitionState) RestorePartitionedNode() {
-	atomic.StoreUint32(&p.testPartitioned, 0)
+func (nh *NodeHost) RestorePartitionedNode() {
 	plog.Infof("restored from partition test mode")
+	atomic.StoreInt32(&nh.partitioned, 0)
 }
 
 // IsPartitioned indicates whether the local node is in partitioned mode. This
 // function is only implemented in the monkey test build mode. It always
 // returns false in a regular build.
-func (p *testPartitionState) IsPartitioned() bool {
-	return p.isPartitioned()
+func (nh *NodeHost) IsPartitioned() bool {
+	return nh.isPartitioned()
 }
 
 // IsPartitioned indicates whether the local node is in partitioned mode.
-func (p *testPartitionState) isPartitioned() bool {
-	return atomic.LoadUint32(&p.testPartitioned) == 1
+func (nh *NodeHost) isPartitioned() bool {
+	return atomic.LoadInt32(&nh.partitioned) == 1
 }
