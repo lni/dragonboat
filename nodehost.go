@@ -255,6 +255,11 @@ type NodeHost struct {
 		clusters sync.Map // clusterID -> *node
 		lm       sync.Map // shardID -> *logDBMetrics
 	}
+	events struct {
+		leaderInfoQ *leaderInfoQueue
+		raft        raftio.IRaftEventListener
+		sys         *sysEventListener
+	}
 	snapshotStatus *snapshotFeedback
 	serverCtx      *server.Context
 	nhConfig       config.NodeHostConfig
@@ -266,9 +271,6 @@ type NodeHost struct {
 	logdb          raftio.ILogDB
 	transport      transport.ITransport
 	msgHandler     *messageHandler
-	liQueue        *leaderInfoQueue
-	raftListener   raftio.IRaftEventListener
-	sysListener    *sysEventListener
 	fs             vfs.IFS
 }
 
@@ -292,22 +294,22 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		return nil, err
 	}
 	nh := &NodeHost{
-		serverCtx:    serverCtx,
-		nhConfig:     nhConfig,
-		stopper:      syncutil.NewStopper(),
-		duStopper:    syncutil.NewStopper(),
-		nodes:        transport.NewNodes(streamConnections),
-		raftListener: nhConfig.RaftEventListener,
-		fs:           nhConfig.FS,
+		serverCtx: serverCtx,
+		nhConfig:  nhConfig,
+		stopper:   syncutil.NewStopper(),
+		duStopper: syncutil.NewStopper(),
+		nodes:     transport.NewNodes(streamConnections),
+		fs:        nhConfig.FS,
 	}
 	// make static check happy
 	_ = nh.partitioned
-	nh.sysListener = newSysEventListener(nhConfig.SystemEventListener,
+	nh.events.raft = nhConfig.RaftEventListener
+	nh.events.sys = newSysEventListener(nhConfig.SystemEventListener,
 		nh.stopper.ShouldStop())
+	if nhConfig.RaftEventListener != nil {
+		nh.events.leaderInfoQ = newLeaderInfoQueue()
+	}
 	if nhConfig.RaftEventListener != nil || nhConfig.SystemEventListener != nil {
-		if nhConfig.RaftEventListener != nil {
-			nh.liQueue = newLeaderInfoQueue()
-		}
 		nh.stopper.RunWorker(func() {
 			nh.handleListenerEvents()
 		})
@@ -369,7 +371,7 @@ func (nh *NodeHost) Stop() {
 		panic(ErrClosed)
 	}
 	atomic.StoreInt32(&nh.closed, 1)
-	nh.sysListener.Publish(server.SystemEvent{
+	nh.events.sys.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
 	nodes := make([]raftio.NodeInfo, 0)
@@ -1534,7 +1536,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		createStateMachine,
 		snapshotter,
 		nh.engine,
-		nh.liQueue,
+		nh.events.leaderInfoQ,
 		nh.transport.GetStreamSink,
 		nh.msgHandler.HandleSnapshotStatus,
 		nh.sendMessage,
@@ -1542,7 +1544,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		nh.requestPools[nodeID%requestPoolShards],
 		nh.logdb,
 		nh.getLogDBMetrics(shard),
-		nh.sysListener)
+		nh.events.sys)
 	if err != nil {
 		panic(err)
 	}
@@ -1640,7 +1642,7 @@ type transportEvent struct {
 }
 
 func (te *transportEvent) ConnectionEstablished(addr string, snapshot bool) {
-	te.nh.sysListener.Publish(server.SystemEvent{
+	te.nh.events.sys.Publish(server.SystemEvent{
 		Type:               server.ConnectionEstablished,
 		Address:            addr,
 		SnapshotConnection: snapshot,
@@ -1648,7 +1650,7 @@ func (te *transportEvent) ConnectionEstablished(addr string, snapshot bool) {
 }
 
 func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
-	te.nh.sysListener.Publish(server.SystemEvent{
+	te.nh.events.sys.Publish(server.SystemEvent{
 		Type:               server.ConnectionFailed,
 		Address:            addr,
 		SnapshotConnection: snapshot,
@@ -1730,24 +1732,24 @@ func (nh *NodeHost) tickWorkerMain() {
 }
 
 func (nh *NodeHost) handleListenerEvents() {
-	var lic chan struct{}
-	if nh.liQueue != nil {
-		lic = nh.liQueue.workReady()
+	var ch chan struct{}
+	if nh.events.leaderInfoQ != nil {
+		ch = nh.events.leaderInfoQ.workReady()
 	}
 	for {
 		select {
 		case <-nh.stopper.ShouldStop():
 			return
-		case <-lic:
+		case <-ch:
 			for {
-				v, ok := nh.liQueue.getLeaderInfo()
+				v, ok := nh.events.leaderInfoQ.getLeaderInfo()
 				if !ok {
 					break
 				}
-				nh.raftListener.LeaderUpdated(v)
+				nh.events.raft.LeaderUpdated(v)
 			}
-		case e := <-nh.sysListener.events:
-			nh.sysListener.handle(e)
+		case e := <-nh.events.sys.events:
+			nh.events.sys.handle(e)
 		}
 	}
 }
@@ -1770,7 +1772,7 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
 			}
 		}
-		nh.sysListener.Publish(server.SystemEvent{
+		nh.events.sys.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotStarted,
 			ClusterID: msg.ClusterId,
 			NodeID:    msg.To,
@@ -2025,7 +2027,7 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	if failed {
 		eventType = server.SendSnapshotAborted
 	}
-	h.nh.sysListener.Publish(server.SystemEvent{
+	h.nh.events.sys.Publish(server.SystemEvent{
 		Type:      eventType,
 		ClusterID: clusterID,
 		NodeID:    nodeID,
@@ -2055,7 +2057,7 @@ func (h *messageHandler) HandleSnapshot(clusterID uint64,
 	}
 	h.nh.sendMessage(m)
 	plog.Debugf("%s sent SnapshotReceived to %d", dn(clusterID, nodeID), from)
-	h.nh.sysListener.Publish(server.SystemEvent{
+	h.nh.events.sys.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
 		ClusterID: clusterID,
 		NodeID:    nodeID,

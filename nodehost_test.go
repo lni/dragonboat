@@ -1541,7 +1541,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 			if err := nh.StopCluster(1); err != nil {
 				t.Errorf("failed to stop cluster 2 %v", err)
 			}
-			listener, ok := nh.sysListener.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
@@ -1611,7 +1611,7 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to delete node %v", err)
 			}
-			listener, ok := nh.sysListener.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
@@ -2136,7 +2136,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
-		listener, ok := nh2.sysListener.userListener.(*testSysEventListener)
+		listener, ok := nh2.events.sys.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2152,7 +2152,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if len(listener.getLogCompacted()) == 0 {
 			t.Fatalf("log compaction not notified")
 		}
-		listener, ok = nh1.sysListener.userListener.(*testSysEventListener)
+		listener, ok = nh1.events.sys.userListener.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2676,7 +2676,7 @@ func TestSyncRequestSnapshot(t *testing.T) {
 			if idx == 0 {
 				t.Errorf("unexpected index %d", idx)
 			}
-			listener, ok := nh.sysListener.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
@@ -2973,7 +2973,7 @@ func TestSyncRemoveData(t *testing.T) {
 			if err := nh.SyncRemoveData(ctx, 1, 1); err != nil {
 				t.Fatalf("sync remove data fail %v", err)
 			}
-			listener, ok := nh.sysListener.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
