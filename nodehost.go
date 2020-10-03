@@ -260,18 +260,18 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	snapshotStatus *snapshotFeedback
-	serverCtx      *server.Context
-	nhConfig       config.NodeHostConfig
-	stopper        *syncutil.Stopper
-	duStopper      *syncutil.Stopper
-	nodes          *transport.Nodes
-	requestPools   []*sync.Pool
-	engine         *engine
-	logdb          raftio.ILogDB
-	transport      transport.ITransport
-	msgHandler     *messageHandler
-	fs             vfs.IFS
+	streams      *streamState
+	serverCtx    *server.Context
+	nhConfig     config.NodeHostConfig
+	stopper      *syncutil.Stopper
+	duStopper    *syncutil.Stopper
+	nodes        *transport.Nodes
+	requestPools []*sync.Pool
+	engine       *engine
+	logdb        raftio.ILogDB
+	transport    transport.ITransport
+	msgHandler   *messageHandler
+	fs           vfs.IFS
 }
 
 var _ nodeLoader = (*NodeHost)(nil)
@@ -314,7 +314,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			nh.handleListenerEvents()
 		})
 	}
-	nh.snapshotStatus = newSnapshotFeedback(nh.pushSnapshotStatus)
+	nh.streams = newStreamState(nh.pushSnapshotStatus)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.createPools()
 	defer func() {
@@ -1708,11 +1708,7 @@ func (nh *NodeHost) tickWorkerMain() {
 	idx := uint64(0)
 	nodes := make([]*node, 0)
 	tf := func(usec uint64) bool {
-		tms := usec / 1000
-		count += tms
-		for i := uint64(0); i < tms; i++ {
-			nh.increaseTick()
-		}
+		count += (usec / 1000)
 		if count >= nh.nhConfig.RTTMillisecond {
 			count -= nh.nhConfig.RTTMillisecond
 			if idx != nh.getClusterSetIndex() {
@@ -1722,7 +1718,7 @@ func (nh *NodeHost) tickWorkerMain() {
 					return true
 				})
 			}
-			nh.snapshotStatus.pushReady(nh.getTick())
+			nh.streams.tick()
 			nh.sendTickMessage(nodes)
 		}
 		return false
@@ -1863,14 +1859,6 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 	return true
 }
 
-func (nh *NodeHost) increaseTick() {
-	atomic.AddUint64(&nh.tick, 1)
-}
-
-func (nh *NodeHost) getTick() uint64 {
-	return atomic.LoadUint64(&nh.tick)
-}
-
 func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
@@ -1995,7 +1983,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		if req.Type == pb.SnapshotReceived {
 			plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
 				req.ClusterId, req.From)
-			nh.snapshotStatus.confirm(req.ClusterId, req.From, nh.getTick())
+			nh.streams.confirm(req.ClusterId, req.From)
 			continue
 		}
 		if n, ok := nh.getCluster(req.ClusterId); ok {
@@ -2022,7 +2010,6 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 
 func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 	nodeID uint64, failed bool) {
-	tick := h.nh.getTick()
 	eventType := server.SendSnapshotCompleted
 	if failed {
 		eventType = server.SendSnapshotAborted
@@ -2032,7 +2019,7 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 		ClusterID: clusterID,
 		NodeID:    nodeID,
 	})
-	h.nh.snapshotStatus.addStatus(clusterID, nodeID, failed, tick)
+	h.nh.streams.add(clusterID, nodeID, failed)
 }
 
 func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
