@@ -69,8 +69,8 @@ const (
 	lockFilename = "LOCK"
 )
 
-// Context is the server context for NodeHost.
-type Context struct {
+// Env is the server environment for NodeHost.
+type Env struct {
 	hostname     string
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
@@ -79,9 +79,9 @@ type Context struct {
 	fs           vfs.IFS
 }
 
-// NewContext creates and returns a new server Context object.
-func NewContext(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Context, error) {
-	s := &Context{
+// NewEnv creates and returns a new server Env object.
+func NewEnv(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Env, error) {
+	s := &Env{
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
 		partitioner:  NewFixedPartitioner(defaultClusterIDMod),
@@ -99,9 +99,9 @@ func NewContext(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Context, error) {
 	return s, nil
 }
 
-// Stop stops the context.
-func (sc *Context) Stop() {
-	for _, fl := range sc.flocks {
+// Stop stops the environment.
+func (env *Env) Stop() {
+	for _, fl := range env.flocks {
 		if err := fl.Close(); err != nil {
 			panic(err)
 		}
@@ -109,78 +109,78 @@ func (sc *Context) Stop() {
 }
 
 // GetRandomSource returns the random source associated with the Nodehost.
-func (sc *Context) GetRandomSource() random.Source {
-	return sc.randomSource
+func (env *Env) GetRandomSource() random.Source {
+	return env.randomSource
 }
 
 // GetSnapshotDir returns the snapshot directory name.
-func (sc *Context) GetSnapshotDir(did uint64, clusterID uint64,
+func (env *Env) GetSnapshotDir(did uint64, clusterID uint64,
 	nodeID uint64) string {
-	parts, _, _ := sc.getSnapshotDirParts(did, clusterID, nodeID)
-	return sc.fs.PathJoin(parts...)
+	parts, _, _ := env.getSnapshotDirParts(did, clusterID, nodeID)
+	return env.fs.PathJoin(parts...)
 }
 
-func (sc *Context) getSnapshotDirParts(did uint64,
+func (env *Env) getSnapshotDirParts(did uint64,
 	clusterID uint64, nodeID uint64) ([]string, string, []string) {
-	dd := sc.getDeploymentIDSubDirName(did)
-	pd := fmt.Sprintf("snapshot-part-%d", sc.partitioner.GetPartitionID(clusterID))
+	dd := env.getDeploymentIDSubDirName(did)
+	pd := fmt.Sprintf("snapshot-part-%d", env.partitioner.GetPartitionID(clusterID))
 	sd := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
-	dir := sc.nhConfig.NodeHostDir
+	dir := env.nhConfig.NodeHostDir
 	parts := make([]string, 0)
 	toBeCreated := make([]string, 0)
-	return append(parts, dir, sc.hostname, dd, pd, sd),
-		sc.fs.PathJoin(dir, sc.hostname, dd), append(toBeCreated, pd, sd)
+	return append(parts, dir, env.hostname, dd, pd, sd),
+		env.fs.PathJoin(dir, env.hostname, dd), append(toBeCreated, pd, sd)
 }
 
 // GetLogDBDirs returns the directory names for LogDB
-func (sc *Context) GetLogDBDirs(did uint64) (string, string) {
-	dir, lldir := sc.getDataDirs()
-	didStr := sc.getDeploymentIDSubDirName(did)
-	dir = sc.fs.PathJoin(dir, sc.hostname, didStr)
-	if len(sc.nhConfig.WALDir) > 0 {
-		lldir = sc.fs.PathJoin(lldir, sc.hostname, didStr)
+func (env *Env) GetLogDBDirs(did uint64) (string, string) {
+	dir, lldir := env.getDataDirs()
+	didStr := env.getDeploymentIDSubDirName(did)
+	dir = env.fs.PathJoin(dir, env.hostname, didStr)
+	if len(env.nhConfig.WALDir) > 0 {
+		lldir = env.fs.PathJoin(lldir, env.hostname, didStr)
 		return dir, lldir
 	}
 	return dir, dir
 }
 
-func (sc *Context) getDataDirs() (string, string) {
-	lldir := sc.nhConfig.WALDir
-	dir := sc.nhConfig.NodeHostDir
-	if len(sc.nhConfig.WALDir) > 0 {
+func (env *Env) getDataDirs() (string, string) {
+	lldir := env.nhConfig.WALDir
+	dir := env.nhConfig.NodeHostDir
+	if len(env.nhConfig.WALDir) > 0 {
 		return dir, lldir
 	}
 	return dir, dir
 }
 
 // CreateNodeHostDir creates the top level dirs used by nodehost.
-func (sc *Context) CreateNodeHostDir(did uint64) (string, string, error) {
-	dir, lldir := sc.GetLogDBDirs(did)
-	if err := fileutil.MkdirAll(dir, sc.fs); err != nil {
+func (env *Env) CreateNodeHostDir(did uint64) (string, string, error) {
+	dir, lldir := env.GetLogDBDirs(did)
+	if err := fileutil.MkdirAll(dir, env.fs); err != nil {
 		return "", "", err
 	}
-	if err := fileutil.MkdirAll(lldir, sc.fs); err != nil {
+	if err := fileutil.MkdirAll(lldir, env.fs); err != nil {
 		return "", "", err
 	}
 	return dir, lldir, nil
 }
 
 // CreateSnapshotDir creates the snapshot directory for the specified node.
-func (sc *Context) CreateSnapshotDir(did uint64,
+func (env *Env) CreateSnapshotDir(did uint64,
 	clusterID uint64, nodeID uint64) error {
-	_, path, parts := sc.getSnapshotDirParts(did, clusterID, nodeID)
+	_, path, parts := env.getSnapshotDirParts(did, clusterID, nodeID)
 	for _, part := range parts {
-		path = sc.fs.PathJoin(path, part)
-		exist, err := fileutil.Exist(path, sc.fs)
+		path = env.fs.PathJoin(path, part)
+		exist, err := fileutil.Exist(path, env.fs)
 		if err != nil {
 			return err
 		}
 		if !exist {
-			if err := fileutil.Mkdir(path, sc.fs); err != nil {
+			if err := fileutil.Mkdir(path, env.fs); err != nil {
 				return err
 			}
 		} else {
-			deleted, err := fileutil.IsDirMarkedAsDeleted(path, sc.fs)
+			deleted, err := fileutil.IsDirMarkedAsDeleted(path, env.fs)
 			if err != nil {
 				return err
 			}
@@ -194,24 +194,24 @@ func (sc *Context) CreateSnapshotDir(did uint64,
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (sc *Context) CheckNodeHostDir(config config.NodeHostConfig,
+func (env *Env) CheckNodeHostDir(config config.NodeHostConfig,
 	binVer uint32, dbType string) error {
-	return sc.checkNodeHostDir(config, binVer, dbType, false)
+	return env.checkNodeHostDir(config, binVer, dbType, false)
 }
 
 // CheckLogDBType checks whether LogDB type is compatible.
-func (sc *Context) CheckLogDBType(config config.NodeHostConfig,
+func (env *Env) CheckLogDBType(config config.NodeHostConfig,
 	dbType string) error {
-	return sc.checkNodeHostDir(config, 0, dbType, true)
+	return env.checkNodeHostDir(config, 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
-func (sc *Context) LockNodeHostDir() error {
-	dir, lldir := sc.getDataDirs()
-	if err := sc.tryLockNodeHostDir(dir); err != nil {
+func (env *Env) LockNodeHostDir() error {
+	dir, lldir := env.getDataDirs()
+	if err := env.tryLockNodeHostDir(dir); err != nil {
 		return err
 	}
-	if err := sc.tryLockNodeHostDir(lldir); err != nil {
+	if err := env.tryLockNodeHostDir(lldir); err != nil {
 		return err
 	}
 	return nil
@@ -219,29 +219,29 @@ func (sc *Context) LockNodeHostDir() error {
 
 // RemoveSnapshotDir marks the node snapshot directory as removed and have all
 // existing snapshots deleted.
-func (sc *Context) RemoveSnapshotDir(did uint64,
+func (env *Env) RemoveSnapshotDir(did uint64,
 	clusterID uint64, nodeID uint64) error {
-	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
-	exist, err := fileutil.Exist(dir, sc.fs)
+	dir := env.GetSnapshotDir(did, clusterID, nodeID)
+	exist, err := fileutil.Exist(dir, env.fs)
 	if err != nil {
 		return err
 	}
 	if exist {
-		if err := sc.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
+		if err := env.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
 			return err
 		}
-		if err := removeSavedSnapshots(dir, sc.fs); err != nil {
+		if err := removeSavedSnapshots(dir, env.fs); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (sc *Context) markSnapshotDirRemoved(did uint64, clusterID uint64,
+func (env *Env) markSnapshotDirRemoved(did uint64, clusterID uint64,
 	nodeID uint64) error {
-	dir := sc.GetSnapshotDir(did, clusterID, nodeID)
+	dir := env.GetSnapshotDir(did, clusterID, nodeID)
 	s := &raftpb.RaftDataStatus{}
-	return fileutil.MarkDirAsDeleted(dir, s, sc.fs)
+	return fileutil.MarkDirAsDeleted(dir, s, env.fs)
 }
 
 func removeSavedSnapshots(dir string, fs vfs.IFS) error {
@@ -267,36 +267,36 @@ func removeSavedSnapshots(dir string, fs vfs.IFS) error {
 	return fileutil.SyncDir(dir, fs)
 }
 
-func (sc *Context) checkNodeHostDir(config config.NodeHostConfig,
+func (env *Env) checkNodeHostDir(config config.NodeHostConfig,
 	binVer uint32, name string, dbto bool) error {
-	dir, lldir := sc.getDataDirs()
-	if err := sc.check(config, dir, binVer, name, dbto); err != nil {
+	dir, lldir := env.getDataDirs()
+	if err := env.check(config, dir, binVer, name, dbto); err != nil {
 		return err
 	}
-	if err := sc.check(config, lldir, binVer, name, dbto); err != nil {
+	if err := env.check(config, lldir, binVer, name, dbto); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (sc *Context) tryLockNodeHostDir(dir string) error {
-	fp := sc.fs.PathJoin(dir, lockFilename)
-	_, ok := sc.flocks[fp]
+func (env *Env) tryLockNodeHostDir(dir string) error {
+	fp := env.fs.PathJoin(dir, lockFilename)
+	_, ok := env.flocks[fp]
 	if !ok {
-		c, err := sc.fs.Lock(fp)
+		c, err := env.fs.Lock(fp)
 		if err != nil {
 			return ErrLockDirectory
 		}
-		sc.flocks[fp] = c
+		env.flocks[fp] = c
 	}
 	return nil
 }
 
-func (sc *Context) getDeploymentIDSubDirName(did uint64) string {
+func (env *Env) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
 
-func (sc *Context) compatibleLogDBType(saved string, name string) bool {
+func (env *Env) compatibleLogDBType(saved string, name string) bool {
 	if len(saved) > 0 && saved != name {
 		if !((saved == "rocksdb" && name == "pebble") ||
 			(saved == "pebble" && name == "rocksdb")) {
@@ -306,31 +306,31 @@ func (sc *Context) compatibleLogDBType(saved string, name string) bool {
 	return true
 }
 
-func (sc *Context) check(config config.NodeHostConfig,
+func (env *Env) check(config config.NodeHostConfig,
 	dir string, binVer uint32, name string, dbto bool) error {
 	fn := flagFilename
-	fp := sc.fs.PathJoin(dir, fn)
+	fp := env.fs.PathJoin(dir, fn)
 	se := func(s1 string, s2 string) bool {
 		return strings.EqualFold(strings.TrimSpace(s1), strings.TrimSpace(s2))
 	}
-	if _, err := sc.fs.Stat(fp); vfs.IsNotExist(err) {
+	if _, err := env.fs.Stat(fp); vfs.IsNotExist(err) {
 		if dbto {
 			return nil
 		}
-		return sc.createFlagFile(config, dir, binVer, name)
+		return env.createFlagFile(config, dir, binVer, name)
 	}
 	s := raftpb.RaftDataStatus{}
-	if err := fileutil.GetFlagFileContent(dir, fn, &s, sc.fs); err != nil {
+	if err := fileutil.GetFlagFileContent(dir, fn, &s, env.fs); err != nil {
 		return err
 	}
-	if !sc.compatibleLogDBType(s.LogdbType, name) {
+	if !env.compatibleLogDBType(s.LogdbType, name) {
 		return ErrLogDBType
 	}
 	if !dbto {
 		if !se(string(s.Address), config.RaftAddress) {
 			return ErrNotOwner
 		}
-		if len(s.Hostname) > 0 && !se(s.Hostname, sc.hostname) {
+		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {
 			return ErrHostnameChanged
 		}
 		if s.DeploymentId != 0 && s.DeploymentId != config.GetDeploymentID() {
@@ -362,19 +362,19 @@ func (sc *Context) check(config config.NodeHostConfig,
 	return nil
 }
 
-func (sc *Context) createFlagFile(config config.NodeHostConfig,
+func (env *Env) createFlagFile(config config.NodeHostConfig,
 	dir string, ver uint32, name string) error {
 	s := raftpb.RaftDataStatus{
 		Address:         config.RaftAddress,
 		BinVer:          ver,
 		HardHash:        0,
 		LogdbType:       name,
-		Hostname:        sc.hostname,
+		Hostname:        env.hostname,
 		DeploymentId:    config.GetDeploymentID(),
 		StepWorkerCount: config.Expert.ExecShards,
 		LogdbShardCount: config.Expert.LogDBShards,
 		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
 		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 	}
-	return fileutil.CreateFlagFile(dir, flagFilename, &s, sc.fs)
+	return fileutil.CreateFlagFile(dir, flagFilename, &s, env.fs)
 }

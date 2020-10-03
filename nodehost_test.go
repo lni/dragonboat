@@ -1439,10 +1439,10 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			did := nh.nhConfig.GetDeploymentID()
-			if err := nh.serverCtx.CreateSnapshotDir(did, 1, 1); err != nil {
+			if err := nh.env.CreateSnapshotDir(did, 1, 1); err != nil {
 				t.Fatalf("failed to get snap dir")
 			}
-			snapDir := nh.serverCtx.GetSnapshotDir(did, 1, 1)
+			snapDir := nh.env.GetSnapshotDir(did, 1, 1)
 			z1 = fs.PathJoin(snapDir, dirName)
 			plog.Infof("creating %s", z1)
 			if err := fs.MkdirAll(z1, 0755); err != nil {
@@ -3053,7 +3053,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if len(snapshots) == 0 {
 				t.Fatalf("failed to save snapshots")
 			}
-			snapshotDir := nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), 1, 1)
+			snapshotDir := nh.env.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), 1, 1)
 			exist, err := fileutil.Exist(snapshotDir, fs)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -4502,7 +4502,7 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		if _, err := nh2.Propose(session, []byte("test-data"), pto); err != ErrInvalidOperation {
 			t.Fatalf("proposal not rejected on witness")
 		}
-		session = client.NewSession(1, nh2.serverCtx.GetRandomSource())
+		session = client.NewSession(1, nh2.env.GetRandomSource())
 		session.PrepareForRegister()
 		if _, err := nh2.ProposeSession(session, pto); err != ErrInvalidOperation {
 			t.Fatalf("propose session not rejected on witness")

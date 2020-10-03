@@ -632,7 +632,7 @@ type engine struct {
 	taskStopper     *syncutil.Stopper
 	nh              nodeLoader
 	loaded          *loadedNodes
-	ctx             *server.Context
+	env             *server.Env
 	logdb           raftio.ILogDB
 	ctxs            []raftio.IContext
 	stepWorkReady   *workReady
@@ -644,14 +644,14 @@ type engine struct {
 }
 
 func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
-	errorInjection bool, ctx *server.Context, logdb raftio.ILogDB) *engine {
+	errorInjection bool, env *server.Env, logdb raftio.ILogDB) *engine {
 	if execShards == 0 {
 		panic("execShards == 0")
 	}
 	loaded := newLoadedNodes()
 	s := &engine{
 		nh:              nh,
-		ctx:             ctx,
+		env:             env,
 		logdb:           logdb,
 		loaded:          loaded,
 		nodeStopper:     syncutil.NewStopper(),

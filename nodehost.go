@@ -260,7 +260,7 @@ type NodeHost struct {
 		sys         *sysEventListener
 	}
 	streams      *streamState
-	serverCtx    *server.Context
+	env          *server.Env
 	nhConfig     config.NodeHostConfig
 	stopper      *syncutil.Stopper
 	nodes        *transport.Nodes
@@ -287,16 +287,16 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Prepare(); err != nil {
 		return nil, err
 	}
-	serverCtx, err := server.NewContext(nhConfig, nhConfig.FS)
+	env, err := server.NewEnv(nhConfig, nhConfig.FS)
 	if err != nil {
 		return nil, err
 	}
 	nh := &NodeHost{
-		serverCtx: serverCtx,
-		nhConfig:  nhConfig,
-		stopper:   syncutil.NewStopper(),
-		nodes:     transport.NewNodes(streamConnections),
-		fs:        nhConfig.FS,
+		env:      env,
+		nhConfig: nhConfig,
+		stopper:  syncutil.NewStopper(),
+		nodes:    transport.NewNodes(streamConnections),
+		fs:       nhConfig.FS,
 	}
 	// make static check happy
 	_ = nh.partitioned
@@ -336,7 +336,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
 	}
 	nh.engine = newExecEngine(nh, nhConfig.Expert.ExecShards,
-		nh.nhConfig.NotifyCommit, errorInjection, nh.serverCtx, nh.logdb)
+		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.logdb)
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain()
 	})
@@ -402,8 +402,8 @@ func (nh *NodeHost) Stop() {
 		plog.Warningf("logdb is nil")
 	}
 	plog.Debugf("logdb closed, %s is now stopped", nh.id())
-	nh.serverCtx.Stop()
-	plog.Debugf("serverCtx stopped on %s", nh.id())
+	nh.env.Stop()
+	plog.Debugf("env stopped on %s", nh.id())
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -653,7 +653,7 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 // NO-OP client session must be used for making proposals on IOnDiskStateMachine
 // based state machine.
 func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
-	return client.NewNoOPSession(clusterID, nh.serverCtx.GetRandomSource())
+	return client.NewNoOPSession(clusterID, nh.env.GetRandomSource())
 }
 
 // GetNewSession starts a synchronous proposal to create, register and return
@@ -709,7 +709,7 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	cs := client.NewSession(clusterID, nh.serverCtx.GetRandomSource())
+	cs := client.NewSession(clusterID, nh.env.GetRandomSource())
 	cs.PrepareForRegister()
 	rs, err := nh.ProposeSession(cs, timeout)
 	if err != nil {
@@ -1293,7 +1293,7 @@ func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
 	}
 	// mark the snapshot dir as removed
 	did := nh.nhConfig.GetDeploymentID()
-	if err := nh.serverCtx.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+	if err := nh.env.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
 		panic(err)
 	}
 	return nil
@@ -1506,14 +1506,14 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		}
 	}
 	did := nh.nhConfig.GetDeploymentID()
-	if err := nh.serverCtx.CreateSnapshotDir(did, clusterID, nodeID); err != nil {
+	if err := nh.env.CreateSnapshotDir(did, clusterID, nodeID); err != nil {
 		if err == server.ErrDirMarkedAsDeleted {
 			return ErrNodeRemoved
 		}
 		panic(err)
 	}
 	getSnapshotDir := func(cid uint64, nid uint64) string {
-		return nh.serverCtx.GetSnapshotDir(did, cid, nid)
+		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
 		nh.nhConfig, getSnapshotDir, nh.logdb, nh.fs)
@@ -1567,11 +1567,11 @@ func (nh *NodeHost) createPools() {
 
 func (nh *NodeHost) createLogDB() error {
 	did := nh.nhConfig.GetDeploymentID()
-	nhDir, walDir, err := nh.serverCtx.CreateNodeHostDir(did)
+	nhDir, walDir, err := nh.env.CreateNodeHostDir(did)
 	if err != nil {
 		return err
 	}
-	if err := nh.serverCtx.LockNodeHostDir(); err != nil {
+	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
 	}
 	var factory config.LogDBFactoryFunc
@@ -1588,7 +1588,7 @@ func (nh *NodeHost) createLogDB() error {
 	if err != nil {
 		return err
 	}
-	if err := nh.serverCtx.CheckLogDBType(nh.nhConfig, name); err != nil {
+	if err := nh.env.CheckLogDBType(nh.nhConfig, name); err != nil {
 		return err
 	}
 	ldb, err := factory(nh.nhConfig,
@@ -1598,7 +1598,7 @@ func (nh *NodeHost) createLogDB() error {
 	}
 	nh.logdb = ldb
 	ver := ldb.BinaryFormat()
-	if err := nh.serverCtx.CheckNodeHostDir(nh.nhConfig, ver, name); err != nil {
+	if err := nh.env.CheckNodeHostDir(nh.nhConfig, ver, name); err != nil {
 		return err
 	}
 	if shardedrdb, ok := ldb.(*logdb.ShardedDB); ok {
@@ -1653,10 +1653,10 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 
 func (nh *NodeHost) createTransport() error {
 	getSnapshotDir := func(cid uint64, nid uint64) string {
-		return nh.serverCtx.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
+		return nh.env.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.serverCtx, nh.nodes, getSnapshotDir, &transportEvent{nh: nh}, nh.fs)
+		nh.env, nh.nodes, getSnapshotDir, &transportEvent{nh: nh}, nh.fs)
 	if err != nil {
 		return err
 	}

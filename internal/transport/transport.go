@@ -171,7 +171,7 @@ type Transport struct {
 	jobs              uint32
 	chunks            *Chunks
 	metrics           *transportMetrics
-	serverCtx         *server.Context
+	env               *server.Env
 	nhConfig          config.NodeHostConfig
 	sourceAddress     string
 	resolver          INodeAddressResolver
@@ -193,13 +193,13 @@ var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
-	ctx *server.Context, resolver INodeAddressResolver,
+	env *server.Env, resolver INodeAddressResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	address := nhConfig.RaftAddress
 	t := &Transport{
 		nhConfig:          nhConfig,
-		serverCtx:         ctx,
+		env:               env,
 		sourceAddress:     address,
 		resolver:          resolver,
 		stopper:           syncutil.NewStopper(),

@@ -85,7 +85,7 @@ func runChunkTest(t *testing.T,
 	}()
 	defer leaktest.AfterTest(t)()
 	trans, _, stopper, tt := newTestTransport(false, fs)
-	defer trans.serverCtx.Stop()
+	defer trans.env.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
 	defer tt.cleanup()

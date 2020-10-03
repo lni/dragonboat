@@ -162,25 +162,25 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := checkMembers(oldss.Membership, memberNodes); err != nil {
 		return err
 	}
-	serverCtx, err := server.NewContext(nhConfig, fs)
+	env, err := server.NewEnv(nhConfig, fs)
 	if err != nil {
 		return err
 	}
-	defer serverCtx.Stop()
-	if _, _, err := serverCtx.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
+	defer env.Stop()
+	if _, _, err := env.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
 		return err
 	}
-	logdb, err := getLogDB(*serverCtx, nhConfig, fs)
+	logdb, err := getLogDB(*env, nhConfig, fs)
 	if err != nil {
 		return err
 	}
 	defer logdb.Close()
 
-	if err := serverCtx.CheckNodeHostDir(nhConfig,
+	if err := env.CheckNodeHostDir(nhConfig,
 		logdb.BinaryFormat(), logdb.Name()); err != nil {
 		return err
 	}
-	ssDir := serverCtx.GetSnapshotDir(nhConfig.DeploymentID,
+	ssDir := env.GetSnapshotDir(nhConfig.DeploymentID,
 		oldss.ClusterId, nodeID)
 	exist, err := fileutil.Exist(ssDir, fs)
 	if err != nil {
@@ -191,26 +191,26 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 			return err
 		}
 	} else {
-		if err := serverCtx.CreateSnapshotDir(nhConfig.DeploymentID,
+		if err := env.CreateSnapshotDir(nhConfig.DeploymentID,
 			oldss.ClusterId, nodeID); err != nil {
 			return err
 		}
 	}
 	getSnapshotDir := func(cid uint64, nid uint64) string {
-		return serverCtx.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
+		return env.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
-	env := server.NewSSEnv(getSnapshotDir,
+	ssEnv := server.NewSSEnv(getSnapshotDir,
 		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshotMode, fs)
-	if err := env.CreateTempDir(); err != nil {
+	if err := ssEnv.CreateTempDir(); err != nil {
 		return err
 	}
-	dstDir := env.GetTempDir()
-	finalDir := env.GetFinalDir()
+	dstDir := ssEnv.GetTempDir()
+	finalDir := ssEnv.GetFinalDir()
 	ss := getProcessedSnapshotRecord(finalDir, oldss, memberNodes, fs)
 	if err := copySnapshot(oldss, srcDir, dstDir, fs); err != nil {
 		return err
 	}
-	if err := env.FinalizeSnapshot(&ss); err != nil {
+	if err := ssEnv.FinalizeSnapshot(&ss); err != nil {
 		return err
 	}
 	return logdb.ImportSnapshot(ss, nodeID)
@@ -465,9 +465,9 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 	return fileutil.SyncDir(fs.PathDir(dst), fs)
 }
 
-func getLogDB(ctx server.Context,
+func getLogDB(env server.Env,
 	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
-	nhDir, walDir := ctx.GetLogDBDirs(nhConfig.DeploymentID)
+	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
 	return logdb.NewDefaultLogDB(nhConfig,
 		nil, []string{nhDir}, []string{walDir}, fs)
 }

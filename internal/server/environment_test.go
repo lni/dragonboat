@@ -58,9 +58,9 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 				t.Fatalf("panic not expected")
 			}
 		}()
-		ctx, err := NewContext(c, fs)
+		ctx, err := NewEnv(c, fs)
 		if err != nil {
-			t.Fatalf("failed to new context %v", err)
+			t.Fatalf("failed to new environment %v", err)
 		}
 		if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
 			t.Fatalf("%v", err)
@@ -103,9 +103,9 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 	}()
-	ctx, err := NewContext(c, fs)
+	ctx, err := NewEnv(c, fs)
 	if err != nil {
-		t.Fatalf("failed to new context %v", err)
+		t.Fatalf("failed to new environment %v", err)
 	}
 	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
 		t.Fatalf("%v", err)
@@ -184,9 +184,9 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	ctx, err := NewContext(c, fs)
+	ctx, err := NewEnv(c, fs)
 	if err != nil {
-		t.Fatalf("failed to new context %v", err)
+		t.Fatalf("failed to new environment %v", err)
 	}
 	if _, _, err := ctx.CreateNodeHostDir(c.DeploymentID); err != nil {
 		t.Fatalf("%v", err)
@@ -246,7 +246,7 @@ func TestRemoveSavedSnapshots(t *testing.T) {
 }
 
 func TestCompatibleLogDBType(t *testing.T) {
-	sc := &Context{}
+	sc := &Env{}
 	if !sc.compatibleLogDBType("rocksdb", "pebble") ||
 		!sc.compatibleLogDBType("pebble", "rocksdb") {
 		t.Errorf("rocksdb/pebble marked as not compatible")
@@ -266,9 +266,9 @@ func TestWALDirCanBeSet(t *testing.T) {
 		WALDir:      walDir,
 	}
 	fs := vfs.GetTestFS()
-	c, err := NewContext(nhConfig, fs)
+	c, err := NewEnv(nhConfig, fs)
 	if err != nil {
-		t.Fatalf("failed to get context %v", err)
+		t.Fatalf("failed to get environment %v", err)
 	}
 	defer c.Stop()
 	dir, lldir := c.GetLogDBDirs(12345)

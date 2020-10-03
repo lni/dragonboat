@@ -51,15 +51,15 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		return false, err
 	}
 	fs := vfs.DefaultFS
-	serverCtx, err := server.NewContext(nhConfig, fs)
+	env, err := server.NewEnv(nhConfig, fs)
 	if err != nil {
 		return false, err
 	}
-	defer serverCtx.Stop()
-	if err := serverCtx.LockNodeHostDir(); err != nil {
+	defer env.Stop()
+	if err := env.LockNodeHostDir(); err != nil {
 		return false, err
 	}
-	nhDir, walDir := serverCtx.GetLogDBDirs(nhConfig.DeploymentID)
+	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
 	logdb, err := logdb.NewDefaultLogDB(nhConfig,
 		nil, []string{nhDir}, []string{walDir}, fs)
 	if err != nil {

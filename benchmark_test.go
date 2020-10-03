@@ -406,7 +406,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 		RaftAddress: addr1,
 		FS:          vfs.DefaultFS,
 	}
-	ctx1, err := server.NewContext(nhc1, vfs.DefaultFS)
+	env1, err := server.NewEnv(nhc1, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
@@ -414,18 +414,18 @@ func benchmarkTransport(b *testing.B, sz int) {
 		RaftAddress: addr2,
 		FS:          vfs.DefaultFS,
 	}
-	ctx2, err := server.NewContext(nhc2, vfs.DefaultFS)
+	env2, err := server.NewEnv(nhc2, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
 	nodes1 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes2 := transport.NewNodes(settings.Soft.StreamConnections)
 	nodes1.AddRemote(1, 2, addr2)
-	t1, err := transport.NewTransport(nhc1, ctx1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	t1, err := transport.NewTransport(nhc1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
-	t2, err := transport.NewTransport(nhc2, ctx2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	t2, err := transport.NewTransport(nhc2, env2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
