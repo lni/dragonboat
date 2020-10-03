@@ -363,3 +363,10 @@ func (c Chunk) IsLastFileChunk() bool {
 func (c Chunk) IsPoisonChunk() bool {
 	return c.ChunkCount == PoisonChunkCount
 }
+
+// CanDrop returns a boolean value indicating whether the message can be
+// safely dropped.
+func (m *Message) CanDrop() bool {
+	return m.Type != InstallSnapshot &&
+		m.Type != Unreachable && m.Type != SnapshotStatus
+}

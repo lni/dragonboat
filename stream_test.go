@@ -71,41 +71,6 @@ func TestStreamStateGetReady(t *testing.T) {
 	}
 }
 
-func TestStreamAddRetry(t *testing.T) {
-	p := newStreamState(nil)
-	p.add(100, 1, true)
-	s1 := stream{
-		clusterID: 100,
-		nodeID:    1,
-		tick:      500,
-		failed:    true,
-	}
-	s2 := stream{
-		clusterID: 100,
-		nodeID:    2,
-		tick:      600,
-		failed:    false,
-	}
-	p.retry([]stream{s1, s2}, 1000)
-	if len(p.streams) != 2 {
-		t.Errorf("got %d, want 2", len(p.streams))
-	}
-	v, ok := p.streams[raftio.GetNodeInfo(100, 1)]
-	if !ok {
-		t.Fatalf("rec not found")
-	}
-	if v.tick != 1000+streamRetryDelayTick {
-		t.Errorf("unexpected release tick")
-	}
-	v, ok = p.streams[raftio.GetNodeInfo(100, 2)]
-	if !ok {
-		t.Fatalf("rec not found")
-	}
-	if v.tick != 1000+streamRetryDelayTick {
-		t.Errorf("unexpected release tick")
-	}
-}
-
 func TestStreamAddConfirmation(t *testing.T) {
 	p := newStreamState(nil)
 	p.add(100, 1, true)
@@ -170,14 +135,7 @@ func TestSnapshotStatusPushReady(t *testing.T) {
 	if pushed != 1 {
 		t.Errorf("rec not pushed")
 	}
-	if len(p.streams) != 1 {
-		t.Errorf("rec not added back")
-	}
-	v, ok := p.streams[raftio.GetNodeInfo(100, 1)]
-	if !ok {
-		t.Fatalf("rec not found")
-	}
-	if v.tick != p.getTick()+streamRetryDelayTick {
-		t.Errorf("unexpected release tick")
+	if len(p.streams) != 0 {
+		t.Errorf("stream state not removed")
 	}
 }

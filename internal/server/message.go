@@ -108,7 +108,7 @@ func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 
 // MustAdd adds the specified message to the queue.
 func (q *MessageQueue) MustAdd(msg pb.Message) bool {
-	if msg.Type != pb.InstallSnapshot && msg.Type != pb.Unreachable {
+	if msg.CanDrop() {
 		panic("not a snapshot or unreachable message")
 	}
 	q.mu.Lock()

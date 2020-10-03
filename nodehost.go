@@ -313,7 +313,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			nh.handleListenerEvents()
 		})
 	}
-	nh.streams = newStreamState(nh.pushSnapshotStatus)
+	nh.streams = newStreamState(nh.pushStreamState)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.createPools()
 	defer func() {
@@ -1827,7 +1827,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 	server.StartTicker(monitorInterval, tf, nh.stopper.ShouldStop())
 }
 
-func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
+func (nh *NodeHost) pushStreamState(clusterID uint64,
 	nodeID uint64, failed bool) bool {
 	if n, ok := nh.getCluster(clusterID); ok {
 		m := pb.Message{
@@ -1836,26 +1836,13 @@ func (nh *NodeHost) pushSnapshotStatus(clusterID uint64,
 			To:     nodeID,
 			Reject: failed,
 		}
-		added, stopped := n.mq.Add(m)
-		if added {
+		if n.mq.MustAdd(m) {
 			nh.engine.setStepReady(clusterID)
-			plog.Debugf("%s just got snapshot status", dn(clusterID, nodeID))
+			plog.Debugf("%s added stream state", dn(clusterID, nodeID))
 			return true
-		}
-		if stopped {
-			return true
-		}
-		select {
-		case <-nh.stopper.ShouldStop():
-			return true
-		case <-n.shouldStop():
-			return true
-		default:
-			return false
 		}
 	}
-	plog.Warningf("failed to send snapshot status to %s", dn(clusterID, nodeID))
-	return true
+	return false
 }
 
 func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {

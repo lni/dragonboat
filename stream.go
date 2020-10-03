@@ -24,7 +24,6 @@ import (
 var (
 	streamPushDelayTick      uint64 = 10
 	streamConfirmedDelayTick uint64 = 2
-	streamRetryDelayTick     uint64 = 3
 )
 
 type stream struct {
@@ -56,14 +55,11 @@ func (s *streamState) tick() {
 	if len(ready) == 0 {
 		return
 	}
-	retry := make([]stream, 0)
 	for _, r := range ready {
 		if !s.pf(r.clusterID, r.nodeID, r.failed) {
-			plog.Debugf("snapshot to %s failed", dn(r.clusterID, r.nodeID))
-			retry = append(retry, r)
+			plog.Warningf("stream state to %s not added", dn(r.clusterID, r.nodeID))
 		}
 	}
-	s.retry(retry, tick)
 }
 
 func (s *streamState) increaseTick() uint64 {
@@ -96,15 +92,6 @@ func (s *streamState) add(clusterID uint64, nodeID uint64, failed bool) {
 		nodeID:    nodeID,
 		tick:      s.getTick() + streamPushDelayTick,
 		failed:    failed,
-	}
-}
-
-func (s *streamState) retry(retry []stream, tick uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, r := range retry {
-		r.tick = tick + streamRetryDelayTick
-		s.streams[raftio.GetNodeInfo(r.clusterID, r.nodeID)] = r
 	}
 }
 

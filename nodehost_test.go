@@ -1848,22 +1848,6 @@ func TestNodeHostHasNodeInfo(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestPushSnapshotStatusForRemovedClusterReturnTrue(t *testing.T) {
-	fs := vfs.GetTestFS()
-	to := &testOption{
-		defaultTestNode: true,
-		tf: func(nh *NodeHost) {
-			if !nh.pushSnapshotStatus(123, 123, true) {
-				t.Errorf("unexpected push snapshot status result")
-			}
-			if !nh.pushSnapshotStatus(123, 123, false) {
-				t.Errorf("unexpected push snapshot status result")
-			}
-		},
-	}
-	runNodeHostTest(t, to, fs)
-}
-
 func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{

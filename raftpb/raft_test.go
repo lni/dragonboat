@@ -488,5 +488,44 @@ func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 		sh2.Data >= sh1.Data+uintptr(sh1.Len)) {
 		t.Fatalf("overlapping slice")
 	}
+}
 
+func TestMessageCanDrop(t *testing.T) {
+	tests := []struct {
+		t       MessageType
+		canDrop bool
+	}{
+		{LocalTick, true},
+		{Election, true},
+		{LeaderHeartbeat, true},
+		{ConfigChangeEvent, true},
+		{NoOP, true},
+		{Ping, true},
+		{Pong, true},
+		{Propose, true},
+		{SnapshotStatus, false},
+		{Unreachable, false},
+		{CheckQuorum, true},
+		{BatchedReadIndex, true},
+		{Replicate, true},
+		{ReplicateResp, true},
+		{RequestVote, true},
+		{RequestVoteResp, true},
+		{InstallSnapshot, false},
+		{Heartbeat, true},
+		{HeartbeatResp, true},
+		{ReadIndex, true},
+		{ReadIndexResp, true},
+		{Quiesce, true},
+		{SnapshotReceived, true},
+		{LeaderTransfer, true},
+		{TimeoutNow, true},
+		{RateLimit, true},
+	}
+	for idx, tt := range tests {
+		m := Message{Type: tt.t}
+		if m.CanDrop() != tt.canDrop {
+			t.Errorf("%d, can drop %t, want %t", idx, m.CanDrop(), tt.canDrop)
+		}
+	}
 }
