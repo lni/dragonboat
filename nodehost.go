@@ -246,7 +246,6 @@ var DefaultSnapshotOption SnapshotOption
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
 type NodeHost struct {
-	tick        uint64
 	closed      int32
 	partitioned int32
 	mu          struct {
