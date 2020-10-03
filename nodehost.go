@@ -263,7 +263,6 @@ type NodeHost struct {
 	serverCtx    *server.Context
 	nhConfig     config.NodeHostConfig
 	stopper      *syncutil.Stopper
-	duStopper    *syncutil.Stopper
 	nodes        *transport.Nodes
 	requestPools []*sync.Pool
 	engine       *engine
@@ -296,7 +295,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		serverCtx: serverCtx,
 		nhConfig:  nhConfig,
 		stopper:   syncutil.NewStopper(),
-		duStopper: syncutil.NewStopper(),
 		nodes:     transport.NewNodes(streamConnections),
 		fs:        nhConfig.FS,
 	}
@@ -388,9 +386,6 @@ func (nh *NodeHost) Stop() {
 		}
 	}
 	plog.Debugf("%s is going to stop the nh stopper", nh.id())
-	if nh.duStopper != nil {
-		nh.duStopper.Stop()
-	}
 	nh.stopper.Stop()
 	plog.Debugf("%s is going to stop the exec engine", nh.id())
 	if nh.engine != nil {
