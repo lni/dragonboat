@@ -292,8 +292,6 @@ func (p *workerPool) getWorker() *ssWorker {
 }
 
 func (p *workerPool) workerPoolMain() {
-	// TODO:
-	// convert the selects below using reflect.Select
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	nodes := make(map[uint64]*node)
