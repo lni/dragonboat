@@ -250,7 +250,7 @@ type NodeHost struct {
 	partitioned int32
 	mu          struct {
 		sync.RWMutex
-		csi      uint64
+		cci      uint64
 		clusters sync.Map // clusterID -> *node
 		lm       sync.Map // shardID -> *logDBMetrics
 	}
@@ -1422,13 +1422,13 @@ func (nh *NodeHost) forEachCluster(f func(uint64, *node) bool) uint64 {
 	nh.mu.clusters.Range(func(k, v interface{}) bool {
 		return f(k.(uint64), v.(*node))
 	})
-	return nh.mu.csi
+	return nh.mu.cci
 }
 
 func (nh *NodeHost) getClusterSetIndex() uint64 {
 	nh.mu.RLock()
 	defer nh.mu.RUnlock()
-	return nh.mu.csi
+	return nh.mu.cci
 }
 
 // there are three major reasons to bootstrap the cluster
@@ -1543,7 +1543,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		panic(err)
 	}
 	nh.mu.clusters.Store(clusterID, rn)
-	nh.mu.csi++
+	nh.mu.cci++
+	nh.engine.setCCIReady(clusterID)
 	nh.engine.setApplyReady(clusterID)
 	return nil
 }
@@ -1677,9 +1678,14 @@ func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error 
 		return ErrClusterNotFound
 	}
 	nh.mu.clusters.Delete(clusterID)
-	nh.mu.csi++
+	nh.mu.cci++
+	nh.engine.setCCIReady(clusterID)
 	n.close()
 	n.offloaded(rsm.FromNodeHost)
+	nh.engine.setStepReady(clusterID)
+	nh.engine.setCommitReady(clusterID)
+	nh.engine.setApplyReady(clusterID)
+	nh.engine.setRecoverReady(clusterID)
 	return nil
 }
 

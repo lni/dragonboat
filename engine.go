@@ -238,6 +238,7 @@ func (w *ssWorker) stream(j job) {
 type workerPool struct {
 	nh            nodeLoader
 	loaded        *loadedNodes
+	cciReady      *workReady
 	saveReady     *workReady
 	recoverReady  *workReady
 	streamReady   *workReady
@@ -255,6 +256,7 @@ func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
 	w := &workerPool{
 		nh:            nh,
 		loaded:        loaded,
+		cciReady:      newWorkReady(1),
 		saveReady:     newWorkReady(1),
 		recoverReady:  newWorkReady(1),
 		streamReady:   newWorkReady(1),
@@ -303,9 +305,10 @@ func (p *workerPool) workerPoolMain() {
 		// 1 - p.saveReady.waitCh(1)
 		// 2 - p.recoverReady.waitCh(1)
 		// 3 - p.streamReady.waitCh(1)
-		// 4 - worker completedC
-		// 4 + len(workers) - ticker.C
-		cases := make([]reflect.SelectCase, len(p.workers)+5)
+		// 4 - p.cciReady.waitCh(1)
+		// 5 - worker completedC
+		// 5 + len(workers) - ticker.C
+		cases := make([]reflect.SelectCase, len(p.workers)+6)
 		cases[0] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(p.poolStopper.ShouldStop()),
@@ -322,13 +325,17 @@ func (p *workerPool) workerPoolMain() {
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(p.streamReady.waitCh(1)),
 		}
+		cases[4] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.cciReady.waitCh(1)),
+		}
 		for idx, w := range p.workers {
-			cases[4+idx] = reflect.SelectCase{
+			cases[5+idx] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
 				Chan: reflect.ValueOf(w.completedC),
 			}
 		}
-		cases[4+len(p.workers)] = reflect.SelectCase{
+		cases[5+len(p.workers)] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(ticker.C),
 		}
@@ -363,8 +370,10 @@ func (p *workerPool) workerPoolMain() {
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
-		} else if chosen >= 4 && chosen <= 4+len(p.workers)-1 {
-			workerID := uint64(chosen - 4)
+		} else if chosen == 4 {
+			cci, nodes = p.loadNodes(cci, nodes)
+		} else if chosen >= 5 && chosen <= 5+len(p.workers)-1 {
+			workerID := uint64(chosen - 5)
 			w := p.workers[workerID]
 			if w.workerID != workerID {
 				panic("w.workerID != workerID")
@@ -636,8 +645,11 @@ type engine struct {
 	logdb           raftio.ILogDB
 	ctxs            []raftio.IContext
 	stepWorkReady   *workReady
+	stepCCIReady    *workReady
 	commitWorkReady *workReady
+	commitCCIReady  *workReady
 	applyWorkReady  *workReady
+	applyCCIReady   *workReady
 	wp              *workerPool
 	ec              chan error
 	notifyCommit    bool
@@ -658,8 +670,11 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		commitStopper:   syncutil.NewStopper(),
 		taskStopper:     syncutil.NewStopper(),
 		stepWorkReady:   newWorkReady(execShards),
+		stepCCIReady:    newWorkReady(execShards),
 		commitWorkReady: newWorkReady(commitWorkerCount),
+		commitCCIReady:  newWorkReady(commitWorkerCount),
 		applyWorkReady:  newWorkReady(applyWorkerCount),
+		applyCCIReady:   newWorkReady(applyWorkerCount),
 		ctxs:            make([]raftio.IContext, execShards),
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
@@ -755,6 +770,8 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 		case <-ticker.C:
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			e.processCommits(workerID, make(map[uint64]struct{}), nodes)
+		case <-e.commitCCIReady.waitCh(workerID):
+			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.commitWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
@@ -803,6 +820,8 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			e.processApplies(workerID, make(map[uint64]struct{}), nodes, batch, entries)
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
+		case <-e.applyCCIReady.waitCh(workerID):
+			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.applyWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
@@ -866,6 +885,8 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			e.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
+		case <-e.stepCCIReady.waitCh(workerID):
+			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.stepWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
@@ -1018,8 +1039,8 @@ func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 func (e *engine) onSnapshotSaved(updates []pb.Update,
 	nodes map[uint64]*node) error {
 	for _, ud := range updates {
-		node := nodes[ud.ClusterID]
 		if !pb.IsEmptySnapshot(ud.Snapshot) {
+			node := nodes[ud.ClusterID]
 			if err := node.removeSnapshotFlagFile(ud.Snapshot.Index); err != nil {
 				return err
 			}
@@ -1050,6 +1071,13 @@ func (e *engine) setSaveReady(clusterID uint64) {
 
 func (e *engine) setRecoverReady(clusterID uint64) {
 	e.wp.recoverReady.clusterReady(clusterID)
+}
+
+func (e *engine) setCCIReady(clusterID uint64) {
+	e.stepCCIReady.clusterReady(clusterID)
+	e.commitCCIReady.clusterReady(clusterID)
+	e.applyCCIReady.clusterReady(clusterID)
+	e.wp.cciReady.clusterReady(clusterID)
 }
 
 func (e *engine) offloadNodeMap(nodes map[uint64]*node, from rsm.From) {

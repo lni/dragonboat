@@ -2955,7 +2955,7 @@ func TestSyncRemoveData(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
 			if err := nh.SyncRemoveData(ctx, 1, 1); err != nil {
-				t.Fatalf("sync remove data fail %v", err)
+				t.Fatalf("sync remove data failed: %v", err)
 			}
 			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
 			if !ok {
