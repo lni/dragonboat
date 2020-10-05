@@ -769,7 +769,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			e.processCommits(workerID, make(map[uint64]struct{}), nodes)
 		case <-e.commitCCIReady.waitCh(workerID):
-			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
+			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 		case <-e.commitWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
@@ -819,7 +819,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
 		case <-e.applyCCIReady.waitCh(workerID):
-			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
+			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 		case <-e.applyWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
