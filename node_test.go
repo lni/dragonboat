@@ -538,7 +538,7 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 		n := nodes[0]
 		sm := smList[0]
 		for i := uint64(5); i <= 100; i++ {
-			sm.SetBatchedLastApplied(i)
+			sm.SetVisibleLastApplied(i)
 			if !n.handleEvents() {
 				t.Errorf("handle events reported no event")
 			}
@@ -575,7 +575,7 @@ func TestLastAppliedValueIsAlwaysOneWayIncreasing(t *testing.T) {
 		}()
 		n := nodes[0]
 		sm := smList[0]
-		sm.SetBatchedLastApplied(1)
+		sm.SetVisibleLastApplied(1)
 		n.handleEvents()
 		n.getUpdate()
 	}

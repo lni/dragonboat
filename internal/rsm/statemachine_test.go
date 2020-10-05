@@ -162,7 +162,11 @@ func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 	return snap, nil
 }
 
-func (s *testSnapshotter) GetFilePath(index uint64) string {
+func (s *testSnapshotter) Shrinked(ss pb.Snapshot) (bool, error) {
+	return IsShrinkedSnapshotFile(s.getFilePath(ss.Index), s.fs)
+}
+
+func (s *testSnapshotter) getFilePath(index uint64) string {
 	filename := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	return s.fs.PathJoin(testSnapshotterDir, filename)
 }
@@ -198,7 +202,7 @@ func (s *testSnapshotter) Stream(streamable IStreamable,
 }
 
 func (s *testSnapshotter) Save(savable ISavable,
-	meta *SSMeta) (ss *pb.Snapshot, env *server.SSEnv, err error) {
+	meta *SSMeta) (ss pb.Snapshot, env *server.SSEnv, err error) {
 	s.index = meta.Index
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
@@ -208,22 +212,22 @@ func (s *testSnapshotter) Save(savable ISavable,
 	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, s.fs)
 	if err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
 	cw := dio.NewCountedWriter(writer)
 	defer func() {
 		if cerr := cw.Close(); err == nil {
 			err = cerr
 		}
-		if ss != nil {
+		if ss.Index > 0 {
 			ss.FileSize = cw.BytesWritten() + SnapshotHeaderSize
 		}
 	}()
 	session := meta.Session.Bytes()
 	if _, err := savable.Save(&SSMeta{}, cw, session, nil); err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
-	ss = &pb.Snapshot{
+	ss = pb.Snapshot{
 		Filepath:   env.GetFilepath(),
 		Membership: meta.Membership,
 		Index:      meta.Index,
@@ -232,8 +236,17 @@ func (s *testSnapshotter) Save(savable ISavable,
 	return ss, env, nil
 }
 
-func (s *testSnapshotter) Load(loadable ILoadable,
-	recoverable IRecoverable, fp string, fs []sm.SnapshotFile) error {
+func (s *testSnapshotter) Load(ss pb.Snapshot,
+	loadable ILoadable, recoverable IRecoverable) error {
+	fp := s.getFilePath(ss.Index)
+	fs := make([]sm.SnapshotFile, 0)
+	for _, f := range ss.Files {
+		fs = append(fs, sm.SnapshotFile{
+			FileID:   f.FileId,
+			Filepath: f.Filepath,
+			Metadata: f.Metadata,
+		})
+	}
 	reader, err := NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
@@ -571,8 +584,8 @@ func applyConfigChangeEntry(sm *StateMachine,
 
 func TestBatchedLastAppliedValue(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.SetBatchedLastApplied(12345)
-		if sm.GetBatchedLastApplied() != 12345 {
+		sm.SetVisibleLastApplied(12345)
+		if sm.GetVisibleLastApplied() != 12345 {
 			t.Errorf("batched last applied value can not be set/get")
 		}
 	}
@@ -1872,7 +1885,7 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 
 func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
-		shrunk          bool
+		shrinked        bool
 		init            bool
 		onDiskIndex     uint64
 		onDiskInitIndex uint64
@@ -1914,8 +1927,8 @@ func TestRecoverSMRequired(t *testing.T) {
 				onDiskIndex:     tt.onDiskInitIndex,
 				fs:              fs,
 			}
-			fp := snapshotter.GetFilePath(ssIndex)
-			if tt.shrunk {
+			fp := snapshotter.getFilePath(ssIndex)
+			if tt.shrinked {
 				fp = fp + ".tmp"
 			}
 			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, fs)
@@ -1937,9 +1950,9 @@ func TestRecoverSMRequired(t *testing.T) {
 			if err := w.Close(); err != nil {
 				t.Fatalf("%v", err)
 			}
-			if tt.shrunk {
+			if tt.shrinked {
 				if err := ShrinkSnapshot(fp,
-					snapshotter.GetFilePath(ssIndex), fs); err != nil {
+					snapshotter.getFilePath(ssIndex), fs); err != nil {
 					t.Fatalf("failed to shrink %v", err)
 				}
 			}
@@ -1948,7 +1961,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				OnDiskIndex: tt.onDiskIndex,
 			}
 			defer func() {
-				if !tt.init && tt.shrunk {
+				if !tt.init && tt.shrinked {
 					if r := recover(); r == nil {
 						t.Fatalf("not panic")
 					}
@@ -2223,8 +2236,8 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if msm.last != tt.lastApplied {
 			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
 		}
-		if sm.GetBatchedLastApplied() != tt.last {
-			t.Errorf("%d, index %d, last %d", idx, sm.GetBatchedLastApplied(), tt.last)
+		if sm.GetVisibleLastApplied() != tt.last {
+			t.Errorf("%d, index %d, last %d", idx, sm.GetVisibleLastApplied(), tt.last)
 		}
 		if np.firstIndex != tt.firstApplied {
 			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)

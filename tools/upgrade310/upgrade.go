@@ -77,11 +77,11 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		}
 		for _, ss := range ssList {
 			if ss.Type == pb.OnDiskStateMachine && ss.OnDiskIndex == 0 {
-				shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
+				shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
 				if err != nil {
 					return false, err
 				}
-				if !shrunk {
+				if !shrinked {
 					return false, nil
 				}
 			}

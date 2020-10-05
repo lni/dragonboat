@@ -104,7 +104,7 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 		if err := env.CreateTempDir(); err != nil {
 			t.Errorf("create tmp snapshot dir failed %v", err)
 		}
-		if err := s.Commit(ss, rsm.SSRequest{}); err != errSnapshotOutOfDate {
+		if err := s.commit(ss, rsm.SSRequest{}); err != errSnapshotOutOfDate {
 			t.Errorf("unexpected error result %v", err)
 		}
 	}
@@ -140,7 +140,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 			t.Fatalf("write failed %v", err)
 		}
 		f.Close()
-		if err = s.Commit(ss, rsm.SSRequest{}); err != nil {
+		if err = s.commit(ss, rsm.SSRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)
 		}
 		snapshots, err := ldb.ListSnapshots(1, 1, math.MaxUint64)
@@ -433,10 +433,10 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			if err := env.CreateTempDir(); err != nil {
 				t.Errorf("failed to create snapshot dir")
 			}
-			if err := snapshotter.Commit(s, rsm.SSRequest{}); err != nil {
+			if err := snapshotter.commit(s, rsm.SSRequest{}); err != nil {
 				t.Errorf("failed to save snapshot record")
 			}
-			fp := snapshotter.GetFilePath(s.Index)
+			fp := snapshotter.getFilePath(s.Index)
 			f, err := fs.Create(fp)
 			if err != nil {
 				t.Errorf("failed to create the file, %v", err)
@@ -474,7 +474,7 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 			}
 		}
 		for i := uint64(0); i < removed; i++ {
-			fp := snapshotter.GetFilePath(i)
+			fp := snapshotter.getFilePath(i)
 			if _, err := fs.Stat(fp); !vfs.IsNotExist(err) {
 				t.Errorf("snapshot file didn't get deleted")
 			}
@@ -504,10 +504,10 @@ func TestShrinkSnapshots(t *testing.T) {
 			if err := env.CreateTempDir(); err != nil {
 				t.Errorf("failed to create snapshot dir")
 			}
-			if err := snapshotter.Commit(s, rsm.SSRequest{}); err != nil {
+			if err := snapshotter.commit(s, rsm.SSRequest{}); err != nil {
 				t.Errorf("failed to save snapshot record")
 			}
-			fp = snapshotter.GetFilePath(s.Index)
+			fp = snapshotter.getFilePath(s.Index)
 			writer, err := rsm.NewSnapshotWriter(fp,
 				rsm.V2SnapshotVersion, pb.NoCompression, fs)
 			if err != nil {
