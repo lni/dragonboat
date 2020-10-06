@@ -31,7 +31,6 @@ matrix:
         - go get -u github.com/gordonklaus/ineffassign
         - sudo apt-get install librocksdb-dev
       script:
-        - make golangci-lint-check
         - make static-check
     - name: "go1.15.x-linux-arm64"
       go: 1.15.x
