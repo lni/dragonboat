@@ -258,6 +258,7 @@ tools-checkdisk:
 ###############################################################################
 CHECKED_PKGS=$(shell go list ./...)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS)))
+EXTRA_LINTERS=-E misspell -E scopelint -E interfacer
 .PHONY: static-check
 static-check:
 	@for p in $(CHECKED_PKGS); do \
@@ -266,15 +267,16 @@ static-check:
 	done;
 	@for p in $(CHECKED_DIRS); do \
 		ineffassign $$p; \
+		golangci-lint run $$p; \
+		golangci-lint run $(EXTRA_LINTERS) $$p; \
 	done;
 
-EXTRA_LINTERS=-E dupl -E misspell -E scopelint -E interfacer
-.PHONY: golangci-lint-check
-golangci-lint-check:
+.PHONY: extra-static-check
+extra-static-check: override EXTRA_LINTERS :=-E dupl
+extra-static-check:
 	@for p in $(CHECKED_DIRS); do \
-		golangci-lint run $$p; \
-	done;
-	@golangci-lint run $(EXTRA_LINTERS) .
+    golangci-lint run $(EXTRA_LINTERS) $$p; \
+  done;
 
 ###############################################################################
 # clean
