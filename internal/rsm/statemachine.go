@@ -151,7 +151,7 @@ type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
 	Stream(IStreamable, *SSMeta, pb.IChunkSink) error
-	Shrinked(ss pb.Snapshot) (bool, error)
+	Shrunk(ss pb.Snapshot) (bool, error)
 	Save(ISavable, *SSMeta) (pb.Snapshot, *server.SSEnv, error)
 	Load(pb.Snapshot, ILoadable, IRecoverable) error
 	IsNoSnapshotError(error) bool
@@ -273,7 +273,7 @@ func (s *StateMachine) mustBeOnDiskSM() {
 
 func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	s.mustBeOnDiskSM()
-	shrinked, err := s.snapshotter.Shrinked(ss)
+	shrinked, err := s.snapshotter.Shrunk(ss)
 	if err != nil {
 		panic(err)
 	}

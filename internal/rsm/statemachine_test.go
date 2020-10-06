@@ -162,8 +162,8 @@ func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 	return snap, nil
 }
 
-func (s *testSnapshotter) Shrinked(ss pb.Snapshot) (bool, error) {
-	return IsShrinkedSnapshotFile(s.getFilePath(ss.Index), s.fs)
+func (s *testSnapshotter) Shrunk(ss pb.Snapshot) (bool, error) {
+	return IsShrunkSnapshotFile(s.getFilePath(ss.Index), s.fs)
 }
 
 func (s *testSnapshotter) getFilePath(index uint64) string {

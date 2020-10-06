@@ -86,8 +86,8 @@ func (s *snapshotter) ssid(index uint64) string {
 	return logutil.DescribeSS(s.clusterID, s.nodeID, index)
 }
 
-func (s *snapshotter) Shrinked(ss pb.Snapshot) (bool, error) {
-	return rsm.IsShrinkedSnapshotFile(s.getFilePath(ss.Index), s.fs)
+func (s *snapshotter) Shrunk(ss pb.Snapshot) (bool, error) {
+	return rsm.IsShrunkSnapshotFile(s.getFilePath(ss.Index), s.fs)
 }
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,

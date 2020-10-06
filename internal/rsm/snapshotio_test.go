@@ -402,7 +402,7 @@ func TestShrinkSnapshot(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatalf("close failed %v", err)
 	}
-	shrinked, err := IsShrinkedSnapshotFile(snapshotFilename, fs)
+	shrinked, err := IsShrunkSnapshotFile(snapshotFilename, fs)
 	if err != nil {
 		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
 	}
@@ -417,14 +417,14 @@ func TestShrinkSnapshot(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	shrinked, err = IsShrinkedSnapshotFile(snapshotFilename, fs)
+	shrinked, err = IsShrunkSnapshotFile(snapshotFilename, fs)
 	if err != nil {
 		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
 	}
 	if shrinked {
 		t.Errorf("incorrectly reported as shrinked")
 	}
-	shrinked, err = IsShrinkedSnapshotFile(shrinkedFilename, fs)
+	shrinked, err = IsShrunkSnapshotFile(shrinkedFilename, fs)
 	if err != nil {
 		t.Fatalf("failed to check whether snapshot file is shrinked %v", err)
 	}

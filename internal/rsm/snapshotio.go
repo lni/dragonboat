@@ -436,9 +436,9 @@ func (v *SnapshotValidator) Validate() bool {
 	return v.v.Validate()
 }
 
-// IsShrinkedSnapshotFile returns a boolean flag indicating whether the
+// IsShrunkSnapshotFile returns a boolean flag indicating whether the
 // specified snapshot file is already shrinked.
-func IsShrinkedSnapshotFile(fp string, fs vfs.IFS) (shrinked bool, err error) {
+func IsShrunkSnapshotFile(fp string, fs vfs.IFS) (shrinked bool, err error) {
 	reader, err := NewSnapshotReader(fp, fs)
 	if err != nil {
 		return false, err
