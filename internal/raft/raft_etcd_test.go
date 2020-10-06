@@ -1023,18 +1023,21 @@ func TestProposal(t *testing.T) {
 	}
 
 	for j, tt := range tests {
+		success := tt.success
+		jj := j
+		ttt := tt
 		send := func(m pb.Message) {
 			defer func() {
 				// only recover is we expect it to panic so
 				// panics we don't expect go up.
-				if !tt.success {
+				if !success {
 					e := recover()
 					if e != nil {
-						t.Logf("#%d: err: %s", j, e)
+						t.Logf("#%d: err: %s", jj, e)
 					}
 				}
 			}()
-			tt.send(m)
+			ttt.send(m)
 		}
 
 		data := []byte("somedata")

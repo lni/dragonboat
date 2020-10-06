@@ -115,7 +115,7 @@ func TestConfigViolationWillPanic(t *testing.T) {
 		func() {
 			defer func() {
 				if r := recover(); test.shouldFail == (r == nil) {
-					t.Errorf("Test %v failed: panic expectaion is %v however get recover result %v",
+					t.Errorf("Test %v failed: panic expectation is %v however get recover result %v",
 						test.name, test.shouldFail, r)
 				}
 			}()
@@ -2093,8 +2093,9 @@ func TestUnrolledBubbleSortMatchValue(t *testing.T) {
 		r := &raft{matched: make([]uint64, len(tt.vals))}
 		copy(r.matched, tt.vals)
 		r.sortMatchValues()
+		vals := tt.vals
 		sort.Slice(tt.vals, func(i, j int) bool {
-			return tt.vals[i] < tt.vals[j]
+			return vals[i] < vals[j]
 		})
 		if !reflect.DeepEqual(tt.vals, r.matched) {
 			t.Errorf("%d, sort failed, %v, want %v", idx, r.matched, tt.vals)

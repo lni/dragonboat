@@ -54,16 +54,21 @@ func TestMustBeChild(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		ok := true
+		ttok := tt.ok
+		ttidx := idx
+		parent := tt.parent
+		child := tt.child
+
 		f := func() {
 			defer func() {
 				if r := recover(); r != nil {
 					ok = false
 				}
-				if ok != tt.ok {
-					t.Errorf("idx %d, expected ok value %t", idx, tt.ok)
+				if ok != ttok {
+					t.Errorf("idx %d, expected ok value %t", ttidx, ttok)
 				}
 			}()
-			mustBeChild(tt.parent, tt.child)
+			mustBeChild(parent, child)
 		}
 		f()
 	}

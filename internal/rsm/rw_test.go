@@ -162,8 +162,9 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 			t.Errorf("%d, validation failed", idx)
 		}
 		if sz > SnapshotHeaderSize {
+			szz := sz
 			vf := func(data []byte) bool {
-				s := sz / 2
+				s := szz / 2
 				fh := data[:s]
 				lh := data[s:]
 				validator := newV2Validator(getDefaultChecksum())

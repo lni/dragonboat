@@ -1231,6 +1231,10 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 		{100, 0, 101, 100},
 	}
 	for _, tt := range tests {
+		snapshotIndex := tt.snapshotIndex
+		entryCount := tt.entryCount
+		firstIndex := tt.firstIndex
+		lastIndex := tt.lastIndex
 		tf := func(t *testing.T, db raftio.ILogDB) {
 			clusterID := uint64(0)
 			nodeID := uint64(4)
@@ -1241,7 +1245,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				Commit: 100,
 			}
 			ss := pb.Snapshot{
-				Index: tt.snapshotIndex,
+				Index: snapshotIndex,
 				Term:  1,
 			}
 			for i := uint64(1); i <= 100; i++ {
@@ -1270,8 +1274,8 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 			if state.FirstIndex != ss.Index {
 				t.Errorf("first index %d, want %d", state.FirstIndex, 1)
 			}
-			if state.EntryCount != tt.entryCount {
-				t.Errorf("length %d, want %d", state.EntryCount, tt.entryCount)
+			if state.EntryCount != entryCount {
+				t.Errorf("length %d, want %d", state.EntryCount, entryCount)
 			}
 			logReader := NewLogReader(clusterID, nodeID, db)
 			if err := logReader.ApplySnapshot(ss); err != nil {
@@ -1279,7 +1283,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 			}
 			logReader.SetRange(state.FirstIndex, state.EntryCount)
 			fi, li := logReader.GetRange()
-			if fi != tt.firstIndex || li != tt.lastIndex {
+			if fi != firstIndex || li != lastIndex {
 				t.Errorf("unexpected range %d:%d", fi, li)
 			}
 		}

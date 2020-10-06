@@ -273,15 +273,15 @@ func (s *StateMachine) mustBeOnDiskSM() {
 
 func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	s.mustBeOnDiskSM()
-	shrinked, err := s.snapshotter.Shrunk(ss)
+	shrunk, err := s.snapshotter.Shrunk(ss)
 	if err != nil {
 		panic(err)
 	}
-	if !init && shrinked {
-		panic("not initial recovery but snapshot shrinked")
+	if !init && shrunk {
+		panic("not initial recovery but snapshot shrunk")
 	}
 	if init {
-		if shrinked {
+		if shrunk {
 			return false
 		}
 		if ss.Imported {

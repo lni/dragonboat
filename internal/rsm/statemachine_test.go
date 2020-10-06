@@ -1885,7 +1885,7 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 
 func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
-		shrinked        bool
+		shrunk          bool
 		init            bool
 		onDiskIndex     uint64
 		onDiskInitIndex uint64
@@ -1928,7 +1928,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				fs:              fs,
 			}
 			fp := snapshotter.getFilePath(ssIndex)
-			if tt.shrinked {
+			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
 			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, fs)
@@ -1950,7 +1950,7 @@ func TestRecoverSMRequired(t *testing.T) {
 			if err := w.Close(); err != nil {
 				t.Fatalf("%v", err)
 			}
-			if tt.shrinked {
+			if tt.shrunk {
 				if err := ShrinkSnapshot(fp,
 					snapshotter.getFilePath(ssIndex), fs); err != nil {
 					t.Fatalf("failed to shrink %v", err)
@@ -1961,7 +1961,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				OnDiskIndex: tt.onDiskIndex,
 			}
 			defer func() {
-				if !tt.init && tt.shrinked {
+				if !tt.init && tt.shrunk {
 					if r := recover(); r == nil {
 						t.Fatalf("not panic")
 					}

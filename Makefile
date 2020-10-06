@@ -267,10 +267,11 @@ static-check:
 	done;
 	@for p in $(CHECKED_DIRS); do \
 		ineffassign $$p; \
-		golangci-lint run $$p; \
 		golangci-lint run $(EXTRA_LINTERS) $$p; \
 	done;
 
+# -E dupl is not included in regular static check as there are duplicated code
+# in auto generated code
 .PHONY: extra-static-check
 extra-static-check: override EXTRA_LINTERS :=-E dupl
 extra-static-check:
