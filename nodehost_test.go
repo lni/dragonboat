@@ -1979,11 +1979,11 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, f
 					h.Version, rsm.SnapshotVersion)
 			}
 			reader.Close()
-			shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
+			shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
 			if err != nil {
-				t.Fatalf("failed to check shrunk %v", err)
+				t.Fatalf("failed to check shrinked %v", err)
 			}
-			if !shrunk {
+			if !shrinked {
 				t.Errorf("not a dummy snapshot")
 			}
 		},
@@ -2103,12 +2103,12 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 					if ss.OnDiskIndex == 0 {
 						t.Errorf("on disk index not recorded in ss")
 					}
-					shrunk, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
+					shrinked, err := rsm.IsShrinkedSnapshotFile(ss.Filepath, fs)
 					if err != nil {
-						t.Errorf("failed to check whether snapshot is shrunk %v", err)
+						t.Errorf("failed to check whether snapshot is shrinked %v", err)
 					}
-					if !shrunk {
-						t.Errorf("snapshot %d is not shrunk", ss.Index)
+					if !shrinked {
+						t.Errorf("snapshot %d is not shrinked", ss.Index)
 					}
 				}
 				break
@@ -3337,12 +3337,12 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			if !exist {
 				t.Errorf("snapshot metadata not saved")
 			}
-			shrunk, err := rsm.IsShrinkedSnapshotFile(fp, fs)
+			shrinked, err := rsm.IsShrinkedSnapshotFile(fp, fs)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if shrunk {
-				t.Errorf("exported snapshot is considered as shrunk")
+			if shrinked {
+				t.Errorf("exported snapshot is considered as shrinked")
 			}
 			var ss pb.Snapshot
 			if err := fileutil.GetFlagFileContent(fs.PathJoin(sspath, snapshotDir),

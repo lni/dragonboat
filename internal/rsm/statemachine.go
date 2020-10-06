@@ -150,10 +150,10 @@ type INode interface {
 type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
-	GetFilePath(uint64) string
 	Stream(IStreamable, *SSMeta, pb.IChunkSink) error
-	Save(ISavable, *SSMeta) (*pb.Snapshot, *server.SSEnv, error)
-	Load(ILoadable, IRecoverable, string, []sm.SnapshotFile) error
+	Shrinked(ss pb.Snapshot) (bool, error)
+	Save(ISavable, *SSMeta) (pb.Snapshot, *server.SSEnv, error)
+	Load(pb.Snapshot, ILoadable, IRecoverable) error
 	IsNoSnapshotError(error) bool
 }
 
@@ -161,7 +161,7 @@ type ISnapshotter interface {
 // machine
 type StateMachine struct {
 	syncedIndex        uint64
-	batchedLastApplied uint64
+	visibleLastApplied uint64
 	mu                 sync.RWMutex
 	snapshotter        ISnapshotter
 	node               INode
@@ -239,7 +239,7 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
-	s.SetBatchedLastApplied(ss.Index)
+	s.SetVisibleLastApplied(ss.Index)
 	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
@@ -273,16 +273,15 @@ func (s *StateMachine) mustBeOnDiskSM() {
 
 func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	s.mustBeOnDiskSM()
-	fn := s.snapshotter.GetFilePath(ss.Index)
-	shrunk, err := IsShrinkedSnapshotFile(fn, s.fs)
+	shrinked, err := s.snapshotter.Shrinked(ss)
 	if err != nil {
 		panic(err)
 	}
-	if !init && shrunk {
-		panic("not initial recovery but snapshot shrunk")
+	if !init && shrinked {
+		panic("not initial recovery but snapshot shrinked")
 	}
 	if init {
-		if shrunk {
+		if shrinked {
 			return false
 		}
 		if ss.Imported {
@@ -311,8 +310,7 @@ func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
 func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	index := ss.Index
-	if s.index >= index {
+	if s.index >= ss.Index {
 		return raft.ErrSnapshotOutOfDate
 	}
 	if s.aborted {
@@ -332,8 +330,6 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		}
 		s.applyOnDisk(ss, init)
 	} else {
-		plog.Debugf("%s is on disk SM, %d vs %d, SM not restored",
-			s.id(), index, s.onDiskInitIndex)
 		s.apply(ss)
 	}
 	return nil
@@ -345,16 +341,7 @@ func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 	s.logMembership("members", index, ss.Membership.Addresses)
 	s.logMembership("observers", index, ss.Membership.Observers)
 	s.logMembership("witnesses", index, ss.Membership.Witnesses)
-	fs := make([]sm.SnapshotFile, 0)
-	for _, f := range ss.Files {
-		fs = append(fs, sm.SnapshotFile{
-			FileID:   f.FileId,
-			Filepath: f.Filepath,
-			Metadata: f.Metadata,
-		})
-	}
-	fn := s.snapshotter.GetFilePath(index)
-	if err := s.snapshotter.Load(s.sessions, s.sm, fn, fs); err != nil {
+	if err := s.snapshotter.Load(ss, s.sessions, s.sm); err != nil {
 		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
 		if err == sm.ErrSnapshotStopped {
 			s.aborted = true
@@ -385,8 +372,8 @@ func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
 
 // ReadyToStream returns a boolean flag to indicate whether the state machine
 // is ready to stream snapshot. It can not stream a full snapshot when
-// membership state is catching up with the all disk SM state. however, meta
-// only snapshot can be taken at any time.
+// membership state is catching up with the all disk SM state. Meta only
+// snapshot can be taken at any time.
 func (s *StateMachine) ReadyToStream() bool {
 	if !s.OnDiskStateMachine() {
 		return true
@@ -430,24 +417,24 @@ func (s *StateMachine) GetLastApplied() uint64 {
 	return v
 }
 
-// GetBatchedLastApplied returns the batched last applied value.
-func (s *StateMachine) GetBatchedLastApplied() uint64 {
-	return atomic.LoadUint64(&s.batchedLastApplied)
-}
-
 // GetSyncedIndex returns the index value that is known to have been
 // synchronized.
 func (s *StateMachine) GetSyncedIndex() uint64 {
 	return atomic.LoadUint64(&s.syncedIndex)
 }
 
-// SetBatchedLastApplied sets the batched last applied value. This method
+// GetVisibleLastApplied returns the batched last applied value.
+func (s *StateMachine) GetVisibleLastApplied() uint64 {
+	return atomic.LoadUint64(&s.visibleLastApplied)
+}
+
+// SetVisibleLastApplied sets the batched last applied value. This method
 // is mostly used in tests.
-func (s *StateMachine) SetBatchedLastApplied(index uint64) {
-	if s.GetBatchedLastApplied() > index {
+func (s *StateMachine) SetVisibleLastApplied(index uint64) {
+	if s.GetVisibleLastApplied() > index {
 		panic("batched applied index moving backward")
 	}
-	atomic.StoreUint64(&s.batchedLastApplied, index)
+	atomic.StoreUint64(&s.visibleLastApplied, index)
 }
 
 func (s *StateMachine) setSyncedIndex(index uint64) {
@@ -531,8 +518,7 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 }
 
 // Save creates a snapshot.
-func (s *StateMachine) Save(req SSRequest) (*pb.Snapshot,
-	*server.SSEnv, error) {
+func (s *StateMachine) Save(req SSRequest) (pb.Snapshot, *server.SSEnv, error) {
 	if req.Streaming() {
 		panic("invalid snapshot request")
 	}
@@ -714,7 +700,7 @@ func (s *StateMachine) stream(sink pb.IChunkSink) error {
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
-func (s *StateMachine) concurrentSave(req SSRequest) (*pb.Snapshot,
+func (s *StateMachine) concurrentSave(req SSRequest) (pb.Snapshot,
 	*server.SSEnv, error) {
 	var err error
 	var meta *SSMeta
@@ -724,31 +710,30 @@ func (s *StateMachine) concurrentSave(req SSRequest) (*pb.Snapshot,
 		meta, err = s.prepare(req)
 		return err
 	}(); err != nil {
-		return nil, nil, err
+		return pb.Snapshot{}, nil, err
 	}
 	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.sync") {
-		return nil, nil, ErrTestKnobReturn
+		return pb.Snapshot{}, nil, ErrTestKnobReturn
 	}
 	if err := s.sync(); err != nil {
-		return nil, nil, err
+		return pb.Snapshot{}, nil, err
 	}
 	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.concurrentSave") {
-		return nil, nil, ErrTestKnobReturn
+		return pb.Snapshot{}, nil, ErrTestKnobReturn
 	}
 	return s.doSave(meta)
 }
 
-func (s *StateMachine) save(req SSRequest) (*pb.Snapshot,
-	*server.SSEnv, error) {
+func (s *StateMachine) save(req SSRequest) (pb.Snapshot, *server.SSEnv, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	meta, err := s.prepare(req)
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
-		return nil, nil, err
+		return pb.Snapshot{}, nil, err
 	}
 	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.save") {
-		return nil, nil, ErrTestKnobReturn
+		return pb.Snapshot{}, nil, ErrTestKnobReturn
 	}
 	return s.doSave(meta)
 }
@@ -782,15 +767,15 @@ func (s *StateMachine) sync() error {
 	return nil
 }
 
-func (s *StateMachine) doSave(meta *SSMeta) (*pb.Snapshot,
+func (s *StateMachine) doSave(meta *SSMeta) (pb.Snapshot,
 	*server.SSEnv, error) {
-	snapshot, env, err := s.snapshotter.Save(s.sm, meta)
+	ss, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
 		plog.Errorf("%s snapshotter.Save failed %v", s.id(), err)
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
 	s.snapshotIndex = meta.Index
-	return snapshot, env, nil
+	return ss, env, nil
 }
 
 func getEntryTypes(entries []pb.Entry) (bool, bool) {
@@ -842,22 +827,20 @@ func (s *StateMachine) entryInInitDiskSM(index uint64) bool {
 	return index <= s.onDiskInitIndex
 }
 
-func (s *StateMachine) updateOnDiskIndex(firstIndex uint64, lastIndex uint64) {
+func (s *StateMachine) setOnDiskIndex(first uint64, last uint64) {
 	if !s.OnDiskStateMachine() {
 		return
 	}
-	if firstIndex > lastIndex {
-		panic("firstIndex > lastIndex")
+	if first > last {
+		panic("first > last")
 	}
-	if firstIndex <= s.onDiskInitIndex {
-		plog.Panicf("last entry index to apply %d, initial on disk index %d",
-			firstIndex, s.onDiskInitIndex)
+	if first <= s.onDiskInitIndex {
+		plog.Panicf("first index %d, init on disk %d", first, s.onDiskInitIndex)
 	}
-	if firstIndex <= s.onDiskIndex {
-		plog.Panicf("last entry index to apply %d, on disk index %d",
-			firstIndex, s.onDiskIndex)
+	if first <= s.onDiskIndex {
+		plog.Panicf("first index %d, on disk index %d", first, s.onDiskIndex)
 	}
-	s.onDiskIndex = lastIndex
+	s.onDiskIndex = last
 }
 
 func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
@@ -899,7 +882,7 @@ func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 		plog.Panicf("unexpected last applied value, %d, %d", index, e.Index)
 	}
 	if last {
-		s.SetBatchedLastApplied(e.Index)
+		s.SetVisibleLastApplied(e.Index)
 	}
 	return nil
 }
@@ -930,9 +913,6 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		s.setLastApplied(e.Index, e.Term)
 	}
 	if len(ents) > 0 {
-		firstIndex := ents[0].Index
-		lastIndex := ents[len(ents)-1].Index
-		s.updateOnDiskIndex(firstIndex, lastIndex)
 		results, err := s.sm.BatchedUpdate(ents)
 		if err != nil {
 			return err
@@ -947,9 +927,10 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 			last := ce.Index == input[len(input)-1].Index
 			s.onUpdateApplied(ce, e.Result, false, false, last)
 		}
+		s.setOnDiskIndex(ents[0].Index, ents[len(ents)-1].Index)
 	}
 	if len(input) > 0 {
-		s.SetBatchedLastApplied(input[len(input)-1].Index)
+		s.SetVisibleLastApplied(input[len(input)-1].Index)
 	}
 	return nil
 }
@@ -958,9 +939,6 @@ func (s *StateMachine) handleConfigChange(e pb.Entry) {
 	var cc pb.ConfigChange
 	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
-	}
-	if cc.Type == pb.AddNode && len(cc.Address) == 0 {
-		panic("empty address in AddNode request")
 	}
 	rejected := true
 	func() {
@@ -1039,11 +1017,11 @@ func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 			panic("already has response in session")
 		}
 	}
-	s.updateOnDiskIndex(e.Index, e.Index)
 	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: GetPayload(e)})
 	if err != nil {
 		return sm.Result{}, false, false, err
 	}
+	s.setOnDiskIndex(e.Index, e.Index)
 	if session != nil {
 		session.addResponse(RaftSeriesID(e.SeriesID), result)
 	}

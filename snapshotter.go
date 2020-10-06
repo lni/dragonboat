@@ -64,8 +64,7 @@ type snapshotter struct {
 
 var _ rsm.ISnapshotter = (*snapshotter)(nil)
 
-func newSnapshotter(clusterID uint64,
-	nodeID uint64,
+func newSnapshotter(clusterID uint64, nodeID uint64,
 	nhConfig config.NodeHostConfig, root server.SnapshotDirFunc,
 	ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
 	return &snapshotter{
@@ -87,6 +86,10 @@ func (s *snapshotter) ssid(index uint64) string {
 	return logutil.DescribeSS(s.clusterID, s.nodeID, index)
 }
 
+func (s *snapshotter) Shrinked(ss pb.Snapshot) (bool, error) {
+	return rsm.IsShrinkedSnapshotFile(s.getFilePath(ss.Index), s.fs)
+}
+
 func (s *snapshotter) Stream(streamable rsm.IStreamable,
 	meta *rsm.SSMeta, sink pb.IChunkSink) error {
 	ct := compressionType(meta.CompressionType)
@@ -99,10 +102,10 @@ func (s *snapshotter) Stream(streamable rsm.IStreamable,
 }
 
 func (s *snapshotter) Save(savable rsm.ISavable,
-	meta *rsm.SSMeta) (ss *pb.Snapshot, env *server.SSEnv, err error) {
+	meta *rsm.SSMeta) (ss pb.Snapshot, env *server.SSEnv, err error) {
 	env = s.getCustomEnv(meta)
 	if err := env.CreateTempDir(); err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
 	files := rsm.NewFileCollection()
 	fp := env.GetTempFilepath()
@@ -110,7 +113,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	writer, err := rsm.NewSnapshotWriter(fp,
 		rsm.SnapshotVersion, meta.CompressionType, s.fs)
 	if err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
 	cw := dio.NewCountedWriter(writer)
 	sw := dio.NewCompressor(ct, cw)
@@ -118,7 +121,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		if cerr := sw.Close(); err == nil {
 			err = cerr
 		}
-		if ss != nil {
+		if ss.Index > 0 {
 			total := cw.BytesWritten()
 			ss.Checksum = writer.GetPayloadChecksum()
 			ss.FileSize = writer.GetPayloadSize(total) + rsm.SnapshotHeaderSize
@@ -127,13 +130,13 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	session := meta.Session.Bytes()
 	dummy, err := savable.Save(meta, sw, session, files)
 	if err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
 	fs, err := files.PrepareFiles(env.GetTempDir(), env.GetFinalDir())
 	if err != nil {
-		return nil, env, err
+		return pb.Snapshot{}, env, err
 	}
-	ss = &pb.Snapshot{
+	ss = pb.Snapshot{
 		ClusterId:   s.clusterID,
 		Filepath:    env.GetFilepath(),
 		Membership:  meta.Membership,
@@ -147,8 +150,17 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	return ss, env, nil
 }
 
-func (s *snapshotter) Load(sessions rsm.ILoadable,
-	asm rsm.IRecoverable, fp string, fs []sm.SnapshotFile) (err error) {
+func (s *snapshotter) Load(ss pb.Snapshot,
+	sessions rsm.ILoadable, asm rsm.IRecoverable) (err error) {
+	fp := s.getFilePath(ss.Index)
+	fs := make([]sm.SnapshotFile, 0)
+	for _, f := range ss.Files {
+		fs = append(fs, sm.SnapshotFile{
+			FileID:   f.FileId,
+			Filepath: f.Filepath,
+			Metadata: f.Metadata,
+		})
+	}
 	reader, err := rsm.NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
@@ -174,32 +186,6 @@ func (s *snapshotter) Load(sessions rsm.ILoadable,
 	}
 	reader.ValidatePayload(header)
 	return nil
-}
-
-func (s *snapshotter) Commit(ss pb.Snapshot, req rsm.SSRequest) error {
-	env := s.getCustomEnv(&rsm.SSMeta{
-		Index:   ss.Index,
-		Request: req,
-	})
-	if err := env.SaveSSMetadata(&ss); err != nil {
-		return err
-	}
-	if err := env.FinalizeSnapshot(&ss); err != nil {
-		if err == server.ErrSnapshotOutOfDate {
-			return errSnapshotOutOfDate
-		}
-		return err
-	}
-	if !req.Exported() {
-		if err := s.saveSnapshot(ss); err != nil {
-			return err
-		}
-	}
-	return env.RemoveFlagFile()
-}
-
-func (s *snapshotter) GetFilePath(index uint64) string {
-	return s.getEnv(index).GetFilepath()
 }
 
 func (s *snapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
@@ -228,6 +214,32 @@ func (s *snapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
 
 func (s *snapshotter) IsNoSnapshotError(e error) bool {
 	return e == ErrNoSnapshot
+}
+
+func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
+	env := s.getCustomEnv(&rsm.SSMeta{
+		Index:   ss.Index,
+		Request: req,
+	})
+	if err := env.SaveSSMetadata(&ss); err != nil {
+		return err
+	}
+	if err := env.FinalizeSnapshot(&ss); err != nil {
+		if err == server.ErrSnapshotOutOfDate {
+			return errSnapshotOutOfDate
+		}
+		return err
+	}
+	if !req.Exported() {
+		if err := s.saveSnapshot(ss); err != nil {
+			return err
+		}
+	}
+	return env.RemoveFlagFile()
+}
+
+func (s *snapshotter) getFilePath(index uint64) string {
+	return s.getEnv(index).GetFilepath()
 }
 
 func (s *snapshotter) shrink(shrinkTo uint64) error {

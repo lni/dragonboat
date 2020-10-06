@@ -667,7 +667,7 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 	}
 	plog.Infof("%s snapshotted, %s, term %d, file count %d",
 		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
-	if err := n.snapshotter.Commit(*ss, req); err != nil {
+	if err := n.snapshotter.commit(ss, req); err != nil {
 		plog.Errorf("%s Commit failed %v", n.id(), err)
 		if err == errSnapshotOutOfDate {
 			ssenv.MustRemoveTempDir()
@@ -685,7 +685,7 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 	if !ss.Validate(n.snapshotter.fs) {
 		plog.Panicf("%s generated invalid snapshot %v", n.id(), ss)
 	}
-	if err = n.logReader.CreateSnapshot(*ss); err != nil {
+	if err = n.logReader.CreateSnapshot(ss); err != nil {
 		plog.Errorf("%s CreateSnapshot failed %v", n.id(), err)
 		if !isSoftSnapshotError(err) {
 			return 0, err
@@ -1059,7 +1059,7 @@ func (n *node) hasEntryToApply() bool {
 }
 
 func (n *node) updateBatchedLastApplied() uint64 {
-	n.appliedIndex = n.sm.GetBatchedLastApplied()
+	n.appliedIndex = n.sm.GetVisibleLastApplied()
 	n.p.NotifyRaftLastApplied(n.appliedIndex)
 	return n.appliedIndex
 }
