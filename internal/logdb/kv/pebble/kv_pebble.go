@@ -57,7 +57,7 @@ func (l *eventListener) notify() {
 					l.kv.config.KVMaxWriteBufferNumber * 19 / 20
 				l0FileNumThreshold := l.kv.config.KVLevel0StopWritesTrigger - 1
 				m := l.kv.db.Metrics()
-				busy := uint64(m.MemTable.Size) >= memSizeThreshold ||
+				busy := m.MemTable.Size >= memSizeThreshold ||
 					uint64(m.Levels[0].NumFiles) >= l0FileNumThreshold
 				l.kv.callback(busy)
 			}

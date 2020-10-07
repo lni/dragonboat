@@ -203,7 +203,7 @@ func TestAddMessageIsRateLimited(t *testing.T) {
 			sz := q.rl.Get()
 			added, stopped := q.Add(m)
 			if added {
-				if q.rl.Get() != sz+uint64(raftpb.GetEntrySliceInMemSize([]raftpb.Entry{e})) {
+				if q.rl.Get() != sz+raftpb.GetEntrySliceInMemSize([]raftpb.Entry{e}) {
 					t.Errorf("failed to update rate limit")
 				}
 			}

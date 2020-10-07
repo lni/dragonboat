@@ -133,7 +133,7 @@ func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
 func (m *membership) isPromotingObserver(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
 		oa, ok := m.members.Observers[cc.NodeID]
-		return ok && addressEqual(oa, string(cc.Address))
+		return ok && addressEqual(oa, cc.Address)
 	}
 	return false
 }
@@ -141,7 +141,7 @@ func (m *membership) isPromotingObserver(cc pb.ConfigChange) bool {
 func (m *membership) isInvalidObserverPromotion(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
 		oa, ok := m.members.Observers[cc.NodeID]
-		return ok && !addressEqual(oa, string(cc.Address))
+		return ok && !addressEqual(oa, cc.Address)
 	}
 	return false
 }
@@ -173,17 +173,17 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 		cc.Type == pb.AddObserver ||
 		cc.Type == pb.AddWitness {
 		for _, addr := range m.members.Addresses {
-			if addressEqual(addr, string(cc.Address)) {
+			if addressEqual(addr, cc.Address) {
 				return true
 			}
 		}
 		for _, addr := range m.members.Observers {
-			if addressEqual(addr, string(cc.Address)) {
+			if addressEqual(addr, cc.Address) {
 				return true
 			}
 		}
 		for _, addr := range m.members.Witnesses {
-			if addressEqual(addr, string(cc.Address)) {
+			if addressEqual(addr, cc.Address) {
 				return true
 			}
 		}
@@ -242,7 +242,7 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 	m.members.ConfigChangeId = index
 	switch cc.Type {
 	case pb.AddNode:
-		nodeAddr := string(cc.Address)
+		nodeAddr := cc.Address
 		delete(m.members.Observers, cc.NodeID)
 		if _, ok := m.members.Witnesses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
@@ -252,7 +252,7 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 		if _, ok := m.members.Addresses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
-		m.members.Observers[cc.NodeID] = string(cc.Address)
+		m.members.Observers[cc.NodeID] = cc.Address
 	case pb.AddWitness:
 		if _, ok := m.members.Addresses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
@@ -260,7 +260,7 @@ func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
 		if _, ok := m.members.Observers[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
-		m.members.Witnesses[cc.NodeID] = string(cc.Address)
+		m.members.Witnesses[cc.NodeID] = cc.Address
 	case pb.RemoveNode:
 		delete(m.members.Addresses, cc.NodeID)
 		delete(m.members.Observers, cc.NodeID)
@@ -301,16 +301,16 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		m.applyConfigChange(cc, index)
 		if cc.Type == pb.AddNode {
 			plog.Infof("%s applied ADD ccid %d (%d), %s (%s)",
-				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if cc.Type == pb.RemoveNode {
 			plog.Infof("%s applied REMOVE ccid %d (%d), %s",
 				m.id(), ccid, index, nid(cc.NodeID))
 		} else if cc.Type == pb.AddObserver {
 			plog.Infof("%s applied ADD OBSERVER ccid %d (%d), %s (%s)",
-				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if cc.Type == pb.AddWitness {
 			plog.Infof("%s applied ADD WITNESS ccid %d (%d), %s (%s)",
-				m.id(), ccid, index, nid(cc.NodeID), string(cc.Address))
+				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else {
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}

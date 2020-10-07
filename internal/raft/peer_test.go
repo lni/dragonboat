@@ -42,8 +42,8 @@ import (
 )
 
 // Campaign starts the campaign procedure.
-func (rc *Peer) Campaign() {
-	rc.raft.Handle(pb.Message{Type: pb.Election})
+func (p *Peer) Campaign() {
+	p.raft.Handle(pb.Message{Type: pb.Election})
 }
 
 func getTestMembership(nodes []uint64) pb.Membership {
@@ -687,8 +687,8 @@ func TestValidateUpdate(t *testing.T) {
 		ud := pb.Update{}
 		ud.Commit = tt.commit
 		if tt.committedLength > 0 {
-			lastIndex := uint64(tt.firstCommittedIndex) + uint64(tt.committedLength) - 1
-			for i := uint64(tt.firstCommittedIndex); i <= lastIndex; i++ {
+			lastIndex := tt.firstCommittedIndex + tt.committedLength - 1
+			for i := tt.firstCommittedIndex; i <= lastIndex; i++ {
 				e := pb.Entry{
 					Index: i,
 				}
@@ -696,8 +696,8 @@ func TestValidateUpdate(t *testing.T) {
 			}
 		}
 		if tt.saveLength > 0 {
-			lastIndex := uint64(tt.firstSaveIndex) + uint64(tt.saveLength) - 1
-			for i := uint64(tt.firstSaveIndex); i <= lastIndex; i++ {
+			lastIndex := tt.firstSaveIndex + tt.saveLength - 1
+			for i := tt.firstSaveIndex; i <= lastIndex; i++ {
 				e := pb.Entry{
 					Index: i,
 				}
@@ -748,8 +748,8 @@ func TestSetFastApply(t *testing.T) {
 			}
 		}
 		if tt.committedLength > 0 {
-			lastIndex := uint64(tt.firstCommittedIndex) + uint64(tt.committedLength) - 1
-			for i := uint64(tt.firstCommittedIndex); i <= lastIndex; i++ {
+			lastIndex := tt.firstCommittedIndex + tt.committedLength - 1
+			for i := tt.firstCommittedIndex; i <= lastIndex; i++ {
 				e := pb.Entry{
 					Index: i,
 				}
@@ -757,8 +757,8 @@ func TestSetFastApply(t *testing.T) {
 			}
 		}
 		if tt.saveLength > 0 {
-			lastIndex := uint64(tt.firstSaveIndex) + uint64(tt.saveLength) - 1
-			for i := uint64(tt.firstSaveIndex); i <= lastIndex; i++ {
+			lastIndex := tt.firstSaveIndex + tt.saveLength - 1
+			for i := tt.firstSaveIndex; i <= lastIndex; i++ {
 				e := pb.Entry{
 					Index: i,
 				}

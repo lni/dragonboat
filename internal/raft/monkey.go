@@ -30,18 +30,18 @@ func (p *Peer) DumpRaftInfoToLog(addrMap map[uint64]string) {
 	p.raft.dumpRaftInfoToLog(addrMap)
 }
 
-func (rc *Peer) GetInMemLogSize() uint64 {
-	ents := rc.raft.log.inmem.entries
+func (p *Peer) GetInMemLogSize() uint64 {
+	ents := p.raft.log.inmem.entries
 	if len(ents) > 0 {
-		if ents[0].Index == rc.raft.applied {
+		if ents[0].Index == p.raft.applied {
 			ents = ents[1:]
 		}
 	}
 	return getEntrySliceInMemSize(ents)
 }
 
-func (rc *Peer) GetRateLimiter() *server.InMemRateLimiter {
-	return rc.raft.log.inmem.rl
+func (p *Peer) GetRateLimiter() *server.InMemRateLimiter {
+	return p.raft.log.inmem.rl
 }
 
 func (r *raft) dumpRaftInfoToLog(addrs map[uint64]string) {

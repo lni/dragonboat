@@ -73,77 +73,77 @@ func NewNoOPSession(clusterID uint64, rng random.Source) *Session {
 
 // IsNoOPSession returns a boolean flag indicating whether the session instance
 // is a NoOP session.
-func (cs *Session) IsNoOPSession() bool {
-	return cs.SeriesID == NoOPSeriesID
+func (m *Session) IsNoOPSession() bool {
+	return m.SeriesID == NoOPSeriesID
 }
 
 // ClusterIDMustMatch asserts that the input cluster id matches the cluster id
 // of the client session.
-func (cs *Session) ClusterIDMustMatch(clusterID uint64) {
-	if cs.ClusterID != clusterID {
+func (m *Session) ClusterIDMustMatch(clusterID uint64) {
+	if m.ClusterID != clusterID {
 		panic("cluster id do not match")
 	}
 }
 
 // PrepareForRegister sets the series id to the special series id for
 // registering client session.
-func (cs *Session) PrepareForRegister() {
-	cs.assertRegularSession()
-	cs.SeriesID = SeriesIDForRegister
+func (m *Session) PrepareForRegister() {
+	m.assertRegularSession()
+	m.SeriesID = SeriesIDForRegister
 }
 
 // PrepareForUnregister sets the series id to the special series id for
 // unregistering client session.
-func (cs *Session) PrepareForUnregister() {
-	cs.assertRegularSession()
-	cs.SeriesID = SeriesIDForUnregister
+func (m *Session) PrepareForUnregister() {
+	m.assertRegularSession()
+	m.SeriesID = SeriesIDForUnregister
 }
 
 // PrepareForPropose sets the series id to the first series id that can be used
 // for making proposals.
-func (cs *Session) PrepareForPropose() {
-	cs.assertRegularSession()
-	cs.SeriesID = SeriesIDFirstProposal
+func (m *Session) PrepareForPropose() {
+	m.assertRegularSession()
+	m.SeriesID = SeriesIDFirstProposal
 }
 
 // ProposalCompleted increases the series id and the RespondedTo value.
 // ProposalCompleted is expected to be called by the application every time
 // when a proposal is completed or aborted by the application.
-func (cs *Session) ProposalCompleted() {
-	cs.assertRegularSession()
-	if cs.SeriesID == cs.RespondedTo+1 {
-		cs.RespondedTo = cs.SeriesID
-		cs.SeriesID++
+func (m *Session) ProposalCompleted() {
+	m.assertRegularSession()
+	if m.SeriesID == m.RespondedTo+1 {
+		m.RespondedTo = m.SeriesID
+		m.SeriesID++
 	} else {
 		panic("invalid responded to/series id values")
 	}
 }
 
-func (cs *Session) assertRegularSession() {
-	if cs.ClientID == NotSessionManagedClientID ||
-		cs.SeriesID == NoOPSeriesID {
+func (m *Session) assertRegularSession() {
+	if m.ClientID == NotSessionManagedClientID ||
+		m.SeriesID == NoOPSeriesID {
 		panic("not a regular session")
 	}
 }
 
 // ValidForProposal checks whether the client session object is valid for
 // making proposals.
-func (cs *Session) ValidForProposal(clusterID uint64) bool {
-	if cs.SeriesID == NoOPSeriesID && cs.ClientID == NotSessionManagedClientID {
+func (m *Session) ValidForProposal(clusterID uint64) bool {
+	if m.SeriesID == NoOPSeriesID && m.ClientID == NotSessionManagedClientID {
 		return false
 	}
-	if cs.ClusterID != clusterID {
+	if m.ClusterID != clusterID {
 		return false
 	}
-	if cs.ClientID == NotSessionManagedClientID {
+	if m.ClientID == NotSessionManagedClientID {
 		return false
 	}
-	if cs.SeriesID == SeriesIDForRegister ||
-		cs.SeriesID == SeriesIDForUnregister {
+	if m.SeriesID == SeriesIDForRegister ||
+		m.SeriesID == SeriesIDForUnregister {
 		return false
 	}
-	if cs.RespondedTo > cs.SeriesID {
-		panic("cs.RespondedTo > cs.SeriesID")
+	if m.RespondedTo > m.SeriesID {
+		panic("m.RespondedTo > m.SeriesID")
 	}
 	return true
 }
@@ -151,16 +151,16 @@ func (cs *Session) ValidForProposal(clusterID uint64) bool {
 // ValidForSessionOp checks whether the client session is valid for
 // making client session related proposals, e.g. registering or unregistering
 // a client session.
-func (cs *Session) ValidForSessionOp(clusterID uint64) bool {
-	if cs.ClusterID != clusterID {
+func (m *Session) ValidForSessionOp(clusterID uint64) bool {
+	if m.ClusterID != clusterID {
 		return false
 	}
-	if cs.ClientID == NotSessionManagedClientID ||
-		cs.SeriesID == NoOPSeriesID {
+	if m.ClientID == NotSessionManagedClientID ||
+		m.SeriesID == NoOPSeriesID {
 		return false
 	}
-	if cs.SeriesID == SeriesIDForRegister ||
-		cs.SeriesID == SeriesIDForUnregister {
+	if m.SeriesID == SeriesIDForRegister ||
+		m.SeriesID == SeriesIDForUnregister {
 		return true
 	}
 	return false

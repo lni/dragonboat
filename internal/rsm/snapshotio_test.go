@@ -145,7 +145,7 @@ func corruptSnapshotPayload(t *testing.T, fs vfs.IFS) {
 		if _, err := f.ReadAt(data, int64(SnapshotHeaderSize+s)); err != nil {
 			t.Fatalf("%v", err)
 		}
-		data[0] = byte(data[0] + 1)
+		data[0] = data[0] + 1
 		if _, err := f.WriteAt(data, int64(SnapshotHeaderSize+s)); err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -607,7 +607,7 @@ func TestValidateHeader(t *testing.T) {
 	if !validateHeader(data, crc) {
 		t.Errorf("expected to report valid")
 	}
-	crc[0] = byte(crc[0] + 1)
+	crc[0] = crc[0] + 1
 	if validateHeader(data, crc) {
 		t.Errorf("corrupted header data not reported")
 	}

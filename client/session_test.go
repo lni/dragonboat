@@ -122,11 +122,11 @@ func TestIsNoOPSession(t *testing.T) {
 	if !s.IsNoOPSession() {
 		t.Errorf("not considered as a noop session")
 	}
-	s.ClientID = s.ClientID + 1
+	s.ClientID++
 	if !s.IsNoOPSession() {
 		t.Errorf("not considered as a noop session")
 	}
-	s.SeriesID = s.SeriesID + 1
+	s.SeriesID++
 	if s.IsNoOPSession() {
 		t.Errorf("still considered as a noop session")
 	}

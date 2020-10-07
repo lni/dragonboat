@@ -160,7 +160,7 @@ func TestEntryQueueCanBeClosed(t *testing.T) {
 func TestEntryQueueAllowEntriesToBeAdded(t *testing.T) {
 	q := newEntryQueue(5, 0)
 	for i := uint64(0); i < 5; i++ {
-		ok, stopped := q.add(raftpb.Entry{Index: uint64(i + 1)})
+		ok, stopped := q.add(raftpb.Entry{Index: i + 1})
 		if !ok || stopped {
 			t.Errorf("failed to add new entry")
 		}
@@ -173,8 +173,8 @@ func TestEntryQueueAllowEntriesToBeAdded(t *testing.T) {
 		} else {
 			r = q.right
 		}
-		if r[i].Index != uint64(i+1) {
-			t.Errorf("index %d, want %d", r[i].Index, uint64(i+1))
+		if r[i].Index != i+1 {
+			t.Errorf("index %d, want %d", r[i].Index, i+1)
 		}
 	}
 }

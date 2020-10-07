@@ -61,10 +61,6 @@ func newLoadedNodes() *loadedNodes {
 	}
 }
 
-func (l *loadedNodes) loaded(clusterID uint64, nodeID uint64) bool {
-	return l.get(clusterID, nodeID) != nil
-}
-
 func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -511,14 +507,13 @@ func (p *workerPool) canSchedule(j pendingJob) bool {
 }
 
 func (p workerPool) setBusy(node *node, workerID uint64) {
-	_, ok := p.busy[workerID]
-	if ok {
+	if _, ok := p.busy[workerID]; ok {
 		plog.Panicf("trying to use a busy worker")
 	}
 	p.busy[workerID] = node
 }
 
-func (p *workerPool) startStreaming(node *node, workerID uint64) {
+func (p *workerPool) startStreaming(node *node) {
 	count, ok := p.streaming[node.clusterID]
 	if !ok {
 		p.streaming[node.clusterID] = 1
@@ -527,7 +522,7 @@ func (p *workerPool) startStreaming(node *node, workerID uint64) {
 	}
 }
 
-func (p *workerPool) startSaving(node *node, workerID uint64) {
+func (p *workerPool) startSaving(node *node) {
 	_, ok := p.saving[node.clusterID]
 	if ok {
 		plog.Panicf("%s trying to start saving again", node.id())
@@ -535,7 +530,7 @@ func (p *workerPool) startSaving(node *node, workerID uint64) {
 	p.saving[node.clusterID] = struct{}{}
 }
 
-func (p *workerPool) startRecovering(node *node, workerID uint64) {
+func (p *workerPool) startRecovering(node *node) {
 	_, ok := p.recovering[node.clusterID]
 	if ok {
 		plog.Panicf("%s trying to start recovering again", node.id())
@@ -547,11 +542,11 @@ func (p *workerPool) start(jt jobType, node *node, workerID uint64) {
 	p.setBusy(node, workerID)
 	switch jt {
 	case snapshotAvailable:
-		p.startRecovering(node, workerID)
+		p.startRecovering(node)
 	case snapshotRequested:
-		p.startSaving(node, workerID)
+		p.startSaving(node)
 	case streamSnapshot:
-		p.startStreaming(node, workerID)
+		p.startStreaming(node)
 	default:
 		plog.Panicf("unknown task type %d", jt)
 	}
@@ -767,7 +762,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
-			e.processCommits(workerID, make(map[uint64]struct{}), nodes)
+			e.processCommits(make(map[uint64]struct{}), nodes)
 		case <-e.commitCCIReady.waitCh(workerID):
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 		case <-e.commitWorkReady.waitCh(workerID):
@@ -775,7 +770,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			}
 			clusterIDMap := e.commitWorkReady.getReadyMap(workerID)
-			e.processCommits(workerID, clusterIDMap, nodes)
+			e.processCommits(clusterIDMap, nodes)
 		}
 	}
 }
@@ -785,8 +780,8 @@ func (e *engine) loadCommitNodes(workerID uint64, cci uint64,
 	return e.load(workerID, cci, nodes, rsm.FromCommitWorker, e.commitWorkReady)
 }
 
-func (e *engine) processCommits(workerID uint64,
-	idmap map[uint64]struct{}, nodes map[uint64]*node) {
+func (e *engine) processCommits(idmap map[uint64]struct{},
+	nodes map[uint64]*node) {
 	if len(idmap) == 0 {
 		for k := range nodes {
 			idmap[k] = struct{}{}
@@ -815,7 +810,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
-			e.processApplies(workerID, make(map[uint64]struct{}), nodes, batch, entries)
+			e.processApplies(make(map[uint64]struct{}), nodes, batch, entries)
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
 		case <-e.applyCCIReady.waitCh(workerID):
@@ -825,7 +820,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 			}
 			clusterIDMap := e.applyWorkReady.getReadyMap(workerID)
-			e.processApplies(workerID, clusterIDMap, nodes, batch, entries)
+			e.processApplies(clusterIDMap, nodes, batch, entries)
 		}
 	}
 }
@@ -843,8 +838,7 @@ func (e *engine) loadApplyNodes(workerID uint64, cci uint64,
 // R, R, won't happen, when in R state, processApplies will not process the node
 // R, T, won't happen, when in R state, processApplies will not process the node
 
-func (e *engine) processApplies(workerID uint64,
-	idmap map[uint64]struct{},
+func (e *engine) processApplies(idmap map[uint64]struct{},
 	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
 	if len(idmap) == 0 {
 		for k := range nodes {

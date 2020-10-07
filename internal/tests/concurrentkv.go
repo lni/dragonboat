@@ -109,8 +109,8 @@ func (s *ConcurrentKVTest) PrepareSnapshot() (interface{}, error) {
 	}
 	data.junk = append(data.junk, p.junk...)
 	p.kvs.Range(func(k, v interface{}) bool {
-		key := string(k.(string))
-		val := string(v.(string))
+		key := k.(string)
+		val := v.(string)
 		data.kvs.Store(key, val)
 		return true
 	})
@@ -144,8 +144,8 @@ func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 		Junk:    ctxdata.junk,
 	}
 	ctxdata.kvs.Range(func(k, v interface{}) bool {
-		key := string(k.(string))
-		val := string(v.(string))
+		key := k.(string)
+		val := v.(string)
 		jsondata.KVStore[key] = val
 		return true
 	})
@@ -213,8 +213,8 @@ func (s *ConcurrentKVTest) GetHash() (uint64, error) {
 		Count:   p.count,
 	}
 	p.kvs.Range(func(k, v interface{}) bool {
-		key := string(k.(string))
-		val := string(v.(string))
+		key := k.(string)
+		val := v.(string)
 		jsondata.KVStore[key] = val
 		return true
 	})

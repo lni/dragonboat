@@ -257,8 +257,9 @@ tools-checkdisk:
 # static checks
 ###############################################################################
 CHECKED_PKGS=$(shell go list ./...)
-CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS)))
-EXTRA_LINTERS=-E misspell -E scopelint -E interfacer
+CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
+EXTRA_LINTERS=-E misspell -E scopelint -E interfacer -E rowserrcheck \
+	-E depguard -E unconvert -E prealloc -E gofmt -E stylecheck
 .PHONY: static-check
 static-check:
 	@for p in $(CHECKED_PKGS); do \
@@ -275,7 +276,7 @@ static-check:
 .PHONY: extra-static-check
 extra-static-check: override EXTRA_LINTERS :=-E dupl
 extra-static-check:
-	@for p in $(CHECKED_DIRS); do \
+	for p in $(CHECKED_DIRS); do \
     golangci-lint run $(EXTRA_LINTERS) $$p; \
   done;
 

@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	rand.Seed(int64(time.Now().UnixNano()))
+	rand.Seed(time.Now().UnixNano())
 }
 
 func TestCountedWriteCanReportTotalWritten(t *testing.T) {

@@ -386,8 +386,8 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 		}
 		for i := uint64(0); i < batchSize-1; i++ {
 			e := eb.Entries[i]
-			if e.Index != uint64(i+1) {
-				t.Errorf("unexpected index %d, want %d", e.Index, uint64(i+1))
+			if e.Index != i+1 {
+				t.Errorf("unexpected index %d, want %d", e.Index, i+1)
 			}
 			if e.Index < batchSize-4 {
 				if e.Term != uint64(1) {

@@ -789,11 +789,9 @@ func (r *raft) sendReplicateMessage(to uint64) {
 		plog.Infof("%s is sending snapshot (%d) to %s, r.Next %d, r.Match %d, %v",
 			r.describe(), index, NodeID(to), rp.next, rp.match, err)
 		rp.becomeSnapshot(index)
-	} else {
-		if len(m.Entries) > 0 {
-			lastIndex := m.Entries[len(m.Entries)-1].Index
-			rp.progress(lastIndex)
-		}
+	} else if len(m.Entries) > 0 {
+		lastIndex := m.Entries[len(m.Entries)-1].Index
+		rp.progress(lastIndex)
 	}
 	r.send(m)
 }

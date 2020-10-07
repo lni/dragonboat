@@ -269,7 +269,7 @@ func (lr *LogReader) SetRange(firstIndex uint64, length uint64) {
 	case lr.length > offset:
 		lr.length = offset + length
 	case lr.length == offset:
-		lr.length = lr.length + length
+		lr.length += length
 	default:
 		panic("missing log entry")
 	}
@@ -297,7 +297,7 @@ func (lr *LogReader) Compact(index uint64) error {
 		return err
 	}
 	i := index - lr.markerIndex
-	lr.length = lr.length - i
+	lr.length -= i
 	lr.markerIndex = index
 	lr.markerTerm = term
 	return nil

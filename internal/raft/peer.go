@@ -367,7 +367,7 @@ func checkLaunchRequest(config config.Config,
 	}
 	uniqueAddressList := make(map[string]struct{})
 	for _, addr := range addresses {
-		uniqueAddressList[string(addr.Address)] = struct{}{}
+		uniqueAddressList[addr.Address] = struct{}{}
 	}
 	if len(uniqueAddressList) != len(addresses) {
 		plog.Panicf("duplicated address found %v", addresses)
@@ -381,7 +381,7 @@ func bootstrap(r *raft, addresses []PeerAddress) {
 	ents := make([]pb.Entry, len(addresses))
 	for i, peer := range addresses {
 		plog.Infof("%s added bootstrap ConfigChangeAddNode, %d, %s",
-			r.describe(), peer.NodeID, string(peer.Address))
+			r.describe(), peer.NodeID, peer.Address)
 		cc := pb.ConfigChange{
 			Type:       pb.AddNode,
 			NodeID:     peer.NodeID,

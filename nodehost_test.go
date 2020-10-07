@@ -3729,7 +3729,7 @@ type dataCorruptionSink struct {
 func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.enabled && len(chunk.Data) > 0 {
 		idx := rand.Uint64() % uint64(len(chunk.Data))
-		chunk.Data[idx] = byte(chunk.Data[idx] + 1)
+		chunk.Data[idx] = chunk.Data[idx] + 1
 	}
 	s.receiver.AddChunk(chunk)
 	return true, false

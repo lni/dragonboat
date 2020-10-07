@@ -51,8 +51,8 @@ func (m *Session) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (dst *Session) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Session.Merge(dst, src)
+func (m *Session) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Session.Merge(m, src)
 }
 func (m *Session) XXX_Size() int {
 	return m.Size()

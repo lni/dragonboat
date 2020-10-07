@@ -878,7 +878,7 @@ func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 
 func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	mutualTLS bool, fs vfs.IFS) {
-	snapshotSize := uint64(snapshotChunkSize) * 10
+	snapshotSize := snapshotChunkSize * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer func() {
 		if err := fs.RemoveAll(snapshotDir); err != nil {
@@ -989,7 +989,7 @@ func TestFailedSnapshotLoadChunkWillBeReported(t *testing.T) {
 
 func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	mutualTLS bool, fs vfs.IFS) {
-	snapshotSize := uint64(snapshotChunkSize) * 10
+	snapshotSize := snapshotChunkSize * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.env.Stop()
 	defer tt.cleanup()
@@ -1026,7 +1026,7 @@ func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
 }
 
 func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.IFS) {
-	snapshotSize := uint64(snapshotChunkSize) * 10
+	snapshotSize := snapshotChunkSize * 10
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.env.Stop()
 	defer tt.cleanup()

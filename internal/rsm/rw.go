@@ -171,7 +171,7 @@ func (bw *BlockWriter) Flush() error {
 		}
 	}
 	totalbs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(totalbs, uint64(bw.total))
+	binary.LittleEndian.PutUint64(totalbs, bw.total)
 	tailBlock := append(totalbs, writerMagicNumber...)
 	return bw.processNewBlock(tailBlock, nil)
 }

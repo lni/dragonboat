@@ -1593,7 +1593,7 @@ func TestAllServerStepdown(t *testing.T) {
 			if sm.term != tt.wterm {
 				t.Errorf("#%d.%d term = %v , want %v", i, j, sm.term, tt.wterm)
 			}
-			if uint64(sm.log.lastIndex()) != tt.windex {
+			if sm.log.lastIndex() != tt.windex {
 				t.Errorf("#%d.%d index = %v , want %v", i, j, sm.log.lastIndex(), tt.windex)
 			}
 			if uint64(len(getAllEntries(sm.log))) != tt.windex {

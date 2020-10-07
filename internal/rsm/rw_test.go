@@ -53,7 +53,7 @@ func TestCorruptedBlockIsRejected(t *testing.T) {
 	if !validateBlock(v, h) {
 		t.Fatalf("validation failed")
 	}
-	v[0] = byte(v[0] + 1)
+	v[0] = v[0] + 1
 	if validateBlock(v, h) {
 		t.Fatalf("validation didn't failed")
 	}
@@ -189,12 +189,12 @@ func TestCorruptedDataCanBeDetectedByValidator(t *testing.T) {
 	}
 	testCorruptedDataCanBeDetectedByValidator(t, noop, true)
 	firstByte := func(data []byte) []byte {
-		data[0] = byte(data[0] + 1)
+		data[0] = data[0] + 1
 		return data
 	}
 	testCorruptedDataCanBeDetectedByValidator(t, firstByte, false)
 	lastByte := func(data []byte) []byte {
-		data[len(data)-1] = byte(data[len(data)-1] + 1)
+		data[len(data)-1] = data[len(data)-1] + 1
 		return data
 	}
 	testCorruptedDataCanBeDetectedByValidator(t, lastByte, false)
@@ -404,7 +404,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 				}
 			}()
 			curRead := make([]byte, 4)
-			written[idx] = byte(written[idx] + 1)
+			written[idx] = written[idx] + 1
 			lr := io.LimitReader(bytes.NewBuffer(written), int64(len(written)-16))
 			reader := newBlockReader(lr, blockSize, defaultChecksumType)
 			for {

@@ -223,11 +223,11 @@ func (c *Config) Validate() error {
 	}
 	if c.SnapshotCompressionType != Snappy &&
 		c.SnapshotCompressionType != NoCompression {
-		return errors.New("Unknown compression type")
+		return errors.New("unknown compression type")
 	}
 	if c.EntryCompressionType != Snappy &&
 		c.EntryCompressionType != NoCompression {
-		return errors.New("Unknown compression type")
+		return errors.New("unknown compression type")
 	}
 	if c.IsWitness && c.SnapshotEntries > 0 {
 		return errors.New("witness node can not take snapshot")

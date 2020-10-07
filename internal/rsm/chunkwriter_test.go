@@ -180,7 +180,7 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 			if err := header.Unmarshal(headerdata); err != nil {
 				t.Fatalf("%v", err)
 			}
-			if uint64(len(chunk.Data)) != uint64(SnapshotHeaderSize)+tailSize {
+			if uint64(len(chunk.Data)) != SnapshotHeaderSize+tailSize {
 				t.Errorf("unexpected data size")
 			}
 			checksum := header.HeaderChecksum

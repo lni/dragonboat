@@ -112,7 +112,7 @@ func TestReturnedReadyMapContainsReadyClusterID(t *testing.T) {
 
 func TestLoadedNodes(t *testing.T) {
 	lns := newLoadedNodes()
-	if lns.loaded(2, 3) {
+	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 	nodes := make(map[uint64]*node)
@@ -120,19 +120,19 @@ func TestLoadedNodes(t *testing.T) {
 	n.nodeID = 3
 	nodes[2] = n
 	lns.update(1, rsm.FromSnapshotWorker, nodes)
-	if !lns.loaded(2, 3) {
+	if lns.get(2, 3) == nil {
 		t.Errorf("unexpectedly returned false")
 	}
 	n.nodeID = 4
 	lns.update(1, rsm.FromSnapshotWorker, nodes)
-	if lns.loaded(2, 3) {
+	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 	nodes = make(map[uint64]*node)
 	nodes[5] = n
 	n.nodeID = 3
 	lns.update(1, rsm.FromSnapshotWorker, nodes)
-	if lns.loaded(2, 3) {
+	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 }

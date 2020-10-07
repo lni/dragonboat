@@ -76,7 +76,7 @@ var tolerateTailCorruptionWarning uint32
 var useUniversalCompactionWarning uint32
 
 func getRocksDBOptions(config config.LogDBConfig,
-	directory string, walDirectory string) (*gorocksdb.Options,
+	walDirectory string) (*gorocksdb.Options,
 	*gorocksdb.BlockBasedTableOptions, *gorocksdb.Cache) {
 	// TODO:
 	// log the settings
@@ -173,7 +173,7 @@ func getRocksDBOptions(config config.LogDBConfig,
 	return opts, bbto, cache
 }
 
-func openRocksDB(config config.LogDBConfig, callback kv.LogDBCallback,
+func openRocksDB(config config.LogDBConfig, _ kv.LogDBCallback,
 	dir string, wal string, fs vfs.IFS) (kv.IKVStore, error) {
 	if config.IsEmpty() {
 		panic("invalid LogDBConfig")
@@ -183,7 +183,7 @@ func openRocksDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	if err := fileutil.MkdirAll(wal, fs); err != nil {
 		panic(err)
 	}
-	opts, bbto, cache := getRocksDBOptions(config, dir, wal)
+	opts, bbto, cache := getRocksDBOptions(config, wal)
 	db, err := gorocksdb.OpenDb(opts, dir)
 	if err != nil {
 		return nil, err

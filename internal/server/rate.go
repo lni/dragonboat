@@ -57,7 +57,7 @@ func (r *RateLimiter) Increase(sz uint64) {
 
 // Decrease decreases the recorded in memory log size by sz bytes.
 func (r *RateLimiter) Decrease(sz uint64) {
-	atomic.AddUint64(&r.size, ^uint64(sz-1))
+	atomic.AddUint64(&r.size, ^(sz - 1))
 }
 
 // Set sets the recorded in memory log size to sz bytes.

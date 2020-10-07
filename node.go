@@ -252,7 +252,7 @@ func (n *node) applyConfigChange(cc pb.ConfigChange) {
 	n.p.ApplyConfigChange(cc)
 	switch cc.Type {
 	case pb.AddNode, pb.AddObserver, pb.AddWitness:
-		n.nodeRegistry.Add(n.clusterID, cc.NodeID, string(cc.Address))
+		n.nodeRegistry.Add(n.clusterID, cc.NodeID, cc.Address)
 	case pb.RemoveNode:
 		if cc.NodeID == n.nodeID {
 			plog.Infof("%s applied ConfChange Remove for itself", n.id())

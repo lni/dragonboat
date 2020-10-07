@@ -190,7 +190,7 @@ func splitBySnapshotFile(msg pb.Message,
 		panic("empty file")
 	}
 	results := make([]pb.Chunk, 0)
-	chunkCount := uint64((filesize-1)/snapshotChunkSize + 1)
+	chunkCount := (filesize-1)/snapshotChunkSize + 1
 	for i := uint64(0); i < chunkCount; i++ {
 		var csz uint64
 		if i == chunkCount-1 {

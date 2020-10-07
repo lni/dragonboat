@@ -211,7 +211,7 @@ func readMessage(conn net.Conn,
 	}
 	received := uint64(0)
 	var recvBuf []byte
-	if rheader.size < uint64(recvBufSize) {
+	if rheader.size < recvBufSize {
 		recvBuf = buf[:rheader.size]
 	} else {
 		recvBuf = buf[:recvBufSize]
@@ -227,13 +227,13 @@ func readMessage(conn net.Conn,
 		}
 		toRead -= uint64(len(recvBuf))
 		received += uint64(len(recvBuf))
-		if toRead < uint64(recvBufSize) {
-			recvBuf = buf[received : uint64(received)+toRead]
+		if toRead < recvBufSize {
+			recvBuf = buf[received : received+toRead]
 		} else {
-			recvBuf = buf[received : received+uint64(recvBufSize)]
+			recvBuf = buf[received : received+recvBufSize]
 		}
 	}
-	if uint64(received) != rheader.size {
+	if received != rheader.size {
 		panic("unexpected size")
 	}
 	if !encrypted && crc32.ChecksumIEEE(buf) != rheader.crc {
@@ -580,6 +580,8 @@ func setTCPConn(conn *net.TCPConn) error {
 	return conn.SetKeepAlivePeriod(keepAlivePeriod)
 }
 
+// FIXME:
+// context.Context is ignored
 func (t *TCP) getConnection(ctx context.Context,
 	target string) (net.Conn, error) {
 	timeout := time.Duration(dialTimeoutSecond) * time.Second

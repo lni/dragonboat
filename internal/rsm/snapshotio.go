@@ -343,8 +343,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		payloadSz := st.Size() - int64(SnapshotHeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
-	t := pb.ChecksumType(sr.header.ChecksumType)
-	sr.r = mustGetVersionedReader(reader, v, t)
+	sr.r = mustGetVersionedReader(reader, v, sr.header.ChecksumType)
 	return sr.header, nil
 }
 

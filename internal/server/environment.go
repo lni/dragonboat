@@ -44,7 +44,7 @@ var (
 	ErrHostnameChanged = errors.New("hostname changed")
 	// ErrDeploymentIDChanged is the error used to indicate that the deployment
 	// ID changed.
-	ErrDeploymentIDChanged = errors.New("Deployment ID changed")
+	ErrDeploymentIDChanged = errors.New("deployment ID changed")
 	// ErrLogDBType is the error used to indicate that the LogDB type changed.
 	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
@@ -327,7 +327,7 @@ func (env *Env) check(config config.NodeHostConfig,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !se(string(s.Address), config.RaftAddress) {
+		if !se(s.Address, config.RaftAddress) {
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {

@@ -379,7 +379,7 @@ func (s *snapshotter) getCustomEnv(meta *rsm.SSMeta) *server.SSEnv {
 }
 
 func (s *snapshotter) saveSnapshot(snapshot pb.Snapshot) error {
-	return s.logdb.SaveSnapshots([]pb.Update{pb.Update{
+	return s.logdb.SaveSnapshots([]pb.Update{{
 		ClusterID: s.clusterID,
 		NodeID:    s.nodeID,
 		Snapshot:  snapshot,

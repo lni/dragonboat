@@ -284,10 +284,8 @@ func (s *ShardedDB) getParititionID(updates []pb.Update) uint64 {
 		id := s.partitioner.GetPartitionID(ud.ClusterID)
 		if pid == math.MaxUint64 {
 			pid = id
-		} else {
-			if pid != id {
-				plog.Panicf("multiple pid value found")
-			}
+		} else if pid != id {
+			plog.Panicf("multiple pid value found")
 		}
 	}
 	if pid == uint64(math.MaxUint64) {

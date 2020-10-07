@@ -64,7 +64,7 @@ func GetPayload(e pb.Entry) []byte {
 // ToDioType converts the CompressionType type defined in the config package to
 // the CompressionType value defined in the dio package.
 func ToDioType(ct config.CompressionType) dio.CompressionType {
-	return dio.CompressionType(ct)
+	return ct
 }
 
 // GetEncodedPayload returns the encoded payload using the specified
@@ -120,7 +120,7 @@ func parseEncodedHeader(cmd []byte) (uint8, uint8, bool) {
 	vermask := uint8(15 << 4)
 	ctmask := uint8(7 << 1)
 	sesmask := uint8(1)
-	header := uint8(cmd[0])
+	header := cmd[0]
 	return header & vermask, header & ctmask, header&sesmask == 1
 }
 

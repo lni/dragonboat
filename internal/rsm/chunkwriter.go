@@ -120,7 +120,7 @@ func (cw *ChunkWriter) getHeader() []byte {
 		PayloadChecksum: []byte{0, 0, 0, 0},
 		ChecksumType:    DefaultChecksumType,
 		Version:         uint64(V2SnapshotVersion),
-		CompressionType: pb.CompressionType(cw.meta.CompressionType),
+		CompressionType: cw.meta.CompressionType,
 	}
 	data, err := header.Marshal()
 	if err != nil {

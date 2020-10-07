@@ -229,7 +229,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{
-			NodeID:              uint64(i),
+			NodeID:              i,
 			ClusterID:           testClusterID,
 			ElectionRTT:         20,
 			HeartbeatRTT:        2,
@@ -244,7 +244,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		}
 		// node registry
 		nr := transport.NewNodes(settings.Soft.StreamConnections)
-		ch := router.getMessageReceiveChannel(testClusterID, uint64(i))
+		ch := router.getMessageReceiveChannel(testClusterID, i)
 		nhConfig := config.NodeHostConfig{RTTMillisecond: tickMillisecond}
 		node, err := newNode(peers,
 			true,
