@@ -57,7 +57,7 @@ matrix:
     - name: "go1.15.x-windows"
       go: 1.15.x
       os: windows
-      script: go test -v
+      script: go test ./...
     - name: "go1.15.x-freebsd"
       go: 1.15.x
       os: freebsd
