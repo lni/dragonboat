@@ -13,7 +13,6 @@ matrix:
     - name: "go1.15.x-linux"
       go: 1.15.x
       os: linux
-      dist: focal
       script: make travis-test
     - name: "go1.15.x-linux (rocksdb)"
       go: 1.15.x
