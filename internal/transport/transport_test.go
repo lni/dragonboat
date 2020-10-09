@@ -1239,11 +1239,12 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 		t.Errorf("send failed")
 	}
 	req.SetToFail(true)
-	ok = tt.Send(msg)
-	if !ok {
-		t.Errorf("send failed")
-	}
-	for i := 0; i < 1000; i++ {
+	// requested the noop trans to fail the send batch operation, given the first
+	// batch is in the chan, we don't know whether the first batch is going to
+	// fail or the one below is going to fail. after the send below, failure will
+	// eventually be triggered and we just need to check & wait.
+	tt.Send(msg)
+	for i := 0; i < 5000; i++ {
 		if tt.queueSize() != 0 {
 			time.Sleep(time.Millisecond)
 		} else {
