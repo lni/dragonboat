@@ -1120,7 +1120,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
-	ac := testing.AllocsPerRun(1000, func() {
+	ac := testing.AllocsPerRun(10000, func() {
 		v := atomic.AddUint32(&total, 1)
 		rs, err := pp.propose(session, data, 100)
 		if err != nil {
@@ -1150,7 +1150,7 @@ func TestReadIndexAllocationCount(t *testing.T) {
 	total := uint32(0)
 	q := newReadIndexQueue(2048)
 	pri := newPendingReadIndex(p, q)
-	ac := testing.AllocsPerRun(1000, func() {
+	ac := testing.AllocsPerRun(10000, func() {
 		v := atomic.AddUint32(&total, 1)
 		rs, err := pri.read(100)
 		if err != nil {
