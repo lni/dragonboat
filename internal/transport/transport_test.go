@@ -1275,10 +1275,9 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 		t.Errorf("send failed")
 	}
 	req.SetToFail(true)
-	ok = tt.Send(msg)
-	if !ok {
-		t.Errorf("send failed")
-	}
+	// see comments in TestFailedConnectionIsRemovedFromTransport for why
+	// the returned value of the below Send() is not checked
+	tt.Send(msg)
 	for i := 0; i < 1000; i++ {
 		if tt.queueSize() != 0 {
 			time.Sleep(time.Millisecond)
