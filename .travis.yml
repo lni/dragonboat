@@ -13,6 +13,10 @@ matrix:
     - name: "go1.15.x-linux"
       go: 1.15.x
       os: linux
+      script: make travis-test
+    - name: "go1.15.x-linux-ubuntu-focal"
+      go: 1.15.x
+      os: linux
       dist: focal
       script: make travis-test
     - name: "go1.15.x-linux (rocksdb)"
@@ -21,7 +25,7 @@ matrix:
       dist: bionic
       before_script:
         - sudo apt-get install librocksdb-dev
-      script: DRAGONBOAT_LOGDB=rocksdb make test-logdb
+      script: DRAGONBOAT_LOGDB=rocksdb make test
     - name: "go1.15.x-linux-static-check"
       go: 1.15.x
       os: linux
@@ -38,7 +42,7 @@ matrix:
       os: linux
       arch: arm64
       dist: bionic
-      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_MEMFS_TEST=1 make test
+      script: GOPROXY=direct GOSUMDB=off make test
     - name: "go1.15.x-linux-arm64 (rocksdb)"
       go: 1.15.x
       os: linux
@@ -46,7 +50,7 @@ matrix:
       arch: arm64
       before_script:
         - sudo apt-get install librocksdb-dev
-      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_LOGDB=rocksdb make test-logdb
+      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_LOGDB=rocksdb make test
     - name: "go1.15.x-linux-race"
       go: 1.15.x
       os: linux
