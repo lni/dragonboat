@@ -9,10 +9,12 @@ matrix:
     - name: "go1.14.x-linux"
       go: 1.14.x
       os: linux
+      dist: bionic
       script: make test
     - name: "go1.15.x-linux"
       go: 1.15.x
       os: linux
+      dist: bionic
       script: make travis-test
     - name: "go1.15.x-linux-ubuntu-focal"
       go: 1.15.x
@@ -54,6 +56,7 @@ matrix:
     - name: "go1.15.x-linux-race"
       go: 1.15.x
       os: linux
+      dist: bionic
       script: RACE=1 make test
     - name: "go1.15.x-darwin"
       go: 1.15.x
@@ -70,10 +73,12 @@ matrix:
     - name: "build tools"
       go: 1.15.x
       os: linux
+      dist: bionic
       script: make tools
     - name: "nightly test - monkey test"
       go: 1.15.x
       os: linux
+      dist: bionic
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
         - git clone https://github.com/lni/drummer2 drummer
@@ -84,6 +89,7 @@ matrix:
     - name: "nightly test - monkey test ondisk"
       go: 1.15.x
       os: linux
+      dist: bionic
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
         - git clone https://github.com/lni/drummer2 drummer
@@ -94,6 +100,7 @@ matrix:
     - name: "nightly test - monkey test memfs"
       go: 1.15.x
       os: linux
+      dist: bionic
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
         - git clone https://github.com/lni/drummer2 drummer
@@ -104,6 +111,7 @@ matrix:
     - name: "nightly test - monkey test race"
       go: 1.15.x
       os: linux
+      dist: bionic
       before_script:
         - echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
         - git clone https://github.com/lni/drummer2 drummer
