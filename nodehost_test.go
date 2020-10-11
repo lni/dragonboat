@@ -165,6 +165,26 @@ func getTestConfig() *config.Config {
 	}
 }
 
+func waitNodeInfoEvent(t *testing.T, f func() []raftio.NodeInfo, count int) {
+	for i := 0; i < 1000; i++ {
+		if len(f()) == count {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("failed to get node info event")
+}
+
+func waitSnapshotInfoEvent(t *testing.T, f func() []raftio.SnapshotInfo, count int) {
+	for i := 0; i < 1000; i++ {
+		if len(f()) == count {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("failed to get snapshot info event")
+}
+
 type testSysEventListener struct {
 	mu                    sync.Mutex
 	nodeHostShuttingdown  uint64
@@ -1541,17 +1561,14 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 			if err := nh.StopCluster(1); err != nil {
 				t.Errorf("failed to stop cluster 2 %v", err)
 			}
-			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.ul.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
-			if len(listener.getNodeReady()) != 1 {
-				t.Errorf("node ready not signalled")
-			} else {
-				ni := listener.getNodeReady()[0]
-				if ni.ClusterID != 1 || ni.NodeID != 1 {
-					t.Fatalf("incorrect node ready info")
-				}
+			waitNodeInfoEvent(t, listener.getNodeReady, 1)
+			ni := listener.getNodeReady()[0]
+			if ni.ClusterID != 1 || ni.NodeID != 1 {
+				t.Fatalf("incorrect node ready info")
 			}
 		},
 	}
@@ -1611,19 +1628,11 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to delete node %v", err)
 			}
-			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.ul.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
-			retry := 0
-			for retry < 10000 {
-				if len(listener.getMembershipChanged()) != 2 {
-					time.Sleep(time.Millisecond)
-					retry++
-				} else {
-					break
-				}
-			}
+			waitNodeInfoEvent(t, listener.getMembershipChanged, 2)
 			ni := listener.getMembershipChanged()[1]
 			if ni.ClusterID != 1 || ni.NodeID != 1 {
 				t.Fatalf("incorrect node ready info")
@@ -2120,7 +2129,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if !snapshotted {
 			t.Fatalf("failed to take 3 snapshots")
 		}
-		listener, ok := nh2.events.sys.userListener.(*testSysEventListener)
+		listener, ok := nh2.events.sys.ul.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2136,7 +2145,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if len(listener.getLogCompacted()) == 0 {
 			t.Fatalf("log compaction not notified")
 		}
-		listener, ok = nh1.events.sys.userListener.(*testSysEventListener)
+		listener, ok = nh1.events.sys.ul.(*testSysEventListener)
 		if !ok {
 			t.Fatalf("failed to get the system event listener")
 		}
@@ -2660,19 +2669,11 @@ func TestSyncRequestSnapshot(t *testing.T) {
 			if idx == 0 {
 				t.Errorf("unexpected index %d", idx)
 			}
-			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.ul.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
-			retry := 0
-			for retry < 10000 {
-				if len(listener.getSnapshotCreated()) != 1 {
-					time.Sleep(time.Millisecond)
-					retry++
-				} else {
-					break
-				}
-			}
+			waitSnapshotInfoEvent(t, listener.getSnapshotCreated, 1)
 			si := listener.getSnapshotCreated()[0]
 			if si.ClusterID != 1 || si.NodeID != 1 {
 				t.Fatalf("incorrect created snapshot info")
@@ -2957,17 +2958,14 @@ func TestSyncRemoveData(t *testing.T) {
 			if err := nh.SyncRemoveData(ctx, 1, 1); err != nil {
 				t.Fatalf("sync remove data failed: %v", err)
 			}
-			listener, ok := nh.events.sys.userListener.(*testSysEventListener)
+			listener, ok := nh.events.sys.ul.(*testSysEventListener)
 			if !ok {
 				t.Fatalf("failed to get the system event listener")
 			}
-			if len(listener.getNodeUnloaded()) != 1 {
-				t.Errorf("node ready not signalled")
-			} else {
-				ni := listener.getNodeUnloaded()[0]
-				if ni.ClusterID != 1 || ni.NodeID != 1 {
-					t.Fatalf("incorrect node unloaded info")
-				}
+			waitNodeInfoEvent(t, listener.getNodeUnloaded, 1)
+			ni := listener.getNodeUnloaded()[0]
+			if ni.ClusterID != 1 || ni.NodeID != 1 {
+				t.Fatalf("incorrect node unloaded info")
 			}
 		},
 	}
