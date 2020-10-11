@@ -81,9 +81,9 @@ matrix:
       dist: bionic
       before_script:
         - sudo apt-get install librocksdb-dev
-        - git clone https://github.com/lni/dragonboat-example examples
+        - git clone https://github.com/lni/dragonboat-example
       scripts:
-        - cd examples
+        - cd dragonboat-example
         - go get github.com/lni/dragonboat/v3@master
         - make
     - name: "nightly test - monkey test"
