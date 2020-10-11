@@ -80,7 +80,7 @@ matrix:
       os: linux
       dist: focal
       before_script:
-        - sudo apt-get install librocksdb-dev
+        - sudo apt-get install librocksdb-dev libsnappy-dev
         - git clone https://github.com/lni/dragonboat-example
       scripts:
         - cd dragonboat-example
