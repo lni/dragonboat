@@ -78,7 +78,7 @@ matrix:
     - name: "build examples"
       go: 1.15.x
       os: linux
-      dist: bionic
+      dist: focal
       before_script:
         - sudo apt-get install librocksdb-dev
         - git clone https://github.com/lni/dragonboat-example
