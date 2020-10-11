@@ -75,6 +75,17 @@ matrix:
       os: linux
       dist: bionic
       script: make tools
+    - name: "build examples"
+      go: 1.15.x
+      os: linux
+      dist: bionic
+      before_script:
+        - sudo apt-get install librocksdb-dev
+        - git clone https://github.com/lni/dragonboat-example examples
+      scripts:
+        - cd examples
+        - go get github.com/lni/dragonboat/v3@master
+        - make
     - name: "nightly test - monkey test"
       go: 1.15.x
       os: linux
