@@ -1,22 +1,28 @@
 ## v3.3 (TBD)
 
-Dragonboat v3.3 comes with new features and improvements. All v3.2.x users are recommended to upgrade.
+Dragonboat v3.3 is a major release that comes with new features and improvements. All v3.2.x users are recommended to upgrade.
 
 ### New features
 
-- Pebble has been made the default LogDB storage engine. Dragonboat can now be used with CGO disabled.
+- Pebble has been made the default LogDB engine for storing Raft Logs. RocksDB and CGO are no longer required.
 - Added the option to get notified when proposals and config changes are committed.
+- Added ARM64/Linux as the a new targetted platform.
+
+Note that Pebble provides bidirectional compatibility with RocksDB. Existing Dragonboat applications can upgrade to v3.3 without any conversion.
 
 ### Improvements
 
 - Optimized the read index implementation.
 - Made LogDB configurations accessible programmatically.
 - Added protobuf workaround to allow Dragonboat and etcd to be used in the same project.
+- Fixed a few data race issues.
+- Fixed a potential Raft election deadlock issue when nodes are highly loaded.
+- Allow incoming proposals to be rate limitted when LogDB is busy.
 
 ### Breaking changes
 
 - The signature of config.LogDBFactoryFunc has been changed. Your application is not affected unless it uses a custom LogDB implementation.
-- C++ binding is no longer supported.
+- Due to lack of user interests, C++ binding is no longer supported.
 - LevelDB based LogDB is no longer supported.
 
 ## v3.2 (2020-03-05)
