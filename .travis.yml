@@ -42,17 +42,17 @@ matrix:
     - name: "go1.15.x-linux-arm64"
       go: 1.15.x
       os: linux
-      arch: arm64
+      arch: arm64-graviton2
       dist: bionic
-      script: GOPROXY=direct GOSUMDB=off make test
+      script: make test
     - name: "go1.15.x-linux-arm64 (rocksdb)"
       go: 1.15.x
       os: linux
       dist: bionic
-      arch: arm64
+      arch: arm64-graviton2
       before_script:
         - sudo apt-get install librocksdb-dev
-      script: GOPROXY=direct GOSUMDB=off DRAGONBOAT_LOGDB=rocksdb make test
+      script: DRAGONBOAT_LOGDB=rocksdb make test
     - name: "go1.15.x-linux-race"
       go: 1.15.x
       os: linux
