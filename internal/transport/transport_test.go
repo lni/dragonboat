@@ -949,8 +949,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		conns = append(conns, sink)
 	}
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := trans.GetStreamSink(100, 2)
-		if sink != nil {
+		if sink := trans.GetStreamSink(100, 2); sink != nil {
 			t.Errorf("connection is not limited")
 		}
 	}
@@ -973,9 +972,9 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	}
 	plog.Infof("circuit breaker for %s is now ready", serverAddress)
 	for i := uint32(0); i < maxConnectionCount; i++ {
-		sink := trans.GetStreamSink(100, 2)
-		if sink == nil {
-			t.Errorf("failed to get sink again %d", i)
+		breaker.Success()
+		if sink := trans.GetStreamSink(100, 2); sink == nil {
+			t.Fatalf("failed to get sink again %d", i)
 		}
 	}
 }
