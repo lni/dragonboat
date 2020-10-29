@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lni/goutils/stringutil"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lni/dragonboat/v3/raftpb"
@@ -118,6 +120,22 @@ func (c *NOOPSnapshotConnection) SendChunk(chunk raftpb.Chunk) error {
 	}
 	c.sendChunksCount++
 	return nil
+}
+
+// NOOPTransportModule is a NOOP transport module used in testing
+type NOOPTransportModule struct{}
+
+// Create creates a noop transport instance.
+func (n *NOOPTransportModule) Create(nhConfig config.NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return NewNOOPTransport(nhConfig, handler, chunkHandler)
+}
+
+// Validate returns a boolean value indicating whether the input address is
+// valid.
+func (n *NOOPTransportModule) Validate(addr string) bool {
+	return stringutil.IsValidAddress(addr)
 }
 
 // NOOPTransport is a transport module for testing purposes. It does not

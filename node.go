@@ -88,6 +88,7 @@ type node struct {
 	getStreamSink         func(uint64, uint64) *transport.Sink
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
+	validateAddress       func(string) bool
 	sm                    *rsm.StateMachine
 	incomingProposals     *entryQueue
 	incomingReadIndexes   *readIndexQueue
@@ -188,6 +189,11 @@ func newNode(peers map[uint64]string,
 			clusterID:    config.ClusterID,
 			nodeID:       config.NodeID,
 		},
+	}
+	if nhConfig.TransportModule != nil {
+		rn.validateAddress = nhConfig.TransportModule.Validate
+	} else {
+		rn.validateAddress = stringutil.IsValidAddress
 	}
 	ds := createSM(config.ClusterID, config.NodeID, stopC)
 	sm := rsm.NewStateMachine(ds, snapshotter, config, rn, snapshotter.fs)
@@ -450,7 +456,7 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, addr string, orderID uint64,
 	timeoutTick uint64) (*RequestState, error) {
-	if cct != pb.RemoveNode && !stringutil.IsValidAddress(addr) {
+	if cct != pb.RemoveNode && !n.validateAddress(addr) {
 		return nil, ErrInvalidAddress
 	}
 	if n.isWitness() {

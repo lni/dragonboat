@@ -660,7 +660,7 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestTransportTypeCanBeSet(t *testing.T) {
+func TestRaftRPCFactoryIsStillHonored(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
@@ -675,6 +675,70 @@ func TestTransportTypeCanBeSet(t *testing.T) {
 			}
 		},
 		noElection: true,
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestTransportModuleCanBeSet(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
+			nhc.TransportModule = &transport.NOOPTransportModule{}
+			return nhc
+		},
+		tf: func(nh *NodeHost) {
+			tt := nh.transport.(*transport.Transport)
+			if tt.GetTrans().Name() != transport.NOOPRaftName {
+				t.Errorf("transport type name %s, expect %s",
+					tt.GetTrans().Name(), transport.NOOPRaftName)
+			}
+		},
+		noElection: true,
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+type validatorTestModule struct {
+	done bool
+}
+
+func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return transport.NewNOOPTransport(nhConfig, handler, chunkHandler)
+}
+
+func (tm *validatorTestModule) Validate(addr string) bool {
+	if tm.done {
+		return true
+	}
+	tm.done = true
+	return false
+}
+
+func TestAddressValidatorCanBeSet(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
+			nhc.TransportModule = &validatorTestModule{}
+			return nhc
+		},
+		tf: func(nh *NodeHost) {
+			pto := lpto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			err := nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12345", 0)
+			cancel()
+			if err != ErrInvalidAddress {
+				t.Fatalf("failed to return ErrInvalidAddress, %v", err)
+			}
+			ctx, cancel = context.WithTimeout(context.Background(), pto)
+			err = nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12345", 0)
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to add node, %v", err)
+			}
+		},
 	}
 	runNodeHostTest(t, to, fs)
 }

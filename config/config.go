@@ -45,6 +45,16 @@ const (
 	defaultLogDBShards uint64 = 16
 )
 
+// TransportModule is the interface used to specify the transport module to be
+// used by Dragonboat. TransportModule is optional, it is not required to be
+// implemented when using Dragonboat's default built-in TCP based transport
+// module.
+type TransportModule interface {
+	Create(NodeHostConfig,
+		raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
+	Validate(string) bool
+}
+
 // LogDBInfo is the info provided when LogDBCallback is invoked.
 type LogDBInfo struct {
 	Shard uint64
@@ -318,7 +328,13 @@ type NodeHostConfig struct {
 	// RaftRPCFactory is the factory function used for creating the Raft RPC
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based RPC module to be used.
+	//
+	// Depreciated: Use TransportModule instead. NodeHostConig.RaftRPCFactory will
+	// be removed in v4.0.
 	RaftRPCFactory RaftRPCFactoryFunc
+	// TransportModule is an optional field used to specify what transport module
+	// to use. By default, the built-in TCP transport module is used.
+	TransportModule TransportModule
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
 	EnableMetrics bool
@@ -406,7 +422,24 @@ func (c *NodeHostConfig) Validate() error {
 		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxReceiveSize value is too small")
 	}
+	if c.RaftRPCFactory != nil && c.TransportModule != nil {
+		return errors.New("both TransportModule and RaftRPCFactory specified")
+	}
 	return nil
+}
+
+type transportModule struct {
+	factory RaftRPCFactoryFunc
+}
+
+func (tm *transportModule) Create(nhConfig NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return tm.factory(nhConfig, handler, chunkHandler)
+}
+
+func (tm *transportModule) Validate(addr string) bool {
+	return stringutil.IsValidAddress(addr)
 }
 
 // Prepare sets the default value for NodeHostConfig.
@@ -432,6 +465,10 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.LogDB.IsEmpty() {
 		plog.Infof("using default LogDBConfig")
 		c.LogDB = GetDefaultLogDBConfig()
+	}
+	if c.RaftRPCFactory != nil && c.TransportModule == nil {
+		c.TransportModule = &transportModule{factory: c.RaftRPCFactory}
+		c.RaftRPCFactory = nil
 	}
 	if c.Expert.IsEmpty() {
 		plog.Infof("using default ExpertConfig")
@@ -489,7 +526,8 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 	return c.DeploymentID
 }
 
-// IsValidAddress returns whether the input address is valid.
+// IsValidAddress returns a boolean value indicating whether the input address
+// is valid.
 func IsValidAddress(addr string) bool {
 	return stringutil.IsValidAddress(addr)
 }

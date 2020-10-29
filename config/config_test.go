@@ -157,3 +157,20 @@ func TestLogDBConfigMemSize(t *testing.T) {
 		t.Errorf("size %d, want 8192", c4.MemorySizeMB())
 	}
 }
+
+func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
+	m := &transportModule{}
+	c := NodeHostConfig{
+		RaftAddress:    "localhost:9010",
+		RTTMillisecond: 100,
+		NodeHostDir:    "/data",
+		RaftRPCFactory: m.Create,
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("cfg not valid")
+	}
+	c.TransportModule = m
+	if err := c.Validate(); err == nil {
+		t.Fatalf("cfg not considered as invalid")
+	}
+}

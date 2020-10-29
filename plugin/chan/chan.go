@@ -19,6 +19,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -48,6 +49,22 @@ type chanConn struct {
 
 var listening = make(map[string]acceptChanConn)
 var listeningMu sync.Mutex
+
+// ChanTransportModule is a channel based module used for testing purposes.
+type ChanTransportModule struct{}
+
+// Create creates a channel based transport instance.
+func (ctm *ChanTransportModule) Create(nhConfig config.NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return NewChanTransport(nhConfig, handler, chunkHandler)
+}
+
+// Validate returns a boolean value indicating whether the specified address
+// is valid.
+func (ctm *ChanTransportModule) Validate(addr string) bool {
+	return stringutil.IsValidAddress(addr)
+}
 
 // ChanConnection is a channel based connection.
 type ChanConnection struct {

@@ -50,6 +50,7 @@ import (
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/netutil/rubyist/circuitbreaker"
+	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -160,6 +161,22 @@ const (
 	chanIsFull
 )
 
+// DefaultTransportModule is the default transport module used.
+type DefaultTransportModule struct{}
+
+// Create creates a default transport instance.
+func (dtm *DefaultTransportModule) Create(nhConfig config.NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return NewTCPTransport(nhConfig, handler, chunkHandler)
+}
+
+// Validate returns a boolean value indicating whether the specified address is
+// valid.
+func (dtm *DefaultTransportModule) Validate(addr string) bool {
+	return stringutil.IsValidAddress(addr)
+}
+
 // Transport is the transport layer for delivering raft messages and snapshots.
 type Transport struct {
 	mu struct {
@@ -210,7 +227,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	}
 	chunks := NewChunks(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
-	t.trans = createTransport(nhConfig, t.handleRequest, chunks)
+	t.trans = create(nhConfig, t.handleRequest, chunks)
 	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
@@ -536,16 +553,16 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 	return nil
 }
 
-func createTransport(nhConfig config.NodeHostConfig,
+func create(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
 	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
-	var factory config.RaftRPCFactoryFunc
-	if nhConfig.RaftRPCFactory != nil {
-		factory = nhConfig.RaftRPCFactory
+	var tm config.TransportModule
+	if nhConfig.TransportModule != nil {
+		tm = nhConfig.TransportModule
 	} else if memfsTest {
-		factory = ct.NewChanTransport
+		tm = &ct.ChanTransportModule{}
 	} else {
-		factory = NewTCPTransport
+		tm = &DefaultTransportModule{}
 	}
-	return factory(nhConfig, requestHandler, chunkHandler)
+	return tm.Create(nhConfig, requestHandler, chunkHandler)
 }
