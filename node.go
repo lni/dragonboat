@@ -371,14 +371,14 @@ func (n *node) OnDiskStateMachine() bool {
 }
 
 func (n *node) proposeSession(session *client.Session,
-	timeoutTick uint64) (*RequestState, error) {
+	timeout uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
 	if !session.ValidForSessionOp(n.clusterID) {
 		return nil, ErrInvalidSession
 	}
-	return n.pendingProposals.propose(session, nil, timeoutTick)
+	return n.pendingProposals.propose(session, nil, timeout)
 }
 
 func (n *node) payloadTooBig(sz int) bool {
@@ -389,7 +389,7 @@ func (n *node) payloadTooBig(sz int) bool {
 }
 
 func (n *node) propose(session *client.Session,
-	cmd []byte, timeoutTick uint64) (*RequestState, error) {
+	cmd []byte, timeout uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -399,14 +399,14 @@ func (n *node) propose(session *client.Session,
 	if n.payloadTooBig(len(cmd)) {
 		return nil, ErrPayloadTooBig
 	}
-	return n.pendingProposals.propose(session, cmd, timeoutTick)
+	return n.pendingProposals.propose(session, cmd, timeout)
 }
 
-func (n *node) read(timeoutTick uint64) (*RequestState, error) {
+func (n *node) read(timeout uint64) (*RequestState, error) {
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	rs, err := n.pendingReadIndexes.read(timeoutTick)
+	rs, err := n.pendingReadIndexes.read(timeout)
 	if err == nil {
 		rs.node = n
 	}
@@ -421,7 +421,7 @@ func (n *node) requestLeaderTransfer(nodeID uint64) error {
 }
 
 func (n *node) requestSnapshot(opt SnapshotOption,
-	timeoutTick uint64) (*RequestState, error) {
+	timeout uint64) (*RequestState, error) {
 	st := rsm.UserRequested
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -446,7 +446,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 		opt.ExportPath,
 		opt.OverrideCompactionOverhead,
 		opt.CompactionOverhead,
-		timeoutTick)
+		timeout)
 }
 
 func (n *node) reportIgnoredSnapshotRequest(key uint64) {
@@ -454,9 +454,9 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 }
 
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
-	nodeID uint64, addr string, orderID uint64,
-	timeoutTick uint64) (*RequestState, error) {
-	if cct != pb.RemoveNode && !n.validateAddress(addr) {
+	nodeID uint64, target string, orderID uint64,
+	timeout uint64) (*RequestState, error) {
+	if cct != pb.RemoveNode && !n.validateAddress(target) {
 		return nil, ErrInvalidAddress
 	}
 	if n.isWitness() {
@@ -466,29 +466,29 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 		Type:           cct,
 		NodeID:         nodeID,
 		ConfigChangeId: orderID,
-		Address:        addr,
+		Address:        target,
 	}
-	return n.pendingConfigChange.request(cc, timeoutTick)
+	return n.pendingConfigChange.request(cc, timeout)
 }
 
 func (n *node) requestDeleteNodeWithOrderID(nodeID uint64,
-	order uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.RemoveNode, nodeID, "", order, timeoutTick)
+	order uint64, timeout uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.RemoveNode, nodeID, "", order, timeout)
 }
 
 func (n *node) requestAddNodeWithOrderID(nodeID uint64,
-	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddNode, nodeID, addr, order, timeoutTick)
+	target string, order uint64, timeout uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddNode, nodeID, target, order, timeout)
 }
 
 func (n *node) requestAddObserverWithOrderID(nodeID uint64,
-	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddObserver, nodeID, addr, order, timeoutTick)
+	target string, order uint64, timeout uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddObserver, nodeID, target, order, timeout)
 }
 
 func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
-	addr string, order uint64, timeoutTick uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddWitness, nodeID, addr, order, timeoutTick)
+	target string, order uint64, timeout uint64) (*RequestState, error) {
+	return n.requestConfigChange(pb.AddWitness, nodeID, target, order, timeout)
 }
 
 func (n *node) getLeaderID() (uint64, bool) {

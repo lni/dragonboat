@@ -1013,13 +1013,13 @@ func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 // The input ctx must have its deadline set.
 func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 	clusterID uint64, nodeID uint64,
-	address string, configChangeIndex uint64) error {
+	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	rs, err := nh.RequestAddNode(clusterID,
-		nodeID, address, configChangeIndex, timeout)
+		nodeID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1033,13 +1033,13 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 // The input ctx must have its deadline set.
 func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 	clusterID uint64, nodeID uint64,
-	address string, configChangeIndex uint64) error {
+	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	rs, err := nh.RequestAddObserver(clusterID,
-		nodeID, address, configChangeIndex, timeout)
+		nodeID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1053,13 +1053,13 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 // The input ctx must have its deadline set.
 func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 	clusterID uint64, nodeID uint64,
-	address string, configChangeIndex uint64) error {
+	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	rs, err := nh.RequestAddWitness(clusterID,
-		nodeID, address, configChangeIndex, timeout)
+		nodeID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1109,24 +1109,26 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // instance to get notified for the outcome.
 //
 // If there is already an observer with the same nodeID in the cluster, it will
-// be promoted to a regular node with voting power. The address parameter of the
+// be promoted to a regular node with voting power. The target parameter of the
 // RequestAddNode call is ignored when promoting an observer to a regular node.
 //
 // After the node is successfully added to the Raft cluster, it is application's
-// responsibility to call StartCluster on the right NodeHost instance to actually
-// start the Raft cluster node.
+// responsibility to call StartCluster on the target NodeHost instance to
+// actually start the Raft cluster node.
 //
 // Requesting a removed node back to the Raft cluster will always be rejected.
 //
-// The input address parameter is the RaftAddress of the NodeHost where the new
-// Raft node being added will be running. When the raft cluster is created with
-// the OrderedConfigChange config flag set as false, the configChangeIndex
-// parameter is ignored. Otherwise, it should be set to the most recent Config
-// Change Index value returned by the SyncGetClusterMembership method. The
-// requested add node operation will be rejected if other membership change has
-// been applied since that earlier call to the SyncGetClusterMembership method.
+// The input target parameter is usually the RaftAddress of the NodeHost where
+// the new Raft node being added will be running.
+//
+// When the Raft cluster is created with the OrderedConfigChange config flag
+// set as false, the configChangeIndex parameter is ignored. Otherwise, it
+// should be set to the most recent Config Change Index value returned by the
+// SyncGetClusterMembership method. The requested add node operation will be
+// rejected if other membership change has been applied since that earlier call
+// to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
-	nodeID uint64, address string, configChangeIndex uint64,
+	nodeID uint64, target string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1137,7 +1139,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 	}
 	defer nh.engine.setStepReady(clusterID)
 	return n.requestAddNodeWithOrderID(nodeID,
-		address, configChangeIndex, nh.getTimeoutTick(timeout))
+		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
 // RequestAddObserver is a Raft cluster membership change method for requesting
@@ -1155,16 +1157,17 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// The input address parameter is the RaftAddress of the NodeHost where the new
-// observer being added will be running. When the raft cluster is created with
-// the OrderedConfigChange config flag set as false, the configChangeIndex
-// parameter is ignored. Otherwise, it should be set to the most recent Config
-// Change Index value returned by the SyncGetClusterMembership method. The
-// requested add observer operation will be rejected if other membership change
-// has been applied since that earlier call to the SyncGetClusterMembership
-// method.
+// The input target parameter is usually the RaftAddress of the NodeHost where
+// the new observer being added will be running.
+//
+// When the Raft cluster is created with the OrderedConfigChange config flag
+// set as false, the configChangeIndex parameter is ignored. Otherwise, it
+// should be set to the most recent Config Change Index value returned by the
+// SyncGetClusterMembership method. The requested add observer operation will be
+// rejected if other membership change has been applied since that earlier call
+// to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
-	nodeID uint64, address string, configChangeIndex uint64,
+	nodeID uint64, target string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1175,7 +1178,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	}
 	defer nh.engine.setStepReady(clusterID)
 	return n.requestAddObserverWithOrderID(nodeID,
-		address, configChangeIndex, nh.getTimeoutTick(timeout))
+		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
 // RequestAddWitness is a Raft cluster membership change method for requesting
@@ -1191,16 +1194,17 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// The input address parameter is the RaftAddress of the NodeHost where the new
-// witness being added will be running. When the raft cluster is created with
-// the OrderedConfigChange config flag set as false, the configChangeIndex
-// parameter is ignored. Otherwise, it should be set to the most recent Config
-// Change Index value returned by the SyncGetClusterMembership method. The
-// requested add witness operation will be rejected if other membership change
-// has been applied since that earlier call to the SyncGetClusterMembership
-// method.
+// The input target parameter is usually the RaftAddress of the NodeHost where
+// the new witness being added will be running.
+//
+// When the Raft cluster is created with the OrderedConfigChange config flag
+// set as false, the configChangeIndex parameter is ignored. Otherwise, it
+// should be set to the most recent Config Change Index value returned by the
+// SyncGetClusterMembership method. The requested add witness operation will be
+// rejected if other membership change has been applied since that earlier call
+// to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
-	nodeID uint64, address string, configChangeIndex uint64,
+	nodeID uint64, target string, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1211,7 +1215,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	}
 	defer nh.engine.setStepReady(clusterID)
 	return n.requestAddWitnessWithOrderID(nodeID,
-		address, configChangeIndex, nh.getTimeoutTick(timeout))
+		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
 // RequestLeaderTransfer makes a request to transfer the leadership of the
