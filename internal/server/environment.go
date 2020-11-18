@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	uuidlib "github.com/google/uuid"
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -67,11 +68,31 @@ var (
 const (
 	flagFilename = "dragonboat.ds"
 	lockFilename = "LOCK"
+	idFilename   = "ID"
 )
+
+type uuid struct {
+	uuid uuidlib.UUID
+}
+
+func newUUID() *uuid {
+	return &uuid{
+		uuid: uuidlib.New(),
+	}
+}
+
+func (n *uuid) Marshal() ([]byte, error) {
+	return n.uuid.MarshalBinary()
+}
+
+func (n *uuid) Unmarshal(data []byte) error {
+	return n.uuid.UnmarshalBinary(data)
+}
 
 // Env is the server environment for NodeHost.
 type Env struct {
 	hostname     string
+	uuid         string
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
@@ -192,6 +213,30 @@ func (env *Env) CreateSnapshotDir(did uint64,
 	return nil
 }
 
+// UUID returns the string representation of the NodeHost UUID.
+func (env *Env) UUID() string {
+	return env.uuid
+}
+
+// LoadUUID loads the NodeHost UUID value from the id file.
+func (env *Env) LoadUUID() (string, error) {
+	dir, _ := env.getDataDirs()
+	nhUUID := newUUID()
+	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
+		if err := fileutil.GetFlagFileContent(dir,
+			idFilename, nhUUID, env.fs); err != nil {
+			return "", err
+		}
+	} else {
+		if err := fileutil.CreateFlagFile(dir,
+			idFilename, nhUUID, env.fs); err != nil {
+			return "", err
+		}
+	}
+	env.uuid = nhUUID.uuid.String()
+	return env.uuid, nil
+}
+
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
 func (env *Env) CheckNodeHostDir(config config.NodeHostConfig,
@@ -281,8 +326,7 @@ func (env *Env) checkNodeHostDir(config config.NodeHostConfig,
 
 func (env *Env) tryLockNodeHostDir(dir string) error {
 	fp := env.fs.PathJoin(dir, lockFilename)
-	_, ok := env.flocks[fp]
-	if !ok {
+	if _, ok := env.flocks[fp]; !ok {
 		c, err := env.fs.Lock(fp)
 		if err != nil {
 			return ErrLockDirectory

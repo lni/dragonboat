@@ -418,8 +418,8 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
-	nodes1 := transport.NewNodes(settings.Soft.StreamConnections)
-	nodes2 := transport.NewNodes(settings.Soft.StreamConnections)
+	nodes1 := transport.NewNodes(settings.Soft.StreamConnections, nil)
+	nodes2 := transport.NewNodes(settings.Soft.StreamConnections, nil)
 	nodes1.AddRemote(1, 2, addr2)
 	t1, err := transport.NewTransport(nhc1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
 	if err != nil {

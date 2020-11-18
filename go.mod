@@ -5,6 +5,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20200930160449-ed4318c4a113
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.2-0.20190904063534-ff6b7dc882cf
+	github.com/google/uuid v1.1.2
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
 	github.com/lni/goutils v1.2.3-0.20201010045919-3885c6f6643f
 )

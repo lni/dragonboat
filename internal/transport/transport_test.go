@@ -322,7 +322,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 func newNOOPTestTransport(fs vfs.IFS) (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
 	t := newTestSnapshotDir(fs)
-	nodes := NewNodes(settings.Soft.StreamConnections)
+	nodes := NewNodes(settings.Soft.StreamConnections, nil)
 	c := config.NodeHostConfig{
 		MaxSendQueueSize: 256 * 1024 * 1024,
 		RaftAddress:      "localhost:9876",
@@ -346,7 +346,7 @@ func newNOOPTestTransport(fs vfs.IFS) (*Transport,
 func newTestTransport(mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
 	*syncutil.Stopper, *testSnapshotDir) {
 	stopper := syncutil.NewStopper()
-	nodes := NewNodes(settings.Soft.StreamConnections)
+	nodes := NewNodes(settings.Soft.StreamConnections, nil)
 	t := newTestSnapshotDir(fs)
 	c := config.NodeHostConfig{
 		RaftAddress: serverAddress,

@@ -288,6 +288,9 @@ type NodeHostConfig struct {
 	// identifier for a NodeHost instance. RaftAddress should be set to the
 	// public address that can be accessed from remote NodeHost instances.
 	RaftAddress string
+	// DynamicRaftAddress indicates that the RaftAddress of the NodeHost is
+	// possible to change after restart.
+	DynamicRaftAddress bool
 	// ListenAddress is a hostname:port or IP:port address used by the Raft RPC
 	// module to listen on for Raft message and snapshots. When the ListenAddress
 	// field is not set, The Raft RPC module listens on RaftAddress. If 0.0.0.0
@@ -424,6 +427,9 @@ func (c *NodeHostConfig) Validate() error {
 	}
 	if c.RaftRPCFactory != nil && c.TransportModule != nil {
 		return errors.New("both TransportModule and RaftRPCFactory specified")
+	}
+	if c.DynamicRaftAddress && c.TransportModule == nil {
+		return errors.New("NodeHostConfig.TransportModule not set")
 	}
 	return nil
 }

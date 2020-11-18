@@ -43,10 +43,13 @@ type record struct {
 	key     string
 }
 
+type validator func(string) bool
+
 // Nodes is used to manage all known node addresses in the multi raft system.
 // The transport layer uses this address registry to locate nodes.
 type Nodes struct {
 	partitioner server.IPartitioner
+	validator   validator
 	mu          struct {
 		sync.Mutex
 		addr map[raftio.NodeInfo]record
@@ -58,8 +61,8 @@ type Nodes struct {
 }
 
 // NewNodes returns a new Nodes object.
-func NewNodes(streamConnections uint64) *Nodes {
-	n := &Nodes{}
+func NewNodes(streamConnections uint64, v validator) *Nodes {
+	n := &Nodes{validator: v}
 	if streamConnections > 1 {
 		n.partitioner = server.NewFixedPartitioner(streamConnections)
 	}
@@ -111,8 +114,8 @@ func (n *Nodes) getFromRemote(clusterID uint64, nodeID uint64) (string, error) {
 func (n *Nodes) Add(clusterID uint64, nodeID uint64, addr string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if !stringutil.IsValidAddress(addr) {
-		plog.Panicf("invalid address %s", addr)
+	if n.validator != nil && !n.validator(addr) {
+		plog.Panicf("invalid addr %s", addr)
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	if _, ok := n.mu.addr[key]; !ok {

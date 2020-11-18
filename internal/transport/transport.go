@@ -190,7 +190,7 @@ type Transport struct {
 	metrics           *transportMetrics
 	env               *server.Env
 	nhConfig          config.NodeHostConfig
-	sourceAddress     string
+	sourceID          string
 	resolver          INodeAddressResolver
 	stopper           *syncutil.Stopper
 	dir               server.SnapshotDirFunc
@@ -213,11 +213,16 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	env *server.Env, resolver INodeAddressResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
-	address := nhConfig.RaftAddress
+	var sourceID string
+	if nhConfig.DynamicRaftAddress {
+		sourceID = env.UUID()
+	} else {
+		sourceID = nhConfig.RaftAddress
+	}
 	t := &Transport{
 		nhConfig:          nhConfig,
 		env:               env,
-		sourceAddress:     address,
+		sourceID:          sourceID,
 		resolver:          resolver,
 		stopper:           syncutil.NewStopper(),
 		dir:               dir,
@@ -385,7 +390,7 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
-			t.sourceAddress, dn(clusterID, toNodeID))
+			t.sourceID, dn(clusterID, toNodeID))
 		return false, unknownTarget
 	}
 	// fail fast
@@ -437,11 +442,11 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
 	if err := func() error {
-		plog.Debugf("%s is trying to connect to %s", t.sourceAddress, remoteHost)
+		plog.Debugf("%s is trying to connect to %s", t.sourceID, remoteHost)
 		conn, err := t.trans.GetConnection(t.ctx, remoteHost)
 		if err != nil {
 			plog.Errorf("Nodehost %s failed to get a connection to %s, %v",
-				t.sourceAddress, remoteHost, err)
+				t.sourceID, remoteHost, err)
 			return err
 		}
 		defer conn.Close()
@@ -454,7 +459,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 		return t.processMessages(clusterID, toNodeID, sq, conn)
 	}(); err != nil {
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
-			t.sourceAddress, remoteHost, err.Error())
+			t.sourceID, remoteHost, err.Error())
 		breaker.Fail()
 		t.metrics.messageConnectionFailure()
 		t.sysEvents.ConnectionFailed(remoteHost, false)
@@ -469,7 +474,7 @@ func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
 	defer idleTimer.Stop()
 	sz := uint64(0)
 	batch := pb.MessageBatch{
-		SourceAddress: t.sourceAddress,
+		SourceAddress: t.sourceID,
 		BinVer:        raftio.RPCBinVersion,
 	}
 	did := t.nhConfig.GetDeploymentID()

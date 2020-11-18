@@ -49,6 +49,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	chantrans "github.com/lni/dragonboat/v3/plugin/chan"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -56,7 +57,11 @@ import (
 	"github.com/lni/dragonboat/v3/tools/upgrade310"
 )
 
-const defaultTestPort = 26001
+const (
+	defaultTestPort = 26001
+	testUUID1       = "test-uuid-1"
+	testUUID2       = "test-uuid-2"
+)
 
 func getTestPort() int {
 	pv := os.Getenv("DRAGONBOAT_TEST_PORT")
@@ -699,7 +704,6 @@ func TestTransportModuleCanBeSet(t *testing.T) {
 }
 
 type validatorTestModule struct {
-	done bool
 }
 
 func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
@@ -709,11 +713,7 @@ func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
 }
 
 func (tm *validatorTestModule) Validate(addr string) bool {
-	if tm.done {
-		return true
-	}
-	tm.done = true
-	return false
+	return addr == "localhost:12346" || addr == "localhost:26001"
 }
 
 func TestAddressValidatorCanBeSet(t *testing.T) {
@@ -733,7 +733,7 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 				t.Fatalf("failed to return ErrInvalidAddress, %v", err)
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), pto)
-			err = nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12345", 0)
+			err = nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12346", 0)
 			cancel()
 			if err != nil {
 				t.Fatalf("failed to add node, %v", err)
@@ -741,6 +741,129 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 		},
 	}
 	runNodeHostTest(t, to, fs)
+}
+
+type uuidChanTransport struct {
+	t raftio.IRaftRPC
+}
+
+func (u *uuidChanTransport) Name() string {
+	return u.t.Name()
+}
+
+func (u *uuidChanTransport) Start() error {
+	return u.t.Start()
+}
+
+func (u *uuidChanTransport) Stop() {
+	u.t.Stop()
+}
+
+func (u *uuidChanTransport) getAddr(uuid string) (string, error) {
+	if uuid == testUUID1 {
+		return nodeHostTestAddr1, nil
+	} else if uuid == testUUID2 {
+		return nodeHostTestAddr2, nil
+	}
+	return "", errors.New("unknown uuid")
+}
+
+func (u *uuidChanTransport) GetConnection(ctx context.Context,
+	target string) (raftio.IConnection, error) {
+	addr, err := u.getAddr(target)
+	if err != nil {
+		return nil, err
+	}
+	return u.t.GetConnection(ctx, addr)
+}
+
+func (u *uuidChanTransport) GetSnapshotConnection(ctx context.Context,
+	target string) (raftio.ISnapshotConnection, error) {
+	addr, err := u.getAddr(target)
+	if err != nil {
+		return nil, err
+	}
+	return u.t.GetSnapshotConnection(ctx, addr)
+}
+
+type uuidTestTransportModule struct{}
+
+func (tm *uuidTestTransportModule) Create(nhConfig config.NodeHostConfig,
+	handler raftio.RequestHandler,
+	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	return &uuidChanTransport{
+		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
+	}
+}
+
+func (tm *uuidTestTransportModule) Validate(addr string) bool {
+	return addr == testUUID1 || addr == testUUID2
+}
+
+func TestTransportModuleCanUseUUID(t *testing.T) {
+	fs := vfs.GetTestFS()
+	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	addr1 := nodeHostTestAddr1
+	addr2 := nodeHostTestAddr2
+	nhc1 := config.NodeHostConfig{
+		NodeHostDir:     datadir1,
+		RTTMillisecond:  getRTTMillisecond(fs, datadir1),
+		RaftAddress:     addr1,
+		FS:              fs,
+		TransportModule: &uuidTestTransportModule{},
+	}
+	nhc2 := config.NodeHostConfig{
+		NodeHostDir:     datadir2,
+		RTTMillisecond:  getRTTMillisecond(fs, datadir2),
+		RaftAddress:     addr2,
+		FS:              fs,
+		TransportModule: &uuidTestTransportModule{},
+	}
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create nh, %v", err)
+	}
+	defer nh1.Stop()
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create nh2, %v", err)
+	}
+	defer nh2.Stop()
+	peers := make(map[uint64]string)
+	peers[1] = testUUID1
+	peers[2] = testUUID2
+	createSM := func(uint64, uint64) sm.IStateMachine {
+		return &PST{}
+	}
+	rc := config.Config{
+		ClusterID:       1,
+		NodeID:          1,
+		ElectionRTT:     10,
+		HeartbeatRTT:    1,
+		SnapshotEntries: 0,
+	}
+	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.NodeID = 2
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	waitForLeaderToBeElected(t, nh2, 1)
+	pto := lpto(nh1)
+	session := nh1.GetNoOPSession(1)
+	for i := 0; i < 10; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), pto)
+		if _, err := nh1.SyncPropose(ctx, session, make([]byte, 0)); err == nil {
+			cancel()
+			return
+		}
+		t.Logf("got %v", err)
+		cancel()
+	}
+	t.Fatalf("failed to make proposal")
 }
 
 func TestNewNodeHostReturnErrorOnInvalidConfig(t *testing.T) {
@@ -1264,6 +1387,39 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 			}
 		},
 		restartNodeHost: true,
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestUUIDIsStatic(t *testing.T) {
+	fs := vfs.GetTestFS()
+	var uuid string
+	to := &testOption{
+		restartNodeHost: true,
+		noElection:      true,
+		tf: func(nh *NodeHost) {
+			uuid = nh.UUID()
+		},
+		rf: func(nh *NodeHost) {
+			if nh.UUID() != uuid {
+				t.Fatalf("UUID value changed")
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestUUIDCanBeSet(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		noElection: true,
+		tf: func(nh *NodeHost) {
+			uuid := "test-uuid-value"
+			nh.test.uuid = uuid
+			if nh.UUID() != uuid {
+				t.Fatalf("failed to set uuid")
+			}
+		},
 	}
 	runNodeHostTest(t, to, fs)
 }

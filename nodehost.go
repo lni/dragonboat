@@ -259,6 +259,9 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
+	test struct {
+		uuid string
+	}
 	streams      *streamState
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
@@ -291,11 +294,15 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err != nil {
 		return nil, err
 	}
+	var validator func(string) bool
+	if nhConfig.TransportModule != nil {
+		validator = nhConfig.TransportModule.Validate
+	}
 	nh := &NodeHost{
 		env:      env,
 		nhConfig: nhConfig,
 		stopper:  syncutil.NewStopper(),
-		nodes:    transport.NewNodes(streamConnections),
+		nodes:    transport.NewNodes(streamConnections, validator),
 		fs:       nhConfig.FS,
 	}
 	// make static check happy
@@ -353,12 +360,34 @@ func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
 	return nh.nhConfig
 }
 
-// RaftAddress returns the Raft address of the NodeHost instance. The
-// returned RaftAddress value is used to identify this NodeHost instance. It is
-// also the address used for exchanging Raft messages and snapshots between
-// distributed NodeHost instances.
+// RaftAddress returns the Raft address of the NodeHost instance, it is the
+// network address by which the NodeHost can be reached by other NodeHost
+// instances for exchanging Raft messages and snapshots. By default, the
+// RaftAddress value of a NodeHost is not expected to change after restarts and
+// thus used to identify a NodeHost instance in Dragonboat's default settings.
 func (nh *NodeHost) RaftAddress() string {
 	return nh.nhConfig.RaftAddress
+}
+
+// UUID returns the string representation of the NodeHost's UUID value. The
+// UUID value of a NodeHost will not change between restarts and thus can be
+// used to identify a NodeHost instance when the RaftAddress value of a
+// NodeHost change between restrats.
+func (nh *NodeHost) UUID() string {
+	if len(nh.test.uuid) > 0 {
+		return nh.test.uuid
+	}
+	return nh.env.UUID()
+}
+
+// ID returns a string representation of the NodeHost ID. By default, it
+// returns the RaftAddress value of the NodeHost, or it returns the UUID of the
+// NodeHost when NodeHostConfig.DynamicRaftAddress is set.
+func (nh *NodeHost) ID() string {
+	if nh.nhConfig.DynamicRaftAddress {
+		return nh.UUID()
+	}
+	return nh.RaftAddress()
 }
 
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
@@ -411,8 +440,10 @@ func (nh *NodeHost) Stop() {
 // started is backed by a regular state machine that implements the
 // sm.IStateMachine interface.
 //
-// The input parameter initialMembers is a map of node ID to RaftAddress for all
-// Raft cluster's initial member nodes. For the same Raft cluster, the same
+// The input parameter initialMembers is a map of node ID to NodeHost ID for all
+// Raft cluster's initial member nodes. By default, NodeHost ID is the
+// RaftAddress of the NodeHost. See the godoc of NodeHost's ID method for the
+// full definition of NodeHostID. For the same Raft cluster, the same
 // initialMembers map should be specified when starting its initial member nodes
 // on distributed NodeHost instances.
 //
@@ -1578,6 +1609,15 @@ func (nh *NodeHost) createLogDB() error {
 	}
 	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
+	}
+	if len(nh.test.uuid) == 0 {
+		uuid, err := nh.env.LoadUUID()
+		if err != nil {
+			return err
+		}
+		plog.Infof("NodeHost UUID: %s", uuid)
+	} else {
+		plog.Infof("Test NodeHost UUID: %s", nh.test.uuid)
 	}
 	var factory config.LogDBFactoryFunc
 	df := func(config config.NodeHostConfig, cb config.LogDBCallback,
