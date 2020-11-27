@@ -30,6 +30,8 @@ github.com/cockroachdb/pebble v0.0.0-20200924231120-0602c847ff9d h1:yb+I1Emx/vgC
 github.com/cockroachdb/pebble v0.0.0-20200924231120-0602c847ff9d/go.mod h1:hU7vhtrqonEphNF+xt8/lHdaBprxmV1h8BOGrd9XwmQ=
 github.com/cockroachdb/pebble v0.0.0-20200930160449-ed4318c4a113 h1:RJuDQqmTx0jyoO9KF0N2MBhfKxfN/OB5O9AwNdxQXPg=
 github.com/cockroachdb/pebble v0.0.0-20200930160449-ed4318c4a113/go.mod h1:hU7vhtrqonEphNF+xt8/lHdaBprxmV1h8BOGrd9XwmQ=
+github.com/cockroachdb/pebble v0.0.0-20201113230643-8f63fcd266a5 h1:VIYiLaijH0TY/WLGCo2er3SSxPDxlbvLFzndh/I7O6M=
+github.com/cockroachdb/pebble v0.0.0-20201113230643-8f63fcd266a5/go.mod h1:hU7vhtrqonEphNF+xt8/lHdaBprxmV1h8BOGrd9XwmQ=
 github.com/cockroachdb/redact v0.0.0-20200622112456-cd282804bbd3 h1:2+dpIJzYMSbLi0587YXpi8tOJT52qCOI/1I0UNThc/I=
 github.com/cockroachdb/redact v0.0.0-20200622112456-cd282804bbd3/go.mod h1:BVNblN9mBWFyMyqK1k3AAiSxhvhfK2oOZZ2lK+dpvRg=
 github.com/cockroachdb/redact v1.0.6 h1:W34uRRyNR4dlZFd0MibhNELsZSgMkl52uRV/tA1xToY=
