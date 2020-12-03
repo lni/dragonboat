@@ -163,16 +163,16 @@ TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
 	test-utils
-.PHONY: travis-ci-test
-travis-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
+.PHONY: ci-test
+ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		       \
   test-config test-client test-server test-tests test-tools test-fs 				 \
 	test-utils
 .PHONY: test
 test: dragonboat-test test-tests
 .PHONY: dev-test
 dev-test: test test-plugins
-.PHONY: travis-test
-travis-test: travis-ci-test test-cov
+.PHONY: actions-test
+actions-test: ci-test test-cov
 
 ###############################################################################
 # build unit tests
