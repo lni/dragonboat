@@ -1,0 +1,113 @@
+on: [push, pull_request]
+name: Test
+jobs:
+  unit-test:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: make test
+  race-unit-test:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: RACE=1 make test
+  rocksdb-unit-test:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: |
+       sudo apt-get install librocksdb-dev
+       DRAGONBOAT_LOGDB=rocksdb make test
+  go1-14-unit-test:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.14.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: make test
+  macos-unit-test:
+    runs-on: macos-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Test
+      run: make test
+  windows-unit-test:
+    runs-on: windows-latest
+    steps:
+     - name: Install Go
+       uses: actions/setup-go@v2
+       with:
+         go-version: 1.15.x
+     - name: Checkout code
+       uses: actions/checkout@v2
+     - name: Test
+       run: go test -v
+  build-tools:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Build
+      run: make tools
+  build-examples:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.x
+    - name: Build
+      run: |
+       sudo apt-get install librocksdb-dev libsnappy-dev
+       git clone https://github.com/lni/dragonboat-example
+       cd dragonboat-example
+       go get github.com/lni/dragonboat/v3@master
+       make
+  static-check:
+    runs-on: ubuntu-18.04
+    steps: 
+     - name: Install Go
+       uses: actions/setup-go@v2
+       with:
+         go-version: 1.15.x
+     - name: Install golangci-lint
+       run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.23.8
+        go get -u golang.org/x/lint/golint
+        go get -u github.com/gordonklaus/ineffassign
+        sudo apt-get install librocksdb-dev
+     - name: Checkout code
+       uses: actions/checkout@v2
+     - name: Static check
+       run: make static-check
