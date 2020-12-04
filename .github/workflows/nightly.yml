@@ -1,6 +1,6 @@
 on:
   schedule:
-  - cron: '*/30 * * * *'
+  - cron: '30 19 * * *'
 name: Nightly
 jobs:
   monkey-test:
