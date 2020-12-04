@@ -1,6 +1,6 @@
 on:
   schedule:
-  - cron: '*/10 * * * *'
+  - cron: '*/30 * * * *'
 name: Nightly
 jobs:
   monkey-test:
@@ -19,7 +19,7 @@ jobs:
         git clone https://github.com/lni/drummer2 drummer
         cd drummer
         go get github.com/lni/dragonboat/v3@master
-        make monkey-test
+        make race-monkey-test
   ondisk-monkey-test:
     runs-on: ubuntu-18.04
     steps:
@@ -36,4 +36,4 @@ jobs:
         git clone https://github.com/lni/drummer2 drummer
         cd drummer
         go get github.com/lni/dragonboat/v3@master
-        make ondisk-monkey-test
+        make race-ondisk-monkey-test
