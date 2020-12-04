@@ -1,6 +1,8 @@
 on:
+  push:
+  pull_request:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '30 * * * *'
 name: Nightly
 jobs:
   test:
