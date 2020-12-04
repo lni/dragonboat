@@ -956,11 +956,16 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // When the Exported field of the input SnapshotOption instance is set to false,
 // snapshots created as the result of RequestSnapshot are managed by Dragonboat.
 // Users are not suppose to move, copy, modify or delete the generated snapshot.
-// Such requested snapshot will also trigger Raft log and snapshot compactions.
-// Similar to automatic snapshots, when a snapshot is requested on a node backed
-// by an IOnDiskStateMachine, only the metadata portion of the state machine
-// will be captured and saved. Requesting snapshots on IOnDiskStateMachine based
-// nodes are typically used to trigger Raft log and snapshot compactions.
+// Such requested snapshot will also trigger Raft log and snapshot compactions
+// similar to automatic snapshotting. Users need to subsequently call
+// RequestCompaction(), which can be far more I/O intensive, at suitable time to
+// actually reclaim disk spaces used by Raft log entries and snapshot metadata
+// records.
+//
+// When a snapshot is requested on a node backed by an IOnDiskStateMachine, only
+// the metadata portion of the state machine will be captured and saved.
+// Requesting snapshots on IOnDiskStateMachine based nodes are typically used to
+// trigger Raft log and snapshot compactions.
 //
 // RequestSnapshot returns a RequestState instance or an error immediately.
 // Applications can wait on the ResultC() channel of the returned RequestState
