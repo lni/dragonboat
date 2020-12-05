@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        target: [race-monkey-test, race-ondisk-monkey-test]
+        target: [race-monkey-test, race-ondisk-monkey-test, memfs-monkey-test, memfs-ondisk-monkey-test]
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
