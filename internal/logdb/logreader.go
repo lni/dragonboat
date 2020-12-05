@@ -48,6 +48,8 @@ const (
 	maxEntrySliceSize uint64 = 4 * 1024 * 1024
 )
 
+var dn = logutil.DescribeNode
+
 // LogReader is the struct used to manage logs that have already been persisted
 // into LogDB. This implementation is influenced by CockroachDB's
 // replicaRaftStorage.
@@ -79,8 +81,7 @@ func NewLogReader(clusterID uint64,
 
 func (lr *LogReader) id() string {
 	return fmt.Sprintf("logreader %s index %d term %d length %d",
-		logutil.DescribeNode(lr.clusterID, lr.nodeID),
-		lr.markerIndex, lr.markerTerm, lr.length)
+		dn(lr.clusterID, lr.nodeID), lr.markerIndex, lr.markerTerm, lr.length)
 }
 
 // NodeState returns the initial state.

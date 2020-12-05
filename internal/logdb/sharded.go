@@ -335,6 +335,8 @@ func (s *ShardedDB) compact() {
 			}
 			atomic.AddUint64(&s.completedCompactions, 1)
 			close(t.done)
+			plog.Infof("%s completed LogDB compaction up to index %d",
+				dn(t.clusterID, t.nodeID), t.index)
 			select {
 			case <-s.stopper.ShouldStop():
 				return
