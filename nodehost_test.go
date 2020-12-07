@@ -131,7 +131,7 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 // typical proposal timeout
 func pto(nh *NodeHost) time.Duration {
 	rtt := nh.NodeHostConfig().RTTMillisecond
-	return time.Duration(rtt*15) * time.Millisecond
+	return time.Duration(rtt*45) * time.Millisecond
 }
 
 func lpto(nh *NodeHost) time.Duration {
@@ -4402,97 +4402,67 @@ func (rel *testRaftEventListener) get() []raftio.LeaderInfo {
 
 func TestRaftEventsAreReported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	defer leaktest.AfterTest(t)()
-	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-		t.Fatalf("%v", err)
-	}
 	rel := &testRaftEventListener{
 		received: make([]raftio.LeaderInfo, 0),
 	}
-	rc := config.Config{
-		NodeID:       1,
-		ClusterID:    1,
-		ElectionRTT:  3,
-		HeartbeatRTT: 1,
-		CheckQuorum:  true,
+	to := &testOption{
+		defaultTestNode: true,
+		updateNodeHostConfig: func(nh *config.NodeHostConfig) *config.NodeHostConfig {
+			nh.RaftEventListener = rel
+			return nh
+		},
+		tf: func(nh *NodeHost) {
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			if err := nh.SyncRequestAddNode(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
+				t.Fatalf("add node failed %v", err)
+			}
+			cancel()
+			var received []raftio.LeaderInfo
+			for i := 0; i < 1000; i++ {
+				received = rel.get()
+				if len(received) >= 4 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+				if i == 999 {
+					t.Fatalf("failed to get the second LeaderUpdated notification")
+				}
+			}
+			exp0 := raftio.LeaderInfo{
+				ClusterID: 1,
+				NodeID:    1,
+				LeaderID:  raftio.NoLeader,
+				Term:      1,
+			}
+			exp1 := raftio.LeaderInfo{
+				ClusterID: 1,
+				NodeID:    1,
+				LeaderID:  raftio.NoLeader,
+				Term:      2,
+			}
+			exp2 := raftio.LeaderInfo{
+				ClusterID: 1,
+				NodeID:    1,
+				LeaderID:  1,
+				Term:      2,
+			}
+			exp3 := raftio.LeaderInfo{
+				ClusterID: 1,
+				NodeID:    1,
+				LeaderID:  raftio.NoLeader,
+				Term:      2,
+			}
+			expected := []raftio.LeaderInfo{exp0, exp1, exp2, exp3}
+			for idx := range expected {
+				if !reflect.DeepEqual(&(received[idx]), &expected[idx]) {
+					t.Errorf("unexpecded leader info, %d, %v, %v",
+						idx, received[idx], expected[idx])
+				}
+			}
+		},
 	}
-	peers := make(map[uint64]string)
-	peers[1] = nodeHostTestAddr1
-	nhc := config.NodeHostConfig{
-		NodeHostDir:       singleNodeHostTestDir,
-		RTTMillisecond:    getRTTMillisecond(fs, singleNodeHostTestDir),
-		RaftAddress:       peers[1],
-		RaftEventListener: rel,
-		FS:                fs,
-		Expert:            getTestExpertConfig(),
-	}
-	nh, err := NewNodeHost(nhc)
-	if err != nil {
-		t.Fatalf("failed to create node host")
-	}
-	defer func() {
-		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-			t.Fatalf("%v", err)
-		}
-	}()
-	defer nh.Stop()
-	var pst *PST
-	newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
-		pst = &PST{slowSave: false}
-		return pst
-	}
-	if err := nh.StartCluster(peers, false, newPST, rc); err != nil {
-		t.Fatalf("failed to start cluster")
-	}
-	waitForLeaderToBeElected(t, nh, 1)
-	pto := pto(nh)
-	ctx, cancel := context.WithTimeout(context.Background(), pto)
-	if err := nh.SyncRequestAddNode(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
-		t.Fatalf("add node failed %v", err)
-	}
-	cancel()
-	var received []raftio.LeaderInfo
-	for i := 0; i < 1000; i++ {
-		received = rel.get()
-		if len(received) >= 4 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-		if i == 999 {
-			t.Fatalf("failed to get the second LeaderUpdated notification")
-		}
-	}
-	exp0 := raftio.LeaderInfo{
-		ClusterID: 1,
-		NodeID:    1,
-		LeaderID:  raftio.NoLeader,
-		Term:      1,
-	}
-	exp1 := raftio.LeaderInfo{
-		ClusterID: 1,
-		NodeID:    1,
-		LeaderID:  raftio.NoLeader,
-		Term:      2,
-	}
-	exp2 := raftio.LeaderInfo{
-		ClusterID: 1,
-		NodeID:    1,
-		LeaderID:  1,
-		Term:      2,
-	}
-	exp3 := raftio.LeaderInfo{
-		ClusterID: 1,
-		NodeID:    1,
-		LeaderID:  raftio.NoLeader,
-		Term:      2,
-	}
-	expected := []raftio.LeaderInfo{exp0, exp1, exp2, exp3}
-	for idx := range expected {
-		if !reflect.DeepEqual(&(received[idx]), &expected[idx]) {
-			t.Errorf("unexpecded leader info, %d, %v, %v",
-				idx, received[idx], expected[idx])
-		}
-	}
+	runNodeHostTest(t, to, fs)
 }
 
 func TestV2DataCanBeHandled(t *testing.T) {
