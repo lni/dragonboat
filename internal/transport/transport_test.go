@@ -436,13 +436,13 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 func TestMessageCanBeSent(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	testMessageCanBeSent(t, false, settings.LargeEntitySize*2, fs)
+	testMessageCanBeSent(t, false, settings.LargeEntitySize+1, fs)
 	testMessageCanBeSent(t, false, recvBufSize/2, fs)
 	testMessageCanBeSent(t, false, recvBufSize+1, fs)
 	testMessageCanBeSent(t, false, perConnBufSize+1, fs)
 	testMessageCanBeSent(t, false, perConnBufSize/2, fs)
 	testMessageCanBeSent(t, false, 1, fs)
-	testMessageCanBeSent(t, true, settings.LargeEntitySize*2, fs)
+	testMessageCanBeSent(t, true, settings.LargeEntitySize+1, fs)
 	testMessageCanBeSent(t, true, recvBufSize/2, fs)
 	testMessageCanBeSent(t, true, recvBufSize+1, fs)
 	testMessageCanBeSent(t, true, perConnBufSize+1, fs)
@@ -473,7 +473,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 			Type:      raftpb.Replicate,
 			To:        2,
 			ClusterId: 100,
-			Entries:   []raftpb.Entry{{Cmd: make([]byte, 2*1024*1024)}},
+			Entries:   []raftpb.Entry{{Cmd: make([]byte, 1024)}},
 		}
 		done := trans.Send(msg)
 		if !done {
@@ -636,12 +636,6 @@ func TestSnapshotCanBeSent(t *testing.T) {
 		testSnapshotCanBeSent(t, snapshotChunkSize*3+1, 10000, v, fs)
 		testSnapshotCanBeSent(t, snapshotChunkSize*3-1, 10000, v, fs)
 	}
-}
-
-func TestLargeSnapshotCanBeSent(t *testing.T) {
-	fs := vfs.GetTestFS()
-	defer leaktest.AfterTest(t)()
-	testSnapshotCanBeSent(t, 128*1024*1024+5, 300000, true, fs)
 }
 
 func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs vfs.IFS) {
@@ -1019,7 +1013,7 @@ func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
 }
 
 func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.IFS) {
-	snapshotSize := snapshotChunkSize * 10
+	snapshotSize := snapshotChunkSize*3 + 1
 	trans, nodes, stopper, tt := newTestTransport(mutualTLS, fs)
 	defer trans.env.Stop()
 	defer tt.cleanup()

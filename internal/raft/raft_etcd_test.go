@@ -36,12 +36,11 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (
-	testRateLimit = settings.LargeEntitySize * 4
+	testRateLimit = uint64(1024 * 128)
 )
 
 func (r *raft) testOnlyHasConfigChangeToApply() bool {
