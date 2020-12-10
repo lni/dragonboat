@@ -274,7 +274,7 @@ type NodeHostConfig struct {
 	// RTTMillisecond defines the average Rround Trip Time (RTT) in milliseconds
 	// between two NodeHost instances. Such a RTT interval is internally used as
 	// a logical clock tick, Raft heartbeat and election intervals are both
-	// defined in term of how many such RTT intervals.
+	// defined in term of how many such logical clock ticks (RTT intervals).
 	// Note that RTTMillisecond is the combined delays between two NodeHost
 	// instances including all delays caused by network transmission, delays
 	// caused by NodeHost queuing and processing. As an example, when fully
@@ -284,20 +284,26 @@ type NodeHostConfig struct {
 	// than 1 million in your environment.
 	RTTMillisecond uint64
 	// RaftAddress is a hostname:port or IP:port address used by the Raft RPC
-	// module for exchanging Raft messages and snapshots. This is also the
-	// identifier for a NodeHost instance. RaftAddress should be set to the
-	// public address that can be accessed from remote NodeHost instances.
+	// module for exchanging Raft messages and snapshots. It should be set to
+	// the public address that can be accessed from remote NodeHost instances.
+	// DynamicRaftAddress should be set to true when the RaftAddress of this
+	// NodeHost instance might change after restart.
+	//
+	// When the NodeHostConfig.ListenAddress field is empty, Dragonboat listens on
+	// RaftAddress for incoming Raft messages. When hostname or domain name is
+	// used, it will be resolved to IPv4 addresses first and Dragonboat listens
+	// to all resolved IPv4 addresses.
 	RaftAddress string
 	// DynamicRaftAddress indicates that the RaftAddress of the NodeHost is
 	// possible to change after restart.
 	DynamicRaftAddress bool
-	// ListenAddress is a hostname:port or IP:port address used by the Raft RPC
-	// module to listen on for Raft message and snapshots. When the ListenAddress
-	// field is not set, The Raft RPC module listens on RaftAddress. If 0.0.0.0
-	// is specified as the IP of the ListenAddress, Dragonboat listens to the
-	// specified port on all interfaces. When hostname or domain name is
-	// specified, it is locally resolved to IP addresses first and Dragonboat
-	// listens to all resolved IP addresses.
+	// ListenAddress is an optional field in the hostname:port or IP:port address
+	// form used by the Raft RPC module to listen on for Raft message and
+	// snapshots. When the ListenAddress field is not set, The Raft RPC module
+	// listens on RaftAddress. If 0.0.0.0 is specified as the IP of the
+	// ListenAddress, Dragonboat listens to the specified port on all network
+	// interfaces. When hostname or domain name is used, it will be resolved to
+	// IPv4 addresses first and Dragonboat listens to all resolved IPv4 addresses.
 	ListenAddress string
 	// MutualTLS defines whether to use mutual TLS for authenticating servers
 	// and clients. Insecure communication is used when MutualTLS is set to
