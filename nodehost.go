@@ -1154,8 +1154,12 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 //
 // Requesting a removed node back to the Raft cluster will always be rejected.
 //
-// The input target parameter is usually the RaftAddress of the NodeHost where
-// the new Raft node being added will be running.
+// The target parameter is usually the ID() value of the NodeHost instance where
+// the new Raft node will be running. It should be set to NodeHost's RaftAddress
+// value when fixed IP or DNS name is available to address the NodeHost,
+// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
+// DNS name is not available (typically when the DynamicRaftAddress field is set
+// to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1193,8 +1197,12 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// The input target parameter is usually the RaftAddress of the NodeHost where
-// the new observer being added will be running.
+// The target parameter is usually the ID() value of the NodeHost instance where
+// the new Raft node will be running. It should be set to NodeHost's RaftAddress
+// value when fixed IP or DNS name is available to address the NodeHost,
+// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
+// DNS name is not available (typically when the DynamicRaftAddress field is set
+// to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1230,8 +1238,12 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// The input target parameter is usually the RaftAddress of the NodeHost where
-// the new witness being added will be running.
+// The target parameter is usually the ID() value of the NodeHost instance where
+// the new Raft node will be running. It should be set to NodeHost's RaftAddress
+// value when fixed IP or DNS name is available to address the NodeHost,
+// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
+// DNS name is not available (typically when the DynamicRaftAddress field is set
+// to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
