@@ -65,10 +65,9 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 		panic(err)
 	}
 	expert := config.GetDefaultExpertConfig()
-	expert.LogDBShards = 4
+	expert.LogDB.Shards = 4
 	cfg := config.NodeHostConfig{
 		Expert: expert,
-		LogDB:  config.GetDefaultLogDBConfig(),
 	}
 
 	db, err := NewLogDB(cfg, nil,

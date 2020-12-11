@@ -43,13 +43,13 @@ var _ raftio.ILogDB = (*ShardedDB)(nil)
 
 func checkAllShards(config config.NodeHostConfig,
 	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	for i := uint64(0); i < config.Expert.LogDBShards; i++ {
+	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lls) > 0 {
 			lldir = fs.PathJoin(lls[i], fmt.Sprintf("logdb-%d", i))
 		}
-		batched, err := hasBatchedRecord(config.LogDB, dir, lldir, fs, kvf)
+		batched, err := hasBatchedRecord(config.Expert.LogDB, dir, lldir, fs, kvf)
 		if err != nil {
 			return false, err
 		}
@@ -75,8 +75,8 @@ func (sc *shardCallback) callback(busy bool) {
 func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
 	fs vfs.IFS, kvf kvFactory) (*ShardedDB, error) {
-	if config.LogDB.IsEmpty() || config.Expert.IsEmpty() {
-		panic("config.LogDB.IsEmpty() || config.Expert.IsEmpty()")
+	if config.Expert.LogDB.IsEmpty() {
+		panic("config.Expert.LogDB.IsEmpty()")
 	}
 	shards := make([]*db, 0)
 	if batched {
@@ -96,14 +96,14 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 		}
 		plog.Infof("all shards checked, batched: %t", batched)
 	}
-	for i := uint64(0); i < config.Expert.LogDBShards; i++ {
+	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
 		lldir := ""
 		if len(lldirs) > 0 {
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
 		sc := shardCallback{shard: i, f: callback}
-		db, err := openRDB(config.LogDB, sc.callback, dir, lldir, batched, fs, kvf)
+		db, err := openRDB(config.Expert.LogDB, sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()
@@ -113,9 +113,9 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 		shards = append(shards, db)
 	}
 	partitioner := server.NewDoubleFixedPartitioner(config.Expert.ExecShards,
-		config.Expert.LogDBShards)
+		config.Expert.LogDB.Shards)
 	mw := &ShardedDB{
-		config:       config.LogDB,
+		config:       config.Expert.LogDB,
 		shards:       shards,
 		partitioner:  partitioner,
 		compactions:  newCompactions(),

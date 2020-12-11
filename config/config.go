@@ -320,16 +320,6 @@ type NodeHostConfig struct {
 	// KeyFile is the path of the node key file. This field is ignored when
 	// MutualTLS is false.
 	KeyFile string
-	// MaxSendQueueSize is the maximum size in bytes of each send queue.
-	// Once the maximum size is reached, further replication messages will be
-	// dropped to restrict memory usage. When set to 0, it means the send queue
-	// size is unlimited.
-	MaxSendQueueSize uint64
-	// MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
-	// Once the maximum size is reached, further replication messages will be
-	// dropped to restrict memory usage. When set to 0, it means the queue size
-	// is unlimited.
-	MaxReceiveQueueSize uint64
 	// LogDBFactory is the factory function used for creating the Log DB instance
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
@@ -354,6 +344,21 @@ type NodeHostConfig struct {
 	// goroutines managed by users. See the raftio.IRaftEventListener definition
 	// for more details.
 	RaftEventListener raftio.IRaftEventListener
+	// SystemEventsListener allows users to be notified for system events such
+	// as snapshot creation, log compaction and snapshot streaming. It is usually
+	// used for testing purposes or for other advanced usages, Dragonboat
+	// applications are not required to explicitly set this field.
+	SystemEventListener raftio.ISystemEventListener
+	// MaxSendQueueSize is the maximum size in bytes of each send queue.
+	// Once the maximum size is reached, further replication messages will be
+	// dropped to restrict memory usage. When set to 0, it means the send queue
+	// size is unlimited.
+	MaxSendQueueSize uint64
+	// MaxReceiveQueueSize is the maximum size in bytes of each receive queue.
+	// Once the maximum size is reached, further replication messages will be
+	// dropped to restrict memory usage. When set to 0, it means the queue size
+	// is unlimited.
+	MaxReceiveQueueSize uint64
 	// MaxSnapshotSendBytesPerSecond defines how much snapshot data can be sent
 	// every second for all Raft clusters managed by the NodeHost instance.
 	// The default value 0 means there is no limit set for snapshot streaming.
@@ -362,35 +367,17 @@ type NodeHostConfig struct {
 	// received each second for all Raft clusters managed by the NodeHost instance.
 	// The default value 0 means there is no limit for receiving snapshot data.
 	MaxSnapshotRecvBytesPerSecond uint64
-	// FS is the filesystem used by tests. Dragonboat applications are not
-	// required to explicitly set this field.
-	FS IFS
-	// SystemEventsListener allows users to be notified for system events such
-	// as snapshot creation, log compaction and snapshot streaming. It is usually
-	// used for testing purposes or for other advanced usages, Dragonboat
-	// applications are not required to explicitly set this field.
-	SystemEventListener raftio.ISystemEventListener
-	// SystemTickerPrecision is the precision of the system ticker. This value is
-	// usually set in tests. Dragonboat applications are not required to
-	// explicitly set this field.
-	SystemTickerPrecision time.Duration
-	// LogDB is the configuration object for the LogDB storage engine. LogDB
-	// is used for storing Raft Logs and other metadata. This is an option for
-	// advanced users when tuning the balance of I/O performance and memory
-	// consumption. Regular users are recommdned not to set this field to use it
-	// default value.
-	LogDB LogDBConfig
+	// NotifyCommit specifies whether clients should be notified when their
+	// regular proposals and config change requests are committed. By default,
+	// commits are not notified, clients are only notified when their proposals
+	// are both committed and applied.
+	NotifyCommit bool
 	// Expert contains configuration options for expert users who are familiar
 	// with the internal of the Dragonboat library. Regular users are expected
 	// not to use ExpertConfig. It is important to understand that any change
 	// to the ExpertConfig may cause an existing Dragonboat setup unable to
 	// restart.
 	Expert ExpertConfig
-	// NotifyCommit specifies whether clients should be notified when their
-	// regular proposals and config change requests are committed. By default,
-	// commits are not notified, clients are only notified when their proposals
-	// are both committed and applied.
-	NotifyCommit bool
 }
 
 // Validate validates the NodeHostConfig instance and return an error when
@@ -467,26 +454,24 @@ func (c *NodeHostConfig) Prepare() error {
 			return err
 		}
 	}
-	if c.FS == nil {
-		c.FS = vfs.DefaultFS
+	if c.Expert.FS == nil {
+		c.Expert.FS = vfs.DefaultFS
 	}
-	if c.SystemTickerPrecision == 0 {
+	if c.Expert.SystemTickerPrecision == 0 {
 		plog.Infof("system ticker precision is set to 1ms (default)")
-		c.SystemTickerPrecision = time.Millisecond
+		c.Expert.SystemTickerPrecision = time.Millisecond
 	}
-	if c.LogDB.IsEmpty() {
+	if c.Expert.LogDB.IsEmpty() {
 		plog.Infof("using default LogDBConfig")
-		c.LogDB = GetDefaultLogDBConfig()
+		c.Expert.LogDB = GetDefaultLogDBConfig()
+	}
+	if c.Expert.ExecShards == 0 {
+		c.Expert.ExecShards = defaultExecShards
 	}
 	if c.RaftRPCFactory != nil && c.TransportModule == nil {
 		c.TransportModule = &transportModule{factory: c.RaftRPCFactory}
 		c.RaftRPCFactory = nil
 	}
-	if c.Expert.IsEmpty() {
-		plog.Infof("using default ExpertConfig")
-		c.Expert = GetDefaultExpertConfig()
-	}
-	c.LogDB.expert = c.Expert
 	return nil
 }
 
@@ -555,7 +540,7 @@ func IsValidAddress(addr string) bool {
 // affect the upper bound of memory size used by the built-in LogDB storage
 // engine.
 type LogDBConfig struct {
-	expert                             ExpertConfig
+	Shards                             uint64
 	KVKeepLogFileNum                   uint64
 	KVMaxBackgroundCompactions         uint64
 	KVMaxBackgroundFlushes             uint64
@@ -620,6 +605,7 @@ func GetLargeMemLogDBConfig() LogDBConfig {
 
 func getDefaultLogDBConfig() LogDBConfig {
 	return LogDBConfig{
+		Shards:                             defaultLogDBShards,
 		KVMaxBackgroundCompactions:         2,
 		KVMaxBackgroundFlushes:             2,
 		KVLRUCacheSize:                     0,
@@ -645,11 +631,8 @@ func getDefaultLogDBConfig() LogDBConfig {
 // MemorySizeMB returns the estimated upper bound memory size used by the LogDB
 // storage engine. The returned value is in MBytes.
 func (cfg *LogDBConfig) MemorySizeMB() uint64 {
-	if cfg.expert.IsEmpty() {
-		panic("uninitialized expert config")
-	}
 	ss := cfg.KVWriteBufferSize * cfg.KVMaxWriteBufferNumber
-	bs := ss * cfg.expert.LogDBShards
+	bs := ss * cfg.Shards
 	return bs / (1024 * 1024)
 }
 
@@ -663,8 +646,8 @@ func (cfg *LogDBConfig) IsEmpty() bool {
 // GetDefaultExpertConfig returns the default ExpertConfig.
 func GetDefaultExpertConfig() ExpertConfig {
 	return ExpertConfig{
-		ExecShards:  defaultExecShards,
-		LogDBShards: defaultLogDBShards,
+		ExecShards: defaultExecShards,
+		LogDB:      getDefaultLogDBConfig(),
 	}
 }
 
@@ -675,12 +658,14 @@ type ExpertConfig struct {
 	// ExecShards is the number of execution shards in the first stage of the
 	// execution engine. Default value is 16.
 	ExecShards uint64
-	// LogDBShards is the number of LogDB shards. Default value is 16.
-	LogDBShards uint64
-}
-
-// IsEmpty returns a boolean value indicating whether the ExpertConfig instance
-// is a default one with all zero values.
-func (e *ExpertConfig) IsEmpty() bool {
-	return e.ExecShards == 0 && e.LogDBShards == 0
+	// LogDB contains configuration options for the LogDB storage engine. LogDB
+	// is used for storing Raft Logs and metadata. This optional option is used
+	// by advanced users for tuning the balance of I/O performance, memory and
+	// disk usages.
+	LogDB LogDBConfig
+	// SystemTickerPrecision is the precision of the system ticker. This value is
+	// usually set in tests.
+	SystemTickerPrecision time.Duration
+	// FS is the filesystem instance used in tests.
+	FS IFS
 }

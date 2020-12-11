@@ -152,12 +152,11 @@ func main() {
 		NodeHostDir:    dataDirectoryName,
 		RTTMillisecond: 200,
 		RaftAddress:    raftAddress,
-		FS:             fs,
-		LogDB:          lc,
+		Expert:         config.ExpertConfig{FS: fs, LogDB: lc},
 	}
 	if *tiny {
 		log.Println("using tiny LogDB memory limit")
-		nhc.LogDB = config.GetTinyMemLogDBConfig()
+		nhc.Expert.LogDB = config.GetTinyMemLogDBConfig()
 	}
 	if *batched {
 		log.Println("using batched logdb")

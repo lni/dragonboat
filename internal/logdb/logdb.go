@@ -66,10 +66,10 @@ func NewDefaultBatchedLogDB(config config.NodeHostConfig,
 func NewLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback, dirs []string, lldirs []string,
 	batched bool, check bool, fs vfs.IFS, f kvFactory) (raftio.ILogDB, error) {
-	checkDirs(config.Expert.LogDBShards, dirs, lldirs)
+	checkDirs(config.Expert.LogDB.Shards, dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
 	if len(dirs) == 1 {
-		for i := uint64(1); i < config.Expert.LogDBShards; i++ {
+		for i := uint64(1); i < config.Expert.LogDB.Shards; i++ {
 			dirs = append(dirs, dirs[0])
 			if llDirRequired {
 				lldirs = append(lldirs, lldirs[0])

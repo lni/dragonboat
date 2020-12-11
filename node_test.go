@@ -203,7 +203,6 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			panic(err)
 		}
 		cfg := config.NodeHostConfig{
-			LogDB:  config.GetDefaultLogDBConfig(),
 			Expert: config.GetDefaultExpertConfig(),
 		}
 		ldb, err = logdb.NewDefaultLogDB(cfg,
@@ -225,7 +224,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			return snapdir
 		}
 		snapshotter := newSnapshotter(testClusterID, i,
-			config.NodeHostConfig{FS: fs}, rootDirFunc, ldb, fs)
+			config.NodeHostConfig{Expert: config.ExpertConfig{FS: fs}}, rootDirFunc, ldb, fs)
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{

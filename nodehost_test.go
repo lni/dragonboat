@@ -138,9 +138,11 @@ func lpto(nh *NodeHost) time.Duration {
 	rtt := nh.NodeHostConfig().RTTMillisecond
 	return time.Duration(rtt*100) * time.Millisecond
 }
-func getTestExpertConfig() config.ExpertConfig {
+
+func getTestExpertConfig(fs vfs.IFS) config.ExpertConfig {
 	cfg := config.GetDefaultExpertConfig()
-	cfg.LogDBShards = 4
+	cfg.LogDB.Shards = 4
+	cfg.FS = fs
 	return cfg
 }
 
@@ -149,15 +151,15 @@ func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 }
 
 func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
-	return &config.NodeHostConfig{
+	cfg := &config.NodeHostConfig{
 		WALDir:              singleNodeHostTestDir,
 		NodeHostDir:         singleNodeHostTestDir,
 		RTTMillisecond:      getRTTMillisecond(fs, singleNodeHostTestDir),
 		RaftAddress:         singleNodeHostTestAddr,
-		FS:                  fs,
-		Expert:              getTestExpertConfig(),
+		Expert:              getTestExpertConfig(fs),
 		SystemEventListener: &testSysEventListener{},
 	}
+	return cfg
 }
 
 func getTestConfig() *config.Config {
@@ -810,14 +812,14 @@ func TestTransportModuleCanUseUUID(t *testing.T) {
 		NodeHostDir:     datadir1,
 		RTTMillisecond:  getRTTMillisecond(fs, datadir1),
 		RaftAddress:     addr1,
-		FS:              fs,
+		Expert:          config.ExpertConfig{FS: fs},
 		TransportModule: &uuidTestTransportModule{},
 	}
 	nhc2 := config.NodeHostConfig{
 		NodeHostDir:     datadir2,
 		RTTMillisecond:  getRTTMillisecond(fs, datadir2),
 		RaftAddress:     addr2,
-		FS:              fs,
+		Expert:          config.ExpertConfig{FS: fs},
 		TransportModule: &uuidTestTransportModule{},
 	}
 	nh1, err := NewNodeHost(nhc1)
@@ -1002,8 +1004,7 @@ func createConcurrentTestNodeHost(addr string,
 		NodeHostDir:    datadir,
 		RTTMillisecond: getRTTMillisecond(fs, datadir),
 		RaftAddress:    peers[1],
-		FS:             fs,
-		Expert:         getTestExpertConfig(),
+		Expert:         getTestExpertConfig(fs),
 	}
 	nh, err := NewNodeHost(nhc)
 	if err != nil {
@@ -1102,18 +1103,16 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
-		Expert:              getTestExpertConfig(),
+		Expert:              getTestExpertConfig(fs),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:              datadir2,
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		FS:                  fs,
 		SystemEventListener: &testSysEventListener{},
-		Expert:              getTestExpertConfig(),
+		Expert:              getTestExpertConfig(fs),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -1144,16 +1143,14 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		NodeHostDir:    datadir1,
 		RTTMillisecond: getRTTMillisecond(fs, datadir1),
 		RaftAddress:    peers[1],
-		FS:             fs,
-		Expert:         getTestExpertConfig(),
+		Expert:         getTestExpertConfig(fs),
 	}
 	nhc2 := config.NodeHostConfig{
 		WALDir:         datadir2,
 		NodeHostDir:    datadir2,
 		RTTMillisecond: getRTTMillisecond(fs, datadir2),
 		RaftAddress:    peers[2],
-		FS:             fs,
-		Expert:         getTestExpertConfig(),
+		Expert:         getTestExpertConfig(fs),
 	}
 	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
@@ -2589,7 +2586,7 @@ func TestLogDBRateLimit(t *testing.T) {
 			logDBConfig := config.GetDefaultLogDBConfig()
 			logDBConfig.KVMaxWriteBufferNumber = 2
 			logDBConfig.KVWriteBufferSize = 1024 * 32
-			c.LogDB = logDBConfig
+			c.Expert.LogDB = logDBConfig
 			return c
 		},
 		tf: func(nh *NodeHost) {
@@ -3600,9 +3597,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             fs,
-			LogDB:          config.GetDefaultLogDBConfig(),
-			Expert:         getTestExpertConfig(),
+			Expert:         getTestExpertConfig(fs),
 		}
 		nh, err := NewNodeHost(nhc)
 		if err != nil {
@@ -3765,16 +3760,14 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			NodeHostDir:    nh1dir,
 			RTTMillisecond: getRTTMillisecond(fs, nh1dir),
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             fs,
-			Expert:         getTestExpertConfig(),
+			Expert:         getTestExpertConfig(fs),
 		}
 		nhc2 := config.NodeHostConfig{
 			WALDir:         nh2dir,
 			NodeHostDir:    nh2dir,
 			RTTMillisecond: getRTTMillisecond(fs, nh2dir),
 			RaftAddress:    nodeHostTestAddr2,
-			FS:             fs,
-			Expert:         getTestExpertConfig(),
+			Expert:         getTestExpertConfig(fs),
 		}
 		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once
@@ -4143,7 +4136,7 @@ func TestNodeHostFileLock(t *testing.T) {
 			NodeHostDir:    singleNodeHostTestDir,
 			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
 			RaftAddress:    nodeHostTestAddr1,
-			Expert:         getTestExpertConfig(),
+			Expert:         getTestExpertConfig(fs),
 		}
 		if !child {
 			nh, err := NewNodeHost(nhc)
@@ -4584,8 +4577,7 @@ func testWitnessIO(t *testing.T,
 			NodeHostDir:    dir,
 			RTTMillisecond: getRTTMillisecond(fs, dir),
 			RaftAddress:    nodeHostTestAddr1,
-			FS:             fs,
-			Expert:         getTestExpertConfig(),
+			Expert:         getTestExpertConfig(fs),
 		}
 		nh1, err := NewNodeHost(nhc1)
 		if err != nil {

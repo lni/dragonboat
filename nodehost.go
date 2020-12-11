@@ -290,7 +290,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err := nhConfig.Prepare(); err != nil {
 		return nil, err
 	}
-	env, err := server.NewEnv(nhConfig, nhConfig.FS)
+	env, err := server.NewEnv(nhConfig, nhConfig.Expert.FS)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nhConfig: nhConfig,
 		stopper:  syncutil.NewStopper(),
 		nodes:    transport.NewNodes(streamConnections, validator),
-		fs:       nhConfig.FS,
+		fs:       nhConfig.Expert.FS,
 	}
 	// make static check happy
 	_ = nh.partitioned
@@ -338,8 +338,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		return nil, err
 	}
 	errorInjection := false
-	if nhConfig.FS != nil {
-		_, errorInjection = nhConfig.FS.(*vfs.ErrorFS)
+	if nhConfig.Expert.FS != nil {
+		_, errorInjection = nhConfig.Expert.FS.(*vfs.ErrorFS)
 		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
 	}
 	nh.engine = newExecEngine(nh, nhConfig.Expert.ExecShards,
@@ -1573,7 +1573,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 		panic(err)
 	}
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.ExecShards,
-		nh.nhConfig.Expert.LogDBShards)
+		nh.nhConfig.Expert.LogDB.Shards)
 	shard := p.GetPartitionID(clusterID)
 	rn, err := newNode(peers,
 		im,
@@ -1672,7 +1672,8 @@ func (nh *NodeHost) createLogDB() error {
 			return server.ErrLogDBBrokenChange
 		}
 	}
-	plog.Infof("logdb memory limit: %d MBytes", nh.nhConfig.LogDB.MemorySizeMB())
+	plog.Infof("logdb memory limit: %d MBytes",
+		nh.nhConfig.Expert.LogDB.MemorySizeMB())
 	return nil
 }
 
@@ -1784,7 +1785,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		return false
 	}
-	server.StartTicker(nh.nhConfig.SystemTickerPrecision,
+	server.StartTicker(nh.nhConfig.Expert.SystemTickerPrecision,
 		tf, nh.stopper.ShouldStop())
 }
 

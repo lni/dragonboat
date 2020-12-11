@@ -134,13 +134,13 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 			unmanagedDeploymentID)
 		nhConfig.DeploymentID = unmanagedDeploymentID
 	}
-	if nhConfig.FS == nil {
-		nhConfig.FS = vfs.DefaultFS
+	if nhConfig.Expert.FS == nil {
+		nhConfig.Expert.FS = vfs.DefaultFS
 	}
 	if err := nhConfig.Prepare(); err != nil {
 		return err
 	}
-	fs := nhConfig.FS
+	fs := nhConfig.Expert.FS
 	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
 		return err
 	}

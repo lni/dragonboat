@@ -132,27 +132,22 @@ func TestLogDBConfigIsEmpty(t *testing.T) {
 
 func TestLogDBConfigMemSize(t *testing.T) {
 	c := GetDefaultLogDBConfig()
-	c.expert = GetDefaultExpertConfig()
 	if c.MemorySizeMB() != 8192 {
 		t.Errorf("unexpected default memory size")
 	}
 	c1 := GetTinyMemLogDBConfig()
-	c1.expert = GetDefaultExpertConfig()
 	if c1.MemorySizeMB() != 256 {
 		t.Errorf("size %d, want 256", c1.MemorySizeMB())
 	}
 	c2 := GetSmallMemLogDBConfig()
-	c2.expert = GetDefaultExpertConfig()
 	if c2.MemorySizeMB() != 1024 {
 		t.Errorf("size %d, want 1024", c2.MemorySizeMB())
 	}
 	c3 := GetMediumMemLogDBConfig()
-	c3.expert = GetDefaultExpertConfig()
 	if c3.MemorySizeMB() != 4096 {
 		t.Errorf("size %d, want 4096", c3.MemorySizeMB())
 	}
 	c4 := GetLargeMemLogDBConfig()
-	c4.expert = GetDefaultExpertConfig()
 	if c4.MemorySizeMB() != 8192 {
 		t.Errorf("size %d, want 8192", c4.MemorySizeMB())
 	}
