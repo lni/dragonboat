@@ -372,11 +372,11 @@ type NodeHostConfig struct {
 	// commits are not notified, clients are only notified when their proposals
 	// are both committed and applied.
 	NotifyCommit bool
-	// Expert contains configuration options for expert users who are familiar
-	// with the internal of the Dragonboat library. Regular users are expected
-	// not to use ExpertConfig. It is important to understand that any change
-	// to the ExpertConfig may cause an existing Dragonboat setup unable to
-	// restart.
+	// Expert contains options for expert users who are familiar with the internals
+	// of Dragonboat. Users are recommended not to use this field unless
+	// absoloutely necessary. It is important to note that any change to this field
+	// may cause an existing instance unable to restart, it may also cause negative
+	// performance impacts.
 	Expert ExpertConfig
 }
 
@@ -651,9 +651,9 @@ func GetDefaultExpertConfig() ExpertConfig {
 	}
 }
 
-// ExpertConfig contains configuration options for expert users who are familiar
-// with the internal of the Dragonboat library. Regular users are expected not
-// to use ExpertConfig.
+// ExpertConfig contains options for expert users who are familiar with the
+// internals of Dragonboat. Users are recommended not to use ExpertConfig
+// unless it is absoloutely necessary.
 type ExpertConfig struct {
 	// ExecShards is the number of execution shards in the first stage of the
 	// execution engine. Default value is 16.
