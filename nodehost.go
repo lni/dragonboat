@@ -1766,27 +1766,22 @@ func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 }
 
 func (nh *NodeHost) tickWorkerMain() {
-	count := uint64(0)
 	idx := uint64(0)
 	nodes := make([]*node, 0)
-	tf := func(usec uint64) bool {
-		count += (usec / 1000)
-		if count >= nh.nhConfig.RTTMillisecond {
-			count -= nh.nhConfig.RTTMillisecond
-			if idx != nh.getClusterSetIndex() {
-				nodes = nodes[:0]
-				idx = nh.forEachCluster(func(cid uint64, n *node) bool {
-					nodes = append(nodes, n)
-					return true
-				})
-			}
-			nh.streams.tick()
-			nh.sendTickMessage(nodes)
+	tf := func() bool {
+		if idx != nh.getClusterSetIndex() {
+			nodes = nodes[:0]
+			idx = nh.forEachCluster(func(cid uint64, n *node) bool {
+				nodes = append(nodes, n)
+				return true
+			})
 		}
+		nh.streams.tick()
+		nh.sendTickMessage(nodes)
 		return false
 	}
-	server.StartTicker(nh.nhConfig.Expert.SystemTickerPrecision,
-		tf, nh.stopper.ShouldStop())
+	ti := time.Duration(nh.nhConfig.RTTMillisecond) * time.Millisecond
+	server.StartTicker(ti, tf, nh.stopper.ShouldStop())
 }
 
 func (nh *NodeHost) handleListenerEvents() {
@@ -1883,7 +1878,7 @@ func (nh *NodeHost) closeStoppedClusters() {
 }
 
 func (nh *NodeHost) nodeMonitorMain() {
-	tf := func(usec uint64) bool {
+	tf := func() bool {
 		nh.closeStoppedClusters()
 		return false
 	}
