@@ -23,7 +23,6 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
-	"time"
 
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
@@ -457,10 +456,6 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.Expert.FS == nil {
 		c.Expert.FS = vfs.DefaultFS
 	}
-	if c.Expert.SystemTickerPrecision == 0 {
-		plog.Infof("system ticker precision is set to 1ms (default)")
-		c.Expert.SystemTickerPrecision = time.Millisecond
-	}
 	if c.Expert.LogDB.IsEmpty() {
 		plog.Infof("using default LogDBConfig")
 		c.Expert.LogDB = GetDefaultLogDBConfig()
@@ -663,9 +658,6 @@ type ExpertConfig struct {
 	// by advanced users for tuning the balance of I/O performance, memory and
 	// disk usages.
 	LogDB LogDBConfig
-	// SystemTickerPrecision is the precision of the system ticker. This value is
-	// usually set in tests.
-	SystemTickerPrecision time.Duration
 	// FS is the filesystem instance used in tests.
 	FS IFS
 }
