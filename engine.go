@@ -86,7 +86,7 @@ type workReady struct {
 	count       uint64
 	indexes     map[uint64]struct{}
 	maps        []*readyCluster
-	channels    []chan uint64
+	channels    []chan struct{}
 }
 
 func newWorkReady(count uint64) *workReady {
@@ -95,10 +95,10 @@ func newWorkReady(count uint64) *workReady {
 		count:       count,
 		indexes:     make(map[uint64]struct{}),
 		maps:        make([]*readyCluster, count),
-		channels:    make([]chan uint64, count),
+		channels:    make([]chan struct{}, count),
 	}
 	for i := uint64(0); i < count; i++ {
-		wr.channels[i] = make(chan uint64, 1)
+		wr.channels[i] = make(chan struct{}, 1)
 		wr.maps[i] = newReadyCluster()
 	}
 	return wr
@@ -122,7 +122,7 @@ func (wr *workReady) allClustersReady(nodes []*node) {
 		// the 0 value below is a dummy value that will never be used by the
 		// receiving end
 		select {
-		case wr.channels[idx] <- 0:
+		case wr.channels[idx] <- struct{}{}:
 		default:
 		}
 	}
@@ -133,12 +133,12 @@ func (wr *workReady) clusterReady(clusterID uint64) {
 	readyMap := wr.maps[idx]
 	readyMap.setClusterReady(clusterID)
 	select {
-	case wr.channels[idx] <- clusterID:
+	case wr.channels[idx] <- struct{}{}:
 	default:
 	}
 }
 
-func (wr *workReady) waitCh(workerID uint64) chan uint64 {
+func (wr *workReady) waitCh(workerID uint64) chan struct{} {
 	return wr.channels[workerID-1]
 }
 
