@@ -82,22 +82,24 @@ func (l *loadedNodes) update(workerID uint64,
 }
 
 type workReady struct {
-	partitioner  server.IPartitioner
-	count        uint64
-	readyMapList []*readyCluster
-	readyChList  []chan uint64
+	partitioner server.IPartitioner
+	count       uint64
+	indexes     map[uint64]struct{}
+	maps        []*readyCluster
+	channels    []chan uint64
 }
 
 func newWorkReady(count uint64) *workReady {
 	wr := &workReady{
-		partitioner:  server.NewFixedPartitioner(count),
-		count:        count,
-		readyMapList: make([]*readyCluster, count),
-		readyChList:  make([]chan uint64, count),
+		partitioner: server.NewFixedPartitioner(count),
+		count:       count,
+		indexes:     make(map[uint64]struct{}),
+		maps:        make([]*readyCluster, count),
+		channels:    make([]chan uint64, count),
 	}
 	for i := uint64(0); i < count; i++ {
-		wr.readyChList[i] = make(chan uint64, 1)
-		wr.readyMapList[i] = newReadyCluster()
+		wr.channels[i] = make(chan uint64, 1)
+		wr.maps[i] = newReadyCluster()
 	}
 	return wr
 }
@@ -106,22 +108,42 @@ func (wr *workReady) getPartitioner() server.IPartitioner {
 	return wr.partitioner
 }
 
+func (wr *workReady) allClustersReady(nodes []*node) {
+	for key := range wr.indexes {
+		delete(wr.indexes, key)
+	}
+	for _, n := range nodes {
+		idx := wr.partitioner.GetPartitionID(n.clusterID)
+		wr.indexes[idx] = struct{}{}
+		readyMap := wr.maps[idx]
+		readyMap.setClusterReady(n.clusterID)
+	}
+	for idx := range wr.indexes {
+		// the 0 value below is a dummy value that will never be used by the
+		// receiving end
+		select {
+		case wr.channels[idx] <- 0:
+		default:
+		}
+	}
+}
+
 func (wr *workReady) clusterReady(clusterID uint64) {
 	idx := wr.partitioner.GetPartitionID(clusterID)
-	readyMap := wr.readyMapList[idx]
+	readyMap := wr.maps[idx]
 	readyMap.setClusterReady(clusterID)
 	select {
-	case wr.readyChList[idx] <- clusterID:
+	case wr.channels[idx] <- clusterID:
 	default:
 	}
 }
 
 func (wr *workReady) waitCh(workerID uint64) chan uint64 {
-	return wr.readyChList[workerID-1]
+	return wr.channels[workerID-1]
 }
 
 func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
-	readyMap := wr.readyMapList[workerID-1]
+	readyMap := wr.maps[workerID-1]
 	return readyMap.getReadyClusters()
 }
 
@@ -1039,6 +1061,10 @@ func (e *engine) onSnapshotSaved(updates []pb.Update,
 		}
 	}
 	return nil
+}
+
+func (e *engine) setAllStepReady(nodes []*node) {
+	e.stepWorkReady.allClustersReady(nodes)
 }
 
 func (e *engine) setStepReady(clusterID uint64) {

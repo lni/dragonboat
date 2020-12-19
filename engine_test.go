@@ -22,7 +22,7 @@ import (
 
 func TestWorkReadyCanBeCreated(t *testing.T) {
 	wr := newWorkReady(4)
-	if len(wr.readyMapList) != 4 || len(wr.readyChList) != 4 {
+	if len(wr.maps) != 4 || len(wr.channels) != 4 {
 		t.Errorf("unexpected ready list len")
 	}
 	if wr.count != 4 {

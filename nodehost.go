@@ -1778,6 +1778,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		}
 		nh.streams.tick()
 		nh.sendTickMessage(nodes)
+		nh.engine.setAllStepReady(nodes)
 		return false
 	}
 	ti := time.Duration(nh.nhConfig.RTTMillisecond) * time.Millisecond
@@ -1842,7 +1843,6 @@ func (nh *NodeHost) sendTickMessage(clusters []*node) {
 			From: n.nodeID,
 		}
 		n.mq.Add(m)
-		nh.engine.setStepReady(n.clusterID)
 	}
 }
 
