@@ -2585,12 +2585,12 @@ func TestLogDBRateLimit(t *testing.T) {
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
 			logDBConfig := config.GetDefaultLogDBConfig()
 			logDBConfig.KVMaxWriteBufferNumber = 2
-			logDBConfig.KVWriteBufferSize = 1024 * 32
+			logDBConfig.KVWriteBufferSize = 1024 * 8
 			c.Expert.LogDB = logDBConfig
 			return c
 		},
 		tf: func(nh *NodeHost) {
-			for i := 0; i < 1024; i++ {
+			for i := 0; i < 10240; i++ {
 				pto := pto(nh)
 				session := nh.GetNoOPSession(1)
 				ctx, cancel := context.WithTimeout(context.Background(), pto)
