@@ -2116,7 +2116,8 @@ func logBuildTagsAndVersion() {
 	if DEVVersion {
 		devstr = "Dev"
 	}
-	plog.Infof("go version: %s", runtime.Version())
+	plog.Infof("go version: %s, %s/%s",
+		runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	plog.Infof("dragonboat version: %d.%d.%d (%s)",
 		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr)
 	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
