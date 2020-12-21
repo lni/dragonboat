@@ -124,7 +124,6 @@ var (
 	receiveQueueLen   = settings.Soft.ReceiveQueueLength
 	requestPoolShards = settings.Soft.NodeHostRequestStatePoolShards
 	streamConnections = settings.Soft.StreamConnections
-	monitorInterval   = 100 * time.Millisecond
 )
 
 var (
@@ -251,6 +250,7 @@ type NodeHost struct {
 	mu          struct {
 		sync.RWMutex
 		cci      uint64
+		cciCh    chan struct{}
 		clusters sync.Map // clusterID -> *node
 		lm       sync.Map // shardID -> *logDBMetrics
 	}
@@ -310,6 +310,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.events.raft = nhConfig.RaftEventListener
 	nh.events.sys = newSysEventListener(nhConfig.SystemEventListener,
 		nh.stopper.ShouldStop())
+	nh.mu.cciCh = make(chan struct{}, 1)
 	if nhConfig.RaftEventListener != nil {
 		nh.events.leaderInfoQ = newLeaderInfoQueue()
 	}
@@ -1596,9 +1597,17 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	}
 	nh.mu.clusters.Store(clusterID, rn)
 	nh.mu.cci++
+	nh.cciUpdated()
 	nh.engine.setCCIReady(clusterID)
 	nh.engine.setApplyReady(clusterID)
 	return nil
+}
+
+func (nh *NodeHost) cciUpdated() {
+	select {
+	case nh.mu.cciCh <- struct{}{}:
+	default:
+	}
 }
 
 func (nh *NodeHost) createPools() {
@@ -1741,6 +1750,7 @@ func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error 
 	}
 	nh.mu.clusters.Delete(clusterID)
 	nh.mu.cci++
+	nh.cciUpdated()
 	nh.engine.setCCIReady(clusterID)
 	n.close()
 	n.offloaded(rsm.FromNodeHost)
@@ -1846,43 +1856,48 @@ func (nh *NodeHost) sendTickMessage(clusters []*node) {
 	}
 }
 
-func (nh *NodeHost) closeStoppedClusters() {
-	chans := make([]<-chan struct{}, 0)
-	keys := make([]uint64, 0)
-	nodeIDs := make([]uint64, 0)
-	nh.forEachCluster(func(cid uint64, node *node) bool {
-		chans = append(chans, node.shouldStop())
-		keys = append(keys, cid)
-		nodeIDs = append(nodeIDs, node.nodeID)
-		return true
-	})
-	if len(chans) == 0 {
-		return
-	}
-	cases := make([]reflect.SelectCase, len(chans)+1)
-	for i, ch := range chans {
-		cases[i] = reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ch),
-		}
-	}
-	cases[len(chans)] = reflect.SelectCase{Dir: reflect.SelectDefault}
-	if chosen, _, ok := reflect.Select(cases); !ok && chosen < len(keys) {
-		clusterID := keys[chosen]
-		nodeID := nodeIDs[chosen]
-		plog.Debugf("%s will be stopped by the node monitor", dn(clusterID, nodeID))
-		if err := nh.stopNode(clusterID, nodeID, true); err != nil {
-			plog.Errorf("failed to remove cluster %d", clusterID)
-		}
-	}
-}
-
 func (nh *NodeHost) nodeMonitorMain() {
-	tf := func() bool {
-		nh.closeStoppedClusters()
-		return false
+	for {
+		nodes := make([]*node, 0)
+		nh.forEachCluster(func(cid uint64, node *node) bool {
+			nodes = append(nodes, node)
+			return true
+		})
+		if len(nodes) == 0 {
+			return
+		}
+		cases := make([]reflect.SelectCase, len(nodes)+2)
+		for i, n := range nodes {
+			cases[i] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(n.shouldStop()),
+			}
+		}
+		cases[len(nodes)] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(nh.mu.cciCh),
+		}
+		cases[len(nodes)+1] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(nh.stopper.ShouldStop()),
+		}
+		index, _, ok := reflect.Select(cases)
+		if !ok && index < len(nodes) {
+			// node closed
+			n := nodes[index]
+			plog.Debugf("%s will be stopped by the node monitor",
+				dn(n.clusterID, n.nodeID))
+			_ = nh.stopNode(n.clusterID, n.nodeID, true)
+		} else if index == len(nodes) {
+			// cci change
+			continue
+		} else if index == len(nodes)+1 {
+			// stopped
+			return
+		} else {
+			panic("unknown node list change state")
+		}
 	}
-	server.StartTicker(monitorInterval, tf, nh.stopper.ShouldStop())
 }
 
 func (nh *NodeHost) pushStreamState(clusterID uint64,
