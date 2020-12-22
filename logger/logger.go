@@ -19,6 +19,8 @@ package logger
 
 import (
 	"sync"
+
+	"github.com/lni/dragonboat/v3/internal/invariants"
 )
 
 // LogLevel is the log level defined in dragonboat.
@@ -66,25 +68,38 @@ func SetLoggerFactory(f Factory) {
 // GetLogger returns the logger for the specified package name. The most common
 // use case for the returned logger is to set its log verbosity level.
 func GetLogger(pkgName string) ILogger {
+	return getILogger(pkgName, false)
+}
+
+// GetMonkeyLogger returns a logger that only works in monkey test mode.
+func GetMonkeyLogger(pkgName string) ILogger {
+	return getILogger(pkgName, true)
+}
+
+func getILogger(pkgName string, monkey bool) ILogger {
 	_loggers.mu.Lock()
 	defer _loggers.mu.Unlock()
 	l, ok := _loggers.loggers[pkgName]
 	if !ok {
-		l = &dragonboatLogger{pkgName: pkgName}
+		l = &dragonboatLogger{pkgName: pkgName, monkeyLogger: monkey}
 		_loggers.loggers[pkgName] = l
 	}
 	return l
 }
 
 type dragonboatLogger struct {
-	mu      sync.Mutex
-	logger  ILogger
-	pkgName string
+	mu           sync.Mutex
+	logger       ILogger
+	pkgName      string
+	monkeyLogger bool
 }
 
 var _ ILogger = (*dragonboatLogger)(nil)
 
 func (d *dragonboatLogger) get() ILogger {
+	if d.monkeyLogger && !invariants.MonkeyTest {
+		return _nullLogger
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.logger == nil {
@@ -144,3 +159,15 @@ func createSysLoggers() *sysLoggers {
 func createDefaultILogger(pkgName string) ILogger {
 	return CreateCapnsLog(pkgName)
 }
+
+type nullLogger struct{}
+
+var _ ILogger = (*nullLogger)(nil)
+var _nullLogger = nullLogger{}
+
+func (_ nullLogger) SetLevel(LogLevel)                           {}
+func (_ nullLogger) Debugf(format string, args ...interface{})   {}
+func (_ nullLogger) Infof(format string, args ...interface{})    {}
+func (_ nullLogger) Warningf(format string, args ...interface{}) {}
+func (_ nullLogger) Errorf(format string, args ...interface{})   {}
+func (_ nullLogger) Panicf(format string, args ...interface{})   {}

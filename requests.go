@@ -47,7 +47,8 @@ var (
 )
 
 var (
-	plog = logger.GetLogger("dragonboat")
+	plog      = logger.GetLogger("dragonboat")
+	monkeyLog = logger.GetMonkeyLogger("monkey")
 )
 
 var (

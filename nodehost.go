@@ -1779,6 +1779,7 @@ func (nh *NodeHost) tickWorkerMain() {
 	idx := uint64(0)
 	nodes := make([]*node, 0)
 	tf := func() bool {
+		monkeyLog.Infof("%s logical tick received", nh.ID())
 		if idx != nh.getClusterSetIndex() {
 			nodes = nodes[:0]
 			idx = nh.forEachCluster(func(cid uint64, n *node) bool {
@@ -1789,6 +1790,7 @@ func (nh *NodeHost) tickWorkerMain() {
 		nh.streams.tick()
 		nh.sendTickMessage(nodes)
 		nh.engine.setAllStepReady(nodes)
+		monkeyLog.Infof("%s logical tick handled", nh.ID())
 		return false
 	}
 	ti := time.Duration(nh.nhConfig.RTTMillisecond) * time.Millisecond

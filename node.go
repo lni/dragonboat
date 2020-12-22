@@ -390,6 +390,7 @@ func (n *node) payloadTooBig(sz int) bool {
 
 func (n *node) propose(session *client.Session,
 	cmd []byte, timeout uint64) (*RequestState, error) {
+	monkeyLog.Infof("%s made a proposal %d bytes", n.id(), len(cmd))
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -1115,15 +1116,20 @@ func (n *node) handleEvents() bool {
 		hasEvent = true
 	}
 	if hasEvent {
-		if n.gcTick != n.currentTick {
-			n.pendingProposals.gc()
-			n.pendingConfigChange.gc()
-			n.pendingSnapshot.gc()
-			n.gcTick = n.currentTick
-		}
+		n.gc()
 		n.pendingReadIndexes.applied(lastApplied)
 	}
 	return hasEvent
+}
+
+func (n *node) gc() {
+	if n.gcTick != n.currentTick {
+		monkeyLog.Infof("%s called gc", n.id())
+		n.pendingProposals.gc()
+		n.pendingConfigChange.gc()
+		n.pendingSnapshot.gc()
+		n.gcTick = n.currentTick
+	}
 }
 
 func (n *node) handleCompaction() bool {
