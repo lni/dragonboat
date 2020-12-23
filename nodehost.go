@@ -174,9 +174,6 @@ type ClusterInfo struct {
 	ConfigChangeIndex uint64
 	// StateMachineType is the type of the state machine.
 	StateMachineType sm.Type
-	// Pending is a boolean flag indicating whether details of the cluster node
-	// is not available. The Pending flag is set to true usually because the node
-	// has not had anything applied yet.
 	// IsLeader indicates whether this is a leader node.
 	IsLeader bool
 	// IsObserver indicates whether this is a non-voting observer node.
