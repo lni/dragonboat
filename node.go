@@ -372,6 +372,9 @@ func (n *node) OnDiskStateMachine() bool {
 
 func (n *node) proposeSession(session *client.Session,
 	timeout uint64) (*RequestState, error) {
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
+	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -390,7 +393,9 @@ func (n *node) payloadTooBig(sz int) bool {
 
 func (n *node) propose(session *client.Session,
 	cmd []byte, timeout uint64) (*RequestState, error) {
-	monkeyLog.Infof("%s made a proposal %d bytes", n.id(), len(cmd))
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
+	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -404,6 +409,9 @@ func (n *node) propose(session *client.Session,
 }
 
 func (n *node) read(timeout uint64) (*RequestState, error) {
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
+	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -415,6 +423,9 @@ func (n *node) read(timeout uint64) (*RequestState, error) {
 }
 
 func (n *node) requestLeaderTransfer(nodeID uint64) error {
+	if !n.initialized() {
+		return ErrClusterNotReady
+	}
 	if n.isWitness() {
 		return ErrInvalidOperation
 	}
@@ -423,10 +434,13 @@ func (n *node) requestLeaderTransfer(nodeID uint64) error {
 
 func (n *node) requestSnapshot(opt SnapshotOption,
 	timeout uint64) (*RequestState, error) {
-	st := rsm.UserRequested
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
+	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
+	st := rsm.UserRequested
 	if opt.Exported {
 		plog.Debugf("%s called export snapshot", n.id())
 		st = rsm.Exported
@@ -457,11 +471,14 @@ func (n *node) reportIgnoredSnapshotRequest(key uint64) {
 func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	nodeID uint64, target string, orderID uint64,
 	timeout uint64) (*RequestState, error) {
-	if cct != pb.RemoveNode && !n.validateAddress(target) {
-		return nil, ErrInvalidAddress
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
+	}
+	if cct != pb.RemoveNode && !n.validateAddress(target) {
+		return nil, ErrInvalidAddress
 	}
 	cc := pb.ConfigChange{
 		Type:           cct,
@@ -1115,8 +1132,8 @@ func (n *node) handleEvents() bool {
 	if n.handleCompaction() {
 		hasEvent = true
 	}
+	n.gc()
 	if hasEvent {
-		n.gc()
 		n.pendingReadIndexes.applied(lastApplied)
 	}
 	return hasEvent
@@ -1124,7 +1141,6 @@ func (n *node) handleEvents() bool {
 
 func (n *node) gc() {
 	if n.gcTick != n.currentTick {
-		monkeyLog.Infof("%s called gc", n.id())
 		n.pendingProposals.gc()
 		n.pendingConfigChange.gc()
 		n.pendingSnapshot.gc()

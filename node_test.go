@@ -1736,3 +1736,28 @@ func TestLogDBMetrics(t *testing.T) {
 		t.Errorf("unexpected value")
 	}
 }
+
+func TestUninitializedNodeNotAllowedToMakeRequests(t *testing.T) {
+	n := node{}
+	if n.initialized() {
+		t.Fatalf("already initialized")
+	}
+	if _, err := n.propose(nil, nil, 1); err != ErrClusterNotReady {
+		t.Fatalf("making proposal not rejected")
+	}
+	if _, err := n.proposeSession(nil, 1); err != ErrClusterNotReady {
+		t.Fatalf("propose session not rejected")
+	}
+	if _, err := n.read(1); err != ErrClusterNotReady {
+		t.Fatalf("read not rejected")
+	}
+	if err := n.requestLeaderTransfer(1); err != ErrClusterNotReady {
+		t.Fatalf("leader transfer request not rejected")
+	}
+	if _, err := n.requestSnapshot(SnapshotOption{}, 1); err != ErrClusterNotReady {
+		t.Fatalf("snapshot request not rejected")
+	}
+	if _, err := n.requestConfigChange(pb.ConfigChangeType(0), 1, "localhost:1", 1, 1); err != ErrClusterNotReady {
+		t.Fatalf("config change request not rejected")
+	}
+}

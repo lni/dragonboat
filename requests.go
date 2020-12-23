@@ -84,7 +84,8 @@ var (
 	ErrRejected = errors.New("request rejected")
 	// ErrClusterNotReady indicates that the request has been dropped as the
 	// specified raft cluster is not ready to handle the request. Unknown leader
-	// is the most common cause of this error.
+	// is the most common cause of this error, trying to use a cluster not fully
+	// initialized is another major cause of ErrClusterNotReady.
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
