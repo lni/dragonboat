@@ -165,9 +165,9 @@ type nullLogger struct{}
 var _ ILogger = (*nullLogger)(nil)
 var _nullLogger = nullLogger{}
 
-func (_ nullLogger) SetLevel(LogLevel)                           {}
-func (_ nullLogger) Debugf(format string, args ...interface{})   {}
-func (_ nullLogger) Infof(format string, args ...interface{})    {}
-func (_ nullLogger) Warningf(format string, args ...interface{}) {}
-func (_ nullLogger) Errorf(format string, args ...interface{})   {}
-func (_ nullLogger) Panicf(format string, args ...interface{})   {}
+func (nullLogger) SetLevel(LogLevel)                           {}
+func (nullLogger) Debugf(format string, args ...interface{})   {}
+func (nullLogger) Infof(format string, args ...interface{})    {}
+func (nullLogger) Warningf(format string, args ...interface{}) {}
+func (nullLogger) Errorf(format string, args ...interface{})   {}
+func (nullLogger) Panicf(format string, args ...interface{})   {}
