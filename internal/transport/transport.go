@@ -213,11 +213,9 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	env *server.Env, resolver INodeAddressResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
-	var sourceID string
-	if nhConfig.DynamicRaftAddress {
-		sourceID = env.UUID()
-	} else {
-		sourceID = nhConfig.RaftAddress
+	sourceID := nhConfig.RaftAddress
+	if nhConfig.AddressByNodeHostID {
+		sourceID = env.NodeHostID()
 	}
 	t := &Transport{
 		nhConfig:          nhConfig,

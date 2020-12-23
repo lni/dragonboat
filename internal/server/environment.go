@@ -15,13 +15,15 @@
 package server
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
-	uuidlib "github.com/google/uuid"
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -34,7 +36,11 @@ import (
 )
 
 var (
-	plog = logger.GetLogger("server")
+	plog   = logger.GetLogger("server")
+	nhidRe = regexp.MustCompile("^NHID-([0-9]*)$")
+	// ErrInvalidNodeHostID indicates that the NodeHost ID value provided is
+	// invalid
+	ErrInvalidNodeHostID = errors.New("invalid NodeHost ID value")
 	// ErrHardSettingChanged indicates that one or more of the hard settings
 	// changed.
 	ErrHardSettingChanged = errors.New("hard setting changed")
@@ -68,31 +74,55 @@ var (
 const (
 	flagFilename = "dragonboat.ds"
 	lockFilename = "LOCK"
-	idFilename   = "ID"
+	idFilename   = "NODEHOST.ID"
 )
 
-type uuid struct {
-	uuid uuidlib.UUID
+type NodeHostID struct {
+	id uint64
 }
 
-func newUUID() *uuid {
-	return &uuid{
-		uuid: uuidlib.New(),
+func ParseNodeHostID(v string) (*NodeHostID, error) {
+	match := nhidRe.FindStringSubmatch(v)
+	if len(match) != 2 {
+		return &NodeHostID{}, ErrInvalidNodeHostID
 	}
+	id, err := strconv.ParseUint(match[1], 10, 64)
+	if err != nil {
+		return &NodeHostID{}, ErrInvalidNodeHostID
+	}
+	return &NodeHostID{id: id}, nil
 }
 
-func (n *uuid) Marshal() ([]byte, error) {
-	return n.uuid.MarshalBinary()
+func NewNodeHostID(id uint64) *NodeHostID {
+	return &NodeHostID{id: id}
 }
 
-func (n *uuid) Unmarshal(data []byte) error {
-	return n.uuid.UnmarshalBinary(data)
+func newRandomNodeHostID() *NodeHostID {
+	return &NodeHostID{id: random.LockGuardedRand.Uint64()}
+}
+
+func (n *NodeHostID) String() string {
+	return fmt.Sprintf("NHID-%d", n.id)
+}
+
+func (n *NodeHostID) Marshal() ([]byte, error) {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, n.id)
+	return buf, nil
+}
+
+func (n *NodeHostID) Unmarshal(data []byte) error {
+	if len(data) != 8 {
+		panic("failed to get NodeHost id")
+	}
+	n.id = binary.LittleEndian.Uint64(data)
+	return nil
 }
 
 // Env is the server environment for NodeHost.
 type Env struct {
 	hostname     string
-	uuid         string
+	nhid         *NodeHostID
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
@@ -213,28 +243,28 @@ func (env *Env) CreateSnapshotDir(did uint64,
 	return nil
 }
 
-// UUID returns the string representation of the NodeHost UUID.
-func (env *Env) UUID() string {
-	return env.uuid
+// NodeHostID returns the string representation of the NodeHost ID value.
+func (env *Env) NodeHostID() string {
+	return env.nhid.String()
 }
 
-// LoadUUID loads the NodeHost UUID value from the id file.
-func (env *Env) LoadUUID() (string, error) {
+// LoadNodeHostID loads the NodeHost ID value from the id file.
+func (env *Env) LoadNodeHostID() (*NodeHostID, error) {
 	dir, _ := env.getDataDirs()
-	nhUUID := newUUID()
+	nhID := newRandomNodeHostID()
 	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
 		if err := fileutil.GetFlagFileContent(dir,
-			idFilename, nhUUID, env.fs); err != nil {
-			return "", err
+			idFilename, nhID, env.fs); err != nil {
+			return nil, err
 		}
 	} else {
 		if err := fileutil.CreateFlagFile(dir,
-			idFilename, nhUUID, env.fs); err != nil {
-			return "", err
+			idFilename, nhID, env.fs); err != nil {
+			return nil, err
 		}
 	}
-	env.uuid = nhUUID.uuid.String()
-	return env.uuid, nil
+	env.nhid = nhID
+	return nhID, nil
 }
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the

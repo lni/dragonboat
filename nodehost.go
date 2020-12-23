@@ -16,16 +16,15 @@
 Package dragonboat is a multi-group Raft implementation.
 
 The NodeHost struct is the facade interface for all features provided by the
-dragonboat package. Each NodeHost instance, identified by its RaftAddress
-property, usually runs on a separate host managing its CPU, storage and network
-resources. Each NodeHost can manage Raft nodes from many different Raft groups
-known as Raft clusters. Each Raft cluster is identified by its ClusterID Each
-Raft cluster usually consists of multiple nodes, identified by their NodeID
-values. Nodes from the same Raft cluster are suppose to be distributed on
-different NodeHost instances across the network, this brings fault tolerance
-to node failures as application data stored in such a Raft cluster can be
-available as long as the majority of its managing NodeHost instances (i.e. its
-underlying hosts) are available.
+dragonboat package. Each NodeHost instance usually runs on a separate host
+managing its CPU, storage and network resources. Each NodeHost can manage
+Raft nodes from many different Raft groups known as Raft clusters. Each Raft
+cluster is identified by its ClusterID Each Raft cluster usually consists of
+multiple nodes, identified by their NodeID values. Nodes from the same Raft
+cluster are suppose to be distributed on different NodeHost instances across
+the network, this brings fault tolerance to node failures as application data
+stored in such a Raft cluster can be available as long as the majority of its
+managing NodeHost instances (i.e. its underlying hosts) are available.
 
 User applications can leverage the power of the Raft protocol implemented in
 dragonboat by implementing its IStateMachine or IOnDiskStateMachine component.
@@ -189,7 +188,8 @@ type ClusterInfo struct {
 // NodeHostInfo provides info about the NodeHost, including its managed Raft
 // cluster nodes and available Raft logs saved in its local persistent storage.
 type NodeHostInfo struct {
-	// RaftAddress is the public address and the identifier of the NodeHost.
+	// RaftAddress is the public address of the NodeHost used for exchanging Raft
+	// messages, snapshots and other metadata with other NodeHost instances.
 	RaftAddress string
 	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
 	ClusterInfoList []ClusterInfo
@@ -256,9 +256,6 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	test struct {
-		uuid string
-	}
 	streams      *streamState
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
@@ -270,6 +267,7 @@ type NodeHost struct {
 	transport    transport.ITransport
 	msgHandler   *messageHandler
 	fs           vfs.IFS
+	id           *server.NodeHostID
 }
 
 var _ nodeLoader = (*NodeHost)(nil)
@@ -335,6 +333,12 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
+	nh.id, err = nh.env.LoadNodeHostID()
+	if err != nil {
+		nh.Stop()
+		return nil, err
+	}
+	plog.Infof("NodeHost ID: %s", nh.id.String())
 	errorInjection := false
 	if nhConfig.Expert.FS != nil {
 		_, errorInjection = nhConfig.Expert.FS.(*vfs.ErrorFS)
@@ -360,32 +364,18 @@ func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
 
 // RaftAddress returns the Raft address of the NodeHost instance, it is the
 // network address by which the NodeHost can be reached by other NodeHost
-// instances for exchanging Raft messages and snapshots. By default, the
-// RaftAddress value of a NodeHost is not expected to change after restarts and
-// thus used to identify a NodeHost instance in Dragonboat's default settings.
+// instances for exchanging Raft messages, snapshots and other metadata. By
+// default, the RaftAddress value of a NodeHost is not expected to change
+// after restarts.
 func (nh *NodeHost) RaftAddress() string {
 	return nh.nhConfig.RaftAddress
 }
 
-// UUID returns the string representation of the NodeHost's UUID value. The
-// UUID value of a NodeHost will not change between restarts and thus can be
-// used to identify a NodeHost instance when the RaftAddress value of a
-// NodeHost change between restrats.
-func (nh *NodeHost) UUID() string {
-	if len(nh.test.uuid) > 0 {
-		return nh.test.uuid
-	}
-	return nh.env.UUID()
-}
-
-// ID returns a string representation of the NodeHost ID. By default, it
-// returns the RaftAddress value of the NodeHost, or it returns the UUID of the
-// NodeHost when NodeHostConfig.DynamicRaftAddress is set.
+// ID returns the string representation of the NodeHost ID value. The NodeHost
+// ID is assigned to each NodeHost on its initial creation and it can be used
+// to uniquely identify the NodeHost instance for its entire life cycle.
 func (nh *NodeHost) ID() string {
-	if nh.nhConfig.DynamicRaftAddress {
-		return nh.UUID()
-	}
-	return nh.RaftAddress()
+	return nh.id.String()
 }
 
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
@@ -412,25 +402,25 @@ func (nh *NodeHost) Stop() {
 				logutil.ClusterID(node.ClusterID))
 		}
 	}
-	plog.Debugf("%s is going to stop the nh stopper", nh.id())
+	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
 	nh.stopper.Stop()
-	plog.Debugf("%s is going to stop the exec engine", nh.id())
+	plog.Debugf("%s is going to stop the exec engine", nh.describe())
 	if nh.engine != nil {
 		nh.engine.stop()
 	}
-	plog.Debugf("%s is going to stop the tranport module", nh.id())
+	plog.Debugf("%s is going to stop the tranport module", nh.describe())
 	if nh.transport != nil {
 		nh.transport.Stop()
 	}
-	plog.Debugf("%s transport module stopped", nh.id())
+	plog.Debugf("%s transport module stopped", nh.describe())
 	if nh.logdb != nil {
 		nh.logdb.Close()
 	} else {
 		plog.Warningf("logdb is nil")
 	}
-	plog.Debugf("logdb closed, %s is now stopped", nh.id())
+	plog.Debugf("logdb closed, %s is now stopped", nh.describe())
 	nh.env.Stop()
-	plog.Debugf("env stopped on %s", nh.id())
+	plog.Debugf("env stopped on %s", nh.describe())
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -1156,8 +1146,8 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // the new Raft node will be running. It should be set to NodeHost's RaftAddress
 // value when fixed IP or DNS name is available to address the NodeHost,
 // otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// DNS name is not available (typically when the AddressByNodeHostID field is
+// set to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1199,8 +1189,8 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // the new Raft node will be running. It should be set to NodeHost's RaftAddress
 // value when fixed IP or DNS name is available to address the NodeHost,
 // otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// DNS name is not available (typically when the AddressByNodeHostID field is
+// set to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1240,8 +1230,8 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // the new Raft node will be running. It should be set to NodeHost's RaftAddress
 // value when fixed IP or DNS name is available to address the NodeHost,
 // otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// DNS name is not available (typically when the AddressByNodeHostID field is
+// set to true in NodeHostConfig).
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1532,6 +1522,13 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
+	if nh.nhConfig.AddressByNodeHostID {
+		for _, nhid := range initialMembers {
+			if _, err := server.ParseNodeHostID(nhid); err != nil {
+				return ErrInvalidNodeHostID
+			}
+		}
+	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
 	if _, ok := nh.mu.clusters.Load(clusterID); ok {
@@ -1632,15 +1629,6 @@ func (nh *NodeHost) createLogDB() error {
 	}
 	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
-	}
-	if len(nh.test.uuid) == 0 {
-		uuid, err := nh.env.LoadUUID()
-		if err != nil {
-			return err
-		}
-		plog.Infof("NodeHost UUID: %s", uuid)
-	} else {
-		plog.Infof("Test NodeHost UUID: %s", nh.test.uuid)
 	}
 	var factory config.LogDBFactoryFunc
 	df := func(config config.NodeHostConfig, cb config.LogDBCallback,
@@ -1921,7 +1909,7 @@ func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
 
-func (nh *NodeHost) id() string {
+func (nh *NodeHost) describe() string {
 	return nh.RaftAddress()
 }
 

@@ -40,7 +40,7 @@ var (
 )
 
 type nodeLoader interface {
-	id() string
+	describe() string
 	getClusterSetIndex() uint64
 	forEachCluster(f func(uint64, *node) bool) uint64
 }
@@ -366,7 +366,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.saveReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotRequested}
-				plog.Debugf("%s snapshotRequested for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotRequested for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -374,7 +374,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.recoverReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotAvailable}
-				plog.Debugf("%s snapshotAvailable for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotAvailable for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -382,7 +382,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.streamReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: streamSnapshot}
-				plog.Debugf("%s streamSnapshot for %d", p.nh.id(), cid)
+				plog.Debugf("%s streamSnapshot for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -588,7 +588,7 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 	}
 	w := p.getWorker()
 	if w == nil {
-		plog.Debugf("%s no more worker", p.nh.id())
+		plog.Debugf("%s no more worker", p.nh.describe())
 		return false
 	}
 	for idx, pj := range p.pending {

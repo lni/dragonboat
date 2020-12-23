@@ -89,6 +89,9 @@ var (
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
+	// ErrInvalidNodeHostID indicates that the NodeHost ID value provided is
+	// invalid
+	ErrInvalidNodeHostID = errors.New("invalid NodeHost ID value")
 )
 
 var (

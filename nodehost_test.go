@@ -59,8 +59,8 @@ import (
 
 const (
 	defaultTestPort = 26001
-	testUUID1       = "test-uuid-1"
-	testUUID2       = "test-uuid-2"
+	testNodeHostID1 = "NHID-12345"
+	testNodeHostID2 = "NHID-12346"
 )
 
 func getTestPort() int {
@@ -762,9 +762,9 @@ func (u *uuidChanTransport) Stop() {
 }
 
 func (u *uuidChanTransport) getAddr(uuid string) (string, error) {
-	if uuid == testUUID1 {
+	if uuid == testNodeHostID1 {
 		return nodeHostTestAddr1, nil
-	} else if uuid == testUUID2 {
+	} else if uuid == testNodeHostID2 {
 		return nodeHostTestAddr2, nil
 	}
 	return "", errors.New("unknown uuid")
@@ -799,7 +799,7 @@ func (tm *uuidTestTransportModule) Create(nhConfig config.NodeHostConfig,
 }
 
 func (tm *uuidTestTransportModule) Validate(addr string) bool {
-	return addr == testUUID1 || addr == testUUID2
+	return addr == testNodeHostID1 || addr == testNodeHostID2
 }
 
 func TestTransportModuleCanUseUUID(t *testing.T) {
@@ -833,8 +833,8 @@ func TestTransportModuleCanUseUUID(t *testing.T) {
 	}
 	defer nh2.Stop()
 	peers := make(map[uint64]string)
-	peers[1] = testUUID1
-	peers[2] = testUUID2
+	peers[1] = testNodeHostID1
+	peers[2] = testNodeHostID2
 	createSM := func(uint64, uint64) sm.IStateMachine {
 		return &PST{}
 	}
@@ -1388,17 +1388,17 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestUUIDIsStatic(t *testing.T) {
+func TestNodeHostIDIsStatic(t *testing.T) {
 	fs := vfs.GetTestFS()
-	var uuid string
+	id := ""
 	to := &testOption{
 		restartNodeHost: true,
 		noElection:      true,
 		tf: func(nh *NodeHost) {
-			uuid = nh.UUID()
+			id = nh.ID()
 		},
 		rf: func(nh *NodeHost) {
-			if nh.UUID() != uuid {
+			if nh.ID() != id {
 				t.Fatalf("UUID value changed")
 			}
 		},
@@ -1406,14 +1406,15 @@ func TestUUIDIsStatic(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestUUIDCanBeSet(t *testing.T) {
+func TestNodeHostIDCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		noElection: true,
 		tf: func(nh *NodeHost) {
-			uuid := "test-uuid-value"
-			nh.test.uuid = uuid
-			if nh.UUID() != uuid {
+			id := uint64(1234567890)
+			nhid := server.NewNodeHostID(id)
+			nh.id = nhid
+			if nh.ID() != nhid.String() {
 				t.Fatalf("failed to set uuid")
 			}
 		},

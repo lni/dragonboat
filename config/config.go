@@ -282,20 +282,26 @@ type NodeHostConfig struct {
 	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
 	// than 1 million in your environment.
 	RTTMillisecond uint64
-	// RaftAddress is a hostname:port or IP:port address used by the Raft RPC
-	// module for exchanging Raft messages and snapshots. It should be set to
-	// the public address that can be accessed from remote NodeHost instances.
-	// DynamicRaftAddress should be set to true when the RaftAddress of this
-	// NodeHost instance might change after restart.
+	// RaftAddress is a DNS name:port or IP:port address used by the Raft
+	// transport module for exchanging Raft messages, snapshots and metadata. It
+	// should be set to the public address that can be accessed from remote
+	// NodeHost instances.
 	//
-	// When the NodeHostConfig.ListenAddress field is empty, Dragonboat listens on
+	// AddressByNodeHostID should be set to true when the RaftAddress of this
+	// NodeHost instance might change after restart. In this case, a custom
+	// transport is required that can translate NodeHostID values to their current
+	// RaftAddress values.
+	//
+	// When the NodeHostConfig.ListenAddress field is empty, NodeHost listens on
 	// RaftAddress for incoming Raft messages. When hostname or domain name is
 	// used, it will be resolved to IPv4 addresses first and Dragonboat listens
 	// to all resolved IPv4 addresses.
 	RaftAddress string
-	// DynamicRaftAddress indicates that the RaftAddress of the NodeHost is
-	// possible to change after restart.
-	DynamicRaftAddress bool
+	// AddressByNodeHostID indicates that NodeHost instances should be addressed
+	// by their NodeHostID values. This requires users to provide a custom
+	// transport module capable of addressing NodeHost instances by their
+	// NodeHostID values.
+	AddressByNodeHostID bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
 	// form used by the Raft RPC module to listen on for Raft message and
 	// snapshots. When the ListenAddress field is not set, The Raft RPC module
@@ -420,7 +426,7 @@ func (c *NodeHostConfig) Validate() error {
 	if c.RaftRPCFactory != nil && c.TransportModule != nil {
 		return errors.New("both TransportModule and RaftRPCFactory specified")
 	}
-	if c.DynamicRaftAddress && c.TransportModule == nil {
+	if c.AddressByNodeHostID && c.TransportModule == nil {
 		return errors.New("NodeHostConfig.TransportModule not set")
 	}
 	return nil
