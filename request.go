@@ -1188,6 +1188,10 @@ func (p *proposalShard) gcAt(now uint64) {
 	if p.stopped {
 		return
 	}
+	if len(p.pending) > 0 {
+		monkeyLog.Infof("%s called gc, now %d, last gc %d, gcTick %d",
+			dn(p.cfg.ClusterID, p.cfg.NodeID), now, p.lastGcTime, p.gcTick)
+	}
 	if now-p.lastGcTime < p.gcTick {
 		return
 	}
