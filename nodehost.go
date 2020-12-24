@@ -1862,6 +1862,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 				Dir:  reflect.SelectRecv,
 				Chan: reflect.ValueOf(n.shouldStop()),
 			}
+			monkeyLog.Infof("%s added to node monitor", n.id())
 		}
 		cases[len(nodes)] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
@@ -1875,8 +1876,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 		if !ok && index < len(nodes) {
 			// node closed
 			n := nodes[index]
-			plog.Debugf("%s will be stopped by the node monitor",
-				dn(n.clusterID, n.nodeID))
+			monkeyLog.Infof("%s will be stopped by the node monitor", n.id())
 			_ = nh.stopNode(n.clusterID, n.nodeID, true)
 		} else if index == len(nodes) {
 			// cci change
