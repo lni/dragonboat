@@ -1880,9 +1880,11 @@ func (nh *NodeHost) nodeMonitorMain() {
 			_ = nh.stopNode(n.clusterID, n.nodeID, true)
 		} else if index == len(nodes) {
 			// cci change
+			monkeyLog.Infof("%s cci update", nh.RaftAddress())
 			continue
 		} else if index == len(nodes)+1 {
 			// stopped
+			monkeyLog.Infof("%s monitor thread stopped", nh.RaftAddress())
 			return
 		} else {
 			panic("unknown node list change state")
