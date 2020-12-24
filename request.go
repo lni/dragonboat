@@ -595,7 +595,11 @@ func (p *pendingSnapshot) gc() {
 		return
 	}
 	now := p.getTick()
-	if now-p.lastGcTime < p.gcTick {
+	// FIXME:
+	// golangci-lint v1.23 complains that lastGcTime is not used unless lastGcTime
+	// is accessed as a member of the logicalClock. v1.33's typecheck is pretty
+	// broken, preventing us from upgrading.
+	if now-p.logicalClock.lastGcTime < p.gcTick {
 		return
 	}
 	p.lastGcTime = now

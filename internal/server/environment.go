@@ -77,10 +77,13 @@ const (
 	idFilename   = "NODEHOST.ID"
 )
 
+// NodeHostID is the NodeHost ID type used for identifying a NodeHost instance.
 type NodeHostID struct {
 	id uint64
 }
 
+// ParseNodeHostID creates a NodeHostID instance based on the specified string
+// representation of the NodeHost ID.
 func ParseNodeHostID(v string) (*NodeHostID, error) {
 	match := nhidRe.FindStringSubmatch(v)
 	if len(match) != 2 {
@@ -93,6 +96,7 @@ func ParseNodeHostID(v string) (*NodeHostID, error) {
 	return &NodeHostID{id: id}, nil
 }
 
+// NewNodeHostID creates a NodeHostID instance based on the specified id value.
 func NewNodeHostID(id uint64) *NodeHostID {
 	return &NodeHostID{id: id}
 }
@@ -101,16 +105,19 @@ func newRandomNodeHostID() *NodeHostID {
 	return &NodeHostID{id: random.LockGuardedRand.Uint64()}
 }
 
+// String returns a string representation of the NodeHostID instance.
 func (n *NodeHostID) String() string {
 	return fmt.Sprintf("NHID-%d", n.id)
 }
 
+// Marshal marshals the NodeHostID instances.
 func (n *NodeHostID) Marshal() ([]byte, error) {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, n.id)
 	return buf, nil
 }
 
+// Unmarshal unmarshals the NodeHostID instance.
 func (n *NodeHostID) Unmarshal(data []byte) error {
 	if len(data) != 8 {
 		panic("failed to get NodeHost id")
