@@ -349,7 +349,8 @@ func step(nodes []*node) bool {
 func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 	r *testMessageRouter) {
 	for _, node := range nodes {
-		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID}
+		tick := node.pendingReadIndexes.getTick() + 1
+		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID, Hint: tick}
 		tickMsg.ClusterId = testClusterID
 		r.sendMessage(tickMsg)
 	}
@@ -361,8 +362,13 @@ func stepNodes(nodes []*node, smList []*rsm.StateMachine,
 	s := ticks + 10
 	for i := uint64(0); i < s; i++ {
 		for _, node := range nodes {
-			tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID}
-			tickMsg.ClusterId = testClusterID
+			tick := node.pendingReadIndexes.getTick() + 1
+			tickMsg := pb.Message{
+				Type:      pb.LocalTick,
+				To:        node.nodeID,
+				ClusterId: testClusterID,
+				Hint:      tick,
+			}
 			r.sendMessage(tickMsg)
 		}
 		step(nodes)

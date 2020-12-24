@@ -966,6 +966,9 @@ func (e *engine) processSteps(workerID uint64,
 	for cid := range clusterIDMap {
 		node, ok := nodes[cid]
 		if !ok || node.stopped() {
+			if node != nil && node.stopped() {
+				monkeyLog.Infof("%s skipped stepNode, node stopped", node.id())
+			}
 			continue
 		}
 		if ud, hasUpdate := node.stepNode(); hasUpdate {
