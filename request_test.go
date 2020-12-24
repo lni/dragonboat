@@ -194,14 +194,14 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	if ps.pending == nil {
 		t.Errorf("pending not set")
 	}
-	for i := 0; i < 21; i++ {
-		ps.tick()
+	for i := uint64(1); i < 22; i++ {
+		ps.tick(i)
 		ps.gc()
 		if ps.pending == nil {
 			t.Errorf("pending cleared")
 		}
 	}
-	ps.tick()
+	ps.tick(uint64(22))
 	ps.gc()
 	if ps.pending != nil {
 		t.Errorf("pending is not cleared")
@@ -433,7 +433,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 		t.Errorf("RequestConfigChange failed: %v", err)
 	}
 	for i := uint64(0); i < tickCount; i++ {
-		pcc.tick()
+		pcc.tick(i)
 		pcc.gc()
 	}
 	select {
@@ -442,7 +442,7 @@ func TestConfigChangeCanExpire(t *testing.T) {
 	default:
 	}
 	for i := uint64(0); i < defaultGCTick+1; i++ {
-		pcc.tick()
+		pcc.tick(i + tickCount)
 		pcc.gc()
 	}
 	select {
@@ -851,7 +851,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 		t.Errorf("failed to make proposal, %v", err)
 	}
 	for i := uint64(0); i < tickCount; i++ {
-		pp.tick()
+		pp.tick(i)
 		pp.gc()
 	}
 	select {
@@ -860,7 +860,7 @@ func TestProposalCanBeExpired(t *testing.T) {
 	default:
 	}
 	for i := uint64(0); i < defaultGCTick+1; i++ {
-		pp.tick()
+		pp.tick(i + tickCount)
 		pp.gc()
 	}
 	select {
@@ -1060,7 +1060,7 @@ func testPendingSCReadCanExpire(t *testing.T, addReady bool) {
 	}
 	tickToWait := 100 + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
-		pp.tick()
+		pp.tick(i)
 		pp.applied(499)
 	}
 	select {
@@ -1097,7 +1097,7 @@ func TestNonEmptyReadBatchIsNeverExpired(t *testing.T) {
 	}
 	tickToWait := defaultGCTick * 10
 	for i := uint64(0); i < tickToWait; i++ {
-		pp.tick()
+		pp.tick(i)
 		pp.applied(499)
 	}
 	if len(pp.batches) == 0 {

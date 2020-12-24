@@ -230,8 +230,8 @@ type logicalClock struct {
 	gcTick     uint64
 }
 
-func (p *logicalClock) tick() {
-	atomic.AddUint64(&p.ltick, 1)
+func (p *logicalClock) tick(tick uint64) {
+	atomic.StoreUint64(&p.ltick, tick)
 }
 
 func (p *logicalClock) getTick() uint64 {
@@ -595,10 +595,10 @@ func (p *pendingSnapshot) gc() {
 		return
 	}
 	now := p.getTick()
-	if now-p.logicalClock.lastGcTime < p.gcTick {
+	if now-p.lastGcTime < p.gcTick {
 		return
 	}
-	p.logicalClock.lastGcTime = now
+	p.lastGcTime = now
 	if p.pending.deadline < now {
 		p.pending.timeout()
 		p.pending = nil
@@ -703,10 +703,10 @@ func (p *pendingConfigChange) gc() {
 		return
 	}
 	now := p.getTick()
-	if now-p.logicalClock.lastGcTime < p.gcTick {
+	if now-p.lastGcTime < p.gcTick {
 		return
 	}
-	p.logicalClock.lastGcTime = now
+	p.lastGcTime = now
 	if p.pending.deadline < now {
 		p.pending.timeout()
 		p.pending = nil
@@ -900,10 +900,10 @@ func (p *pendingReadIndex) applied(applied uint64) {
 			delete(p.batches, sys)
 		}
 	}
-	if now-p.logicalClock.lastGcTime < p.gcTick {
+	if now-p.lastGcTime < p.gcTick {
 		return
 	}
-	p.logicalClock.lastGcTime = now
+	p.lastGcTime = now
 	p.gc(now)
 }
 
@@ -999,9 +999,9 @@ func (p *pendingProposal) nextKey(clientID uint64) uint64 {
 	return p.keyg[clientID%p.ps].nextKey()
 }
 
-func (p *pendingProposal) tick() {
+func (p *pendingProposal) tick(tick uint64) {
 	for i := uint64(0); i < p.ps; i++ {
-		p.shards[i].tick()
+		p.shards[i].tick(tick)
 	}
 }
 

@@ -1273,7 +1273,7 @@ func (n *node) handleReceivedMessages() bool {
 func (n *node) handleMessage(m pb.Message) bool {
 	switch m.Type {
 	case pb.LocalTick:
-		n.tick()
+		n.tick(m.Hint)
 	case pb.Quiesce:
 		n.qs.tryEnterQuiesce()
 	case pb.SnapshotStatus:
@@ -1446,7 +1446,7 @@ func (n *node) processStreamStatus() bool {
 	return false
 }
 
-func (n *node) tick() {
+func (n *node) tick(tick uint64) {
 	if n.p == nil {
 		panic("rc node is still nil")
 	}
@@ -1457,10 +1457,10 @@ func (n *node) tick() {
 	} else {
 		n.p.Tick()
 	}
-	n.pendingSnapshot.tick()
-	n.pendingProposals.tick()
-	n.pendingReadIndexes.tick()
-	n.pendingConfigChange.tick()
+	n.pendingSnapshot.tick(tick)
+	n.pendingProposals.tick(tick)
+	n.pendingReadIndexes.tick(tick)
+	n.pendingConfigChange.tick(tick)
 }
 
 func (n *node) notifyConfigChange() {

@@ -1761,10 +1761,12 @@ func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 }
 
 func (nh *NodeHost) tickWorkerMain() {
+	tick := uint64(0)
 	idx := uint64(0)
 	nodes := make([]*node, 0)
 	tf := func() bool {
-		monkeyLog.Infof("%s logical tick received", nh.RaftAddress())
+		tick++
+		monkeyLog.Infof("%s logical tick received, tick %d", nh.RaftAddress(), tick)
 		if idx != nh.getClusterSetIndex() {
 			nodes = nodes[:0]
 			idx = nh.forEachCluster(func(cid uint64, n *node) bool {
@@ -1773,7 +1775,7 @@ func (nh *NodeHost) tickWorkerMain() {
 			})
 		}
 		nh.streams.tick()
-		nh.sendTickMessage(nodes)
+		nh.sendTickMessage(nodes, tick)
 		nh.engine.setAllStepReady(nodes)
 		monkeyLog.Infof("%s logical tick handled", nh.RaftAddress())
 		return false
@@ -1832,12 +1834,13 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 	}
 }
 
-func (nh *NodeHost) sendTickMessage(clusters []*node) {
+func (nh *NodeHost) sendTickMessage(clusters []*node, tick uint64) {
 	for _, n := range clusters {
 		m := pb.Message{
 			Type: pb.LocalTick,
 			To:   n.nodeID,
 			From: n.nodeID,
+			Hint: tick,
 		}
 		n.mq.Add(m)
 	}
