@@ -1853,16 +1853,12 @@ func (nh *NodeHost) nodeMonitorMain() {
 			nodes = append(nodes, node)
 			return true
 		})
-		if len(nodes) == 0 {
-			return
-		}
 		cases := make([]reflect.SelectCase, len(nodes)+2)
 		for i, n := range nodes {
 			cases[i] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
 				Chan: reflect.ValueOf(n.shouldStop()),
 			}
-			monkeyLog.Infof("%s added to node monitor", n.id())
 		}
 		cases[len(nodes)] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
@@ -1876,15 +1872,12 @@ func (nh *NodeHost) nodeMonitorMain() {
 		if !ok && index < len(nodes) {
 			// node closed
 			n := nodes[index]
-			monkeyLog.Infof("%s will be stopped by the node monitor", n.id())
 			_ = nh.stopNode(n.clusterID, n.nodeID, true)
 		} else if index == len(nodes) {
 			// cci change
-			monkeyLog.Infof("%s cci update", nh.RaftAddress())
 			continue
 		} else if index == len(nodes)+1 {
 			// stopped
-			monkeyLog.Infof("%s monitor thread stopped", nh.RaftAddress())
 			return
 		} else {
 			panic("unknown node list change state")
