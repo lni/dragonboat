@@ -802,7 +802,7 @@ func (tm *uuidTestTransportModule) Validate(addr string) bool {
 	return addr == testNodeHostID1 || addr == testNodeHostID2
 }
 
-func TestTransportModuleCanUseUUID(t *testing.T) {
+func TestTransportModuleCanUseNodeHostID(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
@@ -1399,7 +1399,7 @@ func TestNodeHostIDIsStatic(t *testing.T) {
 		},
 		rf: func(nh *NodeHost) {
 			if nh.ID() != id {
-				t.Fatalf("UUID value changed")
+				t.Fatalf("NodeHost ID value changed")
 			}
 		},
 	}
