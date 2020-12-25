@@ -1201,6 +1201,8 @@ func (p *proposalShard) gcAt(now uint64) {
 	}
 	p.lastGcTime = now
 	for key, rec := range p.pending {
+		monkeyLog.Infof("%s deadline %d, now %d",
+			dn(p.cfg.ClusterID, p.cfg.NodeID), rec.deadline, now)
 		if rec.deadline < now {
 			rec.timeout()
 			delete(p.pending, key)
