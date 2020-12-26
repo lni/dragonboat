@@ -86,7 +86,6 @@ var (
 // address
 type INodeAddressResolver interface {
 	Resolve(uint64, uint64) (string, string, error)
-	ReverseResolve(string) []raftio.NodeInfo
 	AddRemote(uint64, uint64, string)
 }
 
@@ -103,7 +102,6 @@ type IRaftMessageHandler interface {
 // Raft messages.
 type ITransport interface {
 	Name() string
-	SetMessageHandler(IRaftMessageHandler)
 	Send(pb.Message) bool
 	SendSnapshot(pb.Message) bool
 	GetStreamSink(clusterID uint64, nodeID uint64) *Sink
@@ -195,7 +193,7 @@ type Transport struct {
 	stopper           *syncutil.Stopper
 	dir               server.SnapshotDirFunc
 	trans             raftio.IRaftRPC
-	handler           atomic.Value
+	msgHandler        IRaftMessageHandler
 	postSend          atomic.Value
 	preSend           atomic.Value
 	preSendBatch      atomic.Value
@@ -210,7 +208,7 @@ var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
-	env *server.Env, resolver INodeAddressResolver,
+	handler IRaftMessageHandler, env *server.Env, resolver INodeAddressResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	sourceID := nhConfig.RaftAddress
@@ -227,6 +225,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		streamConnections: streamConnections,
 		sysEvents:         sysEvents,
 		fs:                fs,
+		msgHandler:        handler,
 	}
 	chunks := NewChunks(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
@@ -309,15 +308,6 @@ func (t *Transport) GetCircuitBreaker(key string) *circuit.Breaker {
 	return breaker
 }
 
-// SetMessageHandler sets the raft message handler.
-func (t *Transport) SetMessageHandler(handler IRaftMessageHandler) {
-	v := t.handler.Load()
-	if v != nil {
-		panic("trying to set the grpctransport handler again")
-	}
-	t.handler.Store(handler)
-}
-
 func (t *Transport) handleRequest(req pb.MessageBatch) {
 	did := t.nhConfig.GetDeploymentID()
 	if req.DeploymentId != did {
@@ -330,10 +320,6 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 			req.BinVer, raftio.RPCBinVersion)
 		return
 	}
-	handler := t.handler.Load()
-	if handler == nil {
-		return
-	}
 	addr := req.SourceAddress
 	if len(addr) > 0 {
 		for _, r := range req.Requests {
@@ -342,27 +328,21 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 			}
 		}
 	}
-	ssCount, msgCount := handler.(IRaftMessageHandler).HandleMessageBatch(req)
+	ssCount, msgCount := t.msgHandler.HandleMessageBatch(req)
 	dropedMsgCount := uint64(len(req.Requests)) - ssCount - msgCount
 	t.metrics.receivedMessages(ssCount, msgCount, dropedMsgCount)
 }
 
 func (t *Transport) snapshotReceived(clusterID uint64,
 	nodeID uint64, from uint64) {
-	if handler := t.handler.Load(); handler != nil {
-		handler.(IRaftMessageHandler).HandleSnapshot(clusterID, nodeID, from)
-	}
+	t.msgHandler.HandleSnapshot(clusterID, nodeID, from)
 }
 
-func (t *Transport) sendUnreachableNotification(addr string) {
-	if handler := t.handler.Load(); handler != nil {
-		h := handler.(IRaftMessageHandler)
-		edp := t.resolver.ReverseResolve(addr)
-		plog.Warningf("%s became unreachable, affecting %d raft nodes",
-			addr, len(edp))
-		for _, rec := range edp {
-			h.HandleUnreachable(rec.ClusterID, rec.NodeID)
-		}
+func (t *Transport) notifyUnreachable(addr string,
+	affected map[raftio.NodeInfo]struct{}) {
+	plog.Warningf("%s became unreachable, affected %d nodes", addr, len(affected))
+	for n := range affected {
+		t.msgHandler.HandleUnreachable(n.ClusterID, n.NodeID)
 	}
 }
 
@@ -414,8 +394,9 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 			t.mu.Unlock()
 		}
 		t.stopper.RunWorker(func() {
-			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from) {
-				t.sendUnreachableNotification(addr)
+			affected := make(map[raftio.NodeInfo]struct{})
+			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from, affected) {
+				t.notifyUnreachable(addr, affected)
 			}
 			shutdownQueue()
 		})
@@ -434,8 +415,10 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 
 // connectAndProcess returns a boolean value indicating whether it is stopped
 // gracefully when the system is being shutdown
-func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
-	remoteHost string, sq sendQueue, from uint64) bool {
+func (t *Transport) connectAndProcess(clusterID uint64,
+	toNodeID uint64, remoteHost string, sq sendQueue, from uint64,
+	affected map[raftio.NodeInfo]struct{}) bool {
+	affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: from}] = struct{}{}
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -454,7 +437,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
 			t.sysEvents.ConnectionEstablished(remoteHost, false)
 		}
-		return t.processMessages(clusterID, toNodeID, sq, conn)
+		return t.processMessages(clusterID, toNodeID, sq, conn, affected)
 	}(); err != nil {
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
 			t.sourceID, remoteHost, err.Error())
@@ -466,8 +449,9 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 	return true
 }
 
-func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
-	sq sendQueue, conn raftio.IConnection) error {
+func (t *Transport) processMessages(clusterID uint64,
+	toNodeID uint64, sq sendQueue, conn raftio.IConnection,
+	affected map[raftio.NodeInfo]struct{}) error {
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
 	sz := uint64(0)
@@ -485,6 +469,7 @@ func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
 		case <-idleTimer.C:
 			return nil
 		case req := <-sq.ch:
+			affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: req.From}] = struct{}{}
 			sq.decrease(req)
 			sz += uint64(req.SizeUpperLimit())
 			requests = append(requests, req)

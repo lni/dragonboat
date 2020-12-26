@@ -425,16 +425,6 @@ func benchmarkTransport(b *testing.B, sz int) {
 	nodes1 := transport.NewNodes(settings.Soft.StreamConnections, nil)
 	nodes2 := transport.NewNodes(settings.Soft.StreamConnections, nil)
 	nodes1.AddRemote(1, 2, addr2)
-	t1, err := transport.NewTransport(nhc1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
-	if err != nil {
-		b.Fatalf("failed to create transport %v", err)
-	}
-	t2, err := transport.NewTransport(nhc2, env2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
-	if err != nil {
-		b.Fatalf("failed to create transport %v", err)
-	}
-	defer t2.Stop()
-	defer t1.Stop()
 	handler1 := &benchmarkMessageHandler{
 		ch:       make(chan struct{}, 1),
 		expected: 128,
@@ -443,8 +433,18 @@ func benchmarkTransport(b *testing.B, sz int) {
 		ch:       make(chan struct{}, 1),
 		expected: 128,
 	}
-	t2.SetMessageHandler(handler1)
-	t1.SetMessageHandler(handler2)
+	t1, err := transport.NewTransport(nhc1,
+		handler1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
+	t2, err := transport.NewTransport(nhc2,
+		handler2, env2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
+	defer t2.Stop()
+	defer t1.Stop()
 	msgs := make([]pb.Message, 0)
 	e := pb.Entry{
 		Index:       12843560,

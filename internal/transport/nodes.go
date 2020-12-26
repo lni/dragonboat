@@ -179,17 +179,3 @@ func (n *Nodes) Resolve(clusterID uint64, nodeID uint64) (string, string, error)
 	}
 	return addr.address, addr.key, nil
 }
-
-// ReverseResolve does the reverse lookup for the specified address. A list
-// of node raftio.NodeInfos are returned for nodes that match the specified address
-func (n *Nodes) ReverseResolve(addr string) []raftio.NodeInfo {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	affected := make([]raftio.NodeInfo, 0)
-	for k, v := range n.mu.addr {
-		if v.address == addr {
-			affected = append(affected, k)
-		}
-	}
-	return affected
-}

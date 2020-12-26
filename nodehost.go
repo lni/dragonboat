@@ -1713,11 +1713,11 @@ func (nh *NodeHost) createTransport() error {
 		return nh.env.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.env, nh.nodes, getSnapshotDir, &transportEvent{nh: nh}, nh.fs)
+		nh.msgHandler, nh.env, nh.nodes, getSnapshotDir,
+		&transportEvent{nh: nh}, nh.fs)
 	if err != nil {
 		return err
 	}
-	tsp.SetMessageHandler(nh.msgHandler)
 	nh.transport = tsp
 	return nil
 }

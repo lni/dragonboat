@@ -84,13 +84,12 @@ func runChunkTest(t *testing.T,
 		}
 	}()
 	defer leaktest.AfterTest(t)()
-	trans, _, stopper, tt := newTestTransport(false, fs)
+	handler := newTestMessageHandler()
+	trans, _, stopper, tt := newTestTransport(handler, false, fs)
 	defer trans.env.Stop()
 	defer trans.Stop()
 	defer stopper.Stop()
 	defer tt.cleanup()
-	handler := newTestMessageHandler()
-	trans.SetMessageHandler(handler)
 	chunks := NewChunks(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunks()
