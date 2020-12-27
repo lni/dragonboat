@@ -27,6 +27,7 @@ import (
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
@@ -43,6 +44,13 @@ const (
 	defaultExecShards  uint64 = 16
 	defaultLogDBShards uint64 = 16
 )
+
+// TargetValidator is the validtor used to validate user specified target values.
+type TargetValidator func(string) bool
+
+// RaftAddressValidator is the validator used to validate user specified
+// RaftAddress values.
+type RaftAddressValidator func(string) bool
 
 // TransportModule is the interface used to specify the transport module to be
 // used by Dragonboat. TransportModule is optional, it is not required to be
@@ -377,6 +385,12 @@ type NodeHostConfig struct {
 	// commits are not notified, clients are only notified when their proposals
 	// are both committed and applied.
 	NotifyCommit bool
+	// Gossip contains configurations for the gossip module. When the
+	// AddressByNodeHostID field is set to true and the default transport module
+	// is used, each NodeHost instance will use gossip to exchange knowledges on
+	// available NodeHost instances. GossipConfig contains configurations that
+	// controls how the gossip service works.
+	Gossip GossipConfig
 	// Expert contains options for expert users who are familiar with the internals
 	// of Dragonboat. Users are recommended not to use this field unless
 	// absoloutely necessary. It is important to note that any change to this field
@@ -393,12 +407,6 @@ func (c *NodeHostConfig) Validate() error {
 	}
 	if len(c.NodeHostDir) == 0 {
 		return errors.New("NodeHostConfig.NodeHostDir is empty")
-	}
-	if !stringutil.IsValidAddress(c.RaftAddress) {
-		return errors.New("invalid NodeHost address")
-	}
-	if len(c.ListenAddress) > 0 && !stringutil.IsValidAddress(c.ListenAddress) {
-		return errors.New("invalid ListenAddress")
 	}
 	if !c.MutualTLS &&
 		(len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0) {
@@ -427,7 +435,26 @@ func (c *NodeHostConfig) Validate() error {
 		return errors.New("both TransportModule and RaftRPCFactory specified")
 	}
 	if c.AddressByNodeHostID && c.TransportModule == nil {
-		return errors.New("NodeHostConfig.TransportModule not set")
+		if c.Gossip.IsEmpty() {
+			return errors.New("gossip service not configured")
+		}
+	}
+	if c.TransportModule != nil {
+		if !c.Gossip.IsEmpty() {
+			return errors.New("gossip service not supported")
+		}
+	}
+	validate := c.GetRaftAddressValidator()
+	if !validate(c.RaftAddress) {
+		return errors.New("invalid NodeHost address")
+	}
+	if len(c.ListenAddress) > 0 && !validate(c.ListenAddress) {
+		return errors.New("invalid ListenAddress")
+	}
+	if !c.Gossip.IsEmpty() {
+		if err := c.Gossip.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -522,6 +549,27 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 		return settings.UnmanagedDeploymentID
 	}
 	return c.DeploymentID
+}
+
+// GetTargetValidator returns a TargetValidator based on the specified
+// NodeHostConfig instance.
+func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
+	if c.AddressByNodeHostID {
+		plog.Infof("returning IsNodeHostID as target validator")
+		return id.IsNodeHostID
+	} else if c.TransportModule != nil {
+		return c.TransportModule.Validate
+	}
+	return stringutil.IsValidAddress
+}
+
+// GetRaftAddressValidator creates a RaftAddressValidator based on the specified
+// NodeHostConfig instance.
+func (c *NodeHostConfig) GetRaftAddressValidator() RaftAddressValidator {
+	if c.TransportModule != nil {
+		return c.TransportModule.Validate
+	}
+	return stringutil.IsValidAddress
 }
 
 // IsValidAddress returns a boolean value indicating whether the input address
@@ -666,4 +714,45 @@ type ExpertConfig struct {
 	LogDB LogDBConfig
 	// FS is the filesystem instance used in tests.
 	FS IFS
+	// TestNodeHostID is the NodeHostID value to be used by the NodeHost instance.
+	// This field is expected to be used in tests only.
+	TestNodeHostID uint64
+}
+
+// GossipConfig contains configurations for the gossip module.
+type GossipConfig struct {
+	// BindAddress is the address for the gossip service to bind to and listen on.
+	// Both UDP and TCP ports are used by the gossip service.
+	BindAddress string
+	// AdvertiseAddress is the address to advertise to other NodeHost instances
+	// used for NAT traversal.
+	AdvertiseAddress string
+	// Seed is a list of AdvertiseAddress of remote NodeHost instances. Local
+	// NodeHost instance will try to contact all of them to bootstrap the gossip
+	// service. At least one reachable NodeHost instance is required to
+	// successfully bootstrap the gossip service.
+	Seed []string
+}
+
+// IsEmpty returns a boolean flag indicating whether the GossipConfig instance
+// is empty.
+func (g *GossipConfig) IsEmpty() bool {
+	return len(g.BindAddress) == 0 &&
+		len(g.AdvertiseAddress) == 0 && len(g.Seed) == 0
+}
+
+// Validate validates the GossipConfig instance.
+func (g *GossipConfig) Validate() error {
+	if len(g.BindAddress) > 0 && !stringutil.IsValidAddress(g.BindAddress) {
+		return errors.New("invalid GossipConfig.BindAddress")
+	}
+	if len(g.AdvertiseAddress) > 0 && !stringutil.IsValidAddress(g.AdvertiseAddress) {
+		return errors.New("invalid GossipConfig.AdvertiseAddress")
+	}
+	for _, v := range g.Seed {
+		if !stringutil.IsValidAddress(v) {
+			return errors.New("invalid GossipConfig.Seed value")
+		}
+	}
+	return nil
 }

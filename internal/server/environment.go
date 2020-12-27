@@ -15,19 +15,17 @@
 package server
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
@@ -36,11 +34,7 @@ import (
 )
 
 var (
-	plog   = logger.GetLogger("server")
-	nhidRe = regexp.MustCompile("^NHID-([0-9]*)$")
-	// ErrInvalidNodeHostID indicates that the NodeHost ID value provided is
-	// invalid
-	ErrInvalidNodeHostID = errors.New("invalid NodeHost ID value")
+	plog = logger.GetLogger("server")
 	// ErrHardSettingChanged indicates that one or more of the hard settings
 	// changed.
 	ErrHardSettingChanged = errors.New("hard setting changed")
@@ -77,59 +71,10 @@ const (
 	idFilename   = "NODEHOST.ID"
 )
 
-// NodeHostID is the NodeHost ID type used for identifying a NodeHost instance.
-type NodeHostID struct {
-	id uint64
-}
-
-// ParseNodeHostID creates a NodeHostID instance based on the specified string
-// representation of the NodeHost ID.
-func ParseNodeHostID(v string) (*NodeHostID, error) {
-	match := nhidRe.FindStringSubmatch(v)
-	if len(match) != 2 {
-		return &NodeHostID{}, ErrInvalidNodeHostID
-	}
-	id, err := strconv.ParseUint(match[1], 10, 64)
-	if err != nil {
-		return &NodeHostID{}, ErrInvalidNodeHostID
-	}
-	return &NodeHostID{id: id}, nil
-}
-
-// NewNodeHostID creates a NodeHostID instance based on the specified id value.
-func NewNodeHostID(id uint64) *NodeHostID {
-	return &NodeHostID{id: id}
-}
-
-func newRandomNodeHostID() *NodeHostID {
-	return &NodeHostID{id: random.LockGuardedRand.Uint64()}
-}
-
-// String returns a string representation of the NodeHostID instance.
-func (n *NodeHostID) String() string {
-	return fmt.Sprintf("NHID-%d", n.id)
-}
-
-// Marshal marshals the NodeHostID instances.
-func (n *NodeHostID) Marshal() ([]byte, error) {
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, n.id)
-	return buf, nil
-}
-
-// Unmarshal unmarshals the NodeHostID instance.
-func (n *NodeHostID) Unmarshal(data []byte) error {
-	if len(data) != 8 {
-		panic("failed to get NodeHost id")
-	}
-	n.id = binary.LittleEndian.Uint64(data)
-	return nil
-}
-
 // Env is the server environment for NodeHost.
 type Env struct {
 	hostname     string
-	nhid         *NodeHostID
+	nhid         *id.NodeHostID
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
@@ -255,10 +200,12 @@ func (env *Env) NodeHostID() string {
 	return env.nhid.String()
 }
 
-// LoadNodeHostID loads the NodeHost ID value from the id file.
-func (env *Env) LoadNodeHostID() (*NodeHostID, error) {
+// LoadNodeHostID loads the NodeHost ID value from the ID file. A new ID file
+// will be created with a randomly assigned NodeHostID when running for the
+// first time.
+func (env *Env) LoadNodeHostID() (*id.NodeHostID, error) {
 	dir, _ := env.getDataDirs()
-	nhID := newRandomNodeHostID()
+	nhID := id.NewRandomNodeHostID()
 	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
 		if err := fileutil.GetFlagFileContent(dir,
 			idFilename, nhID, env.fs); err != nil {
@@ -272,6 +219,15 @@ func (env *Env) LoadNodeHostID() (*NodeHostID, error) {
 	}
 	env.nhid = nhID
 	return nhID, nil
+}
+
+// SetNodeHostID sets the NodeHostID value recorded in Env. This is typically
+// invoked by tests.
+func (env *Env) SetNodeHostID(nhid *id.NodeHostID) {
+	if env.nhid != nil {
+		panic("trying to change NodeHostID")
+	}
+	env.nhid = nhid
 }
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the

@@ -19,7 +19,6 @@ import (
 	"sync/atomic"
 
 	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/client"
@@ -88,7 +87,7 @@ type node struct {
 	getStreamSink         func(uint64, uint64) *transport.Sink
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
-	validateAddress       func(string) bool
+	validateTarget        func(string) bool
 	sm                    *rsm.StateMachine
 	incomingProposals     *entryQueue
 	incomingReadIndexes   *readIndexQueue
@@ -183,17 +182,13 @@ func newNode(peers map[uint64]string,
 		metrics:               metrics,
 		initializedC:          make(chan struct{}),
 		ss:                    &snapshotState{},
+		validateTarget:        nhConfig.GetTargetValidator(),
 		qs: &quiesceState{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
 			clusterID:    config.ClusterID,
 			nodeID:       config.NodeID,
 		},
-	}
-	if nhConfig.TransportModule != nil {
-		rn.validateAddress = nhConfig.TransportModule.Validate
-	} else {
-		rn.validateAddress = stringutil.IsValidAddress
 	}
 	ds := createSM(config.ClusterID, config.NodeID, stopC)
 	sm := rsm.NewStateMachine(ds, snapshotter, config, rn, snapshotter.fs)
@@ -478,7 +473,7 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	if cct != pb.RemoveNode && !n.validateAddress(target) {
+	if cct != pb.RemoveNode && !n.validateTarget(target) {
 		return nil, ErrInvalidAddress
 	}
 	cc := pb.ConfigChange{

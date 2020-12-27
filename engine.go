@@ -791,8 +791,8 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.commitWorkReady.getReadyMap(workerID)
-			e.processCommits(clusterIDMap, nodes)
+			active := e.commitWorkReady.getReadyMap(workerID)
+			e.processCommits(active, nodes)
 		}
 	}
 }
@@ -841,8 +841,8 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.applyWorkReady.getReadyMap(workerID)
-			e.processApplies(clusterIDMap, nodes, batch, entries)
+			active := e.applyWorkReady.getReadyMap(workerID)
+			e.processApplies(active, nodes, batch, entries)
 		}
 	}
 }
@@ -905,8 +905,8 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.stepWorkReady.getReadyMap(workerID)
-			e.processSteps(workerID, clusterIDMap, nodes, stopC)
+			active := e.stepWorkReady.getReadyMap(workerID)
+			e.processSteps(workerID, active, nodes, stopC)
 		}
 	}
 }
@@ -947,7 +947,7 @@ func (e *engine) loadBucketNodes(workerID uint64,
 }
 
 func (e *engine) processSteps(workerID uint64,
-	clusterIDMap map[uint64]struct{},
+	active map[uint64]struct{},
 	nodes map[uint64]*node, stopC chan struct{}) {
 	if len(nodes) == 0 {
 		return
@@ -957,13 +957,15 @@ func (e *engine) processSteps(workerID uint64,
 	}
 	nodeCtx := e.ctxs[workerID-1]
 	nodeCtx.Reset()
-	if len(clusterIDMap) == 0 {
+	if len(active) == 0 {
 		for cid := range nodes {
-			clusterIDMap[cid] = struct{}{}
+			active[cid] = struct{}{}
 		}
 	}
+	monkeyLog.Infof("%s worker ID %d called processStep, nodes %d, clusters %d",
+		e.nh.describe(), workerID, len(nodes), len(active))
 	nodeUpdates := nodeCtx.GetUpdates()
-	for cid := range clusterIDMap {
+	for cid := range active {
 		node, ok := nodes[cid]
 		if !ok || node.stopped() {
 			if node != nil && node.stopped() {

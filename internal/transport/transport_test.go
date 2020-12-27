@@ -322,7 +322,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 func newNOOPTestTransport(handler IRaftMessageHandler, fs vfs.IFS) (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
 	t := newTestSnapshotDir(fs)
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	c := config.NodeHostConfig{
 		MaxSendQueueSize: 256 * 1024 * 1024,
 		RaftAddress:      "localhost:9876",
@@ -348,7 +348,7 @@ func newTestTransport(handler IRaftMessageHandler,
 	mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
 	*syncutil.Stopper, *testSnapshotDir) {
 	stopper := syncutil.NewStopper()
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	t := newTestSnapshotDir(fs)
 	c := config.NodeHostConfig{
 		RaftAddress: serverAddress,
@@ -1193,8 +1193,8 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	if tt.queueSize() != 1 {
 		t.Errorf("queue len %d, want 1", tt.queueSize())
 	}
-	if len(tt.mu.breakers) != 1 {
-		t.Errorf("breakers len %d, want 1", tt.queueSize())
+	if len(tt.mu.breakers) != 2 {
+		t.Errorf("breakers len %d, want 2", len(tt.mu.breakers))
 	}
 	if noopRPC.connected != 1 {
 		t.Errorf("connected %d, want 1", noopRPC.connected)

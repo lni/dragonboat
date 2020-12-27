@@ -20,16 +20,24 @@ import (
 	"sync"
 
 	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/stringutil"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/raftio"
+)
+
+var (
+	// ErrUnknownTarget is the error returned when the target address of the node
+	// is unknown.
+	ErrUnknownTarget = errors.New("target address unknown")
 )
 
 // INodeRegistry is the local registry interface used to keep all known
 // nodes in the system..
 type INodeRegistry interface {
+	Stop()
 	Add(clusterID uint64, nodeID uint64, url string)
+	AddRemote(uint64, uint64, string)
 	Remove(clusterID uint64, nodeID uint64)
 	RemoveCluster(clusterID uint64)
 	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
@@ -43,13 +51,11 @@ type record struct {
 	key     string
 }
 
-type validator func(string) bool
-
 // Nodes is used to manage all known node addresses in the multi raft system.
 // The transport layer uses this address registry to locate nodes.
 type Nodes struct {
 	partitioner server.IPartitioner
-	validator   validator
+	validate    config.TargetValidator
 	mu          struct {
 		sync.Mutex
 		addr map[raftio.NodeInfo]record
@@ -60,9 +66,9 @@ type Nodes struct {
 	}
 }
 
-// NewNodes returns a new Nodes object.
-func NewNodes(streamConnections uint64, v validator) *Nodes {
-	n := &Nodes{validator: v}
+// NewNodeRegistry returns a new Nodes object.
+func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Nodes {
+	n := &Nodes{validate: v}
 	if streamConnections > 1 {
 		n.partitioner = server.NewFixedPartitioner(streamConnections)
 	}
@@ -71,22 +77,25 @@ func NewNodes(streamConnections uint64, v validator) *Nodes {
 	return n
 }
 
+// Stop stops the node registry.
+func (n *Nodes) Stop() {}
+
 // AddRemote remembers the specified address obtained from the source of the
 // incoming message.
-func (n *Nodes) AddRemote(clusterID uint64, nodeID uint64, addr string) {
-	if !stringutil.IsValidAddress(addr) {
-		plog.Panicf("invalid address %s", addr)
+func (n *Nodes) AddRemote(clusterID uint64, nodeID uint64, target string) {
+	if n.validate != nil && !n.validate(target) {
+		plog.Panicf("invalid target %s", target)
 	}
 	n.nmu.Lock()
 	defer n.nmu.Unlock()
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	v, ok := n.nmu.nodes[key]
 	if !ok {
-		n.nmu.nodes[key] = addr
+		n.nmu.nodes[key] = target
 	} else {
-		if v != addr {
-			plog.Panicf("inconsistent addr for %s, %s:%s",
-				logutil.DescribeNode(clusterID, nodeID), v, addr)
+		if v != target {
+			plog.Panicf("inconsistent target for %s, %s:%s",
+				logutil.DescribeNode(clusterID, nodeID), v, target)
 		}
 	}
 }
@@ -105,23 +114,23 @@ func (n *Nodes) getFromRemote(clusterID uint64, nodeID uint64) (string, error) {
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	v, ok := n.nmu.nodes[key]
 	if !ok {
-		return "", errors.New("addr not found")
+		return "", ErrUnknownTarget
 	}
 	return v, nil
 }
 
 // Add add a new node.
-func (n *Nodes) Add(clusterID uint64, nodeID uint64, addr string) {
+func (n *Nodes) Add(clusterID uint64, nodeID uint64, target string) {
+	if n.validate != nil && !n.validate(target) {
+		plog.Panicf("invalid target %s", target)
+	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.validator != nil && !n.validator(addr) {
-		plog.Panicf("invalid addr %s", addr)
-	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	if _, ok := n.mu.addr[key]; !ok {
 		n.mu.addr[key] = record{
-			address: addr,
-			key:     n.getConnectionKey(addr, clusterID),
+			address: target,
+			key:     n.getConnectionKey(target, clusterID),
 		}
 	}
 }

@@ -24,7 +24,7 @@ import (
 )
 
 func TestPeerCanBeAdded(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
 		t.Fatalf("error not reported")
@@ -40,7 +40,7 @@ func TestPeerCanBeAdded(t *testing.T) {
 }
 
 func TestPeerAddressCanNotBeUpdated(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	nodes.Add(100, 2, "a2:3")
 	nodes.Add(100, 2, "a2:4")
@@ -54,7 +54,7 @@ func TestPeerAddressCanNotBeUpdated(t *testing.T) {
 }
 
 func TestPeerCanBeRemoved(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestPeerCanBeRemoved(t *testing.T) {
 }
 
 func TestRemoveCluster(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	nodes.Add(100, 3, "a2:3")
 	nodes.Add(200, 2, "a3:2")
@@ -87,7 +87,7 @@ func TestRemoveCluster(t *testing.T) {
 }
 
 func TestRemoteAddressCanBeUsed(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
 		t.Errorf("unexpected result")
@@ -112,7 +112,7 @@ func TestRemoteAddressCanBeUsed(t *testing.T) {
 
 func testInvalidAddressWillPanic(t *testing.T, addr string) {
 	po := false
-	nodes := NewNodes(settings.Soft.StreamConnections, stringutil.IsValidAddress)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, stringutil.IsValidAddress)
 	defer func() {
 		if r := recover(); r != nil {
 			po = true

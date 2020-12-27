@@ -50,7 +50,6 @@ import (
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/netutil/rubyist/circuitbreaker"
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -172,7 +171,7 @@ func (dtm *DefaultTransportModule) Create(nhConfig config.NodeHostConfig,
 // Validate returns a boolean value indicating whether the specified address is
 // valid.
 func (dtm *DefaultTransportModule) Validate(addr string) bool {
-	return stringutil.IsValidAddress(addr)
+	panic("not suppose to be called")
 }
 
 // Transport is the transport layer for delivering raft messages and snapshots.
@@ -365,12 +364,18 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	toNodeID := req.To
 	clusterID := req.ClusterId
 	from := req.From
+	resolveBreaker := t.GetCircuitBreaker("address.resolve")
+	if !resolveBreaker.Ready() {
+		return false, circuitBreakerNotReady
+	}
 	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
 			t.sourceID, dn(clusterID, toNodeID))
+		resolveBreaker.Fail()
 		return false, unknownTarget
 	}
+	resolveBreaker.Success()
 	// fail fast
 	if !t.GetCircuitBreaker(addr).Ready() {
 		t.metrics.messageConnectionFailure()

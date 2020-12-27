@@ -97,6 +97,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -260,14 +261,14 @@ type NodeHost struct {
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
 	stopper      *syncutil.Stopper
-	nodes        *transport.Nodes
+	nodes        transport.INodeRegistry
 	requestPools []*sync.Pool
 	engine       *engine
 	logdb        raftio.ILogDB
 	transport    transport.ITransport
 	msgHandler   *messageHandler
 	fs           vfs.IFS
-	id           *server.NodeHostID
+	id           *id.NodeHostID
 }
 
 var _ nodeLoader = (*NodeHost)(nil)
@@ -289,15 +290,10 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err != nil {
 		return nil, err
 	}
-	var validator func(string) bool
-	if nhConfig.TransportModule != nil {
-		validator = nhConfig.TransportModule.Validate
-	}
 	nh := &NodeHost{
 		env:      env,
 		nhConfig: nhConfig,
 		stopper:  syncutil.NewStopper(),
-		nodes:    transport.NewNodes(streamConnections, validator),
 		fs:       nhConfig.Expert.FS,
 	}
 	// make static check happy
@@ -323,22 +319,25 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			plog.Panicf("failed to create NodeHost: %v", r)
 		}
 	}()
-	if err := nh.createTransport(); err != nil {
-		nh.Stop()
-		return nil, err
-	}
 	did := nh.nhConfig.GetDeploymentID()
 	plog.Infof("DeploymentID set to %d", did)
 	if err := nh.createLogDB(); err != nil {
 		nh.Stop()
 		return nil, err
 	}
-	nh.id, err = nh.env.LoadNodeHostID()
-	if err != nil {
+	if err := nh.loadNodeHostID(); err != nil {
 		nh.Stop()
 		return nil, err
 	}
 	plog.Infof("NodeHost ID: %s", nh.id.String())
+	if err := nh.createNodesRegistry(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
+	if err := nh.createTransport(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
 	errorInjection := false
 	if nhConfig.Expert.FS != nil {
 		_, errorInjection = nhConfig.Expert.FS.(*vfs.ErrorFS)
@@ -405,6 +404,9 @@ func (nh *NodeHost) Stop() {
 	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
 	nh.stopper.Stop()
 	plog.Debugf("%s is going to stop the exec engine", nh.describe())
+	if nh.nodes != nil {
+		nh.nodes.Stop()
+	}
 	if nh.engine != nil {
 		nh.engine.stop()
 	}
@@ -1522,11 +1524,10 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	if nh.nhConfig.AddressByNodeHostID {
-		for _, nhid := range initialMembers {
-			if _, err := server.ParseNodeHostID(nhid); err != nil {
-				return ErrInvalidNodeHostID
-			}
+	validator := nh.nhConfig.GetTargetValidator()
+	for _, target := range initialMembers {
+		if !validator(target) {
+			return ErrInvalidTarget
 		}
 	}
 	nh.mu.Lock()
@@ -1602,6 +1603,24 @@ func (nh *NodeHost) cciUpdated() {
 	case nh.mu.cciCh <- struct{}{}:
 	default:
 	}
+}
+
+func (nh *NodeHost) loadNodeHostID() error {
+	if nh.nhConfig.Expert.TestNodeHostID == 0 {
+		nhid, err := nh.env.LoadNodeHostID()
+		if err != nil {
+			return err
+		}
+		nh.id = nhid
+	} else {
+		nhid, err := id.NewNodeHostID(nh.nhConfig.Expert.TestNodeHostID)
+		if err != nil {
+			return err
+		}
+		nh.id = nhid
+		nh.env.SetNodeHostID(nh.id)
+	}
+	return nil
 }
 
 func (nh *NodeHost) createPools() {
@@ -1706,6 +1725,25 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 		Address:            addr,
 		SnapshotConnection: snapshot,
 	})
+}
+
+func (nh *NodeHost) createNodesRegistry() error {
+	validator := nh.nhConfig.GetTargetValidator()
+	// TODO:
+	// more tests here required
+	if nh.nhConfig.AddressByNodeHostID && nh.nhConfig.TransportModule == nil {
+		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
+		r, err := transport.NewNodeHostIDRegistry(nh.ID(),
+			nh.nhConfig, streamConnections, validator)
+		if err != nil {
+			return err
+		}
+		nh.nodes = r
+	} else {
+		plog.Infof("using regular node registry")
+		nh.nodes = transport.NewNodeRegistry(streamConnections, validator)
+	}
+	return nil
 }
 
 func (nh *NodeHost) createTransport() error {

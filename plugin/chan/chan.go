@@ -19,7 +19,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -63,7 +62,7 @@ func (ctm *ChanTransportModule) Create(nhConfig config.NodeHostConfig,
 // Validate returns a boolean value indicating whether the specified address
 // is valid.
 func (ctm *ChanTransportModule) Validate(addr string) bool {
-	return stringutil.IsValidAddress(addr)
+	panic("not suppose to be called")
 }
 
 // ChanConnection is a channel based connection.

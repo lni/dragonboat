@@ -422,8 +422,8 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
-	nodes1 := transport.NewNodes(settings.Soft.StreamConnections, nil)
-	nodes2 := transport.NewNodes(settings.Soft.StreamConnections, nil)
+	nodes1 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	nodes2 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes1.AddRemote(1, 2, addr2)
 	handler1 := &benchmarkMessageHandler{
 		ch:       make(chan struct{}, 1),

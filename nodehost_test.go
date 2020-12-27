@@ -42,6 +42,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -745,32 +746,32 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-type uuidChanTransport struct {
+type nhidChanTransport struct {
 	t raftio.IRaftRPC
 }
 
-func (u *uuidChanTransport) Name() string {
+func (u *nhidChanTransport) Name() string {
 	return u.t.Name()
 }
 
-func (u *uuidChanTransport) Start() error {
+func (u *nhidChanTransport) Start() error {
 	return u.t.Start()
 }
 
-func (u *uuidChanTransport) Stop() {
+func (u *nhidChanTransport) Stop() {
 	u.t.Stop()
 }
 
-func (u *uuidChanTransport) getAddr(uuid string) (string, error) {
-	if uuid == testNodeHostID1 {
+func (u *nhidChanTransport) getAddr(nhid string) (string, error) {
+	if nhid == testNodeHostID1 {
 		return nodeHostTestAddr1, nil
-	} else if uuid == testNodeHostID2 {
+	} else if nhid == testNodeHostID2 {
 		return nodeHostTestAddr2, nil
 	}
-	return "", errors.New("unknown uuid")
+	return "", errors.New("unknown nhid")
 }
 
-func (u *uuidChanTransport) GetConnection(ctx context.Context,
+func (u *nhidChanTransport) GetConnection(ctx context.Context,
 	target string) (raftio.IConnection, error) {
 	addr, err := u.getAddr(target)
 	if err != nil {
@@ -779,7 +780,7 @@ func (u *uuidChanTransport) GetConnection(ctx context.Context,
 	return u.t.GetConnection(ctx, addr)
 }
 
-func (u *uuidChanTransport) GetSnapshotConnection(ctx context.Context,
+func (u *nhidChanTransport) GetSnapshotConnection(ctx context.Context,
 	target string) (raftio.ISnapshotConnection, error) {
 	addr, err := u.getAddr(target)
 	if err != nil {
@@ -788,39 +789,72 @@ func (u *uuidChanTransport) GetSnapshotConnection(ctx context.Context,
 	return u.t.GetSnapshotConnection(ctx, addr)
 }
 
-type uuidTestTransportModule struct{}
+type nhidTestTransportModule struct{}
 
-func (tm *uuidTestTransportModule) Create(nhConfig config.NodeHostConfig,
+func (tm *nhidTestTransportModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
 	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
-	return &uuidChanTransport{
+	return &nhidChanTransport{
 		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
 	}
 }
 
-func (tm *uuidTestTransportModule) Validate(addr string) bool {
-	return addr == testNodeHostID1 || addr == testNodeHostID2
+func (tm *nhidTestTransportModule) Validate(addr string) bool {
+	return addr == nodeHostTestAddr1 || addr == nodeHostTestAddr2
 }
 
-func TestTransportModuleCanUseNodeHostID(t *testing.T) {
+func TestCustomTransportModuleCanUseNodeHostID(t *testing.T) {
+	testAddressByNodeHostID(t, true)
+}
+
+func TestDynamicRaftAddressClustersCanUseGossip(t *testing.T) {
+	testAddressByNodeHostID(t, false)
+}
+
+func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
-		NodeHostDir:     datadir1,
-		RTTMillisecond:  getRTTMillisecond(fs, datadir1),
-		RaftAddress:     addr1,
-		Expert:          config.ExpertConfig{FS: fs},
-		TransportModule: &uuidTestTransportModule{},
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
+		RaftAddress:         addr1,
+		Expert:              config.ExpertConfig{FS: fs},
+		AddressByNodeHostID: true,
 	}
 	nhc2 := config.NodeHostConfig{
-		NodeHostDir:     datadir2,
-		RTTMillisecond:  getRTTMillisecond(fs, datadir2),
-		RaftAddress:     addr2,
-		Expert:          config.ExpertConfig{FS: fs},
-		TransportModule: &uuidTestTransportModule{},
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
+		RaftAddress:         addr2,
+		Expert:              config.ExpertConfig{FS: fs},
+		AddressByNodeHostID: true,
+	}
+	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	if useCustomTransport {
+		nhc1.TransportModule = &nhidTestTransportModule{}
+		nhc2.TransportModule = &nhidTestTransportModule{}
+	} else {
+		nhc1.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25001",
+			AdvertiseAddress: "127.0.0.1:25001",
+			Seed:             []string{"127.0.0.1:25002"},
+		}
+		nhc2.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25002",
+			AdvertiseAddress: "127.0.0.1:25002",
+			Seed:             []string{"127.0.0.1:25001"},
+		}
 	}
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
@@ -1408,14 +1442,20 @@ func TestNodeHostIDIsStatic(t *testing.T) {
 
 func TestNodeHostIDCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
+	nhid := uint64(1234567890)
 	to := &testOption{
+		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
+			c.Expert.TestNodeHostID = nhid
+			return c
+		},
 		noElection: true,
 		tf: func(nh *NodeHost) {
-			id := uint64(1234567890)
-			nhid := server.NewNodeHostID(id)
-			nh.id = nhid
+			nhid, err := id.NewNodeHostID(nhid)
+			if err != nil {
+				t.Fatalf("failed to create NHID")
+			}
 			if nh.ID() != nhid.String() {
-				t.Fatalf("failed to set uuid")
+				t.Fatalf("failed to set nhid")
 			}
 		},
 	}
