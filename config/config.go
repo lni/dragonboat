@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
@@ -719,6 +720,9 @@ type ExpertConfig struct {
 	// TestNodeHostID is the NodeHostID value to be used by the NodeHost instance.
 	// This field is expected to be used in tests only.
 	TestNodeHostID uint64
+	// TestGossipProbeInterval define the probe interval used by the gossip
+	// service in tests.
+	TestGossipProbeInterval time.Duration
 }
 
 // GossipConfig contains configurations for the gossip module.
@@ -755,19 +759,18 @@ func (g *GossipConfig) Validate() error {
 	}
 	if len(g.Seed) == 0 {
 		return errors.New("seed nodes not set")
-	} else {
-		count := 0
-		for _, v := range g.Seed {
-			if v != g.BindAddress {
-				count++
-			}
-			if !stringutil.IsValidAddress(v) {
-				return errors.New("invalid GossipConfig.Seed value")
-			}
+	}
+	count := 0
+	for _, v := range g.Seed {
+		if v != g.BindAddress {
+			count++
 		}
-		if count == 0 {
-			return errors.New("no valid seed node")
+		if !stringutil.IsValidAddress(v) {
+			return errors.New("invalid GossipConfig.Seed value")
 		}
+	}
+	if count == 0 {
+		return errors.New("no valid seed node")
 	}
 	return nil
 }

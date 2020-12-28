@@ -123,6 +123,11 @@ func newGossipManager(nhid string,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Name = nhid
+	if nhConfig.Expert.TestGossipProbeInterval > 0 {
+		plog.Infof("gossip probe interval set to %s",
+			nhConfig.Expert.TestGossipProbeInterval)
+		cfg.ProbeInterval = nhConfig.Expert.TestGossipProbeInterval
+	}
 	bindAddr, bindPort, err := parseAddress(nhConfig.Gossip.BindAddress)
 	if err != nil {
 		return nil, err

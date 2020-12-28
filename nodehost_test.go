@@ -823,15 +823,21 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		Expert:              config.ExpertConfig{FS: fs},
 		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
 	}
 	nhc2 := config.NodeHostConfig{
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		Expert:              config.ExpertConfig{FS: fs},
 		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
 	}
 	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
 	if err != nil {
@@ -916,15 +922,21 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		Expert:              config.ExpertConfig{FS: fs},
 		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
 	}
 	nhc2 := config.NodeHostConfig{
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		Expert:              config.ExpertConfig{FS: fs},
 		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
 	}
 	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
 	if err != nil {
