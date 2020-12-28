@@ -78,7 +78,7 @@ func TestZeroIDNotAllowed(t *testing.T) {
 	}
 }
 
-func TestnhidCanBeMarshaled(t *testing.T) {
+func TestNHIDCanBeMarshaled(t *testing.T) {
 	for _, v := range []uint64{1, 123, 1234567890, 4023449441798808321} {
 		nhid, err := NewNodeHostID(v)
 		if err != nil {

@@ -225,7 +225,7 @@ func TestGossipConfigValidate(t *testing.T) {
 		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1::12345"}, false},
 		{"myhost.com:12345", "202.23.45.1::12345", []string{"128.0.0.1:12345"}, false},
 		{"myhost.com::12345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
-		{"node1:12345", "node2:12345", []string{"node3:12345", "node4:12345"}, true},
+		{"node1:12345", "202.96.23.1:12345", []string{"node3:12345", "node4:12345"}, true},
 	}
 	for idx, tt := range tests {
 		gc := &GossipConfig{
