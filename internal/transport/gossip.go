@@ -143,15 +143,12 @@ func newGossipManager(nhid string,
 	}
 	seed := make([]string, len(nhConfig.Gossip.Seed)+1)
 	seed = append(seed, nhConfig.Gossip.Seed...)
-	seed = append(seed, nhConfig.Gossip.AdvertiseAddress)
-	if _, err = list.Join(seed); err != nil {
-		return nil, err
-	}
 	g := &gossipManager{
 		cfg:     cfg,
 		list:    list,
 		stopper: syncutil.NewStopper(),
 	}
+	g.join(seed)
 	g.stopper.RunWorker(func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -161,15 +158,21 @@ func newGossipManager(nhid string,
 				if len(g.list.Members()) > 1 {
 					return
 				}
-				if _, err := list.Join(seed); err != nil {
-					plog.Errorf("failed to join the gossip group, %v", err)
-				}
+				g.join(seed)
 			case <-g.stopper.ShouldStop():
 				return
 			}
 		}
 	})
 	return g, nil
+}
+
+func (g *gossipManager) join(seed []string) {
+	if count, err := g.list.Join(seed); err != nil {
+		plog.Errorf("failed to join the gossip group, %v", err)
+	} else {
+		plog.Infof("connected to %d member nodes in the gossip group", count)
+	}
 }
 
 func (g *gossipManager) Stop() {
