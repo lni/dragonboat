@@ -60,8 +60,8 @@ import (
 
 const (
 	defaultTestPort = 26001
-	testNodeHostID1 = "NHID-12345"
-	testNodeHostID2 = "NHID-12346"
+	testNodeHostID1 = "nhid-12345"
+	testNodeHostID2 = "nhid-12346"
 )
 
 func getTestPort() int {
@@ -815,6 +815,8 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
@@ -1452,7 +1454,7 @@ func TestNodeHostIDCanBeSet(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			nhid, err := id.NewNodeHostID(nhid)
 			if err != nil {
-				t.Fatalf("failed to create NHID")
+				t.Fatalf("failed to create NodeHostID")
 			}
 			if nh.ID() != nhid.String() {
 				t.Fatalf("failed to set nhid")

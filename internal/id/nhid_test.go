@@ -20,54 +20,54 @@ import (
 
 func TestIsNodeHostID(t *testing.T) {
 	nhidTests := []string{
-		"NHID-1",
-		"NHID-123456789",
-		"NHID-4023449441798808321",
-	}
-	notNHIDTests := []string{
-		"",
-		"NHID-0",
-		"1234567890",
-		"NHID1234567890",
-		"NHID4023449441798808321",
+		"nhid-1",
+		"nhid-123456789",
 		"nhid-4023449441798808321",
-		"NHI-4023449441798808321",
+	}
+	notnhidTests := []string{
+		"",
+		"nhid-0",
+		"1234567890",
+		"nhid1234567890",
+		"nhid4023449441798808321",
+		"NHID-4023449441798808321",
+		"nhi-4023449441798808321",
 	}
 	for _, v := range nhidTests {
 		if !IsNodeHostID(v) {
-			t.Errorf("%s not considered as a NHID", v)
+			t.Errorf("%s not considered as a nhid", v)
 		}
 	}
-	for _, v := range notNHIDTests {
+	for _, v := range notnhidTests {
 		if IsNodeHostID(v) {
-			t.Errorf("%s considered as a NHID", v)
+			t.Errorf("%s considered as a nhid", v)
 		}
 	}
 }
 
 func TestParseNodeHostID(t *testing.T) {
 	nhidTests := []string{
-		"NHID-1",
-		"NHID-123456789",
-		"NHID-4023449441798808321",
-	}
-	notNHIDTests := []string{
-		"",
-		"NHID-0",
-		"1234567890",
-		"NHID1234567890",
-		"NHID4023449441798808321",
+		"nhid-1",
+		"nhid-123456789",
 		"nhid-4023449441798808321",
-		"NHI-4023449441798808321",
+	}
+	notnhidTests := []string{
+		"",
+		"nhid-0",
+		"1234567890",
+		"nhid1234567890",
+		"nhid4023449441798808321",
+		"NHID-4023449441798808321",
+		"nhi-4023449441798808321",
 	}
 	for _, v := range nhidTests {
 		if _, err := ParseNodeHostID(v); err != nil {
-			t.Errorf("%s considered as a NHID", v)
+			t.Errorf("%s considered as a nhid", v)
 		}
 	}
-	for _, v := range notNHIDTests {
+	for _, v := range notnhidTests {
 		if _, err := ParseNodeHostID(v); err == nil {
-			t.Errorf("%s not considered as a NHID", v)
+			t.Errorf("%s not considered as a nhid", v)
 		}
 	}
 }
@@ -78,7 +78,7 @@ func TestZeroIDNotAllowed(t *testing.T) {
 	}
 }
 
-func TestNHIDCanBeMarshaled(t *testing.T) {
+func TestnhidCanBeMarshaled(t *testing.T) {
 	for _, v := range []uint64{1, 123, 1234567890, 4023449441798808321} {
 		nhid, err := NewNodeHostID(v)
 		if err != nil {
@@ -100,9 +100,9 @@ func TestNHIDCanBeMarshaled(t *testing.T) {
 
 func TestString(t *testing.T) {
 	nhidTests := []string{
-		"NHID-1",
-		"NHID-123456789",
-		"NHID-4023449441798808321",
+		"nhid-1",
+		"nhid-123456789",
+		"nhid-4023449441798808321",
 	}
 	for _, v := range nhidTests {
 		nhid, err := ParseNodeHostID(v)

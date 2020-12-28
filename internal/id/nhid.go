@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	nhidRe = regexp.MustCompile("^NHID-([0-9]*)$")
+	nhidRe = regexp.MustCompile("^nhid-([0-9]*)$")
 	// ErrInvalidNodeHostID indicates that the NodeHost ID value provided is
 	// invalid
 	ErrInvalidNodeHostID = errors.New("invalid NodeHost ID value")
@@ -86,7 +86,7 @@ func (n *NodeHostID) Value() uint64 {
 
 // String returns a string representation of the NodeHostID instance.
 func (n *NodeHostID) String() string {
-	return fmt.Sprintf("NHID-%d", n.id)
+	return fmt.Sprintf("nhid-%d", n.id)
 }
 
 // Marshal marshals the NodeHostID instances.
