@@ -21,8 +21,10 @@ package config
 import (
 	"crypto/tls"
 	"errors"
+	"net"
 	"path/filepath"
 	"reflect"
+	"strconv"
 
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
@@ -745,14 +747,44 @@ func (g *GossipConfig) IsEmpty() bool {
 func (g *GossipConfig) Validate() error {
 	if len(g.BindAddress) > 0 && !stringutil.IsValidAddress(g.BindAddress) {
 		return errors.New("invalid GossipConfig.BindAddress")
+	} else if len(g.BindAddress) == 0 {
+		return errors.New("BindAddress not set")
 	}
-	if len(g.AdvertiseAddress) > 0 && !stringutil.IsValidAddress(g.AdvertiseAddress) {
+	if len(g.AdvertiseAddress) > 0 && !isValidAdvertiseAddress(g.AdvertiseAddress) {
 		return errors.New("invalid GossipConfig.AdvertiseAddress")
 	}
-	for _, v := range g.Seed {
-		if !stringutil.IsValidAddress(v) {
-			return errors.New("invalid GossipConfig.Seed value")
+	if len(g.Seed) == 0 {
+		return errors.New("seed nodes not set")
+	} else {
+		count := 0
+		for _, v := range g.Seed {
+			if v != g.BindAddress {
+				count++
+			}
+			if !stringutil.IsValidAddress(v) {
+				return errors.New("invalid GossipConfig.Seed value")
+			}
+		}
+		if count == 0 {
+			return errors.New("no valid seed node")
 		}
 	}
 	return nil
+}
+
+func isValidAdvertiseAddress(addr string) bool {
+	host, sp, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	port, err := strconv.ParseUint(sp, 10, 16)
+	if err != nil {
+		return false
+	}
+	if port > 65535 {
+		return false
+	}
+	// the memberlist package doesn't allow hostname or DNS name to be used in
+	// advertise address
+	return stringutil.IPV4Regex.MatchString(host)
 }

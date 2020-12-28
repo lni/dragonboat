@@ -169,3 +169,73 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 		t.Fatalf("cfg not considered as invalid")
 	}
 }
+
+func TestGossipConfigIsEmtpy(t *testing.T) {
+	gc := &GossipConfig{}
+	if !gc.IsEmpty() {
+		t.Errorf("not empty")
+	}
+	tests := []struct {
+		bindAddr      string
+		advertiseAddr string
+		seed          []string
+		empty         bool
+	}{
+		{"localhost:12345", "", []string{}, false},
+		{"", "localhost:12345", []string{}, false},
+		{"", "", []string{}, true},
+		{"", "", []string{"127.0.0.1:12345"}, false},
+	}
+	for idx, tt := range tests {
+		gc := &GossipConfig{
+			BindAddress:      tt.bindAddr,
+			AdvertiseAddress: tt.advertiseAddr,
+			Seed:             tt.seed,
+		}
+		if gc.IsEmpty() != tt.empty {
+			t.Errorf("%d, got %t, want %t", idx, gc.IsEmpty(), tt.empty)
+		}
+	}
+}
+
+func TestGossipConfigValidate(t *testing.T) {
+	tests := []struct {
+		bindAddr      string
+		advertiseAddr string
+		seed          []string
+		valid         bool
+	}{
+		{"114.1.1.1:12345", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, true},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, true},
+		{"myhost.com:12345", "", []string{"128.0.0.1:1234"}, true},
+		{"", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "myhost2.net:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"myhost.com:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1"}, false},
+		{"myhost.com:12345", ":12345", []string{"128.0.0.1:12345"}, false},
+		{"300.0.0.1:12345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:66345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "302.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:72345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"328.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1:65536"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1::12345"}, false},
+		{"myhost.com:12345", "202.23.45.1::12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com::12345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"node1:12345", "node2:12345", []string{"node3:12345", "node4:12345"}, true},
+	}
+	for idx, tt := range tests {
+		gc := &GossipConfig{
+			BindAddress:      tt.bindAddr,
+			AdvertiseAddress: tt.advertiseAddr,
+			Seed:             tt.seed,
+		}
+		err := gc.Validate()
+		if (err != nil && tt.valid) || (err == nil && !tt.valid) {
+			t.Errorf("%d, err: %v, valid: %t", idx, err, tt.valid)
+		}
+	}
+}

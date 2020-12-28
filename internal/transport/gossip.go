@@ -121,20 +121,22 @@ type gossipManager struct {
 
 func newGossipManager(nhid string,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
+	cfg := memberlist.DefaultWANConfig()
+	cfg.Name = nhid
 	bindAddr, bindPort, err := parseAddress(nhConfig.Gossip.BindAddress)
 	if err != nil {
 		return nil, err
 	}
-	pAddr, pPort, err := parseAddress(nhConfig.Gossip.AdvertiseAddress)
-	if err != nil {
-		return nil, err
-	}
-	cfg := memberlist.DefaultWANConfig()
-	cfg.Name = nhid
 	cfg.BindAddr = bindAddr
 	cfg.BindPort = bindPort
-	cfg.AdvertiseAddr = pAddr
-	cfg.AdvertisePort = pPort
+	if len(nhConfig.Gossip.AdvertiseAddress) > 0 {
+		aAddr, aPort, err := parseAddress(nhConfig.Gossip.AdvertiseAddress)
+		if err != nil {
+			return nil, err
+		}
+		cfg.AdvertiseAddr = aAddr
+		cfg.AdvertisePort = aPort
+	}
 	cfg.Delegate = &delegate{raftAddress: nhConfig.RaftAddress}
 	list, err := memberlist.Create(cfg)
 	if err != nil {
