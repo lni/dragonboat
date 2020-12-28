@@ -232,15 +232,15 @@ func (env *Env) SetNodeHostID(nhid *id.NodeHostID) {
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (env *Env) CheckNodeHostDir(config config.NodeHostConfig,
+func (env *Env) CheckNodeHostDir(cfg config.NodeHostConfig,
 	binVer uint32, dbType string) error {
-	return env.checkNodeHostDir(config, binVer, dbType, false)
+	return env.checkNodeHostDir(cfg, binVer, dbType, false)
 }
 
 // CheckLogDBType checks whether LogDB type is compatible.
-func (env *Env) CheckLogDBType(config config.NodeHostConfig,
+func (env *Env) CheckLogDBType(cfg config.NodeHostConfig,
 	dbType string) error {
-	return env.checkNodeHostDir(config, 0, dbType, true)
+	return env.checkNodeHostDir(cfg, 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
@@ -305,13 +305,13 @@ func removeSavedSnapshots(dir string, fs vfs.IFS) error {
 	return fileutil.SyncDir(dir, fs)
 }
 
-func (env *Env) checkNodeHostDir(config config.NodeHostConfig,
+func (env *Env) checkNodeHostDir(cfg config.NodeHostConfig,
 	binVer uint32, name string, dbto bool) error {
 	dir, lldir := env.getDataDirs()
-	if err := env.check(config, dir, binVer, name, dbto); err != nil {
+	if err := env.check(cfg, dir, binVer, name, dbto); err != nil {
 		return err
 	}
-	if err := env.check(config, lldir, binVer, name, dbto); err != nil {
+	if err := env.check(cfg, lldir, binVer, name, dbto); err != nil {
 		return err
 	}
 	return nil
@@ -343,7 +343,7 @@ func (env *Env) compatibleLogDBType(saved string, name string) bool {
 	return true
 }
 
-func (env *Env) check(config config.NodeHostConfig,
+func (env *Env) check(cfg config.NodeHostConfig,
 	dir string, binVer uint32, name string, dbto bool) error {
 	fn := flagFilename
 	fp := env.fs.PathJoin(dir, fn)
@@ -354,7 +354,7 @@ func (env *Env) check(config config.NodeHostConfig,
 		if dbto {
 			return nil
 		}
-		return env.createFlagFile(config, dir, binVer, name)
+		return env.createFlagFile(cfg, dir, binVer, name)
 	}
 	s := raftpb.RaftDataStatus{}
 	if err := fileutil.GetFlagFileContent(dir, fn, &s, env.fs); err != nil {
@@ -364,13 +364,13 @@ func (env *Env) check(config config.NodeHostConfig,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !se(s.Address, config.RaftAddress) {
+		if !cfg.AddressByNodeHostID && !se(s.Address, cfg.RaftAddress) {
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {
 			return ErrHostnameChanged
 		}
-		if s.DeploymentId != 0 && s.DeploymentId != config.GetDeploymentID() {
+		if s.DeploymentId != 0 && s.DeploymentId != cfg.GetDeploymentID() {
 			return ErrDeploymentIDChanged
 		}
 		if s.BinVer != binVer {
@@ -382,14 +382,14 @@ func (env *Env) check(config config.NodeHostConfig,
 			return ErrIncompatibleData
 		}
 		if s.HardHash != 0 {
-			if s.HardHash != settings.HardHash(config.Expert.ExecShards,
-				config.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
+			if s.HardHash != settings.HardHash(cfg.Expert.ExecShards,
+				cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 				settings.Hard.LogDBEntryBatchSize) {
 				return ErrHardSettingsChanged
 			}
 		} else {
-			if s.StepWorkerCount != config.Expert.ExecShards ||
-				s.LogdbShardCount != config.Expert.LogDB.Shards ||
+			if s.StepWorkerCount != cfg.Expert.ExecShards ||
+				s.LogdbShardCount != cfg.Expert.LogDB.Shards ||
 				s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
 				s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
 				return ErrHardSettingChanged
@@ -399,17 +399,17 @@ func (env *Env) check(config config.NodeHostConfig,
 	return nil
 }
 
-func (env *Env) createFlagFile(config config.NodeHostConfig,
+func (env *Env) createFlagFile(cfg config.NodeHostConfig,
 	dir string, ver uint32, name string) error {
 	s := raftpb.RaftDataStatus{
-		Address:         config.RaftAddress,
+		Address:         cfg.RaftAddress,
 		BinVer:          ver,
 		HardHash:        0,
 		LogdbType:       name,
 		Hostname:        env.hostname,
-		DeploymentId:    config.GetDeploymentID(),
-		StepWorkerCount: config.Expert.ExecShards,
-		LogdbShardCount: config.Expert.LogDB.Shards,
+		DeploymentId:    cfg.GetDeploymentID(),
+		StepWorkerCount: cfg.Expert.ExecShards,
+		LogdbShardCount: cfg.Expert.LogDB.Shards,
 		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
 		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
 	}

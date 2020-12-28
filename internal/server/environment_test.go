@@ -58,14 +58,14 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 				t.Fatalf("panic not expected")
 			}
 		}()
-		ctx, err := NewEnv(c, fs)
+		env, err := NewEnv(c, fs)
 		if err != nil {
 			t.Fatalf("failed to new environment %v", err)
 		}
-		if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+		if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
 			t.Fatalf("%v", err)
 		}
-		dir, _ := ctx.getDataDirs()
+		dir, _ := env.getDataDirs()
 		testName := "test-name"
 		cfg := config.NodeHostConfig{
 			Expert:       config.GetDefaultExpertConfig(),
@@ -79,19 +79,65 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 				cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 				settings.Hard.LogDBEntryBatchSize),
 			LogdbType:    testName,
-			Hostname:     ctx.hostname,
+			Hostname:     env.hostname,
 			DeploymentId: testDeploymentID,
 		}
 		err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
 		if err != nil {
 			t.Errorf("failed to create flag file %v", err)
 		}
-		if err := ctx.CheckNodeHostDir(cfg,
+		if err := env.CheckNodeHostDir(cfg,
 			raftio.LogDBBinVersion, testName); err != nil {
 			t.Fatalf("check node host dir failed %v", err)
 		}
 	}()
 	reportLeakedFD(fs, t)
+}
+
+func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
+	fs := vfs.GetTestFS()
+	c := getTestNodeHostConfig()
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	binVer := uint32(100)
+	testLogDBName := "test-name"
+	hostname := ""
+	env, err := NewEnv(c, fs)
+	if err != nil {
+		t.Fatalf("failed to new environment %v", err)
+	}
+	if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
+		t.Fatalf("%v", err)
+	}
+	dir, _ := env.getDataDirs()
+	cfg := config.NodeHostConfig{
+		Expert:       config.GetDefaultExpertConfig(),
+		DeploymentID: testDeploymentID,
+		RaftAddress:  "addr1:12345",
+	}
+	status := raftpb.RaftDataStatus{
+		Address: "addr2:54321",
+		BinVer:  binVer,
+		HardHash: settings.HardHash(cfg.Expert.ExecShards,
+			cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
+			settings.Hard.LogDBEntryBatchSize),
+		LogdbType: testLogDBName,
+		Hostname:  hostname,
+	}
+	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
+	if err != nil {
+		t.Errorf("failed to create flag file %v", err)
+	}
+	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err == nil {
+		t.Fatalf("changed raft address not detected")
+	}
+	cfg.AddressByNodeHostID = true
+	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err != nil {
+		t.Fatalf("changed raft address not allowed")
+	}
 }
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
@@ -103,14 +149,14 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 	}()
-	ctx, err := NewEnv(c, fs)
+	env, err := NewEnv(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new environment %v", err)
 	}
-	if _, _, err := ctx.CreateNodeHostDir(testDeploymentID); err != nil {
+	if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
 		t.Fatalf("%v", err)
 	}
-	dir, _ := ctx.getDataDirs()
+	dir, _ := env.getDataDirs()
 	cfg := config.NodeHostConfig{
 		Expert:       config.GetDefaultExpertConfig(),
 		DeploymentID: testDeploymentID,
@@ -133,8 +179,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	if err != nil {
 		t.Errorf("failed to create flag file %v", err)
 	}
-	err = ctx.CheckNodeHostDir(cfg, testBinVer, testLogDBName)
-	plog.Infof("err: %v", err)
+	err = env.CheckNodeHostDir(cfg, testBinVer, testLogDBName)
 	if err != expErr {
 		t.Errorf("expect err %v, got %v", expErr, err)
 	}
@@ -184,17 +229,17 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	ctx, err := NewEnv(c, fs)
+	env, err := NewEnv(c, fs)
 	if err != nil {
 		t.Fatalf("failed to new environment %v", err)
 	}
-	if _, _, err := ctx.CreateNodeHostDir(c.DeploymentID); err != nil {
+	if _, _, err := env.CreateNodeHostDir(c.DeploymentID); err != nil {
 		t.Fatalf("%v", err)
 	}
-	if err := ctx.LockNodeHostDir(); err != nil {
+	if err := env.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
-	ctx.Stop()
+	env.Stop()
 	reportLeakedFD(fs, t)
 }
 

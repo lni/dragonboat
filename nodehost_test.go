@@ -904,6 +904,112 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 	t.Fatalf("failed to make proposal")
 }
 
+func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
+	fs := vfs.GetTestFS()
+	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	addr1 := nodeHostTestAddr1
+	addr2 := nodeHostTestAddr2
+	nhc1 := config.NodeHostConfig{
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
+		RaftAddress:         addr1,
+		Expert:              config.ExpertConfig{FS: fs},
+		AddressByNodeHostID: true,
+	}
+	nhc2 := config.NodeHostConfig{
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
+		RaftAddress:         addr2,
+		Expert:              config.ExpertConfig{FS: fs},
+		AddressByNodeHostID: true,
+	}
+	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc1.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25001",
+		AdvertiseAddress: "127.0.0.1:25001",
+		Seed:             []string{"127.0.0.1:25002"},
+	}
+	nhc2.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25002",
+		AdvertiseAddress: "127.0.0.1:25002",
+		Seed:             []string{"127.0.0.1:25001"},
+	}
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create nh, %v", err)
+	}
+	defer nh1.Stop()
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create nh2, %v", err)
+	}
+	peers := make(map[uint64]string)
+	peers[1] = testNodeHostID1
+	peers[2] = testNodeHostID2
+	createSM := func(uint64, uint64) sm.IStateMachine {
+		return &PST{}
+	}
+	rc := config.Config{
+		ClusterID:       1,
+		NodeID:          1,
+		ElectionRTT:     3,
+		HeartbeatRTT:    1,
+		SnapshotEntries: 0,
+	}
+	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.NodeID = 2
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	waitForLeaderToBeElected(t, nh2, 1)
+	pto := lpto(nh1)
+	session := nh1.GetNoOPSession(1)
+	testProposal := func() {
+		done := false
+		for i := 0; i < 10; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			_, err := nh1.SyncPropose(ctx, session, make([]byte, 0))
+			cancel()
+			if err != nil {
+				continue
+			}
+			done = true
+			break
+		}
+		if !done {
+			t.Fatalf("failed to make proposal")
+		}
+	}
+	testProposal()
+	nh2.Stop()
+	nhc2.RaftAddress = nodeHostTestAddr3
+	nh2, err = NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to restart nh2, %v", err)
+	}
+	defer nh2.Stop()
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh2, 1)
+	testProposal()
+}
+
 func TestNewNodeHostReturnErrorOnInvalidConfig(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
@@ -941,6 +1047,7 @@ var (
 	singleNodeHostTestAddr = fmt.Sprintf("localhost:%d", getTestPort())
 	nodeHostTestAddr1      = fmt.Sprintf("localhost:%d", getTestPort())
 	nodeHostTestAddr2      = fmt.Sprintf("localhost:%d", getTestPort()+1)
+	nodeHostTestAddr3      = fmt.Sprintf("localhost:%d", getTestPort()+2)
 	singleNodeHostTestDir  = "single_nodehost_test_dir_safe_to_delete"
 )
 
@@ -993,7 +1100,6 @@ func (n *PST) SaveSnapshot(w io.Writer,
 		select {
 		case <-done:
 			n.stopped = true
-			plog.Infof("saveSnapshot stopped")
 			return sm.ErrSnapshotStopped
 		default:
 		}
@@ -1150,7 +1256,6 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		SystemEventListener: &testSysEventListener{},
 		Expert:              getTestExpertConfig(fs),
 	}
-	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		return nil, nil, err
@@ -1188,7 +1293,6 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		RaftAddress:    peers[2],
 		Expert:         getTestExpertConfig(fs),
 	}
-	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		return nil, nil, err
@@ -1486,7 +1590,6 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
-			plog.Infof("nh is ready")
 			pto := lpto(nh)
 			rctx, rcancel := context.WithTimeout(context.Background(), pto)
 			rcs, err := nh.SyncGetSession(rctx, 1)
@@ -1724,7 +1827,6 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 			}
 			snapDir := nh.env.GetSnapshotDir(did, 1, 1)
 			z1 = fs.PathJoin(snapDir, dirName)
-			plog.Infof("creating %s", z1)
 			if err := fs.MkdirAll(z1, 0755); err != nil {
 				t.Fatalf("failed to create dir %v", err)
 			}
@@ -1862,7 +1964,6 @@ func TestEntryCompression(t *testing.T) {
 				if e.Type == pb.EncodedEntry {
 					hasEncodedEntry = true
 					payload := rsm.GetPayload(e)
-					plog.Infof("compressed size: %d, original size: %d", len(e.Cmd), len(payload))
 					if !bytes.Equal(payload, make([]byte, 1024)) {
 						t.Errorf("payload changed")
 					}
@@ -2468,7 +2569,6 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				}
 				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v%2 == 1 {
-					plog.Infof("a concurrent read has been confirmed")
 					atomic.AddUint32(&count, 1)
 					atomic.StoreUint32(&done, 1)
 					return
@@ -2551,7 +2651,6 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				t.Errorf("unexpected IsObserver value")
 			}
 		}
-		plog.Infof("going to run tests")
 		stopper := syncutil.NewStopper()
 		pto := pto(nh)
 		stopper.RunWorker(func() {
@@ -2578,7 +2677,6 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				}
 				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v == 1 {
-					plog.Infof("got a v == 1 result")
 					atomic.StoreUint32(&failed, 1)
 					return
 				}
@@ -2982,7 +3080,6 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 				Exported:   true,
 				ExportPath: sspath,
 			}
-			plog.Infof("going to export snapshot")
 			ctx, cancel = context.WithTimeout(context.Background(), pto)
 			exportIdx, err := nh.SyncRequestSnapshot(ctx, 1, opt)
 			cancel()
@@ -3083,7 +3180,6 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 				t.Errorf("failed to complete the requested snapshot")
 			}
 			index = v.SnapshotIndex()
-			plog.Infof("going to request snapshot again")
 			sr, err = nh.RequestSnapshot(1, SnapshotOption{}, pto)
 			if err != nil {
 				t.Fatalf("failed to request snapshot")
@@ -3576,7 +3672,6 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			if len(snapshots) != 0 {
 				t.Fatalf("snapshot record unexpectedly inserted into the system")
 			}
-			plog.Infof("snapshot index %d", index)
 			snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 			snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
 			fp := fs.PathJoin(sspath, snapshotDir, snapshotFile)
@@ -3701,7 +3796,6 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 				break
 			}
 		}
-		plog.Infof("index of exported snapshot %d", index)
 		makeProposals(nh)
 		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		rv, err := nh.SyncRead(ctx, 1, nil)
@@ -3757,7 +3851,6 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			if index != rv.(uint64) {
 				t.Fatalf("invalid returned value %d", rv.(uint64))
 			}
-			plog.Infof("checking proposes")
 			makeProposals(rnh)
 		}()
 		ok, err = upgrade310.CanUpgradeToV310(nhc)
@@ -3812,7 +3905,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr2,
 			Expert:         getTestExpertConfig(fs),
 		}
-		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once
 		nh1, err := NewNodeHost(nhc1)
 		if err != nil {
@@ -3890,7 +3982,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
 		index = v.SnapshotIndex()
-		plog.Infof("exported snapshot index %d", index)
 		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 		dir := fs.PathJoin(sspath, snapshotDir)
 		members := make(map[uint64]string)
@@ -3906,7 +3997,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		if err := tools.ImportSnapshot(nhc2, dir, members, 10); err != nil {
 			t.Fatalf("failed to import snapshot %v", err)
 		}
-		plog.Infof("snapshots imported")
 		rnh1, err := NewNodeHost(nhc1)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
@@ -4425,7 +4515,6 @@ type testRaftEventListener struct {
 func (rel *testRaftEventListener) LeaderUpdated(info raftio.LeaderInfo) {
 	rel.mu.Lock()
 	defer rel.mu.Unlock()
-	plog.Infof("leader info: %+v", info)
 	rel.received = append(rel.received, info)
 }
 
@@ -4597,7 +4686,6 @@ func makeProposals(nh *NodeHost) {
 		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 		cancel()
 		if err != nil {
-			plog.Errorf("failed to make proposal %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
