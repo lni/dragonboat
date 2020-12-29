@@ -186,16 +186,30 @@ type ClusterInfo struct {
 	Pending bool
 }
 
+// GossipInfo contains details of the gossip service.
+type GossipInfo struct {
+	// Enabled is a boolean flag indicating whether the gossip service is enabled.
+	Enabled bool
+	// AdvertiseAddress is the advertise address used by the gossip service.
+	AdvertiseAddress string
+	// NumOfLiveNodeHosts is the number of current live NodeHost instances known
+	// to the gossip service. Note that the gossip service always knowns the
+	// local NodeHost instance itself. When the NumOfKnownNodeHosts value is 1,
+	// it means the gossip service doesn't know any other NodeHost instance that
+	// is considered as live.
+	NumOfKnownNodeHosts int
+}
+
 // NodeHostInfo provides info about the NodeHost, including its managed Raft
 // cluster nodes and available Raft logs saved in its local persistent storage.
 type NodeHostInfo struct {
-	// ID is the unique identifier of the NodeHost instance.
-	ID string
+	// NodeHostID is the unique identifier of the NodeHost instance.
+	NodeHostID string
 	// RaftAddress is the public address of the NodeHost used for exchanging Raft
 	// messages, snapshots and other metadata with other NodeHost instances.
 	RaftAddress string
-	// GossipAdvertiseAddress is the advertise address used by the gossip service.
-	GossipAdvertiseAddress string
+	// Gossip contains gossip service related information.
+	Gossip GossipInfo
 	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
 	ClusterInfoList []ClusterInfo
 	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
@@ -1387,10 +1401,10 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		return &NodeHostInfo{}
 	}
 	nhi := &NodeHostInfo{
-		ID:                     nh.ID(),
-		RaftAddress:            nh.RaftAddress(),
-		GossipAdvertiseAddress: nh.getGossipAdvertiseAddress(),
-		ClusterInfoList:        nh.getClusterInfo(),
+		NodeHostID:      nh.ID(),
+		RaftAddress:     nh.RaftAddress(),
+		Gossip:          nh.getGossipInfo(),
+		ClusterInfoList: nh.getClusterInfo(),
 	}
 	if !opt.SkipLogInfo {
 		logInfo, err := nh.logdb.ListNodeInfo()
@@ -1402,11 +1416,15 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 	return nhi
 }
 
-func (nh *NodeHost) getGossipAdvertiseAddress() string {
+func (nh *NodeHost) getGossipInfo() GossipInfo {
 	if r, ok := nh.nodes.(*transport.NodeHostIDRegistry); ok {
-		return r.AdvertiseAddress()
+		return GossipInfo{
+			Enabled:             true,
+			AdvertiseAddress:    r.AdvertiseAddress(),
+			NumOfKnownNodeHosts: r.NumMembers(),
+		}
 	}
-	return ""
+	return GossipInfo{}
 }
 
 func (nh *NodeHost) propose(s *client.Session,

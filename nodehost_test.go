@@ -4427,7 +4427,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestGossipAdvertiseAddressAndNodeHostIDAreReported(t *testing.T) {
+func TestGossipInfoIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	advertiseAddress := "202.96.1.2:12345"
 	to := &testOption{
@@ -4443,12 +4443,19 @@ func TestGossipAdvertiseAddressAndNodeHostIDAreReported(t *testing.T) {
 		},
 		tf: func(nh *NodeHost) {
 			nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
-			if nhi.GossipAdvertiseAddress != advertiseAddress {
+			if nhi.Gossip.AdvertiseAddress != advertiseAddress {
 				t.Errorf("unexpected advertise address, got %s, want %s",
-					nhi.GossipAdvertiseAddress, advertiseAddress)
+					nhi.Gossip.AdvertiseAddress, advertiseAddress)
 			}
-			if nhi.ID != nh.ID() {
-				t.Errorf("unexpected NodeHostID, got %s, want %s", nhi.ID, nh.ID())
+			if !nhi.Gossip.Enabled {
+				t.Errorf("gossip info not marked as enabled")
+			}
+			if nhi.Gossip.NumOfKnownNodeHosts != 1 {
+				t.Errorf("unexpected NumOfKnownNodeHosts, got %d, want 1",
+					nhi.Gossip.NumOfKnownNodeHosts)
+			}
+			if nhi.NodeHostID != nh.ID() {
+				t.Errorf("unexpected NodeHostID, got %s, want %s", nhi.NodeHostID, nh.ID())
 			}
 		},
 	}
