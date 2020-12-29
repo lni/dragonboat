@@ -52,6 +52,11 @@ func (n *NodeHostIDRegistry) Stop() {
 	n.gossip.Stop()
 }
 
+// AdvertiseAddress returns the advertise address of the gossip service
+func (n *NodeHostIDRegistry) AdvertiseAddress() string {
+	return n.gossip.advertiseAddress()
+}
+
 // Add adds a new node with its known NodeHostID to the registry.
 func (n *NodeHostIDRegistry) Add(clusterID uint64,
 	nodeID uint64, target string) {
@@ -199,4 +204,8 @@ func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (g *gossipManager) advertiseAddress() string {
+	return g.list.LocalNode().Address()
 }

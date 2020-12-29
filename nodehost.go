@@ -192,6 +192,8 @@ type NodeHostInfo struct {
 	// RaftAddress is the public address of the NodeHost used for exchanging Raft
 	// messages, snapshots and other metadata with other NodeHost instances.
 	RaftAddress string
+	// GossipAdvertiseAddress is the advertise address used by the gossip service.
+	GossipAdvertiseAddress string
 	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
 	ClusterInfoList []ClusterInfo
 	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
@@ -1383,8 +1385,9 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		return &NodeHostInfo{}
 	}
 	nhi := &NodeHostInfo{
-		RaftAddress:     nh.RaftAddress(),
-		ClusterInfoList: nh.getClusterInfo(),
+		RaftAddress:            nh.RaftAddress(),
+		GossipAdvertiseAddress: nh.getGossipAdvertiseAddress(),
+		ClusterInfoList:        nh.getClusterInfo(),
 	}
 	if !opt.SkipLogInfo {
 		logInfo, err := nh.logdb.ListNodeInfo()
@@ -1394,6 +1397,13 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		nhi.LogInfo = logInfo
 	}
 	return nhi
+}
+
+func (nh *NodeHost) getGossipAdvertiseAddress() string {
+	if r, ok := nh.nodes.(*transport.NodeHostIDRegistry); ok {
+		return r.AdvertiseAddress()
+	}
+	return ""
 }
 
 func (nh *NodeHost) propose(s *client.Session,

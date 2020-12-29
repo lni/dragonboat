@@ -500,7 +500,11 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 	}
 	peers := make(map[uint64]string)
 	if !to.join {
-		peers[cfg.ClusterID] = nh.RaftAddress()
+		if !nh.nhConfig.AddressByNodeHostID {
+			peers[cfg.ClusterID] = nh.RaftAddress()
+		} else {
+			peers[cfg.ClusterID] = nh.ID()
+		}
 	}
 	if to.createSM != nil {
 		if err := nh.StartCluster(peers, to.join, to.createSM, *cfg); err != nil {
@@ -4423,7 +4427,32 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
+func TestGossipAdvertiseAddressIsReported(t *testing.T) {
+	fs := vfs.GetTestFS()
+	advertiseAddress := "202.96.1.2:12345"
+	to := &testOption{
+		defaultTestNode: true,
+		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
+			c.AddressByNodeHostID = true
+			c.Gossip = config.GossipConfig{
+				BindAddress:      "localhost:23001",
+				AdvertiseAddress: advertiseAddress,
+				Seed:             []string{"localhost:23002"},
+			}
+			return c
+		},
+		tf: func(nh *NodeHost) {
+			nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
+			if nhi.GossipAdvertiseAddress != advertiseAddress {
+				t.Errorf("unexpected advertise address, got %s, want %s",
+					nhi.GossipAdvertiseAddress, advertiseAddress)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestLeaderInfoIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
