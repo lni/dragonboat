@@ -189,6 +189,8 @@ type ClusterInfo struct {
 // NodeHostInfo provides info about the NodeHost, including its managed Raft
 // cluster nodes and available Raft logs saved in its local persistent storage.
 type NodeHostInfo struct {
+	// ID is the unique identifier of the NodeHost instance.
+	ID string
 	// RaftAddress is the public address of the NodeHost used for exchanging Raft
 	// messages, snapshots and other metadata with other NodeHost instances.
 	RaftAddress string
@@ -1385,6 +1387,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		return &NodeHostInfo{}
 	}
 	nhi := &NodeHostInfo{
+		ID:                     nh.ID(),
 		RaftAddress:            nh.RaftAddress(),
 		GossipAdvertiseAddress: nh.getGossipAdvertiseAddress(),
 		ClusterInfoList:        nh.getClusterInfo(),
