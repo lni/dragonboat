@@ -72,25 +72,22 @@ var (
 
 var (
 	plog                = logger.GetLogger("transport")
-	streamConnections   = settings.Soft.StreamConnections
 	sendQueueLen        = settings.Soft.SendQueueLength
 	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
-	errChunkSendSkipped = errors.New("chunk is skipped")
-	errBatchSendSkipped = errors.New("raft request batch is skipped")
 	idleTimeout         = time.Minute
+	errChunkSendSkipped = errors.New("chunk skipped")
+	errBatchSendSkipped = errors.New("batch skipped")
 	dn                  = logutil.DescribeNode
 )
 
-// INodeAddressResolver converts the (cluster id, node id( tuple to network
-// address
-type INodeAddressResolver interface {
+// IResolver converts the (cluster id, node id( tuple to network address.
+type IResolver interface {
 	Resolve(uint64, uint64) (string, string, error)
-	AddRemote(uint64, uint64, string)
+	Add(uint64, uint64, string)
 }
 
-// IRaftMessageHandler is the interface required to handle incoming raft
-// requests.
-type IRaftMessageHandler interface {
+// IMessageHandler is the interface required to handle incoming raft requests.
+type IMessageHandler interface {
 	HandleMessageBatch(batch pb.MessageBatch) (uint64, uint64)
 	HandleUnreachable(clusterID uint64, nodeID uint64)
 	HandleSnapshotStatus(clusterID uint64, nodeID uint64, rejected bool)
@@ -182,32 +179,31 @@ type Transport struct {
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	jobs              uint32
-	chunks            *Chunks
-	metrics           *transportMetrics
-	env               *server.Env
-	nhConfig          config.NodeHostConfig
-	sourceID          string
-	resolver          INodeAddressResolver
-	stopper           *syncutil.Stopper
-	dir               server.SnapshotDirFunc
-	trans             raftio.IRaftRPC
-	msgHandler        IRaftMessageHandler
-	postSend          atomic.Value
-	preSend           atomic.Value
-	preSendBatch      atomic.Value
-	ctx               context.Context
-	cancel            context.CancelFunc
-	streamConnections uint64
-	sysEvents         ITransportEvent
-	fs                vfs.IFS
+	jobs         uint32
+	chunks       *Chunks
+	metrics      *transportMetrics
+	env          *server.Env
+	nhConfig     config.NodeHostConfig
+	sourceID     string
+	resolver     IResolver
+	stopper      *syncutil.Stopper
+	dir          server.SnapshotDirFunc
+	trans        raftio.IRaftRPC
+	msgHandler   IMessageHandler
+	postSend     atomic.Value
+	preSend      atomic.Value
+	preSendBatch atomic.Value
+	ctx          context.Context
+	cancel       context.CancelFunc
+	sysEvents    ITransportEvent
+	fs           vfs.IFS
 }
 
 var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
-	handler IRaftMessageHandler, env *server.Env, resolver INodeAddressResolver,
+	handler IMessageHandler, env *server.Env, resolver IResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	sourceID := nhConfig.RaftAddress
@@ -215,16 +211,15 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		sourceID = env.NodeHostID()
 	}
 	t := &Transport{
-		nhConfig:          nhConfig,
-		env:               env,
-		sourceID:          sourceID,
-		resolver:          resolver,
-		stopper:           syncutil.NewStopper(),
-		dir:               dir,
-		streamConnections: streamConnections,
-		sysEvents:         sysEvents,
-		fs:                fs,
-		msgHandler:        handler,
+		nhConfig:   nhConfig,
+		env:        env,
+		sourceID:   sourceID,
+		resolver:   resolver,
+		stopper:    syncutil.NewStopper(),
+		dir:        dir,
+		sysEvents:  sysEvents,
+		fs:         fs,
+		msgHandler: handler,
 	}
 	chunks := NewChunks(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
@@ -323,7 +318,7 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 	if len(addr) > 0 {
 		for _, r := range req.Requests {
 			if r.From != 0 {
-				t.resolver.AddRemote(r.ClusterId, r.From, addr)
+				t.resolver.Add(r.ClusterId, r.From, addr)
 			}
 		}
 	}

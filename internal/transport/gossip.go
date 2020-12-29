@@ -68,12 +68,6 @@ func (n *NodeHostIDRegistry) Add(clusterID uint64,
 	n.nodes.Add(clusterID, nodeID, target)
 }
 
-// AddRemote a new node with its known NodeHostID to the registry.
-func (n *NodeHostIDRegistry) AddRemote(clusterID uint64,
-	nodeID uint64, target string) {
-	n.nodes.AddRemote(clusterID, nodeID, target)
-}
-
 // Remove removes the specified node from the registry.
 func (n *NodeHostIDRegistry) Remove(clusterID uint64, nodeID uint64) {
 	n.nodes.Remove(clusterID, nodeID)

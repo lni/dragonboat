@@ -319,7 +319,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 	return 0
 }
 
-func newNOOPTestTransport(handler IRaftMessageHandler, fs vfs.IFS) (*Transport,
+func newNOOPTestTransport(handler IMessageHandler, fs vfs.IFS) (*Transport,
 	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
 	t := newTestSnapshotDir(fs)
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
@@ -344,7 +344,7 @@ func newNOOPTestTransport(handler IRaftMessageHandler, fs vfs.IFS) (*Transport,
 	return transport, nodes, trans, trans.req, trans.connReq
 }
 
-func newTestTransport(handler IRaftMessageHandler,
+func newTestTransport(handler IMessageHandler,
 	mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
 	*syncutil.Stopper, *testSnapshotDir) {
 	stopper := syncutil.NewStopper()
@@ -663,11 +663,11 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs
 	if count == 200 {
 		t.Errorf("failed to send the message")
 	}
-	if len(nodes.nmu.nodes) != 1 {
+	if len(nodes.addr) != 2 {
 		t.Errorf("remote address not updated")
 	}
 	key := raftio.GetNodeInfo(100, 200)
-	v, ok := nodes.nmu.nodes[key]
+	v, ok := nodes.addr[key]
 	if !ok {
 		t.Errorf("did not record source address")
 	}

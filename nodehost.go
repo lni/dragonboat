@@ -2074,7 +2074,7 @@ type messageHandler struct {
 	nh *NodeHost
 }
 
-var _ transport.IRaftMessageHandler = (*messageHandler)(nil)
+var _ transport.IMessageHandler = (*messageHandler)(nil)
 
 func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 	return &messageHandler{nh: nh}

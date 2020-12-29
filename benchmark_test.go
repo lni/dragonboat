@@ -424,7 +424,7 @@ func benchmarkTransport(b *testing.B, sz int) {
 	}
 	nodes1 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes2 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
-	nodes1.AddRemote(1, 2, addr2)
+	nodes1.Add(1, 2, addr2)
 	handler1 := &benchmarkMessageHandler{
 		ch:       make(chan struct{}, 1),
 		expected: 128,
