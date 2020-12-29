@@ -728,15 +728,26 @@ type ExpertConfig struct {
 // GossipConfig contains configurations for the gossip module.
 type GossipConfig struct {
 	// BindAddress is the address for the gossip service to bind to and listen on.
-	// Both UDP and TCP ports are used by the gossip service.
+	// Both UDP and TCP ports are used by the gossip service. The local gossip
+	// service should be able to receive gossip service related messages by
+	// binding to and listening on this address. BindAddress is usually in the
+	// format of IP:Port, Hostname:Port or DNS Name:Port.
 	BindAddress string
 	// AdvertiseAddress is the address to advertise to other NodeHost instances
-	// used for NAT traversal.
+	// used for NAT traversal. Gossip services running on remote NodeHost
+	// instances will use AdvertiseAddress to exchange gossip service related
+	// messages. AdvertiseAddress is in the format of IP:Port.
 	AdvertiseAddress string
 	// Seed is a list of AdvertiseAddress of remote NodeHost instances. Local
 	// NodeHost instance will try to contact all of them to bootstrap the gossip
 	// service. At least one reachable NodeHost instance is required to
-	// successfully bootstrap the gossip service.
+	// successfully bootstrap the gossip service. Each seed address is in the
+	// format of IP:Port, Hostname:Port or DNS Name:Port.
+	//
+	// It is ok to include seed addresses that are temporarily unreachable, e.g.
+	// when launching the first NodeHost instance in your deployment, you can
+	// include AdvertiseAddresses from other NodeHost instances that you plan to
+	// launch shortly afterwards.
 	Seed []string
 }
 
@@ -762,7 +773,7 @@ func (g *GossipConfig) Validate() error {
 	}
 	count := 0
 	for _, v := range g.Seed {
-		if v != g.BindAddress {
+		if v != g.BindAddress && v != g.AdvertiseAddress {
 			count++
 		}
 		if !stringutil.IsValidAddress(v) {

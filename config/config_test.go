@@ -213,6 +213,7 @@ func TestGossipConfigValidate(t *testing.T) {
 		{"myhost.com:12345", "myhost2.net:12345", []string{"128.0.0.1:1234"}, false},
 		{"myhost.com:12345", "202.23.45.1:12345", []string{}, false},
 		{"myhost.com:12345", "202.23.45.1:12345", []string{"myhost.com:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"202.23.45.1:12345"}, false},
 		{"myhost.com:12345", "202.23.45.1", []string{"128.0.0.1:1234"}, false},
 		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1"}, false},
 		{"myhost.com:12345", ":12345", []string{"128.0.0.1:12345"}, false},
