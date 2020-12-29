@@ -381,16 +381,17 @@ func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
 
 // RaftAddress returns the Raft address of the NodeHost instance, it is the
 // network address by which the NodeHost can be reached by other NodeHost
-// instances for exchanging Raft messages, snapshots and other metadata. By
-// default, the RaftAddress value of a NodeHost is not expected to change
-// after restarts.
+// instances for exchanging Raft messages, snapshots and other metadata.
 func (nh *NodeHost) RaftAddress() string {
 	return nh.nhConfig.RaftAddress
 }
 
 // ID returns the string representation of the NodeHost ID value. The NodeHost
 // ID is assigned to each NodeHost on its initial creation and it can be used
-// to uniquely identify the NodeHost instance for its entire life cycle.
+// to uniquely identify the NodeHost instance for its entire life cycle. When
+// the system is running in the AddressByNodeHost mode, it is used as the target
+// value when calling the StartCluster, RequestAddNode, RequestAddObserver,
+// RequestAddWitness methods.
 func (nh *NodeHost) ID() string {
 	return nh.id.String()
 }
@@ -448,12 +449,14 @@ func (nh *NodeHost) Stop() {
 // started is backed by a regular state machine that implements the
 // sm.IStateMachine interface.
 //
-// The input parameter initialMembers is a map of node ID to NodeHost ID for all
-// Raft cluster's initial member nodes. By default, NodeHost ID is the
-// RaftAddress of the NodeHost. See the godoc of NodeHost's ID method for the
-// full definition of NodeHostID. For the same Raft cluster, the same
-// initialMembers map should be specified when starting its initial member nodes
-// on distributed NodeHost instances.
+// The input parameter initialMembers is a map of node ID to node target for all
+// Raft cluster's initial member nodes. By default, the target is the
+// RaftAddress value of the NodeHost where the node will be running. When running
+// in the AddressByNodeHostID mode, target should be set to the NodeHostID value
+// of the NodeHost where the node will be running. See the godoc of NodeHost's ID
+// method for the full definition of NodeHostID. For the same Raft cluster, the
+// same initialMembers map should be specified when starting its initial member
+// nodes on distributed NodeHost instances.
 //
 // The join flag indicates whether the node is a new node joining an existing
 // cluster. create is a factory function for creating the IStateMachine instance,
@@ -1162,12 +1165,11 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 //
 // Requesting a removed node back to the Raft cluster will always be rejected.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the AddressByNodeHostID field is
-// set to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1205,12 +1207,11 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the AddressByNodeHostID field is
-// set to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1246,12 +1247,11 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the AddressByNodeHostID field is
-// set to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it

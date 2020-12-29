@@ -293,25 +293,30 @@ type NodeHostConfig struct {
 	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
 	// than 1 million in your environment.
 	RTTMillisecond uint64
-	// RaftAddress is a DNS name:port or IP:port address used by the Raft
-	// transport module for exchanging Raft messages, snapshots and metadata. It
-	// should be set to the public address that can be accessed from remote
-	// NodeHost instances.
-	//
-	// AddressByNodeHostID should be set to true when the RaftAddress of this
-	// NodeHost instance might change after restart. In this case, a custom
-	// transport is required that can translate NodeHostID values to their current
-	// RaftAddress values.
+	// RaftAddress is a DNS name:port or IP:port address used by the transport
+	// module for exchanging Raft messages, snapshots and metadata between
+	// NodeHost instances. It should be set to the public address that can be
+	// accessed from remote NodeHost instances.
 	//
 	// When the NodeHostConfig.ListenAddress field is empty, NodeHost listens on
 	// RaftAddress for incoming Raft messages. When hostname or domain name is
 	// used, it will be resolved to IPv4 addresses first and Dragonboat listens
 	// to all resolved IPv4 addresses.
+	//
+	// By default, the RaftAddress value is not allowed to change between NodeHost
+	// restarts. AddressByNodeHostID should be set to true when the RaftAddress
+	// value might change after restart.
 	RaftAddress string
 	// AddressByNodeHostID indicates that NodeHost instances should be addressed
-	// by their NodeHostID values. This requires users to provide a custom
-	// transport module capable of addressing NodeHost instances by their
-	// NodeHostID values.
+	// by their NodeHostID values. When this field is set to true, NodeHostID
+	// values should be used as the target when calling NodeHost's StartCluster,
+	// RequestAddNode, RequestAddObserver and RequestAddWitness methods.
+	//
+	// When not using custom transport module, setting AddressByNodeHostID to
+	// true also enables the internal gossip service as it is required for
+	// managing the internal NodeHostID to RaftAddress mappings.
+	// The NodeHostConfig.Gossip field should be configured to run this gossip
+	// service.
 	AddressByNodeHostID bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
 	// form used by the Raft RPC module to listen on for Raft message and
@@ -388,11 +393,12 @@ type NodeHostConfig struct {
 	// commits are not notified, clients are only notified when their proposals
 	// are both committed and applied.
 	NotifyCommit bool
-	// Gossip contains configurations for the gossip module. When the
+	// Gossip contains configurations for the gossip service. When the
 	// AddressByNodeHostID field is set to true and the default transport module
-	// is used, each NodeHost instance will use gossip to exchange knowledges on
-	// available NodeHost instances. GossipConfig contains configurations that
-	// controls how the gossip service works.
+	// is used, each NodeHost instance will use an internal gossip service to
+	// exchange knowledges on available NodeHost instances and the mappings of
+	// their RaftAddress and NodeHostID values. This Gossip field contains
+	// configurations that controls how the gossip service works.
 	Gossip GossipConfig
 	// Expert contains options for expert users who are familiar with the internals
 	// of Dragonboat. Users are recommended not to use this field unless
@@ -725,7 +731,11 @@ type ExpertConfig struct {
 	TestGossipProbeInterval time.Duration
 }
 
-// GossipConfig contains configurations for the gossip module.
+// GossipConfig contains configurations for the gossip service. Gossip service
+// is a fully distributed networked service for exchanging knowledges on
+// NodeHost instances. When enabled by the NodeHostConfig.AddressByNodeHostID
+// field, it is employed to manage NodeHostID to RaftAddress mappings of known
+// NodeHost instances.
 type GossipConfig struct {
 	// BindAddress is the address for the gossip service to bind to and listen on.
 	// Both UDP and TCP ports are used by the gossip service. The local gossip
