@@ -317,6 +317,9 @@ type NodeHostConfig struct {
 	// managing the internal NodeHostID to RaftAddress mappings.
 	// The NodeHostConfig.Gossip field should be configured to run this gossip
 	// service.
+	//
+	// It is important to note that the AddressByNodeHostID setting can not be
+	// changed after restarts.
 	AddressByNodeHostID bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
 	// form used by the Raft RPC module to listen on for Raft message and

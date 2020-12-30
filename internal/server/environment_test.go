@@ -135,14 +135,19 @@ func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
 		t.Fatalf("changed raft address not detected")
 	}
 	cfg.AddressByNodeHostID = true
+	status.AddressByNodeHostId = true
+	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
+	if err != nil {
+		t.Errorf("failed to create flag file %v", err)
+	}
 	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err != nil {
-		t.Fatalf("changed raft address not allowed")
+		t.Fatalf("changed raft address not allowed, %v", err)
 	}
 }
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	addr string, hostname string, binVer uint32, name string,
-	hardHashMismatch bool, expErr error, fs vfs.IFS) {
+	hardHashMismatch bool, addressByNodeHostID bool, expErr error, fs vfs.IFS) {
 	c := getTestNodeHostConfig()
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
@@ -158,9 +163,10 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	}
 	dir, _ := env.getDataDirs()
 	cfg := config.NodeHostConfig{
-		Expert:       config.GetDefaultExpertConfig(),
-		DeploymentID: testDeploymentID,
-		RaftAddress:  testAddress,
+		Expert:              config.GetDefaultExpertConfig(),
+		DeploymentID:        testDeploymentID,
+		RaftAddress:         testAddress,
+		AddressByNodeHostID: addressByNodeHostID,
 	}
 
 	status := raftpb.RaftDataStatus{
@@ -169,8 +175,9 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		HardHash: settings.HardHash(cfg.Expert.ExecShards,
 			cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 			settings.Hard.LogDBEntryBatchSize),
-		LogdbType: name,
-		Hostname:  hostname,
+		LogdbType:           name,
+		Hostname:            hostname,
+		AddressByNodeHostId: false,
 	}
 	if hardHashMismatch {
 		status.HardHash = 1
@@ -190,35 +197,42 @@ func TestCanDetectMismatchedHostname(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "incorrect-hostname", raftio.LogDBBinVersion,
-		testLogDBName, false, ErrHostnameChanged, fs)
+		testLogDBName, false, false, ErrHostnameChanged, fs)
 }
 
 func TestCanDetectMismatchedLogDBName(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "", raftio.LogDBBinVersion,
-		"incorrect name", false, ErrLogDBType, fs)
+		"incorrect name", false, false, ErrLogDBType, fs)
 }
 
 func TestCanDetectMismatchedBinVer(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "", raftio.LogDBBinVersion+1,
-		testLogDBName, false, ErrIncompatibleData, fs)
+		testLogDBName, false, false, ErrIncompatibleData, fs)
 }
 
 func TestCanDetectMismatchedAddress(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		"invalid:12345", "", raftio.LogDBBinVersion,
-		testLogDBName, false, ErrNotOwner, fs)
+		testLogDBName, false, false, ErrNotOwner, fs)
 }
 
 func TestCanDetectMismatchedHardHash(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "", raftio.LogDBBinVersion,
-		testLogDBName, true, ErrHardSettingsChanged, fs)
+		testLogDBName, true, false, ErrHardSettingsChanged, fs)
+}
+
+func TestCanDetectMismatchedAddressByNodeHostID(t *testing.T) {
+	fs := vfs.GetTestFS()
+	testNodeHostDirectoryDetectsMismatches(t,
+		testAddress, "", raftio.LogDBBinVersion,
+		testLogDBName, false, true, ErrAddressByNodeHostIDChanged, fs)
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {

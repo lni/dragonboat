@@ -46,6 +46,9 @@ var (
 	// ErrDeploymentIDChanged is the error used to indicate that the deployment
 	// ID changed.
 	ErrDeploymentIDChanged = errors.New("deployment ID changed")
+	// ErrAddressByNodeHostIDChanged is the error used to indicate that the
+	// AddressByNodeHostID setting has changed.
+	ErrAddressByNodeHostIDChanged = errors.New("AddressByNodeHostID changed")
 	// ErrLogDBType is the error used to indicate that the LogDB type changed.
 	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
@@ -373,6 +376,9 @@ func (env *Env) check(cfg config.NodeHostConfig,
 		if s.DeploymentId != 0 && s.DeploymentId != cfg.GetDeploymentID() {
 			return ErrDeploymentIDChanged
 		}
+		if s.AddressByNodeHostId != cfg.AddressByNodeHostID {
+			return ErrAddressByNodeHostIDChanged
+		}
 		if s.BinVer != binVer {
 			if s.BinVer == raftio.LogDBBinVersion &&
 				binVer == raftio.PlainLogDBBinVersion {
@@ -402,16 +408,17 @@ func (env *Env) check(cfg config.NodeHostConfig,
 func (env *Env) createFlagFile(cfg config.NodeHostConfig,
 	dir string, ver uint32, name string) error {
 	s := raftpb.RaftDataStatus{
-		Address:         cfg.RaftAddress,
-		BinVer:          ver,
-		HardHash:        0,
-		LogdbType:       name,
-		Hostname:        env.hostname,
-		DeploymentId:    cfg.GetDeploymentID(),
-		StepWorkerCount: cfg.Expert.ExecShards,
-		LogdbShardCount: cfg.Expert.LogDB.Shards,
-		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
-		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
+		Address:             cfg.RaftAddress,
+		BinVer:              ver,
+		HardHash:            0,
+		LogdbType:           name,
+		Hostname:            env.hostname,
+		DeploymentId:        cfg.GetDeploymentID(),
+		StepWorkerCount:     cfg.Expert.ExecShards,
+		LogdbShardCount:     cfg.Expert.LogDB.Shards,
+		MaxSessionCount:     settings.Hard.LRUMaxSessionCount,
+		EntryBatchSize:      settings.Hard.LogDBEntryBatchSize,
+		AddressByNodeHostId: cfg.AddressByNodeHostID,
 	}
 	return fileutil.CreateFlagFile(dir, flagFilename, &s, env.fs)
 }
