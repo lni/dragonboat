@@ -120,6 +120,7 @@ type node struct {
 	sysEvents             *sysEventListener
 	metrics               *logDBMetrics
 	initializedC          chan struct{}
+	initializedFlag       uint64
 }
 
 var _ rsm.INode = (*node)(nil)
@@ -1540,8 +1541,12 @@ func (n *node) isFollower() bool {
 }
 
 func (n *node) initialized() bool {
+	if atomic.LoadUint64(&n.initializedFlag) != 0 {
+		return true
+	}
 	select {
 	case <-n.initializedC:
+		atomic.StoreUint64(&n.initializedFlag, 1)
 		return true
 	default:
 	}
