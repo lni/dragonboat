@@ -750,72 +750,34 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-type nhidChanTransport struct {
-	t raftio.ITransport
-}
+type chanTransportFactory struct{}
 
-func (u *nhidChanTransport) Name() string {
-	return u.t.Name()
-}
-
-func (u *nhidChanTransport) Start() error {
-	return u.t.Start()
-}
-
-func (u *nhidChanTransport) Stop() {
-	u.t.Stop()
-}
-
-func (u *nhidChanTransport) getAddr(nhid string) (string, error) {
-	if nhid == testNodeHostID1 {
-		return nodeHostTestAddr1, nil
-	} else if nhid == testNodeHostID2 {
-		return nodeHostTestAddr2, nil
-	}
-	return "", errors.New("unknown nhid")
-}
-
-func (u *nhidChanTransport) GetConnection(ctx context.Context,
-	target string) (raftio.IConnection, error) {
-	addr, err := u.getAddr(target)
-	if err != nil {
-		return nil, err
-	}
-	return u.t.GetConnection(ctx, addr)
-}
-
-func (u *nhidChanTransport) GetSnapshotConnection(ctx context.Context,
-	target string) (raftio.ISnapshotConnection, error) {
-	addr, err := u.getAddr(target)
-	if err != nil {
-		return nil, err
-	}
-	return u.t.GetSnapshotConnection(ctx, addr)
-}
-
-type nhidTestTransportFactory struct{}
-
-func (tm *nhidTestTransportFactory) Create(nhConfig config.NodeHostConfig,
+func (*chanTransportFactory) Create(nhConfig config.NodeHostConfig,
 	handler raftio.MessageHandler,
 	chunkHandler raftio.ChunkHandler) raftio.ITransport {
-	return &nhidChanTransport{
-		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
-	}
+	return chantrans.NewChanTransport(nhConfig, handler, chunkHandler)
 }
 
-func (tm *nhidTestTransportFactory) Validate(addr string) bool {
+func (tm *chanTransportFactory) Validate(addr string) bool {
 	return addr == nodeHostTestAddr1 || addr == nodeHostTestAddr2
 }
 
-func TestCustomTransportFactoryCanUseNodeHostID(t *testing.T) {
-	testAddressByNodeHostID(t, true)
+func TestGossip(t *testing.T) {
+	testAddressByNodeHostID(t, true, nil)
 }
 
-func TestDynamicRaftAddressClustersCanUseGossip(t *testing.T) {
-	testAddressByNodeHostID(t, false)
+func TestCustomTransportCanUseNodeHostID(t *testing.T) {
+	factory := &chanTransportFactory{}
+	testAddressByNodeHostID(t, true, factory)
 }
 
-func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
+func TestCustomTransportCanGoWithoutNodeHostID(t *testing.T) {
+	factory := &chanTransportFactory{}
+	testAddressByNodeHostID(t, false, factory)
+}
+
+func testAddressByNodeHostID(t *testing.T,
+	addressByNodeHostID bool, factory config.TransportFactory) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
@@ -827,21 +789,35 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		AddressByNodeHostID: true,
+		AddressByNodeHostID: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
 		},
 	}
+	if addressByNodeHostID {
+		nhc1.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25001",
+			AdvertiseAddress: "127.0.0.1:25001",
+			Seed:             []string{"127.0.0.1:25002"},
+		}
+	}
 	nhc2 := config.NodeHostConfig{
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		AddressByNodeHostID: true,
+		AddressByNodeHostID: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
 		},
+	}
+	if addressByNodeHostID {
+		nhc2.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25002",
+			AdvertiseAddress: "127.0.0.1:25002",
+			Seed:             []string{"127.0.0.1:25001"},
+		}
 	}
 	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
 	if err != nil {
@@ -853,21 +829,8 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 		t.Fatalf("failed to parse nhid")
 	}
 	nhc2.Expert.TestNodeHostID = nhid2.Value()
-	if useCustomTransport {
-		nhc1.TransportFactory = &nhidTestTransportFactory{}
-		nhc2.TransportFactory = &nhidTestTransportFactory{}
-	} else {
-		nhc1.Gossip = config.GossipConfig{
-			BindAddress:      "127.0.0.1:25001",
-			AdvertiseAddress: "127.0.0.1:25001",
-			Seed:             []string{"127.0.0.1:25002"},
-		}
-		nhc2.Gossip = config.GossipConfig{
-			BindAddress:      "127.0.0.1:25002",
-			AdvertiseAddress: "127.0.0.1:25002",
-			Seed:             []string{"127.0.0.1:25001"},
-		}
-	}
+	nhc1.TransportFactory = factory
+	nhc2.TransportFactory = factory
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		t.Fatalf("failed to create nh, %v", err)
@@ -879,8 +842,13 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 	}
 	defer nh2.Stop()
 	peers := make(map[uint64]string)
-	peers[1] = testNodeHostID1
-	peers[2] = testNodeHostID2
+	if addressByNodeHostID {
+		peers[1] = testNodeHostID1
+		peers[2] = testNodeHostID2
+	} else {
+		peers[1] = addr1
+		peers[2] = addr2
+	}
 	createSM := func(uint64, uint64) sm.IStateMachine {
 		return &PST{}
 	}

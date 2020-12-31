@@ -168,6 +168,28 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 	}
 }
 
+func TestGossipMustBeConfiguredWhenAddressByNodeHostID(t *testing.T) {
+	c := NodeHostConfig{
+		RaftAddress:    "localhost:9010",
+		RTTMillisecond: 100,
+		NodeHostDir:    "/data",
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("invalid config")
+	}
+	c.AddressByNodeHostID = true
+	if err := c.Validate(); err == nil {
+		t.Fatalf("unexpectedly considreed as valid config")
+	}
+	c.Gossip = GossipConfig{
+		BindAddress: "localhost:12345",
+		Seed:        []string{"localhost:23456"},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("invalid config")
+	}
+}
+
 func TestGossipConfigIsEmtpy(t *testing.T) {
 	gc := &GossipConfig{}
 	if !gc.IsEmpty() {

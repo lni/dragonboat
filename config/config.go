@@ -272,11 +272,9 @@ type NodeHostConfig struct {
 	// values should be used as the target when calling NodeHost's StartCluster,
 	// RequestAddNode, RequestAddObserver and RequestAddWitness methods.
 	//
-	// When not using custom transport module, setting AddressByNodeHostID to
-	// true also enables the internal gossip service as it is required for
-	// managing the internal NodeHostID to RaftAddress mappings.
-	// The NodeHostConfig.Gossip field should be configured to run this gossip
-	// service.
+	// Setting AddressByNodeHostID to true also enables the internal gossip
+	// service, NodeHostConfig.Gossip must be configured to control the behaviors
+	// of the gossip service.
 	//
 	// It is important to note that the AddressByNodeHostID setting can not be
 	// changed after restarts.
@@ -307,7 +305,10 @@ type NodeHostConfig struct {
 	// LogDBFactory is the factory function used for creating the Log DB instance
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
-	LogDBFactory LogDBFactoryFunc
+	//
+	// Depreciated: Use TransportFactory instead. NodeHostConig.RaftRPCFactory will
+	// be removed in v4.0.
+	OldLogDBFactory LogDBFactoryFunc
 	// RaftRPCFactory is the factory function used for creating the transport
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based transport to be used.
@@ -315,8 +316,12 @@ type NodeHostConfig struct {
 	// Depreciated: Use TransportFactory instead. NodeHostConig.RaftRPCFactory will
 	// be removed in v4.0.
 	RaftRPCFactory RaftRPCFactoryFunc
+	// LogDBFactory is the factory function used for creating the LogDB instance
+	// used by NodeHost. When not set, the default built-in Pebble based LogDB
+	// implementation is used.
+	LogDBFactory LogDBFactory
 	// TransportFactory is an optional factory type used for creating the custom
-	// trasnport module to be used by dragonbaot. When not set, the built-in TCP
+	// transport module to be used by dragonbaot. When not set, the built-in TCP
 	// transport module is used.
 	TransportFactory TransportFactory
 	// EnableMetrics determines whether health metrics in Prometheus format should
@@ -382,12 +387,21 @@ type TargetValidator func(string) bool
 // RaftAddress values.
 type RaftAddressValidator func(string) bool
 
+// LogDBFactory is the factory type for creating a LogDB instance.
+type LogDBFactory func(NodeHostConfig,
+	LogDBCallback, []string, []string) (raftio.ILogDB, error)
+
 // TransportFactory is the interface used for creating custom transport modules.
 type TransportFactory interface {
 	// Create creates a transport module. It is invoked during the creation of its
 	// owner NodeHost instance.
 	Create(NodeHostConfig,
 		raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
+	// Validate validates the RaftAddress of the NodeHost. When using a custom
+	// transport module, users are granted full control on what address type to
+	// use for the NodeHostConfig.RaftAddress field, it can be of the traditional
+	// IP:Port format or any other form. The Validate method is used to validate
+	// that a received address is of the valid form.
 	Validate(string) bool
 }
 
@@ -404,13 +418,14 @@ type LogDBCallback func(LogDBInfo)
 // RaftRPCFactoryFunc is the factory function that creates the transport module
 // instance for exchanging Raft messages between NodeHosts.
 //
-// Depreciated: Use TransportFactory instead. RaftRPCFactoryFunc will be removed
-// in v4.0.
+// Depreciated: Use TransportFactory instead.
 type RaftRPCFactoryFunc func(NodeHostConfig,
 	raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
+//
+// Depreciated: User LogDBFactory instead.
 type LogDBFactoryFunc func(NodeHostConfig,
 	LogDBCallback, []string, []string) (raftio.ILogDB, error)
 
@@ -449,15 +464,8 @@ func (c *NodeHostConfig) Validate() error {
 	if c.RaftRPCFactory != nil && c.TransportFactory != nil {
 		return errors.New("both TransportFactory and RaftRPCFactory specified")
 	}
-	if c.AddressByNodeHostID && c.TransportFactory == nil {
-		if c.Gossip.IsEmpty() {
-			return errors.New("gossip service not configured")
-		}
-	}
-	if c.TransportFactory != nil {
-		if !c.Gossip.IsEmpty() {
-			return errors.New("gossip service not supported")
-		}
+	if c.AddressByNodeHostID && c.Gossip.IsEmpty() {
+		return errors.New("gossip service not configured")
 	}
 	validate := c.GetRaftAddressValidator()
 	if !validate(c.RaftAddress) {

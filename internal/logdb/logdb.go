@@ -100,7 +100,7 @@ func checkDirs(numOfShards uint64, dirs []string, lldirs []string) {
 }
 
 // GetLogDBInfo returns logdb type name.
-func GetLogDBInfo(f config.LogDBFactoryFunc,
+func GetLogDBInfo(f config.LogDBFactory,
 	config config.NodeHostConfig,
 	nhDirs []string, fs vfs.IFS) (name string, err error) {
 	tmpDirs := make([]string, 0)

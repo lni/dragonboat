@@ -28,7 +28,7 @@ var (
 	singleNodeHostTestDir = "plugin_test_dir_safe_to_delete"
 )
 
-func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactoryFunc) {
+func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
 	os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	nhc := config.NodeHostConfig{

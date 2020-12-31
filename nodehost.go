@@ -257,6 +257,12 @@ type SnapshotOption struct {
 // and the generated snapshot is managed by the system.
 var DefaultSnapshotOption SnapshotOption
 
+// Target is the type used to specify where a node is running. Target is remote
+// NodeHost's RaftAddress value when NodeHostConfig.AddressByNodeHostID is not
+// set. Target will use NodeHost's ID value when
+// NodeHostConfig.AddressByNodeHostID is set.
+type Target = string
+
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
@@ -477,7 +483,7 @@ func (nh *NodeHost) Stop() {
 //  - restarting an crashed or stopped node, set join to false and leave the
 //    initialMembers map to be empty. This applies to both initial member nodes
 //    and those joined later.
-func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -489,7 +495,7 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
 // to start a Raft node backed by a concurrent state machine.
-func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -502,7 +508,7 @@ func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
 // start a Raft node backed by an IOnDiskStateMachine.
-func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -1178,7 +1184,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1220,7 +1226,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1260,7 +1266,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1517,7 +1523,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 //    procedure that records such info.
 // 3. the bootstrap record is used as a marker record in our default Log DB
 //    implementation to indicate that a certain node exists there
-func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
@@ -1547,7 +1553,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 	return bi.Addresses, !bi.Join, nil
 }
 
-func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	join bool, createStateMachine rsm.ManagedStateMachineFactory,
 	config config.Config, smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
@@ -1680,7 +1686,7 @@ func (nh *NodeHost) createLogDB() error {
 	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
 	}
-	var factory config.LogDBFactoryFunc
+	var factory config.LogDBFactory
 	df := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lows []string) (raftio.ILogDB, error) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
@@ -1762,7 +1768,7 @@ func (nh *NodeHost) createNodesRegistry() error {
 	validator := nh.nhConfig.GetTargetValidator()
 	// TODO:
 	// more tests here required
-	if nh.nhConfig.AddressByNodeHostID && nh.nhConfig.TransportFactory == nil {
+	if nh.nhConfig.AddressByNodeHostID {
 		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
 		r, err := transport.NewNodeHostIDRegistry(nh.ID(),
 			nh.nhConfig, streamConnections, validator)
