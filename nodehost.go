@@ -57,7 +57,7 @@ the risk to have the same proposal committed and applied twice into the user
 state machine. Dragonboat prevents this by implementing the client session
 concept described in Diego Ongaro's PhD thesis.
 
-Arbitary number of Raft clusters can be launched across the network
+Arbitrary number of Raft clusters can be launched across the network
 simultaneously to aggregate distributed processing and storage capacities. Users
 can also make membership change requests to add or remove nodes from any
 interested Raft cluster.

@@ -61,7 +61,7 @@ type RaftAddressValidator func(string) bool
 // module.
 type TransportModule interface {
 	Create(NodeHostConfig,
-		raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
+		raftio.RequestHandler, raftio.IChunkHandler) raftio.ITransport
 	Validate(string) bool
 }
 
@@ -75,10 +75,13 @@ type LogDBInfo struct {
 // be notified for the status change of the LogDB.
 type LogDBCallback func(LogDBInfo)
 
-// RaftRPCFactoryFunc is the factory function that creates the Raft RPC module
+// RaftRPCFactoryFunc is the factory function that creates the transport module
 // instance for exchanging Raft messages between NodeHosts.
+//
+// Depreciated: Use TransportModule instead. RaftRPCFactoryFunc will be removed
+// in v4.0.
 type RaftRPCFactoryFunc func(NodeHostConfig,
-	raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
+	raftio.RequestHandler, raftio.IChunkHandler) raftio.ITransport
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
@@ -322,8 +325,8 @@ type NodeHostConfig struct {
 	// changed after restarts.
 	AddressByNodeHostID bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
-	// form used by the Raft RPC module to listen on for Raft message and
-	// snapshots. When the ListenAddress field is not set, The Raft RPC module
+	// form used by the transport module to listen on for Raft message and
+	// snapshots. When the ListenAddress field is not set, The transport module
 	// listens on RaftAddress. If 0.0.0.0 is specified as the IP of the
 	// ListenAddress, Dragonboat listens to the specified port on all network
 	// interfaces. When hostname or domain name is used, it will be resolved to
@@ -348,9 +351,9 @@ type NodeHostConfig struct {
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
 	LogDBFactory LogDBFactoryFunc
-	// RaftRPCFactory is the factory function used for creating the Raft RPC
+	// RaftRPCFactory is the factory function used for creating the transport
 	// instance for exchanging Raft message between NodeHost instances. The default
-	// zero value causes the built-in TCP based RPC module to be used.
+	// zero value causes the built-in TCP based transport to be used.
 	//
 	// Depreciated: Use TransportModule instead. NodeHostConig.RaftRPCFactory will
 	// be removed in v4.0.
@@ -477,7 +480,7 @@ type transportModule struct {
 
 func (tm *transportModule) Create(nhConfig NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return tm.factory(nhConfig, handler, chunkHandler)
 }
 
@@ -515,7 +518,7 @@ func (c *NodeHostConfig) Prepare() error {
 	return nil
 }
 
-// GetListenAddress returns the actual address the RPC module is going to
+// GetListenAddress returns the actual address the transport module is going to
 // listen on.
 func (c *NodeHostConfig) GetListenAddress() string {
 	if len(c.ListenAddress) > 0 {

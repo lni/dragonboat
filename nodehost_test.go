@@ -662,9 +662,9 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	to := &testOption{
 		tf: func(nh *NodeHost) {
 			tt := nh.transport.(*transport.Transport)
-			if tt.GetTrans().Name() != transport.TCPRaftRPCName {
+			if tt.GetTrans().Name() != transport.TCPTransportName {
 				t.Errorf("transport type name %s, expect %s",
-					tt.GetTrans().Name(), transport.TCPRaftRPCName)
+					tt.GetTrans().Name(), transport.TCPTransportName)
 			}
 		},
 		noElection: true,
@@ -672,7 +672,7 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestRaftRPCFactoryIsStillHonored(t *testing.T) {
+func TestTransportFactoryIsStillHonored(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
@@ -715,7 +715,7 @@ type validatorTestModule struct {
 
 func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return transport.NewNOOPTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -751,7 +751,7 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 }
 
 type nhidChanTransport struct {
-	t raftio.IRaftRPC
+	t raftio.ITransport
 }
 
 func (u *nhidChanTransport) Name() string {
@@ -797,7 +797,7 @@ type nhidTestTransportModule struct{}
 
 func (tm *nhidTestTransportModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return &nhidChanTransport{
 		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
 	}
@@ -4119,7 +4119,7 @@ func getTestSSMeta() *rsm.SSMeta {
 	}
 }
 
-func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
+func testCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T,
 	enabled bool, exp uint64, fs vfs.IFS) {
 	if err := fs.RemoveAll(testSnapshotDir); err != nil {
 		t.Fatalf("%v", err)
@@ -4128,7 +4128,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewChunks(c.onReceive,
+	cks := transport.NewChunk(c.onReceive,
 		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSSMeta()
@@ -4156,13 +4156,13 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	}
 }
 
-func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
+func TestCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, false, 1, fs)
-	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, true, 0, fs)
+	testCorruptedChunkWriterOutputCanBeHandledByChunk(t, false, 1, fs)
+	testCorruptedChunkWriterOutputCanBeHandledByChunk(t, true, 0, fs)
 }
 
-func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
+func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	fs := vfs.GetTestFS()
 	if err := fs.RemoveAll(testSnapshotDir); err != nil {
 		t.Fatalf("%v", err)
@@ -4171,7 +4171,7 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewChunks(c.onReceive,
+	cks := transport.NewChunk(c.onReceive,
 		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &testSink2{receiver: cks}
 	meta := getTestSSMeta()

@@ -128,7 +128,7 @@ type NOOPTransportModule struct{}
 // Create creates a noop transport instance.
 func (n *NOOPTransportModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return NewNOOPTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -151,7 +151,7 @@ type NOOPTransport struct {
 // NewNOOPTransport creates a new NOOPTransport instance.
 func NewNOOPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return &NOOPTransport{
 		req:     &noopRequest{},
 		connReq: &noopConnectRequest{},

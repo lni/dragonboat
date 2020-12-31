@@ -26,7 +26,7 @@ Raft这样的共识算法使得只要系统中的多数成员在线便可使得�
 * 完备的测试确保[正确性](/docs/test.md)，这包括[Jepsen](https://aphyr.com/tags/jepsen)所带的[Knossos](https://github.com/jepsen-io/knossos)强一致性检查，部分测试日志[在此](https://github.com/lni/knossos-data)
 * 全流水线设计、TLS支持，适合被部署于跨地域的高网络延时公网环境
 * 在中档硬件上即可获得约300万/秒的写或1000万/秒的强一致读的性能
-* 支持定制的Raft log存储与Raft RPC模块，可方便整合最新IO类技术产品
+* 支持定制的Raft log存储与通讯模块，可方便整合最新IO类技术产品
 * 基于Prometheus的健康度metrics支持
 * 内建的用于修复已永久丢失多数派节点的Raft组的工具
 * 多Raft组由自带的[Drummer](/drummer)服务器组件管理以获得良好的高可用

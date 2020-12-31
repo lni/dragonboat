@@ -23,9 +23,9 @@ const (
 	// PlainLogDBBinVersion is the logdb binary compatibility version value when
 	// plain entries are used in ILogDB.
 	PlainLogDBBinVersion uint32 = 100
-	// RPCBinVersion is the RPC binary compatibility version implemented in
+	// TransportBinVersion is the transport binary compatibility version implemented in
 	// Dragonboat.
-	// For v1.4  RPCBinLog = 100
-	//     v2.0  RPCBinLog = 210
-	RPCBinVersion uint32 = 210
+	// For v1.4  TransportBinLog = 100
+	//     v2.0  TransportBinLog = 210
+	TransportBinVersion uint32 = 210
 )

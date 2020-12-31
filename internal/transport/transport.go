@@ -161,7 +161,7 @@ type DefaultTransportModule struct{}
 // Create creates a default transport instance.
 func (dtm *DefaultTransportModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return NewTCPTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -180,7 +180,7 @@ type Transport struct {
 		breakers map[string]*circuit.Breaker
 	}
 	jobs         uint32
-	chunks       *Chunks
+	chunks       *Chunk
 	metrics      *transportMetrics
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
@@ -188,7 +188,7 @@ type Transport struct {
 	resolver     IResolver
 	stopper      *syncutil.Stopper
 	dir          server.SnapshotDirFunc
-	trans        raftio.IRaftRPC
+	trans        raftio.ITransport
 	msgHandler   IMessageHandler
 	postSend     atomic.Value
 	preSend      atomic.Value
@@ -221,13 +221,13 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		fs:         fs,
 		msgHandler: handler,
 	}
-	chunks := NewChunks(t.handleRequest,
+	chunks := NewChunk(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
 	t.trans = create(nhConfig, t.handleRequest, chunks)
 	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
-		plog.Errorf("transport rpc failed to start %v", err)
+		plog.Errorf("transport failed to start %v", err)
 		t.trans.Stop()
 		return nil, err
 	}
@@ -263,8 +263,8 @@ func (t *Transport) Name() string {
 	return t.trans.Name()
 }
 
-// GetTrans returns the raft RPC instance.
-func (t *Transport) GetTrans() raftio.IRaftRPC {
+// GetTrans returns the transport instance.
+func (t *Transport) GetTrans() raftio.ITransport {
 	return t.trans
 }
 
@@ -309,9 +309,9 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 			req.DeploymentId, did)
 		return
 	}
-	if req.BinVer != raftio.RPCBinVersion {
+	if req.BinVer != raftio.TransportBinVersion {
 		plog.Warningf("binary compatibility version not match %d vs %d",
-			req.BinVer, raftio.RPCBinVersion)
+			req.BinVer, raftio.TransportBinVersion)
 		return
 	}
 	addr := req.SourceAddress
@@ -457,7 +457,7 @@ func (t *Transport) processMessages(clusterID uint64,
 	sz := uint64(0)
 	batch := pb.MessageBatch{
 		SourceAddress: t.sourceID,
-		BinVer:        raftio.RPCBinVersion,
+		BinVer:        raftio.TransportBinVersion,
 	}
 	did := t.nhConfig.GetDeploymentID()
 	requests := make([]pb.Message, 0)
@@ -543,7 +543,7 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 
 func create(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	var tm config.TransportModule
 	if nhConfig.TransportModule != nil {
 		tm = nhConfig.TransportModule

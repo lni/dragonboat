@@ -543,7 +543,7 @@ func TestMessageBatchWithNotMatchedDeploymentIDAreDropped(t *testing.T) {
 func TestMessageBatchWithNotMatchedBinVerAreDropped(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	f := func(b raftpb.MessageBatch) (raftpb.MessageBatch, bool) {
-		b.BinVer = raftio.RPCBinVersion + 1
+		b.BinVer = raftio.TransportBinVersion + 1
 		return b, true
 	}
 	fs := vfs.GetTestFS()
@@ -762,7 +762,7 @@ func testSnapshotCanBeSent(t *testing.T,
 	m := getTestSnapshotMessage(2)
 	m.Snapshot.FileSize = getTestSnapshotFileSize(sz)
 	dir := tt.GetSnapshotDir(100, 12, testSnapshotIndex)
-	chunks := NewChunks(trans.handleRequest,
+	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	snapDir := chunks.dir(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
@@ -860,7 +860,7 @@ func TestSnapshotWithNotMatchedBinVerWillBeDropped(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	f := func(c raftpb.Chunk) (raftpb.Chunk, bool) {
-		c.BinVer = raftio.RPCBinVersion + 1
+		c.BinVer = raftio.TransportBinVersion + 1
 		return c, true
 	}
 	testSnapshotWithNotMatchedDBVWillBeDropped(t, f, true, fs)
@@ -881,7 +881,7 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
-	chunks := NewChunks(trans.handleRequest,
+	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	snapDir := chunks.dir(100, 2)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
@@ -1088,9 +1088,9 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
-	chunks := NewChunks(trans.handleRequest,
+	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
-	ts := getTestChunks()
+	ts := getTestChunk()
 	snapDir := chunks.dir(ts[0].ClusterId, ts[0].NodeId)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
@@ -1170,7 +1170,7 @@ func TestNoOPTransportCanBeCreated(t *testing.T) {
 func TestInitialMessageCanBeSent(t *testing.T) {
 	fs := vfs.GetTestFS()
 	handler := newTestMessageHandler()
-	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport(handler, fs)
+	tt, nodes, noopTransport, req, connReq := newNOOPTestTransport(handler, fs)
 	defer tt.Stop()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
@@ -1185,7 +1185,7 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 		t.Errorf("send failed")
 	}
 	for i := 0; i < 1000; i++ {
-		if atomic.LoadUint64(&noopRPC.connected) != 0 {
+		if atomic.LoadUint64(&noopTransport.connected) != 0 {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -1196,8 +1196,8 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	if len(tt.mu.breakers) != 2 {
 		t.Errorf("breakers len %d, want 2", len(tt.mu.breakers))
 	}
-	if noopRPC.connected != 1 {
-		t.Errorf("connected %d, want 1", noopRPC.connected)
+	if noopTransport.connected != 1 {
+		t.Errorf("connected %d, want 1", noopTransport.connected)
 	}
 }
 
@@ -1239,7 +1239,7 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	fs := vfs.GetTestFS()
 	handler := newTestMessageHandler()
-	tt, nodes, noopRPC, req, connReq := newNOOPTestTransport(handler, fs)
+	tt, nodes, noopTransport, req, connReq := newNOOPTestTransport(handler, fs)
 	defer tt.Stop()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
@@ -1275,11 +1275,11 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	if tt.queueSize() != 0 {
 		t.Errorf("queue len %d, want 0", tt.queueSize())
 	}
-	if atomic.LoadUint64(&noopRPC.connected) != 1 {
-		t.Errorf("connected %d, want 1", noopRPC.connected)
+	if atomic.LoadUint64(&noopTransport.connected) != 1 {
+		t.Errorf("connected %d, want 1", noopTransport.connected)
 	}
-	if atomic.LoadUint64(&noopRPC.tryConnect) != 1 {
-		t.Errorf("connected %d, want 1", noopRPC.tryConnect)
+	if atomic.LoadUint64(&noopTransport.tryConnect) != 1 {
+		t.Errorf("connected %d, want 1", noopTransport.tryConnect)
 	}
 }
 

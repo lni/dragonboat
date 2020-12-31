@@ -55,7 +55,7 @@ type ChanTransportModule struct{}
 // Create creates a channel based transport instance.
 func (ctm *ChanTransportModule) Create(nhConfig config.NodeHostConfig,
 	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return NewChanTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -130,7 +130,7 @@ type ChanTransport struct {
 // NewChanTransport creates a new channel based test transport module.
 func NewChanTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	chunkHandler raftio.IChunkHandler) raftio.ITransport {
 	return &ChanTransport{
 		nhConfig:       nhConfig,
 		requestHandler: requestHandler,

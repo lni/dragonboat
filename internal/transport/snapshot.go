@@ -194,7 +194,7 @@ func splitBySnapshotFile(msg pb.Message,
 			csz = snapshotChunkSize
 		}
 		c := pb.Chunk{
-			BinVer:         raftio.RPCBinVersion,
+			BinVer:         raftio.TransportBinVersion,
 			ClusterId:      msg.ClusterId,
 			NodeId:         msg.To,
 			From:           msg.From,
@@ -243,7 +243,7 @@ func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.Chunk {
 	}
 	results := make([]pb.Chunk, 0)
 	results = append(results, pb.Chunk{
-		BinVer:         raftio.RPCBinVersion,
+		BinVer:         raftio.TransportBinVersion,
 		ClusterId:      m.ClusterId,
 		NodeId:         m.To,
 		From:           m.From,

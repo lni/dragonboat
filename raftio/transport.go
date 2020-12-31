@@ -14,12 +14,12 @@
 
 /*
 Package raftio contains structs, interfaces and function definitions required
-to build customized persistent Raft log storage and Raft RPC modules.
+to build customized persistent Raft log storage and transport modules.
 
 Structs, interfaces and functions defined in the raftio package are only
-required when building your customized persistent Raft log storage or RPC
+required when building your customized persistent Raft log storage or transport
 modules. You can safely skip this package if you plan to use the default
-built-in LogDB and Raft RPC modules provided by Dragonboat.
+built-in LogDB and transport modules provided by Dragonboat.
 
 Structs, interfaces and functions defined in the raftio package are not
 considered as a part of Dragonboat's public APIs. Breaking changes might
@@ -57,10 +57,10 @@ type IChunkSink interface {
 	Tick()
 }
 
-// IConnection is the interface used by the Raft RPC module for sending Raft
-// messages. Each IConnection works for a specified target nodehost instance,
+// IConnection is the interface used by the transport module for sending Raft
+// messages. Each IConnection works for a specified target NodeHost instance,
 // it is possible for a target to have multiple concurrent IConnection
-// instances.
+// instances in use.
 type IConnection interface {
 	// Close closes the IConnection instance.
 	Close()
@@ -71,9 +71,9 @@ type IConnection interface {
 	SendMessageBatch(batch pb.MessageBatch) error
 }
 
-// ISnapshotConnection is the interface used by the Raft RPC module for sending
+// ISnapshotConnection is the interface used by the transport module for sending
 // snapshot chunks. Each ISnapshotConnection works for a specified target
-// nodehost instance.
+// NodeHost instance.
 type ISnapshotConnection interface {
 	// Close closes the ISnapshotConnection instance.
 	Close()
@@ -84,22 +84,23 @@ type ISnapshotConnection interface {
 	SendChunk(chunk pb.Chunk) error
 }
 
-// IRaftRPC is the interface to be implemented by a customized Raft RPC
-// module. A Raft RPC module is responsible for exchanging Raft messages
-// including snapshot chunks between nodehost instances.
-type IRaftRPC interface {
-	// Name returns the type name of the IRaftRPC instance.
+// ITransport is the interface to be implemented by a customized transport
+// module. A transport module is responsible for exchanging Raft messages,
+// snapshots and other metadata between NodeHost instances.
+type ITransport interface {
+	// Name returns the type name of the ITransport instance.
 	Name() string
-	// Start launches the Raft RPC module and make it ready to start sending and
-	// receiving Raft messages.
+	// Start launches the transport module and make it ready to start sending and
+	// receiving Raft messages. If necessary, ITransport may take this opportunity
+	// to start listening for incoming data.
 	Start() error
-	// Stop stops the Raft RPC instance.
+	// Stop stops the transport module.
 	Stop()
-	// GetConnection returns an IConnection instance responsible for
-	// sending Raft messages to the specified target nodehost.
+	// GetConnection returns an IConnection instance used for sending messages
+	// to the specified target NodeHost instance.
 	GetConnection(ctx context.Context, target string) (IConnection, error)
 	// GetSnapshotConnection returns an ISnapshotConnection instance used for
-	// sending snapshot chunks to the specified target nodehost.
+	// sending snapshot chunks to the specified target NodeHost instance.
 	GetSnapshotConnection(ctx context.Context,
 		target string) (ISnapshotConnection, error)
 }

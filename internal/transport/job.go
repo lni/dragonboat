@@ -71,7 +71,7 @@ type job struct {
 	deploymentID uint64
 	streaming    bool
 	ctx          context.Context
-	rpc          raftio.IRaftRPC
+	transport    raftio.ITransport
 	conn         raftio.ISnapshotConnection
 	ch           chan pb.Chunk
 	stopc        chan struct{}
@@ -83,7 +83,7 @@ type job struct {
 
 func newJob(ctx context.Context,
 	clusterID uint64, nodeID uint64,
-	did uint64, streaming bool, sz int, rpc raftio.IRaftRPC,
+	did uint64, streaming bool, sz int, transport raftio.ITransport,
 	stopc chan struct{}, fs vfs.IFS) *job {
 	j := &job{
 		clusterID:    clusterID,
@@ -91,7 +91,7 @@ func newJob(ctx context.Context,
 		deploymentID: did,
 		streaming:    streaming,
 		ctx:          ctx,
-		rpc:          rpc,
+		transport:    transport,
 		stopc:        stopc,
 		failed:       make(chan struct{}),
 		fs:           fs,
@@ -113,7 +113,7 @@ func (j *job) close() {
 }
 
 func (j *job) connect(addr string) error {
-	conn, err := j.rpc.GetSnapshotConnection(j.ctx, addr)
+	conn, err := j.transport.GetSnapshotConnection(j.ctx, addr)
 	if err != nil {
 		plog.Errorf("failed to get a job to %s, %v", addr, err)
 		return err
