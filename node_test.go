@@ -310,10 +310,9 @@ func step(nodes []*node) bool {
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 	}
-	rtc := nodes[0].logdb.GetLogDBThreadContext()
 	// persistent state and entries are saved first
 	// then the snapshot. order can not be changed.
-	if err := nodes[0].logdb.SaveRaftState(nodeUpdates, rtc); err != nil {
+	if err := nodes[0].logdb.SaveRaftState(nodeUpdates, 1); err != nil {
 		panic(err)
 	}
 	for idx, ud := range nodeUpdates {

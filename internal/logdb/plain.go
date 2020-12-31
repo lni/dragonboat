@@ -37,8 +37,7 @@ func newPlainEntries(cs *cache, keys *keyPool, kvs kv.IKVStore) entryManager {
 }
 
 func (pe *plainEntries) record(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64,
-	ctx raftio.IContext, entries []pb.Entry) uint64 {
+	clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64 {
 	idx := 0
 	maxIndex := uint64(0)
 	for idx < len(entries) {

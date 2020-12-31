@@ -16,7 +16,6 @@ package logdb
 
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -67,7 +66,7 @@ func (c *context) Reset() {
 	}
 }
 
-func (c *context) GetKey() raftio.IReusableKey {
+func (c *context) GetKey() IReusableKey {
 	return c.key
 }
 

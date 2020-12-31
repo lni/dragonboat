@@ -290,7 +290,7 @@ func (be *batchedEntries) rangedOp(clusterID uint64,
 
 func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, eb pb.EntryBatch,
-	firstBatchID uint64, lastBatchID uint64, ctx raftio.IContext) {
+	firstBatchID uint64, lastBatchID uint64, ctx IContext) {
 	if len(eb.Entries) == 0 {
 		return
 	}
@@ -321,8 +321,7 @@ func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 }
 
 func (be *batchedEntries) record(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64,
-	ctx raftio.IContext, entries []pb.Entry) uint64 {
+	clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64 {
 	if len(entries) == 0 {
 		panic("empty entries")
 	}

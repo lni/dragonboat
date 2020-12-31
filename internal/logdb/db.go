@@ -33,8 +33,7 @@ var (
 type entryManager interface {
 	binaryFormat() uint32
 	record(wb kv.IWriteBatch,
-		clusterID uint64, nodeID uint64,
-		ctx raftio.IContext, entries []pb.Entry) uint64
+		clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64
 	iterate(ents []pb.Entry, maxIndex uint64,
 		size uint64, clusterID uint64, nodeID uint64,
 		low uint64, high uint64, maxSize uint64) ([]pb.Entry, uint64, error)
@@ -130,7 +129,7 @@ func (r *db) close() {
 	}
 }
 
-func (r *db) getWriteBatch(ctx raftio.IContext) kv.IWriteBatch {
+func (r *db) getWriteBatch(ctx IContext) kv.IWriteBatch {
 	if ctx != nil {
 		wb := ctx.GetWriteBatch()
 		if wb == nil {
@@ -191,7 +190,7 @@ func (r *db) getRange(clusterID uint64,
 	return r.entries.getRange(clusterID, nodeID, snapshotIndex, maxIndex)
 }
 
-func (r *db) saveRaftState(updates []pb.Update, ctx raftio.IContext) error {
+func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 	wb := r.getWriteBatch(ctx)
 	for _, ud := range updates {
 		r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
@@ -251,7 +250,7 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 }
 
 func (r *db) setMaxIndex(wb kv.IWriteBatch,
-	ud pb.Update, maxIndex uint64, ctx raftio.IContext) {
+	ud pb.Update, maxIndex uint64, ctx IContext) {
 	r.cs.setMaxIndex(ud.ClusterID, ud.NodeID, maxIndex)
 	r.saveMaxIndex(wb, ud.ClusterID, ud.NodeID, maxIndex, ctx)
 }
@@ -281,9 +280,9 @@ func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 }
 
 func (r *db) saveMaxIndex(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, index uint64, ctx raftio.IContext) {
+	clusterID uint64, nodeID uint64, index uint64, ctx IContext) {
 	var data []byte
-	var k raftio.IReusableKey
+	var k IReusableKey
 	if ctx != nil {
 		data = ctx.GetValueBuffer(8)
 	} else {
@@ -312,7 +311,7 @@ func (r *db) saveStateAllocs(wb kv.IWriteBatch,
 }
 
 func (r *db) saveState(clusterID uint64,
-	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx raftio.IContext) {
+	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx IContext) {
 	if pb.IsEmptyState(st) {
 		return
 	}
@@ -490,7 +489,7 @@ func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
 }
 
 func (r *db) saveEntries(updates []pb.Update,
-	wb kv.IWriteBatch, ctx raftio.IContext) {
+	wb kv.IWriteBatch, ctx IContext) {
 	for _, ud := range updates {
 		if len(ud.EntriesToSave) > 0 {
 			mi := r.entries.record(wb, ud.ClusterID, ud.NodeID, ctx, ud.EntriesToSave)

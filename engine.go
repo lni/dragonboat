@@ -658,7 +658,6 @@ type engine struct {
 	loaded          *loadedNodes
 	env             *server.Env
 	logdb           raftio.ILogDB
-	ctxs            []raftio.IContext
 	stepWorkReady   *workReady
 	stepCCIReady    *workReady
 	commitWorkReady *workReady
@@ -690,7 +689,6 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		commitCCIReady:  newWorkReady(commitWorkerCount),
 		applyWorkReady:  newWorkReady(applyWorkerCount),
 		applyCCIReady:   newWorkReady(applyWorkerCount),
-		ctxs:            make([]raftio.IContext, execShards),
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
 	}
@@ -699,7 +697,6 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 	}
 	for i := uint64(1); i <= execShards; i++ {
 		workerID := i
-		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
 		s.nodeStopper.RunWorker(func() {
 			if errorInjection {
 				defer func() {
@@ -742,11 +739,6 @@ func (e *engine) stop() {
 	e.commitStopper.Stop()
 	e.taskStopper.Stop()
 	e.wp.stop()
-	for _, ctx := range e.ctxs {
-		if ctx != nil {
-			ctx.Destroy()
-		}
-	}
 }
 
 func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
@@ -891,6 +883,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 	defer ticker.Stop()
 	cci := uint64(0)
 	stopC := e.nodeStopper.ShouldStop()
+	updates := make([]pb.Update, 0)
 	for {
 		select {
 		case <-stopC:
@@ -898,7 +891,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
-			e.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
+			e.processSteps(workerID, make(map[uint64]struct{}), nodes, updates, stopC)
 		case <-e.stepCCIReady.waitCh(workerID):
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.stepWorkReady.waitCh(workerID):
@@ -906,7 +899,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			}
 			active := e.stepWorkReady.getReadyMap(workerID)
-			e.processSteps(workerID, active, nodes, stopC)
+			e.processSteps(workerID, active, nodes, updates, stopC)
 		}
 	}
 }
@@ -948,15 +941,13 @@ func (e *engine) loadBucketNodes(workerID uint64,
 
 func (e *engine) processSteps(workerID uint64,
 	active map[uint64]struct{},
-	nodes map[uint64]*node, stopC chan struct{}) {
+	nodes map[uint64]*node, nodeUpdates []pb.Update, stopC chan struct{}) {
 	if len(nodes) == 0 {
 		return
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "") {
 		return
 	}
-	nodeCtx := e.ctxs[workerID-1]
-	nodeCtx.Reset()
 	if len(active) == 0 {
 		for cid := range nodes {
 			active[cid] = struct{}{}
@@ -964,7 +955,7 @@ func (e *engine) processSteps(workerID uint64,
 	}
 	monkeyLog.Infof("%s worker ID %d called processStep, nodes %d, clusters %d",
 		e.nh.describe(), workerID, len(nodes), len(active))
-	nodeUpdates := nodeCtx.GetUpdates()
+	nodeUpdates = nodeUpdates[:0]
 	for cid := range active {
 		node, ok := nodes[cid]
 		if !ok || node.stopped() {
@@ -993,7 +984,7 @@ func (e *engine) processSteps(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
 		return
 	}
-	if err := e.logdb.SaveRaftState(nodeUpdates, nodeCtx); err != nil {
+	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
 		panic(err)
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {

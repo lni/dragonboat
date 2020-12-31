@@ -413,7 +413,6 @@ type noopLogDB struct {
 func (n *noopLogDB) BinaryFormat() uint32                                      { return 0 }
 func (n *noopLogDB) Name() string                                              { return "noopLogDB" }
 func (n *noopLogDB) Close()                                                    {}
-func (n *noopLogDB) GetLogDBThreadContext() raftio.IContext                    { return nil }
 func (n *noopLogDB) HasNodeInfo(clusterID uint64, nodeID uint64) (bool, error) { return true, nil }
 func (n *noopLogDB) CreateNodeInfo(clusterID uint64, nodeID uint64) error      { return nil }
 func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                  { return nil, nil }
@@ -423,7 +422,7 @@ func (n *noopLogDB) SaveBootstrapInfo(clusterID uint64, nodeID uint64, bs pb.Boo
 func (n *noopLogDB) GetBootstrapInfo(clusterID uint64, nodeID uint64) (*pb.Bootstrap, error) {
 	return nil, nil
 }
-func (n *noopLogDB) SaveRaftState(updates []pb.Update, ctx raftio.IContext) error { return nil }
+func (n *noopLogDB) SaveRaftState(updates []pb.Update, workerID uint64) error { return nil }
 func (n *noopLogDB) IterateEntries(ents []pb.Entry,
 	size uint64, clusterID uint64, nodeID uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {

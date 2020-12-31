@@ -32,6 +32,7 @@ import (
 type ShardedDB struct {
 	completedCompactions uint64
 	config               config.LogDBConfig
+	ctxs                 []IContext
 	shards               []*db
 	partitioner          server.IPartitioner
 	compactionCh         chan struct{}
@@ -103,7 +104,8 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
 		sc := shardCallback{shard: i, f: callback}
-		db, err := openRDB(config.Expert.LogDB, sc.callback, dir, lldir, batched, fs, kvf)
+		db, err := openRDB(config.Expert.LogDB,
+			sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			for _, s := range shards {
 				s.close()
@@ -117,10 +119,14 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 	mw := &ShardedDB{
 		config:       config.Expert.LogDB,
 		shards:       shards,
+		ctxs:         make([]IContext, config.Expert.ExecShards),
 		partitioner:  partitioner,
 		compactions:  newCompactions(),
 		compactionCh: make(chan struct{}, 1),
 		stopper:      syncutil.NewStopper(),
+	}
+	for i := uint64(0); i < config.Expert.ExecShards; i++ {
+		mw.ctxs[i] = newContext(mw.config.SaveBufferSize, mw.config.MaxSaveBufferSize)
 	}
 	mw.stopper.RunWorker(func() {
 		mw.compactionWorkerMain()
@@ -153,15 +159,26 @@ func (s *ShardedDB) SelfCheckFailed() (bool, error) {
 	return false, nil
 }
 
-// GetLogDBThreadContext return a IContext instance.
-func (s *ShardedDB) GetLogDBThreadContext() raftio.IContext {
+// SaveRaftState saves the raft state and logs found in the raft.Update list
+// to the log db.
+func (s *ShardedDB) SaveRaftState(updates []pb.Update, shardID uint64) error {
+	if shardID-1 >= uint64(len(s.ctxs)) {
+		plog.Panicf("invalid shardID %d, len(s.ctxs): %d", shardID, len(s.ctxs))
+	}
+	ctx := s.ctxs[shardID-1]
+	ctx.Reset()
+	return s.SaveRaftStateCtx(updates, ctx)
+}
+
+// GetLogDBThreadContext return an IContext instance. This method is expected
+// to be used in benchmarks and tests only.
+func (s *ShardedDB) GetLogDBThreadContext() IContext {
 	return newContext(s.config.SaveBufferSize, s.config.MaxSaveBufferSize)
 }
 
-// SaveRaftState saves the raft state and logs found in the raft.Update list
+// SaveRaftStateCtx saves the raft state and logs found in the raft.Update list
 // to the log db.
-func (s *ShardedDB) SaveRaftState(updates []pb.Update,
-	ctx raftio.IContext) error {
+func (s *ShardedDB) SaveRaftStateCtx(updates []pb.Update, ctx IContext) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -275,6 +292,9 @@ func (s *ShardedDB) Close() {
 	s.stopper.Stop()
 	for _, v := range s.shards {
 		v.close()
+	}
+	for _, v := range s.ctxs {
+		v.Destroy()
 	}
 }
 

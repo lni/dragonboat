@@ -26,6 +26,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -290,13 +291,11 @@ func BenchmarkFSyncLatency(b *testing.B) {
 		NodeID:        1,
 		EntriesToSave: []pb.Entry{e},
 	}
-	rdbctx := db.GetLogDBThreadContext()
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
+		if err := db.SaveRaftState([]pb.Update{u}, 1); err != nil {
 			b.Fatalf("%v", err)
 		}
-		rdbctx.Reset()
 	}
 }
 
@@ -311,7 +310,11 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	clusterID := uint32(1)
 	b.StartTimer()
 	b.RunParallel(func(pbt *testing.PB) {
-		rdbctx := db.GetLogDBThreadContext()
+		ldb, ok := db.(*logdb.ShardedDB)
+		if !ok {
+			b.Fatalf("not a logdb.ShardedDB instance")
+		}
+		rdbctx := ldb.GetLogDBThreadContext()
 		e := pb.Entry{
 			Index:       12843560,
 			Term:        123,
@@ -335,7 +338,7 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 		}
 		for pbt.Next() {
 			rdbctx.Reset()
-			if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
+			if err := ldb.SaveRaftStateCtx([]pb.Update{u}, rdbctx); err != nil {
 				b.Errorf("%v", err)
 			}
 			b.SetBytes(int64(bytes))
