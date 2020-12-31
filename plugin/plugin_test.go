@@ -35,8 +35,7 @@ func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 20,
 		RaftAddress:    "localhost:26000",
-		LogDBFactory:   f,
-		Expert:         config.ExpertConfig{FS: vfs.DefaultFS},
+		Expert:         config.ExpertConfig{FS: vfs.DefaultFS, LogDBFactory: f},
 	}
 	nh, err := dragonboat.NewNodeHost(nhc)
 	if err != nil {

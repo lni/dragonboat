@@ -545,8 +545,8 @@ func create(nhConfig config.NodeHostConfig,
 	requestHandler raftio.MessageHandler,
 	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	var tm config.TransportFactory
-	if nhConfig.TransportFactory != nil {
-		tm = nhConfig.TransportFactory
+	if nhConfig.Expert.TransportFactory != nil {
+		tm = nhConfig.Expert.TransportFactory
 	} else if memfsTest {
 		tm = &ct.ChanTransportFactory{}
 	} else {

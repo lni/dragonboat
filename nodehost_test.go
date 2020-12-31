@@ -637,7 +637,7 @@ func TestLogDBCanBeExtended(t *testing.T) {
 	ldb := &noopLogDB{}
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.LogDBFactory = func(config.NodeHostConfig,
+			nhc.Expert.LogDBFactory = func(config.NodeHostConfig,
 				config.LogDBCallback, []string, []string) (raftio.ILogDB, error) {
 				return ldb, nil
 			}
@@ -695,7 +695,7 @@ func TestTransportFactoryCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportFactory = &transport.NOOPTransportFactory{}
+			nhc.Expert.TransportFactory = &transport.NOOPTransportFactory{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -728,7 +728,7 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportFactory = &validatorTestModule{}
+			nhc.Expert.TransportFactory = &validatorTestModule{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -829,8 +829,8 @@ func testAddressByNodeHostID(t *testing.T,
 		t.Fatalf("failed to parse nhid")
 	}
 	nhc2.Expert.TestNodeHostID = nhid2.Value()
-	nhc1.TransportFactory = factory
-	nhc2.TransportFactory = factory
+	nhc1.Expert.TransportFactory = factory
+	nhc2.Expert.TransportFactory = factory
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		t.Fatalf("failed to create nh, %v", err)
@@ -4220,7 +4220,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 				dirs []string, lldirs []string) (raftio.ILogDB, error) {
 				return &noopLogDB{}, nil
 			}
-			c.LogDBFactory = f
+			c.Expert.LogDBFactory = f
 			return c
 		},
 		at: func() {
@@ -4295,14 +4295,14 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	to := &testOption{
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = nff
+			nhc.Expert.LogDBFactory = nff
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrLogDBBrokenChange {
 				t.Errorf("failed to return ErrLogDBBrokenChange")
 			}
 		},
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = bff
+			c.Expert.LogDBFactory = bff
 			return c
 		},
 		noElection: true,
@@ -4322,13 +4322,13 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = nff
+			c.Expert.LogDBFactory = nff
 			return c
 		},
 		noElection: true,
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = bff
+			nhc.Expert.LogDBFactory = bff
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrIncompatibleData {
 				t.Errorf("failed to return server.ErrIncompatibleData")
@@ -4350,7 +4350,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = bff
+			c.Expert.LogDBFactory = bff
 			return c
 		},
 		createSM: func(uint64, uint64) sm.IStateMachine {
@@ -4368,7 +4368,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		},
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = nff
+			nhc.Expert.LogDBFactory = nff
 			if nh, err := NewNodeHost(*nhc); err != nil {
 				t.Errorf("failed to create node host")
 			} else {

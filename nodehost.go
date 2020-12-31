@@ -1691,8 +1691,8 @@ func (nh *NodeHost) createLogDB() error {
 		dirs []string, lows []string) (raftio.ILogDB, error) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
 	}
-	if nh.nhConfig.LogDBFactory != nil {
-		factory = nh.nhConfig.LogDBFactory
+	if nh.nhConfig.Expert.LogDBFactory != nil {
+		factory = nh.nhConfig.Expert.LogDBFactory
 	} else {
 		factory = df
 	}

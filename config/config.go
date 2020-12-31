@@ -306,24 +306,14 @@ type NodeHostConfig struct {
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
 	//
-	// Depreciated: Use TransportFactory instead. NodeHostConig.RaftRPCFactory will
-	// be removed in v4.0.
-	OldLogDBFactory LogDBFactoryFunc
+	// Depreciated: Use NodeHostConfig.Expert.LogDBFactory instead.
+	LogDBFactory LogDBFactoryFunc
 	// RaftRPCFactory is the factory function used for creating the transport
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based transport to be used.
 	//
-	// Depreciated: Use TransportFactory instead. NodeHostConig.RaftRPCFactory will
-	// be removed in v4.0.
+	// Depreciated: Use NodeHostConfig.Expert.TransportFactory instead.
 	RaftRPCFactory RaftRPCFactoryFunc
-	// LogDBFactory is the factory function used for creating the LogDB instance
-	// used by NodeHost. When not set, the default built-in Pebble based LogDB
-	// implementation is used.
-	LogDBFactory LogDBFactory
-	// TransportFactory is an optional factory type used for creating the custom
-	// transport module to be used by dragonbaot. When not set, the built-in TCP
-	// transport module is used.
-	TransportFactory TransportFactory
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
 	EnableMetrics bool
@@ -461,7 +451,7 @@ func (c *NodeHostConfig) Validate() error {
 		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxReceiveSize value is too small")
 	}
-	if c.RaftRPCFactory != nil && c.TransportFactory != nil {
+	if c.RaftRPCFactory != nil && c.Expert.TransportFactory != nil {
 		return errors.New("both TransportFactory and RaftRPCFactory specified")
 	}
 	if c.AddressByNodeHostID && c.Gossip.IsEmpty() {
@@ -519,8 +509,8 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.Expert.ExecShards == 0 {
 		c.Expert.ExecShards = defaultExecShards
 	}
-	if c.RaftRPCFactory != nil && c.TransportFactory == nil {
-		c.TransportFactory = &transportModule{factory: c.RaftRPCFactory}
+	if c.RaftRPCFactory != nil && c.Expert.TransportFactory == nil {
+		c.Expert.TransportFactory = &transportModule{factory: c.RaftRPCFactory}
 		c.RaftRPCFactory = nil
 	}
 	return nil
@@ -579,8 +569,8 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
 	if c.AddressByNodeHostID {
 		return id.IsNodeHostID
-	} else if c.TransportFactory != nil {
-		return c.TransportFactory.Validate
+	} else if c.Expert.TransportFactory != nil {
+		return c.Expert.TransportFactory.Validate
 	}
 	return stringutil.IsValidAddress
 }
@@ -588,8 +578,8 @@ func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
 // GetRaftAddressValidator creates a RaftAddressValidator based on the specified
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetRaftAddressValidator() RaftAddressValidator {
-	if c.TransportFactory != nil {
-		return c.TransportFactory.Validate
+	if c.Expert.TransportFactory != nil {
+		return c.Expert.TransportFactory.Validate
 	}
 	return stringutil.IsValidAddress
 }
@@ -726,6 +716,14 @@ func GetDefaultExpertConfig() ExpertConfig {
 // internals of Dragonboat. Users are recommended not to use ExpertConfig
 // unless it is absoloutely necessary.
 type ExpertConfig struct {
+	// LogDBFactory is the factory function used for creating the LogDB instance
+	// used by NodeHost. When not set, the default built-in Pebble based LogDB
+	// implementation is used.
+	LogDBFactory LogDBFactory
+	// TransportFactory is an optional factory type used for creating the custom
+	// transport module to be used by dragonbaot. When not set, the built-in TCP
+	// transport module is used.
+	TransportFactory TransportFactory
 	// ExecShards is the number of execution shards in the first stage of the
 	// execution engine. Default value is 16.
 	ExecShards uint64
