@@ -1762,7 +1762,7 @@ func (nh *NodeHost) createNodesRegistry() error {
 	validator := nh.nhConfig.GetTargetValidator()
 	// TODO:
 	// more tests here required
-	if nh.nhConfig.AddressByNodeHostID && nh.nhConfig.TransportModule == nil {
+	if nh.nhConfig.AddressByNodeHostID && nh.nhConfig.TransportFactory == nil {
 		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
 		r, err := transport.NewNodeHostIDRegistry(nh.ID(),
 			nh.nhConfig, streamConnections, validator)

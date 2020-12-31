@@ -162,7 +162,7 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("cfg not valid")
 	}
-	c.TransportModule = m
+	c.TransportFactory = m
 	if err := c.Validate(); err == nil {
 		t.Fatalf("cfg not considered as invalid")
 	}

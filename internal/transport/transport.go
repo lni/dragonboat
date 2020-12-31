@@ -155,19 +155,19 @@ const (
 	chanIsFull
 )
 
-// DefaultTransportModule is the default transport module used.
-type DefaultTransportModule struct{}
+// DefaultTransportFactory is the default transport module used.
+type DefaultTransportFactory struct{}
 
 // Create creates a default transport instance.
-func (dtm *DefaultTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
+func (dtm *DefaultTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return NewTCPTransport(nhConfig, handler, chunkHandler)
 }
 
 // Validate returns a boolean value indicating whether the specified address is
 // valid.
-func (dtm *DefaultTransportModule) Validate(addr string) bool {
+func (dtm *DefaultTransportFactory) Validate(addr string) bool {
 	panic("not suppose to be called")
 }
 
@@ -223,7 +223,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	}
 	chunks := NewChunk(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
-	t.trans = create(nhConfig, t.handleRequest, chunks)
+	t.trans = create(nhConfig, t.handleRequest, chunks.Add)
 	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
@@ -542,15 +542,15 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 }
 
 func create(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
-	var tm config.TransportModule
-	if nhConfig.TransportModule != nil {
-		tm = nhConfig.TransportModule
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
+	var tm config.TransportFactory
+	if nhConfig.TransportFactory != nil {
+		tm = nhConfig.TransportFactory
 	} else if memfsTest {
-		tm = &ct.ChanTransportModule{}
+		tm = &ct.ChanTransportFactory{}
 	} else {
-		tm = &DefaultTransportModule{}
+		tm = &DefaultTransportFactory{}
 	}
 	return tm.Create(nhConfig, requestHandler, chunkHandler)
 }

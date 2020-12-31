@@ -33,29 +33,16 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-// RequestHandler is the handler function type for handling received message
+// MessageHandler is the handler function type for handling received message
 // batch. Received message batches should be passed to the request handler to
 // have them processed by Dragonboat.
-type RequestHandler func(req pb.MessageBatch)
+type MessageHandler func(pb.MessageBatch)
 
-// IChunkHandler is the handler interface to handle incoming snapshot chunks.
-type IChunkHandler interface {
-	// AddChunk adds a new snapshot chunk to the snapshot chunk sink. All chunks
-	// belong to the snapshot will be combined into the snapshot image and then
-	// be passed to Dragonboat once all member chunks are received.
-	AddChunk(chunk pb.Chunk) bool
-}
-
-// IChunkSink is the interface of snapshot chunk sink. IChunkSink is used to
-// accept received snapshot chunks.
-type IChunkSink interface {
-	IChunkHandler
-	// Close closes the sink instance and releases all resources held by it.
-	Close()
-	// Tick moves forward the internal logic clock. It is suppose to be called
-	// roughly every second.
-	Tick()
-}
+// ChunkHandler is the handler function type for handling received snapshot
+// chunk. It adds the new snapshot chunk to the snapshot chunk sink. Chunks
+// from the same snapshot will be combined into the snapshot image and then
+// be passed to dragonboat once all chunks are received.
+type ChunkHandler func(pb.Chunk) bool
 
 // IConnection is the interface used by the transport module for sending Raft
 // messages. Each IConnection works for a specified target NodeHost instance,

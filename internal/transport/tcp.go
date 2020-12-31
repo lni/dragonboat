@@ -410,8 +410,8 @@ type TCP struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
 	connStopper    *syncutil.Stopper
-	requestHandler raftio.RequestHandler
-	chunkHandler   raftio.IChunkHandler
+	requestHandler raftio.MessageHandler
+	chunkHandler   raftio.ChunkHandler
 	encrypted      bool
 	readBucket     *ratelimit.Bucket
 	writeBucket    *ratelimit.Bucket
@@ -421,8 +421,8 @@ var _ raftio.ITransport = (*TCP)(nil)
 
 // NewTCPTransport creates and returns a new TCP transport module.
 func NewTCPTransport(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	t := &TCP{
 		nhConfig:       nhConfig,
 		stopper:        syncutil.NewStopper(),
@@ -562,7 +562,7 @@ func (t *TCP) serveConn(conn net.Conn) {
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}
-			if !t.chunkHandler.AddChunk(chunk) {
+			if !t.chunkHandler(chunk) {
 				plog.Errorf("chunk rejected %s", chunkKey(chunk))
 				return
 			}

@@ -99,8 +99,8 @@ func NewChunk(onReceive func(pb.MessageBatch),
 	}
 }
 
-// AddChunk adds an received trunk to chunks.
-func (c *Chunk) AddChunk(chunk pb.Chunk) bool {
+// Add adds a received trunk to chunks.
+func (c *Chunk) Add(chunk pb.Chunk) bool {
 	if chunk.DeploymentId != c.did ||
 		chunk.BinVer != raftio.TransportBinVersion {
 		plog.Errorf("invalid did or binver, %d, %d, %d, %d",

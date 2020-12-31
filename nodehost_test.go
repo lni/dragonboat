@@ -691,11 +691,11 @@ func TestTransportFactoryIsStillHonored(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestTransportModuleCanBeSet(t *testing.T) {
+func TestTransportFactoryCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportModule = &transport.NOOPTransportModule{}
+			nhc.TransportFactory = &transport.NOOPTransportFactory{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -714,8 +714,8 @@ type validatorTestModule struct {
 }
 
 func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return transport.NewNOOPTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -728,7 +728,7 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportModule = &validatorTestModule{}
+			nhc.TransportFactory = &validatorTestModule{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -793,21 +793,21 @@ func (u *nhidChanTransport) GetSnapshotConnection(ctx context.Context,
 	return u.t.GetSnapshotConnection(ctx, addr)
 }
 
-type nhidTestTransportModule struct{}
+type nhidTestTransportFactory struct{}
 
-func (tm *nhidTestTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
+func (tm *nhidTestTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return &nhidChanTransport{
 		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
 	}
 }
 
-func (tm *nhidTestTransportModule) Validate(addr string) bool {
+func (tm *nhidTestTransportFactory) Validate(addr string) bool {
 	return addr == nodeHostTestAddr1 || addr == nodeHostTestAddr2
 }
 
-func TestCustomTransportModuleCanUseNodeHostID(t *testing.T) {
+func TestCustomTransportFactoryCanUseNodeHostID(t *testing.T) {
 	testAddressByNodeHostID(t, true)
 }
 
@@ -854,8 +854,8 @@ func testAddressByNodeHostID(t *testing.T, useCustomTransport bool) {
 	}
 	nhc2.Expert.TestNodeHostID = nhid2.Value()
 	if useCustomTransport {
-		nhc1.TransportModule = &nhidTestTransportModule{}
-		nhc2.TransportModule = &nhidTestTransportModule{}
+		nhc1.TransportFactory = &nhidTestTransportFactory{}
+		nhc2.TransportFactory = &nhidTestTransportFactory{}
 	} else {
 		nhc1.Gossip = config.GossipConfig{
 			BindAddress:      "127.0.0.1:25001",
@@ -4065,7 +4065,7 @@ type testSink2 struct {
 }
 
 func (s *testSink2) Receive(chunk pb.Chunk) (bool, bool) {
-	s.receiver.AddChunk(chunk)
+	s.receiver.Add(chunk)
 	return true, false
 }
 
@@ -4091,7 +4091,7 @@ func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 		idx := rand.Uint64() % uint64(len(chunk.Data))
 		chunk.Data[idx] = chunk.Data[idx] + 1
 	}
-	s.receiver.AddChunk(chunk)
+	s.receiver.Add(chunk)
 	return true, false
 }
 
@@ -4108,7 +4108,7 @@ func (s *dataCorruptionSink) ToNodeID() uint64 {
 }
 
 type chunkReceiver interface {
-	AddChunk(chunk pb.Chunk) bool
+	Add(chunk pb.Chunk) bool
 }
 
 func getTestSSMeta() *rsm.SSMeta {

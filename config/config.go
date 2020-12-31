@@ -48,51 +48,8 @@ const (
 	defaultLogDBShards uint64 = 16
 )
 
-// TargetValidator is the validtor used to validate user specified target values.
-type TargetValidator func(string) bool
-
-// RaftAddressValidator is the validator used to validate user specified
-// RaftAddress values.
-type RaftAddressValidator func(string) bool
-
-// TransportModule is the interface used to specify the transport module to be
-// used by Dragonboat. TransportModule is optional, it is not required to be
-// implemented when using Dragonboat's default built-in TCP based transport
-// module.
-type TransportModule interface {
-	Create(NodeHostConfig,
-		raftio.RequestHandler, raftio.IChunkHandler) raftio.ITransport
-	Validate(string) bool
-}
-
-// LogDBInfo is the info provided when LogDBCallback is invoked.
-type LogDBInfo struct {
-	Shard uint64
-	Busy  bool
-}
-
-// LogDBCallback is called by the LogDB layer whenever NodeHost is required to
-// be notified for the status change of the LogDB.
-type LogDBCallback func(LogDBInfo)
-
-// RaftRPCFactoryFunc is the factory function that creates the transport module
-// instance for exchanging Raft messages between NodeHosts.
-//
-// Depreciated: Use TransportModule instead. RaftRPCFactoryFunc will be removed
-// in v4.0.
-type RaftRPCFactoryFunc func(NodeHostConfig,
-	raftio.RequestHandler, raftio.IChunkHandler) raftio.ITransport
-
-// LogDBFactoryFunc is the factory function that creates NodeHost's persistent
-// storage module known as Log DB.
-type LogDBFactoryFunc func(NodeHostConfig,
-	LogDBCallback, []string, []string) (raftio.ILogDB, error)
-
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
-
-// IFS is the filesystem interface used by tests.
-type IFS = vfs.IFS
 
 const (
 	// NoCompression is the CompressionType value used to indicate not to use
@@ -355,12 +312,13 @@ type NodeHostConfig struct {
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based transport to be used.
 	//
-	// Depreciated: Use TransportModule instead. NodeHostConig.RaftRPCFactory will
+	// Depreciated: Use TransportFactory instead. NodeHostConig.RaftRPCFactory will
 	// be removed in v4.0.
 	RaftRPCFactory RaftRPCFactoryFunc
-	// TransportModule is an optional field used to specify what transport module
-	// to use. By default, the built-in TCP transport module is used.
-	TransportModule TransportModule
+	// TransportFactory is an optional factory type used for creating the custom
+	// trasnport module to be used by dragonbaot. When not set, the built-in TCP
+	// transport module is used.
+	TransportFactory TransportFactory
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
 	EnableMetrics bool
@@ -414,6 +372,48 @@ type NodeHostConfig struct {
 	Expert ExpertConfig
 }
 
+// IFS is the filesystem interface used by tests.
+type IFS = vfs.IFS
+
+// TargetValidator is the validtor used to validate user specified target values.
+type TargetValidator func(string) bool
+
+// RaftAddressValidator is the validator used to validate user specified
+// RaftAddress values.
+type RaftAddressValidator func(string) bool
+
+// TransportFactory is the interface used for creating custom transport modules.
+type TransportFactory interface {
+	// Create creates a transport module. It is invoked during the creation of its
+	// owner NodeHost instance.
+	Create(NodeHostConfig,
+		raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
+	Validate(string) bool
+}
+
+// LogDBInfo is the info provided when LogDBCallback is invoked.
+type LogDBInfo struct {
+	Shard uint64
+	Busy  bool
+}
+
+// LogDBCallback is called by the LogDB layer whenever NodeHost is required to
+// be notified for the status change of the LogDB.
+type LogDBCallback func(LogDBInfo)
+
+// RaftRPCFactoryFunc is the factory function that creates the transport module
+// instance for exchanging Raft messages between NodeHosts.
+//
+// Depreciated: Use TransportFactory instead. RaftRPCFactoryFunc will be removed
+// in v4.0.
+type RaftRPCFactoryFunc func(NodeHostConfig,
+	raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
+
+// LogDBFactoryFunc is the factory function that creates NodeHost's persistent
+// storage module known as Log DB.
+type LogDBFactoryFunc func(NodeHostConfig,
+	LogDBCallback, []string, []string) (raftio.ILogDB, error)
+
 // Validate validates the NodeHostConfig instance and return an error when
 // the configuration is considered as invalid.
 func (c *NodeHostConfig) Validate() error {
@@ -446,15 +446,15 @@ func (c *NodeHostConfig) Validate() error {
 		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxReceiveSize value is too small")
 	}
-	if c.RaftRPCFactory != nil && c.TransportModule != nil {
-		return errors.New("both TransportModule and RaftRPCFactory specified")
+	if c.RaftRPCFactory != nil && c.TransportFactory != nil {
+		return errors.New("both TransportFactory and RaftRPCFactory specified")
 	}
-	if c.AddressByNodeHostID && c.TransportModule == nil {
+	if c.AddressByNodeHostID && c.TransportFactory == nil {
 		if c.Gossip.IsEmpty() {
 			return errors.New("gossip service not configured")
 		}
 	}
-	if c.TransportModule != nil {
+	if c.TransportFactory != nil {
 		if !c.Gossip.IsEmpty() {
 			return errors.New("gossip service not supported")
 		}
@@ -479,8 +479,8 @@ type transportModule struct {
 }
 
 func (tm *transportModule) Create(nhConfig NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.ITransport {
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return tm.factory(nhConfig, handler, chunkHandler)
 }
 
@@ -511,8 +511,8 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.Expert.ExecShards == 0 {
 		c.Expert.ExecShards = defaultExecShards
 	}
-	if c.RaftRPCFactory != nil && c.TransportModule == nil {
-		c.TransportModule = &transportModule{factory: c.RaftRPCFactory}
+	if c.RaftRPCFactory != nil && c.TransportFactory == nil {
+		c.TransportFactory = &transportModule{factory: c.RaftRPCFactory}
 		c.RaftRPCFactory = nil
 	}
 	return nil
@@ -570,10 +570,9 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
 	if c.AddressByNodeHostID {
-		plog.Infof("returning IsNodeHostID as target validator")
 		return id.IsNodeHostID
-	} else if c.TransportModule != nil {
-		return c.TransportModule.Validate
+	} else if c.TransportFactory != nil {
+		return c.TransportFactory.Validate
 	}
 	return stringutil.IsValidAddress
 }
@@ -581,8 +580,8 @@ func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
 // GetRaftAddressValidator creates a RaftAddressValidator based on the specified
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetRaftAddressValidator() RaftAddressValidator {
-	if c.TransportModule != nil {
-		return c.TransportModule.Validate
+	if c.TransportFactory != nil {
+		return c.TransportFactory.Validate
 	}
 	return stringutil.IsValidAddress
 }
