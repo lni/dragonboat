@@ -28,7 +28,7 @@ import (
 // NodeHostIDRegistry is a node registry backed by gossip. It is capable of
 // supporting NodeHosts with dynamic RaftAddress values.
 type NodeHostIDRegistry struct {
-	nodes  *Nodes
+	nodes  *Registry
 	gossip *gossipManager
 }
 

@@ -320,7 +320,7 @@ func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 }
 
 func newNOOPTestTransport(handler IMessageHandler, fs vfs.IFS) (*Transport,
-	*Nodes, *NOOPTransport, *noopRequest, *noopConnectRequest) {
+	*Registry, *NOOPTransport, *noopRequest, *noopConnectRequest) {
 	t := newTestSnapshotDir(fs)
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	c := config.NodeHostConfig{
@@ -347,7 +347,7 @@ func newNOOPTestTransport(handler IMessageHandler, fs vfs.IFS) (*Transport,
 }
 
 func newTestTransport(handler IMessageHandler,
-	mutualTLS bool, fs vfs.IFS) (*Transport, *Nodes,
+	mutualTLS bool, fs vfs.IFS) (*Transport, *Registry,
 	*syncutil.Stopper, *testSnapshotDir) {
 	stopper := syncutil.NewStopper()
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)

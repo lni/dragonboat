@@ -354,7 +354,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		return nil, err
 	}
 	plog.Infof("NodeHost ID: %s", nh.id.String())
-	if err := nh.createNodesRegistry(); err != nil {
+	if err := nh.createNodeRegistry(); err != nil {
 		nh.Stop()
 		return nil, err
 	}
@@ -1764,7 +1764,7 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 	})
 }
 
-func (nh *NodeHost) createNodesRegistry() error {
+func (nh *NodeHost) createNodeRegistry() error {
 	validator := nh.nhConfig.GetTargetValidator()
 	// TODO:
 	// more tests here required

@@ -42,21 +42,21 @@ type INodeRegistry interface {
 	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
 }
 
-var _ INodeRegistry = (*Nodes)(nil)
-var _ IResolver = (*Nodes)(nil)
+var _ INodeRegistry = (*Registry)(nil)
+var _ IResolver = (*Registry)(nil)
 
-// Nodes is used to manage all known node addresses in the multi raft system.
+// Registry is used to manage all known node addresses in the multi raft system.
 // The transport layer uses this address registry to locate nodes.
-type Nodes struct {
+type Registry struct {
 	mu          sync.RWMutex
 	partitioner server.IPartitioner
 	validate    config.TargetValidator
 	addr        map[raftio.NodeInfo]string
 }
 
-// NewNodeRegistry returns a new Nodes object.
-func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Nodes {
-	n := &Nodes{
+// NewNodeRegistry returns a new Registry object.
+func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Registry {
+	n := &Registry{
 		validate: v,
 		addr:     make(map[raftio.NodeInfo]string),
 	}
@@ -67,10 +67,10 @@ func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Nodes 
 }
 
 // Stop stops the node registry.
-func (n *Nodes) Stop() {}
+func (n *Registry) Stop() {}
 
 // Add adds the specified node and its target info to the registry.
-func (n *Nodes) Add(clusterID uint64, nodeID uint64, target string) {
+func (n *Registry) Add(clusterID uint64, nodeID uint64, target string) {
 	if n.validate != nil && !n.validate(target) {
 		plog.Panicf("invalid target %s", target)
 	}
@@ -88,7 +88,7 @@ func (n *Nodes) Add(clusterID uint64, nodeID uint64, target string) {
 	}
 }
 
-func (n *Nodes) getConnectionKey(addr string, clusterID uint64) string {
+func (n *Registry) getConnectionKey(addr string, clusterID uint64) string {
 	if n.partitioner == nil {
 		return addr
 	}
@@ -96,7 +96,7 @@ func (n *Nodes) getConnectionKey(addr string, clusterID uint64) string {
 }
 
 // Remove removes a remote from the node registry.
-func (n *Nodes) Remove(clusterID uint64, nodeID uint64) {
+func (n *Registry) Remove(clusterID uint64, nodeID uint64) {
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -104,7 +104,7 @@ func (n *Nodes) Remove(clusterID uint64, nodeID uint64) {
 }
 
 // RemoveCluster removes all nodes info associated with the specified cluster
-func (n *Nodes) RemoveCluster(clusterID uint64) {
+func (n *Registry) RemoveCluster(clusterID uint64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for k := range n.addr {
@@ -115,7 +115,7 @@ func (n *Nodes) RemoveCluster(clusterID uint64) {
 }
 
 // Resolve looks up the Addr of the specified node.
-func (n *Nodes) Resolve(clusterID uint64, nodeID uint64) (string, string, error) {
+func (n *Registry) Resolve(clusterID uint64, nodeID uint64) (string, string, error) {
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	n.mu.RLock()
 	defer n.mu.RUnlock()
