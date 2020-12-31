@@ -17,32 +17,30 @@ Package dragonboat is a multi-group Raft implementation.
 
 The NodeHost struct is the facade interface for all features provided by the
 dragonboat package. Each NodeHost instance usually runs on a separate host
-managing its CPU, storage and network resources. Each NodeHost can manage
-Raft nodes from many different Raft groups known as Raft clusters. Each Raft
-cluster is identified by its ClusterID Each Raft cluster usually consists of
-multiple nodes, identified by their NodeID values. Nodes from the same Raft
-cluster are suppose to be distributed on different NodeHost instances across
-the network, this brings fault tolerance to node failures as application data
-stored in such a Raft cluster can be available as long as the majority of its
-managing NodeHost instances (i.e. its underlying hosts) are available.
+managing its CPU, storage and network resources. Each NodeHost can manage Raft
+nodes from many different Raft groups known as Raft clusters. Each Raft cluster
+is identified by its ClusterID and it usually consists of multiple nodes, each
+identified its NodeID value. Nodes from the same Raft cluster can be considered
+as replicas of the same data, they are suppose to be distributed on different
+NodeHost instances across the network, this brings fault tolerance to machine
+and network failures as application data stored in the Raft cluster will be
+available as long as the majority of its managing NodeHost instances (i.e. its
+underlying hosts) are available.
 
 User applications can leverage the power of the Raft protocol implemented in
-dragonboat by implementing its IStateMachine or IOnDiskStateMachine component.
-IStateMachine and IOnDiskStateMachine is defined in
-github.com/lni/dragonboat/v3/statemachine. Each cluster node is associated with an
-IStateMachine or IOnDiskStateMachine instance, it is in charge of updating,
-querying and snapshotting application data, with minimum exposure to the
-complexity of the Raft protocol implementation.
+dragonboat by implementing the IStateMachine or IOnDiskStateMachine component,
+as defined in github.com/lni/dragonboat/v3/statemachine. Known as user state
+machines, each IStateMachine and IOnDiskStateMachine instance is in charge of
+updating, querying and snapshotting application data with minimum exposure to
+the complexity of the Raft protocol implementation.
 
 User applications can use NodeHost's APIs to update the state of their
 IStateMachine or IOnDiskStateMachine instances, this is called making proposals.
-Once accepted by the majority nodes of a Raft cluster, the proposal is considered
-as committed and it will be applied on all member nodes of the Raft cluster.
-Applications can also make linearizable reads to query the state of their
+Once accepted by the majority nodes of a Raft cluster, the proposal is
+considered as committed and it will be applied on all member nodes of the Raft
+cluster. Applications can also make linearizable reads to query the state of the
 IStateMachine or IOnDiskStateMachine instances. Dragonboat employs the ReadIndex
-protocol invented by Diego Ongaro to implement linearizable reads. Both read and
-write operations can be initiated on any member nodes, although initiating from
-the leader nodes incurs the lowest overhead.
+protocol invented by Diego Ongaro for fast linearizable reads.
 
 Dragonboat guarantees the linearizability of your I/O when interacting with the
 IStateMachine or IOnDiskStateMachine instances. In plain English, writes (via
@@ -59,16 +57,18 @@ the risk to have the same proposal committed and applied twice into the user
 state machine. Dragonboat prevents this by implementing the client session
 concept described in Diego Ongaro's PhD thesis.
 
-NodeHost APIs for making the above mentioned application requests can be loosely
-classified into two categories, synchronous and asynchronous APIs. Synchronous
-APIs which will not return until the completion of the requested operation.
-Their method names all start with Sync*. The asynchronous counterpart of those
-asynchronous APIs, on the other hand, usually return immediately without waiting
-on any significant delays caused by networking or disk IO. This allows users to
-concurrently initiate multiple such asynchronous operations to save the total
-amount of time required to complete them. Users are free to choose whether they
-prefer to use the synchronous APIs for its simplicity or their asynchronous
-variants for better performance and flexibility.
+Arbitary number of Raft clusters can be launched across the network
+simultaneously to aggregate distributed processing and storage capacities. Users
+can also make membership change requests to add or remove nodes from any
+interested Raft cluster.
+
+NodeHost APIs for making the above mentioned requests can be loosely classified
+into two categories, synchronous and asynchronous APIs. Synchronous APIs will
+not return until the completion of the requested operation. Their method names
+all start with Sync*. The asynchronous counterparts of such synchronous APIs,
+on the other hand, usually return immediately. This allows users to concurrently
+initiate multiple such asynchronous operations to save the total amount of time
+required to complete all of them.
 
 Dragonboat is a feature complete Multi-Group Raft implementation - snapshotting,
 membership change, leadership transfer, non-voting members and disk based state
@@ -77,8 +77,8 @@ machine are all provided.
 Dragonboat is also extensively optimized. The Raft protocol implementation is
 fully pipelined, meaning proposals can start before the completion of previous
 proposals. This is critical for system throughput in high latency environment.
-Dragonboat is also fully batched, it batches internal operations whenever
-possible to maximize system throughput.
+Dragonboat is also fully batched, internal operations are batched whenever
+possible to maximize the overall throughput.
 */
 package dragonboat // github.com/lni/dragonboat/v3
 
