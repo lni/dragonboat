@@ -468,6 +468,10 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 func getLogDB(env server.Env,
 	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
 	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
+	if nhConfig.Expert.LogDBFactory != nil {
+		return nhConfig.Expert.LogDBFactory(nhConfig,
+			nil, []string{nhDir}, []string{walDir})
+	}
 	return logdb.NewDefaultLogDB(nhConfig,
 		nil, []string{nhDir}, []string{walDir}, fs)
 }
