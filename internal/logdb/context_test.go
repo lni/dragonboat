@@ -16,10 +16,47 @@ package logdb
 
 import (
 	"testing"
-
-	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	pb "github.com/lni/dragonboat/v3/raftpb"
 )
+
+type kvpair struct {
+	delete bool
+	key    []byte
+	val    []byte
+}
+
+type testWriteBatch struct {
+	vals []kvpair
+}
+
+func newtestWriteBatch() *testWriteBatch {
+	return &testWriteBatch{vals: make([]kvpair, 0)}
+}
+
+func (wb *testWriteBatch) Destroy() {
+	wb.vals = nil
+}
+
+func (wb *testWriteBatch) Put(key []byte, val []byte) {
+	k := make([]byte, len(key))
+	v := make([]byte, len(val))
+	copy(k, key)
+	copy(v, val)
+	wb.vals = append(wb.vals, kvpair{key: k, val: v})
+}
+
+func (wb *testWriteBatch) Delete(key []byte) {
+	k := make([]byte, len(key))
+	copy(k, key)
+	wb.vals = append(wb.vals, kvpair{key: k, val: nil, delete: true})
+}
+
+func (wb *testWriteBatch) Clear() {
+	wb.vals = make([]kvpair, 0)
+}
+
+func (wb *testWriteBatch) Count() int {
+	return len(wb.vals)
+}
 
 func TestRDBContextCanBeCreated(t *testing.T) {
 	ctx := newContext(128, 128)
@@ -38,7 +75,7 @@ func TestRDBContextCaBeDestroyed(t *testing.T) {
 
 func TestRDBContextCaBeReset(t *testing.T) {
 	ctx := newContext(128, 128)
-	ctx.SetWriteBatch(kv.NewSimpleWriteBatch())
+	ctx.SetWriteBatch(newtestWriteBatch())
 	ctx.wb.Put([]byte("key"), []byte("val"))
 	if ctx.wb.Count() != 1 {
 		t.Errorf("unexpected count")
@@ -58,27 +95,5 @@ func TestGetValueBuffer(t *testing.T) {
 	buf = ctx.GetValueBuffer(1024)
 	if cap(buf) != 1024 {
 		t.Errorf("didn't return a new buffer")
-	}
-}
-
-func TestGetUpdates(t *testing.T) {
-	ctx := newContext(128, 128)
-	v := ctx.GetUpdates()
-	if cap(v) != updateSliceLen {
-		t.Errorf("unexpected updates cap")
-	}
-	if len(v) != 0 {
-		t.Errorf("unexpected len")
-	}
-	v2 := append(v, pb.Update{})
-	if len(v2) != 1 {
-		t.Errorf("unexpected len")
-	}
-	v = ctx.GetUpdates()
-	if cap(v) != updateSliceLen {
-		t.Errorf("unexpected updates cap")
-	}
-	if len(v) != 0 {
-		t.Errorf("unexpected len")
 	}
 }

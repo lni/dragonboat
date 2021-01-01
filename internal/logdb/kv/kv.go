@@ -22,6 +22,16 @@ const (
 // LogDBCallback is a callback function called by the LogDB
 type LogDBCallback func(busy bool)
 
+// IWriteBatch is the interface representing a write batch capable of
+// atomically writing many key-value pairs to the key-value store.
+type IWriteBatch interface {
+	Destroy()
+	Put([]byte, []byte)
+	Delete([]byte)
+	Clear()
+	Count() int
+}
+
 // IKVStore is the interface used by the RDB struct to access the underlying
 // Key-Value store.
 type IKVStore interface {
@@ -59,61 +69,4 @@ type IKVStore interface {
 	CompactEntries(firstKey []byte, lastKey []byte) error
 	// FullCompaction compact the entire key space.
 	FullCompaction() error
-}
-
-// IWriteBatch is the interface representing a write batch capable of
-// atomically writing many key-value pairs to the key-value store.
-type IWriteBatch interface {
-	Destroy()
-	Put([]byte, []byte)
-	Delete([]byte)
-	Clear()
-	Count() int
-}
-
-type kvpair struct {
-	delete bool
-	key    []byte
-	val    []byte
-}
-
-// SimpleWriteBatch is a write batch used in tests.
-type SimpleWriteBatch struct {
-	vals []kvpair
-}
-
-// NewSimpleWriteBatch ...
-func NewSimpleWriteBatch() *SimpleWriteBatch {
-	return &SimpleWriteBatch{vals: make([]kvpair, 0)}
-}
-
-// Destroy ...
-func (wb *SimpleWriteBatch) Destroy() {
-	wb.vals = nil
-}
-
-// Put ...
-func (wb *SimpleWriteBatch) Put(key []byte, val []byte) {
-	k := make([]byte, len(key))
-	v := make([]byte, len(val))
-	copy(k, key)
-	copy(v, val)
-	wb.vals = append(wb.vals, kvpair{key: k, val: v})
-}
-
-// Delete ...
-func (wb *SimpleWriteBatch) Delete(key []byte) {
-	k := make([]byte, len(key))
-	copy(k, key)
-	wb.vals = append(wb.vals, kvpair{key: k, val: nil, delete: true})
-}
-
-// Clear ...
-func (wb *SimpleWriteBatch) Clear() {
-	wb.vals = make([]kvpair, 0)
-}
-
-// Count ...
-func (wb *SimpleWriteBatch) Count() int {
-	return len(wb.vals)
 }

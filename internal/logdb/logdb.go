@@ -73,8 +73,6 @@ type IContext interface {
 	GetKey() IReusableKey
 	// GetValueBuffer returns a byte buffer with at least sz bytes in length.
 	GetValueBuffer(sz uint64) []byte
-	// GetUpdates return a raftpb.Update slice,
-	GetUpdates() []pb.Update
 	// GetWriteBatch returns a write batch or transaction instance.
 	GetWriteBatch() interface{}
 	// SetWriteBatch adds the write batch to the IContext instance.
