@@ -40,7 +40,7 @@ var (
 )
 
 type nodeLoader interface {
-	id() string
+	describe() string
 	getClusterSetIndex() uint64
 	forEachCluster(f func(uint64, *node) bool) uint64
 }
@@ -366,7 +366,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.saveReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotRequested}
-				plog.Debugf("%s snapshotRequested for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotRequested for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -374,7 +374,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.recoverReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: snapshotAvailable}
-				plog.Debugf("%s snapshotAvailable for %d", p.nh.id(), cid)
+				plog.Debugf("%s snapshotAvailable for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -382,7 +382,7 @@ func (p *workerPool) workerPoolMain() {
 			clusters := p.streamReady.getReadyMap(1)
 			for cid := range clusters {
 				pj := pendingJob{clusterID: cid, jt: streamSnapshot}
-				plog.Debugf("%s streamSnapshot for %d", p.nh.id(), cid)
+				plog.Debugf("%s streamSnapshot for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -588,7 +588,7 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 	}
 	w := p.getWorker()
 	if w == nil {
-		plog.Debugf("%s no more worker", p.nh.id())
+		plog.Debugf("%s no more worker", p.nh.describe())
 		return false
 	}
 	for idx, pj := range p.pending {
@@ -658,7 +658,6 @@ type engine struct {
 	loaded          *loadedNodes
 	env             *server.Env
 	logdb           raftio.ILogDB
-	ctxs            []raftio.IContext
 	stepWorkReady   *workReady
 	stepCCIReady    *workReady
 	commitWorkReady *workReady
@@ -690,7 +689,6 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		commitCCIReady:  newWorkReady(commitWorkerCount),
 		applyWorkReady:  newWorkReady(applyWorkerCount),
 		applyCCIReady:   newWorkReady(applyWorkerCount),
-		ctxs:            make([]raftio.IContext, execShards),
 		wp:              newWorkerPool(nh, loaded),
 		notifyCommit:    notifyCommit,
 	}
@@ -699,7 +697,6 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 	}
 	for i := uint64(1); i <= execShards; i++ {
 		workerID := i
-		s.ctxs[i-1] = logdb.GetLogDBThreadContext()
 		s.nodeStopper.RunWorker(func() {
 			if errorInjection {
 				defer func() {
@@ -742,11 +739,6 @@ func (e *engine) stop() {
 	e.commitStopper.Stop()
 	e.taskStopper.Stop()
 	e.wp.stop()
-	for _, ctx := range e.ctxs {
-		if ctx != nil {
-			ctx.Destroy()
-		}
-	}
 }
 
 func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
@@ -791,8 +783,8 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.commitWorkReady.getReadyMap(workerID)
-			e.processCommits(clusterIDMap, nodes)
+			active := e.commitWorkReady.getReadyMap(workerID)
+			e.processCommits(active, nodes)
 		}
 	}
 }
@@ -841,8 +833,8 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.applyWorkReady.getReadyMap(workerID)
-			e.processApplies(clusterIDMap, nodes, batch, entries)
+			active := e.applyWorkReady.getReadyMap(workerID)
+			e.processApplies(active, nodes, batch, entries)
 		}
 	}
 }
@@ -891,6 +883,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 	defer ticker.Stop()
 	cci := uint64(0)
 	stopC := e.nodeStopper.ShouldStop()
+	updates := make([]pb.Update, 0)
 	for {
 		select {
 		case <-stopC:
@@ -898,15 +891,15 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
-			e.processSteps(workerID, make(map[uint64]struct{}), nodes, stopC)
+			e.processSteps(workerID, make(map[uint64]struct{}), nodes, updates, stopC)
 		case <-e.stepCCIReady.waitCh(workerID):
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.stepWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			}
-			clusterIDMap := e.stepWorkReady.getReadyMap(workerID)
-			e.processSteps(workerID, clusterIDMap, nodes, stopC)
+			active := e.stepWorkReady.getReadyMap(workerID)
+			e.processSteps(workerID, active, nodes, updates, stopC)
 		}
 	}
 }
@@ -947,25 +940,28 @@ func (e *engine) loadBucketNodes(workerID uint64,
 }
 
 func (e *engine) processSteps(workerID uint64,
-	clusterIDMap map[uint64]struct{},
-	nodes map[uint64]*node, stopC chan struct{}) {
+	active map[uint64]struct{},
+	nodes map[uint64]*node, nodeUpdates []pb.Update, stopC chan struct{}) {
 	if len(nodes) == 0 {
 		return
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "") {
 		return
 	}
-	nodeCtx := e.ctxs[workerID-1]
-	nodeCtx.Reset()
-	if len(clusterIDMap) == 0 {
+	if len(active) == 0 {
 		for cid := range nodes {
-			clusterIDMap[cid] = struct{}{}
+			active[cid] = struct{}{}
 		}
 	}
-	nodeUpdates := nodeCtx.GetUpdates()
-	for cid := range clusterIDMap {
+	monkeyLog.Infof("%s worker ID %d called processStep, nodes %d, clusters %d",
+		e.nh.describe(), workerID, len(nodes), len(active))
+	nodeUpdates = nodeUpdates[:0]
+	for cid := range active {
 		node, ok := nodes[cid]
 		if !ok || node.stopped() {
+			if node != nil && node.stopped() {
+				monkeyLog.Infof("%s skipped stepNode, node stopped", node.id())
+			}
 			continue
 		}
 		if ud, hasUpdate := node.stepNode(); hasUpdate {
@@ -988,7 +984,7 @@ func (e *engine) processSteps(workerID uint64,
 	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
 		return
 	}
-	if err := e.logdb.SaveRaftState(nodeUpdates, nodeCtx); err != nil {
+	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
 		panic(err)
 	}
 	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {

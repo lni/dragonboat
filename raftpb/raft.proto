@@ -95,6 +95,7 @@ message RaftDataStatus {
   optional uint64 logdb_shard_count = 8 [(gogoproto.nullable) = false];
   optional uint64 max_session_count = 9 [(gogoproto.nullable) = false];
   optional uint64 entry_batch_size = 10 [(gogoproto.nullable) = false];
+  optional bool address_by_node_host_id = 11 [(gogoproto.nullable) = false];
 }
 
 message State {

@@ -28,15 +28,14 @@ var (
 	singleNodeHostTestDir = "plugin_test_dir_safe_to_delete"
 )
 
-func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactoryFunc) {
+func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
 	os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	nhc := config.NodeHostConfig{
 		NodeHostDir:    singleNodeHostTestDir,
 		RTTMillisecond: 20,
 		RaftAddress:    "localhost:26000",
-		LogDBFactory:   f,
-		Expert:         config.ExpertConfig{FS: vfs.DefaultFS},
+		Expert:         config.ExpertConfig{FS: vfs.DefaultFS, LogDBFactory: f},
 	}
 	nh, err := dragonboat.NewNodeHost(nhc)
 	if err != nil {

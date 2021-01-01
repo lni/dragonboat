@@ -299,7 +299,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -314,7 +314,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -353,7 +353,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			e := pb.Entry{Index: i, Term: 1}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -366,7 +366,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			e := pb.Entry{Index: i, Term: 2}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -418,7 +418,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -432,7 +432,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ClusterID:     clusterID,
 			NodeID:        nodeID,
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
@@ -448,7 +448,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			}
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
-		err = db.SaveRaftState([]pb.Update{ud}, newContext(1, 1))
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}

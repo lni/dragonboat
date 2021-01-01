@@ -40,7 +40,7 @@ func getNewLogReaderTestDB(entries []pb.Entry, fs vfs.IFS) raftio.ILogDB {
 		ClusterID:     LogReaderTestClusterID,
 		NodeID:        LogReaderTestNodeID,
 	}
-	if err := logdb.SaveRaftState([]pb.Update{ud}, newContext(1, 1)); err != nil {
+	if err := logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 		panic(err)
 	}
 	return logdb
@@ -255,7 +255,7 @@ func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 			ClusterID:     LogReaderTestClusterID,
 			NodeID:        LogReaderTestNodeID,
 		}
-		if err := s.logdb.SaveRaftState([]pb.Update{ud}, newContext(1, 1)); err != nil {
+		if err := s.logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 			t.Fatalf("%v", err)
 		}
 		bfi := tt.wentries[0].Index - 1

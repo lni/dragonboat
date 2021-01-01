@@ -56,53 +56,6 @@ func GetNodeInfo(cid uint64, nid uint64) NodeInfo {
 	return NodeInfo{ClusterID: cid, NodeID: nid}
 }
 
-// IReusableKey is the interface for keys that can be reused. A reusable key is
-// usually obtained by calling the GetKey() function of the IContext
-// instance.
-type IReusableKey interface {
-	SetEntryBatchKey(clusterID uint64, nodeID uint64, index uint64)
-	// SetEntryKey sets the key to be an entry key for the specified Raft node
-	// with the specified entry index.
-	SetEntryKey(clusterID uint64, nodeID uint64, index uint64)
-	// SetStateKey sets the key to be an persistent state key suitable
-	// for the specified Raft cluster node.
-	SetStateKey(clusterID uint64, nodeID uint64)
-	// SetMaxIndexKey sets the key to be the max possible index key for the
-	// specified Raft cluster node.
-	SetMaxIndexKey(clusterID uint64, nodeID uint64)
-	// Key returns the underlying byte slice of the key.
-	Key() []byte
-	// Release releases the key instance so it can be reused in the future.
-	Release()
-}
-
-// IContext is the per thread context used in the logdb module.
-// IContext is expected to contain a list of reusable keys and byte
-// slices that are owned per thread so they can be safely reused by the same
-// thread when accessing ILogDB.
-type IContext interface {
-	// Destroy destroys the IContext instance.
-	Destroy()
-	// Reset resets the IContext instance, all previous returned keys and
-	// buffers will be put back to the IContext instance and be ready to
-	// be used for the next iteration.
-	Reset()
-	// GetKey returns a reusable key.
-	GetKey() IReusableKey
-	// GetValueBuffer returns a byte buffer with at least sz bytes in length.
-	GetValueBuffer(sz uint64) []byte
-	// GetUpdates return a raftpb.Update slice,
-	GetUpdates() []pb.Update
-	// GetWriteBatch returns a write batch or transaction instance.
-	GetWriteBatch() interface{}
-	// SetWriteBatch adds the write batch to the IContext instance.
-	SetWriteBatch(wb interface{})
-	// GetEntryBatch returns an entry batch instance.
-	GetEntryBatch() pb.EntryBatch
-	// GetLastEntryBatch returns an entry batch instance.
-	GetLastEntryBatch() pb.EntryBatch
-}
-
 // ILogDB is the interface implemented by the log DB for persistently store
 // Raft states, log entries and other Raft metadata.
 type ILogDB interface {
@@ -113,8 +66,6 @@ type ILogDB interface {
 	// BinaryFormat returns an constant uint32 value representing the binary
 	// format version compatible with the ILogDB instance.
 	BinaryFormat() uint32
-	// GetLogDBThreadContext returns a new IContext instance.
-	GetLogDBThreadContext() IContext
 	// ListNodeInfo lists all available NodeInfo found in the log DB.
 	ListNodeInfo() ([]NodeInfo, error)
 	// SaveBootstrapInfo saves the specified bootstrap info to the log DB.
@@ -126,7 +77,7 @@ type ILogDB interface {
 	GetBootstrapInfo(clusterID uint64, nodeID uint64) (*pb.Bootstrap, error)
 	// SaveRaftState atomically saves the Raft states, log entries and snapshots
 	// metadata found in the pb.Update list to the log DB.
-	SaveRaftState(updates []pb.Update, ctx IContext) error
+	SaveRaftState(updates []pb.Update, shardID uint64) error
 	// IterateEntries returns the continuous Raft log entries of the specified
 	// Raft node between the index value range of [low, high) up to a max size
 	// limit of maxSize bytes. It returns the located log entries, their total

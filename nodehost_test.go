@@ -42,6 +42,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -59,8 +60,8 @@ import (
 
 const (
 	defaultTestPort = 26001
-	testUUID1       = "test-uuid-1"
-	testUUID2       = "test-uuid-2"
+	testNodeHostID1 = "nhid-12345"
+	testNodeHostID2 = "nhid-12346"
 )
 
 func getTestPort() int {
@@ -412,7 +413,6 @@ type noopLogDB struct {
 func (n *noopLogDB) BinaryFormat() uint32                                      { return 0 }
 func (n *noopLogDB) Name() string                                              { return "noopLogDB" }
 func (n *noopLogDB) Close()                                                    {}
-func (n *noopLogDB) GetLogDBThreadContext() raftio.IContext                    { return nil }
 func (n *noopLogDB) HasNodeInfo(clusterID uint64, nodeID uint64) (bool, error) { return true, nil }
 func (n *noopLogDB) CreateNodeInfo(clusterID uint64, nodeID uint64) error      { return nil }
 func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                  { return nil, nil }
@@ -422,7 +422,7 @@ func (n *noopLogDB) SaveBootstrapInfo(clusterID uint64, nodeID uint64, bs pb.Boo
 func (n *noopLogDB) GetBootstrapInfo(clusterID uint64, nodeID uint64) (*pb.Bootstrap, error) {
 	return nil, nil
 }
-func (n *noopLogDB) SaveRaftState(updates []pb.Update, ctx raftio.IContext) error { return nil }
+func (n *noopLogDB) SaveRaftState(updates []pb.Update, workerID uint64) error { return nil }
 func (n *noopLogDB) IterateEntries(ents []pb.Entry,
 	size uint64, clusterID uint64, nodeID uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
@@ -499,7 +499,11 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 	}
 	peers := make(map[uint64]string)
 	if !to.join {
-		peers[cfg.ClusterID] = nh.RaftAddress()
+		if !nh.nhConfig.AddressByNodeHostID {
+			peers[cfg.ClusterID] = nh.RaftAddress()
+		} else {
+			peers[cfg.ClusterID] = nh.ID()
+		}
 	}
 	if to.createSM != nil {
 		if err := nh.StartCluster(peers, to.join, to.createSM, *cfg); err != nil {
@@ -632,7 +636,7 @@ func TestLogDBCanBeExtended(t *testing.T) {
 	ldb := &noopLogDB{}
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.LogDBFactory = func(config.NodeHostConfig,
+			nhc.Expert.LogDBFactory = func(config.NodeHostConfig,
 				config.LogDBCallback, []string, []string) (raftio.ILogDB, error) {
 				return ldb, nil
 			}
@@ -657,9 +661,9 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	to := &testOption{
 		tf: func(nh *NodeHost) {
 			tt := nh.transport.(*transport.Transport)
-			if tt.GetTrans().Name() != transport.TCPRaftRPCName {
+			if tt.GetTrans().Name() != transport.TCPTransportName {
 				t.Errorf("transport type name %s, expect %s",
-					tt.GetTrans().Name(), transport.TCPRaftRPCName)
+					tt.GetTrans().Name(), transport.TCPTransportName)
 			}
 		},
 		noElection: true,
@@ -667,7 +671,7 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestRaftRPCFactoryIsStillHonored(t *testing.T) {
+func TestTransportFactoryIsStillHonored(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
@@ -686,11 +690,11 @@ func TestRaftRPCFactoryIsStillHonored(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestTransportModuleCanBeSet(t *testing.T) {
+func TestTransportFactoryCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportModule = &transport.NOOPTransportModule{}
+			nhc.Expert.TransportFactory = &transport.NOOPTransportFactory{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -709,8 +713,8 @@ type validatorTestModule struct {
 }
 
 func (tm *validatorTestModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return transport.NewNOOPTransport(nhConfig, handler, chunkHandler)
 }
 
@@ -723,7 +727,7 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.TransportModule = &validatorTestModule{}
+			nhc.Expert.TransportFactory = &validatorTestModule{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {
@@ -745,83 +749,87 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-type uuidChanTransport struct {
-	t raftio.IRaftRPC
+type chanTransportFactory struct{}
+
+func (*chanTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
+	return chantrans.NewChanTransport(nhConfig, handler, chunkHandler)
 }
 
-func (u *uuidChanTransport) Name() string {
-	return u.t.Name()
+func (tm *chanTransportFactory) Validate(addr string) bool {
+	return addr == nodeHostTestAddr1 || addr == nodeHostTestAddr2
 }
 
-func (u *uuidChanTransport) Start() error {
-	return u.t.Start()
+func TestGossip(t *testing.T) {
+	testAddressByNodeHostID(t, true, nil)
 }
 
-func (u *uuidChanTransport) Stop() {
-	u.t.Stop()
+func TestCustomTransportCanUseNodeHostID(t *testing.T) {
+	factory := &chanTransportFactory{}
+	testAddressByNodeHostID(t, true, factory)
 }
 
-func (u *uuidChanTransport) getAddr(uuid string) (string, error) {
-	if uuid == testUUID1 {
-		return nodeHostTestAddr1, nil
-	} else if uuid == testUUID2 {
-		return nodeHostTestAddr2, nil
-	}
-	return "", errors.New("unknown uuid")
+func TestCustomTransportCanGoWithoutNodeHostID(t *testing.T) {
+	factory := &chanTransportFactory{}
+	testAddressByNodeHostID(t, false, factory)
 }
 
-func (u *uuidChanTransport) GetConnection(ctx context.Context,
-	target string) (raftio.IConnection, error) {
-	addr, err := u.getAddr(target)
-	if err != nil {
-		return nil, err
-	}
-	return u.t.GetConnection(ctx, addr)
-}
-
-func (u *uuidChanTransport) GetSnapshotConnection(ctx context.Context,
-	target string) (raftio.ISnapshotConnection, error) {
-	addr, err := u.getAddr(target)
-	if err != nil {
-		return nil, err
-	}
-	return u.t.GetSnapshotConnection(ctx, addr)
-}
-
-type uuidTestTransportModule struct{}
-
-func (tm *uuidTestTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
-	return &uuidChanTransport{
-		t: chantrans.NewChanTransport(nhConfig, handler, chunkHandler),
-	}
-}
-
-func (tm *uuidTestTransportModule) Validate(addr string) bool {
-	return addr == testUUID1 || addr == testUUID2
-}
-
-func TestTransportModuleCanUseUUID(t *testing.T) {
+func testAddressByNodeHostID(t *testing.T,
+	addressByNodeHostID bool, factory config.TransportFactory) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
-		NodeHostDir:     datadir1,
-		RTTMillisecond:  getRTTMillisecond(fs, datadir1),
-		RaftAddress:     addr1,
-		Expert:          config.ExpertConfig{FS: fs},
-		TransportModule: &uuidTestTransportModule{},
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
+		RaftAddress:         addr1,
+		AddressByNodeHostID: addressByNodeHostID,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
+	}
+	if addressByNodeHostID {
+		nhc1.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25001",
+			AdvertiseAddress: "127.0.0.1:25001",
+			Seed:             []string{"127.0.0.1:25002"},
+		}
 	}
 	nhc2 := config.NodeHostConfig{
-		NodeHostDir:     datadir2,
-		RTTMillisecond:  getRTTMillisecond(fs, datadir2),
-		RaftAddress:     addr2,
-		Expert:          config.ExpertConfig{FS: fs},
-		TransportModule: &uuidTestTransportModule{},
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
+		RaftAddress:         addr2,
+		AddressByNodeHostID: addressByNodeHostID,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
 	}
+	if addressByNodeHostID {
+		nhc2.Gossip = config.GossipConfig{
+			BindAddress:      "127.0.0.1:25002",
+			AdvertiseAddress: "127.0.0.1:25002",
+			Seed:             []string{"127.0.0.1:25001"},
+		}
+	}
+	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc1.Expert.TransportFactory = factory
+	nhc2.Expert.TransportFactory = factory
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		t.Fatalf("failed to create nh, %v", err)
@@ -833,8 +841,13 @@ func TestTransportModuleCanUseUUID(t *testing.T) {
 	}
 	defer nh2.Stop()
 	peers := make(map[uint64]string)
-	peers[1] = testUUID1
-	peers[2] = testUUID2
+	if addressByNodeHostID {
+		peers[1] = testNodeHostID1
+		peers[2] = testNodeHostID2
+	} else {
+		peers[1] = addr1
+		peers[2] = addr2
+	}
 	createSM := func(uint64, uint64) sm.IStateMachine {
 		return &PST{}
 	}
@@ -866,6 +879,118 @@ func TestTransportModuleCanUseUUID(t *testing.T) {
 		cancel()
 	}
 	t.Fatalf("failed to make proposal")
+}
+
+func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
+	fs := vfs.GetTestFS()
+	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	addr1 := nodeHostTestAddr1
+	addr2 := nodeHostTestAddr2
+	nhc1 := config.NodeHostConfig{
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
+		RaftAddress:         addr1,
+		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
+	}
+	nhc2 := config.NodeHostConfig{
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
+		RaftAddress:         addr2,
+		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
+	}
+	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc1.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25001",
+		AdvertiseAddress: "127.0.0.1:25001",
+		Seed:             []string{"127.0.0.1:25002"},
+	}
+	nhc2.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25002",
+		AdvertiseAddress: "127.0.0.1:25002",
+		Seed:             []string{"127.0.0.1:25001"},
+	}
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create nh, %v", err)
+	}
+	defer nh1.Stop()
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create nh2, %v", err)
+	}
+	peers := make(map[uint64]string)
+	peers[1] = testNodeHostID1
+	peers[2] = testNodeHostID2
+	createSM := func(uint64, uint64) sm.IStateMachine {
+		return &PST{}
+	}
+	rc := config.Config{
+		ClusterID:       1,
+		NodeID:          1,
+		ElectionRTT:     3,
+		HeartbeatRTT:    1,
+		SnapshotEntries: 0,
+	}
+	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.NodeID = 2
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	waitForLeaderToBeElected(t, nh2, 1)
+	pto := lpto(nh1)
+	session := nh1.GetNoOPSession(1)
+	testProposal := func() {
+		done := false
+		for i := 0; i < 10; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			_, err := nh1.SyncPropose(ctx, session, make([]byte, 0))
+			cancel()
+			if err != nil {
+				continue
+			}
+			done = true
+			break
+		}
+		if !done {
+			t.Fatalf("failed to make proposal")
+		}
+	}
+	testProposal()
+	nh2.Stop()
+	nhc2.RaftAddress = nodeHostTestAddr3
+	nh2, err = NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to restart nh2, %v", err)
+	}
+	defer nh2.Stop()
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh2, 1)
+	testProposal()
 }
 
 func TestNewNodeHostReturnErrorOnInvalidConfig(t *testing.T) {
@@ -905,6 +1030,7 @@ var (
 	singleNodeHostTestAddr = fmt.Sprintf("localhost:%d", getTestPort())
 	nodeHostTestAddr1      = fmt.Sprintf("localhost:%d", getTestPort())
 	nodeHostTestAddr2      = fmt.Sprintf("localhost:%d", getTestPort()+1)
+	nodeHostTestAddr3      = fmt.Sprintf("localhost:%d", getTestPort()+2)
 	singleNodeHostTestDir  = "single_nodehost_test_dir_safe_to_delete"
 )
 
@@ -957,7 +1083,6 @@ func (n *PST) SaveSnapshot(w io.Writer,
 		select {
 		case <-done:
 			n.stopped = true
-			plog.Infof("saveSnapshot stopped")
 			return sm.ErrSnapshotStopped
 		default:
 		}
@@ -1114,7 +1239,6 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 		SystemEventListener: &testSysEventListener{},
 		Expert:              getTestExpertConfig(fs),
 	}
-	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		return nil, nil, err
@@ -1152,7 +1276,6 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		RaftAddress:    peers[2],
 		Expert:         getTestExpertConfig(fs),
 	}
-	plog.Infof("dir1 %s, dir2 %s", datadir1, datadir2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
 		return nil, nil, err
@@ -1388,33 +1511,40 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestUUIDIsStatic(t *testing.T) {
+func TestNodeHostIDIsStatic(t *testing.T) {
 	fs := vfs.GetTestFS()
-	var uuid string
+	id := ""
 	to := &testOption{
 		restartNodeHost: true,
 		noElection:      true,
 		tf: func(nh *NodeHost) {
-			uuid = nh.UUID()
+			id = nh.ID()
 		},
 		rf: func(nh *NodeHost) {
-			if nh.UUID() != uuid {
-				t.Fatalf("UUID value changed")
+			if nh.ID() != id {
+				t.Fatalf("NodeHost ID value changed")
 			}
 		},
 	}
 	runNodeHostTest(t, to, fs)
 }
 
-func TestUUIDCanBeSet(t *testing.T) {
+func TestNodeHostIDCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
+	nhid := uint64(1234567890)
 	to := &testOption{
+		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
+			c.Expert.TestNodeHostID = nhid
+			return c
+		},
 		noElection: true,
 		tf: func(nh *NodeHost) {
-			uuid := "test-uuid-value"
-			nh.test.uuid = uuid
-			if nh.UUID() != uuid {
-				t.Fatalf("failed to set uuid")
+			nhid, err := id.NewNodeHostID(nhid)
+			if err != nil {
+				t.Fatalf("failed to create NodeHostID")
+			}
+			if nh.ID() != nhid.String() {
+				t.Fatalf("failed to set nhid")
 			}
 		},
 	}
@@ -1443,7 +1573,6 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
-			plog.Infof("nh is ready")
 			pto := lpto(nh)
 			rctx, rcancel := context.WithTimeout(context.Background(), pto)
 			rcs, err := nh.SyncGetSession(rctx, 1)
@@ -1681,7 +1810,6 @@ func testZombieSnapshotDirWillBeDeletedDuringAddCluster(t *testing.T, dirName st
 			}
 			snapDir := nh.env.GetSnapshotDir(did, 1, 1)
 			z1 = fs.PathJoin(snapDir, dirName)
-			plog.Infof("creating %s", z1)
 			if err := fs.MkdirAll(z1, 0755); err != nil {
 				t.Fatalf("failed to create dir %v", err)
 			}
@@ -1819,7 +1947,6 @@ func TestEntryCompression(t *testing.T) {
 				if e.Type == pb.EncodedEntry {
 					hasEncodedEntry = true
 					payload := rsm.GetPayload(e)
-					plog.Infof("compressed size: %d, original size: %d", len(e.Cmd), len(payload))
 					if !bytes.Equal(payload, make([]byte, 1024)) {
 						t.Errorf("payload changed")
 					}
@@ -2425,7 +2552,6 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				}
 				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v%2 == 1 {
-					plog.Infof("a concurrent read has been confirmed")
 					atomic.AddUint32(&count, 1)
 					atomic.StoreUint32(&done, 1)
 					return
@@ -2508,7 +2634,6 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				t.Errorf("unexpected IsObserver value")
 			}
 		}
-		plog.Infof("going to run tests")
 		stopper := syncutil.NewStopper()
 		pto := pto(nh)
 		stopper.RunWorker(func() {
@@ -2535,7 +2660,6 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 				}
 				v := binary.LittleEndian.Uint32(result.([]byte))
 				if v == 1 {
-					plog.Infof("got a v == 1 result")
 					atomic.StoreUint32(&failed, 1)
 					return
 				}
@@ -2939,7 +3063,6 @@ func TestSnapshotCanBeExportedAfterSnapshotting(t *testing.T) {
 				Exported:   true,
 				ExportPath: sspath,
 			}
-			plog.Infof("going to export snapshot")
 			ctx, cancel = context.WithTimeout(context.Background(), pto)
 			exportIdx, err := nh.SyncRequestSnapshot(ctx, 1, opt)
 			cancel()
@@ -3040,7 +3163,6 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 				t.Errorf("failed to complete the requested snapshot")
 			}
 			index = v.SnapshotIndex()
-			plog.Infof("going to request snapshot again")
 			sr, err = nh.RequestSnapshot(1, SnapshotOption{}, pto)
 			if err != nil {
 				t.Fatalf("failed to request snapshot")
@@ -3533,7 +3655,6 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			if len(snapshots) != 0 {
 				t.Fatalf("snapshot record unexpectedly inserted into the system")
 			}
-			plog.Infof("snapshot index %d", index)
 			snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 			snapshotFile := fmt.Sprintf("snapshot-%016X.gbsnap", index)
 			fp := fs.PathJoin(sspath, snapshotDir, snapshotFile)
@@ -3658,7 +3779,6 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 				break
 			}
 		}
-		plog.Infof("index of exported snapshot %d", index)
 		makeProposals(nh)
 		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		rv, err := nh.SyncRead(ctx, 1, nil)
@@ -3714,7 +3834,6 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			if index != rv.(uint64) {
 				t.Fatalf("invalid returned value %d", rv.(uint64))
 			}
-			plog.Infof("checking proposes")
 			makeProposals(rnh)
 		}()
 		ok, err = upgrade310.CanUpgradeToV310(nhc)
@@ -3769,7 +3888,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			RaftAddress:    nodeHostTestAddr2,
 			Expert:         getTestExpertConfig(fs),
 		}
-		plog.Infof("dir1 %s, dir2 %s", nh1dir, nh2dir)
 		var once sync.Once
 		nh1, err := NewNodeHost(nhc1)
 		if err != nil {
@@ -3847,7 +3965,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to complete the requested snapshot")
 		}
 		index = v.SnapshotIndex()
-		plog.Infof("exported snapshot index %d", index)
 		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 		dir := fs.PathJoin(sspath, snapshotDir)
 		members := make(map[uint64]string)
@@ -3863,7 +3980,6 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		if err := tools.ImportSnapshot(nhc2, dir, members, 10); err != nil {
 			t.Fatalf("failed to import snapshot %v", err)
 		}
-		plog.Infof("snapshots imported")
 		rnh1, err := NewNodeHost(nhc1)
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
@@ -3916,7 +4032,7 @@ type testSink2 struct {
 }
 
 func (s *testSink2) Receive(chunk pb.Chunk) (bool, bool) {
-	s.receiver.AddChunk(chunk)
+	s.receiver.Add(chunk)
 	return true, false
 }
 
@@ -3942,7 +4058,7 @@ func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 		idx := rand.Uint64() % uint64(len(chunk.Data))
 		chunk.Data[idx] = chunk.Data[idx] + 1
 	}
-	s.receiver.AddChunk(chunk)
+	s.receiver.Add(chunk)
 	return true, false
 }
 
@@ -3959,7 +4075,7 @@ func (s *dataCorruptionSink) ToNodeID() uint64 {
 }
 
 type chunkReceiver interface {
-	AddChunk(chunk pb.Chunk) bool
+	Add(chunk pb.Chunk) bool
 }
 
 func getTestSSMeta() *rsm.SSMeta {
@@ -3970,7 +4086,7 @@ func getTestSSMeta() *rsm.SSMeta {
 	}
 }
 
-func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
+func testCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T,
 	enabled bool, exp uint64, fs vfs.IFS) {
 	if err := fs.RemoveAll(testSnapshotDir); err != nil {
 		t.Fatalf("%v", err)
@@ -3979,7 +4095,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewChunks(c.onReceive,
+	cks := transport.NewChunk(c.onReceive,
 		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &dataCorruptionSink{receiver: cks, enabled: enabled}
 	meta := getTestSSMeta()
@@ -4007,13 +4123,13 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T,
 	}
 }
 
-func TestCorruptedChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
+func TestCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, false, 1, fs)
-	testCorruptedChunkWriterOutputCanBeHandledByChunks(t, true, 0, fs)
+	testCorruptedChunkWriterOutputCanBeHandledByChunk(t, false, 1, fs)
+	testCorruptedChunkWriterOutputCanBeHandledByChunk(t, true, 0, fs)
 }
 
-func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
+func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	fs := vfs.GetTestFS()
 	if err := fs.RemoveAll(testSnapshotDir); err != nil {
 		t.Fatalf("%v", err)
@@ -4022,7 +4138,7 @@ func TestChunkWriterOutputCanBeHandledByChunks(t *testing.T) {
 	if err := fs.MkdirAll(c.getSnapshotDirFunc(0, 0), 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
-	cks := transport.NewChunks(c.onReceive,
+	cks := transport.NewChunk(c.onReceive,
 		c.confirm, c.getSnapshotDirFunc, 0, fs)
 	sink := &testSink2{receiver: cks}
 	meta := getTestSSMeta()
@@ -4103,7 +4219,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 				dirs []string, lldirs []string) (raftio.ILogDB, error) {
 				return &noopLogDB{}, nil
 			}
-			c.LogDBFactory = f
+			c.Expert.LogDBFactory = f
 			return c
 		},
 		at: func() {
@@ -4178,14 +4294,14 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	to := &testOption{
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = nff
+			nhc.Expert.LogDBFactory = nff
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrLogDBBrokenChange {
 				t.Errorf("failed to return ErrLogDBBrokenChange")
 			}
 		},
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = bff
+			c.Expert.LogDBFactory = bff
 			return c
 		},
 		noElection: true,
@@ -4205,13 +4321,13 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = nff
+			c.Expert.LogDBFactory = nff
 			return c
 		},
 		noElection: true,
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = bff
+			nhc.Expert.LogDBFactory = bff
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrIncompatibleData {
 				t.Errorf("failed to return server.ErrIncompatibleData")
@@ -4233,7 +4349,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.LogDBFactory = bff
+			c.Expert.LogDBFactory = bff
 			return c
 		},
 		createSM: func(uint64, uint64) sm.IStateMachine {
@@ -4251,7 +4367,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		},
 		at: func() {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.LogDBFactory = nff
+			nhc.Expert.LogDBFactory = nff
 			if nh, err := NewNodeHost(*nhc); err != nil {
 				t.Errorf("failed to create node host")
 			} else {
@@ -4278,7 +4394,42 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestLeaderInfoIsCorrectlyReported(t *testing.T) {
+func TestGossipInfoIsReported(t *testing.T) {
+	fs := vfs.GetTestFS()
+	advertiseAddress := "202.96.1.2:12345"
+	to := &testOption{
+		defaultTestNode: true,
+		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
+			c.AddressByNodeHostID = true
+			c.Gossip = config.GossipConfig{
+				BindAddress:      "localhost:23001",
+				AdvertiseAddress: advertiseAddress,
+				Seed:             []string{"localhost:23002"},
+			}
+			return c
+		},
+		tf: func(nh *NodeHost) {
+			nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
+			if nhi.Gossip.AdvertiseAddress != advertiseAddress {
+				t.Errorf("unexpected advertise address, got %s, want %s",
+					nhi.Gossip.AdvertiseAddress, advertiseAddress)
+			}
+			if !nhi.Gossip.Enabled {
+				t.Errorf("gossip info not marked as enabled")
+			}
+			if nhi.Gossip.NumOfKnownNodeHosts != 1 {
+				t.Errorf("unexpected NumOfKnownNodeHosts, got %d, want 1",
+					nhi.Gossip.NumOfKnownNodeHosts)
+			}
+			if nhi.NodeHostID != nh.ID() {
+				t.Errorf("unexpected NodeHostID, got %s, want %s", nhi.NodeHostID, nh.ID())
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestLeaderInfoIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
@@ -4382,7 +4533,6 @@ type testRaftEventListener struct {
 func (rel *testRaftEventListener) LeaderUpdated(info raftio.LeaderInfo) {
 	rel.mu.Lock()
 	defer rel.mu.Unlock()
-	plog.Infof("leader info: %+v", info)
 	rel.received = append(rel.received, info)
 }
 
@@ -4554,7 +4704,6 @@ func makeProposals(nh *NodeHost) {
 		_, err := nh.SyncPropose(ctx, session, []byte("test-data"))
 		cancel()
 		if err != nil {
-			plog.Errorf("failed to make proposal %v", err)
 			time.Sleep(100 * time.Millisecond)
 		}
 	}

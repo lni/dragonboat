@@ -149,7 +149,7 @@ func (cw *ChunkWriter) getChunk() pb.Chunk {
 		Term:        cw.meta.Term,
 		OnDiskIndex: cw.meta.OnDiskIndex,
 		Membership:  cw.meta.Membership,
-		BinVer:      raftio.RPCBinVersion,
+		BinVer:      raftio.TransportBinVersion,
 		Filepath:    server.GetSnapshotFilename(cw.meta.Index),
 	}
 }

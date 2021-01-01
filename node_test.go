@@ -242,7 +242,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			return rsm.NewNativeSM(cfg, rsm.NewRegularStateMachine(noopSM), done)
 		}
 		// node registry
-		nr := transport.NewNodes(settings.Soft.StreamConnections, nil)
+		nr := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
 		ch := router.getMessageReceiveChannel(testClusterID, i)
 		nhConfig := config.NodeHostConfig{RTTMillisecond: tickMillisecond}
 		node, err := newNode(peers,
@@ -310,10 +310,9 @@ func step(nodes []*node) bool {
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 	}
-	rtc := nodes[0].logdb.GetLogDBThreadContext()
 	// persistent state and entries are saved first
 	// then the snapshot. order can not be changed.
-	if err := nodes[0].logdb.SaveRaftState(nodeUpdates, rtc); err != nil {
+	if err := nodes[0].logdb.SaveRaftState(nodeUpdates, 1); err != nil {
 		panic(err)
 	}
 	for idx, ud := range nodeUpdates {
@@ -349,7 +348,8 @@ func step(nodes []*node) bool {
 func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 	r *testMessageRouter) {
 	for _, node := range nodes {
-		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID}
+		tick := node.pendingReadIndexes.getTick() + 1
+		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID, Hint: tick}
 		tickMsg.ClusterId = testClusterID
 		r.sendMessage(tickMsg)
 	}
@@ -361,8 +361,13 @@ func stepNodes(nodes []*node, smList []*rsm.StateMachine,
 	s := ticks + 10
 	for i := uint64(0); i < s; i++ {
 		for _, node := range nodes {
-			tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID}
-			tickMsg.ClusterId = testClusterID
+			tick := node.pendingReadIndexes.getTick() + 1
+			tickMsg := pb.Message{
+				Type:      pb.LocalTick,
+				To:        node.nodeID,
+				ClusterId: testClusterID,
+				Hint:      tick,
+			}
 			r.sendMessage(tickMsg)
 		}
 		step(nodes)

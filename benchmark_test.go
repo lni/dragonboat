@@ -26,6 +26,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -290,13 +291,11 @@ func BenchmarkFSyncLatency(b *testing.B) {
 		NodeID:        1,
 		EntriesToSave: []pb.Entry{e},
 	}
-	rdbctx := db.GetLogDBThreadContext()
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
+		if err := db.SaveRaftState([]pb.Update{u}, 1); err != nil {
 			b.Fatalf("%v", err)
 		}
-		rdbctx.Reset()
 	}
 }
 
@@ -311,7 +310,11 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	clusterID := uint32(1)
 	b.StartTimer()
 	b.RunParallel(func(pbt *testing.PB) {
-		rdbctx := db.GetLogDBThreadContext()
+		ldb, ok := db.(*logdb.ShardedDB)
+		if !ok {
+			b.Fatalf("not a logdb.ShardedDB instance")
+		}
+		rdbctx := ldb.GetLogDBThreadContext()
 		e := pb.Entry{
 			Index:       12843560,
 			Term:        123,
@@ -335,7 +338,7 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 		}
 		for pbt.Next() {
 			rdbctx.Reset()
-			if err := db.SaveRaftState([]pb.Update{u}, rdbctx); err != nil {
+			if err := ldb.SaveRaftStateCtx([]pb.Update{u}, rdbctx); err != nil {
 				b.Errorf("%v", err)
 			}
 			b.SetBytes(int64(bytes))
@@ -422,19 +425,9 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
-	nodes1 := transport.NewNodes(settings.Soft.StreamConnections, nil)
-	nodes2 := transport.NewNodes(settings.Soft.StreamConnections, nil)
-	nodes1.AddRemote(1, 2, addr2)
-	t1, err := transport.NewTransport(nhc1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
-	if err != nil {
-		b.Fatalf("failed to create transport %v", err)
-	}
-	t2, err := transport.NewTransport(nhc2, env2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
-	if err != nil {
-		b.Fatalf("failed to create transport %v", err)
-	}
-	defer t2.Stop()
-	defer t1.Stop()
+	nodes1 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	nodes2 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	nodes1.Add(1, 2, addr2)
 	handler1 := &benchmarkMessageHandler{
 		ch:       make(chan struct{}, 1),
 		expected: 128,
@@ -443,8 +436,18 @@ func benchmarkTransport(b *testing.B, sz int) {
 		ch:       make(chan struct{}, 1),
 		expected: 128,
 	}
-	t2.SetMessageHandler(handler1)
-	t1.SetMessageHandler(handler2)
+	t1, err := transport.NewTransport(nhc1,
+		handler1, env1, nodes1, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
+	t2, err := transport.NewTransport(nhc2,
+		handler2, env2, nodes2, nil, &dummyTransportEvent{}, vfs.DefaultFS)
+	if err != nil {
+		b.Fatalf("failed to create transport %v", err)
+	}
+	defer t2.Stop()
+	defer t1.Stop()
 	msgs := make([]pb.Message, 0)
 	e := pb.Entry{
 		Index:       12843560,

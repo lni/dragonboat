@@ -20,11 +20,10 @@ import (
 	"github.com/lni/goutils/stringutil"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/raftio"
 )
 
 func TestPeerCanBeAdded(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
 		t.Fatalf("error not reported")
@@ -40,21 +39,18 @@ func TestPeerCanBeAdded(t *testing.T) {
 }
 
 func TestPeerAddressCanNotBeUpdated(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("didn't panic when updating addr")
+		}
+	}()
 	nodes.Add(100, 2, "a2:2")
 	nodes.Add(100, 2, "a2:3")
-	nodes.Add(100, 2, "a2:4")
-	url, _, err := nodes.Resolve(100, 2)
-	if err != nil {
-		t.Errorf("failed to resolve address")
-	}
-	if url != "a2:2" {
-		t.Errorf("got %s, want %s", url, "a2:2")
-	}
 }
 
 func TestPeerCanBeRemoved(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
 	if err != nil {
@@ -71,7 +67,7 @@ func TestPeerCanBeRemoved(t *testing.T) {
 }
 
 func TestRemoveCluster(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	nodes.Add(100, 3, "a2:3")
 	nodes.Add(200, 2, "a3:2")
@@ -86,33 +82,9 @@ func TestRemoveCluster(t *testing.T) {
 	}
 }
 
-func TestRemoteAddressCanBeUsed(t *testing.T) {
-	nodes := NewNodes(settings.Soft.StreamConnections, nil)
-	_, _, err := nodes.Resolve(100, 2)
-	if err == nil {
-		t.Errorf("unexpected result")
-	}
-	nodes.AddRemote(100, 2, "a3:2")
-	v, _, err := nodes.Resolve(100, 2)
-	if err != nil {
-		t.Errorf("failed to return the remote address")
-	}
-	if v != "a3:2" {
-		t.Errorf("v %s, want a3:2", v)
-	}
-	nodes.nmu.nodes = make(map[raftio.NodeInfo]string)
-	v, _, err = nodes.Resolve(100, 2)
-	if err != nil {
-		t.Errorf("failed to return the remote address")
-	}
-	if v != "a3:2" {
-		t.Errorf("v %s, want a3:2", v)
-	}
-}
-
 func testInvalidAddressWillPanic(t *testing.T, addr string) {
 	po := false
-	nodes := NewNodes(settings.Soft.StreamConnections, stringutil.IsValidAddress)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections, stringutil.IsValidAddress)
 	defer func() {
 		if r := recover(); r != nil {
 			po = true

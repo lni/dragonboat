@@ -65,8 +65,8 @@ func (l *ssLock) unlock() {
 	l.mu.Unlock()
 }
 
-// Chunks managed on the receiving side
-type Chunks struct {
+// Chunk managed on the receiving side
+type Chunk struct {
 	did       uint64
 	tick      uint64
 	validate  bool
@@ -81,11 +81,11 @@ type Chunks struct {
 	mu        sync.Mutex
 }
 
-// NewChunks creates and returns a new snapshot chunks instance.
-func NewChunks(onReceive func(pb.MessageBatch),
+// NewChunk creates and returns a new snapshot chunks instance.
+func NewChunk(onReceive func(pb.MessageBatch),
 	confirm func(uint64, uint64, uint64), dir server.SnapshotDirFunc,
-	did uint64, fs vfs.IFS) *Chunks {
-	return &Chunks{
+	did uint64, fs vfs.IFS) *Chunk {
+	return &Chunk{
 		did:       did,
 		validate:  true,
 		onReceive: onReceive,
@@ -99,12 +99,12 @@ func NewChunks(onReceive func(pb.MessageBatch),
 	}
 }
 
-// AddChunk adds an received trunk to chunks.
-func (c *Chunks) AddChunk(chunk pb.Chunk) bool {
+// Add adds a received trunk to chunks.
+func (c *Chunk) Add(chunk pb.Chunk) bool {
 	if chunk.DeploymentId != c.did ||
-		chunk.BinVer != raftio.RPCBinVersion {
+		chunk.BinVer != raftio.TransportBinVersion {
 		plog.Errorf("invalid did or binver, %d, %d, %d, %d",
-			chunk.DeploymentId, c.did, chunk.BinVer, raftio.RPCBinVersion)
+			chunk.DeploymentId, c.did, chunk.BinVer, raftio.TransportBinVersion)
 		return false
 	}
 	key := chunkKey(chunk)
@@ -115,7 +115,7 @@ func (c *Chunks) AddChunk(chunk pb.Chunk) bool {
 }
 
 // Tick moves the internal logical clock forward.
-func (c *Chunks) Tick() {
+func (c *Chunk) Tick() {
 	ct := atomic.AddUint64(&c.tick, 1)
 	if ct%c.gcTick == 0 {
 		c.gc()
@@ -123,7 +123,7 @@ func (c *Chunks) Tick() {
 }
 
 // Close closes the chunks instance.
-func (c *Chunks) Close() {
+func (c *Chunk) Close() {
 	tracked := c.getTracked()
 	for key, td := range tracked {
 		func() {
@@ -136,7 +136,7 @@ func (c *Chunks) Close() {
 	}
 }
 
-func (c *Chunks) gc() {
+func (c *Chunk) gc() {
 	tracked := c.getTracked()
 	tick := c.getTick()
 	for key, td := range tracked {
@@ -152,17 +152,17 @@ func (c *Chunks) gc() {
 	}
 }
 
-func (c *Chunks) getTick() uint64 {
+func (c *Chunk) getTick() uint64 {
 	return atomic.LoadUint64(&c.tick)
 }
 
-func (c *Chunks) reset(key string) {
+func (c *Chunk) reset(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.resetLocked(key)
 }
 
-func (c *Chunks) getTracked() map[string]*tracked {
+func (c *Chunk) getTracked() map[string]*tracked {
 	m := make(map[string]*tracked)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -172,11 +172,11 @@ func (c *Chunks) getTracked() map[string]*tracked {
 	return m
 }
 
-func (c *Chunks) resetLocked(key string) {
+func (c *Chunk) resetLocked(key string) {
 	delete(c.tracked, key)
 }
 
-func (c *Chunks) getSnapshotLock(key string) *ssLock {
+func (c *Chunk) getSnapshotLock(key string) *ssLock {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	l, ok := c.locks[key]
@@ -187,11 +187,11 @@ func (c *Chunks) getSnapshotLock(key string) *ssLock {
 	return l
 }
 
-func (c *Chunks) full() bool {
+func (c *Chunk) full() bool {
 	return uint64(len(c.tracked)) >= maxConcurrentSlot
 }
 
-func (c *Chunks) record(chunk pb.Chunk) *tracked {
+func (c *Chunk) record(chunk pb.Chunk) *tracked {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := chunkKey(chunk)
@@ -247,11 +247,11 @@ func (c *Chunks) record(chunk pb.Chunk) *tracked {
 	return td
 }
 
-func (c *Chunks) shouldValidate(chunk pb.Chunk) bool {
+func (c *Chunk) shouldValidate(chunk pb.Chunk) bool {
 	return c.validate && !chunk.HasFileInfo && chunk.ChunkId != 0
 }
 
-func (c *Chunks) addLocked(chunk pb.Chunk) bool {
+func (c *Chunk) addLocked(chunk pb.Chunk) bool {
 	key := chunkKey(chunk)
 	td := c.record(chunk)
 	if td == nil {
@@ -304,13 +304,13 @@ func (c *Chunks) addLocked(chunk pb.Chunk) bool {
 	return true
 }
 
-func (c *Chunks) nodeRemoved(chunk pb.Chunk) (bool, error) {
+func (c *Chunk) nodeRemoved(chunk pb.Chunk) (bool, error) {
 	env := c.getEnv(chunk)
 	dir := env.GetRootDir()
 	return fileutil.IsDirMarkedAsDeleted(dir, c.fs)
 }
 
-func (c *Chunks) save(chunk pb.Chunk) (err error) {
+func (c *Chunk) save(chunk pb.Chunk) (err error) {
 	env := c.getEnv(chunk)
 	if chunk.ChunkId == 0 {
 		if err := env.CreateTempDir(); err != nil {
@@ -348,12 +348,12 @@ func (c *Chunks) save(chunk pb.Chunk) (err error) {
 	return nil
 }
 
-func (c *Chunks) getEnv(chunk pb.Chunk) *server.SSEnv {
+func (c *Chunk) getEnv(chunk pb.Chunk) *server.SSEnv {
 	return server.NewSSEnv(c.dir, chunk.ClusterId, chunk.NodeId,
 		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }
 
-func (c *Chunks) finalize(chunk pb.Chunk, td *tracked) error {
+func (c *Chunk) finalize(chunk pb.Chunk, td *tracked) error {
 	env := c.getEnv(chunk)
 	msg := c.toMessage(td.first, td.files)
 	if len(msg.Requests) != 1 || msg.Requests[0].Type != pb.InstallSnapshot {
@@ -367,12 +367,12 @@ func (c *Chunks) finalize(chunk pb.Chunk, td *tracked) error {
 	return err
 }
 
-func (c *Chunks) removeTempDir(chunk pb.Chunk) {
+func (c *Chunk) removeTempDir(chunk pb.Chunk) {
 	env := c.getEnv(chunk)
 	env.MustRemoveTempDir()
 }
 
-func (c *Chunks) toMessage(chunk pb.Chunk,
+func (c *Chunk) toMessage(chunk pb.Chunk,
 	files []*pb.SnapshotFile) pb.MessageBatch {
 	if chunk.ChunkId != 0 {
 		panic("not first chunk")
@@ -406,6 +406,6 @@ func (c *Chunks) toMessage(chunk pb.Chunk,
 	}
 }
 
-func (c *Chunks) ssid(chunk pb.Chunk) string {
+func (c *Chunk) ssid(chunk pb.Chunk) string {
 	return logutil.DescribeSS(chunk.ClusterId, chunk.NodeId, chunk.Index)
 }

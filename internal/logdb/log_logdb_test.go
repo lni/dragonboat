@@ -716,7 +716,7 @@ func TestRLLTSlice(t *testing.T) {
 			NodeID:        LogReaderTestNodeID,
 			EntriesToSave: []pb.Entry{{Index: offset + i, Term: offset + i}},
 		}
-		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, newContext(1, 1)); err != nil {
+		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 			t.Fatalf("%v", err)
 		}
 	}

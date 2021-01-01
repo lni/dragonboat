@@ -21,12 +21,16 @@ package config
 import (
 	"crypto/tls"
 	"errors"
+	"net"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"time"
 
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
@@ -44,41 +48,8 @@ const (
 	defaultLogDBShards uint64 = 16
 )
 
-// TransportModule is the interface used to specify the transport module to be
-// used by Dragonboat. TransportModule is optional, it is not required to be
-// implemented when using Dragonboat's default built-in TCP based transport
-// module.
-type TransportModule interface {
-	Create(NodeHostConfig,
-		raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
-	Validate(string) bool
-}
-
-// LogDBInfo is the info provided when LogDBCallback is invoked.
-type LogDBInfo struct {
-	Shard uint64
-	Busy  bool
-}
-
-// LogDBCallback is called by the LogDB layer whenever NodeHost is required to
-// be notified for the status change of the LogDB.
-type LogDBCallback func(LogDBInfo)
-
-// RaftRPCFactoryFunc is the factory function that creates the Raft RPC module
-// instance for exchanging Raft messages between NodeHosts.
-type RaftRPCFactoryFunc func(NodeHostConfig,
-	raftio.RequestHandler, raftio.IChunkHandler) raftio.IRaftRPC
-
-// LogDBFactoryFunc is the factory function that creates NodeHost's persistent
-// storage module known as Log DB.
-type LogDBFactoryFunc func(NodeHostConfig,
-	LogDBCallback, []string, []string) (raftio.ILogDB, error)
-
 // CompressionType is the type of the compression.
 type CompressionType = pb.CompressionType
-
-// IFS is the filesystem interface used by tests.
-type IFS = vfs.IFS
 
 const (
 	// NoCompression is the CompressionType value used to indicate not to use
@@ -282,23 +253,35 @@ type NodeHostConfig struct {
 	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
 	// than 1 million in your environment.
 	RTTMillisecond uint64
-	// RaftAddress is a hostname:port or IP:port address used by the Raft RPC
-	// module for exchanging Raft messages and snapshots. It should be set to
-	// the public address that can be accessed from remote NodeHost instances.
-	// DynamicRaftAddress should be set to true when the RaftAddress of this
-	// NodeHost instance might change after restart.
+	// RaftAddress is a DNS name:port or IP:port address used by the transport
+	// module for exchanging Raft messages, snapshots and metadata between
+	// NodeHost instances. It should be set to the public address that can be
+	// accessed from remote NodeHost instances.
 	//
-	// When the NodeHostConfig.ListenAddress field is empty, Dragonboat listens on
+	// When the NodeHostConfig.ListenAddress field is empty, NodeHost listens on
 	// RaftAddress for incoming Raft messages. When hostname or domain name is
 	// used, it will be resolved to IPv4 addresses first and Dragonboat listens
 	// to all resolved IPv4 addresses.
+	//
+	// By default, the RaftAddress value is not allowed to change between NodeHost
+	// restarts. AddressByNodeHostID should be set to true when the RaftAddress
+	// value might change after restart.
 	RaftAddress string
-	// DynamicRaftAddress indicates that the RaftAddress of the NodeHost is
-	// possible to change after restart.
-	DynamicRaftAddress bool
+	// AddressByNodeHostID indicates that NodeHost instances should be addressed
+	// by their NodeHostID values. When this field is set to true, NodeHostID
+	// values should be used as the target when calling NodeHost's StartCluster,
+	// RequestAddNode, RequestAddObserver and RequestAddWitness methods.
+	//
+	// Setting AddressByNodeHostID to true also enables the internal gossip
+	// service, NodeHostConfig.Gossip must be configured to control the behaviors
+	// of the gossip service.
+	//
+	// It is important to note that the AddressByNodeHostID setting can not be
+	// changed after restarts.
+	AddressByNodeHostID bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
-	// form used by the Raft RPC module to listen on for Raft message and
-	// snapshots. When the ListenAddress field is not set, The Raft RPC module
+	// form used by the transport module to listen on for Raft message and
+	// snapshots. When the ListenAddress field is not set, The transport module
 	// listens on RaftAddress. If 0.0.0.0 is specified as the IP of the
 	// ListenAddress, Dragonboat listens to the specified port on all network
 	// interfaces. When hostname or domain name is used, it will be resolved to
@@ -322,17 +305,15 @@ type NodeHostConfig struct {
 	// LogDBFactory is the factory function used for creating the Log DB instance
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
-	LogDBFactory LogDBFactoryFunc
-	// RaftRPCFactory is the factory function used for creating the Raft RPC
-	// instance for exchanging Raft message between NodeHost instances. The default
-	// zero value causes the built-in TCP based RPC module to be used.
 	//
-	// Depreciated: Use TransportModule instead. NodeHostConig.RaftRPCFactory will
-	// be removed in v4.0.
+	// Depreciated: Use NodeHostConfig.Expert.LogDBFactory instead.
+	LogDBFactory LogDBFactoryFunc
+	// RaftRPCFactory is the factory function used for creating the transport
+	// instance for exchanging Raft message between NodeHost instances. The default
+	// zero value causes the built-in TCP based transport to be used.
+	//
+	// Depreciated: Use NodeHostConfig.Expert.TransportFactory instead.
 	RaftRPCFactory RaftRPCFactoryFunc
-	// TransportModule is an optional field used to specify what transport module
-	// to use. By default, the built-in TCP transport module is used.
-	TransportModule TransportModule
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
 	EnableMetrics bool
@@ -371,6 +352,13 @@ type NodeHostConfig struct {
 	// commits are not notified, clients are only notified when their proposals
 	// are both committed and applied.
 	NotifyCommit bool
+	// Gossip contains configurations for the gossip service. When the
+	// AddressByNodeHostID field is set to true and the default transport module
+	// is used, each NodeHost instance will use an internal gossip service to
+	// exchange knowledges on available NodeHost instances and the mappings of
+	// their RaftAddress and NodeHostID values. This Gossip field contains
+	// configurations that controls how the gossip service works.
+	Gossip GossipConfig
 	// Expert contains options for expert users who are familiar with the internals
 	// of Dragonboat. Users are recommended not to use this field unless
 	// absoloutely necessary. It is important to note that any change to this field
@@ -378,6 +366,58 @@ type NodeHostConfig struct {
 	// performance impacts.
 	Expert ExpertConfig
 }
+
+// IFS is the filesystem interface used by tests.
+type IFS = vfs.IFS
+
+// TargetValidator is the validtor used to validate user specified target values.
+type TargetValidator func(string) bool
+
+// RaftAddressValidator is the validator used to validate user specified
+// RaftAddress values.
+type RaftAddressValidator func(string) bool
+
+// LogDBFactory is the factory type for creating a LogDB instance.
+type LogDBFactory func(NodeHostConfig,
+	LogDBCallback, []string, []string) (raftio.ILogDB, error)
+
+// TransportFactory is the interface used for creating custom transport modules.
+type TransportFactory interface {
+	// Create creates a transport module. It is invoked during the creation of its
+	// owner NodeHost instance.
+	Create(NodeHostConfig,
+		raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
+	// Validate validates the RaftAddress of the NodeHost. When using a custom
+	// transport module, users are granted full control on what address type to
+	// use for the NodeHostConfig.RaftAddress field, it can be of the traditional
+	// IP:Port format or any other form. The Validate method is used to validate
+	// that a received address is of the valid form.
+	Validate(string) bool
+}
+
+// LogDBInfo is the info provided when LogDBCallback is invoked.
+type LogDBInfo struct {
+	Shard uint64
+	Busy  bool
+}
+
+// LogDBCallback is called by the LogDB layer whenever NodeHost is required to
+// be notified for the status change of the LogDB.
+type LogDBCallback func(LogDBInfo)
+
+// RaftRPCFactoryFunc is the factory function that creates the transport module
+// instance for exchanging Raft messages between NodeHosts.
+//
+// Depreciated: Use TransportFactory instead.
+type RaftRPCFactoryFunc func(NodeHostConfig,
+	raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
+
+// LogDBFactoryFunc is the factory function that creates NodeHost's persistent
+// storage module known as Log DB.
+//
+// Depreciated: User LogDBFactory instead.
+type LogDBFactoryFunc func(NodeHostConfig,
+	LogDBCallback, []string, []string) (raftio.ILogDB, error)
 
 // Validate validates the NodeHostConfig instance and return an error when
 // the configuration is considered as invalid.
@@ -387,12 +427,6 @@ func (c *NodeHostConfig) Validate() error {
 	}
 	if len(c.NodeHostDir) == 0 {
 		return errors.New("NodeHostConfig.NodeHostDir is empty")
-	}
-	if !stringutil.IsValidAddress(c.RaftAddress) {
-		return errors.New("invalid NodeHost address")
-	}
-	if len(c.ListenAddress) > 0 && !stringutil.IsValidAddress(c.ListenAddress) {
-		return errors.New("invalid ListenAddress")
 	}
 	if !c.MutualTLS &&
 		(len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0) {
@@ -417,11 +451,23 @@ func (c *NodeHostConfig) Validate() error {
 		c.MaxReceiveQueueSize < settings.EntryNonCmdFieldsSize+1 {
 		return errors.New("MaxReceiveSize value is too small")
 	}
-	if c.RaftRPCFactory != nil && c.TransportModule != nil {
-		return errors.New("both TransportModule and RaftRPCFactory specified")
+	if c.RaftRPCFactory != nil && c.Expert.TransportFactory != nil {
+		return errors.New("both TransportFactory and RaftRPCFactory specified")
 	}
-	if c.DynamicRaftAddress && c.TransportModule == nil {
-		return errors.New("NodeHostConfig.TransportModule not set")
+	if c.AddressByNodeHostID && c.Gossip.IsEmpty() {
+		return errors.New("gossip service not configured")
+	}
+	validate := c.GetRaftAddressValidator()
+	if !validate(c.RaftAddress) {
+		return errors.New("invalid NodeHost address")
+	}
+	if len(c.ListenAddress) > 0 && !validate(c.ListenAddress) {
+		return errors.New("invalid ListenAddress")
+	}
+	if !c.Gossip.IsEmpty() {
+		if err := c.Gossip.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -431,8 +477,8 @@ type transportModule struct {
 }
 
 func (tm *transportModule) Create(nhConfig NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return tm.factory(nhConfig, handler, chunkHandler)
 }
 
@@ -463,14 +509,14 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.Expert.ExecShards == 0 {
 		c.Expert.ExecShards = defaultExecShards
 	}
-	if c.RaftRPCFactory != nil && c.TransportModule == nil {
-		c.TransportModule = &transportModule{factory: c.RaftRPCFactory}
+	if c.RaftRPCFactory != nil && c.Expert.TransportFactory == nil {
+		c.Expert.TransportFactory = &transportModule{factory: c.RaftRPCFactory}
 		c.RaftRPCFactory = nil
 	}
 	return nil
 }
 
-// GetListenAddress returns the actual address the RPC module is going to
+// GetListenAddress returns the actual address the transport module is going to
 // listen on.
 func (c *NodeHostConfig) GetListenAddress() string {
 	if len(c.ListenAddress) > 0 {
@@ -516,6 +562,26 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 		return settings.UnmanagedDeploymentID
 	}
 	return c.DeploymentID
+}
+
+// GetTargetValidator returns a TargetValidator based on the specified
+// NodeHostConfig instance.
+func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
+	if c.AddressByNodeHostID {
+		return id.IsNodeHostID
+	} else if c.Expert.TransportFactory != nil {
+		return c.Expert.TransportFactory.Validate
+	}
+	return stringutil.IsValidAddress
+}
+
+// GetRaftAddressValidator creates a RaftAddressValidator based on the specified
+// NodeHostConfig instance.
+func (c *NodeHostConfig) GetRaftAddressValidator() RaftAddressValidator {
+	if c.Expert.TransportFactory != nil {
+		return c.Expert.TransportFactory.Validate
+	}
+	return stringutil.IsValidAddress
 }
 
 // IsValidAddress returns a boolean value indicating whether the input address
@@ -650,6 +716,14 @@ func GetDefaultExpertConfig() ExpertConfig {
 // internals of Dragonboat. Users are recommended not to use ExpertConfig
 // unless it is absoloutely necessary.
 type ExpertConfig struct {
+	// LogDBFactory is the factory function used for creating the LogDB instance
+	// used by NodeHost. When not set, the default built-in Pebble based LogDB
+	// implementation is used.
+	LogDBFactory LogDBFactory
+	// TransportFactory is an optional factory type used for creating the custom
+	// transport module to be used by dragonbaot. When not set, the built-in TCP
+	// transport module is used.
+	TransportFactory TransportFactory
 	// ExecShards is the number of execution shards in the first stage of the
 	// execution engine. Default value is 16.
 	ExecShards uint64
@@ -660,4 +734,92 @@ type ExpertConfig struct {
 	LogDB LogDBConfig
 	// FS is the filesystem instance used in tests.
 	FS IFS
+	// TestNodeHostID is the NodeHostID value to be used by the NodeHost instance.
+	// This field is expected to be used in tests only.
+	TestNodeHostID uint64
+	// TestGossipProbeInterval define the probe interval used by the gossip
+	// service in tests.
+	TestGossipProbeInterval time.Duration
+}
+
+// GossipConfig contains configurations for the gossip service. Gossip service
+// is a fully distributed networked service for exchanging knowledges on
+// NodeHost instances. When enabled by the NodeHostConfig.AddressByNodeHostID
+// field, it is employed to manage NodeHostID to RaftAddress mappings of known
+// NodeHost instances.
+type GossipConfig struct {
+	// BindAddress is the address for the gossip service to bind to and listen on.
+	// Both UDP and TCP ports are used by the gossip service. The local gossip
+	// service should be able to receive gossip service related messages by
+	// binding to and listening on this address. BindAddress is usually in the
+	// format of IP:Port, Hostname:Port or DNS Name:Port.
+	BindAddress string
+	// AdvertiseAddress is the address to advertise to other NodeHost instances
+	// used for NAT traversal. Gossip services running on remote NodeHost
+	// instances will use AdvertiseAddress to exchange gossip service related
+	// messages. AdvertiseAddress is in the format of IP:Port.
+	AdvertiseAddress string
+	// Seed is a list of AdvertiseAddress of remote NodeHost instances. Local
+	// NodeHost instance will try to contact all of them to bootstrap the gossip
+	// service. At least one reachable NodeHost instance is required to
+	// successfully bootstrap the gossip service. Each seed address is in the
+	// format of IP:Port, Hostname:Port or DNS Name:Port.
+	//
+	// It is ok to include seed addresses that are temporarily unreachable, e.g.
+	// when launching the first NodeHost instance in your deployment, you can
+	// include AdvertiseAddresses from other NodeHost instances that you plan to
+	// launch shortly afterwards.
+	Seed []string
+}
+
+// IsEmpty returns a boolean flag indicating whether the GossipConfig instance
+// is empty.
+func (g *GossipConfig) IsEmpty() bool {
+	return len(g.BindAddress) == 0 &&
+		len(g.AdvertiseAddress) == 0 && len(g.Seed) == 0
+}
+
+// Validate validates the GossipConfig instance.
+func (g *GossipConfig) Validate() error {
+	if len(g.BindAddress) > 0 && !stringutil.IsValidAddress(g.BindAddress) {
+		return errors.New("invalid GossipConfig.BindAddress")
+	} else if len(g.BindAddress) == 0 {
+		return errors.New("BindAddress not set")
+	}
+	if len(g.AdvertiseAddress) > 0 && !isValidAdvertiseAddress(g.AdvertiseAddress) {
+		return errors.New("invalid GossipConfig.AdvertiseAddress")
+	}
+	if len(g.Seed) == 0 {
+		return errors.New("seed nodes not set")
+	}
+	count := 0
+	for _, v := range g.Seed {
+		if v != g.BindAddress && v != g.AdvertiseAddress {
+			count++
+		}
+		if !stringutil.IsValidAddress(v) {
+			return errors.New("invalid GossipConfig.Seed value")
+		}
+	}
+	if count == 0 {
+		return errors.New("no valid seed node")
+	}
+	return nil
+}
+
+func isValidAdvertiseAddress(addr string) bool {
+	host, sp, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	port, err := strconv.ParseUint(sp, 10, 16)
+	if err != nil {
+		return false
+	}
+	if port > 65535 {
+		return false
+	}
+	// the memberlist package doesn't allow hostname or DNS name to be used in
+	// advertise address
+	return stringutil.IPV4Regex.MatchString(host)
 }

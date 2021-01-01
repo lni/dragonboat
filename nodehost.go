@@ -16,34 +16,31 @@
 Package dragonboat is a multi-group Raft implementation.
 
 The NodeHost struct is the facade interface for all features provided by the
-dragonboat package. Each NodeHost instance, identified by its RaftAddress
-property, usually runs on a separate host managing its CPU, storage and network
-resources. Each NodeHost can manage Raft nodes from many different Raft groups
-known as Raft clusters. Each Raft cluster is identified by its ClusterID Each
-Raft cluster usually consists of multiple nodes, identified by their NodeID
-values. Nodes from the same Raft cluster are suppose to be distributed on
-different NodeHost instances across the network, this brings fault tolerance
-to node failures as application data stored in such a Raft cluster can be
+dragonboat package. Each NodeHost instance usually runs on a separate host
+managing its CPU, storage and network resources. Each NodeHost can manage Raft
+nodes from many different Raft groups known as Raft clusters. Each Raft cluster
+is identified by its ClusterID and it usually consists of multiple nodes, each
+identified its NodeID value. Nodes from the same Raft cluster can be considered
+as replicas of the same data, they are suppose to be distributed on different
+NodeHost instances across the network, this brings fault tolerance to machine
+and network failures as application data stored in the Raft cluster will be
 available as long as the majority of its managing NodeHost instances (i.e. its
 underlying hosts) are available.
 
 User applications can leverage the power of the Raft protocol implemented in
-dragonboat by implementing its IStateMachine or IOnDiskStateMachine component.
-IStateMachine and IOnDiskStateMachine is defined in
-github.com/lni/dragonboat/v3/statemachine. Each cluster node is associated with an
-IStateMachine or IOnDiskStateMachine instance, it is in charge of updating,
-querying and snapshotting application data, with minimum exposure to the
-complexity of the Raft protocol implementation.
+dragonboat by implementing the IStateMachine or IOnDiskStateMachine component,
+as defined in github.com/lni/dragonboat/v3/statemachine. Known as user state
+machines, each IStateMachine and IOnDiskStateMachine instance is in charge of
+updating, querying and snapshotting application data with minimum exposure to
+the complexity of the Raft protocol implementation.
 
 User applications can use NodeHost's APIs to update the state of their
 IStateMachine or IOnDiskStateMachine instances, this is called making proposals.
-Once accepted by the majority nodes of a Raft cluster, the proposal is considered
-as committed and it will be applied on all member nodes of the Raft cluster.
-Applications can also make linearizable reads to query the state of their
+Once accepted by the majority nodes of a Raft cluster, the proposal is
+considered as committed and it will be applied on all member nodes of the Raft
+cluster. Applications can also make linearizable reads to query the state of the
 IStateMachine or IOnDiskStateMachine instances. Dragonboat employs the ReadIndex
-protocol invented by Diego Ongaro to implement linearizable reads. Both read and
-write operations can be initiated on any member nodes, although initiating from
-the leader nodes incurs the lowest overhead.
+protocol invented by Diego Ongaro for fast linearizable reads.
 
 Dragonboat guarantees the linearizability of your I/O when interacting with the
 IStateMachine or IOnDiskStateMachine instances. In plain English, writes (via
@@ -60,16 +57,18 @@ the risk to have the same proposal committed and applied twice into the user
 state machine. Dragonboat prevents this by implementing the client session
 concept described in Diego Ongaro's PhD thesis.
 
-NodeHost APIs for making the above mentioned application requests can be loosely
-classified into two categories, synchronous and asynchronous APIs. Synchronous
-APIs which will not return until the completion of the requested operation.
-Their method names all start with Sync*. The asynchronous counterpart of those
-asynchronous APIs, on the other hand, usually return immediately without waiting
-on any significant delays caused by networking or disk IO. This allows users to
-concurrently initiate multiple such asynchronous operations to save the total
-amount of time required to complete them. Users are free to choose whether they
-prefer to use the synchronous APIs for its simplicity or their asynchronous
-variants for better performance and flexibility.
+Arbitrary number of Raft clusters can be launched across the network
+simultaneously to aggregate distributed processing and storage capacities. Users
+can also make membership change requests to add or remove nodes from any
+interested Raft cluster.
+
+NodeHost APIs for making the above mentioned requests can be loosely classified
+into two categories, synchronous and asynchronous APIs. Synchronous APIs will
+not return until the completion of the requested operation. Their method names
+all start with Sync*. The asynchronous counterparts of such synchronous APIs,
+on the other hand, usually return immediately. This allows users to concurrently
+initiate multiple such asynchronous operations to save the total amount of time
+required to complete all of them.
 
 Dragonboat is a feature complete Multi-Group Raft implementation - snapshotting,
 membership change, leadership transfer, non-voting members and disk based state
@@ -78,8 +77,8 @@ machine are all provided.
 Dragonboat is also extensively optimized. The Raft protocol implementation is
 fully pipelined, meaning proposals can start before the completion of previous
 proposals. This is critical for system throughput in high latency environment.
-Dragonboat is also fully batched, it batches internal operations whenever
-possible to maximize system throughput.
+Dragonboat is also fully batched, internal operations are batched whenever
+possible to maximize the overall throughput.
 */
 package dragonboat // github.com/lni/dragonboat/v3
 
@@ -98,6 +97,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -186,11 +186,30 @@ type ClusterInfo struct {
 	Pending bool
 }
 
+// GossipInfo contains details of the gossip service.
+type GossipInfo struct {
+	// Enabled is a boolean flag indicating whether the gossip service is enabled.
+	Enabled bool
+	// AdvertiseAddress is the advertise address used by the gossip service.
+	AdvertiseAddress string
+	// NumOfLiveNodeHosts is the number of current live NodeHost instances known
+	// to the gossip service. Note that the gossip service always knowns the
+	// local NodeHost instance itself. When the NumOfKnownNodeHosts value is 1,
+	// it means the gossip service doesn't know any other NodeHost instance that
+	// is considered as live.
+	NumOfKnownNodeHosts int
+}
+
 // NodeHostInfo provides info about the NodeHost, including its managed Raft
 // cluster nodes and available Raft logs saved in its local persistent storage.
 type NodeHostInfo struct {
-	// RaftAddress is the public address and the identifier of the NodeHost.
+	// NodeHostID is the unique identifier of the NodeHost instance.
+	NodeHostID string
+	// RaftAddress is the public address of the NodeHost used for exchanging Raft
+	// messages, snapshots and other metadata with other NodeHost instances.
 	RaftAddress string
+	// Gossip contains gossip service related information.
+	Gossip GossipInfo
 	// ClusterInfo is a list of all Raft clusters managed by the NodeHost
 	ClusterInfoList []ClusterInfo
 	// LogInfo is a list of raftio.NodeInfo values representing all Raft logs
@@ -238,6 +257,12 @@ type SnapshotOption struct {
 // and the generated snapshot is managed by the system.
 var DefaultSnapshotOption SnapshotOption
 
+// Target is the type used to specify where a node is running. Target is remote
+// NodeHost's RaftAddress value when NodeHostConfig.AddressByNodeHostID is not
+// set. Target will use NodeHost's ID value when
+// NodeHostConfig.AddressByNodeHostID is set.
+type Target = string
+
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central access
 // point for Dragonboat functionalities provided to applications.
@@ -256,20 +281,18 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	test struct {
-		uuid string
-	}
 	streams      *streamState
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
 	stopper      *syncutil.Stopper
-	nodes        *transport.Nodes
+	nodes        transport.INodeRegistry
 	requestPools []*sync.Pool
 	engine       *engine
 	logdb        raftio.ILogDB
 	transport    transport.ITransport
 	msgHandler   *messageHandler
 	fs           vfs.IFS
+	id           *id.NodeHostID
 }
 
 var _ nodeLoader = (*NodeHost)(nil)
@@ -291,15 +314,10 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	if err != nil {
 		return nil, err
 	}
-	var validator func(string) bool
-	if nhConfig.TransportModule != nil {
-		validator = nhConfig.TransportModule.Validate
-	}
 	nh := &NodeHost{
 		env:      env,
 		nhConfig: nhConfig,
 		stopper:  syncutil.NewStopper(),
-		nodes:    transport.NewNodes(streamConnections, validator),
 		fs:       nhConfig.Expert.FS,
 	}
 	// make static check happy
@@ -325,13 +343,22 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			plog.Panicf("failed to create NodeHost: %v", r)
 		}
 	}()
-	if err := nh.createTransport(); err != nil {
-		nh.Stop()
-		return nil, err
-	}
 	did := nh.nhConfig.GetDeploymentID()
 	plog.Infof("DeploymentID set to %d", did)
 	if err := nh.createLogDB(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
+	if err := nh.loadNodeHostID(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
+	plog.Infof("NodeHost ID: %s", nh.id.String())
+	if err := nh.createNodeRegistry(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
+	if err := nh.createTransport(); err != nil {
 		nh.Stop()
 		return nil, err
 	}
@@ -360,32 +387,19 @@ func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
 
 // RaftAddress returns the Raft address of the NodeHost instance, it is the
 // network address by which the NodeHost can be reached by other NodeHost
-// instances for exchanging Raft messages and snapshots. By default, the
-// RaftAddress value of a NodeHost is not expected to change after restarts and
-// thus used to identify a NodeHost instance in Dragonboat's default settings.
+// instances for exchanging Raft messages, snapshots and other metadata.
 func (nh *NodeHost) RaftAddress() string {
 	return nh.nhConfig.RaftAddress
 }
 
-// UUID returns the string representation of the NodeHost's UUID value. The
-// UUID value of a NodeHost will not change between restarts and thus can be
-// used to identify a NodeHost instance when the RaftAddress value of a
-// NodeHost change between restrats.
-func (nh *NodeHost) UUID() string {
-	if len(nh.test.uuid) > 0 {
-		return nh.test.uuid
-	}
-	return nh.env.UUID()
-}
-
-// ID returns a string representation of the NodeHost ID. By default, it
-// returns the RaftAddress value of the NodeHost, or it returns the UUID of the
-// NodeHost when NodeHostConfig.DynamicRaftAddress is set.
+// ID returns the string representation of the NodeHost ID value. The NodeHost
+// ID is assigned to each NodeHost on its initial creation and it can be used
+// to uniquely identify the NodeHost instance for its entire life cycle. When
+// the system is running in the AddressByNodeHost mode, it is used as the target
+// value when calling the StartCluster, RequestAddNode, RequestAddObserver,
+// RequestAddWitness methods.
 func (nh *NodeHost) ID() string {
-	if nh.nhConfig.DynamicRaftAddress {
-		return nh.UUID()
-	}
-	return nh.RaftAddress()
+	return nh.id.String()
 }
 
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
@@ -412,25 +426,28 @@ func (nh *NodeHost) Stop() {
 				logutil.ClusterID(node.ClusterID))
 		}
 	}
-	plog.Debugf("%s is going to stop the nh stopper", nh.id())
+	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
 	nh.stopper.Stop()
-	plog.Debugf("%s is going to stop the exec engine", nh.id())
+	plog.Debugf("%s is going to stop the exec engine", nh.describe())
+	if nh.nodes != nil {
+		nh.nodes.Stop()
+	}
 	if nh.engine != nil {
 		nh.engine.stop()
 	}
-	plog.Debugf("%s is going to stop the tranport module", nh.id())
+	plog.Debugf("%s is going to stop the tranport module", nh.describe())
 	if nh.transport != nil {
 		nh.transport.Stop()
 	}
-	plog.Debugf("%s transport module stopped", nh.id())
+	plog.Debugf("%s transport module stopped", nh.describe())
 	if nh.logdb != nil {
 		nh.logdb.Close()
 	} else {
 		plog.Warningf("logdb is nil")
 	}
-	plog.Debugf("logdb closed, %s is now stopped", nh.id())
+	plog.Debugf("logdb closed, %s is now stopped", nh.describe())
 	nh.env.Stop()
-	plog.Debugf("env stopped on %s", nh.id())
+	plog.Debugf("env stopped on %s", nh.describe())
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -438,12 +455,14 @@ func (nh *NodeHost) Stop() {
 // started is backed by a regular state machine that implements the
 // sm.IStateMachine interface.
 //
-// The input parameter initialMembers is a map of node ID to NodeHost ID for all
-// Raft cluster's initial member nodes. By default, NodeHost ID is the
-// RaftAddress of the NodeHost. See the godoc of NodeHost's ID method for the
-// full definition of NodeHostID. For the same Raft cluster, the same
-// initialMembers map should be specified when starting its initial member nodes
-// on distributed NodeHost instances.
+// The input parameter initialMembers is a map of node ID to node target for all
+// Raft cluster's initial member nodes. By default, the target is the
+// RaftAddress value of the NodeHost where the node will be running. When running
+// in the AddressByNodeHostID mode, target should be set to the NodeHostID value
+// of the NodeHost where the node will be running. See the godoc of NodeHost's ID
+// method for the full definition of NodeHostID. For the same Raft cluster, the
+// same initialMembers map should be specified when starting its initial member
+// nodes on distributed NodeHost instances.
 //
 // The join flag indicates whether the node is a new node joining an existing
 // cluster. create is a factory function for creating the IStateMachine instance,
@@ -464,7 +483,7 @@ func (nh *NodeHost) Stop() {
 //  - restarting an crashed or stopped node, set join to false and leave the
 //    initialMembers map to be empty. This applies to both initial member nodes
 //    and those joined later.
-func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -476,7 +495,7 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]string,
 
 // StartConcurrentCluster is similar to the StartCluster method but it is used
 // to start a Raft node backed by a concurrent state machine.
-func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -489,7 +508,7 @@ func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]string,
 
 // StartOnDiskCluster is similar to the StartCluster method but it is used to
 // start a Raft node backed by an IOnDiskStateMachine.
-func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -1152,12 +1171,11 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 //
 // Requesting a removed node back to the Raft cluster will always be rejected.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1166,7 +1184,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddNode(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1195,12 +1213,11 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1209,7 +1226,7 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1236,12 +1253,11 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// The target parameter is usually the ID() value of the NodeHost instance where
-// the new Raft node will be running. It should be set to NodeHost's RaftAddress
-// value when fixed IP or DNS name is available to address the NodeHost,
-// otherwise it should be set to NodeHost's UUID() value when such fixed IP or
-// DNS name is not available (typically when the DynamicRaftAddress field is set
-// to true in NodeHostConfig).
+// By default, the target parameter is the RaftAddress of the NodeHost instance
+// where the new Raft node will be running. Note that fixed IP or static DNS
+// name should be used in RaftAddress in such default mode. When running in the
+// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// can be obtained by calling the ID() method.
 //
 // When the Raft cluster is created with the OrderedConfigChange config flag
 // set as false, the configChangeIndex parameter is ignored. Otherwise, it
@@ -1250,7 +1266,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
-	nodeID uint64, target string, configChangeIndex uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -1391,7 +1407,9 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		return &NodeHostInfo{}
 	}
 	nhi := &NodeHostInfo{
+		NodeHostID:      nh.ID(),
 		RaftAddress:     nh.RaftAddress(),
+		Gossip:          nh.getGossipInfo(),
 		ClusterInfoList: nh.getClusterInfo(),
 	}
 	if !opt.SkipLogInfo {
@@ -1402,6 +1420,17 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 		nhi.LogInfo = logInfo
 	}
 	return nhi
+}
+
+func (nh *NodeHost) getGossipInfo() GossipInfo {
+	if r, ok := nh.nodes.(*transport.NodeHostIDRegistry); ok {
+		return GossipInfo{
+			Enabled:             true,
+			AdvertiseAddress:    r.AdvertiseAddress(),
+			NumOfKnownNodeHosts: r.NumMembers(),
+		}
+	}
+	return GossipInfo{}
 }
 
 func (nh *NodeHost) propose(s *client.Session,
@@ -1494,7 +1523,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 //    procedure that records such info.
 // 3. the bootstrap record is used as a marker record in our default Log DB
 //    implementation to indicate that a certain node exists there
-func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
@@ -1524,13 +1553,19 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]string,
 	return bi.Addresses, !bi.Join, nil
 }
 
-func (nh *NodeHost) startCluster(initialMembers map[uint64]string,
+func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	join bool, createStateMachine rsm.ManagedStateMachineFactory,
 	config config.Config, smType pb.StateMachineType) error {
 	clusterID := config.ClusterID
 	nodeID := config.NodeID
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
+	}
+	validator := nh.nhConfig.GetTargetValidator()
+	for _, target := range initialMembers {
+		if !validator(target) {
+			return ErrInvalidTarget
+		}
 	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
@@ -1607,6 +1642,24 @@ func (nh *NodeHost) cciUpdated() {
 	}
 }
 
+func (nh *NodeHost) loadNodeHostID() error {
+	if nh.nhConfig.Expert.TestNodeHostID == 0 {
+		nhid, err := nh.env.LoadNodeHostID()
+		if err != nil {
+			return err
+		}
+		nh.id = nhid
+	} else {
+		nhid, err := id.NewNodeHostID(nh.nhConfig.Expert.TestNodeHostID)
+		if err != nil {
+			return err
+		}
+		nh.id = nhid
+		nh.env.SetNodeHostID(nh.id)
+	}
+	return nil
+}
+
 func (nh *NodeHost) createPools() {
 	nh.requestPools = make([]*sync.Pool, requestPoolShards)
 	for i := uint64(0); i < requestPoolShards; i++ {
@@ -1633,22 +1686,13 @@ func (nh *NodeHost) createLogDB() error {
 	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
 	}
-	if len(nh.test.uuid) == 0 {
-		uuid, err := nh.env.LoadUUID()
-		if err != nil {
-			return err
-		}
-		plog.Infof("NodeHost UUID: %s", uuid)
-	} else {
-		plog.Infof("Test NodeHost UUID: %s", nh.test.uuid)
-	}
-	var factory config.LogDBFactoryFunc
+	var factory config.LogDBFactory
 	df := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lows []string) (raftio.ILogDB, error) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
 	}
-	if nh.nhConfig.LogDBFactory != nil {
-		factory = nh.nhConfig.LogDBFactory
+	if nh.nhConfig.Expert.LogDBFactory != nil {
+		factory = nh.nhConfig.Expert.LogDBFactory
 	} else {
 		factory = df
 	}
@@ -1720,16 +1764,35 @@ func (te *transportEvent) ConnectionFailed(addr string, snapshot bool) {
 	})
 }
 
+func (nh *NodeHost) createNodeRegistry() error {
+	validator := nh.nhConfig.GetTargetValidator()
+	// TODO:
+	// more tests here required
+	if nh.nhConfig.AddressByNodeHostID {
+		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
+		r, err := transport.NewNodeHostIDRegistry(nh.ID(),
+			nh.nhConfig, streamConnections, validator)
+		if err != nil {
+			return err
+		}
+		nh.nodes = r
+	} else {
+		plog.Infof("using regular node registry")
+		nh.nodes = transport.NewNodeRegistry(streamConnections, validator)
+	}
+	return nil
+}
+
 func (nh *NodeHost) createTransport() error {
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.env.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), cid, nid)
 	}
 	tsp, err := transport.NewTransport(nh.nhConfig,
-		nh.env, nh.nodes, getSnapshotDir, &transportEvent{nh: nh}, nh.fs)
+		nh.msgHandler, nh.env, nh.nodes, getSnapshotDir,
+		&transportEvent{nh: nh}, nh.fs)
 	if err != nil {
 		return err
 	}
-	tsp.SetMessageHandler(nh.msgHandler)
 	nh.transport = tsp
 	return nil
 }
@@ -1773,10 +1836,12 @@ func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 }
 
 func (nh *NodeHost) tickWorkerMain() {
+	tick := uint64(0)
 	idx := uint64(0)
 	nodes := make([]*node, 0)
-	tf := func() bool {
-		monkeyLog.Infof("%s logical tick received", nh.ID())
+	tf := func() {
+		tick++
+		monkeyLog.Infof("%s logical tick received, tick %d", nh.RaftAddress(), tick)
 		if idx != nh.getClusterSetIndex() {
 			nodes = nodes[:0]
 			idx = nh.forEachCluster(func(cid uint64, n *node) bool {
@@ -1785,13 +1850,21 @@ func (nh *NodeHost) tickWorkerMain() {
 			})
 		}
 		nh.streams.tick()
-		nh.sendTickMessage(nodes)
+		nh.sendTickMessage(nodes, tick)
 		nh.engine.setAllStepReady(nodes)
-		monkeyLog.Infof("%s logical tick handled", nh.ID())
-		return false
+		monkeyLog.Infof("%s logical tick handled", nh.RaftAddress())
 	}
-	ti := time.Duration(nh.nhConfig.RTTMillisecond) * time.Millisecond
-	server.StartTicker(ti, tf, nh.stopper.ShouldStop())
+	td := time.Duration(nh.nhConfig.RTTMillisecond) * time.Millisecond
+	ticker := time.NewTicker(td)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			tf()
+		case <-nh.stopper.ShouldStop():
+			return
+		}
+	}
 }
 
 func (nh *NodeHost) handleListenerEvents() {
@@ -1844,12 +1917,13 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 	}
 }
 
-func (nh *NodeHost) sendTickMessage(clusters []*node) {
+func (nh *NodeHost) sendTickMessage(clusters []*node, tick uint64) {
 	for _, n := range clusters {
 		m := pb.Message{
 			Type: pb.LocalTick,
 			To:   n.nodeID,
 			From: n.nodeID,
+			Hint: tick,
 		}
 		n.mq.Add(m)
 	}
@@ -1862,9 +1936,6 @@ func (nh *NodeHost) nodeMonitorMain() {
 			nodes = append(nodes, node)
 			return true
 		})
-		if len(nodes) == 0 {
-			return
-		}
 		cases := make([]reflect.SelectCase, len(nodes)+2)
 		for i, n := range nodes {
 			cases[i] = reflect.SelectCase{
@@ -1884,8 +1955,6 @@ func (nh *NodeHost) nodeMonitorMain() {
 		if !ok && index < len(nodes) {
 			// node closed
 			n := nodes[index]
-			plog.Debugf("%s will be stopped by the node monitor",
-				dn(n.clusterID, n.nodeID))
 			_ = nh.stopNode(n.clusterID, n.nodeID, true)
 		} else if index == len(nodes) {
 			// cci change
@@ -1921,7 +1990,7 @@ func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
 
-func (nh *NodeHost) id() string {
+func (nh *NodeHost) describe() string {
 	return nh.RaftAddress()
 }
 
@@ -2011,7 +2080,7 @@ type messageHandler struct {
 	nh *NodeHost
 }
 
-var _ transport.IRaftMessageHandler = (*messageHandler)(nil)
+var _ transport.IMessageHandler = (*messageHandler)(nil)
 
 func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 	return &messageHandler{nh: nh}

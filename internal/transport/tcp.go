@@ -55,8 +55,8 @@ var (
 )
 
 const (
-	// TCPRaftRPCName is the name of the tcp RPC module.
-	TCPRaftRPCName           = "go-tcp-transport"
+	// TCPTransportName is the name of the tcp transport module.
+	TCPTransportName         = "go-tcp-transport"
 	requestHeaderSize        = 18
 	raftType          uint16 = 100
 	snapshotType      uint16 = 200
@@ -404,25 +404,25 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
 }
 
-// TCP is a TCP based RPC module for exchanging raft messages and
+// TCP is a TCP based transport module for exchanging raft messages and
 // snapshots between NodeHost instances.
 type TCP struct {
 	nhConfig       config.NodeHostConfig
 	stopper        *syncutil.Stopper
 	connStopper    *syncutil.Stopper
-	requestHandler raftio.RequestHandler
-	chunkHandler   raftio.IChunkHandler
+	requestHandler raftio.MessageHandler
+	chunkHandler   raftio.ChunkHandler
 	encrypted      bool
 	readBucket     *ratelimit.Bucket
 	writeBucket    *ratelimit.Bucket
 }
 
-var _ raftio.IRaftRPC = (*TCP)(nil)
+var _ raftio.ITransport = (*TCP)(nil)
 
 // NewTCPTransport creates and returns a new TCP transport module.
 func NewTCPTransport(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	t := &TCP{
 		nhConfig:       nhConfig,
 		stopper:        syncutil.NewStopper(),
@@ -523,7 +523,7 @@ func (t *TCP) GetSnapshotConnection(ctx context.Context,
 
 // Name returns a human readable name of the TCP transport module.
 func (t *TCP) Name() string {
-	return TCPRaftRPCName
+	return TCPTransportName
 }
 
 func (t *TCP) serveConn(conn net.Conn) {
@@ -562,7 +562,7 @@ func (t *TCP) serveConn(conn net.Conn) {
 			if err := chunk.Unmarshal(buf); err != nil {
 				return
 			}
-			if !t.chunkHandler.AddChunk(chunk) {
+			if !t.chunkHandler(chunk) {
 				plog.Errorf("chunk rejected %s", chunkKey(chunk))
 				return
 			}

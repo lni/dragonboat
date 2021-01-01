@@ -19,7 +19,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -50,20 +49,20 @@ type chanConn struct {
 var listening = make(map[string]acceptChanConn)
 var listeningMu sync.Mutex
 
-// ChanTransportModule is a channel based module used for testing purposes.
-type ChanTransportModule struct{}
+// ChanTransportFactory is a channel based module used for testing purposes.
+type ChanTransportFactory struct{}
 
 // Create creates a channel based transport instance.
-func (ctm *ChanTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+func (ctm *ChanTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return NewChanTransport(nhConfig, handler, chunkHandler)
 }
 
 // Validate returns a boolean value indicating whether the specified address
 // is valid.
-func (ctm *ChanTransportModule) Validate(addr string) bool {
-	return stringutil.IsValidAddress(addr)
+func (ctm *ChanTransportFactory) Validate(addr string) bool {
+	panic("not suppose to be called")
 }
 
 // ChanConnection is a channel based connection.
@@ -123,15 +122,15 @@ func (csc *ChanSSConnection) SendChunk(chunk pb.Chunk) error {
 // ChanTransport is a channel based transport module used for testing purposes.
 type ChanTransport struct {
 	nhConfig       config.NodeHostConfig
-	requestHandler raftio.RequestHandler
-	chunkHandler   raftio.IChunkHandler
+	requestHandler raftio.MessageHandler
+	chunkHandler   raftio.ChunkHandler
 	stopper        *syncutil.Stopper
 }
 
 // NewChanTransport creates a new channel based test transport module.
 func NewChanTransport(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return &ChanTransport{
 		nhConfig:       nhConfig,
 		requestHandler: requestHandler,
@@ -225,7 +224,7 @@ func (ct *ChanTransport) process(data []byte, cc chanConn) bool {
 		if err := chunk.Unmarshal(data); err != nil {
 			return false
 		}
-		if !ct.chunkHandler.AddChunk(chunk) {
+		if !ct.chunkHandler(chunk) {
 			return false
 		}
 	} else {

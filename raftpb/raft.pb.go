@@ -411,16 +411,17 @@ func (m *Bootstrap) GetType() StateMachineType {
 }
 
 type RaftDataStatus struct {
-	Address         string `protobuf:"bytes,1,opt,name=address" json:"address"`
-	BinVer          uint32 `protobuf:"varint,2,opt,name=bin_ver,json=binVer" json:"bin_ver"`
-	HardHash        uint64 `protobuf:"varint,3,opt,name=hard_hash,json=hardHash" json:"hard_hash"`
-	LogdbType       string `protobuf:"bytes,4,opt,name=logdb_type,json=logdbType" json:"logdb_type"`
-	Hostname        string `protobuf:"bytes,5,opt,name=hostname" json:"hostname"`
-	DeploymentId    uint64 `protobuf:"varint,6,opt,name=deployment_id,json=deploymentId" json:"deployment_id"`
-	StepWorkerCount uint64 `protobuf:"varint,7,opt,name=step_worker_count,json=stepWorkerCount" json:"step_worker_count"`
-	LogdbShardCount uint64 `protobuf:"varint,8,opt,name=logdb_shard_count,json=logdbShardCount" json:"logdb_shard_count"`
-	MaxSessionCount uint64 `protobuf:"varint,9,opt,name=max_session_count,json=maxSessionCount" json:"max_session_count"`
-	EntryBatchSize  uint64 `protobuf:"varint,10,opt,name=entry_batch_size,json=entryBatchSize" json:"entry_batch_size"`
+	Address             string `protobuf:"bytes,1,opt,name=address" json:"address"`
+	BinVer              uint32 `protobuf:"varint,2,opt,name=bin_ver,json=binVer" json:"bin_ver"`
+	HardHash            uint64 `protobuf:"varint,3,opt,name=hard_hash,json=hardHash" json:"hard_hash"`
+	LogdbType           string `protobuf:"bytes,4,opt,name=logdb_type,json=logdbType" json:"logdb_type"`
+	Hostname            string `protobuf:"bytes,5,opt,name=hostname" json:"hostname"`
+	DeploymentId        uint64 `protobuf:"varint,6,opt,name=deployment_id,json=deploymentId" json:"deployment_id"`
+	StepWorkerCount     uint64 `protobuf:"varint,7,opt,name=step_worker_count,json=stepWorkerCount" json:"step_worker_count"`
+	LogdbShardCount     uint64 `protobuf:"varint,8,opt,name=logdb_shard_count,json=logdbShardCount" json:"logdb_shard_count"`
+	MaxSessionCount     uint64 `protobuf:"varint,9,opt,name=max_session_count,json=maxSessionCount" json:"max_session_count"`
+	EntryBatchSize      uint64 `protobuf:"varint,10,opt,name=entry_batch_size,json=entryBatchSize" json:"entry_batch_size"`
+	AddressByNodeHostId bool   `protobuf:"varint,11,opt,name=address_by_node_host_id,json=addressByNodeHostId" json:"address_by_node_host_id"`
 }
 
 func (m *RaftDataStatus) Reset()         { *m = RaftDataStatus{} }
@@ -524,6 +525,13 @@ func (m *RaftDataStatus) GetEntryBatchSize() uint64 {
 		return m.EntryBatchSize
 	}
 	return 0
+}
+
+func (m *RaftDataStatus) GetAddressByNodeHostId() bool {
+	if m != nil {
+		return m.AddressByNodeHostId
+	}
+	return false
 }
 
 type State struct {
@@ -1900,6 +1908,14 @@ func (m *RaftDataStatus) MarshalTo(dAtA []byte) (int, error) {
 	dAtA[i] = 0x50
 	i++
 	i = encodeVarintRaft(dAtA, i, uint64(m.EntryBatchSize))
+	dAtA[i] = 0x58
+	i++
+	if m.AddressByNodeHostId {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i++
 	return i, nil
 }
 
@@ -2605,6 +2621,7 @@ func (m *RaftDataStatus) Size() (n int) {
 	n += 1 + sovRaft(uint64(m.LogdbShardCount))
 	n += 1 + sovRaft(uint64(m.MaxSessionCount))
 	n += 1 + sovRaft(uint64(m.EntryBatchSize))
+	n += 2
 	return n
 }
 
@@ -3354,6 +3371,26 @@ func (m *RaftDataStatus) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AddressByNodeHostId", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRaft
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AddressByNodeHostId = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipRaft(dAtA[iNdEx:])

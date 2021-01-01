@@ -31,8 +31,6 @@ func ExampleNodeHostConfig() {
 		// might has a private address of 172.17.0.2 when the public address of the
 		// host is node01.raft.company.com and tcp port 5012 has been published.
 		ListenAddress: "172.17.0.2:5012",
-		// set this if you want to use gRPC based RPC module for exchanging raft data between raft nodes.
-		// RaftRPCFactory: rpc.NewRaftGRPC,
 	}
 	_ = nhc
 }
@@ -164,8 +162,101 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("cfg not valid")
 	}
-	c.TransportModule = m
+	c.Expert.TransportFactory = m
 	if err := c.Validate(); err == nil {
 		t.Fatalf("cfg not considered as invalid")
+	}
+}
+
+func TestGossipMustBeConfiguredWhenAddressByNodeHostID(t *testing.T) {
+	c := NodeHostConfig{
+		RaftAddress:    "localhost:9010",
+		RTTMillisecond: 100,
+		NodeHostDir:    "/data",
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("invalid config")
+	}
+	c.AddressByNodeHostID = true
+	if err := c.Validate(); err == nil {
+		t.Fatalf("unexpectedly considreed as valid config")
+	}
+	c.Gossip = GossipConfig{
+		BindAddress: "localhost:12345",
+		Seed:        []string{"localhost:23456"},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("invalid config")
+	}
+}
+
+func TestGossipConfigIsEmtpy(t *testing.T) {
+	gc := &GossipConfig{}
+	if !gc.IsEmpty() {
+		t.Errorf("not empty")
+	}
+	tests := []struct {
+		bindAddr      string
+		advertiseAddr string
+		seed          []string
+		empty         bool
+	}{
+		{"localhost:12345", "", []string{}, false},
+		{"", "localhost:12345", []string{}, false},
+		{"", "", []string{}, true},
+		{"", "", []string{"127.0.0.1:12345"}, false},
+	}
+	for idx, tt := range tests {
+		gc := &GossipConfig{
+			BindAddress:      tt.bindAddr,
+			AdvertiseAddress: tt.advertiseAddr,
+			Seed:             tt.seed,
+		}
+		if gc.IsEmpty() != tt.empty {
+			t.Errorf("%d, got %t, want %t", idx, gc.IsEmpty(), tt.empty)
+		}
+	}
+}
+
+func TestGossipConfigValidate(t *testing.T) {
+	tests := []struct {
+		bindAddr      string
+		advertiseAddr string
+		seed          []string
+		valid         bool
+	}{
+		{"114.1.1.1:12345", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, true},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, true},
+		{"myhost.com:12345", "", []string{"128.0.0.1:1234"}, true},
+		{"", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com", "202.23.45.1:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "myhost2.net:12345", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"myhost.com:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"202.23.45.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1", []string{"128.0.0.1:1234"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1"}, false},
+		{"myhost.com:12345", ":12345", []string{"128.0.0.1:12345"}, false},
+		{"300.0.0.1:12345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:66345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "302.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:72345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"328.0.0.1:12345"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1:65536"}, false},
+		{"myhost.com:12345", "202.23.45.1:12345", []string{"128.0.0.1::12345"}, false},
+		{"myhost.com:12345", "202.23.45.1::12345", []string{"128.0.0.1:12345"}, false},
+		{"myhost.com::12345", "202.23.45.1:12345", []string{"128.0.0.1:12345"}, false},
+		{"node1:12345", "202.96.23.1:12345", []string{"node3:12345", "node4:12345"}, true},
+	}
+	for idx, tt := range tests {
+		gc := &GossipConfig{
+			BindAddress:      tt.bindAddr,
+			AdvertiseAddress: tt.advertiseAddr,
+			Seed:             tt.seed,
+		}
+		err := gc.Validate()
+		if (err != nil && tt.valid) || (err == nil && !tt.valid) {
+			t.Errorf("%d, err: %v, valid: %t", idx, err, tt.valid)
+		}
 	}
 }

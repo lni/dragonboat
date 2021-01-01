@@ -122,19 +122,19 @@ func (c *NOOPSnapshotConnection) SendChunk(chunk raftpb.Chunk) error {
 	return nil
 }
 
-// NOOPTransportModule is a NOOP transport module used in testing
-type NOOPTransportModule struct{}
+// NOOPTransportFactory is a NOOP transport module used in testing
+type NOOPTransportFactory struct{}
 
 // Create creates a noop transport instance.
-func (n *NOOPTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+func (n *NOOPTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return NewNOOPTransport(nhConfig, handler, chunkHandler)
 }
 
 // Validate returns a boolean value indicating whether the input address is
 // valid.
-func (n *NOOPTransportModule) Validate(addr string) bool {
+func (n *NOOPTransportFactory) Validate(addr string) bool {
 	return stringutil.IsValidAddress(addr)
 }
 
@@ -150,8 +150,8 @@ type NOOPTransport struct {
 
 // NewNOOPTransport creates a new NOOPTransport instance.
 func NewNOOPTransport(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return &NOOPTransport{
 		req:     &noopRequest{},
 		connReq: &noopConnectRequest{},

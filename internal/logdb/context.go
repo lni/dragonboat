@@ -16,12 +16,7 @@ package logdb
 
 import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-)
-
-const (
-	updateSliceLen = 256
 )
 
 // context is an IContext implementation suppose to be owned and used
@@ -33,7 +28,6 @@ type context struct {
 	lb      pb.EntryBatch
 	key     *Key
 	val     []byte
-	updates []pb.Update
 	wb      kv.IWriteBatch
 }
 
@@ -44,7 +38,6 @@ func newContext(size uint64, maxSize uint64) *context {
 		maxSize: maxSize,
 		key:     newKey(maxKeySize, nil),
 		val:     make([]byte, size),
-		updates: make([]pb.Update, 0, updateSliceLen),
 	}
 	ctx.lb.Entries = make([]pb.Entry, 0, batchSize)
 	ctx.eb.Entries = make([]pb.Entry, 0, batchSize)
@@ -56,7 +49,6 @@ func (c *context) Destroy() {
 		c.wb.Destroy()
 	}
 	c.val = nil
-	c.updates = nil
 	c.lb.Entries = nil
 	c.eb.Entries = nil
 }
@@ -67,7 +59,7 @@ func (c *context) Reset() {
 	}
 }
 
-func (c *context) GetKey() raftio.IReusableKey {
+func (c *context) GetKey() IReusableKey {
 	return c.key
 }
 
@@ -81,10 +73,6 @@ func (c *context) GetValueBuffer(sz uint64) []byte {
 		c.val = val
 	}
 	return val
-}
-
-func (c *context) GetUpdates() []pb.Update {
-	return c.updates
 }
 
 func (c *context) GetEntryBatch() pb.EntryBatch {

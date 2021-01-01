@@ -4,9 +4,12 @@ Dragonboat v3.3 is a major release that comes with new features and improvements
 
 ### New features
 
-- Pebble has been made the default LogDB engine for storing Raft Logs. RocksDB and CGO are no longer required.
+- Pebble, which is bidirectional compatible with RocksDB, has been made the default engine for storing Raft Logs. RocksDB and CGO are no longer required.
+- Added the ability to slow down incoming proposals when the Raft Logs engine is highly loaded.
 - Added the option to get notified when proposals and config changes are committed.
-- Added ARM64/Linux as the a new targetted platform.
+- Added a gossip service to allow NodeHosts to use dynamically assigned IP addresses as RaftAddress.
+- Added the ability to better control memory footprint.
+- Added ARM64/Linux as a new targeted platform.
 
 Note that Pebble provides bidirectional compatibility with RocksDB. Existing Dragonboat applications can upgrade to v3.3 without any conversion.
 
@@ -17,7 +20,8 @@ Note that Pebble provides bidirectional compatibility with RocksDB. Existing Dra
 - Added protobuf workaround to allow Dragonboat and etcd to be used in the same project.
 - Fixed a few data race issues.
 - Fixed a potential Raft election deadlock issue when nodes are highly loaded.
-- Allow incoming proposals to be rate limitted when LogDB is busy.
+- Allow incoming proposals to be rate limited when LogDB is busy.
+- Simplified many aspects of the implementation and tests. 
 
 ### Breaking changes
 
@@ -57,7 +61,7 @@ There is no breaking change for regular users. However,
 
  - If you have built customized transport module implementing the raftio.IRaftRPC interface, there is minor change to the config.RaftRPCFactoryFunc type. See github.com/lni/dragoboat/config/config.go for details.
  - The default transport module has been updated, it is no longer compatible with earlier versions of dragonboat. 
- - The default LogDB data format is no longer backward compactible with v3.1 or earlier. 
+ - The default LogDB data format is no longer backward compatible with v3.1 or earlier. 
 
 ### Other changes
 

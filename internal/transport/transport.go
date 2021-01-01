@@ -50,7 +50,6 @@ import (
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/netutil/rubyist/circuitbreaker"
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -73,26 +72,22 @@ var (
 
 var (
 	plog                = logger.GetLogger("transport")
-	streamConnections   = settings.Soft.StreamConnections
 	sendQueueLen        = settings.Soft.SendQueueLength
 	dialTimeoutSecond   = settings.Soft.GetConnectedTimeoutSecond
-	errChunkSendSkipped = errors.New("chunk is skipped")
-	errBatchSendSkipped = errors.New("raft request batch is skipped")
 	idleTimeout         = time.Minute
+	errChunkSendSkipped = errors.New("chunk skipped")
+	errBatchSendSkipped = errors.New("batch skipped")
 	dn                  = logutil.DescribeNode
 )
 
-// INodeAddressResolver converts the (cluster id, node id( tuple to network
-// address
-type INodeAddressResolver interface {
+// IResolver converts the (cluster id, node id( tuple to network address.
+type IResolver interface {
 	Resolve(uint64, uint64) (string, string, error)
-	ReverseResolve(string) []raftio.NodeInfo
-	AddRemote(uint64, uint64, string)
+	Add(uint64, uint64, string)
 }
 
-// IRaftMessageHandler is the interface required to handle incoming raft
-// requests.
-type IRaftMessageHandler interface {
+// IMessageHandler is the interface required to handle incoming raft requests.
+type IMessageHandler interface {
 	HandleMessageBatch(batch pb.MessageBatch) (uint64, uint64)
 	HandleUnreachable(clusterID uint64, nodeID uint64)
 	HandleSnapshotStatus(clusterID uint64, nodeID uint64, rejected bool)
@@ -103,7 +98,6 @@ type IRaftMessageHandler interface {
 // Raft messages.
 type ITransport interface {
 	Name() string
-	SetMessageHandler(IRaftMessageHandler)
 	Send(pb.Message) bool
 	SendSnapshot(pb.Message) bool
 	GetStreamSink(clusterID uint64, nodeID uint64) *Sink
@@ -161,20 +155,20 @@ const (
 	chanIsFull
 )
 
-// DefaultTransportModule is the default transport module used.
-type DefaultTransportModule struct{}
+// DefaultTransportFactory is the default transport module used.
+type DefaultTransportFactory struct{}
 
 // Create creates a default transport instance.
-func (dtm *DefaultTransportModule) Create(nhConfig config.NodeHostConfig,
-	handler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
+func (dtm *DefaultTransportFactory) Create(nhConfig config.NodeHostConfig,
+	handler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return NewTCPTransport(nhConfig, handler, chunkHandler)
 }
 
 // Validate returns a boolean value indicating whether the specified address is
 // valid.
-func (dtm *DefaultTransportModule) Validate(addr string) bool {
-	return stringutil.IsValidAddress(addr)
+func (dtm *DefaultTransportFactory) Validate(addr string) bool {
+	panic("not suppose to be called")
 }
 
 // Transport is the transport layer for delivering raft messages and snapshots.
@@ -185,58 +179,55 @@ type Transport struct {
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	jobs              uint32
-	chunks            *Chunks
-	metrics           *transportMetrics
-	env               *server.Env
-	nhConfig          config.NodeHostConfig
-	sourceID          string
-	resolver          INodeAddressResolver
-	stopper           *syncutil.Stopper
-	dir               server.SnapshotDirFunc
-	trans             raftio.IRaftRPC
-	handler           atomic.Value
-	postSend          atomic.Value
-	preSend           atomic.Value
-	preSendBatch      atomic.Value
-	ctx               context.Context
-	cancel            context.CancelFunc
-	streamConnections uint64
-	sysEvents         ITransportEvent
-	fs                vfs.IFS
+	jobs         uint32
+	chunks       *Chunk
+	metrics      *transportMetrics
+	env          *server.Env
+	nhConfig     config.NodeHostConfig
+	sourceID     string
+	resolver     IResolver
+	stopper      *syncutil.Stopper
+	dir          server.SnapshotDirFunc
+	trans        raftio.ITransport
+	msgHandler   IMessageHandler
+	postSend     atomic.Value
+	preSend      atomic.Value
+	preSendBatch atomic.Value
+	ctx          context.Context
+	cancel       context.CancelFunc
+	sysEvents    ITransportEvent
+	fs           vfs.IFS
 }
 
 var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
-	env *server.Env, resolver INodeAddressResolver,
+	handler IMessageHandler, env *server.Env, resolver IResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
-	var sourceID string
-	if nhConfig.DynamicRaftAddress {
-		sourceID = env.UUID()
-	} else {
-		sourceID = nhConfig.RaftAddress
+	sourceID := nhConfig.RaftAddress
+	if nhConfig.AddressByNodeHostID {
+		sourceID = env.NodeHostID()
 	}
 	t := &Transport{
-		nhConfig:          nhConfig,
-		env:               env,
-		sourceID:          sourceID,
-		resolver:          resolver,
-		stopper:           syncutil.NewStopper(),
-		dir:               dir,
-		streamConnections: streamConnections,
-		sysEvents:         sysEvents,
-		fs:                fs,
+		nhConfig:   nhConfig,
+		env:        env,
+		sourceID:   sourceID,
+		resolver:   resolver,
+		stopper:    syncutil.NewStopper(),
+		dir:        dir,
+		sysEvents:  sysEvents,
+		fs:         fs,
+		msgHandler: handler,
 	}
-	chunks := NewChunks(t.handleRequest,
+	chunks := NewChunk(t.handleRequest,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
-	t.trans = create(nhConfig, t.handleRequest, chunks)
+	t.trans = create(nhConfig, t.handleRequest, chunks.Add)
 	t.chunks = chunks
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
-		plog.Errorf("transport rpc failed to start %v", err)
+		plog.Errorf("transport failed to start %v", err)
 		t.trans.Stop()
 		return nil, err
 	}
@@ -272,8 +263,8 @@ func (t *Transport) Name() string {
 	return t.trans.Name()
 }
 
-// GetTrans returns the raft RPC instance.
-func (t *Transport) GetTrans() raftio.IRaftRPC {
+// GetTrans returns the transport instance.
+func (t *Transport) GetTrans() raftio.ITransport {
 	return t.trans
 }
 
@@ -311,15 +302,6 @@ func (t *Transport) GetCircuitBreaker(key string) *circuit.Breaker {
 	return breaker
 }
 
-// SetMessageHandler sets the raft message handler.
-func (t *Transport) SetMessageHandler(handler IRaftMessageHandler) {
-	v := t.handler.Load()
-	if v != nil {
-		panic("trying to set the grpctransport handler again")
-	}
-	t.handler.Store(handler)
-}
-
 func (t *Transport) handleRequest(req pb.MessageBatch) {
 	did := t.nhConfig.GetDeploymentID()
 	if req.DeploymentId != did {
@@ -327,44 +309,34 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 			req.DeploymentId, did)
 		return
 	}
-	if req.BinVer != raftio.RPCBinVersion {
+	if req.BinVer != raftio.TransportBinVersion {
 		plog.Warningf("binary compatibility version not match %d vs %d",
-			req.BinVer, raftio.RPCBinVersion)
-		return
-	}
-	handler := t.handler.Load()
-	if handler == nil {
+			req.BinVer, raftio.TransportBinVersion)
 		return
 	}
 	addr := req.SourceAddress
 	if len(addr) > 0 {
 		for _, r := range req.Requests {
 			if r.From != 0 {
-				t.resolver.AddRemote(r.ClusterId, r.From, addr)
+				t.resolver.Add(r.ClusterId, r.From, addr)
 			}
 		}
 	}
-	ssCount, msgCount := handler.(IRaftMessageHandler).HandleMessageBatch(req)
+	ssCount, msgCount := t.msgHandler.HandleMessageBatch(req)
 	dropedMsgCount := uint64(len(req.Requests)) - ssCount - msgCount
 	t.metrics.receivedMessages(ssCount, msgCount, dropedMsgCount)
 }
 
 func (t *Transport) snapshotReceived(clusterID uint64,
 	nodeID uint64, from uint64) {
-	if handler := t.handler.Load(); handler != nil {
-		handler.(IRaftMessageHandler).HandleSnapshot(clusterID, nodeID, from)
-	}
+	t.msgHandler.HandleSnapshot(clusterID, nodeID, from)
 }
 
-func (t *Transport) sendUnreachableNotification(addr string) {
-	if handler := t.handler.Load(); handler != nil {
-		h := handler.(IRaftMessageHandler)
-		edp := t.resolver.ReverseResolve(addr)
-		plog.Warningf("%s became unreachable, affecting %d raft nodes",
-			addr, len(edp))
-		for _, rec := range edp {
-			h.HandleUnreachable(rec.ClusterID, rec.NodeID)
-		}
+func (t *Transport) notifyUnreachable(addr string,
+	affected map[raftio.NodeInfo]struct{}) {
+	plog.Warningf("%s became unreachable, affected %d nodes", addr, len(affected))
+	for n := range affected {
+		t.msgHandler.HandleUnreachable(n.ClusterID, n.NodeID)
 	}
 }
 
@@ -387,12 +359,18 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	toNodeID := req.To
 	clusterID := req.ClusterId
 	from := req.From
+	resolveBreaker := t.GetCircuitBreaker("address.resolve")
+	if !resolveBreaker.Ready() {
+		return false, circuitBreakerNotReady
+	}
 	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
 			t.sourceID, dn(clusterID, toNodeID))
+		resolveBreaker.Fail()
 		return false, unknownTarget
 	}
+	resolveBreaker.Success()
 	// fail fast
 	if !t.GetCircuitBreaker(addr).Ready() {
 		t.metrics.messageConnectionFailure()
@@ -416,8 +394,9 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 			t.mu.Unlock()
 		}
 		t.stopper.RunWorker(func() {
-			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from) {
-				t.sendUnreachableNotification(addr)
+			affected := make(map[raftio.NodeInfo]struct{})
+			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from, affected) {
+				t.notifyUnreachable(addr, affected)
 			}
 			shutdownQueue()
 		})
@@ -436,8 +415,10 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 
 // connectAndProcess returns a boolean value indicating whether it is stopped
 // gracefully when the system is being shutdown
-func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
-	remoteHost string, sq sendQueue, from uint64) bool {
+func (t *Transport) connectAndProcess(clusterID uint64,
+	toNodeID uint64, remoteHost string, sq sendQueue, from uint64,
+	affected map[raftio.NodeInfo]struct{}) bool {
+	affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: from}] = struct{}{}
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -456,7 +437,7 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
 			t.sysEvents.ConnectionEstablished(remoteHost, false)
 		}
-		return t.processMessages(clusterID, toNodeID, sq, conn)
+		return t.processMessages(clusterID, toNodeID, sq, conn, affected)
 	}(); err != nil {
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
 			t.sourceID, remoteHost, err.Error())
@@ -468,14 +449,15 @@ func (t *Transport) connectAndProcess(clusterID uint64, toNodeID uint64,
 	return true
 }
 
-func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
-	sq sendQueue, conn raftio.IConnection) error {
+func (t *Transport) processMessages(clusterID uint64,
+	toNodeID uint64, sq sendQueue, conn raftio.IConnection,
+	affected map[raftio.NodeInfo]struct{}) error {
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
 	sz := uint64(0)
 	batch := pb.MessageBatch{
 		SourceAddress: t.sourceID,
-		BinVer:        raftio.RPCBinVersion,
+		BinVer:        raftio.TransportBinVersion,
 	}
 	did := t.nhConfig.GetDeploymentID()
 	requests := make([]pb.Message, 0)
@@ -487,6 +469,7 @@ func (t *Transport) processMessages(clusterID uint64, toNodeID uint64,
 		case <-idleTimer.C:
 			return nil
 		case req := <-sq.ch:
+			affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: req.From}] = struct{}{}
 			sq.decrease(req)
 			sz += uint64(req.SizeUpperLimit())
 			requests = append(requests, req)
@@ -559,15 +542,15 @@ func (t *Transport) sendMessageBatch(conn raftio.IConnection,
 }
 
 func create(nhConfig config.NodeHostConfig,
-	requestHandler raftio.RequestHandler,
-	chunkHandler raftio.IChunkHandler) raftio.IRaftRPC {
-	var tm config.TransportModule
-	if nhConfig.TransportModule != nil {
-		tm = nhConfig.TransportModule
+	requestHandler raftio.MessageHandler,
+	chunkHandler raftio.ChunkHandler) raftio.ITransport {
+	var tm config.TransportFactory
+	if nhConfig.Expert.TransportFactory != nil {
+		tm = nhConfig.Expert.TransportFactory
 	} else if memfsTest {
-		tm = &ct.ChanTransportModule{}
+		tm = &ct.ChanTransportFactory{}
 	} else {
-		tm = &DefaultTransportModule{}
+		tm = &DefaultTransportFactory{}
 	}
 	return tm.Create(nhConfig, requestHandler, chunkHandler)
 }

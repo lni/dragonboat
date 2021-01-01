@@ -21,11 +21,11 @@ import (
 	"os"
 	"strings"
 
-	uuidlib "github.com/google/uuid"
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
@@ -46,6 +46,9 @@ var (
 	// ErrDeploymentIDChanged is the error used to indicate that the deployment
 	// ID changed.
 	ErrDeploymentIDChanged = errors.New("deployment ID changed")
+	// ErrAddressByNodeHostIDChanged is the error used to indicate that the
+	// AddressByNodeHostID setting has changed.
+	ErrAddressByNodeHostIDChanged = errors.New("AddressByNodeHostID changed")
 	// ErrLogDBType is the error used to indicate that the LogDB type changed.
 	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
@@ -68,31 +71,13 @@ var (
 const (
 	flagFilename = "dragonboat.ds"
 	lockFilename = "LOCK"
-	idFilename   = "ID"
+	idFilename   = "NODEHOST.ID"
 )
-
-type uuid struct {
-	uuid uuidlib.UUID
-}
-
-func newUUID() *uuid {
-	return &uuid{
-		uuid: uuidlib.New(),
-	}
-}
-
-func (n *uuid) Marshal() ([]byte, error) {
-	return n.uuid.MarshalBinary()
-}
-
-func (n *uuid) Unmarshal(data []byte) error {
-	return n.uuid.UnmarshalBinary(data)
-}
 
 // Env is the server environment for NodeHost.
 type Env struct {
 	hostname     string
-	uuid         string
+	nhid         *id.NodeHostID
 	randomSource random.Source
 	nhConfig     config.NodeHostConfig
 	partitioner  IPartitioner
@@ -213,41 +198,52 @@ func (env *Env) CreateSnapshotDir(did uint64,
 	return nil
 }
 
-// UUID returns the string representation of the NodeHost UUID.
-func (env *Env) UUID() string {
-	return env.uuid
+// NodeHostID returns the string representation of the NodeHost ID value.
+func (env *Env) NodeHostID() string {
+	return env.nhid.String()
 }
 
-// LoadUUID loads the NodeHost UUID value from the id file.
-func (env *Env) LoadUUID() (string, error) {
+// LoadNodeHostID loads the NodeHost ID value from the ID file. A new ID file
+// will be created with a randomly assigned NodeHostID when running for the
+// first time.
+func (env *Env) LoadNodeHostID() (*id.NodeHostID, error) {
 	dir, _ := env.getDataDirs()
-	nhUUID := newUUID()
+	nhID := id.NewRandomNodeHostID()
 	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
 		if err := fileutil.GetFlagFileContent(dir,
-			idFilename, nhUUID, env.fs); err != nil {
-			return "", err
+			idFilename, nhID, env.fs); err != nil {
+			return nil, err
 		}
 	} else {
 		if err := fileutil.CreateFlagFile(dir,
-			idFilename, nhUUID, env.fs); err != nil {
-			return "", err
+			idFilename, nhID, env.fs); err != nil {
+			return nil, err
 		}
 	}
-	env.uuid = nhUUID.uuid.String()
-	return env.uuid, nil
+	env.nhid = nhID
+	return nhID, nil
+}
+
+// SetNodeHostID sets the NodeHostID value recorded in Env. This is typically
+// invoked by tests.
+func (env *Env) SetNodeHostID(nhid *id.NodeHostID) {
+	if env.nhid != nil {
+		panic("trying to change NodeHostID")
+	}
+	env.nhid = nhid
 }
 
 // CheckNodeHostDir checks whether NodeHost dir is owned by the
 // current nodehost.
-func (env *Env) CheckNodeHostDir(config config.NodeHostConfig,
+func (env *Env) CheckNodeHostDir(cfg config.NodeHostConfig,
 	binVer uint32, dbType string) error {
-	return env.checkNodeHostDir(config, binVer, dbType, false)
+	return env.checkNodeHostDir(cfg, binVer, dbType, false)
 }
 
 // CheckLogDBType checks whether LogDB type is compatible.
-func (env *Env) CheckLogDBType(config config.NodeHostConfig,
+func (env *Env) CheckLogDBType(cfg config.NodeHostConfig,
 	dbType string) error {
-	return env.checkNodeHostDir(config, 0, dbType, true)
+	return env.checkNodeHostDir(cfg, 0, dbType, true)
 }
 
 // LockNodeHostDir tries to lock the NodeHost data directories.
@@ -312,13 +308,13 @@ func removeSavedSnapshots(dir string, fs vfs.IFS) error {
 	return fileutil.SyncDir(dir, fs)
 }
 
-func (env *Env) checkNodeHostDir(config config.NodeHostConfig,
+func (env *Env) checkNodeHostDir(cfg config.NodeHostConfig,
 	binVer uint32, name string, dbto bool) error {
 	dir, lldir := env.getDataDirs()
-	if err := env.check(config, dir, binVer, name, dbto); err != nil {
+	if err := env.check(cfg, dir, binVer, name, dbto); err != nil {
 		return err
 	}
-	if err := env.check(config, lldir, binVer, name, dbto); err != nil {
+	if err := env.check(cfg, lldir, binVer, name, dbto); err != nil {
 		return err
 	}
 	return nil
@@ -341,16 +337,14 @@ func (env *Env) getDeploymentIDSubDirName(did uint64) string {
 }
 
 func (env *Env) compatibleLogDBType(saved string, name string) bool {
-	if len(saved) > 0 && saved != name {
-		if !((saved == "rocksdb" && name == "pebble") ||
-			(saved == "pebble" && name == "rocksdb")) {
-			return false
-		}
+	if saved == name {
+		return true
 	}
-	return true
+	return (saved == "rocksdb" && name == "pebble") ||
+		(saved == "pebble" && name == "rocksdb")
 }
 
-func (env *Env) check(config config.NodeHostConfig,
+func (env *Env) check(cfg config.NodeHostConfig,
 	dir string, binVer uint32, name string, dbto bool) error {
 	fn := flagFilename
 	fp := env.fs.PathJoin(dir, fn)
@@ -361,7 +355,7 @@ func (env *Env) check(config config.NodeHostConfig,
 		if dbto {
 			return nil
 		}
-		return env.createFlagFile(config, dir, binVer, name)
+		return env.createFlagFile(cfg, dir, binVer, name)
 	}
 	s := raftpb.RaftDataStatus{}
 	if err := fileutil.GetFlagFileContent(dir, fn, &s, env.fs); err != nil {
@@ -371,14 +365,17 @@ func (env *Env) check(config config.NodeHostConfig,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !se(s.Address, config.RaftAddress) {
+		if !cfg.AddressByNodeHostID && !se(s.Address, cfg.RaftAddress) {
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {
 			return ErrHostnameChanged
 		}
-		if s.DeploymentId != 0 && s.DeploymentId != config.GetDeploymentID() {
+		if s.DeploymentId != 0 && s.DeploymentId != cfg.GetDeploymentID() {
 			return ErrDeploymentIDChanged
+		}
+		if s.AddressByNodeHostId != cfg.AddressByNodeHostID {
+			return ErrAddressByNodeHostIDChanged
 		}
 		if s.BinVer != binVer {
 			if s.BinVer == raftio.LogDBBinVersion &&
@@ -389,14 +386,14 @@ func (env *Env) check(config config.NodeHostConfig,
 			return ErrIncompatibleData
 		}
 		if s.HardHash != 0 {
-			if s.HardHash != settings.HardHash(config.Expert.ExecShards,
-				config.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
+			if s.HardHash != settings.HardHash(cfg.Expert.ExecShards,
+				cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 				settings.Hard.LogDBEntryBatchSize) {
 				return ErrHardSettingsChanged
 			}
 		} else {
-			if s.StepWorkerCount != config.Expert.ExecShards ||
-				s.LogdbShardCount != config.Expert.LogDB.Shards ||
+			if s.StepWorkerCount != cfg.Expert.ExecShards ||
+				s.LogdbShardCount != cfg.Expert.LogDB.Shards ||
 				s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
 				s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
 				return ErrHardSettingChanged
@@ -406,19 +403,20 @@ func (env *Env) check(config config.NodeHostConfig,
 	return nil
 }
 
-func (env *Env) createFlagFile(config config.NodeHostConfig,
+func (env *Env) createFlagFile(cfg config.NodeHostConfig,
 	dir string, ver uint32, name string) error {
 	s := raftpb.RaftDataStatus{
-		Address:         config.RaftAddress,
-		BinVer:          ver,
-		HardHash:        0,
-		LogdbType:       name,
-		Hostname:        env.hostname,
-		DeploymentId:    config.GetDeploymentID(),
-		StepWorkerCount: config.Expert.ExecShards,
-		LogdbShardCount: config.Expert.LogDB.Shards,
-		MaxSessionCount: settings.Hard.LRUMaxSessionCount,
-		EntryBatchSize:  settings.Hard.LogDBEntryBatchSize,
+		Address:             cfg.RaftAddress,
+		BinVer:              ver,
+		HardHash:            0,
+		LogdbType:           name,
+		Hostname:            env.hostname,
+		DeploymentId:        cfg.GetDeploymentID(),
+		StepWorkerCount:     cfg.Expert.ExecShards,
+		LogdbShardCount:     cfg.Expert.LogDB.Shards,
+		MaxSessionCount:     settings.Hard.LRUMaxSessionCount,
+		EntryBatchSize:      settings.Hard.LogDBEntryBatchSize,
+		AddressByNodeHostId: cfg.AddressByNodeHostID,
 	}
 	return fileutil.CreateFlagFile(dir, flagFilename, &s, env.fs)
 }

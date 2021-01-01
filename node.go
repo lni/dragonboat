@@ -19,7 +19,6 @@ import (
 	"sync/atomic"
 
 	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/stringutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/client"
@@ -88,7 +87,7 @@ type node struct {
 	getStreamSink         func(uint64, uint64) *transport.Sink
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
-	validateAddress       func(string) bool
+	validateTarget        func(string) bool
 	sm                    *rsm.StateMachine
 	incomingProposals     *entryQueue
 	incomingReadIndexes   *readIndexQueue
@@ -121,6 +120,7 @@ type node struct {
 	sysEvents             *sysEventListener
 	metrics               *logDBMetrics
 	initializedC          chan struct{}
+	initializedFlag       uint64
 }
 
 var _ rsm.INode = (*node)(nil)
@@ -183,17 +183,13 @@ func newNode(peers map[uint64]string,
 		metrics:               metrics,
 		initializedC:          make(chan struct{}),
 		ss:                    &snapshotState{},
+		validateTarget:        nhConfig.GetTargetValidator(),
 		qs: &quiesceState{
 			electionTick: config.ElectionRTT * 2,
 			enabled:      config.Quiesce,
 			clusterID:    config.ClusterID,
 			nodeID:       config.NodeID,
 		},
-	}
-	if nhConfig.TransportModule != nil {
-		rn.validateAddress = nhConfig.TransportModule.Validate
-	} else {
-		rn.validateAddress = stringutil.IsValidAddress
 	}
 	ds := createSM(config.ClusterID, config.NodeID, stopC)
 	sm := rsm.NewStateMachine(ds, snapshotter, config, rn, snapshotter.fs)
@@ -396,6 +392,7 @@ func (n *node) propose(session *client.Session,
 	if !n.initialized() {
 		return nil, ErrClusterNotReady
 	}
+	monkeyLog.Infof("%s made a proposal", n.id())
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -477,7 +474,7 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
-	if cct != pb.RemoveNode && !n.validateAddress(target) {
+	if cct != pb.RemoveNode && !n.validateTarget(target) {
 		return nil, ErrInvalidAddress
 	}
 	cc := pb.ConfigChange{
@@ -1098,6 +1095,8 @@ func (n *node) stepNode() (pb.Update, bool) {
 			}
 			return n.getUpdate()
 		}
+	} else {
+		monkeyLog.Infof("%s skipped handleEvents, not initialized", n.id())
 	}
 	return pb.Update{}, false
 }
@@ -1273,7 +1272,7 @@ func (n *node) handleReceivedMessages() bool {
 func (n *node) handleMessage(m pb.Message) bool {
 	switch m.Type {
 	case pb.LocalTick:
-		n.tick()
+		n.tick(m.Hint)
 	case pb.Quiesce:
 		n.qs.tryEnterQuiesce()
 	case pb.SnapshotStatus:
@@ -1446,7 +1445,7 @@ func (n *node) processStreamStatus() bool {
 	return false
 }
 
-func (n *node) tick() {
+func (n *node) tick(tick uint64) {
 	if n.p == nil {
 		panic("rc node is still nil")
 	}
@@ -1457,10 +1456,10 @@ func (n *node) tick() {
 	} else {
 		n.p.Tick()
 	}
-	n.pendingSnapshot.tick()
-	n.pendingProposals.tick()
-	n.pendingReadIndexes.tick()
-	n.pendingConfigChange.tick()
+	n.pendingSnapshot.tick(tick)
+	n.pendingProposals.tick(tick)
+	n.pendingReadIndexes.tick(tick)
+	n.pendingConfigChange.tick(tick)
 }
 
 func (n *node) notifyConfigChange() {
@@ -1542,8 +1541,12 @@ func (n *node) isFollower() bool {
 }
 
 func (n *node) initialized() bool {
+	if atomic.LoadUint64(&n.initializedFlag) != 0 {
+		return true
+	}
 	select {
 	case <-n.initializedC:
+		atomic.StoreUint64(&n.initializedFlag, 1)
 		return true
 	default:
 	}

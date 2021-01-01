@@ -490,6 +490,35 @@ func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 	}
 }
 
+func TestRaftDataStatusCanBeMarshaled(t *testing.T) {
+	r := &RaftDataStatus{
+		Address:             "mydomain.com:12345",
+		BinVer:              uint32(123),
+		HardHash:            uint64(1234567890),
+		LogdbType:           "mytype",
+		Hostname:            "myhostname",
+		DeploymentId:        uint64(1234567890),
+		EntryBatchSize:      uint64(123456789),
+		AddressByNodeHostId: true,
+	}
+	check := func(v *RaftDataStatus) {
+		data, err := v.Marshal()
+		if err != nil {
+			t.Fatalf("failed to marshal %v", err)
+		}
+		r2 := &RaftDataStatus{}
+		if err := r2.Unmarshal(data); err != nil {
+			t.Fatalf("failed to unmarshal %v", err)
+		}
+		if !reflect.DeepEqual(v, r2) {
+			t.Fatalf("data changed, %+v\n%+v", *v, *r2)
+		}
+	}
+	check(r)
+	r.AddressByNodeHostId = false
+	check(r)
+}
+
 func TestMessageCanDrop(t *testing.T) {
 	tests := []struct {
 		t       MessageType
