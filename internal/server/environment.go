@@ -337,13 +337,11 @@ func (env *Env) getDeploymentIDSubDirName(did uint64) string {
 }
 
 func (env *Env) compatibleLogDBType(saved string, name string) bool {
-	if len(saved) > 0 && saved != name {
-		if !((saved == "rocksdb" && name == "pebble") ||
-			(saved == "pebble" && name == "rocksdb")) {
-			return false
-		}
+	if saved == name {
+		return true
 	}
-	return true
+	return (saved == "rocksdb" && name == "pebble") ||
+		(saved == "pebble" && name == "rocksdb")
 }
 
 func (env *Env) check(cfg config.NodeHostConfig,
