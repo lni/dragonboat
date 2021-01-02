@@ -938,6 +938,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create nh2, %v", err)
 	}
+	nh2NodeHostID := nh2.ID()
 	peers := make(map[uint64]string)
 	peers[1] = testNodeHostID1
 	peers[2] = testNodeHostID2
@@ -986,6 +987,9 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		t.Fatalf("failed to restart nh2, %v", err)
 	}
 	defer nh2.Stop()
+	if nh2.ID() != nh2NodeHostID {
+		t.Fatalf("NodeHostID changed, got %s, want %s", nh2.ID(), nh2NodeHostID)
+	}
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}

@@ -16,6 +16,8 @@ package config
 
 import (
 	"testing"
+
+	"github.com/lni/dragonboat/v3/raftio"
 )
 
 func ExampleNodeHostConfig() {
@@ -163,6 +165,26 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 		t.Fatalf("cfg not valid")
 	}
 	c.Expert.TransportFactory = m
+	if err := c.Validate(); err == nil {
+		t.Fatalf("cfg not considered as invalid")
+	}
+}
+
+func TestLogDBFactoryAndExpertLogDBFactoryCanNotBeSetTogether(t *testing.T) {
+	f := func(NodeHostConfig,
+		LogDBCallback, []string, []string) (raftio.ILogDB, error) {
+		return nil, nil
+	}
+	c := NodeHostConfig{
+		RaftAddress:    "localhost:9010",
+		RTTMillisecond: 100,
+		NodeHostDir:    "/data",
+		LogDBFactory:   LogDBFactoryFunc(f),
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("cfg not valid")
+	}
+	c.Expert.LogDBFactory = f
 	if err := c.Validate(); err == nil {
 		t.Fatalf("cfg not considered as invalid")
 	}
