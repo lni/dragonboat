@@ -22,6 +22,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -60,18 +61,24 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		return false, err
 	}
 	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
-	logdb, err := logdb.NewDefaultLogDB(nhConfig,
-		nil, []string{nhDir}, []string{walDir}, fs)
+	var ldb raftio.ILogDB
+	if nhConfig.Expert.LogDBFactory == nil {
+		ldb, err = logdb.NewDefaultLogDB(nhConfig,
+			nil, []string{nhDir}, []string{walDir}, fs)
+	} else {
+		ldb, err = nhConfig.Expert.LogDBFactory(nhConfig,
+			nil, []string{nhDir}, []string{walDir})
+	}
 	if err != nil {
 		return false, err
 	}
-	defer logdb.Close()
-	niList, err := logdb.ListNodeInfo()
+	defer ldb.Close()
+	niList, err := ldb.ListNodeInfo()
 	if err != nil {
 		return false, err
 	}
 	for _, ni := range niList {
-		ssList, err := logdb.ListSnapshots(ni.ClusterID, ni.NodeID, math.MaxUint64)
+		ssList, err := ldb.ListSnapshots(ni.ClusterID, ni.NodeID, math.MaxUint64)
 		if err != nil {
 			return false, err
 		}
