@@ -454,6 +454,9 @@ func (c *NodeHostConfig) Validate() error {
 	if c.RaftRPCFactory != nil && c.Expert.TransportFactory != nil {
 		return errors.New("both TransportFactory and RaftRPCFactory specified")
 	}
+	if c.LogDBFactory != nil && c.Expert.LogDBFactory != nil {
+		return errors.New("both LogDBFactory and Expert.LogDBFactory specified")
+	}
 	if c.AddressByNodeHostID && c.Gossip.IsEmpty() {
 		return errors.New("gossip service not configured")
 	}
@@ -472,17 +475,17 @@ func (c *NodeHostConfig) Validate() error {
 	return nil
 }
 
-type transportModule struct {
+type defaultTransport struct {
 	factory RaftRPCFactoryFunc
 }
 
-func (tm *transportModule) Create(nhConfig NodeHostConfig,
+func (tm *defaultTransport) Create(nhConfig NodeHostConfig,
 	handler raftio.MessageHandler,
 	chunkHandler raftio.ChunkHandler) raftio.ITransport {
 	return tm.factory(nhConfig, handler, chunkHandler)
 }
 
-func (tm *transportModule) Validate(addr string) bool {
+func (tm *defaultTransport) Validate(addr string) bool {
 	return stringutil.IsValidAddress(addr)
 }
 
@@ -510,8 +513,12 @@ func (c *NodeHostConfig) Prepare() error {
 		c.Expert.ExecShards = defaultExecShards
 	}
 	if c.RaftRPCFactory != nil && c.Expert.TransportFactory == nil {
-		c.Expert.TransportFactory = &transportModule{factory: c.RaftRPCFactory}
+		c.Expert.TransportFactory = &defaultTransport{factory: c.RaftRPCFactory}
 		c.RaftRPCFactory = nil
+	}
+	if c.LogDBFactory != nil && c.Expert.LogDBFactory == nil {
+		c.Expert.LogDBFactory = LogDBFactory(c.LogDBFactory)
+		c.LogDBFactory = nil
 	}
 	return nil
 }

@@ -152,7 +152,7 @@ func TestLogDBConfigMemSize(t *testing.T) {
 }
 
 func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
-	m := &transportModule{}
+	m := &defaultTransport{}
 	c := NodeHostConfig{
 		RaftAddress:    "localhost:9010",
 		RTTMillisecond: 100,
