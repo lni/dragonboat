@@ -304,20 +304,6 @@ func TestRemoveSavedSnapshots(t *testing.T) {
 	reportLeakedFD(fs, t)
 }
 
-func TestCompatibleLogDBType(t *testing.T) {
-	sc := &Env{}
-	if !sc.compatibleLogDBType("rocksdb", "pebble") ||
-		!sc.compatibleLogDBType("pebble", "rocksdb") {
-		t.Errorf("rocksdb/pebble marked as not compatible")
-	}
-	if sc.compatibleLogDBType("rocksdb", "1") ||
-		sc.compatibleLogDBType("pebble", "2") ||
-		sc.compatibleLogDBType("1", "rocksdb") ||
-		sc.compatibleLogDBType("2", "pebble") {
-		t.Errorf("unexpectedly marked as compatible")
-	}
-}
-
 func TestWALDirCanBeSet(t *testing.T) {
 	walDir := "d2-wal-dir-name"
 	nhConfig := config.NodeHostConfig{
@@ -339,5 +325,29 @@ func TestWALDirCanBeSet(t *testing.T) {
 	}
 	if strings.Contains(dir, walDir) {
 		t.Errorf("wal dir appeared in node host dir, %s", dir)
+	}
+}
+
+func TestCompatibleLogDBType(t *testing.T) {
+	tests := []struct {
+		saved      string
+		name       string
+		compatible bool
+	}{
+		{"pebble", "rocksdb", true},
+		{"rocksdb", "pebble", true},
+		{"pebble", "tee", false},
+		{"tee", "pebble", false},
+		{"rocksdb", "tee", false},
+		{"tee", "rocksdb", false},
+		{"tee", "tee", true},
+		{"", "tee", false},
+		{"tee", "", false},
+		{"tee", "inmem", false},
+	}
+	for idx, tt := range tests {
+		if r := compatibleLogDBType(tt.saved, tt.name); r != tt.compatible {
+			t.Errorf("%d, compatibleLogDBType failed, want %t, got %t", idx, tt.compatible, r)
+		}
 	}
 }

@@ -367,24 +367,15 @@ func (r *RequestState) committed() {
 }
 
 func (r *RequestState) timeout() {
-	rr := RequestResult{
-		code: requestTimeout,
-	}
-	r.notify(rr)
+	r.notify(RequestResult{code: requestTimeout})
 }
 
 func (r *RequestState) terminated() {
-	rr := RequestResult{
-		code: requestTerminated,
-	}
-	r.notify(rr)
+	r.notify(RequestResult{code: requestTerminated})
 }
 
 func (r *RequestState) dropped() {
-	rr := RequestResult{
-		code: requestDropped,
-	}
-	r.notify(rr)
+	r.notify(RequestResult{code: requestDropped})
 }
 
 func (r *RequestState) notify(result RequestResult) {

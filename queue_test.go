@@ -320,3 +320,27 @@ func TestGetFromLeaderInfoQueue(t *testing.T) {
 		t.Errorf("unexpectedly return third reader info rec")
 	}
 }
+
+func TestReadIndexQueueCanHandleAddFailure(t *testing.T) {
+	q := newReadIndexQueue(1)
+	added, stopped := q.add(&RequestState{})
+	if !added || stopped {
+		t.Errorf("unexpected failure")
+	}
+	added, stopped = q.add(&RequestState{})
+	if added {
+		t.Errorf("unexpectedly added the rs")
+	}
+	if stopped {
+		t.Errorf("unexpectedly reported state as stopped")
+	}
+	q.close()
+	added, stopped = q.add(&RequestState{})
+	if added {
+		t.Errorf("unexpectedly added the rs")
+	}
+	if !stopped {
+		t.Errorf("failed to report state as stopped")
+	}
+
+}

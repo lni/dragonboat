@@ -336,7 +336,7 @@ func (env *Env) getDeploymentIDSubDirName(did uint64) string {
 	return fmt.Sprintf("%020d", did)
 }
 
-func (env *Env) compatibleLogDBType(saved string, name string) bool {
+func compatibleLogDBType(saved string, name string) bool {
 	if saved == name {
 		return true
 	}
@@ -361,7 +361,7 @@ func (env *Env) check(cfg config.NodeHostConfig,
 	if err := fileutil.GetFlagFileContent(dir, fn, &s, env.fs); err != nil {
 		return err
 	}
-	if !env.compatibleLogDBType(s.LogdbType, name) {
+	if !compatibleLogDBType(s.LogdbType, name) {
 		return ErrLogDBType
 	}
 	if !dbto {

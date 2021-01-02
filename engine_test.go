@@ -43,6 +43,45 @@ func TestPartitionerWorksAsExpected(t *testing.T) {
 	}
 }
 
+func TestAllClustersReady(t *testing.T) {
+	wr := newWorkReady(4)
+	nodes := make([]*node, 0)
+	for i := uint64(0); i < uint64(4); i++ {
+		nodes = append(nodes, &node{clusterID: i})
+	}
+	wr.allClustersReady(nodes)
+	for i := uint64(0); i < uint64(4); i++ {
+		ch := wr.channels[i]
+		select {
+		case <-ch:
+		default:
+			t.Errorf("channel not ready")
+		}
+		rc := wr.maps[i]
+		m := rc.getReadyClusters()
+		if len(m) != 1 {
+			t.Errorf("unexpected map size")
+		}
+		if _, ok := m[i]; !ok {
+			t.Errorf("cluster not set")
+		}
+	}
+	nodes = nodes[:0]
+	nodes = append(nodes, []*node{{clusterID: 0}, {clusterID: 2}, {clusterID: 3}}...)
+	wr.allClustersReady(nodes)
+	ch := wr.channels[1]
+	select {
+	case <-ch:
+		t.Errorf("channel unexpectedly set as ready")
+	default:
+	}
+	rc := wr.maps[1]
+	m := rc.getReadyClusters()
+	if len(m) != 0 {
+		t.Errorf("cluster map unexpected set")
+	}
+}
+
 func TestWorkCanBeSetAsReady(t *testing.T) {
 	wr := newWorkReady(4)
 	select {

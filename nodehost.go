@@ -1308,6 +1308,9 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 // cluster member will corrupt the Raft cluster.
 func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	clusterID uint64, nodeID uint64) error {
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		return ErrClosed
+	}
 	if _, ok := nh.getCluster(clusterID); ok {
 		return ErrClusterNotStopped
 	}
@@ -1337,6 +1340,9 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 // RemoveData returns ErrClusterNotStopped when the specified node has not been
 // fully offloaded from the NodeHost instance.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		return ErrClosed
+	}
 	n, ok := nh.getCluster(clusterID)
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
@@ -1351,9 +1357,6 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 }
 
 func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return ErrClosed
-	}
 	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
 		panic(err)
 	}

@@ -451,7 +451,7 @@ type updateConfig func(*config.Config) *config.Config
 type updateNodeHostConfig func(*config.NodeHostConfig) *config.NodeHostConfig
 type testFunc func(*NodeHost)
 type beforeTest func()
-type afterTest func()
+type afterTest func(*NodeHost)
 
 type testOption struct {
 	updateConfig         updateConfig
@@ -554,7 +554,7 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 			defer func() {
 				nh.Stop()
 				if to.at != nil {
-					to.at()
+					to.at(nh)
 				}
 			}()
 		}
@@ -574,7 +574,7 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 			defer func() {
 				nh.Stop()
 				if to.at != nil {
-					to.at()
+					to.at(nh)
 				}
 			}()
 			createSingleTestNode(t, to, nh)
@@ -1461,7 +1461,7 @@ func TestSnapshotCanBeStopped(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			createProposalsToTriggerSnapshot(t, nh, 50, true)
 		},
-		at: func() {
+		at: func(*NodeHost) {
 			if !pst.saved || !pst.stopped {
 				t.Errorf("snapshot not stopped")
 			}
@@ -1494,7 +1494,7 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 				}
 			}
 		},
-		at: func() {
+		at: func(*NodeHost) {
 			wait := 0
 			for !pst.stopped {
 				time.Sleep(10 * time.Millisecond)
@@ -4226,7 +4226,7 @@ func TestNodeHostChecksLogDBType(t *testing.T) {
 			c.Expert.LogDBFactory = f
 			return c
 		},
-		at: func() {
+		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
 			_, err := NewNodeHost(*nhc)
 			if err != server.ErrLogDBType {
@@ -4296,7 +4296,7 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
 	}
 	to := &testOption{
-		at: func() {
+		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
 			nhc.Expert.LogDBFactory = nff
 			_, err := NewNodeHost(*nhc)
@@ -4329,7 +4329,7 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 			return c
 		},
 		noElection: true,
-		at: func() {
+		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
 			nhc.Expert.LogDBFactory = bff
 			_, err := NewNodeHost(*nhc)
@@ -4369,7 +4369,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 				t.Errorf("failed to make proposal %v", err)
 			}
 		},
-		at: func() {
+		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
 			nhc.Expert.LogDBFactory = nff
 			if nh, err := NewNodeHost(*nhc); err != nil {
@@ -4386,7 +4386,7 @@ func TestNodeHostWithUnexpectedDeploymentIDWillBeDetected(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		noElection: true,
-		at: func() {
+		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
 			nhc.DeploymentID = 200
 			_, err := NewNodeHost(*nhc)
@@ -4929,4 +4929,104 @@ func TestIOErrorIsHandled(t *testing.T) {
 	}
 	testIOErrorIsHandled(t, vfs.OpWrite)
 	testIOErrorIsHandled(t, vfs.OpSync)
+}
+
+func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		at: func(nh *NodeHost) {
+			plog.Infof("hello")
+			if err := nh.StartCluster(nil, false, nil, config.Config{}); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.StartConcurrentCluster(nil, false, nil, config.Config{}); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.StartOnDiskCluster(nil, false, nil, config.Config{}); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.StopCluster(1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.StopNode(1, 1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+			defer cancel()
+			if _, err := nh.SyncPropose(ctx, nil, nil); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.SyncRead(ctx, 1, nil); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.SyncGetClusterMembership(ctx, 1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, _, err := nh.GetLeaderID(1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.Propose(nil, nil, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.ReadIndex(1, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.ReadLocalNode(nil, nil); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.NAReadLocalNode(nil, nil); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.StaleRead(1, nil); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.SyncRequestSnapshot(ctx, 1, DefaultSnapshotOption); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestSnapshot(1, DefaultSnapshotOption, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestCompaction(1, 1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.SyncRequestDeleteNode(ctx, 1, 1, 0); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.SyncRequestAddNode(ctx, 1, 1, "", 0); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.SyncRequestAddObserver(ctx, 1, 1, "", 0); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.SyncRequestAddWitness(ctx, 1, 1, "", 0); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestDeleteNode(1, 1, 0, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestAddNode(1, 1, "", 0, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestAddObserver(1, 1, "", 0, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.RequestAddWitness(1, 1, "", 0, time.Second); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.RequestLeaderTransfer(1, 2); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.SyncRemoveData(ctx, 1, 1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if err := nh.RemoveData(1, 1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.GetNodeUser(1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
 }
