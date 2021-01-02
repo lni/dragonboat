@@ -293,6 +293,7 @@ type RequestState struct {
 	node         *node
 	pool         *sync.Pool
 	notifyCommit bool
+	testErr      chan struct{}
 }
 
 // AppliedC returns a channel of RequestResult for delivering request result.
@@ -330,23 +331,46 @@ func (r *RequestState) ResultC() chan RequestResult {
 	}
 	r.aggrC = make(chan RequestResult, 2)
 	go func() {
+		if r.testErr != nil {
+			defer func() {
+				if rr := recover(); rr != nil {
+					close(r.testErr)
+				}
+			}()
+		}
 		select {
 		case cn := <-r.committedC:
 			if cn.code != requestCommitted {
-				plog.Panicf("unknown code, %s", cn.code)
+				plog.Panicf("unexpected requestResult, %s", cn.code)
 			}
 			r.aggrC <- cn
 			cc := <-r.CompletedC
+			if cc.Dropped() {
+				plog.Panicf("committed entry dropped")
+			}
+			if cc.Aborted() {
+				plog.Panicf("committed entry aborted")
+			}
+			if cc.code == requestCommitted {
+				plog.Panicf("entry committed notified twice")
+			}
 			r.aggrC <- cc
 		case cc := <-r.CompletedC:
-			if cc.Completed() || cc.Terminated() || cc.Timeout() {
-				select {
-				case ccn := <-r.committedC:
-					r.aggrC <- ccn
-				default:
-				}
-				r.aggrC <- cc
+			if cc.Aborted() {
+				plog.Panicf("requestAborted sent to CompletedC")
 			}
+			if cc.code == requestCommitted {
+				plog.Panicf("requestCommitted sent to CompletedC")
+			}
+			select {
+			case ccn := <-r.committedC:
+				if cc.Dropped() {
+					plog.Panicf("applied entry dropped")
+				}
+				r.aggrC <- ccn
+			default:
+			}
+			r.aggrC <- cc
 		}
 	}()
 	return r.aggrC
@@ -354,7 +378,7 @@ func (r *RequestState) ResultC() chan RequestResult {
 
 func (r *RequestState) committed() {
 	if !r.notifyCommit {
-		plog.Panicf("notify commit not enabled")
+		plog.Panicf("notify commit not allowed")
 	}
 	if r.committedC == nil {
 		plog.Panicf("committedC is nil")

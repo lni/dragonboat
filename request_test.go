@@ -29,6 +29,110 @@ import (
 	"github.com/lni/goutils/random"
 )
 
+func TestResultCReturnsCompleteCWhenNotifyCommitNotSet(t *testing.T) {
+	rs := &RequestState{
+		CompletedC: make(chan RequestResult),
+	}
+	if rs.ResultC() != rs.CompletedC {
+		t.Errorf("chan not equal")
+	}
+}
+
+func TestResultCPanicWhenCommittedCIsNil(t *testing.T) {
+	rs := &RequestState{
+		CompletedC:   make(chan RequestResult),
+		notifyCommit: true,
+	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("no panic")
+		}
+	}()
+	rs.ResultC()
+}
+
+func TestResultCCanReceiveRequestResults(t *testing.T) {
+	tests := []struct {
+		notifyCommit        bool
+		hasCommittedCResult bool
+		completedCCode      RequestResultCode
+		crash               bool
+	}{
+		{false, false, requestTimeout, false},
+		{false, false, requestCompleted, false},
+		{false, false, requestTerminated, false},
+		{false, false, requestRejected, false},
+		{false, false, requestDropped, false},
+		{false, false, requestAborted, false},
+		{false, false, requestCommitted, false},
+
+		{true, false, requestTimeout, false},
+		{true, false, requestCompleted, false},
+		{true, false, requestTerminated, false},
+		{true, false, requestRejected, false},
+		{true, false, requestDropped, false},
+		{true, false, requestAborted, true},
+		{true, false, requestCommitted, true},
+
+		{true, true, requestTimeout, false},
+		{true, true, requestCompleted, false},
+		{true, true, requestTerminated, false},
+		{true, true, requestRejected, false},
+		{true, true, requestDropped, true},
+		{true, true, requestAborted, true},
+		{true, true, requestCommitted, true},
+	}
+	for idx, tt := range tests {
+		func() {
+			rs := &RequestState{
+				CompletedC:   make(chan RequestResult, 1),
+				notifyCommit: tt.notifyCommit,
+			}
+			if tt.crash {
+				rs.testErr = make(chan struct{})
+			}
+			if tt.notifyCommit {
+				rs.committedC = make(chan RequestResult, 1)
+			}
+			if tt.hasCommittedCResult {
+				rs.committed()
+			}
+			rs.notify(RequestResult{code: tt.completedCCode})
+			ch := rs.ResultC()
+			crashed := false
+			if tt.hasCommittedCResult {
+				select {
+				case cc := <-ch:
+					if cc.code != requestCommitted {
+						t.Errorf("%d, not the expected committed result", idx)
+					}
+				case <-rs.testErr:
+					crashed = true
+				}
+			}
+			select {
+			case cc := <-ch:
+				if cc.code != tt.completedCCode {
+					t.Errorf("%d, unexpected completedC value, got %s, want %s",
+						idx, cc.code, tt.completedCCode)
+				}
+				if rs.testErr != nil {
+					<-rs.testErr
+					crashed = true
+				}
+			case <-rs.testErr:
+				crashed = true
+			}
+			if tt.crash && !crashed {
+				t.Errorf("%d, didn't crash", idx)
+			}
+			if ch != rs.ResultC() {
+				t.Errorf("%d, ch changed", idx)
+			}
+		}()
+	}
+}
+
 func TestPendingLeaderTransferCanBeCreated(t *testing.T) {
 	p := newPendingLeaderTransfer()
 	if len(p.leaderTransferC) != 0 || p.leaderTransferC == nil {
