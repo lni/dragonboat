@@ -156,7 +156,6 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		panic("invalid LogDBConfig")
 	}
 	pebbleWarning.Do(func() {
-		plog.Warningf("pebble support is experimental, DO NOT USE IN PRODUCTION")
 		if fs == vfs.MemStrictFS {
 			plog.Warningf("running in pebble memfs test mode")
 		}

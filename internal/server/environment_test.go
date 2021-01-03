@@ -334,6 +334,8 @@ func TestCompatibleLogDBType(t *testing.T) {
 		name       string
 		compatible bool
 	}{
+		{"sharded-rocksdb", "sharded-pebble", true},
+		{"sharded-pebble", "sharded-rocksdb", true},
 		{"pebble", "rocksdb", true},
 		{"rocksdb", "pebble", true},
 		{"pebble", "tee", false},
