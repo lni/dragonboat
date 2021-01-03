@@ -494,6 +494,14 @@ func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
 	}
 }
 
+func TestCanNotMakeRequestOnClosedPendingConfigChange(t *testing.T) {
+	pcc, _ := getPendingConfigChange(false)
+	pcc.close()
+	if _, err := pcc.request(pb.ConfigChange{}, 100); err != ErrClusterClosed {
+		t.Errorf("failed to return ErrClusterClosed, %v", err)
+	}
+}
+
 func TestConfigChangeCanBeRequested(t *testing.T) {
 	pcc, c := getPendingConfigChange(false)
 	var cc pb.ConfigChange
@@ -1032,7 +1040,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	}
 }
 
-func getPendingSCRead() (*pendingReadIndex, *readIndexQueue) {
+func getPendingReadIndex() (*pendingReadIndex, *readIndexQueue) {
 	q := newReadIndexQueue(5)
 	p := &sync.Pool{}
 	p.New = func() interface{} {
@@ -1044,8 +1052,8 @@ func getPendingSCRead() (*pendingReadIndex, *readIndexQueue) {
 	return newPendingReadIndex(p, q), q
 }
 
-func TestPendingSCReadCanBeCreatedAndClosed(t *testing.T) {
-	pp, c := getPendingSCRead()
+func TestPendingReadIndexCanBeCreatedAndClosed(t *testing.T) {
+	pp, c := getPendingReadIndex()
 	if len(c.get()) > 0 {
 		t.Errorf("unexpected content")
 	}
@@ -1055,8 +1063,16 @@ func TestPendingSCReadCanBeCreatedAndClosed(t *testing.T) {
 	}
 }
 
-func TestPendingSCReadCanRead(t *testing.T) {
-	pp, c := getPendingSCRead()
+func TestCanNotMakeRequestOnClosedPendingReadIndex(t *testing.T) {
+	pp, _ := getPendingReadIndex()
+	pp.close()
+	if _, err := pp.read(100); err != ErrClusterClosed {
+		t.Errorf("failed to return ErrClusterClosed %v", err)
+	}
+}
+
+func TestPendingReadIndexCanRead(t *testing.T) {
+	pp, c := getPendingReadIndex()
 	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
@@ -1092,8 +1108,8 @@ func TestPendingSCReadCanRead(t *testing.T) {
 	}
 }
 
-func TestPendingSCReadCanComplete(t *testing.T) {
-	pp, _ := getPendingSCRead()
+func TestPendingReadIndexCanComplete(t *testing.T) {
+	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
@@ -1129,7 +1145,7 @@ func TestPendingSCReadCanComplete(t *testing.T) {
 }
 
 func TestPendingReadIndexCanBeDropped(t *testing.T) {
-	pp, _ := getPendingSCRead()
+	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
@@ -1150,8 +1166,8 @@ func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	}
 }
 
-func testPendingSCReadCanExpire(t *testing.T, addReady bool) {
-	pp, _ := getPendingSCRead()
+func testPendingReadIndexCanExpire(t *testing.T, addReady bool) {
+	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
 	if err != nil {
 		t.Errorf("failed to do read")
@@ -1180,16 +1196,16 @@ func testPendingSCReadCanExpire(t *testing.T, addReady bool) {
 	}
 }
 
-func TestPendingSCReadCanExpire(t *testing.T) {
-	testPendingSCReadCanExpire(t, true)
+func TestPendingReadIndexCanExpire(t *testing.T) {
+	testPendingReadIndexCanExpire(t, true)
 }
 
-func TestPendingSCReadCanExpireWithoutCallingAddReady(t *testing.T) {
-	testPendingSCReadCanExpire(t, false)
+func TestPendingReadIndexCanExpireWithoutCallingAddReady(t *testing.T) {
+	testPendingReadIndexCanExpire(t, false)
 }
 
 func TestNonEmptyReadBatchIsNeverExpired(t *testing.T) {
-	pp, _ := getPendingSCRead()
+	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(10000)
 	if err != nil {
 		t.Errorf("failed to do read")

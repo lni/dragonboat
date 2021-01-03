@@ -230,6 +230,13 @@ type logicalClock struct {
 	gcTick     uint64
 }
 
+func newLogicalClock() logicalClock {
+	if defaultGCTick == 0 || defaultGCTick > 3 {
+		plog.Panicf("invalid defaultGCTick %d", defaultGCTick)
+	}
+	return logicalClock{gcTick: defaultGCTick}
+}
+
 func (p *logicalClock) tick(tick uint64) {
 	atomic.StoreUint64(&p.ltick, tick)
 }
@@ -541,13 +548,8 @@ func (l *pendingLeaderTransfer) get() (uint64, bool) {
 }
 
 func newPendingSnapshot(snapshotC chan<- rsm.SSRequest) *pendingSnapshot {
-	gcTick := defaultGCTick
-	if gcTick == 0 {
-		plog.Panicf("invalid gcTick")
-	}
-	lcu := logicalClock{gcTick: gcTick}
 	return &pendingSnapshot{
-		logicalClock: lcu,
+		logicalClock: newLogicalClock(),
 		snapshotC:    snapshotC,
 	}
 }
@@ -651,14 +653,9 @@ func (p *pendingSnapshot) apply(key uint64,
 
 func newPendingConfigChange(confChangeC chan<- configChangeRequest,
 	notifyCommit bool) *pendingConfigChange {
-	gcTick := defaultGCTick
-	if gcTick == 0 {
-		plog.Panicf("invalid gcTick")
-	}
-	lcu := logicalClock{gcTick: gcTick}
 	return &pendingConfigChange{
 		confChangeC:  confChangeC,
-		logicalClock: lcu,
+		logicalClock: newLogicalClock(),
 		notifyCommit: notifyCommit,
 	}
 }
@@ -775,15 +772,10 @@ func (p *pendingConfigChange) apply(key uint64, rejected bool) {
 
 func newPendingReadIndex(pool *sync.Pool,
 	requests *readIndexQueue) *pendingReadIndex {
-	gcTick := defaultGCTick
-	if gcTick == 0 {
-		plog.Panicf("invalid gcTick")
-	}
-	lcu := logicalClock{gcTick: gcTick}
 	p := &pendingReadIndex{
 		batches:      make(map[pb.SystemCtx]readBatch),
 		requests:     requests,
-		logicalClock: lcu,
+		logicalClock: newLogicalClock(),
 		pool:         pool,
 	}
 	return p
@@ -1033,15 +1025,10 @@ func (p *pendingProposal) gc() {
 
 func newPendingProposalShard(cfg config.Config,
 	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *proposalShard {
-	gcTick := defaultGCTick
-	if gcTick == 0 {
-		plog.Panicf("invalid gcTick")
-	}
-	lcu := logicalClock{gcTick: gcTick}
 	p := &proposalShard{
 		proposals:    proposals,
 		pending:      make(map[uint64]*RequestState),
-		logicalClock: lcu,
+		logicalClock: newLogicalClock(),
 		pool:         pool,
 		cfg:          cfg,
 		notifyCommit: notifyCommit,
