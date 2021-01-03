@@ -53,6 +53,7 @@ import (
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -547,7 +548,7 @@ func create(nhConfig config.NodeHostConfig,
 	var tm config.TransportFactory
 	if nhConfig.Expert.TransportFactory != nil {
 		tm = nhConfig.Expert.TransportFactory
-	} else if memfsTest {
+	} else if invariants.MemfsTest {
 		tm = &ct.ChanTransportFactory{}
 	} else {
 		tm = &DefaultTransportFactory{}

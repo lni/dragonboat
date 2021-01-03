@@ -14,8 +14,8 @@
 
 // +build !dragonboat_memfs_test
 
-package transport
+package invariants
 
-const (
-	memfsTest = false
-)
+// MemfsTest is a boolean flag indicating whether dragonboat is running memfs
+// test mode.
+const MemfsTest = false
