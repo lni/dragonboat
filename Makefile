@@ -1,4 +1,4 @@
-# Copyright 2018-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+# Copyright 2018-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,93 +21,17 @@ OS := $(shell uname)
 PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 # name of the package
 PKGNAME=github.com/lni/dragonboat/v3
-# set the environmental variable DRAGONBOAT_LOGDB to lmdb to use lmdb based
-# LogDB implementation. 
+
 ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
-GOCMD=$(GOEXEC)
 LOGDB_TAG=dragonboat_rocksdb_test
 $(info using rocksdb based log storage)
-ifeq ($(OS),Darwin)
-ROCKSDB_SO_FILE=librocksdb.dylib
-else ifeq ($(OS),Linux)
-ROCKSDB_SO_FILE=librocksdb.so
-else ifeq ($(OS),FreeBSD)
-ROCKSDB_SO_FILE=librocksdb.so
-else ifneq (,$(findstring MINGW,$(OS)))
-$(info running on Windows/MinGW)
-else ifneq (,$(findstring MSYS, $(OS)))
-$(info running on Windows/MSYS)
-else
-$(error OS type $(OS) not supported)
-endif ## ifeq ($(OS),Darwin)
-
-# RocksDB version 5 or 6 are required
-ROCKSDB_INC_PATH ?=
-ROCKSDB_LIB_PATH ?=
-# figure out where is the rocksdb installation
-# supported gorocksdb version in ./build/lib?
-ifeq ($(ROCKSDB_LIB_PATH),)
-ifeq ($(ROCKSDB_INC_PATH),)
-ifneq ($(wildcard $(PKGROOT)/build/lib/$(ROCKSDB_SO_FILE)),)
-ifneq ($(wildcard $(PKGROOT)/build/include/rocksdb/c.h),)
-$(info rocksdb lib found at $(PKGROOT)/build/lib/$(ROCKSDB_SO_FILE))
-ROCKSDB_LIB_PATH=$(PKGROOT)/build/lib
-ROCKSDB_INC_PATH=$(PKGROOT)/build/include
-endif
-endif
-endif
-endif
-
-# in /usr/local/lib?
-ifeq ($(ROCKSDB_LIB_PATH),)
-ifeq ($(ROCKSDB_INC_PATH),)
-ifneq ($(wildcard /usr/local/lib/$(ROCKSDB_SO_FILE)),)
-ifneq ($(wildcard /usr/local/include/rocksdb/c.h),)
-$(info rocksdb lib found at /usr/local/lib/$(ROCKSDB_SO_FILE))
-ROCKSDB_LIB_PATH=/usr/local/lib
-ROCKSDB_INC_PATH=/usr/local/include
-endif
-endif
-endif
-endif 
-
-ifeq ($(OS),Linux)
-ROCKSDB_LIB_FLAG=-lrocksdb -ldl
-else
-ROCKSDB_LIB_FLAG=-lrocksdb
-endif
-
-# by default, shared rocksdb lib is used. when using the static rocksdb lib,
-# you may need to add
-# -lbz2 -lsnappy -lz -llz4 
-ifeq ($(ROCKSDB_LIB_PATH),)
-CDEPS_LDFLAGS=-lrocksdb
-else
-CDEPS_LDFLAGS=-L$(ROCKSDB_LIB_PATH) -lrocksdb
-endif
-
-ifneq ($(ROCKSDB_INC_PATH),)
-CGO_CFLAGS=CGO_CFLAGS="-I$(ROCKSDB_INC_PATH)"
-endif
-
-CGO_LDFLAGS=CGO_LDFLAGS="$(CDEPS_LDFLAGS)"
-GOCMD=$(CGO_LDFLAGS) $(CGO_CFLAGS) $(GOEXEC)
-
-## ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
-else ifeq ($(DRAGONBOAT_LOGDB),pebble_memfs)
-$(error invalid DRAGONBOAT_LOGDB pebble_memfs)
-else ifeq ($(DRAGONBOAT_LOGDB),custom)
-$(info using custom lodb)
-GOCMD=$(GOEXEC)
 else ifeq ($(DRAGONBOAT_LOGDB),)
-GOCMD=$(GOEXEC)
 ifneq ($(DRAGONBOAT_MEMFS_TEST),)
 $(info using memfs based pebble)
 LOGDB_TAG=dragonboat_memfs_test
 else
 $(info using pebble based log storage)
 endif
-
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
@@ -115,9 +39,9 @@ endif
 # verbosity, use -v to see details of go build
 VERBOSE ?= -v
 ifeq ($(VERBOSE),)
-GO=@$(GOCMD)
+GO=@$(GOEXEC)
 else
-GO=$(GOCMD)
+GO=$(GOEXEC)
 endif
 # golang race detector
 # set the RACE environmental variable to 1 to enable it, e.g. RACE=1 make test
