@@ -4932,6 +4932,81 @@ func TestIOErrorIsHandled(t *testing.T) {
 	testIOErrorIsHandled(t, vfs.OpSync)
 }
 
+func TestInstallSnapshotMessageIsNeverDropped(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			nh.partitioned = 1
+			handler := newNodeHostMessageHandler(nh)
+			msg := pb.Message{Type: pb.InstallSnapshot, ClusterId: 1, To: 1}
+			batch := pb.MessageBatch{Requests: []pb.Message{msg}}
+			s, m := handler.HandleMessageBatch(batch)
+			if s != 1 {
+				t.Errorf("snapshot message dropped, %d", s)
+			}
+			if m != 0 {
+				t.Errorf("unexpected message count %d", m)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestMessageToUnknownNodeIsIgnored(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			handler := newNodeHostMessageHandler(nh)
+			msg1 := pb.Message{Type: pb.Ping, ClusterId: 1, To: 1}
+			msg2 := pb.Message{Type: pb.Pong, ClusterId: 1, To: 1}
+			msg3 := pb.Message{Type: pb.Pong, ClusterId: 1, To: 2}
+			batch := pb.MessageBatch{Requests: []pb.Message{msg1, msg2, msg3}}
+			s, m := handler.HandleMessageBatch(batch)
+			if s != 0 {
+				t.Errorf("unexpected snapshot count, %d", s)
+			}
+			if m != 2 {
+				t.Errorf("unexpected message count %d", m)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestNodeCanBeUnloadedOnceClosed(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			countNodes := func(nh *NodeHost) uint64 {
+				count := uint64(0)
+				nh.mu.clusters.Range(func(key, value interface{}) bool {
+					count++
+					return true
+				})
+				return count
+			}
+			node, ok := nh.getCluster(1)
+			if !ok {
+				t.Fatalf("failed to get node")
+			}
+			node.requestRemoval()
+			retry := 1000
+			for retry > 0 {
+				retry--
+				if countNodes(nh) == 0 {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			t.Fatalf("failed to unload the node")
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
 func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{

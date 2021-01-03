@@ -37,10 +37,6 @@ import (
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
-const (
-	badKeyCheck bool = false
-)
-
 var (
 	defaultGCTick         uint64 = 2
 	pendingProposalShards        = settings.Soft.PendingProposalShards
@@ -440,6 +436,22 @@ func (r *RequestState) Release() {
 	}
 }
 
+func (r *RequestState) reuse(notifyCommit bool) {
+	if r.aggrC != nil {
+		plog.Panicf("aggrC not nil")
+	}
+	if len(r.CompletedC) > 0 || r.CompletedC == nil {
+		r.CompletedC = make(chan RequestResult, 1)
+	}
+	if notifyCommit {
+		if len(r.committedC) > 0 || r.committedC == nil {
+			r.committedC = make(chan RequestResult, 1)
+		}
+	} else {
+		r.committedC = nil
+	}
+}
+
 func (r *RequestState) mustBeReadyForLocalRead() {
 	if r.node == nil {
 		plog.Panicf("invalid rs")
@@ -806,11 +818,10 @@ func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 		return nil, ErrTimeoutTooSmall
 	}
 	req := p.pool.Get().(*RequestState)
+	req.reuse(false)
 	req.notifyCommit = false
 	req.deadline = p.getTick() + timeoutTick
-	if len(req.CompletedC) > 0 {
-		req.CompletedC = make(chan RequestResult, 1)
-	}
+
 	ok, closed := p.requests.add(req)
 	if closed {
 		return nil, ErrClusterClosed
@@ -1057,34 +1068,14 @@ func (p *proposalShard) propose(session *client.Session,
 		entry.Cmd = prepareProposalPayload(p.cfg.EntryCompressionType, cmd)
 	}
 	req := p.pool.Get().(*RequestState)
+	req.reuse(p.notifyCommit)
 	req.clientID = session.ClientID
 	req.seriesID = session.SeriesID
 	req.key = entry.Key
 	req.deadline = p.getTick() + timeoutTick
 	req.notifyCommit = p.notifyCommit
-	if req.aggrC != nil {
-		plog.Panicf("aggrC not nil")
-	}
-	if len(req.CompletedC) > 0 {
-		req.CompletedC = make(chan RequestResult, 1)
-	}
-	if p.notifyCommit {
-		if len(req.committedC) > 0 || req.committedC == nil {
-			req.committedC = make(chan RequestResult, 1)
-		}
-	} else {
-		req.committedC = nil
-	}
 
 	p.mu.Lock()
-	if badKeyCheck {
-		_, ok := p.pending[entry.Key]
-		if ok {
-			plog.Warningf("bad key")
-			p.mu.Unlock()
-			return nil, ErrBadKey
-		}
-	}
 	p.pending[entry.Key] = req
 	p.mu.Unlock()
 

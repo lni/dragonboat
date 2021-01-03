@@ -29,6 +29,63 @@ import (
 	"github.com/lni/goutils/random"
 )
 
+func TestRequestStateCommitted(t *testing.T) {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("no panic")
+			}
+		}()
+		rs := &RequestState{}
+		rs.committed()
+	}()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("no panic")
+			}
+		}()
+		rs := &RequestState{notifyCommit: true}
+		rs.committed()
+	}()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("no panic")
+			}
+		}()
+		rs := &RequestState{notifyCommit: true, committedC: make(chan RequestResult, 1)}
+		rs.committed()
+		rs.committed()
+	}()
+	rs := &RequestState{notifyCommit: true, committedC: make(chan RequestResult, 1)}
+	rs.committed()
+	select {
+	case cc := <-rs.committedC:
+		if cc.code != requestCommitted {
+			t.Errorf("not requestedCommitted")
+		}
+	default:
+		t.Errorf("nothing in the committedC")
+	}
+}
+
+func TestRequestStateReuse(t *testing.T) {
+	rs := &RequestState{}
+	rs.reuse(false)
+	if rs.CompletedC == nil || cap(rs.CompletedC) != 1 {
+		t.Errorf("completedC not ready")
+	}
+	if rs.committedC != nil {
+		t.Errorf("committedC unexpectedly created")
+	}
+	rs = &RequestState{}
+	rs.reuse(true)
+	if rs.committedC == nil || cap(rs.committedC) != 1 {
+		t.Errorf("committedC not ready")
+	}
+}
+
 func TestResultCReturnsCompleteCWhenNotifyCommitNotSet(t *testing.T) {
 	rs := &RequestState{
 		CompletedC: make(chan RequestResult),

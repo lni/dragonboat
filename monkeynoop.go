@@ -16,6 +16,10 @@
 
 package dragonboat
 
+import (
+	"sync/atomic"
+)
+
 func (nh *NodeHost) isPartitioned() bool {
-	return false
+	return atomic.LoadInt32(&nh.partitioned) == 1
 }

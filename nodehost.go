@@ -2094,18 +2094,18 @@ func newNodeHostMessageHandler(nh *NodeHost) *messageHandler {
 
 func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64) {
 	nh := h.nh
-	mustKeep := false
 	snapshotCount := uint64(0)
 	msgCount := uint64(0)
 	if nh.isPartitioned() {
+		keep := false
 		// InstallSnapshot is a in-memory local message type that will never be
 		// dropped in production as it will never be sent via networks
 		for _, req := range msg.Requests {
 			if req.Type == pb.InstallSnapshot {
-				mustKeep = true
+				keep = true
 			}
 		}
-		if !mustKeep {
+		if !keep {
 			return 0, 0
 		}
 	}
