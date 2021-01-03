@@ -1311,6 +1311,9 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
+	if _, ok := ctx.Deadline(); !ok {
+		return ErrDeadlineNotSet
+	}
 	if _, ok := nh.getCluster(clusterID); ok {
 		return ErrClusterNotStopped
 	}

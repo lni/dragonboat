@@ -869,14 +869,14 @@ func testAddressByNodeHostID(t *testing.T,
 	waitForLeaderToBeElected(t, nh2, 1)
 	pto := lpto(nh1)
 	session := nh1.GetNoOPSession(1)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), pto)
 		if _, err := nh1.SyncPropose(ctx, session, make([]byte, 0)); err == nil {
 			cancel()
 			return
 		}
-		t.Logf("got %v", err)
 		cancel()
+		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatalf("failed to make proposal")
 }
@@ -965,11 +965,12 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	session := nh1.GetNoOPSession(1)
 	testProposal := func() {
 		done := false
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 100; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh1.SyncPropose(ctx, session, make([]byte, 0))
 			cancel()
 			if err != nil {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			done = true
@@ -5025,6 +5026,56 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			}
 			if _, err := nh.GetNodeUser(1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestContextDeadlineIsChecked(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			ctx := context.Background()
+			if _, err := nh.SyncPropose(ctx, nil, nil); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if _, err := nh.SyncRead(ctx, 1, nil); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if _, err := nh.SyncGetClusterMembership(ctx, 1); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if _, err := nh.GetNewSession(ctx, 1); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.CloseSession(ctx, nil); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if _, err := nh.SyncGetSession(ctx, 1); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncCloseSession(ctx, nil); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if _, err := nh.SyncRequestSnapshot(ctx, 1, DefaultSnapshotOption); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncRequestDeleteNode(ctx, 1, 1, 0); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncRequestAddNode(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncRequestAddObserver(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncRequestAddWitness(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
+			}
+			if err := nh.SyncRemoveData(ctx, 1, 1); err != ErrDeadlineNotSet {
+				t.Errorf("ctx deadline not checked")
 			}
 		},
 	}
