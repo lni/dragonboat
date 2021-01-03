@@ -54,7 +54,7 @@ func TestNodeHostIDRegistry(t *testing.T) {
 	// remove node
 	r.Remove(123, 456)
 	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
-		t.Errorf("removed failed")
+		t.Errorf("removed failed, %v", err)
 	}
 	// add back
 	r.Add(123, 456, nhid)
@@ -67,12 +67,8 @@ func TestNodeHostIDRegistry(t *testing.T) {
 	}
 	// remove cluster
 	r.RemoveCluster(123)
-	addr, _, err = r.Resolve(123, 456)
-	if err != nil {
+	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
 		t.Fatalf("failed to get addr, %v", err)
-	}
-	if addr != nhConfig.RaftAddress {
-		t.Errorf("unexpected addr %s", addr)
 	}
 }
 

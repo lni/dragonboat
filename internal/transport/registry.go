@@ -121,7 +121,7 @@ func (n *Registry) Resolve(clusterID uint64, nodeID uint64) (string, string, err
 	defer n.mu.RUnlock()
 	addr, ok := n.addr[key]
 	if !ok {
-		return "", "", errors.New("addr not found")
+		return "", "", ErrUnknownTarget
 	}
 	return addr, n.getConnectionKey(addr, clusterID), nil
 }
