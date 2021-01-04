@@ -32,7 +32,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -44,9 +43,6 @@ var (
 )
 
 var (
-	// ErrTestKnobReturn is the error returned when returned earlier due to test
-	// knob.
-	ErrTestKnobReturn = errors.New("returned earlier due to test knob")
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
 	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
@@ -694,9 +690,6 @@ func (s *StateMachine) stream(sink pb.IChunkSink) error {
 	}(); err != nil {
 		return err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.stream") {
-		return ErrTestKnobReturn
-	}
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
@@ -712,14 +705,8 @@ func (s *StateMachine) concurrentSave(req SSRequest) (pb.Snapshot,
 	}(); err != nil {
 		return pb.Snapshot{}, nil, err
 	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.sync") {
-		return pb.Snapshot{}, nil, ErrTestKnobReturn
-	}
 	if err := s.sync(); err != nil {
 		return pb.Snapshot{}, nil, err
-	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.concurrentSave") {
-		return pb.Snapshot{}, nil, ErrTestKnobReturn
 	}
 	return s.doSave(meta)
 }
@@ -731,9 +718,6 @@ func (s *StateMachine) save(req SSRequest) (pb.Snapshot, *server.SSEnv, error) {
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
 		return pb.Snapshot{}, nil, err
-	}
-	if tests.ReadyToReturnTestKnob(s.node.ShouldStop(), "s.save") {
-		return pb.Snapshot{}, nil, ErrTestKnobReturn
 	}
 	return s.doSave(meta)
 }

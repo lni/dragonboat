@@ -24,7 +24,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -945,9 +944,6 @@ func (e *engine) processSteps(workerID uint64,
 	if len(nodes) == 0 {
 		return
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "") {
-		return
-	}
 	if len(active) == 0 {
 		for cid := range nodes {
 			active[cid] = struct{}{}
@@ -969,9 +965,6 @@ func (e *engine) processSteps(workerID uint64,
 		}
 	}
 	e.applySnapshotAndUpdate(nodeUpdates, nodes, true)
-	if tests.ReadyToReturnTestKnob(stopC, "sending append msg") {
-		return
-	}
 	// see raft thesis section 10.2.1 on details why we send Replicate message
 	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
@@ -981,34 +974,19 @@ func (e *engine) processSteps(workerID uint64,
 		node.processDroppedEntries(ud)
 		node.processDroppedReadIndexes(ud)
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "saving raft state") {
-		return
-	}
 	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
 		panic(err)
-	}
-	if tests.ReadyToReturnTestKnob(stopC, "saving snapshots") {
-		return
 	}
 	if err := e.onSnapshotSaved(nodeUpdates, nodes); err != nil {
 		panic(err)
 	}
-	if tests.ReadyToReturnTestKnob(stopC, "applying updates") {
-		return
-	}
 	e.applySnapshotAndUpdate(nodeUpdates, nodes, false)
-	if tests.ReadyToReturnTestKnob(stopC, "processing raft updates") {
-		return
-	}
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
 		if err := node.processRaftUpdate(ud); err != nil {
 			panic(err)
 		}
 		e.processMoreCommittedEntries(ud)
-		if tests.ReadyToReturnTestKnob(stopC, "committing updates") {
-			return
-		}
 		node.commitRaftUpdate(ud)
 	}
 	if lazyFreeCycle > 0 {

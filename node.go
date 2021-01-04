@@ -29,7 +29,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -673,18 +672,15 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 	ss, ssenv, err := n.sm.Save(req)
 	if err != nil {
 		if saveAborted(err) {
+			plog.Infof("%s aborted SaveSnapshot", n.id())
 			ssenv.MustRemoveTempDir()
 			n.pendingSnapshot.apply(req.Key, false, true, 0)
-			plog.Infof("%s aborted SaveSnapshot", n.id())
 			return 0, nil
-		} else if isSoftSnapshotError(err) || err == rsm.ErrTestKnobReturn {
+		} else if isSoftSnapshotError(err) {
 			return 0, nil
 		}
 		plog.Errorf("%s SaveSnapshot failed %v", n.id(), err)
 		return 0, err
-	}
-	if tests.ReadyToReturnTestKnob(n.stopC, "snapshotter.Commit") {
-		return 0, nil
 	}
 	plog.Infof("%s snapshotted, %s, term %d, file count %d",
 		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
@@ -737,7 +733,7 @@ func (n *node) compactionOverhead(req rsm.SSRequest) uint64 {
 
 func (n *node) stream(sink pb.IChunkSink) error {
 	if sink != nil {
-		plog.Infof("%s called streamSnapshot to node %d", n.id(), sink.ToNodeID())
+		plog.Infof("%s called doStream to node %d", n.id(), sink.ToNodeID())
 		if err := n.doStream(sink); err != nil {
 			return err
 		}
@@ -747,10 +743,8 @@ func (n *node) stream(sink pb.IChunkSink) error {
 
 func (n *node) doStream(sink pb.IChunkSink) error {
 	if err := n.sm.Stream(sink); err != nil {
-		plog.Errorf("%s StreamSnapshot failed %v", n.id(), err)
-		if !saveAborted(err) &&
-			err != sm.ErrSnapshotStreaming &&
-			err != rsm.ErrTestKnobReturn {
+		plog.Errorf("%s sm.Stream failed %v", n.id(), err)
+		if !saveAborted(err) && err != sm.ErrSnapshotStreaming {
 			return err
 		}
 	}
@@ -824,7 +818,7 @@ func (n *node) recoverDone(index uint64) {
 	if !n.initialized() {
 		n.initialSnapshotDone(index)
 	} else {
-		n.doRecoverFromSnapshotDone()
+		n.recoverFromSnapshotDone()
 	}
 }
 
@@ -833,7 +827,7 @@ func (n *node) initialSnapshotDone(index uint64) {
 	n.pipeline.setApplyReady(n.clusterID)
 }
 
-func (n *node) doRecoverFromSnapshotDone() {
+func (n *node) recoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
 	n.pipeline.setApplyReady(n.clusterID)
 }
