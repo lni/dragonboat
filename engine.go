@@ -64,8 +64,7 @@ func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, m := range l.nodes {
-		n, ok := m[clusterID]
-		if ok && n.nodeID == nodeID {
+		if n, ok := m[clusterID]; ok && n.nodeID == nodeID {
 			return n
 		}
 	}
@@ -149,23 +148,23 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 type jobType uint64
 
 const (
-	snapshotAvailable jobType = iota
-	snapshotRequested
-	streamSnapshot
+	recoverRequested jobType = iota
+	saveRequested
+	streamRequested
 )
 
 var jobTypeNames = [...]string{
-	"snapshotAvailable",
-	"snapshotRequested",
-	"streamSnapshot",
+	"recoverRequested",
+	"saveRequested",
+	"streamRequested",
 }
 
-func (jt jobType) String() string {
-	return jobTypeNames[uint64(jt)]
+func (t jobType) String() string {
+	return jobTypeNames[uint64(t)]
 }
 
 type pendingJob struct {
-	jt        jobType
+	t         jobType
 	clusterID uint64
 }
 
@@ -364,24 +363,24 @@ func (p *workerPool) workerPoolMain() {
 		} else if chosen == 1 {
 			clusters := p.saveReady.getReadyMap(1)
 			for cid := range clusters {
-				pj := pendingJob{clusterID: cid, jt: snapshotRequested}
-				plog.Debugf("%s snapshotRequested for %d", p.nh.describe(), cid)
+				pj := pendingJob{clusterID: cid, t: saveRequested}
+				plog.Debugf("%s saveRequested for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
 		} else if chosen == 2 {
 			clusters := p.recoverReady.getReadyMap(1)
 			for cid := range clusters {
-				pj := pendingJob{clusterID: cid, jt: snapshotAvailable}
-				plog.Debugf("%s snapshotAvailable for %d", p.nh.describe(), cid)
+				pj := pendingJob{clusterID: cid, t: recoverRequested}
+				plog.Debugf("%s recoverRequested for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
 		} else if chosen == 3 {
 			clusters := p.streamReady.getReadyMap(1)
 			for cid := range clusters {
-				pj := pendingJob{clusterID: cid, jt: streamSnapshot}
-				plog.Debugf("%s streamSnapshot for %d", p.nh.describe(), cid)
+				pj := pendingJob{clusterID: cid, t: streamRequested}
+				plog.Debugf("%s streamRequested for %d", p.nh.describe(), cid)
 				p.pending = append(p.pending, pj)
 				toSchedule = true
 			}
@@ -458,6 +457,7 @@ func (p *workerPool) doLoadNodes(csi uint64,
 }
 
 func (p *workerPool) completed(workerID uint64) {
+	count := 0
 	n, ok := p.busy[workerID]
 	if !ok {
 		plog.Panicf("worker %d is not busy", workerID)
@@ -465,17 +465,19 @@ func (p *workerPool) completed(workerID uint64) {
 	delete(p.busy, workerID)
 	_, ok1 := p.saving[n.clusterID]
 	if ok1 {
-		plog.Debugf("%s completed snapshotRequested", n.id())
+		plog.Debugf("%s completed saveRequested", n.id())
 		delete(p.saving, n.clusterID)
+		count++
 	}
 	_, ok2 := p.recovering[n.clusterID]
 	if ok2 {
-		plog.Debugf("%s completed snapshotAvailable", n.id())
+		plog.Debugf("%s completed recoverRequested", n.id())
 		delete(p.recovering, n.clusterID)
+		count++
 	}
 	count, ok3 := p.streaming[n.clusterID]
 	if ok3 {
-		plog.Debugf("%s completed streamSnapshot", n.id())
+		plog.Debugf("%s completed streamRequested", n.id())
 		if count == 0 {
 			plog.Panicf("node completed streaming when not streaming")
 		} else if count == 1 {
@@ -483,9 +485,13 @@ func (p *workerPool) completed(workerID uint64) {
 		} else {
 			p.streaming[n.clusterID] = count - 1
 		}
+		count++
 	}
 	if !ok1 && !ok2 && !ok3 {
 		plog.Panicf("not sure what got completed")
+	}
+	if count > 1 {
+		plog.Panicf("completed more than 1 job?")
 	}
 }
 
@@ -497,8 +503,7 @@ func (p *workerPool) inProgress(clusterID uint64) bool {
 }
 
 func (p *workerPool) canStream(clusterID uint64) bool {
-	_, ok := p.saving[clusterID]
-	if ok {
+	if _, ok := p.saving[clusterID]; ok {
 		return false
 	}
 	_, ok = p.recovering[clusterID]
@@ -514,15 +519,15 @@ func (p *workerPool) canRecover(clusterID uint64) bool {
 }
 
 func (p *workerPool) canSchedule(j pendingJob) bool {
-	switch j.jt {
-	case snapshotAvailable:
+	switch j.t {
+	case recoverRequested:
 		return p.canRecover(j.clusterID)
-	case snapshotRequested:
+	case saveRequested:
 		return p.canSave(j.clusterID)
-	case streamSnapshot:
+	case streamRequested:
 		return p.canStream(j.clusterID)
 	default:
-		plog.Panicf("unknown job type %d", j.jt)
+		plog.Panicf("unknown job type %d", j.t)
 	}
 	panic("not suppose to reach here")
 }
@@ -535,8 +540,7 @@ func (p workerPool) setBusy(node *node, workerID uint64) {
 }
 
 func (p *workerPool) startStreaming(node *node) {
-	count, ok := p.streaming[node.clusterID]
-	if !ok {
+	if count, ok := p.streaming[node.clusterID]; !ok {
 		p.streaming[node.clusterID] = 1
 	} else {
 		p.streaming[node.clusterID] = count + 1
@@ -544,32 +548,30 @@ func (p *workerPool) startStreaming(node *node) {
 }
 
 func (p *workerPool) startSaving(node *node) {
-	_, ok := p.saving[node.clusterID]
-	if ok {
+	if _, ok := p.saving[node.clusterID]; ok {
 		plog.Panicf("%s trying to start saving again", node.id())
 	}
 	p.saving[node.clusterID] = struct{}{}
 }
 
 func (p *workerPool) startRecovering(node *node) {
-	_, ok := p.recovering[node.clusterID]
-	if ok {
+	if _, ok := p.recovering[node.clusterID]; ok {
 		plog.Panicf("%s trying to start recovering again", node.id())
 	}
 	p.recovering[node.clusterID] = struct{}{}
 }
 
-func (p *workerPool) start(jt jobType, node *node, workerID uint64) {
+func (p *workerPool) start(t jobType, node *node, workerID uint64) {
 	p.setBusy(node, workerID)
-	switch jt {
-	case snapshotAvailable:
+	switch t {
+	case recoverRequested:
 		p.startRecovering(node)
-	case snapshotRequested:
+	case saveRequested:
 		p.startSaving(node)
-	case streamSnapshot:
+	case streamRequested:
 		p.startStreaming(node)
 	default:
-		plog.Panicf("unknown task type %d", jt)
+		plog.Panicf("unknown task type %d", t)
 	}
 }
 
@@ -597,11 +599,13 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*node) bool {
 			return true
 		}
 		if p.canSchedule(pj) {
-			if p.scheduleTask(pj.jt, n, w) {
-				plog.Debugf("%s scheduled for %s", n.id(), pj.jt)
-				p.removeFromPending(idx)
-				return true
+			if p.scheduleTask(pj.t, n, w) {
+				plog.Debugf("%s scheduled for %s", n.id(), pj.t)
+			} else {
+				plog.Warningf("%s abandoned pending job %s", n.id(), pj.t)
 			}
+			p.removeFromPending(idx)
+			return true
 		}
 	}
 	return false
@@ -616,22 +620,22 @@ func (p *workerPool) removeFromPending(idx int) {
 	}
 }
 
-func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
+func (p *workerPool) scheduleTask(t jobType, n *node, w *ssWorker) bool {
 	var j job
-	switch jt {
-	case snapshotRequested:
+	switch t {
+	case saveRequested:
 		req, ok := n.ss.getSaveReq()
 		if !ok {
 			return false
 		}
 		j = job{task: req, node: n}
-	case snapshotAvailable:
+	case recoverRequested:
 		req, ok := n.ss.getRecoverReq()
 		if !ok {
 			return false
 		}
 		j = job{task: req, node: n}
-	case streamSnapshot:
+	case streamRequested:
 		req, sinkFn, ok := n.ss.getStreamReq()
 		if !ok {
 			return false
@@ -640,11 +644,11 @@ func (p *workerPool) scheduleTask(jt jobType, n *node, w *ssWorker) bool {
 	default:
 		panic("unknown job type")
 	}
-	p.start(jt, n, w.workerID)
+	p.start(t, n, w.workerID)
 	select {
 	case w.requestC <- j:
 	default:
-		panic("worker busy")
+		panic("worker received multiple jobs")
 	}
 	return true
 }
