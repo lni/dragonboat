@@ -475,15 +475,15 @@ func (p *workerPool) completed(workerID uint64) {
 		delete(p.recovering, n.clusterID)
 		count++
 	}
-	count, ok3 := p.streaming[n.clusterID]
+	sc, ok3 := p.streaming[n.clusterID]
 	if ok3 {
 		plog.Debugf("%s completed streamRequested", n.id())
-		if count == 0 {
+		if sc == 0 {
 			plog.Panicf("node completed streaming when not streaming")
-		} else if count == 1 {
+		} else if sc == 1 {
 			delete(p.streaming, n.clusterID)
 		} else {
-			p.streaming[n.clusterID] = count - 1
+			p.streaming[n.clusterID] = sc - 1
 		}
 		count++
 	}
@@ -506,7 +506,7 @@ func (p *workerPool) canStream(clusterID uint64) bool {
 	if _, ok := p.saving[clusterID]; ok {
 		return false
 	}
-	_, ok = p.recovering[clusterID]
+	_, ok := p.recovering[clusterID]
 	return !ok
 }
 
