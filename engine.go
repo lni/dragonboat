@@ -273,6 +273,8 @@ type workerPool struct {
 	recovering    map[uint64]struct{} // map of clusterID
 	streaming     map[uint64]uint64   // map of clusterID -> target count
 	pending       []job
+	nodes         map[uint64]*ssNode
+	cci           uint64
 	workerStopper *syncutil.Stopper
 	poolStopper   *syncutil.Stopper
 }
@@ -285,6 +287,7 @@ func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
 		saveReady:     newWorkReady(1),
 		recoverReady:  newWorkReady(1),
 		streamReady:   newWorkReady(1),
+		nodes:         make(map[uint64]*ssNode),
 		workers:       make([]*ssWorker, snapshotWorkerCount),
 		busy:          make(map[uint64]*ssNode, snapshotWorkerCount),
 		saving:        make(map[uint64]struct{}, snapshotWorkerCount),
@@ -319,9 +322,6 @@ func (p *workerPool) getWorker() *ssWorker {
 func (p *workerPool) workerPoolMain() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
-	nodes := make(map[uint64]*ssNode)
-	cci := uint64(0)
-	busyUpdated := false
 	for {
 		toSchedule := false
 		// 0 - pool stopper stopc
@@ -365,15 +365,15 @@ func (p *workerPool) workerPoolMain() {
 		chosen, _, _ := reflect.Select(cases)
 		if chosen == 0 {
 			p.workerStopper.Stop()
-			for _, n := range nodes {
+			for _, n := range p.nodes {
 				n.n.offloaded(rsm.FromSnapshotWorker)
 			}
 			return
 		} else if chosen == 1 {
 			clusters := p.saveReady.getReadyMap(1)
-			cci, nodes = p.loadNodes(cci, nodes)
+			p.loadNodes()
 			for cid := range clusters {
-				if j, ok := p.getSaveJob(nodes, cid); ok {
+				if j, ok := p.getSaveJob(cid); ok {
 					plog.Debugf("%s saveRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
 					toSchedule = true
@@ -381,9 +381,9 @@ func (p *workerPool) workerPoolMain() {
 			}
 		} else if chosen == 2 {
 			clusters := p.recoverReady.getReadyMap(1)
-			cci, nodes = p.loadNodes(cci, nodes)
+			p.loadNodes()
 			for cid := range clusters {
-				if j, ok := p.getRecoverJob(nodes, cid); ok {
+				if j, ok := p.getRecoverJob(cid); ok {
 					plog.Debugf("%s recoverRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
 					toSchedule = true
@@ -391,16 +391,16 @@ func (p *workerPool) workerPoolMain() {
 			}
 		} else if chosen == 3 {
 			clusters := p.streamReady.getReadyMap(1)
-			cci, nodes = p.loadNodes(cci, nodes)
+			p.loadNodes()
 			for cid := range clusters {
-				if j, ok := p.getStreamJob(nodes, cid); ok {
+				if j, ok := p.getStreamJob(cid); ok {
 					plog.Debugf("%s streamRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
 					toSchedule = true
 				}
 			}
 		} else if chosen == 4 {
-			cci, nodes = p.loadNodes(cci, nodes)
+			p.loadNodes()
 		} else if chosen >= 5 && chosen <= 5+len(p.workers)-1 {
 			workerID := uint64(chosen - 5)
 			w := p.workers[workerID]
@@ -411,21 +411,15 @@ func (p *workerPool) workerPoolMain() {
 				plog.Panicf("not in busy state")
 			}
 			p.completed(workerID)
-			busyUpdated = true
 			toSchedule = true
 		} else if chosen == len(cases)-1 {
-			if busyUpdated {
-				cci, nodes = p.loadNodes(0, nodes)
-				busyUpdated = false
-			} else {
-				cci, nodes = p.loadNodes(cci, nodes)
-			}
+			p.loadNodes()
 		} else {
 			plog.Panicf("chosen %d, unexpected case", chosen)
 		}
 		if toSchedule {
-			cci, nodes = p.loadNodes(0, nodes)
-			p.schedule(nodes)
+			p.loadNodes()
+			p.schedule()
 		}
 	}
 }
@@ -434,29 +428,26 @@ func (p *workerPool) updateLoadedBusyNodes() {
 	p.loaded.updateSSNodes(2, rsm.FromSnapshotWorker, p.busy)
 }
 
-func (p *workerPool) loadNodes(cci uint64,
-	nodes map[uint64]*ssNode) (uint64, map[uint64]*ssNode) {
-	newCCI := p.nh.getClusterSetIndex()
-	if newCCI != cci {
+func (p *workerPool) loadNodes() {
+	if p.nh.getClusterSetIndex() != p.cci {
 		newNodes := make(map[uint64]*ssNode)
-		newCCI = p.nh.forEachCluster(func(cid uint64, n *node) bool {
+		p.cci = p.nh.forEachCluster(func(cid uint64, n *node) bool {
 			n.loaded(rsm.FromSnapshotWorker)
-			if on, ok := nodes[cid]; ok && on.n.instanceID == n.instanceID {
+			if on, ok := p.nodes[cid]; ok && on.n.instanceID == n.instanceID {
 				newNodes[cid] = on
 			} else {
 				newNodes[cid] = newSSNode(n)
 			}
 			return true
 		})
-		for cid, n := range nodes {
+		for cid, n := range p.nodes {
 			if nn, ok := newNodes[cid]; !ok || nn.n.instanceID != n.n.instanceID {
 				n.unref()
 			}
 		}
 		p.loaded.updateSSNodes(1, rsm.FromSnapshotWorker, newNodes)
-		return newCCI, newNodes
+		p.nodes = newNodes
 	}
-	return cci, nodes
 }
 
 func (p *workerPool) completed(workerID uint64) {
@@ -585,15 +576,15 @@ func (p *workerPool) start(j job, n *ssNode, workerID uint64) {
 	}
 }
 
-func (p *workerPool) schedule(nodes map[uint64]*ssNode) {
+func (p *workerPool) schedule() {
 	for {
-		if !p.scheduleWorker(nodes) {
+		if !p.scheduleWorker() {
 			return
 		}
 	}
 }
 
-func (p *workerPool) scheduleWorker(nodes map[uint64]*ssNode) bool {
+func (p *workerPool) scheduleWorker() bool {
 	if len(p.pending) == 0 {
 		return false
 	}
@@ -603,7 +594,7 @@ func (p *workerPool) scheduleWorker(nodes map[uint64]*ssNode) bool {
 		return false
 	}
 	for idx, j := range p.pending {
-		n, ok := nodes[j.clusterID]
+		n, ok := p.nodes[j.clusterID]
 		if !ok {
 			p.removeFromPending(idx)
 			return true
@@ -626,9 +617,8 @@ func (p *workerPool) removeFromPending(idx int) {
 	}
 }
 
-func (p *workerPool) getSaveJob(nodes map[uint64]*ssNode,
-	clusterID uint64) (job, bool) {
-	n, ok := nodes[clusterID]
+func (p *workerPool) getSaveJob(clusterID uint64) (job, bool) {
+	n, ok := p.nodes[clusterID]
 	if !ok {
 		return job{}, false
 	}
@@ -644,9 +634,8 @@ func (p *workerPool) getSaveJob(nodes map[uint64]*ssNode,
 	}, true
 }
 
-func (p *workerPool) getRecoverJob(nodes map[uint64]*ssNode,
-	clusterID uint64) (job, bool) {
-	n, ok := nodes[clusterID]
+func (p *workerPool) getRecoverJob(clusterID uint64) (job, bool) {
+	n, ok := p.nodes[clusterID]
 	if !ok {
 		return job{}, false
 	}
@@ -662,9 +651,8 @@ func (p *workerPool) getRecoverJob(nodes map[uint64]*ssNode,
 	}, true
 }
 
-func (p *workerPool) getStreamJob(nodes map[uint64]*ssNode,
-	clusterID uint64) (job, bool) {
-	n, ok := nodes[clusterID]
+func (p *workerPool) getStreamJob(clusterID uint64) (job, bool) {
+	n, ok := p.nodes[clusterID]
 	if !ok {
 		return job{}, false
 	}
