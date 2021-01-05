@@ -176,6 +176,24 @@ func TestLoadedNodes(t *testing.T) {
 	}
 }
 
+func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
+	m := make(map[uint64]*ssNode)
+	m[1] = &ssNode{n: &node{clusterID: 100, nodeID: 100}}
+	m[2] = &ssNode{n: &node{clusterID: 200, nodeID: 200}}
+	l := newLoadedNodes()
+	l.updateFromBusySSNodes(2, rsm.FromSnapshotWorker, m)
+	nm := l.nodes[nodeType{workerID: 2, from: rsm.FromSnapshotWorker}]
+	if len(nm) != 2 {
+		t.Errorf("unexpected map len")
+	}
+	if n, ok := nm[100]; !ok || n.clusterID != 100 {
+		t.Errorf("failed to locate the node")
+	}
+	if n, ok := nm[200]; !ok || n.clusterID != 200 {
+		t.Errorf("failed to locate the node")
+	}
+}
+
 /*
 func TestWPRemoveFromPending(t *testing.T) {
 	tests := []struct {

@@ -80,14 +80,21 @@ func (l *loadedNodes) update(workerID uint64,
 	l.nodes[nt] = nodes
 }
 
-func (l *loadedNodes) updateSSNodes(workerID uint64,
+// nodes is a map of workerID -> *ssNode
+func (l *loadedNodes) updateFromBusySSNodes(workerID uint64,
+	from rsm.From, nodes map[uint64]*ssNode) {
+	l.updateFromLoadedSSNodes(workerID, from, nodes)
+}
+
+// nodes is a map of clusterID -> *ssNode
+func (l *loadedNodes) updateFromLoadedSSNodes(workerID uint64,
 	from rsm.From, nodes map[uint64]*ssNode) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	nt := nodeType{workerID: workerID, from: from}
 	nm := make(map[uint64]*node, len(nodes))
-	for cid, n := range nodes {
-		nm[cid] = n.n
+	for _, n := range nodes {
+		nm[n.n.clusterID] = n.n
 	}
 	l.nodes[nt] = nm
 }
@@ -425,7 +432,7 @@ func (p *workerPool) workerPoolMain() {
 }
 
 func (p *workerPool) updateLoadedBusyNodes() {
-	p.loaded.updateSSNodes(2, rsm.FromSnapshotWorker, p.busy)
+	p.loaded.updateFromBusySSNodes(2, rsm.FromSnapshotWorker, p.busy)
 }
 
 func (p *workerPool) loadNodes() {
@@ -445,7 +452,7 @@ func (p *workerPool) loadNodes() {
 				n.unref()
 			}
 		}
-		p.loaded.updateSSNodes(1, rsm.FromSnapshotWorker, newNodes)
+		p.loaded.updateFromLoadedSSNodes(1, rsm.FromSnapshotWorker, newNodes)
 		p.nodes = newNodes
 	}
 }
