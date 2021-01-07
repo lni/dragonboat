@@ -228,8 +228,7 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 	if pb.IsEmptySnapshot(ss) {
 		return 0, nil
 	}
-	ss.Validate(s.fs)
-	plog.Debugf("%s called RecoverFromSnapshot, %s, on disk idx %d",
+	plog.Debugf("%s called Recover, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	if err := s.recover(ss, t.Initial); err != nil {
 		return 0, err
@@ -341,9 +340,8 @@ func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
 		if err == sm.ErrSnapshotStopped {
 			s.aborted = true
-			return err
 		}
-		return ErrRestoreSnapshot
+		return err
 	}
 	s.apply(ss)
 	return nil
@@ -393,7 +391,7 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	s.tryInjectTestFS()
 	index, err := s.sm.Open()
 	if err != nil {
-		plog.Errorf("%s failed to open on disk SM", s.id())
+		plog.Errorf("%s failed to open on disk SM, %v", s.id(), err)
 		if err == sm.ErrOpenStopped {
 			s.aborted = true
 		}

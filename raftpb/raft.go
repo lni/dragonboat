@@ -283,14 +283,12 @@ func checkFileSize(path string, size uint64, fs vfs.IFS) {
 
 // Validate validates the snapshot instance.
 func (snapshot *Snapshot) Validate(fs vfs.IFS) bool {
-	if len(snapshot.Filepath) == 0 ||
-		snapshot.FileSize == 0 {
+	if len(snapshot.Filepath) == 0 || snapshot.FileSize == 0 {
 		return false
 	}
 	checkFileSize(snapshot.Filepath, snapshot.FileSize, fs)
 	for _, f := range snapshot.Files {
-		if len(f.Filepath) == 0 ||
-			f.FileSize == 0 {
+		if len(f.Filepath) == 0 || f.FileSize == 0 {
 			return false
 		}
 		checkFileSize(f.Filepath, f.FileSize, fs)
