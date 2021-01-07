@@ -26,11 +26,16 @@ ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
 LOGDB_TAG=dragonboat_rocksdb_test
 $(info using rocksdb based log storage)
 else ifeq ($(DRAGONBOAT_LOGDB),)
-ifneq ($(DRAGONBOAT_MEMFS_TEST),)
+ifneq ($(MEMFS_TEST),)
+$(info using memfs based pebble)
+LOGDB_TAG=dragonboat_memfs_test
+else
+ifneq ($(MEMFS_TEST_TO_RUN),)
 $(info using memfs based pebble)
 LOGDB_TAG=dragonboat_memfs_test
 else
 $(info using pebble based log storage)
+endif
 endif
 else
 $(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
@@ -53,6 +58,11 @@ endif
 ifneq ($(TEST_TO_RUN),)
 $(info Running selected tests $(TEST_TO_RUN))
 SELECTED_TEST_OPTION=-run $(TEST_TO_RUN)
+endif
+
+ifneq ($(MEMFS_TEST_TO_RUN),)
+$(info Running selected tests $(MEMFS_TEST_TO_RUN))
+SELECTED_TEST_OPTION=-run $(MEMFS_TEST_TO_RUN)
 endif
 
 ifneq ($(BENCHMARK_TO_RUN),)
