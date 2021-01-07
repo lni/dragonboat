@@ -1579,6 +1579,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		return ErrClusterAlreadyExist
 	}
 	if nh.engine.nodeLoaded(clusterID, nodeID) {
+		// node is still loaded in the execution engine, e.g. processing snapshot
 		return ErrClusterAlreadyExist
 	}
 	if join && len(initialMembers) > 0 {
