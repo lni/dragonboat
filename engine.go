@@ -372,9 +372,7 @@ func (p *workerPool) workerPoolMain() {
 		chosen, _, _ := reflect.Select(cases)
 		if chosen == 0 {
 			p.workerStopper.Stop()
-			for _, n := range p.nodes {
-				n.n.offloaded(rsm.FromSnapshotWorker)
-			}
+			p.unloadNodes()
 			return
 		} else if chosen == 1 {
 			clusters := p.saveReady.getReadyMap(1)
@@ -428,6 +426,15 @@ func (p *workerPool) workerPoolMain() {
 			p.loadNodes()
 			p.schedule()
 		}
+	}
+}
+
+func (p *workerPool) unloadNodes() {
+	for _, n := range p.nodes {
+		n.unref()
+	}
+	for _, n := range p.busy {
+		n.unref()
 	}
 }
 
