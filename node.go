@@ -768,7 +768,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 		if err != nil {
 			if openAborted(err) {
 				plog.Infof("%s aborted OpenOnDiskStateMachine", n.id())
-				return 0, err
+				return 0, nil
 			}
 			plog.Errorf("%s failed to OpenOnDiskStateMachine, %v", n.id(), err)
 			return 0, err
@@ -782,6 +782,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 		plog.Errorf("%s failed to recover, %v", n.id(), err)
 		if recoverAborted(err) {
 			plog.Infof("%s aborted recovery", n.id())
+			return 0, nil
 		}
 		return 0, err
 	}

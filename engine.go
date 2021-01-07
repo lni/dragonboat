@@ -243,9 +243,7 @@ func (w *ssWorker) handle(j job) {
 
 func (w *ssWorker) recover(j job) {
 	if index, err := j.node.n.recover(j.task); err != nil {
-		if !openAborted(err) && !recoverAborted(err) {
-			panic(err)
-		}
+		panic(err)
 	} else {
 		j.node.n.recoverDone(index)
 	}
