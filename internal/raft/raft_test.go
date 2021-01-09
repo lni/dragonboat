@@ -1861,7 +1861,7 @@ func TestIsRequestLeaderMessage(t *testing.T) {
 		{pb.InstallSnapshot, false, true},
 		{pb.ReadIndexResp, false, true},
 		{pb.TimeoutNow, false, true},
-		{pb.LeaderTransfer, false, false},
+		{pb.LeaderTransfer, true, false},
 	}
 	for _, tt := range tests {
 		if isRequestMessage(tt.msgType) != tt.reqMsg {
@@ -2317,7 +2317,7 @@ func TestFollowerResetElectionTickOnReceivingLeaderMessage(t *testing.T) {
 
 func TestFollowerRedirectReadIndexMessageToLeader(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
-	r.becomeFollower(0, 2)
+	r.becomeFollower(10, 2)
 	m := pb.Message{
 		Type: pb.ReadIndex,
 	}
@@ -2327,6 +2327,45 @@ func TestFollowerRedirectReadIndexMessageToLeader(t *testing.T) {
 	}
 	if r.msgs[0].Type != pb.ReadIndex || r.msgs[0].To != 2 {
 		t.Errorf("unexpected message sent %v", r.msgs[0])
+	}
+	if r.msgs[0].Term != 0 {
+		t.Errorf("term unexpectedly set")
+	}
+}
+
+func TestFollowerRedirectProposeMessageToLeader(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.becomeFollower(10, 2)
+	m := pb.Message{
+		Type: pb.Propose,
+	}
+	r.handleFollowerPropose(m)
+	if len(r.msgs) != 1 {
+		t.Fatalf("failed to redirect the message")
+	}
+	if r.msgs[0].Type != pb.Propose || r.msgs[0].To != 2 {
+		t.Errorf("unexpected message sent %v", r.msgs[0])
+	}
+	if r.msgs[0].Term != 0 {
+		t.Errorf("term unexpectedly set")
+	}
+}
+
+func TestFollowerRedirectLeaderTransferMessageToLeader(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.becomeFollower(10, 2)
+	m := pb.Message{
+		Type: pb.LeaderTransfer,
+	}
+	r.handleFollowerLeaderTransfer(m)
+	if len(r.msgs) != 1 {
+		t.Fatalf("failed to redirect the message")
+	}
+	if r.msgs[0].Type != pb.LeaderTransfer || r.msgs[0].To != 2 {
+		t.Errorf("unexpected message sent %v", r.msgs[0])
+	}
+	if r.msgs[0].Term != 0 {
+		t.Errorf("term unexpectedly set")
 	}
 }
 

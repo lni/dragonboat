@@ -1389,7 +1389,7 @@ func (r *raft) handleReplicateMessage(m pb.Message) {
 //
 
 func isRequestMessage(t pb.MessageType) bool {
-	return t == pb.Propose || t == pb.ReadIndex
+	return t == pb.Propose || t == pb.ReadIndex || t == pb.LeaderTransfer
 }
 
 func isLeaderMessage(t pb.MessageType) bool {
