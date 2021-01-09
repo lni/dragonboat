@@ -2047,6 +2047,10 @@ func getRequestState(ctx context.Context, rs *RequestState) (sm.Result, error) {
 // without locating the Raft node in NodeHost's node list first. It is useful
 // when doing bulk load operations on selected clusters.
 type INodeUser interface {
+	// ClusterID is the cluster ID of the node.
+	ClusterID() uint64
+	// NodeID is the node ID of the node.
+	NodeID() uint64
 	// Propose starts an asynchronous proposal on the Raft cluster represented by
 	// the INodeUser instance. Its semantics is the same as the Propose() method
 	// in NodeHost.
@@ -2065,6 +2069,14 @@ type nodeUser struct {
 }
 
 var _ INodeUser = (*nodeUser)(nil)
+
+func (nu *nodeUser) ClusterID() uint64 {
+	return nu.node.clusterID
+}
+
+func (nu *nodeUser) NodeID() uint64 {
+	return nu.node.nodeID
+}
 
 func (nu *nodeUser) Propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
