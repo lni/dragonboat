@@ -141,7 +141,7 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 		data := snapshot.Bytes()
 		toRecover := bytes.NewBuffer(data)
 		newS := &Session{}
-		err := newS.recoverFromSnapshot(toRecover, V2SnapshotVersion)
+		err := newS.recoverFromSnapshot(toRecover, V2)
 		if err != nil {
 			t.Fatalf("failed to create session from snapshot, %v", err)
 		}
@@ -178,7 +178,7 @@ func TestSessionCanBeRestoredFromV1Snapshot(t *testing.T) {
 	newS := &Session{}
 	data = ss.Bytes()
 	toRecover := bytes.NewBuffer(data)
-	if err := newS.recoverFromSnapshot(toRecover, V1SnapshotVersion); err != nil {
+	if err := newS.recoverFromSnapshot(toRecover, V1); err != nil {
 		t.Errorf("recover from ss %v", err)
 	}
 	if newS.ClientID != session.ClientID || newS.RespondedUpTo != session.RespondedUpTo {

@@ -1081,8 +1081,8 @@ func (n *node) hasEntryToApply() bool {
 	return n.p.HasEntryToApply()
 }
 
-func (n *node) updateBatchedLastApplied() uint64 {
-	n.appliedIndex = n.sm.GetVisibleLastApplied()
+func (n *node) updateAppliedIndex() uint64 {
+	n.appliedIndex = n.sm.GetLastApplied()
 	n.p.NotifyRaftLastApplied(n.appliedIndex)
 	return n.appliedIndex
 }
@@ -1105,7 +1105,7 @@ func (n *node) stepNode() (pb.Update, bool) {
 
 func (n *node) handleEvents() bool {
 	hasEvent := false
-	lastApplied := n.updateBatchedLastApplied()
+	lastApplied := n.updateAppliedIndex()
 	if lastApplied != n.confirmedIndex {
 		hasEvent = true
 	}

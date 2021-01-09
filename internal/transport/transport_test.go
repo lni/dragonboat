@@ -139,8 +139,7 @@ func (g *testSnapshotDir) generateSnapshotFile(clusterID uint64,
 	fp := g.fs.PathJoin(snapDir, filename)
 	data := make([]byte, sz)
 	rand.Read(data)
-	writer, err := rsm.NewSnapshotWriter(fp,
-		rsm.SnapshotVersion, raftpb.NoCompression, fs)
+	writer, err := rsm.NewSnapshotWriter(fp, raftpb.NoCompression, fs)
 	if err != nil {
 		panic(err)
 	}
@@ -735,10 +734,10 @@ func waitForSnapshotCountUpdate(handler *testMessageHandler, maxWait uint64) {
 }
 
 func getTestSnapshotFileSize(sz uint64) uint64 {
-	if rsm.SnapshotVersion == rsm.V1SnapshotVersion {
-		return sz + rsm.SnapshotHeaderSize
-	} else if rsm.SnapshotVersion == rsm.V2SnapshotVersion {
-		return rsm.GetV2PayloadSize(sz) + rsm.SnapshotHeaderSize
+	if rsm.DefaultVersion == rsm.V1 {
+		return sz + rsm.HeaderSize
+	} else if rsm.DefaultVersion == rsm.V2 {
+		return rsm.GetV2PayloadSize(sz) + rsm.HeaderSize
 	} else {
 		panic("unknown snapshot version")
 	}

@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Reusee (https://github.com/reusee)
+// Copyright 2017-2021 Reusee (https://github.com/reusee)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	snapshotBlockSize = settings.SnapshotChunkSize
+	blockSize = settings.SnapshotChunkSize
 )
 
 var (
@@ -57,7 +57,7 @@ var (
 // GetV2PayloadSize returns the actual on disk size for the input user payload
 // size.
 func GetV2PayloadSize(sz uint64) uint64 {
-	return getV2PayloadSize(sz, snapshotBlockSize)
+	return getV2PayloadSize(sz, blockSize)
 }
 
 func getV2PayloadSize(sz uint64, blockSize uint64) uint64 {
@@ -100,25 +100,22 @@ var _ IBlockWriter = (*BlockWriter)(nil)
 
 // IBlockWriter is the interface for writing checksumed data blocks.
 type IBlockWriter interface {
-	Write(bs []byte) (int, error)
-	Flush() error
+	io.WriteCloser
 	GetPayloadChecksum() []byte
 }
 
 // NewBlockWriter creates and returns a block writer.
 func NewBlockWriter(blockSize uint64,
-	onNewBlock func(data []byte, crc []byte) error,
-	t pb.ChecksumType) *BlockWriter {
-	return newBlockWriter(blockSize, onNewBlock, t)
+	nb func(data []byte, crc []byte) error, t pb.ChecksumType) *BlockWriter {
+	return newBlockWriter(blockSize, nb, t)
 }
 
 func newBlockWriter(blockSize uint64,
-	onNewBlock func(data []byte, crc []byte) error,
-	t pb.ChecksumType) *BlockWriter {
+	nb func(data []byte, crc []byte) error, t pb.ChecksumType) *BlockWriter {
 	return &BlockWriter{
 		blockSize:  blockSize,
 		block:      make([]byte, 0, blockSize+checksumSize),
-		onNewBlock: onNewBlock,
+		onNewBlock: nb,
 		nextStop:   blockSize,
 		h:          mustGetChecksum(t),
 		fh:         mustGetChecksum(t),
@@ -156,8 +153,9 @@ func (bw *BlockWriter) Write(bs []byte) (int, error) {
 	return int(totalN), nil
 }
 
-// Flush writes all in memory buffered data.
-func (bw *BlockWriter) Flush() error {
+// Close closes the writer by passing all in memory buffered data to the
+// underlying onNewBlock function.
+func (bw *BlockWriter) Close() error {
 	if bw.flushed {
 		panic("flush called again")
 	} else {
@@ -259,11 +257,10 @@ func (br *blockReader) readBlock() (int, error) {
 
 // IVWriter is the interface for versioned snapshot writer.
 type IVWriter interface {
-	Write(data []byte) (int, error)
+	io.WriteCloser
 	GetVersion() SSVersion
 	GetPayloadSum() []byte
 	GetPayloadSize(uint64) uint64
-	Flush() error
 }
 
 // IVReader is the interface for versioned snapshot reader.
@@ -290,7 +287,7 @@ func (v1w *v1writer) Write(data []byte) (int, error) {
 }
 
 func (v1w *v1writer) GetVersion() SSVersion {
-	return V1SnapshotVersion
+	return V1
 }
 
 func (v1w *v1writer) GetPayloadSize(sz uint64) uint64 {
@@ -301,7 +298,7 @@ func (v1w *v1writer) GetPayloadSum() []byte {
 	return v1w.h.Sum(nil)
 }
 
-func (v1w *v1writer) Flush() error {
+func (v1w *v1writer) Close() error {
 	return nil
 }
 
@@ -344,7 +341,7 @@ func newV2Writer(fw io.Writer, t pb.ChecksumType) *v2writer {
 		return err
 	}
 	return &v2writer{
-		bw: newBlockWriter(snapshotBlockSize, onBlock, t),
+		bw: newBlockWriter(blockSize, onBlock, t),
 	}
 }
 
@@ -353,19 +350,19 @@ func (v2w *v2writer) Write(data []byte) (int, error) {
 }
 
 func (v2w *v2writer) GetVersion() SSVersion {
-	return V2SnapshotVersion
+	return V2
 }
 
 func (v2w *v2writer) GetPayloadSize(sz uint64) uint64 {
-	return getV2PayloadSize(sz, snapshotBlockSize)
+	return getV2PayloadSize(sz, blockSize)
 }
 
 func (v2w *v2writer) GetPayloadSum() []byte {
 	return v2w.bw.GetPayloadChecksum()
 }
 
-func (v2w *v2writer) Flush() error {
-	return v2w.bw.Flush()
+func (v2w *v2writer) Close() error {
+	return v2w.bw.Close()
 }
 
 type v2reader struct {
@@ -375,7 +372,7 @@ type v2reader struct {
 var _ IVReader = (*v2reader)(nil)
 
 func newV2Reader(fr io.Reader, t pb.ChecksumType) *v2reader {
-	return &v2reader{br: newBlockReader(fr, snapshotBlockSize, t)}
+	return &v2reader{br: newBlockReader(fr, blockSize, t)}
 }
 
 func (br *v2reader) Read(data []byte) (int, error) {
@@ -387,11 +384,11 @@ func (br *v2reader) Sum() []byte {
 }
 
 func getHeaderFromFirstChunk(data []byte) ([]byte, []byte, bool) {
-	if uint64(len(data)) < SnapshotHeaderSize {
+	if uint64(len(data)) < HeaderSize {
 		panic("first chunk is too small")
 	}
 	sz := binary.LittleEndian.Uint64(data)
-	if sz > SnapshotHeaderSize-8 {
+	if sz > HeaderSize-8 {
 		return nil, nil, false
 	}
 	return data[8 : 8+sz], data[8+sz : 12+sz], true
@@ -420,7 +417,7 @@ func newV1Validator(header pb.SnapshotHeader) *v1validator {
 func (v *v1validator) AddChunk(data []byte, chunkID uint64) bool {
 	var p []byte
 	if chunkID == 0 {
-		p = data[SnapshotHeaderSize:]
+		p = data[HeaderSize:]
 	} else {
 		p = data
 	}
@@ -444,7 +441,7 @@ var _ IVValidator = (*v2validator)(nil)
 
 func newV2Validator(h hash.Hash) *v2validator {
 	return &v2validator{
-		block: make([]byte, 0, snapshotBlockSize+checksumSize),
+		block: make([]byte, 0, blockSize+checksumSize),
 		h:     h,
 	}
 }
@@ -452,15 +449,15 @@ func newV2Validator(h hash.Hash) *v2validator {
 func (v *v2validator) AddChunk(data []byte, chunkID uint64) bool {
 	var p []byte
 	if chunkID == 0 {
-		p = data[SnapshotHeaderSize:]
+		p = data[HeaderSize:]
 	} else {
 		p = data
 	}
 	v.total += len(p)
 	v.block = append(v.block, p...)
-	for uint64(len(v.block)) >= 2*(snapshotBlockSize+checksumSize) {
-		block := v.block[:snapshotBlockSize+checksumSize]
-		v.block = v.block[snapshotBlockSize+checksumSize:]
+	for uint64(len(v.block)) >= 2*(blockSize+checksumSize) {
+		block := v.block[:blockSize+checksumSize]
+		v.block = v.block[blockSize+checksumSize:]
 		if !v.validateBlock(block) {
 			return false
 		}
@@ -477,9 +474,9 @@ func (v *v2validator) Validate() bool {
 	if !v.validateMagicSize(tail) {
 		return false
 	}
-	for uint64(len(block)) > snapshotBlockSize+checksumSize {
-		c := block[:snapshotBlockSize+checksumSize]
-		block = block[snapshotBlockSize+checksumSize:]
+	for uint64(len(block)) > blockSize+checksumSize {
+		c := block[:blockSize+checksumSize]
+		block = block[blockSize+checksumSize:]
 		if !v.validateBlock(c) {
 			return false
 		}
@@ -524,8 +521,7 @@ func GetV2PayloadChecksum(fp string, fs vfs.IFS) (crc []byte, err error) {
 	}()
 	for _, offset := range offsets {
 		crc := make([]byte, checksumSize)
-		_, err := f.ReadAt(crc, int64(offset))
-		if err != nil {
+		if _, err := f.ReadAt(crc, int64(offset)); err != nil {
 			return nil, err
 		}
 		if _, err = h.Write(crc); err != nil {
@@ -550,7 +546,7 @@ func getV2ChecksumType(fp string, fs vfs.IFS) (ct pb.ChecksumType, err error) {
 	if err != nil {
 		return pb.ChecksumType(0), err
 	}
-	if header.Version != uint64(V2SnapshotVersion) {
+	if header.Version != uint64(V2) {
 		return pb.ChecksumType(0), errors.New("not a v2 snapshot file")
 	}
 	return header.ChecksumType, nil
@@ -565,17 +561,17 @@ func getV2CRCOffsetList(fp string, fs vfs.IFS) ([]uint64, error) {
 }
 
 func getV2CRCOffsetListFromFileSize(sz uint64) ([]uint64, error) {
-	if sz <= tailSize+SnapshotHeaderSize {
+	if sz <= tailSize+HeaderSize {
 		return nil, errors.New("invalid file size")
 	}
-	sz = sz - tailSize - SnapshotHeaderSize
+	sz = sz - tailSize - HeaderSize
 	result := make([]uint64, 0)
-	offset := SnapshotHeaderSize
+	offset := HeaderSize
 	for sz > 0 {
-		if sz >= snapshotBlockSize+checksumSize {
-			result = append(result, offset+snapshotBlockSize)
-			offset = offset + snapshotBlockSize + checksumSize
-			sz = sz - (snapshotBlockSize + checksumSize)
+		if sz >= blockSize+checksumSize {
+			result = append(result, offset+blockSize)
+			offset = offset + blockSize + checksumSize
+			sz = sz - (blockSize + checksumSize)
 		} else {
 			result = append(result, offset+sz-checksumSize)
 			break

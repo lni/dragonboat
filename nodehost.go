@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,6 +98,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/id"
+	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -488,7 +489,7 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 	cf := func(clusterID uint64, nodeID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
 		sm := create(clusterID, nodeID)
-		return rsm.NewNativeSM(cfg, rsm.NewRegularStateMachine(sm), done)
+		return rsm.NewNativeSM(cfg, rsm.NewInMemStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers, join, cf, cfg, pb.RegularStateMachine)
 }
@@ -1561,9 +1562,9 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 
 func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	join bool, createStateMachine rsm.ManagedStateMachineFactory,
-	config config.Config, smType pb.StateMachineType) error {
-	clusterID := config.ClusterID
-	nodeID := config.NodeID
+	cfg config.Config, smType pb.StateMachineType) error {
+	clusterID := cfg.ClusterID
+	nodeID := cfg.NodeID
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
@@ -1572,6 +1573,11 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		if !validator(target) {
 			return ErrInvalidTarget
 		}
+	}
+	if cfg.SnapshotCompressionType == config.Snappy &&
+		invariants.Is32BitArch() {
+		// see https://github.com/golang/snappy/issues/58
+		plog.Warningf("Golang SNAPPY is known to be buggy on 32bit arch")
 	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
@@ -1585,7 +1591,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	if join && len(initialMembers) > 0 {
 		return ErrInvalidClusterSettings
 	}
-	peers, im, err := nh.bootstrapCluster(initialMembers, join, config, smType)
+	peers, im, err := nh.bootstrapCluster(initialMembers, join, cfg, smType)
 	if err == ErrInvalidClusterSettings {
 		return ErrInvalidClusterSettings
 	}
@@ -1617,7 +1623,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	shard := p.GetPartitionID(clusterID)
 	rn, err := newNode(peers,
 		im,
-		config,
+		cfg,
 		nh.nhConfig,
 		createStateMachine,
 		snapshotter,
@@ -2195,9 +2201,8 @@ func logBuildTagsAndVersion() {
 		runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	plog.Infof("dragonboat version: %d.%d.%d (%s)",
 		DragonboatMajor, DragonboatMinor, DragonboatPatch, devstr)
-	plog.Infof("raft entry encoding scheme: %s", pb.RaftEntryEncodingScheme)
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		plog.Warningf("running on %s, don't use for production purposes",
-			runtime.GOOS)
+	if !invariants.IsSupportedOS() || !invariants.IsSupportedArch() {
+		plog.Warningf("unsupported OS/ARCH %s/%s, don't use for production",
+			runtime.GOOS, runtime.GOARCH)
 	}
 }

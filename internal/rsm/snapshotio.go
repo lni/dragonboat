@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,14 +32,14 @@ import (
 type SSVersion uint64
 
 const (
-	// V1SnapshotVersion is the value of snapshot version 1.
-	V1SnapshotVersion SSVersion = 1
-	// V2SnapshotVersion is the value of snapshot version 2.
-	V2SnapshotVersion SSVersion = 2
-	// SnapshotVersion is the snapshot binary format version.
-	SnapshotVersion SSVersion = V2SnapshotVersion
-	// SnapshotHeaderSize is the size of snapshot in number of bytes.
-	SnapshotHeaderSize = settings.SnapshotHeaderSize
+	// V1 is the value of snapshot version 1.
+	V1 SSVersion = 1
+	// V2 is the value of snapshot version 2.
+	V2 SSVersion = 2
+	// DefaultVersion is the snapshot binary format version.
+	DefaultVersion SSVersion = V2
+	// HeaderSize is the size of snapshot in number of bytes.
+	HeaderSize = settings.SnapshotHeaderSize
 	// which checksum type to use.
 	// CRC32IEEE and google's highway hash are supported
 	defaultChecksumType = pb.CRC32IEEE
@@ -80,9 +80,9 @@ func mustGetChecksum(t pb.ChecksumType) hash.Hash {
 }
 
 func getVersionedWriter(w io.Writer, v SSVersion) (IVWriter, bool) {
-	if v == V1SnapshotVersion {
+	if v == V1 {
 		return newV1Wrtier(w), true
-	} else if v == V2SnapshotVersion {
+	} else if v == V2 {
 		return newV2Writer(w, defaultChecksumType), true
 	}
 	return nil, false
@@ -98,9 +98,9 @@ func mustGetVersionedWriter(w io.Writer, v SSVersion) IVWriter {
 
 func getVersionedReader(r io.Reader,
 	v SSVersion, t pb.ChecksumType) (IVReader, bool) {
-	if v == V1SnapshotVersion {
+	if v == V1 {
 		return newV1Reader(r), true
-	} else if v == V2SnapshotVersion {
+	} else if v == V2 {
 		return newV2Reader(r, t), true
 	}
 	return nil, false
@@ -117,9 +117,9 @@ func mustGetVersionedReader(r io.Reader,
 
 func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	v := (SSVersion)(header.Version)
-	if v == V1SnapshotVersion {
+	if v == V1 {
 		return newV1Validator(header), true
-	} else if v == V2SnapshotVersion {
+	} else if v == V2 {
 		h, ok := getChecksum(header.ChecksumType)
 		if !ok {
 			return nil, false
@@ -135,7 +135,7 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	w, err := newSnapshotWriter(f, path, SnapshotVersion, pb.NoCompression, fs)
+	w, err := newSnapshotWriter(f, path, DefaultVersion, pb.NoCompression, fs)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +169,11 @@ type SnapshotWriter struct {
 
 // NewSnapshotWriter creates a new snapshot writer instance.
 func NewSnapshotWriter(fp string,
+	ct pb.CompressionType, fs vfs.IFS) (*SnapshotWriter, error) {
+	return newVersionedSnapshotWriter(fp, DefaultVersion, ct, fs)
+}
+
+func newVersionedSnapshotWriter(fp string,
 	v SSVersion, ct pb.CompressionType, fs vfs.IFS) (*SnapshotWriter, error) {
 	f, err := fs.Create(fp)
 	if err != nil {
@@ -179,7 +184,7 @@ func NewSnapshotWriter(fp string,
 
 func newSnapshotWriter(f vfs.File, fp string,
 	v SSVersion, ct pb.CompressionType, fs vfs.IFS) (*SnapshotWriter, error) {
-	dummy := make([]byte, SnapshotHeaderSize)
+	dummy := make([]byte, HeaderSize)
 	if _, err := f.Write(dummy); err != nil {
 		return nil, err
 	}
@@ -226,7 +231,7 @@ func (sw *SnapshotWriter) GetPayloadChecksum() []byte {
 }
 
 func (sw *SnapshotWriter) flush() error {
-	return sw.vw.Flush()
+	return sw.vw.Close()
 }
 
 func (sw *SnapshotWriter) saveHeader() error {
@@ -247,13 +252,12 @@ func (sw *SnapshotWriter) saveHeader() error {
 	if _, err := headerHash.Write(data); err != nil {
 		return err
 	}
-	headerChecksum := headerHash.Sum(nil)
-	sh.HeaderChecksum = headerChecksum
+	sh.HeaderChecksum = headerHash.Sum(nil)
 	data, err = sh.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	if uint64(len(data)) > SnapshotHeaderSize-8 {
+	if uint64(len(data)) > HeaderSize-8 {
 		panic("snapshot header is too large")
 	}
 	lenbuf := make([]byte, 8)
@@ -300,7 +304,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 		return empty, io.ErrUnexpectedEOF
 	}
 	sz := binary.LittleEndian.Uint64(lenbuf)
-	if sz > SnapshotHeaderSize-8 {
+	if sz > HeaderSize-8 {
 		panic("invalid snapshot header size")
 	}
 	data := make([]byte, sz)
@@ -325,7 +329,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if !validateHeader(data, crcdata) {
 		panic("corrupted header")
 	}
-	blank := make([]byte, SnapshotHeaderSize-8-sz-4)
+	blank := make([]byte, HeaderSize-8-sz-4)
 	n, err = io.ReadFull(sr.file, blank)
 	if err != nil {
 		return empty, err
@@ -335,12 +339,12 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	}
 	var reader io.Reader = sr.file
 	v := SSVersion(sr.header.Version)
-	if v == V2SnapshotVersion {
+	if v == V2 {
 		st, err := sr.file.Stat()
 		if err != nil {
 			return empty, err
 		}
-		payloadSz := st.Size() - int64(SnapshotHeaderSize) - int64(tailSize)
+		payloadSz := st.Size() - int64(HeaderSize) - int64(tailSize)
 		reader = io.LimitReader(reader, payloadSz)
 	}
 	sr.r = mustGetVersionedReader(reader, v, sr.header.ChecksumType)
@@ -361,7 +365,7 @@ func (sr *SnapshotReader) ValidatePayload(header pb.SnapshotHeader) {
 	if sr.r == nil {
 		panic("ValidatePayload called when the header is not even read")
 	}
-	if sr.header.Version == uint64(V1SnapshotVersion) {
+	if sr.header.Version == uint64(V1) {
 		checksum := sr.r.Sum()
 		if !bytes.Equal(checksum, header.PayloadChecksum) {
 			panic("corrupted snapshot payload")
@@ -490,7 +494,7 @@ func ShrinkSnapshot(fp string, newFp string, fs vfs.IFS) (err error) {
 			err = cerr
 		}
 	}()
-	writer, err := NewSnapshotWriter(newFp, SnapshotVersion, pb.NoCompression, fs)
+	writer, err := NewSnapshotWriter(newFp, pb.NoCompression, fs)
 	if err != nil {
 		return err
 	}

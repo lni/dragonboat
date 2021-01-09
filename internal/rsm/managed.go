@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package rsm
 import (
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -51,7 +50,8 @@ type ILoadable interface {
 	LoadSessions(io.Reader, SSVersion) error
 }
 
-// IManagedStateMachine is the interface used to manage data store.
+// IManagedStateMachine is the interface used for managed state machine. A
+// managed state machine contains a user state machine plus its engine state.
 type IManagedStateMachine interface {
 	Open() (uint64, error)
 	Update(sm.Entry) (sm.Result, error)
@@ -98,7 +98,6 @@ type NativeSM struct {
 	sm     IStateMachine
 	done   <-chan struct{}
 	ue     []sm.Entry
-	mu     sync.RWMutex
 	OffloadedStatus
 }
 
@@ -129,8 +128,6 @@ func (ds *NativeSM) Open() (uint64, error) {
 
 // Offloaded offloads the data store from the specified part of the system.
 func (ds *NativeSM) Offloaded(from From) bool {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
 		if err := ds.sm.Close(); err != nil {
@@ -144,8 +141,6 @@ func (ds *NativeSM) Offloaded(from From) bool {
 
 // Loaded marks the statemachine as loaded by the specified component.
 func (ds *NativeSM) Loaded(from From) {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
 }
 
@@ -202,24 +197,18 @@ func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 
 // Lookup queries the data store.
 func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
 		return nil, ErrClusterClosed
 	}
-	v, err := ds.sm.Lookup(query)
-	return v, err
+	return ds.sm.Lookup(query)
 }
 
 // NALookup queries the data store.
 func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
 		return nil, ErrClusterClosed
 	}
-	v, err := ds.sm.NALookup(query)
-	return v, err
+	return ds.sm.NALookup(query)
 }
 
 // Sync synchronizes state machine's in-core state with that on disk.

@@ -110,12 +110,11 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	files := rsm.NewFileCollection()
 	fp := env.GetTempFilepath()
 	ct := compressionType(meta.CompressionType)
-	writer, err := rsm.NewSnapshotWriter(fp,
-		rsm.SnapshotVersion, meta.CompressionType, s.fs)
+	w, err := rsm.NewSnapshotWriter(fp, meta.CompressionType, s.fs)
 	if err != nil {
 		return pb.Snapshot{}, env, err
 	}
-	cw := dio.NewCountedWriter(writer)
+	cw := dio.NewCountedWriter(w)
 	sw := dio.NewCompressor(ct, cw)
 	defer func() {
 		if cerr := sw.Close(); err == nil {
@@ -123,8 +122,8 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		}
 		if ss.Index > 0 {
 			total := cw.BytesWritten()
-			ss.Checksum = writer.GetPayloadChecksum()
-			ss.FileSize = writer.GetPayloadSize(total) + rsm.SnapshotHeaderSize
+			ss.Checksum = w.GetPayloadChecksum()
+			ss.FileSize = w.GetPayloadSize(total) + rsm.HeaderSize
 		}
 	}()
 	session := meta.Session.Bytes()

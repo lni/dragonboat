@@ -46,9 +46,9 @@ func getTestChunk() []pb.Chunk {
 			Index:          1,
 			Term:           1,
 			Filepath:       "snapshot-0000000000000001.gbsnap",
-			FileSize:       10 * rsm.SnapshotHeaderSize,
+			FileSize:       10 * rsm.HeaderSize,
 		}
-		data := make([]byte, rsm.SnapshotHeaderSize)
+		data := make([]byte, rsm.HeaderSize)
 		rand.Read(data)
 		c.Data = data
 		result = append(result, c)

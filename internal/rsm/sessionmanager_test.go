@@ -71,7 +71,7 @@ func TestSessionSaveOrderWithEviction(t *testing.T) {
 		t.Fatalf("failed to save snapshot %v", err)
 	}
 	rs := bytes.NewBuffer(ss.Bytes())
-	if err := sm2.LoadSessions(rs, V2SnapshotVersion); err != nil {
+	if err := sm2.LoadSessions(rs, V2); err != nil {
 		t.Fatalf("failed to restore snapshot %v", err)
 	}
 	// client with the same client id (1 and 2 here) expected to be evicted

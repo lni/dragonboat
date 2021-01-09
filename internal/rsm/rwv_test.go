@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,12 +78,12 @@ func TestWellFormedBlocksAreAccepted(t *testing.T) {
 func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 	szs := []uint64{
 		1,
-		snapshotBlockSize,
-		snapshotBlockSize - 1,
-		snapshotBlockSize + 1,
-		snapshotBlockSize * 5,
-		snapshotBlockSize*6 - 1,
-		snapshotBlockSize*6 + 1,
+		blockSize,
+		blockSize - 1,
+		blockSize + 1,
+		blockSize * 5,
+		blockSize*6 - 1,
+		blockSize*6 + 1,
 	}
 	for idx, sz := range szs {
 		v := make([]byte, sz)
@@ -94,10 +94,10 @@ func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
 		}
-		if err := w.Flush(); err != nil {
+		if err := w.Close(); err != nil {
 			t.Fatalf("failed to flush %v", err)
 		}
-		header := make([]byte, SnapshotHeaderSize)
+		header := make([]byte, HeaderSize)
 		data := append(header, buf.Bytes()...)
 		validator := newV2Validator(getDefaultChecksum())
 		if !validator.AddChunk(data, 0) {
@@ -106,7 +106,7 @@ func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 		if !validator.Validate() {
 			t.Errorf("%d, validation failed", idx)
 		}
-		if sz > SnapshotHeaderSize {
+		if sz > HeaderSize {
 			s := sz / 2
 			fh := data[:s]
 			lh := data[s:]
@@ -128,12 +128,12 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 	corruptFn func([]byte) []byte, ok bool) {
 	szs := []uint64{
 		1,
-		snapshotBlockSize,
-		snapshotBlockSize - 1,
-		snapshotBlockSize + 1,
-		snapshotBlockSize * 3,
-		snapshotBlockSize*3 - 1,
-		snapshotBlockSize*3 + 1,
+		blockSize,
+		blockSize - 1,
+		blockSize + 1,
+		blockSize * 3,
+		blockSize*3 - 1,
+		blockSize*3 + 1,
 	}
 	for idx, sz := range szs {
 		v := make([]byte, sz)
@@ -144,12 +144,12 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
 		}
-		if err := w.Flush(); err != nil {
+		if err := w.Close(); err != nil {
 			t.Fatalf("failed to flush %v", err)
 		}
 		payload := buf.Bytes()
 		payload = corruptFn(payload)
-		header := make([]byte, SnapshotHeaderSize)
+		header := make([]byte, HeaderSize)
 		data := append(header, payload...)
 		vf := func(data []byte) bool {
 			validator := newV2Validator(getDefaultChecksum())
@@ -161,7 +161,7 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 		if result := vf(data); result != ok {
 			t.Errorf("%d, validation failed", idx)
 		}
-		if sz > SnapshotHeaderSize {
+		if sz > HeaderSize {
 			szz := sz
 			vf := func(data []byte) bool {
 				s := szz / 2
@@ -268,7 +268,7 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 			t.Errorf("write failed %v", err)
 		}
 
-		writer.Flush()
+		writer.Close()
 		result := written[:len(written)-16]
 		meta := written[len(written)-16:]
 		total := binary.LittleEndian.Uint64(meta[:8])
@@ -333,7 +333,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			if err != nil {
 				t.Errorf("write failed %v", err)
 			}
-			writer.Flush()
+			writer.Close()
 			written := buf.Bytes()
 			expSz := getChecksumedBlockSize(sz, blockSize) + 16
 			if expSz != uint64(len(written)) {
@@ -394,7 +394,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 	if err != nil {
 		t.Errorf("write failed %v", err)
 	}
-	writer.Flush()
+	writer.Close()
 	written := append([]byte{}, buf.Bytes()...)
 	for idx := 0; idx < len(written)-16; idx++ {
 		func() {

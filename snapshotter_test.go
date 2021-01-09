@@ -508,8 +508,7 @@ func TestShrinkSnapshots(t *testing.T) {
 				t.Errorf("failed to save snapshot record")
 			}
 			fp = snapshotter.getFilePath(s.Index)
-			writer, err := rsm.NewSnapshotWriter(fp,
-				rsm.V2SnapshotVersion, pb.NoCompression, fs)
+			writer, err := rsm.NewSnapshotWriter(fp, pb.NoCompression, fs)
 			if err != nil {
 				t.Fatalf("failed to create the snapshot %v", err)
 			}

@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -210,7 +210,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 	env = server.NewSSEnv(f, 1, 1, s.index, 1, server.SnapshotMode, s.fs)
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := s.fs.PathJoin(testSnapshotterDir, fn)
-	writer, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, s.fs)
+	writer, err := NewSnapshotWriter(fp, pb.NoCompression, s.fs)
 	if err != nil {
 		return pb.Snapshot{}, env, err
 	}
@@ -220,7 +220,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 			err = cerr
 		}
 		if ss.Index > 0 {
-			ss.FileSize = cw.BytesWritten() + SnapshotHeaderSize
+			ss.FileSize = cw.BytesWritten() + HeaderSize
 		}
 	}()
 	session := meta.Session.Bytes()
@@ -274,7 +274,7 @@ func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine), fs vfs.IFS
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -292,7 +292,7 @@ func runSMTest2(t *testing.T,
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
-	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -435,9 +435,6 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 	if err := tsm.handleBatch(entries, batch); err != nil {
 		t.Fatalf("handle failed %v", err)
 	}
-	if tsm.GetLastApplied() != 237 {
-		t.Errorf("last applied %d, want 236", tsm.GetLastApplied())
-	}
 	v, err := store.Lookup([]byte("test-key"))
 	if err != nil {
 		t.Errorf("%v", err)
@@ -466,7 +463,7 @@ func TestHandleAllocationCount(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	store := &tests.NoOP{NoAlloc: true}
 	config := config.Config{ClusterID: 1, NodeID: 1}
-	ds := NewNativeSM(config, NewRegularStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -580,17 +577,6 @@ func applyConfigChangeEntry(sm *StateMachine,
 	}
 	sm.index = index - 1
 	sm.taskQ.Add(commit)
-}
-
-func TestBatchedLastAppliedValue(t *testing.T) {
-	tf := func(t *testing.T, sm *StateMachine) {
-		sm.SetVisibleLastApplied(12345)
-		if sm.GetVisibleLastApplied() != 12345 {
-			t.Errorf("batched last applied value can not be set/get")
-		}
-	}
-	fs := vfs.GetTestFS()
-	runSMTest(t, tf, fs)
 }
 
 func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
@@ -1394,7 +1380,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store2 := tests.NewKVTest(1, 1)
 		config := config.Config{ClusterID: 1, NodeID: 1}
 		store2.(*tests.KVTest).DisableLargeDelay()
-		ds2 := NewNativeSM(config, NewRegularStateMachine(store2), make(chan struct{}))
+		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter(fs)
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
@@ -1931,7 +1917,7 @@ func TestRecoverSMRequired(t *testing.T) {
 			if tt.shrunk {
 				fp = fp + ".tmp"
 			}
-			w, err := NewSnapshotWriter(fp, SnapshotVersion, pb.NoCompression, fs)
+			w, err := NewSnapshotWriter(fp, pb.NoCompression, fs)
 			if err != nil {
 				t.Fatalf("failed to create snapshot writer %v", err)
 			}
@@ -2001,43 +1987,6 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 	}
 }
 
-func TestUpdateLastApplied(t *testing.T) {
-	tests := []struct {
-		index uint64
-		term  uint64
-		crash bool
-	}{
-		{0, 100, true},
-		{101, 0, true},
-		{100, 100, true},
-		{101, 100, false},
-		{100, 90, true},
-		{100, 101, true},
-		{100, 110, true},
-		{101, 0, true},
-		{101, 99, true},
-	}
-	for idx, tt := range tests {
-		func() {
-			sm := &StateMachine{index: 100, term: 100}
-			if tt.crash {
-				defer func() {
-					if r := recover(); r == nil {
-						t.Errorf("no panic")
-					}
-				}()
-			}
-			sm.setLastApplied(tt.index, tt.term)
-			if sm.index != tt.index {
-				t.Errorf("%d, index not updated", idx)
-			}
-			if sm.term != tt.term {
-				t.Errorf("%d, term not updated", idx)
-			}
-		}()
-	}
-}
-
 func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
 	sm := &StateMachine{
 		onDiskSM:        true,
@@ -2052,12 +2001,6 @@ func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
 	}
 	if err := sm.handleEntry(ent, false); err != nil {
 		t.Fatalf("handle entry failed %v", err)
-	}
-	if sm.index != 91 {
-		t.Errorf("index not moved")
-	}
-	if sm.term != 6 {
-		t.Errorf("term not moved")
 	}
 }
 
@@ -2236,17 +2179,14 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		if msm.last != tt.lastApplied {
 			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
 		}
-		if sm.GetVisibleLastApplied() != tt.last {
-			t.Errorf("%d, index %d, last %d", idx, sm.GetVisibleLastApplied(), tt.last)
-		}
 		if np.firstIndex != tt.firstApplied {
 			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
 		}
 		if np.index != tt.lastApplied {
 			t.Errorf("%d, unexpected first value, %d, %d", idx, np.index, tt.lastApplied)
 		}
-		if sm.index != tt.last {
-			t.Errorf("unexpected last applied index %d, want %d", sm.index, tt.last)
+		if sm.GetLastApplied() != tt.index {
+			t.Errorf("%d, last applied index moved", idx)
 		}
 	}
 }
@@ -2412,5 +2352,45 @@ func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
 	_, _, err := sm.Save(SSRequest{})
 	if err != nil {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestSetLastApplied(t *testing.T) {
+	tests := []struct {
+		index   uint64
+		term    uint64
+		entries []pb.Entry
+		crash   bool
+	}{
+		{100, 5, []pb.Entry{{Index: 0, Term: 1}}, true},
+		{100, 5, []pb.Entry{{Index: 1, Term: 0}}, true},
+		{100, 5, []pb.Entry{{Index: 102, Term: 5}}, true},
+		{100, 5, []pb.Entry{{Index: 101, Term: 4}}, true},
+		{100, 5, []pb.Entry{{Index: 101, Term: 5}, {Index: 103, Term: 5}}, true},
+		{100, 5, []pb.Entry{{Index: 101, Term: 6}, {Index: 102, Term: 5}}, true},
+		{100, 5, []pb.Entry{{Index: 101, Term: 5}, {Index: 102, Term: 6}}, false},
+	}
+	for idx, tt := range tests {
+		sm := StateMachine{
+			index: tt.index,
+			term:  tt.term,
+		}
+		func() {
+			defer func() {
+				if r := recover(); r == nil {
+					if tt.crash {
+						t.Fatalf("%d, failed to trigger panic", idx)
+					}
+				}
+			}()
+			sm.setLastApplied(tt.entries)
+			if tt.crash {
+				t.Fatalf("%d, failed to trigger panic", idx)
+			}
+			if sm.index != tt.entries[len(tt.entries)-1].Index ||
+				sm.term != tt.entries[len(tt.entries)-1].Term {
+				t.Errorf("%d, unexpected index/term", idx)
+			}
+		}()
 	}
 }

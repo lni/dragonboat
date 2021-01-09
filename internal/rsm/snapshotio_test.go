@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,8 +38,7 @@ func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 
 func TestSnapshotWriterCanBeCreated(t *testing.T) {
 	fs := vfs.GetTestFS()
-	w, err := NewSnapshotWriter(testSnapshotFilename,
-		SnapshotVersion, pb.NoCompression, fs)
+	w, err := NewSnapshotWriter(testSnapshotFilename, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -59,8 +58,7 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		}
 	}()
 	func() {
-		w, err := NewSnapshotWriter(testSnapshotFilename,
-			SnapshotVersion, pb.NoCompression, fs)
+		w, err := NewSnapshotWriter(testSnapshotFilename, pb.NoCompression, fs)
 		if err != nil {
 			t.Fatalf("failed to create snapshot writer %v", err)
 		}
@@ -89,9 +87,8 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		if header.Version != uint64(SnapshotVersion) {
-			t.Errorf("invalid version %d, want %d",
-				header.Version, SnapshotVersion)
+		if SSVersion(header.Version) != DefaultVersion {
+			t.Errorf("invalid version %d, want %d", header.Version, DefaultVersion)
 		}
 		if header.ChecksumType != DefaultChecksumType {
 			t.Errorf("unexpected checksum type %d, want %d",
@@ -110,7 +107,7 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	if err := fs.RemoveAll(testSnapshotFilename); err != nil {
 		t.Fatalf("%v", err)
 	}
-	w, err := NewSnapshotWriter(testSnapshotFilename, v, pb.NoCompression, fs)
+	w, err := newVersionedSnapshotWriter(testSnapshotFilename, v, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to create snapshot writer %v", err)
 	}
@@ -142,11 +139,11 @@ func corruptSnapshotPayload(t *testing.T, fs vfs.IFS) {
 		defer f.Close()
 		s := (testSessionSize + testPayloadSize) / 2
 		data := make([]byte, 1)
-		if _, err := f.ReadAt(data, int64(SnapshotHeaderSize+s)); err != nil {
+		if _, err := f.ReadAt(data, int64(HeaderSize+s)); err != nil {
 			t.Fatalf("%v", err)
 		}
 		data[0] = data[0] + 1
-		if _, err := f.WriteAt(data, int64(SnapshotHeaderSize+s)); err != nil {
+		if _, err := f.WriteAt(data, int64(HeaderSize+s)); err != nil {
 			t.Fatalf("%v", err)
 		}
 	}()
@@ -202,8 +199,8 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 
 func TestCorruptedPayloadWillBeDetected(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testCorruptedPayloadWillBeDetected(t, V1SnapshotVersion, fs)
-	testCorruptedPayloadWillBeDetected(t, V2SnapshotVersion, fs)
+	testCorruptedPayloadWillBeDetected(t, V1, fs)
+	testCorruptedPayloadWillBeDetected(t, V2, fs)
 }
 
 func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) {
@@ -246,8 +243,8 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) 
 
 func TestNormalSnapshotCanPassValidation(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testNormalSnapshotCanPassValidation(t, V1SnapshotVersion, fs)
-	testNormalSnapshotCanPassValidation(t, V2SnapshotVersion, fs)
+	testNormalSnapshotCanPassValidation(t, V1, fs)
+	testNormalSnapshotCanPassValidation(t, V2, fs)
 }
 
 func readTestSnapshot(fn string, sz uint64, fs vfs.IFS) ([]byte, error) {
@@ -299,8 +296,8 @@ func testSingleBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 
 func TestSingleBlockSnapshotValidation(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testSingleBlockSnapshotValidation(t, V1SnapshotVersion, fs)
-	testSingleBlockSnapshotValidation(t, V2SnapshotVersion, fs)
+	testSingleBlockSnapshotValidation(t, V1, fs)
+	testSingleBlockSnapshotValidation(t, V2, fs)
 }
 
 func testMultiBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
@@ -342,8 +339,8 @@ func testMultiBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 
 func TestMultiBlockSnapshotValidation(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testMultiBlockSnapshotValidation(t, V1SnapshotVersion, fs)
-	testMultiBlockSnapshotValidation(t, V2SnapshotVersion, fs)
+	testMultiBlockSnapshotValidation(t, V1, fs)
+	testMultiBlockSnapshotValidation(t, V2, fs)
 }
 
 func TestMustInSameDir(t *testing.T) {
@@ -377,8 +374,7 @@ func TestShrinkSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	snapshotFilename := "test_snapshot_safe_to_delete.data"
 	shrunkFilename := "test_snapshot_safe_to_delete.shrunk"
-	writer, err := NewSnapshotWriter(snapshotFilename,
-		V2SnapshotVersion, pb.NoCompression, fs)
+	writer, err := NewSnapshotWriter(snapshotFilename, pb.NoCompression, fs)
 	if err != nil {
 		t.Fatalf("failed to get writer %v", err)
 	}
@@ -502,7 +498,7 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 		}
 	}()
 	func() {
-		makeTestSnapshotFile(t, 0, sz, V2SnapshotVersion, fs)
+		makeTestSnapshotFile(t, 0, sz, V2, fs)
 		reader, err := NewSnapshotReader(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("failed to create reader %v", err)
@@ -527,12 +523,12 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 
 func TestV2PayloadChecksumCanBeRead(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize-1, fs)
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize, fs)
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize+1, fs)
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3-1, fs)
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3, fs)
-	testV2PayloadChecksumCanBeRead(t, snapshotBlockSize*3+1, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize-1, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize+1, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize*3-1, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize*3, fs)
+	testV2PayloadChecksumCanBeRead(t, blockSize*3+1, fs)
 }
 
 func TestV1SnapshotCanBeLoaded(t *testing.T) {

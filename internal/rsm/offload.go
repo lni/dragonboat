@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,10 @@
 // limitations under the License.
 
 package rsm
+
+import (
+	"sync"
+)
 
 // From identifies a component in the system.
 type From uint64
@@ -50,6 +54,7 @@ func (f From) String() string {
 // OffloadedStatus is used for tracking whether the managed data store has been
 // offloaded from various system components.
 type OffloadedStatus struct {
+	mu                          sync.Mutex
 	clusterID                   uint64
 	nodeID                      uint64
 	readyToDestroy              bool
@@ -68,6 +73,8 @@ type OffloadedStatus struct {
 // ReadyToDestroy returns a boolean value indicating whether the the managed data
 // store is ready to be destroyed.
 func (o *OffloadedStatus) ReadyToDestroy() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	return o.readyToDestroy
 }
 
@@ -90,6 +97,8 @@ func (o *OffloadedStatus) SetDestroyed() {
 // SetLoaded marks the managed data store as loaded from the specified
 // component.
 func (o *OffloadedStatus) SetLoaded(from From) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if o.offloadedFromNodeHost {
 		if from == FromStepWorker ||
 			from == FromCommitWorker ||
@@ -116,6 +125,8 @@ func (o *OffloadedStatus) SetLoaded(from From) {
 // SetOffloaded marks the managed data store as offloaded from the specified
 // component.
 func (o *OffloadedStatus) SetOffloaded(from From) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if from == FromNodeHost {
 		o.offloadedFromNodeHost = true
 	} else if from == FromStepWorker {

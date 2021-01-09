@@ -139,9 +139,9 @@ func (s *Session) recoverFromSnapshot(reader io.Reader, v SSVersion) error {
 	if n != len(data) {
 		return io.ErrUnexpectedEOF
 	}
-	if v == V1SnapshotVersion {
+	if v == V1 {
 		s.recoverFromV1Snapshot(data)
-	} else if v == V2SnapshotVersion {
+	} else if v == V2 {
 		if err := json.Unmarshal(data, s); err != nil {
 			panic(err)
 		}

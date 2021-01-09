@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -503,7 +503,7 @@ func BenchmarkLookup(b *testing.B) {
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
 	config := config.Config{ClusterID: 1, NodeID: 1}
-	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeSM(config, rsm.NewInMemStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -523,7 +523,7 @@ func BenchmarkNALookup(b *testing.B) {
 	ds := &tests.NoOP{}
 	done := make(chan struct{})
 	config := config.Config{ClusterID: 1, NodeID: 1}
-	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeSM(config, rsm.NewInMemStateMachine(ds), done)
 	input := make([]byte, 1)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -543,7 +543,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	ds := &tests.NoOP{NoAlloc: true}
 	done := make(chan struct{})
 	config := config.Config{ClusterID: 1, NodeID: 1}
-	nds := rsm.NewNativeSM(config, rsm.NewRegularStateMachine(ds), done)
+	nds := rsm.NewNativeSM(config, rsm.NewInMemStateMachine(ds), done)
 	smo := rsm.NewStateMachine(nds, nil, config, &testDummyNodeProxy{}, vfs.DefaultFS)
 	idx := uint64(0)
 	var s *client.Session

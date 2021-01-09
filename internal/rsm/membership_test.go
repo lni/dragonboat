@@ -140,18 +140,18 @@ func TestIsDeletingOnlyNode(t *testing.T) {
 		Type:   pb.AddNode,
 		NodeID: 1,
 	}
-	if !o.isDeletingOnlyNode(cc) {
+	if !o.isDeleteOnlyNode(cc) {
 		t.Errorf("not considered as deleting only node")
 	}
-	if o.isDeletingOnlyNode(cc2) {
+	if o.isDeleteOnlyNode(cc2) {
 		t.Errorf("not even a delete node op")
 	}
 	o.members.Observers[2] = "a2"
-	if !o.isDeletingOnlyNode(cc) {
+	if !o.isDeleteOnlyNode(cc) {
 		t.Errorf("not considered as deleting only node")
 	}
 	o.members.Addresses[3] = "a3"
-	if o.isDeletingOnlyNode(cc) {
+	if o.isDeleteOnlyNode(cc) {
 		t.Errorf("still considered as deleting only node")
 	}
 }
@@ -161,33 +161,33 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	cc := pb.ConfigChange{}
 	cc.Type = pb.AddNode
 	cc.NodeID = 1
-	if o.isAddingRemovedNode(cc) {
+	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
 	cc.Type = pb.AddObserver
-	if o.isAddingRemovedNode(cc) {
+	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
 	cc.Type = pb.RemoveNode
-	if o.isAddingRemovedNode(cc) {
+	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
 	cc.Type = pb.AddWitness
-	if o.isAddingRemovedNode(cc) {
+	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
 	o.members.Removed[1] = true
 	cc.Type = pb.AddNode
-	if !o.isAddingRemovedNode(cc) {
+	if !o.isAddRemovedNode(cc) {
 		t.Errorf("not rejected")
 	}
 	cc.Type = pb.AddWitness
-	if !o.isAddingRemovedNode(cc) {
+	if !o.isAddRemovedNode(cc) {
 		t.Errorf("not rejected")
 	}
 	cc.Type = pb.AddObserver
 	cc.NodeID = 2
-	if o.isAddingRemovedNode(cc) {
+	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrectly rejected")
 	}
 }
@@ -219,7 +219,7 @@ func TestIsAddingNodeAsObserver(t *testing.T) {
 		for _, v := range tt.addrs {
 			o.members.Addresses[v] = "addr"
 		}
-		result := o.isAddingNodeAsObserver(cc)
+		result := o.isAddNodeAsObserver(cc)
 		if result != tt.result {
 			t.Errorf("%d failed", idx)
 		}
@@ -250,7 +250,7 @@ func TestIsConfChangeUpToDate(t *testing.T) {
 			Initialize:     tt.initialize,
 			ConfigChangeId: tt.iccid,
 		}
-		if result := o.isConfChangeUpToDate(cc); result != tt.result {
+		if result := o.isUpToDate(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
@@ -296,7 +296,7 @@ func TestIsAddingExistingMember(t *testing.T) {
 			Address: tt.addr,
 			NodeID:  tt.nodeID,
 		}
-		if result := o.isAddingExistingMember(cc); result != tt.result {
+		if result := o.isAddExistingMember(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
@@ -330,7 +330,7 @@ func TestIsPromotingObserver(t *testing.T) {
 			Address: tt.addr,
 			NodeID:  tt.nodeID,
 		}
-		if result := o.isPromotingObserver(cc); result != tt.result {
+		if result := o.isPromoteObserver(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
@@ -377,7 +377,7 @@ func TestApplyAddNode(t *testing.T) {
 		Address: "a1",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
 		t.Errorf("ccid not updated")
 	}
@@ -395,7 +395,7 @@ func TestAddNodeCanPromoteObserverToNode(t *testing.T) {
 		Address: "a2",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 	v, ok := o.members.Addresses[100]
 	if !ok || v != "a2" || len(o.members.Addresses) != 1 {
 		t.Errorf("node not added")
@@ -413,7 +413,7 @@ func TestApplyAddObserver(t *testing.T) {
 		Address: "a1",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
 		t.Errorf("ccid not updated")
 	}
@@ -449,7 +449,7 @@ func TestAddingExistingNodeAsObserverWillPanic(t *testing.T) {
 		Address: "a1",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 }
 
 func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
@@ -465,7 +465,7 @@ func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
 		Address: "a1",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 }
 
 func TestAddingExistingObserverAsWitnessWillPanic(t *testing.T) {
@@ -481,7 +481,7 @@ func TestAddingExistingObserverAsWitnessWillPanic(t *testing.T) {
 		Address: "a1",
 		NodeID:  100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 }
 
 func TestApplyRemoveNode(t *testing.T) {
@@ -493,7 +493,7 @@ func TestApplyRemoveNode(t *testing.T) {
 		Type:   pb.RemoveNode,
 		NodeID: 100,
 	}
-	o.applyConfigChange(cc, 1000)
+	o.apply(cc, 1000)
 	if len(o.members.Addresses) != 0 ||
 		len(o.members.Observers) != 0 ||
 		len(o.members.Witnesses) != 0 {

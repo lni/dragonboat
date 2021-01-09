@@ -110,7 +110,7 @@ func (m *membership) isEmpty() bool {
 	return len(m.members.Addresses) == 0
 }
 
-func (m *membership) isConfChangeUpToDate(cc pb.ConfigChange) bool {
+func (m *membership) isUpToDate(cc pb.ConfigChange) bool {
 	if !m.ordered || cc.Initialize {
 		return true
 	}
@@ -120,7 +120,7 @@ func (m *membership) isConfChangeUpToDate(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
+func (m *membership) isAddRemovedNode(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode ||
 		cc.Type == pb.AddObserver ||
 		cc.Type == pb.AddWitness {
@@ -130,7 +130,7 @@ func (m *membership) isAddingRemovedNode(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isPromotingObserver(cc pb.ConfigChange) bool {
+func (m *membership) isPromoteObserver(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
 		oa, ok := m.members.Observers[cc.NodeID]
 		return ok && addressEqual(oa, cc.Address)
@@ -146,7 +146,7 @@ func (m *membership) isInvalidObserverPromotion(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
+func (m *membership) isAddExistingMember(cc pb.ConfigChange) bool {
 	// try to add again with the same node ID
 	if cc.Type == pb.AddNode {
 		_, ok := m.members.Addresses[cc.NodeID]
@@ -166,7 +166,7 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 			return true
 		}
 	}
-	if m.isPromotingObserver(cc) {
+	if m.isPromoteObserver(cc) {
 		return false
 	}
 	if cc.Type == pb.AddNode ||
@@ -191,14 +191,14 @@ func (m *membership) isAddingExistingMember(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingNodeAsObserver(cc pb.ConfigChange) bool {
+func (m *membership) isAddNodeAsObserver(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddObserver {
 		_, ok := m.members.Addresses[cc.NodeID]
 		return ok
 	}
 	return false
 }
-func (m *membership) isAddingNodeAsWitness(cc pb.ConfigChange) bool {
+func (m *membership) isAddNodeAsWitness(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddWitness {
 		_, ok := m.members.Addresses[cc.NodeID]
 		return ok
@@ -206,7 +206,7 @@ func (m *membership) isAddingNodeAsWitness(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingWitnessAsObserver(cc pb.ConfigChange) bool {
+func (m *membership) isAddWitnessAsObserver(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddObserver {
 		_, ok := m.members.Witnesses[cc.NodeID]
 		return ok
@@ -214,7 +214,7 @@ func (m *membership) isAddingWitnessAsObserver(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingWitnessAsNode(cc pb.ConfigChange) bool {
+func (m *membership) isAddWitnessAsNode(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
 		_, ok := m.members.Witnesses[cc.NodeID]
 		return ok
@@ -222,7 +222,7 @@ func (m *membership) isAddingWitnessAsNode(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddingObserverAsWitness(cc pb.ConfigChange) bool {
+func (m *membership) isAddObserverAsWitness(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddWitness {
 		_, ok := m.members.Observers[cc.NodeID]
 		return ok
@@ -230,7 +230,7 @@ func (m *membership) isAddingObserverAsWitness(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isDeletingOnlyNode(cc pb.ConfigChange) bool {
+func (m *membership) isDeleteOnlyNode(cc pb.ConfigChange) bool {
 	if cc.Type == pb.RemoveNode && len(m.members.Addresses) == 1 {
 		_, ok := m.members.Addresses[cc.NodeID]
 		return ok
@@ -238,7 +238,7 @@ func (m *membership) isDeletingOnlyNode(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) applyConfigChange(cc pb.ConfigChange, index uint64) {
+func (m *membership) apply(cc pb.ConfigChange, index uint64) {
 	m.members.ConfigChangeId = index
 	switch cc.Type {
 	case pb.AddNode:
@@ -276,15 +276,15 @@ var nid = logutil.NodeID
 func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	// order id requested by user
 	ccid := cc.ConfigChangeId
-	nodeBecomingObserver := m.isAddingNodeAsObserver(cc)
-	nodeBecomingWitness := m.isAddingNodeAsWitness(cc)
-	witnessBecomingNode := m.isAddingWitnessAsNode(cc)
-	witnessBecomingObserver := m.isAddingWitnessAsObserver(cc)
-	observerBecomingWitness := m.isAddingObserverAsWitness(cc)
-	alreadyMember := m.isAddingExistingMember(cc)
-	addRemovedNode := m.isAddingRemovedNode(cc)
-	upToDateCC := m.isConfChangeUpToDate(cc)
-	deleteOnlyNode := m.isDeletingOnlyNode(cc)
+	nodeBecomingObserver := m.isAddNodeAsObserver(cc)
+	nodeBecomingWitness := m.isAddNodeAsWitness(cc)
+	witnessBecomingNode := m.isAddWitnessAsNode(cc)
+	witnessBecomingObserver := m.isAddWitnessAsObserver(cc)
+	observerBecomingWitness := m.isAddObserverAsWitness(cc)
+	alreadyMember := m.isAddExistingMember(cc)
+	addRemovedNode := m.isAddRemovedNode(cc)
+	upToDateCC := m.isUpToDate(cc)
+	deleteOnlyNode := m.isDeleteOnlyNode(cc)
 	invalidPromotion := m.isInvalidObserverPromotion(cc)
 	accepted := upToDateCC &&
 		!addRemovedNode &&
@@ -298,7 +298,7 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		!invalidPromotion
 	if accepted {
 		// current entry index, it will be recorded as the conf change id of the members
-		m.applyConfigChange(cc, index)
+		m.apply(cc, index)
 		if cc.Type == pb.AddNode {
 			plog.Infof("%s applied ADD ccid %d (%d), %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)

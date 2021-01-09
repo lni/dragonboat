@@ -16,6 +16,7 @@ package rsm
 
 import (
 	"encoding/binary"
+	"io"
 	"time"
 
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -29,6 +30,8 @@ const (
 	// ChunkSize is the size of each snapshot chunk.
 	ChunkSize = settings.SnapshotChunkSize
 )
+
+var _ io.WriteCloser = (*ChunkWriter)(nil)
 
 // ChunkWriter is an io.WriteCloser type that streams snapshot chunks to its
 // intended remote nodes.
@@ -53,8 +56,13 @@ func NewChunkWriter(sink pb.IChunkSink, meta *SSMeta) *ChunkWriter {
 
 // Close closes the chunk writer.
 func (cw *ChunkWriter) Close() error {
-	if err := cw.flush(); err != nil {
+	if err := cw.bw.Close(); err != nil {
 		return err
+	}
+	if !cw.failed {
+		if err := cw.onNewChunk(cw.getTailChunk()); err != nil {
+			return err
+		}
 	}
 	cw.sink.Stop()
 	return nil
@@ -69,16 +77,6 @@ func (cw *ChunkWriter) Write(data []byte) (int, error) {
 		return 0, sm.ErrSnapshotStreaming
 	}
 	return cw.bw.Write(data)
-}
-
-func (cw *ChunkWriter) flush() error {
-	if err := cw.bw.Flush(); err != nil {
-		return err
-	}
-	if !cw.failed {
-		return cw.onNewChunk(cw.getTailChunk())
-	}
-	return nil
 }
 
 func (cw *ChunkWriter) onNewBlock(data []byte, crc []byte) error {
@@ -119,7 +117,7 @@ func (cw *ChunkWriter) getHeader() []byte {
 		UnreliableTime:  uint64(time.Now().UnixNano()),
 		PayloadChecksum: []byte{0, 0, 0, 0},
 		ChecksumType:    DefaultChecksumType,
-		Version:         uint64(V2SnapshotVersion),
+		Version:         uint64(V2),
 		CompressionType: cw.meta.CompressionType,
 	}
 	data, err := header.Marshal()
@@ -131,7 +129,7 @@ func (cw *ChunkWriter) getHeader() []byte {
 		panic(err)
 	}
 	checksum := h.Sum(nil)
-	result := make([]byte, SnapshotHeaderSize)
+	result := make([]byte, HeaderSize)
 	binary.LittleEndian.PutUint64(result, uint64(len(data)))
 	copy(result[8:], data)
 	copy(result[8+len(data):], checksum)

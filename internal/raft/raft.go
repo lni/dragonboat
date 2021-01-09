@@ -1495,6 +1495,7 @@ func (r *raft) hasConfigChangeToApply() bool {
 	// with the current entry log implementation, the simplification below is no
 	// longer required, we can now actually scan the committed but not applied
 	// portion of the log as they are now all in memory.
+	plog.Infof("committed: %d, applied: %d", r.log.committed, r.getApplied())
 	return r.log.committed > r.getApplied()
 }
 

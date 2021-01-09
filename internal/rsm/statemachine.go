@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
-Package rsm implements Replicated State Machines used in Dragonboat.
+Package rsm implements State Machines used in Dragonboat.
 
 This package is internally used by Dragonboat, applications are not expected to
 import this package.
@@ -45,7 +45,7 @@ var (
 var (
 	// ErrRestoreSnapshot indicates there is error when trying to restore
 	// from a snapshot
-	ErrRestoreSnapshot             = errors.New("failed to restore from snapshot")
+	ErrRestoreSnapshot             = errors.New("failed to restore snapshot")
 	batchedEntryApply              = settings.Soft.BatchedEntryApply
 	sessionBufferInitialCap uint64 = 128 * 1024
 )
@@ -156,25 +156,29 @@ type ISnapshotter interface {
 // StateMachine is a manager class that manages application state
 // machine
 type StateMachine struct {
-	syncedIndex        uint64
-	visibleLastApplied uint64
-	mu                 sync.RWMutex
-	snapshotter        ISnapshotter
-	node               INode
-	sm                 IManagedStateMachine
-	sessions           *SessionManager
-	members            *membership
-	index              uint64
-	term               uint64
-	snapshotIndex      uint64
-	onDiskInitIndex    uint64
-	onDiskIndex        uint64
-	taskQ              *TaskQueue
-	onDiskSM           bool
-	aborted            bool
-	isWitness          bool
-	sct                config.CompressionType
-	fs                 vfs.IFS
+	mu          sync.RWMutex
+	lastApplied struct {
+		sync.Mutex
+		index uint64
+		term  uint64
+	}
+	syncedIndex     uint64
+	snapshotter     ISnapshotter
+	node            INode
+	sm              IManagedStateMachine
+	sessions        *SessionManager
+	members         *membership
+	index           uint64
+	term            uint64
+	snapshotIndex   uint64
+	onDiskInitIndex uint64
+	onDiskIndex     uint64
+	taskQ           *TaskQueue
+	onDiskSM        bool
+	aborted         bool
+	isWitness       bool
+	sct             config.CompressionType
+	fs              vfs.IFS
 }
 
 // NewStateMachine creates a new application state machine object.
@@ -234,14 +238,13 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 		return 0, err
 	}
 	s.node.RestoreRemotes(ss)
-	s.SetVisibleLastApplied(ss.Index)
 	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
 
 func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	if !t.Initial {
-		snapshot, err := s.snapshotter.GetSnapshot(t.Index)
+		ss, err := s.snapshotter.GetSnapshot(t.Index)
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
 			plog.Errorf("%s, get snapshot failed: %v", s.id(), err)
 			return pb.Snapshot{}, ErrRestoreSnapshot
@@ -250,19 +253,19 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 			plog.Errorf("%s, no snapshot", s.id())
 			return pb.Snapshot{}, err
 		}
-		return snapshot, nil
+		return ss, nil
 	}
-	snapshot, err := s.snapshotter.GetMostRecentSnapshot()
+	ss, err := s.snapshotter.GetMostRecentSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
 		plog.Infof("%s no snapshot available during launch", s.id())
 		return pb.Snapshot{}, nil
 	}
-	return snapshot, nil
+	return ss, nil
 }
 
 func (s *StateMachine) mustBeOnDiskSM() {
 	if !s.OnDiskStateMachine() {
-		panic("not an on disk sm")
+		panic("not an OnDiskStateMachine")
 	}
 }
 
@@ -287,7 +290,7 @@ func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	return ss.OnDiskIndex > s.onDiskIndex
 }
 
-func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
+func (s *StateMachine) checkRecoverOnDiskSM(ss pb.Snapshot, init bool) {
 	s.mustBeOnDiskSM()
 	if ss.Imported && init {
 		return
@@ -305,7 +308,7 @@ func (s *StateMachine) canRecoverOnDiskSnapshot(ss pb.Snapshot, init bool) {
 func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.index >= ss.Index {
+	if s.GetLastApplied() >= ss.Index {
 		return raft.ErrSnapshotOutOfDate
 	}
 	if s.aborted {
@@ -319,7 +322,7 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		return s.doRecover(ss, init)
 	}
 	if s.recoverRequired(ss, init) {
-		s.canRecoverOnDiskSnapshot(ss, init)
+		s.checkRecoverOnDiskSM(ss, init)
 		if err := s.doRecover(ss, init); err != nil {
 			return err
 		}
@@ -348,9 +351,11 @@ func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 }
 
 func (s *StateMachine) apply(ss pb.Snapshot) {
+	s.members.set(ss.Membership)
+	s.lastApplied.Lock()
+	defer s.lastApplied.Unlock()
 	s.index = ss.Index
 	s.term = ss.Term
-	s.members.set(ss.Membership)
 }
 
 func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
@@ -403,50 +408,19 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 	return index, nil
 }
 
-// GetLastApplied returns the last applied value.
-func (s *StateMachine) GetLastApplied() uint64 {
-	s.mu.RLock()
-	v := s.index
-	s.mu.RUnlock()
-	return v
-}
-
-// GetSyncedIndex returns the index value that is known to have been
-// synchronized.
-func (s *StateMachine) GetSyncedIndex() uint64 {
-	return atomic.LoadUint64(&s.syncedIndex)
-}
-
-// GetVisibleLastApplied returns the batched last applied value.
-func (s *StateMachine) GetVisibleLastApplied() uint64 {
-	return atomic.LoadUint64(&s.visibleLastApplied)
-}
-
-// SetVisibleLastApplied sets the batched last applied value. This method
-// is mostly used in tests.
-func (s *StateMachine) SetVisibleLastApplied(index uint64) {
-	if s.GetVisibleLastApplied() > index {
-		panic("batched applied index moving backward")
-	}
-	atomic.StoreUint64(&s.visibleLastApplied, index)
-}
-
-func (s *StateMachine) setSyncedIndex(index uint64) {
-	if s.GetSyncedIndex() > index {
-		panic("synced index moving backward")
-	}
-	atomic.StoreUint64(&s.syncedIndex, index)
-}
-
 // Offloaded marks the state machine as offloaded from the specified compone.
 // It returns a boolean value indicating whether the node has been fully
 // unloaded after unloading from the specified compone.
 func (s *StateMachine) Offloaded(from From) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.sm.Offloaded(from)
 }
 
 // Loaded marks the state machine as loaded from the specified compone.
 func (s *StateMachine) Loaded(from From) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sm.Loaded(from)
 }
 
@@ -564,7 +538,7 @@ func (s *StateMachine) Handle(batch []Task, apply []sm.Entry) (Task, error) {
 	processed := false
 	defer func() {
 		// give the node worker a chance to run when
-		//  - batched applied value has been updated
+		//  - the visible index value has been updated
 		//  - taskC has been popped
 		if processed {
 			s.node.StepReady()
@@ -640,7 +614,6 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		Type:            s.sm.Type(),
 		CompressionType: ct,
 	}
-	plog.Debugf("%s generating %s", s.id(), s.ssid(meta.Index))
 	s.logMembership("members", meta.Index, meta.Membership.Addresses)
 	if err := s.sessions.SaveSessions(meta.Session); err != nil {
 		return nil, err
@@ -648,29 +621,71 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	return meta, nil
 }
 
-func (s *StateMachine) setLastApplied(index uint64, term uint64) {
-	if s.index+1 != index {
-		plog.Panicf("%s invalid index %d, applied %d", s.id(), index, s.index)
+// GetLastApplied returns the last applied value.
+func (s *StateMachine) GetLastApplied() uint64 {
+	s.lastApplied.Lock()
+	defer s.lastApplied.Unlock()
+	return s.index
+}
+
+// GetSyncedIndex returns the index value that is known to have been
+// synchronized.
+func (s *StateMachine) GetSyncedIndex() uint64 {
+	return atomic.LoadUint64(&s.syncedIndex)
+}
+
+func (s *StateMachine) setSyncedIndex(index uint64) {
+	if s.GetSyncedIndex() > index {
+		panic("synced index moving backward")
 	}
-	if index == 0 || term == 0 {
-		plog.Panicf("%s invalid index %d or term %d", s.id(), index, term)
+	atomic.StoreUint64(&s.syncedIndex, index)
+}
+
+func (s *StateMachine) setLastApplied(entries []pb.Entry) {
+	if len(entries) > 0 {
+		index := uint64(0)
+		term := uint64(0)
+		for idx, e := range entries {
+			if e.Index == 0 || e.Term == 0 {
+				plog.Panicf("invalid entry index/term, %v", e)
+			}
+			if idx == 0 {
+				index = e.Index
+				term = e.Term
+			} else {
+				if e.Index != index+1 {
+					plog.Panicf("%s, index gap found, %d,%d", s.id(), index, e.Index)
+				}
+				if e.Term < term {
+					plog.Panicf("%s, term moving backward, %d, %d", s.id(), term, e.Term)
+				}
+				index = e.Index
+				term = e.Term
+			}
+		}
+		s.lastApplied.Lock()
+		defer s.lastApplied.Unlock()
+		if s.index+1 != entries[0].Index {
+			plog.Panicf("%s, gap between batches, %d, %d", s.id())
+		}
+		if s.term > entries[0].Term {
+			plog.Panicf("%s, invalid term", s.id())
+		}
+		s.index = entries[len(entries)-1].Index
+		s.term = entries[len(entries)-1].Term
 	}
-	if term < s.term {
-		plog.Panicf("%s term %d moving backward, new term %d", s.id(), s.term, term)
-	}
-	s.index = index
-	s.term = term
 }
 
 func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
-	if s.index < s.snapshotIndex {
+	index := s.GetLastApplied()
+	if index < s.snapshotIndex {
 		panic("s.index < s.snapshotIndex")
 	}
 	if !s.OnDiskStateMachine() {
-		if !req.Exported() && s.index > 0 && s.index == s.snapshotIndex {
+		if !req.Exported() && index > 0 && index == s.snapshotIndex {
 			return raft.ErrSnapshotOutOfDate
 		}
 	}
@@ -741,11 +756,11 @@ func (s *StateMachine) sync() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	plog.Debugf("%s is being synchronized, index %d", s.id(), s.index)
+	index := s.GetLastApplied()
 	if err := s.sm.Sync(); err != nil {
 		return err
 	}
-	s.setSyncedIndex(s.index)
+	s.setSyncedIndex(index)
 	return nil
 }
 
@@ -774,26 +789,27 @@ func getEntryTypes(entries []pb.Entry) (bool, bool) {
 	return allUpdate, allNoOP
 }
 
-func (s *StateMachine) handle(batch []Task, toApply []sm.Entry) error {
-	batchSupport := batchedEntryApply && s.Concurrent()
-	for b := range batch {
-		if batch[b].IsSnapshotTask() || batch[b].isSyncTask() {
+func (s *StateMachine) handle(t []Task, a []sm.Entry) error {
+	batch := batchedEntryApply && s.Concurrent()
+	for idx := range t {
+		if t[idx].IsSnapshotTask() || t[idx].isSyncTask() {
 			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())
 		}
-		input := batch[b].Entries
-		allUpdate, allNoOP := getEntryTypes(input)
-		if batchSupport && allUpdate && allNoOP {
-			if err := s.handleBatch(input, toApply); err != nil {
+		e := t[idx].Entries
+		update, noop := getEntryTypes(e)
+		if batch && update && noop {
+			if err := s.handleBatch(e, a); err != nil {
 				return err
 			}
 		} else {
-			for i := range input {
-				last := b == len(batch)-1 && i == len(input)-1
-				if err := s.handleEntry(input[i], last); err != nil {
+			for i := range e {
+				last := idx == len(t)-1 && i == len(e)-1
+				if err := s.handleEntry(e[i], last); err != nil {
 					return err
 				}
 			}
 		}
+		s.setLastApplied(e)
 	}
 	return nil
 }
@@ -827,49 +843,42 @@ func (s *StateMachine) setOnDiskIndex(first uint64, last uint64) {
 
 func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 	if e.IsConfigChange() {
-		s.handleConfigChange(e)
+		s.configChange(e)
 	} else {
 		if !e.IsSessionManaged() {
 			if e.IsEmpty() {
-				s.handleNoOP(e)
+				s.noop(e)
 				s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
 			} else {
 				panic("not session managed, not empty")
 			}
 		} else {
 			if e.IsNewSessionRequest() {
-				smResult := s.handleRegisterSession(e)
-				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
+				r := s.registerSession(e)
+				s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
 			} else if e.IsEndOfSessionRequest() {
-				smResult := s.handleUnregisterSession(e)
-				s.node.ApplyUpdate(e, smResult, isEmptyResult(smResult), false, last)
+				r := s.unregisterSession(e)
+				s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
 			} else {
 				if !s.entryInInitDiskSM(e.Index) {
-					smResult, ignored, rejected, err := s.handleUpdate(e)
+					r, ignored, rejected, err := s.update(e)
 					if err != nil {
 						return err
 					}
 					if !ignored {
-						s.node.ApplyUpdate(e, smResult, rejected, ignored, last)
+						s.node.ApplyUpdate(e, r, rejected, ignored, last)
 					}
 				} else {
 					// treat it as a NoOP entry
-					s.handleNoOP(pb.Entry{Index: e.Index, Term: e.Term})
+					s.noop(pb.Entry{Index: e.Index, Term: e.Term})
 				}
 			}
 		}
 	}
-	index := s.GetLastApplied()
-	if index != e.Index {
-		plog.Panicf("unexpected last applied value, %d, %d", index, e.Index)
-	}
-	if last {
-		s.SetVisibleLastApplied(e.Index)
-	}
 	return nil
 }
 
-func (s *StateMachine) onUpdateApplied(e pb.Entry,
+func (s *StateMachine) onApplied(e pb.Entry,
 	result sm.Result, ignored bool, rejected bool, last bool) {
 	if !ignored {
 		s.node.ApplyUpdate(e, result, rejected, ignored, last)
@@ -892,7 +901,6 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 		} else {
 			skipped++
 		}
-		s.setLastApplied(e.Index, e.Term)
 	}
 	if len(ents) > 0 {
 		results, err := s.sm.BatchedUpdate(ents)
@@ -907,17 +915,14 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 					s.id(), ce.Index, e.Index, skipped)
 			}
 			last := ce.Index == input[len(input)-1].Index
-			s.onUpdateApplied(ce, e.Result, false, false, last)
+			s.onApplied(ce, e.Result, false, false, last)
 		}
 		s.setOnDiskIndex(ents[0].Index, ents[len(ents)-1].Index)
-	}
-	if len(input) > 0 {
-		s.SetVisibleLastApplied(input[len(input)-1].Index)
 	}
 	return nil
 }
 
-func (s *StateMachine) handleConfigChange(e pb.Entry) {
+func (s *StateMachine) configChange(e pb.Entry) {
 	var cc pb.ConfigChange
 	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
@@ -926,7 +931,6 @@ func (s *StateMachine) handleConfigChange(e pb.Entry) {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.setLastApplied(e.Index, e.Term)
 		if s.members.handleConfigChange(cc, e.Index) {
 			rejected = false
 		}
@@ -934,44 +938,32 @@ func (s *StateMachine) handleConfigChange(e pb.Entry) {
 	s.node.ApplyConfigChange(cc, e.Key, rejected)
 }
 
-func (s *StateMachine) handleRegisterSession(e pb.Entry) sm.Result {
+func (s *StateMachine) registerSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sessions.RegisterClientID(e.ClientID)
-	if isEmptyResult(smResult) {
-		plog.Errorf("%s register client failed %v", s.id(), e)
-	}
-	s.setLastApplied(e.Index, e.Term)
-	return smResult
+	return s.sessions.RegisterClientID(e.ClientID)
 }
 
-func (s *StateMachine) handleUnregisterSession(e pb.Entry) sm.Result {
+func (s *StateMachine) unregisterSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	smResult := s.sessions.UnregisterClientID(e.ClientID)
-	if isEmptyResult(smResult) {
-		plog.Errorf("%s unregister %d failed %v", s.id(), e.ClientID, e)
-	}
-	s.setLastApplied(e.Index, e.Term)
-	return smResult
+	return s.sessions.UnregisterClientID(e.ClientID)
 }
 
-func (s *StateMachine) handleNoOP(e pb.Entry) {
+func (s *StateMachine) noop(e pb.Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !e.IsEmpty() || e.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
-	s.setLastApplied(e.Index, e.Term)
 }
 
-// result a tuple of (result, should ignore, rejected)
-func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
+// result is a tuple of (result, should ignore, rejected, error)
+func (s *StateMachine) update(e pb.Entry) (sm.Result, bool, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ok bool
 	var session *Session
-	s.setLastApplied(e.Index, e.Term)
 	if !e.IsNoOPSession() {
 		session, ok = s.sessions.ClientRegistered(e.ClientID)
 		if !ok {
@@ -999,15 +991,15 @@ func (s *StateMachine) handleUpdate(e pb.Entry) (sm.Result, bool, bool, error) {
 			panic("already has response in session")
 		}
 	}
-	result, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: GetPayload(e)})
+	r, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: GetPayload(e)})
 	if err != nil {
 		return sm.Result{}, false, false, err
 	}
 	s.setOnDiskIndex(e.Index, e.Index)
 	if session != nil {
-		session.addResponse(RaftSeriesID(e.SeriesID), result)
+		session.addResponse(RaftSeriesID(e.SeriesID), r)
 	}
-	return result, false, false, nil
+	return r, false, false, nil
 }
 
 func (s *StateMachine) id() string {

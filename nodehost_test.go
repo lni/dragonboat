@@ -2332,9 +2332,9 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, f
 			if h.CompressionType != config.NoCompression {
 				t.Errorf("dummy snapshot compressed")
 			}
-			if h.Version != uint64(rsm.SnapshotVersion) {
+			if rsm.SSVersion(h.Version) != rsm.DefaultVersion {
 				t.Errorf("unexpected snapshot version, got %d, want %d",
-					h.Version, rsm.SnapshotVersion)
+					h.Version, rsm.DefaultVersion)
 			}
 			reader.Close()
 			shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
@@ -3196,7 +3196,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get header %v", err)
 			}
-			if rsm.SSVersion(header.Version) != rsm.V2SnapshotVersion {
+			if rsm.SSVersion(header.Version) != rsm.V2 {
 				t.Errorf("unexpected snapshot version")
 			}
 		},
