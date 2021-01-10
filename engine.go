@@ -973,7 +973,7 @@ func (e *engine) loadBucketNodes(workerID uint64,
 					plog.Panicf("%s from two incarnations found", n.id())
 				}
 			} else {
-				loaded = append(loaded, n)
+				loaded = append(loaded, v)
 			}
 			if partitioner.GetPartitionID(cid) == bucket {
 				newNodes[cid] = v
