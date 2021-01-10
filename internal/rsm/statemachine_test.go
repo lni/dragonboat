@@ -2021,6 +2021,12 @@ func (t *testManagedStateMachine) NALookup(input []byte) ([]byte, error) {
 	t.nalookup = true
 	return input, nil
 }
+func (t *testManagedStateMachine) ConcurrentLookup(interface{}) (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) NAConcurrentLookup(input []byte) ([]byte, error) {
+	t.nalookup = true
+	return input, nil
+}
+
 func (t *testManagedStateMachine) Sync() error {
 	t.synced = true
 	return nil

@@ -17,6 +17,7 @@ package rsm
 import (
 	"errors"
 	"io"
+	"sync"
 
 	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -57,7 +58,9 @@ type IManagedStateMachine interface {
 	Update(sm.Entry) (sm.Result, error)
 	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
 	Lookup(interface{}) (interface{}, error)
+	ConcurrentLookup(interface{}) (interface{}, error)
 	NALookup([]byte) ([]byte, error)
+	NAConcurrentLookup([]byte) ([]byte, error)
 	Sync() error
 	GetHash() (uint64, error)
 	Prepare() (interface{}, error)
@@ -94,6 +97,7 @@ type ManagedStateMachineFactory func(clusterID uint64,
 // NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
 type NativeSM struct {
+	mu     sync.RWMutex
 	config config.Config
 	sm     IStateMachine
 	done   <-chan struct{}
@@ -128,6 +132,8 @@ func (ds *NativeSM) Open() (uint64, error) {
 
 // Offloaded offloads the data store from the specified part of the system.
 func (ds *NativeSM) Offloaded(from From) bool {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 	ds.SetOffloaded(from)
 	if ds.ReadyToDestroy() && !ds.Destroyed() {
 		if err := ds.sm.Close(); err != nil {
@@ -141,6 +147,8 @@ func (ds *NativeSM) Offloaded(from From) bool {
 
 // Loaded marks the statemachine as loaded by the specified component.
 func (ds *NativeSM) Loaded(from From) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 	ds.SetLoaded(from)
 }
 
@@ -197,17 +205,31 @@ func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 
 // Lookup queries the data store.
 func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
 		return nil, ErrClusterClosed
 	}
 	return ds.sm.Lookup(query)
 }
 
+// ConcurrentLookup queries the data store without obtaining the NativeSM.mu.
+func (ds *NativeSM) ConcurrentLookup(query interface{}) (interface{}, error) {
+	return ds.sm.Lookup(query)
+}
+
 // NALookup queries the data store.
 func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
 	if ds.Destroyed() {
 		return nil, ErrClusterClosed
 	}
+	return ds.sm.NALookup(query)
+}
+
+// NAConcurrentLookup queries the data store without obtaining the NativeSM.mu.
+func (ds *NativeSM) NAConcurrentLookup(query []byte) ([]byte, error) {
 	return ds.sm.NALookup(query)
 }
 

@@ -412,15 +412,11 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 // It returns a boolean value indicating whether the node has been fully
 // unloaded after unloading from the specified compone.
 func (s *StateMachine) Offloaded(from From) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.sm.Offloaded(from)
 }
 
 // Loaded marks the state machine as loaded from the specified compone.
 func (s *StateMachine) Loaded(from From) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sm.Loaded(from)
 }
 
@@ -442,7 +438,7 @@ func (s *StateMachine) lookup(query interface{}) (interface{}, error) {
 }
 
 func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) {
-	return s.sm.Lookup(query)
+	return s.sm.ConcurrentLookup(query)
 }
 
 // NALookup queries the local state machine.
@@ -463,7 +459,7 @@ func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
 }
 
 func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
-	return s.sm.NALookup(query)
+	return s.sm.NAConcurrentLookup(query)
 }
 
 // GetMembership returns the membership info maintained by the state machine.
