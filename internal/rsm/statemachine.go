@@ -162,6 +162,8 @@ type StateMachine struct {
 		index uint64
 		term  uint64
 	}
+	appliedIndex    uint64
+	appliedTerm     uint64
 	syncedIndex     uint64
 	snapshotter     ISnapshotter
 	node            INode
@@ -354,8 +356,8 @@ func (s *StateMachine) apply(ss pb.Snapshot) {
 	s.members.set(ss.Membership)
 	s.lastApplied.Lock()
 	defer s.lastApplied.Unlock()
-	s.index = ss.Index
-	s.term = ss.Term
+	s.index, s.term = ss.Index, ss.Term
+	s.appliedIndex, s.appliedTerm = ss.Index, ss.Term
 }
 
 func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
@@ -601,8 +603,8 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	meta := &SSMeta{
 		From:            s.node.NodeID(),
 		Ctx:             c,
-		Index:           s.index,
-		Term:            s.term,
+		Index:           s.appliedIndex,
+		Term:            s.appliedTerm,
 		OnDiskIndex:     s.onDiskIndex,
 		Request:         r,
 		Session:         buf,
@@ -635,6 +637,17 @@ func (s *StateMachine) setSyncedIndex(index uint64) {
 		panic("synced index moving backward")
 	}
 	atomic.StoreUint64(&s.syncedIndex, index)
+}
+
+func (s *StateMachine) setApplied(index uint64, term uint64) {
+	if s.appliedIndex+1 != index {
+		plog.Panicf("%s, applied index %d, new index %d",
+			s.id(), s.appliedIndex, index)
+	}
+	if s.appliedTerm > term {
+		plog.Panicf("%s, applied term %d, new term %d", s.id(), s.appliedTerm, term)
+	}
+	s.appliedIndex, s.appliedTerm = index, term
 }
 
 func (s *StateMachine) setLastApplied(entries []pb.Entry) {
@@ -896,6 +909,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 			})
 		} else {
 			skipped++
+			s.setApplied(e.Index, e.Term)
 		}
 	}
 	if len(ents) > 0 {
@@ -912,6 +926,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 			}
 			last := ce.Index == input[len(input)-1].Index
 			s.onApplied(ce, e.Result, false, false, last)
+			s.setApplied(ce.Index, ce.Term)
 		}
 		s.setOnDiskIndex(ents[0].Index, ents[len(ents)-1].Index)
 	}
@@ -927,6 +942,7 @@ func (s *StateMachine) configChange(e pb.Entry) {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		defer s.setApplied(e.Index, e.Term)
 		if s.members.handleConfigChange(cc, e.Index) {
 			rejected = false
 		}
@@ -937,18 +953,21 @@ func (s *StateMachine) configChange(e pb.Entry) {
 func (s *StateMachine) registerSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.setApplied(e.Index, e.Term)
 	return s.sessions.RegisterClientID(e.ClientID)
 }
 
 func (s *StateMachine) unregisterSession(e pb.Entry) sm.Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.setApplied(e.Index, e.Term)
 	return s.sessions.UnregisterClientID(e.ClientID)
 }
 
 func (s *StateMachine) noop(e pb.Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.setApplied(e.Index, e.Term)
 	if !e.IsEmpty() || e.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
@@ -958,6 +977,7 @@ func (s *StateMachine) noop(e pb.Entry) {
 func (s *StateMachine) update(e pb.Entry) (sm.Result, bool, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.setApplied(e.Index, e.Term)
 	var ok bool
 	var session *Session
 	if !e.IsNoOPSession() {
