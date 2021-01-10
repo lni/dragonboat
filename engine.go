@@ -443,6 +443,7 @@ func (p *workerPool) updateLoadedBusyNodes() {
 func (p *workerPool) loadNodes() {
 	if p.nh.getClusterSetIndex() != p.cci {
 		newNodes := make(map[uint64]*ssNode)
+		loaded := make([]*node, 0)
 		p.cci = p.nh.forEachCluster(func(cid uint64, n *node) bool {
 			if on, ok := p.nodes[cid]; ok {
 				if on.n.instanceID != n.instanceID {
@@ -450,6 +451,7 @@ func (p *workerPool) loadNodes() {
 				}
 				newNodes[cid] = on
 			} else {
+				loaded = append(loaded, n)
 				newNodes[cid] = newSSNode(n)
 			}
 			return true
@@ -459,8 +461,8 @@ func (p *workerPool) loadNodes() {
 				n.unref()
 			}
 		}
-		for _, n := range newNodes {
-			n.n.loaded(rsm.FromSnapshotWorker)
+		for _, n := range loaded {
+			n.loaded(rsm.FromSnapshotWorker)
 		}
 		p.loaded.updateFromLoadedSSNodes(1, rsm.FromSnapshotWorker, newNodes)
 		p.nodes = newNodes
@@ -964,11 +966,14 @@ func (e *engine) loadBucketNodes(workerID uint64,
 	var offloaded []*node
 	if newCSI != csi {
 		newNodes := make(map[uint64]*node)
+		loaded := make([]*node, 0)
 		newCSI = e.nh.forEachCluster(func(cid uint64, v *node) bool {
 			if n, ok := nodes[cid]; ok {
 				if n.instanceID != v.instanceID {
 					plog.Panicf("%s from two incarnations found", n.id())
 				}
+			} else {
+				loaded = append(loaded, n)
 			}
 			if partitioner.GetPartitionID(cid) == bucket {
 				newNodes[cid] = v
@@ -980,7 +985,7 @@ func (e *engine) loadBucketNodes(workerID uint64,
 				offloaded = append(offloaded, node)
 			}
 		}
-		for _, n := range newNodes {
+		for _, n := range loaded {
 			n.loaded(from)
 		}
 		return newNodes, offloaded, newCSI
