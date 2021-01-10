@@ -67,8 +67,8 @@ type IManagedStateMachine interface {
 	Save(*SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 	Recover(io.Reader, []sm.SnapshotFile) error
 	Stream(interface{}, io.Writer) error
-	Offloaded(From) bool
-	Loaded(From)
+	Offloaded() bool
+	Loaded()
 	DestroyedC() <-chan struct{}
 	Concurrent() bool
 	OnDisk() bool
@@ -130,12 +130,11 @@ func (ds *NativeSM) Open() (uint64, error) {
 	return ds.sm.Open(ds.done)
 }
 
-// Offloaded offloads the data store from the specified part of the system.
-func (ds *NativeSM) Offloaded(from From) bool {
+// Offloaded offloads the data store from a user component.
+func (ds *NativeSM) Offloaded() bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	ds.SetOffloaded(from)
-	if ds.ReadyToDestroy() && !ds.Destroyed() {
+	if ds.SetOffloaded() == 0 {
 		if err := ds.sm.Close(); err != nil {
 			panic(err)
 		}
@@ -146,10 +145,10 @@ func (ds *NativeSM) Offloaded(from From) bool {
 }
 
 // Loaded marks the statemachine as loaded by the specified component.
-func (ds *NativeSM) Loaded(from From) {
+func (ds *NativeSM) Loaded() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	ds.SetLoaded(from)
+	ds.SetLoaded()
 }
 
 // DestroyedC returns a chan struct{} used to indicate whether the SM has been

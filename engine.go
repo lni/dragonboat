@@ -17,7 +17,6 @@ package dragonboat
 import (
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/lni/goutils/syncutil"
@@ -39,6 +38,16 @@ var (
 	taskBatchSize       = settings.Soft.TaskBatchSize
 )
 
+type from uint64
+
+const (
+	fromStepWorker from = iota
+	fromCommitWorker
+	fromApplyWorker
+	fromWorkerPool
+	fromWorker
+)
+
 type nodeLoader interface {
 	describe() string
 	getClusterSetIndex() uint64
@@ -47,7 +56,7 @@ type nodeLoader interface {
 
 type nodeType struct {
 	workerID uint64
-	from     rsm.From
+	from     from
 }
 
 type loadedNodes struct {
@@ -73,28 +82,28 @@ func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 }
 
 func (l *loadedNodes) update(workerID uint64,
-	from rsm.From, nodes map[uint64]*node) {
+	from from, nodes map[uint64]*node) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	nt := nodeType{workerID: workerID, from: from}
 	l.nodes[nt] = nodes
 }
 
-// nodes is a map of workerID -> *ssNode
+// nodes is a map of workerID -> *node
 func (l *loadedNodes) updateFromBusySSNodes(workerID uint64,
-	from rsm.From, nodes map[uint64]*ssNode) {
+	from from, nodes map[uint64]*node) {
 	l.updateFromLoadedSSNodes(workerID, from, nodes)
 }
 
-// nodes is a map of clusterID -> *ssNode
+// nodes is a map of clusterID -> *node
 func (l *loadedNodes) updateFromLoadedSSNodes(workerID uint64,
-	from rsm.From, nodes map[uint64]*ssNode) {
+	from from, nodes map[uint64]*node) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	nt := nodeType{workerID: workerID, from: from}
 	nm := make(map[uint64]*node, len(nodes))
 	for _, n := range nodes {
-		nm[n.n.clusterID] = n.n
+		nm[n.clusterID] = n
 	}
 	l.nodes[nt] = nm
 }
@@ -163,28 +172,9 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 	return readyMap.getReadyClusters()
 }
 
-type ssNode struct {
-	n      *node
-	refcnt uint32
-}
-
-func newSSNode(n *node) *ssNode {
-	return &ssNode{n: n, refcnt: 1}
-}
-
-func (n *ssNode) ref() {
-	atomic.AddUint32(&n.refcnt, 1)
-}
-
-func (n *ssNode) unref() {
-	if atomic.AddUint32(&n.refcnt, ^uint32(0)) == 0 {
-		n.n.offloaded(rsm.FromSnapshotWorker)
-	}
-}
-
 type job struct {
 	task       rsm.Task
-	node       *ssNode
+	node       *node
 	sink       getSink
 	instanceID uint64
 	clusterID  uint64
@@ -242,26 +232,26 @@ func (w *ssWorker) handle(j job) {
 }
 
 func (w *ssWorker) recover(j job) {
-	if index, err := j.node.n.recover(j.task); err != nil {
+	if index, err := j.node.recover(j.task); err != nil {
 		panic(err)
 	} else {
-		j.node.n.recoverDone(index)
+		j.node.recoverDone(index)
 	}
 }
 
 func (w *ssWorker) save(j job) {
-	if err := j.node.n.save(j.task); err != nil {
+	if err := j.node.save(j.task); err != nil {
 		panic(err)
 	} else {
-		j.node.n.saveDone()
+		j.node.saveDone()
 	}
 }
 
 func (w *ssWorker) stream(j job) {
-	if err := j.node.n.stream(j.sink()); err != nil {
+	if err := j.node.stream(j.sink()); err != nil {
 		panic(err)
 	} else {
-		j.node.n.streamDone()
+		j.node.streamDone()
 	}
 }
 
@@ -273,12 +263,12 @@ type workerPool struct {
 	recoverReady  *workReady
 	streamReady   *workReady
 	workers       []*ssWorker
-	busy          map[uint64]*ssNode  // map of workerID -> *node
+	busy          map[uint64]*node    // map of workerID -> *node
 	saving        map[uint64]struct{} // map of clusterID
 	recovering    map[uint64]struct{} // map of clusterID
 	streaming     map[uint64]uint64   // map of clusterID -> target count
 	pending       []job
-	nodes         map[uint64]*ssNode
+	nodes         map[uint64]*node
 	cci           uint64
 	workerStopper *syncutil.Stopper
 	poolStopper   *syncutil.Stopper
@@ -292,9 +282,9 @@ func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
 		saveReady:     newWorkReady(1),
 		recoverReady:  newWorkReady(1),
 		streamReady:   newWorkReady(1),
-		nodes:         make(map[uint64]*ssNode),
+		nodes:         make(map[uint64]*node),
 		workers:       make([]*ssWorker, snapshotWorkerCount),
-		busy:          make(map[uint64]*ssNode, snapshotWorkerCount),
+		busy:          make(map[uint64]*node, snapshotWorkerCount),
 		saving:        make(map[uint64]struct{}, snapshotWorkerCount),
 		recovering:    make(map[uint64]struct{}, snapshotWorkerCount),
 		streaming:     make(map[uint64]uint64, snapshotWorkerCount),
@@ -429,42 +419,42 @@ func (p *workerPool) workerPoolMain() {
 
 func (p *workerPool) unloadNodes() {
 	for _, n := range p.nodes {
-		n.unref()
+		n.offloaded()
 	}
 	for _, n := range p.busy {
-		n.unref()
+		n.offloaded()
 	}
 }
 
 func (p *workerPool) updateLoadedBusyNodes() {
-	p.loaded.updateFromBusySSNodes(2, rsm.FromSnapshotWorker, p.busy)
+	p.loaded.updateFromBusySSNodes(2, fromWorker, p.busy)
 }
 
 func (p *workerPool) loadNodes() {
 	if p.nh.getClusterSetIndex() != p.cci {
-		newNodes := make(map[uint64]*ssNode)
+		newNodes := make(map[uint64]*node)
 		loaded := make([]*node, 0)
 		p.cci = p.nh.forEachCluster(func(cid uint64, n *node) bool {
 			if on, ok := p.nodes[cid]; ok {
-				if on.n.instanceID != n.instanceID {
+				if on.instanceID != n.instanceID {
 					plog.Panicf("%s from two incarnations found", n.id())
 				}
 				newNodes[cid] = on
 			} else {
 				loaded = append(loaded, n)
-				newNodes[cid] = newSSNode(n)
+				newNodes[cid] = n
 			}
 			return true
 		})
 		for cid, n := range p.nodes {
 			if _, ok := newNodes[cid]; !ok {
-				n.unref()
+				n.offloaded()
 			}
 		}
 		for _, n := range loaded {
-			n.loaded(rsm.FromSnapshotWorker)
+			n.loaded()
 		}
-		p.loaded.updateFromLoadedSSNodes(1, rsm.FromSnapshotWorker, newNodes)
+		p.loaded.updateFromLoadedSSNodes(1, fromWorkerPool, newNodes)
 		p.nodes = newNodes
 	}
 }
@@ -475,24 +465,24 @@ func (p *workerPool) completed(workerID uint64) {
 	if !ok {
 		plog.Panicf("worker %d is not busy", workerID)
 	}
-	if _, ok := p.saving[n.n.clusterID]; ok {
-		plog.Debugf("%s completed saveRequested", n.n.id())
-		delete(p.saving, n.n.clusterID)
+	if _, ok := p.saving[n.clusterID]; ok {
+		plog.Debugf("%s completed saveRequested", n.id())
+		delete(p.saving, n.clusterID)
 		count++
 	}
-	if _, ok := p.recovering[n.n.clusterID]; ok {
-		plog.Debugf("%s completed recoverRequested", n.n.id())
-		delete(p.recovering, n.n.clusterID)
+	if _, ok := p.recovering[n.clusterID]; ok {
+		plog.Debugf("%s completed recoverRequested", n.id())
+		delete(p.recovering, n.clusterID)
 		count++
 	}
-	if sc, ok := p.streaming[n.n.clusterID]; ok {
-		plog.Debugf("%s completed streamRequested", n.n.id())
+	if sc, ok := p.streaming[n.clusterID]; ok {
+		plog.Debugf("%s completed streamRequested", n.id())
 		if sc == 0 {
 			plog.Panicf("node completed streaming when not streaming")
 		} else if sc == 1 {
-			delete(p.streaming, n.n.clusterID)
+			delete(p.streaming, n.clusterID)
 		} else {
-			p.streaming[n.n.clusterID] = sc - 1
+			p.streaming[n.clusterID] = sc - 1
 		}
 		count++
 	}
@@ -546,43 +536,43 @@ func (p *workerPool) setIdle(workerID uint64) {
 	if !ok {
 		plog.Panicf("worker %d is not busy", workerID)
 	}
-	n.unref()
+	n.offloaded()
 	delete(p.busy, workerID)
 	p.updateLoadedBusyNodes()
 }
 
-func (p *workerPool) setBusy(n *ssNode, workerID uint64) {
+func (p *workerPool) setBusy(n *node, workerID uint64) {
 	if _, ok := p.busy[workerID]; ok {
 		plog.Panicf("trying to use a busy worker")
 	}
-	n.ref()
+	n.loaded()
 	p.busy[workerID] = n
 	p.updateLoadedBusyNodes()
 }
 
-func (p *workerPool) startStreaming(n *ssNode) {
-	if count, ok := p.streaming[n.n.clusterID]; !ok {
-		p.streaming[n.n.clusterID] = 1
+func (p *workerPool) startStreaming(n *node) {
+	if count, ok := p.streaming[n.clusterID]; !ok {
+		p.streaming[n.clusterID] = 1
 	} else {
-		p.streaming[n.n.clusterID] = count + 1
+		p.streaming[n.clusterID] = count + 1
 	}
 }
 
-func (p *workerPool) startSaving(n *ssNode) {
-	if _, ok := p.saving[n.n.clusterID]; ok {
-		plog.Panicf("%s trying to start saving again", n.n.id())
+func (p *workerPool) startSaving(n *node) {
+	if _, ok := p.saving[n.clusterID]; ok {
+		plog.Panicf("%s trying to start saving again", n.id())
 	}
-	p.saving[n.n.clusterID] = struct{}{}
+	p.saving[n.clusterID] = struct{}{}
 }
 
-func (p *workerPool) startRecovering(n *ssNode) {
-	if _, ok := p.recovering[n.n.clusterID]; ok {
-		plog.Panicf("%s trying to start recovering again", n.n.id())
+func (p *workerPool) startRecovering(n *node) {
+	if _, ok := p.recovering[n.clusterID]; ok {
+		plog.Panicf("%s trying to start recovering again", n.id())
 	}
-	p.recovering[n.n.clusterID] = struct{}{}
+	p.recovering[n.clusterID] = struct{}{}
 }
 
-func (p *workerPool) start(j job, n *ssNode, workerID uint64) {
+func (p *workerPool) start(j job, n *node, workerID uint64) {
 	p.setBusy(n, workerID)
 	if j.task.Recover {
 		p.startRecovering(n)
@@ -641,14 +631,14 @@ func (p *workerPool) getSaveJob(clusterID uint64) (job, bool) {
 	if !ok {
 		return job{}, false
 	}
-	req, ok := n.n.ss.getSaveReq()
+	req, ok := n.ss.getSaveReq()
 	if !ok {
 		return job{}, false
 	}
 	return job{
 		task:       req,
 		node:       n,
-		instanceID: n.n.instanceID,
+		instanceID: n.instanceID,
 		clusterID:  clusterID,
 	}, true
 }
@@ -658,14 +648,14 @@ func (p *workerPool) getRecoverJob(clusterID uint64) (job, bool) {
 	if !ok {
 		return job{}, false
 	}
-	req, ok := n.n.ss.getRecoverReq()
+	req, ok := n.ss.getRecoverReq()
 	if !ok {
 		return job{}, false
 	}
 	return job{
 		task:       req,
 		node:       n,
-		instanceID: n.n.instanceID,
+		instanceID: n.instanceID,
 		clusterID:  clusterID,
 	}, true
 }
@@ -675,7 +665,7 @@ func (p *workerPool) getStreamJob(clusterID uint64) (job, bool) {
 	if !ok {
 		return job{}, false
 	}
-	req, sinkFn, ok := n.n.ss.getStreamReq()
+	req, sinkFn, ok := n.ss.getStreamReq()
 	if !ok {
 		return job{}, false
 	}
@@ -683,13 +673,13 @@ func (p *workerPool) getStreamJob(clusterID uint64) (job, bool) {
 		task:       req,
 		node:       n,
 		sink:       sinkFn,
-		instanceID: n.n.instanceID,
+		instanceID: n.instanceID,
 		clusterID:  clusterID,
 	}, true
 }
 
-func (p *workerPool) scheduleTask(j job, n *ssNode, w *ssWorker) {
-	if n.n.instanceID == j.instanceID {
+func (p *workerPool) scheduleTask(j job, n *node, w *ssWorker) {
+	if n.instanceID == j.instanceID {
 		p.start(j, n, w.workerID)
 		select {
 		case w.requestC <- j:
@@ -803,12 +793,12 @@ func (e *engine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{} {
 
 func (e *engine) load(workerID uint64,
 	cci uint64, nodes map[uint64]*node,
-	from rsm.From, ready *workReady) (map[uint64]*node, uint64) {
+	from from, ready *workReady) (map[uint64]*node, uint64) {
 	result, offloaded, cci := e.loadBucketNodes(workerID, cci, nodes,
 		ready.getPartitioner(), from)
 	e.loaded.update(workerID, from, result)
 	for _, n := range offloaded {
-		n.offloaded(from)
+		n.offloaded()
 	}
 	return result, cci
 }
@@ -821,7 +811,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-e.commitStopper.ShouldStop():
-			e.offloadNodeMap(nodes, rsm.FromCommitWorker)
+			e.offloadNodeMap(nodes)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
@@ -840,7 +830,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 
 func (e *engine) loadCommitNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return e.load(workerID, cci, nodes, rsm.FromCommitWorker, e.commitWorkReady)
+	return e.load(workerID, cci, nodes, fromCommitWorker, e.commitWorkReady)
 }
 
 func (e *engine) processCommits(idmap map[uint64]struct{},
@@ -869,7 +859,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-e.taskStopper.ShouldStop():
-			e.offloadNodeMap(nodes, rsm.FromApplyWorker)
+			e.offloadNodeMap(nodes)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
@@ -890,7 +880,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 
 func (e *engine) loadApplyNodes(workerID uint64, cci uint64,
 	nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return e.load(workerID, cci, nodes, rsm.FromApplyWorker, e.applyWorkReady)
+	return e.load(workerID, cci, nodes, fromApplyWorker, e.applyWorkReady)
 }
 
 // T: take snapshot
@@ -936,7 +926,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-stopC:
-			e.offloadNodeMap(nodes, rsm.FromStepWorker)
+			e.offloadNodeMap(nodes)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
@@ -955,12 +945,12 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 
 func (e *engine) loadStepNodes(workerID uint64,
 	cci uint64, nodes map[uint64]*node) (map[uint64]*node, uint64) {
-	return e.load(workerID, cci, nodes, rsm.FromStepWorker, e.stepWorkReady)
+	return e.load(workerID, cci, nodes, fromStepWorker, e.stepWorkReady)
 }
 
 func (e *engine) loadBucketNodes(workerID uint64,
 	csi uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
-	from rsm.From) (map[uint64]*node, []*node, uint64) {
+	from from) (map[uint64]*node, []*node, uint64) {
 	bucket := workerID - 1
 	newCSI := e.nh.getClusterSetIndex()
 	var offloaded []*node
@@ -973,7 +963,9 @@ func (e *engine) loadBucketNodes(workerID uint64,
 					plog.Panicf("%s from two incarnations found", n.id())
 				}
 			} else {
-				loaded = append(loaded, v)
+				if partitioner.GetPartitionID(cid) == bucket {
+					loaded = append(loaded, v)
+				}
 			}
 			if partitioner.GetPartitionID(cid) == bucket {
 				newNodes[cid] = v
@@ -986,7 +978,7 @@ func (e *engine) loadBucketNodes(workerID uint64,
 			}
 		}
 		for _, n := range loaded {
-			n.loaded(from)
+			n.loaded()
 		}
 		return newNodes, offloaded, newCSI
 	}
@@ -1127,8 +1119,8 @@ func (e *engine) setCCIReady(clusterID uint64) {
 	e.wp.cciReady.clusterReady(clusterID)
 }
 
-func (e *engine) offloadNodeMap(nodes map[uint64]*node, from rsm.From) {
+func (e *engine) offloadNodeMap(nodes map[uint64]*node) {
 	for _, node := range nodes {
-		node.offloaded(from)
+		node.offloaded()
 	}
 }

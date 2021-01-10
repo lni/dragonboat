@@ -14,6 +14,7 @@
 
 package rsm
 
+/*
 import (
 	"testing"
 )
@@ -69,4 +70,4 @@ func TestOffloadedStatusOffloadedFromNodeHostIsHandled(t *testing.T) {
 	if !o1.ReadyToDestroy() {
 		t.Errorf("not ready to destroy, not expected")
 	}
-}
+}*/

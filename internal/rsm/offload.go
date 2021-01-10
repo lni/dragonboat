@@ -14,61 +14,17 @@
 
 package rsm
 
-// From identifies a component in the system.
-type From uint64
-
-const (
-	// FromNodeHost indicates the data store has been loaded by or offloaded from
-	// nodehost.
-	FromNodeHost From = iota
-	// FromStepWorker indicates that the data store has been loaded by or
-	// offloaded from the step worker.
-	FromStepWorker
-	// FromCommitWorker indicates that the data store has been loaded by or
-	// offloaded from the commit worker.
-	FromCommitWorker
-	// FromApplyWorker indicates that the data store has been loaded by or
-	// offloaded from the apply worker.
-	FromApplyWorker
-	// FromSnapshotWorker indicates that the data store has been loaded by or
-	// offloaded from the snapshot worker.
-	FromSnapshotWorker
+import (
+	"sync/atomic"
 )
-
-var fromNames = [...]string{
-	"FromNodeHost",
-	"FromStepWorker",
-	"FromCommitWorker",
-	"FromApplyWorker",
-	"FromSnapshotWorker",
-}
-
-func (f From) String() string {
-	return fromNames[uint64(f)]
-}
 
 // OffloadedStatus is used for tracking whether the managed data store has been
 // offloaded from various system components.
 type OffloadedStatus struct {
-	clusterID                   uint64
-	nodeID                      uint64
-	readyToDestroy              bool
-	offloadedFromNodeHost       bool
-	offloadedFromStepWorker     bool
-	offloadedFromCommitWorker   bool
-	offloadedFromApplyWorker    bool
-	offloadedFromSnapshotWorker bool
-	loadedByStepWorker          bool
-	loadedByCommitWorker        bool
-	loadedByApplyWorker         bool
-	loadedBySnapshotWorker      bool
-	DestroyedC                  chan struct{}
-}
-
-// ReadyToDestroy returns a boolean value indicating whether the the managed data
-// store is ready to be destroyed.
-func (o *OffloadedStatus) ReadyToDestroy() bool {
-	return o.readyToDestroy
+	clusterID   uint64
+	nodeID      uint64
+	loadedCount uint64
+	DestroyedC  chan struct{}
 }
 
 // Destroyed returns a boolean value indicating whether the belonging object
@@ -87,67 +43,13 @@ func (o *OffloadedStatus) SetDestroyed() {
 	close(o.DestroyedC)
 }
 
-// SetLoaded marks the managed data store as loaded from the specified
-// component.
-func (o *OffloadedStatus) SetLoaded(from From) {
-	if o.offloadedFromNodeHost {
-		if from == FromStepWorker ||
-			from == FromCommitWorker ||
-			from == FromApplyWorker ||
-			from == FromSnapshotWorker {
-			plog.Panicf("loaded from %v after offloaded from nodehost", from)
-		}
-	}
-	if from == FromNodeHost {
-		panic("not suppose to get loaded notification from nodehost")
-	} else if from == FromStepWorker {
-		o.loadedByStepWorker = true
-	} else if from == FromCommitWorker {
-		o.loadedByCommitWorker = true
-	} else if from == FromApplyWorker {
-		o.loadedByApplyWorker = true
-	} else if from == FromSnapshotWorker {
-		o.loadedBySnapshotWorker = true
-	} else {
-		panic("unknown offloadFrom value")
-	}
+// SetLoaded marks the managed data store as loaded by a user component.
+func (o *OffloadedStatus) SetLoaded() {
+	atomic.AddUint64(&o.loadedCount, 1)
 }
 
-// SetOffloaded marks the managed data store as offloaded from the specified
+// SetOffloaded marks the managed data store as offloaded from a user
 // component.
-func (o *OffloadedStatus) SetOffloaded(from From) {
-	if from == FromNodeHost {
-		o.offloadedFromNodeHost = true
-	} else if from == FromStepWorker {
-		o.offloadedFromStepWorker = true
-	} else if from == FromCommitWorker {
-		o.offloadedFromCommitWorker = true
-	} else if from == FromApplyWorker {
-		o.offloadedFromApplyWorker = true
-	} else if from == FromSnapshotWorker {
-		o.offloadedFromSnapshotWorker = true
-	} else {
-		panic("unknown offloadFrom value")
-	}
-	if from == FromNodeHost {
-		if !o.loadedByStepWorker {
-			o.offloadedFromStepWorker = true
-		}
-		if !o.loadedByCommitWorker {
-			o.offloadedFromCommitWorker = true
-		}
-		if !o.loadedByApplyWorker {
-			o.offloadedFromApplyWorker = true
-		}
-		if !o.loadedBySnapshotWorker {
-			o.offloadedFromSnapshotWorker = true
-		}
-	}
-	if o.offloadedFromNodeHost &&
-		o.offloadedFromCommitWorker &&
-		o.offloadedFromApplyWorker &&
-		o.offloadedFromSnapshotWorker &&
-		o.offloadedFromStepWorker {
-		o.readyToDestroy = true
-	}
+func (o *OffloadedStatus) SetOffloaded() uint64 {
+	return atomic.AddUint64(&o.loadedCount, ^uint64(0))
 }

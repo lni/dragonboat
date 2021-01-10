@@ -1640,6 +1640,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	if err != nil {
 		panic(err)
 	}
+	rn.loaded()
 	nh.mu.clusters.Store(clusterID, rn)
 	nh.mu.cci++
 	nh.cciUpdated()
@@ -1826,7 +1827,7 @@ func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error 
 	nh.cciUpdated()
 	nh.engine.setCCIReady(clusterID)
 	n.close()
-	n.offloaded(rsm.FromNodeHost)
+	n.offloaded()
 	nh.engine.setStepReady(clusterID)
 	nh.engine.setCommitReady(clusterID)
 	nh.engine.setApplyReady(clusterID)

@@ -510,8 +510,8 @@ func (n *node) getLeaderID() (uint64, bool) {
 	return v, v != raft.NoLeader
 }
 
-func (n *node) offloaded(from rsm.From) {
-	if n.sm.Offloaded(from) {
+func (n *node) offloaded() {
+	if n.sm.Offloaded() {
 		n.sysEvents.Publish(server.SystemEvent{
 			Type:      server.NodeUnloaded,
 			ClusterID: n.clusterID,
@@ -520,8 +520,8 @@ func (n *node) offloaded(from rsm.From) {
 	}
 }
 
-func (n *node) loaded(from rsm.From) {
-	n.sm.Loaded(from)
+func (n *node) loaded() {
+	n.sm.Loaded()
 }
 
 func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {

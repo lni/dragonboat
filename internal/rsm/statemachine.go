@@ -413,13 +413,13 @@ func (s *StateMachine) OpenOnDiskStateMachine() (uint64, error) {
 // Offloaded marks the state machine as offloaded from the specified compone.
 // It returns a boolean value indicating whether the node has been fully
 // unloaded after unloading from the specified compone.
-func (s *StateMachine) Offloaded(from From) bool {
-	return s.sm.Offloaded(from)
+func (s *StateMachine) Offloaded() bool {
+	return s.sm.Offloaded()
 }
 
 // Loaded marks the state machine as loaded from the specified compone.
-func (s *StateMachine) Loaded(from From) {
-	s.sm.Loaded(from)
+func (s *StateMachine) Loaded() {
+	s.sm.Loaded()
 }
 
 // Lookup queries the local state machine.

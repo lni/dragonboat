@@ -16,8 +16,6 @@ package dragonboat
 
 import (
 	"testing"
-
-	"github.com/lni/dragonboat/v3/internal/rsm"
 )
 
 func TestWorkReadyCanBeCreated(t *testing.T) {
@@ -158,31 +156,31 @@ func TestLoadedNodes(t *testing.T) {
 	n := &node{}
 	n.nodeID = 3
 	nodes[2] = n
-	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) == nil {
 		t.Errorf("unexpectedly returned false")
 	}
 	n.nodeID = 4
-	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 	nodes = make(map[uint64]*node)
 	nodes[5] = n
 	n.nodeID = 3
-	lns.update(1, rsm.FromSnapshotWorker, nodes)
+	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 }
 
 func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
-	m := make(map[uint64]*ssNode)
-	m[1] = &ssNode{n: &node{clusterID: 100, nodeID: 100}}
-	m[2] = &ssNode{n: &node{clusterID: 200, nodeID: 200}}
+	m := make(map[uint64]*node)
+	m[1] = &node{clusterID: 100, nodeID: 100}
+	m[2] = &node{clusterID: 200, nodeID: 200}
 	l := newLoadedNodes()
-	l.updateFromBusySSNodes(2, rsm.FromSnapshotWorker, m)
-	nm := l.nodes[nodeType{workerID: 2, from: rsm.FromSnapshotWorker}]
+	l.updateFromBusySSNodes(2, fromStepWorker, m)
+	nm := l.nodes[nodeType{workerID: 2, from: fromStepWorker}]
 	if len(nm) != 2 {
 		t.Errorf("unexpected map len")
 	}
