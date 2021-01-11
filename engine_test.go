@@ -179,8 +179,8 @@ func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
 	m[1] = &node{clusterID: 100, nodeID: 100}
 	m[2] = &node{clusterID: 200, nodeID: 200}
 	l := newLoadedNodes()
-	l.updateFromBusySSNodes(2, fromStepWorker, m)
-	nm := l.nodes[nodeType{workerID: 2, from: fromStepWorker}]
+	l.updateFromBusySSNodes(m)
+	nm := l.nodes[nodeType{workerID: 0, from: fromWorker}]
 	if len(nm) != 2 {
 		t.Errorf("unexpected map len")
 	}

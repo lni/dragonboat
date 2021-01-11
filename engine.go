@@ -73,7 +73,7 @@ func newLoadedNodes() *loadedNodes {
 func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, m := range l.nodes {
+	for t, m := range l.nodes {
 		if n, ok := m[clusterID]; ok && n.nodeID == nodeID {
 			return n
 		}
@@ -90,17 +90,16 @@ func (l *loadedNodes) update(workerID uint64,
 }
 
 // nodes is a map of workerID -> *node
-func (l *loadedNodes) updateFromBusySSNodes(workerID uint64,
-	from from, nodes map[uint64]*node) {
-	l.updateFromLoadedSSNodes(workerID, from, nodes)
+func (l *loadedNodes) updateFromBusySSNodes(nodes map[uint64]*node) {
+	l.updateFromLoadedSSNodes(fromWorker, nodes)
 }
 
 // nodes is a map of clusterID -> *node
-func (l *loadedNodes) updateFromLoadedSSNodes(workerID uint64,
-	from from, nodes map[uint64]*node) {
+func (l *loadedNodes) updateFromLoadedSSNodes(from from,
+	nodes map[uint64]*node) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	nt := nodeType{workerID: workerID, from: from}
+	nt := nodeType{workerID: 0, from: from}
 	nm := make(map[uint64]*node, len(nodes))
 	for _, n := range nodes {
 		nm[n.clusterID] = n
@@ -427,7 +426,7 @@ func (p *workerPool) unloadNodes() {
 }
 
 func (p *workerPool) updateLoadedBusyNodes() {
-	p.loaded.updateFromBusySSNodes(2, fromWorker, p.busy)
+	p.loaded.updateFromBusySSNodes(p.busy)
 }
 
 func (p *workerPool) loadNodes() {
@@ -446,6 +445,7 @@ func (p *workerPool) loadNodes() {
 			}
 			return true
 		})
+		p.loaded.updateFromLoadedSSNodes(fromWorkerPool, newNodes)
 		for cid, n := range p.nodes {
 			if _, ok := newNodes[cid]; !ok {
 				n.offloaded()
@@ -454,7 +454,6 @@ func (p *workerPool) loadNodes() {
 		for _, n := range loaded {
 			n.loaded()
 		}
-		p.loaded.updateFromLoadedSSNodes(1, fromWorkerPool, newNodes)
 		p.nodes = newNodes
 	}
 }
@@ -536,9 +535,9 @@ func (p *workerPool) setIdle(workerID uint64) {
 	if !ok {
 		plog.Panicf("worker %d is not busy", workerID)
 	}
-	n.offloaded()
 	delete(p.busy, workerID)
 	p.updateLoadedBusyNodes()
+	n.offloaded()
 }
 
 func (p *workerPool) setBusy(n *node, workerID uint64) {
