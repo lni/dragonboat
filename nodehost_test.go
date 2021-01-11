@@ -132,11 +132,17 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 // typical proposal timeout
 func pto(nh *NodeHost) time.Duration {
 	rtt := nh.NodeHostConfig().RTTMillisecond
+	if invariants.Race {
+		return 5 * time.Second
+	}
 	return time.Duration(rtt*45) * time.Millisecond
 }
 
 func lpto(nh *NodeHost) time.Duration {
 	rtt := nh.NodeHostConfig().RTTMillisecond
+	if invariants.Race {
+		return 30 * time.Second
+	}
 	return time.Duration(rtt*100) * time.Millisecond
 }
 
