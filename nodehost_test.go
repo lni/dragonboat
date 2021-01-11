@@ -379,6 +379,7 @@ type TimeoutStateMachine struct {
 	updateDelay   uint64
 	lookupDelay   uint64
 	snapshotDelay uint64
+	closed        bool
 }
 
 func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
@@ -410,6 +411,7 @@ func (t *TimeoutStateMachine) RecoverFromSnapshot(r io.Reader,
 }
 
 func (t *TimeoutStateMachine) Close() error {
+	t.closed = true
 	return nil
 }
 
@@ -4870,6 +4872,22 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		}
 	}
 	testWitnessIO(t, tf, fs)
+}
+
+func TestStateMachineIsClosedAfterOffloaded(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tsm := &TimeoutStateMachine{}
+	to := &testOption{
+		createSM: func(uint64, uint64) sm.IStateMachine {
+			return tsm
+		},
+		at: func(nh *NodeHost) {
+			if !tsm.closed {
+				t.Fatalf("sm not closed")
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
 }
 
 func TestTimeoutCanBeReturned(t *testing.T) {
