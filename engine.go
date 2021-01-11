@@ -73,7 +73,7 @@ func newLoadedNodes() *loadedNodes {
 func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for t, m := range l.nodes {
+	for _, m := range l.nodes {
 		if n, ok := m[clusterID]; ok && n.nodeID == nodeID {
 			return n
 		}
