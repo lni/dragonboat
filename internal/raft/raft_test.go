@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -3056,5 +3056,59 @@ func TestFirstQuiescedTickResizesInMemoryEntriesSlice(t *testing.T) {
 	r.quiescedTick()
 	if cap(r.log.inmem.entries) != 0 {
 		t.Errorf("unexpectedly resized again")
+	}
+}
+
+func TestDelayedSnapshotAckCanBeSet(t *testing.T) {
+	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	p.becomeCandidate()
+	p.becomeLeader()
+	rp := p.remotes[3]
+	rp.state = remoteSnapshot
+	p.handleLeaderSnapshotStatus(pb.Message{
+		Type:   pb.SnapshotStatus,
+		Hint:   10,
+		Reject: true,
+	}, rp)
+	if !rp.delayed.rejected || rp.delayed.ctick != 10 {
+		t.Errorf("delayed snapshot ack not set")
+	}
+}
+
+func TestCheckDelayedSnapshotAck(t *testing.T) {
+	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	p.becomeCandidate()
+	p.becomeLeader()
+	if p.snapshotting {
+		t.Errorf("unexpected snapshotting flag")
+	}
+	rp := p.remotes[3]
+	rp.state = remoteSnapshot
+	rp.snapshotIndex = 100
+	p.handleLeaderSnapshotStatus(pb.Message{
+		Type:   pb.SnapshotStatus,
+		Hint:   10,
+		Reject: true,
+	}, rp)
+	if !p.snapshotting {
+		t.Errorf("snapshotting flag not set")
+	}
+	for i := 0; i < 10; i++ {
+		p.tick()
+		if i != 9 {
+			if !p.snapshotting {
+				t.Errorf("snapshotting flag not set")
+			}
+		} else {
+			if p.snapshotting {
+				t.Errorf("snapshotting flag not cleared")
+			}
+		}
+	}
+	if rp.delayed.rejected || rp.delayed.ctick != 0 {
+		t.Errorf("pending not cleared")
+	}
+	if rp.state != remoteWait || rp.snapshotIndex != 0 {
+		t.Errorf("not in remote wait state, %s", rp.state)
 	}
 }

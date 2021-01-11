@@ -282,7 +282,6 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	streams      *streamState
 	env          *server.Env
 	nhConfig     config.NodeHostConfig
 	stopper      *syncutil.Stopper
@@ -335,7 +334,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 			nh.handleListenerEvents()
 		})
 	}
-	nh.streams = newStreamState(nh.pushStreamState)
 	nh.msgHandler = newNodeHostMessageHandler(nh)
 	nh.createPools()
 	defer func() {
@@ -1863,7 +1861,6 @@ func (nh *NodeHost) tickWorkerMain() {
 				return true
 			})
 		}
-		nh.streams.tick()
 		nh.sendTickMessage(nodes, tick)
 		nh.engine.setAllStepReady(nodes)
 		monkeyLog.Infof("%s logical tick handled", nh.RaftAddress())
@@ -1982,24 +1979,6 @@ func (nh *NodeHost) nodeMonitorMain() {
 	}
 }
 
-func (nh *NodeHost) pushStreamState(clusterID uint64,
-	nodeID uint64, failed bool) bool {
-	if n, ok := nh.getCluster(clusterID); ok {
-		m := pb.Message{
-			Type:   pb.SnapshotStatus,
-			From:   nodeID,
-			To:     nodeID,
-			Reject: failed,
-		}
-		if n.mq.MustAdd(m) {
-			nh.engine.setStepReady(clusterID)
-			plog.Debugf("%s added stream state", dn(clusterID, nodeID))
-			return true
-		}
-	}
-	return false
-}
-
 func (nh *NodeHost) getTimeoutTick(timeout time.Duration) uint64 {
 	return uint64(timeout.Milliseconds()) / nh.nhConfig.RTTMillisecond
 }
@@ -2102,6 +2081,11 @@ func getTimeoutFromContext(ctx context.Context) (time.Duration, error) {
 	return d.Sub(now), nil
 }
 
+var (
+	streamPushDelayTick      uint64 = 10
+	streamConfirmedDelayTick uint64 = 2
+)
+
 type messageHandler struct {
 	nh *NodeHost
 }
@@ -2133,12 +2117,6 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		if req.To == 0 {
 			plog.Panicf("to field not set, %s", req.Type)
 		}
-		if req.Type == pb.SnapshotReceived {
-			plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
-				req.ClusterId, req.From)
-			nh.streams.confirm(req.ClusterId, req.From)
-			continue
-		}
 		if n, ok := nh.getCluster(req.ClusterId); ok {
 			if n.nodeID != req.To {
 				plog.Warningf("%s sent to node %d but received by node %d",
@@ -2148,6 +2126,14 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			if req.Type == pb.InstallSnapshot {
 				n.mq.MustAdd(req)
 				snapshotCount++
+			} else if req.Type == pb.SnapshotReceived {
+				plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
+					req.ClusterId, req.From)
+				n.mq.MustAdd(pb.Message{
+					Type: pb.SnapshotStatus,
+					From: req.To,
+					Hint: streamConfirmedDelayTick,
+				})
 			} else {
 				if added, stopped := n.mq.Add(req); !added || stopped {
 					plog.Warningf("dropped an incoming message")
@@ -2172,7 +2158,15 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 		ClusterID: clusterID,
 		NodeID:    nodeID,
 	})
-	h.nh.streams.add(clusterID, nodeID, failed)
+	if n, ok := h.nh.getCluster(clusterID); ok {
+		n.mq.MustAdd(pb.Message{
+			Type:   pb.SnapshotStatus,
+			From:   nodeID,
+			Reject: failed,
+			Hint:   streamPushDelayTick,
+		})
+		h.nh.engine.setStepReady(clusterID)
+	}
 }
 
 func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,45 @@ import (
 	"reflect"
 	"testing"
 )
+
+func TestSnapshotAckTick(t *testing.T) {
+	a := snapshotAck{ctick: 10}
+	for i := 0; i < 10; i++ {
+		r := a.tick()
+		if (i == 9) != r {
+			t.Errorf("unexpected tick result, i %d, tick %d, r %t", i, a.ctick, r)
+		}
+	}
+}
+
+func TestRemoteClearSnapshotAck(t *testing.T) {
+	r := remote{delayed: snapshotAck{ctick: 10, rejected: true}}
+	r.clearSnapshotAck()
+	if r.delayed.ctick != 0 || r.delayed.rejected {
+		t.Errorf("snapshot ack not cleared")
+	}
+}
+
+func TestRemoteSetSnapshotAck(t *testing.T) {
+	r := remote{
+		state:   remoteSnapshot,
+		delayed: snapshotAck{ctick: 10, rejected: true},
+	}
+	r.setSnapshotAck(20, false)
+	if r.delayed.ctick != 20 || r.delayed.rejected {
+		t.Errorf("setSnapshotAck failed to set values")
+	}
+}
+
+func TestSetSnapshotAckWhenNotInSnapshotStateIsNotAllowed(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("failed to trigger panic")
+		}
+	}()
+	r := remote{}
+	r.setSnapshotAck(20, false)
+}
 
 func TestRemoteString(t *testing.T) {
 	for _, tt := range []remoteStateType{remoteRetry,

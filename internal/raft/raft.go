@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -219,6 +219,7 @@ type raft struct {
 	droppedReadIndexes        []pb.SystemCtx
 	quiesce                   bool
 	checkQuorum               bool
+	snapshotting              bool
 	tickCount                 uint64
 	electionTick              uint64
 	heartbeatTick             uint64
@@ -625,6 +626,7 @@ func (r *raft) leaderTick() {
 			Type: pb.LeaderHeartbeat,
 		})
 	}
+	r.checkPendingSnapshotAck()
 }
 
 func (r *raft) quiescedTick() {
@@ -1792,15 +1794,20 @@ func (r *raft) handleLeaderSnapshotStatus(m pb.Message, rp *remote) {
 	if rp.state != remoteSnapshot {
 		return
 	}
-	if m.Reject {
-		rp.clearPendingSnapshot()
-		plog.Warningf("%s snapshot failed, %s is now in wait state",
-			r.describe(), NodeID(m.From))
+	if m.Hint == 0 {
+		if m.Reject {
+			rp.clearPendingSnapshot()
+			plog.Warningf("%s snapshot failed, %s is now in wait state",
+				r.describe(), NodeID(m.From))
+		} else {
+			plog.Debugf("%s snapshot succeeded, %s in wait state now, next %d",
+				r.describe(), NodeID(m.From), rp.next)
+		}
+		rp.becomeWait()
 	} else {
-		plog.Debugf("%s snapshot succeeded, %s in wait state now, next %d",
-			r.describe(), NodeID(m.From), rp.next)
+		rp.setSnapshotAck(m.Hint, m.Reject)
+		r.snapshotting = true
 	}
-	rp.becomeWait()
 }
 
 func (r *raft) handleLeaderUnreachable(m pb.Message, rp *remote) {
@@ -1820,6 +1827,32 @@ func (r *raft) handleLeaderRateLimit(m pb.Message) {
 func (r *raft) enterRetryState(rp *remote) {
 	if rp.state == remoteReplicate {
 		rp.becomeRetry()
+	}
+}
+
+func (r *raft) checkPendingSnapshotAck() {
+	if r.isLeader() && r.snapshotting {
+		check := func(m map[uint64]*remote) {
+			for from, rp := range m {
+				if rp.state == remoteSnapshot {
+					if rp.delayed.tick() {
+						r.Handle(pb.Message{
+							Type:   pb.SnapshotStatus,
+							From:   from,
+							Reject: rp.delayed.rejected,
+							Hint:   0,
+						})
+						rp.clearSnapshotAck()
+					} else {
+						r.snapshotting = true
+					}
+				}
+			}
+		}
+		r.snapshotting = false
+		check(r.remotes)
+		check(r.observers)
+		check(r.witnesses)
 	}
 }
 

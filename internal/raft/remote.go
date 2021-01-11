@@ -14,7 +14,7 @@
 //
 //
 //
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,19 @@ package raft
 import (
 	"fmt"
 )
+
+type snapshotAck struct {
+	ctick    uint64
+	rejected bool
+}
+
+func (a *snapshotAck) tick() bool {
+	if a.ctick > 0 {
+		a.ctick--
+		return a.ctick == 0
+	}
+	return false
+}
 
 type remoteStateType uint64
 
@@ -66,11 +79,24 @@ type remote struct {
 	snapshotIndex uint64
 	state         remoteStateType
 	active        bool
+	delayed       snapshotAck
 }
 
 func (r *remote) String() string {
 	return fmt.Sprintf("match:%d,next:%d,state:%s,si:%d",
 		r.match, r.next, r.state, r.snapshotIndex)
+}
+
+func (r *remote) clearSnapshotAck() {
+	r.delayed = snapshotAck{}
+}
+
+func (r *remote) setSnapshotAck(tick uint64, rejected bool) {
+	if r.state == remoteSnapshot {
+		r.delayed.ctick, r.delayed.rejected = tick, rejected
+	} else {
+		panic("setting snapshot ack when not in snapshot state")
+	}
 }
 
 func (r *remote) reset() {
@@ -100,6 +126,7 @@ func (r *remote) waitToRetry() {
 }
 
 func (r *remote) becomeWait() {
+	r.clearSnapshotAck()
 	r.becomeRetry()
 	r.retryToWait()
 }
