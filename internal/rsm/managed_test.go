@@ -15,10 +15,15 @@
 package rsm
 
 import (
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/lni/dragonboat/v3/config"
+	pb "github.com/lni/dragonboat/v3/raftpb"
+	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 func init() {
@@ -41,5 +46,50 @@ func TestCountedWriteCanReportTotalWritten(t *testing.T) {
 	}
 	if total != cw.total {
 		t.Errorf("total %d, want %d", cw.total, total)
+	}
+}
+
+type dummySM struct{}
+
+func (d *dummySM) Open(<-chan struct{}) (uint64, error)          { return 0, nil }
+func (d *dummySM) Update(entries []sm.Entry) ([]sm.Entry, error) { return nil, nil }
+func (d *dummySM) Lookup(query interface{}) (interface{}, error) { return nil, nil }
+func (d *dummySM) NALookup(query []byte) ([]byte, error)         { return nil, nil }
+func (d *dummySM) Sync() error                                   { return nil }
+func (d *dummySM) Prepare() (interface{}, error)                 { return nil, nil }
+func (d *dummySM) Save(interface{},
+	io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error {
+	return nil
+}
+func (d *dummySM) Recover(io.Reader, []sm.SnapshotFile, <-chan struct{}) error { return nil }
+func (d *dummySM) Close() error                                                { return nil }
+func (d *dummySM) GetHash() (uint64, error)                                    { return 0, nil }
+func (d *dummySM) Concurrent() bool                                            { return false }
+func (d *dummySM) OnDisk() bool                                                { return false }
+func (d *dummySM) Type() pb.StateMachineType                                   { return pb.OnDiskStateMachine }
+
+func TestDestroyedFlagIsSetWhenDestroyed(t *testing.T) {
+	sm := NewNativeSM(config.Config{}, &dummySM{}, nil)
+	sm.Loaded()
+	sm.Offloaded()
+	if !sm.destroyed {
+		t.Errorf("destroyed flag not set")
+	}
+	select {
+	case <-sm.DestroyedC():
+	default:
+		t.Errorf("destroyed ch not closed")
+	}
+}
+
+func TestLookupWillFailOnClosedStateMachine(t *testing.T) {
+	sm := NewNativeSM(config.Config{}, &dummySM{}, nil)
+	sm.Loaded()
+	sm.Offloaded()
+	if _, err := sm.Lookup(nil); err != ErrClusterClosed {
+		t.Errorf("failed to return ErrClusterClosed")
+	}
+	if _, err := sm.NALookup(nil); err != ErrClusterClosed {
+		t.Errorf("failed to return ErrClusterClosed")
 	}
 }

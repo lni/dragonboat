@@ -112,7 +112,7 @@ var _ IRecoverable = (*NativeSM)(nil)
 
 // NewNativeSM creates and returns a new NativeSM object.
 func NewNativeSM(config config.Config, ism IStateMachine,
-	done <-chan struct{}) IManagedStateMachine {
+	done <-chan struct{}) *NativeSM {
 	s := &NativeSM{
 		config: config,
 		sm:     ism,

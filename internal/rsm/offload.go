@@ -31,7 +31,6 @@ type OffloadedStatus struct {
 // Destroyed returns a boolean value indicating whether the belonging object
 // has been destroyed.
 func (o *OffloadedStatus) Destroyed() bool {
-	o.destroyed = true
 	select {
 	case <-o.DestroyedC:
 		return true
@@ -42,6 +41,7 @@ func (o *OffloadedStatus) Destroyed() bool {
 
 // SetDestroyed set the destroyed flag to be true
 func (o *OffloadedStatus) SetDestroyed() {
+	o.destroyed = true
 	close(o.DestroyedC)
 }
 
