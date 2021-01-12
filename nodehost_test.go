@@ -5180,3 +5180,91 @@ func TestContextDeadlineIsChecked(t *testing.T) {
 	}
 	runNodeHostTest(t, to, fs)
 }
+
+func TestGetTimeoutFromContext(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	if _, err := getTimeoutFromContext(context.Background()); err != ErrDeadlineNotSet {
+		t.Errorf("failed to return ErrDeadlineNotSet, %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	d, err := getTimeoutFromContext(ctx)
+	if err != nil {
+		t.Errorf("failed to get timeout, %v", err)
+	}
+	if d < 55*time.Second {
+		t.Errorf("unexpected result")
+	}
+}
+
+func TestHandleSnapshotStatus(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	nh := &NodeHost{stopper: syncutil.NewStopper()}
+	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	defer engine.stop()
+	nh.engine = engine
+	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
+	h := messageHandler{nh: nh}
+	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
+	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	h.nh.mu.clusters.Store(uint64(1), node)
+	h.HandleSnapshotStatus(1, 2, true)
+	msgs := node.mq.Get()
+	if len(msgs) != 1 {
+		t.Fatalf("no msg")
+	}
+	if msgs[0].Type != pb.SnapshotStatus || !msgs[0].Reject || msgs[0].Hint != streamPushDelayTick {
+		t.Fatalf("unexpected message")
+	}
+}
+
+func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	nh := &NodeHost{stopper: syncutil.NewStopper()}
+	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	defer engine.stop()
+	nh.engine = engine
+	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
+	h := messageHandler{nh: nh}
+	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
+	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	h.nh.mu.clusters.Store(uint64(1), node)
+	mb := pb.MessageBatch{
+		Requests: []pb.Message{{To: 1, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
+	}
+	sc, mc := h.HandleMessageBatch(mb)
+	if sc != 0 || mc != 1 {
+		t.Errorf("failed to handle message batch")
+	}
+	msgs := node.mq.Get()
+	if len(msgs) != 1 {
+		t.Fatalf("no msg")
+	}
+	if msgs[0].Type != pb.SnapshotStatus || msgs[0].Reject || msgs[0].Hint != streamConfirmedDelayTick {
+		t.Fatalf("unexpected message")
+	}
+}
+
+func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	nh := &NodeHost{stopper: syncutil.NewStopper()}
+	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	defer engine.stop()
+	nh.engine = engine
+	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
+	h := messageHandler{nh: nh}
+	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
+	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	h.nh.mu.clusters.Store(uint64(1), node)
+	mb := pb.MessageBatch{
+		Requests: []pb.Message{{To: 3, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
+	}
+	sc, mc := h.HandleMessageBatch(mb)
+	if sc != 0 || mc != 0 {
+		t.Errorf("failed to ignore the message")
+	}
+	msgs := node.mq.Get()
+	if len(msgs) != 0 {
+		t.Fatalf("received unexpected message")
+	}
+}

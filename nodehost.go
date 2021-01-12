@@ -2119,8 +2119,8 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		}
 		if n, ok := nh.getCluster(req.ClusterId); ok {
 			if n.nodeID != req.To {
-				plog.Warningf("%s sent to node %d but received by node %d",
-					req.Type, req.To, n.nodeID)
+				plog.Warningf("ignored a %s message sent to %s but received by %s",
+					req.Type, dn(req.ClusterId, req.To), dn(req.ClusterId, n.nodeID))
 				continue
 			}
 			if req.Type == pb.InstallSnapshot {
@@ -2131,9 +2131,10 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					req.ClusterId, req.From)
 				n.mq.MustAdd(pb.Message{
 					Type: pb.SnapshotStatus,
-					From: req.To,
+					From: req.From,
 					Hint: streamConfirmedDelayTick,
 				})
+				msgCount++
 			} else {
 				if added, stopped := n.mq.Add(req); !added || stopped {
 					plog.Warningf("dropped an incoming message")
