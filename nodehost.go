@@ -2142,9 +2142,9 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					msgCount++
 				}
 			}
-			nh.engine.setStepReady(req.ClusterId)
 		}
 	}
+	nh.engine.setStepReadyByMessageBatch(msg)
 	return snapshotCount, msgCount
 }
 

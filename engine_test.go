@@ -18,6 +18,34 @@ import (
 	"testing"
 )
 
+func TestBitmapAdd(t *testing.T) {
+	var b bitmap
+	for i := uint64(0); i < 64; i++ {
+		if b.contains(i) {
+			t.Errorf("unexpectedly contains value %d", i)
+		}
+		b.add(i)
+		if !b.contains(i) {
+			t.Errorf("failed to add value %d", i)
+		}
+	}
+}
+
+func TestBitmapContains(t *testing.T) {
+	var b bitmap
+	b.add(1)
+	b.add(3)
+	if !b.contains(1) {
+		t.Errorf("contains 1 failed")
+	}
+	if !b.contains(3) {
+		t.Errorf("contains 3 failed")
+	}
+	if b.contains(2) {
+		t.Errorf("contains 2 failed")
+	}
+}
+
 func TestWorkReadyCanBeCreated(t *testing.T) {
 	wr := newWorkReady(4)
 	if len(wr.maps) != 4 || len(wr.channels) != 4 {

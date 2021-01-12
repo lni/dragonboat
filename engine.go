@@ -38,6 +38,24 @@ var (
 	taskBatchSize       = settings.Soft.TaskBatchSize
 )
 
+type bitmap struct {
+	v uint64
+}
+
+func (b *bitmap) contains(v uint64) bool {
+	if v >= 64 {
+		panic("invalid v")
+	}
+	return b.v&(1<<v) > 0
+}
+
+func (b *bitmap) add(v uint64) {
+	if v >= 64 {
+		panic("invalid v")
+	}
+	b.v = b.v | (1 << v)
+}
+
 type from uint64
 
 const (
@@ -132,6 +150,25 @@ func newWorkReady(count uint64) *workReady {
 
 func (wr *workReady) getPartitioner() server.IPartitioner {
 	return wr.partitioner
+}
+
+func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
+	var notified bitmap
+	for _, req := range mb.Requests {
+		idx := wr.partitioner.GetPartitionID(req.ClusterId)
+		readyMap := wr.maps[idx]
+		readyMap.setClusterReady(req.ClusterId)
+	}
+	for _, req := range mb.Requests {
+		idx := wr.partitioner.GetPartitionID(req.ClusterId)
+		if !notified.contains(idx) {
+			notified.add(idx)
+			select {
+			case wr.channels[idx] <- struct{}{}:
+			default:
+			}
+		}
+	}
 }
 
 func (wr *workReady) allClustersReady(nodes []*node) {
@@ -1081,6 +1118,10 @@ func (e *engine) onSnapshotSaved(updates []pb.Update,
 		}
 	}
 	return nil
+}
+
+func (e *engine) setStepReadyByMessageBatch(mb pb.MessageBatch) {
+	e.stepWorkReady.clusterReadyByMessageBatch(mb)
 }
 
 func (e *engine) setAllStepReady(nodes []*node) {
