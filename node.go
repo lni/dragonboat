@@ -223,6 +223,10 @@ func (n *node) StepReady() {
 	n.pipeline.setStepReady(n.clusterID)
 }
 
+func (n *node) applyReady() {
+	n.pipeline.setApplyReady(n.clusterID)
+}
+
 func (n *node) ApplyUpdate(e pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyRead bool) {
 	if n.isWitness() {
@@ -544,12 +548,13 @@ func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
 }
 
 func (n *node) pushTask(rec rsm.Task) {
-	if !n.notifyCommit {
-		n.toApplyQ.Add(rec)
-		n.pipeline.setApplyReady(n.clusterID)
-	} else {
+	if n.notifyCommit && !rec.Stream && !rec.Save && !rec.Recover {
+		if len(rec.Entries) == 0 {
+			panic("nothing to notify commit")
+		}
 		n.toCommitQ.Add(rec)
-		n.pipeline.setCommitReady(n.clusterID)
+	} else {
+		n.toApplyQ.Add(rec)
 	}
 }
 
@@ -567,6 +572,7 @@ func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) {
 		NodeID:    nodeID,
 		Stream:    true,
 	})
+	n.applyReady()
 }
 
 func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
@@ -574,6 +580,7 @@ func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
 		Save:      true,
 		SSRequest: req,
 	})
+	n.applyReady()
 }
 
 func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
@@ -589,6 +596,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
 		Recover: true,
 		Index:   snapshot.Index,
 	})
+	n.applyReady()
 	n.ss.setIndex(snapshot.Index)
 	n.pushedIndex = snapshot.Index
 }
@@ -814,12 +822,12 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 
 func (n *node) streamDone() {
 	n.ss.notifySnapshotStatus(false, false, true, false, 0)
-	n.pipeline.setApplyReady(n.clusterID)
+	n.applyReady()
 }
 
 func (n *node) saveDone() {
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.pipeline.setApplyReady(n.clusterID)
+	n.applyReady()
 }
 
 func (n *node) recoverDone(index uint64) {
@@ -832,12 +840,12 @@ func (n *node) recoverDone(index uint64) {
 
 func (n *node) initialSnapshotDone(index uint64) {
 	n.ss.notifySnapshotStatus(false, true, false, true, index)
-	n.pipeline.setApplyReady(n.clusterID)
+	n.applyReady()
 }
 
 func (n *node) recoverFromSnapshotDone() {
 	n.ss.notifySnapshotStatus(false, true, false, false, 0)
-	n.pipeline.setApplyReady(n.clusterID)
+	n.applyReady()
 }
 
 func (n *node) handleTask(ts []rsm.Task, es []sm.Entry) (rsm.Task, error) {
@@ -1011,6 +1019,9 @@ func (n *node) processDroppedEntries(ud pb.Update) {
 func (n *node) notifyCommittedEntries() {
 	tasks := n.toCommitQ.GetAll()
 	for _, t := range tasks {
+		if t.Save || t.Stream || t.Recover {
+			plog.Panicf("unexpected task, %+v", t)
+		}
 		for _, e := range t.Entries {
 			if e.IsProposal() {
 				n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
@@ -1023,7 +1034,7 @@ func (n *node) notifyCommittedEntries() {
 		n.toApplyQ.Add(t)
 	}
 	if len(tasks) > 0 {
-		n.pipeline.setApplyReady(n.clusterID)
+		n.applyReady()
 	}
 }
 

@@ -128,7 +128,6 @@ func (l *loadedNodes) updateFromLoadedSSNodes(from from,
 type workReady struct {
 	partitioner server.IPartitioner
 	count       uint64
-	indexes     map[uint64]struct{}
 	maps        []*readyCluster
 	channels    []chan struct{}
 }
@@ -137,7 +136,6 @@ func newWorkReady(count uint64) *workReady {
 	wr := &workReady{
 		partitioner: server.NewFixedPartitioner(count),
 		count:       count,
-		indexes:     make(map[uint64]struct{}),
 		maps:        make([]*readyCluster, count),
 		channels:    make([]chan struct{}, count),
 	}
@@ -152,6 +150,52 @@ func (wr *workReady) getPartitioner() server.IPartitioner {
 	return wr.partitioner
 }
 
+func (wr *workReady) notify(idx uint64) {
+	select {
+	case wr.channels[idx] <- struct{}{}:
+	default:
+	}
+}
+
+func (wr *workReady) clusterReadyByApplyUpdates(nodes map[uint64]*node,
+	updates []pb.Update) {
+	inc := func(n *node) bool {
+		return !n.notifyCommit
+	}
+	wr.clusterReadyByUpdates(nodes, updates, inc)
+}
+
+func (wr *workReady) clusterReadyByCommitUpdates(nodes map[uint64]*node,
+	updates []pb.Update) {
+	inc := func(n *node) bool {
+		return n.notifyCommit
+	}
+	wr.clusterReadyByUpdates(nodes, updates, inc)
+}
+
+func (wr *workReady) clusterReadyByUpdates(nodes map[uint64]*node,
+	updates []pb.Update, include func(*node) bool) {
+	var notified bitmap
+	for _, ud := range updates {
+		node := nodes[ud.ClusterID]
+		if include(node) && len(ud.CommittedEntries) > 0 {
+			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
+			readyMap := wr.maps[idx]
+			readyMap.setClusterReady(ud.ClusterID)
+		}
+	}
+	for _, ud := range updates {
+		node := nodes[ud.ClusterID]
+		if include(node) && len(ud.CommittedEntries) > 0 {
+			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
+			if !notified.contains(idx) {
+				notified.add(idx)
+				wr.notify(idx)
+			}
+		}
+	}
+}
+
 func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 	var notified bitmap
 	for _, req := range mb.Requests {
@@ -163,28 +207,23 @@ func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 		idx := wr.partitioner.GetPartitionID(req.ClusterId)
 		if !notified.contains(idx) {
 			notified.add(idx)
-			select {
-			case wr.channels[idx] <- struct{}{}:
-			default:
-			}
+			wr.notify(idx)
 		}
 	}
 }
 
 func (wr *workReady) allClustersReady(nodes []*node) {
-	for key := range wr.indexes {
-		delete(wr.indexes, key)
-	}
+	var notified bitmap
 	for _, n := range nodes {
 		idx := wr.partitioner.GetPartitionID(n.clusterID)
-		wr.indexes[idx] = struct{}{}
 		readyMap := wr.maps[idx]
 		readyMap.setClusterReady(n.clusterID)
 	}
-	for idx := range wr.indexes {
-		select {
-		case wr.channels[idx] <- struct{}{}:
-		default:
+	for _, n := range nodes {
+		idx := wr.partitioner.GetPartitionID(n.clusterID)
+		if !notified.contains(idx) {
+			notified.add(idx)
+			wr.notify(idx)
 		}
 	}
 }
@@ -193,10 +232,7 @@ func (wr *workReady) clusterReady(clusterID uint64) {
 	idx := wr.partitioner.GetPartitionID(clusterID)
 	readyMap := wr.maps[idx]
 	readyMap.setClusterReady(clusterID)
-	select {
-	case wr.channels[idx] <- struct{}{}:
-	default:
-	}
+	wr.notify(idx)
 }
 
 func (wr *workReady) waitCh(workerID uint64) chan struct{} {
@@ -1095,15 +1131,28 @@ func (e *engine) processMoreCommittedEntries(ud pb.Update) {
 
 func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 	nodes map[uint64]*node, fastApply bool) {
+	hasNotifyCommitNode := false
+	hasApplyCommitNode := false
 	for _, ud := range updates {
 		if ud.FastApply != fastApply {
 			continue
 		}
 		node := nodes[ud.ClusterID]
+		if node.notifyCommit {
+			hasNotifyCommitNode = true
+		} else {
+			hasApplyCommitNode = true
+		}
 		if err := node.processSnapshot(ud); err != nil {
 			panic(err)
 		}
 		node.applyRaftUpdates(ud)
+	}
+	if hasApplyCommitNode {
+		e.setApplyReadyByUpdates(nodes, updates)
+	}
+	if hasNotifyCommitNode {
+		e.setCommitReadyByUpdates(nodes, updates)
 	}
 }
 
@@ -1132,8 +1181,18 @@ func (e *engine) setStepReady(clusterID uint64) {
 	e.stepWorkReady.clusterReady(clusterID)
 }
 
+func (e *engine) setCommitReadyByUpdates(nodes map[uint64]*node,
+	updates []pb.Update) {
+	e.commitWorkReady.clusterReadyByCommitUpdates(nodes, updates)
+}
+
 func (e *engine) setCommitReady(clusterID uint64) {
 	e.commitWorkReady.clusterReady(clusterID)
+}
+
+func (e *engine) setApplyReadyByUpdates(nodes map[uint64]*node,
+	updates []pb.Update) {
+	e.applyWorkReady.clusterReadyByApplyUpdates(nodes, updates)
 }
 
 func (e *engine) setApplyReady(clusterID uint64) {
