@@ -157,36 +157,17 @@ func (wr *workReady) notify(idx uint64) {
 	}
 }
 
-func (wr *workReady) clusterReadyByApplyUpdates(nodes map[uint64]*node,
-	updates []pb.Update) {
-	inc := func(n *node) bool {
-		return !n.notifyCommit
-	}
-	wr.clusterReadyByUpdates(nodes, updates, inc)
-}
-
-func (wr *workReady) clusterReadyByCommitUpdates(nodes map[uint64]*node,
-	updates []pb.Update) {
-	inc := func(n *node) bool {
-		return n.notifyCommit
-	}
-	wr.clusterReadyByUpdates(nodes, updates, inc)
-}
-
-func (wr *workReady) clusterReadyByUpdates(nodes map[uint64]*node,
-	updates []pb.Update, include func(*node) bool) {
+func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
 	var notified bitmap
 	for _, ud := range updates {
-		node := nodes[ud.ClusterID]
-		if include(node) && len(ud.CommittedEntries) > 0 {
+		if len(ud.CommittedEntries) > 0 {
 			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
 			readyMap := wr.maps[idx]
 			readyMap.setClusterReady(ud.ClusterID)
 		}
 	}
 	for _, ud := range updates {
-		node := nodes[ud.ClusterID]
-		if include(node) && len(ud.CommittedEntries) > 0 {
+		if len(ud.CommittedEntries) > 0 {
 			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
 			if !notified.contains(idx) {
 				notified.add(idx)
@@ -1131,28 +1112,24 @@ func (e *engine) processMoreCommittedEntries(ud pb.Update) {
 
 func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 	nodes map[uint64]*node, fastApply bool) {
-	hasNotifyCommitNode := false
-	hasApplyCommitNode := false
+	notifyCommit := false
 	for _, ud := range updates {
 		if ud.FastApply != fastApply {
 			continue
 		}
 		node := nodes[ud.ClusterID]
 		if node.notifyCommit {
-			hasNotifyCommitNode = true
-		} else {
-			hasApplyCommitNode = true
+			notifyCommit = true
 		}
 		if err := node.processSnapshot(ud); err != nil {
 			panic(err)
 		}
 		node.applyRaftUpdates(ud)
 	}
-	if hasApplyCommitNode {
-		e.setApplyReadyByUpdates(nodes, updates)
-	}
-	if hasNotifyCommitNode {
-		e.setCommitReadyByUpdates(nodes, updates)
+	if !notifyCommit {
+		e.setApplyReadyByUpdates(updates)
+	} else {
+		e.setCommitReadyByUpdates(updates)
 	}
 }
 
@@ -1181,18 +1158,16 @@ func (e *engine) setStepReady(clusterID uint64) {
 	e.stepWorkReady.clusterReady(clusterID)
 }
 
-func (e *engine) setCommitReadyByUpdates(nodes map[uint64]*node,
-	updates []pb.Update) {
-	e.commitWorkReady.clusterReadyByCommitUpdates(nodes, updates)
+func (e *engine) setCommitReadyByUpdates(updates []pb.Update) {
+	e.commitWorkReady.clusterReadyByUpdates(updates)
 }
 
 func (e *engine) setCommitReady(clusterID uint64) {
 	e.commitWorkReady.clusterReady(clusterID)
 }
 
-func (e *engine) setApplyReadyByUpdates(nodes map[uint64]*node,
-	updates []pb.Update) {
-	e.applyWorkReady.clusterReadyByApplyUpdates(nodes, updates)
+func (e *engine) setApplyReadyByUpdates(updates []pb.Update) {
+	e.applyWorkReady.clusterReadyByUpdates(updates)
 }
 
 func (e *engine) setApplyReady(clusterID uint64) {
