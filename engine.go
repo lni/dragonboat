@@ -1049,15 +1049,10 @@ func (e *engine) processSteps(workerID uint64,
 			active[cid] = struct{}{}
 		}
 	}
-	monkeyLog.Infof("%s worker ID %d called processStep, nodes %d, clusters %d",
-		e.nh.describe(), workerID, len(nodes), len(active))
 	nodeUpdates = nodeUpdates[:0]
 	for cid := range active {
 		node, ok := nodes[cid]
 		if !ok || node.stopped() {
-			if node != nil && node.stopped() {
-				monkeyLog.Infof("%s skipped stepNode, node stopped", node.id())
-			}
 			continue
 		}
 		if ud, hasUpdate := node.stepNode(); hasUpdate {

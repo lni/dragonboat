@@ -395,7 +395,6 @@ func (n *node) propose(session *client.Session,
 	if !n.initialized() {
 		return nil, ErrClusterNotReady
 	}
-	monkeyLog.Infof("%s made a proposal", n.id())
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
 	}
@@ -1108,8 +1107,6 @@ func (n *node) stepNode() (pb.Update, bool) {
 			}
 			return n.getUpdate()
 		}
-	} else {
-		monkeyLog.Infof("%s skipped handleEvents, not initialized", n.id())
 	}
 	return pb.Update{}, false
 }

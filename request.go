@@ -43,8 +43,7 @@ var (
 )
 
 var (
-	plog      = logger.GetLogger("dragonboat")
-	monkeyLog = logger.GetMonkeyLogger("monkey")
+	plog = logger.GetLogger("dragonboat")
 )
 
 var (
@@ -1185,17 +1184,11 @@ func (p *proposalShard) gcAt(now uint64) {
 	if p.stopped {
 		return
 	}
-	if len(p.pending) > 0 {
-		monkeyLog.Infof("%s called gc, now %d, last gc %d, gcTick %d",
-			dn(p.cfg.ClusterID, p.cfg.NodeID), now, p.lastGcTime, p.gcTick)
-	}
 	if now-p.lastGcTime < p.gcTick {
 		return
 	}
 	p.lastGcTime = now
 	for key, rec := range p.pending {
-		monkeyLog.Infof("%s deadline %d, now %d",
-			dn(p.cfg.ClusterID, p.cfg.NodeID), rec.deadline, now)
 		if rec.deadline < now {
 			rec.timeout()
 			delete(p.pending, key)
