@@ -25,11 +25,13 @@ type OffloadedStatus struct {
 	nodeID      uint64
 	loadedCount uint64
 	DestroyedC  chan struct{}
+	destroyed   bool
 }
 
 // Destroyed returns a boolean value indicating whether the belonging object
 // has been destroyed.
 func (o *OffloadedStatus) Destroyed() bool {
+	o.destroyed = true
 	select {
 	case <-o.DestroyedC:
 		return true

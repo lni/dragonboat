@@ -206,7 +206,7 @@ func (ds *NativeSM) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
 func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	if ds.Destroyed() {
+	if ds.destroyed {
 		return nil, ErrClusterClosed
 	}
 	return ds.sm.Lookup(query)
@@ -221,7 +221,7 @@ func (ds *NativeSM) ConcurrentLookup(query interface{}) (interface{}, error) {
 func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	if ds.Destroyed() {
+	if ds.destroyed {
 		return nil, ErrClusterClosed
 	}
 	return ds.sm.NALookup(query)
