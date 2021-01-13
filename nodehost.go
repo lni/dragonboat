@@ -357,10 +357,6 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.Stop()
 		return nil, err
 	}
-	if err := nh.createTransport(); err != nil {
-		nh.Stop()
-		return nil, err
-	}
 	errorInjection := false
 	if nhConfig.Expert.FS != nil {
 		_, errorInjection = nhConfig.Expert.FS.(*vfs.ErrorFS)
@@ -368,6 +364,10 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	}
 	nh.engine = newExecEngine(nh, nhConfig.Expert.ExecShards,
 		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.logdb)
+	if err := nh.createTransport(); err != nil {
+		nh.Stop()
+		return nil, err
+	}
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain()
 	})
