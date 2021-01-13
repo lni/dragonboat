@@ -185,15 +185,14 @@ func (r *readyCluster) setClusterReady(clusterID uint64) {
 }
 
 func (r *readyCluster) getReadyClusters() map[uint64]struct{} {
+	m := r.maps[(r.index+1)%2]
+	for k := range m {
+		delete(m, k)
+	}
 	r.mu.Lock()
 	v := r.ready
 	r.index++
-	selected := r.index % 2
-	nm := r.maps[selected]
-	for k := range nm {
-		delete(nm, k)
-	}
-	r.ready = nm
+	r.ready = r.maps[r.index%2]
 	r.mu.Unlock()
 	return v
 }
