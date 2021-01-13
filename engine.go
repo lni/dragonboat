@@ -1318,12 +1318,6 @@ func (e *engine) setCloseReady(n *node) {
 }
 
 func (e *engine) setStepReadyByMessageBatch(mb pb.MessageBatch) {
-	if e == nil {
-		plog.Panicf("nil engine")
-	}
-	if e.stepWorkReady == nil {
-		plog.Panicf("nil work ready")
-	}
 	e.stepWorkReady.clusterReadyByMessageBatch(mb)
 }
 
