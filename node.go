@@ -227,6 +227,10 @@ func (n *node) applyReady() {
 	n.pipeline.setApplyReady(n.clusterID)
 }
 
+func (n *node) commitReady() {
+	n.pipeline.setCommitReady(n.clusterID)
+}
+
 func (n *node) ApplyUpdate(e pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyRead bool) {
 	if n.isWitness() {
@@ -546,14 +550,17 @@ func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
 	return nil
 }
 
-func (n *node) pushTask(rec rsm.Task) {
-	if n.notifyCommit && !rec.Stream && !rec.Save && !rec.Recover {
-		if len(rec.Entries) == 0 {
-			panic("nothing to notify commit")
-		}
+func (n *node) pushTask(rec rsm.Task, notify bool) {
+	if n.notifyCommit {
 		n.toCommitQ.Add(rec)
+		if notify {
+			n.commitReady()
+		}
 	} else {
 		n.toApplyQ.Add(rec)
+		if notify {
+			n.applyReady()
+		}
 	}
 }
 
@@ -561,7 +568,7 @@ func (n *node) pushEntries(ents []pb.Entry) {
 	if len(ents) == 0 {
 		return
 	}
-	n.pushTask(rsm.Task{Entries: ents})
+	n.pushTask(rsm.Task{Entries: ents}, false)
 	n.pushedIndex = ents[len(ents)-1].Index
 }
 
@@ -570,16 +577,14 @@ func (n *node) pushStreamSnapshotRequest(clusterID uint64, nodeID uint64) {
 		ClusterID: clusterID,
 		NodeID:    nodeID,
 		Stream:    true,
-	})
-	n.applyReady()
+	}, true)
 }
 
 func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
 	n.pushTask(rsm.Task{
 		Save:      true,
 		SSRequest: req,
-	})
-	n.applyReady()
+	}, true)
 }
 
 func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
@@ -594,8 +599,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
 	n.pushTask(rsm.Task{
 		Recover: true,
 		Index:   snapshot.Index,
-	})
-	n.applyReady()
+	}, true)
 	n.ss.setIndex(snapshot.Index)
 	n.pushedIndex = snapshot.Index
 }
@@ -864,7 +868,7 @@ func (n *node) runSyncTask() error {
 		return nil
 	}
 	if !n.sm.TaskChanBusy() {
-		n.pushTask(rsm.Task{PeriodicSync: true})
+		n.pushTask(rsm.Task{PeriodicSync: true}, true)
 	}
 	return n.shrink(n.sm.GetSyncedIndex())
 }
@@ -1018,9 +1022,6 @@ func (n *node) processDroppedEntries(ud pb.Update) {
 func (n *node) notifyCommittedEntries() {
 	tasks := n.toCommitQ.GetAll()
 	for _, t := range tasks {
-		if t.Save || t.Stream || t.Recover {
-			plog.Panicf("unexpected task, %+v", t)
-		}
 		for _, e := range t.Entries {
 			if e.IsProposal() {
 				n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
