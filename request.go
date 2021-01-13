@@ -1123,8 +1123,8 @@ func (p *proposalShard) borrowProposal(clientID uint64,
 func (p *proposalShard) takeProposal(clientID uint64,
 	seriesID uint64, key uint64, now uint64, remove bool) *RequestState {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.stopped {
-		p.mu.Unlock()
 		return nil
 	}
 	ps, ok := p.pending[key]
@@ -1133,11 +1133,9 @@ func (p *proposalShard) takeProposal(clientID uint64,
 			if remove {
 				delete(p.pending, key)
 			}
-			p.mu.Unlock()
 			return ps
 		}
 	}
-	p.mu.Unlock()
 	return nil
 }
 
