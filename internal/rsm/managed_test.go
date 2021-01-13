@@ -72,6 +72,19 @@ func TestDestroyedFlagIsSetWhenDestroyed(t *testing.T) {
 	sm := NewNativeSM(config.Config{}, &dummySM{}, nil)
 	sm.Loaded()
 	sm.Offloaded()
+	if sm.loadedCount != 0 {
+		t.Errorf("loadedCount is not 0")
+	}
+	if sm.destroyed {
+		t.Errorf("destroyed flag unexpectedly set")
+	}
+	select {
+	case <-sm.DestroyedC():
+		t.Errorf("destroyedC unexpected closed")
+	default:
+	}
+
+	sm.Close()
 	if !sm.destroyed {
 		t.Errorf("destroyed flag not set")
 	}
@@ -86,6 +99,7 @@ func TestLookupWillFailOnClosedStateMachine(t *testing.T) {
 	sm := NewNativeSM(config.Config{}, &dummySM{}, nil)
 	sm.Loaded()
 	sm.Offloaded()
+	sm.Close()
 	if _, err := sm.Lookup(nil); err != ErrClusterClosed {
 		t.Errorf("failed to return ErrClusterClosed")
 	}

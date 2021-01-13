@@ -2054,6 +2054,7 @@ func (t *testManagedStateMachine) Recover(io.Reader, []sm.SnapshotFile) error {
 func (t *testManagedStateMachine) Stream(interface{}, io.Writer) error { return nil }
 func (t *testManagedStateMachine) Offloaded() bool                     { return false }
 func (t *testManagedStateMachine) Loaded()                             {}
+func (t *testManagedStateMachine) Close()                              {}
 func (t *testManagedStateMachine) DestroyedC() <-chan struct{}         { return nil }
 func (t *testManagedStateMachine) Concurrent() bool                    { return false }
 func (t *testManagedStateMachine) OnDisk() bool                        { return false }

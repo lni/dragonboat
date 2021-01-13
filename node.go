@@ -43,6 +43,7 @@ var (
 )
 
 type pipeline interface {
+	setCloseReady(*node)
 	setStepReady(clusterID uint64)
 	setCommitReady(clusterID uint64)
 	setApplyReady(clusterID uint64)
@@ -517,8 +518,13 @@ func (n *node) getLeaderID() (uint64, bool) {
 	return v, v != raft.NoLeader
 }
 
+func (n *node) destroy() {
+	n.sm.Close()
+}
+
 func (n *node) offloaded() {
 	if n.sm.Offloaded() {
+		n.pipeline.setCloseReady(n)
 		n.sysEvents.Publish(server.SystemEvent{
 			Type:      server.NodeUnloaded,
 			ClusterID: n.clusterID,

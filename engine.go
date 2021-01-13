@@ -33,6 +33,7 @@ var (
 	commitWorkerCount   = settings.Soft.StepEngineCommitWorkerCount
 	applyWorkerCount    = settings.Soft.StepEngineTaskWorkerCount
 	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
+	closeWorkerCount    = settings.Soft.StepEngineCloseWorkerCount
 	reloadTime          = settings.Soft.NodeReloadMillisecond
 	nodeReloadInterval  = time.Millisecond * time.Duration(reloadTime)
 	taskBatchSize       = settings.Soft.TaskBatchSize
@@ -453,9 +454,6 @@ func (p *workerPool) workerPoolMain() {
 			if w.workerID != workerID {
 				panic("w.workerID != workerID")
 			}
-			if _, ok := p.busy[workerID]; !ok {
-				plog.Panicf("not in busy state")
-			}
 			p.completed(workerID)
 			toSchedule = true
 		} else if chosen == len(cases)-1 {
@@ -742,6 +740,177 @@ func (p *workerPool) scheduleTask(j job, n *node, w *ssWorker) {
 	}
 }
 
+type closeReq struct {
+	node *node
+}
+
+type closeWorker struct {
+	workerID   uint64
+	stopper    *syncutil.Stopper
+	requestC   chan closeReq
+	completedC chan struct{}
+}
+
+func newCloseWorker(workerID uint64, stopper *syncutil.Stopper) *closeWorker {
+	w := &closeWorker{
+		workerID:   workerID,
+		stopper:    stopper,
+		requestC:   make(chan closeReq, 1),
+		completedC: make(chan struct{}, 1),
+	}
+	stopper.RunWorker(func() {
+		w.workerMain()
+	})
+	return w
+}
+
+func (w *closeWorker) workerMain() {
+	for {
+		select {
+		case <-w.stopper.ShouldStop():
+			return
+		case req := <-w.requestC:
+			w.handle(req)
+			w.completed()
+		}
+	}
+}
+
+func (w *closeWorker) completed() {
+	w.completedC <- struct{}{}
+}
+
+func (w *closeWorker) handle(req closeReq) {
+	req.node.destroy()
+}
+
+type closeWorkerPool struct {
+	workers       []*closeWorker
+	ready         chan closeReq
+	busy          map[uint64]struct{}
+	pending       []*node
+	workerStopper *syncutil.Stopper
+	poolStopper   *syncutil.Stopper
+}
+
+func newCloseWorkerPool() *closeWorkerPool {
+	w := &closeWorkerPool{
+		workers:       make([]*closeWorker, closeWorkerCount),
+		ready:         make(chan closeReq, 1),
+		busy:          make(map[uint64]struct{}, closeWorkerCount),
+		pending:       make([]*node, 0),
+		workerStopper: syncutil.NewStopper(),
+		poolStopper:   syncutil.NewStopper(),
+	}
+
+	for workerID := uint64(0); workerID < closeWorkerCount; workerID++ {
+		w.workers[workerID] = newCloseWorker(workerID, w.workerStopper)
+	}
+	w.poolStopper.RunWorker(func() {
+		w.workerPoolMain()
+	})
+	return w
+}
+
+func (p *closeWorkerPool) stop() {
+	p.poolStopper.Stop()
+}
+
+func (p *closeWorkerPool) workerPoolMain() {
+	for {
+		// 0 - pool stopper stopc
+		// 1 - node ready for destroy
+		cases := make([]reflect.SelectCase, len(p.workers)+2)
+		cases[0] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.poolStopper.ShouldStop()),
+		}
+		cases[1] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(p.ready),
+		}
+		for idx, w := range p.workers {
+			cases[2+idx] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(w.completedC),
+			}
+		}
+		chosen, v, _ := reflect.Select(cases)
+		if chosen == 0 {
+			p.workerStopper.Stop()
+			return
+		} else if chosen == 1 {
+			node := v.Interface().(closeReq).node
+			p.pending = append(p.pending, node)
+		} else if chosen > 1 && chosen < len(p.workers)+2 {
+			workerID := uint64(chosen - 2)
+			p.completed(workerID)
+		} else {
+			plog.Panicf("chosen %d, unknown case", chosen)
+		}
+		p.schedule()
+	}
+}
+
+func (p *closeWorkerPool) completed(workerID uint64) {
+	if _, ok := p.busy[workerID]; !ok {
+		plog.Panicf("close worker %d is not in busy state")
+	}
+	delete(p.busy, workerID)
+}
+
+func (p *closeWorkerPool) setBusy(workerID uint64) {
+	p.busy[workerID] = struct{}{}
+}
+
+func (p *closeWorkerPool) getWorker() *closeWorker {
+	for _, w := range p.workers {
+		if _, busy := p.busy[w.workerID]; !busy {
+			return w
+		}
+	}
+	return nil
+}
+
+func (p *closeWorkerPool) schedule() {
+	for {
+		if !p.scheduleWorker() {
+			return
+		}
+	}
+}
+
+func (p *closeWorkerPool) scheduleWorker() bool {
+	w := p.getWorker()
+	if w == nil {
+		return false
+	}
+	if len(p.pending) > 0 {
+		p.scheduleReq(p.pending[0], w)
+		p.removeFromPending(0)
+		return true
+	}
+	return false
+}
+
+func (p *closeWorkerPool) scheduleReq(n *node, w *closeWorker) {
+	p.setBusy(w.workerID)
+	select {
+	case w.requestC <- closeReq{node: n}:
+	default:
+		panic("worker received multiple jobs")
+	}
+}
+
+func (p *closeWorkerPool) removeFromPending(idx int) {
+	sz := len(p.pending)
+	copy(p.pending[idx:], p.pending[idx+1:])
+	p.pending = p.pending[:sz-1]
+	if len(p.pending) != sz-1 {
+		panic("len(p.pending) != sz - 1")
+	}
+}
+
 type engine struct {
 	nodeStopper     *syncutil.Stopper
 	commitStopper   *syncutil.Stopper
@@ -757,6 +926,7 @@ type engine struct {
 	applyWorkReady  *workReady
 	applyCCIReady   *workReady
 	wp              *workerPool
+	cp              *closeWorkerPool
 	ec              chan error
 	notifyCommit    bool
 }
@@ -782,6 +952,7 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		applyWorkReady:  newWorkReady(applyWorkerCount),
 		applyCCIReady:   newWorkReady(applyWorkerCount),
 		wp:              newWorkerPool(nh, loaded),
+		cp:              newCloseWorkerPool(),
 		notifyCommit:    notifyCommit,
 	}
 	if errorInjection {
@@ -831,6 +1002,7 @@ func (e *engine) stop() {
 	e.commitStopper.Stop()
 	e.taskStopper.Stop()
 	e.wp.stop()
+	e.cp.stop()
 }
 
 func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
@@ -1141,7 +1313,17 @@ func (e *engine) onSnapshotSaved(updates []pb.Update,
 	return nil
 }
 
+func (e *engine) setCloseReady(n *node) {
+	e.cp.ready <- closeReq{node: n}
+}
+
 func (e *engine) setStepReadyByMessageBatch(mb pb.MessageBatch) {
+	if e == nil {
+		plog.Panicf("nil engine")
+	}
+	if e.stepWorkReady == nil {
+		plog.Panicf("nil work ready")
+	}
 	e.stepWorkReady.clusterReadyByMessageBatch(mb)
 }
 

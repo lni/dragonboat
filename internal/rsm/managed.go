@@ -69,6 +69,7 @@ type IManagedStateMachine interface {
 	Stream(interface{}, io.Writer) error
 	Offloaded() bool
 	Loaded()
+	Close()
 	DestroyedC() <-chan struct{}
 	Concurrent() bool
 	OnDisk() bool
@@ -134,14 +135,7 @@ func (ds *NativeSM) Open() (uint64, error) {
 func (ds *NativeSM) Offloaded() bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	if ds.SetOffloaded() == 0 {
-		if err := ds.sm.Close(); err != nil {
-			panic(err)
-		}
-		ds.SetDestroyed()
-		return true
-	}
-	return false
+	return ds.SetOffloaded() == 0
 }
 
 // Loaded marks the statemachine as loaded by the specified component.
@@ -149,6 +143,14 @@ func (ds *NativeSM) Loaded() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.SetLoaded()
+}
+
+// Close closes the underlying user state machine and set the destroyed flag.
+func (ds *NativeSM) Close() {
+	if err := ds.sm.Close(); err != nil {
+		panic(err)
+	}
+	ds.SetDestroyed()
 }
 
 // DestroyedC returns a chan struct{} used to indicate whether the SM has been

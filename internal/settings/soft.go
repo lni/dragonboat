@@ -127,6 +127,9 @@ type soft struct {
 	// StepEngineSnapshotWorkerCount is the number of workers to take and
 	// apply application state machine snapshots.
 	StepEngineSnapshotWorkerCount uint64
+	// StepEngineCloseWorkerCount is the number of workers to invoke the Close
+	// method of closed state machines.
+	StepEngineCloseWorkerCount uint64
 
 	//
 	// transport
@@ -204,6 +207,7 @@ func getDefaultSoftSettings() soft {
 		StepEngineCommitWorkerCount:    16,
 		StepEngineTaskWorkerCount:      16,
 		StepEngineSnapshotWorkerCount:  64,
+		StepEngineCloseWorkerCount:     16,
 		SendQueueLength:                1024 * 2,
 		ReceiveQueueLength:             1024,
 		StreamConnections:              4,

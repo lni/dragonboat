@@ -164,6 +164,7 @@ func getTestRaftNodes(count int, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 type dummyEngine struct {
 }
 
+func (d *dummyEngine) setCloseReady(n *node)            {}
 func (d *dummyEngine) setStepReady(clusterID uint64)    {}
 func (d *dummyEngine) setCommitReady(clusterID uint64)  {}
 func (d *dummyEngine) setApplyReady(clusterID uint64)   {}
