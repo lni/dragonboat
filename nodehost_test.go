@@ -1165,7 +1165,7 @@ func createConcurrentTestNodeHost(addr string,
 			return &tests.TestSnapshot{}
 		}
 	}
-	rc.ClusterID = 1 + applyWorkerCount
+	rc.ClusterID = 1 + nhc.Expert.Engine.ApplyShards
 	if err := nh.StartConcurrentCluster(peers, false, newConcurrentSM, rc); err != nil {
 		return nil, err
 	}
@@ -1197,8 +1197,9 @@ func singleConcurrentNodeHostTest(t *testing.T,
 		defer func() {
 			nh.Stop()
 		}()
+		nhc := nh.NodeHostConfig()
 		waitForLeaderToBeElected(t, nh, 1)
-		waitForLeaderToBeElected(t, nh, 1+applyWorkerCount)
+		waitForLeaderToBeElected(t, nh, 1+nhc.Expert.Engine.ApplyShards)
 		tf(t, nh)
 	}()
 	reportLeakedFD(fs, t)
@@ -2521,9 +2522,10 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 
 func TestConcurrentStateMachineLookup(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + applyWorkerCount
 	done := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
+		nhc := nh.NodeHostConfig()
+		clusterID := 1 + nhc.Expert.Engine.ApplyShards
 		count := uint32(0)
 		stopper := syncutil.NewStopper()
 		pto := pto(nh)
@@ -2581,8 +2583,9 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 
 func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + applyWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
+		nhc := nh.NodeHostConfig()
+		clusterID := 1 + nhc.Expert.Engine.ApplyShards
 		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
 			if ci.ClusterID == clusterID {
@@ -2617,8 +2620,9 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 
 func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 	fs := vfs.GetTestFS()
-	clusterID := 1 + applyWorkerCount
 	tf := func(t *testing.T, nh *NodeHost) {
+		nhc := nh.NodeHostConfig()
+		clusterID := 1 + nhc.Expert.Engine.ApplyShards
 		for i := 0; i < 100; i++ {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
@@ -5200,7 +5204,7 @@ func TestGetTimeoutFromContext(t *testing.T) {
 func TestHandleSnapshotStatus(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
-	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
 	defer engine.stop()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
@@ -5221,7 +5225,7 @@ func TestHandleSnapshotStatus(t *testing.T) {
 func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
-	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
 	defer engine.stop()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
@@ -5248,7 +5252,7 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
-	engine := newExecEngine(nh, 1, false, false, nil, nil)
+	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
 	defer engine.stop()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())

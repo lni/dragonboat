@@ -472,6 +472,11 @@ func (c *NodeHostConfig) Validate() error {
 			return err
 		}
 	}
+	if !c.Expert.Engine.IsEmpty() {
+		if err := c.Expert.Engine.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -505,12 +510,13 @@ func (c *NodeHostConfig) Prepare() error {
 	if c.Expert.FS == nil {
 		c.Expert.FS = vfs.DefaultFS
 	}
+	if c.Expert.Engine.IsEmpty() {
+		plog.Infof("using default EngineConfig")
+		c.Expert.Engine = GetDefaultEngineConfig()
+	}
 	if c.Expert.LogDB.IsEmpty() {
 		plog.Infof("using default LogDBConfig")
 		c.Expert.LogDB = GetDefaultLogDBConfig()
-	}
-	if c.Expert.ExecShards == 0 {
-		c.Expert.ExecShards = defaultExecShards
 	}
 	if c.RaftRPCFactory != nil && c.Expert.TransportFactory == nil {
 		c.Expert.TransportFactory = &defaultTransport{factory: c.RaftRPCFactory}
@@ -631,9 +637,9 @@ type LogDBConfig struct {
 }
 
 // GetDefaultLogDBConfig returns the default configurations for the LogDB
-// storage engine. The default LogDB can use up to 8GBytes memory.
+// storage engine. The default LogDB configuration use up to 8GBytes memory.
 func GetDefaultLogDBConfig() LogDBConfig {
-	return getDefaultLogDBConfig()
+	return GetLargeMemLogDBConfig()
 }
 
 // GetTinyMemLogDBConfig returns a LogDB config aimed for minimizing memory
@@ -707,20 +713,65 @@ func (cfg *LogDBConfig) MemorySizeMB() uint64 {
 // IsEmpty returns a boolean value indicating whether the LogDBConfig instance
 // is empty.
 func (cfg *LogDBConfig) IsEmpty() bool {
-	empty := LogDBConfig{}
-	return reflect.DeepEqual(cfg, &empty)
+	return reflect.DeepEqual(cfg, &LogDBConfig{})
+}
+
+// EngineConfig is the configuration for the execution engine.
+type EngineConfig struct {
+	// ExecShards is the number of execution shards in the first stage of the
+	// execution engine. Default value is 16. Once deployed, this value can not
+	// be changed later.
+	ExecShards uint64
+	// CommitShards is the number of commit shards in the second stage of the
+	// execution engine. Default value is 16.
+	CommitShards uint64
+	// ApplyShards is the number of apply shards in the third stage of the
+	// execution engine. Default value is 16.
+	ApplyShards uint64
+	// SnapshotShards is the number of snapshot shards in the forth stage of the
+	// execution engine. Default value is 48.
+	SnapshotShards uint64
+	// CloseShards is the number of close shards used for closing stopped
+	// state machines. Default value is 32.
+	CloseShards uint64
+}
+
+// GetDefaultEngineConfig returns the default EngineConfig instance.
+func GetDefaultEngineConfig() EngineConfig {
+	return EngineConfig{
+		ExecShards:     defaultExecShards,
+		CommitShards:   16,
+		ApplyShards:    16,
+		SnapshotShards: 48,
+		CloseShards:    32,
+	}
+}
+
+// IsEmpty returns a boolean value indicating whether EngineConfig is an empty
+// one.
+func (ec EngineConfig) IsEmpty() bool {
+	return reflect.DeepEqual(&ec, &EngineConfig{})
+}
+
+// Validate return an error value when the EngineConfig is invalid.
+func (ec EngineConfig) Validate() error {
+	if ec.ExecShards == 0 || ec.CommitShards == 0 || ec.ApplyShards == 0 ||
+		ec.SnapshotShards == 0 || ec.CloseShards == 0 {
+		return errors.New("invalid engine configuration")
+	}
+	return nil
 }
 
 // GetDefaultExpertConfig returns the default ExpertConfig.
 func GetDefaultExpertConfig() ExpertConfig {
 	return ExpertConfig{
-		ExecShards: defaultExecShards,
-		LogDB:      getDefaultLogDBConfig(),
+		Engine: GetDefaultEngineConfig(),
+		LogDB:  getDefaultLogDBConfig(),
 	}
 }
 
 // ExpertConfig contains options for expert users who are familiar with the
-// internals of Dragonboat. Users are recommended not to use ExpertConfig
+// internals of Dragonboat. Users are recommended not to set ExpertConfig
 // unless it is absoloutely necessary.
 type ExpertConfig struct {
 	// LogDBFactory is the factory function used for creating the LogDB instance
@@ -731,9 +782,8 @@ type ExpertConfig struct {
 	// transport module to be used by dragonbaot. When not set, the built-in TCP
 	// transport module is used.
 	TransportFactory TransportFactory
-	// ExecShards is the number of execution shards in the first stage of the
-	// execution engine. Default value is 16.
-	ExecShards uint64
+	// Engine is the cponfiguration for the execution engine.
+	Engine EngineConfig
 	// LogDB contains configuration options for the LogDB storage engine. LogDB
 	// is used for storing Raft Logs and metadata. This optional option is used
 	// by advanced users for tuning the balance of I/O performance, memory and

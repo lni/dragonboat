@@ -75,7 +75,7 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 		status := raftpb.RaftDataStatus{
 			Address: testAddress,
 			BinVer:  raftio.LogDBBinVersion,
-			HardHash: settings.HardHash(cfg.Expert.ExecShards,
+			HardHash: settings.HardHash(cfg.Expert.Engine.ExecShards,
 				cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 				settings.Hard.LogDBEntryBatchSize),
 			LogdbType:    testName,
@@ -121,7 +121,7 @@ func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
 	status := raftpb.RaftDataStatus{
 		Address: "addr2:54321",
 		BinVer:  binVer,
-		HardHash: settings.HardHash(cfg.Expert.ExecShards,
+		HardHash: settings.HardHash(cfg.Expert.Engine.ExecShards,
 			cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 			settings.Hard.LogDBEntryBatchSize),
 		LogdbType: testLogDBName,
@@ -172,7 +172,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	status := raftpb.RaftDataStatus{
 		Address: addr,
 		BinVer:  binVer,
-		HardHash: settings.HardHash(cfg.Expert.ExecShards,
+		HardHash: settings.HardHash(cfg.Expert.Engine.ExecShards,
 			cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 			settings.Hard.LogDBEntryBatchSize),
 		LogdbType:           name,

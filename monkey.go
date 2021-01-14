@@ -166,17 +166,6 @@ func (n *node) dumpRaftInfoToLog() {
 	}
 }
 
-// SetSnapshotWorkerCount sets how many snapshot workers to use in during
-// monkeytest.
-func SetSnapshotWorkerCount(count uint64) {
-	snapshotWorkerCount = count
-}
-
-// SetApplyWorkerCount sets how many apply workers to use during monkeytest.
-func SetApplyWorkerCount(count uint64) {
-	applyWorkerCount = count
-}
-
 // PartitionNode puts the node into test partition mode. All connectivity to
 // the outside world should be stopped.
 func (nh *NodeHost) PartitionNode() {

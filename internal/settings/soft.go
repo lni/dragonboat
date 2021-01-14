@@ -117,19 +117,6 @@ type soft struct {
 	// NodeReloadMillisecond defines how often step engine should reload
 	// nodes, it is defined in number of millisecond.
 	NodeReloadMillisecond uint64
-	// StepEngineCommitWorkerCountis the number of workers to use to notify
-	// committed proposals.
-	StepEngineCommitWorkerCount uint64
-	// StepEngineTaskWorkerCount is the number of workers to use to apply
-	// proposals (processing committed proposals) to application state
-	// machines.
-	StepEngineTaskWorkerCount uint64
-	// StepEngineSnapshotWorkerCount is the number of workers to take and
-	// apply application state machine snapshots.
-	StepEngineSnapshotWorkerCount uint64
-	// StepEngineCloseWorkerCount is the number of workers to invoke the Close
-	// method of closed state machines.
-	StepEngineCloseWorkerCount uint64
 	// CloseWorkerTimedWaitSecond is the number of seconds allowed for the
 	// close worker to run cleanups before exit.
 	CloseWorkerTimedWaitSecond uint64
@@ -207,10 +194,6 @@ func getDefaultSoftSettings() soft {
 		NodeHostRequestStatePoolShards: 8,
 		TaskBatchSize:                  512,
 		NodeReloadMillisecond:          200,
-		StepEngineCommitWorkerCount:    16,
-		StepEngineTaskWorkerCount:      16,
-		StepEngineSnapshotWorkerCount:  64,
-		StepEngineCloseWorkerCount:     16,
 		CloseWorkerTimedWaitSecond:     3,
 		SendQueueLength:                1024 * 2,
 		ReceiveQueueLength:             1024,

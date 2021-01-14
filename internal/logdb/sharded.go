@@ -114,18 +114,18 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 		}
 		shards = append(shards, db)
 	}
-	partitioner := server.NewDoubleFixedPartitioner(config.Expert.ExecShards,
+	partitioner := server.NewDoubleFixedPartitioner(config.Expert.Engine.ExecShards,
 		config.Expert.LogDB.Shards)
 	mw := &ShardedDB{
 		config:       config.Expert.LogDB,
 		shards:       shards,
-		ctxs:         make([]IContext, config.Expert.ExecShards),
+		ctxs:         make([]IContext, config.Expert.Engine.ExecShards),
 		partitioner:  partitioner,
 		compactions:  newCompactions(),
 		compactionCh: make(chan struct{}, 1),
 		stopper:      syncutil.NewStopper(),
 	}
-	for i := uint64(0); i < config.Expert.ExecShards; i++ {
+	for i := uint64(0); i < config.Expert.Engine.ExecShards; i++ {
 		mw.ctxs[i] = newContext(mw.config.SaveBufferSize, mw.config.MaxSaveBufferSize)
 	}
 	mw.stopper.RunWorker(func() {

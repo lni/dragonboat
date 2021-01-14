@@ -362,7 +362,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		_, errorInjection = nhConfig.Expert.FS.(*vfs.ErrorFS)
 		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
 	}
-	nh.engine = newExecEngine(nh, nhConfig.Expert.ExecShards,
+	nh.engine = newExecEngine(nh, nhConfig.Expert.Engine,
 		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.logdb)
 	if err := nh.createTransport(); err != nil {
 		nh.Stop()
@@ -1616,7 +1616,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
-	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.ExecShards,
+	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
 		nh.nhConfig.Expert.LogDB.Shards)
 	shard := p.GetPartitionID(clusterID)
 	rn, err := newNode(peers,

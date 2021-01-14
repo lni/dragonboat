@@ -15,6 +15,7 @@
 package config
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/lni/dragonboat/v3/raftio"
@@ -280,5 +281,16 @@ func TestGossipConfigValidate(t *testing.T) {
 		if (err != nil && tt.valid) || (err == nil && !tt.valid) {
 			t.Errorf("%d, err: %v, valid: %t", idx, err, tt.valid)
 		}
+	}
+}
+
+func TestDefaultEngineConfig(t *testing.T) {
+	nhc := &NodeHostConfig{}
+	if err := nhc.Prepare(); err != nil {
+		t.Errorf("prepare failed, %v", err)
+	}
+	ec := GetDefaultEngineConfig()
+	if !reflect.DeepEqual(&nhc.Expert.Engine, &ec) {
+		t.Errorf("default engine configure not set")
 	}
 }

@@ -388,13 +388,13 @@ func (env *Env) check(cfg config.NodeHostConfig,
 			return ErrIncompatibleData
 		}
 		if s.HardHash != 0 {
-			if s.HardHash != settings.HardHash(cfg.Expert.ExecShards,
+			if s.HardHash != settings.HardHash(cfg.Expert.Engine.ExecShards,
 				cfg.Expert.LogDB.Shards, settings.Hard.LRUMaxSessionCount,
 				settings.Hard.LogDBEntryBatchSize) {
 				return ErrHardSettingsChanged
 			}
 		} else {
-			if s.StepWorkerCount != cfg.Expert.ExecShards ||
+			if s.StepWorkerCount != cfg.Expert.Engine.ExecShards ||
 				s.LogdbShardCount != cfg.Expert.LogDB.Shards ||
 				s.MaxSessionCount != settings.Hard.LRUMaxSessionCount ||
 				s.EntryBatchSize != settings.Hard.LogDBEntryBatchSize {
@@ -414,7 +414,7 @@ func (env *Env) createFlagFile(cfg config.NodeHostConfig,
 		LogdbType:           name,
 		Hostname:            env.hostname,
 		DeploymentId:        cfg.GetDeploymentID(),
-		StepWorkerCount:     cfg.Expert.ExecShards,
+		StepWorkerCount:     cfg.Expert.Engine.ExecShards,
 		LogdbShardCount:     cfg.Expert.LogDB.Shards,
 		MaxSessionCount:     settings.Hard.LRUMaxSessionCount,
 		EntryBatchSize:      settings.Hard.LogDBEntryBatchSize,

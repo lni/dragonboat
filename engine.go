@@ -21,6 +21,7 @@ import (
 
 	"github.com/lni/goutils/syncutil"
 
+	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -30,10 +31,6 @@ import (
 )
 
 var (
-	commitWorkerCount    = settings.Soft.StepEngineCommitWorkerCount
-	applyWorkerCount     = settings.Soft.StepEngineTaskWorkerCount
-	snapshotWorkerCount  = settings.Soft.StepEngineSnapshotWorkerCount
-	closeWorkerCount     = settings.Soft.StepEngineCloseWorkerCount
 	reloadTime           = settings.Soft.NodeReloadMillisecond
 	timedCloseWaitSecond = settings.Soft.CloseWorkerTimedWaitSecond
 	timedCloseWait       = time.Second * time.Duration(timedCloseWaitSecond)
@@ -330,7 +327,8 @@ type workerPool struct {
 	poolStopper   *syncutil.Stopper
 }
 
-func newWorkerPool(nh nodeLoader, loaded *loadedNodes) *workerPool {
+func newWorkerPool(nh nodeLoader,
+	snapshotWorkerCount uint64, loaded *loadedNodes) *workerPool {
 	w := &workerPool{
 		nh:            nh,
 		loaded:        loaded,
@@ -791,7 +789,7 @@ type closeWorkerPool struct {
 	poolStopper   *syncutil.Stopper
 }
 
-func newCloseWorkerPool() *closeWorkerPool {
+func newCloseWorkerPool(closeWorkerCount uint64) *closeWorkerPool {
 	w := &closeWorkerPool{
 		workers:       make([]*closeWorker, closeWorkerCount),
 		ready:         make(chan closeReq, 1),
@@ -982,10 +980,10 @@ type engine struct {
 	notifyCommit    bool
 }
 
-func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
+func newExecEngine(nh nodeLoader, cfg config.EngineConfig, notifyCommit bool,
 	errorInjection bool, env *server.Env, logdb raftio.ILogDB) *engine {
-	if execShards == 0 {
-		panic("execShards == 0")
+	if cfg.ExecShards == 0 {
+		panic("ExecShards == 0")
 	}
 	loaded := newLoadedNodes()
 	s := &engine{
@@ -996,20 +994,20 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		nodeStopper:     syncutil.NewStopper(),
 		commitStopper:   syncutil.NewStopper(),
 		taskStopper:     syncutil.NewStopper(),
-		stepWorkReady:   newWorkReady(execShards),
-		stepCCIReady:    newWorkReady(execShards),
-		commitWorkReady: newWorkReady(commitWorkerCount),
-		commitCCIReady:  newWorkReady(commitWorkerCount),
-		applyWorkReady:  newWorkReady(applyWorkerCount),
-		applyCCIReady:   newWorkReady(applyWorkerCount),
-		wp:              newWorkerPool(nh, loaded),
-		cp:              newCloseWorkerPool(),
+		stepWorkReady:   newWorkReady(cfg.ExecShards),
+		stepCCIReady:    newWorkReady(cfg.ExecShards),
+		commitWorkReady: newWorkReady(cfg.CommitShards),
+		commitCCIReady:  newWorkReady(cfg.CommitShards),
+		applyWorkReady:  newWorkReady(cfg.ApplyShards),
+		applyCCIReady:   newWorkReady(cfg.ApplyShards),
+		wp:              newWorkerPool(nh, cfg.SnapshotShards, loaded),
+		cp:              newCloseWorkerPool(cfg.CloseShards),
 		notifyCommit:    notifyCommit,
 	}
 	if errorInjection {
 		s.ec = make(chan error, 1)
 	}
-	for i := uint64(1); i <= execShards; i++ {
+	for i := uint64(1); i <= cfg.ExecShards; i++ {
 		workerID := i
 		s.nodeStopper.RunWorker(func() {
 			if errorInjection {
@@ -1025,14 +1023,14 @@ func newExecEngine(nh nodeLoader, execShards uint64, notifyCommit bool,
 		})
 	}
 	if notifyCommit {
-		for i := uint64(1); i <= commitWorkerCount; i++ {
+		for i := uint64(1); i <= cfg.CommitShards; i++ {
 			commitWorkerID := i
 			s.commitStopper.RunWorker(func() {
 				s.commitWorkerMain(commitWorkerID)
 			})
 		}
 	}
-	for i := uint64(1); i <= applyWorkerCount; i++ {
+	for i := uint64(1); i <= cfg.ApplyShards; i++ {
 		applyWorkerID := i
 		s.taskStopper.RunWorker(func() {
 			s.applyWorkerMain(applyWorkerID)
