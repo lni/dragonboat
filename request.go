@@ -69,8 +69,6 @@ var (
 	// ErrClusterNotInitialized indicates that the requested operation can not be
 	// completed as the involved raft cluster has not been initialized yet.
 	ErrClusterNotInitialized = errors.New("raft cluster not initialized yet")
-	// ErrBadKey indicates that the key is bad, retry the request is recommended.
-	ErrBadKey = errors.New("bad key try again later")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
 	// ErrCanceled indicates that the request has been canceled.
@@ -90,13 +88,20 @@ var (
 )
 
 var (
+	// ErrBadKey indicates that the key is bad, retry the request is recommended.
+	//
+	// Depreciated: ErrBadKey is no longer used.
+	ErrBadKey = errors.New("bad key try again later")
 	// ErrPendingLeaderTransferExist has been depredicated, use ErrSystemBusy.
+	//
 	// Depreciated: ErrPendingLeaderTransferExist is depreciated.
 	ErrPendingLeaderTransferExist = ErrSystemBusy
 	// ErrPendingConfigChangeExist has been deprecicated, use ErrSystemBusy.
+	//
 	// Depreciated: ErrPendingConfigChangeExist is depreciated.
 	ErrPendingConfigChangeExist = ErrSystemBusy
 	// ErrPendingSnapshotRequestExist has been depreciated, use ErrSystemBusy.
+	//
 	// Depreciated: ErrPendingSnapshotRequestExist is depreciated.
 	ErrPendingSnapshotRequestExist = ErrSystemBusy
 )
@@ -106,12 +111,11 @@ var (
 // input, potentially on a more suitable NodeHost instance.
 func IsTempError(err error) bool {
 	return err == ErrSystemBusy ||
-		err == ErrClusterNotInitialized ||
-		err == ErrTimeout ||
-		err == ErrBadKey ||
 		err == ErrClusterClosed ||
-		err == ErrClosed ||
-		err == ErrClusterNotReady
+		err == ErrClusterNotInitialized ||
+		err == ErrClusterNotReady ||
+		err == ErrTimeout ||
+		err == ErrClosed
 }
 
 // RequestResultCode is the result code returned to the client to indicate the
