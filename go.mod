@@ -7,7 +7,7 @@ require (
 	github.com/golang/snappy v0.0.3-0.20201103224600-674baa8c7fc3
 	github.com/hashicorp/memberlist v0.2.2
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
-	github.com/lni/goutils v1.2.3-0.20201010045919-3885c6f6643f
+	github.com/lni/goutils v1.2.3-0.20210114081842-c04d22066ac6
 )
 
 go 1.14
