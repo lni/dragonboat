@@ -107,7 +107,7 @@ jobs:
        sudo apt-get install librocksdb-dev libsnappy-dev
        git clone https://github.com/lni/dragonboat-example
        cd dragonboat-example
-       go get github.com/lni/dragonboat/v3@master
+       GOPROXY=direct go get github.com/lni/dragonboat/v3@master
        make
   static-check:
     runs-on: ubuntu-18.04
