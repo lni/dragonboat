@@ -246,8 +246,8 @@ func main() {
 	stopper := syncutil.NewStopper()
 	results := make([]uint64, *clientcount)
 	for i := uint64(0); i < uint64(*clientcount); i++ {
-		stopper.RunPWorker(func(arg interface{}) {
-			workerID := arg.(uint64)
+		workerID := i
+		stopper.RunWorker(func() {
 			clusterID := (workerID % uint64(*clustercount)) + 1
 			nh := nhList[clusterID-1]
 			cs := nh.GetNoOPSession(clusterID)
@@ -271,13 +271,13 @@ func main() {
 				default:
 				}
 			}
-		}, i)
+		})
 	}
 	reads := struct{ v uint64 }{}
 	if *read {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
-			stopper.RunPWorker(func(arg interface{}) {
-				workerID := arg.(uint64)
+			workerID := i
+			stopper.RunWorker(func() {
 				clusterID := (workerID % uint64(*clustercount)) + 1
 				nh := nhList[clusterID-1]
 				for {
@@ -297,7 +297,7 @@ func main() {
 					default:
 					}
 				}
-			}, i)
+			})
 		}
 	}
 	stopper.Stop()
