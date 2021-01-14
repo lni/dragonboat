@@ -865,6 +865,12 @@ func (p *closeWorkerPool) timedWait() {
 				len(p.busy), len(p.pending))
 		}
 	}()
+	// p.ready is buffered, don't ignore that buffered close req
+	select {
+	case v := <-p.ready:
+		p.pending = append(p.pending, v.node)
+	default:
+	}
 	cases := make([]reflect.SelectCase, len(p.workers)+1)
 	for !p.isIdle() {
 		cases[0] = reflect.SelectCase{
