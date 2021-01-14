@@ -452,10 +452,6 @@ func (p *workerPool) workerPoolMain() {
 			p.loadNodes()
 		} else if chosen >= 5 && chosen <= 5+len(p.workers)-1 {
 			workerID := uint64(chosen - 5)
-			w := p.workers[workerID]
-			if w.workerID != workerID {
-				panic("w.workerID != workerID")
-			}
 			p.completed(workerID)
 			toSchedule = true
 		} else if chosen == len(cases)-1 {
