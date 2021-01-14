@@ -130,6 +130,9 @@ type soft struct {
 	// StepEngineCloseWorkerCount is the number of workers to invoke the Close
 	// method of closed state machines.
 	StepEngineCloseWorkerCount uint64
+	// CloseWorkerTimedWaitSecond is the number of seconds allowed for the
+	// close worker to run cleanups before exit.
+	CloseWorkerTimedWaitSecond uint64
 
 	//
 	// transport
@@ -208,6 +211,7 @@ func getDefaultSoftSettings() soft {
 		StepEngineTaskWorkerCount:      16,
 		StepEngineSnapshotWorkerCount:  64,
 		StepEngineCloseWorkerCount:     16,
+		CloseWorkerTimedWaitSecond:     3,
 		SendQueueLength:                1024 * 2,
 		ReceiveQueueLength:             1024,
 		StreamConnections:              4,

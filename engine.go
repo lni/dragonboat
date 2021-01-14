@@ -30,13 +30,15 @@ import (
 )
 
 var (
-	commitWorkerCount   = settings.Soft.StepEngineCommitWorkerCount
-	applyWorkerCount    = settings.Soft.StepEngineTaskWorkerCount
-	snapshotWorkerCount = settings.Soft.StepEngineSnapshotWorkerCount
-	closeWorkerCount    = settings.Soft.StepEngineCloseWorkerCount
-	reloadTime          = settings.Soft.NodeReloadMillisecond
-	nodeReloadInterval  = time.Millisecond * time.Duration(reloadTime)
-	taskBatchSize       = settings.Soft.TaskBatchSize
+	commitWorkerCount    = settings.Soft.StepEngineCommitWorkerCount
+	applyWorkerCount     = settings.Soft.StepEngineTaskWorkerCount
+	snapshotWorkerCount  = settings.Soft.StepEngineSnapshotWorkerCount
+	closeWorkerCount     = settings.Soft.StepEngineCloseWorkerCount
+	reloadTime           = settings.Soft.NodeReloadMillisecond
+	timedCloseWaitSecond = settings.Soft.CloseWorkerTimedWaitSecond
+	timedCloseWait       = time.Second * time.Duration(timedCloseWaitSecond)
+	nodeReloadInterval   = time.Millisecond * time.Duration(reloadTime)
+	taskBatchSize        = settings.Soft.TaskBatchSize
 )
 
 type bitmap struct {
@@ -371,6 +373,7 @@ func (p *workerPool) getWorker() *ssWorker {
 func (p *workerPool) workerPoolMain() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	cases := make([]reflect.SelectCase, len(p.workers)+6)
 	for {
 		toSchedule := false
 		// 0 - pool stopper stopc
@@ -380,7 +383,6 @@ func (p *workerPool) workerPoolMain() {
 		// 4 - p.cciReady.waitCh(1)
 		// 5 - worker completedC
 		// 5 + len(workers) - ticker.C
-		cases := make([]reflect.SelectCase, len(p.workers)+6)
 		cases[0] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(p.poolStopper.ShouldStop()),
@@ -817,10 +819,10 @@ func (p *closeWorkerPool) stop() {
 }
 
 func (p *closeWorkerPool) workerPoolMain() {
+	cases := make([]reflect.SelectCase, len(p.workers)+2)
 	for {
 		// 0 - pool stopper stopc
 		// 1 - node ready for destroy
-		cases := make([]reflect.SelectCase, len(p.workers)+2)
 		cases[0] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(p.poolStopper.ShouldStop()),
@@ -837,7 +839,7 @@ func (p *closeWorkerPool) workerPoolMain() {
 		}
 		chosen, v, _ := reflect.Select(cases)
 		if chosen == 0 {
-			p.workerStopper.Stop()
+			p.timedWait()
 			return
 		} else if chosen == 1 {
 			node := v.Interface().(closeReq).node
@@ -850,6 +852,53 @@ func (p *closeWorkerPool) workerPoolMain() {
 		}
 		p.schedule()
 	}
+}
+
+func (p *closeWorkerPool) timedWait() {
+	timer := time.NewTimer(timedCloseWait)
+	timeout := false
+	defer timer.Stop()
+	defer p.workerStopper.Stop()
+	defer func() {
+		if timeout {
+			plog.Infof("timedWait ready to exit, busy %d, pending %d",
+				len(p.busy), len(p.pending))
+		}
+	}()
+	cases := make([]reflect.SelectCase, len(p.workers)+1)
+	for !p.isIdle() {
+		cases[0] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(timer.C),
+		}
+		for idx, w := range p.workers {
+			cases[1+idx] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(w.completedC),
+			}
+		}
+		chosen, _, _ := reflect.Select(cases)
+		if chosen == 0 {
+			timeout = true
+			return
+		} else if chosen > 0 && chosen < len(p.workers)+1 {
+			select {
+			case <-timer.C:
+				timeout = true
+				return
+			default:
+			}
+			workerID := uint64(chosen - 1)
+			p.completed(workerID)
+			p.schedule()
+		} else {
+			plog.Panicf("chosen %d, unknown case", chosen)
+		}
+	}
+}
+
+func (p *closeWorkerPool) isIdle() bool {
+	return len(p.busy) == 0 && len(p.pending) == 0
 }
 
 func (p *closeWorkerPool) completed(workerID uint64) {
