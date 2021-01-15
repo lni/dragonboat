@@ -21,12 +21,7 @@ to import this package.
 package logdb
 
 import (
-	"fmt"
-
-	"github.com/lni/goutils/random"
-
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
@@ -86,6 +81,28 @@ type IContext interface {
 type kvFactory func(config.LogDBConfig,
 	kv.LogDBCallback, string, string, vfs.IFS) (kv.IKVStore, error)
 
+// DefaultFactory is the default factory for creating LogDB instance.
+type DefaultFactory struct {
+	fs vfs.IFS
+}
+
+// NewDefaultFactory creates a new DefaultFactory instance.
+func NewDefaultFactory(fs vfs.IFS) *DefaultFactory {
+	return &DefaultFactory{fs: fs}
+}
+
+// Create creates the LogDB instance.
+func (f *DefaultFactory) Create(cfg config.NodeHostConfig,
+	cb config.LogDBCallback,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return NewDefaultLogDB(cfg, cb, dirs, lldirs, f.fs)
+}
+
+// Name returns the name of the default LogDB instance.
+func (f *DefaultFactory) Name() string {
+	return "sharded-pebble"
+}
+
 // NewDefaultLogDB creates a Log DB instance using the default KV store
 // implementation. The created Log DB tries to store entry records in
 // plain format but it switches to the batched mode if there is already
@@ -143,33 +160,4 @@ func checkDirs(numOfShards uint64, dirs []string, lldirs []string) {
 	} else {
 		panic("no regular dir")
 	}
-}
-
-// GetLogDBInfo returns logdb type name.
-func GetLogDBInfo(f config.LogDBFactory,
-	config config.NodeHostConfig,
-	nhDirs []string, fs vfs.IFS) (name string, err error) {
-	tmpDirs := make([]string, 0)
-	for _, dir := range nhDirs {
-		tmp := fmt.Sprintf("tmp-%d", random.LockGuardedRand.Uint64())
-		td := fs.PathJoin(dir, tmp)
-		if err := fileutil.MkdirAll(td, fs); err != nil {
-			return "", err
-		}
-		tmpDirs = append(tmpDirs, td)
-	}
-	ldb, err := f(config, nil, tmpDirs, tmpDirs)
-	if err != nil {
-		return "", err
-	}
-	name = ldb.Name()
-	defer func() {
-		ldb.Close()
-		for _, dir := range tmpDirs {
-			if cerr := fs.RemoveAll(dir); err == nil {
-				err = cerr
-			}
-		}
-	}()
-	return name, nil
 }

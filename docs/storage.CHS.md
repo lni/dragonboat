@@ -16,7 +16,7 @@ Pebble是一个全新的以Go实现的Key-Value store，它提供与RocksDB双�
 
 为了使用RocksDB来存储Raft日志，需要先安装RocksDB库，在编译您的应用的时候，可能需要设置CGO_CFLAGS和CGO_LDFLAGS这两个环境变量以指向RocksDB库的安装位置。
 
-改用RocksDB来存储Dragonboat数据只需要修改一行代码，仅需将config.NodeHostConfig的LogDBFactory项设置为github.com/lni/dragonboat/v3/plugin/rocksdb包的rocksdb.NewLogDB即可。
+改用RocksDB来存储Dragonboat数据只需要修改一行代码，仅需将config.NodeHostConfig.Expert的LogDBFactory项设置为github.com/lni/dragonboat/v3/plugin/rocksdb包的rocksdb.Factory即可。
 
 ## 使用自定义的存储方案 ##
 

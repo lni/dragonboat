@@ -66,7 +66,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 		ldb, err = logdb.NewDefaultLogDB(nhConfig,
 			nil, []string{nhDir}, []string{walDir}, fs)
 	} else {
-		ldb, err = nhConfig.Expert.LogDBFactory(nhConfig,
+		ldb, err = nhConfig.Expert.LogDBFactory.Create(nhConfig,
 			nil, []string{nhDir}, []string{walDir})
 	}
 	if err != nil {

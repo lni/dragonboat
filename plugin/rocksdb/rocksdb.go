@@ -25,6 +25,22 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
+// Factory is the factory type for creating RocksDB based LogDB.
+type Factory struct{}
+
+// Create creates RocksDB based LogDB.
+func (rf *Factory) Create(cfg config.NodeHostConfig,
+	cb config.LogDBCallback,
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
+	return logdb.NewLogDB(cfg,
+		cb, dirs, lldirs, false, false, vfs.DefaultFS, rocksdb.NewKVStore)
+}
+
+// Name returns the name of the LogDB instance.
+func (rf *Factory) Name() string {
+	return "sharded-rocksdb"
+}
+
 // NewLogDB is the factory function for creating RocksDB based Log DB instances.
 // Raft entries are stored in its plain format, it uses less memory than the
 // batched alternative implementation but comes at the cost of lower throughput.

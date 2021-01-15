@@ -42,25 +42,6 @@ type ShardedDB struct {
 
 var _ raftio.ILogDB = (*ShardedDB)(nil)
 
-func checkAllShards(config config.NodeHostConfig,
-	dirs []string, lls []string, fs vfs.IFS, kvf kvFactory) (bool, error) {
-	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
-		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
-		lldir := ""
-		if len(lls) > 0 {
-			lldir = fs.PathJoin(lls[i], fmt.Sprintf("logdb-%d", i))
-		}
-		batched, err := hasBatchedRecord(config.Expert.LogDB, dir, lldir, fs, kvf)
-		if err != nil {
-			return false, err
-		}
-		if batched {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 type shardCallback struct {
 	shard uint64
 	f     config.LogDBCallback
@@ -73,29 +54,20 @@ func (sc *shardCallback) callback(busy bool) {
 }
 
 // OpenShardedDB creates a ShardedDB instance.
-func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
+func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
 	fs vfs.IFS, kvf kvFactory) (*ShardedDB, error) {
 	if config.Expert.LogDB.IsEmpty() {
 		panic("config.Expert.LogDB.IsEmpty()")
 	}
-	shards := make([]*db, 0)
-	if batched {
-		plog.Infof("using batched ShardedDB")
-	} else {
-		plog.Infof("using plain ShardedDB")
-	}
 	if check && batched {
-		panic("check && batched both set to true")
+		plog.Panicf("check and batched both set")
 	}
-	var err error
-	if check {
-		plog.Infof("checking all LogDB shards...")
-		batched, err = checkAllShards(config, dirs, lldirs, fs, kvf)
-		if err != nil {
-			return nil, err
+	shards := make([]*db, 0)
+	closeAll := func(all []*db) {
+		for _, s := range all {
+			s.close()
 		}
-		plog.Infof("all shards checked, batched: %t", batched)
 	}
 	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
 		dir := fs.PathJoin(dirs[i], fmt.Sprintf("logdb-%d", i))
@@ -103,16 +75,32 @@ func OpenShardedDB(config config.NodeHostConfig, callback config.LogDBCallback,
 		if len(lldirs) > 0 {
 			lldir = fs.PathJoin(lldirs[i], fmt.Sprintf("logdb-%d", i))
 		}
-		sc := shardCallback{shard: i, f: callback}
+		sc := shardCallback{shard: i, f: cb}
 		db, err := openRDB(config.Expert.LogDB,
 			sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
-			for _, s := range shards {
-				s.close()
-			}
+			closeAll(shards)
 			return nil, err
 		}
 		shards = append(shards, db)
+	}
+	if check && !batched {
+		for _, s := range shards {
+			located, err := hasEntryRecord(s.kvs, true)
+			if err != nil {
+				closeAll(shards)
+				return nil, err
+			}
+			if located {
+				closeAll(shards)
+				return OpenShardedDB(config, cb, dirs, lldirs, true, false, fs, kvf)
+			}
+		}
+	}
+	if batched {
+		plog.Infof("using batched logdb")
+	} else {
+		plog.Infof("using plain logdb")
 	}
 	partitioner := server.NewDoubleFixedPartitioner(config.Expert.Engine.ExecShards,
 		config.Expert.LogDB.Shards)

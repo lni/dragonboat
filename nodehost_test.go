@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -639,15 +639,25 @@ func runNodeHostTestDC(t *testing.T, f func(), removeDir bool, fs vfs.IFS) {
 	reportLeakedFD(fs, t)
 }
 
+type testLogDBFactory struct {
+	ldb raftio.ILogDB
+}
+
+func (t *testLogDBFactory) Create(cfg config.NodeHostConfig,
+	cb config.LogDBCallback, dirs []string, wals []string) (raftio.ILogDB, error) {
+	return t.ldb, nil
+}
+
+func (t *testLogDBFactory) Name() string {
+	return t.ldb.Name()
+}
+
 func TestLogDBCanBeExtended(t *testing.T) {
 	fs := vfs.GetTestFS()
 	ldb := &noopLogDB{}
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.Expert.LogDBFactory = func(config.NodeHostConfig,
-				config.LogDBCallback, []string, []string) (raftio.ILogDB, error) {
-				return ldb, nil
-			}
+			nhc.Expert.LogDBFactory = &testLogDBFactory{ldb: ldb}
 			return nhc
 		},
 
@@ -4230,13 +4240,10 @@ func TestNodeHostReturnsErrorWhenTransportCanNotBeCreated(t *testing.T) {
 
 func TestNodeHostChecksLogDBType(t *testing.T) {
 	fs := vfs.GetTestFS()
+	ldb := &noopLogDB{}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			f := func(config config.NodeHostConfig, cb config.LogDBCallback,
-				dirs []string, lldirs []string) (raftio.ILogDB, error) {
-				return &noopLogDB{}, nil
-			}
-			c.Expert.LogDBFactory = f
+			c.Expert.LogDBFactory = &testLogDBFactory{ldb: ldb}
 			return c
 		},
 		at: func(*NodeHost) {
@@ -4298,6 +4305,21 @@ func TestNodeHostFileLock(t *testing.T) {
 	runNodeHostTestDC(t, tf, false, fs)
 }
 
+type testLogDBFactory2 struct {
+	f func(config.NodeHostConfig,
+		config.LogDBCallback, []string, []string) (raftio.ILogDB, error)
+	name string
+}
+
+func (t *testLogDBFactory2) Create(cfg config.NodeHostConfig, cb config.LogDBCallback,
+	dirs []string, wals []string) (raftio.ILogDB, error) {
+	return t.f(cfg, cb, dirs, wals)
+}
+
+func (t *testLogDBFactory2) Name() string {
+	return t.name
+}
+
 func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	fs := vfs.GetTestFS()
 	bff := func(config config.NodeHostConfig, cb config.LogDBCallback,
@@ -4311,14 +4333,13 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	to := &testOption{
 		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.Expert.LogDBFactory = nff
-			_, err := NewNodeHost(*nhc)
-			if err != server.ErrLogDBBrokenChange {
+			nhc.Expert.LogDBFactory = &testLogDBFactory2{f: nff}
+			if _, err := NewNodeHost(*nhc); err != server.ErrLogDBBrokenChange {
 				t.Errorf("failed to return ErrLogDBBrokenChange")
 			}
 		},
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.Expert.LogDBFactory = bff
+			c.Expert.LogDBFactory = &testLogDBFactory2{f: bff}
 			return c
 		},
 		noElection: true,
@@ -4338,15 +4359,14 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.Expert.LogDBFactory = nff
+			c.Expert.LogDBFactory = &testLogDBFactory2{f: nff}
 			return c
 		},
 		noElection: true,
 		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.Expert.LogDBFactory = bff
-			_, err := NewNodeHost(*nhc)
-			if err != server.ErrIncompatibleData {
+			nhc.Expert.LogDBFactory = &testLogDBFactory2{f: bff}
+			if _, err := NewNodeHost(*nhc); err != server.ErrIncompatibleData {
 				t.Errorf("failed to return server.ErrIncompatibleData")
 			}
 		},
@@ -4366,7 +4386,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.Expert.LogDBFactory = bff
+			c.Expert.LogDBFactory = &testLogDBFactory2{f: bff}
 			return c
 		},
 		createSM: func(uint64, uint64) sm.IStateMachine {
@@ -4384,7 +4404,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 		},
 		at: func(*NodeHost) {
 			nhc := getTestNodeHostConfig(fs)
-			nhc.Expert.LogDBFactory = nff
+			nhc.Expert.LogDBFactory = &testLogDBFactory2{f: nff}
 			if nh, err := NewNodeHost(*nhc); err != nil {
 				t.Errorf("failed to create node host")
 			} else {

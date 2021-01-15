@@ -206,6 +206,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		cfg := config.NodeHostConfig{
 			Expert: config.GetDefaultExpertConfig(),
 		}
+		cfg.Expert.LogDB.Shards = 2
 		ldb, err = logdb.NewDefaultLogDB(cfg,
 			nil, []string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
 		if err != nil {

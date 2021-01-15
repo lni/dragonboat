@@ -1698,24 +1698,17 @@ func (nh *NodeHost) createLogDB() error {
 	if err := nh.env.LockNodeHostDir(); err != nil {
 		return err
 	}
-	var factory config.LogDBFactory
-	df := func(config config.NodeHostConfig, cb config.LogDBCallback,
-		dirs []string, lows []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(config, cb, dirs, lows, nh.fs)
-	}
+	var lf config.LogDBFactory
 	if nh.nhConfig.Expert.LogDBFactory != nil {
-		factory = nh.nhConfig.Expert.LogDBFactory
+		lf = nh.nhConfig.Expert.LogDBFactory
 	} else {
-		factory = df
+		lf = logdb.NewDefaultFactory(nh.fs)
 	}
-	name, err := logdb.GetLogDBInfo(factory, nh.nhConfig, []string{nhDir}, nh.fs)
-	if err != nil {
-		return err
-	}
+	name := lf.Name()
 	if err := nh.env.CheckLogDBType(nh.nhConfig, name); err != nil {
 		return err
 	}
-	ldb, err := factory(nh.nhConfig,
+	ldb, err := lf.Create(nh.nhConfig,
 		nh.handleLogDBInfo, []string{nhDir}, []string{walDir})
 	if err != nil {
 		return err

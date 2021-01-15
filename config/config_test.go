@@ -185,7 +185,7 @@ func TestLogDBFactoryAndExpertLogDBFactoryCanNotBeSetTogether(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("cfg not valid")
 	}
-	c.Expert.LogDBFactory = f
+	c.Expert.LogDBFactory = &defaultLogDB{}
 	if err := c.Validate(); err == nil {
 		t.Fatalf("cfg not considered as invalid")
 	}

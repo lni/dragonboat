@@ -21,7 +21,9 @@ package config
 import (
 	"crypto/tls"
 	"errors"
+	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -459,14 +461,18 @@ type TargetValidator func(string) bool
 // RaftAddress values.
 type RaftAddressValidator func(string) bool
 
-// LogDBFactory is the factory type for creating a LogDB instance.
-type LogDBFactory func(NodeHostConfig,
-	LogDBCallback, []string, []string) (raftio.ILogDB, error)
+// LogDBFactory is the interface used for creating custom logdb modules.
+type LogDBFactory interface {
+	// Create creates a logdb module.
+	Create(NodeHostConfig,
+		LogDBCallback, []string, []string) (raftio.ILogDB, error)
+	// Name returns the type name of the logdb module.
+	Name() string
+}
 
 // TransportFactory is the interface used for creating custom transport modules.
 type TransportFactory interface {
-	// Create creates a transport module. It is invoked during the creation of its
-	// owner NodeHost instance.
+	// Create creates a transport module.
 	Create(NodeHostConfig,
 		raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
 	// Validate validates the RaftAddress of the NodeHost. When using a custom
@@ -576,6 +582,29 @@ func (tm *defaultTransport) Validate(addr string) bool {
 	return stringutil.IsValidAddress(addr)
 }
 
+type defaultLogDB struct {
+	factory LogDBFactoryFunc
+}
+
+func (l *defaultLogDB) Create(nhConfig NodeHostConfig,
+	cb LogDBCallback, dirs []string, wals []string) (raftio.ILogDB, error) {
+	return l.factory(nhConfig, cb, dirs, wals)
+}
+
+func (l *defaultLogDB) Name() string {
+	dir, err := ioutil.TempDir("", "logdb_check_name")
+	if err != nil {
+		plog.Panicf("failed to get temp dir, %v", err)
+	}
+	ldb, err := l.factory(NodeHostConfig{}, nil, []string{dir}, []string{})
+	if err != nil {
+		plog.Panicf("failed to create ldb, %v", err)
+	}
+	defer os.RemoveAll(dir)
+	defer ldb.Close()
+	return ldb.Name()
+}
+
 // Prepare sets the default value for NodeHostConfig.
 func (c *NodeHostConfig) Prepare() error {
 	var err error
@@ -605,7 +634,7 @@ func (c *NodeHostConfig) Prepare() error {
 		c.RaftRPCFactory = nil
 	}
 	if c.LogDBFactory != nil && c.Expert.LogDBFactory == nil {
-		c.Expert.LogDBFactory = LogDBFactory(c.LogDBFactory)
+		c.Expert.LogDBFactory = &defaultLogDB{factory: c.LogDBFactory}
 		c.LogDBFactory = nil
 	}
 	return nil

@@ -469,7 +469,7 @@ func getLogDB(env server.Env,
 	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
 	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
 	if nhConfig.Expert.LogDBFactory != nil {
-		return nhConfig.Expert.LogDBFactory(nhConfig,
+		return nhConfig.Expert.LogDBFactory.Create(nhConfig,
 			nil, []string{nhDir}, []string{walDir})
 	}
 	return logdb.NewDefaultLogDB(nhConfig,
