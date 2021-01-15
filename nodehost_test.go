@@ -5282,7 +5282,9 @@ func TestProposeOnClosedNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get node, %v", err)
 			}
-			nh.StopNode(1, 1)
+			if err := nh.StopNode(1, 1); err != nil {
+				t.Fatalf("failed to stop node, %v", err)
+			}
 			cs := nh.GetNoOPSession(1)
 			if _, err := u.Propose(cs, nil, time.Second); err == nil {
 				t.Errorf("propose on closed node didn't cause error")
@@ -5303,7 +5305,9 @@ func TestReadIndexOnClosedNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get node, %v", err)
 			}
-			nh.StopNode(1, 1)
+			if err := nh.StopNode(1, 1); err != nil {
+				t.Fatalf("failed to stop node, %v", err)
+			}
 			if _, err := u.ReadIndex(time.Second); err == nil {
 				t.Errorf("ReadIndex on closed node didn't cause error")
 			} else {
