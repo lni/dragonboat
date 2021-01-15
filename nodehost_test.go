@@ -5272,3 +5272,44 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 		t.Fatalf("received unexpected message")
 	}
 }
+
+func TestProposeOnClosedNode(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			u, err := nh.GetNodeUser(1)
+			if err != nil {
+				t.Fatalf("failed to get node, %v", err)
+			}
+			nh.StopNode(1, 1)
+			cs := nh.GetNoOPSession(1)
+			if _, err := u.Propose(cs, nil, time.Second); err == nil {
+				t.Errorf("propose on closed node didn't cause error")
+			} else {
+				plog.Infof("%v returned from closed node", err)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestReadIndexOnClosedNode(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			u, err := nh.GetNodeUser(1)
+			if err != nil {
+				t.Fatalf("failed to get node, %v", err)
+			}
+			nh.StopNode(1, 1)
+			if _, err := u.ReadIndex(time.Second); err == nil {
+				t.Errorf("ReadIndex on closed node didn't cause error")
+			} else {
+				plog.Infof("%v returned from closed node", err)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
