@@ -289,6 +289,10 @@ func main() {
 						v := <-rs.ResultC()
 						if v.Completed() {
 							atomic.AddUint64(&reads.v, 1)
+							if _, err := nh.ReadLocalNode(rs, nil); err != nil {
+								panic(err)
+							}
+							rs.Release()
 						}
 					}
 					select {
