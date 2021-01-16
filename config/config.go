@@ -596,7 +596,12 @@ func (l *defaultLogDB) Name() string {
 	if err != nil {
 		plog.Panicf("failed to get temp dir, %v", err)
 	}
-	ldb, err := l.factory(NodeHostConfig{}, nil, []string{dir}, []string{})
+	nhc := NodeHostConfig{
+		Expert: ExpertConfig{
+			LogDB: GetDefaultLogDBConfig(),
+		},
+	}
+	ldb, err := l.factory(nhc, nil, []string{dir}, []string{})
 	if err != nil {
 		plog.Panicf("failed to create ldb, %v", err)
 	}
