@@ -865,6 +865,7 @@ func (p *closeWorkerPool) timedWait() {
 		p.pending = append(p.pending, v.node)
 	default:
 	}
+	p.schedule()
 	cases := make([]reflect.SelectCase, len(p.workers)+1)
 	for !p.isIdle() {
 		cases[0] = reflect.SelectCase{
