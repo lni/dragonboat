@@ -194,7 +194,7 @@ func getDefaultSoftSettings() soft {
 		NodeHostRequestStatePoolShards: 8,
 		TaskBatchSize:                  512,
 		NodeReloadMillisecond:          200,
-		CloseWorkerTimedWaitSecond:     3,
+		CloseWorkerTimedWaitSecond:     5,
 		SendQueueLength:                1024 * 2,
 		ReceiveQueueLength:             1024,
 		StreamConnections:              4,
