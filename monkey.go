@@ -89,7 +89,7 @@ func (nh *NodeHost) SetPreStreamChunkSendHook(f transport.StreamChunkSendFunc) {
 }
 
 func (nh *NodeHost) GetLogDB() raftio.ILogDB {
-	return nh.logdb
+	return nh.mu.logdb
 }
 
 func (n *node) GetLastApplied() uint64 {

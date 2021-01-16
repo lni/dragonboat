@@ -272,10 +272,14 @@ type NodeHost struct {
 	partitioned int32
 	mu          struct {
 		sync.RWMutex
-		cci      uint64
-		cciCh    chan struct{}
-		clusters sync.Map // clusterID -> *node
-		lm       sync.Map // shardID -> *logDBMetrics
+		cci   uint64
+		cciCh chan struct{}
+		// clusterID -> *node
+		clusters sync.Map
+		// shardID -> *logDBMetrics
+		lm sync.Map
+		// mu must be locked when logdb is accessed from a user goroutine
+		logdb raftio.ILogDB
 	}
 	events struct {
 		leaderInfoQ *leaderInfoQueue
@@ -288,7 +292,6 @@ type NodeHost struct {
 	nodes        transport.INodeRegistry
 	requestPools []*sync.Pool
 	engine       *engine
-	logdb        raftio.ILogDB
 	transport    transport.ITransport
 	msgHandler   *messageHandler
 	fs           vfs.IFS
@@ -363,7 +366,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		plog.Infof("filesystem error injection mode enabled: %t", errorInjection)
 	}
 	nh.engine = newExecEngine(nh, nhConfig.Expert.Engine,
-		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.logdb)
+		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.mu.logdb)
 	if err := nh.createTransport(); err != nil {
 		nh.Stop()
 		return nil, err
@@ -404,13 +407,15 @@ func (nh *NodeHost) ID() string {
 // Stop stops all Raft nodes managed by the NodeHost instance, closes the
 // transport and persistent storage modules.
 func (nh *NodeHost) Stop() {
+	nh.events.sys.Publish(server.SystemEvent{
+		Type: server.NodeHostShuttingDown,
+	})
+	nh.mu.Lock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		panic(ErrClosed)
 	}
 	atomic.StoreInt32(&nh.closed, 1)
-	nh.events.sys.Publish(server.SystemEvent{
-		Type: server.NodeHostShuttingDown,
-	})
+	nh.mu.Unlock()
 	nodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodes = append(nodes, raftio.NodeInfo{
@@ -439,8 +444,9 @@ func (nh *NodeHost) Stop() {
 		nh.transport.Stop()
 	}
 	plog.Debugf("%s transport module stopped", nh.describe())
-	if nh.logdb != nil {
-		nh.logdb.Close()
+	if nh.mu.logdb != nil {
+		nh.mu.logdb.Close()
+		nh.mu.logdb = nil
 	} else {
 		plog.Warningf("logdb is nil")
 	}
@@ -1022,13 +1028,15 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 // nothing to be reclaimed.
 func (nh *NodeHost) RequestCompaction(clusterID uint64,
 	nodeID uint64) (*SysOpState, error) {
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
 	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		// assume this is a node that has already been removed via RemoveData
-		done, err := nh.logdb.CompactEntriesTo(clusterID, nodeID, math.MaxUint64)
+		done, err := nh.mu.logdb.CompactEntriesTo(clusterID, nodeID, math.MaxUint64)
 		if err != nil {
 			return nil, err
 		}
@@ -1342,24 +1350,20 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 // RemoveData returns ErrClusterNotStopped when the specified node has not been
 // fully offloaded from the NodeHost instance.
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return ErrClosed
-	}
 	n, ok := nh.getCluster(clusterID)
 	if ok && n.nodeID == nodeID {
 		return ErrClusterNotStopped
 	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		return ErrClosed
+	}
 	if nh.engine.nodeLoaded(clusterID, nodeID) {
 		return ErrClusterNotStopped
 	}
 	plog.Debugf("%s called RemoveData", dn(clusterID, nodeID))
-	return nh.removeData(clusterID, nodeID)
-}
-
-func (nh *NodeHost) removeData(clusterID uint64, nodeID uint64) error {
-	if err := nh.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
+	if err := nh.mu.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
 		panic(err)
 	}
 	// mark the snapshot dir as removed
@@ -1392,10 +1396,12 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 // HasNodeInfo returns a boolean value indicating whether the specified node
 // has been bootstrapped on the current NodeHost instance.
 func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return false
 	}
-	if _, err := nh.logdb.GetBootstrapInfo(clusterID, nodeID); err != nil {
+	if _, err := nh.mu.logdb.GetBootstrapInfo(clusterID, nodeID); err != nil {
 		if err == raftio.ErrNoBootstrapInfo {
 			return false
 		}
@@ -1408,17 +1414,19 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 // of the NodeHost, this includes details of all Raft clusters managed by the
 // the NodeHost instance.
 func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return &NodeHostInfo{}
-	}
 	nhi := &NodeHostInfo{
 		NodeHostID:      nh.ID(),
 		RaftAddress:     nh.RaftAddress(),
 		Gossip:          nh.getGossipInfo(),
 		ClusterInfoList: nh.getClusterInfo(),
 	}
+	nh.mu.Lock()
+	defer nh.mu.Unlock()
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		return nil
+	}
 	if !opt.SkipLogInfo {
-		logInfo, err := nh.logdb.ListNodeInfo()
+		logInfo, err := nh.mu.logdb.ListNodeInfo()
 		if err != nil {
 			plog.Panicf("failed to list all logs %v", err)
 		}
@@ -1531,7 +1539,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
-	bi, err := nh.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
+	bi, err := nh.mu.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
 	if err == raftio.ErrNoBootstrapInfo {
 		if !join && len(initialMembers) == 0 {
 			return nil, false, ErrClusterNotBootstrapped
@@ -1541,7 +1549,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 			members = initialMembers
 		}
 		bi = pb.NewBootstrapInfo(join, smType, initialMembers)
-		err := nh.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, *bi)
+		err := nh.mu.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, *bi)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1563,9 +1571,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	cfg config.Config, smType pb.StateMachineType) error {
 	clusterID := cfg.ClusterID
 	nodeID := cfg.NodeID
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return ErrClosed
-	}
 	validator := nh.nhConfig.GetTargetValidator()
 	for _, target := range initialMembers {
 		if !validator(target) {
@@ -1579,6 +1584,9 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
+	if atomic.LoadInt32(&nh.closed) != 0 {
+		return ErrClosed
+	}
 	if _, ok := nh.mu.clusters.Load(clusterID); ok {
 		return ErrClusterAlreadyExist
 	}
@@ -1612,7 +1620,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
 	snapshotter := newSnapshotter(clusterID, nodeID,
-		nh.nhConfig, getSnapshotDir, nh.logdb, nh.fs)
+		nh.nhConfig, getSnapshotDir, nh.mu.logdb, nh.fs)
 	if err := snapshotter.processOrphans(); err != nil {
 		panic(err)
 	}
@@ -1632,7 +1640,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		nh.sendMessage,
 		nh.nodes,
 		nh.requestPools[nodeID%requestPoolShards],
-		nh.logdb,
+		nh.mu.logdb,
 		nh.getLogDBMetrics(shard),
 		nh.events.sys)
 	if err != nil {
@@ -1713,7 +1721,7 @@ func (nh *NodeHost) createLogDB() error {
 	if err != nil {
 		return err
 	}
-	nh.logdb = ldb
+	nh.mu.logdb = ldb
 	ver := ldb.BinaryFormat()
 	if err := nh.env.CheckNodeHostDir(nh.nhConfig, ver, name); err != nil {
 		return err
@@ -1979,12 +1987,8 @@ func (nh *NodeHost) describe() string {
 }
 
 func (nh *NodeHost) logNodeHostDetails() {
-	if nh.transport != nil {
-		plog.Infof("transport type: %s", nh.transport.Name())
-	}
-	if nh.logdb != nil {
-		plog.Infof("logdb type: %s", nh.logdb.Name())
-	}
+	plog.Infof("transport type: %s", nh.transport.Name())
+	plog.Infof("logdb type: %s", nh.mu.logdb.Name())
 	plog.Infof("nodehost address: %s", nh.nhConfig.RaftAddress)
 }
 

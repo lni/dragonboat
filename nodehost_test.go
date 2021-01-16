@@ -662,8 +662,8 @@ func TestLogDBCanBeExtended(t *testing.T) {
 		},
 
 		tf: func(nh *NodeHost) {
-			if nh.logdb.Name() != ldb.Name() {
-				t.Errorf("logdb type name %s, expect %s", nh.logdb.Name(), ldb.Name())
+			if nh.mu.logdb.Name() != ldb.Name() {
+				t.Errorf("logdb type name %s, expect %s", nh.mu.logdb.Name(), ldb.Name())
 			}
 		},
 		noElection: true,
@@ -1779,7 +1779,7 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 		},
 		tf: func(nh *NodeHost) {
 			cs := nh.GetNoOPSession(1)
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshotted := false
 			var snapshot pb.Snapshot
 			for i := 0; i < 1000; i++ {
@@ -1961,7 +1961,7 @@ func TestEntryCompression(t *testing.T) {
 			if err != nil {
 				t.Errorf("make proposal failed %v", err)
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			ents, _, err := logdb.IterateEntries(nil, 0, 1, 1, 1, 100, math.MaxUint64)
 			if err != nil {
 				t.Errorf("failed to get entries %v", err)
@@ -2294,7 +2294,7 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, f
 		},
 		tf: func(nh *NodeHost) {
 			session := nh.GetNoOPSession(1)
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshotted := false
 			var ss pb.Snapshot
 			for i := uint64(2); i < 1000; i++ {
@@ -2399,7 +2399,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
-		logdb := nh1.logdb
+		logdb := nh1.mu.logdb
 		snapshotted := false
 		session := nh1.GetNoOPSession(1)
 		for i := uint64(2); i < 1000; i++ {
@@ -2454,7 +2454,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		snapshotted = false
-		logdb = nh2.logdb
+		logdb = nh2.mu.logdb
 		waitForLeaderToBeElected(t, nh2, 1)
 		for i := uint64(2); i < 1000; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
@@ -3141,7 +3141,7 @@ func TestCanOverrideSnapshotOverhead(t *testing.T) {
 			if v.SnapshotIndex() < 16 {
 				t.Fatalf("unexpected snapshot index %d", v.SnapshotIndex())
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			for i := 0; i < 1000; i++ {
 				if i == 999 {
 					t.Fatalf("failed to compact the entries")
@@ -3198,7 +3198,7 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			if !v.Rejected() {
 				t.Errorf("failed to complete the requested snapshot")
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -3409,7 +3409,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if err := nh.StopCluster(1); err != nil {
 				t.Fatalf("failed to stop cluster %v", err)
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -3562,7 +3562,7 @@ func TestSnapshotCanBeExported(t *testing.T) {
 				t.Fatalf("failed to complete the requested snapshot")
 			}
 			index = v.SnapshotIndex()
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -3674,7 +3674,7 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 			if !aborted {
 				t.Fatalf("never aborted")
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -4685,7 +4685,7 @@ func TestV2DataCanBeHandled(t *testing.T) {
 			return c
 		},
 		tf: func(nh *NodeHost) {
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			rs, err := logdb.ReadRaftState(2, 1, 0)
 			if err != nil {
 				t.Fatalf("failed to get raft state %v", err)
@@ -4713,7 +4713,7 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
-			logdb := nh.logdb
+			logdb := nh.mu.logdb
 			ssList, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("failed to list snapshots: %v", err)
@@ -4824,7 +4824,7 @@ func TestWitnessSnapshotIsCorrectlyHandled(t *testing.T) {
 			if witness.GetRecovered() > 0 {
 				t.Fatalf("unexpected recovered count %d", witness.GetRecovered())
 			}
-			snapshots, err := nh2.logdb.ListSnapshots(1, 2, math.MaxUint64)
+			snapshots, err := nh2.mu.logdb.ListSnapshots(1, 2, math.MaxUint64)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
