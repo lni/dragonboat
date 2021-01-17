@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other Dragonboat authors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other contributors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
 
 /*
 Package raftio contains structs, interfaces and function definitions required
-to build customized persistent Raft log storage and transport modules.
+to build custom persistent Raft log storage and transport modules.
 
 Structs, interfaces and functions defined in the raftio package are only
-required when building your customized persistent Raft log storage or transport
-modules. You can safely skip this package if you plan to use the default
-built-in LogDB and transport modules provided by Dragonboat.
+required when building your custom persistent Raft log storage or transport
+modules. Skip this package if you plan to use the default built-in LogDB and
+transport modules provided by Dragonboat.
 
 Structs, interfaces and functions defined in the raftio package are not
 considered as a part of Dragonboat's public APIs. Breaking changes might
