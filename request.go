@@ -1068,7 +1068,7 @@ func (p *proposalShard) propose(session *client.Session,
 		entry.Type = pb.ApplicationEntry
 	} else {
 		entry.Type = pb.EncodedEntry
-		entry.Cmd = prepareProposalPayload(p.cfg.EntryCompressionType, cmd)
+		entry.Cmd = preparePayload(p.cfg.EntryCompressionType, cmd)
 	}
 	req := p.pool.Get().(*RequestState)
 	req.reuse(p.notifyCommit)
@@ -1198,6 +1198,6 @@ func (p *proposalShard) gcAt(now uint64) {
 	}
 }
 
-func prepareProposalPayload(ct config.CompressionType, cmd []byte) []byte {
-	return rsm.GetEncodedPayload(rsm.ToDioType(ct), cmd, nil)
+func preparePayload(ct config.CompressionType, cmd []byte) []byte {
+	return rsm.GetEncoded(rsm.ToDioType(ct), cmd, nil)
 }

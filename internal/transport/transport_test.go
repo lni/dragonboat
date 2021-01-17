@@ -933,14 +933,14 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
 	conns := make([]*Sink, 0)
-	for i := uint32(0); i < maxConnectionCount; i++ {
+	for i := uint64(0); i < maxConnectionCount; i++ {
 		sink := trans.GetStreamSink(100, 2)
 		if sink == nil {
 			t.Errorf("failed to get sink")
 		}
 		conns = append(conns, sink)
 	}
-	for i := uint32(0); i < maxConnectionCount; i++ {
+	for i := uint64(0); i < maxConnectionCount; i++ {
 		if sink := trans.GetStreamSink(100, 2); sink != nil {
 			t.Errorf("connection is not limited")
 		}
@@ -949,7 +949,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 		close(v.j.ch)
 	}
 	for {
-		if atomic.LoadUint32(&trans.jobs) != 0 {
+		if atomic.LoadUint64(&trans.jobs) != 0 {
 			time.Sleep(time.Millisecond)
 		} else {
 			break
@@ -958,7 +958,7 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	breaker := trans.GetCircuitBreaker(serverAddress)
 	breaker.Reset()
 	plog.Infof("circuit breaker for %s is now ready", serverAddress)
-	for i := uint32(0); i < maxConnectionCount; i++ {
+	for i := uint64(0); i < maxConnectionCount; i++ {
 		if sink := trans.GetStreamSink(100, 2); sink == nil {
 			t.Fatalf("failed to get sink again %d", i)
 		}
@@ -1334,13 +1334,13 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	tt, nodes, _, _, _ := newNOOPTestTransport(handler, fs)
 	defer tt.Stop()
 	nodes.Add(100, 2, serverAddress)
-	for i := uint32(0); i < maxConnectionCount; i++ {
+	for i := uint64(0); i < maxConnectionCount; i++ {
 		sink := tt.GetStreamSink(100, 2)
 		if sink == nil {
 			t.Errorf("failed to connect")
 		}
 	}
-	for i := uint32(0); i < 2*maxConnectionCount; i++ {
+	for i := uint64(0); i < 2*maxConnectionCount; i++ {
 		sink := tt.GetStreamSink(100, 2)
 		if sink != nil {
 			t.Errorf("stream connection not limited")
@@ -1349,7 +1349,7 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	failedSnapshotReported := false
 	for i := 0; i < 10000; i++ {
 		count := handler.getFailedSnapshotCount(100, 2)
-		if count != uint64(2*maxConnectionCount) {
+		if count != 2*maxConnectionCount {
 			time.Sleep(time.Millisecond)
 			continue
 		}

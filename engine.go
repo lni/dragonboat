@@ -668,9 +668,6 @@ func (p *workerPool) removeFromPending(idx int) {
 	sz := len(p.pending)
 	copy(p.pending[idx:], p.pending[idx+1:])
 	p.pending = p.pending[:sz-1]
-	if len(p.pending) != sz-1 {
-		panic("len(p.pending) != sz - 1")
-	}
 }
 
 func (p *workerPool) getSaveJob(clusterID uint64) (job, bool) {
@@ -956,9 +953,6 @@ func (p *closeWorkerPool) removeFromPending(idx int) {
 	sz := len(p.pending)
 	copy(p.pending[idx:], p.pending[idx+1:])
 	p.pending = p.pending[:sz-1]
-	if len(p.pending) != sz-1 {
-		panic("len(p.pending) != sz - 1")
-	}
 }
 
 type engine struct {
@@ -1158,13 +1152,13 @@ func (e *engine) loadApplyNodes(workerID uint64, cci uint64,
 	return e.load(workerID, cci, nodes, fromApplyWorker, e.applyWorkReady)
 }
 
-// T: take snapshot
+// S: save snapshot
 // R: recover from snapshot
 // existing op, new op, action
-// T, T, ignore the new op
-// T, R, R is queued as node state, will be handled when T is done
+// S, S, ignore the new op
+// S, R, R is queued as node state, will be handled when S is done
 // R, R, won't happen, when in R state, processApplies will not process the node
-// R, T, won't happen, when in R state, processApplies will not process the node
+// R, S, won't happen, when in R state, processApplies will not process the node
 
 func (e *engine) processApplies(idmap map[uint64]struct{},
 	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {

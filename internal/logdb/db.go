@@ -145,16 +145,16 @@ func (r *db) listNodeInfo() ([]raftio.NodeInfo, error) {
 }
 
 func (r *db) readRaftState(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64) (*raftio.RaftState, error) {
+	nodeID uint64, snapshotIndex uint64) (raftio.RaftState, error) {
 	firstIndex, length, err := r.getRange(clusterID, nodeID, snapshotIndex)
 	if err != nil {
-		return nil, err
+		return raftio.RaftState{}, err
 	}
 	state, err := r.getState(clusterID, nodeID)
 	if err != nil {
-		return nil, err
+		return raftio.RaftState{}, err
 	}
-	return &raftio.RaftState{
+	return raftio.RaftState{
 		State:      state,
 		FirstIndex: firstIndex,
 		EntryCount: length,
@@ -322,10 +322,10 @@ func (r *db) saveBootstrapInfo(clusterID uint64,
 }
 
 func (r *db) getBootstrapInfo(clusterID uint64,
-	nodeID uint64) (*pb.Bootstrap, error) {
+	nodeID uint64) (pb.Bootstrap, error) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
-	bootstrap := &pb.Bootstrap{}
+	bootstrap := pb.Bootstrap{}
 	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return raftio.ErrNoBootstrapInfo
@@ -335,7 +335,7 @@ func (r *db) getBootstrapInfo(clusterID uint64,
 		}
 		return nil
 	}); err != nil {
-		return nil, err
+		return pb.Bootstrap{}, err
 	}
 	return bootstrap, nil
 }
@@ -407,11 +407,11 @@ func (r *db) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	return maxIndex, nil
 }
 
-func (r *db) getState(clusterID uint64, nodeID uint64) (*pb.State, error) {
+func (r *db) getState(clusterID uint64, nodeID uint64) (pb.State, error) {
 	k := r.keys.get()
 	defer k.Release()
 	k.SetStateKey(clusterID, nodeID)
-	hs := &pb.State{}
+	hs := pb.State{}
 	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return raftio.ErrNoSavedLog
@@ -421,7 +421,7 @@ func (r *db) getState(clusterID uint64, nodeID uint64) (*pb.State, error) {
 		}
 		return nil
 	}); err != nil {
-		return nil, err
+		return pb.State{}, err
 	}
 	return hs, nil
 }
@@ -474,8 +474,7 @@ func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }
 
-func (r *db) saveEntries(updates []pb.Update,
-	wb kv.IWriteBatch, ctx IContext) {
+func (r *db) saveEntries(updates []pb.Update, wb kv.IWriteBatch, ctx IContext) {
 	for _, ud := range updates {
 		if len(ud.EntriesToSave) > 0 {
 			mi := r.entries.record(wb, ud.ClusterID, ud.NodeID, ctx, ud.EntriesToSave)

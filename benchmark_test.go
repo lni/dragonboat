@@ -71,7 +71,7 @@ func benchmarkEncodedPayload(b *testing.B, ct dio.CompressionType, sz uint64) {
 	rand.Read(input)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rsm.GetEncodedPayload(ct, input, nil)
+		rsm.GetEncoded(ct, input, nil)
 	}
 }
 
@@ -628,7 +628,7 @@ func (n *noopSink) ToNodeID() uint64              { return 1 }
 
 func BenchmarkChunkWriter(b *testing.B) {
 	sink := &noopSink{}
-	meta := &rsm.SSMeta{}
+	meta := rsm.SSMeta{}
 	cw := rsm.NewChunkWriter(sink, meta)
 	sz := int64(1024 * 256)
 	data := make([]byte, sz)
@@ -645,7 +645,7 @@ func BenchmarkChunkWriter(b *testing.B) {
 
 func BenchmarkSnappyCompressedChunkWriter(b *testing.B) {
 	sink := &noopSink{}
-	meta := &rsm.SSMeta{}
+	meta := rsm.SSMeta{}
 	cw := rsm.NewChunkWriter(sink, meta)
 	w := snappy.NewBufferedWriter(cw)
 	sz := int64(1024 * 256)

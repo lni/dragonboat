@@ -49,8 +49,8 @@ func (s *testSink) ToNodeID() uint64 {
 	return 300
 }
 
-func getTestSSMeta() *SSMeta {
-	return &SSMeta{
+func getTestSSMeta() SSMeta {
+	return SSMeta{
 		Index: 1000,
 		Term:  5,
 		From:  150,

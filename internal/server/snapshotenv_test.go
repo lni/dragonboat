@@ -118,7 +118,7 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	reportLeakedFD(fs, t)
 }
 
-func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv), fs vfs.IFS) {
+func runEnvTest(t *testing.T, f func(t *testing.T, env SSEnv), fs vfs.IFS) {
 	rd := "server-pkg-test-data-safe-to-delete"
 	defer func() {
 		if err := fs.RemoveAll(rd); err != nil {
@@ -140,7 +140,7 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env *SSEnv), fs vfs.IFS) {
 }
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
-	tf := func(t *testing.T, env *SSEnv) {
+	tf := func(t *testing.T, env SSEnv) {
 		if err := env.renameToFinalDir(); err != nil {
 			t.Errorf("failed to rename dir, %v", err)
 		}
@@ -150,7 +150,7 @@ func TestRenameTempDirToFinalDir(t *testing.T) {
 }
 
 func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
-	tf := func(t *testing.T, env *SSEnv) {
+	tf := func(t *testing.T, env SSEnv) {
 		if env.finalDirExists() {
 			t.Errorf("final dir already exist")
 		}
@@ -170,7 +170,7 @@ func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 }
 
 func TestFlagFileExists(t *testing.T) {
-	tf := func(t *testing.T, env *SSEnv) {
+	tf := func(t *testing.T, env SSEnv) {
 		if env.finalDirExists() {
 			t.Errorf("final dir already exist")
 		}
@@ -194,7 +194,7 @@ func TestFlagFileExists(t *testing.T) {
 }
 
 func TestFinalizeSnapshotCanComplete(t *testing.T) {
-	tf := func(t *testing.T, env *SSEnv) {
+	tf := func(t *testing.T, env SSEnv) {
 		m := &pb.Message{}
 		if err := env.FinalizeSnapshot(m); err != nil {
 			t.Errorf("failed to finalize snapshot %v", err)
@@ -211,7 +211,7 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 }
 
 func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
-	tf := func(t *testing.T, env *SSEnv) {
+	tf := func(t *testing.T, env SSEnv) {
 		finalDir := env.GetFinalDir()
 		if err := env.fs.MkdirAll(finalDir, 0755); err != nil {
 			t.Fatalf("%v", err)

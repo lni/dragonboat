@@ -29,7 +29,7 @@ func TestGetEntryPayload(t *testing.T) {
 	e3payload := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}
 	e3 := pb.Entry{
 		Type: pb.EncodedEntry,
-		Cmd:  GetEncodedPayload(dio.Snappy, e3payload, make([]byte, 512)),
+		Cmd:  GetEncoded(dio.Snappy, e3payload, make([]byte, 512)),
 	}
 	if !bytes.Equal(e1.Cmd, GetPayload(e1)) {
 		t.Errorf("e1 payload changed")
@@ -76,7 +76,7 @@ func TestGetV0EncodedPayload(t *testing.T) {
 		} else {
 			dst = make([]byte, tt.dst)
 		}
-		result := GetEncodedPayload(tt.ct, src, dst)
+		result := GetEncoded(tt.ct, src, dst)
 		ver, ct, hasSession := parseEncodedHeader(result)
 		if ver != EEV0 {
 			t.Errorf("invalid version number %d", ver)

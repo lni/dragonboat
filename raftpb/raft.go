@@ -212,8 +212,8 @@ func (e *Entry) IsUpdateEntry() bool {
 
 // NewBootstrapInfo creates and returns a new bootstrap record.
 func NewBootstrapInfo(join bool,
-	smType StateMachineType, nodes map[uint64]string) *Bootstrap {
-	bootstrap := &Bootstrap{
+	smType StateMachineType, nodes map[uint64]string) Bootstrap {
+	bootstrap := Bootstrap{
 		Join:      join,
 		Addresses: make(map[uint64]string),
 		Type:      smType,

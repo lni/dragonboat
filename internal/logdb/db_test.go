@@ -16,6 +16,7 @@ package logdb
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -115,12 +116,8 @@ func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		bootstrap, err := db.GetBootstrapInfo(1, 2)
-		if err != raftio.ErrNoBootstrapInfo {
+		if _, err := db.GetBootstrapInfo(1, 2); err != raftio.ErrNoBootstrapInfo {
 			t.Errorf("unexpected error %v", err)
-		}
-		if bootstrap != nil {
-			t.Errorf("not nil value")
 		}
 	}
 	runLogDBTest(t, tf, fs)
@@ -523,7 +520,7 @@ func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 	if err != nil {
 		t.Errorf("failed to read")
 	}
-	if rs.State == nil {
+	if reflect.DeepEqual(rs.State, raftio.RaftState{}) {
 		t.Errorf("failed to get hs")
 	}
 	if rs.State.Term != 2 ||
@@ -1394,12 +1391,8 @@ func TestRemoveNodeData(t *testing.T) {
 		if len(snapshots) != 0 {
 			t.Fatalf("snapshot not deleted")
 		}
-		bs, err := db.GetBootstrapInfo(clusterID, nodeID)
-		if err != raftio.ErrNoBootstrapInfo {
+		if _, err := db.GetBootstrapInfo(clusterID, nodeID); err != raftio.ErrNoBootstrapInfo {
 			t.Fatalf("failed to delete bootstrap %v", err)
-		}
-		if bs != nil {
-			t.Fatalf("bs not nil")
 		}
 		ents, sz, err := db.IterateEntries(nil, 0, clusterID, nodeID, 0,
 			math.MaxUint64, math.MaxUint64)
@@ -1479,7 +1472,7 @@ func TestImportSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("raft state not deleted %v", err)
 		}
-		if state == nil {
+		if reflect.DeepEqual(state, raftio.RaftState{}) {
 			t.Fatalf("failed to get raft state")
 		}
 		if state.State.Commit != snapshots[0].Index {
@@ -1498,7 +1491,7 @@ func TestImportSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("raft state not deleted %v", err)
 		}
-		if state == nil {
+		if reflect.DeepEqual(state, raftio.RaftState{}) {
 			t.Fatalf("failed to get raft state")
 		}
 		if state.FirstIndex != snapshots[0].Index {

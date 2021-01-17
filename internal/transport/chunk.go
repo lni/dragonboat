@@ -348,7 +348,7 @@ func (c *Chunk) save(chunk pb.Chunk) (err error) {
 	return nil
 }
 
-func (c *Chunk) getEnv(chunk pb.Chunk) *server.SSEnv {
+func (c *Chunk) getEnv(chunk pb.Chunk) server.SSEnv {
 	return server.NewSSEnv(c.dir, chunk.ClusterId, chunk.NodeId,
 		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }

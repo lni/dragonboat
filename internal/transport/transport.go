@@ -148,6 +148,8 @@ type ITransportEvent interface {
 
 type failedSend uint64
 
+type nodeMap map[raftio.NodeInfo]struct{}
+
 const (
 	success failedSend = iota
 	circuitBreakerNotReady
@@ -180,7 +182,7 @@ type Transport struct {
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	jobs         uint32
+	jobs         uint64
 	chunks       *Chunk
 	metrics      *transportMetrics
 	env          *server.Env
@@ -253,7 +255,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		return float64(len(t.mu.queues))
 	}
 	ssCount := func() float64 {
-		return float64(atomic.LoadUint32(&t.jobs))
+		return float64(atomic.LoadUint64(&t.jobs))
 	}
 	t.metrics = newTransportMetrics(true, msgConn, ssCount)
 	return t, nil
@@ -333,8 +335,7 @@ func (t *Transport) snapshotReceived(clusterID uint64,
 	t.msgHandler.HandleSnapshot(clusterID, nodeID, from)
 }
 
-func (t *Transport) notifyUnreachable(addr string,
-	affected map[raftio.NodeInfo]struct{}) {
+func (t *Transport) notifyUnreachable(addr string, affected nodeMap) {
 	plog.Warningf("%s became unreachable, affected %d nodes", addr, len(affected))
 	for n := range affected {
 		t.msgHandler.HandleUnreachable(n.ClusterID, n.NodeID)
@@ -395,7 +396,7 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 			t.mu.Unlock()
 		}
 		t.stopper.RunWorker(func() {
-			affected := make(map[raftio.NodeInfo]struct{})
+			affected := make(nodeMap)
 			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from, affected) {
 				t.notifyUnreachable(addr, affected)
 			}
@@ -417,9 +418,13 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 // connectAndProcess returns a boolean value indicating whether it is stopped
 // gracefully when the system is being shutdown
 func (t *Transport) connectAndProcess(clusterID uint64,
-	toNodeID uint64, remoteHost string, sq sendQueue, from uint64,
-	affected map[raftio.NodeInfo]struct{}) bool {
-	affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: from}] = struct{}{}
+	toNodeID uint64, remoteHost string, sq sendQueue,
+	from uint64, affected nodeMap) bool {
+	n := raftio.NodeInfo{
+		ClusterID: clusterID,
+		NodeID:    from,
+	}
+	affected[n] = struct{}{}
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -434,7 +439,7 @@ func (t *Transport) connectAndProcess(clusterID uint64,
 		defer conn.Close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
-			plog.Infof("%s, message stream to %s (%s) established",
+			plog.Debugf("%s, message stream to %s (%s) established",
 				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
 			t.sysEvents.ConnectionEstablished(remoteHost, false)
 		}
@@ -452,7 +457,7 @@ func (t *Transport) connectAndProcess(clusterID uint64,
 
 func (t *Transport) processMessages(clusterID uint64,
 	toNodeID uint64, sq sendQueue, conn raftio.IConnection,
-	affected map[raftio.NodeInfo]struct{}) error {
+	affected nodeMap) error {
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
 	sz := uint64(0)
@@ -470,12 +475,14 @@ func (t *Transport) processMessages(clusterID uint64,
 		case <-idleTimer.C:
 			return nil
 		case req := <-sq.ch:
-			affected[raftio.NodeInfo{ClusterID: clusterID, NodeID: req.From}] = struct{}{}
+			n := raftio.NodeInfo{
+				ClusterID: clusterID,
+				NodeID:    req.From,
+			}
+			affected[n] = struct{}{}
 			sq.decrease(req)
 			sz += uint64(req.SizeUpperLimit())
 			requests = append(requests, req)
-			// batch below allows multiple requests to be sent in a single message,
-			// then each request can have multiple log entries.
 			for done := false; !done && sz < maxMsgBatchSize; {
 				select {
 				case req = <-sq.ch:

@@ -45,8 +45,8 @@ import (
 )
 
 var (
-	snapshotChunkSize         = settings.SnapshotChunkSize
-	maxConnectionCount uint32 = uint32(settings.Soft.MaxSnapshotConnections)
+	snapshotChunkSize  = settings.SnapshotChunkSize
+	maxConnectionCount = settings.Soft.MaxSnapshotConnections
 )
 
 // SendSnapshot asynchronously sends raft snapshot message to its target.
@@ -75,7 +75,7 @@ func (t *Transport) getStreamSink(clusterID uint64, nodeID uint64) *Sink {
 		return nil
 	}
 	if !t.GetCircuitBreaker(addr).Ready() {
-		plog.Errorf("circuit breaker for %s is not ready", addr)
+		plog.Warningf("circuit breaker for %s is not ready", addr)
 		return nil
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
@@ -89,7 +89,7 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 	toNodeID := m.To
 	clusterID := m.ClusterId
 	if m.Type != pb.InstallSnapshot {
-		panic("non-snapshot message received by ASyncSendSnapshot")
+		panic("not a snapshot message")
 	}
 	chunks := splitSnapshotMessage(m, t.fs)
 	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
@@ -111,9 +111,9 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 
 func (t *Transport) createJob(key raftio.NodeInfo,
 	addr string, streaming bool, sz int) *job {
-	if v := atomic.AddUint32(&t.jobs, 1); v > maxConnectionCount {
-		r := atomic.AddUint32(&t.jobs, ^uint32(0))
-		plog.Errorf("job count is rate limited %d", r)
+	if v := atomic.AddUint64(&t.jobs, 1); v > maxConnectionCount {
+		r := atomic.AddUint64(&t.jobs, ^uint64(0))
+		plog.Warningf("job count is rate limited %d", r)
 		return nil
 	}
 	job := newJob(t.ctx, key.ClusterID, key.NodeID, t.nhConfig.GetDeploymentID(),
@@ -121,7 +121,7 @@ func (t *Transport) createJob(key raftio.NodeInfo,
 	job.postSend = t.postSend
 	job.preSend = t.preSend
 	shutdown := func() {
-		atomic.AddUint32(&t.jobs, ^uint32(0))
+		atomic.AddUint64(&t.jobs, ^uint64(0))
 	}
 	t.stopper.RunWorker(func() {
 		t.processSnapshot(job, addr)
@@ -147,7 +147,7 @@ func (t *Transport) processSnapshot(c *job, addr string) {
 		defer c.close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
-			plog.Infof("snapshot stream to %s (%s) established",
+			plog.Debugf("snapshot stream to %s (%s) established",
 				dn(clusterID, nodeID), addr)
 			t.sysEvents.ConnectionEstablished(addr, true)
 		}

@@ -138,14 +138,14 @@ func (t *LogDB) SaveBootstrapInfo(clusterID uint64,
 
 // GetBootstrapInfo ...
 func (t *LogDB) GetBootstrapInfo(clusterID uint64,
-	nodeID uint64) (*pb.Bootstrap, error) {
+	nodeID uint64) (pb.Bootstrap, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	ob, oe := t.odb.GetBootstrapInfo(clusterID, nodeID)
 	nb, ne := t.ndb.GetBootstrapInfo(clusterID, nodeID)
 	assertSameError(oe, ne)
 	if oe != nil {
-		return nil, oe
+		return pb.Bootstrap{}, oe
 	}
 	if !reflect.DeepEqual(ob, nb) {
 		plog.Panicf("conflict GetBootstrapInfo values, %+v, %+v", ob, nb)
@@ -188,14 +188,14 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 
 // ReadRaftState ...
 func (t *LogDB) ReadRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (*raftio.RaftState, error) {
+	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	os, oe := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
 	ns, ne := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
 	assertSameError(oe, ne)
 	if oe != nil {
-		return nil, oe
+		return raftio.RaftState{}, oe
 	}
 	if !reflect.DeepEqual(os, ns) {
 		plog.Panicf("conflict ReadRaftState values, %+v, %+v", os, ns)

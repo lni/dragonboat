@@ -176,7 +176,7 @@ func (s *ShardedDB) SaveRaftStateCtx(updates []pb.Update, ctx IContext) error {
 
 // ReadRaftState returns the persistent state of the specified raft node.
 func (s *ShardedDB) ReadRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (*raftio.RaftState, error) {
+	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
 	idx := s.partitioner.GetPartitionID(clusterID)
 	return s.shards[idx].readRaftState(clusterID, nodeID, lastIndex)
 }
@@ -227,7 +227,7 @@ func (s *ShardedDB) SaveBootstrapInfo(clusterID uint64,
 
 // GetBootstrapInfo returns the saved bootstrap info for the given node.
 func (s *ShardedDB) GetBootstrapInfo(clusterID uint64,
-	nodeID uint64) (*pb.Bootstrap, error) {
+	nodeID uint64) (pb.Bootstrap, error) {
 	idx := s.partitioner.GetPartitionID(clusterID)
 	return s.shards[idx].getBootstrapInfo(clusterID, nodeID)
 }

@@ -43,7 +43,7 @@ type NodeInfo struct {
 // RaftState is the persistent Raft state found in the Log DB.
 type RaftState struct {
 	// State is the Raft state persistent to the disk
-	State *pb.State
+	State pb.State
 	// FirstIndex is the index of the first entry to iterate
 	FirstIndex uint64
 	// EntryCount is the number of entries to iterate
@@ -74,7 +74,7 @@ type ILogDB interface {
 	// GetBootstrapInfo returns saved bootstrap info from log DB. It returns
 	// ErrNoBootstrapInfo when there is no previously saved bootstrap info for
 	// the specified node.
-	GetBootstrapInfo(clusterID uint64, nodeID uint64) (*pb.Bootstrap, error)
+	GetBootstrapInfo(clusterID uint64, nodeID uint64) (pb.Bootstrap, error)
 	// SaveRaftState atomically saves the Raft states, log entries and snapshots
 	// metadata found in the pb.Update list to the log DB.
 	SaveRaftState(updates []pb.Update, shardID uint64) error
@@ -87,7 +87,7 @@ type ILogDB interface {
 		high uint64, maxSize uint64) ([]pb.Entry, uint64, error)
 	// ReadRaftState returns the persistented raft state found in Log DB.
 	ReadRaftState(clusterID uint64,
-		nodeID uint64, lastIndex uint64) (*RaftState, error)
+		nodeID uint64, lastIndex uint64) (RaftState, error)
 	// RemoveEntriesTo removes entries associated with the specified Raft node up
 	// to the specified index.
 	RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error

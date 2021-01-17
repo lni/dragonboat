@@ -427,8 +427,8 @@ func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                  {
 func (n *noopLogDB) SaveBootstrapInfo(clusterID uint64, nodeID uint64, bs pb.Bootstrap) error {
 	return nil
 }
-func (n *noopLogDB) GetBootstrapInfo(clusterID uint64, nodeID uint64) (*pb.Bootstrap, error) {
-	return nil, nil
+func (n *noopLogDB) GetBootstrapInfo(clusterID uint64, nodeID uint64) (pb.Bootstrap, error) {
+	return pb.Bootstrap{}, nil
 }
 func (n *noopLogDB) SaveRaftState(updates []pb.Update, workerID uint64) error { return nil }
 func (n *noopLogDB) IterateEntries(ents []pb.Entry,
@@ -437,8 +437,8 @@ func (n *noopLogDB) IterateEntries(ents []pb.Entry,
 	return nil, 0, nil
 }
 func (n *noopLogDB) ReadRaftState(clusterID uint64, nodeID uint64,
-	lastIndex uint64) (*raftio.RaftState, error) {
-	return nil, nil
+	lastIndex uint64) (raftio.RaftState, error) {
+	return raftio.RaftState{}, nil
 }
 func (n *noopLogDB) RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error { return nil }
 func (n *noopLogDB) CompactEntriesTo(clusterID uint64,
@@ -2891,6 +2891,7 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 			t.Fatalf("failed to observe rate limited")
 		}
 		if makeTestProposal(nh1, 1000) {
+			plog.Infof("rate limit lifted, all good")
 			return
 		}
 		t.Fatalf("failed to make proposal again")
@@ -3490,7 +3491,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if err != raftio.ErrNoBootstrapInfo {
 				t.Fatalf("failed to delete bootstrap %v", err)
 			}
-			if bs != nil {
+			if !reflect.DeepEqual(bs, pb.Bootstrap{}) {
 				t.Fatalf("bs not nil")
 			}
 			ents, sz, err := logdb.IterateEntries(nil, 0, 1, 1, 0,
@@ -4105,8 +4106,8 @@ type chunkReceiver interface {
 	Add(chunk pb.Chunk) bool
 }
 
-func getTestSSMeta() *rsm.SSMeta {
-	return &rsm.SSMeta{
+func getTestSSMeta() rsm.SSMeta {
+	return rsm.SSMeta{
 		Index: 1000,
 		Term:  5,
 		From:  150,

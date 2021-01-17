@@ -67,16 +67,17 @@ func ToDioType(ct config.CompressionType) dio.CompressionType {
 	return ct
 }
 
-// GetEncodedPayload returns the encoded payload using the specified
-// compression type and the default encoded entry version.
-func GetEncodedPayload(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
+// GetEncoded returns the encoded payload using the specified compression type
+// and the default encoded entry version.
+func GetEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
 	if len(cmd) == 0 {
 		panic("empty payload")
 	}
-	return getV0EncodedPayload(ct, cmd, dst)
+	return getEncoded(ct, cmd, dst)
 }
 
-func getV0EncodedPayload(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
+// get v0 encoded payload
+func getEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
 	if ct == dio.NoCompression {
 		// output is 1 byte header, len(cmd) bytes of payload
 		if len(dst) < len(cmd)+1 {

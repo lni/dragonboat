@@ -154,7 +154,7 @@ func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 
 func (j *job) process() error {
 	if j.conn == nil {
-		panic("trying to process on nil ch, not connected?")
+		panic("nil connection")
 	}
 	if j.streaming {
 		err := j.streamSnapshot()
@@ -178,8 +178,8 @@ func (j *job) streamSnapshot() error {
 				return ErrStreamSnapshot
 			}
 			if err := j.sendChunk(chunk, j.conn); err != nil {
-				plog.Errorf("streaming snapshot chunk to %s failed",
-					dn(chunk.ClusterId, chunk.NodeId))
+				plog.Errorf("streaming snapshot chunk to %s failed, %v",
+					dn(chunk.ClusterId, chunk.NodeId), err)
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
@@ -235,11 +235,9 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 func (j *job) sendChunk(c pb.Chunk,
 	conn raftio.ISnapshotConnection) error {
 	if f := j.preSend.Load(); f != nil {
-		plog.Debugf("pre stream chunk send set")
 		updated, shouldSend := f.(StreamChunkSendFunc)(c)
-		plog.Debugf("shoudSend: %t", shouldSend)
 		if !shouldSend {
-			plog.Debugf("not sending the chunk!")
+			plog.Debugf("chunk to %s skipped", dn(c.ClusterId, c.NodeId))
 			return errChunkSendSkipped
 		}
 		return conn.SendChunk(updated)

@@ -20,7 +20,6 @@ import (
 
 	"github.com/lni/goutils/logutil"
 
-	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
@@ -41,8 +40,9 @@ func compressionType(ct pb.CompressionType) dio.CompressionType {
 	} else if ct == pb.Snappy {
 		return dio.Snappy
 	} else {
-		panic("unknown compression type")
+		plog.Panicf("unknown compression type: %d", ct)
 	}
+	panic("will never reach here")
 }
 
 var (
@@ -54,7 +54,6 @@ var (
 
 type snapshotter struct {
 	root      server.SnapshotDirFunc
-	nhConfig  config.NodeHostConfig
 	dir       string
 	clusterID uint64
 	nodeID    uint64
@@ -65,11 +64,9 @@ type snapshotter struct {
 var _ rsm.ISnapshotter = (*snapshotter)(nil)
 
 func newSnapshotter(clusterID uint64, nodeID uint64,
-	nhConfig config.NodeHostConfig, root server.SnapshotDirFunc,
-	ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
+	root server.SnapshotDirFunc, ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
 	return &snapshotter{
 		root:      root,
-		nhConfig:  nhConfig,
 		dir:       root(clusterID, nodeID),
 		logdb:     ldb,
 		clusterID: clusterID,
@@ -91,7 +88,7 @@ func (s *snapshotter) Shrunk(ss pb.Snapshot) (bool, error) {
 }
 
 func (s *snapshotter) Stream(streamable rsm.IStreamable,
-	meta *rsm.SSMeta, sink pb.IChunkSink) error {
+	meta rsm.SSMeta, sink pb.IChunkSink) error {
 	ct := compressionType(meta.CompressionType)
 	cw := dio.NewCompressor(ct, rsm.NewChunkWriter(sink, meta))
 	if err := streamable.Stream(meta.Ctx, cw); err != nil {
@@ -102,7 +99,7 @@ func (s *snapshotter) Stream(streamable rsm.IStreamable,
 }
 
 func (s *snapshotter) Save(savable rsm.ISavable,
-	meta *rsm.SSMeta) (ss pb.Snapshot, env *server.SSEnv, err error) {
+	meta rsm.SSMeta) (ss pb.Snapshot, env server.SSEnv, err error) {
 	env = s.getCustomEnv(meta)
 	if err := env.CreateTempDir(); err != nil {
 		return pb.Snapshot{}, env, err
@@ -135,7 +132,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	if err != nil {
 		return pb.Snapshot{}, env, err
 	}
-	ss = pb.Snapshot{
+	return pb.Snapshot{
 		ClusterId:   s.clusterID,
 		Filepath:    env.GetFilepath(),
 		Membership:  meta.Membership,
@@ -145,8 +142,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		Files:       fs,
 		Dummy:       dummy,
 		Type:        meta.Type,
-	}
-	return ss, env, nil
+	}, env, nil
 }
 
 func (s *snapshotter) Load(ss pb.Snapshot,
@@ -216,7 +212,7 @@ func (s *snapshotter) IsNoSnapshotError(e error) bool {
 }
 
 func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
-	env := s.getCustomEnv(&rsm.SSMeta{
+	env := s.getCustomEnv(rsm.SSMeta{
 		Index:   ss.Index,
 		Request: req,
 	})
@@ -238,7 +234,8 @@ func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
 }
 
 func (s *snapshotter) getFilePath(index uint64) string {
-	return s.getEnv(index).GetFilepath()
+	env := s.getEnv(index)
+	return env.GetFilepath()
 }
 
 func (s *snapshotter) shrink(shrinkTo uint64) error {
@@ -249,17 +246,17 @@ func (s *snapshotter) shrink(shrinkTo uint64) error {
 	plog.Debugf("%s has %d snapshots to shrink", s.id(), len(snapshots))
 	for idx, ss := range snapshots {
 		if ss.Index > shrinkTo {
-			plog.Panicf("unexpected snapshot found %v, shrink to %d", ss, shrinkTo)
+			plog.Panicf("snapshot index %d, shrink to %d", ss.Index, shrinkTo)
 		}
 		if !ss.Dummy && !ss.Witness {
 			env := s.getEnv(ss.Index)
 			fp := env.GetFilepath()
-			shrinkedFp := env.GetShrinkedFilepath()
+			shrunk := env.GetShrinkedFilepath()
 			plog.Debugf("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
-			if err := rsm.ShrinkSnapshot(fp, shrinkedFp, s.fs); err != nil {
+			if err := rsm.ShrinkSnapshot(fp, shrunk, s.fs); err != nil {
 				return err
 			}
-			if err := rsm.ReplaceSnapshot(shrinkedFp, fp, s.fs); err != nil {
+			if err := rsm.ReplaceSnapshot(shrunk, fp, s.fs); err != nil {
 				return err
 			}
 		}
@@ -331,7 +328,8 @@ func (s *snapshotter) processOrphans() error {
 					return err
 				}
 			} else {
-				if err := s.getEnv(ss.Index).RemoveFlagFile(); err != nil {
+				env := s.getEnv(ss.Index)
+				if err := env.RemoveFlagFile(); err != nil {
 					return err
 				}
 			}
@@ -351,27 +349,29 @@ func (s *snapshotter) remove(index uint64) error {
 	if err := s.logdb.DeleteSnapshot(s.clusterID, s.nodeID, index); err != nil {
 		return err
 	}
-	return s.getEnv(index).RemoveFinalDir()
+	env := s.getEnv(index)
+	return env.RemoveFinalDir()
 }
 
 func (s *snapshotter) removeFlagFile(index uint64) error {
-	return s.getEnv(index).RemoveFlagFile()
+	env := s.getEnv(index)
+	return env.RemoveFlagFile()
 }
 
-func (s *snapshotter) getEnv(index uint64) *server.SSEnv {
+func (s *snapshotter) getEnv(index uint64) server.SSEnv {
 	return server.NewSSEnv(s.root,
 		s.clusterID, s.nodeID, index, s.nodeID, server.SnapshotMode, s.fs)
 }
 
-func (s *snapshotter) getCustomEnv(meta *rsm.SSMeta) *server.SSEnv {
+func (s *snapshotter) getCustomEnv(meta rsm.SSMeta) server.SSEnv {
 	if meta.Request.Exported() {
 		if len(meta.Request.Path) == 0 {
 			plog.Panicf("Path is empty when exporting snapshot")
 		}
-		getPath := func(clusterID uint64, nodeID uint64) string {
+		gp := func(clusterID uint64, nodeID uint64) string {
 			return meta.Request.Path
 		}
-		return server.NewSSEnv(getPath,
+		return server.NewSSEnv(gp,
 			s.clusterID, s.nodeID, meta.Index, s.nodeID, server.SnapshotMode, s.fs)
 	}
 	return s.getEnv(meta.Index)

@@ -127,7 +127,7 @@ type SSEnv struct {
 // NewSSEnv creates and returns a new SSEnv instance.
 func NewSSEnv(f SnapshotDirFunc,
 	clusterID uint64, nodeID uint64, index uint64,
-	from uint64, mode Mode, fs vfs.IFS) *SSEnv {
+	from uint64, mode Mode, fs vfs.IFS) SSEnv {
 	var tmpSuffix string
 	if mode == SnapshotMode {
 		tmpSuffix = genTmpDirSuffix
@@ -136,7 +136,7 @@ func NewSSEnv(f SnapshotDirFunc,
 	}
 	rootDir := f(clusterID, nodeID)
 	fp := fs.PathJoin(getFinalDirName(rootDir, index), getFilename(index))
-	return &SSEnv{
+	return SSEnv{
 		index:    index,
 		rootDir:  rootDir,
 		tmpDir:   getTempDirName(rootDir, tmpSuffix, index, from),

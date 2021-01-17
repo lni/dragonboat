@@ -225,8 +225,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}
-		snapshotter := newSnapshotter(testClusterID, i,
-			config.NodeHostConfig{Expert: config.ExpertConfig{FS: fs}}, rootDirFunc, ldb, fs)
+		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, fs)
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{
@@ -1559,16 +1558,34 @@ func TestPayloadTooBig(t *testing.T) {
 // node states
 //
 
+type dummyPipeline struct{}
+
+func (d *dummyPipeline) setCloseReady(*node)              {}
+func (d *dummyPipeline) setStepReady(clusterID uint64)    {}
+func (d *dummyPipeline) setCommitReady(clusterID uint64)  {}
+func (d *dummyPipeline) setApplyReady(clusterID uint64)   {}
+func (d *dummyPipeline) setStreamReady(clusterID uint64)  {}
+func (d *dummyPipeline) setSaveReady(clusterID uint64)    {}
+func (d *dummyPipeline) setRecoverReady(clusterID uint64) {}
+
 func TestProcessUninitilizedNode(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
-	_, ok := n.uninitializedNodeTask()
-	if !ok {
+	n := &node{ss: &snapshotState{}, pipeline: &dummyPipeline{}}
+	if !n.processUninitializedNodeStatus() {
 		t.Errorf("failed to returned the recover request")
+	}
+	if !n.ss.recovering() {
+		t.Errorf("not in recovering mode")
+	}
+	req, ok := n.ss.getRecoverReq()
+	if !ok {
+		t.Fatalf("failed to set recover req")
+	}
+	if !req.Initial || !req.Recover {
+		t.Errorf("unexpected req")
 	}
 	n2 := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
 	n2.setInitialized()
-	_, ok = n2.uninitializedNodeTask()
-	if ok {
+	if n2.processUninitializedNodeStatus() {
 		t.Errorf("unexpected recover from snapshot request")
 	}
 }

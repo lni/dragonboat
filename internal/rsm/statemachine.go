@@ -64,6 +64,9 @@ const (
 	Streaming
 )
 
+// SSEnv is the snapshot environment type.
+type SSEnv = server.SSEnv
+
 // SSRequest is the type for describing the details of a snapshot request.
 type SSRequest struct {
 	Type               SSReqType
@@ -146,9 +149,9 @@ type INode interface {
 type ISnapshotter interface {
 	GetSnapshot(uint64) (pb.Snapshot, error)
 	GetMostRecentSnapshot() (pb.Snapshot, error)
-	Stream(IStreamable, *SSMeta, pb.IChunkSink) error
+	Stream(IStreamable, SSMeta, pb.IChunkSink) error
 	Shrunk(ss pb.Snapshot) (bool, error)
-	Save(ISavable, *SSMeta) (pb.Snapshot, *server.SSEnv, error)
+	Save(ISavable, SSMeta) (pb.Snapshot, SSEnv, error)
 	Load(pb.Snapshot, ILoadable, IRecoverable) error
 	IsNoSnapshotError(error) bool
 }
@@ -272,7 +275,7 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 
 func (s *StateMachine) mustBeOnDiskSM() {
 	if !s.OnDiskStateMachine() {
-		panic("not an OnDiskStateMachine")
+		panic("not an IOnDiskStateMachine")
 	}
 }
 
@@ -489,7 +492,7 @@ func (s *StateMachine) OnDiskStateMachine() bool {
 }
 
 // Save creates a snapshot.
-func (s *StateMachine) Save(req SSRequest) (pb.Snapshot, *server.SSEnv, error) {
+func (s *StateMachine) Save(req SSRequest) (pb.Snapshot, SSEnv, error) {
 	if req.Streaming() {
 		panic("invalid snapshot request")
 	}
@@ -595,9 +598,9 @@ func (s *StateMachine) logMembership(name string,
 	}
 }
 
-func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
+func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (SSMeta, error) {
 	if s.members.isEmpty() {
-		plog.Panicf("%s has empty membership", s.id())
+		plog.Panicf("%s, empty membership", s.id())
 	}
 	ct := s.sct
 	// never compress dummy snapshot file
@@ -605,7 +608,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 		ct = config.NoCompression
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap))
-	meta := &SSMeta{
+	meta := SSMeta{
 		From:            s.node.NodeID(),
 		Ctx:             c,
 		Index:           s.appliedIndex,
@@ -619,7 +622,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (*SSMeta, error) {
 	}
 	s.logMembership("members", meta.Index, meta.Membership.Addresses)
 	if err := s.sessions.SaveSessions(meta.Session); err != nil {
-		return nil, err
+		return SSMeta{}, err
 	}
 	return meta, nil
 }
@@ -661,7 +664,7 @@ func (s *StateMachine) setLastApplied(entries []pb.Entry) {
 		term := uint64(0)
 		for idx, e := range entries {
 			if e.Index == 0 || e.Term == 0 {
-				plog.Panicf("invalid entry index/term, %v", e)
+				plog.Panicf("invalid entry, %v", e)
 			}
 			if idx == 0 {
 				index = e.Index
@@ -690,7 +693,7 @@ func (s *StateMachine) setLastApplied(entries []pb.Entry) {
 	}
 }
 
-func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
+func (s *StateMachine) checkSnapshotStatus(r SSRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
@@ -699,7 +702,7 @@ func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 		panic("s.index < s.snapshotIndex")
 	}
 	if !s.OnDiskStateMachine() {
-		if !req.Exported() && index > 0 && index == s.snapshotIndex {
+		if !r.Exported() && index > 0 && index == s.snapshotIndex {
 			return raft.ErrSnapshotOutOfDate
 		}
 	}
@@ -708,7 +711,7 @@ func (s *StateMachine) checkSnapshotStatus(req SSRequest) error {
 
 func (s *StateMachine) stream(sink pb.IChunkSink) error {
 	var err error
-	var meta *SSMeta
+	var meta SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
@@ -720,48 +723,47 @@ func (s *StateMachine) stream(sink pb.IChunkSink) error {
 	return s.snapshotter.Stream(s.sm, meta, sink)
 }
 
-func (s *StateMachine) concurrentSave(req SSRequest) (pb.Snapshot,
-	*server.SSEnv, error) {
+func (s *StateMachine) concurrentSave(r SSRequest) (pb.Snapshot, SSEnv, error) {
 	var err error
-	var meta *SSMeta
+	var meta SSMeta
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
-		meta, err = s.prepare(req)
+		meta, err = s.prepare(r)
 		return err
 	}(); err != nil {
-		return pb.Snapshot{}, nil, err
+		return pb.Snapshot{}, SSEnv{}, err
 	}
 	if err := s.sync(); err != nil {
-		return pb.Snapshot{}, nil, err
+		return pb.Snapshot{}, SSEnv{}, err
 	}
 	return s.doSave(meta)
 }
 
-func (s *StateMachine) save(req SSRequest) (pb.Snapshot, *server.SSEnv, error) {
+func (s *StateMachine) save(r SSRequest) (pb.Snapshot, SSEnv, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	meta, err := s.prepare(req)
+	meta, err := s.prepare(r)
 	if err != nil {
 		plog.Errorf("prepare snapshot failed %v", err)
-		return pb.Snapshot{}, nil, err
+		return pb.Snapshot{}, SSEnv{}, err
 	}
 	return s.doSave(meta)
 }
 
-func (s *StateMachine) prepare(req SSRequest) (*SSMeta, error) {
-	if err := s.checkSnapshotStatus(req); err != nil {
-		return nil, err
+func (s *StateMachine) prepare(r SSRequest) (SSMeta, error) {
+	if err := s.checkSnapshotStatus(r); err != nil {
+		return SSMeta{}, err
 	}
 	var err error
 	var ctx interface{}
 	if s.Concurrent() {
 		ctx, err = s.sm.Prepare()
 		if err != nil {
-			return nil, err
+			return SSMeta{}, err
 		}
 	}
-	return s.getSSMeta(ctx, req)
+	return s.getSSMeta(ctx, r)
 }
 
 func (s *StateMachine) sync() error {
@@ -778,8 +780,7 @@ func (s *StateMachine) sync() error {
 	return nil
 }
 
-func (s *StateMachine) doSave(meta *SSMeta) (pb.Snapshot,
-	*server.SSEnv, error) {
+func (s *StateMachine) doSave(meta SSMeta) (pb.Snapshot, SSEnv, error) {
 	ss, env, err := s.snapshotter.Save(s.sm, meta)
 	if err != nil {
 		plog.Errorf("%s snapshotter.Save failed %v", s.id(), err)

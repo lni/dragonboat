@@ -41,11 +41,11 @@ type ChunkWriter struct {
 	chunkID uint64
 	sink    pb.IChunkSink
 	bw      IBlockWriter
-	meta    *SSMeta
+	meta    SSMeta
 }
 
 // NewChunkWriter creates and returns a chunk writer instance.
-func NewChunkWriter(sink pb.IChunkSink, meta *SSMeta) *ChunkWriter {
+func NewChunkWriter(sink pb.IChunkSink, meta SSMeta) *ChunkWriter {
 	cw := &ChunkWriter{
 		sink: sink,
 		meta: meta,

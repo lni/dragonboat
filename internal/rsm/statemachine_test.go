@@ -191,7 +191,7 @@ func (s *testSnapshotter) IsNoSnapshotError(err error) bool {
 }
 
 func (s *testSnapshotter) Stream(streamable IStreamable,
-	meta *SSMeta, sink pb.IChunkSink) error {
+	meta SSMeta, sink pb.IChunkSink) error {
 	writer := NewChunkWriter(sink, meta)
 	defer func() {
 		if err := writer.Close(); err != nil {
@@ -202,7 +202,7 @@ func (s *testSnapshotter) Stream(streamable IStreamable,
 }
 
 func (s *testSnapshotter) Save(savable ISavable,
-	meta *SSMeta) (ss pb.Snapshot, env *server.SSEnv, err error) {
+	meta SSMeta) (ss pb.Snapshot, env SSEnv, err error) {
 	s.index = meta.Index
 	f := func(cid uint64, nid uint64) string {
 		return testSnapshotterDir
@@ -224,7 +224,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	if _, err := savable.Save(&SSMeta{}, cw, session, nil); err != nil {
+	if _, err := savable.Save(SSMeta{}, cw, session, nil); err != nil {
 		return pb.Snapshot{}, env, err
 	}
 	ss = pb.Snapshot{
@@ -413,8 +413,8 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 	tsm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
 	data1 := getTestKVData()
 	data2 := getTestKVData2()
-	encoded1 := GetEncodedPayload(ct, data1, make([]byte, 512))
-	encoded2 := GetEncodedPayload(ct, data2, make([]byte, 512))
+	encoded1 := GetEncoded(ct, data1, make([]byte, 512))
+	encoded2 := GetEncoded(ct, data2, make([]byte, 512))
 	e1 := pb.Entry{
 		Type:     pb.EncodedEntry,
 		ClientID: 123,
@@ -1276,7 +1276,7 @@ func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType, fs vfs.I
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		data := getTestKVData()
-		encoded := GetEncodedPayload(ct, data, make([]byte, 512))
+		encoded := GetEncoded(ct, data, make([]byte, 512))
 		e1 := pb.Entry{
 			Type:     pb.EncodedEntry,
 			ClientID: 123,
@@ -2044,7 +2044,7 @@ func (t *testManagedStateMachine) Sync() error {
 }
 func (t *testManagedStateMachine) GetHash() (uint64, error)      { return 0, nil }
 func (t *testManagedStateMachine) Prepare() (interface{}, error) { return nil, nil }
-func (t *testManagedStateMachine) Save(*SSMeta,
+func (t *testManagedStateMachine) Save(SSMeta,
 	io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error) {
 	return false, nil
 }

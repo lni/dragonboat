@@ -36,7 +36,7 @@ type IStreamable interface {
 
 // ISavable is the interface for types that can its content saved as snapshots.
 type ISavable interface {
-	Save(*SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
+	Save(SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 }
 
 // IRecoverable is the interface for types that can have its state restored from
@@ -64,7 +64,7 @@ type IManagedStateMachine interface {
 	Sync() error
 	GetHash() (uint64, error)
 	Prepare() (interface{}, error)
-	Save(*SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
+	Save(SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 	Recover(io.Reader, []sm.SnapshotFile) error
 	Stream(interface{}, io.Writer) error
 	Offloaded() bool
@@ -250,7 +250,7 @@ func (ds *NativeSM) Prepare() (interface{}, error) {
 }
 
 // Save saves the state of the data store to the specified writer.
-func (ds *NativeSM) Save(meta *SSMeta,
+func (ds *NativeSM) Save(meta SSMeta,
 	w io.Writer, session []byte, c sm.ISnapshotFileCollection) (bool, error) {
 	if ds.config.IsWitness || (ds.sm.OnDisk() && !meta.Request.Exported()) {
 		return true, ds.saveDummy(w, session)

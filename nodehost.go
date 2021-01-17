@@ -412,7 +412,7 @@ func (nh *NodeHost) Stop() {
 	})
 	nh.mu.Lock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
-		panic(ErrClosed)
+		panic("NodeHost.Stop called twice")
 	}
 	atomic.StoreInt32(&nh.closed, 1)
 	nh.mu.Unlock()
@@ -1337,7 +1337,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	}
 	err := nh.RemoveData(clusterID, nodeID)
 	if err == ErrClusterNotStopped {
-		panic("node not stopped")
+		plog.Panicf("invalid destroyed state, node not stopped")
 	}
 	return err
 }
@@ -1549,7 +1549,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 			members = initialMembers
 		}
 		bi = pb.NewBootstrapInfo(join, smType, initialMembers)
-		err := nh.mu.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, *bi)
+		err := nh.mu.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, bi)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1619,9 +1619,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
-	snapshotter := newSnapshotter(clusterID, nodeID,
-		nh.nhConfig, getSnapshotDir, nh.mu.logdb, nh.fs)
-	if err := snapshotter.processOrphans(); err != nil {
+	ss := newSnapshotter(clusterID, nodeID, getSnapshotDir, nh.mu.logdb, nh.fs)
+	if err := ss.processOrphans(); err != nil {
 		panic(err)
 	}
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
@@ -1632,7 +1631,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		cfg,
 		nh.nhConfig,
 		createStateMachine,
-		snapshotter,
+		ss,
 		nh.engine,
 		nh.events.leaderInfoQ,
 		nh.transport.GetStreamSink,
@@ -1973,7 +1972,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 			// stopped
 			return
 		} else {
-			panic("unknown node list change state")
+			plog.Panicf("unknown node list change state, %d, %t", index, ok)
 		}
 	}
 }
