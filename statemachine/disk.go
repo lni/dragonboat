@@ -49,13 +49,14 @@ var (
 //
 // As IOnDiskStateMachine always has most of its state kept on disk by design.
 // Its SaveSnapshot method is thus only invoked on demand when a full snapshot
-// is required to be streamed to a remote node to help it to catch up.
+// is required to be streamed to a remote node.
 //
-// Applications that implement IOnDiskStateMachine are still recommended to
-// setup periodic snapshotting, that only triggers the state machine's
-// metadata to be periodically snapshotted and thus adds negligible overheads
-// to the system. It also provides an opportunities for the system to signal
-// Raft Log compaction to free up disk spaces.
+// Applications that implement IOnDiskStateMachine are recommended to setup
+// periodic snapshotting with relatively short time intervals, that triggers
+// the state machine's metadata, usually only a few KBytes each, to be
+// periodically snapshotted and thus causes negligible overheads for the system.
+// It also provides opportunities for the system to signal Raft Log compactions
+// to free up disk spaces.
 type IOnDiskStateMachine interface {
 	// Open opens the existing on disk state machine to be used or it creates a
 	// new state machine with empty state if it does not exist. Open returns the
@@ -224,14 +225,18 @@ type IOnDiskStateMachine interface {
 	// RecoverFromSnapshot is not required to synchronize its in-core state with
 	// that on disk.
 	RecoverFromSnapshot(io.Reader, <-chan struct{}) error
-	// Close closes the IOnDiskStateMachine instance.
+	// Close closes the IOnDiskStateMachine instance. Close is invoked when the
+	// state machine is in a ready-to-exit state in which there will be no further
+	// call to the Update, Sync, PrepareSnapshot, SaveSnapshot and the
+	// RecoverFromSnapshot method. It is possible to have concurrent Lookup calls,
+	// Lookup can also be called after the return of Close.
 	//
 	// Close allows the application to finalize resources to a state easier to
 	// be re-opened and restarted in the future. It is important to understand
-	// that Close is not guaranteed to be always called, e.g. node can crash at
-	// any time without calling Close. IOnDiskStateMachine should be designed
-	// in a way that the safety and integrity of its on disk data doesn't rely
-	// on whether Close is eventually called or not.
+	// that Close is not guaranteed to be always invoked, e.g. node can crash at
+	// any time without calling the Close method. IOnDiskStateMachine should be
+	// designed in a way that the safety and integrity of its on disk data
+	// doesn't rely on whether Close is eventually called or not.
 	//
 	// Other than setting up some internal flags to indicate that the
 	// IOnDiskStateMachine instance has been closed, the Close method is not

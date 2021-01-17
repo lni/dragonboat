@@ -16,12 +16,13 @@ Note that Pebble provides bidirectional compatibility with RocksDB. Existing Dra
 ### Improvements
 
 - Optimized the read index implementation.
+- Reduced LogDB restart delays.
 - Made LogDB configurations accessible programmatically.
 - Added protobuf workaround to allow Dragonboat and etcd to be used in the same project.
 - Fixed a few data race issues.
 - Fixed a potential Raft election deadlock issue when nodes are highly loaded.
 - Allow incoming proposals to be rate limited when LogDB is busy.
-- Simplified many aspects of the implementation and tests. 
+- Simplified many aspects of the library.
 
 ### Breaking changes
 

@@ -265,8 +265,8 @@ var DefaultSnapshotOption SnapshotOption
 type Target = string
 
 // NodeHost manages Raft clusters and enables them to share resources such as
-// transport and persistent storage etc. NodeHost is also the central access
-// point for Dragonboat functionalities provided to applications.
+// transport and persistent storage etc. NodeHost is also the central thread
+// safe access point for Dragonboat functionalities.
 type NodeHost struct {
 	closed      int32
 	partitioned int32
@@ -404,8 +404,8 @@ func (nh *NodeHost) ID() string {
 	return nh.id.String()
 }
 
-// Stop stops all Raft nodes managed by the NodeHost instance, closes the
-// transport and persistent storage modules.
+// Stop stops all Raft nodes managed by the NodeHost instance, it also closes
+// all internal components such as the transport and LogDB modules.
 func (nh *NodeHost) Stop() {
 	nh.events.sys.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
