@@ -11,17 +11,16 @@
 * 2020-03-05 Dragonboat v3.2 已发布，请查看[CHANGELOG](CHANGELOG.md)获知详情。
 * 2019-07-04 Dragonboat v3.1 已发布，请在升级前仔细阅读[CHANGELOG](CHANGELOG.md)。
 * 2019-06-21 Dragonboat v3.0 已发布，新增基于磁盘的状态机和Go module支持，详见([CHANGELOG](CHANGELOG.md))。
-* 2019-02-20 Dragonboat v2.1 已发布。
 
 ## 关于 ##
-Dragonboat是一个高性能[Go](https://golang.org)实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库。
+Dragonboat是一个高性能纯[Go](https://golang.org)语言实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库。
 
 Raft这样的共识算法使得只要系统中的多数成员在线便可使得系统持续运行。比如，一个拥有5台服务器的Raft集群中即使有两台服务器故障依旧可以工作。它同时向客户端展现一个单机节点，始终提供强一致保证的数据访存。同时，所有在线的成员节点都可用来提供读操作，从而提供更高的读吞吐总和。
 
 所有Raft相关的技术难点都会由Dragonboat来承担，用户从而可以只关注他们各自的应用领域。Dragonboats[使用十分简便](docs/overview.CHS.md)，详细的[例程](https://github.com/lni/dragonboat-example)可使新用户在半小时内完全掌握它。
 
 ## 功能 ##
-* 便于使用的可构建单组与多组Raft应用的API
+* 便于使用的可构建单组与多组Raft应用的纯Go语言API
 * 功能完备的多组Raft协议的实现，同机支持数千Raft组
 * 完备的测试确保[正确性](/docs/test.md)，这包括[Jepsen](https://aphyr.com/tags/jepsen)所带的[Knossos](https://github.com/jepsen-io/knossos)强一致性检查，部分测试日志[在此](https://github.com/lni/knossos-data)
 * 全流水线设计、TLS支持，适合被部署于跨地域的高网络延时公网环境

@@ -11,17 +11,16 @@
 * 2020-03-05 Dragonboat v3.2 has been released, please check [CHANGELOG](CHANGELOG.md) for details.
 * 2019-07-04 Dragonboat v3.1 has been released, please read [CHANGELOG](CHANGELOG.md) before you upgrade.
 * 2019-06-21 Dragonboat v3.0 has been released with on disk state machine and Go module support ([CHANGELOG](CHANGELOG.md)).
-* 2019-02-20 Dragonboat v2.1 has been released.
 
 ## About ##
-Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in [Go](https://golang.org/).
+Dragonboat is a high performance multi-group [Raft](https://raft.github.io/) [consensus](https://en.wikipedia.org/wiki/Consensus_(computer_science)) library in pure [Go](https://golang.org/).
 
-Consensus algorithms such as Raft provides fault-tolerance by alllowing a system continue to operate as long as the majority member servers are available. For example, a Raft cluster of 5 servers can make progress even if 2 servers fail. It also appears to clients as a single node with strong data consistency always provided. All running servers can be used to initiate read requests for aggregated read throughput.
+Consensus algorithms such as Raft provides fault-tolerance by alllowing a system continue to operate as long as the majority member servers are available. For example, a Raft cluster of 5 servers can make progress even if 2 servers fail. It also appears to clients as a single entity with strong data consistency always provided. All Raft replicas can be used to handle read requests for aggregated read throughput.
 
 Dragonboat handles all technical difficulties associated with Raft to allow users to just focus on their application domains. It is also very easy to use, our step-by-step [examples](https://github.com/lni/dragonboat-example) can help new users to master it in half an hour.
 
 ## Features ##
-* Easy to use API for building Raft based applications
+* Easy to use pure-Go APIs for building Raft based applications
 * Feature complete and scalable multi-group Raft implementation
 * Disk based and memory based state machine support
 * Fully pipelined and TLS mutual authentication support, ready for high latency open environment
