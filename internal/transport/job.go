@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	streamingChanLength = 16
+	streamingChanLength = 0
 )
 
 var (
@@ -76,6 +76,7 @@ type job struct {
 	ch           chan pb.Chunk
 	stopc        chan struct{}
 	failed       chan struct{}
+	completed    chan struct{}
 	postSend     atomic.Value
 	preSend      atomic.Value
 	fs           vfs.IFS
@@ -94,6 +95,7 @@ func newJob(ctx context.Context,
 		transport:    transport,
 		stopc:        stopc,
 		failed:       make(chan struct{}),
+		completed:    make(chan struct{}),
 		fs:           fs,
 	}
 	var chsz int
@@ -144,6 +146,11 @@ func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 	select {
 	case j.ch <- chunk:
 		return true, false
+	case <-j.completed:
+		if !chunk.IsPoisonChunk() {
+			plog.Panicf("more chunk received for completed job")
+		}
+		return true, false
 	case <-j.failed:
 		plog.Warningf("stream snapshot to %s failed", dn(j.clusterID, j.nodeID))
 		return false, false
@@ -185,6 +192,7 @@ func (j *job) streamSnapshot() error {
 			if chunk.ChunkCount == pb.LastChunkCount {
 				plog.Debugf("node %d just sent all chunks to %s",
 					chunk.From, dn(chunk.ClusterId, chunk.NodeId))
+				close(j.completed)
 				return nil
 			}
 		}
