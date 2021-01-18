@@ -430,29 +430,27 @@ func (nh *NodeHost) Stop() {
 				logutil.ClusterID(node.ClusterID))
 		}
 	}
-	plog.Debugf("%s is going to stop the nh stopper", nh.describe())
+	plog.Debugf("%s is stopping the nh stopper", nh.describe())
 	nh.stopper.Stop()
-	plog.Debugf("%s is going to stop the exec engine", nh.describe())
 	if nh.nodes != nil {
 		nh.nodes.Stop()
 	}
-	if nh.engine != nil {
-		nh.engine.stop()
-	}
-	plog.Debugf("%s is going to stop the tranport module", nh.describe())
+	plog.Debugf("%s is stopping the tranport module", nh.describe())
 	if nh.transport != nil {
 		nh.transport.Stop()
 	}
-	plog.Debugf("%s transport module stopped", nh.describe())
+	plog.Debugf("%s is stopping the engine module", nh.describe())
+	if nh.engine != nil {
+		nh.engine.stop()
+	}
+	plog.Debugf("%s is stopping the logdb module", nh.describe())
 	if nh.mu.logdb != nil {
 		nh.mu.logdb.Close()
 		nh.mu.logdb = nil
-	} else {
-		plog.Warningf("logdb is nil")
 	}
-	plog.Debugf("logdb closed, %s is now stopped", nh.describe())
+	plog.Infof("%s is stopping the env module", nh.describe())
 	nh.env.Stop()
-	plog.Debugf("env stopped on %s", nh.describe())
+	plog.Debugf("NodeHost %s stopped", nh.describe())
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts

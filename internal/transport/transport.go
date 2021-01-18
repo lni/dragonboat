@@ -489,6 +489,8 @@ func (t *Transport) processMessages(clusterID uint64,
 					sq.decrease(req)
 					sz += uint64(req.SizeUpperLimit())
 					requests = append(requests, req)
+				case <-t.stopper.ShouldStop():
+					return nil
 				default:
 					done = true
 				}
