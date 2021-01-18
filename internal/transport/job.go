@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	streamingChanLength = 0
+	streamingChanLength = 4
 )
 
 var (
