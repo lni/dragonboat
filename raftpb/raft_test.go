@@ -21,27 +21,9 @@ import (
 	"testing"
 	"unsafe"
 
-	proto "github.com/golang/protobuf/proto"
-
 	"github.com/lni/dragonboat/v3/client"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
-
-func TestCanUsedWithEtcd(t *testing.T) {
-	var names = map[int32]string{
-		0: "EntryNormal",
-		1: "EntryConfChange",
-		2: "EntryConfChangeV2",
-	}
-	var values = map[string]int32{
-		"EntryNormal":       0,
-		"EntryConfChange":   1,
-		"EntryConfChangeV2": 2,
-	}
-	// init() need to be commented out in raft.pb.go
-	// otherwise it is going to conflict with the etcd definition
-	proto.RegisterEnum("raftpb.EntryType", names, values)
-}
 
 func TestStateMachineTypeHaveExpectedValues(t *testing.T) {
 	if sm.Type(UnknownStateMachine) != 0 ||
