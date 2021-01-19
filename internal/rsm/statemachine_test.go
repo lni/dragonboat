@@ -339,8 +339,8 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	commit := Task{
 		Entries: []pb.Entry{e1, e2, e3},
 	}
+	sm.lastApplied.index = 234
 	sm.index = 234
-	sm.appliedIndex = 234
 	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
@@ -383,8 +383,8 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 	commit := Task{
 		Entries: []pb.Entry{e1, e2, e3},
 	}
+	sm.lastApplied.index = 234
 	sm.index = 234
-	sm.appliedIndex = 234
 	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
@@ -431,8 +431,8 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 		Index:    237,
 		Term:     1,
 	}
+	tsm.lastApplied.index = 235
 	tsm.index = 235
-	tsm.appliedIndex = 235
 	entries := []pb.Entry{e1, e2}
 	batch := make([]sm.Entry, 0, 8)
 	if err := tsm.handleBatch(entries, batch); err != nil {
@@ -470,8 +470,8 @@ func TestHandleAllocationCount(t *testing.T) {
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
+	sm.lastApplied.index = 1
 	sm.index = 1
-	sm.appliedIndex = 1
 	idx := uint64(1)
 	batch := make([]Task, 0, 8)
 	entries := make([]pb.Entry, 1)
@@ -532,8 +532,8 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	commit := Task{
 		Entries: []pb.Entry{e1, e2, e3},
 	}
+	sm.lastApplied.index = 234
 	sm.index = 234
-	sm.appliedIndex = 234
 	sm.taskQ.Add(commit)
 	// two commits to handle
 	batch := make([]Task, 0, 8)
@@ -580,8 +580,8 @@ func applyConfigChangeEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
+	sm.lastApplied.index = index - 1
 	sm.index = index - 1
-	sm.appliedIndex = index - 1
 	sm.taskQ.Add(commit)
 }
 
@@ -712,10 +712,10 @@ func TestGetSSMeta(t *testing.T) {
 			ConfigChangeId: 12345,
 		}
 		applySessionRegisterEntry(sm, 12345, 789)
+		sm.lastApplied.index = 100
 		sm.index = 100
-		sm.appliedIndex = 100
-		sm.appliedTerm = 101
 		sm.term = 101
+		sm.lastApplied.term = 101
 		meta, err := sm.getSSMeta(make([]byte, 123), SSRequest{})
 		if err != nil {
 			t.Fatalf("get snapshot meta failed %v", err)
@@ -1212,13 +1212,13 @@ func TestHandleSyncTask(t *testing.T) {
 		task2 := Task{
 			PeriodicSync: true,
 		}
-		tsm.index = 100
+		tsm.lastApplied.index = 100
 		tsm.taskQ.Add(task1)
 		tsm.taskQ.Add(task2)
 		if _, err := tsm.Handle(make([]Task, 0), make([]sm.Entry, 0)); err != nil {
 			t.Fatalf("%v", err)
 		}
-		if tsm.index != 100 {
+		if tsm.lastApplied.index != 100 {
 			t.Errorf("index unexpected moved")
 		}
 	}
@@ -1237,8 +1237,8 @@ func TestHandleEmptyEvent(t *testing.T) {
 		commit := Task{
 			Entries: []pb.Entry{e},
 		}
+		sm.lastApplied.index = 233
 		sm.index = 233
-		sm.appliedIndex = 233
 		sm.taskQ.Add(commit)
 		batch := make([]Task, 0, 8)
 		if _, err := sm.Handle(batch, nil); err != nil {
@@ -1288,8 +1288,8 @@ func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType, fs vfs.I
 		commit := Task{
 			Entries: []pb.Entry{e1},
 		}
+		sm.lastApplied.index = 235
 		sm.index = 235
-		sm.appliedIndex = 235
 		sm.taskQ.Add(commit)
 		// two commits to handle
 		batch := make([]Task, 0, 8)
@@ -1336,8 +1336,8 @@ func TestHandleUpate(t *testing.T) {
 		commit := Task{
 			Entries: []pb.Entry{e1, e2},
 		}
+		sm.lastApplied.index = 234
 		sm.index = 234
-		sm.appliedIndex = 234
 		sm.taskQ.Add(commit)
 		// two commits to handle
 		batch := make([]Task, 0, 8)
@@ -1373,8 +1373,8 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		sm.members.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
+		sm.lastApplied.index = 3
 		sm.index = 3
-		sm.appliedIndex = 3
 		hash1, _ := sm.GetHash()
 		ss, _, err := sm.Save(SSRequest{})
 		if err != nil {
@@ -1493,8 +1493,8 @@ func applySessionRegisterEntry(sm *StateMachine,
 	commit := Task{
 		Entries: []pb.Entry{e},
 	}
+	sm.lastApplied.index = index - 1
 	sm.index = index - 1
-	sm.appliedIndex = index - 1
 	sm.taskQ.Add(commit)
 	return e
 }
@@ -1623,8 +1623,8 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		sm.lastApplied.index = 789
 		sm.index = 789
-		sm.appliedIndex = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
 		batch := make([]Task, 0, 8)
 		if _, err := sm.Handle(batch, nil); err != nil {
@@ -1655,8 +1655,8 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
+		sm.lastApplied.index = 789
 		sm.index = 789
-		sm.appliedIndex = 789
 		batch := make([]Task, 0, 8)
 		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
@@ -1988,9 +1988,9 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 	for idx, tt := range tests {
 		sm := &StateMachine{
 			onDiskSM:        tt.onDisk,
-			index:           tt.index,
 			onDiskInitIndex: tt.onDiskInitIndex,
 		}
+		sm.lastApplied.index = tt.index
 		if result := sm.ReadyToStream(); result != tt.ready {
 			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
 		}
@@ -2002,9 +2002,9 @@ func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
 		onDiskSM:        true,
 		onDiskInitIndex: 100,
 		index:           90,
-		term:            5,
-		appliedIndex:    90,
 	}
+	sm.lastApplied.index = 90
+	sm.lastApplied.term = 5
 	ent := pb.Entry{
 		ClientID: 100,
 		Index:    91,
@@ -2099,17 +2099,17 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 	createTestDir(fs)
 	defer removeTestDir(fs)
 	sm := &StateMachine{
-		onDiskSM:     true,
-		sm:           msm,
-		node:         np,
-		index:        100,
-		appliedIndex: 100,
-		term:         5,
-		snapshotter:  newTestSnapshotter(fs),
-		sessions:     NewSessionManager(),
-		members:      newMembership(1, 1, false),
-		fs:           fs,
+		onDiskSM:    true,
+		sm:          msm,
+		node:        np,
+		index:       100,
+		snapshotter: newTestSnapshotter(fs),
+		sessions:    NewSessionManager(),
+		members:     newMembership(1, 1, false),
+		fs:          fs,
 	}
+	sm.lastApplied.index = 100
+	sm.lastApplied.term = 5
 	sm.members.members.Addresses[1] = "a1"
 	ss, _, err := sm.concurrentSave(SSRequest{})
 	if err != nil {
@@ -2132,13 +2132,13 @@ func TestStreamSnapshot(t *testing.T) {
 		onDiskSM:    true,
 		sm:          msm,
 		node:        np,
-		index:       100,
-		term:        5,
 		snapshotter: newTestSnapshotter(fs),
 		sessions:    NewSessionManager(),
 		members:     newMembership(1, 1, false),
 		fs:          fs,
 	}
+	sm.lastApplied.index = 100
+	sm.lastApplied.term = 5
 	sm.members.members.Addresses[1] = "a1"
 	ts := &testSink{
 		chunks: make([]pb.Chunk, 0),
@@ -2185,11 +2185,11 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 			onDiskSM:        true,
 			onDiskInitIndex: tt.onDiskInitIndex,
 			index:           tt.index,
-			appliedIndex:    tt.index,
-			term:            100,
 			sm:              msm,
 			node:            np,
 		}
+		sm.lastApplied.index = tt.index
+		sm.lastApplied.term = 100
 		if err := sm.handleBatch(input, ents); err != nil {
 			t.Fatalf("handle batched entries failed %v", err)
 		}
@@ -2218,11 +2218,11 @@ func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
 	sm := &StateMachine{
 		onDiskSM:        true,
 		onDiskInitIndex: 0,
-		index:           0,
-		term:            100,
 		sm:              msm,
 		node:            np,
 	}
+	sm.lastApplied.index = 0
+	sm.lastApplied.term = 100
 	input := make([]pb.Entry, 0)
 	for i := uint64(1); i <= 10; i++ {
 		input = append(input, pb.Entry{Index: i, Term: 100})
@@ -2245,8 +2245,6 @@ func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
 	sm := &StateMachine{
 		onDiskSM:        true,
 		onDiskInitIndex: 0,
-		index:           0,
-		term:            0,
 		sm:              msm,
 		taskQ:           NewTaskQueue(),
 		node:            np,
@@ -2391,10 +2389,9 @@ func TestSetLastApplied(t *testing.T) {
 		{100, 5, []pb.Entry{{Index: 101, Term: 5}, {Index: 102, Term: 6}}, false},
 	}
 	for idx, tt := range tests {
-		sm := StateMachine{
-			index: tt.index,
-			term:  tt.term,
-		}
+		sm := StateMachine{}
+		sm.lastApplied.index = tt.index
+		sm.lastApplied.term = tt.term
 		func() {
 			defer func() {
 				if r := recover(); r == nil {
@@ -2407,8 +2404,8 @@ func TestSetLastApplied(t *testing.T) {
 			if tt.crash {
 				t.Fatalf("%d, failed to trigger panic", idx)
 			}
-			if sm.index != tt.entries[len(tt.entries)-1].Index ||
-				sm.term != tt.entries[len(tt.entries)-1].Term {
+			if sm.lastApplied.index != tt.entries[len(tt.entries)-1].Index ||
+				sm.lastApplied.term != tt.entries[len(tt.entries)-1].Term {
 				t.Errorf("%d, unexpected index/term", idx)
 			}
 		}()

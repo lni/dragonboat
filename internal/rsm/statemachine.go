@@ -156,25 +156,31 @@ type ISnapshotter interface {
 	IsNoSnapshotError(error) bool
 }
 
-// StateMachine is a manager class that manages application state
-// machine
+// StateMachine is the state machine component in the replicated state machine
+// scheme.
 type StateMachine struct {
-	mu          sync.RWMutex
+	mu sync.RWMutex
+	// lastApplied is the last applied index visibile to other modules in the
+	// system. it is updated by only setting the last index and term values of
+	// the update batch. it is protected by its own mutex to minimize contention
+	// with the update thread
 	lastApplied struct {
 		sync.Mutex
 		index uint64
 		term  uint64
 	}
-	appliedIndex    uint64
-	appliedTerm     uint64
+	// applied index and term values updated for each update entry. they are
+	// primarily used to ensure index values applied into the SM are continuous
+	// and the term values never move backward. they are only accessed when
+	// StateMachine.mu is locked
+	index           uint64
+	term            uint64
 	syncedIndex     uint64
 	snapshotter     ISnapshotter
 	node            INode
 	sm              IManagedStateMachine
 	sessions        *SessionManager
 	members         *membership
-	index           uint64
-	term            uint64
 	snapshotIndex   uint64
 	onDiskInitIndex uint64
 	onDiskIndex     uint64
@@ -364,8 +370,8 @@ func (s *StateMachine) apply(ss pb.Snapshot) {
 	s.members.set(ss.Membership)
 	s.lastApplied.Lock()
 	defer s.lastApplied.Unlock()
+	s.lastApplied.index, s.lastApplied.term = ss.Index, ss.Term
 	s.index, s.term = ss.Index, ss.Term
-	s.appliedIndex, s.appliedTerm = ss.Index, ss.Term
 }
 
 func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
@@ -611,8 +617,8 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (SSMeta, error) {
 	meta := SSMeta{
 		From:            s.node.NodeID(),
 		Ctx:             c,
-		Index:           s.appliedIndex,
-		Term:            s.appliedTerm,
+		Index:           s.index,
+		Term:            s.term,
 		OnDiskIndex:     s.onDiskIndex,
 		Request:         r,
 		Session:         buf,
@@ -631,7 +637,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (SSMeta, error) {
 func (s *StateMachine) GetLastApplied() uint64 {
 	s.lastApplied.Lock()
 	defer s.lastApplied.Unlock()
-	return s.index
+	return s.lastApplied.index
 }
 
 // GetSyncedIndex returns the index value that is known to have been
@@ -648,14 +654,14 @@ func (s *StateMachine) setSyncedIndex(index uint64) {
 }
 
 func (s *StateMachine) setApplied(index uint64, term uint64) {
-	if s.appliedIndex+1 != index {
+	if s.index+1 != index {
 		plog.Panicf("%s, applied index %d, new index %d",
-			s.id(), s.appliedIndex, index)
+			s.id(), s.index, index)
 	}
-	if s.appliedTerm > term {
-		plog.Panicf("%s, applied term %d, new term %d", s.id(), s.appliedTerm, term)
+	if s.term > term {
+		plog.Panicf("%s, applied term %d, new term %d", s.id(), s.term, term)
 	}
-	s.appliedIndex, s.appliedTerm = index, term
+	s.index, s.term = index, term
 }
 
 func (s *StateMachine) setLastApplied(entries []pb.Entry) {
@@ -682,14 +688,14 @@ func (s *StateMachine) setLastApplied(entries []pb.Entry) {
 		}
 		s.lastApplied.Lock()
 		defer s.lastApplied.Unlock()
-		if s.index+1 != entries[0].Index {
+		if s.lastApplied.index+1 != entries[0].Index {
 			plog.Panicf("%s, gap between batches, %d, %d", s.id())
 		}
-		if s.term > entries[0].Term {
+		if s.lastApplied.term > entries[0].Term {
 			plog.Panicf("%s, invalid term", s.id())
 		}
-		s.index = entries[len(entries)-1].Index
-		s.term = entries[len(entries)-1].Term
+		s.lastApplied.index = entries[len(entries)-1].Index
+		s.lastApplied.term = entries[len(entries)-1].Term
 	}
 }
 
