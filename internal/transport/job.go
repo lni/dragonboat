@@ -218,8 +218,13 @@ func (j *job) sendSnapshot() error {
 }
 
 func (j *job) sendChunks(chunks []pb.Chunk) error {
+	chunkData := make([]byte, snapshotChunkSize)
 	for _, chunk := range chunks {
-		chunkData := make([]byte, snapshotChunkSize)
+		select {
+		case <-j.stopc:
+			return ErrStopped
+		default:
+		}
 		chunk.DeploymentId = j.deploymentID
 		if !chunk.Witness {
 			data, err := loadChunkData(chunk, chunkData, j.fs)
