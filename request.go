@@ -1144,15 +1144,13 @@ func (p *proposalShard) takeProposal(clientID uint64,
 }
 
 func (p *proposalShard) committed(clientID uint64, seriesID uint64, key uint64) {
-	ps := p.borrowProposal(clientID, seriesID, key, p.getTick())
-	if ps != nil {
+	if ps := p.borrowProposal(clientID, seriesID, key, p.getTick()); ps != nil {
 		ps.committed()
 	}
 }
 
 func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
-	ps := p.getProposal(clientID, seriesID, key, p.getTick())
-	if ps != nil {
+	if ps := p.getProposal(clientID, seriesID, key, p.getTick()); ps != nil {
 		ps.dropped()
 	}
 }
@@ -1166,8 +1164,7 @@ func (p *proposalShard) applied(clientID uint64,
 	} else {
 		code = requestCompleted
 	}
-	ps := p.getProposal(clientID, seriesID, key, now)
-	if ps != nil {
+	if ps := p.getProposal(clientID, seriesID, key, now); ps != nil {
 		ps.notify(RequestResult{code: code, result: result})
 	}
 	if now != p.expireNotified {

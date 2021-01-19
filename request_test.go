@@ -29,6 +29,44 @@ import (
 	"github.com/lni/goutils/random"
 )
 
+func TestIsTempError(t *testing.T) {
+	tests := []struct {
+		err  error
+		temp bool
+	}{
+		{ErrInvalidOperation, false},
+		{ErrInvalidAddress, false},
+		{ErrInvalidSession, false},
+		{ErrTimeoutTooSmall, false},
+		{ErrPayloadTooBig, false},
+		{ErrSystemBusy, true},
+		{ErrClusterClosed, true},
+		{ErrClusterNotInitialized, true},
+		{ErrTimeout, true},
+		{ErrCanceled, false},
+		{ErrRejected, false},
+		{ErrClusterNotReady, true},
+		{ErrInvalidTarget, false},
+		{ErrInvalidNodeHostID, false},
+		{ErrBadKey, false},
+		{ErrPendingLeaderTransferExist, true},
+		{ErrPendingConfigChangeExist, true},
+		{ErrPendingSnapshotRequestExist, true},
+	}
+	for idx, tt := range tests {
+		if tmp := IsTempError(tt.err); tmp != tt.temp {
+			t.Errorf("%d, IsTempError failed", idx)
+		}
+	}
+}
+
+func TestRequestCodeName(t *testing.T) {
+	code := requestTimeout
+	if code.String() != "RequestTimeout" {
+		t.Errorf("unexpected request code name")
+	}
+}
+
 func TestRequestStateCommitted(t *testing.T) {
 	func() {
 		defer func() {
@@ -54,11 +92,17 @@ func TestRequestStateCommitted(t *testing.T) {
 				t.Errorf("no panic")
 			}
 		}()
-		rs := &RequestState{notifyCommit: true, committedC: make(chan RequestResult, 1)}
+		rs := &RequestState{
+			notifyCommit: true,
+			committedC:   make(chan RequestResult, 1),
+		}
 		rs.committed()
 		rs.committed()
 	}()
-	rs := &RequestState{notifyCommit: true, committedC: make(chan RequestResult, 1)}
+	rs := &RequestState{
+		notifyCommit: true,
+		committedC:   make(chan RequestResult, 1),
+	}
 	rs.committed()
 	select {
 	case cc := <-rs.committedC:
@@ -308,6 +352,17 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	case <-snapshotC:
 	default:
 		t.Errorf("requested snapshot is not pushed")
+	}
+}
+
+func TestPendingSnapshotCanReturnBusy(t *testing.T) {
+	snapshotC := make(chan rsm.SSRequest, 1)
+	ps := newPendingSnapshot(snapshotC)
+	if _, err := ps.request(rsm.UserRequested, "", false, 0, 10); err != nil {
+		t.Errorf("failed to request snapshot")
+	}
+	if _, err := ps.request(rsm.UserRequested, "", false, 0, 10); err != ErrSystemBusy {
+		t.Errorf("failed to return ErrSystemBusy")
 	}
 }
 
@@ -590,6 +645,17 @@ func TestConfigChangeCanBeRequested(t *testing.T) {
 		}
 	default:
 		t.Errorf("expect to return something")
+	}
+}
+
+func TestPendingConfigChangeCanReturnBusy(t *testing.T) {
+	pcc, _ := getPendingConfigChange(false)
+	var cc pb.ConfigChange
+	if _, err := pcc.request(cc, 100); err != nil {
+		t.Errorf("RequestConfigChange failed: %v", err)
+	}
+	if _, err := pcc.request(cc, 100); err != ErrSystemBusy {
+		t.Errorf("failed to return busy: %v", err)
 	}
 }
 
@@ -1162,6 +1228,19 @@ func TestPendingReadIndexCanRead(t *testing.T) {
 		}
 	default:
 		t.Errorf("not expected to be signaled")
+	}
+}
+
+func TestPendingReadIndexCanReturnBusy(t *testing.T) {
+	pri, _ := getPendingReadIndex()
+	for i := 0; i < 6; i++ {
+		_, err := pri.read(100)
+		if i != 5 && err != nil {
+			t.Errorf("failed to do read")
+		}
+		if i == 5 && err != ErrSystemBusy {
+			t.Errorf("failed to return ErrSystemBusy")
+		}
 	}
 }
 

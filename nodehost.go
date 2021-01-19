@@ -1529,11 +1529,11 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 //    join=false and len(nodes) > 0
 // 2. when restarting a node which is a part of the initial cluster members,
 //    for user convenience, we allow the caller not to provide the details of
-//    all initial members. when the initial cluster member info is required,
-//    we need to get the initial member info from somewhere. bootstrap is the
-//    procedure that records such info.
-// 3. the bootstrap record is used as a marker record in our default Log DB
-//    implementation to indicate that a certain node exists there
+//    initial members. when the initial cluster member info is required, however
+//    we still need to get the initial member info from somewhere. bootstrap is
+//    the procedure that records such info.
+// 3. the bootstrap record is used as a marker record in our default LogDB
+//    implementation to indicate that a certain node exists here
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
@@ -1597,7 +1597,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	}
 	peers, im, err := nh.bootstrapCluster(initialMembers, join, cfg, smType)
 	if err == ErrInvalidClusterSettings {
-		return ErrInvalidClusterSettings
+		return err
 	}
 	if err != nil {
 		panic(err)

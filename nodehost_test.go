@@ -4436,7 +4436,7 @@ func TestGossipInfoIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	advertiseAddress := "202.96.1.2:12345"
 	to := &testOption{
-		defaultTestNode: true,
+		noElection: true,
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
 			c.AddressByNodeHostID = true
 			c.Gossip = config.GossipConfig{
@@ -4471,8 +4471,8 @@ func TestLeaderInfoIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
-		tf: func(nh1 *NodeHost) {
-			nhi := nh1.GetNodeHostInfo(DefaultNodeHostInfoOption)
+		tf: func(nh *NodeHost) {
+			nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 			if len(nhi.ClusterInfoList) != 1 {
 				t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
 			}
@@ -4482,14 +4482,14 @@ func TestLeaderInfoIsReported(t *testing.T) {
 			if !nhi.ClusterInfoList[0].IsLeader {
 				t.Errorf("not leader")
 			}
-			pto := pto(nh1)
+			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			if err := nh1.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
+			if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
 				t.Fatalf("failed to add node %v", err)
 			}
 			for i := 0; i < 500; i++ {
-				nhi := nh1.GetNodeHostInfo(DefaultNodeHostInfoOption)
+				nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 				if len(nhi.ClusterInfoList) != 1 {
 					t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
 				}
@@ -5333,6 +5333,39 @@ func TestReadIndexOnClosedNode(t *testing.T) {
 				t.Errorf("ReadIndex on closed node didn't cause error")
 			} else {
 				plog.Infof("%v returned from closed node", err)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestNodeCanNotStartWhenStillLoadedInEngine(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			nodes := make(map[uint64]*node)
+			nodes[2] = &node{clusterID: 2, nodeID: 1}
+			nh.engine.loaded.update(1, fromStepWorker, nodes)
+			if err := nh.startCluster(nil, false, nil,
+				config.Config{ClusterID: 2, NodeID: 1},
+				pb.RegularStateMachine); err != ErrClusterAlreadyExist {
+				t.Errorf("failed to return ErrClusterAlreadyExist, %v", err)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestBootstrapInfoIsValidated(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			if _, _, err := nh.bootstrapCluster(nil, false,
+				config.Config{ClusterID: 1, NodeID: 1},
+				pb.OnDiskStateMachine); err != ErrInvalidClusterSettings {
+				t.Errorf("failed to fail the boostrap, %v", err)
 			}
 		},
 	}
