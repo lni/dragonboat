@@ -11,7 +11,7 @@ Dragonboat v3.3 is a major release that comes with new features and improvements
 - Added the ability to better control memory footprint.
 - Added ARM64/Linux as a new targeted platform.
 
-Note that Pebble provides bidirectional compatibility with RocksDB. Existing Dragonboat applications can upgrade to v3.3 without any conversion.
+Note that Pebble provides bidirectional compatibility with RocksDB v6.2.1. Existing Dragonboat applications can upgrade to v3.3 without any conversion unless a newer version of RocksDB was used. RocksDB v6.4.x has been briefly tested and it seems to be compatible with Pebble as well. 
 
 ### Improvements
 
