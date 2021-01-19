@@ -1456,9 +1456,6 @@ func (nh *NodeHost) propose(s *client.Session,
 	if !v.supportClientSession() && !s.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	// TODO:
-	// check whether using defer in this hot path is going to have noticeable
-	// impact on performance
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
 	nh.engine.setStepReady(s.ClusterID)
 	return req, err

@@ -39,9 +39,6 @@ const (
 	NoNode uint64 = 0
 )
 
-// TODO
-// structs below are not pb generated. move them to a more suitable place?
-
 // SystemCtx is used to identify a ReadIndex operation.
 type SystemCtx struct {
 	Low  uint64
