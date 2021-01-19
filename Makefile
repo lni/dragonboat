@@ -48,11 +48,15 @@ GO=@$(GOEXEC)
 else
 GO=$(GOEXEC)
 endif
-# golang race detector
-# set the RACE environmental variable to 1 to enable it, e.g. RACE=1 make test
+
 ifeq ($(RACE),1)
 RACE_DETECTOR_FLAG=-race
 $(warning "data race detector enabled")
+endif
+
+ifeq ($(COVER),1)
+COVER_FLAG=-coverprofile=coverage.out
+$(warning "coverage enabled, `go tool cover -html=coverage.out` to see results")
 endif
 
 ifneq ($(TEST_TO_RUN),)
@@ -92,7 +96,7 @@ GOCMDTAGS=-tags=$(TESTTAGS)
 endif
 
 TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
-  $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION)
+  $(RACE_DETECTOR_FLAG) $(COVER_FLAG) $(SELECTED_TEST_OPTION)
 .PHONY: dragonboat-test
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
