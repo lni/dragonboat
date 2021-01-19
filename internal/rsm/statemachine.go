@@ -640,6 +640,14 @@ func (s *StateMachine) GetLastApplied() uint64 {
 	return s.lastApplied.index
 }
 
+// SetLastApplied sets the last applied index to the specified value. This
+// method is only used in tests.
+func (s *StateMachine) SetLastApplied(index uint64) {
+	s.lastApplied.Lock()
+	defer s.lastApplied.Unlock()
+	s.lastApplied.index = index
+}
+
 // GetSyncedIndex returns the index value that is known to have been
 // synchronized.
 func (s *StateMachine) GetSyncedIndex() uint64 {
