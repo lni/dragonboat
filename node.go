@@ -356,10 +356,6 @@ func (n *node) requestRemoval() {
 	plog.Debugf("%s called requestRemoval()", n.id())
 }
 
-func (n *node) shouldStop() <-chan struct{} {
-	return n.stopC
-}
-
 func (n *node) concurrentSnapshot() bool {
 	return n.sm.Concurrent()
 }

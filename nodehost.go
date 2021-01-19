@@ -1947,7 +1947,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 		for i, n := range nodes {
 			cases[i] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(n.shouldStop()),
+				Chan: reflect.ValueOf(n.ShouldStop()),
 			}
 		}
 		cases[len(nodes)] = reflect.SelectCase{
