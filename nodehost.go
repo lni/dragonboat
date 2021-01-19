@@ -448,7 +448,7 @@ func (nh *NodeHost) Stop() {
 		nh.mu.logdb.Close()
 		nh.mu.logdb = nil
 	}
-	plog.Infof("%s is stopping the env module", nh.describe())
+	plog.Debugf("%s is stopping the env module", nh.describe())
 	nh.env.Stop()
 	plog.Debugf("NodeHost %s stopped", nh.describe())
 }
