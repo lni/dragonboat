@@ -106,3 +106,34 @@ func TestMoreEntryToApply(t *testing.T) {
 		t.Errorf("entry not limited")
 	}
 }
+
+func TestTaskQueueGetAll(t *testing.T) {
+	t1 := Task{ClusterID: 1}
+	t2 := Task{ClusterID: 2}
+	t3 := Task{ClusterID: 3}
+	tq := NewTaskQueue()
+	all := tq.GetAll()
+	if len(all) != 0 {
+		t.Errorf("unexpected results")
+	}
+	tq.Add(t1)
+	all = tq.GetAll()
+	if len(all) != 1 {
+		t.Fatalf("unexpected results")
+	}
+	if !reflect.DeepEqual(&t1, &all[0]) {
+		t.Fatalf("unexpected task")
+	}
+	tq.Add(t1)
+	tq.Add(t2)
+	tq.Add(t3)
+	all = tq.GetAll()
+	if len(all) != 3 {
+		t.Fatalf("unexpected results")
+	}
+	if !reflect.DeepEqual(&t1, &all[0]) ||
+		!reflect.DeepEqual(&t2, &all[1]) ||
+		!reflect.DeepEqual(&t3, &all[2]) {
+		t.Errorf("unexpected results")
+	}
+}

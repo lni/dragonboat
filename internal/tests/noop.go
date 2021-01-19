@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"sync/atomic"
 	"time"
 
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -27,6 +28,11 @@ import (
 type NoOP struct {
 	MillisecondToSleep uint64
 	NoAlloc            bool
+}
+
+// SetSleep sets the sleep time of the state machine.
+func (n *NoOP) SetSleepTime(v uint64) {
+	atomic.StoreUint64(&n.MillisecondToSleep, v)
 }
 
 // Lookup locally looks up the data.
@@ -41,8 +47,9 @@ func (n *NoOP) NALookup(key []byte) ([]byte, error) {
 
 // Update updates the object.
 func (n *NoOP) Update(data []byte) (sm.Result, error) {
-	if n.MillisecondToSleep > 0 {
-		time.Sleep(time.Duration(n.MillisecondToSleep) * time.Millisecond)
+	sleep := atomic.LoadUint64(&n.MillisecondToSleep)
+	if sleep > 0 {
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
 	}
 	if n.NoAlloc {
 		return sm.Result{Value: uint64(len(data))}, nil

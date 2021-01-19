@@ -1275,7 +1275,8 @@ func createFakeDiskTwoTestNodeHosts(addr1 string, addr2 string,
 }
 
 func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
-	datadir1 string, datadir2 string, fs vfs.IFS) (*NodeHost, *NodeHost, error) {
+	datadir1 string, datadir2 string,
+	fs vfs.IFS) (*NodeHost, *NodeHost, *tests.NoOP, *tests.NoOP, error) {
 	rc := config.Config{
 		ClusterID:       1,
 		ElectionRTT:     3,
@@ -1302,11 +1303,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	}
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	nh2, err := NewNodeHost(nhc2)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	sm1 := &tests.NoOP{}
 	sm2 := &tests.NoOP{}
@@ -1318,11 +1319,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	}
 	rc.NodeID = 1
 	if err := nh1.StartCluster(peers, false, newRSM1, rc); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	rc.NodeID = 2
 	if err := nh2.StartCluster(peers, false, newRSM2, rc); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var leaderNh *NodeHost
 	var followerNh *NodeHost
@@ -1333,22 +1334,23 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 			if leaderID == 1 {
 				leaderNh = nh1
 				followerNh = nh2
-				sm2.MillisecondToSleep = nhc1.RTTMillisecond * 10
+				sm2.SetSleepTime(nhc1.RTTMillisecond * 10)
 			} else {
 				leaderNh = nh2
 				followerNh = nh1
-				sm1.MillisecondToSleep = nhc1.RTTMillisecond * 10
+				sm1.SetSleepTime(nhc1.RTTMillisecond * 10)
 			}
-			return leaderNh, followerNh, nil
+			return leaderNh, followerNh, sm1, sm2, nil
 		}
 		// wait for leader to be elected
 		time.Sleep(100 * time.Millisecond)
 	}
-	return nil, nil, errors.New("failed to get usable nodehosts")
+	return nil, nil, nil, nil, errors.New("failed to get usable nodehosts")
 }
 
 func rateLimitedTwoNodeHostTest(t *testing.T,
-	tf func(t *testing.T, leaderNh *NodeHost, followerNh *NodeHost), fs vfs.IFS) {
+	tf func(t *testing.T, leaderNh *NodeHost, followerNh *NodeHost,
+		n1 *tests.NoOP, n2 *tests.NoOP), fs vfs.IFS) {
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -1361,7 +1363,7 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
 		}
-		nh1, nh2, err := createRateLimitedTwoTestNodeHosts(nodeHostTestAddr1,
+		nh1, nh2, n1, n2, err := createRateLimitedTwoTestNodeHosts(nodeHostTestAddr1,
 			nodeHostTestAddr2, nh1dir, nh2dir, fs)
 		if err != nil {
 			t.Fatalf("failed to create nodehost2 %v", err)
@@ -1370,7 +1372,7 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 			nh1.Stop()
 			nh2.Stop()
 		}()
-		tf(t, nh1, nh2)
+		tf(t, nh1, nh2, n1, n2)
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -2872,10 +2874,11 @@ func TestRateLimitCanBeTriggered(t *testing.T) {
 
 func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 	fs := vfs.GetTestFS()
-	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost,
+		n1 *tests.NoOP, n2 *tests.NoOP) {
 		session := nh1.GetNoOPSession(1)
 		limited := false
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 2000; i++ {
 			pto := pto(nh1)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh1.SyncPropose(ctx, session, make([]byte, 1024))
@@ -2890,7 +2893,9 @@ func TestRateLimitCanUseFollowerFeedback(t *testing.T) {
 		if !limited {
 			t.Fatalf("failed to observe rate limited")
 		}
-		if makeTestProposal(nh1, 1000) {
+		n1.SetSleepTime(0)
+		n2.SetSleepTime(0)
+		if makeTestProposal(nh1, 2000) {
 			plog.Infof("rate limit lifted, all good")
 			return
 		}

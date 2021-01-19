@@ -151,7 +151,7 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 		return nil, err
 	}
 	defer df.Close()
-	buf := &bytes.Buffer{}
+	buf := bytes.NewBuffer(nil)
 	if _, err = io.Copy(buf, df); err != nil {
 		return nil, err
 	}

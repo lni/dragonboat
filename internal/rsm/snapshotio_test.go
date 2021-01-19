@@ -608,3 +608,15 @@ func TestValidateHeader(t *testing.T) {
 		t.Errorf("corrupted header data not reported")
 	}
 }
+
+func TestGetWitnessSnapshot(t *testing.T) {
+	fs := vfs.GetTestFS()
+	if d, err := GetWitnessSnapshot(fs); err != nil {
+		t.Fatalf("failed to get witness snapshot, %v", err)
+	} else {
+		data := GetEmptyLRUSession()
+		if uint64(len(d)) != HeaderSize+uint64(len(data))+20 {
+			t.Errorf("unexpected length, %d, data len %d", len(d), len(data))
+		}
+	}
+}
