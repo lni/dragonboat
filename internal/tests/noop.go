@@ -30,7 +30,7 @@ type NoOP struct {
 	NoAlloc            bool
 }
 
-// SetSleep sets the sleep time of the state machine.
+// SetSleepTime sets the sleep time of the state machine.
 func (n *NoOP) SetSleepTime(v uint64) {
 	atomic.StoreUint64(&n.MillisecondToSleep, v)
 }
