@@ -8,9 +8,8 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
+* 2021-01-20 Dragonboat v3.3 已发布，请查看[CHANGELOG](CHANGELOG.md)获知所有更新情况。
 * 2020-03-05 Dragonboat v3.2 已发布，请查看[CHANGELOG](CHANGELOG.md)获知详情。
-* 2019-07-04 Dragonboat v3.1 已发布，请在升级前仔细阅读[CHANGELOG](CHANGELOG.md)。
-* 2019-06-21 Dragonboat v3.0 已发布，新增基于磁盘的状态机和Go module支持，详见([CHANGELOG](CHANGELOG.md))。
 
 ## 关于 ##
 Dragonboat是一个高性能纯[Go](https://golang.org)语言实现的多组[Raft](https://raft.github.io/) [共识算法](https://en.wikipedia.org/wiki/Consensus_(computer_science))库。
