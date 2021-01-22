@@ -52,10 +52,10 @@ func GetEmptyLRUSession() []byte {
 // lrusession is a session manager that keeps up to size number of client
 // sessions. LRU is the policy for evicting old ones.
 type lrusession struct {
-	sync.Mutex
-	size      uint64
 	sessions  *cache.OrderedCache
+	size      uint64
 	searchKey RaftClientID
+	sync.Mutex
 }
 
 // Newlrusession returns a new lrusession instance that can hold up to size
@@ -161,9 +161,9 @@ func (rec *lrusession) load(reader io.Reader, v SSVersion) error {
 func (rec *lrusession) makeEntry(key RaftClientID,
 	value Session) *cache.Entry {
 	alloc := struct {
-		key   RaftClientID
-		value Session
 		entry cache.Entry
+		value Session
+		key   RaftClientID
 	}{
 		key:   key,
 		value: value,

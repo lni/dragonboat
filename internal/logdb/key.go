@@ -42,9 +42,9 @@ var (
 
 // Key represents keys that are managed by a sync.Pool to be reused.
 type Key struct {
+	pool *sync.Pool
 	data []byte
 	key  []byte
-	pool *sync.Pool
 }
 
 // NewKey creates and returns a new Key instance.

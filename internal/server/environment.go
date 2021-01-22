@@ -76,13 +76,13 @@ const (
 
 // Env is the server environment for NodeHost.
 type Env struct {
-	hostname     string
-	nhid         *id.NodeHostID
-	randomSource random.Source
-	nhConfig     config.NodeHostConfig
-	partitioner  IPartitioner
-	flocks       map[string]io.Closer
 	fs           vfs.IFS
+	randomSource random.Source
+	partitioner  IPartitioner
+	nhid         *id.NodeHostID
+	flocks       map[string]io.Closer
+	hostname     string
+	nhConfig     config.NodeHostConfig
 }
 
 // NewEnv creates and returns a new server Env object.

@@ -142,10 +142,10 @@ func (n *NOOPTransportFactory) Validate(addr string) bool {
 // actually has the ability to exchange messages or snapshots between
 // nodehosts.
 type NOOPTransport struct {
-	connected  uint64
-	tryConnect uint64
 	req        *noopRequest
 	connReq    *noopConnectRequest
+	connected  uint64
+	tryConnect uint64
 }
 
 // NewNOOPTransport creates a new NOOPTransport instance.

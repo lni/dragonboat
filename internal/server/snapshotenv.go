@@ -114,14 +114,14 @@ func getFinalDirName(rootDir string, index uint64) string {
 // SSEnv is the struct used to manage involved directories for taking or
 // receiving snapshots.
 type SSEnv struct {
-	index uint64
+	fs vfs.IFS
 	// rootDir is the parent of all snapshot tmp/final dirs for a specified
 	// raft node
 	rootDir  string
 	tmpDir   string
 	finalDir string
 	filepath string
-	fs       vfs.IFS
+	index    uint64
 }
 
 // NewSSEnv creates and returns a new SSEnv instance.

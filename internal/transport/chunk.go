@@ -46,11 +46,11 @@ func chunkKey(c pb.Chunk) string {
 }
 
 type tracked struct {
+	validator *rsm.SnapshotValidator
+	files     []*pb.SnapshotFile
+	first     pb.Chunk
 	tick      uint64
 	next      uint64
-	first     pb.Chunk
-	files     []*pb.SnapshotFile
-	validator *rsm.SnapshotValidator
 }
 
 type ssLock struct {
@@ -67,18 +67,18 @@ func (l *ssLock) unlock() {
 
 // Chunk managed on the receiving side
 type Chunk struct {
-	did       uint64
-	tick      uint64
-	validate  bool
-	dir       server.SnapshotDirFunc
-	onReceive func(pb.MessageBatch)
-	confirm   func(uint64, uint64, uint64)
+	fs        vfs.IFS
 	tracked   map[string]*tracked
 	locks     map[string]*ssLock
+	dir       server.SnapshotDirFunc
+	confirm   func(uint64, uint64, uint64)
+	onReceive func(pb.MessageBatch)
 	timeout   uint64
+	did       uint64
+	tick      uint64
 	gcTick    uint64
-	fs        vfs.IFS
 	mu        sync.Mutex
+	validate  bool
 }
 
 // NewChunk creates and returns a new snapshot chunks instance.

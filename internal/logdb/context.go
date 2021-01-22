@@ -22,13 +22,13 @@ import (
 // context is an IContext implementation suppose to be owned and used
 // by a single thread throughout its life time.
 type context struct {
-	size    uint64
-	maxSize uint64
+	wb      kv.IWriteBatch
+	key     *Key
 	eb      pb.EntryBatch
 	lb      pb.EntryBatch
-	key     *Key
 	val     []byte
-	wb      kv.IWriteBatch
+	maxSize uint64
+	size    uint64
 }
 
 // newContext creates a new RDB context instance.

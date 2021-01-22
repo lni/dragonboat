@@ -36,12 +36,12 @@ var _ io.WriteCloser = (*ChunkWriter)(nil)
 // ChunkWriter is an io.WriteCloser type that streams snapshot chunks to its
 // intended remote nodes.
 type ChunkWriter struct {
-	failed  bool
-	stopped bool
-	chunkID uint64
 	sink    pb.IChunkSink
 	bw      IBlockWriter
 	meta    SSMeta
+	chunkID uint64
+	failed  bool
+	stopped bool
 }
 
 // NewChunkWriter creates and returns a chunk writer instance.

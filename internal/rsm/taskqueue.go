@@ -28,9 +28,9 @@ var (
 
 // TaskQueue is a queue of tasks to be processed by the state machine.
 type TaskQueue struct {
-	mu    sync.Mutex
 	tasks []Task
 	next  uint64
+	mu    sync.Mutex
 }
 
 // NewTaskQueue creates and returns a new task queue.

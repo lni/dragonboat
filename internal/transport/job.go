@@ -66,20 +66,20 @@ func (s *Sink) ToNodeID() uint64 {
 }
 
 type job struct {
-	clusterID    uint64
-	nodeID       uint64
-	deploymentID uint64
-	streaming    bool
+	conn         raftio.ISnapshotConnection
+	preSend      atomic.Value
+	postSend     atomic.Value
+	fs           vfs.IFS
 	ctx          context.Context
 	transport    raftio.ITransport
-	conn         raftio.ISnapshotConnection
 	ch           chan pb.Chunk
+	completed    chan struct{}
 	stopc        chan struct{}
 	failed       chan struct{}
-	completed    chan struct{}
-	postSend     atomic.Value
-	preSend      atomic.Value
-	fs           vfs.IFS
+	deploymentID uint64
+	nodeID       uint64
+	clusterID    uint64
+	streaming    bool
 }
 
 func newJob(ctx context.Context,

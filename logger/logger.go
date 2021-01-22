@@ -88,9 +88,9 @@ func getILogger(pkgName string, monkey bool) ILogger {
 }
 
 type dragonboatLogger struct {
-	mu           sync.Mutex
 	logger       ILogger
 	pkgName      string
+	mu           sync.Mutex
 	monkeyLogger bool
 }
 
@@ -133,9 +133,9 @@ func (d *dragonboatLogger) Panicf(format string, args ...interface{}) {
 }
 
 type sysLoggers struct {
-	mu            sync.Mutex
 	loggers       map[string]*dragonboatLogger
 	loggerFactory Factory
+	mu            sync.Mutex
 }
 
 func (l *sysLoggers) createILogger(pkgName string) ILogger {

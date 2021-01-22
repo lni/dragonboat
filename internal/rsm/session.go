@@ -47,16 +47,16 @@ func (a *RaftClientID) Compare(b llrb.Comparable) int {
 
 // Session is the session object maintained on the raft side.
 type Session struct {
+	History       map[RaftSeriesID]sm.Result
 	ClientID      RaftClientID
 	RespondedUpTo RaftSeriesID
-	History       map[RaftSeriesID]sm.Result
 }
 
 // v1session is the session type used in v1 snapshot format.
 type v1session struct {
+	History       map[RaftSeriesID]uint64
 	ClientID      RaftClientID
 	RespondedUpTo RaftSeriesID
-	History       map[RaftSeriesID]uint64
 }
 
 func newSession(id RaftClientID) *Session {

@@ -86,10 +86,10 @@ func (r *RateLimiter) RateLimited() bool {
 
 // InMemRateLimiter is the struct used to keep tracking the in memory rate log size.
 type InMemRateLimiter struct {
+	followerSizes map[uint64]followerState
+	rl            RateLimiter
 	tick          uint64
 	tickLimited   uint64
-	rl            RateLimiter
-	followerSizes map[uint64]followerState
 	limited       bool
 }
 

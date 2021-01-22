@@ -28,14 +28,14 @@ var (
 // inMemory is a two stage in memory log storage struct to keep log entries
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
-	shrunk         bool
 	snapshot       *pb.Snapshot
+	rl             *server.InMemRateLimiter
 	entries        []pb.Entry
+	savedTo        uint64
 	markerIndex    uint64
 	appliedToIndex uint64
 	appliedToTerm  uint64
-	savedTo        uint64
-	rl             *server.InMemRateLimiter
+	shrunk         bool
 }
 
 func newInMemory(lastIndex uint64, rl *server.InMemRateLimiter) inMemory {

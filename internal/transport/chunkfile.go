@@ -24,9 +24,9 @@ import (
 // ChunkFile is the snapshot chunk file being transferred.
 type ChunkFile struct {
 	file    vfs.File
-	syncDir bool
-	dir     string
 	fs      vfs.IFS
+	dir     string
+	syncDir bool
 }
 
 // OpenChunkFileForAppend opens the chunk file at fp for appending.

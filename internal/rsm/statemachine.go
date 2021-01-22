@@ -69,11 +69,11 @@ type SSEnv = server.SSEnv
 
 // SSRequest is the type for describing the details of a snapshot request.
 type SSRequest struct {
+	Path               string
 	Type               SSReqType
 	Key                uint64
-	Path               string
-	OverrideCompaction bool
 	CompactionOverhead uint64
+	OverrideCompaction bool
 }
 
 // Exported returns a boolean value indicating whether the snapshot request
@@ -90,31 +90,31 @@ func (r *SSRequest) Streaming() bool {
 
 // SSMeta is the metadata of a snapshot.
 type SSMeta struct {
+	Membership      pb.Membership
+	Ctx             interface{}
+	Session         *bytes.Buffer
+	Request         SSRequest
 	From            uint64
+	OnDiskIndex     uint64
 	Index           uint64
 	Term            uint64
-	OnDiskIndex     uint64 // applied index of IOnDiskStateMachine
-	Request         SSRequest
-	Membership      pb.Membership
 	Type            pb.StateMachineType
-	Session         *bytes.Buffer
-	Ctx             interface{}
 	CompressionType config.CompressionType
 }
 
 // Task describes a task that need to be handled by StateMachine.
 type Task struct {
+	Entries      []pb.Entry
+	SSRequest    SSRequest
 	ClusterID    uint64
 	NodeID       uint64
 	Index        uint64
-	Recover      bool
-	Initial      bool
 	Save         bool
 	Stream       bool
 	PeriodicSync bool
 	NewNode      bool
-	SSRequest    SSRequest
-	Entries      []pb.Entry
+	Recover      bool
+	Initial      bool
 }
 
 // IsSnapshotTask returns a boolean flag indicating whether it is a snapshot
@@ -159,37 +159,34 @@ type ISnapshotter interface {
 // StateMachine is the state machine component in the replicated state machine
 // scheme.
 type StateMachine struct {
-	mu sync.RWMutex
+	node        INode
+	fs          vfs.IFS
+	sm          IManagedStateMachine
+	snapshotter ISnapshotter
+	taskQ       *TaskQueue
+	sessions    *SessionManager
+	members     *membership
 	// lastApplied is the last applied index visibile to other modules in the
 	// system. it is updated by only setting the last index and term values of
 	// the update batch. it is protected by its own mutex to minimize contention
-	// with the update thread
+	// with the update thread.
 	lastApplied struct {
 		sync.Mutex
 		index uint64
 		term  uint64
 	}
-	// applied index and term values updated for each update entry. they are
-	// primarily used to ensure index values applied into the SM are continuous
-	// and the term values never move backward. they are only accessed when
-	// StateMachine.mu is locked
+	// index and term values updated for each applied entry
 	index           uint64
 	term            uint64
-	syncedIndex     uint64
-	snapshotter     ISnapshotter
-	node            INode
-	sm              IManagedStateMachine
-	sessions        *SessionManager
-	members         *membership
 	snapshotIndex   uint64
 	onDiskInitIndex uint64
 	onDiskIndex     uint64
-	taskQ           *TaskQueue
+	syncedIndex     uint64
+	mu              sync.RWMutex
+	sct             config.CompressionType
 	onDiskSM        bool
 	aborted         bool
 	isWitness       bool
-	sct             config.CompressionType
-	fs              vfs.IFS
 }
 
 // NewStateMachine creates a new application state machine object.

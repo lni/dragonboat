@@ -24,8 +24,8 @@ import (
 // Files is a collection of external files specified by the SaveSnapshot
 // method of the state machine type.
 type Files struct {
-	files []*pb.SnapshotFile
 	idmap map[uint64]struct{}
+	files []*pb.SnapshotFile
 }
 
 // NewFileCollection creates and returns a Files instance.

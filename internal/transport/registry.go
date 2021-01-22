@@ -48,10 +48,10 @@ var _ IResolver = (*Registry)(nil)
 // Registry is used to manage all known node addresses in the multi raft system.
 // The transport layer uses this address registry to locate nodes.
 type Registry struct {
-	mu          sync.RWMutex
 	partitioner server.IPartitioner
 	validate    config.TargetValidator
 	addr        map[raftio.NodeInfo]string
+	mu          sync.RWMutex
 }
 
 // NewNodeRegistry returns a new Registry object.

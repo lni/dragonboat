@@ -163,12 +163,12 @@ var (
 // ClusterInfo is a record for representing the state of a Raft cluster based
 // on the knowledge of the local NodeHost instance.
 type ClusterInfo struct {
+	// Nodes is a map of member node IDs to their Raft addresses.
+	Nodes map[uint64]string
 	// ClusterID is the cluster ID of the Raft cluster node.
 	ClusterID uint64
 	// NodeID is the node ID of the Raft cluster node.
 	NodeID uint64
-	// Nodes is a map of member node IDs to their Raft addresses.
-	Nodes map[uint64]string
 	// ConfigChangeIndex is the current config change index of the Raft node.
 	// ConfigChangeIndex is Raft Log index of the last applied membership
 	// change entry.
@@ -189,8 +189,6 @@ type ClusterInfo struct {
 
 // GossipInfo contains details of the gossip service.
 type GossipInfo struct {
-	// Enabled is a boolean flag indicating whether the gossip service is enabled.
-	Enabled bool
 	// AdvertiseAddress is the advertise address used by the gossip service.
 	AdvertiseAddress string
 	// NumOfLiveNodeHosts is the number of current live NodeHost instances known
@@ -199,6 +197,8 @@ type GossipInfo struct {
 	// it means the gossip service doesn't know any other NodeHost instance that
 	// is considered as live.
 	NumOfKnownNodeHosts int
+	// Enabled is a boolean flag indicating whether the gossip service is enabled.
+	Enabled bool
 }
 
 // NodeHostInfo provides info about the NodeHost, including its managed Raft
@@ -232,14 +232,14 @@ var DefaultNodeHostInfoOption NodeHostInfoOption
 // SnapshotOption is the options users can specify when requesting a snapshot
 // to be generated.
 type SnapshotOption struct {
-	// CompactionOverhead is the compaction overhead value to use for the request
-	// snapshot operation when OverrideCompactionOverhead is true. This field is
-	// ignored when exporting a snapshot, that is when Exported is true.
-	CompactionOverhead uint64
 	// ExportPath is the path where the exported snapshot should be stored, it
 	// must point to an existing directory for which the current user has write
 	// permission to it.
 	ExportPath string
+	// CompactionOverhead is the compaction overhead value to use for the request
+	// snapshot operation when OverrideCompactionOverhead is true. This field is
+	// ignored when exporting a snapshot, that is when Exported is true.
+	CompactionOverhead uint64
 	// Exported is a boolean flag indicating whether the snapshot requested to
 	// be generated should be exported. For an exported snapshot, it is users'
 	// responsibility to manage the snapshot files. By default, a requested
@@ -268,34 +268,31 @@ type Target = string
 // transport and persistent storage etc. NodeHost is also the central thread
 // safe access point for Dragonboat functionalities.
 type NodeHost struct {
-	closed      int32
-	partitioned int32
-	mu          struct {
+	mu struct {
 		sync.RWMutex
-		cci   uint64
-		cciCh chan struct{}
-		// clusterID -> *node
+		cci      uint64
+		cciCh    chan struct{}
 		clusters sync.Map
-		// shardID -> *logDBMetrics
-		lm sync.Map
-		// mu must be locked when logdb is accessed from a user goroutine
-		logdb raftio.ILogDB
+		lm       sync.Map
+		logdb    raftio.ILogDB
 	}
 	events struct {
 		leaderInfoQ *leaderInfoQueue
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	env          *server.Env
-	nhConfig     config.NodeHostConfig
-	stopper      *syncutil.Stopper
 	nodes        transport.INodeRegistry
-	requestPools []*sync.Pool
-	engine       *engine
-	transport    transport.ITransport
-	msgHandler   *messageHandler
 	fs           vfs.IFS
+	transport    transport.ITransport
 	id           *id.NodeHostID
+	stopper      *syncutil.Stopper
+	msgHandler   *messageHandler
+	env          *server.Env
+	engine       *engine
+	nhConfig     config.NodeHostConfig
+	requestPools []*sync.Pool
+	partitioned  int32
+	closed       int32
 }
 
 var _ nodeLoader = (*NodeHost)(nil)

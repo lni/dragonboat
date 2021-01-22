@@ -22,19 +22,19 @@ import (
 
 // MessageQueue is the queue used to hold Raft messages.
 type MessageQueue struct {
-	size          uint64
 	ch            chan struct{}
 	rl            *RateLimiter
 	left          []pb.Message
 	right         []pb.Message
 	nodrop        []pb.Message
-	leftInWrite   bool
-	stopped       bool
+	cycle         uint64
+	size          uint64
+	lazyFreeCycle uint64
 	idx           uint64
 	oldIdx        uint64
-	cycle         uint64
-	lazyFreeCycle uint64
 	mu            sync.Mutex
+	stopped       bool
+	leftInWrite   bool
 }
 
 // NewMessageQueue creates a new MessageQueue instance.

@@ -63,9 +63,9 @@ const (
 )
 
 type requestHeader struct {
-	method uint16
 	size   uint64
 	crc    uint32
+	method uint16
 }
 
 // TODO:
@@ -407,14 +407,14 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 // TCP is a TCP based transport module for exchanging raft messages and
 // snapshots between NodeHost instances.
 type TCP struct {
-	nhConfig       config.NodeHostConfig
+	readBucket     *ratelimit.Bucket
 	stopper        *syncutil.Stopper
 	connStopper    *syncutil.Stopper
 	requestHandler raftio.MessageHandler
 	chunkHandler   raftio.ChunkHandler
-	encrypted      bool
-	readBucket     *ratelimit.Bucket
 	writeBucket    *ratelimit.Bucket
+	nhConfig       config.NodeHostConfig
+	encrypted      bool
 }
 
 var _ raftio.ITransport = (*TCP)(nil)

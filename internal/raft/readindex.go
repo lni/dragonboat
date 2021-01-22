@@ -19,10 +19,10 @@ import (
 )
 
 type readStatus struct {
+	confirmed map[uint64]struct{}
+	ctx       raftpb.SystemCtx
 	index     uint64
 	from      uint64
-	ctx       raftpb.SystemCtx
-	confirmed map[uint64]struct{}
 }
 
 // readIndex is the struct that implements the ReadIndex protocol described in

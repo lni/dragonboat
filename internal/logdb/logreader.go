@@ -54,15 +54,15 @@ var dn = logutil.DescribeNode
 // into LogDB. This implementation is influenced by CockroachDB's
 // replicaRaftStorage.
 type LogReader struct {
-	sync.Mutex
+	logdb       raftio.ILogDB
+	snapshot    pb.Snapshot
+	state       pb.State
+	markerIndex uint64
 	clusterID   uint64
 	nodeID      uint64
-	logdb       raftio.ILogDB
-	state       pb.State
-	snapshot    pb.Snapshot
-	markerIndex uint64
 	markerTerm  uint64
 	length      uint64
+	sync.Mutex
 }
 
 var _ raft.ILogDB = (*LogReader)(nil)

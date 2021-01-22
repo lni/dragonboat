@@ -196,42 +196,42 @@ func getLocalStatus(r *raft) Status {
 var dn = logutil.DescribeNode
 
 type raft struct {
-	applied                   uint64
-	nodeID                    uint64
-	clusterID                 uint64
-	term                      uint64
-	vote                      uint64
+	handlers                  [numStates][numMessageTypes]handlerFunc
+	events                    server.IRaftEventListener
+	hasNotAppliedConfigChange func() bool
+	votes                     map[uint64]bool
+	handle                    stepFunc
 	log                       *entryLog
 	rl                        *server.InMemRateLimiter
 	remotes                   map[uint64]*remote
 	observers                 map[uint64]*remote
 	witnesses                 map[uint64]*remote
-	state                     State
-	votes                     map[uint64]bool
-	msgs                      []pb.Message
-	leaderID                  uint64
-	leaderTransferTarget      uint64
-	isLeaderTransferTarget    bool
-	pendingConfigChange       bool
 	readIndex                 *readIndex
-	readyToRead               []pb.ReadyToRead
-	droppedEntries            []pb.Entry
+	matched                   []uint64
+	msgs                      []pb.Message
 	droppedReadIndexes        []pb.SystemCtx
-	quiesce                   bool
-	checkQuorum               bool
-	snapshotting              bool
+	droppedEntries            []pb.Entry
+	readyToRead               []pb.ReadyToRead
+	prevLeader                server.LeaderInfo
+	state                     State
+	leaderTransferTarget      uint64
+	leaderID                  uint64
+	clusterID                 uint64
+	nodeID                    uint64
+	term                      uint64
+	applied                   uint64
+	vote                      uint64
 	tickCount                 uint64
 	electionTick              uint64
 	heartbeatTick             uint64
 	heartbeatTimeout          uint64
 	electionTimeout           uint64
 	randomizedElectionTimeout uint64
-	handlers                  [numStates][numMessageTypes]handlerFunc
-	handle                    stepFunc
-	matched                   []uint64
-	hasNotAppliedConfigChange func() bool
-	events                    server.IRaftEventListener
-	prevLeader                server.LeaderInfo
+	snapshotting              bool
+	checkQuorum               bool
+	quiesce                   bool
+	isLeaderTransferTarget    bool
+	pendingConfigChange       bool
 }
 
 func newRaft(c config.Config, logdb ILogDB) *raft {

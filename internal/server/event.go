@@ -60,9 +60,9 @@ type ReplicationInfo struct {
 
 // ProposalInfo contains info on proposals.
 type ProposalInfo struct {
+	Entries   []pb.Entry
 	ClusterID uint64
 	NodeID    uint64
-	Entries   []pb.Entry
 }
 
 // ReadIndexInfo contains info on read index requests.
@@ -121,11 +121,11 @@ const (
 // SystemEvent is an system event record published by the system that can be
 // handled by a raftio.ISystemEventListener.
 type SystemEvent struct {
+	Address            string
 	Type               SystemEventType
 	ClusterID          uint64
 	NodeID             uint64
-	Address            string
-	SnapshotConnection bool
 	From               uint64
 	Index              uint64
+	SnapshotConnection bool
 }

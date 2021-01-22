@@ -54,10 +54,10 @@ func deepCopyMembership(m pb.Membership) pb.Membership {
 }
 
 type membership struct {
+	members   *pb.Membership
 	clusterID uint64
 	nodeID    uint64
 	ordered   bool
-	members   *pb.Membership
 }
 
 func newMembership(clusterID uint64, nodeID uint64, ordered bool) *membership {

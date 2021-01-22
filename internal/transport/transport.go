@@ -178,28 +178,27 @@ func (dtm *DefaultTransportFactory) Validate(addr string) bool {
 type Transport struct {
 	mu struct {
 		sync.Mutex
-		// each (cluster id, node id) pair has its own queue and breaker
 		queues   map[string]sendQueue
 		breakers map[string]*circuit.Breaker
 	}
-	jobs         uint64
-	chunks       *Chunk
-	metrics      *transportMetrics
-	env          *server.Env
-	nhConfig     config.NodeHostConfig
-	sourceID     string
+	sysEvents    ITransportEvent
+	ctx          context.Context
+	preSendBatch atomic.Value
+	preSend      atomic.Value
+	postSend     atomic.Value
+	msgHandler   IMessageHandler
 	resolver     IResolver
+	trans        raftio.ITransport
+	fs           vfs.IFS
 	stopper      *syncutil.Stopper
 	dir          server.SnapshotDirFunc
-	trans        raftio.ITransport
-	msgHandler   IMessageHandler
-	postSend     atomic.Value
-	preSend      atomic.Value
-	preSendBatch atomic.Value
-	ctx          context.Context
+	env          *server.Env
+	metrics      *transportMetrics
+	chunks       *Chunk
 	cancel       context.CancelFunc
-	sysEvents    ITransportEvent
-	fs           vfs.IFS
+	sourceID     string
+	nhConfig     config.NodeHostConfig
+	jobs         uint64
 }
 
 var _ ITransport = (*Transport)(nil)

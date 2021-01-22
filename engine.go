@@ -78,8 +78,8 @@ type nodeType struct {
 }
 
 type loadedNodes struct {
-	mu    sync.Mutex
 	nodes map[nodeType]map[uint64]*node
+	mu    sync.Mutex
 }
 
 func newLoadedNodes() *loadedNodes {
@@ -127,9 +127,9 @@ func (l *loadedNodes) updateFromLoadedSSNodes(from from,
 
 type workReady struct {
 	partitioner server.IPartitioner
-	count       uint64
 	maps        []*readyCluster
 	channels    []chan struct{}
+	count       uint64
 }
 
 func newWorkReady(count uint64) *workReady {
@@ -226,18 +226,18 @@ func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 }
 
 type job struct {
-	task       rsm.Task
 	node       *node
 	sink       getSink
+	task       rsm.Task
 	instanceID uint64
 	clusterID  uint64
 }
 
 type ssWorker struct {
-	workerID   uint64
 	stopper    *syncutil.Stopper
 	requestC   chan job
 	completedC chan struct{}
+	workerID   uint64
 }
 
 func newSSWorker(workerID uint64, stopper *syncutil.Stopper) *ssWorker {
@@ -310,21 +310,21 @@ func (w *ssWorker) stream(j job) {
 
 type workerPool struct {
 	nh            nodeLoader
-	loaded        *loadedNodes
+	saving        map[uint64]struct{}
 	cciReady      *workReady
 	saveReady     *workReady
 	recoverReady  *workReady
 	streamReady   *workReady
-	workers       []*ssWorker
-	busy          map[uint64]*node    // map of workerID -> *node
-	saving        map[uint64]struct{} // map of clusterID
-	recovering    map[uint64]struct{} // map of clusterID
-	streaming     map[uint64]uint64   // map of clusterID -> target count
-	pending       []job
-	nodes         map[uint64]*node
-	cci           uint64
 	workerStopper *syncutil.Stopper
+	busy          map[uint64]*node
+	loaded        *loadedNodes
+	recovering    map[uint64]struct{}
+	streaming     map[uint64]uint64
+	nodes         map[uint64]*node
 	poolStopper   *syncutil.Stopper
+	pending       []job
+	workers       []*ssWorker
+	cci           uint64
 }
 
 func newWorkerPool(nh nodeLoader,
@@ -738,10 +738,10 @@ type closeReq struct {
 }
 
 type closeWorker struct {
-	workerID   uint64
 	stopper    *syncutil.Stopper
 	requestC   chan closeReq
 	completedC chan struct{}
+	workerID   uint64
 }
 
 func newCloseWorker(workerID uint64, stopper *syncutil.Stopper) *closeWorker {
@@ -778,12 +778,12 @@ func (w *closeWorker) handle(req closeReq) {
 }
 
 type closeWorkerPool struct {
-	workers       []*closeWorker
 	ready         chan closeReq
 	busy          map[uint64]struct{}
-	pending       []*node
 	workerStopper *syncutil.Stopper
 	poolStopper   *syncutil.Stopper
+	workers       []*closeWorker
+	pending       []*node
 }
 
 func newCloseWorkerPool(closeWorkerCount uint64) *closeWorkerPool {

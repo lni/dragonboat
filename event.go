@@ -33,20 +33,20 @@ func WriteHealthMetrics(w io.Writer) {
 }
 
 type raftEventListener struct {
-	clusterID           uint64
-	nodeID              uint64
-	termValue           uint64
+	readIndexDropped    *metrics.Counter
+	proposalDropped     *metrics.Counter
+	replicationRejected *metrics.Counter
 	leaderID            *uint64
-	metrics             bool
+	snapshotRejected    *metrics.Counter
 	queue               *leaderInfoQueue
 	hasLeader           *metrics.Gauge
 	term                *metrics.Gauge
 	campaignLaunched    *metrics.Counter
 	campaignSkipped     *metrics.Counter
-	snapshotRejected    *metrics.Counter
-	replicationRejected *metrics.Counter
-	proposalDropped     *metrics.Counter
-	readIndexDropped    *metrics.Counter
+	termValue           uint64
+	nodeID              uint64
+	clusterID           uint64
+	metrics             bool
 }
 
 var _ server.IRaftEventListener = (*raftEventListener)(nil)

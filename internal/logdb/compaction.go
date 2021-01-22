@@ -21,20 +21,20 @@ import (
 )
 
 type task struct {
+	done      chan struct{}
 	clusterID uint64
 	nodeID    uint64
 	index     uint64
-	done      chan struct{}
 }
 
 type compactionInfo struct {
-	index uint64
 	done  chan struct{}
+	index uint64
 }
 
 type compactions struct {
-	mu       sync.Mutex
 	pendings map[raftio.NodeInfo]compactionInfo
+	mu       sync.Mutex
 }
 
 func newCompactions() *compactions {

@@ -21,10 +21,10 @@ import (
 // OffloadedStatus is used for tracking whether the managed data store has been
 // offloaded from various system components.
 type OffloadedStatus struct {
+	DestroyedC  chan struct{}
 	clusterID   uint64
 	nodeID      uint64
 	loadedCount uint64
-	DestroyedC  chan struct{}
 	destroyed   bool
 }
 

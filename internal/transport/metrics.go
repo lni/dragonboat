@@ -19,18 +19,18 @@ import (
 )
 
 type transportMetrics struct {
-	useMetrics         bool
+	snapshotSent       *metrics.Counter
 	messageConns       *metrics.Gauge
 	snapshotConns      *metrics.Gauge
 	messageDropped     *metrics.Counter
 	messageSent        *metrics.Counter
 	snapshotDropped    *metrics.Counter
-	snapshotSent       *metrics.Counter
 	messageConnFailed  *metrics.Counter
 	snapshotConnFailed *metrics.Counter
 	messageReceived    *metrics.Counter
 	messageRecvDropped *metrics.Counter
 	snapshotReceived   *metrics.Counter
+	useMetrics         bool
 }
 
 func newTransportMetrics(useMetrics bool,

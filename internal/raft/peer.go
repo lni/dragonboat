@@ -49,8 +49,8 @@ import (
 
 // PeerAddress is the basic info for a peer in the Raft cluster.
 type PeerAddress struct {
-	NodeID  uint64
 	Address string
+	NodeID  uint64
 }
 
 // Peer is the interface struct for interacting with the underlying Raft

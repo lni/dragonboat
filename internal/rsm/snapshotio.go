@@ -162,9 +162,9 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 type SnapshotWriter struct {
 	vw   IVWriter
 	file vfs.File
+	fs   vfs.IFS
 	fp   string
 	ct   pb.CompressionType
-	fs   vfs.IFS
 }
 
 // NewSnapshotWriter creates a new snapshot writer instance.

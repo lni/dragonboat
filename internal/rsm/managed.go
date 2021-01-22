@@ -98,12 +98,12 @@ type ManagedStateMachineFactory func(clusterID uint64,
 // NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
 type NativeSM struct {
-	mu     sync.RWMutex
-	config config.Config
-	sm     IStateMachine
-	done   <-chan struct{}
-	ue     []sm.Entry
+	sm   IStateMachine
+	done <-chan struct{}
 	OffloadedStatus
+	ue     []sm.Entry
+	config config.Config
+	mu     sync.RWMutex
 }
 
 var _ IManagedStateMachine = (*NativeSM)(nil)

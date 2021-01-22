@@ -30,21 +30,21 @@ import (
 
 // ShardedDB is a LogDB implementation using sharded rocksdb instances.
 type ShardedDB struct {
-	completedCompactions uint64
-	config               config.LogDBConfig
-	ctxs                 []IContext
-	shards               []*db
 	partitioner          server.IPartitioner
-	compactionCh         chan struct{}
 	compactions          *compactions
 	stopper              *syncutil.Stopper
+	compactionCh         chan struct{}
+	ctxs                 []IContext
+	shards               []*db
+	config               config.LogDBConfig
+	completedCompactions uint64
 }
 
 var _ raftio.ILogDB = (*ShardedDB)(nil)
 
 type shardCallback struct {
-	shard uint64
 	f     config.LogDBCallback
+	shard uint64
 }
 
 func (sc *shardCallback) callback(busy bool) {

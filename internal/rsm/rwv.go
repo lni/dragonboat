@@ -87,9 +87,9 @@ func validateBlock(block []byte, h hash.Hash) bool {
 type BlockWriter struct {
 	h          hash.Hash
 	fh         hash.Hash
+	onNewBlock func(data []byte, crc []byte) error
 	block      []byte
 	blockSize  uint64
-	onNewBlock func(data []byte, crc []byte) error
 	nextStop   uint64
 	written    uint64
 	total      uint64
@@ -193,9 +193,9 @@ func (bw *BlockWriter) processNewBlock(data []byte, crc []byte) error {
 
 type blockReader struct {
 	r         io.Reader
-	t         pb.ChecksumType
-	blockSize uint64
 	block     []byte
+	blockSize uint64
+	t         pb.ChecksumType
 }
 
 // the input reader should be a reader to all blocks, thus the 16 bytes length
@@ -401,8 +401,8 @@ type IVValidator interface {
 }
 
 type v1validator struct {
-	header pb.SnapshotHeader
 	h      hash.Hash
+	header pb.SnapshotHeader
 }
 
 var _ IVValidator = (*v1validator)(nil)
@@ -432,9 +432,9 @@ func (v *v1validator) Validate() bool {
 }
 
 type v2validator struct {
+	h     hash.Hash
 	block []byte
 	total int
-	h     hash.Hash
 }
 
 var _ IVValidator = (*v2validator)(nil)

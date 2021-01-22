@@ -70,58 +70,58 @@ func (l *logDBMetrics) isBusy() bool {
 }
 
 type node struct {
-	clusterID             uint64
-	nodeID                uint64
-	leaderID              uint64
-	instanceID            uint64
-	raftAddress           string
-	config                config.Config
+	clusterInfo           atomic.Value
+	nodeRegistry          transport.INodeRegistry
+	logdb                 raftio.ILogDB
+	pipeline              pipeline
+	getStreamSink         func(uint64, uint64) *transport.Sink
+	ss                    *snapshotState
 	configChangeC         <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
 	toApplyQ              *rsm.TaskQueue
 	toCommitQ             *rsm.TaskQueue
-	mq                    *server.MessageQueue
-	appliedIndex          uint64
-	confirmedIndex        uint64
-	pushedIndex           uint64
-	pipeline              pipeline
-	getStreamSink         func(uint64, uint64) *transport.Sink
+	syncTask              *task
+	metrics               *logDBMetrics
+	stopC                 chan struct{}
+	pendingLeaderTransfer *pendingLeaderTransfer
+	sysEvents             *sysEventListener
+	raftEvents            *raftEventListener
 	handleSnapshotStatus  func(uint64, uint64, bool)
 	sendRaftMessage       func(pb.Message)
 	validateTarget        func(string) bool
 	sm                    *rsm.StateMachine
-	incomingProposals     *entryQueue
+	snapshotLock          *syncutil.Lock
 	incomingReadIndexes   *readIndexQueue
 	pendingProposals      *pendingProposal
 	pendingReadIndexes    *pendingReadIndex
 	pendingConfigChange   *pendingConfigChange
 	pendingSnapshot       *pendingSnapshot
-	pendingLeaderTransfer *pendingLeaderTransfer
-	raftMu                sync.Mutex
+	incomingProposals     *entryQueue
+	initializedC          chan struct{}
 	p                     *raft.Peer
 	logReader             *logdb.LogReader
-	logdb                 raftio.ILogDB
 	snapshotter           *snapshotter
-	nodeRegistry          transport.INodeRegistry
-	stopC                 chan struct{}
-	clusterInfo           atomic.Value
+	mq                    *server.MessageQueue
+	qs                    *quiesceState
+	raftAddress           string
+	config                config.Config
 	currentTick           uint64
 	gcTick                uint64
+	appliedIndex          uint64
+	pushedIndex           uint64
+	confirmedIndex        uint64
 	tickMillisecond       uint64
-	syncTask              *task
-	notifyCommit          bool
-	rateLimited           bool
-	logDBLimited          bool
-	new                   bool
-	closeOnce             sync.Once
-	ss                    *snapshotState
-	qs                    *quiesceState
-	snapshotLock          *syncutil.Lock
-	raftEvents            *raftEventListener
-	sysEvents             *sysEventListener
-	metrics               *logDBMetrics
-	initializedC          chan struct{}
+	clusterID             uint64
+	nodeID                uint64
+	leaderID              uint64
+	instanceID            uint64
 	initializedFlag       uint64
+	closeOnce             sync.Once
+	raftMu                sync.Mutex
+	new                   bool
+	logDBLimited          bool
+	rateLimited           bool
+	notifyCommit          bool
 }
 
 var _ rsm.INode = (*node)(nil)
