@@ -1569,11 +1569,6 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 			return ErrInvalidTarget
 		}
 	}
-	if cfg.SnapshotCompressionType == config.Snappy &&
-		invariants.Is32BitArch() {
-		// see https://github.com/golang/snappy/issues/58
-		plog.Warningf("Golang SNAPPY is known to be buggy on 32bit arch")
-	}
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
