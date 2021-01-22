@@ -69,11 +69,11 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 * x86_64/Linux, x86_64/MacOS或ARM64/Linux, Go 1.15或1.14
 
 ## 开始使用 ##
-__Master是用于开发的非稳定branch。生产环境请使用已发布版本。__如您使用v3.2.x版本，请参考v3.2.x版本的[README.CHS.md](https://github.com/lni/dragonboat/blob/release-3.2/README.CHS.md)。
+__Master是用于开发的非稳定branch。生产环境请使用已发布版本__。如您使用v3.3.x版本，请参考v3.3.x版本的[README.CHS.md](https://github.com/lni/dragonboat/blob/release-3.3/README.CHS.md)。
 
 首先请确保Go 1.14或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
-请在Go程序中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.2.0"添加到您的Go应用的go.mod文件的__require__部分。
+请在Go程序中import __github.com/lni/dragonboat/v3__这个包，同时把"github.com/lni/dragonboat/v3 v3.3.0"添加到您的Go应用的go.mod文件的__require__部分。
 
 [Pebble](https://github.com/cockroachdb/pebble)是默认的用于存储Raft Log的存储引擎。RocksDB与自定义存储引擎的使用方法可参考[这里](docs/storage.CHS.md)。
 

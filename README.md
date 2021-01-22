@@ -68,11 +68,11 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 * x86_64/Linux, x86_64/MacOS or ARM64/Linux, Go 1.15 or 1.14
 
 ## Getting Started ##
-__Master is our unstable branch for development. Please use the latest released versions for any production purposes.__ For Dragonboat v3.2.x, please follow the instructions in v3.2.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.2/README.md). 
+__Master is our unstable branch for development. Please use the latest released versions for any production purposes.__ For Dragonboat v3.3.x, please follow the instructions in v3.3.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.3/README.md). 
 
 Go 1.14 or above with [Go module](https://github.com/golang/go/wiki/Modules) support is required.
 
-To use Dragonboat, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.2.0" to the __require__ section of your project's go.mod file.
+To use Dragonboat, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.3.0" to the __require__ section of your project's go.mod file.
 
 By default, [Pebble](https://github.com/cockroachdb/pebble) is used for storing Raft Logs in Dragonboat. RocksDB and other storage engines are also supported, more info [here](docs/storage.md).
 
