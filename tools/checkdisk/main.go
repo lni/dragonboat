@@ -46,6 +46,7 @@ const (
 
 var clustercount = flag.Int("num-of-clusters", 48, "number of raft clusters")
 var read = flag.Bool("enable-read", false, "enable read")
+var readonly = flag.Bool("read-only", false, "read only")
 var batched = flag.Bool("batched-logdb", false, "use batched logdb")
 var cpupprof = flag.Bool("cpu-profiling", false, "run CPU profiling")
 var mempprof = flag.Bool("mem-profiling", false, "run mem profiling")
@@ -245,36 +246,38 @@ func main() {
 	// keep proposing for 60 seconds
 	stopper := syncutil.NewStopper()
 	results := make([]uint64, *clientcount)
-	for i := uint64(0); i < uint64(*clientcount); i++ {
-		workerID := i
-		stopper.RunWorker(func() {
-			clusterID := (workerID % uint64(*clustercount)) + 1
-			nh := nhList[clusterID-1]
-			cs := nh.GetNoOPSession(clusterID)
-			cmd := make([]byte, 16)
-			results[workerID] = 0
-			for {
-				for j := 0; j < 32; j++ {
-					rs, err := nh.Propose(cs, cmd, 4*time.Second)
-					if err != nil {
-						panic(err)
+	if !*readonly {
+		for i := uint64(0); i < uint64(*clientcount); i++ {
+			workerID := i
+			stopper.RunWorker(func() {
+				clusterID := (workerID % uint64(*clustercount)) + 1
+				nh := nhList[clusterID-1]
+				cs := nh.GetNoOPSession(clusterID)
+				cmd := make([]byte, 16)
+				results[workerID] = 0
+				for {
+					for j := 0; j < 32; j++ {
+						rs, err := nh.Propose(cs, cmd, 4*time.Second)
+						if err != nil {
+							panic(err)
+						}
+						v := <-rs.ResultC()
+						if v.Completed() {
+							results[workerID] = results[workerID] + 1
+							rs.Release()
+						}
 					}
-					v := <-rs.ResultC()
-					if v.Completed() {
-						results[workerID] = results[workerID] + 1
-						rs.Release()
+					select {
+					case <-doneCh:
+						return
+					default:
 					}
 				}
-				select {
-				case <-doneCh:
-					return
-				default:
-				}
-			}
-		})
+			})
+		}
 	}
 	reads := struct{ v uint64 }{}
-	if *read {
+	if *read || *readonly {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			workerID := i
 			stopper.RunWorker(func() {
