@@ -664,15 +664,20 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs
 	if count == 200 {
 		t.Errorf("failed to send the message")
 	}
-	if len(nodes.addr) != 2 {
+	vc := 0
+	nodes.addr.Range(func(k, v interface{}) bool {
+		vc++
+		return true
+	})
+	if vc != 2 {
 		t.Errorf("remote address not updated")
 	}
 	key := raftio.GetNodeInfo(100, 200)
-	v, ok := nodes.addr[key]
+	v, ok := nodes.addr.Load(key)
 	if !ok {
 		t.Errorf("did not record source address")
 	}
-	if v != serverAddress {
+	if v.(string) != serverAddress {
 		t.Errorf("v %s, want %s", v, serverAddress)
 	}
 }

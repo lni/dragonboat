@@ -50,16 +50,12 @@ var _ IResolver = (*Registry)(nil)
 type Registry struct {
 	partitioner server.IPartitioner
 	validate    config.TargetValidator
-	addr        map[raftio.NodeInfo]string
-	mu          sync.RWMutex
+	addr        sync.Map // map of raftio.NodeInfo => string
 }
 
 // NewNodeRegistry returns a new Registry object.
 func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Registry {
-	n := &Registry{
-		validate: v,
-		addr:     make(map[raftio.NodeInfo]string),
-	}
+	n := &Registry{validate: v}
 	if streamConnections > 1 {
 		n.partitioner = server.NewFixedPartitioner(streamConnections)
 	}
@@ -74,14 +70,10 @@ func (n *Registry) Add(clusterID uint64, nodeID uint64, target string) {
 	if n.validate != nil && !n.validate(target) {
 		plog.Panicf("invalid target %s", target)
 	}
-	n.mu.Lock()
-	defer n.mu.Unlock()
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	v, ok := n.addr[key]
-	if !ok {
-		n.addr[key] = target
-	} else {
-		if v != target {
+	v, ok := n.addr.LoadOrStore(key, target)
+	if ok {
+		if v.(string) != target {
 			plog.Panicf("inconsistent target for %s, %s:%s",
 				logutil.DescribeNode(clusterID, nodeID), v, target)
 		}
@@ -97,31 +89,30 @@ func (n *Registry) getConnectionKey(addr string, clusterID uint64) string {
 
 // Remove removes a remote from the node registry.
 func (n *Registry) Remove(clusterID uint64, nodeID uint64) {
-	key := raftio.GetNodeInfo(clusterID, nodeID)
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	delete(n.addr, key)
+	n.addr.Delete(raftio.GetNodeInfo(clusterID, nodeID))
 }
 
 // RemoveCluster removes all nodes info associated with the specified cluster
 func (n *Registry) RemoveCluster(clusterID uint64) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	for k := range n.addr {
-		if k.ClusterID == clusterID {
-			delete(n.addr, k)
+	var toRemove []raftio.NodeInfo
+	n.addr.Range(func(k, v interface{}) bool {
+		ni := k.(raftio.NodeInfo)
+		if ni.ClusterID == clusterID {
+			toRemove = append(toRemove, ni)
 		}
+		return true
+	})
+	for _, v := range toRemove {
+		n.addr.Delete(v)
 	}
 }
 
 // Resolve looks up the Addr of the specified node.
 func (n *Registry) Resolve(clusterID uint64, nodeID uint64) (string, string, error) {
 	key := raftio.GetNodeInfo(clusterID, nodeID)
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	addr, ok := n.addr[key]
+	addr, ok := n.addr.Load(key)
 	if !ok {
 		return "", "", ErrUnknownTarget
 	}
-	return addr, n.getConnectionKey(addr, clusterID), nil
+	return addr.(string), n.getConnectionKey(addr.(string), clusterID), nil
 }
