@@ -28,7 +28,7 @@ Dragonboat handles all technical difficulties associated with Raft to allow user
 * Built-in tool to repair Raft clusters that permanently lost the quorum
 * [Extensively tested](/docs/test.md) including using [Jepsen](https://aphyr.com/tags/jepsen)'s [Knossos](https://github.com/jepsen-io/knossos) linearizability checker, some results are [here](https://github.com/lni/knossos-data)
 
-Most features covered in Diego Ongaro's [Raft thesis](https://ramcloud.stanford.edu/~ongaro/thesis.pdf) have been supported -
+Most features covered in Diego Ongaro's [Raft thesis](https://github.com/ongardie/dissertation/blob/master/stanford.pdf) have been supported -
 * leader election, log replication, snapshotting and log compaction
 * membership change
 * ReadIndex protocol for read-only queries
