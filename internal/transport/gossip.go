@@ -152,7 +152,7 @@ func newGossipManager(nhid string,
 		plog.Errorf("failed to create memberlist, %v", err)
 		return nil, err
 	}
-	seed := make([]string, len(nhConfig.Gossip.Seed)+1)
+	seed := make([]string, 0, len(nhConfig.Gossip.Seed))
 	seed = append(seed, nhConfig.Gossip.Seed...)
 	g := &gossipManager{
 		cfg:     cfg,
