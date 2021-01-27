@@ -17,6 +17,7 @@ package transport
 import (
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/memberlist"
@@ -93,6 +94,42 @@ func (n *NodeHostIDRegistry) Resolve(clusterID uint64,
 	return "", "", ErrUnknownTarget
 }
 
+type eventDelegate struct {
+	memberlist.ChannelEventDelegate
+	ch      chan memberlist.NodeEvent
+	stopper *syncutil.Stopper
+	nodes   sync.Map // map of string => *memberlist.Node
+}
+
+func newEventDelegate(s *syncutil.Stopper) *eventDelegate {
+	ch := make(chan memberlist.NodeEvent, 10)
+	ed := &eventDelegate{
+		stopper:              s,
+		ch:                   ch,
+		ChannelEventDelegate: memberlist.ChannelEventDelegate{Ch: ch},
+	}
+	return ed
+}
+
+func (d *eventDelegate) start() {
+	d.stopper.RunWorker(func() {
+		for {
+			select {
+			case <-d.stopper.ShouldStop():
+				return
+			case e := <-d.ch:
+				if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
+					d.nodes.Store(e.Node.Name, e.Node)
+				} else if e.Event == memberlist.NodeLeave {
+					d.nodes.Delete(e.Node.Name)
+				} else {
+					panic("unknown event type")
+				}
+			}
+		}
+	})
+}
+
 type delegate struct {
 	raftAddress string
 }
@@ -120,11 +157,14 @@ func parseAddress(addr string) (string, int, error) {
 type gossipManager struct {
 	cfg     *memberlist.Config
 	list    *memberlist.Memberlist
+	ed      *eventDelegate
 	stopper *syncutil.Stopper
 }
 
 func newGossipManager(nhid string,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
+	stopper := syncutil.NewStopper()
+	ed := newEventDelegate(stopper)
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Name = nhid
 	if nhConfig.Expert.TestGossipProbeInterval > 0 {
@@ -147,6 +187,7 @@ func newGossipManager(nhid string,
 		cfg.AdvertisePort = aPort
 	}
 	cfg.Delegate = &delegate{raftAddress: nhConfig.RaftAddress}
+	cfg.Events = ed
 	list, err := memberlist.Create(cfg)
 	if err != nil {
 		plog.Errorf("failed to create memberlist, %v", err)
@@ -157,9 +198,11 @@ func newGossipManager(nhid string,
 	g := &gossipManager{
 		cfg:     cfg,
 		list:    list,
-		stopper: syncutil.NewStopper(),
+		ed:      ed,
+		stopper: stopper,
 	}
 	g.join(seed)
+	g.ed.start()
 	g.stopper.RunWorker(func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -197,10 +240,8 @@ func (g *gossipManager) Stop() {
 }
 
 func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
-	for _, member := range g.list.Members() {
-		if member.Name == nhid {
-			return string(member.Meta), true
-		}
+	if v, ok := g.ed.nodes.Load(nhid); ok {
+		return string(v.(*memberlist.Node).Meta), true
 	}
 	return "", false
 }
