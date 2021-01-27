@@ -98,7 +98,7 @@ type eventDelegate struct {
 	memberlist.ChannelEventDelegate
 	ch      chan memberlist.NodeEvent
 	stopper *syncutil.Stopper
-	nodes   sync.Map // map of string => *memberlist.Node
+	nodes   sync.Map
 }
 
 func newEventDelegate(s *syncutil.Stopper) *eventDelegate {
@@ -119,7 +119,7 @@ func (d *eventDelegate) start() {
 				return
 			case e := <-d.ch:
 				if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
-					d.nodes.Store(e.Node.Name, e.Node)
+					d.nodes.Store(e.Node.Name, string(e.Node.Meta))
 				} else if e.Event == memberlist.NodeLeave {
 					d.nodes.Delete(e.Node.Name)
 				} else {
@@ -246,7 +246,7 @@ func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
 		return g.nhConfig.RaftAddress, true
 	}
 	if v, ok := g.ed.nodes.Load(nhid); ok {
-		return string(v.(*memberlist.Node).Meta), true
+		return v.(string), true
 	}
 	return "", false
 }
