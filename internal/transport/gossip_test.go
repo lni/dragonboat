@@ -99,7 +99,7 @@ func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 		t.Errorf("failed to get raft address")
 	}
 	if addr != nhConfig.RaftAddress {
-		t.Errorf("unexpected raft address, %s", addr)
+		t.Errorf("unexpected raft address, %s, want %s", addr, nhConfig.RaftAddress)
 	}
 }
 

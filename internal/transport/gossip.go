@@ -155,10 +155,11 @@ func parseAddress(addr string) (string, int, error) {
 }
 
 type gossipManager struct {
-	cfg     *memberlist.Config
-	list    *memberlist.Memberlist
-	ed      *eventDelegate
-	stopper *syncutil.Stopper
+	nhConfig config.NodeHostConfig
+	cfg      *memberlist.Config
+	list     *memberlist.Memberlist
+	ed       *eventDelegate
+	stopper  *syncutil.Stopper
 }
 
 func newGossipManager(nhid string,
@@ -196,10 +197,11 @@ func newGossipManager(nhid string,
 	seed := make([]string, len(nhConfig.Gossip.Seed)+1)
 	seed = append(seed, nhConfig.Gossip.Seed...)
 	g := &gossipManager{
-		cfg:     cfg,
-		list:    list,
-		ed:      ed,
-		stopper: stopper,
+		nhConfig: nhConfig,
+		cfg:      cfg,
+		list:     list,
+		ed:       ed,
+		stopper:  stopper,
 	}
 	g.join(seed)
 	g.ed.start()
@@ -240,6 +242,9 @@ func (g *gossipManager) Stop() {
 }
 
 func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
+	if g.cfg.Name == nhid {
+		return g.nhConfig.RaftAddress, true
+	}
 	if v, ok := g.ed.nodes.Load(nhid); ok {
 		return string(v.(*memberlist.Node).Meta), true
 	}
