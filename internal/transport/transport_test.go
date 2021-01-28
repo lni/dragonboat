@@ -1194,8 +1194,8 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	if tt.queueSize() != 1 {
 		t.Errorf("queue len %d, want 1", tt.queueSize())
 	}
-	if len(tt.mu.breakers) != 2 {
-		t.Errorf("breakers len %d, want 2", len(tt.mu.breakers))
+	if len(tt.mu.breakers) != 1 {
+		t.Errorf("breakers len %d, want 1", len(tt.mu.breakers))
 	}
 	if noopTransport.connected != 1 {
 		t.Errorf("connected %d, want 1", noopTransport.connected)
@@ -1275,6 +1275,47 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	}
 	if tt.queueSize() != 0 {
 		t.Errorf("queue len %d, want 0", tt.queueSize())
+	}
+	if atomic.LoadUint64(&noopTransport.connected) != 1 {
+		t.Errorf("connected %d, want 1", noopTransport.connected)
+	}
+	if atomic.LoadUint64(&noopTransport.tryConnect) != 1 {
+		t.Errorf("connected %d, want 1", noopTransport.tryConnect)
+	}
+}
+
+func TestCircuitBreakerForResolveNotShared(t *testing.T) {
+	fs := vfs.GetTestFS()
+	handler := newTestMessageHandler()
+	tt, nodes, noopTransport, req, connReq := newNOOPTestTransport(handler, fs)
+	defer tt.Stop()
+	nodes.Add(100, 2, serverAddress)
+	msg := raftpb.Message{
+		Type:      raftpb.Heartbeat,
+		To:        2,
+		ClusterId: 100,
+	}
+	msgUnknownNode := raftpb.Message{
+		Type:      raftpb.Heartbeat,
+		To:        3,
+		ClusterId: 100,
+	}
+	connReq.SetToFail(false)
+	req.SetToFail(false)
+	if ok := tt.Send(msg); !ok {
+		t.Errorf("send failed")
+	}
+	for i := 0; i < 1000; i++ {
+		if ok := tt.Send(msgUnknownNode); ok {
+			t.Errorf("send unexpectedly returned ok")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for i := 0; i < 20; i++ {
+		if ok := tt.Send(msg); !ok {
+			t.Errorf("send failed for known host")
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if atomic.LoadUint64(&noopTransport.connected) != 1 {
 		t.Errorf("connected %d, want 1", noopTransport.connected)

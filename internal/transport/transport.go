@@ -49,7 +49,7 @@ import (
 
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/netutil"
-	"github.com/lni/goutils/netutil/rubyist/circuitbreaker"
+	circuit "github.com/lni/goutils/netutil/rubyist/circuitbreaker"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -361,18 +361,12 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	toNodeID := req.To
 	clusterID := req.ClusterId
 	from := req.From
-	resolveBreaker := t.GetCircuitBreaker("address.resolve")
-	if !resolveBreaker.Ready() {
-		return false, circuitBreakerNotReady
-	}
 	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
 			t.sourceID, dn(clusterID, toNodeID))
-		resolveBreaker.Fail()
 		return false, unknownTarget
 	}
-	resolveBreaker.Success()
 	// fail fast
 	if !t.GetCircuitBreaker(addr).Ready() {
 		t.metrics.messageConnectionFailure()
