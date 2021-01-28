@@ -1305,7 +1305,7 @@ func TestCircuitBreakerForResolveNotShared(t *testing.T) {
 	if ok := tt.Send(msg); !ok {
 		t.Errorf("send failed")
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 20; i++ {
 		if ok := tt.Send(msgUnknownNode); ok {
 			t.Errorf("send unexpectedly returned ok")
 		}
