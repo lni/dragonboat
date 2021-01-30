@@ -704,6 +704,10 @@ func (s *StateMachine) setLastApplied(entries []pb.Entry) {
 	}
 }
 
+func (s *StateMachine) savingDummySnapshot(r SSRequest) bool {
+	return s.OnDiskStateMachine() && !r.Streaming() && !r.Exported()
+}
+
 func (s *StateMachine) checkSnapshotStatus(r SSRequest) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
@@ -768,7 +772,7 @@ func (s *StateMachine) prepare(r SSRequest) (SSMeta, error) {
 	}
 	var err error
 	var ctx interface{}
-	if s.Concurrent() {
+	if s.Concurrent() && !s.savingDummySnapshot(r) {
 		ctx, err = s.sm.Prepare()
 		if err != nil {
 			return SSMeta{}, err
