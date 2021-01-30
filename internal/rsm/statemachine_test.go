@@ -2344,28 +2344,6 @@ func TestIsDummySnapshot(t *testing.T) {
 	}
 }
 
-func TestWitnessNodeIsNeverConsideredAsOnDiskSM(t *testing.T) {
-	tests := []struct {
-		onDiskSM  bool
-		isWitness bool
-		result    bool
-	}{
-		{true, true, false},
-		{true, false, true},
-		{false, true, false},
-		{false, false, false},
-	}
-	for idx, tt := range tests {
-		sm := &StateMachine{
-			onDiskSM:  tt.onDiskSM,
-			isWitness: tt.isWitness,
-		}
-		if sm.OnDiskStateMachine() != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, sm.OnDiskStateMachine(), tt.result)
-		}
-	}
-}
-
 func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
 	sm := &StateMachine{isWitness: true}
 	defer func() {

@@ -361,7 +361,7 @@ func (n *node) concurrentSnapshot() bool {
 }
 
 func (n *node) supportClientSession() bool {
-	return !n.OnDiskStateMachine()
+	return !n.OnDiskStateMachine() && !n.isWitness()
 }
 
 func (n *node) isWitness() bool {

@@ -838,6 +838,10 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
+	// witness node is not expected to propose anything
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
 	if !n.supportClientSession() && !session.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}

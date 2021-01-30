@@ -491,7 +491,7 @@ func (s *StateMachine) Concurrent() bool {
 // OnDiskStateMachine returns a boolean flag indicating whether it is an on
 // disk state machine.
 func (s *StateMachine) OnDiskStateMachine() bool {
-	return s.onDiskSM && !s.isWitness
+	return s.onDiskSM
 }
 
 // Save creates a snapshot.
