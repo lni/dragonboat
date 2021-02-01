@@ -282,8 +282,13 @@ func (s *StateMachine) mustBeOnDiskSM() {
 	}
 }
 
-func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
-	s.mustBeOnDiskSM()
+// isShrunkSnapshot determines if the snapshot is shrunk. This check involves
+// disk I/O
+func (s *StateMachine) isShrunkSnapshot(ss pb.Snapshot, init bool) bool {
+	if !s.OnDiskStateMachine() {
+		return false
+	}
+
 	shrunk, err := s.snapshotter.Shrunk(ss)
 	if err != nil {
 		panic(err)
@@ -291,10 +296,21 @@ func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
 	if !init && shrunk {
 		panic("not initial recovery but snapshot shrunk")
 	}
+	return shrunk
+}
+
+// recoverRequired determines if the snapshot must be recovered or not. This method
+// mustn't be called on a non-disk-sm or on a partial snapshot (shrunk, witness or dummy).
+// The check that this method is not called on a shrunk snapshot is not enforced, because
+// this would involve a disk I/O. The caller is responsible for not calling this method
+// on a shrunk snapshot and can optimize for only determining once if it has been shrunk
+// or not.
+func (s *StateMachine) recoverRequired(ss pb.Snapshot, init bool) bool {
+	s.mustBeOnDiskSM()
+	if ss.Witness || ss.Dummy {
+		panic("called on a partial snapshot")
+	}
 	if init {
-		if shrunk {
-			return false
-		}
 		if ss.Imported {
 			return true
 		}
@@ -318,6 +334,21 @@ func (s *StateMachine) checkRecoverOnDiskSM(ss pb.Snapshot, init bool) {
 	}
 }
 
+func (s *StateMachine) checkPartialSnapshotApplyOnDiskSM(ss pb.Snapshot, init bool) {
+	s.mustBeOnDiskSM()
+	// For OnDisk StateMachines check for corruption: A partial snapshot can only be
+	// applied if we have at least the OnDiskIndex of the snapshot reached.
+	if init {
+		if ss.OnDiskIndex > s.onDiskInitIndex {
+			plog.Panicf("%s, ss.OnDiskIndex (%d) > s.onDiskInitIndex (%d)",
+				s.id(), ss.OnDiskIndex, s.onDiskInitIndex)
+		}
+	} else if ss.OnDiskIndex > s.onDiskIndex {
+		plog.Panicf("%s, ss.OnDiskInit (%d) > s.onDiskIndex (%d)",
+			s.id(), ss.OnDiskIndex, s.onDiskIndex)
+	}
+}
+
 func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -327,11 +358,16 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	if s.aborted {
 		return sm.ErrSnapshotStopped
 	}
-	if ss.Witness || ss.Dummy {
+	onDisk := s.OnDiskStateMachine()
+	if ss.Witness || ss.Dummy || s.isShrunkSnapshot(ss, init) {
+		if onDisk {
+			s.checkPartialSnapshotApplyOnDiskSM(ss, init)
+		}
+
 		s.apply(ss)
 		return nil
 	}
-	if !s.OnDiskStateMachine() {
+	if !onDisk {
 		return s.doRecover(ss, init)
 	}
 	if s.recoverRequired(ss, init) {

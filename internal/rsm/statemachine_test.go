@@ -1879,26 +1879,144 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 	}
 }
 
+func TestRecoverSMRequired2(t *testing.T) {
+	tests := []struct {
+		init          bool
+		ssOnDiskIndex uint64
+		onDiskIndex   uint64
+		shouldPanic   bool
+	}{
+		{true, 100, 100, false},
+		{true, 200, 100, true},
+		{true, 300, 100, true},
+
+		{true, 100, 200, false},
+		{true, 200, 200, false},
+		{true, 300, 200, true},
+
+		{true, 100, 300, false},
+		{true, 200, 300, false},
+		{true, 300, 300, false},
+
+		{false, 100, 100, false},
+		{false, 200, 100, true},
+		{false, 300, 100, true},
+
+		{false, 100, 200, false},
+		{false, 200, 200, false},
+		{false, 300, 200, true},
+
+		{false, 100, 300, false},
+		{false, 200, 300, false},
+		{false, 300, 300, false},
+	}
+	ssIndex := uint64(200)
+	node := newTestNodeProxy()
+	for idx, tt := range tests {
+		sm := &StateMachine{
+			onDiskSM: true,
+			node:     node,
+		}
+		if tt.init {
+			sm.onDiskInitIndex = tt.onDiskIndex
+		} else {
+			sm.onDiskIndex = tt.onDiskIndex
+		}
+		ss := pb.Snapshot{
+			Index:       ssIndex,
+			OnDiskIndex: tt.ssOnDiskIndex,
+		}
+		func() {
+			defer func() {
+				r := recover()
+				if tt.shouldPanic && r == nil {
+					t.Fatalf("%d, did not panic", idx)
+				} else if !tt.shouldPanic && r != nil {
+					t.Fatalf("%d, should not panic", idx)
+				}
+			}()
+			sm.checkPartialSnapshotApplyOnDiskSM(ss, tt.init)
+		}()
+	}
+}
+
 func TestRecoverSMRequired(t *testing.T) {
 	tests := []struct {
-		shrunk          bool
+		witness         bool
+		dummy           bool
 		init            bool
 		onDiskIndex     uint64
 		onDiskInitIndex uint64
 		required        bool
 	}{
-		{true, true, 100, 100, false},
-		{true, true, 200, 100, false},
-		{true, true, 100, 200, false},
-		{true, false, 100, 100, false},
-		{true, false, 200, 100, false},
-		{true, false, 100, 200, false},
-		{false, true, 100, 100, false},
-		{false, true, 200, 100, true},
-		{false, true, 100, 200, false},
-		{false, false, 100, 100, false},
-		{false, false, 200, 100, true},
-		{false, false, 100, 200, false},
+		{false, false, true, 100, 100, false},
+		{false, false, true, 200, 100, true},
+		{false, false, true, 100, 200, false},
+		{false, false, false, 100, 100, false},
+		{false, false, false, 200, 100, true},
+		{false, false, false, 100, 200, false},
+
+		{false, true, true, 100, 100, false},
+		{false, true, true, 200, 100, false},
+		{false, true, true, 100, 200, false},
+		{false, true, false, 100, 100, false},
+		{false, true, false, 200, 100, false},
+		{false, true, false, 100, 200, false},
+
+		{true, false, true, 100, 100, false},
+		{true, false, true, 200, 100, false},
+		{true, false, true, 100, 200, false},
+		{true, false, false, 100, 100, false},
+		{true, false, false, 200, 100, false},
+		{true, false, false, 100, 200, false},
+
+		{true, true, true, 100, 100, false},
+		{true, true, true, 200, 100, false},
+		{true, true, true, 100, 200, false},
+		{true, true, false, 100, 100, false},
+		{true, true, false, 200, 100, false},
+		{true, true, false, 100, 200, false},
+	}
+	ssIndex := uint64(200)
+	for idx, tt := range tests {
+		sm := &StateMachine{
+			onDiskSM:        true,
+			onDiskInitIndex: tt.onDiskInitIndex,
+			onDiskIndex:     tt.onDiskInitIndex,
+		}
+		ss := pb.Snapshot{
+			Index:       ssIndex,
+			OnDiskIndex: tt.onDiskIndex,
+			Witness:     tt.witness,
+			Dummy:       tt.dummy,
+		}
+		func() {
+			defer func() {
+				if tt.dummy || tt.witness {
+					if r := recover(); r == nil {
+						t.Fatalf("%d, not panic", idx)
+					}
+				}
+
+			}()
+			if res := sm.recoverRequired(ss, tt.init); res != tt.required {
+				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
+			}
+		}()
+	}
+}
+
+func TestIsShrunkSnapshot(t *testing.T) {
+	tests := []struct {
+		shrunk   bool
+		init     bool
+		isShrunk bool
+	}{
+		{false, false, false},
+		{false, true, false},
+
+		{true, false, false},
+		{true, true, true},
 	}
 	ssIndex := uint64(200)
 	for idx, tt := range tests {
@@ -1917,11 +2035,9 @@ func TestRecoverSMRequired(t *testing.T) {
 			}
 			snapshotter := newTestSnapshotter(fs)
 			sm := &StateMachine{
-				snapshotter:     snapshotter,
-				onDiskSM:        true,
-				onDiskInitIndex: tt.onDiskInitIndex,
-				onDiskIndex:     tt.onDiskInitIndex,
-				fs:              fs,
+				snapshotter: snapshotter,
+				onDiskSM:    true,
+				fs:          fs,
 			}
 			fp := snapshotter.getFilePath(ssIndex)
 			if tt.shrunk {
@@ -1953,8 +2069,7 @@ func TestRecoverSMRequired(t *testing.T) {
 				}
 			}
 			ss := pb.Snapshot{
-				Index:       ssIndex,
-				OnDiskIndex: tt.onDiskIndex,
+				Index: ssIndex,
 			}
 			defer func() {
 				if !tt.init && tt.shrunk {
@@ -1963,8 +2078,8 @@ func TestRecoverSMRequired(t *testing.T) {
 					}
 				}
 			}()
-			if res := sm.recoverRequired(ss, tt.init); res != tt.required {
-				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
+			if res := sm.isShrunkSnapshot(ss, tt.init); res != tt.isShrunk {
+				t.Errorf("%d, result %t, want %t", idx, res, tt.isShrunk)
 			}
 		}()
 		reportLeakedFD(fs, t)
