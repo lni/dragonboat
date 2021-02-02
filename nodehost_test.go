@@ -2285,7 +2285,8 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, fs vfs.IFS) {
+func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
+	fs := vfs.GetTestFS()
 	to := &testOption{
 		fakeDiskNode: true,
 		compressed:   compressed,
@@ -2371,9 +2372,8 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool, f
 }
 
 func TestOnDiskStateMachineCanTakeDummySnapshot(t *testing.T) {
-	fs := vfs.GetTestFS()
-	testOnDiskStateMachineCanTakeDummySnapshot(t, true, fs)
-	testOnDiskStateMachineCanTakeDummySnapshot(t, false, fs)
+	testOnDiskStateMachineCanTakeDummySnapshot(t, true)
+	testOnDiskStateMachineCanTakeDummySnapshot(t, false)
 }
 
 func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
