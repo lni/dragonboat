@@ -17,7 +17,7 @@
 package vfs
 
 import (
-	gvfs "github.com/lni/goutils/vfs"
+	gvfs "github.com/lni/vfs"
 )
 
 func GetFS() IFS {

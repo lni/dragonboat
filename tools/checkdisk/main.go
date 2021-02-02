@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lni/goutils/syncutil"
+
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
@@ -33,8 +35,6 @@ import (
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-	"github.com/lni/goutils/syncutil"
-	gvfs "github.com/lni/goutils/vfs"
 )
 
 const (
@@ -100,10 +100,10 @@ func (s *dummyStateMachine) Close() error { return nil }
 
 func main() {
 	flag.Parse()
-	fs := gvfs.Default
+	fs := vfs.DefaultFS
 	if *inmemfs {
 		log.Println("using in-memory fs")
-		fs = gvfs.NewMem()
+		fs = vfs.NewMemFS()
 	}
 	if *cpupprof {
 		f, err := os.Create("cpu.pprof")

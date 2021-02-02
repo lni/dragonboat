@@ -37,7 +37,6 @@ import (
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
 	"github.com/lni/goutils/syncutil"
-	gvfs "github.com/lni/goutils/vfs"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -154,7 +153,7 @@ func getTestExpertConfig(fs vfs.IFS) config.ExpertConfig {
 }
 
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
-	gvfs.ReportLeakedFD(fs, t)
+	vfs.ReportLeakedFD(fs, t)
 }
 
 func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {

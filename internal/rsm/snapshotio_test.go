@@ -23,7 +23,6 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
-	gvfs "github.com/lni/goutils/vfs"
 )
 
 const (
@@ -33,7 +32,7 @@ const (
 )
 
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
-	gvfs.ReportLeakedFD(fs, t)
+	vfs.ReportLeakedFD(fs, t)
 }
 
 func TestSnapshotWriterCanBeCreated(t *testing.T) {

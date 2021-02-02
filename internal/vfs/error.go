@@ -15,7 +15,7 @@
 package vfs
 
 import (
-	gvfs "github.com/lni/goutils/vfs"
+	gvfs "github.com/lni/vfs"
 )
 
 // ErrInjected is an error injected for testing purposes.

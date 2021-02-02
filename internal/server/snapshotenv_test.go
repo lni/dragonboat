@@ -18,14 +18,12 @@ import (
 	"strings"
 	"testing"
 
-	gvfs "github.com/lni/goutils/vfs"
-
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
-	gvfs.ReportLeakedFD(fs, t)
+	vfs.ReportLeakedFD(fs, t)
 }
 
 func TestGetSnapshotDirName(t *testing.T) {

@@ -18,10 +18,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"testing"
 
 	pvfs "github.com/cockroachdb/pebble/vfs"
 
-	gvfs "github.com/lni/goutils/vfs"
+	gvfs "github.com/lni/vfs"
 )
 
 // IFS is the vfs interface used by dragonboat.
@@ -38,6 +39,11 @@ var MemStrictFS IFS = gvfs.NewStrictMem()
 
 // File is the file interface returned by IFS.
 type File = gvfs.File
+
+// NewMemFS creates a in-memory fs.
+func NewMemFS() IFS {
+	return gvfs.NewStrictMem()
+}
 
 // PebbleFS is a wrapper struct that implements the pebble/vfs.FS interface.
 type PebbleFS struct {
@@ -158,4 +164,9 @@ func TempDir() string {
 // Clean is a wrapper for filepath.Clean.
 func Clean(dir string) string {
 	return filepath.Clean(dir)
+}
+
+// ReportLeakedFD reports leaked file fds.
+func ReportLeakedFD(fs IFS, t *testing.T) {
+	gvfs.ReportLeakedFD(fs, t)
 }

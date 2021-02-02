@@ -21,8 +21,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/vfs"
-
-	gvfs "github.com/lni/goutils/vfs"
 )
 
 const (
@@ -36,8 +34,8 @@ func newDefaultKVStore(config config.LogDBConfig,
 	if fs == nil {
 		panic("nil fs")
 	}
-	if _, ok := fs.(*gvfs.MemFS); !ok {
-		if _, ok := fs.(*gvfs.ErrorFS); !ok {
+	if _, ok := fs.(*vfs.MemFS); !ok {
+		if _, ok := fs.(*vfs.ErrorFS); !ok {
 			panic("invalid fs")
 		}
 	}
