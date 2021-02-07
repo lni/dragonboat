@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/memberlist v0.2.2
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
 	github.com/lni/goutils v1.3.0
-	github.com/lni/vfs v1.0.0
+	github.com/lni/vfs v0.1.0
 )
 
 go 1.14
