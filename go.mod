@@ -7,7 +7,7 @@ require (
 	github.com/golang/snappy v0.0.3-0.20201103224600-674baa8c7fc3
 	github.com/hashicorp/memberlist v0.2.2
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
-	github.com/lni/goutils v1.3.0
+	github.com/lni/goutils v1.3.1-0.20210207055804-2f3468487e42
 	github.com/lni/vfs v0.1.0
 )
 
