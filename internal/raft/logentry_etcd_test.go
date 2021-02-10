@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -34,7 +36,7 @@ func getAllEntries(l *entryLog) []pb.Entry {
 		return ents
 	}
 	// try again if there was a racing compaction
-	if err == ErrCompacted {
+	if errors.Is(err, ErrCompacted) {
 		return getAllEntries(l)
 	}
 	panic(err)

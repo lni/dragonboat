@@ -15,7 +15,7 @@
 package raft
 
 import (
-	"errors"
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -150,7 +150,8 @@ func (l *entryLog) term(index uint64) (uint64, error) {
 	}
 
 	t, err := l.logdb.Term(index)
-	if err != nil && err != ErrCompacted && err != ErrUnavailable {
+	if err != nil &&
+		!errors.Is(err, ErrCompacted) && errors.Is(err, ErrUnavailable) {
 		panic(err)
 	}
 	if err == nil {
@@ -190,7 +191,7 @@ func (l *entryLog) getEntriesFromLogDB(low uint64,
 
 	upperBound := min(high, l.inmem.markerIndex)
 	ents, err := l.logdb.Entries(low, upperBound, maxSize)
-	if err == ErrCompacted {
+	if errors.Is(err, ErrCompacted) {
 		return nil, false, err
 	} else if err != nil {
 		panic(err)
@@ -380,7 +381,7 @@ func (l *entryLog) tryCommit(index uint64, term uint64) bool {
 		return false
 	}
 	lterm, err := l.term(index)
-	if err == ErrCompacted {
+	if errors.Is(err, ErrCompacted) {
 		lterm = 0
 	} else if err != nil {
 		panic(err)

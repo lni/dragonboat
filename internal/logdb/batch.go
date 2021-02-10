@@ -15,8 +15,9 @@
 package logdb
 
 import (
-	"errors"
 	"math"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/raftio"

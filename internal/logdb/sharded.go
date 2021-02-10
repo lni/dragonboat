@@ -19,6 +19,7 @@ import (
 	"math"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -80,7 +81,7 @@ func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 			sc.callback, dir, lldir, batched, fs, kvf)
 		if err != nil {
 			closeAll(shards)
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		shards = append(shards, db)
 	}
@@ -89,7 +90,7 @@ func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 			located, err := hasEntryRecord(s.kvs, true)
 			if err != nil {
 				closeAll(shards)
-				return nil, err
+				return nil, errors.WithStack(err)
 			}
 			if located {
 				closeAll(shards)
@@ -138,7 +139,7 @@ func (s *ShardedDB) SelfCheckFailed() (bool, error) {
 	for _, shard := range s.shards {
 		failed, err := shard.selfCheckFailed()
 		if err != nil {
-			return false, err
+			return false, errors.WithStack(err)
 		}
 		if failed {
 			return true, nil
@@ -155,7 +156,7 @@ func (s *ShardedDB) SaveRaftState(updates []pb.Update, shardID uint64) error {
 	}
 	ctx := s.ctxs[shardID-1]
 	ctx.Reset()
-	return s.SaveRaftStateCtx(updates, ctx)
+	return errors.WithStack(s.SaveRaftStateCtx(updates, ctx))
 }
 
 // GetLogDBThreadContext return an IContext instance. This method is expected
@@ -170,15 +171,16 @@ func (s *ShardedDB) SaveRaftStateCtx(updates []pb.Update, ctx IContext) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	pid := s.getParititionID(updates)
-	return s.shards[pid].saveRaftState(updates, ctx)
+	p := s.getParititionID(updates)
+	return errors.WithStack(s.shards[p].saveRaftState(updates, ctx))
 }
 
 // ReadRaftState returns the persistent state of the specified raft node.
 func (s *ShardedDB) ReadRaftState(clusterID uint64,
 	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].readRaftState(clusterID, nodeID, lastIndex)
+	p := s.partitioner.GetPartitionID(clusterID)
+	rs, err := s.shards[p].readRaftState(clusterID, nodeID, lastIndex)
+	return rs, errors.WithStack(err)
 }
 
 // ListNodeInfo lists all available NodeInfo found in the log db.
@@ -187,7 +189,7 @@ func (s *ShardedDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 	for _, v := range s.shards {
 		n, err := v.listNodeInfo()
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		r = append(r, n...)
 	}
@@ -199,37 +201,40 @@ func (s *ShardedDB) SaveSnapshots(updates []pb.Update) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	pid := s.getParititionID(updates)
-	return s.shards[pid].saveSnapshots(updates)
+	p := s.getParititionID(updates)
+	return errors.WithStack(s.shards[p].saveSnapshots(updates))
 }
 
 // DeleteSnapshot removes the specified snapshot metadata from the log db.
 func (s *ShardedDB) DeleteSnapshot(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64) error {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].deleteSnapshot(clusterID, nodeID, snapshotIndex)
+	nodeID uint64, ssIndex uint64) error {
+	p := s.partitioner.GetPartitionID(clusterID)
+	return errors.WithStack(s.shards[p].deleteSnapshot(clusterID, nodeID, ssIndex))
 }
 
 // ListSnapshots lists all available snapshots associated with the specified
 // raft node.
 func (s *ShardedDB) ListSnapshots(clusterID uint64,
 	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].listSnapshots(clusterID, nodeID, index)
+	p := s.partitioner.GetPartitionID(clusterID)
+	ss, err := s.shards[p].listSnapshots(clusterID, nodeID, index)
+	return ss, errors.WithStack(err)
 }
 
 // SaveBootstrapInfo saves the specified bootstrap info for the given node.
 func (s *ShardedDB) SaveBootstrapInfo(clusterID uint64,
 	nodeID uint64, bootstrap pb.Bootstrap) error {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].saveBootstrapInfo(clusterID, nodeID, bootstrap)
+	p := s.partitioner.GetPartitionID(clusterID)
+	err := s.shards[p].saveBootstrapInfo(clusterID, nodeID, bootstrap)
+	return errors.WithStack(err)
 }
 
 // GetBootstrapInfo returns the saved bootstrap info for the given node.
 func (s *ShardedDB) GetBootstrapInfo(clusterID uint64,
 	nodeID uint64) (pb.Bootstrap, error) {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].getBootstrapInfo(clusterID, nodeID)
+	p := s.partitioner.GetPartitionID(clusterID)
+	bs, err := s.shards[p].getBootstrapInfo(clusterID, nodeID)
+	return bs, errors.WithStack(err)
 }
 
 // IterateEntries returns a list of saved entries starting with index low up to
@@ -237,19 +242,19 @@ func (s *ShardedDB) GetBootstrapInfo(clusterID uint64,
 func (s *ShardedDB) IterateEntries(ents []pb.Entry,
 	size uint64, clusterID uint64, nodeID uint64, low uint64, high uint64,
 	maxSize uint64) ([]pb.Entry, uint64, error) {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].iterateEntries(ents,
+	p := s.partitioner.GetPartitionID(clusterID)
+	entries, sz, err := s.shards[p].iterateEntries(ents,
 		size, clusterID, nodeID, low, high, maxSize)
+	return entries, sz, errors.WithStack(err)
 }
 
 // RemoveEntriesTo removes entries associated with the specified raft node up
 // to the specified index.
 func (s *ShardedDB) RemoveEntriesTo(clusterID uint64,
 	nodeID uint64, index uint64) error {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	if err := s.shards[idx].removeEntriesTo(clusterID,
-		nodeID, index); err != nil {
-		return err
+	p := s.partitioner.GetPartitionID(clusterID)
+	if err := s.shards[p].removeEntriesTo(clusterID, nodeID, index); err != nil {
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -264,15 +269,15 @@ func (s *ShardedDB) CompactEntriesTo(clusterID uint64,
 
 // RemoveNodeData deletes all node data that belongs to the specified node.
 func (s *ShardedDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
-	idx := s.partitioner.GetPartitionID(clusterID)
-	return s.shards[idx].removeNodeData(clusterID, nodeID)
+	p := s.partitioner.GetPartitionID(clusterID)
+	return errors.WithStack(s.shards[p].removeNodeData(clusterID, nodeID))
 }
 
 // ImportSnapshot imports the snapshot record and other metadata records to the
 // system.
 func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
-	idx := s.partitioner.GetPartitionID(ss.ClusterId)
-	return s.shards[idx].importSnapshot(ss, nodeID)
+	p := s.partitioner.GetPartitionID(ss.ClusterId)
+	return errors.WithStack(s.shards[p].importSnapshot(ss, nodeID))
 }
 
 // Close closes the ShardedDB instance.

@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -103,7 +104,7 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 		if err := env.CreateTempDir(); err != nil {
 			t.Errorf("create tmp snapshot dir failed %v", err)
 		}
-		if err := s.commit(ss, rsm.SSRequest{}); err != errSnapshotOutOfDate {
+		if err := s.commit(ss, rsm.SSRequest{}); !errors.Is(err, errSnapshotOutOfDate) {
 			t.Errorf("unexpected error result %v", err)
 		}
 	}

@@ -17,7 +17,6 @@ package dragonboat
 import (
 	"crypto/sha512"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -26,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/client"
@@ -110,12 +110,12 @@ var (
 // is a temporary error that worth to be retried later with the exact same
 // input, potentially on a more suitable NodeHost instance.
 func IsTempError(err error) bool {
-	return err == ErrSystemBusy ||
-		err == ErrClusterClosed ||
-		err == ErrClusterNotInitialized ||
-		err == ErrClusterNotReady ||
-		err == ErrTimeout ||
-		err == ErrClosed
+	return errors.Is(err, ErrSystemBusy) ||
+		errors.Is(err, ErrClusterClosed) ||
+		errors.Is(err, ErrClusterNotInitialized) ||
+		errors.Is(err, ErrClusterNotReady) ||
+		errors.Is(err, ErrTimeout) ||
+		errors.Is(err, ErrClosed)
 }
 
 // RequestResultCode is the result code returned to the client to indicate the

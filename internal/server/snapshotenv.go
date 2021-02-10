@@ -15,7 +15,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"

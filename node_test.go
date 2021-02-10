@@ -207,7 +207,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		ldb, err = logdb.NewDefaultLogDB(cfg,
 			nil, []string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
 		if err != nil {
-			plog.Panicf("failed to open logdb, %v", err)
+			plog.Panicf("failed to open logdb, %+v", err)
 		}
 	}
 	// message router

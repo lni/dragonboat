@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -34,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
 	"github.com/lni/goutils/syncutil"
@@ -3492,7 +3492,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 				}
 			}
 			bs, err := logdb.GetBootstrapInfo(1, 1)
-			if err != raftio.ErrNoBootstrapInfo {
+			if !errors.Is(err, raftio.ErrNoBootstrapInfo) {
 				t.Fatalf("failed to delete bootstrap %v", err)
 			}
 			if !reflect.DeepEqual(bs, pb.Bootstrap{}) {
@@ -3514,7 +3514,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 				t.Fatalf("snapshot not deleted")
 			}
 			_, err = logdb.ReadRaftState(1, 1, 1)
-			if err != raftio.ErrNoSavedLog {
+			if !errors.Is(err, raftio.ErrNoSavedLog) {
 				t.Fatalf("raft state not deleted %v", err)
 			}
 			sysop, err := nh.RequestCompaction(1, 1)

@@ -68,8 +68,9 @@ represent in memory state machine with concurrent read and write capabilities.
 package statemachine
 
 import (
-	"errors"
 	"io"
+
+	"github.com/cockroachdb/errors"
 )
 
 var (

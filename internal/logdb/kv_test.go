@@ -16,13 +16,13 @@ package logdb
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 
 	"github.com/lni/dragonboat/v3/config"

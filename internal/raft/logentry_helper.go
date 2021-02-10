@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -74,7 +76,7 @@ func (l *LogTestHelper) AllEntries() []pb.Entry {
 	if err == nil {
 		return ents
 	}
-	if err == ErrCompacted {
+	if errors.Is(err, ErrCompacted) {
 		return l.AllEntries()
 	}
 	panic(err)

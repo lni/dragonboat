@@ -84,7 +84,6 @@ package dragonboat // github.com/lni/dragonboat/v3
 
 import (
 	"context"
-	"errors"
 	"math"
 	"reflect"
 	"runtime"
@@ -92,6 +91,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 
@@ -592,7 +592,7 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	v, err := nh.linearizableRead(ctx, clusterID,
 		func(node *node) (interface{}, error) {
 			data, err := node.sm.Lookup(query)
-			if err == rsm.ErrClusterClosed {
+			if errors.Is(err, rsm.ErrClusterClosed) {
 				return nil, ErrClusterClosed
 			}
 			return data, err
@@ -878,7 +878,7 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	// the local read. The critical section is used to make sure we don't read
 	// from a destroyed C++ StateMachine object
 	data, err := rs.node.sm.Lookup(query)
-	if err == rsm.ErrClusterClosed {
+	if errors.Is(err, rsm.ErrClusterClosed) {
 		return nil, ErrClusterClosed
 	}
 	return data, err
@@ -900,7 +900,7 @@ func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
 	}
 	rs.mustBeReadyForLocalRead()
 	data, err := rs.node.sm.NALookup(query)
-	if err == rsm.ErrClusterClosed {
+	if errors.Is(err, rsm.ErrClusterClosed) {
 		return nil, ErrClusterClosed
 	}
 	return data, err
@@ -932,7 +932,7 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 		return nil, ErrInvalidOperation
 	}
 	data, err := n.sm.Lookup(query)
-	if err == rsm.ErrClusterClosed {
+	if errors.Is(err, rsm.ErrClusterClosed) {
 		return nil, ErrClusterClosed
 	}
 	return data, err
@@ -1335,7 +1335,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 		}
 	}
 	err := nh.RemoveData(clusterID, nodeID)
-	if err == ErrClusterNotStopped {
+	if errors.Is(err, ErrClusterNotStopped) {
 		plog.Panicf("invalid destroyed state, node not stopped")
 	}
 	return err
@@ -1401,7 +1401,7 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 		return false
 	}
 	if _, err := nh.mu.logdb.GetBootstrapInfo(clusterID, nodeID); err != nil {
-		if err == raftio.ErrNoBootstrapInfo {
+		if errors.Is(err, raftio.ErrNoBootstrapInfo) {
 			return false
 		}
 		panic(err)
@@ -1536,7 +1536,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
 	bi, err := nh.mu.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
-	if err == raftio.ErrNoBootstrapInfo {
+	if errors.Is(err, raftio.ErrNoBootstrapInfo) {
 		if !join && len(initialMembers) == 0 {
 			return nil, false, ErrClusterNotBootstrapped
 		}
@@ -1589,11 +1589,11 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		return ErrInvalidClusterSettings
 	}
 	peers, im, err := nh.bootstrapCluster(initialMembers, join, cfg, smType)
-	if err == ErrInvalidClusterSettings {
+	if errors.Is(err, ErrInvalidClusterSettings) {
 		return err
 	}
 	if err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	for k, v := range peers {
 		if k != nodeID {
@@ -1602,7 +1602,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	}
 	did := nh.nhConfig.GetDeploymentID()
 	if err := nh.env.CreateSnapshotDir(did, clusterID, nodeID); err != nil {
-		if err == server.ErrDirMarkedAsDeleted {
+		if errors.Is(err, server.ErrDirMarkedAsDeleted) {
 			return ErrNodeRemoved
 		}
 		panic(err)
@@ -2198,4 +2198,9 @@ func logBuildTagsAndVersion() {
 		plog.Warningf("unsupported OS/ARCH %s/%s, don't use for production",
 			runtime.GOOS, runtime.GOARCH)
 	}
+}
+
+func panicNow(err error) {
+	plog.Panicf("%+v", err)
+	panic(err)
 }

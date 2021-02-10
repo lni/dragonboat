@@ -16,11 +16,11 @@ package id
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/random"
 )
 

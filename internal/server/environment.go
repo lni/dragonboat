@@ -15,12 +15,12 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/config"

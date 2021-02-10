@@ -262,7 +262,9 @@ func (w *ssWorker) workerMain() {
 			if job.node == nil {
 				panic("req.node == nil")
 			}
-			w.handle(job)
+			if err := w.handle(job); err != nil {
+				panicNow(err)
+			}
 			w.completed()
 		}
 	}
@@ -272,40 +274,41 @@ func (w *ssWorker) completed() {
 	w.completedC <- struct{}{}
 }
 
-func (w *ssWorker) handle(j job) {
+func (w *ssWorker) handle(j job) error {
 	if j.task.Recover {
-		w.recover(j)
+		return w.recover(j)
 	} else if j.task.Save {
-		w.save(j)
+		return w.save(j)
 	} else if j.task.Stream {
-		w.stream(j)
-	} else {
-		panic("unknown snapshot task type")
+		return w.stream(j)
 	}
+	panic("unknown snapshot task type")
 }
 
-func (w *ssWorker) recover(j job) {
-	if index, err := j.node.recover(j.task); err != nil {
-		panic(err)
-	} else {
-		j.node.recoverDone(index)
+func (w *ssWorker) recover(j job) error {
+	var err error
+	var index uint64
+	if index, err = j.node.recover(j.task); err != nil {
+		return err
 	}
+	j.node.recoverDone(index)
+	return nil
 }
 
-func (w *ssWorker) save(j job) {
+func (w *ssWorker) save(j job) error {
 	if err := j.node.save(j.task); err != nil {
-		panic(err)
-	} else {
-		j.node.saveDone()
+		return err
 	}
+	j.node.saveDone()
+	return nil
 }
 
-func (w *ssWorker) stream(j job) {
+func (w *ssWorker) stream(j job) error {
 	if err := j.node.stream(j.sink()); err != nil {
-		panic(err)
-	} else {
-		j.node.streamDone()
+		return err
 	}
+	j.node.streamDone()
+	return nil
 }
 
 type workerPool struct {
@@ -1132,7 +1135,10 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
-			e.processApplies(make(map[uint64]struct{}), nodes, batch, entries)
+			a := make(map[uint64]struct{})
+			if err := e.processApplies(a, nodes, batch, entries); err != nil {
+				panicNow(err)
+			}
 			batch = make([]rsm.Task, 0, taskBatchSize)
 			entries = make([]sm.Entry, 0, taskBatchSize)
 		case <-e.applyCCIReady.waitCh(workerID):
@@ -1141,8 +1147,10 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 			}
-			active := e.applyWorkReady.getReadyMap(workerID)
-			e.processApplies(active, nodes, batch, entries)
+			a := e.applyWorkReady.getReadyMap(workerID)
+			if err := e.processApplies(a, nodes, batch, entries); err != nil {
+				panicNow(err)
+			}
 		}
 	}
 }
@@ -1161,7 +1169,7 @@ func (e *engine) loadApplyNodes(workerID uint64, cci uint64,
 // R, S, won't happen, when in R state, processApplies will not process the node
 
 func (e *engine) processApplies(idmap map[uint64]struct{},
-	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) {
+	nodes map[uint64]*node, batch []rsm.Task, entries []sm.Entry) error {
 	if len(idmap) == 0 {
 		for k := range nodes {
 			idmap[k] = struct{}{}
@@ -1177,12 +1185,13 @@ func (e *engine) processApplies(idmap map[uint64]struct{},
 		}
 		task, err := node.handleTask(batch, entries)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if task.IsSnapshotTask() {
 			node.handleSnapshotTask(task)
 		}
 	}
+	return nil
 }
 
 func (e *engine) stepWorkerMain(workerID uint64) {
@@ -1199,15 +1208,20 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
-			e.processSteps(workerID, make(map[uint64]struct{}), nodes, updates, stopC)
+			a := make(map[uint64]struct{})
+			if err := e.processSteps(workerID, a, nodes, updates, stopC); err != nil {
+				panicNow(err)
+			}
 		case <-e.stepCCIReady.waitCh(workerID):
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 		case <-e.stepWorkReady.waitCh(workerID):
 			if cci == 0 || len(nodes) == 0 {
 				nodes, cci = e.loadStepNodes(workerID, cci, nodes)
 			}
-			active := e.stepWorkReady.getReadyMap(workerID)
-			e.processSteps(workerID, active, nodes, updates, stopC)
+			a := e.stepWorkReady.getReadyMap(workerID)
+			if err := e.processSteps(workerID, a, nodes, updates, stopC); err != nil {
+				panicNow(err)
+			}
 		}
 	}
 }
@@ -1256,9 +1270,9 @@ func (e *engine) loadBucketNodes(workerID uint64,
 
 func (e *engine) processSteps(workerID uint64,
 	active map[uint64]struct{},
-	nodes map[uint64]*node, nodeUpdates []pb.Update, stopC chan struct{}) {
+	nodes map[uint64]*node, nodeUpdates []pb.Update, stopC chan struct{}) error {
 	if len(nodes) == 0 {
-		return
+		return nil
 	}
 	if len(active) == 0 {
 		for cid := range nodes {
@@ -1275,7 +1289,9 @@ func (e *engine) processSteps(workerID uint64,
 			nodeUpdates = append(nodeUpdates, ud)
 		}
 	}
-	e.applySnapshotAndUpdate(nodeUpdates, nodes, true)
+	if err := e.applySnapshotAndUpdate(nodeUpdates, nodes, true); err != nil {
+		return err
+	}
 	// see raft thesis section 10.2.1 on details why we send Replicate message
 	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
@@ -1286,16 +1302,18 @@ func (e *engine) processSteps(workerID uint64,
 		node.processDroppedReadIndexes(ud)
 	}
 	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
-		panic(err)
+		return err
 	}
 	if err := e.onSnapshotSaved(nodeUpdates, nodes); err != nil {
-		panic(err)
+		return err
 	}
-	e.applySnapshotAndUpdate(nodeUpdates, nodes, false)
+	if err := e.applySnapshotAndUpdate(nodeUpdates, nodes, false); err != nil {
+		return err
+	}
 	for _, ud := range nodeUpdates {
 		node := nodes[ud.ClusterID]
 		if err := node.processRaftUpdate(ud); err != nil {
-			panic(err)
+			return err
 		}
 		e.processMoreCommittedEntries(ud)
 		node.commitRaftUpdate(ud)
@@ -1303,6 +1321,7 @@ func (e *engine) processSteps(workerID uint64,
 	if lazyFreeCycle > 0 {
 		resetNodeUpdate(nodeUpdates)
 	}
+	return nil
 }
 
 func resetNodeUpdate(nodeUpdates []pb.Update) {
@@ -1322,7 +1341,7 @@ func (e *engine) processMoreCommittedEntries(ud pb.Update) {
 }
 
 func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
-	nodes map[uint64]*node, fastApply bool) {
+	nodes map[uint64]*node, fastApply bool) error {
 	notifyCommit := false
 	for _, ud := range updates {
 		if ud.FastApply != fastApply {
@@ -1333,7 +1352,7 @@ func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 			notifyCommit = true
 		}
 		if err := node.processSnapshot(ud); err != nil {
-			panic(err)
+			return err
 		}
 		node.applyRaftUpdates(ud)
 	}
@@ -1342,6 +1361,7 @@ func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 	} else {
 		e.setCommitReadyByUpdates(updates)
 	}
+	return nil
 }
 
 func (e *engine) onSnapshotSaved(updates []pb.Update,

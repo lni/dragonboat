@@ -15,12 +15,12 @@
 package transport
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -290,7 +290,7 @@ func (c *Chunk) addLocked(chunk pb.Chunk) bool {
 		}
 		if err := c.finalize(chunk, td); err != nil {
 			c.removeTempDir(chunk)
-			if err != ErrSnapshotOutOfDate {
+			if !errors.Is(err, ErrSnapshotOutOfDate) {
 				plog.Panicf("%s failed when finalizing, %v", key, err)
 			}
 			return false

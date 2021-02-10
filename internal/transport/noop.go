@@ -16,11 +16,11 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/stringutil"
 
 	"github.com/lni/dragonboat/v3/config"

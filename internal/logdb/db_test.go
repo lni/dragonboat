@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -116,7 +117,7 @@ func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		if _, err := db.GetBootstrapInfo(1, 2); err != raftio.ErrNoBootstrapInfo {
+		if _, err := db.GetBootstrapInfo(1, 2); !errors.Is(err, raftio.ErrNoBootstrapInfo) {
 			t.Errorf("unexpected error %v", err)
 		}
 	}
@@ -371,8 +372,7 @@ func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) 
 		if err := db.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 			t.Fatalf("failed to save single de rec")
 		}
-		_, err := db.ReadRaftState(3, 4, ss.Index)
-		if err != raftio.ErrNoSavedLog {
+		if _, err := db.ReadRaftState(3, 4, ss.Index); !errors.Is(err, raftio.ErrNoSavedLog) {
 			t.Fatalf("failed to return expected error %v", err)
 		}
 	}
@@ -1381,7 +1381,7 @@ func TestRemoveNodeData(t *testing.T) {
 		}
 		plog.Infof("RemoveNodeData done")
 		_, err = db.ReadRaftState(clusterID, nodeID, 1)
-		if err != raftio.ErrNoSavedLog {
+		if !errors.Is(err, raftio.ErrNoSavedLog) {
 			t.Fatalf("raft state not deleted %v", err)
 		}
 		snapshots, err := db.ListSnapshots(clusterID, nodeID, math.MaxUint64)
@@ -1391,7 +1391,7 @@ func TestRemoveNodeData(t *testing.T) {
 		if len(snapshots) != 0 {
 			t.Fatalf("snapshot not deleted")
 		}
-		if _, err := db.GetBootstrapInfo(clusterID, nodeID); err != raftio.ErrNoBootstrapInfo {
+		if _, err := db.GetBootstrapInfo(clusterID, nodeID); !errors.Is(err, raftio.ErrNoBootstrapInfo) {
 			t.Fatalf("failed to delete bootstrap %v", err)
 		}
 		ents, sz, err := db.IterateEntries(nil, 0, clusterID, nodeID, 0,

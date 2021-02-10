@@ -26,6 +26,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/random"
 
@@ -314,7 +315,7 @@ func (r *raft) resetMatchValueArray() {
 func (r *raft) describe() string {
 	li := r.log.lastIndex()
 	t, err := r.log.term(li)
-	if err != nil && err != ErrCompacted {
+	if err != nil && !errors.Is(err, ErrCompacted) {
 		plog.Panicf("%s failed to get term, %v", dn(r.clusterID, r.nodeID), err)
 	}
 	// first, last, term, committed, applied
@@ -1640,7 +1641,7 @@ func (r *raft) hasCommittedEntryAtCurrentTerm() bool {
 		panic("not suppose to reach here")
 	}
 	lastCommittedTerm, err := r.log.term(r.log.committed)
-	if err != nil && err != ErrCompacted {
+	if err != nil && !errors.Is(err, ErrCompacted) {
 		plog.Panicf("%s failed to get term, %v", r.describe(), err)
 	}
 	return lastCommittedTerm == r.term

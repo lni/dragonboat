@@ -34,10 +34,11 @@ package rsm
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"hash"
 	"io"
 	"math"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"

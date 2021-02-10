@@ -15,9 +15,9 @@
 package dragonboat
 
 import (
-	"errors"
 	"math"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -291,7 +291,7 @@ func (s *snapshotter) processOrphans() error {
 	noss := false
 	mrss, err := s.GetMostRecentSnapshot()
 	if err != nil {
-		if err == ErrNoSnapshot {
+		if errors.Is(err, ErrNoSnapshot) {
 			noss = true
 		} else {
 			return err

@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 
@@ -612,7 +613,7 @@ func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
 func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	plog.Infof("%s replaying raft logs", n.id())
 	snapshot, err := n.snapshotter.GetMostRecentSnapshot()
-	if err != nil && err != ErrNoSnapshot {
+	if err != nil && !errors.Is(err, ErrNoSnapshot) {
 		return false, err
 	}
 	if snapshot.Index > 0 {
@@ -622,7 +623,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		}
 	}
 	rs, err := n.logdb.ReadRaftState(clusterID, nodeID, snapshot.Index)
-	if err == raftio.ErrNoSavedLog {
+	if errors.Is(err, raftio.ErrNoSavedLog) {
 		return true, nil
 	}
 	if err != nil {
@@ -657,27 +658,30 @@ func (n *node) saveSnapshotRequired(applied uint64) bool {
 }
 
 func isSoftSnapshotError(err error) bool {
-	return err == raft.ErrCompacted || err == raft.ErrSnapshotOutOfDate
+	return errors.Is(err, raft.ErrCompacted) ||
+		errors.Is(err, raft.ErrSnapshotOutOfDate)
 }
 
 func saveAborted(err error) bool {
-	return err == sm.ErrSnapshotStopped || err == sm.ErrSnapshotAborted
+	return errors.Is(err, sm.ErrSnapshotStopped) ||
+		errors.Is(err, sm.ErrSnapshotAborted)
 }
 
 func snapshotCommitAborted(err error) bool {
-	return err == errSnapshotOutOfDate
+	return errors.Is(err, errSnapshotOutOfDate)
 }
 
 func streamAborted(err error) bool {
-	return saveAborted(err) || err == sm.ErrSnapshotStreaming
+	return saveAborted(err) || errors.Is(err, sm.ErrSnapshotStreaming)
 }
 
 func openAborted(err error) bool {
-	return err == sm.ErrOpenStopped
+	return errors.Is(err, sm.ErrOpenStopped)
 }
 
 func recoverAborted(err error) bool {
-	return err == sm.ErrSnapshotStopped || err == raft.ErrSnapshotOutOfDate
+	return errors.Is(err, sm.ErrSnapshotStopped) ||
+		errors.Is(err, raft.ErrSnapshotOutOfDate)
 }
 
 func (n *node) save(rec rsm.Task) error {
@@ -713,8 +717,7 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 			// e.g. trying to save a snapshot at the same index twice
 			return 0, nil
 		}
-		plog.Errorf("%s save snapshot failed %v", n.id(), err)
-		return 0, err
+		return 0, errors.Wrapf(err, "%s save snapshot failed", n.id())
 	}
 	plog.Infof("%s saved snapshot, index %s, term %d, file count %d",
 		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
@@ -727,7 +730,7 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 			ssenv.MustRemoveTempDir()
 			return 0, nil
 		}
-		return 0, err
+		return 0, errors.Wrapf(err, "%s commit snapshot failed", n.id())
 	}
 	if req.Exported() {
 		return ss.Index, nil
@@ -736,14 +739,13 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 		plog.Panicf("%s generated invalid snapshot %v", n.id(), ss)
 	}
 	if err = n.logReader.CreateSnapshot(ss); err != nil {
-		plog.Errorf("%s create snapshot record failed %v", n.id(), err)
 		if isSoftSnapshotError(err) {
 			return 0, nil
 		}
-		return 0, err
+		return 0, errors.Wrapf(err, "%s create snapshot failed", n.id())
 	}
 	if err := n.compact(req, ss.Index); err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "%s compact failed", n.id())
 	}
 	n.ss.setIndex(ss.Index)
 	return ss.Index, nil
@@ -768,8 +770,7 @@ func (n *node) stream(sink pb.IChunkSink) error {
 		plog.Infof("%s requested to stream to %d", n.id(), sink.ToNodeID())
 		if err := n.sm.Stream(sink); err != nil {
 			if !streamAborted(err) {
-				plog.Errorf("%s failed to stream, %v", n.id(), err)
-				return err
+				return errors.Wrapf(err, "%s stream failed", n.id())
 			}
 		}
 	}
@@ -787,8 +788,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 				plog.Warningf("%s aborted OpenOnDiskStateMachine", n.id())
 				return 0, nil
 			}
-			plog.Errorf("%s failed to OpenOnDiskStateMachine, %v", n.id(), err)
-			return 0, err
+			return 0, errors.Wrapf(err, "%s OpenOnDiskStateMachine failed", n.id())
 		}
 		if idx > 0 && rec.NewNode {
 			plog.Panicf("%s new node at non-zero index %d", n.id(), idx)
@@ -796,28 +796,24 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 	}
 	index, err := n.sm.Recover(rec)
 	if err != nil {
-		plog.Errorf("%s failed to recover, %v", n.id(), err)
 		if recoverAborted(err) {
 			plog.Warningf("%s aborted recovery", n.id())
 			return 0, nil
 		}
-		return 0, err
+		return 0, errors.Wrapf(err, "%s recover failed", n.id())
 	}
 	if index > 0 {
 		plog.Infof("%s recovered from %s", n.id(), n.ssid(index))
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
-				plog.Errorf("%s failed to sync, %v", n.id(), err)
-				return 0, err
+				return 0, errors.Wrapf(err, "%s sync failed", n.id())
 			}
 			if err := n.snapshotter.shrink(index); err != nil {
-				plog.Errorf("%s failed to shrink, %v", n.id(), err)
-				return 0, err
+				return 0, errors.Wrapf(err, "%s shrink failed", n.id())
 			}
 		}
 		if err := n.compactSnapshots(index); err != nil {
-			plog.Errorf("%s failed to compact snapshots, %v", n.id(), err)
-			return 0, err
+			return 0, errors.Wrapf(err, "%s compact snapshots failed", n.id())
 		}
 	}
 	n.sysEvents.Publish(server.SystemEvent{

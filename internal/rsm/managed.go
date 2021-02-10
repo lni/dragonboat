@@ -15,9 +15,10 @@
 package rsm
 
 import (
-	"errors"
 	"io"
 	"sync"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"

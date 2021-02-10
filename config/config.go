@@ -20,7 +20,6 @@ package config
 
 import (
 	"crypto/tls"
-	"errors"
 	"io/ioutil"
 	"net"
 	"os"
@@ -29,6 +28,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 

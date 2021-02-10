@@ -34,8 +34,9 @@
 package transport
 
 import (
-	"errors"
 	"sync/atomic"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/settings"

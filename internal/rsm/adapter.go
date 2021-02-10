@@ -17,6 +17,8 @@ package rsm
 import (
 	"io"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
@@ -75,7 +77,7 @@ func (i *InMemStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	}
 	var err error
 	entries[0].Result, err = i.sm.Update(entries[0].Cmd)
-	return entries, err
+	return entries, errors.WithStack(err)
 }
 
 // Lookup queries the state machine.
@@ -107,18 +109,18 @@ func (i *InMemStateMachine) Save(ctx interface{},
 	if ctx != nil {
 		panic("snapshot ctx is not nil")
 	}
-	return i.sm.SaveSnapshot(w, fc, stopc)
+	return errors.WithStack(i.sm.SaveSnapshot(w, fc, stopc))
 }
 
 // Recover recovers the state machine from a snapshot.
 func (i *InMemStateMachine) Recover(r io.Reader,
 	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return i.sm.RecoverFromSnapshot(r, fs, stopc)
+	return errors.WithStack(i.sm.RecoverFromSnapshot(r, fs, stopc))
 }
 
 // Close closes the state machine.
 func (i *InMemStateMachine) Close() error {
-	return i.sm.Close()
+	return errors.WithStack(i.sm.Close())
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -127,7 +129,8 @@ func (i *InMemStateMachine) GetHash() (uint64, error) {
 	if i.h == nil {
 		return 0, sm.ErrNotImplemented
 	}
-	return i.h.GetHash()
+	h, err := i.h.GetHash()
+	return h, errors.WithStack(err)
 }
 
 // Concurrent returns a boolean flag indicating whether the state machine is
@@ -174,7 +177,8 @@ func (s *ConcurrentStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 
 // Update updates the state machine.
 func (s *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
-	return s.sm.Update(entries)
+	results, err := s.sm.Update(entries)
+	return results, errors.WithStack(err)
 }
 
 // Lookup queries the state machine.
@@ -197,24 +201,25 @@ func (s *ConcurrentStateMachine) Sync() error {
 
 // Prepare makes preparations for taking concurrent snapshot.
 func (s *ConcurrentStateMachine) Prepare() (interface{}, error) {
-	return s.sm.PrepareSnapshot()
+	results, err := s.sm.PrepareSnapshot()
+	return results, errors.WithStack(err)
 }
 
 // Save saves the snapshot.
 func (s *ConcurrentStateMachine) Save(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
-	return s.sm.SaveSnapshot(ctx, w, fc, stopc)
+	return errors.WithStack(s.sm.SaveSnapshot(ctx, w, fc, stopc))
 }
 
 // Recover recovers the state machine from a snapshot.
 func (s *ConcurrentStateMachine) Recover(r io.Reader,
 	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
-	return s.sm.RecoverFromSnapshot(r, fs, stopc)
+	return errors.WithStack(s.sm.RecoverFromSnapshot(r, fs, stopc))
 }
 
 // Close closes the state machine.
 func (s *ConcurrentStateMachine) Close() error {
-	return s.sm.Close()
+	return errors.WithStack(s.sm.Close())
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -223,7 +228,8 @@ func (s *ConcurrentStateMachine) GetHash() (uint64, error) {
 	if s.h == nil {
 		return 0, sm.ErrNotImplemented
 	}
-	return s.h.GetHash()
+	h, err := s.h.GetHash()
+	return h, errors.WithStack(err)
 }
 
 // Concurrent returns a boolean flag indicating whether the state machine is
@@ -283,16 +289,14 @@ func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	}
 	s.opened = true
 	applied, err := s.sm.Open(stopc)
-	if err != nil {
-		return 0, err
-	}
-	return applied, nil
+	return applied, errors.WithStack(err)
 }
 
 // Update updates the state machine.
 func (s *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	s.ensureOpened()
-	return s.sm.Update(entries)
+	results, err := s.sm.Update(entries)
+	return results, errors.WithStack(err)
 }
 
 // Lookup queries the state machine.
@@ -310,32 +314,33 @@ func (s *OnDiskStateMachine) NALookup(query []byte) ([]byte, error) {
 // Sync synchronizes all in-core state with that on disk.
 func (s *OnDiskStateMachine) Sync() error {
 	s.ensureOpened()
-	return s.sm.Sync()
+	return errors.WithStack(s.sm.Sync())
 }
 
 // Prepare makes preparations for taking concurrent snapshot.
 func (s *OnDiskStateMachine) Prepare() (interface{}, error) {
 	s.ensureOpened()
-	return s.sm.PrepareSnapshot()
+	results, err := s.sm.PrepareSnapshot()
+	return results, errors.WithStack(err)
 }
 
 // Save saves the snapshot.
 func (s *OnDiskStateMachine) Save(ctx interface{},
 	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
 	s.ensureOpened()
-	return s.sm.SaveSnapshot(ctx, w, stopc)
+	return errors.WithStack(s.sm.SaveSnapshot(ctx, w, stopc))
 }
 
 // Recover recovers the state machine from a snapshot.
 func (s *OnDiskStateMachine) Recover(r io.Reader,
 	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	s.ensureOpened()
-	return s.sm.RecoverFromSnapshot(r, stopc)
+	return errors.WithStack(s.sm.RecoverFromSnapshot(r, stopc))
 }
 
 // Close closes the state machine.
 func (s *OnDiskStateMachine) Close() error {
-	return s.sm.Close()
+	return errors.WithStack(s.sm.Close())
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -345,7 +350,8 @@ func (s *OnDiskStateMachine) GetHash() (uint64, error) {
 	if s.h == nil {
 		return 0, sm.ErrNotImplemented
 	}
-	return s.h.GetHash()
+	h, err := s.h.GetHash()
+	return h, errors.WithStack(err)
 }
 
 // Concurrent returns a boolean flag indicating whether the state machine is

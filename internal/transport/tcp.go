@@ -19,13 +19,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"errors"
 	"hash/crc32"
 	"io"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/juju/ratelimit"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/syncutil"
@@ -533,11 +533,11 @@ func (t *TCP) serveConn(conn net.Conn) {
 	for {
 		err := readMagicNumber(conn, magicNum)
 		if err != nil {
-			if err == errPoisonReceived {
+			if errors.Is(err, errPoisonReceived) {
 				_ = sendPoisonAck(conn, poisonNumber[:])
 				return
 			}
-			if err == ErrBadMessage {
+			if errors.Is(err, ErrBadMessage) {
 				return
 			}
 			operr, ok := err.(net.Error)

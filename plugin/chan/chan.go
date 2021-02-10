@@ -16,9 +16,9 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"sync"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"

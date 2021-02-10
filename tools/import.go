@@ -21,11 +21,12 @@ tools for managing Dragonboat based applications.
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
