@@ -34,14 +34,17 @@ import (
 )
 
 // MessageHandler is the handler function type for handling received message
-// batch. Received message batches should be passed to the request handler to
-// have them processed by Dragonboat.
+// batches. Received message batches should be passed to the message handler to
+// be processed.
 type MessageHandler func(pb.MessageBatch)
 
 // ChunkHandler is the handler function type for handling received snapshot
-// chunk. It adds the new snapshot chunk to the snapshot chunk sink. Chunks
-// from the same snapshot will be combined into the snapshot image and then
-// be passed to dragonboat once all chunks are received.
+// chunks. It adds the new snapshot chunk to the snapshot chunk sink. Chunks
+// from the same snapshot are combined into the snapshot image and then
+// be passed to dragonboat.
+//
+// ChunkHandler returns a boolean value indicating whether the snapshot
+// connection is still valid for accepting future snapshot chunks.
 type ChunkHandler func(pb.Chunk) bool
 
 // IConnection is the interface used by the transport module for sending Raft

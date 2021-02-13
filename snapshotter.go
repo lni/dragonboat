@@ -246,7 +246,8 @@ func (s *snapshotter) shrink(shrinkTo uint64) error {
 	plog.Debugf("%s has %d snapshots to shrink", s.id(), len(snapshots))
 	for idx, ss := range snapshots {
 		if ss.Index > shrinkTo {
-			plog.Panicf("snapshot index %d, shrink to %d", ss.Index, shrinkTo)
+			plog.Panicf("%s snapshot index %d, shrink to %d",
+				s.id(), ss.Index, shrinkTo)
 		}
 		if !ss.Dummy && !ss.Witness {
 			env := s.getEnv(ss.Index)

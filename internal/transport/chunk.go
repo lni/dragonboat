@@ -260,7 +260,7 @@ func (c *Chunk) addLocked(chunk pb.Chunk) bool {
 	}
 	removed, err := c.nodeRemoved(chunk)
 	if err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	if removed {
 		c.removeTempDir(chunk)
@@ -274,9 +274,9 @@ func (c *Chunk) addLocked(chunk pb.Chunk) bool {
 		}
 	}
 	if err := c.save(chunk); err != nil {
-		plog.Errorf("failed to save a chunk %s, %v", key, err)
+		err = errors.Wrapf(err, "failed to save chunk %s", key)
 		c.removeTempDir(chunk)
-		panic(err)
+		panicNow(err)
 	}
 	if chunk.IsLastChunk() {
 		plog.Debugf("last chunk %s received", key)
@@ -408,4 +408,9 @@ func (c *Chunk) toMessage(chunk pb.Chunk,
 
 func (c *Chunk) ssid(chunk pb.Chunk) string {
 	return logutil.DescribeSS(chunk.ClusterId, chunk.NodeId, chunk.Index)
+}
+
+func panicNow(err error) {
+	plog.Panicf("%+v", err)
+	panic(err)
 }

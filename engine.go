@@ -763,7 +763,9 @@ func (w *closeWorker) workerMain() {
 		case <-w.stopper.ShouldStop():
 			return
 		case req := <-w.requestC:
-			w.handle(req)
+			if err := w.handle(req); err != nil {
+				panicNow(err)
+			}
 			w.completed()
 		}
 	}
@@ -773,8 +775,8 @@ func (w *closeWorker) completed() {
 	w.completedC <- struct{}{}
 }
 
-func (w *closeWorker) handle(req closeReq) {
-	req.node.destroy()
+func (w *closeWorker) handle(req closeReq) error {
+	return req.node.destroy()
 }
 
 type closeWorkerPool struct {
