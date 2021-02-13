@@ -76,8 +76,7 @@ func validateBlock(block []byte, h hash.Hash) bool {
 	payload := block[:uint64(len(block))-checksumSize]
 	crc := block[uint64(len(block))-checksumSize:]
 	h.Reset()
-	_, err := h.Write(payload)
-	if err != nil {
+	if _, err := h.Write(payload); err != nil {
 		panic(err)
 	}
 	return bytes.Equal(crc, h.Sum(nil))
@@ -226,8 +225,7 @@ func (br *blockReader) Read(data []byte) (int, error) {
 	read := len(br.block)
 	copy(data, br.block)
 	for read < want {
-		_, err := br.readBlock()
-		if err != nil {
+		if _, err := br.readBlock(); err != nil {
 			return read, err
 		}
 		toRead := want - read
@@ -248,8 +246,7 @@ func (br *blockReader) readBlock() (int, error) {
 		return n, err
 	}
 	br.block = br.block[:n]
-	h := mustGetChecksum(br.t)
-	if !validateBlock(br.block, h) {
+	if !validateBlock(br.block, mustGetChecksum(br.t)) {
 		panic("corrupted block")
 	}
 	br.block = br.block[:uint64(len(br.block))-checksumSize]

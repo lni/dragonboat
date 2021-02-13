@@ -281,14 +281,17 @@ func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
 }
 
 // Close closes the ShardedDB instance.
-func (s *ShardedDB) Close() {
+func (s *ShardedDB) Close() error {
 	s.stopper.Stop()
 	for _, v := range s.shards {
-		v.close()
+		if err := v.close(); err != nil {
+			return err
+		}
 	}
 	for _, v := range s.ctxs {
 		v.Destroy()
 	}
+	return nil
 }
 
 func (s *ShardedDB) getParititionID(updates []pb.Update) uint64 {
@@ -313,7 +316,9 @@ func (s *ShardedDB) compactionWorkerMain() {
 		case <-s.stopper.ShouldStop():
 			return
 		case <-s.compactionCh:
-			s.compact()
+			if err := s.compact(); err != nil {
+				panicNow(err)
+			}
 		}
 		select {
 		case <-s.stopper.ShouldStop():
@@ -338,13 +343,13 @@ func (s *ShardedDB) addCompaction(clusterID uint64,
 	return done
 }
 
-func (s *ShardedDB) compact() {
+func (s *ShardedDB) compact() error {
 	for {
 		if t, hasTask := s.compactions.getTask(); hasTask {
 			idx := s.partitioner.GetPartitionID(t.clusterID)
 			shard := s.shards[idx]
 			if err := shard.compact(t.clusterID, t.nodeID, t.index); err != nil {
-				panic(err)
+				return err
 			}
 			atomic.AddUint64(&s.completedCompactions, 1)
 			close(t.done)
@@ -352,11 +357,16 @@ func (s *ShardedDB) compact() {
 				dn(t.clusterID, t.nodeID), t.index)
 			select {
 			case <-s.stopper.ShouldStop():
-				return
+				return nil
 			default:
 			}
 		} else {
-			return
+			return nil
 		}
 	}
+}
+
+func panicNow(err error) {
+	plog.Panicf("%+v", err)
+	panic(err)
 }

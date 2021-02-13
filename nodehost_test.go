@@ -419,7 +419,7 @@ type noopLogDB struct {
 
 func (n *noopLogDB) BinaryFormat() uint32                                      { return 0 }
 func (n *noopLogDB) Name() string                                              { return "noopLogDB" }
-func (n *noopLogDB) Close()                                                    {}
+func (n *noopLogDB) Close() error                                              { return nil }
 func (n *noopLogDB) HasNodeInfo(clusterID uint64, nodeID uint64) (bool, error) { return true, nil }
 func (n *noopLogDB) CreateNodeInfo(clusterID uint64, nodeID uint64) error      { return nil }
 func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                  { return nil, nil }

@@ -62,7 +62,7 @@ type ILogDB interface {
 	// Name returns the type name of the ILogDB instance.
 	Name() string
 	// Close closes the ILogDB instance.
-	Close()
+	Close() error
 	// BinaryFormat returns an constant uint32 value representing the binary
 	// format version compatible with the ILogDB instance.
 	BinaryFormat() uint32

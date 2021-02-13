@@ -93,10 +93,12 @@ func (t *LogDB) Name() string {
 }
 
 // Close ...
-func (t *LogDB) Close() {
+func (t *LogDB) Close() error {
 	t.stopper.Stop()
-	t.odb.Close()
-	t.ndb.Close()
+	if err := t.odb.Close(); err != nil {
+		return nil
+	}
+	return t.ndb.Close()
 }
 
 // BinaryFormat ...

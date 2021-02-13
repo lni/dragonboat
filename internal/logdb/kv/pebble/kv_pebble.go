@@ -260,7 +260,7 @@ func (r *KV) Close() error {
 func iteratorIsValid(iter *pebble.Iterator) bool {
 	v := iter.Valid()
 	if err := iter.Error(); err != nil {
-		panic(err)
+		plog.Panicf("%+v", err)
 	}
 	return v
 }

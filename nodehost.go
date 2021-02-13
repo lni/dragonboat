@@ -339,7 +339,9 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			nh.Stop()
-			plog.Panicf("failed to create NodeHost: %v", r)
+			if r, ok := r.(error); ok {
+				panicNow(r)
+			}
 		}
 	}()
 	did := nh.nhConfig.GetDeploymentID()
@@ -442,7 +444,9 @@ func (nh *NodeHost) Stop() {
 	}
 	plog.Debugf("%s is stopping the logdb module", nh.describe())
 	if nh.mu.logdb != nil {
-		nh.mu.logdb.Close()
+		if err := nh.mu.logdb.Close(); err != nil {
+			panicNow(err)
+		}
 		nh.mu.logdb = nil
 	}
 	plog.Debugf("%s is stopping the env module", nh.describe())
@@ -1336,7 +1340,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 	}
 	err := nh.RemoveData(clusterID, nodeID)
 	if errors.Is(err, ErrClusterNotStopped) {
-		plog.Panicf("invalid destroyed state, node not stopped")
+		panic("node not stopped")
 	}
 	return err
 }
@@ -1363,12 +1367,12 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	}
 	plog.Debugf("%s called RemoveData", dn(clusterID, nodeID))
 	if err := nh.mu.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	// mark the snapshot dir as removed
 	did := nh.nhConfig.GetDeploymentID()
 	if err := nh.env.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	return nil
 }
@@ -1404,7 +1408,7 @@ func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
 		if errors.Is(err, raftio.ErrNoBootstrapInfo) {
 			return false
 		}
-		panic(err)
+		panicNow(err)
 	}
 	return true
 }
@@ -1427,7 +1431,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 	if !opt.SkipLogInfo {
 		logInfo, err := nh.mu.logdb.ListNodeInfo()
 		if err != nil {
-			plog.Panicf("failed to list all logs %v", err)
+			panicNow(err)
 		}
 		nhi.LogInfo = logInfo
 	}
@@ -1455,7 +1459,7 @@ func (nh *NodeHost) propose(s *client.Session,
 		return nil, ErrClusterNotFound
 	}
 	if !v.supportClientSession() && !s.IsNoOPSession() {
-		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
+		panic("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
 	nh.engine.setStepReady(s.ClusterID)
@@ -1605,14 +1609,14 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		if errors.Is(err, server.ErrDirMarkedAsDeleted) {
 			return ErrNodeRemoved
 		}
-		panic(err)
+		panicNow(err)
 	}
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
 	ss := newSnapshotter(clusterID, nodeID, getSnapshotDir, nh.mu.logdb, nh.fs)
 	if err := ss.processOrphans(); err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
 		nh.nhConfig.Expert.LogDB.Shards)
@@ -1634,7 +1638,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		nh.getLogDBMetrics(shard),
 		nh.events.sys)
 	if err != nil {
-		panic(err)
+		panicNow(err)
 	}
 	rn.loaded()
 	nh.mu.clusters.Store(clusterID, rn)

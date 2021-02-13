@@ -517,8 +517,8 @@ func (n *node) getLeaderID() (uint64, bool) {
 	return v, v != raft.NoLeader
 }
 
-func (n *node) destroy() {
-	n.sm.Close()
+func (n *node) destroy() error {
+	return n.sm.Close()
 }
 
 func (n *node) offloaded() {
@@ -614,12 +614,11 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	plog.Infof("%s replaying raft logs", n.id())
 	snapshot, err := n.snapshotter.GetMostRecentSnapshot()
 	if err != nil && !errors.Is(err, ErrNoSnapshot) {
-		return false, err
+		return false, errors.Wrapf(err, "%s failed to get latest snapshot", n.id())
 	}
 	if snapshot.Index > 0 {
 		if err = n.logReader.ApplySnapshot(snapshot); err != nil {
-			plog.Errorf("failed to apply snapshot, %v", err)
-			return false, err
+			return false, errors.Wrapf(err, "%s failed to apply snapshot", n.id())
 		}
 	}
 	rs, err := n.logdb.ReadRaftState(clusterID, nodeID, snapshot.Index)
@@ -627,7 +626,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		return true, nil
 	}
 	if err != nil {
-		return false, err
+		return false, errors.Wrapf(err, "%s ReadRaftState failed", n.id())
 	}
 	hasRaftState := !reflect.DeepEqual(rs.State, pb.State{})
 	if hasRaftState {
@@ -722,7 +721,6 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 	plog.Infof("%s saved snapshot, index %s, term %d, file count %d",
 		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
 	if err := n.snapshotter.commit(ss, req); err != nil {
-		plog.Errorf("%s commit snapshot failed %v", n.id(), err)
 		if snapshotCommitAborted(err) || saveAborted(err) {
 			// saveAborted() will only be true in monkey test
 			// commit abort happens when the final dir already exists, probably due to
@@ -879,11 +877,11 @@ func (n *node) shrink(index uint64) error {
 	if n.snapshotLock.TryLock() {
 		defer n.snapshotLock.Unlock()
 		if !n.sm.OnDiskStateMachine() {
-			plog.Panicf("trying to shrink snapshots on non all disk SMs")
+			panic("trying to shrink snapshots on non all disk SMs")
 		}
 		plog.Debugf("%s will shrink snapshots up to %d", n.id(), index)
 		if err := n.snapshotter.shrink(index); err != nil {
-			return err
+			return errors.Wrapf(err, "%s failed to shrink to %d", n.id(), index)
 		}
 	}
 	return nil
@@ -891,7 +889,7 @@ func (n *node) shrink(index uint64) error {
 
 func (n *node) compactSnapshots(index uint64) error {
 	if err := n.snapshotter.compact(index); err != nil {
-		return err
+		return errors.Wrapf(err, "%s snapshot compaction failed", n.id())
 	}
 	n.sysEvents.Publish(server.SystemEvent{
 		Type:      server.SnapshotCompacted,
@@ -906,7 +904,7 @@ func (n *node) removeLog() error {
 	if n.ss.hasCompactLogTo() {
 		compactTo := n.ss.getCompactLogTo()
 		if compactTo == 0 {
-			plog.Panicf("racy compact log to value?")
+			panic("racy compact log to value?")
 		}
 		if err := n.logReader.Compact(compactTo); err != nil {
 			if err != raft.ErrCompacted {
@@ -926,8 +924,10 @@ func (n *node) removeLog() error {
 			Index:     compactTo,
 		})
 		if !n.config.DisableAutoCompactions {
-			if _, err := n.requestCompaction(); err == nil {
-				plog.Debugf("auto compaction for %s up to index %d", n.id(), compactTo)
+			if _, err := n.requestCompaction(); err != nil {
+				if err != ErrRejected {
+					return errors.Wrapf(err, "%s failed to request compaction", n.id())
+				}
 			}
 		}
 	}
@@ -1051,7 +1051,7 @@ func (n *node) processSnapshot(ud pb.Update) error {
 	if !pb.IsEmptySnapshot(ud.Snapshot) {
 		err := n.logReader.ApplySnapshot(ud.Snapshot)
 		if err != nil && !isSoftSnapshotError(err) {
-			return err
+			return errors.Wrapf(err, "%s failed to apply snapshot", n.id())
 		}
 		plog.Debugf("%s, push snapshot %d", n.id(), ud.Snapshot.Index)
 		n.pushSnapshot(ud.Snapshot, ud.LastApplied)
