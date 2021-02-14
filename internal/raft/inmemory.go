@@ -145,12 +145,12 @@ func (im *inMemory) appliedLogTo(index uint64) {
 	if index > im.entries[len(im.entries)-1].Index {
 		return
 	}
-	lastAppliedEntry := im.entries[index-im.markerIndex]
-	if lastAppliedEntry.Index != index {
-		panic("lastAppliedEntry.Index != index")
+	lastEntry := im.entries[index-im.markerIndex]
+	if lastEntry.Index != index {
+		panic("lastEntry.Index != index")
 	}
-	im.appliedToIndex = lastAppliedEntry.Index
-	im.appliedToTerm = lastAppliedEntry.Term
+	im.appliedToIndex = lastEntry.Index
+	im.appliedToTerm = lastEntry.Term
 	newMarkerIndex := index + 1
 	applied := im.entries[:newMarkerIndex-im.markerIndex]
 	im.shrunk = true

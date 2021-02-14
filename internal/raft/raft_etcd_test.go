@@ -44,7 +44,10 @@ var (
 )
 
 func (r *raft) testOnlyHasConfigChangeToApply() bool {
-	entries := r.log.getEntriesToApply(noLimit)
+	entries, err := r.log.getEntriesToApply(noLimit)
+	if err != nil {
+		panic(err)
+	}
 	if r.log.committed > r.log.processed && len(entries) > 0 {
 		return countConfigChange(entries) > 0
 	}
@@ -99,11 +102,18 @@ func nextEnts(r *raft, s ILogDB) (ents []pb.Entry) {
 	if err := s.Append(r.log.entriesToSave()); err != nil {
 		panic(err)
 	}
+	term, err := r.log.lastTerm()
+	if err != nil {
+		panic(err)
+	}
 	r.log.commitUpdate(pb.UpdateCommit{
 		StableLogTo:   r.log.lastIndex(),
-		StableLogTerm: r.log.lastTerm(),
+		StableLogTerm: term,
 	})
-	ents = r.log.entriesToApply()
+	ents, err = r.log.entriesToApply()
+	if err != nil {
+		panic(err)
+	}
 	r.log.commitUpdate(pb.UpdateCommit{
 		Processed: r.log.committed,
 	})
@@ -111,7 +121,7 @@ func nextEnts(r *raft, s ILogDB) (ents []pb.Entry) {
 }
 
 type stateMachine interface {
-	Handle(m pb.Message)
+	Handle(m pb.Message) error
 	readMessages() []pb.Message
 }
 
@@ -183,7 +193,7 @@ func TestLeaderTransferWithCheckQuorum(t *testing.T) {
 	// Letting peer 2 electionElapsed reach to timeout so that it can vote for peer 1
 	f := nt.peers[2].(*raft)
 	for i := uint64(0); i < f.electionTimeout; i++ {
-		f.tick()
+		ne(f.tick(), t)
 	}
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 	lead := nt.peers[1].(*raft)
@@ -284,13 +294,13 @@ func TestLeaderTransferTimeout(t *testing.T) {
 		t.Fatalf("wait transferring, leadTransferee = %v, want %v", lead.leaderTransferTarget, 3)
 	}
 	for i := uint64(0); i < lead.heartbeatTimeout; i++ {
-		lead.tick()
+		ne(lead.tick(), t)
 	}
 	if lead.leaderTransferTarget != 3 {
 		t.Fatalf("wait transferring, leadTransferee = %v, want %v", lead.leaderTransferTarget, 3)
 	}
 	for i := uint64(0); i < lead.electionTimeout; i++ {
-		lead.tick()
+		ne(lead.tick(), t)
 	}
 	checkLeaderTransferState(t, lead, leader, 1)
 }
@@ -337,7 +347,7 @@ func TestLeaderTransferRemoveNode(t *testing.T) {
 	if lead.leaderTransferTarget != 3 {
 		t.Fatalf("wait transferring, leadTransferee = %v, want %v", lead.leaderTransferTarget, 3)
 	}
-	lead.removeNode(3)
+	ne(lead.removeNode(3), t)
 	checkLeaderTransferState(t, lead, leader, 1)
 }
 
@@ -373,12 +383,12 @@ func TestLeaderTransferSecondTransferToSameNode(t *testing.T) {
 		t.Fatalf("wait transferring, leadTransferee = %v, want %v", lead.leaderTransferTarget, 3)
 	}
 	for i := uint64(0); i < lead.heartbeatTimeout; i++ {
-		lead.tick()
+		ne(lead.tick(), t)
 	}
 	// Second transfer leadership request to the same node.
 	nt.send(pb.Message{From: 3, To: 1, Hint: 3, Type: pb.LeaderTransfer})
 	for i := uint64(0); i < lead.electionTimeout-lead.heartbeatTimeout; i++ {
-		lead.tick()
+		ne(lead.tick(), t)
 	}
 	checkLeaderTransferState(t, lead, leader, 1)
 }
@@ -387,16 +397,16 @@ func TestLeaderTransferSecondTransferToSameNode(t *testing.T) {
 func TestRemoteResumeByHeartbeatResp(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.remotes[2].retryToWait()
 
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat})
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat}), t)
 	if r.remotes[2].state != remoteWait {
 		t.Errorf("st = %s, want true", r.remotes[2].state)
 	}
 
 	r.remotes[2].becomeReplicate()
-	r.Handle(pb.Message{From: 2, To: 1, Type: pb.HeartbeatResp})
+	ne(r.Handle(pb.Message{From: 2, To: 1, Type: pb.HeartbeatResp}), t)
 	if r.remotes[2].state == remoteWait {
 		t.Errorf("paused = %s, want false", r.remotes[2].state)
 	}
@@ -405,10 +415,10 @@ func TestRemoteResumeByHeartbeatResp(t *testing.T) {
 func TestRemotePaused(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
+	ne(r.becomeLeader(), t)
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
 
 	ms := r.readMessages()
 	if len(ms) != 1 {
@@ -576,7 +586,7 @@ func testVoteFromAnyState(t *testing.T, vt pb.MessageType) {
 			r.becomeCandidate()
 		case leader:
 			r.becomeCandidate()
-			r.becomeLeader()
+			ne(r.becomeLeader(), t)
 		}
 
 		// Note that setting our state above may have advanced r.term
@@ -592,7 +602,7 @@ func testVoteFromAnyState(t *testing.T, vt pb.MessageType) {
 			LogTerm:  newTerm,
 			LogIndex: 42,
 		}
-		r.Handle(msg)
+		ne(r.Handle(msg), t)
 		if len(r.msgs) != 1 {
 			t.Errorf("%s,%s: %d response messages, want 1: %+v", vt, st, len(r.msgs), r.msgs)
 		} else {
@@ -1154,7 +1164,9 @@ func TestCommit(t *testing.T) {
 			sm.setRemote(uint64(j)+1, tt.matches[j], tt.matches[j]+1)
 		}
 		sm.state = leader
-		sm.tryCommit()
+		if _, err := sm.tryCommit(); err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if g := sm.log.committed; g != tt.w {
 			t.Errorf("#%d: committed = %d, want %d", i, g, tt.w)
 		}
@@ -1199,13 +1211,14 @@ func TestPastElectionTimeout(t *testing.T) {
 // actual stepX function.
 func TestStepIgnoreOldTermMsg(t *testing.T) {
 	called := false
-	fakeStep := func(r *raft, m pb.Message) {
+	fakeStep := func(r *raft, m pb.Message) error {
 		called = true
+		return nil
 	}
 	sm := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
 	sm.handle = fakeStep
 	sm.term = 2
-	sm.Handle(pb.Message{Type: pb.Replicate, Term: sm.term - 1})
+	ne(sm.Handle(pb.Message{Type: pb.Replicate, Term: sm.term - 1}), t)
 	if called {
 		t.Errorf("stepFunc called = %v , want %v", called, false)
 	}
@@ -1257,7 +1270,7 @@ func TestHandleMTReplicate(t *testing.T) {
 		sm := newTestRaft(1, []uint64{1}, 10, 1, storage)
 		sm.becomeFollower(2, NoLeader)
 
-		sm.handleReplicateMessage(tt.m)
+		ne(sm.handleReplicateMessage(tt.m), t)
 		if sm.log.lastIndex() != tt.wIndex {
 			t.Errorf("#%d: lastIndex = %d, want %d", i, sm.log.lastIndex(), tt.wIndex)
 		}
@@ -1295,7 +1308,7 @@ func TestHandleHeartbeat(t *testing.T) {
 		sm := newTestRaft(1, []uint64{1, 2}, 5, 1, storage)
 		sm.becomeFollower(2, 2)
 		sm.log.commitTo(commit)
-		sm.handleHeartbeatMessage(tt.m)
+		ne(sm.handleHeartbeatMessage(tt.m), t)
 		if sm.log.committed != tt.wCommit {
 			t.Errorf("#%d: committed = %d, want %d", i, sm.log.committed, tt.wCommit)
 		}
@@ -1317,10 +1330,10 @@ func TestHandleHeartbeatResp(t *testing.T) {
 	}
 	sm := newTestRaft(1, []uint64{1, 2}, 5, 1, storage)
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 	sm.log.commitTo(sm.log.lastIndex())
 	// A heartbeat response from a node that is behind; re-send MTReplicate
-	sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp})
+	ne(sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp}), t)
 	msgs := sm.readMessages()
 	if len(msgs) != 1 {
 		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
@@ -1329,7 +1342,7 @@ func TestHandleHeartbeatResp(t *testing.T) {
 		t.Errorf("type = %v, want MTReplicate", msgs[0].Type)
 	}
 	// A second heartbeat response generates another MTReplicate re-send
-	sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp})
+	ne(sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp}), t)
 	msgs = sm.readMessages()
 	if len(msgs) != 1 {
 		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
@@ -1338,15 +1351,15 @@ func TestHandleHeartbeatResp(t *testing.T) {
 		t.Errorf("type = %v, want MTReplicate", msgs[0].Type)
 	}
 	// Once we have an MTReplicateResp, heartbeats no longer send MTReplicate.
-	sm.Handle(pb.Message{
+	ne(sm.Handle(pb.Message{
 		From:     2,
 		Type:     pb.ReplicateResp,
 		LogIndex: msgs[0].LogIndex + uint64(len(msgs[0].Entries)),
-	})
+	}), t)
 	// Consume the message sent in response to MTReplicateResp
 	sm.readMessages()
 
-	sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp})
+	ne(sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp}), t)
 	msgs = sm.readMessages()
 	if len(msgs) != 0 {
 		t.Fatalf("len(msgs) = %d, want 0: %+v", len(msgs), msgs)
@@ -1358,7 +1371,7 @@ func TestHandleHeartbeatResp(t *testing.T) {
 func TestMTReplicateRespWaitReset(t *testing.T) {
 	sm := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	// The new leader has just emitted a new Term 4 entry; consume those messages
 	// from the outgoing queue.
@@ -1366,11 +1379,11 @@ func TestMTReplicateRespWaitReset(t *testing.T) {
 	sm.readMessages()
 
 	// Node 2 acks the first entry, making it committed.
-	sm.Handle(pb.Message{
+	ne(sm.Handle(pb.Message{
 		From:     2,
 		Type:     pb.ReplicateResp,
 		LogIndex: 1,
-	})
+	}), t)
 	if sm.log.committed != 1 {
 		t.Fatalf("expected committed to be 1, got %d", sm.log.committed)
 	}
@@ -1378,11 +1391,11 @@ func TestMTReplicateRespWaitReset(t *testing.T) {
 	sm.readMessages()
 
 	// A new command is now proposed on node 1.
-	sm.Handle(pb.Message{
+	ne(sm.Handle(pb.Message{
 		From:    1,
 		Type:    pb.Propose,
 		Entries: []pb.Entry{{}},
-	})
+	}), t)
 
 	// The command is broadcast to all nodes not in the wait state.
 	// Node 2 left the wait state due to its MsgAppendResp, but node 3 is still waiting.
@@ -1405,11 +1418,11 @@ func TestMTReplicateRespWaitReset(t *testing.T) {
 	}
 
 	// Now Node 3 acks the first entry. This releases the wait and entry 2 is sent.
-	sm.Handle(pb.Message{
+	ne(sm.Handle(pb.Message{
 		From:     3,
 		Type:     pb.ReplicateResp,
 		LogIndex: 1,
-	})
+	}), t)
 
 	// lni
 	// now node 3 should be in replicate state
@@ -1477,7 +1490,7 @@ func testRecvMsgVote(t *testing.T, msgType pb.MessageType) {
 			inmem: inMemory{markerIndex: 3},
 		}
 
-		sm.Handle(pb.Message{Type: msgType, From: 2, LogIndex: tt.i, LogTerm: tt.term})
+		ne(sm.Handle(pb.Message{Type: msgType, From: 2, LogIndex: tt.i, LogTerm: tt.term}), t)
 
 		msgs := sm.readMessages()
 		if g := len(msgs); g != 1 {
@@ -1541,7 +1554,7 @@ func TestStateTransition(t *testing.T) {
 			case candidate:
 				sm.becomeCandidate()
 			case leader:
-				sm.becomeLeader()
+				ne(sm.becomeLeader(), t)
 			}
 
 			if sm.term != tt.wterm {
@@ -1580,11 +1593,11 @@ func TestAllServerStepdown(t *testing.T) {
 			sm.becomeCandidate()
 		case leader:
 			sm.becomeCandidate()
-			sm.becomeLeader()
+			ne(sm.becomeLeader(), t)
 		}
 
 		for j, msgType := range tmsgTypes {
-			sm.Handle(pb.Message{From: 2, Type: msgType, Term: tterm, LogTerm: tterm})
+			ne(sm.Handle(pb.Message{From: 2, Type: msgType, Term: tterm, LogTerm: tterm}), t)
 
 			if sm.state != tt.wstate {
 				t.Errorf("#%d.%d state = %v , want %v", i, j, sm.state, tt.wstate)
@@ -1615,11 +1628,11 @@ func TestLeaderStepdownWhenQuorumActive(t *testing.T) {
 	sm.checkQuorum = true
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	for i := uint64(0); i < sm.electionTimeout+1; i++ {
-		sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp, Term: sm.term})
-		sm.tick()
+		ne(sm.Handle(pb.Message{From: 2, Type: pb.HeartbeatResp, Term: sm.term}), t)
+		ne(sm.tick(), t)
 	}
 
 	if sm.state != leader {
@@ -1633,10 +1646,10 @@ func TestLeaderStepdownWhenQuorumLost(t *testing.T) {
 	sm.checkQuorum = true
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	for i := uint64(0); i < sm.electionTimeout+1; i++ {
-		sm.tick()
+		ne(sm.tick(), t)
 	}
 
 	if sm.state != follower {
@@ -1657,7 +1670,7 @@ func TestLeaderSupersedingWithCheckQuorum(t *testing.T) {
 	setRandomizedElectionTimeout(b, b.electionTimeout+1)
 
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 
@@ -1677,7 +1690,7 @@ func TestLeaderSupersedingWithCheckQuorum(t *testing.T) {
 
 	// Letting b's electionRTT reach to electionTimeout
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 3, To: 3, Type: pb.Election})
 
@@ -1718,10 +1731,10 @@ func TestLeaderElectionWithCheckQuorum(t *testing.T) {
 	setRandomizedElectionTimeout(a, a.electionTimeout+1)
 	setRandomizedElectionTimeout(b, b.electionTimeout+2)
 	for i := uint64(0); i < a.electionTimeout; i++ {
-		a.tick()
+		ne(a.tick(), t)
 	}
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 3, To: 3, Type: pb.Election})
 
@@ -1759,7 +1772,7 @@ func testFreeStuckCandidateWithCheckQuorum(t *testing.T) {
 	setRandomizedElectionTimeout(b, b.electionTimeout+1)
 
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 
@@ -1829,7 +1842,7 @@ func TestNonPromotableVoterWithCheckQuorum(t *testing.T) {
 	}
 
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 
@@ -1855,7 +1868,7 @@ func TestReadOnlyOptionSafe(t *testing.T) {
 	setRandomizedElectionTimeout(b, b.electionTimeout+1)
 
 	for i := uint64(0); i < b.electionTimeout; i++ {
-		b.tick()
+		ne(b.tick(), t)
 	}
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 
@@ -1928,9 +1941,9 @@ func TestLeaderAppResp(t *testing.T) {
 			inmem: inMemory{markerIndex: 3},
 		}
 		sm.becomeCandidate()
-		sm.becomeLeader()
+		ne(sm.becomeLeader(), t)
 		sm.readMessages()
-		sm.Handle(pb.Message{From: 2, Type: pb.ReplicateResp, LogIndex: tt.index, Term: sm.term, Reject: tt.reject, Hint: tt.index})
+		ne(sm.Handle(pb.Message{From: 2, Type: pb.ReplicateResp, LogIndex: tt.index, Term: sm.term, Reject: tt.reject, Hint: tt.index}), t)
 
 		p := sm.remotes[2]
 		if p.match != tt.wmatch {
@@ -1974,16 +1987,16 @@ func TestBcastBeat(t *testing.T) {
 	sm.term = 1
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 	for i := 0; i < 10; i++ {
-		sm.appendEntries([]pb.Entry{{Index: uint64(i) + 1}})
+		ne(sm.appendEntries([]pb.Entry{{Index: uint64(i) + 1}}), t)
 	}
 	// slow follower
 	sm.remotes[2].match, sm.remotes[2].next = 5, 6
 	// normal follower
 	sm.remotes[3].match, sm.remotes[3].next = sm.log.lastIndex(), sm.log.lastIndex()+1
 
-	sm.Handle(pb.Message{Type: pb.LeaderHeartbeat})
+	ne(sm.Handle(pb.Message{Type: pb.LeaderHeartbeat}), t)
 	msgs := sm.readMessages()
 	if len(msgs) != 2 {
 		t.Fatalf("len(msgs) = %v, want 2", len(msgs))
@@ -2034,7 +2047,7 @@ func TestRecvMsgLeaderHeartbeat(t *testing.T) {
 		sm.log = &entryLog{logdb: &TestLogDB{entries: []pb.Entry{{Index: 1, Term: 0}, {Index: 2, Term: 1}}}}
 		sm.term = 1
 		sm.state = tt.state
-		sm.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat})
+		ne(sm.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat}), t)
 
 		msgs := sm.readMessages()
 		if len(msgs) != tt.wMsg {
@@ -2068,10 +2081,10 @@ func TestLeaderIncreaseNext(t *testing.T) {
 		sm := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 		sm.log.append(previousEnts)
 		sm.becomeCandidate()
-		sm.becomeLeader()
+		ne(sm.becomeLeader(), t)
 		sm.remotes[2].state = tt.state
 		sm.remotes[2].next = tt.next
-		sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
+		ne(sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
 
 		p := sm.remotes[2]
 		if p.next != tt.wnext {
@@ -2083,7 +2096,7 @@ func TestLeaderIncreaseNext(t *testing.T) {
 func TestSendAppendForRemoteRetry(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.readMessages()
 	r.remotes[2].becomeRetry()
 
@@ -2093,7 +2106,7 @@ func TestSendAppendForRemoteRetry(t *testing.T) {
 			// we expect that raft will only send out one msgAPP on the first
 			// loop. After that, the follower is paused until a heartbeat response is
 			// received.
-			r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}})
+			ne(r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}}), t)
 			r.sendReplicateMessage(2)
 			msg := r.readMessages()
 			if len(msg) != 1 {
@@ -2108,7 +2121,7 @@ func TestSendAppendForRemoteRetry(t *testing.T) {
 			t.Errorf("paused = %s, want remoteWait", r.remotes[2].state)
 		}
 		for j := 0; j < 10; j++ {
-			r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}})
+			ne(r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}}), t)
 			r.sendReplicateMessage(2)
 			if l := len(r.readMessages()); l != 0 {
 				t.Errorf("len(msg) = %d, want %d", l, 0)
@@ -2117,7 +2130,7 @@ func TestSendAppendForRemoteRetry(t *testing.T) {
 
 		// do a heartbeat
 		for j := uint64(0); j < r.heartbeatTimeout; j++ {
-			r.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat})
+			ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.LeaderHeartbeat}), t)
 		}
 		if r.remotes[2].state != remoteWait {
 			t.Errorf("paused = %v, want remoteWait", r.remotes[2].state)
@@ -2134,7 +2147,7 @@ func TestSendAppendForRemoteRetry(t *testing.T) {
 	}
 
 	// a heartbeat response will allow another message to be sent
-	r.Handle(pb.Message{From: 2, To: 1, Type: pb.HeartbeatResp})
+	ne(r.Handle(pb.Message{From: 2, To: 1, Type: pb.HeartbeatResp}), t)
 	msg := r.readMessages()
 	if len(msg) != 1 {
 		t.Errorf("len(msg) = %d, want %d", len(msg), 1)
@@ -2151,12 +2164,12 @@ func TestSendAppendForRemoteRetry(t *testing.T) {
 func TestSendAppendForRemoteReplicate(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.readMessages()
 	r.remotes[2].becomeReplicate()
 
 	for i := 0; i < 10; i++ {
-		r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}})
+		ne(r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}}), t)
 		r.sendReplicateMessage(2)
 		msgs := r.readMessages()
 		if len(msgs) != 1 {
@@ -2169,12 +2182,12 @@ func TestSendAppendForRemoteReplicate(t *testing.T) {
 func TestSendAppendForRemoteSnapshot(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.readMessages()
 	r.remotes[2].becomeSnapshot(10)
 
 	for i := 0; i < 10; i++ {
-		r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}})
+		ne(r.appendEntries([]pb.Entry{{Cmd: []byte("somedata")}}), t)
 		r.sendReplicateMessage(2)
 		msgs := r.readMessages()
 		if len(msgs) != 0 {
@@ -2192,14 +2205,14 @@ func TestRecvMsgUnreachable(t *testing.T) {
 	}
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, s)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.readMessages()
 	// set node 2 to state replicate
 	r.remotes[2].match = 3
 	r.remotes[2].becomeReplicate()
 	r.remotes[2].tryUpdate(5)
 
-	r.Handle(pb.Message{From: 2, To: 1, Type: pb.Unreachable})
+	ne(r.Handle(pb.Message{From: 2, To: 1, Type: pb.Unreachable}), t)
 
 	if r.remotes[2].state != remoteRetry {
 		t.Errorf("state = %s, want %s", r.remotes[2].state, remoteRetry)
@@ -2242,7 +2255,11 @@ func TestRestore(t *testing.T) {
 
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
-	if ok := sm.restore(s); !ok {
+	ok, err := sm.restore(s)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Fatal("restore fail, want succeed")
 	}
 
@@ -2262,8 +2279,11 @@ func TestRestore(t *testing.T) {
 	if !sliceEqual(sg, getNodesFromMembership(s.Membership)) {
 		t.Errorf("sm.Nodes = %+v, want %+v", sg, getNodesFromMembership(s.Membership))
 	}
-
-	if ok := sm.restore(s); ok {
+	ok, err = sm.restore(s)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Fatal("restore succeed, want fail")
 	}
 }
@@ -2283,7 +2303,11 @@ func TestRestoreIgnoreSnapshot(t *testing.T) {
 	}
 
 	// ignore snapshot
-	if ok := sm.restore(s); ok {
+	ok, err := sm.restore(s)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("restore = %t, want %t", ok, false)
 	}
 	if sm.log.committed != commit {
@@ -2295,7 +2319,11 @@ func TestRestoreIgnoreSnapshot(t *testing.T) {
 	// but it will fast forward the committed value.
 	// ignore snapshot and fast forward commit
 	s.Index = commit + 1
-	if ok := sm.restore(s); ok {
+	ok, err = sm.restore(s)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("restore = %t, want %t", ok, false)
 	}
 	if sm.log.committed != commit+1 {
@@ -2312,15 +2340,17 @@ func TestProvideSnap(t *testing.T) {
 	}
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1}, 10, 1, storage)
-	sm.restore(s)
+	if _, err := sm.restore(s); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(s)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	// force set the next of node 2, so that node 2 needs a snapshot
 	sm.remotes[2].next = sm.log.firstIndex()
-	sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: sm.remotes[2].next - 1, Reject: true})
+	ne(sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: sm.remotes[2].next - 1, Reject: true}), t)
 
 	msgs := sm.readMessages()
 	if len(msgs) != 1 {
@@ -2341,18 +2371,20 @@ func TestIgnoreProvidingSnap(t *testing.T) {
 	}
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1}, 10, 1, storage)
-	sm.restore(s)
+	if _, err := sm.restore(s); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(s)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	// force set the next of node 2, so that node 2 needs a snapshot
 	// change node 2 to be inactive, expect node 1 ignore sending snapshot to 2
 	sm.remotes[2].next = sm.log.firstIndex() - 1
 	sm.remotes[2].active = false
 
-	sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
+	ne(sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
 
 	msgs := sm.readMessages()
 	if len(msgs) != 0 {
@@ -2369,7 +2401,7 @@ func TestRestoreFromSnapMsg(t *testing.T) {
 	m := pb.Message{Type: pb.InstallSnapshot, From: 1, Term: 2, Snapshot: s}
 
 	sm := newTestRaft(2, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	sm.Handle(m)
+	ne(sm.Handle(m), t)
 
 	if sm.leaderID != uint64(1) {
 		t.Errorf("sm.lead = %d, want 1", sm.leaderID)
@@ -2425,9 +2457,9 @@ func TestStepConfig(t *testing.T) {
 	// a raft that cannot make progress
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	index := r.log.lastIndex()
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}})
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}}), t)
 	if g := r.log.lastIndex(); g != index+1 {
 		t.Errorf("index = %d, want %d", g, index+1)
 	}
@@ -2443,11 +2475,11 @@ func TestStepIgnoreConfig(t *testing.T) {
 	// a raft that cannot make progress
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}})
+	ne(r.becomeLeader(), t)
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}}), t)
 	index := r.log.lastIndex()
 	pendingConfigChange := r.pendingConfigChange
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}})
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Type: pb.ConfigChangeEntry}}}), t)
 	wents := []pb.Entry{{Type: pb.ApplicationEntry, Term: 1, Index: 3, Cmd: nil}}
 	ents, err := r.log.entries(index+1, noLimit)
 	if err != nil {
@@ -2473,9 +2505,9 @@ func TestRecoverPendingConfig(t *testing.T) {
 	}
 	for i, tt := range tests {
 		r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
-		r.appendEntries([]pb.Entry{{Type: tt.entType}})
+		ne(r.appendEntries([]pb.Entry{{Type: tt.entType}}), t)
 		r.becomeCandidate()
-		r.becomeLeader()
+		ne(r.becomeLeader(), t)
 		if r.pendingConfigChange != tt.wpending {
 			t.Errorf("#%d: pendingConfigChange = %v, want %v", i, r.pendingConfigChange, tt.wpending)
 		}
@@ -2492,10 +2524,10 @@ func TestRecoverDoublePendingConfig(t *testing.T) {
 			}
 		}()
 		r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
-		r.appendEntries([]pb.Entry{{Type: pb.ConfigChangeEntry}})
-		r.appendEntries([]pb.Entry{{Type: pb.ConfigChangeEntry}})
+		ne(r.appendEntries([]pb.Entry{{Type: pb.ConfigChangeEntry}}), t)
+		ne(r.appendEntries([]pb.Entry{{Type: pb.ConfigChangeEntry}}), t)
 		r.becomeCandidate()
-		r.becomeLeader()
+		ne(r.becomeLeader(), t)
 	}()
 }
 
@@ -2519,7 +2551,7 @@ func TestAddNode(t *testing.T) {
 func TestRemoveNode(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	r.pendingConfigChange = true
-	r.removeNode(2)
+	ne(r.removeNode(2), t)
 	if r.pendingConfigChange {
 		t.Errorf("pendingConfigChange = %v, want false", r.pendingConfigChange)
 	}
@@ -2529,7 +2561,7 @@ func TestRemoveNode(t *testing.T) {
 	}
 
 	// remove all nodes from cluster
-	r.removeNode(1)
+	ne(r.removeNode(1), t)
 	w = []uint64{}
 	if g := r.nodesSorted(); !reflect.DeepEqual(g, w) {
 		t.Errorf("nodes = %v, want %v", g, w)
@@ -2594,12 +2626,12 @@ func testCampaignWhileLeader(t *testing.T) {
 	}
 	// We don't call campaign() directly because it comes after the check
 	// for our current state.
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Election})
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Election}), t)
 	if r.state != leader {
 		t.Errorf("expected single-node election to become leader but got %s", r.state)
 	}
 	term := r.term
-	r.Handle(pb.Message{From: 1, To: 1, Type: pb.Election})
+	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Election}), t)
 	if r.state != leader {
 		t.Errorf("expected to remain leader but got %s", r.state)
 	}
@@ -2615,7 +2647,7 @@ func TestCommitAfterRemoveNode(t *testing.T) {
 	s := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, s)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 
 	// Begin to remove the second node.
 	cc := pb.ConfigChange{
@@ -2626,12 +2658,12 @@ func TestCommitAfterRemoveNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Handle(pb.Message{
+	ne(r.Handle(pb.Message{
 		Type: pb.Propose,
 		Entries: []pb.Entry{
 			{Type: pb.ConfigChangeEntry, Cmd: ccData},
 		},
-	})
+	}), t)
 	// Stabilize the log and make sure nothing is committed yet.
 	if ents := nextEnts(r, s); len(ents) > 0 {
 		t.Fatalf("unexpected committed entries: %v", ents)
@@ -2639,19 +2671,19 @@ func TestCommitAfterRemoveNode(t *testing.T) {
 	ccIndex := r.log.lastIndex()
 
 	// While the config change is pending, make another proposal.
-	r.Handle(pb.Message{
+	ne(r.Handle(pb.Message{
 		Type: pb.Propose,
 		Entries: []pb.Entry{
 			{Type: pb.ApplicationEntry, Cmd: []byte("hello")},
 		},
-	})
+	}), t)
 
 	// Node 2 acknowledges the config change, committing it.
-	r.Handle(pb.Message{
+	ne(r.Handle(pb.Message{
 		Type:     pb.ReplicateResp,
 		From:     2,
 		LogIndex: ccIndex,
-	})
+	}), t)
 	ents := nextEnts(r, s)
 	if len(ents) != 2 {
 		t.Fatalf("expected two committed entries, got %v", ents)
@@ -2665,7 +2697,7 @@ func TestCommitAfterRemoveNode(t *testing.T) {
 
 	// Apply the config change. This reduces quorum requirements so the
 	// pending command can now commit.
-	r.removeNode(2)
+	ne(r.removeNode(2), t)
 	ents = nextEnts(r, s)
 	if len(ents) != 1 || ents[0].Type != pb.ApplicationEntry ||
 		string(ents[0].Cmd) != "hello" {
@@ -2684,17 +2716,19 @@ var (
 func TestSendingSnapshotSetPendingSnapshot(t *testing.T) {
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1}, 10, 1, storage)
-	sm.restore(testingSnap)
+	if _, err := sm.restore(testingSnap); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(testingSnap)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	// force set the next of node 1, so that
 	// node 1 needs a snapshot
 	sm.remotes[2].next = sm.log.firstIndex()
 
-	sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: sm.remotes[2].next - 1, Reject: true})
+	ne(sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: sm.remotes[2].next - 1, Reject: true}), t)
 	if sm.remotes[2].snapshotIndex != 11 {
 		t.Fatalf("PendingSnapshot = %d, want 11", sm.remotes[2].snapshotIndex)
 	}
@@ -2703,15 +2737,17 @@ func TestSendingSnapshotSetPendingSnapshot(t *testing.T) {
 func TestPendingSnapshotPauseReplication(t *testing.T) {
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
-	sm.restore(testingSnap)
+	if _, err := sm.restore(testingSnap); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(testingSnap)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	sm.remotes[2].becomeSnapshot(11)
 
-	sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}})
+	ne(sm.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("somedata")}}}), t)
 	msgs := sm.readMessages()
 	if len(msgs) != 0 {
 		t.Fatalf("len(msgs) = %d, want 0", len(msgs))
@@ -2721,16 +2757,18 @@ func TestPendingSnapshotPauseReplication(t *testing.T) {
 func TestSnapshotFailure(t *testing.T) {
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
-	sm.restore(testingSnap)
+	if _, err := sm.restore(testingSnap); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(testingSnap)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	sm.remotes[2].next = 1
 	sm.remotes[2].becomeSnapshot(11)
 
-	sm.Handle(pb.Message{From: 2, To: 1, Type: pb.SnapshotStatus, Reject: true})
+	ne(sm.Handle(pb.Message{From: 2, To: 1, Type: pb.SnapshotStatus, Reject: true}), t)
 	if sm.remotes[2].snapshotIndex != 0 {
 		t.Fatalf("PendingSnapshot = %d, want 0", sm.remotes[2].snapshotIndex)
 	}
@@ -2745,16 +2783,18 @@ func TestSnapshotFailure(t *testing.T) {
 func TestSnapshotSucceed(t *testing.T) {
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
-	sm.restore(testingSnap)
+	if _, err := sm.restore(testingSnap); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(testingSnap)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	sm.remotes[2].next = 1
 	sm.remotes[2].becomeSnapshot(11)
 
-	sm.Handle(pb.Message{From: 2, To: 1, Type: pb.SnapshotStatus, Reject: false})
+	ne(sm.Handle(pb.Message{From: 2, To: 1, Type: pb.SnapshotStatus, Reject: false}), t)
 	if sm.remotes[2].snapshotIndex != 0 {
 		t.Fatalf("PendingSnapshot = %d, want 0", sm.remotes[2].snapshotIndex)
 	}
@@ -2769,18 +2809,20 @@ func TestSnapshotSucceed(t *testing.T) {
 func TestSnapshotAbort(t *testing.T) {
 	storage := NewTestLogDB()
 	sm := newTestRaft(1, []uint64{1, 2}, 10, 1, storage)
-	sm.restore(testingSnap)
+	if _, err := sm.restore(testingSnap); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	sm.restoreRemotes(testingSnap)
 
 	sm.becomeCandidate()
-	sm.becomeLeader()
+	ne(sm.becomeLeader(), t)
 
 	sm.remotes[2].next = 1
 	sm.remotes[2].becomeSnapshot(11)
 
 	// A successful msgAppResp that has a higher/equal index than the
 	// pending snapshot should abort the pending snapshot.
-	sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: 11})
+	ne(sm.Handle(pb.Message{From: 2, To: 1, Type: pb.ReplicateResp, LogIndex: 11}), t)
 	if sm.remotes[2].snapshotIndex != 0 {
 		t.Fatalf("PendingSnapshot = %d, want 0", sm.remotes[2].snapshotIndex)
 	}
@@ -2900,7 +2942,9 @@ func (nw *network) send(msgs ...pb.Message) {
 	for len(msgs) > 0 {
 		m := msgs[0]
 		p := nw.peers[m.To]
-		p.Handle(m)
+		if err := p.Handle(m); err != nil {
+			panic(err)
+		}
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
 	}
 }
@@ -2960,7 +3004,7 @@ type connem struct {
 
 type blackHole struct{}
 
-func (blackHole) Handle(pb.Message)          {}
+func (blackHole) Handle(pb.Message) error    { return nil }
 func (blackHole) readMessages() []pb.Message { return nil }
 
 var nopStepper = &blackHole{}

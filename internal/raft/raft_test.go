@@ -136,9 +136,11 @@ func TestNilLogdbWillPanic(t *testing.T) {
 func TestTryCommitResetsMatchArray(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	p.becomeLeader()
+	ne(p.becomeLeader(), t)
 	p.matched = nil
-	p.tryCommit()
+	if _, err := p.tryCommit(); err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
 	if len(p.matched) != 3 {
 		t.Errorf("tryCommit didn't resize the match array")
 	}
@@ -303,7 +305,7 @@ func TestBecomeCandidatePanicWhenNodeIsLeader(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ready = true
 	r.becomeCandidate()
 }
@@ -322,7 +324,7 @@ func TestBecomeLeaderPanicWhenNodeIsFollower(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)
 	ready = true
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 }
 
 func TestBecomeCandidateDragonboat(t *testing.T) {
@@ -354,7 +356,7 @@ func TestObserverWillNotStartElection(t *testing.T) {
 		t.Errorf("p.romotes len: %d", len(p.remotes))
 	}
 	for i := uint64(0); i < p.randomizedElectionTimeout*10; i++ {
-		p.tick()
+		ne(p.tick(), t)
 	}
 	// gRequestVote won't be sent
 	if len(p.msgs) != 0 {
@@ -367,7 +369,7 @@ func TestObserverWillNotVoteInElection(t *testing.T) {
 	if !p.isObserver() {
 		t.Errorf("not an observer")
 	}
-	p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100})
+	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100}), t)
 	if len(p.msgs) != 0 {
 		t.Errorf("observer is voting")
 	}
@@ -400,7 +402,7 @@ func TestObserverCanActAsRegularNodeAfterPromotion(t *testing.T) {
 		t.Errorf("not promoted to regular node")
 	}
 	for i := uint64(0); i <= p.randomizedElectionTimeout; i++ {
-		p.tick()
+		ne(p.tick(), t)
 	}
 	if p.state != leader {
 		t.Errorf("failed to start election")
@@ -423,7 +425,7 @@ func TestObserverReplication(t *testing.T) {
 		t.Errorf("remotes len: %d, want 1", len(p1.remotes))
 	}
 	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
+		ne(p1.tick(), t)
 	}
 	if p1.state != leader {
 		t.Errorf("failed to start election")
@@ -462,7 +464,7 @@ func TestObserverCanPropose(t *testing.T) {
 		t.Errorf("failed to start election")
 	}
 	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
+		ne(p1.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
 	if !p2.isObserver() {
@@ -504,7 +506,7 @@ func TestObserverCanReadIndexQuorum1(t *testing.T) {
 		t.Errorf("failed to start election")
 	}
 	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
+		ne(p1.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
 	if !p2.isObserver() {
@@ -544,7 +546,7 @@ func TestObserverCanReadIndexQuorum2(t *testing.T) {
 		t.Errorf("not an observer")
 	}
 	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
-		p1.tick()
+		ne(p1.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
 	committed := p1.log.committed
@@ -580,7 +582,7 @@ func TestObserverCanReceiveSnapshot(t *testing.T) {
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
-	p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss})
+	ne(p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss}), t)
 	if p1.log.committed != 20 {
 		t.Errorf("snapshot not applied")
 	}
@@ -600,7 +602,7 @@ func TestObserverCanReceiveHeartbeatMessage(t *testing.T) {
 	m.Entries = append(m.Entries, pb.Entry{Index: 1, Term: 1, Cmd: []byte("test-data1")})
 	m.Entries = append(m.Entries, pb.Entry{Index: 2, Term: 1, Cmd: []byte("test-data2")})
 	m.Entries = append(m.Entries, pb.Entry{Index: 3, Term: 1, Cmd: []byte("test-data3")})
-	p1.Handle(m)
+	ne(p1.Handle(m), t)
 	if p1.log.lastIndex() != 3 {
 		t.Errorf("last index unexpected: %d, want 3", p1.log.lastIndex())
 	}
@@ -613,7 +615,7 @@ func TestObserverCanReceiveHeartbeatMessage(t *testing.T) {
 		From:   1,
 		To:     2,
 	}
-	p1.Handle(hbm)
+	ne(p1.Handle(hbm), t)
 	if p1.log.committed != 3 {
 		t.Errorf("unexpected committed value %d, want 3", p1.log.committed)
 	}
@@ -634,7 +636,11 @@ func TestObserverCanBeRestored(t *testing.T) {
 		Membership: members,
 	}
 	p1 := newTestObserver(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
-	if ok := p1.restore(ss); !ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to restore")
 	}
 }
@@ -656,7 +662,11 @@ func TestObserverCanBePromotedBySnapshot(t *testing.T) {
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
-	if ok := p1.restore(ss); !ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to restore")
 	}
 	p1.restoreRemotes(ss)
@@ -717,7 +727,11 @@ func TestObserverCanNotMoveNodeBackToObserverBySnapshot(t *testing.T) {
 			panic("restore didn't cause panic")
 		}
 	}()
-	if ok := p1.restore(ss); ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("restore unexpectedly completed")
 	}
 }
@@ -741,7 +755,7 @@ func TestObserverCanBeRemoved(t *testing.T) {
 	if len(p1.observers) != 2 {
 		t.Errorf("unexpected observer count")
 	}
-	p1.removeNode(2)
+	ne(p1.removeNode(2), t)
 	if len(p1.observers) != 1 {
 		t.Errorf("observer not removed")
 	}
@@ -790,7 +804,7 @@ func TestWitnessWillNotStartElection(t *testing.T) {
 		t.Errorf("p.romotes len: %d", len(p.remotes))
 	}
 	for i := uint64(0); i < p.randomizedElectionTimeout*10; i++ {
-		p.tick()
+		ne(p.tick(), t)
 	}
 	// RequestVote won't be sent
 	if len(p.msgs) != 0 {
@@ -803,7 +817,7 @@ func TestWitnessWillVoteInElection(t *testing.T) {
 	if !p.isWitness() {
 		t.Errorf("not a witness")
 	}
-	p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100})
+	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100}), t)
 	if len(p.msgs) != 1 {
 		t.Fatalf("witness is not voting")
 	}
@@ -843,7 +857,11 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 	if !p1.isObserver() {
 		t.Errorf("not an observer")
 	}
-	if ok := p1.restore(ss); !ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to restore")
 	}
 	p1.restoreRemotes(ss)
@@ -971,7 +989,7 @@ func setUpLeaderAndWitness(t *testing.T) (*raft, *raft, *network) {
 		t.Errorf("failed to start election")
 	}
 	for i := uint64(0); i <= leader.randomizedElectionTimeout; i++ {
-		leader.tick()
+		ne(leader.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
 	if !witness.isWitness() {
@@ -1006,7 +1024,7 @@ func TestWitnessCanReceiveSnapshot(t *testing.T) {
 	if !p1.isWitness() {
 		t.Errorf("not a witness")
 	}
-	p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss})
+	ne(p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss}), t)
 	if p1.log.committed != 20 {
 		t.Errorf("snapshot not applied")
 	}
@@ -1033,7 +1051,7 @@ func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
 	m.Entries = append(m.Entries, pb.Entry{Index: 2, Term: 1, Type: pb.MetadataEntry})
 	m.Entries = append(m.Entries, pb.Entry{Index: 3, Term: 1, Type: pb.MetadataEntry})
 
-	p1.Handle(m)
+	ne(p1.Handle(m), t)
 	if p1.log.lastIndex() != 3 {
 		t.Errorf("last index unexpected: %d, want 3", p1.log.lastIndex())
 	}
@@ -1046,7 +1064,7 @@ func TestWitnessCanReceiveHeartbeatMessage(t *testing.T) {
 		From:   1,
 		To:     2,
 	}
-	p1.Handle(hbm)
+	ne(p1.Handle(hbm), t)
 	if p1.log.committed != 3 {
 		t.Errorf("unexpected committed value %d, want 3", p1.log.committed)
 	}
@@ -1067,7 +1085,11 @@ func TestWitnessCanBeRestored(t *testing.T) {
 		Membership: members,
 	}
 	p1 := newTestWitness(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
-	if ok := p1.restore(ss); !ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to restore")
 	}
 }
@@ -1092,7 +1114,11 @@ func TestWitnessCanNotMoveNodeBackToWitnessBySnapshot(t *testing.T) {
 			panic("restore didn't cause panic")
 		}
 	}()
-	if ok := p1.restore(ss); ok {
+	ok, err := p1.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("restore unexpectedly completed")
 	}
 }
@@ -1116,7 +1142,7 @@ func TestWitnessCanBeRemoved(t *testing.T) {
 	if len(p1.witnesses) != 1 {
 		t.Errorf("unexpected witness count")
 	}
-	p1.removeNode(2)
+	ne(p1.removeNode(2), t)
 	if len(p1.witnesses) != 0 {
 		t.Errorf("witness not removed")
 	}
@@ -1129,7 +1155,7 @@ func TestFollowerTick(t *testing.T) {
 		if r.timeForElection() {
 			t.Errorf("time for election unexpected became true")
 		}
-		r.tick()
+		ne(r.tick(), t)
 	}
 	if len(r.msgs) != 1 {
 		t.Fatalf("unexpected message count %+v", r.msgs)
@@ -1142,9 +1168,9 @@ func TestFollowerTick(t *testing.T) {
 func TestLeaderTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	for i := 0; i < 10; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	if len(r.msgs) != 10 {
 		t.Errorf("unexpected msg count")
@@ -1175,10 +1201,10 @@ func TestTimeForElection(t *testing.T) {
 func TestLeaderChecksQuorumEveryElectionTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.checkQuorum = true
 	for i := 0; i < 5; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	if r.state == leader {
 		t.Errorf("leader didn't step down")
@@ -1188,7 +1214,7 @@ func TestLeaderChecksQuorumEveryElectionTick(t *testing.T) {
 func TestQuiescedTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	for i := 0; i < 200; i++ {
 		r.quiescedTick()
 	}
@@ -1219,7 +1245,7 @@ func TestSetRandomizedElectionTimeout(t *testing.T) {
 func TestMultiNodeClusterCampaign(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeFollower(10, 2)
-	r.campaign()
+	ne(r.campaign(), t)
 	if len(r.msgs) != 2 {
 		t.Fatalf("unexpected message count")
 	}
@@ -1238,7 +1264,7 @@ func TestMultiNodeClusterCampaign(t *testing.T) {
 
 func TestSingleNodeClusterCampaign(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
-	r.campaign()
+	ne(r.campaign(), t)
 	if len(r.msgs) != 0 {
 		t.Fatalf("unexpected message count")
 	}
@@ -1251,7 +1277,7 @@ func TestNoOPWithHigherTermIsSentToLeaderWhenLeaderHasLowerTerm(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeFollower(10, 2)
 	r.checkQuorum = true
-	r.Handle(pb.Message{Type: pb.Heartbeat, Term: 2})
+	ne(r.Handle(pb.Message{Type: pb.Heartbeat, Term: 2}), t)
 	msgs := r.msgs
 	if len(msgs) == 0 {
 		t.Fatalf("no message sent")
@@ -1416,7 +1442,7 @@ func TestMakeInstallSnapshotMessage(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, st)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ss := pb.Snapshot{Index: 100, Term: 2}
 	if err := st.ApplySnapshot(ss); err != nil {
 		t.Errorf("apply snapshot failed %v", err)
@@ -1435,13 +1461,13 @@ func TestMakeReplicateMessage(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, st)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	noop := pb.Entry{}
 	ents := []pb.Entry{
 		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	sz := noop.SizeUpperLimit() + ents[0].SizeUpperLimit() + ents[1].SizeUpperLimit() + 1
 	msg, err := r.makeReplicateMessage(2, 1, uint64(sz))
 	if err != nil {
@@ -1469,7 +1495,7 @@ func TestMakeReplicateMessage(t *testing.T) {
 func TestBroadcastReplicateMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.broadcastReplicateMessage()
 	count := 0
 	for _, msg := range r.msgs {
@@ -1485,7 +1511,7 @@ func TestBroadcastReplicateMessage(t *testing.T) {
 func TestBroadcastHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.broadcastHeartbeatMessage()
 	count := 0
 	for _, msg := range r.msgs {
@@ -1505,7 +1531,7 @@ func TestBroadcastHeartbeatMessageWithHint(t *testing.T) {
 	}
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.broadcastHeartbeatMessageWithHint(ctx)
 	count := 0
 	for _, msg := range r.msgs {
@@ -1535,7 +1561,7 @@ func TestSendTimeoutNowMessage(t *testing.T) {
 func TestSendHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	hint := pb.SystemCtx{Low: 100, High: 200}
 	match := uint64(100)
 	r.remotes[2].match = match
@@ -1581,12 +1607,12 @@ func TestAppendEntries(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1}, 5, 1, st)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	if r.log.committed != 3 {
 		t.Errorf("unexpected committed value %d", r.log.committed)
 	}
@@ -1599,12 +1625,12 @@ func TestAppendEntries(t *testing.T) {
 func TestResetRemotes(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	r.remotes[1].next = 100
 	r.remotes[1].match = 50
 	r.remotes[2].next = 200
@@ -1717,14 +1743,14 @@ func TestDeleteRemote(t *testing.T) {
 func TestCampaignSendExpectedMessages(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	r.becomeFollower(r.term+1, NoLeader)
-	r.campaign()
+	ne(r.campaign(), t)
 	msgs := r.msgs
 	if len(msgs) != 2 {
 		t.Errorf("unexpected message count")
@@ -1785,7 +1811,7 @@ func TestElectionTickResetAfterGrantVote(t *testing.T) {
 		To:   1,
 		Term: 3,
 	}
-	r.Handle(m)
+	ne(r.Handle(m), t)
 	if r.vote != 2 {
 		t.Fatalf("failed to grant the vote")
 	}
@@ -1830,13 +1856,13 @@ func TestPendingConfigChangeFlag(t *testing.T) {
 func TestGetPendingConfigChangeCount(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	for i := 0; i < 5; i++ {
 		ents := []pb.Entry{
 			{Type: pb.ApplicationEntry, Cmd: make([]byte, maxEntriesToApplySize)},
 			{Type: pb.ConfigChangeEntry},
 		}
-		r.appendEntries(ents)
+		ne(r.appendEntries(ents), t)
 	}
 	count := r.getPendingConfigChangeCount()
 	if count != 5 {
@@ -1876,14 +1902,14 @@ func TestIsRequestLeaderMessage(t *testing.T) {
 func TestAddNodeDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ConfigChangeEntry},
 	}
 	r.setPendingConfigChange()
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	if !r.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not set")
 	}
@@ -1902,7 +1928,7 @@ func TestAddNodeDragonboat(t *testing.T) {
 func TestRemoveNodeDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.setPendingConfigChange()
-	r.removeNode(2)
+	ne(r.removeNode(2), t)
 	if r.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not cleared")
 	}
@@ -1915,12 +1941,16 @@ func TestHasCommittedEntryAtCurrentTerm(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	if r.hasCommittedEntryAtCurrentTerm() {
 		t.Errorf("unexpected hasCommittedEntryAtCurrentTerm result")
 	}
 	r.remotes[2].tryUpdate(r.log.lastIndex())
-	if !r.tryCommit() {
+	ok, err := r.tryCommit()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to commit")
 	}
 	if !r.hasCommittedEntryAtCurrentTerm() {
@@ -1931,17 +1961,17 @@ func TestHasCommittedEntryAtCurrentTerm(t *testing.T) {
 func TestHandleLeaderCheckQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
-	r.handleLeaderCheckQuorum(pb.Message{})
+	ne(r.becomeLeader(), t)
+	ne(r.handleLeaderCheckQuorum(pb.Message{}), t)
 	if r.state != follower {
 		t.Errorf("node didn't step down")
 	}
 	r = newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.remotes[1].setActive()
 	r.remotes[2].setActive()
-	r.handleLeaderCheckQuorum(pb.Message{})
+	ne(r.handleLeaderCheckQuorum(pb.Message{}), t)
 	if r.state != leader {
 		t.Errorf("node didn't step down")
 	}
@@ -1967,14 +1997,18 @@ func TestReadyToReadList(t *testing.T) {
 func TestRestoreSnapshotIgnoreDelayedSnapshot(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	ss := pb.Snapshot{Index: 3, Term: 1}
-	if r.restore(ss) {
+	ok, err := r.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("nothing to restore")
 	}
 }
@@ -1982,17 +2016,21 @@ func TestRestoreSnapshotIgnoreDelayedSnapshot(t *testing.T) {
 func TestSnapshotCommitEntries(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	if r.log.committed != 0 {
 		t.Errorf("unexpected commit, %d", r.log.committed)
 	}
 	ss := pb.Snapshot{Index: 2, Term: 1}
-	if r.restore(ss) {
+	ok, err := r.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("not expect to restore")
 	}
 	if r.log.committed != 2 {
@@ -2003,33 +2041,41 @@ func TestSnapshotCommitEntries(t *testing.T) {
 func TestSnapshotCanBeRestored(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	ss := pb.Snapshot{Index: 4, Term: 1}
-	if !r.restore(ss) {
+	ok, err := r.restore(ss)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("snapshot unexpectedly ignored")
 	}
 	if r.log.lastIndex() != 4 {
 		t.Errorf("last index not moved, %d", r.log.lastIndex())
 	}
-	if r.log.lastTerm() != 1 {
-		t.Errorf("last term %d", r.log.lastTerm())
+	term, err := r.log.lastTerm()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if term != 1 {
+		t.Errorf("last term %d", term)
 	}
 }
 
 func TestRestoreRemote(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	ss := pb.Snapshot{}
 	ss.Membership.Addresses = make(map[uint64]string)
 	ss.Membership.Addresses[1] = ""
@@ -2144,7 +2190,7 @@ func TestHandleCandidatePropose(t *testing.T) {
 		Type:    pb.Replicate,
 		Entries: []pb.Entry{{Cmd: []byte("test-data")}},
 	}
-	r.handleCandidatePropose(msg)
+	ne(r.handleCandidatePropose(msg), t)
 	if len(r.msgs) != 0 {
 		t.Errorf("unexpectedly sent message")
 	}
@@ -2153,7 +2199,7 @@ func TestHandleCandidatePropose(t *testing.T) {
 func TestCandidateBecomeFollowerOnRecivingLeaderMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	tests := []struct {
-		fn      func(msg pb.Message)
+		fn      func(msg pb.Message) error
 		msgType pb.MessageType
 	}{
 		{r.handleCandidateReplicate, pb.Replicate},
@@ -2170,7 +2216,7 @@ func TestCandidateBecomeFollowerOnRecivingLeaderMessage(t *testing.T) {
 			Type: tt.msgType,
 			From: 2,
 		}
-		tt.fn(msg)
+		ne(tt.fn(msg), t)
 		if r.state != follower {
 			t.Errorf("not a follower")
 		}
@@ -2197,7 +2243,7 @@ func TestHandleCandidateHeartbeat(t *testing.T) {
 	}
 	// yes, this is a bit hacky
 	r.log.inmem.merge(ents)
-	r.handleCandidateHeartbeat(msg)
+	ne(r.handleCandidateHeartbeat(msg), t)
 	if r.log.committed != 3 {
 		t.Errorf("committed %d, want 3", r.log.committed)
 	}
@@ -2216,7 +2262,7 @@ func TestHandleCandidateInstallSnapshot(t *testing.T) {
 		Term:  1,
 	}
 	m := pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss}
-	r.handleCandidateInstallSnapshot(m)
+	ne(r.handleCandidateInstallSnapshot(m), t)
 	if r.log.committed != 10 {
 		t.Errorf("gSnapshot not applied")
 	}
@@ -2236,7 +2282,7 @@ func TestHandleCandidateReplicate(t *testing.T) {
 		Type:     pb.Replicate,
 		Term:     0,
 	}
-	r.handleCandidateReplicate(m)
+	ne(r.handleCandidateReplicate(m), t)
 	if r.log.lastIndex() != ents[len(ents)-1].Index {
 		t.Errorf("entries not appended, last index %d, want %d",
 			r.log.lastIndex(), ents[len(ents)-1].Index)
@@ -2252,7 +2298,7 @@ func TestHandleCandidateRequestVoteResp(t *testing.T) {
 			From:   i,
 			Reject: false,
 		}
-		r.handleCandidateRequestVoteResp(m)
+		ne(r.handleCandidateRequestVoteResp(m), t)
 	}
 	if r.state != leader {
 		t.Errorf("didn't become leader")
@@ -2277,7 +2323,7 @@ func TestHandleCandidateRequestVoteRespRejected(t *testing.T) {
 			From:   i,
 			Reject: true,
 		}
-		r.handleCandidateRequestVoteResp(m)
+		ne(r.handleCandidateRequestVoteResp(m), t)
 	}
 	if r.state != follower {
 		t.Errorf("didn't become follower")
@@ -2290,7 +2336,7 @@ func TestHandleCandidateRequestVoteRespRejected(t *testing.T) {
 func TestFollowerResetElectionTickOnReceivingLeaderMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	tests := []struct {
-		fn      func(msg pb.Message)
+		fn      func(msg pb.Message) error
 		msgType pb.MessageType
 	}{
 		{r.handleFollowerReplicate, pb.Replicate},
@@ -2305,7 +2351,7 @@ func TestFollowerResetElectionTickOnReceivingLeaderMessage(t *testing.T) {
 			Type: tt.msgType,
 			From: 3,
 		}
-		tt.fn(m)
+		ne(tt.fn(m), t)
 		if r.leaderID != 3 {
 			t.Errorf("leader id not set")
 		}
@@ -2321,7 +2367,7 @@ func TestFollowerRedirectReadIndexMessageToLeader(t *testing.T) {
 	m := pb.Message{
 		Type: pb.ReadIndex,
 	}
-	r.handleFollowerReadIndex(m)
+	ne(r.handleFollowerReadIndex(m), t)
 	if len(r.msgs) != 1 {
 		t.Fatalf("failed to redirect the message")
 	}
@@ -2339,7 +2385,7 @@ func TestFollowerRedirectProposeMessageToLeader(t *testing.T) {
 	m := pb.Message{
 		Type: pb.Propose,
 	}
-	r.handleFollowerPropose(m)
+	ne(r.handleFollowerPropose(m), t)
 	if len(r.msgs) != 1 {
 		t.Fatalf("failed to redirect the message")
 	}
@@ -2357,7 +2403,7 @@ func TestFollowerRedirectLeaderTransferMessageToLeader(t *testing.T) {
 	m := pb.Message{
 		Type: pb.LeaderTransfer,
 	}
-	r.handleFollowerLeaderTransfer(m)
+	ne(r.handleFollowerLeaderTransfer(m), t)
 	if len(r.msgs) != 1 {
 		t.Fatalf("failed to redirect the message")
 	}
@@ -2383,7 +2429,7 @@ func TestHandleFollowerReplicate(t *testing.T) {
 		Type:     pb.Replicate,
 		Term:     0,
 	}
-	r.handleFollowerReplicate(m)
+	ne(r.handleFollowerReplicate(m), t)
 	if r.log.lastIndex() != ents[len(ents)-1].Index {
 		t.Errorf("entries not appended, last index %d, want %d",
 			r.log.lastIndex(), ents[len(ents)-1].Index)
@@ -2403,7 +2449,7 @@ func TestHandleFollowerHeartbeat(t *testing.T) {
 		ents = append(ents, pb.Entry{Index: i, Term: 1})
 	}
 	r.log.inmem.merge(ents)
-	r.handleFollowerHeartbeat(msg)
+	ne(r.handleFollowerHeartbeat(msg), t)
 	if r.log.committed != 3 {
 		t.Errorf("committed %d, want 3", r.log.committed)
 	}
@@ -2422,7 +2468,7 @@ func TestHandleFollowerInstallSnapshot(t *testing.T) {
 		Term:  1,
 	}
 	m := pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss}
-	r.handleFollowerInstallSnapshot(m)
+	ne(r.handleFollowerInstallSnapshot(m), t)
 	if r.log.committed != 10 {
 		t.Errorf("gSnapshot not applied")
 	}
@@ -2437,7 +2483,7 @@ func TestHandleFollowerReadIndexResp(t *testing.T) {
 		HintHigh: 1002,
 		LogIndex: 100,
 	}
-	r.handleFollowerReadIndexResp(msg)
+	ne(r.handleFollowerReadIndexResp(msg), t)
 	if len(r.readyToRead) != 1 {
 		t.Fatalf("ready to read not updated")
 	}
@@ -2453,7 +2499,7 @@ func TestHandleFollowerTimeoutNow(t *testing.T) {
 	m := pb.Message{
 		Type: pb.TimeoutNow,
 	}
-	r.handleFollowerTimeoutNow(m)
+	ne(r.handleFollowerTimeoutNow(m), t)
 	if r.state != candidate {
 		t.Errorf("not become candidate")
 	}
@@ -2471,7 +2517,7 @@ func TestHandleFollowerLeaderTransfer(t *testing.T) {
 	m := pb.Message{
 		Type: pb.LeaderTransfer,
 	}
-	r.handleFollowerLeaderTransfer(m)
+	ne(r.handleFollowerLeaderTransfer(m), t)
 	if len(r.msgs) != 1 {
 		t.Fatalf("gLeaderTransfer not redirected")
 	}
@@ -2483,11 +2529,11 @@ func TestHandleFollowerLeaderTransfer(t *testing.T) {
 func TestLeaderIgnoreElection(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.Election,
 	}
-	r.handleNodeElection(msg)
+	ne(r.handleNodeElection(msg), t)
 	if len(r.msgs) != 0 {
 		t.Errorf("unexpected message sent")
 	}
@@ -2508,7 +2554,7 @@ func TestElectionIgnoredWhenConfigChangeIsPending(t *testing.T) {
 	msg := pb.Message{
 		Type: pb.Election,
 	}
-	r.handleNodeElection(msg)
+	ne(r.handleNodeElection(msg), t)
 	if len(r.msgs) != 0 {
 		t.Errorf("unexpected message sent")
 	}
@@ -2523,7 +2569,7 @@ func TestHandleElection(t *testing.T) {
 	msg := pb.Message{
 		Type: pb.Election,
 	}
-	r.handleNodeElection(msg)
+	ne(r.handleNodeElection(msg), t)
 	if len(r.msgs) != 1 {
 		t.Fatalf("unexpected message count %d", len(r.msgs))
 	}
@@ -2566,15 +2612,15 @@ func TestLeaderStepDownAfterRemoved(t *testing.T) {
 	msg := pb.Message{
 		Type: pb.Election,
 	}
-	r.handleNodeElection(msg)
+	ne(r.handleNodeElection(msg), t)
 	if r.state != leader {
 		t.Errorf("not a leader")
 	}
-	r.removeNode(2)
+	ne(r.removeNode(2), t)
 	if r.state != leader {
 		t.Errorf("no longer a leader, %s", r.state)
 	}
-	r.removeNode(1)
+	ne(r.removeNode(1), t)
 	if r.state != follower {
 		t.Errorf("not a follower, %s", r.state)
 	}
@@ -2589,7 +2635,7 @@ func TestLeaderStepDownAfterRemovedBySnapshot(t *testing.T) {
 	msg := pb.Message{
 		Type: pb.Election,
 	}
-	r.handleNodeElection(msg)
+	ne(r.handleNodeElection(msg), t)
 	if r.state != leader {
 		t.Errorf("not a leader")
 	}
@@ -2619,11 +2665,11 @@ func TestLeaderStepDownAfterRemovedBySnapshot(t *testing.T) {
 func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.LeaderHeartbeat,
 	}
-	r.handleLeaderHeartbeat(msg)
+	ne(r.handleLeaderHeartbeat(msg), t)
 	count := 0
 	for _, msg := range r.msgs {
 		if msg.Type == pb.Heartbeat && (msg.To == 2 || msg.To == 3) {
@@ -2638,11 +2684,11 @@ func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 func TestLeaderStepDownWithoutQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.CheckQuorum,
 	}
-	r.handleLeaderCheckQuorum(msg)
+	ne(r.handleLeaderCheckQuorum(msg), t)
 	if r.state == leader {
 		t.Errorf("leader didn't step down")
 	}
@@ -2651,14 +2697,14 @@ func TestLeaderStepDownWithoutQuorum(t *testing.T) {
 func TestLeaderIgnoreCheckQuorumWhenHasQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.CheckQuorum,
 	}
 	for _, rp := range r.remotes {
 		rp.setActive()
 	}
-	r.handleLeaderCheckQuorum(msg)
+	ne(r.handleLeaderCheckQuorum(msg), t)
 	if r.state != leader {
 		t.Errorf("leader unexpectedly stepped down")
 	}
@@ -2667,7 +2713,7 @@ func TestLeaderIgnoreCheckQuorumWhenHasQuorum(t *testing.T) {
 func TestHandleLeaderUnreachable(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.Unreachable,
 	}
@@ -2676,7 +2722,7 @@ func TestHandleLeaderUnreachable(t *testing.T) {
 		t.Errorf("rp not found")
 	}
 	rp.state = remoteReplicate
-	r.handleLeaderUnreachable(msg, rp)
+	ne(r.handleLeaderUnreachable(msg, rp), t)
 	if rp.state != remoteRetry {
 		t.Errorf("not in retry state")
 	}
@@ -2685,7 +2731,7 @@ func TestHandleLeaderUnreachable(t *testing.T) {
 func TestSnapshotStatusMessageIgnoredWhenNotInSnapshotState(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.SnapshotStatus,
 	}
@@ -2694,7 +2740,7 @@ func TestSnapshotStatusMessageIgnoredWhenNotInSnapshotState(t *testing.T) {
 		t.Errorf("rp not found")
 	}
 	rp.state = remoteReplicate
-	r.handleLeaderSnapshotStatus(msg, rp)
+	ne(r.handleLeaderSnapshotStatus(msg, rp), t)
 	if rp.state == remoteRetry {
 		t.Errorf("unexpectedly in retry state")
 	}
@@ -2703,7 +2749,7 @@ func TestSnapshotStatusMessageIgnoredWhenNotInSnapshotState(t *testing.T) {
 func TestHandleLeaderSnapshotStatus(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.SnapshotStatus,
 	}
@@ -2712,7 +2758,7 @@ func TestHandleLeaderSnapshotStatus(t *testing.T) {
 		t.Errorf("rp not found")
 	}
 	rp.state = remoteSnapshot
-	r.handleLeaderSnapshotStatus(msg, rp)
+	ne(r.handleLeaderSnapshotStatus(msg, rp), t)
 	if rp.state != remoteWait {
 		t.Errorf("not in wait state")
 	}
@@ -2737,7 +2783,7 @@ func TestHandleLeaderTransfer(t *testing.T) {
 	for idx, tt := range tests {
 		r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 		r.becomeCandidate()
-		r.becomeLeader()
+		ne(r.becomeLeader(), t)
 		msg := pb.Message{
 			Type: pb.LeaderTransfer,
 			Hint: tt.target,
@@ -2752,7 +2798,7 @@ func TestHandleLeaderTransfer(t *testing.T) {
 		if tt.match {
 			rp.match = r.log.lastIndex()
 		}
-		r.handleLeaderTransfer(msg)
+		ne(r.handleLeaderTransfer(msg), t)
 		if tt.ignored {
 			if len(r.msgs) != 0 {
 				t.Errorf("unexpectedly sent msg")
@@ -2771,7 +2817,7 @@ func TestHandleLeaderTransfer(t *testing.T) {
 func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type: pb.HeartbeatResp,
 		From: 2,
@@ -2782,7 +2828,7 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	}
 	rp.setNotActive()
 	//rp.pause()
-	r.handleLeaderHeartbeatResp(msg, rp)
+	ne(r.handleLeaderHeartbeatResp(msg, rp), t)
 	if !rp.isActive() {
 		t.Errorf("not active")
 	}
@@ -2791,13 +2837,13 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type:     pb.ReadIndex,
 		Hint:     101,
 		HintHigh: 1002,
 	}
-	r.handleLeaderReadIndex(msg)
+	ne(r.handleLeaderReadIndex(msg), t)
 	if len(r.msgs) != 0 {
 		t.Errorf("unexpected msg sent")
 	}
@@ -2817,13 +2863,13 @@ func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
 func TestLeaderIgnoreReadIndexWhenClusterCommittedIsUnknown(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	msg := pb.Message{
 		Type:     pb.ReadIndex,
 		Hint:     101,
 		HintHigh: 1002,
 	}
-	r.handleLeaderReadIndex(msg)
+	ne(r.handleLeaderReadIndex(msg), t)
 	if len(r.msgs) != 0 {
 		t.Errorf("unexpected msg sent")
 	}
@@ -2842,12 +2888,16 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	if r.hasCommittedEntryAtCurrentTerm() {
 		t.Errorf("unexpected hasCommittedEntryAtCurrentTerm result")
 	}
 	r.remotes[2].tryUpdate(r.log.lastIndex())
-	if !r.tryCommit() {
+	ok, err := r.tryCommit()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if !ok {
 		t.Errorf("failed to commit")
 	}
 	if !r.hasCommittedEntryAtCurrentTerm() {
@@ -2859,7 +2909,7 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 		HintHigh: 1002,
 	}
 	count := 0
-	r.handleLeaderReadIndex(msg)
+	ne(r.handleLeaderReadIndex(msg), t)
 	for _, m := range r.msgs {
 		if m.Type == pb.Heartbeat && (m.To == 2 || m.To == 3) &&
 			m.Hint == 101 && m.HintHigh == 1002 {
@@ -2882,7 +2932,7 @@ func TestWitnessReadIndex(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 
 	r.addWitness(2)
 
@@ -2893,7 +2943,7 @@ func TestWitnessReadIndex(t *testing.T) {
 		From:     2,
 	}
 
-	r.handleLeaderReadIndex(msg)
+	ne(r.handleLeaderReadIndex(msg), t)
 
 	if len(r.readIndex.pending) != 0 || len(r.readIndex.queue) != 0 {
 		t.Errorf("readIndex updated unexpectedly")
@@ -2904,15 +2954,18 @@ func TestVotingMemberLengthMismatchWillResetMatchArray(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeFollower(1, NoLeader)
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	r.remotes[2].tryUpdate(r.log.lastIndex())
 	if len(r.matched) != 3 {
 		t.Errorf("Match array length unexpected %v", len(r.matched))
 	}
 	// Changing the number of total voting members
 	r.witnesses[4] = &remote{}
-
-	if r.tryCommit() {
+	ok, err := r.tryCommit()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if ok {
 		t.Errorf("Should fail commit")
 	}
 	if len(r.matched) != 4 {
@@ -2924,13 +2977,13 @@ func testNodeUpdatesItsRateLimiterHeartbeat(isLeader bool, t *testing.T) {
 	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	if isLeader {
 		r.becomeCandidate()
-		r.becomeLeader()
+		ne(r.becomeLeader(), t)
 	} else {
 		r.becomeFollower(0, 2)
 	}
 	hbt := r.rl.GetTick()
 	for i := uint64(0); i < r.electionTimeout; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	if r.rl.GetTick() != hbt+1 {
 		t.Errorf("rl heartbeat not updated, %d want %d",
@@ -2949,7 +3002,7 @@ func TestFollowerNodeUpdatesItsRateLimiterHeartbeat(t *testing.T) {
 func TestResetClearsFollowerRateLimitState(t *testing.T) {
 	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	rl := r.rl
-	r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1})
+	ne(r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1}), t)
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
 	}
@@ -2968,7 +3021,7 @@ func TestLeaderRateLimitMessageIsHandledByLeader(t *testing.T) {
 	if rl.RateLimited() {
 		t.Errorf("unexpectedly already rate limited")
 	}
-	r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1})
+	ne(r.handleLeaderRateLimit(pb.Message{From: 2, Hint: testRateLimit + 1}), t)
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
 	}
@@ -2977,17 +3030,17 @@ func TestLeaderRateLimitMessageIsHandledByLeader(t *testing.T) {
 func TestRateLimitMessageIsNeverSentByLeader(t *testing.T) {
 	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	r.becomeLeader()
+	ne(r.becomeLeader(), t)
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	rl := r.rl
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
 	}
 	for i := uint64(0); i < r.electionTimeout; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	for _, msg := range r.msgs {
 		if msg.Type == pb.RateLimit {
@@ -3003,13 +3056,13 @@ func testRateLimitMessageIsSentByNonLeader(leaderID uint64,
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
 	}
-	r.appendEntries(ents)
+	ne(r.appendEntries(ents), t)
 	rl := r.rl
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
 	}
 	for i := uint64(0); i < r.electionTimeout; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	sent := false
 	for _, msg := range r.msgs {
@@ -3035,7 +3088,7 @@ func TestInMemoryEntriesSliceCanBeResized(t *testing.T) {
 	}
 	r.log.inmem.shrunk = true
 	for i := uint64(0); i < inMemGcTimeout; i++ {
-		r.tick()
+		ne(r.tick(), t)
 	}
 	if uint64(cap(r.log.inmem.entries)) != entrySliceSize {
 		t.Errorf("not resized")
@@ -3062,14 +3115,14 @@ func TestFirstQuiescedTickResizesInMemoryEntriesSlice(t *testing.T) {
 func TestDelayedSnapshotAckCanBeSet(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	p.becomeLeader()
+	ne(p.becomeLeader(), t)
 	rp := p.remotes[3]
 	rp.state = remoteSnapshot
-	p.handleLeaderSnapshotStatus(pb.Message{
+	ne(p.handleLeaderSnapshotStatus(pb.Message{
 		Type:   pb.SnapshotStatus,
 		Hint:   10,
 		Reject: true,
-	}, rp)
+	}, rp), t)
 	if !rp.delayed.rejected || rp.delayed.ctick != 10 {
 		t.Errorf("delayed snapshot ack not set")
 	}
@@ -3078,23 +3131,23 @@ func TestDelayedSnapshotAckCanBeSet(t *testing.T) {
 func TestCheckDelayedSnapshotAck(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	p.becomeLeader()
+	ne(p.becomeLeader(), t)
 	if p.snapshotting {
 		t.Errorf("unexpected snapshotting flag")
 	}
 	rp := p.remotes[3]
 	rp.state = remoteSnapshot
 	rp.snapshotIndex = 100
-	p.handleLeaderSnapshotStatus(pb.Message{
+	ne(p.handleLeaderSnapshotStatus(pb.Message{
 		Type:   pb.SnapshotStatus,
 		Hint:   10,
 		Reject: true,
-	}, rp)
+	}, rp), t)
 	if !p.snapshotting {
 		t.Errorf("snapshotting flag not set")
 	}
 	for i := 0; i < 10; i++ {
-		p.tick()
+		ne(p.tick(), t)
 		if i != 9 {
 			if !p.snapshotting {
 				t.Errorf("snapshotting flag not set")

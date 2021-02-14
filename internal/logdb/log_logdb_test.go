@@ -71,7 +71,10 @@ func TestRLLTFindConflict(t *testing.T) {
 	defer stable.logdb.(*ShardedDB).Close()
 	for i, tt := range tests {
 		raftLog := raft.NewLog(stable)
-		gconflict := raftLog.GetConflictIndex(tt.ents)
+		gconflict, err := raftLog.GetConflictIndex(tt.ents)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if gconflict != tt.wconflict {
 			t.Errorf("#%d: conflict = %d, want %d", i, gconflict, tt.wconflict)
 		}
@@ -103,7 +106,10 @@ func TestRLLTIsUpToDate(t *testing.T) {
 		{raftLog.LastIndex() + 1, 3, true},
 	}
 	for i, tt := range tests {
-		gUpToDate := raftLog.UpToDate(tt.lastIndex, tt.term)
+		gUpToDate, err := raftLog.UpToDate(tt.lastIndex, tt.term)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if gUpToDate != tt.wUpToDate {
 			t.Errorf("#%d: uptodate = %v, want %v", i, gUpToDate, tt.wUpToDate)
 		}
@@ -276,7 +282,10 @@ func TestRLLTLogMaybeAppend(t *testing.T) {
 					}
 				}
 			}()
-			glasti, gappend := raftLog.TryAppend(tt.index, tt.logTerm, tt.committed, tt.ents)
+			glasti, gappend, err := raftLog.TryAppend(tt.index, tt.logTerm, tt.committed, tt.ents)
+			if err != nil {
+				t.Fatalf("unexpected error %v", err)
+			}
 			gcommit := raftLog.GetCommitted()
 
 			if glasti != tt.wlasti {
@@ -404,7 +413,9 @@ func TestRLLTHasNextEnts(t *testing.T) {
 		if err := raftLog.Append(ents); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog.TryCommit(5, 1)
+		if _, err := raftLog.TryCommit(5, 1); err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		raftLog.AppliedTo(tt.applied)
 
 		hasNext := raftLog.HasEntriesToApply()
@@ -444,10 +455,15 @@ func TestRLLTNextEnts(t *testing.T) {
 		if err := raftLog.Append(ents); err != nil {
 			t.Fatalf("%v", err)
 		}
-		raftLog.TryCommit(5, 1)
+		if _, err := raftLog.TryCommit(5, 1); err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		raftLog.AppliedTo(tt.applied)
 
-		nents := raftLog.EntriesToApply()
+		nents, err := raftLog.EntriesToApply()
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if !reflect.DeepEqual(nents, tt.wents) {
 			t.Errorf("#%d: nents = %+v, want %+v", i, nents, tt.wents)
 		}
@@ -456,28 +472,6 @@ func TestRLLTNextEnts(t *testing.T) {
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
-
-// unstable log focused
-/*
-// TestUnstableEnts ensures unstableEntries returns the unstable part of the
-// entries correctly.
-func TestUnstableEnts(t *testing.T) {
-}
-*/
-
-// not using stable storage
-/*
-func TestCommitTo(t *testing.T) {
-}
-*/
-
-// not related to stable storage
-/*
-func TestStableTo(t *testing.T) {
-}
-
-func TestStableToWithSnap(t *testing.T) {
-}*/
 
 //TestCompaction ensures that the number of log entries is correct after compactions.
 func TestRLLTCompaction(t *testing.T) {
@@ -511,7 +505,9 @@ func TestRLLTCompaction(t *testing.T) {
 				}
 			}()
 
-			raftLog.TryCommit(tt.lastIndex, 0)
+			if _, err := raftLog.TryCommit(tt.lastIndex, 0); err != nil {
+				t.Fatalf("unexpected error %v", err)
+			}
 			raftLog.AppliedTo(raftLog.GetCommitted())
 
 			for j := 0; j < len(tt.compact); j++ {

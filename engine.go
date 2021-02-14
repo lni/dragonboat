@@ -1287,7 +1287,11 @@ func (e *engine) processSteps(workerID uint64,
 		if !ok || node.stopped() {
 			continue
 		}
-		if ud, hasUpdate := node.stepNode(); hasUpdate {
+		ud, hasUpdate, err := node.stepNode()
+		if err != nil {
+			return err
+		}
+		if hasUpdate {
 			nodeUpdates = append(nodeUpdates, ud)
 		}
 	}

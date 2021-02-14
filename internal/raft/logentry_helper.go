@@ -35,7 +35,7 @@ func NewLog(logdb ILogDB) *LogTestHelper {
 }
 
 // GetConflictIndex ...
-func (l *LogTestHelper) GetConflictIndex(ents []pb.Entry) uint64 {
+func (l *LogTestHelper) GetConflictIndex(ents []pb.Entry) (uint64, error) {
 	return l.el.getConflictIndex(ents)
 }
 
@@ -45,7 +45,7 @@ func (l *LogTestHelper) Term(index uint64) (uint64, error) {
 }
 
 // MatchTerm ...
-func (l *LogTestHelper) MatchTerm(index uint64, term uint64) bool {
+func (l *LogTestHelper) MatchTerm(index uint64, term uint64) (bool, error) {
 	return l.el.matchTerm(index, term)
 }
 
@@ -60,7 +60,7 @@ func (l *LogTestHelper) LastIndex() uint64 {
 }
 
 // UpToDate ...
-func (l *LogTestHelper) UpToDate(index uint64, term uint64) bool {
+func (l *LogTestHelper) UpToDate(index uint64, term uint64) (bool, error) {
 	return l.el.upToDate(index, term)
 }
 
@@ -110,14 +110,20 @@ func (l *LogTestHelper) GetCommitted() uint64 {
 
 // TryAppend ...
 func (l *LogTestHelper) TryAppend(index uint64, logTerm uint64,
-	committed uint64, ents []pb.Entry) (uint64, bool) {
-	if l.el.matchTerm(index, logTerm) {
-		l.el.tryAppend(index, ents)
+	committed uint64, ents []pb.Entry) (uint64, bool, error) {
+	match, err := l.el.matchTerm(index, logTerm)
+	if err != nil {
+		return 0, false, err
+	}
+	if match {
+		if _, err := l.el.tryAppend(index, ents); err != nil {
+			return 0, false, err
+		}
 		lastIndex := index + uint64(len(ents))
 		l.el.commitTo(min(lastIndex, committed))
-		return lastIndex, true
+		return lastIndex, true, nil
 	}
-	return 0, false
+	return 0, false, nil
 }
 
 // GetEntries ...
@@ -127,7 +133,7 @@ func (l *LogTestHelper) GetEntries(low uint64, high uint64,
 }
 
 // TryCommit ...
-func (l *LogTestHelper) TryCommit(index uint64, term uint64) bool {
+func (l *LogTestHelper) TryCommit(index uint64, term uint64) (bool, error) {
 	return l.el.tryCommit(index, term)
 }
 
@@ -142,7 +148,7 @@ func (l *LogTestHelper) HasEntriesToApply() bool {
 }
 
 // EntriesToApply ...
-func (l *LogTestHelper) EntriesToApply() []pb.Entry {
+func (l *LogTestHelper) EntriesToApply() ([]pb.Entry, error) {
 	return l.el.entriesToApply()
 }
 

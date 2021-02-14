@@ -137,9 +137,9 @@ type SMFactoryFunc func(clusterID uint64,
 // INode is the interface of a dragonboat node.
 type INode interface {
 	StepReady()
-	RestoreRemotes(pb.Snapshot)
+	RestoreRemotes(pb.Snapshot) error
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
-	ApplyConfigChange(pb.ConfigChange, uint64, bool)
+	ApplyConfigChange(pb.ConfigChange, uint64, bool) error
 	NodeID() uint64
 	ClusterID() uint64
 	ShouldStop() <-chan struct{}
@@ -250,7 +250,9 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 	if err := s.recover(ss, t.Initial); err != nil {
 		return 0, err
 	}
-	s.node.RestoreRemotes(ss)
+	if err := s.node.RestoreRemotes(ss); err != nil {
+		return 0, err
+	}
 	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
 	return ss.Index, nil
 }
@@ -909,35 +911,34 @@ func (s *StateMachine) setOnDiskIndex(first uint64, last uint64) {
 
 func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 	if e.IsConfigChange() {
-		s.configChange(e)
-	} else {
-		if !e.IsSessionManaged() {
-			if e.IsEmpty() {
-				s.noop(e)
-				s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
-			} else {
-				panic("not session managed, not empty")
-			}
+		return s.configChange(e)
+	}
+	if !e.IsSessionManaged() {
+		if e.IsEmpty() {
+			s.noop(e)
+			s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
 		} else {
-			if e.IsNewSessionRequest() {
-				r := s.registerSession(e)
-				s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
-			} else if e.IsEndOfSessionRequest() {
-				r := s.unregisterSession(e)
-				s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
-			} else {
-				if !s.entryInInitDiskSM(e.Index) {
-					r, ignored, rejected, err := s.update(e)
-					if err != nil {
-						return err
-					}
-					if !ignored {
-						s.node.ApplyUpdate(e, r, rejected, ignored, last)
-					}
-				} else {
-					// treat it as a NoOP entry
-					s.noop(pb.Entry{Index: e.Index, Term: e.Term})
+			panic("not session managed, not empty")
+		}
+	} else {
+		if e.IsNewSessionRequest() {
+			r := s.registerSession(e)
+			s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
+		} else if e.IsEndOfSessionRequest() {
+			r := s.unregisterSession(e)
+			s.node.ApplyUpdate(e, r, isEmptyResult(r), false, last)
+		} else {
+			if !s.entryInInitDiskSM(e.Index) {
+				r, ignored, rejected, err := s.update(e)
+				if err != nil {
+					return err
 				}
+				if !ignored {
+					s.node.ApplyUpdate(e, r, rejected, ignored, last)
+				}
+			} else {
+				// treat it as a NoOP entry
+				s.noop(pb.Entry{Index: e.Index, Term: e.Term})
 			}
 		}
 	}
@@ -990,7 +991,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	return nil
 }
 
-func (s *StateMachine) configChange(e pb.Entry) {
+func (s *StateMachine) configChange(e pb.Entry) error {
 	var cc pb.ConfigChange
 	if err := cc.Unmarshal(e.Cmd); err != nil {
 		panic(err)
@@ -1004,7 +1005,7 @@ func (s *StateMachine) configChange(e pb.Entry) {
 			rejected = false
 		}
 	}()
-	s.node.ApplyConfigChange(cc, e.Key, rejected)
+	return s.node.ApplyConfigChange(cc, e.Key, rejected)
 }
 
 func (s *StateMachine) registerSession(e pb.Entry) sm.Result {

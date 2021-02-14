@@ -116,7 +116,10 @@ func TestLogIterateOnReadyToBeAppliedEntries(t *testing.T) {
 	results := make([]pb.Entry, 0)
 	count := 0
 	for {
-		re := el.getEntriesToApply(maxEntriesToApplySize)
+		re, err := el.getEntriesToApply(maxEntriesToApplySize)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if len(re) == 0 {
 			break
 		}
@@ -187,8 +190,12 @@ func TestLogLastTerm(t *testing.T) {
 		{Index: 3, Term: 2},
 		{Index: 4, Term: 3},
 	})
-	if el.lastTerm() != 3 {
-		t.Errorf("unexpected last term %d", el.lastTerm())
+	term, err := el.lastTerm()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if term != 3 {
+		t.Errorf("unexpected last term %d", term)
 	}
 	logdb := NewTestLogDB()
 	if err := logdb.Append([]pb.Entry{
@@ -198,8 +205,12 @@ func TestLogLastTerm(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	el = newEntryLog(logdb, server.NewInMemRateLimiter(0))
-	if el.lastTerm() != 5 {
-		t.Errorf("unexpected last term %d", el.lastTerm())
+	term, err = el.lastTerm()
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if term != 5 {
+		t.Errorf("unexpected last term %d", term)
 	}
 }
 
@@ -427,8 +438,11 @@ func TestLogMatchTerm(t *testing.T) {
 		{8, 5, false},
 	}
 	for idx, tt := range tests {
-		m := el.matchTerm(tt.index, tt.term)
-		if m != tt.match {
+		match, err := el.matchTerm(tt.index, tt.term)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
+		if match != tt.match {
 			t.Errorf("%d, incorrect matchTerm result", idx)
 		}
 	}
@@ -465,7 +479,10 @@ func TestLogUpToDate(t *testing.T) {
 		{2, 5, true},
 	}
 	for idx, tt := range tests {
-		ok := el.upToDate(tt.index, tt.term)
+		ok, err := el.upToDate(tt.index, tt.term)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if ok != tt.ok {
 			t.Errorf("%d, incorrect up to date result", idx)
 		}
@@ -502,7 +519,10 @@ func TestLogGetConflictIndex(t *testing.T) {
 		{[]pb.Entry{{Index: 7, Term: 4}, {Index: 8, Term: 4}}, 8},
 	}
 	for idx, tt := range tests {
-		conflict := el.getConflictIndex(tt.ents)
+		conflict, err := el.getConflictIndex(tt.ents)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 		if conflict != tt.conflict {
 			t.Errorf("%d, conflict index %d, want %d", idx, conflict, tt.conflict)
 		}

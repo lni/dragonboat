@@ -99,15 +99,16 @@ func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 
 func (p *testNodeProxy) SetLastApplied(v uint64) {}
 
-func (p *testNodeProxy) RestoreRemotes(s pb.Snapshot) {
+func (p *testNodeProxy) RestoreRemotes(s pb.Snapshot) error {
 	for k := range s.Membership.Addresses {
 		_ = k
 		p.addPeer = true
 		p.addPeerCount++
 	}
+	return nil
 }
 
-func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, rejected bool) {
+func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, rejected bool) error {
 	if !rejected {
 		p.applyConfChange = true
 		if cc.Type == pb.AddNode {
@@ -121,6 +122,7 @@ func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, reject
 		}
 	}
 	p.configChangeProcessed(key, rejected)
+	return nil
 }
 
 func (p *testNodeProxy) configChangeProcessed(index uint64, rejected bool) {

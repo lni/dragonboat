@@ -252,17 +252,21 @@ func (n *node) ApplyUpdate(e pb.Entry,
 }
 
 func (n *node) ApplyConfigChange(cc pb.ConfigChange,
-	key uint64, rejected bool) {
+	key uint64, rejected bool) error {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
 	if !rejected {
-		n.applyConfigChange(cc)
+		if err := n.applyConfigChange(cc); err != nil {
+			return err
+		}
 	}
-	n.configChangeProcessed(key, rejected)
+	return n.configChangeProcessed(key, rejected)
 }
 
-func (n *node) applyConfigChange(cc pb.ConfigChange) {
-	n.p.ApplyConfigChange(cc)
+func (n *node) applyConfigChange(cc pb.ConfigChange) error {
+	if err := n.p.ApplyConfigChange(cc); err != nil {
+		return err
+	}
 	switch cc.Type {
 	case pb.AddNode, pb.AddObserver, pb.AddWitness:
 		n.nodeRegistry.Add(n.clusterID, cc.NodeID, cc.Address)
@@ -277,21 +281,25 @@ func (n *node) applyConfigChange(cc pb.ConfigChange) {
 	default:
 		plog.Panicf("unknown config change type, %s", cc.Type)
 	}
+	return nil
 }
 
-func (n *node) configChangeProcessed(key uint64, rejected bool) {
+func (n *node) configChangeProcessed(key uint64, rejected bool) error {
 	if n.isWitness() {
-		return
+		return nil
 	}
 	if rejected {
-		n.p.RejectConfigChange()
+		if err := n.p.RejectConfigChange(); err != nil {
+			return err
+		}
 	} else {
 		n.notifyConfigChange()
 	}
 	n.pendingConfigChange.apply(key, rejected)
+	return nil
 }
 
-func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
+func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 	if snapshot.Membership.ConfigChangeId == 0 {
 		plog.Panicf("invalid ConfChangeId")
 	}
@@ -313,8 +321,11 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) {
 		}
 	}
 	plog.Debugf("%s is restoring remotes", n.id())
-	n.p.RestoreRemotes(snapshot)
+	if err := n.p.RestoreRemotes(snapshot); err != nil {
+		return err
+	}
 	n.notifyConfigChange()
+	return nil
 }
 
 func (n *node) startRaft(cfg config.Config,
@@ -987,7 +998,7 @@ func (n *node) sendReplicateMessages(ud pb.Update) {
 	}
 }
 
-func (n *node) getUpdate() (pb.Update, bool) {
+func (n *node) getUpdate() (pb.Update, bool, error) {
 	moreEntries := n.moreEntriesToApply()
 	if n.p.HasUpdate(moreEntries) ||
 		n.confirmedIndex != n.appliedIndex ||
@@ -996,11 +1007,14 @@ func (n *node) getUpdate() (pb.Update, bool) {
 			plog.Panicf("applied index moving backwards, %d, now %d",
 				n.confirmedIndex, n.appliedIndex)
 		}
-		ud := n.p.GetUpdate(moreEntries, n.appliedIndex)
+		ud, err := n.p.GetUpdate(moreEntries, n.appliedIndex)
+		if err != nil {
+			return pb.Update{}, false, err
+		}
 		n.confirmedIndex = n.appliedIndex
-		return ud, true
+		return ud, true, nil
 	}
-	return pb.Update{}, false
+	return pb.Update{}, false, nil
 }
 
 func (n *node) processDroppedReadIndexes(ud pb.Update) {
@@ -1100,21 +1114,29 @@ func (n *node) updateAppliedIndex() uint64 {
 	return n.appliedIndex
 }
 
-func (n *node) stepNode() (pb.Update, bool) {
+func (n *node) stepNode() (pb.Update, bool, error) {
 	n.raftMu.Lock()
 	defer n.raftMu.Unlock()
 	if n.initialized() {
-		if n.handleEvents() {
+		hasEvent, err := n.handleEvents()
+		if err != nil {
+			return pb.Update{}, false, err
+		}
+		if hasEvent {
 			if n.qs.newQuiesceState() {
 				n.sendEnterQuiesceMessages()
 			}
-			return n.getUpdate()
+			ud, hasUpdate, err := n.getUpdate()
+			if err != nil {
+				return pb.Update{}, false, err
+			}
+			return ud, hasUpdate, nil
 		}
 	}
-	return pb.Update{}, false
+	return pb.Update{}, false, nil
 }
 
-func (n *node) handleEvents() bool {
+func (n *node) handleEvents() (bool, error) {
 	hasEvent := false
 	lastApplied := n.updateAppliedIndex()
 	if lastApplied != n.confirmedIndex {
@@ -1123,19 +1145,39 @@ func (n *node) handleEvents() bool {
 	if n.hasEntryToApply() {
 		hasEvent = true
 	}
-	if n.handleReadIndex() {
+	event, err := n.handleReadIndex()
+	if err != nil {
+		return false, err
+	}
+	if event {
 		hasEvent = true
 	}
-	if n.handleReceivedMessages() {
+	event, err = n.handleReceivedMessages()
+	if err != nil {
+		return false, err
+	}
+	if event {
 		hasEvent = true
 	}
-	if n.handleConfigChange() {
+	event, err = n.handleConfigChange()
+	if err != nil {
+		return false, err
+	}
+	if event {
 		hasEvent = true
 	}
-	if n.handleProposals() {
+	event, err = n.handleProposals()
+	if err != nil {
+		return false, err
+	}
+	if event {
 		hasEvent = true
 	}
-	if n.handleLeaderTransfer() {
+	event, err = n.handleLeaderTransfer()
+	if err != nil {
+		return false, err
+	}
+	if event {
 		hasEvent = true
 	}
 	if n.handleSnapshot(lastApplied) {
@@ -1148,7 +1190,7 @@ func (n *node) handleEvents() bool {
 	if hasEvent {
 		n.pendingReadIndexes.applied(lastApplied)
 	}
-	return hasEvent
+	return hasEvent, nil
 }
 
 func (n *node) gc() {
@@ -1164,12 +1206,14 @@ func (n *node) handleCompaction() bool {
 	return n.ss.hasCompactedTo() || n.ss.hasCompactLogTo()
 }
 
-func (n *node) handleLeaderTransfer() bool {
+func (n *node) handleLeaderTransfer() (bool, error) {
 	target, ok := n.pendingLeaderTransfer.get()
 	if ok {
-		n.p.RequestLeaderTransfer(target)
+		if err := n.p.RequestLeaderTransfer(target); err != nil {
+			return false, err
+		}
 	}
-	return ok
+	return ok, nil
 }
 
 func (n *node) handleSnapshot(lastApplied uint64) bool {
@@ -1188,7 +1232,7 @@ func (n *node) handleSnapshot(lastApplied uint64) bool {
 	return true
 }
 
-func (n *node) handleProposals() bool {
+func (n *node) handleProposals() (bool, error) {
 	rateLimited := n.p.RateLimited()
 	if n.rateLimited != rateLimited {
 		n.rateLimited = rateLimited
@@ -1201,26 +1245,30 @@ func (n *node) handleProposals() bool {
 	}
 	paused := logDBBusy || n.rateLimited
 	if entries := n.incomingProposals.get(paused); len(entries) > 0 {
-		n.p.ProposeEntries(entries)
-		return true
+		if err := n.p.ProposeEntries(entries); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
-func (n *node) handleReadIndex() bool {
+func (n *node) handleReadIndex() (bool, error) {
 	if reqs := n.incomingReadIndexes.get(); len(reqs) > 0 {
 		n.qs.record(pb.ReadIndex)
 		ctx := n.pendingReadIndexes.nextCtx()
 		n.pendingReadIndexes.add(ctx, reqs)
-		n.p.ReadIndex(ctx)
-		return true
+		if err := n.p.ReadIndex(ctx); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
-func (n *node) handleConfigChange() bool {
+func (n *node) handleConfigChange() (bool, error) {
 	if len(n.configChangeC) == 0 {
-		return false
+		return false, nil
 	}
 	select {
 	case req, ok := <-n.configChangeC:
@@ -1232,12 +1280,14 @@ func (n *node) handleConfigChange() bool {
 			if err := cc.Unmarshal(req.data); err != nil {
 				panic(err)
 			}
-			n.p.ProposeConfigChange(cc, req.key)
+			if err := n.p.ProposeConfigChange(cc, req.key); err != nil {
+				return false, err
+			}
 		}
 	default:
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
 func (n *node) isBusySnapshotting() bool {
@@ -1256,7 +1306,7 @@ func (n *node) recordMessage(m pb.Message) {
 	}
 }
 
-func (n *node) handleReceivedMessages() bool {
+func (n *node) handleReceivedMessages() (bool, error) {
 	count := uint64(0)
 	busy := n.isBusySnapshotting()
 	msgs := n.mq.Get()
@@ -1266,9 +1316,15 @@ func (n *node) handleReceivedMessages() bool {
 		} else if m.Type == pb.Replicate && busy {
 			continue
 		}
-		if done := n.handleMessage(m); !done {
+		done, err := n.handleMessage(m)
+		if err != nil {
+			return false, err
+		}
+		if !done {
 			n.recordMessage(m)
-			n.p.Handle(m)
+			if err := n.p.Handle(m); err != nil {
+				return false, err
+			}
 		}
 	}
 	if count > n.config.ElectionRTT/2 {
@@ -1279,25 +1335,31 @@ func (n *node) handleReceivedMessages() bool {
 			msgs[i].Entries = nil
 		}
 	}
-	return len(msgs) > 0
+	return len(msgs) > 0, nil
 }
 
-func (n *node) handleMessage(m pb.Message) bool {
+func (n *node) handleMessage(m pb.Message) (bool, error) {
 	switch m.Type {
 	case pb.LocalTick:
-		n.tick(m.Hint)
+		if err := n.tick(m.Hint); err != nil {
+			return false, err
+		}
 	case pb.Quiesce:
 		n.qs.tryEnterQuiesce()
 	case pb.SnapshotStatus:
 		plog.Debugf("%s got ReportSnapshot from %d, rejected %t",
 			n.id(), m.From, m.Reject)
-		n.p.ReportSnapshotStatus(m.From, m.Reject)
+		if err := n.p.ReportSnapshotStatus(m.From, m.Reject); err != nil {
+			return false, err
+		}
 	case pb.Unreachable:
-		n.p.ReportUnreachableNode(m.From)
+		if err := n.p.ReportUnreachableNode(m.From); err != nil {
+			return false, err
+		}
 	default:
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
 func (n *node) setInitialStatus(index uint64) {
@@ -1460,21 +1522,26 @@ func (n *node) processStreamStatus() bool {
 	return false
 }
 
-func (n *node) tick(tick uint64) {
+func (n *node) tick(tick uint64) error {
 	if n.p == nil {
 		plog.Panicf("raft node is nil")
 	}
 	n.currentTick++
 	n.qs.tick()
 	if n.qs.quiesced() {
-		n.p.QuiescedTick()
+		if err := n.p.QuiescedTick(); err != nil {
+			return err
+		}
 	} else {
-		n.p.Tick()
+		if err := n.p.Tick(); err != nil {
+			return err
+		}
 	}
 	n.pendingSnapshot.tick(tick)
 	n.pendingProposals.tick(tick)
 	n.pendingReadIndexes.tick(tick)
 	n.pendingConfigChange.tick(tick)
+	return nil
 }
 
 func (n *node) notifyConfigChange() {

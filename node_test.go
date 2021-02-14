@@ -281,9 +281,15 @@ func step(nodes []*node) bool {
 			node.setInitialStatus(index)
 		}
 		if node.initialized() {
-			if node.handleEvents() {
-				hasEvent = true
-				ud, ok := node.getUpdate()
+			hasEvent, err := node.handleEvents()
+			if err != nil {
+				panic(err)
+			}
+			if hasEvent {
+				ud, ok, err := node.getUpdate()
+				if err != nil {
+					panic(err)
+				}
 				if ok {
 					nodeUpdates = append(nodeUpdates, ud)
 					activeNodes = append(activeNodes, node)
@@ -542,10 +548,17 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 		sm := smList[0]
 		for i := uint64(5); i <= 100; i++ {
 			sm.SetLastApplied(i)
-			if !n.handleEvents() {
+			hasEvent, err := n.handleEvents()
+			if err != nil {
+				t.Fatalf("unexpected error %v", err)
+			}
+			if !hasEvent {
 				t.Errorf("handle events reported no event")
 			}
-			ud, ok := n.getUpdate()
+			ud, ok, err := n.getUpdate()
+			if err != nil {
+				t.Fatalf("unexpected error %v", err)
+			}
 			if !ok {
 				t.Errorf("no update")
 			} else {
@@ -557,10 +570,18 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 			ud.UpdateCommit.LastApplied = 0
 			n.p.Commit(ud)
 		}
-		if n.handleEvents() {
+		hasEvents, err := n.handleEvents()
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
+		if hasEvents {
 			t.Errorf("unexpected event")
 		}
-		if ud, ok := n.getUpdate(); ok {
+		ud, ok, err := n.getUpdate()
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
+		if ok {
 			t.Errorf("unexpected update, %+v", ud)
 		}
 	}
@@ -579,8 +600,12 @@ func TestLastAppliedValueIsAlwaysOneWayIncreasing(t *testing.T) {
 		n := nodes[0]
 		sm := smList[0]
 		sm.SetLastApplied(1)
-		n.handleEvents()
-		n.getUpdate()
+		if _, err := n.handleEvents(); err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
+		if _, _, err := n.getUpdate(); err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
 	}
 	runRaftNodeTest(t, false, false, tf, fs)
 }
@@ -1667,13 +1692,13 @@ func TestGetCompactionOverhead(t *testing.T) {
 
 type testDummyNodeProxy struct{}
 
-func (np *testDummyNodeProxy) StepReady()                                        {}
-func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot)                        {}
-func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
-func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool)   {}
-func (np *testDummyNodeProxy) NodeID() uint64                                    { return 1 }
-func (np *testDummyNodeProxy) ClusterID() uint64                                 { return 1 }
-func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                       { return nil }
+func (np *testDummyNodeProxy) StepReady()                                            {}
+func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot) error                      { return nil }
+func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)     {}
+func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool) error { return nil }
+func (np *testDummyNodeProxy) NodeID() uint64                                        { return 1 }
+func (np *testDummyNodeProxy) ClusterID() uint64                                     { return 1 }
+func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                           { return nil }
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	fs := vfs.GetTestFS()
