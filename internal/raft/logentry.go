@@ -151,7 +151,7 @@ func (l *entryLog) term(index uint64) (uint64, error) {
 
 	t, err := l.logdb.Term(index)
 	if err != nil &&
-		!errors.Is(err, ErrCompacted) && errors.Is(err, ErrUnavailable) {
+		!errors.Is(err, ErrCompacted) && !errors.Is(err, ErrUnavailable) {
 		panic(err)
 	}
 	if err == nil {

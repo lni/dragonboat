@@ -484,8 +484,7 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 		if id == r.nodeID && r.isObserver() {
 			r.becomeFollower(r.term, r.leaderID)
 		}
-		_, ok := r.witnesses[id]
-		if ok {
+		if _, ok := r.witnesses[id]; ok {
 			plog.Panicf("Assumed witness could not promote to full member")
 		}
 		match := uint64(0)
