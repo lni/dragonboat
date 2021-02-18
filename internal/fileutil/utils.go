@@ -21,7 +21,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"runtime"
 	"strconv"
 	"strings"
@@ -242,7 +241,7 @@ func GetFlagFileContent(dir string,
 			err = cerr
 		}
 	}()
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}

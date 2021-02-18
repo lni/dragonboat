@@ -16,7 +16,6 @@ package rsm
 
 import (
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"testing"
 	"time"
@@ -32,7 +31,7 @@ func init() {
 
 func TestCountedWriteCanReportTotalWritten(t *testing.T) {
 	cw := countedWriter{
-		w: ioutil.Discard,
+		w: io.Discard,
 	}
 	total := uint64(0)
 	for i := 0; i < 16; i++ {

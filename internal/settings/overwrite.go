@@ -16,7 +16,6 @@ package settings
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,7 +26,7 @@ func getParsedConfig(fn string) map[string]interface{} {
 		return nil
 	}
 	m := map[string]interface{}{}
-	b, err := ioutil.ReadFile(filepath.Clean(fn))
+	b, err := os.ReadFile(filepath.Clean(fn))
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +56,6 @@ func overwriteSettings(cfg map[string]interface{}, rd reflect.Value) {
 			case "uint64":
 				nv := uint64(val.(float64))
 				plog.Infof("Setting %s to uint64 value %d", key, nv)
-				logHardChange(key, nv)
 				field.SetUint(nv)
 			case "bool":
 				plog.Infof("Setting %s to bool value %t", key, val.(bool))
@@ -70,5 +68,3 @@ func overwriteSettings(cfg map[string]interface{}, rd reflect.Value) {
 		}
 	}
 }
-
-func logHardChange(key string, newVal uint64) {}

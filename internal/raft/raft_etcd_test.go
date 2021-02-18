@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -75,7 +74,7 @@ func diffu(a, b string) string {
 }
 
 func mustTemp(pre, body string) string {
-	f, err := ioutil.TempFile("", pre)
+	f, err := os.CreateTemp("", pre)
 	if err != nil {
 		panic(err)
 	}

@@ -20,7 +20,6 @@ package config
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -592,7 +591,7 @@ func (l *defaultLogDB) Create(nhConfig NodeHostConfig,
 }
 
 func (l *defaultLogDB) Name() string {
-	dir, err := ioutil.TempDir("", "logdb_check_name")
+	dir, err := os.MkdirTemp("", "logdb_check_name")
 	if err != nil {
 		plog.Panicf("failed to get temp dir, %v", err)
 	}

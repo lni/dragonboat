@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -183,7 +182,7 @@ func (s *ConcurrentKVTest) RecoverFromSnapshot(r io.Reader,
 	}
 	kvdata := &kvdata{}
 	jsondata := &KVJson{}
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}
