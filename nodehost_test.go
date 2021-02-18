@@ -4318,7 +4318,7 @@ func TestNodeHostFileLock(t *testing.T) {
 			}
 		}
 	}
-	runNodeHostTestDC(t, tf, false, fs)
+	runNodeHostTestDC(t, tf, !*spawnChild, fs)
 }
 
 type testLogDBFactory2 struct {
