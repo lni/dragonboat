@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 
 	"github.com/lni/dragonboat/v3/client"
@@ -2606,4 +2607,186 @@ func TestPrepareIsNotCalledWhenSavingDummySnapshot(t *testing.T) {
 				idx, msm.prepareInvoked, tt.prepareInvoked)
 		}
 	}
+}
+
+var errReturnedError = errors.New("test error")
+
+func expectedError(err error) bool {
+	return errors.Is(err, errReturnedError) && tests.HasStack(err)
+}
+
+type errorUpdateSM struct{}
+
+func (e *errorUpdateSM) Update(data []byte) (sm.Result, error) {
+	return sm.Result{}, errReturnedError
+}
+func (e *errorUpdateSM) Lookup(q interface{}) (interface{}, error) { return nil, nil }
+func (e *errorUpdateSM) SaveSnapshot(io.Writer,
+	sm.ISnapshotFileCollection, <-chan struct{}) error {
+	return errReturnedError
+}
+func (e *errorUpdateSM) RecoverFromSnapshot(io.Reader,
+	[]sm.SnapshotFile, <-chan struct{}) error {
+	return errReturnedError
+}
+func (e *errorUpdateSM) Close() error { return nil }
+
+func TestUpdateErrorIsReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	defer leaktest.AfterTest(t)()
+	createTestDir(fs)
+	defer removeTestDir(fs)
+	defer reportLeakedFD(fs, t)
+	store := &errorUpdateSM{}
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
+	e1 := pb.Entry{
+		ClientID: 123,
+		SeriesID: client.NoOPSeriesID,
+		Index:    235,
+		Term:     1,
+	}
+	commit := Task{
+		Entries: []pb.Entry{e1},
+	}
+	sm.lastApplied.index = 234
+	sm.index = 234
+	sm.taskQ.Add(commit)
+	batch := make([]Task, 0, 8)
+	if _, err := sm.Handle(batch, nil); !expectedError(err) {
+		t.Fatalf("failed to return the expected error, %v", err)
+	}
+}
+
+type errorNodeProxy struct{}
+
+func (e *errorNodeProxy) StepReady()                                        {}
+func (e *errorNodeProxy) RestoreRemotes(pb.Snapshot) error                  { return errReturnedError }
+func (e *errorNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
+func (e *errorNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool) error {
+	return errReturnedError
+}
+func (e *errorNodeProxy) NodeID() uint64              { return 1 }
+func (e *errorNodeProxy) ClusterID() uint64           { return 1 }
+func (e *errorNodeProxy) ShouldStop() <-chan struct{} { return make(chan struct{}) }
+
+func TestConfigChangeErrorIsReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	defer leaktest.AfterTest(t)()
+	createTestDir(fs)
+	defer removeTestDir(fs)
+	defer reportLeakedFD(fs, t)
+	store := &errorUpdateSM{}
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
+	nodeProxy := &errorNodeProxy{}
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
+	cc := pb.ConfigChange{
+		ConfigChangeId: 1,
+		Type:           pb.AddNode,
+		NodeID:         2,
+		Address:        "localhost:1222",
+	}
+	data, err := cc.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	e := pb.Entry{
+		Cmd:   data,
+		Type:  pb.ConfigChangeEntry,
+		Index: 235,
+		Term:  1,
+	}
+	commit := Task{
+		Entries: []pb.Entry{e},
+	}
+	sm.lastApplied.index = 234
+	sm.index = 234
+	sm.taskQ.Add(commit)
+	// two commits to handle
+	batch := make([]Task, 0, 8)
+	if _, err := sm.Handle(batch, nil); !expectedError(err) {
+		t.Fatalf("failed to return the expected error, %v", err)
+	}
+}
+
+func TestSaveErrorIsReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	defer leaktest.AfterTest(t)()
+	createTestDir(fs)
+	defer removeTestDir(fs)
+	defer reportLeakedFD(fs, t)
+	store := &errorUpdateSM{}
+	config := config.Config{ClusterID: 1, NodeID: 1}
+	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
+	nodeProxy := newTestNodeProxy()
+	snapshotter := newTestSnapshotter(fs)
+	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
+	sm.members.members.Addresses[1] = "localhost:1234"
+	sm.lastApplied.index = 234
+	sm.index = 234
+	if _, _, err := sm.Save(SSRequest{}); !expectedError(err) {
+		t.Fatalf("failed to return expected error %v", err)
+	}
+}
+
+func TestRecoverErrorIsReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		sm.members.members.Addresses[1] = "localhost:1234"
+		sm.lastApplied.index = 3
+		sm.index = 3
+		ss, _, err := sm.Save(SSRequest{})
+		if err != nil {
+			t.Fatalf("failed to make snapshot %v", err)
+		}
+		index := ss.Index
+		commit := Task{
+			Index: index,
+		}
+		store2 := &errorUpdateSM{}
+		config := config.Config{ClusterID: 1, NodeID: 1}
+		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
+		nodeProxy2 := newTestNodeProxy()
+		snapshotter2 := newTestSnapshotter(fs)
+		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
+		if _, err := sm2.Recover(commit); !expectedError(err) {
+			t.Fatalf("failed to return expected error %v", err)
+		}
+	}
+	runSMTest2(t, tf, fs)
+}
+
+func TestRestoreRemoteErrorIsReturned(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		sm.members.members.Addresses[1] = "localhost:1234"
+		sm.lastApplied.index = 3
+		sm.index = 3
+		ss, _, err := sm.Save(SSRequest{})
+		if err != nil {
+			t.Fatalf("failed to make snapshot %v", err)
+		}
+		index := ss.Index
+		commit := Task{
+			Index: index,
+		}
+		store2 := tests.NewKVTest(1, 1)
+		store2.(*tests.KVTest).DisableLargeDelay()
+		config := config.Config{ClusterID: 1, NodeID: 1}
+		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
+		nodeProxy2 := &errorNodeProxy{}
+		snapshotter2 := newTestSnapshotter(fs)
+		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
+		if _, err := sm2.Recover(commit); !expectedError(err) {
+			t.Fatalf("failed to return expected error %v", err)
+		}
+	}
+	runSMTest2(t, tf, fs)
 }
