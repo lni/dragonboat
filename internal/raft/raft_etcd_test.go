@@ -34,6 +34,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -74,7 +75,7 @@ func diffu(a, b string) string {
 }
 
 func mustTemp(pre, body string) string {
-	f, err := os.CreateTemp("", pre)
+	f, err := fileutil.CreateTemp("", pre)
 	if err != nil {
 		panic(err)
 	}

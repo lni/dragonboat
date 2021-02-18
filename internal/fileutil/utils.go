@@ -241,7 +241,7 @@ func GetFlagFileContent(dir string,
 			err = cerr
 		}
 	}()
-	data, err := io.ReadAll(f)
+	data, err := ReadAll(f)
 	if err != nil {
 		return err
 	}

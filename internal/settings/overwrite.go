@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 )
 
 func getParsedConfig(fn string) map[string]interface{} {
@@ -26,7 +28,7 @@ func getParsedConfig(fn string) map[string]interface{} {
 		return nil
 	}
 	m := map[string]interface{}{}
-	b, err := os.ReadFile(filepath.Clean(fn))
+	b, err := fileutil.ReadFile(filepath.Clean(fn))
 	if err != nil {
 		panic(err)
 	}

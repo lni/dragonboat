@@ -31,6 +31,7 @@ import (
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -591,7 +592,7 @@ func (l *defaultLogDB) Create(nhConfig NodeHostConfig,
 }
 
 func (l *defaultLogDB) Name() string {
-	dir, err := os.MkdirTemp("", "logdb_check_name")
+	dir, err := fileutil.MkdirTemp("", "logdb_check_name")
 	if err != nil {
 		plog.Panicf("failed to get temp dir, %v", err)
 	}

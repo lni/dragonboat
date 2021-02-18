@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
@@ -31,7 +32,7 @@ func init() {
 
 func TestCountedWriteCanReportTotalWritten(t *testing.T) {
 	cw := countedWriter{
-		w: io.Discard,
+		w: fileutil.Discard,
 	}
 	total := uint64(0)
 	for i := 0; i < 16; i++ {
