@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -40,6 +41,8 @@ var (
 	snapshotChunkTimeoutTick = settings.Soft.SnapshotChunkTimeoutTick
 	maxConcurrentSlot        = settings.Soft.MaxConcurrentStreamingSnapshot
 )
+
+var firstError = utils.FirstError
 
 func chunkKey(c pb.Chunk) string {
 	return fmt.Sprintf("%d:%d:%d", c.ClusterId, c.NodeId, c.Index)
@@ -329,9 +332,7 @@ func (c *Chunk) save(chunk pb.Chunk) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	n, err := f.Write(chunk.Data)
 	if err != nil {

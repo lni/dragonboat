@@ -375,7 +375,11 @@ func newTestTransport(handler IMessageHandler,
 func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -466,7 +470,11 @@ func TestMessageCanBeSent(t *testing.T) {
 func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -507,7 +515,11 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	f SendMessageBatchFunc, mutualTLS bool, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -572,7 +584,11 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, false, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	nodes.Add(100, 2, "nosuchhost:39001")
@@ -642,7 +658,11 @@ func TestSnapshotCanBeSent(t *testing.T) {
 func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -757,7 +777,11 @@ func testSnapshotCanBeSent(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 	}()
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -821,7 +845,11 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	f StreamChunkSendFunc, mutualTLS bool, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -883,7 +911,11 @@ func testFailedSnapshotLoadChunkWillBeReported(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 	}()
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -932,7 +964,11 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	fs := vfs.GetTestFS()
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, false, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -982,7 +1018,11 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	snapshotSize := snapshotChunkSize * 10
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -1018,7 +1058,11 @@ func testFailedSnapshotSendWillBeReported(t *testing.T, mutualTLS bool, fs vfs.I
 	snapshotSize := snapshotChunkSize*3 + 1
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()
@@ -1090,7 +1134,11 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 			t.Fatalf("%v", err)
 		}
 	}()
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer tt.cleanup()
 	defer trans.Stop()
 	defer stopper.Stop()

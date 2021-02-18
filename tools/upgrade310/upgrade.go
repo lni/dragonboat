@@ -21,10 +21,13 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
+
+var firstError = utils.FirstError
 
 // CanUpgradeToV310 determines whether your production dataset is safe to use
 // the v3.0.3 or higher version of Dragonboat. You need to stop your NodeHost
@@ -56,7 +59,9 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	defer env.Stop()
+	defer func() {
+		err = firstError(err, env.Stop())
+	}()
 	if err := env.LockNodeHostDir(); err != nil {
 		return false, err
 	}
@@ -73,9 +78,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 		return false, err
 	}
 	defer func() {
-		if cerr := ldb.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, ldb.Close())
 	}()
 	niList, err := ldb.ListNodeInfo()
 	if err != nil {

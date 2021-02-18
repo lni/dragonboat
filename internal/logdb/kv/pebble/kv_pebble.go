@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 )
@@ -38,6 +39,8 @@ var (
 const (
 	maxLogFileSize = 1024 * 1024 * 128
 )
+
+var firstError = utils.FirstError
 
 type eventListener struct {
 	kv      *KV
@@ -276,9 +279,7 @@ func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) (err error) {
 	iter := r.db.NewIter(r.ro)
 	defer func() {
-		if cerr := iter.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, iter.Close())
 	}()
 	for iter.SeekGE(fk); iteratorIsValid(iter); iter.Next() {
 		key := iter.Key()
@@ -311,9 +312,7 @@ func (r *KV) GetValue(key []byte, op func([]byte) error) (err error) {
 	}
 	defer func() {
 		if closer != nil {
-			if cerr := closer.Close(); err == nil {
-				err = cerr
-			}
+			err = firstError(err, closer.Close())
 		}
 	}()
 	return op(val)
@@ -354,9 +353,7 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) (err error) {
 	wb := r.db.NewBatch()
 	defer func() {
-		if cerr := wb.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, wb.Close())
 	}()
 	if err := wb.DeleteRange(fk, lk, r.wo); err != nil {
 		return err

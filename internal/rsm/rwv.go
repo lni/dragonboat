@@ -513,9 +513,7 @@ func GetV2PayloadChecksum(fp string, fs vfs.IFS) (crc []byte, err error) {
 		return nil, err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	for _, offset := range offsets {
 		crc := make([]byte, checksumSize)
@@ -536,9 +534,7 @@ func getV2ChecksumType(fp string, fs vfs.IFS) (ct pb.ChecksumType, err error) {
 		return 0, err
 	}
 	defer func() {
-		if cerr := reader.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, reader.Close())
 	}()
 	header, err := reader.GetHeader()
 	if err != nil {

@@ -280,9 +280,7 @@ func loadChunkData(chunk pb.Chunk,
 		return nil, err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	offset := chunk.FileChunkId * snapshotChunkSize
 	if chunk.ChunkSize != uint64(len(data)) {

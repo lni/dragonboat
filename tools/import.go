@@ -34,6 +34,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -55,6 +56,8 @@ var (
 	// directory does not contain a complete snapshot.
 	ErrIncompleteSnapshot = errors.New("snapshot is incomplete")
 )
+
+var firstError = utils.FirstError
 
 // ImportSnapshot is used to repair the Raft cluster already has its quorum
 // nodes permanently lost or damaged. Such repair is only required when the
@@ -167,7 +170,9 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err != nil {
 		return err
 	}
-	defer env.Stop()
+	defer func() {
+		err = firstError(err, env.Stop())
+	}()
 	if _, _, err := env.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
 		return err
 	}
@@ -176,9 +181,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	defer func() {
-		if cerr := logdb.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, logdb.Close())
 	}()
 	if err := env.CheckNodeHostDir(nhConfig,
 		logdb.BinaryFormat(), logdb.Name()); err != nil {
@@ -435,9 +438,7 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := in.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, in.Close())
 	}()
 	fi, err := in.Stat()
 	if err != nil {
@@ -448,9 +449,7 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := out.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, out.Close())
 	}()
 	if runtime.GOOS != "windows" {
 		of, ok := out.(*os.File)

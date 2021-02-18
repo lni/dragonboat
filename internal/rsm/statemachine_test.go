@@ -219,9 +219,7 @@ func (s *testSnapshotter) Save(savable ISavable,
 	}
 	cw := dio.NewCountedWriter(writer)
 	defer func() {
-		if cerr := cw.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, cw.Close())
 		if ss.Index > 0 {
 			ss.FileSize = cw.BytesWritten() + HeaderSize
 		}

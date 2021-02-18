@@ -32,6 +32,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/raft"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -188,6 +189,8 @@ type StateMachine struct {
 	aborted         bool
 	isWitness       bool
 }
+
+var firstError = utils.FirstError
 
 // NewStateMachine creates a new application state machine object.
 func NewStateMachine(sm IManagedStateMachine,

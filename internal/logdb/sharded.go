@@ -24,6 +24,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -42,6 +43,8 @@ type ShardedDB struct {
 }
 
 var _ raftio.ILogDB = (*ShardedDB)(nil)
+
+var firstError = utils.FirstError
 
 type shardCallback struct {
 	f     config.LogDBCallback
@@ -66,11 +69,13 @@ func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 	}
 	shards := make([]*db, 0)
 	closeAll := func(all []*db) {
+		var err error
 		for _, s := range all {
-			if err := s.close(); err != nil {
-				plog.Panicf("%+v", err)
-				panic("not suppose to reach here")
-			}
+			err = firstError(err, s.close())
+		}
+		if err != nil {
+			plog.Panicf("%+v", err)
+			panic("not suppose to reach here")
 		}
 	}
 	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
@@ -284,17 +289,15 @@ func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
 }
 
 // Close closes the ShardedDB instance.
-func (s *ShardedDB) Close() error {
+func (s *ShardedDB) Close() (err error) {
 	s.stopper.Stop()
 	for _, v := range s.shards {
-		if err := v.close(); err != nil {
-			return err
-		}
+		err = firstError(err, v.close())
 	}
 	for _, v := range s.ctxs {
 		v.Destroy()
 	}
-	return nil
+	return err
 }
 
 func (s *ShardedDB) getParititionID(updates []pb.Update) uint64 {

@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
@@ -39,6 +40,8 @@ const (
 	defaultDirFileMode   = 0750
 	deleteFilename       = "DELETED.dragonboat"
 )
+
+var firstError = utils.FirstError
 
 // Marshaler is the interface for types that can be Marshaled.
 type Marshaler interface {
@@ -63,9 +66,7 @@ func DirExist(name string, fs vfs.IFS) (result bool, err error) {
 		return false, err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	s, err := f.Stat()
 	if err != nil {
@@ -143,9 +144,7 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	fileInfo, err := f.Stat()
 	if err != nil {
@@ -159,9 +158,7 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := df.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, df.Close())
 	}()
 	return df.Sync()
 }
@@ -174,8 +171,7 @@ func MarkDirAsDeleted(dir string, msg Marshaler, fs vfs.IFS) error {
 // IsDirMarkedAsDeleted returns a boolean flag indicating whether the specified
 // directory has been marked as deleted.
 func IsDirMarkedAsDeleted(dir string, fs vfs.IFS) (bool, error) {
-	fp := fs.PathJoin(dir, deleteFilename)
-	return Exist(fp, fs)
+	return Exist(fs.PathJoin(dir, deleteFilename), fs)
 }
 
 func getHash(data []byte) []byte {
@@ -197,12 +193,8 @@ func CreateFlagFile(dir string,
 		return err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if cerr := SyncDir(dir, fs); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
+		err = firstError(err, SyncDir(dir, fs))
 	}()
 	data, err := msg.Marshal()
 	if err != nil {
@@ -237,9 +229,7 @@ func GetFlagFileContent(dir string,
 		return err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	data, err := ReadAll(f)
 	if err != nil {
@@ -284,9 +274,7 @@ func ExtractTarBz2(bz2fn string, toDir string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, f.Close())
 	}()
 	ts := bzip2.NewReader(f)
 	tarReader := tar.NewReader(ts)

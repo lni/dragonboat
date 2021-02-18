@@ -215,10 +215,8 @@ func (se *SSEnv) SaveSSMetadata(msg fileutil.Marshaler) error {
 // available in the final directory.
 func (se *SSEnv) HasFlagFile() bool {
 	fp := se.fs.PathJoin(se.finalDir, fileutil.SnapshotFlagFilename)
-	if _, err := se.fs.Stat(fp); vfs.IsNotExist(err) {
-		return false
-	}
-	return true
+	_, err := se.fs.Stat(fp)
+	return !vfs.IsNotExist(err)
 }
 
 // RemoveFlagFile removes the flag file from the final directory.
@@ -261,10 +259,8 @@ func (se *SSEnv) removeDir(dir string) error {
 }
 
 func (se *SSEnv) finalDirExists() bool {
-	if _, err := se.fs.Stat(se.finalDir); vfs.IsNotExist(err) {
-		return false
-	}
-	return true
+	_, err := se.fs.Stat(se.finalDir)
+	return !vfs.IsNotExist(err)
 }
 
 func (se *SSEnv) renameToFinalDir() error {

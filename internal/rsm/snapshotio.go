@@ -150,9 +150,7 @@ func GetWitnessSnapshot(fs vfs.IFS) (result []byte, err error) {
 		return nil, err
 	}
 	defer func() {
-		if cerr := df.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, df.Close())
 	}()
 	buf := bytes.NewBuffer(nil)
 	if _, err = io.Copy(buf, df); err != nil {
@@ -450,9 +448,7 @@ func IsShrunkSnapshotFile(fp string, fs vfs.IFS) (shrunk bool, err error) {
 		return false, err
 	}
 	defer func() {
-		if cerr := reader.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, reader.Close())
 	}()
 	if _, err = reader.GetHeader(); err != nil {
 		return false, err
@@ -493,18 +489,14 @@ func ShrinkSnapshot(fp string, newFp string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		if cerr := reader.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, reader.Close())
 	}()
 	writer, err := NewSnapshotWriter(newFp, pb.NoCompression, fs)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if cerr := writer.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, writer.Close())
 	}()
 	if _, err := reader.GetHeader(); err != nil {
 		return err

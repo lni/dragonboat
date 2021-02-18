@@ -104,6 +104,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/transport"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -299,6 +300,8 @@ var _ nodeLoader = (*NodeHost)(nil)
 
 var dn = logutil.DescribeNode
 
+var firstError = utils.FirstError
+
 // NewNodeHost creates a new NodeHost instance. The returned NodeHost instance
 // is configured using the specified NodeHostConfig instance. In a typical
 // application, it is expected to have one NodeHost on each server.
@@ -443,15 +446,17 @@ func (nh *NodeHost) Stop() {
 		nh.engine.stop()
 	}
 	plog.Debugf("%s is stopping the logdb module", nh.describe())
+	var err error
 	if nh.mu.logdb != nil {
-		if err := nh.mu.logdb.Close(); err != nil {
-			panicNow(err)
-		}
+		err = firstError(err, nh.mu.logdb.Close())
 		nh.mu.logdb = nil
 	}
 	plog.Debugf("%s is stopping the env module", nh.describe())
-	nh.env.Stop()
+	err = firstError(err, nh.env.Stop())
 	plog.Debugf("NodeHost %s stopped", nh.describe())
+	if err != nil {
+		panicNow(err)
+	}
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -2207,6 +2212,9 @@ func logBuildTagsAndVersion() {
 }
 
 func panicNow(err error) {
+	if err == nil {
+		panic("panicNow called with nil error")
+	}
 	plog.Panicf("%+v", err)
 	panic(err)
 }

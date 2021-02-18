@@ -114,9 +114,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 	cw := dio.NewCountedWriter(w)
 	sw := dio.NewCompressor(ct, cw)
 	defer func() {
-		if cerr := sw.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, sw.Close())
 		if ss.Index > 0 {
 			total := cw.BytesWritten()
 			ss.Checksum = w.GetPayloadChecksum()
@@ -167,9 +165,7 @@ func (s *snapshotter) Load(ss pb.Snapshot,
 	ct := compressionType(header.CompressionType)
 	cr := dio.NewDecompressor(ct, reader)
 	defer func() {
-		if cerr := cr.Close(); err == nil {
-			err = cerr
-		}
+		err = firstError(err, cr.Close())
 	}()
 	v := rsm.SSVersion(header.Version)
 	if err := sessions.LoadSessions(cr, v); err != nil {

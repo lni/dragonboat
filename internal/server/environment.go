@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -74,6 +75,8 @@ const (
 	idFilename   = "NODEHOST.ID"
 )
 
+var firstError = utils.FirstError
+
 // Env is the server environment for NodeHost.
 type Env struct {
 	fs           vfs.IFS
@@ -106,12 +109,11 @@ func NewEnv(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Env, error) {
 }
 
 // Stop stops the environment.
-func (env *Env) Stop() {
+func (env *Env) Stop() (err error) {
 	for _, fl := range env.flocks {
-		if err := fl.Close(); err != nil {
-			panic(err)
-		}
+		err = firstError(err, fl.Close())
 	}
+	return err
 }
 
 // GetRandomSource returns the random source associated with the Nodehost.

@@ -86,7 +86,11 @@ func runChunkTest(t *testing.T,
 	defer leaktest.AfterTest(t)()
 	handler := newTestMessageHandler()
 	trans, _, stopper, tt := newTestTransport(handler, false, fs)
-	defer trans.env.Stop()
+	defer func() {
+		if err := trans.env.Stop(); err != nil {
+			t.Fatalf("failed to stop the env %v", err)
+		}
+	}()
 	defer trans.Stop()
 	defer stopper.Stop()
 	defer tt.cleanup()
