@@ -478,6 +478,7 @@ type testOption struct {
 	restartNodeHost      bool
 	noElection           bool
 	compressed           bool
+	fsErrorInjection     bool
 }
 
 func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
@@ -533,7 +534,9 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 
 func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 	func() {
-		defer leaktest.AfterTest(t)()
+		if !to.fsErrorInjection {
+			defer leaktest.AfterTest(t)()
+		}
 		defer func() {
 			if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 				t.Fatalf("%v", err)
@@ -559,7 +562,17 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 		}
 		if !to.restartNodeHost {
 			defer func() {
-				nh.Stop()
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							if to.fsErrorInjection {
+								return
+							}
+							panicNow(r.(error))
+						}
+					}()
+					nh.Stop()
+				}()
 				if to.at != nil {
 					to.at(nh)
 				}
@@ -4953,7 +4966,8 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 	inj := vfs.OnIndex(-1, op)
 	fs := vfs.Wrap(vfs.GetTestFS(), inj)
 	to := &testOption{
-		defaultTestNode: true,
+		fsErrorInjection: true,
+		defaultTestNode:  true,
 		tf: func(nh *NodeHost) {
 			inj.SetIndex(0)
 			pto := pto(nh)

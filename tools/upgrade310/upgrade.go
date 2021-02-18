@@ -44,7 +44,7 @@ import (
 // Note that for the vast majority cases, CanUpgradeToV310 is expected to
 // return true after its first run, which means it is safe to go ahead and
 // upgrade the Dragonboat version.
-func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
+func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	if nhConfig.DeploymentID == 0 {
 		nhConfig.DeploymentID = 1
 	}
@@ -72,7 +72,11 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer ldb.Close()
+	defer func() {
+		if cerr := ldb.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	niList, err := ldb.ListNodeInfo()
 	if err != nil {
 		return false, err

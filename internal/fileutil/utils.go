@@ -52,7 +52,7 @@ type Unmarshaler interface {
 }
 
 // DirExist returns whether the specified filesystem entry exists.
-func DirExist(name string, fs vfs.IFS) (bool, error) {
+func DirExist(name string, fs vfs.IFS) (result bool, err error) {
 	if name == "." || name == "/" {
 		return true, nil
 	}
@@ -63,7 +63,11 @@ func DirExist(name string, fs vfs.IFS) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	s, err := f.Stat()
 	if err != nil {
 		return false, err
@@ -139,7 +143,11 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	fileInfo, err := f.Stat()
 	if err != nil {
 		return err
@@ -271,12 +279,16 @@ func RemoveFlagFile(dir string, filename string, fs vfs.IFS) error {
 
 // ExtractTarBz2 extracts files and directories from the specified tar.bz2 file
 // to the specified target directory.
-func ExtractTarBz2(bz2fn string, toDir string, fs vfs.IFS) error {
+func ExtractTarBz2(bz2fn string, toDir string, fs vfs.IFS) (err error) {
 	f, err := fs.Open(bz2fn)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	ts := bzip2.NewReader(f)
 	tarReader := tar.NewReader(ts)
 	for {

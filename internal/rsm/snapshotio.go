@@ -130,7 +130,7 @@ func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 }
 
 // GetWitnessSnapshot returns the content of a witness snapshot.
-func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
+func GetWitnessSnapshot(fs vfs.IFS) (result []byte, err error) {
 	f, path, err := fileutil.TempFile("", "dragonboat-witness-snapshot", fs)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,6 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 		return nil, err
 	}
 	if _, err := w.Write(GetEmptyLRUSession()); err != nil {
-		w.Close()
 		return nil, err
 	}
 	if err := w.Close(); err != nil {
@@ -150,7 +149,11 @@ func GetWitnessSnapshot(fs vfs.IFS) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer df.Close()
+	defer func() {
+		if cerr := df.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	buf := bytes.NewBuffer(nil)
 	if _, err = io.Copy(buf, df); err != nil {
 		return nil, err

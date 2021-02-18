@@ -605,8 +605,16 @@ func (l *defaultLogDB) Name() string {
 	if err != nil {
 		plog.Panicf("failed to create ldb, %v", err)
 	}
-	defer os.RemoveAll(dir)
-	defer ldb.Close()
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
+	defer func() {
+		if err := ldb.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	return ldb.Name()
 }
 

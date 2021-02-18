@@ -1959,7 +1959,9 @@ func (nh *NodeHost) nodeMonitorMain() {
 		if !ok && index < len(nodes) {
 			// node closed
 			n := nodes[index]
-			_ = nh.stopNode(n.clusterID, n.nodeID, true)
+			if err := nh.stopNode(n.clusterID, n.nodeID, true); err != nil {
+				plog.Debugf("stopNode failed %v", err)
+			}
 		} else if index == len(nodes) {
 			// cci change
 			continue

@@ -162,7 +162,6 @@ func (s *snapshotter) Load(ss pb.Snapshot,
 	}
 	header, err := reader.GetHeader()
 	if err != nil {
-		reader.Close()
 		return err
 	}
 	ct := compressionType(header.CompressionType)

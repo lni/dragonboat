@@ -385,7 +385,11 @@ func NewTCPSnapshotConnection(conn net.Conn,
 
 // Close closes the snapshot connection.
 func (c *TCPSnapshotConnection) Close() {
-	defer c.conn.Close()
+	defer func() {
+		if err := c.conn.Close(); err != nil {
+			plog.Debugf("failed to close the connection %v", err)
+		}
+	}()
 	if err := sendPoison(c.conn, poisonNumber[:]); err != nil {
 		return
 	}
@@ -534,7 +538,9 @@ func (t *TCP) serveConn(conn net.Conn) {
 		err := readMagicNumber(conn, magicNum)
 		if err != nil {
 			if errors.Is(err, errPoisonReceived) {
-				_ = sendPoisonAck(conn, poisonNumber[:])
+				if err := sendPoisonAck(conn, poisonNumber[:]); err != nil {
+					plog.Debugf("failed to send poison ack %v", err)
+				}
 				return
 			}
 			if errors.Is(err, ErrBadMessage) {

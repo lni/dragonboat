@@ -274,12 +274,16 @@ func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.Chunk {
 }
 
 func loadChunkData(chunk pb.Chunk,
-	data []byte, fs vfs.IFS) ([]byte, error) {
+	data []byte, fs vfs.IFS) (result []byte, err error) {
 	f, err := OpenChunkFileForRead(chunk.Filepath, fs)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	offset := chunk.FileChunkId * snapshotChunkSize
 	if chunk.ChunkSize != uint64(len(data)) {
 		data = make([]byte, chunk.ChunkSize)

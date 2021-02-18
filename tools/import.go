@@ -129,7 +129,7 @@ var (
 // It is your applications's responsibility to let m4 and m5 to be aware that
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
-	srcDir string, memberNodes map[uint64]string, nodeID uint64) error {
+	srcDir string, memberNodes map[uint64]string, nodeID uint64) (err error) {
 	if nhConfig.DeploymentID == 0 {
 		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
 			unmanagedDeploymentID)
@@ -175,8 +175,11 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err != nil {
 		return err
 	}
-	defer logdb.Close()
-
+	defer func() {
+		if cerr := logdb.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	if err := env.CheckNodeHostDir(nhConfig,
 		logdb.BinaryFormat(), logdb.Name()); err != nil {
 		return err

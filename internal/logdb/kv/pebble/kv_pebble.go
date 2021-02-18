@@ -85,7 +85,9 @@ type pebbleWriteBatch struct {
 }
 
 func (w *pebbleWriteBatch) Destroy() {
-	w.wb.Close()
+	if err := w.wb.Close(); err != nil {
+		panic(err)
+	}
 }
 
 func (w *pebbleWriteBatch) Put(key []byte, val []byte) {
@@ -101,7 +103,9 @@ func (w *pebbleWriteBatch) Delete(key []byte) {
 }
 
 func (w *pebbleWriteBatch) Clear() {
-	w.wb.Close()
+	if err := w.wb.Close(); err != nil {
+		panic(err)
+	}
 	w.wb = w.db.NewBatch()
 }
 
@@ -252,7 +256,9 @@ func (r *KV) Name() string {
 
 // Close closes the RDB object.
 func (r *KV) Close() error {
-	r.db.Close()
+	if err := r.db.Close(); err != nil {
+		return err
+	}
 	r.event.close()
 	return nil
 }
@@ -267,9 +273,13 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 
 // IterateValue ...
 func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
-	op func(key []byte, data []byte) (bool, error)) error {
+	op func(key []byte, data []byte) (bool, error)) (err error) {
 	iter := r.db.NewIter(r.ro)
-	defer iter.Close()
+	defer func() {
+		if cerr := iter.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	for iter.SeekGE(fk); iteratorIsValid(iter); iter.Next() {
 		key := iter.Key()
 		val := iter.Value()
@@ -341,9 +351,13 @@ func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
 }
 
 // BulkRemoveEntries ...
-func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) error {
+func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) (err error) {
 	wb := r.db.NewBatch()
-	defer wb.Close()
+	defer func() {
+		if cerr := wb.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	if err := wb.DeleteRange(fk, lk, r.wo); err != nil {
 		return err
 	}

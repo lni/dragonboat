@@ -67,7 +67,10 @@ func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 	shards := make([]*db, 0)
 	closeAll := func(all []*db) {
 		for _, s := range all {
-			s.close()
+			if err := s.close(); err != nil {
+				plog.Panicf("%+v", err)
+				panic("not suppose to reach here")
+			}
 		}
 	}
 	for i := uint64(0); i < config.Expert.LogDB.Shards; i++ {
