@@ -206,6 +206,7 @@ static-check:
 	@for p in $(CHECKED_PKGS); do \
 		go vet -tests=false $$p; \
 		golint $$p; \
+		errcheck -blank -ignoretests $$p; \
 	done;
 	@for p in $(CHECKED_DIRS); do \
 		ineffassign $$p; \

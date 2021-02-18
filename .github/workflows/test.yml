@@ -119,6 +119,7 @@ jobs:
      - name: Install golangci-lint
        run: |
         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.23.8
+        go get -u github.com/kisielk/errcheck
         go get -u golang.org/x/lint/golint
         go get -u github.com/gordonklaus/ineffassign
         sudo apt-get install librocksdb-dev
