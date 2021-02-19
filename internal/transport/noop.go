@@ -163,8 +163,9 @@ func (g *NOOPTransport) Start() error {
 	return nil
 }
 
-// Stop stops the NOOPTransport instance.
-func (g *NOOPTransport) Stop() {
+// Close closes the NOOPTransport instance.
+func (g *NOOPTransport) Close() error {
+	return nil
 }
 
 // GetConnection returns a connection.

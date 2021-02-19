@@ -497,10 +497,11 @@ func (t *TCP) Start() error {
 	return nil
 }
 
-// Stop stops the TCP transport module.
-func (t *TCP) Stop() {
+// Close closes the TCP transport module.
+func (t *TCP) Close() error {
 	t.stopper.Stop()
 	t.connStopper.Stop()
+	return nil
 }
 
 // GetConnection returns a new raftio.IConnection for sending raft messages.

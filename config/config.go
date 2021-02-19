@@ -503,7 +503,7 @@ type RaftRPCFactoryFunc func(NodeHostConfig,
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
 //
-// Depreciated: User LogDBFactory instead.
+// Depreciated: Use LogDBFactory instead.
 type LogDBFactoryFunc func(NodeHostConfig,
 	LogDBCallback, []string, []string) (raftio.ILogDB, error)
 

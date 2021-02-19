@@ -171,7 +171,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	defer func() {
-		err = firstError(err, env.Stop())
+		err = firstError(err, env.Close())
 	}()
 	if _, _, err := env.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
 		return err

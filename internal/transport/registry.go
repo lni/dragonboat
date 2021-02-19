@@ -35,7 +35,7 @@ var (
 // INodeRegistry is the local registry interface used to keep all known
 // nodes in the system..
 type INodeRegistry interface {
-	Stop()
+	Close() error
 	Add(clusterID uint64, nodeID uint64, url string)
 	Remove(clusterID uint64, nodeID uint64)
 	RemoveCluster(clusterID uint64)
@@ -62,8 +62,8 @@ func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Regist
 	return n
 }
 
-// Stop stops the node registry.
-func (n *Registry) Stop() {}
+// Close closes the node registry.
+func (n *Registry) Close() error { return nil }
 
 // Add adds the specified node and its target info to the registry.
 func (n *Registry) Add(clusterID uint64, nodeID uint64, target string) {

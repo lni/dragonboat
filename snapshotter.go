@@ -92,7 +92,9 @@ func (s *snapshotter) Stream(streamable rsm.IStreamable,
 	ct := compressionType(meta.CompressionType)
 	cw := dio.NewCompressor(ct, rsm.NewChunkWriter(sink, meta))
 	if err := streamable.Stream(meta.Ctx, cw); err != nil {
-		sink.Stop()
+		if cerr := sink.Close(); cerr != nil {
+			plog.Errorf("failed to close the sink %v", cerr)
+		}
 		return err
 	}
 	return cw.Close()

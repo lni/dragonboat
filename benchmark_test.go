@@ -446,8 +446,16 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to create transport %v", err)
 	}
-	defer t2.Stop()
-	defer t1.Stop()
+	defer func() {
+		if err := t2.Close(); err != nil {
+			b.Fatalf("failed to stop the transport module %v", err)
+		}
+	}()
+	defer func() {
+		if err := t1.Close(); err != nil {
+			b.Fatalf("failed to stop the transport module %v", err)
+		}
+	}()
 	msgs := make([]pb.Message, 0)
 	e := pb.Entry{
 		Index:       12843560,
@@ -622,7 +630,7 @@ func BenchmarkStateMachineStep1024(b *testing.B) {
 type noopSink struct{}
 
 func (n *noopSink) Receive(pb.Chunk) (bool, bool) { return true, false }
-func (n *noopSink) Stop()                         {}
+func (n *noopSink) Close() error                  { return nil }
 func (n *noopSink) ClusterID() uint64             { return 1 }
 func (n *noopSink) ToNodeID() uint64              { return 1 }
 

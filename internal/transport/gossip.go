@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/hashicorp/memberlist"
 	"github.com/lni/goutils/syncutil"
 
@@ -48,9 +49,9 @@ func NewNodeHostIDRegistry(nhid string,
 	return r, nil
 }
 
-// Stop stops the NodeHostIDRegistry instance.
-func (n *NodeHostIDRegistry) Stop() {
-	n.gossip.Stop()
+// Close closes the NodeHostIDRegistry instance.
+func (n *NodeHostIDRegistry) Close() error {
+	return n.gossip.Close()
 }
 
 // AdvertiseAddress returns the advertise address of the gossip service.
@@ -231,14 +232,17 @@ func (g *gossipManager) join(seed []string) {
 	}
 }
 
-func (g *gossipManager) Stop() {
+func (g *gossipManager) Close() error {
 	g.stopper.Stop()
-	if err := g.list.Leave(2 * time.Second); err != nil {
-		plog.Errorf("failed to leave the gossip group, %v", err)
+	var err error
+	var cerr error
+	if err = g.list.Leave(2 * time.Second); err != nil {
+		err = errors.Wrapf(err, "leave memberlist failed")
 	}
-	if err := g.list.Shutdown(); err != nil {
-		plog.Errorf("failed to shutdown gossip manager, %v", err)
+	if cerr = g.list.Shutdown(); cerr != nil {
+		cerr = errors.Wrapf(cerr, "shutdown memberlist failed")
 	}
+	return firstError(err, cerr)
 }
 
 func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {

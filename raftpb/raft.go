@@ -327,7 +327,7 @@ func GetEntrySliceInMemSize(ents []Entry) uint64 {
 type IChunkSink interface {
 	// return (sent, stopped)
 	Receive(chunk Chunk) (bool, bool)
-	Stop()
+	Close() error
 	ClusterID() uint64
 	ToNodeID() uint64
 }

@@ -39,7 +39,11 @@ func TestNodeHostIDRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create the registry, %v", err)
 	}
-	defer r.Stop()
+	defer func() {
+		if err := r.Close(); err != nil {
+			t.Fatalf("failed to close registry %v", err)
+		}
+	}()
 	if r.(*NodeHostIDRegistry).NumMembers() != 1 {
 		t.Errorf("num member result unexpected")
 	}
@@ -87,7 +91,11 @@ func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}
-	defer m.Stop()
+	defer func() {
+		if err := m.Close(); err != nil {
+			t.Fatalf("failed to close the gossip manager %v", err)
+		}
+	}()
 	if m.numMembers() != 1 {
 		t.Errorf("unexpected num members")
 	}
@@ -133,12 +141,20 @@ func TestGossipManagerCanGossip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}
-	defer m1.Stop()
+	defer func() {
+		if err := m1.Close(); err != nil {
+			t.Fatalf("failed to close gossip manager %v", err)
+		}
+	}()
 	m2, err := newGossipManager(nhid2, nhConfig2)
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}
-	defer m2.Stop()
+	defer func() {
+		if err := m2.Close(); err != nil {
+			t.Fatalf("failed to close gossip manager %v", err)
+		}
+	}()
 	retry := 0
 	for retry < 1000 {
 		retry++

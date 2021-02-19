@@ -60,7 +60,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 		return false, err
 	}
 	defer func() {
-		err = firstError(err, env.Stop())
+		err = firstError(err, env.Close())
 	}()
 	if err := env.LockNodeHostDir(); err != nil {
 		return false, err

@@ -49,9 +49,10 @@ func (s *Sink) Receive(chunk pb.Chunk) (bool, bool) {
 	return s.j.AddChunk(chunk)
 }
 
-// Stop stops the sink processing.
-func (s *Sink) Stop() {
+// Close closes the sink processing.
+func (s *Sink) Close() error {
 	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
 // ClusterID returns the cluster ID of the source node.

@@ -569,7 +569,7 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 							panicNow(r.(error))
 						}
 					}()
-					nh.Stop()
+					nh.Close()
 				}()
 				if to.at != nil {
 					to.at(nh)
@@ -584,13 +584,13 @@ func runNodeHostTest(t *testing.T, to *testOption, fs vfs.IFS) {
 			to.tf(nh)
 		}
 		if to.restartNodeHost {
-			nh.Stop()
+			nh.Close()
 			nh, err = NewNodeHost(*nhc)
 			if err != nil {
 				t.Fatalf("failed to create nodehost: %v", err)
 			}
 			defer func() {
-				nh.Stop()
+				nh.Close()
 				if to.at != nil {
 					to.at(nh)
 				}
@@ -862,12 +862,12 @@ func testAddressByNodeHostID(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to create nh, %v", err)
 	}
-	defer nh1.Stop()
+	defer nh1.Close()
 	nh2, err := NewNodeHost(nhc2)
 	if err != nil {
 		t.Fatalf("failed to create nh2, %v", err)
 	}
-	defer nh2.Stop()
+	defer nh2.Close()
 	peers := make(map[uint64]string)
 	if addressByNodeHostID {
 		peers[1] = testNodeHostID1
@@ -961,7 +961,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create nh, %v", err)
 	}
-	defer nh1.Stop()
+	defer nh1.Close()
 	nh2, err := NewNodeHost(nhc2)
 	if err != nil {
 		t.Fatalf("failed to create nh2, %v", err)
@@ -1009,13 +1009,13 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		}
 	}
 	testProposal()
-	nh2.Stop()
+	nh2.Close()
 	nhc2.RaftAddress = nodeHostTestAddr3
 	nh2, err = NewNodeHost(nhc2)
 	if err != nil {
 		t.Fatalf("failed to restart nh2, %v", err)
 	}
-	defer nh2.Stop()
+	defer nh2.Close()
 	if nh2.ID() != nh2NodeHostID {
 		t.Fatalf("NodeHostID changed, got %s, want %s", nh2.ID(), nh2NodeHostID)
 	}
@@ -1215,7 +1215,7 @@ func singleConcurrentNodeHostTest(t *testing.T,
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		defer func() {
-			nh.Stop()
+			nh.Close()
 		}()
 		nhc := nh.NodeHostConfig()
 		waitForLeaderToBeElected(t, nh, 1)
@@ -1245,8 +1245,8 @@ func twoFakeDiskNodeHostTest(t *testing.T,
 			t.Fatalf("failed to create nodehost %v", err)
 		}
 		defer func() {
-			nh1.Stop()
-			nh2.Stop()
+			nh1.Close()
+			nh2.Close()
 		}()
 		tf(t, nh1, nh2)
 	}()
@@ -1379,8 +1379,8 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 			t.Fatalf("failed to create nodehost2 %v", err)
 		}
 		defer func() {
-			nh1.Stop()
-			nh2.Stop()
+			nh1.Close()
+			nh2.Close()
 		}()
 		tf(t, nh1, nh2, n1, n2)
 	}()
@@ -3837,7 +3837,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
-		nh.Stop()
+		nh.Close()
 		snapshotDir := fmt.Sprintf("snapshot-%016X", index)
 		dir := fs.PathJoin(sspath, snapshotDir)
 		members := make(map[uint64]string)
@@ -3860,7 +3860,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			if err != nil {
 				t.Fatalf("failed to create node host %v", err)
 			}
-			defer rnh.Stop()
+			defer rnh.Close()
 			rnewSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 				return tests.NewSimDiskSM(applied)
 			}
@@ -3958,8 +3958,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			}
 		}()
 		defer once.Do(func() {
-			nh1.Stop()
-			nh2.Stop()
+			nh1.Close()
+			nh2.Close()
 		})
 		session := nh1.GetNoOPSession(1)
 		mkproposal := func(nh *NodeHost) {
@@ -4014,8 +4014,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		members[1] = nhc1.RaftAddress
 		members[10] = nhc2.RaftAddress
 		once.Do(func() {
-			nh1.Stop()
-			nh2.Stop()
+			nh1.Close()
+			nh2.Close()
 		})
 		if err := tools.ImportSnapshot(nhc1, dir, members, 1); err != nil {
 			t.Fatalf("failed to import snapshot %v", err)
@@ -4032,8 +4032,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			t.Fatalf("failed to create node host %v", err)
 		}
 		defer func() {
-			rnh1.Stop()
-			rnh2.Stop()
+			rnh1.Close()
+			rnh2.Close()
 		}()
 		if err := rnh1.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
@@ -4079,8 +4079,9 @@ func (s *testSink2) Receive(chunk pb.Chunk) (bool, bool) {
 	return true, false
 }
 
-func (s *testSink2) Stop() {
+func (s *testSink2) Close() error {
 	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
 func (s *testSink2) ClusterID() uint64 {
@@ -4105,8 +4106,9 @@ func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 	return true, false
 }
 
-func (s *dataCorruptionSink) Stop() {
+func (s *dataCorruptionSink) Close() error {
 	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
 func (s *dataCorruptionSink) ClusterID() uint64 {
@@ -4299,7 +4301,7 @@ func TestNodeHostFileLock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create nodehost %v", err)
 			}
-			defer nh.Stop()
+			defer nh.Close()
 			out, err := spawn(os.Args[0])
 			if err == nil {
 				t.Fatalf("file lock didn't prevent the second nh to start, %s", out)
@@ -4314,7 +4316,7 @@ func TestNodeHostFileLock(t *testing.T) {
 				t.Fatalf("returned ErrLockDirectory")
 			}
 			if err == nil {
-				defer cnh.Stop()
+				defer cnh.Close()
 			}
 		}
 	}
@@ -4424,7 +4426,7 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 			if nh, err := NewNodeHost(*nhc); err != nil {
 				t.Errorf("failed to create node host")
 			} else {
-				nh.Stop()
+				nh.Close()
 			}
 		},
 	}
@@ -4785,7 +4787,7 @@ func testWitnessIO(t *testing.T,
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
 		}
-		defer nh1.Stop()
+		defer nh1.Close()
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewSimDiskSM(0)
 		}
@@ -4819,7 +4821,7 @@ func testWitnessIO(t *testing.T,
 		if err != nil {
 			t.Fatalf("failed to create node host %v", err)
 		}
-		defer nh2.Stop()
+		defer nh2.Close()
 		witness := tests.NewSimDiskSM(0)
 		newWitness := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return witness
@@ -5242,7 +5244,11 @@ func TestHandleSnapshotStatus(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
 	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
-	defer engine.stop()
+	defer func() {
+		if err := engine.close(); err != nil {
+			t.Fatalf("failed to close engine %v", err)
+		}
+	}()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}
@@ -5263,7 +5269,11 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
 	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
-	defer engine.stop()
+	defer func() {
+		if err := engine.close(); err != nil {
+			t.Fatalf("failed to close engine %v", err)
+		}
+	}()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}
@@ -5290,7 +5300,11 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nh := &NodeHost{stopper: syncutil.NewStopper()}
 	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
-	defer engine.stop()
+	defer func() {
+		if err := engine.close(); err != nil {
+			t.Fatalf("failed to close engine %v", err)
+		}
+	}()
 	nh.engine = engine
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}

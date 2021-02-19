@@ -64,8 +64,7 @@ func (cw *ChunkWriter) Close() error {
 			return err
 		}
 	}
-	cw.sink.Stop()
-	return nil
+	return cw.sink.Close()
 }
 
 // Write writes the specified input data.

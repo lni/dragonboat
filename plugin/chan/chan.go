@@ -171,9 +171,10 @@ func (ct *ChanTransport) Start() error {
 	return nil
 }
 
-// Stop ...
-func (ct *ChanTransport) Stop() {
+// Close ...
+func (ct *ChanTransport) Close() error {
 	ct.stopper.Stop()
+	return nil
 }
 
 // Name ...

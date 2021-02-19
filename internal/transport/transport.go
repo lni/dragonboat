@@ -102,7 +102,7 @@ type ITransport interface {
 	Send(pb.Message) bool
 	SendSnapshot(pb.Message) bool
 	GetStreamSink(clusterID uint64, nodeID uint64) *Sink
-	Stop()
+	Close() error
 }
 
 //
@@ -230,7 +230,9 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
 		plog.Errorf("transport failed to start %v", err)
-		t.trans.Stop()
+		if cerr := t.trans.Close(); cerr != nil {
+			plog.Errorf("failed to close the transport module %v", cerr)
+		}
 		return nil, err
 	}
 	t.stopper.RunWorker(func() {
@@ -282,12 +284,12 @@ func (t *Transport) SetPreStreamChunkSendHook(h StreamChunkSendFunc) {
 	t.preSend.Store(h)
 }
 
-// Stop stops the Transport object.
-func (t *Transport) Stop() {
+// Close closes the Transport object.
+func (t *Transport) Close() error {
 	t.cancel()
 	t.stopper.Stop()
 	t.chunks.Close()
-	t.trans.Stop()
+	return t.trans.Close()
 }
 
 // GetCircuitBreaker returns the circuit breaker used for the specified

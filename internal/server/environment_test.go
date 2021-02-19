@@ -253,7 +253,7 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 	if err := env.LockNodeHostDir(); err != nil {
 		t.Fatalf("failed to lock the directory %v", err)
 	}
-	if err := env.Stop(); err != nil {
+	if err := env.Close(); err != nil {
 		t.Fatalf("failed to stop env %v", err)
 	}
 	reportLeakedFD(fs, t)
@@ -318,7 +318,7 @@ func TestWALDirCanBeSet(t *testing.T) {
 		t.Fatalf("failed to get environment %v", err)
 	}
 	defer func() {
-		if err := c.Stop(); err != nil {
+		if err := c.Close(); err != nil {
 			t.Fatalf("failed to stop the env %v", err)
 		}
 	}()

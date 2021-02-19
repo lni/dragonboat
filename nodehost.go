@@ -341,7 +341,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.createPools()
 	defer func() {
 		if r := recover(); r != nil {
-			nh.Stop()
+			nh.Close()
 			if r, ok := r.(error); ok {
 				panicNow(r)
 			}
@@ -350,16 +350,16 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	did := nh.nhConfig.GetDeploymentID()
 	plog.Infof("DeploymentID set to %d", did)
 	if err := nh.createLogDB(); err != nil {
-		nh.Stop()
+		nh.Close()
 		return nil, err
 	}
 	if err := nh.loadNodeHostID(); err != nil {
-		nh.Stop()
+		nh.Close()
 		return nil, err
 	}
 	plog.Infof("NodeHost ID: %s", nh.id.String())
 	if err := nh.createNodeRegistry(); err != nil {
-		nh.Stop()
+		nh.Close()
 		return nil, err
 	}
 	errorInjection := false
@@ -370,7 +370,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	nh.engine = newExecEngine(nh, nhConfig.Expert.Engine,
 		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.mu.logdb)
 	if err := nh.createTransport(); err != nil {
-		nh.Stop()
+		nh.Close()
 		return nil, err
 	}
 	nh.stopper.RunWorker(func() {
@@ -383,32 +383,9 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	return nh, nil
 }
 
-// NodeHostConfig returns the NodeHostConfig instance used for configuring this
-// NodeHost instance.
-func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
-	return nh.nhConfig
-}
-
-// RaftAddress returns the Raft address of the NodeHost instance, it is the
-// network address by which the NodeHost can be reached by other NodeHost
-// instances for exchanging Raft messages, snapshots and other metadata.
-func (nh *NodeHost) RaftAddress() string {
-	return nh.nhConfig.RaftAddress
-}
-
-// ID returns the string representation of the NodeHost ID value. The NodeHost
-// ID is assigned to each NodeHost on its initial creation and it can be used
-// to uniquely identify the NodeHost instance for its entire life cycle. When
-// the system is running in the AddressByNodeHost mode, it is used as the target
-// value when calling the StartCluster, RequestAddNode, RequestAddObserver,
-// RequestAddWitness methods.
-func (nh *NodeHost) ID() string {
-	return nh.id.String()
-}
-
-// Stop stops all Raft nodes managed by the NodeHost instance, it also closes
-// all internal components such as the transport and LogDB modules.
-func (nh *NodeHost) Stop() {
+// Close closes and releases all resources owned by the NodeHost instance
+// including Raft nodes managed by the NodeHost.
+func (nh *NodeHost) Close() {
 	nh.events.sys.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
 	})
@@ -434,29 +411,63 @@ func (nh *NodeHost) Stop() {
 	}
 	plog.Debugf("%s is stopping the nh stopper", nh.describe())
 	nh.stopper.Stop()
-	if nh.nodes != nil {
-		nh.nodes.Stop()
-	}
+	var err error
 	plog.Debugf("%s is stopping the tranport module", nh.describe())
 	if nh.transport != nil {
-		nh.transport.Stop()
+		err = firstError(err, nh.transport.Close())
+	}
+	if nh.nodes != nil {
+		err = firstError(err, nh.nodes.Close())
+		nh.nodes = nil
 	}
 	plog.Debugf("%s is stopping the engine module", nh.describe())
 	if nh.engine != nil {
-		nh.engine.stop()
+		err = firstError(err, nh.engine.close())
+		nh.engine = nil
+		nh.transport = nil
 	}
 	plog.Debugf("%s is stopping the logdb module", nh.describe())
-	var err error
 	if nh.mu.logdb != nil {
 		err = firstError(err, nh.mu.logdb.Close())
 		nh.mu.logdb = nil
 	}
 	plog.Debugf("%s is stopping the env module", nh.describe())
-	err = firstError(err, nh.env.Stop())
+	err = firstError(err, nh.env.Close())
 	plog.Debugf("NodeHost %s stopped", nh.describe())
 	if err != nil {
 		panicNow(err)
 	}
+}
+
+// Stop closes and releases all resources owned by the NodeHost instance
+// including Raft nodes managed by the NodeHost.
+//
+// Depreciated: Use Close instead
+func (nh *NodeHost) Stop() {
+	nh.Close()
+}
+
+// NodeHostConfig returns the NodeHostConfig instance used for configuring this
+// NodeHost instance.
+func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
+	return nh.nhConfig
+}
+
+// RaftAddress returns the Raft address of the NodeHost instance, it is the
+// network address by which the NodeHost can be reached by other NodeHost
+// instances for exchanging Raft messages, snapshots and other metadata.
+func (nh *NodeHost) RaftAddress() string {
+	return nh.nhConfig.RaftAddress
+}
+
+// ID returns the string representation of the NodeHost ID value. The NodeHost
+// ID is assigned to each NodeHost on its initial creation and it can be used
+// to uniquely identify the NodeHost instance for its entire life cycle. When
+// the system is running in the AddressByNodeHost mode, it is used as the target
+// value when calling the StartCluster, RequestAddNode, RequestAddObserver,
+// RequestAddWitness methods.
+func (nh *NodeHost) ID() string {
+	return nh.id.String()
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts

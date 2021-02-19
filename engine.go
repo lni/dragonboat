@@ -358,8 +358,9 @@ func newWorkerPool(nh nodeLoader,
 	return w
 }
 
-func (p *workerPool) stop() {
+func (p *workerPool) close() error {
 	p.poolStopper.Stop()
+	return nil
 }
 
 func (p *workerPool) getWorker() *ssWorker {
@@ -810,8 +811,9 @@ func newCloseWorkerPool(closeWorkerCount uint64) *closeWorkerPool {
 	return w
 }
 
-func (p *closeWorkerPool) stop() {
+func (p *closeWorkerPool) close() error {
 	p.poolStopper.Stop()
+	return nil
 }
 
 func (p *closeWorkerPool) workerPoolMain() {
@@ -1046,12 +1048,13 @@ func (e *engine) crash(err error) {
 	}
 }
 
-func (e *engine) stop() {
+func (e *engine) close() error {
 	e.nodeStopper.Stop()
 	e.commitStopper.Stop()
 	e.taskStopper.Stop()
-	e.wp.stop()
-	e.cp.stop()
+	var err error
+	err = firstError(err, e.wp.close())
+	return firstError(err, e.cp.close())
 }
 
 func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {

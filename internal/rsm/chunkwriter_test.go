@@ -37,8 +37,9 @@ func (s *testSink) Receive(chunk pb.Chunk) (bool, bool) {
 	return true, false
 }
 
-func (s *testSink) Stop() {
+func (s *testSink) Close() error {
 	s.Receive(pb.Chunk{ChunkCount: pb.PoisonChunkCount})
+	return nil
 }
 
 func (s *testSink) ClusterID() uint64 {

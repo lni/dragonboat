@@ -87,11 +87,15 @@ func runChunkTest(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, _, stopper, tt := newTestTransport(handler, false, fs)
 	defer func() {
-		if err := trans.env.Stop(); err != nil {
+		if err := trans.env.Close(); err != nil {
 			t.Fatalf("failed to stop the env %v", err)
 		}
 	}()
-	defer trans.Stop()
+	defer func() {
+		if err := trans.Close(); err != nil {
+			t.Fatalf("failed to close the transport module %v", err)
+		}
+	}()
 	defer stopper.Stop()
 	defer tt.cleanup()
 	chunks := NewChunk(trans.handleRequest,

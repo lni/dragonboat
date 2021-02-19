@@ -344,7 +344,7 @@ func (n *node) startRaft(cfg config.Config,
 
 func (n *node) close() {
 	n.requestRemoval()
-	n.raftEvents.stop()
+	n.raftEvents.close()
 	n.mq.Close()
 	n.pendingReadIndexes.close()
 	n.pendingProposals.close()

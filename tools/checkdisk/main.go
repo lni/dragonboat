@@ -183,7 +183,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer nh.Stop()
+	defer nh.Close()
 	var nh2 *dragonboat.NodeHost
 	if *twonh {
 		nhc.NodeHostDir = dataDirectoryName2
@@ -192,7 +192,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		defer nh2.Stop()
+		defer nh2.Close()
 	}
 	rc := config.Config{
 		ClusterID:       1,

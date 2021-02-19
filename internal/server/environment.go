@@ -108,8 +108,8 @@ func NewEnv(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Env, error) {
 	return s, nil
 }
 
-// Stop stops the environment.
-func (env *Env) Stop() (err error) {
+// Close closes the environment.
+func (env *Env) Close() (err error) {
 	for _, fl := range env.flocks {
 		err = firstError(err, fl.Close())
 	}

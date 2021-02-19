@@ -41,7 +41,7 @@ func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
 	if err != nil {
 		t.Fatalf("failed to create nodehost %v", err)
 	}
-	defer nh.Stop()
+	defer nh.Close()
 }
 
 func TestLogDBPluginsCanBeUsed(t *testing.T) {

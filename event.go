@@ -90,7 +90,7 @@ func newRaftEventListener(clusterID uint64, nodeID uint64,
 	return el
 }
 
-func (e *raftEventListener) stop() {
+func (e *raftEventListener) close() {
 }
 
 func (e *raftEventListener) LeaderUpdated(info server.LeaderInfo) {
