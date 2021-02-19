@@ -113,12 +113,6 @@ func (h *requestHeader) decode(buf []byte) bool {
 	return true
 }
 
-// Marshaler is the interface for types that can be Marshaled.
-type Marshaler interface {
-	MarshalTo([]byte) (int, error)
-	Size() int
-}
-
 func sendPoison(conn net.Conn, poison []byte) error {
 	tt := time.Now().Add(magicNumberDuration).Add(magicNumberDuration)
 	if err := conn.SetWriteDeadline(tt); err != nil {
@@ -355,11 +349,8 @@ func (c *TCPConnection) SendMessageBatch(batch pb.MessageBatch) error {
 	} else {
 		buf = c.payload
 	}
-	n, err := batch.MarshalTo(buf)
-	if err != nil {
-		panic(err)
-	}
-	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
+	buf = pb.MustMarshalTo(&batch, buf)
+	return writeMessage(c.conn, header, buf, c.header, c.encrypted)
 }
 
 // TCPSnapshotConnection is the connection for sending raft snapshot chunks to
@@ -401,11 +392,8 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 	header := requestHeader{method: snapshotType}
 	sz := chunk.Size()
 	buf := make([]byte, sz)
-	n, err := chunk.MarshalTo(buf)
-	if err != nil {
-		panic(err)
-	}
-	return writeMessage(c.conn, header, buf[:n], c.header, c.encrypted)
+	buf = pb.MustMarshalTo(&chunk, buf)
+	return writeMessage(c.conn, header, buf, c.header, c.encrypted)
 }
 
 // TCP is a TCP based transport module for exchanging raft messages and

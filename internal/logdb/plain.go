@@ -47,11 +47,7 @@ func (pe *plainEntries) record(wb kv.IWriteBatch,
 		if uint64(len(data)) < esz {
 			panic("got a small buffer")
 		}
-		ms, err := ent.MarshalTo(data)
-		if err != nil {
-			panic(err)
-		}
-		data = data[:ms]
+		data = pb.MustMarshalTo(&ent, data)
 		k := ctx.GetKey()
 		k.SetEntryKey(clusterID, nodeID, ent.Index)
 		wb.Put(k.Key(), data)
@@ -87,9 +83,7 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 	expectedIndex := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var e pb.Entry
-		if err := e.Unmarshal(data); err != nil {
-			panic(e)
-		}
+		pb.MustUnmarshal(&e, data)
 		if e.Index != expectedIndex {
 			return false, nil
 		}
@@ -113,10 +107,8 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 	defer k.Release()
 	k.SetEntryKey(clusterID, nodeID, index)
 	var e pb.Entry
-	op := func(v []byte) error {
-		if err := e.Unmarshal(v); err != nil {
-			panic(err)
-		}
+	op := func(data []byte) error {
+		pb.MustUnmarshal(&e, data)
 		return nil
 	}
 	if err := pe.kvs.GetValue(k.Key(), op); err != nil {
@@ -138,9 +130,7 @@ func (pe *plainEntries) getRange(clusterID uint64,
 	op := func(key []byte, data []byte) (bool, error) {
 		if firstIndex == 0 {
 			var e pb.Entry
-			if err := e.Unmarshal(data); err != nil {
-				return false, err
-			}
+			pb.MustUnmarshal(&e, data)
 			firstIndex = e.Index
 			return false, nil
 		}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/lni/goutils/cache"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/settings"
 )
 
@@ -206,9 +207,7 @@ func (rec *lrusession) getHash() uint64 {
 	}
 	data := snapshot.Bytes()
 	hash := md5.New()
-	if _, err := hash.Write(data); err != nil {
-		panic(err)
-	}
+	fileutil.MustWrite(hash, data)
 	md5sum := hash.Sum(nil)
 	return binary.LittleEndian.Uint64(md5sum[:8])
 }

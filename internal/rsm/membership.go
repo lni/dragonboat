@@ -22,6 +22,7 @@ import (
 
 	"github.com/lni/goutils/logutil"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
@@ -98,9 +99,7 @@ func (m *membership) getHash() uint64 {
 	hash := md5.New()
 	for _, v := range vals {
 		binary.LittleEndian.PutUint64(data, v)
-		if _, err := hash.Write(data); err != nil {
-			panic(err)
-		}
+		fileutil.MustWrite(hash, data)
 	}
 	md5sum := hash.Sum(nil)
 	return binary.LittleEndian.Uint64(md5sum[:8])

@@ -21,7 +21,6 @@ package config
 import (
 	"crypto/tls"
 	"net"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -31,7 +30,6 @@ import (
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
-	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -592,10 +590,16 @@ func (l *defaultLogDB) Create(nhConfig NodeHostConfig,
 }
 
 func (l *defaultLogDB) Name() string {
-	dir, err := fileutil.MkdirTemp("", "logdb_check_name")
-	if err != nil {
-		plog.Panicf("failed to get temp dir, %v", err)
+	fs := vfs.DefaultFS
+	dir := vfs.TempDir()
+	if err := fs.MkdirAll(dir, 0700); err != nil {
+		panic(err)
 	}
+	defer func() {
+		if err := fs.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
 	nhc := NodeHostConfig{
 		Expert: ExpertConfig{
 			LogDB: GetDefaultLogDBConfig(),
@@ -605,11 +609,6 @@ func (l *defaultLogDB) Name() string {
 	if err != nil {
 		plog.Panicf("failed to create ldb, %v", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(dir); err != nil {
-			panic(err)
-		}
-	}()
 	defer func() {
 		if err := ldb.Close(); err != nil {
 			panic(err)

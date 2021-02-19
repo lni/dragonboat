@@ -668,3 +668,42 @@ func BenchmarkSnappyCompressedChunkWriter(b *testing.B) {
 		}
 	}
 }
+
+type marshaler interface {
+	Marshal() ([]byte, error)
+}
+
+func mustMarshal(m marshaler) []byte {
+	result, err := m.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func marshalData(e pb.Entry) {
+	_, err := e.Marshal()
+	if err != nil {
+		panic(err)
+	}
+}
+
+func mustMarshalData(e pb.Entry) {
+	mustMarshal(&e)
+}
+
+func BenchmarkMarshal(b *testing.B) {
+	b.ReportAllocs()
+	e := pb.Entry{}
+	for i := 0; i < b.N; i++ {
+		marshalData(e)
+	}
+}
+
+func BenchmarkMustMarshal(b *testing.B) {
+	b.ReportAllocs()
+	e := pb.Entry{}
+	for i := 0; i < b.N; i++ {
+		mustMarshalData(e)
+	}
+}

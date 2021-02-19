@@ -508,7 +508,10 @@ func testSnapshotWithExternalFilesAreHandledByChunk(t *testing.T,
 			ClusterId: 100,
 			Snapshot:  ss,
 		}
-		inputs := splitSnapshotMessage(msg, chunks.fs)
+		inputs, err := splitSnapshotMessage(msg, chunks.fs)
+		if err != nil {
+			t.Fatalf("failed to get chunks %v", err)
+		}
 		for _, c := range inputs {
 			c.DeploymentId = settings.UnmanagedDeploymentID
 			c.Data = make([]byte, c.ChunkSize)
@@ -558,7 +561,10 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 			ClusterId: 100,
 			Snapshot:  ss,
 		}
-		inputs := splitSnapshotMessage(msg, chunks.fs)
+		inputs, err := splitSnapshotMessage(msg, chunks.fs)
+		if err != nil {
+			t.Fatalf("failed to get chunks %v", err)
+		}
 		if len(inputs) != 1 {
 			t.Errorf("got %d chunks, want 1", len(inputs))
 		}
@@ -600,7 +606,10 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 		ClusterId: 100,
 		Snapshot:  ss,
 	}
-	chunks := splitSnapshotMessage(msg, fs)
+	chunks, err := splitSnapshotMessage(msg, fs)
+	if err != nil {
+		t.Fatalf("failed to get chunks %v", err)
+	}
 	if len(chunks) != 4 {
 		t.Errorf("got %d counts, want 4", len(chunks))
 	}
@@ -682,7 +691,10 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 		ClusterId: 100,
 		Snapshot:  ss,
 	}
-	chunks := splitSnapshotMessage(msg, fs)
+	chunks, err := splitSnapshotMessage(msg, fs)
+	if err != nil {
+		t.Fatalf("failed to get chunks %v", err)
+	}
 	if len(chunks) != 7 {
 		t.Errorf("unexpected chunk count")
 	}

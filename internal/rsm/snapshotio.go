@@ -245,19 +245,13 @@ func (sw *SnapshotWriter) saveHeader() error {
 		Version:         uint64(sw.vw.GetVersion()),
 		CompressionType: sw.ct,
 	}
-	data, err := sh.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&sh)
 	headerHash := getDefaultChecksum()
 	if _, err := headerHash.Write(data); err != nil {
 		return err
 	}
 	sh.HeaderChecksum = headerHash.Sum(nil)
-	data, err = sh.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data = pb.MustMarshal(&sh)
 	if uint64(len(data)) > HeaderSize-8 {
 		panic("snapshot header is too large")
 	}
@@ -316,9 +310,7 @@ func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	if n != len(data) {
 		return empty, io.ErrUnexpectedEOF
 	}
-	if err := sr.header.Unmarshal(data); err != nil {
-		panic(err)
-	}
+	pb.MustUnmarshal(&sr.header, data)
 	crcdata := make([]byte, 4)
 	n, err = io.ReadFull(sr.file, crcdata)
 	if err != nil {
@@ -382,9 +374,7 @@ func validateHeader(header []byte, crc32 []byte) bool {
 	}
 	if !bytes.Equal(crc32, fourZeroBytes) {
 		h := newCRC32Hash()
-		if _, err := h.Write(header); err != nil {
-			panic(err)
-		}
+		fileutil.MustWrite(h, header)
 		return bytes.Equal(h.Sum(nil), crc32)
 	}
 	return true
@@ -416,9 +406,7 @@ func (v *SnapshotValidator) AddChunk(data []byte, chunkID uint64) bool {
 			return false
 		}
 		var headerRec pb.SnapshotHeader
-		if err := headerRec.Unmarshal(header); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&headerRec, header)
 		v.v, ok = getVersionedValidator(headerRec)
 		if !ok {
 			return false

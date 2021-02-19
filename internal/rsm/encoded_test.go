@@ -23,6 +23,14 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
+func mustGetPayload(e pb.Entry) []byte {
+	p, err := GetPayload(e)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 func TestGetEntryPayload(t *testing.T) {
 	e1 := pb.Entry{Cmd: []byte{1, 2, 3, 4, 5}}
 	e2 := pb.Entry{Cmd: []byte{1, 2, 3}, Type: pb.ConfigChangeEntry}
@@ -31,13 +39,13 @@ func TestGetEntryPayload(t *testing.T) {
 		Type: pb.EncodedEntry,
 		Cmd:  GetEncoded(dio.Snappy, e3payload, make([]byte, 512)),
 	}
-	if !bytes.Equal(e1.Cmd, GetPayload(e1)) {
+	if !bytes.Equal(e1.Cmd, mustGetPayload(e1)) {
 		t.Errorf("e1 payload changed")
 	}
-	if !bytes.Equal(e2.Cmd, GetPayload(e2)) {
+	if !bytes.Equal(e2.Cmd, mustGetPayload(e2)) {
 		t.Errorf("e2 payload changed")
 	}
-	if !bytes.Equal(e3payload, GetPayload(e3)) {
+	if !bytes.Equal(e3payload, mustGetPayload(e3)) {
 		t.Errorf("e3 payload changed")
 	}
 }
@@ -90,7 +98,10 @@ func TestGetV0EncodedPayload(t *testing.T) {
 		if tt.ct == dio.Snappy && ct != EESnappy {
 			t.Errorf("invalid ct")
 		}
-		decoded := getDecodedPayload(result, nil)
+		decoded, err := getDecodedPayload(result, nil)
+		if err != nil {
+			t.Fatalf("failed to get decoded payload %v", err)
+		}
 		if !bytes.Equal(decoded, src) {
 			t.Errorf("%d, content changed", idx)
 		}

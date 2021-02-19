@@ -40,6 +40,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -76,9 +77,7 @@ func validateBlock(block []byte, h hash.Hash) bool {
 	payload := block[:uint64(len(block))-checksumSize]
 	crc := block[uint64(len(block))-checksumSize:]
 	h.Reset()
-	if _, err := h.Write(payload); err != nil {
-		panic(err)
-	}
+	fileutil.MustWrite(h, payload)
 	return bytes.Equal(crc, h.Sum(nil))
 }
 
@@ -134,9 +133,7 @@ func (bw *BlockWriter) Write(bs []byte) (int, error) {
 			l = uint64(len(bs))
 		}
 		bw.block = append(bw.block, bs[:l]...)
-		if _, err := bw.h.Write(bs[:l]); err != nil {
-			panic(err)
-		}
+		fileutil.MustWrite(bw.h, bs[:l])
 		bw.written += l
 		if bw.written == bw.nextStop {
 			bw.total += uint64(len(bw.block)) + checksumSize
@@ -184,9 +181,7 @@ func (bw *BlockWriter) GetPayloadChecksum() []byte {
 
 func (bw *BlockWriter) processNewBlock(data []byte, crc []byte) error {
 	if len(crc) > 0 {
-		if _, err := bw.fh.Write(crc); err != nil {
-			panic(err)
-		}
+		fileutil.MustWrite(bw.fh, crc)
 	}
 	return bw.onNewBlock(data, crc)
 }

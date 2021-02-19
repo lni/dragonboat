@@ -123,10 +123,7 @@ func (p *Peer) ProposeEntries(ents []pb.Entry) error {
 
 // ProposeConfigChange proposes a raft membership change.
 func (p *Peer) ProposeConfigChange(cc pb.ConfigChange, key uint64) error {
-	data, err := cc.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&cc)
 	return p.raft.Handle(pb.Message{
 		Type:    pb.Propose,
 		Entries: []pb.Entry{{Type: pb.ConfigChangeEntry, Cmd: data, Key: key}},
@@ -396,15 +393,11 @@ func bootstrap(r *raft, addresses []PeerAddress) {
 			Initialize: true,
 			Address:    peer.Address,
 		}
-		data, err := cc.Marshal()
-		if err != nil {
-			panic("unexpected marshal error")
-		}
 		ents[i] = pb.Entry{
 			Type:  pb.ConfigChangeEntry,
 			Term:  1,
 			Index: uint64(i + 1),
-			Cmd:   data,
+			Cmd:   pb.MustMarshal(&cc),
 		}
 	}
 	r.log.append(ents)

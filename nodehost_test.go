@@ -1982,7 +1982,10 @@ func TestEntryCompression(t *testing.T) {
 			for _, e := range ents {
 				if e.Type == pb.EncodedEntry {
 					hasEncodedEntry = true
-					payload := rsm.GetPayload(e)
+					payload, err := rsm.GetPayload(e)
+					if err != nil {
+						t.Fatalf("failed to get payload %v", err)
+					}
 					if !bytes.Equal(payload, make([]byte, 1024)) {
 						t.Errorf("payload changed")
 					}

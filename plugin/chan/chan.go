@@ -80,10 +80,7 @@ func (cc *ChanConnection) SendMessageBatch(batch pb.MessageBatch) error {
 	if cc.cc.snapshot {
 		panic("sending message on snapshot cc")
 	}
-	data, err := batch.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&batch)
 	select {
 	case <-cc.cc.recverClosed:
 		return ErrClosed
@@ -107,10 +104,7 @@ func (csc *ChanSSConnection) SendChunk(chunk pb.Chunk) error {
 	if !csc.cc.snapshot {
 		panic("sending snapshot data on regular cc")
 	}
-	data, err := chunk.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&chunk)
 	select {
 	case <-csc.cc.recverClosed:
 		return ErrClosed

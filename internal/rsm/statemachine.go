@@ -289,19 +289,21 @@ func (s *StateMachine) mustBeOnDiskSM() {
 
 // isShrunkSnapshot determines if the snapshot is shrunk. This check involves
 // disk I/O
-func (s *StateMachine) isShrunkSnapshot(ss pb.Snapshot, init bool) bool {
+func (s *StateMachine) isShrunkSnapshot(ss pb.Snapshot, init bool) (bool, error) {
 	if !s.OnDiskStateMachine() {
-		return false
+		return false, nil
 	}
-
+	if ss.Witness || ss.Dummy {
+		return false, nil
+	}
 	shrunk, err := s.snapshotter.Shrunk(ss)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	if !init && shrunk {
 		panic("not initial recovery but snapshot shrunk")
 	}
-	return shrunk
+	return shrunk, nil
 }
 
 // recoverRequired determines if the snapshot must be recovered or not. This method
@@ -364,11 +366,14 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		return sm.ErrSnapshotStopped
 	}
 	onDisk := s.OnDiskStateMachine()
-	if ss.Witness || ss.Dummy || s.isShrunkSnapshot(ss, init) {
+	shrunk, err := s.isShrunkSnapshot(ss, init)
+	if err != nil {
+		return err
+	}
+	if ss.Witness || ss.Dummy || shrunk {
 		if onDisk {
 			s.checkPartialSnapshotApplyOnDiskSM(ss, init)
 		}
-
 		s.apply(ss)
 		return nil
 	}
@@ -964,10 +969,11 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 	skipped := 0
 	for _, e := range input {
 		if !s.entryInInitDiskSM(e.Index) {
-			ents = append(ents, sm.Entry{
-				Index: e.Index,
-				Cmd:   GetPayload(e),
-			})
+			payload, err := GetPayload(e)
+			if err != nil {
+				return err
+			}
+			ents = append(ents, sm.Entry{Index: e.Index, Cmd: payload})
 		} else {
 			skipped++
 			s.setApplied(e.Index, e.Term)
@@ -996,9 +1002,7 @@ func (s *StateMachine) handleBatch(input []pb.Entry, ents []sm.Entry) error {
 
 func (s *StateMachine) configChange(e pb.Entry) error {
 	var cc pb.ConfigChange
-	if err := cc.Unmarshal(e.Cmd); err != nil {
-		panic(err)
-	}
+	pb.MustUnmarshal(&cc, e.Cmd)
 	rejected := true
 	func() {
 		s.mu.Lock()
@@ -1068,7 +1072,11 @@ func (s *StateMachine) update(e pb.Entry) (sm.Result, bool, bool, error) {
 			panic("already has response in session")
 		}
 	}
-	r, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: GetPayload(e)})
+	payload, err := GetPayload(e)
+	if err != nil {
+		return sm.Result{}, false, false, err
+	}
+	r, err := s.sm.Update(sm.Entry{Index: e.Index, Cmd: payload})
 	if err != nil {
 		return sm.Result{}, false, false, err
 	}

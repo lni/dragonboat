@@ -52,9 +52,9 @@ func GetMaxBlockSize(ct config.CompressionType) uint64 {
 
 // GetPayload returns the payload of the entry ready to be applied into the
 // state machine.
-func GetPayload(e pb.Entry) []byte {
+func GetPayload(e pb.Entry) ([]byte, error) {
 	if e.Type == pb.ApplicationEntry || e.Type == pb.ConfigChangeEntry {
-		return e.Cmd
+		return e.Cmd, nil
 	} else if e.Type == pb.EncodedEntry {
 		return getDecodedPayload(e.Cmd, nil)
 	}
@@ -125,14 +125,14 @@ func parseEncodedHeader(cmd []byte) (uint8, uint8, bool) {
 	return header & vermask, header & ctmask, header&sesmask == 1
 }
 
-func getDecodedPayload(cmd []byte, buf []byte) []byte {
+func getDecodedPayload(cmd []byte, buf []byte) ([]byte, error) {
 	ver, ct, hasSession := parseEncodedHeader(cmd)
 	if ver == EEV0 {
 		if hasSession {
 			plog.Panicf("v0 cmd has session info")
 		}
 		if ct == EENoCompression {
-			return getV0NoCompressPayload(cmd)
+			return getV0NoCompressPayload(cmd), nil
 		} else if ct == EESnappy {
 			sz, offset := getV0PayloadUncompressedSize(cmd)
 			if sz == 0 {
@@ -149,9 +149,9 @@ func getDecodedPayload(cmd []byte, buf []byte) []byte {
 				result = make([]byte, sz)
 			}
 			if err := dio.DecompressSnappyBlock(compressed, result); err != nil {
-				panic(err)
+				return nil, err
 			}
-			return result
+			return result, nil
 		} else {
 			plog.Panicf("unknown compression type %d", ct)
 		}

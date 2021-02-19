@@ -2079,7 +2079,11 @@ func TestIsShrunkSnapshot(t *testing.T) {
 					}
 				}
 			}()
-			if res := sm.isShrunkSnapshot(ss, tt.init); res != tt.isShrunk {
+			res, err := sm.isShrunkSnapshot(ss, tt.init)
+			if err != nil {
+				t.Fatalf("isShrunkSnapshot failed %v", err)
+			}
+			if res != tt.isShrunk {
 				t.Errorf("%d, result %t, want %t", idx, res, tt.isShrunk)
 			}
 		}()

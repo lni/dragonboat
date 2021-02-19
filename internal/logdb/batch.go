@@ -214,9 +214,7 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 	expectedID := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
-		if err := eb.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&eb, data)
 		if getBatchID(eb.Entries[0].Index) != expectedID {
 			return false, nil
 		}
@@ -243,9 +241,7 @@ func (be *batchedEntries) getRange(clusterID uint64,
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
-		if err := eb.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&eb, data)
 		if len(eb.Entries) == 0 {
 			panic("empty batch found")
 		}
@@ -311,11 +307,7 @@ func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 	}
 	szul := meb.SizeUpperLimit()
 	data := ctx.GetValueBuffer(uint64(szul))
-	sz, err := meb.MarshalTo(data)
-	if err != nil {
-		panic(err)
-	}
-	data = data[:sz]
+	data = pb.MustMarshalTo(&meb, data)
 	k := ctx.GetKey()
 	k.SetEntryBatchKey(clusterID, nodeID, batchID)
 	wb.Put(k.Key(), data)
@@ -363,9 +355,7 @@ func (be *batchedEntries) getBatchFromDB(clusterID uint64,
 		if len(data) == 0 {
 			return errors.New("no such entry")
 		}
-		if err := e.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&e, data)
 		return nil
 	}); err != nil {
 		return e, false

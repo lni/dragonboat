@@ -1277,9 +1277,7 @@ func (n *node) handleConfigChange() (bool, error) {
 		} else {
 			n.qs.record(pb.ConfigChangeEvent)
 			var cc pb.ConfigChange
-			if err := cc.Unmarshal(req.data); err != nil {
-				panic(err)
-			}
+			pb.MustUnmarshal(&cc, req.data)
 			if err := n.p.ProposeConfigChange(cc, req.key); err != nil {
 				return false, err
 			}

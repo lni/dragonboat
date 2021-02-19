@@ -19,6 +19,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -119,14 +120,9 @@ func (cw *ChunkWriter) getHeader() []byte {
 		Version:         uint64(V2),
 		CompressionType: cw.meta.CompressionType,
 	}
-	data, err := header.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&header)
 	h := newCRC32Hash()
-	if _, err := h.Write(data); err != nil {
-		panic(err)
-	}
+	fileutil.MustWrite(h, data)
 	checksum := h.Sum(nil)
 	result := make([]byte, HeaderSize)
 	binary.LittleEndian.PutUint64(result, uint64(len(data)))

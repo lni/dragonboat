@@ -92,7 +92,11 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 	if m.Type != pb.InstallSnapshot {
 		panic("not a snapshot message")
 	}
-	chunks := splitSnapshotMessage(m, t.fs)
+	chunks, err := splitSnapshotMessage(m, t.fs)
+	if err != nil {
+		plog.Errorf("failed to get snapshot chunks %+v", err)
+		return false
+	}
 	addr, _, err := t.resolver.Resolve(clusterID, toNodeID)
 	if err != nil {
 		return false
@@ -106,7 +110,7 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 	if job == nil {
 		return false
 	}
-	job.addSnapshot(m)
+	job.addSnapshot(chunks)
 	return true
 }
 
@@ -235,10 +239,10 @@ func getChunks(m pb.Message) []pb.Chunk {
 	return results
 }
 
-func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.Chunk {
+func getWitnessChunk(m pb.Message, fs vfs.IFS) ([]pb.Chunk, error) {
 	ss, err := rsm.GetWitnessSnapshot(fs)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	results := make([]pb.Chunk, 0)
 	results = append(results, pb.Chunk{
@@ -260,17 +264,17 @@ func getWitnessChunk(m pb.Message, fs vfs.IFS) []pb.Chunk {
 		Witness:        true,
 		Data:           ss,
 	})
-	return results
+	return results, nil
 }
 
-func splitSnapshotMessage(m pb.Message, fs vfs.IFS) []pb.Chunk {
+func splitSnapshotMessage(m pb.Message, fs vfs.IFS) ([]pb.Chunk, error) {
 	if m.Type != pb.InstallSnapshot {
 		panic("not a snapshot message")
 	}
 	if m.Snapshot.Witness {
 		return getWitnessChunk(m, fs)
 	}
-	return getChunks(m)
+	return getChunks(m), nil
 }
 
 func loadChunkData(chunk pb.Chunk,

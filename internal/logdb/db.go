@@ -245,10 +245,7 @@ func (r *db) saveBootstrap(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, bs pb.Bootstrap) {
 	k := newKey(maxKeySize, nil)
 	k.setBootstrapKey(clusterID, nodeID)
-	data, err := bs.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&bs)
 	wb.Put(k.Key(), data)
 }
 
@@ -258,10 +255,7 @@ func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
 	}
 	k := newKey(snapshotKeySize, nil)
 	k.setSnapshotKey(ud.ClusterID, ud.NodeID, ud.Snapshot.Index)
-	data, err := ud.Snapshot.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&ud.Snapshot)
 	wb.Put(k.Key(), data)
 }
 
@@ -287,10 +281,7 @@ func (r *db) saveMaxIndex(wb kv.IWriteBatch,
 
 func (r *db) saveStateAllocs(wb kv.IWriteBatch,
 	clusterID uint64, nodeID uint64, st pb.State) {
-	data, err := st.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(&st)
 	k := newKey(snapshotKeySize, nil)
 	k.SetStateKey(clusterID, nodeID)
 	wb.Put(k.Key(), data)
@@ -305,13 +296,10 @@ func (r *db) saveState(clusterID uint64,
 		return
 	}
 	data := ctx.GetValueBuffer(uint64(st.Size()))
-	ms, err := st.MarshalTo(data)
-	if err != nil {
-		panic(err)
-	}
+	result := pb.MustMarshalTo(&st, data)
 	k := ctx.GetKey()
 	k.SetStateKey(clusterID, nodeID)
-	wb.Put(k.Key(), data[:ms])
+	wb.Put(k.Key(), result)
 }
 
 func (r *db) saveBootstrapInfo(clusterID uint64,
@@ -330,9 +318,7 @@ func (r *db) getBootstrapInfo(clusterID uint64,
 		if len(data) == 0 {
 			return raftio.ErrNoBootstrapInfo
 		}
-		if err := bootstrap.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&bootstrap, data)
 		return nil
 	}); err != nil {
 		return pb.Bootstrap{}, err
@@ -375,9 +361,7 @@ func (r *db) listSnapshots(clusterID uint64,
 	snapshots := make([]pb.Snapshot, 0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var ss pb.Snapshot
-		if err := ss.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&ss, data)
 		snapshots = append(snapshots, ss)
 		return true, nil
 	}
@@ -416,9 +400,7 @@ func (r *db) getState(clusterID uint64, nodeID uint64) (pb.State, error) {
 		if len(data) == 0 {
 			return raftio.ErrNoSavedLog
 		}
-		if err := hs.Unmarshal(data); err != nil {
-			panic(err)
-		}
+		pb.MustUnmarshal(&hs, data)
 		return nil
 	}); err != nil {
 		return pb.State{}, err

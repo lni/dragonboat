@@ -29,6 +29,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 const (
@@ -43,14 +44,12 @@ const (
 
 var firstError = utils.FirstError
 
-// Marshaler is the interface for types that can be Marshaled.
-type Marshaler interface {
-	Marshal() ([]byte, error)
-}
-
-// Unmarshaler is the interface for types that can be Unmarshaled.
-type Unmarshaler interface {
-	Unmarshal([]byte) error
+// MustWrite writes the specified data to the input writer. It will panic if
+// there is any error.
+func MustWrite(w io.Writer, data []byte) {
+	if _, err := w.Write(data); err != nil {
+		panic(err)
+	}
 }
 
 // DirExist returns whether the specified filesystem entry exists.
@@ -164,7 +163,7 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 }
 
 // MarkDirAsDeleted marks the specified directory as deleted.
-func MarkDirAsDeleted(dir string, msg Marshaler, fs vfs.IFS) error {
+func MarkDirAsDeleted(dir string, msg pb.Marshaler, fs vfs.IFS) error {
 	return CreateFlagFile(dir, deleteFilename, msg, fs)
 }
 
@@ -176,9 +175,7 @@ func IsDirMarkedAsDeleted(dir string, fs vfs.IFS) (bool, error) {
 
 func getHash(data []byte) []byte {
 	h := md5.New()
-	if _, err := h.Write(data); err != nil {
-		panic(err)
-	}
+	MustWrite(h, data)
 	s := h.Sum(nil)
 	return s[8:]
 }
@@ -186,7 +183,7 @@ func getHash(data []byte) []byte {
 // CreateFlagFile creates a flag file in the specific location. The flag file
 // contains the marshaled data of the specified protobuf message.
 func CreateFlagFile(dir string,
-	filename string, msg Marshaler, fs vfs.IFS) (err error) {
+	filename string, msg pb.Marshaler, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
 	f, err := fs.Create(fp)
 	if err != nil {
@@ -196,10 +193,7 @@ func CreateFlagFile(dir string,
 		err = firstError(err, f.Close())
 		err = firstError(err, SyncDir(dir, fs))
 	}()
-	data, err := msg.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	data := pb.MustMarshal(msg)
 	h := getHash(data)
 	n, err := f.Write(h)
 	if err != nil {
@@ -222,7 +216,7 @@ func CreateFlagFile(dir string,
 // location. The data of the flag file will be unmarshaled into the specified
 // protobuf message.
 func GetFlagFileContent(dir string,
-	filename string, msg Unmarshaler, fs vfs.IFS) (err error) {
+	filename string, msg pb.Unmarshaler, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
 	f, err := fs.Open(vfs.Clean(fp))
 	if err != nil {
@@ -300,9 +294,7 @@ func ExtractTarBz2(bz2fn string, toDir string, fs vfs.IFS) (err error) {
 					return err
 				}
 				defer func() {
-					if err := nf.Close(); err != nil {
-						panic(err)
-					}
+					err = firstError(err, nf.Close())
 				}()
 				_, err = io.Copy(nf, tarReader)
 				return err
@@ -348,7 +340,7 @@ func TempFile(dir,
 		dir = vfs.TempDir()
 		if fs != vfs.DefaultFS {
 			if err := fs.MkdirAll(dir, defaultDirFileMode); err != nil {
-				panic(err)
+				return nil, "", err
 			}
 		}
 	}

@@ -125,8 +125,7 @@ func (j *job) connect(addr string) error {
 	return nil
 }
 
-func (j *job) addSnapshot(m pb.Message) {
-	chunks := splitSnapshotMessage(m, j.fs)
+func (j *job) addSnapshot(chunks []pb.Chunk) {
 	if len(chunks) != cap(j.ch) {
 		plog.Panicf("cap of ch is %d, want %d", cap(j.ch), len(chunks))
 	}

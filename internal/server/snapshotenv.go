@@ -16,17 +16,16 @@ package server
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/cockroachdb/errors"
 
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"
+	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
 var (
@@ -81,7 +80,7 @@ func GetSnapshotFilename(index uint64) string {
 
 func mustBeChild(parent string, child string) {
 	if v, err := filepath.Rel(parent, child); err != nil {
-		plog.Panicf("%v", err)
+		plog.Panicf("%+v", err)
 	} else {
 		if len(v) == 0 || strings.Contains(v, string(filepath.Separator)) ||
 			strings.HasPrefix(v, ".") {
@@ -172,19 +171,15 @@ func (se *SSEnv) RemoveTempDir() error {
 // is any error.
 func (se *SSEnv) MustRemoveTempDir() {
 	if err := se.removeDir(se.tmpDir); err != nil {
-		if operr, ok := err.(*os.PathError); ok {
-			if errno, ok := operr.Err.(syscall.Errno); ok {
-				if errno == syscall.ENOENT {
-					return
-				}
-			}
+		exist, cerr := fileutil.DirExist(se.tmpDir, se.fs)
+		if cerr != nil || exist {
+			panic(err)
 		}
-		panic(err)
 	}
 }
 
 // FinalizeSnapshot finalizes the snapshot.
-func (se *SSEnv) FinalizeSnapshot(msg fileutil.Marshaler) error {
+func (se *SSEnv) FinalizeSnapshot(msg pb.Marshaler) error {
 	finalizeLock.Lock()
 	defer finalizeLock.Unlock()
 	if err := se.createFlagFile(msg); err != nil {
@@ -207,7 +202,7 @@ func (se *SSEnv) RemoveFinalDir() error {
 }
 
 // SaveSSMetadata saves the metadata of the snapshot file.
-func (se *SSEnv) SaveSSMetadata(msg fileutil.Marshaler) error {
+func (se *SSEnv) SaveSSMetadata(msg pb.Marshaler) error {
 	return fileutil.CreateFlagFile(se.tmpDir, MetadataFilename, msg, se.fs)
 }
 
@@ -270,7 +265,7 @@ func (se *SSEnv) renameToFinalDir() error {
 	return fileutil.SyncDir(se.rootDir, se.fs)
 }
 
-func (se *SSEnv) createFlagFile(msg fileutil.Marshaler) error {
+func (se *SSEnv) createFlagFile(msg pb.Marshaler) error {
 	return fileutil.CreateFlagFile(se.tmpDir,
 		fileutil.SnapshotFlagFilename, msg, se.fs)
 }

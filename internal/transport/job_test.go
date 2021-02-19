@@ -53,13 +53,16 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 			FileSize: 1024 * 1024 * 512,
 		},
 	}
-	chunks := splitSnapshotMessage(m, fs)
+	chunks, err := splitSnapshotMessage(m, fs)
+	if err != nil {
+		t.Fatalf("failed to get chunks %v", err)
+	}
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
 	c := newJob(context.Background(), 1, 1, 1, false, len(chunks), transport, nil, fs)
 	if cap(c.ch) != len(chunks) {
 		t.Errorf("unexpected chan length %d", cap(c.ch))
 	}
-	c.addSnapshot(m)
+	c.addSnapshot(chunks)
 	if len(c.ch) != len(chunks) {
 		t.Errorf("not all chunks pushed to ch")
 	}

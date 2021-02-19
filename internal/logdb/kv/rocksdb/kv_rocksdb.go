@@ -181,7 +181,7 @@ func openRocksDB(config config.LogDBConfig, _ kv.LogDBCallback,
 	// gorocksdb.OpenDb allows the main db directory to be created on open
 	// but WAL directory must exist before calling Open.
 	if err := fileutil.MkdirAll(wal, fs); err != nil {
-		panic(err)
+		return nil, err
 	}
 	opts, bbto, cache := getRocksDBOptions(config, wal)
 	db, err := gorocksdb.OpenDb(opts, dir)

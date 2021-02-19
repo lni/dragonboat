@@ -96,6 +96,11 @@ func (n *NodeHostID) Marshal() ([]byte, error) {
 	return buf, nil
 }
 
+// MarshalTo is not implemented
+func (n *NodeHostID) MarshalTo(result []byte) (int, error) {
+	panic("not implemented")
+}
+
 // Unmarshal unmarshals the NodeHostID instance.
 func (n *NodeHostID) Unmarshal(data []byte) error {
 	if len(data) != 8 {

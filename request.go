@@ -18,7 +18,6 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"sync"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/logger"
@@ -701,10 +701,7 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 	if p.confChangeC == nil {
 		return nil, ErrClusterClosed
 	}
-	data, err := cc.Marshal()
-	if err != nil {
-		plog.Panicf("%v", err)
-	}
+	data := pb.MustMarshal(&cc)
 	ccreq := configChangeRequest{
 		key:  random.LockGuardedRand.Uint64(),
 		data: data,
@@ -966,9 +963,7 @@ func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
 	nano := time.Now().UnixNano()
 	seedStr := fmt.Sprintf("%d-%d-%d-%d-%d", pid, nano, clusterID, nodeID, shard)
 	m := sha512.New()
-	if _, err := io.WriteString(m, seedStr); err != nil {
-		plog.Panicf("%v", err)
-	}
+	fileutil.MustWrite(m, []byte(seedStr))
 	sum := m.Sum(nil)
 	seed := binary.LittleEndian.Uint64(sum)
 	return &keyGenerator{rand: rand.New(rand.NewSource(int64(seed)))}

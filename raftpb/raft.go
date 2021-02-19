@@ -365,3 +365,41 @@ func (m *Message) CanDrop() bool {
 	return m.Type != InstallSnapshot &&
 		m.Type != Unreachable && m.Type != SnapshotStatus
 }
+
+// Marshaler is the interface for instances that can be marshalled.
+type Marshaler interface {
+	Marshal() ([]byte, error)
+	MarshalTo([]byte) (int, error)
+}
+
+// Unmarshaler is the interface for instances that can be unmarshalled.
+type Unmarshaler interface {
+	Unmarshal([]byte) error
+}
+
+// MustMarshal marshals the input object or panic if there is any error.
+func MustMarshal(m Marshaler) []byte {
+	data, err := m.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+// MustMarshalTo marshals the input object to the specified buffer or panic
+// if there is any error.
+func MustMarshalTo(m Marshaler, result []byte) []byte {
+	sz, err := m.MarshalTo(result)
+	if err != nil {
+		panic(err)
+	}
+	return result[:sz]
+}
+
+// MustUnmarshal unmarshals the specified object using the provided marshalled
+// data. MustUnmarshal will panic if there is any error.
+func MustUnmarshal(m Unmarshaler, data []byte) {
+	if err := m.Unmarshal(data); err != nil {
+		panic(err)
+	}
+}
