@@ -204,8 +204,8 @@ func (s *snapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
 	return pb.Snapshot{}, ErrNoSnapshot
 }
 
-func (s *snapshotter) IsNoSnapshotError(e error) bool {
-	return e == ErrNoSnapshot
+func (s *snapshotter) IsNoSnapshotError(err error) bool {
+	return errors.Is(err, ErrNoSnapshot)
 }
 
 func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
@@ -217,7 +217,7 @@ func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
 		return err
 	}
 	if err := env.FinalizeSnapshot(&ss); err != nil {
-		if err == server.ErrSnapshotOutOfDate {
+		if errors.Is(err, server.ErrSnapshotOutOfDate) {
 			return errSnapshotOutOfDate
 		}
 		return err
