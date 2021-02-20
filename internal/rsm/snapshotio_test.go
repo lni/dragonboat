@@ -77,15 +77,11 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		r, err := NewSnapshotReader(testSnapshotFilename, fs)
+		r, header, err := NewSnapshotReader(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 		defer r.Close()
-		header, err := r.GetHeader()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
 		if SSVersion(header.Version) != DefaultVersion {
 			t.Errorf("invalid version %d, want %d", header.Version, DefaultVersion)
 		}
@@ -170,15 +166,11 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 				t.Fatalf("validation error not reported")
 			}
 		}()
-		r, err := NewSnapshotReader(testSnapshotFilename, fs)
+		r, header, err := NewSnapshotReader(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 		defer r.Close()
-		header, err := r.GetHeader()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
 		rand.Read(header.PayloadChecksum)
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
@@ -191,7 +183,7 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 		if uint64(n) != testPayloadSize || err != nil {
 			t.Fatalf("failed to get payload data")
 		}
-		r.ValidatePayload(header)
+		r.validatePayload()
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -210,15 +202,11 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) 
 	}()
 	func() {
 		_, sessionData, storeData := createTestSnapshotFile(t, v, fs)
-		r, err := NewSnapshotReader(testSnapshotFilename, fs)
+		r, _, err := NewSnapshotReader(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 		defer r.Close()
-		header, err := r.GetHeader()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
 		n, err := io.ReadFull(r, s)
@@ -229,7 +217,7 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) 
 		if uint64(n) != testPayloadSize || err != nil {
 			t.Fatalf("failed to get payload data")
 		}
-		r.ValidatePayload(header)
+		r.validatePayload()
 		if !bytes.Equal(sessionData, s) {
 			t.Errorf("session data changed")
 		}
@@ -433,12 +421,9 @@ func TestShrinkSnapshot(t *testing.T) {
 	if fi.Size() != 1060 {
 		t.Errorf("not shrunk according to file size")
 	}
-	reader, err := NewSnapshotReader(shrunkFilename, fs)
+	reader, _, err := NewSnapshotReader(shrunkFilename, fs)
 	if err != nil {
 		t.Fatalf("failed to create snapshot reader %v", err)
-	}
-	if _, err := reader.GetHeader(); err != nil {
-		t.Fatalf("failed to get header %v", err)
 	}
 	if err := reader.Close(); err != nil {
 		t.Fatalf("failed to close the reader %v", err)
@@ -498,17 +483,13 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 	}()
 	func() {
 		makeTestSnapshotFile(t, 0, sz, V2, fs)
-		reader, err := NewSnapshotReader(testSnapshotFilename, fs)
+		reader, header, err := NewSnapshotReader(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("failed to create reader %v", err)
 		}
 		defer func() {
 			reader.Close()
 		}()
-		header, err := reader.GetHeader()
-		if err != nil {
-			t.Fatalf("failed to get header")
-		}
 		crc, err := GetV2PayloadChecksum(testSnapshotFilename, fs)
 		if err != nil {
 			t.Fatalf("failed to get v2 payload checksum %v", err)
@@ -539,15 +520,11 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 		t.Skip("skipped, the fs can not access the testdata")
 	}
 	fp := fs.PathJoin("testdata", "v1snapshot.gbsnap")
-	reader, err := NewSnapshotReader(fp, fs)
+	reader, header, err := NewSnapshotReader(fp, fs)
 	if err != nil {
 		t.Fatalf("failed to get reader %v", err)
 	}
 	defer reader.Close()
-	header, err := reader.GetHeader()
-	if err != nil {
-		t.Fatalf("failed to get header %v", err)
-	}
 	if header.Version != 1 {
 		t.Fatalf("not a version 1 snapshot file")
 	}
@@ -586,7 +563,6 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 	if string(data) != "random-data" {
 		t.Errorf("unexpected content")
 	}
-	reader.ValidatePayload(header)
 }
 
 func TestValidateHeader(t *testing.T) {

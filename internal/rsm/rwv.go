@@ -524,17 +524,13 @@ func GetV2PayloadChecksum(fp string, fs vfs.IFS) (crc []byte, err error) {
 }
 
 func getV2ChecksumType(fp string, fs vfs.IFS) (ct pb.ChecksumType, err error) {
-	reader, err := NewSnapshotReader(fp, fs)
+	reader, header, err := NewSnapshotReader(fp, fs)
 	if err != nil {
 		return 0, err
 	}
 	defer func() {
 		err = firstError(err, reader.Close())
 	}()
-	header, err := reader.GetHeader()
-	if err != nil {
-		return pb.ChecksumType(0), err
-	}
 	if header.Version != uint64(V2) {
 		return pb.ChecksumType(0), errors.New("not a v2 snapshot file")
 	}

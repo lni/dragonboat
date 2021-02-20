@@ -2355,13 +2355,9 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 			if fi.Size() != 1060 {
 				t.Fatalf("unexpected dummy snapshot file size %d", fi.Size())
 			}
-			reader, err := rsm.NewSnapshotReader(ss.Filepath, fs)
+			reader, h, err := rsm.NewSnapshotReader(ss.Filepath, fs)
 			if err != nil {
 				t.Fatalf("failed to read snapshot %v", err)
-			}
-			h, err := reader.GetHeader()
-			if err != nil {
-				t.Errorf("failed to get header")
 			}
 			// dummy snapshot is always not compressed
 			if h.CompressionType != config.NoCompression {
@@ -3228,15 +3224,11 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			if snapshots[0].Index != index {
 				t.Errorf("unexpected index value")
 			}
-			reader, err := rsm.NewSnapshotReader(snapshots[0].Filepath, fs)
+			reader, header, err := rsm.NewSnapshotReader(snapshots[0].Filepath, fs)
 			if err != nil {
 				t.Fatalf("failed to new snapshot reader %v", err)
 			}
 			defer reader.Close()
-			header, err := reader.GetHeader()
-			if err != nil {
-				t.Fatalf("failed to get header %v", err)
-			}
 			if rsm.SSVersion(header.Version) != rsm.V2 {
 				t.Errorf("unexpected snapshot version")
 			}
@@ -4220,14 +4212,11 @@ func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	}
 	fp := fs.PathJoin(testSnapshotDir,
 		"snapshot-00000000000003E8", "snapshot-00000000000003E8.gbsnap")
-	reader, err := rsm.NewSnapshotReader(fp, fs)
+	reader, _, err := rsm.NewSnapshotReader(fp, fs)
 	if err != nil {
 		t.Fatalf("failed to get a snapshot reader %v", err)
 	}
 	defer reader.Close()
-	if _, err = reader.GetHeader(); err != nil {
-		t.Fatalf("failed to get header %v", err)
-	}
 	got := make([]byte, 0)
 	buf := make([]byte, 1024*256)
 	for {

@@ -248,17 +248,13 @@ func (s *testSnapshotter) Load(ss pb.Snapshot,
 			Metadata: f.Metadata,
 		})
 	}
-	reader, err := NewSnapshotReader(fp, s.fs)
+	reader, header, err := NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		err = reader.Close()
 	}()
-	header, err := reader.GetHeader()
-	if err != nil {
-		return err
-	}
 	v := SSVersion(header.Version)
 	if err := loadable.LoadSessions(reader, v); err != nil {
 		return err
@@ -266,7 +262,6 @@ func (s *testSnapshotter) Load(ss pb.Snapshot,
 	if err := recoverable.Recover(reader, fs); err != nil {
 		return err
 	}
-	reader.ValidatePayload(header)
 	return nil
 }
 

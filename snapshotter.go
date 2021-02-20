@@ -156,11 +156,7 @@ func (s *snapshotter) Load(ss pb.Snapshot,
 			Metadata: f.Metadata,
 		})
 	}
-	reader, err := rsm.NewSnapshotReader(fp, s.fs)
-	if err != nil {
-		return err
-	}
-	header, err := reader.GetHeader()
+	reader, header, err := rsm.NewSnapshotReader(fp, s.fs)
 	if err != nil {
 		return err
 	}
@@ -176,7 +172,6 @@ func (s *snapshotter) Load(ss pb.Snapshot,
 	if err := asm.Recover(cr, fs); err != nil {
 		return err
 	}
-	reader.ValidatePayload(header)
 	return nil
 }
 
