@@ -353,7 +353,7 @@ func (v *VerboseSnapshotSM) RecoverFromSnapshot(r io.Reader,
 			total += uint64(n)
 		}
 		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			if err == io.EOF {
 				break
 			}
 			return err

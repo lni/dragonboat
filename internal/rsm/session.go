@@ -124,20 +124,12 @@ func (s *Session) save(writer io.Writer) error {
 
 func (s *Session) recoverFromSnapshot(reader io.Reader, v SSVersion) error {
 	lenbuf := make([]byte, 8)
-	n, err := io.ReadFull(reader, lenbuf)
-	if err != nil {
+	if _, err := io.ReadFull(reader, lenbuf); err != nil {
 		return err
-	}
-	if n != len(lenbuf) {
-		return io.ErrUnexpectedEOF
 	}
 	data := make([]byte, binary.LittleEndian.Uint64(lenbuf))
-	n, err = io.ReadFull(reader, data)
-	if err != nil {
+	if _, err := io.ReadFull(reader, data); err != nil {
 		return err
-	}
-	if n != len(data) {
-		return io.ErrUnexpectedEOF
 	}
 	if v == V1 {
 		s.recoverFromV1Snapshot(data)

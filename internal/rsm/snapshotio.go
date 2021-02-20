@@ -291,44 +291,28 @@ func (sr *SnapshotReader) Close() error {
 func (sr *SnapshotReader) GetHeader() (pb.SnapshotHeader, error) {
 	empty := pb.SnapshotHeader{}
 	lenbuf := make([]byte, 8)
-	n, err := io.ReadFull(sr.file, lenbuf)
-	if err != nil {
+	if _, err := io.ReadFull(sr.file, lenbuf); err != nil {
 		return empty, err
-	}
-	if n != len(lenbuf) {
-		return empty, io.ErrUnexpectedEOF
 	}
 	sz := binary.LittleEndian.Uint64(lenbuf)
 	if sz > HeaderSize-8 {
 		panic("invalid snapshot header size")
 	}
 	data := make([]byte, sz)
-	n, err = io.ReadFull(sr.file, data)
-	if err != nil {
+	if _, err := io.ReadFull(sr.file, data); err != nil {
 		return empty, err
-	}
-	if n != len(data) {
-		return empty, io.ErrUnexpectedEOF
 	}
 	pb.MustUnmarshal(&sr.header, data)
 	crcdata := make([]byte, 4)
-	n, err = io.ReadFull(sr.file, crcdata)
-	if err != nil {
+	if _, err := io.ReadFull(sr.file, crcdata); err != nil {
 		return empty, err
-	}
-	if n != 4 {
-		return empty, io.ErrUnexpectedEOF
 	}
 	if !validateHeader(data, crcdata) {
 		panic("corrupted header")
 	}
 	blank := make([]byte, HeaderSize-8-sz-4)
-	n, err = io.ReadFull(sr.file, blank)
-	if err != nil {
+	if _, err := io.ReadFull(sr.file, blank); err != nil {
 		return empty, err
-	}
-	if n != len(blank) {
-		return empty, io.ErrUnexpectedEOF
 	}
 	var reader io.Reader = sr.file
 	v := SSVersion(sr.header.Version)
@@ -452,13 +436,13 @@ func IsShrunkSnapshotFile(fp string, fs vfs.IFS) (shrunk bool, err error) {
 		return false, nil
 	}
 	oneByte := make([]byte, 1)
-	n, err := io.ReadFull(reader, oneByte)
-	if err == nil || n != 0 {
-		return false, nil
-	} else if err == io.ErrUnexpectedEOF || err == io.EOF {
+	if _, err := io.ReadFull(reader, oneByte); err != nil {
+		if err != io.EOF && err != io.ErrUnexpectedEOF {
+			return false, err
+		}
 		return true, nil
 	}
-	return false, err
+	return false, nil
 }
 
 func mustInSameDir(fp string, newFp string, fs vfs.IFS) {

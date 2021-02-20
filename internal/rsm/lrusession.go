@@ -126,20 +126,12 @@ func (rec *lrusession) load(reader io.Reader, v SSVersion) error {
 	defer rec.Unlock()
 	sessionList := make([]*Session, 0)
 	sizebuf := make([]byte, 8)
-	n, err := io.ReadFull(reader, sizebuf)
-	if err != nil {
+	if _, err := io.ReadFull(reader, sizebuf); err != nil {
 		return err
-	}
-	if n != len(sizebuf) {
-		return io.ErrUnexpectedEOF
 	}
 	sz := binary.LittleEndian.Uint64(sizebuf)
-	n, err = io.ReadFull(reader, sizebuf)
-	if err != nil {
+	if _, err := io.ReadFull(reader, sizebuf); err != nil {
 		return err
-	}
-	if n != len(sizebuf) {
-		return io.ErrUnexpectedEOF
 	}
 	total := binary.LittleEndian.Uint64(sizebuf)
 	for i := uint64(0); i < total; i++ {
