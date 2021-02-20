@@ -328,6 +328,10 @@ func (l *entryLog) commitTo(index uint64) {
 		plog.Panicf("invalid commitTo index %d, lastIndex() %d",
 			index, l.lastIndex())
 	}
+	if index < l.committed {
+		plog.Panicf("committed value moving backwards index %d, committed %d",
+			index, l.committed)
+	}
 	l.committed = index
 }
 
@@ -394,6 +398,10 @@ func (l *entryLog) tryCommit(index uint64, term uint64) (bool, error) {
 
 func (l *entryLog) restore(s pb.Snapshot) {
 	l.inmem.restore(s)
+	if s.Index < l.committed {
+		plog.Panicf("committed value moving backwards ss index %d, committed %d",
+			s.Index, l.committed)
+	}
 	l.committed = s.Index
 	l.processed = s.Index
 }
