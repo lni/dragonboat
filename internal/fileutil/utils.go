@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -43,6 +45,8 @@ const (
 )
 
 var firstError = utils.FirstError
+
+var ws = errors.WithStack
 
 // MustWrite writes the specified data to the input writer. It will panic if
 // there is any error.
@@ -65,11 +69,11 @@ func DirExist(name string, fs vfs.IFS) (result bool, err error) {
 		return false, err
 	}
 	defer func() {
-		err = firstError(err, f.Close())
+		err = firstError(err, ws(f.Close()))
 	}()
 	s, err := f.Stat()
 	if err != nil {
-		return false, err
+		return false, ws(err)
 	}
 	if !s.IsDir() {
 		panic("not a dir")
@@ -143,11 +147,11 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		err = firstError(err, f.Close())
+		err = firstError(err, ws(f.Close()))
 	}()
 	fileInfo, err := f.Stat()
 	if err != nil {
-		return err
+		return ws(err)
 	}
 	if !fileInfo.IsDir() {
 		panic("not a dir")
@@ -157,9 +161,9 @@ func SyncDir(dir string, fs vfs.IFS) (err error) {
 		return err
 	}
 	defer func() {
-		err = firstError(err, df.Close())
+		err = firstError(err, ws(df.Close()))
 	}()
-	return df.Sync()
+	return ws(df.Sync())
 }
 
 // MarkDirAsDeleted marks the specified directory as deleted.
@@ -190,26 +194,26 @@ func CreateFlagFile(dir string,
 		return err
 	}
 	defer func() {
-		err = firstError(err, f.Close())
+		err = firstError(err, ws(f.Close()))
 		err = firstError(err, SyncDir(dir, fs))
 	}()
 	data := pb.MustMarshal(msg)
 	h := getHash(data)
 	n, err := f.Write(h)
 	if err != nil {
-		return err
+		return ws(err)
 	}
 	if n != len(h) {
-		return io.ErrShortWrite
+		return ws(io.ErrShortWrite)
 	}
 	n, err = f.Write(data)
 	if err != nil {
-		return err
+		return ws(err)
 	}
 	if n != len(data) {
-		return io.ErrShortWrite
+		return ws(io.ErrShortWrite)
 	}
-	return f.Sync()
+	return ws(f.Sync())
 }
 
 // GetFlagFileContent gets the content of the flag file found in the specified
@@ -223,11 +227,11 @@ func GetFlagFileContent(dir string,
 		return err
 	}
 	defer func() {
-		err = firstError(err, f.Close())
+		err = firstError(err, ws(f.Close()))
 	}()
 	data, err := ReadAll(f)
 	if err != nil {
-		return err
+		return ws(err)
 	}
 	if len(data) < 8 {
 		panic("corrupted flag file")
@@ -238,7 +242,8 @@ func GetFlagFileContent(dir string,
 	if !bytes.Equal(h, expectedHash) {
 		panic("corrupted flag file content")
 	}
-	return msg.Unmarshal(buf)
+	pb.MustUnmarshal(msg, buf)
+	return nil
 }
 
 // HasFlagFile returns a boolean value indicating whether flag file can be

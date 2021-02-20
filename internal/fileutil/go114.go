@@ -33,20 +33,24 @@ var Discard = ioutil.Discard
 
 // CreateTemp ...
 func CreateTemp(dir string, pattern string) (*os.File, error) {
-	return ioutil.TempFile(dir, pattern)
+	f, err := ioutil.TempFile(dir, pattern)
+	return f, ws(err)
 }
 
 // ReadAll ...
 func ReadAll(r io.Reader) ([]byte, error) {
-	return ioutil.ReadAll(r)
+	result, err := ioutil.ReadAll(r)
+	return result, ws(err)
 }
 
 // MkdirTemp ...
 func MkdirTemp(dir string, pattern string) (string, error) {
-	return ioutil.TempDir(dir, pattern)
+	path, err := ioutil.TempDir(dir, pattern)
+	return path, ws(err)
 }
 
 // ReadFile ...
 func ReadFile(name string) ([]byte, error) {
-	return ioutil.ReadFile(name)
+	result, err := ioutil.ReadFile(name)
+	return result, ws(err)
 }
