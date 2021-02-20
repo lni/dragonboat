@@ -61,7 +61,7 @@ func (l *eventListener) notify() {
 				l0FileNumThreshold := l.kv.config.KVLevel0StopWritesTrigger - 1
 				m := l.kv.db.Metrics()
 				busy := m.MemTable.Size >= memSizeThreshold ||
-					uint64(m.Levels[0].NumFiles) >= l0FileNumThreshold
+					uint64(m.Levels[0].Sublevels) >= l0FileNumThreshold
 				l.kv.callback(busy)
 			}
 		default:
