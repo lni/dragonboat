@@ -290,7 +290,9 @@ func NewSnapshotReader(fp string,
 
 // Close closes the snapshot reader instance.
 func (sr *SnapshotReader) Close() error {
-	sr.validatePayload()
+	// defer is used here to make sure file is always closed, otherwise tests that
+	// panic in validatePayload() will complain about not closed file.
+	defer sr.validatePayload()
 	return sr.file.Close()
 }
 
