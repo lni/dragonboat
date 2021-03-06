@@ -13,72 +13,45 @@
 // limitations under the License.
 
 /*
-Package dragonboat is a multi-group Raft implementation.
+Package dragonboat is a feature complete and highly optimized multi-group Raft
+implementation for providing consensus in distributed systems.
 
 The NodeHost struct is the facade interface for all features provided by the
-dragonboat package. Each NodeHost instance usually runs on a separate host
-managing its CPU, storage and network resources. Each NodeHost can manage Raft
-nodes from many different Raft groups known as Raft clusters. Each Raft cluster
-is identified by its ClusterID and it usually consists of multiple nodes, each
-identified its NodeID value. Nodes from the same Raft cluster can be considered
-as replicas of the same data, they are suppose to be distributed on different
-NodeHost instances across the network, this brings fault tolerance to machine
-and network failures as application data stored in the Raft cluster will be
+dragonboat package. Each NodeHost instance usually runs on a separate server
+managing CPU, storage and network resources used for achieving consensus. Each
+NodeHost manages Raft nodes from different Raft groups known as Raft clusters.
+Each Raft cluster is identified by its ClusterID, it usually consists of
+multiple nodes (also known as replicas) each identified by a NodeID value.
+Nodes from the same Raft cluster suppose to be distributed on different NodeHost
+instances across the network, this brings fault tolerance for machine and
+network failures as application data stored in the Raft cluster will be
 available as long as the majority of its managing NodeHost instances (i.e. its
-underlying hosts) are available.
+underlying servers) are accessible.
 
-User applications can leverage the power of the Raft protocol implemented in
-dragonboat by implementing the IStateMachine or IOnDiskStateMachine component,
-as defined in github.com/lni/dragonboat/v3/statemachine. Known as user state
-machines, each IStateMachine and IOnDiskStateMachine instance is in charge of
-updating, querying and snapshotting application data with minimum exposure to
-the complexity of the Raft protocol implementation.
+Arbitrary number of Raft clusters can be launched across the network to
+aggregate distributed processing and storage capacities. Users can also make
+membership change requests to add or remove nodes from selected Raft cluster.
 
-User applications can use NodeHost's APIs to update the state of their
-IStateMachine or IOnDiskStateMachine instances, this is called making proposals.
-Once accepted by the majority nodes of a Raft cluster, the proposal is
-considered as committed and it will be applied on all member nodes of the Raft
-cluster. Applications can also make linearizable reads to query the state of the
-IStateMachine or IOnDiskStateMachine instances. Dragonboat employs the ReadIndex
-protocol invented by Diego Ongaro for fast linearizable reads.
+User applications can leverage the power of the Raft protocol by implementing
+the IStateMachine or IOnDiskStateMachine component, as defined in
+github.com/lni/dragonboat/v3/statemachine. Known as user state machines, each
+IStateMachine or IOnDiskStateMachine instance is in charge of updating, querying
+and snapshotting application data with minimum exposure to the Raft protocol
+itself.
 
 Dragonboat guarantees the linearizability of your I/O when interacting with the
 IStateMachine or IOnDiskStateMachine instances. In plain English, writes (via
-making proposal) to your Raft cluster appears to be instantaneous, once a write
-is completed, all later reads (linearizable read using the ReadIndex protocol
-as implemented and provided in dragonboat) should return the value of that write
-or a later write. Once a value is returned by a linearizable read, all later
-reads should return the same value or the result of a later write.
+making proposals) to your Raft cluster appears to be instantaneous, once a write
+is completed, all later reads (via linearizable read based on Raft's ReadIndex
+protocol) should return the value of that write or a later write. Once a value
+is returned by a linearizable read, all later reads should return the same value
+or the result of a later write.
 
 To strictly provide such guarantee, we need to implement the at-most-once
-semantic required by linearizability. For a client, when it retries the proposal
-that failed to complete before its deadline during the previous attempt, it has
-the risk to have the same proposal committed and applied twice into the user
-state machine. Dragonboat prevents this by implementing the client session
-concept described in Diego Ongaro's PhD thesis.
-
-Arbitrary number of Raft clusters can be launched across the network
-simultaneously to aggregate distributed processing and storage capacities. Users
-can also make membership change requests to add or remove nodes from any
-interested Raft cluster.
-
-NodeHost APIs for making the above mentioned requests can be loosely classified
-into two categories, synchronous and asynchronous APIs. Synchronous APIs will
-not return until the completion of the requested operation. Their method names
-all start with Sync*. The asynchronous counterparts of such synchronous APIs,
-on the other hand, usually return immediately. This allows users to concurrently
-initiate multiple such asynchronous operations to save the total amount of time
-required to complete all of them.
-
-Dragonboat is a feature complete Multi-Group Raft implementation - snapshotting,
-membership change, leadership transfer, non-voting members and disk based state
-machine are all provided.
-
-Dragonboat is also extensively optimized. The Raft protocol implementation is
-fully pipelined, meaning proposals can start before the completion of previous
-proposals. This is critical for system throughput in high latency environment.
-Dragonboat is also fully batched, internal operations are batched whenever
-possible to maximize the overall throughput.
+semantic. For a client, when it retries the proposal that failed to complete by
+its deadline, it faces the risk of having the same proposal committed and
+applied twice into the user state machine. Dragonboat prevents this by
+implementing the client session concept described in Diego Ongaro's PhD thesis.
 */
 package dragonboat // github.com/lni/dragonboat/v3
 
@@ -230,33 +203,32 @@ type NodeHostInfoOption struct {
 // requests the GetNodeHostInfo method to return all supported info.
 var DefaultNodeHostInfoOption NodeHostInfoOption
 
-// SnapshotOption is the options users can specify when requesting a snapshot
-// to be generated.
+// SnapshotOption is the options supported when requesting a snapshot to be
+// generated.
 type SnapshotOption struct {
 	// ExportPath is the path where the exported snapshot should be stored, it
 	// must point to an existing directory for which the current user has write
-	// permission to it.
+	// permission.
 	ExportPath string
-	// CompactionOverhead is the compaction overhead value to use for the request
-	// snapshot operation when OverrideCompactionOverhead is true. This field is
-	// ignored when exporting a snapshot, that is when Exported is true.
+	// CompactionOverhead is the compaction overhead value to use for the
+	// requested snapshot operation when OverrideCompactionOverhead is set to
+	// true. This field is ignored when exporting a snapshot.
 	CompactionOverhead uint64
-	// Exported is a boolean flag indicating whether the snapshot requested to
-	// be generated should be exported. For an exported snapshot, it is users'
-	// responsibility to manage the snapshot files. By default, a requested
-	// snapshot is not considered as exported, such a regular snapshot is managed
-	// the system.
+	// Exported is a boolean flag indicating whether to export the requested
+	// snapshot. For an exported snapshot, users are responsible for managing the
+	// snapshot files. An exported snapshot is usually used to repair the cluster
+	// when it permanently loses its majority quorum. See the ImportSnapshot method
+	// in the tools package for more details.
 	Exported bool
 	// OverrideCompactionOverhead defines whether the requested snapshot operation
 	// should override the compaction overhead setting specified in node's config.
-	// This field is ignored by the system when exporting a snapshot.
+	// This field is ignored when exporting a snapshot.
 	OverrideCompactionOverhead bool
 }
 
 // DefaultSnapshotOption is the default SnapshotOption value to use when
-// requesting a snapshot to be generated by using NodeHost's RequestSnapshot
-// method. DefaultSnapshotOption causes a regular snapshot to be generated
-// and the generated snapshot is managed by the system.
+// requesting a snapshot to be generated. This default option causes a regular
+// snapshot to be generated.
 var DefaultSnapshotOption SnapshotOption
 
 // Target is the type used to specify where a node is running. Target is remote
@@ -267,7 +239,7 @@ type Target = string
 
 // NodeHost manages Raft clusters and enables them to share resources such as
 // transport and persistent storage etc. NodeHost is also the central thread
-// safe access point for Dragonboat functionalities.
+// safe access point for accessing Dragonboat functionalities.
 type NodeHost struct {
 	mu struct {
 		sync.RWMutex
@@ -302,9 +274,8 @@ var dn = logutil.DescribeNode
 
 var firstError = utils.FirstError
 
-// NewNodeHost creates a new NodeHost instance. The returned NodeHost instance
-// is configured using the specified NodeHostConfig instance. In a typical
-// application, it is expected to have one NodeHost on each server.
+// NewNodeHost creates a new NodeHost instance. In a typical application, it is
+// expected to have one NodeHost on each server.
 func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	logBuildTagsAndVersion()
 	if err := nhConfig.Validate(); err != nil {
@@ -383,8 +354,8 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	return nh, nil
 }
 
-// Close closes and releases all resources owned by the NodeHost instance
-// including Raft nodes managed by the NodeHost.
+// Close stops all managed Raft nodes and releases all resources owned by the
+// NodeHost instance.
 func (nh *NodeHost) Close() {
 	nh.events.sys.Publish(server.SystemEvent{
 		Type: server.NodeHostShuttingDown,
@@ -539,12 +510,10 @@ func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]Target,
 		join, cf, cfg, pb.OnDiskStateMachine)
 }
 
-// StopCluster removes and stops the Raft node associated with the specified
-// Raft cluster from the NodeHost. The node to be removed and stopped is
-// identified by the clusterID value.
+// StopCluster stops the Raft node associated with the specified Raft cluster.
 //
-// Note that this is not the membership change operation to remove the node
-// from the Raft cluster.
+// Note that this is not the membership change operation required to remove the
+// node from the Raft cluster.
 func (nh *NodeHost) StopCluster(clusterID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
@@ -552,11 +521,10 @@ func (nh *NodeHost) StopCluster(clusterID uint64) error {
 	return nh.stopNode(clusterID, 0, false)
 }
 
-// StopNode removes the specified Raft cluster node from the NodeHost and
-// stops that running Raft node.
+// StopNode stops the specified Raft node.
 //
-// Note that this is not the membership change operation to remove the node
-// from the Raft cluster.
+// Note that this is not the membership change operation required to remove the
+// node from the Raft cluster.
 func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
@@ -602,11 +570,10 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 
 // SyncRead performs a synchronous linearizable read on the specified Raft
 // cluster. The specified context parameter must has the timeout value set. The
-// query byte slice specifies what to query, it will be passed to the Lookup
+// query interface{} specifies what to query, it will be passed to the Lookup
 // method of the IStateMachine or IOnDiskStateMachine after the system
-// determines that it is safe to perform the local read on IStateMachine or
-// IOnDiskStateMachine. It returns the query result from the Lookup method or
-// the error encountered.
+// determines that it is safe to perform the local read. It returns the query
+// result from the Lookup method or the error encountered.
 func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	query interface{}) (interface{}, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
@@ -623,8 +590,7 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	return v, nil
 }
 
-// Membership is the struct used to describe Raft cluster membership query
-// results.
+// Membership is the struct used to describe Raft cluster membership.
 type Membership struct {
 	// ConfigChangeID is the Raft entry index of the last applied membership
 	// change entry.
@@ -646,9 +612,6 @@ type Membership struct {
 // SyncGetClusterMembership is a rsynchronous method that queries the membership
 // information from the specified Raft cluster. The specified context parameter
 // must has the timeout value set.
-//
-// SyncGetClusterMembership guarantees that the returned membership information
-// is linearizable.
 func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 	clusterID uint64) (*Membership, error) {
 	v, err := nh.linearizableRead(ctx, clusterID,
@@ -676,12 +639,7 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 }
 
 // GetClusterMembership returns the membership information from the specified
-// Raft cluster. The specified context parameter must has the timeout value
-// set.
-//
-// GetClusterMembership guarantees that the returned membership information is
-// linearizable. This is a synchronous method meaning it will only return after
-// its confirmed completion, failure or timeout.
+// Raft cluster.
 //
 // Deprecated: Use NodeHost.SyncGetClusterMembership instead.
 // NodeHost.GetClusterMembership will be removed in v4.0.
@@ -719,21 +677,13 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 // its own implementation.
 //
 // NO-OP client session must be used for making proposals on IOnDiskStateMachine
-// based state machine.
+// based user state machines.
 func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 	return client.NewNoOPSession(clusterID, nh.env.GetRandomSource())
 }
 
 // GetNewSession starts a synchronous proposal to create, register and return
-// a new client session object for the specified Raft cluster. The specified
-// context parameter must has the timeout value set.
-//
-// A client session object is used to ensure that a retried proposal, e.g.
-// proposal retried after timeout, will not be applied more than once into the
-// IStateMachine.
-//
-// Returned client session instance should not be used concurrently. Use
-// multiple client sessions when making concurrent proposals.
+// a new client session object for the specified Raft cluster.
 //
 // Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
 // be removed in v4.0.
@@ -742,12 +692,8 @@ func (nh *NodeHost) GetNewSession(ctx context.Context,
 	return nh.SyncGetSession(ctx, clusterID)
 }
 
-// CloseSession closes the specified client session by unregistering it
-// from the system. The specified context parameter must has the timeout value
-// set. This is a synchronous method meaning it will only return after its
-// confirmed completion, failure or timeout.
-//
-// Closed client session should no longer be used in future proposals.
+// CloseSession closes the specified client session by unregistering it from the
+// system.
 //
 // Deprecated: Use NodeHost.SyncCloseSession instead. NodeHost.CloseSession will
 // be removed in v4.0.
@@ -764,13 +710,11 @@ func (nh *NodeHost) CloseSession(ctx context.Context,
 // proposal retried after timeout, will not be applied more than once into the
 // state machine.
 //
-// Returned client session instance should not be used concurrently. Use
-// multiple client sessions when you need to concurrently start multiple
-// proposals.
+// Returned client session instance is not thread safe.
 //
-// Client session is not supported by IOnDiskStateMachine based state machine.
-// NO-OP client session must be used for making proposals on IOnDiskStateMachine
-// based state machine.
+// Client session is not supported by IOnDiskStateMachine based user state
+// machines. NO-OP client session must be used on IOnDiskStateMachine based
+// state machines.
 func (nh *NodeHost) SyncGetSession(ctx context.Context,
 	clusterID uint64) (*client.Session, error) {
 	timeout, err := getTimeoutFromContext(ctx)
@@ -795,11 +739,10 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 }
 
 // SyncCloseSession closes the specified client session by unregistering it
-// from the system. The specified context parameter must has the timeout value
-// set. This is a synchronous method meaning it will only return after its
-// confirmed completion, failure or timeout.
+// from the system in a synchronous manner. The specified context parameter
+// must has the timeout value set.
 //
-// Closed client session should no longer be used in future proposals.
+// Closed client session should not be used in future proposals.
 func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 	cs *client.Session) error {
 	timeout, err := getTimeoutFromContext(ctx)
@@ -825,22 +768,21 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 // Session object. The input byte slice can be reused for other purposes
 // immediate after the return of this method.
 //
-// This method returns a RequestState instance or an error immediately.
-// Application can wait on the ResultC() channel of the returned RequestState
-// instance to get notified for the outcome of the proposal and access to the
-// result of the proposal.
+// This method returns a RequestState instance or an error immediately. User can
+// wait on the ResultC() channel of the returned RequestState instance to get
+// notified for the outcome of the proposal.
 //
 // After the proposal is completed, i.e. RequestResult is received from the
 // ResultC() channel of the returned RequestState, unless NO-OP client session
 // is used, it is caller's responsibility to update the Session instance
-// accordingly based on the RequestResult.Code value. Basically, when
-// RequestTimeout is returned, you can retry the same proposal without updating
-// your client session instance, when a RequestRejected value is returned, it
-// usually means the session instance has been evicted from the server side,
-// the Raft paper recommends you to crash your client in this highly unlikely
-// event. When the proposal completed successfully with a RequestCompleted
-// value, application must call client.ProposalCompleted() to get the client
-// session ready to be used in future proposals.
+// accordingly. Basically, when RequestTimeout is returned, you can retry the
+// same proposal without updating your client session instance, when a
+// RequestRejected value is returned, it usually means the session instance has
+// been evicted from the server side as there are too many ongoing client
+// sessions, the Raft paper recommends users to crash the client in such highly
+// unlikely event. When the proposal completed successfully with a
+// RequestCompleted value, application must call client.ProposalCompleted() to
+// get the client session ready to be used in future proposals.
 func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 	timeout time.Duration) (*RequestState, error) {
 	return nh.propose(session, cmd, timeout)
@@ -873,10 +815,9 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 // read on the specified cluster. This method returns a RequestState instance
 // or an error immediately. Application should wait on the ResultC() channel
 // of the returned RequestState object to get notified on the outcome of the
-// ReadIndex operation. On a successful completion, the ReadLocal method can
-// then be invoked to query the state of the IStateMachine or
-// IOnDiskStateMachine to complete the read operation with linearizability
-// guarantee.
+// ReadIndex operation. On a successful completion, the ReadLocalNode method
+// can then be invoked to query the state of the IStateMachine or
+// IOnDiskStateMachine with linearizability guarantee.
 func (nh *NodeHost) ReadIndex(clusterID uint64,
 	timeout time.Duration) (*RequestState, error) {
 	rs, _, err := nh.readIndex(clusterID, timeout)
@@ -884,9 +825,8 @@ func (nh *NodeHost) ReadIndex(clusterID uint64,
 }
 
 // ReadLocalNode queries the Raft node identified by the input RequestState
-// instance. To ensure the IO linearizability, ReadLocalNode should only be
-// called after receiving a RequestCompleted notification from the ReadIndex
-// method. See ReadIndex's example for more details.
+// instance. ReadLocalNode is only allowed to be called after receiving a
+// RequestCompleted notification from the ReadIndex method.
 func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	query interface{}) (interface{}, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -904,13 +844,12 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
-// NAReadLocalNode is a variant of ReadLocalNode, it uses byte slice as its
-// input and output data for read only queries to minimize extra heap
-// allocations caused by using interface{}. Users are recommended to use
-// ReadLocalNode unless performance is the top priority.
+// NAReadLocalNode is a no extra heap allocation variant of ReadLocalNode, it
+// uses byte slice as its input and output data to avoid extra heap allocations
+// caused by using interface{}. Users are recommended to use the ReadLocalNode
+// method unless performance is the top priority.
 //
-// As an optional method, the underlying state machine must implement the
-// statemachine.IExtended interface. NAReadLocalNode returns
+// As an optional feature of the state machine, NAReadLocalNode returns
 // statemachine.ErrNotImplemented if the underlying state machine does not
 // implement the statemachine.IExtended interface.
 func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
@@ -930,9 +869,6 @@ var staleReadCalled uint32
 
 // StaleRead queries the specified Raft node directly without any
 // linearizability guarantee.
-//
-// Users are recommended to use the SyncRead method or a combination of the
-// ReadIndex and ReadLocalNode method to achieve linearizable read.
 func (nh *NodeHost) StaleRead(clusterID uint64,
 	query interface{}) (interface{}, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -961,7 +897,7 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 // SyncRequestSnapshot is the synchronous variant of the RequestSnapshot
 // method. See RequestSnapshot for more details.
 //
-// The input ctx must has deadline set.
+// The input context object must has deadline set.
 //
 // SyncRequestSnapshot returns the index of the created snapshot or the error
 // encountered.
@@ -986,27 +922,11 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 // specified cluster node. For each node, only one ongoing snapshot operation
 // is allowed.
 //
-// Users can use an option parameter to specify details of the requested
-// snapshot. For example, when the input SnapshotOption's Exported field is
-// True, a snapshot will be exported to the directory pointed by the ExportPath
-// field of the SnapshotOption instance. Such an exported snapshot is not
-// managed by the system and it is mainly used to repair the cluster when it
-// permanently loses its majority quorum. See the ImportSnapshot method in the
-// tools package for more details.
-//
-// When the Exported field of the input SnapshotOption instance is set to false,
-// snapshots created as the result of RequestSnapshot are managed by Dragonboat.
-// Users are not suppose to move, copy, modify or delete the generated snapshot.
-// Such requested snapshot will also trigger Raft log and snapshot compactions
+// Each requested snapshot will also trigger Raft log and snapshot compactions
 // similar to automatic snapshotting. Users need to subsequently call
 // RequestCompaction(), which can be far more I/O intensive, at suitable time to
 // actually reclaim disk spaces used by Raft log entries and snapshot metadata
 // records.
-//
-// When a snapshot is requested on a node backed by an IOnDiskStateMachine, only
-// the metadata portion of the state machine will be captured and saved.
-// Requesting snapshots on IOnDiskStateMachine based nodes are typically used to
-// trigger Raft log and snapshot compactions.
 //
 // RequestSnapshot returns a RequestState instance or an error immediately.
 // Applications can wait on the ResultC() channel of the returned RequestState
@@ -1071,7 +991,7 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 // SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode
 // method. See RequestDeleteNode for more details.
 //
-// The input ctx must have its deadline set.
+// The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 	clusterID uint64, nodeID uint64, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
@@ -1089,7 +1009,7 @@ func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 // SyncRequestAddNode is the synchronous variant of the RequestAddNode method.
 // See RequestAddNode for more details.
 //
-// The input ctx must have its deadline set.
+// The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	target string, configChangeIndex uint64) error {
@@ -1109,7 +1029,7 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 // SyncRequestAddObserver is the synchronous variant of the RequestAddObserver
 // method. See RequestAddObserver for more details.
 //
-// The input ctx must have its deadline set.
+// The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	target string, configChangeIndex uint64) error {
@@ -1129,7 +1049,7 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 // SyncRequestAddWitness is the synchronous variant of the RequestAddWitness
 // method. See RequestAddWitness for more details.
 //
-// The input ctx must have its deadline set.
+// The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	target string, configChangeIndex uint64) error {
@@ -1154,8 +1074,8 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 //
 // It is not guaranteed that deleted node will automatically close itself and
 // be removed from its managing NodeHost instance. It is application's
-// responsibility to call RemoveCluster on the right NodeHost instance to
-// actually have the cluster node removed from its managing NodeHost instance.
+// responsibility to call StopCluster on the right NodeHost instance to actually
+// have the cluster node removed from its managing NodeHost instance.
 //
 // Once a node is successfully deleted from a Raft cluster, it will not be
 // allowed to be added back to the cluster with the same node identity.
@@ -1239,18 +1159,8 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsObserver
 // set to true on the right NodeHost to actually start the observer instance.
 //
-// By default, the target parameter is the RaftAddress of the NodeHost instance
-// where the new Raft node will be running. Note that fixed IP or static DNS
-// name should be used in RaftAddress in such default mode. When running in the
-// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
-// can be obtained by calling the ID() method.
-//
-// When the Raft cluster is created with the OrderedConfigChange config flag
-// set as false, the configChangeIndex parameter is ignored. Otherwise, it
-// should be set to the most recent Config Change Index value returned by the
-// SyncGetClusterMembership method. The requested add observer operation will be
-// rejected if other membership change has been applied since that earlier call
-// to the SyncGetClusterMembership method.
+// See the godoc of the RequestAddNode method for the details of the target and
+// configChangeIndex parameters.
 func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1279,18 +1189,8 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Application should later call StartCluster with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// By default, the target parameter is the RaftAddress of the NodeHost instance
-// where the new Raft node will be running. Note that fixed IP or static DNS
-// name should be used in RaftAddress in such default mode. When running in the
-// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
-// can be obtained by calling the ID() method.
-//
-// When the Raft cluster is created with the OrderedConfigChange config flag
-// set as false, the configChangeIndex parameter is ignored. Otherwise, it
-// should be set to the most recent Config Change Index value returned by the
-// SyncGetClusterMembership method. The requested add witness operation will be
-// rejected if other membership change has been applied since that earlier call
-// to the SyncGetClusterMembership method.
+// See the godoc of the RequestAddNode method for the details of the target and
+// configChangeIndex parameters.
 func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
@@ -1309,8 +1209,7 @@ func (nh *NodeHost) RequestAddWitness(clusterID uint64,
 // RequestLeaderTransfer makes a request to transfer the leadership of the
 // specified Raft cluster to the target node identified by targetNodeID. It
 // returns an error if the request fails to be started. There is no guarantee
-// that such request can be fulfilled, i.e. the leadership transfer can still
-// fail after a successful return of the RequestLeaderTransfer method.
+// that such request can be fulfilled.
 func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 	targetNodeID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -1327,8 +1226,8 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for
-// the specified node to be fully offloaded or until the ctx instance is
-// cancelled or timeout.
+// the specified node to be fully offloaded or until the context object instance
+// is cancelled or timeout.
 //
 // Similar to RemoveData, calling SyncRemoveData on a node that is still a Raft
 // cluster member will corrupt the Raft cluster.
