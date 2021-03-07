@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Lei Ni (nilei81@gmail.com) and other contributors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other contributors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,14 +43,9 @@ var (
 // system to ensure mutual exclusion.
 //
 // Once created, the Open method is immediately invoked to open and use the
-// persisted state on disk to continue from the persisted state. This makes
-// IOnDiskStateMachine quite different from the IStateMachine types which
-// require the state machine state to be fully reconstructed from saved
-// snapshots and Raft Log entries.
-//
-// As IOnDiskStateMachine always has most of its state kept on disk by design.
-// Its SaveSnapshot method is thus only invoked on demand when a full snapshot
-// is required to be streamed to a remote node.
+// persisted state on disk. This makes IOnDiskStateMachine different from
+// IStateMachine types which require the state machine state to be fully
+// reconstructed from saved snapshots and Raft logs.
 //
 // Applications that implement IOnDiskStateMachine are recommended to setup
 // periodic snapshotting with relatively short time intervals, that triggers
@@ -85,7 +80,7 @@ type IOnDiskStateMachine interface {
 	//
 	// The Update method can choose to synchronize all of its in-core state with
 	// that on disk. This can minimize the number of committed Raft entries that
-	// need to be re-applied after reboot. Update is also allowed to postpone such
+	// need to be re-applied after reboot. Update can also choose to postpone such
 	// synchronization until the Sync method is invoked, this approach produces
 	// higher throughput during fault free running at the cost that some of the
 	// most recent Raft entries not synchronized onto disks will have to be
@@ -107,10 +102,10 @@ type IOnDiskStateMachine interface {
 	// to the same updated state and outputs the same results. The input entry
 	// slice should be the only input to this method. Reading from the system
 	// clock, random number generator or other similar external data sources will
-	// violate the deterministic requirement of the Update method.
+	// likely violate the deterministic requirement of the Update method.
 	//
-	// Concurrent call to the Lookup method and the SaveSnapshot method is allowed
-	// when the state machine is being updated by the Update method.
+	// Concurrent calls to the Lookup method and the SaveSnapshot method are not
+	// blocked when the state machine is being updated by the Update method.
 	//
 	// The IOnDiskStateMachine implementation should not keep a reference to the
 	// input entry slice after return.
@@ -120,32 +115,29 @@ type IOnDiskStateMachine interface {
 	Update([]Entry) ([]Entry, error)
 	// Lookup queries the state of the IOnDiskStateMachine instance and returns
 	// the query result as an interface{}. The input interface{} specifies what to
-	// query, it is up to the IOnDiskStateMachine implementation to interpret the
-	// input interface{} parameter. The returned interface{} contains the query
-	// result.
+	// query, it is up to the IOnDiskStateMachine implementation to interpret such
+	// input. The returned interface{} contains the query result.
 	//
 	// When an error is returned by the Lookup method, the error will be passed
-	// to the caller of NodeHost's ReadLocalNode() or SyncRead() methods to be
-	// handled. A typical scenario for returning an error is that the state
-	// machine has already been closed or aborted from a RecoverFromSnapshot
-	// procedure before Lookup is handled. You implementation is expected to
-	// panic when there is any unrecoverable error during Lookup.
+	// to the caller to be handled. A typical scenario for returning an error is
+	// that the state machine has already been closed or aborted from a
+	// RecoverFromSnapshot procedure before Lookup is called.
 	//
-	// Concurrent call to the Update and RecoverFromSnapshot method should be
-	// allowed when call to the Lookup method is being processed.
+	// Concurrent calls to the Update and RecoverFromSnapshot method are not
+	// blocked when calls to the Lookup method are being processed.
 	//
-	// The IOnDiskStateMachine implementation should not keep a reference of
-	// the instance pointed by the input interface{} after return.
+	// The IOnDiskStateMachine implementation should not keep any reference of
+	// the input interface{} after return.
 	//
 	// The Lookup method is a read only method, it should never change the state
 	// of IOnDiskStateMachine.
 	Lookup(interface{}) (interface{}, error)
-	// Sync synchronizes all in-core state of the state machine to permanent
+	// Sync synchronizes all in-core state of the state machine to persisted
 	// storage so the state machine can continue from its latest state after
 	// reboot.
 	//
 	// Sync is always invoked with mutual exclusion protection from the Update,
-	// PrepareSnapshot, RecoverFromSnapshot and Close method.
+	// PrepareSnapshot, RecoverFromSnapshot and Close methods.
 	//
 	// Sync returns an error when there is unrecoverable error for synchronizing
 	// the in-core state.
@@ -157,7 +149,7 @@ type IOnDiskStateMachine interface {
 	//
 	// PrepareSnapshot in general saves a state identifier of the current state,
 	// such state identifier can be a version number, a sequence number, a change
-	// ID or some other in memory small data structure used for describing the
+	// ID or some other small in memory data structure used for describing the
 	// point in time state of the state machine. The state identifier is returned
 	// as an interface{} before being passed to the SaveSnapshot() method.
 	//
@@ -165,25 +157,20 @@ type IOnDiskStateMachine interface {
 	// preparing the snapshot.
 	PrepareSnapshot() (interface{}, error)
 	// SaveSnapshot saves the point in time state of the IOnDiskStateMachine
-	// instance identified by the input state identifier to the provided
-	// io.Writer. The io.Writer is a connection to a remote node usually
-	// significantly behind in terms of Raft log progress.
-	//
-	// It is important to understand that SaveSnapshot should never be implemented
-	// to save the current latest state of the state machine when it is invoked.
-	// SaveSnapshot must be implemented to save the point in time state identified
-	// by the input state identifier.
+	// instance identified by the input state identifier, which is usually not
+	// the latest state of the IOnDiskStateMachine instance, to the provided
+	// io.Writer.
 	//
 	// It is application's responsibility to save the complete state to the
 	// provided io.Writer in a deterministic manner. That is for the same state
 	// machine state, when SaveSnapshot is invoked multiple times with the same
-	// input, the content written to the provided io.Writer should always be the
-	// same.
+	// input state identifier, the content written to the provided io.Writer
+	// should always be the same.
 	//
 	// When there is any connectivity error between the local node and the remote
-	// node, an ErrSnapshotStreaming will be returned by io.Writer's Write method
-	// when trying to write data to it. The SaveSnapshot method should return
-	// ErrSnapshotStreaming to terminate early.
+	// node, an ErrSnapshotStreaming will be returned by io.Writer's Write method.
+	// The SaveSnapshot method should return ErrSnapshotStreaming to abort its
+	// operation.
 	//
 	// It is SaveSnapshot's responsibility to free the resources owned by the
 	// input state identifier when it is done.
@@ -202,14 +189,13 @@ type IOnDiskStateMachine interface {
 	//
 	// SaveSnapshot returns the encountered error when generating the snapshot.
 	// Other than the above mentioned ErrSnapshotStopped and ErrSnapshotAborted
-	// errors, the IConcurrentStateMachine implementation should only return a
-	// non-nil error when the system need to be immediately halted for critical
-	// errors, e.g. disk error preventing you from saving the snapshot.
+	// errors, the IOnDiskStateMachine implementation should only return a non-nil
+	// error when the system need to be immediately halted for critical errors,
+	// e.g. disk error preventing you from saving the snapshot.
 	SaveSnapshot(interface{}, io.Writer, <-chan struct{}) error
 	// RecoverFromSnapshot recovers the state of the IOnDiskStateMachine instance
 	// from a snapshot captured by the SaveSnapshot() method on a remote node. The
-	// saved snapshot is provided as an io.Reader backed by a file already fully
-	// available on disk.
+	// saved snapshot is provided as an io.Reader backed by a file stored on disk.
 	//
 	// Dragonboat ensures that the Update, Sync, PrepareSnapshot, SaveSnapshot and
 	// Close methods will not be invoked when RecoverFromSnapshot() is in
@@ -223,8 +209,8 @@ type IOnDiskStateMachine interface {
 	// only return a non-nil error when the system need to be immediately halted
 	// for non-recoverable error.
 	//
-	// RecoverFromSnapshot is not required to synchronize its in-core state with
-	// that on disk.
+	// RecoverFromSnapshot is not required to synchronize its recovered in-core
+	// state with that on disk.
 	RecoverFromSnapshot(io.Reader, <-chan struct{}) error
 	// Close closes the IOnDiskStateMachine instance. Close is invoked when the
 	// state machine is in a ready-to-exit state in which there will be no further
@@ -247,4 +233,4 @@ type IOnDiskStateMachine interface {
 
 // CreateOnDiskStateMachineFunc is a factory function type for creating
 // IOnDiskStateMachine instances.
-type CreateOnDiskStateMachineFunc func(uint64, uint64) IOnDiskStateMachine
+type CreateOnDiskStateMachineFunc func(clusterID uint64, nodeID uint64) IOnDiskStateMachine
