@@ -119,6 +119,7 @@ type ChanTransport struct {
 	requestHandler raftio.MessageHandler
 	chunkHandler   raftio.ChunkHandler
 	stopper        *syncutil.Stopper
+	connStopper    *syncutil.Stopper
 }
 
 // NewChanTransport creates a new channel based test transport module.
@@ -130,6 +131,7 @@ func NewChanTransport(nhConfig config.NodeHostConfig,
 		requestHandler: requestHandler,
 		chunkHandler:   chunkHandler,
 		stopper:        syncutil.NewStopper(),
+		connStopper:    syncutil.NewStopper(),
 	}
 }
 
@@ -156,7 +158,7 @@ func (ct *ChanTransport) Start() error {
 				}()
 				return
 			case cc := <-acc.ac:
-				ct.stopper.RunWorker(func() {
+				ct.connStopper.RunWorker(func() {
 					ct.serveConn(cc)
 				})
 			}
@@ -168,6 +170,7 @@ func (ct *ChanTransport) Start() error {
 // Close ...
 func (ct *ChanTransport) Close() error {
 	ct.stopper.Stop()
+	ct.connStopper.Stop()
 	return nil
 }
 
