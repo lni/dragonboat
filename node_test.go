@@ -1401,8 +1401,8 @@ func TestSnapshotCanBeMade(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get snapshot count")
 			}
-			if count < 3 {
-				t.Errorf("%s has less than 3 snapshot images", dir)
+			if count == 0 {
+				t.Errorf("no snapshot image")
 			}
 		}
 	}

@@ -31,7 +31,13 @@ import (
 )
 
 const (
-	snapshotsToKeep = 3
+	// TODO: check in monkey tests
+	// extra out of date snapshot is no longer kept. snapshot compaction is now
+	// more aggressive. when a new snapshot is generated, it implies that it
+	// would be less expensive to just transmit the latest generated snapshot.
+	// this is achieved by compacting all old snapshots so the ongoing snapshot
+	// transport jobs will be aborted.
+	snapshotsToKeep = 1
 )
 
 func compressionType(ct pb.CompressionType) dio.CompressionType {

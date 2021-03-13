@@ -411,11 +411,11 @@ func TestRemoveUnusedSnapshotRemoveSnapshots(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	// normal case
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 5, fs)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 32, 7, 7, fs)
 	// snapshotsToKeep snapshots will be kept
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 4, 5, 2, fs)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 4, 5, 4, fs)
 	// snapshotsToKeep snapshots will be kept
-	testRemoveUnusedSnapshotRemoveSnapshots(t, 3, 3, 1, fs)
+	testRemoveUnusedSnapshotRemoveSnapshots(t, 3, 3, 3, fs)
 }
 
 func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
@@ -463,6 +463,9 @@ func testRemoveUnusedSnapshotRemoveSnapshots(t *testing.T,
 		snapshots, err = ldb.ListSnapshots(1, 1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to list snapshot")
+		}
+		if len(snapshots) == 0 {
+			t.Errorf("most recent snapshot also removed")
 		}
 		if uint64(len(snapshots)) != total-removed+1 {
 			t.Errorf("got %d, want %d, first index %d",
