@@ -322,19 +322,19 @@ func (c *Chunk) save(chunk pb.Chunk) (err error) {
 	}
 	fn := c.fs.PathBase(chunk.Filepath)
 	fp := c.fs.PathJoin(env.GetTempDir(), fn)
-	var f *ChunkFile
+	var f *chunkFile
 	if chunk.FileChunkId == 0 {
-		f, err = CreateChunkFile(fp, c.fs)
+		f, err = createChunkFile(fp, c.fs)
 	} else {
-		f, err = OpenChunkFileForAppend(fp, c.fs)
+		f, err = openChunkFileForAppend(fp, c.fs)
 	}
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err = firstError(err, f.Close())
+		err = firstError(err, f.close())
 	}()
-	n, err := f.Write(chunk.Data)
+	n, err := f.write(chunk.Data)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func (c *Chunk) save(chunk pb.Chunk) (err error) {
 		return io.ErrShortWrite
 	}
 	if chunk.IsLastChunk() || chunk.IsLastFileChunk() {
-		if err := f.Sync(); err != nil {
+		if err := f.sync(); err != nil {
 			return err
 		}
 	}

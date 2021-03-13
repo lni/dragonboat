@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/errors/oserror"
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -229,13 +230,16 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 		if !chunk.Witness {
 			data, err := loadChunkData(chunk, chunkData, j.fs)
 			if err != nil {
-				plog.Errorf("failed to read the snapshot chunk, %v", err)
+				// failed to load the chunk data when the snapshot file still exists,
+				// treat this as a corruption
+				if _, err := j.fs.Stat(chunk.Filepath); !oserror.IsNotExist(err) {
+					panicNow(err)
+				}
 				return err
 			}
 			chunk.Data = data
 		}
 		if err := j.sendChunk(chunk, j.conn); err != nil {
-			plog.Debugf("send chunk to %s failed", dn(chunk.ClusterId, chunk.NodeId))
 			return err
 		}
 		if f := j.postSend.Load(); f != nil {

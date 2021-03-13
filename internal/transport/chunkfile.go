@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Lei Ni (nilei81@gmail.com) and other contributors.
+// Copyright 2017-2021 Lei Ni (nilei81@gmail.com) and other contributors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,64 +15,57 @@
 package transport
 
 import (
-	"io"
-
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 )
 
-// ChunkFile is the snapshot chunk file being transferred.
-type ChunkFile struct {
+// chunkFile is the snapshot chunk file being transferred.
+type chunkFile struct {
 	file    vfs.File
 	fs      vfs.IFS
 	dir     string
 	syncDir bool
 }
 
-// OpenChunkFileForAppend opens the chunk file at fp for appending.
-func OpenChunkFileForAppend(fp string, fs vfs.IFS) (*ChunkFile, error) {
+// openChunkFileForAppend opens the chunk file at fp for appending.
+func openChunkFileForAppend(fp string, fs vfs.IFS) (*chunkFile, error) {
 	f, err := fs.OpenForAppend(fp)
 	if err != nil {
 		return nil, err
 	}
-	return &ChunkFile{file: f, fs: fs}, nil
+	return &chunkFile{file: f, fs: fs}, nil
 }
 
-// OpenChunkFileForRead opens for the chunk file for read-only operation.
-func OpenChunkFileForRead(fp string, fs vfs.IFS) (*ChunkFile, error) {
+// openChunkFileForRead opens for the chunk file for read-only operation.
+func openChunkFileForRead(fp string, fs vfs.IFS) (*chunkFile, error) {
 	f, err := fs.Open(fp)
 	if err != nil {
 		return nil, err
 	}
-	return &ChunkFile{file: f, fs: fs}, nil
+	return &chunkFile{file: f, fs: fs}, nil
 }
 
-// CreateChunkFile creates a new chunk file.
-func CreateChunkFile(fp string, fs vfs.IFS) (*ChunkFile, error) {
+// createChunkFile creates a new chunk file.
+func createChunkFile(fp string, fs vfs.IFS) (*chunkFile, error) {
 	f, err := fs.Create(fp)
 	if err != nil {
 		return nil, err
 	}
-	return &ChunkFile{file: f, syncDir: true, dir: fs.PathDir(fp), fs: fs}, nil
+	return &chunkFile{file: f, syncDir: true, dir: fs.PathDir(fp), fs: fs}, nil
 }
 
-// ReadAt reads from the file.
-func (cf *ChunkFile) ReadAt(data []byte, offset int64) (int, error) {
+// readAt reads from the file.
+func (cf *chunkFile) readAt(data []byte, offset int64) (int, error) {
 	return cf.file.ReadAt(data, offset)
 }
 
-// Read reads from the file.
-func (cf *ChunkFile) Read(data []byte) (int, error) {
-	return io.ReadFull(cf.file, data)
-}
-
-// Write writes the specified data to the chunk file.
-func (cf *ChunkFile) Write(data []byte) (int, error) {
+// write writes the specified data to the chunk file.
+func (cf *chunkFile) write(data []byte) (int, error) {
 	return cf.file.Write(data)
 }
 
-// Close closes the chunk file.
-func (cf *ChunkFile) Close() error {
+// close closes the chunk file.
+func (cf *chunkFile) close() error {
 	if err := cf.file.Close(); err != nil {
 		return err
 	}
@@ -82,7 +75,7 @@ func (cf *ChunkFile) Close() error {
 	return nil
 }
 
-// Sync syncs the chunk file.
-func (cf *ChunkFile) Sync() error {
+// sync syncs the chunk file.
+func (cf *chunkFile) sync() error {
 	return cf.file.Sync()
 }
