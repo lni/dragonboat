@@ -20,7 +20,7 @@ OS := $(shell uname)
 # the location of this Makefile
 PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 # name of the package
-PKGNAME=github.com/lni/dragonboat/v3
+PKGNAME=$(shell go list)
 
 ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
 LOGDB_TAG=dragonboat_rocksdb_test
