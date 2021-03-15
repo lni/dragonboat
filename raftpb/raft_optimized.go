@@ -55,6 +55,11 @@ func (i ColferTail) Error() string {
 	return fmt.Sprintf("colfer: data continuation at byte %d", i)
 }
 
+// SizeUpperLimit returns the upper limit size of the state instance.
+func (m *State) SizeUpperLimit() int {
+	return 8 + 16*3
+}
+
 // SizeUpperLimit returns the upper limit size of the entry batch.
 func (m *EntryBatch) SizeUpperLimit() (n int) {
 	var l int

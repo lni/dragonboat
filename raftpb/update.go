@@ -177,3 +177,17 @@ func (u *Update) Unmarshal(buf []byte) error {
 	}
 	return nil
 }
+
+// SizeUpperLimit returns the upper limit of the estimated size of marshalled
+// Update instance.
+func (u *Update) SizeUpperLimit() int {
+	sz := 2 + 4
+	sz += int(GetEntrySliceSize(u.EntriesToSave))
+	if !IsEmptyState(u.State) {
+		sz += u.State.SizeUpperLimit()
+	}
+	if !IsEmptySnapshot(u.Snapshot) {
+		sz += u.Snapshot.Size()
+	}
+	return sz
+}
