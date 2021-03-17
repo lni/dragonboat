@@ -188,6 +188,12 @@ func getHash(data []byte) []byte {
 
 // CreateFlagFile creates a flag file in the specific location. The flag file
 // contains the marshaled data of the specified protobuf message.
+//
+// CreateFlagFile is not atomic meaning you can end up having a file at
+// fs.PathJoin(dir, filename) with partial or corrupted content when the machine
+// crashes in the middle of this function call. Special care must be taken to
+// handle such situation, see how CreateFlagFile is used by snapshot images as
+// an example.
 func CreateFlagFile(dir string,
 	filename string, msg pb.Marshaler, fs vfs.IFS) (err error) {
 	fp := fs.PathJoin(dir, filename)
