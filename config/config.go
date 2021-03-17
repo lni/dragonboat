@@ -30,6 +30,7 @@ import (
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
+	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -591,8 +592,8 @@ func (l *defaultLogDB) Create(nhConfig NodeHostConfig,
 
 func (l *defaultLogDB) Name() string {
 	fs := vfs.DefaultFS
-	dir := vfs.TempDir()
-	if err := fs.MkdirAll(dir, 0700); err != nil {
+	dir, err := fileutil.TempDir("", "dragonboat-logdb-test", fs)
+	if err != nil {
 		panic(err)
 	}
 	defer func() {
