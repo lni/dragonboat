@@ -1619,7 +1619,7 @@ func (nh *NodeHost) createLogDB() error {
 	if nh.nhConfig.Expert.LogDBFactory != nil {
 		lf = nh.nhConfig.Expert.LogDBFactory
 	} else {
-		lf = logdb.NewDefaultFactory(nh.fs)
+		lf = logdb.NewDefaultFactory()
 	}
 	name := lf.Name()
 	if err := nh.env.CheckLogDBType(nh.nhConfig, name); err != nil {

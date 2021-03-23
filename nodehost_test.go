@@ -4321,11 +4321,11 @@ func TestNodeHostReturnsErrLogDBBrokenChangeWhenLogDBTypeChanges(t *testing.T) {
 	fs := vfs.GetTestFS()
 	bff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs)
 	}
 	nff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs)
 	}
 	to := &testOption{
 		at: func(*NodeHost) {
@@ -4348,11 +4348,11 @@ func TestNodeHostByDefaultUsePlainEntryLogDB(t *testing.T) {
 	fs := vfs.GetTestFS()
 	bff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs)
 	}
 	nff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs)
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
@@ -4375,11 +4375,11 @@ func TestNodeHostByDefaultChecksWhetherToUseBatchedLogDB(t *testing.T) {
 	fs := vfs.GetTestFS()
 	bff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultBatchedLogDB(config, cb, dirs, lldirs)
 	}
 	nff := func(config config.NodeHostConfig, cb config.LogDBCallback,
 		dirs []string, lldirs []string) (raftio.ILogDB, error) {
-		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs, fs)
+		return logdb.NewDefaultLogDB(config, cb, dirs, lldirs)
 	}
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {

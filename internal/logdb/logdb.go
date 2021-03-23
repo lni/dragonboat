@@ -83,19 +83,18 @@ type kvFactory func(config.LogDBConfig,
 
 // DefaultFactory is the default factory for creating LogDB instance.
 type DefaultFactory struct {
-	fs vfs.IFS
 }
 
 // NewDefaultFactory creates a new DefaultFactory instance.
-func NewDefaultFactory(fs vfs.IFS) *DefaultFactory {
-	return &DefaultFactory{fs: fs}
+func NewDefaultFactory() *DefaultFactory {
+	return &DefaultFactory{}
 }
 
 // Create creates the LogDB instance.
 func (f *DefaultFactory) Create(cfg config.NodeHostConfig,
 	cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return NewDefaultLogDB(cfg, cb, dirs, lldirs, f.fs)
+	return NewDefaultLogDB(cfg, cb, dirs, lldirs)
 }
 
 // Name returns the name of the default LogDB instance.
@@ -109,18 +108,18 @@ func (f *DefaultFactory) Name() string {
 // batched entries saved in the existing DB.
 func NewDefaultLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback,
-	dirs []string, lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return NewLogDB(config,
-		callback, dirs, lldirs, false, true, fs, newDefaultKVStore)
+		callback, dirs, lldirs, false, true, newDefaultKVStore)
 }
 
 // NewDefaultBatchedLogDB creates a Log DB instance using the default KV store
 // implementation with batched entry support.
 func NewDefaultBatchedLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback,
-	dirs []string, lldirs []string, fs vfs.IFS) (raftio.ILogDB, error) {
+	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return NewLogDB(config,
-		callback, dirs, lldirs, true, false, fs, newDefaultKVStore)
+		callback, dirs, lldirs, true, false, newDefaultKVStore)
 }
 
 // NewLogDB creates a Log DB instance based on provided configuration
@@ -128,7 +127,7 @@ func NewDefaultBatchedLogDB(config config.NodeHostConfig,
 // by the provided factory function.
 func NewLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback, dirs []string, lldirs []string,
-	batched bool, check bool, fs vfs.IFS, f kvFactory) (raftio.ILogDB, error) {
+	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
 	checkDirs(config.Expert.LogDB.Shards, dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
 	if len(dirs) == 1 {
@@ -139,7 +138,7 @@ func NewLogDB(config config.NodeHostConfig,
 			}
 		}
 	}
-	return OpenShardedDB(config, callback, dirs, lldirs, batched, check, fs, f)
+	return OpenShardedDB(config, callback, dirs, lldirs, batched, check, f)
 }
 
 func checkDirs(numOfShards uint64, dirs []string, lldirs []string) {

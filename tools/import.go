@@ -176,7 +176,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if _, _, err := env.CreateNodeHostDir(nhConfig.DeploymentID); err != nil {
 		return err
 	}
-	logdb, err := getLogDB(*env, nhConfig, fs)
+	logdb, err := getLogDB(*env, nhConfig)
 	if err != nil {
 		return err
 	}
@@ -469,12 +469,11 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 }
 
 func getLogDB(env server.Env,
-	nhConfig config.NodeHostConfig, fs vfs.IFS) (raftio.ILogDB, error) {
+	nhConfig config.NodeHostConfig) (raftio.ILogDB, error) {
 	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
 	if nhConfig.Expert.LogDBFactory != nil {
 		return nhConfig.Expert.LogDBFactory.Create(nhConfig,
 			nil, []string{nhDir}, []string{walDir})
 	}
-	return logdb.NewDefaultLogDB(nhConfig,
-		nil, []string{nhDir}, []string{walDir}, fs)
+	return logdb.NewDefaultLogDB(nhConfig, nil, []string{nhDir}, []string{walDir})
 }

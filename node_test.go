@@ -204,8 +204,9 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			Expert: config.GetDefaultExpertConfig(),
 		}
 		cfg.Expert.LogDB.Shards = 2
+		cfg.Expert.FS = fs
 		ldb, err = logdb.NewDefaultLogDB(cfg,
-			nil, []string{nodeLogDir}, []string{nodeLowLatencyLogDir}, fs)
+			nil, []string{nodeLogDir}, []string{nodeLowLatencyLogDir})
 		if err != nil {
 			plog.Panicf("failed to open logdb, %+v", err)
 		}

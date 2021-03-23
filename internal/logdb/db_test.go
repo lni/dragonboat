@@ -68,12 +68,13 @@ func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILo
 	}
 	expert := config.GetDefaultExpertConfig()
 	expert.LogDB.Shards = 4
+	expert.FS = fs
 	cfg := config.NodeHostConfig{
 		Expert: expert,
 	}
 
 	db, err := NewLogDB(cfg, nil,
-		[]string{d}, []string{lld}, batched, false, fs, newDefaultKVStore)
+		[]string{d}, []string{lld}, batched, false, newDefaultKVStore)
 	if err != nil {
 		panic(err)
 	}

@@ -50,7 +50,8 @@ func getNewTestDB(dir string, lldir string, fs vfs.IFS) raftio.ILogDB {
 	cfg := config.NodeHostConfig{
 		Expert: config.GetDefaultExpertConfig(),
 	}
-	db, err := logdb.NewDefaultLogDB(cfg, nil, []string{d}, []string{lld}, fs)
+	cfg.Expert.FS = fs
+	db, err := logdb.NewDefaultLogDB(cfg, nil, []string{d}, []string{lld})
 	if err != nil {
 		panic(err.Error())
 	}

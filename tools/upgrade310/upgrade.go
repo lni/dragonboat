@@ -22,7 +22,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/utils"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -54,7 +53,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	if err := nhConfig.Prepare(); err != nil {
 		return false, err
 	}
-	fs := vfs.DefaultFS
+	fs := nhConfig.Expert.FS
 	env, err := server.NewEnv(nhConfig, fs)
 	if err != nil {
 		return false, err
@@ -69,7 +68,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	var ldb raftio.ILogDB
 	if nhConfig.Expert.LogDBFactory == nil {
 		ldb, err = logdb.NewDefaultLogDB(nhConfig,
-			nil, []string{nhDir}, []string{walDir}, fs)
+			nil, []string{nhDir}, []string{walDir})
 	} else {
 		ldb, err = nhConfig.Expert.LogDBFactory.Create(nhConfig,
 			nil, []string{nhDir}, []string{walDir})
