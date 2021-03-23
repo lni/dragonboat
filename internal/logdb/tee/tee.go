@@ -25,7 +25,6 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -52,8 +51,8 @@ type LogDB struct {
 
 // NewTeeLogDB creates a new LogDB instance.
 func NewTeeLogDB(nhConfig config.NodeHostConfig,
-	cb config.LogDBCallback, dirs []string, wals []string,
-	fs vfs.IFS) (raftio.ILogDB, error) {
+	cb config.LogDBCallback,
+	dirs []string, wals []string) (raftio.ILogDB, error) {
 	odirs := make([]string, 0)
 	owals := make([]string, 0)
 	for _, v := range dirs {
@@ -63,7 +62,7 @@ func NewTeeLogDB(nhConfig config.NodeHostConfig,
 		owals = append(owals, filepath.Join(v, "odir"))
 	}
 	odb, err := logdb.NewLogDB(nhConfig,
-		cb, odirs, owals, false, false, fs, rocksdb.NewKVStore)
+		cb, odirs, owals, false, false, rocksdb.NewKVStore)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +75,7 @@ func NewTeeLogDB(nhConfig config.NodeHostConfig,
 		nwals = append(nwals, filepath.Join(v, "ndir"))
 	}
 	ndb, err := logdb.NewLogDB(nhConfig,
-		cb, ndirs, nwals, false, false, fs, pebble.NewKVStore)
+		cb, ndirs, nwals, false, false, pebble.NewKVStore)
 	if err != nil {
 		return nil, err
 	}

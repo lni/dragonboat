@@ -59,9 +59,8 @@ var twonh = flag.Bool("two-nodehosts", false, "use two nodehosts")
 
 func newBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,
-		cb, dirs, lldirs, true, false, fs, pebble.NewKVStore)
+		cb, dirs, lldirs, true, false, pebble.NewKVStore)
 }
 
 type dummyStateMachine struct{}

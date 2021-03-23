@@ -21,7 +21,6 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -33,7 +32,7 @@ func (rf *Factory) Create(cfg config.NodeHostConfig,
 	cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return logdb.NewLogDB(cfg,
-		cb, dirs, lldirs, false, false, vfs.DefaultFS, rocksdb.NewKVStore)
+		cb, dirs, lldirs, false, false, rocksdb.NewKVStore)
 }
 
 // Name returns the name of the LogDB instance.
@@ -46,9 +45,8 @@ func (rf *Factory) Name() string {
 // batched alternative implementation but comes at the cost of lower throughput.
 func NewLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,
-		cb, dirs, lldirs, false, false, fs, rocksdb.NewKVStore)
+		cb, dirs, lldirs, false, false, rocksdb.NewKVStore)
 }
 
 // NewBatchedLogDB is the factory function for creating RocksDB based Log DB
@@ -59,7 +57,6 @@ func NewLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 // Deprecated: NewBatchedLogDB has been deprecated, use NewLogDB instead.
 func NewBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	fs := vfs.DefaultFS
 	return logdb.NewLogDB(cfg,
-		cb, dirs, lldirs, true, false, fs, rocksdb.NewKVStore)
+		cb, dirs, lldirs, true, false, rocksdb.NewKVStore)
 }

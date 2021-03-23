@@ -17,7 +17,6 @@ package tee
 import (
 	"github.com/lni/dragonboat/v3/config"
 	tl "github.com/lni/dragonboat/v3/internal/logdb/tee"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
@@ -31,5 +30,5 @@ import (
 // CreateTeeLogDB is provided here to allow Drummer to use the Tee LogDB.
 func CreateTeeLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {
-	return tl.NewTeeLogDB(cfg, cb, dirs, wals, vfs.DefaultFS)
+	return tl.NewTeeLogDB(cfg, cb, dirs, wals)
 }
