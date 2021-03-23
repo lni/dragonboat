@@ -183,11 +183,11 @@ func (u *Update) Unmarshal(buf []byte) error {
 func (u *Update) SizeUpperLimit() int {
 	sz := 2 + 4
 	sz += int(GetEntrySliceSize(u.EntriesToSave))
-	if !IsEmptyState(u.State) {
-		sz += u.State.SizeUpperLimit()
-	}
+	sz += u.State.SizeUpperLimit()
 	if !IsEmptySnapshot(u.Snapshot) {
 		sz += u.Snapshot.Size()
+	} else {
+		sz += 48
 	}
 	return sz
 }
