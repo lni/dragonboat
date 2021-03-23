@@ -88,8 +88,7 @@ type ILogDB interface {
 	// ReadRaftState returns the persistented raft state found in Log DB.
 	ReadRaftState(clusterID uint64,
 		nodeID uint64, lastIndex uint64) (RaftState, error)
-	// RemoveEntriesTo removes entries associated with the specified Raft node up
-	// to the specified index.
+	// RemoveEntriesTo removes entries with indexes between (0, index].
 	RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error
 	// CompactEntriesTo reclaims underlying storage space used for storing
 	// entries up to the specified index.
