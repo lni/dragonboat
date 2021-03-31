@@ -76,7 +76,10 @@ type ILogDB interface {
 	// the specified node.
 	GetBootstrapInfo(clusterID uint64, nodeID uint64) (pb.Bootstrap, error)
 	// SaveRaftState atomically saves the Raft states, log entries and snapshots
-	// metadata found in the pb.Update list to the log DB.
+	// metadata found in the pb.Update list to the log DB. shardID is a 1-based
+	// ID of the worker invoking the SaveRaftState method, as each worker
+	// accesses the log DB from its own thread, SaveRaftState will never be
+	// concurrently called with the same shardID.
 	SaveRaftState(updates []pb.Update, shardID uint64) error
 	// IterateEntries returns the continuous Raft log entries of the specified
 	// Raft node between the index value range of [low, high) up to a max size
