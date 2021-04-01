@@ -604,6 +604,7 @@ func (l *defaultLogDB) Name() string {
 	nhc := NodeHostConfig{
 		Expert: ExpertConfig{
 			LogDB: GetDefaultLogDBConfig(),
+			FS:    fs,
 		},
 	}
 	ldb, err := l.factory(nhc, nil, []string{dir}, []string{})
