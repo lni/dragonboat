@@ -17,6 +17,7 @@ package tee
 import (
 	"path/filepath"
 	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -37,7 +38,7 @@ var (
 )
 
 func assertSameError(e1 error, e2 error) {
-	if errors.Is(e1, e2) {
+	if errors.Is(e1, e2) || errors.Is(e2, e1) {
 		return
 	}
 	plog.Panicf("conflict errors, e1 %v, e2 %v", e1, e2)
@@ -139,8 +140,14 @@ func (t *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 	if oe != nil {
 		return nil, oe
 	}
+	sort.Slice(o, func(i, j int) bool {
+		return o[i].ClusterID < o[j].ClusterID
+	})
+	sort.Slice(n, func(i, j int) bool {
+		return n[i].ClusterID < n[j].ClusterID
+	})
 	if !reflect.DeepEqual(o, n) {
-		plog.Panicf("conflict NodeInfo list len, %+v, %+v", o, n)
+		plog.Panicf("conflict NodeInfo list, %+v, %+v", o, n)
 	}
 	return o, nil
 }
