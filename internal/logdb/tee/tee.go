@@ -19,10 +19,12 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
 	"github.com/lni/dragonboat/v3/logger"
@@ -35,7 +37,7 @@ var (
 )
 
 func assertSameError(e1 error, e2 error) {
-	if e1 == e2 {
+	if errors.Is(e1, e2) {
 		return
 	}
 	plog.Panicf("conflict errors, e1 %v, e2 %v", e1, e2)
@@ -49,41 +51,58 @@ type LogDB struct {
 	ndb     raftio.ILogDB
 }
 
-// NewTeeLogDB creates a new LogDB instance.
-func NewTeeLogDB(nhConfig config.NodeHostConfig,
+// NewRocksDBLogDB creates a new RocksDB based LogDB instance
+func NewRocksDBLogDB(nhConfig config.NodeHostConfig,
 	cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {
-	odirs := make([]string, 0)
-	owals := make([]string, 0)
-	for _, v := range dirs {
-		odirs = append(odirs, filepath.Join(v, "odir"))
-	}
-	for _, v := range wals {
-		owals = append(owals, filepath.Join(v, "odir"))
-	}
-	odb, err := logdb.NewLogDB(nhConfig,
-		cb, odirs, owals, false, false, rocksdb.NewKVStore)
-	if err != nil {
-		return nil, err
-	}
+	return newKVLogDB(nhConfig, cb, dirs, wals, "tee-rocksdb", rocksdb.NewKVStore)
+}
+
+// NewPebbleLogDB creates a new LogDB instance.
+func NewPebbleLogDB(nhConfig config.NodeHostConfig,
+	cb config.LogDBCallback,
+	dirs []string, wals []string) (raftio.ILogDB, error) {
+	return newKVLogDB(nhConfig, cb, dirs, wals, "tee-pebble", pebble.NewKVStore)
+}
+
+func newKVLogDB(nhConfig config.NodeHostConfig,
+	cb config.LogDBCallback, dirs []string, wals []string,
+	subdir string, f kv.Factory) (raftio.ILogDB, error) {
 	ndirs := make([]string, 0)
 	nwals := make([]string, 0)
 	for _, v := range dirs {
-		ndirs = append(ndirs, filepath.Join(v, "ndir"))
+		ndirs = append(ndirs, filepath.Join(v, subdir))
 	}
 	for _, v := range wals {
-		nwals = append(nwals, filepath.Join(v, "ndir"))
+		nwals = append(nwals, filepath.Join(v, subdir))
 	}
-	ndb, err := logdb.NewLogDB(nhConfig,
-		cb, ndirs, nwals, false, false, pebble.NewKVStore)
+	return logdb.NewLogDB(nhConfig, cb, ndirs, nwals, false, false, f)
+}
+
+// NewTeeLogDB creates a new LogDB instance backed by a pebble and a rocksdb
+// based ILogDB.
+func NewTeeLogDB(nhConfig config.NodeHostConfig,
+	cb config.LogDBCallback,
+	dirs []string, wals []string) (raftio.ILogDB, error) {
+	odb, err := NewRocksDBLogDB(nhConfig, cb, dirs, wals)
 	if err != nil {
 		return nil, err
 	}
+	ndb, err := NewPebbleLogDB(nhConfig, cb, dirs, wals)
+	if err != nil {
+		return nil, err
+	}
+	return MakeTeeLogDB(odb, ndb), nil
+}
+
+// MakeTeeLogDB returns a LogDB instance combined from the specified odb and
+// ndb instances.
+func MakeTeeLogDB(odb raftio.ILogDB, ndb raftio.ILogDB) raftio.ILogDB {
 	return &LogDB{
 		stopper: syncutil.NewStopper(),
 		odb:     odb,
 		ndb:     ndb,
-	}, nil
+	}
 }
 
 // Name ...

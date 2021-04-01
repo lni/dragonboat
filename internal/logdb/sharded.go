@@ -23,6 +23,7 @@ import (
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -59,7 +60,7 @@ func (sc *shardCallback) callback(busy bool) {
 // OpenShardedDB creates a ShardedDB instance.
 func OpenShardedDB(config config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string, batched bool, check bool,
-	kvf kvFactory) (*ShardedDB, error) {
+	kvf kv.Factory) (*ShardedDB, error) {
 	fs := config.Expert.FS
 	if config.Expert.LogDB.IsEmpty() {
 		panic("config.Expert.LogDB.IsEmpty()")

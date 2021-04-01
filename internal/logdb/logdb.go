@@ -23,7 +23,6 @@ package logdb
 import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -78,9 +77,6 @@ type IContext interface {
 	GetLastEntryBatch() pb.EntryBatch
 }
 
-type kvFactory func(config.LogDBConfig,
-	kv.LogDBCallback, string, string, vfs.IFS) (kv.IKVStore, error)
-
 // DefaultFactory is the default factory for creating LogDB instance.
 type DefaultFactory struct {
 }
@@ -127,7 +123,7 @@ func NewDefaultBatchedLogDB(config config.NodeHostConfig,
 // by the provided factory function.
 func NewLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback, dirs []string, lldirs []string,
-	batched bool, check bool, f kvFactory) (raftio.ILogDB, error) {
+	batched bool, check bool, f kv.Factory) (raftio.ILogDB, error) {
 	checkDirs(config.Expert.LogDB.Shards, dirs, lldirs)
 	llDirRequired := len(lldirs) == 1
 	if len(dirs) == 1 {

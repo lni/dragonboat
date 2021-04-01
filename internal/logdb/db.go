@@ -77,7 +77,7 @@ func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 
 func openRDB(config config.LogDBConfig,
 	callback kv.LogDBCallback, dir string, wal string, batched bool,
-	fs vfs.IFS, kvf kvFactory) (*db, error) {
+	fs vfs.IFS, kvf kv.Factory) (*db, error) {
 	kvs, err := kvf(config, callback, dir, wal, fs)
 	if err != nil {
 		return nil, err

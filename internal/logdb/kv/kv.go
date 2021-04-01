@@ -14,10 +14,19 @@
 
 package kv
 
+import (
+	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/vfs"
+)
+
 const (
 	// MaxKeyLength is the max length of keys allowed
 	MaxKeyLength uint64 = 1024
 )
+
+// Factory is the factory function type used for creating IKVStore instances.
+type Factory func(config.LogDBConfig,
+	LogDBCallback, string, string, vfs.IFS) (IKVStore, error)
 
 // LogDBCallback is a callback function called by the LogDB
 type LogDBCallback func(busy bool)
