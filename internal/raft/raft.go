@@ -231,6 +231,7 @@ type raft struct {
 	snapshotting              bool
 	checkQuorum               bool
 	quiesce                   bool
+	disableProposalForwarding bool
 	isLeaderTransferTarget    bool
 	pendingConfigChange       bool
 }
@@ -244,20 +245,21 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 	}
 	rl := server.NewInMemRateLimiter(c.MaxInMemLogSize)
 	r := &raft{
-		clusterID:        c.ClusterID,
-		nodeID:           c.NodeID,
-		leaderID:         NoLeader,
-		msgs:             make([]pb.Message, 0),
-		droppedEntries:   make([]pb.Entry, 0),
-		log:              newEntryLog(logdb, rl),
-		remotes:          make(map[uint64]*remote),
-		observers:        make(map[uint64]*remote),
-		witnesses:        make(map[uint64]*remote),
-		electionTimeout:  c.ElectionRTT,
-		heartbeatTimeout: c.HeartbeatRTT,
-		checkQuorum:      c.CheckQuorum,
-		readIndex:        newReadIndex(),
-		rl:               rl,
+		clusterID:                 c.ClusterID,
+		nodeID:                    c.NodeID,
+		leaderID:                  NoLeader,
+		msgs:                      make([]pb.Message, 0),
+		droppedEntries:            make([]pb.Entry, 0),
+		log:                       newEntryLog(logdb, rl),
+		remotes:                   make(map[uint64]*remote),
+		observers:                 make(map[uint64]*remote),
+		witnesses:                 make(map[uint64]*remote),
+		electionTimeout:           c.ElectionRTT,
+		heartbeatTimeout:          c.HeartbeatRTT,
+		checkQuorum:               c.CheckQuorum,
+		disableProposalForwarding: c.DisableProposalForwarding,
+		readIndex:                 newReadIndex(),
+		rl:                        rl,
 	}
 	plog.Infof("%s raft log rate limit enabled: %t, %d",
 		dn(r.clusterID, r.nodeID), r.rl.Enabled(), c.MaxInMemLogSize)
@@ -1976,6 +1978,10 @@ func (r *raft) handleWitnessSnapshot(m pb.Message) error {
 func (r *raft) handleFollowerPropose(m pb.Message) error {
 	if r.leaderID == NoLeader {
 		plog.Warningf("%s dropped proposal, no leader", r.describe())
+		r.reportDroppedProposal(m)
+		return nil
+	} else if r.disableProposalForwarding {
+		plog.Warningf("%s dropped proposal, disabled forwarding to leader", r.describe())
 		r.reportDroppedProposal(m)
 		return nil
 	}

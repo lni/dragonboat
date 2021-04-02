@@ -2397,6 +2397,23 @@ func TestFollowerRedirectProposeMessageToLeader(t *testing.T) {
 	}
 }
 
+func TestFollowerNotRedirectProposeMessageToLeader(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.disableProposalForwarding = true
+	r.becomeFollower(10, 2)
+	m := pb.Message{
+		Type:    pb.Propose,
+		Entries: []pb.Entry{{Cmd: []byte("test-data")}},
+	}
+	ne(r.handleFollowerPropose(m), t)
+	if len(r.msgs) > 0 {
+		t.Fatalf("unexpected proposal forwarding")
+	}
+	if len(r.droppedEntries) != 1 {
+		t.Fatalf("propose wasn't dropped %d", len(r.droppedEntries))
+	}
+}
+
 func TestFollowerRedirectLeaderTransferMessageToLeader(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeFollower(10, 2)

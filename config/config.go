@@ -179,6 +179,10 @@ type Config struct {
 	//
 	// Quiesce support is currently experimental.
 	Quiesce bool
+	// DisableProposalForwarding set to true means that followers will drop
+	// proposals, rather than forwarding them to the leader. Proposal from
+	// follower or observer will be dropped.
+	DisableProposalForwarding bool
 }
 
 // Validate validates the Config instance and return an error when any member
