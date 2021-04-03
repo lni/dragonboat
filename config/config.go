@@ -131,6 +131,14 @@ type Config struct {
 	CompactionOverhead uint64
 	// OrderedConfigChange determines whether Raft membership change is enforced
 	// with ordered config change ID.
+	//
+	// When set to true, ConfigChangeIndex is required for membership change
+	// requests. This behaves like an optimistic write lock forcing clients to
+	// linearize membership change requests explicitly. (recommended)
+	//
+	// When set to false (default), ConfigChangeIndex is ignored for membership
+	// change requests. This may cause a client to request a membership change
+	// based on stale membership data.
 	OrderedConfigChange bool
 	// MaxInMemLogSize is the target size in bytes allowed for storing in memory
 	// Raft logs on each Raft node. In memory Raft logs are the ones that have
