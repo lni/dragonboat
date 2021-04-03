@@ -312,13 +312,13 @@ type NodeHostConfig struct {
 	// used by NodeHost. The default zero value causes the default built-in RocksDB
 	// based Log DB implementation to be used.
 	//
-	// Depreciated: Use NodeHostConfig.Expert.LogDBFactory instead.
+	// Deprecated: Use NodeHostConfig.Expert.LogDBFactory instead.
 	LogDBFactory LogDBFactoryFunc
 	// RaftRPCFactory is the factory function used for creating the transport
 	// instance for exchanging Raft message between NodeHost instances. The default
 	// zero value causes the built-in TCP based transport to be used.
 	//
-	// Depreciated: Use NodeHostConfig.Expert.TransportFactory instead.
+	// Deprecated: Use NodeHostConfig.Expert.TransportFactory instead.
 	RaftRPCFactory RaftRPCFactoryFunc
 	// EnableMetrics determines whether health metrics in Prometheus format should
 	// be enabled.
@@ -495,14 +495,14 @@ type LogDBCallback func(LogDBInfo)
 // RaftRPCFactoryFunc is the factory function that creates the transport module
 // instance for exchanging Raft messages between NodeHosts.
 //
-// Depreciated: Use TransportFactory instead.
+// Deprecated: Use TransportFactory instead.
 type RaftRPCFactoryFunc func(NodeHostConfig,
 	raftio.MessageHandler, raftio.ChunkHandler) raftio.ITransport
 
 // LogDBFactoryFunc is the factory function that creates NodeHost's persistent
 // storage module known as Log DB.
 //
-// Depreciated: Use LogDBFactory instead.
+// Deprecated: Use LogDBFactory instead.
 type LogDBFactoryFunc func(NodeHostConfig,
 	LogDBCallback, []string, []string) (raftio.ILogDB, error)
 

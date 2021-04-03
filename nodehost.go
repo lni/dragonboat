@@ -413,7 +413,7 @@ func (nh *NodeHost) Close() {
 // Stop closes and releases all resources owned by the NodeHost instance
 // including Raft nodes managed by the NodeHost.
 //
-// Depreciated: Use Close instead
+// Deprecated: Use Close instead
 func (nh *NodeHost) Stop() {
 	nh.Close()
 }
