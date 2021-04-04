@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -37,11 +38,12 @@ var (
 	plog = logger.GetLogger("LogDB")
 )
 
-func assertSameError(e1 error, e2 error) {
+func assertSameError(clusterID uint64, nodeID uint64, e1 error, e2 error) {
 	if errors.Is(e1, e2) || errors.Is(e2, e1) {
 		return
 	}
-	plog.Panicf("conflict errors, e1 %v, e2 %v", e1, e2)
+	plog.Panicf("conflict errors, %s, e1 %v, e2 %v",
+		logutil.DescribeNode(clusterID, nodeID), e1, e2)
 }
 
 // LogDB is a special LogDB module used for testing purposes.
@@ -136,7 +138,7 @@ func (t *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 	defer t.mu.Unlock()
 	o, oe := t.odb.ListNodeInfo()
 	n, ne := t.ndb.ListNodeInfo()
-	assertSameError(oe, ne)
+	assertSameError(0, 0, oe, ne)
 	if oe != nil {
 		return nil, oe
 	}
@@ -159,7 +161,7 @@ func (t *LogDB) SaveBootstrapInfo(clusterID uint64,
 	defer t.mu.Unlock()
 	oe := t.odb.SaveBootstrapInfo(clusterID, nodeID, bootstrap)
 	ne := t.ndb.SaveBootstrapInfo(clusterID, nodeID, bootstrap)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	return oe
 }
 
@@ -170,7 +172,7 @@ func (t *LogDB) GetBootstrapInfo(clusterID uint64,
 	defer t.mu.Unlock()
 	ob, oe := t.odb.GetBootstrapInfo(clusterID, nodeID)
 	nb, ne := t.ndb.GetBootstrapInfo(clusterID, nodeID)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	if oe != nil {
 		return pb.Bootstrap{}, oe
 	}
@@ -186,7 +188,7 @@ func (t *LogDB) SaveRaftState(updates []pb.Update, shardID uint64) error {
 	defer t.mu.Unlock()
 	oe := t.odb.SaveRaftState(updates, shardID)
 	ne := t.ndb.SaveRaftState(updates, shardID)
-	assertSameError(oe, ne)
+	assertSameError(0, 0, oe, ne)
 	return oe
 }
 
@@ -200,12 +202,13 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 		size, clusterID, nodeID, low, high, maxSize)
 	nv, ns, ne := t.ndb.IterateEntries(ents,
 		size, clusterID, nodeID, low, high, maxSize)
-	assertSameError(oe, ne)
+	assertSameError(0, 0, oe, ne)
 	if oe != nil {
 		return nil, 0, oe
 	}
 	if os != ns {
-		plog.Panicf("conflict sizes, %d, %d", os, ns)
+		plog.Infof("")
+		plog.Panicf("conflict sizes, %d, %d, %v, %v", os, ns, ov, nv)
 	}
 	if !reflect.DeepEqual(ov, nv) {
 		plog.Panicf("conflict entry lists, %+v, %+v", ov, nv)
@@ -220,7 +223,7 @@ func (t *LogDB) ReadRaftState(clusterID uint64,
 	defer t.mu.Unlock()
 	os, oe := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
 	ns, ne := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	if oe != nil {
 		return raftio.RaftState{}, oe
 	}
@@ -237,7 +240,7 @@ func (t *LogDB) RemoveEntriesTo(clusterID uint64,
 	defer t.mu.Unlock()
 	oe := t.odb.RemoveEntriesTo(clusterID, nodeID, index)
 	ne := t.ndb.RemoveEntriesTo(clusterID, nodeID, index)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	return oe
 }
 
@@ -247,7 +250,7 @@ func (t *LogDB) SaveSnapshots(updates []pb.Update) error {
 	defer t.mu.Unlock()
 	oe := t.odb.SaveSnapshots(updates)
 	ne := t.ndb.SaveSnapshots(updates)
-	assertSameError(oe, ne)
+	assertSameError(0, 0, oe, ne)
 	return oe
 }
 
@@ -258,7 +261,7 @@ func (t *LogDB) DeleteSnapshot(clusterID uint64,
 	defer t.mu.Unlock()
 	oe := t.odb.DeleteSnapshot(clusterID, nodeID, index)
 	ne := t.ndb.DeleteSnapshot(clusterID, nodeID, index)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	return oe
 }
 
@@ -269,12 +272,12 @@ func (t *LogDB) ListSnapshots(clusterID uint64,
 	defer t.mu.Unlock()
 	ov, oe := t.odb.ListSnapshots(clusterID, nodeID, index)
 	nv, ne := t.ndb.ListSnapshots(clusterID, nodeID, index)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	if oe != nil {
 		return nil, oe
 	}
 	if !reflect.DeepEqual(ov, nv) {
-		plog.Panicf("conflict snapshot lists, %+v, %+v", ov, nv)
+		plog.Panicf("conflict snapshot lists, %+v \n\n %+v", ov, nv)
 	}
 	return ov, nil
 }
@@ -285,7 +288,7 @@ func (t *LogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
 	defer t.mu.Unlock()
 	oe := t.odb.RemoveNodeData(clusterID, nodeID)
 	ne := t.ndb.RemoveNodeData(clusterID, nodeID)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	return oe
 }
 
@@ -295,7 +298,7 @@ func (t *LogDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	defer t.mu.Unlock()
 	oe := t.odb.ImportSnapshot(ss, nodeID)
 	ne := t.ndb.ImportSnapshot(ss, nodeID)
-	assertSameError(oe, ne)
+	assertSameError(ss.ClusterId, nodeID, oe, ne)
 	return oe
 }
 
@@ -307,7 +310,7 @@ func (t *LogDB) CompactEntriesTo(clusterID uint64,
 	done := make(chan struct{}, 1)
 	oc, oe := t.odb.CompactEntriesTo(clusterID, nodeID, index)
 	nc, ne := t.ndb.CompactEntriesTo(clusterID, nodeID, index)
-	assertSameError(oe, ne)
+	assertSameError(clusterID, nodeID, oe, ne)
 	if oe != nil {
 		return nil, oe
 	}
