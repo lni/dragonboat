@@ -90,19 +90,19 @@ var (
 var (
 	// ErrBadKey indicates that the key is bad, retry the request is recommended.
 	//
-	// Depreciated: ErrBadKey is no longer used.
+	// Deprecated: ErrBadKey is no longer used.
 	ErrBadKey = errors.New("bad key try again later")
 	// ErrPendingLeaderTransferExist has been depredicated, use ErrSystemBusy.
 	//
-	// Depreciated: ErrPendingLeaderTransferExist is depreciated.
+	// Deprecated: ErrPendingLeaderTransferExist is deprecated.
 	ErrPendingLeaderTransferExist = ErrSystemBusy
 	// ErrPendingConfigChangeExist has been deprecicated, use ErrSystemBusy.
 	//
-	// Depreciated: ErrPendingConfigChangeExist is depreciated.
+	// Deprecated: ErrPendingConfigChangeExist is deprecated.
 	ErrPendingConfigChangeExist = ErrSystemBusy
-	// ErrPendingSnapshotRequestExist has been depreciated, use ErrSystemBusy.
+	// ErrPendingSnapshotRequestExist has been deprecated, use ErrSystemBusy.
 	//
-	// Depreciated: ErrPendingSnapshotRequestExist is depreciated.
+	// Deprecated: ErrPendingSnapshotRequestExist is deprecated.
 	ErrPendingSnapshotRequestExist = ErrSystemBusy
 )
 
