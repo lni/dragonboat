@@ -689,11 +689,22 @@ func TestTCPTransportIsUsedByDefault(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
+type noopTransportFactory struct{}
+
+func (noopTransportFactory) Create(cfg config.NodeHostConfig,
+	h raftio.MessageHandler, ch raftio.ChunkHandler) raftio.ITransport {
+	return transport.NewNOOPTransport(cfg, h, ch)
+}
+
+func (noopTransportFactory) Validate(string) bool {
+	return true
+}
+
 func TestTransportFactoryIsStillHonored(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		updateNodeHostConfig: func(nhc *config.NodeHostConfig) *config.NodeHostConfig {
-			nhc.RaftRPCFactory = transport.NewNOOPTransport
+			nhc.Expert.TransportFactory = noopTransportFactory{}
 			return nhc
 		},
 		tf: func(nh *NodeHost) {

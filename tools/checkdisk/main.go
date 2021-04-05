@@ -57,10 +57,16 @@ var ckpt = flag.Int("checkpoint-interval", 0, "checkpoint interval")
 var tiny = flag.Bool("tiny-memory", false, "tiny LogDB memory limit")
 var twonh = flag.Bool("two-nodehosts", false, "use two nodehosts")
 
-func newBatchedLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
+type batchedLogDBFactory struct{}
+
+func (batchedLogDBFactory) Create(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return logdb.NewLogDB(cfg,
 		cb, dirs, lldirs, true, false, pebble.NewKVStore)
+}
+
+func (batchedLogDBFactory) Name() string {
+	return "Sharded-Pebble"
 }
 
 type dummyStateMachine struct{}
@@ -176,7 +182,7 @@ func main() {
 	}
 	if *batched {
 		log.Println("using batched logdb")
-		nhc.LogDBFactory = newBatchedLogDB
+		nhc.Expert.LogDBFactory = batchedLogDBFactory{}
 	}
 	nh, err := dragonboat.NewNodeHost(nhc)
 	if err != nil {
