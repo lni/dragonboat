@@ -15,7 +15,6 @@
 package dragonboat
 
 import (
-	"reflect"
 	"sync"
 	"sync/atomic"
 
@@ -639,10 +638,10 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	if err != nil {
 		return false, errors.Wrapf(err, "%s ReadRaftState failed", n.id())
 	}
-	hasRaftState := !reflect.DeepEqual(rs.State, pb.State{})
+	hasRaftState := !pb.IsEmptyState(rs.State)
 	if hasRaftState {
-		plog.Infof("%s has logdb entries size %d commit %d term %d",
-			n.id(), rs.EntryCount, rs.State.Commit, rs.State.Term)
+		plog.Infof("%s logdb first entry %d size %d commit %d term %d",
+			n.id(), rs.FirstIndex, rs.EntryCount, rs.State.Commit, rs.State.Term)
 		n.logReader.SetState(rs.State)
 	}
 	n.logReader.SetRange(rs.FirstIndex, rs.EntryCount)
