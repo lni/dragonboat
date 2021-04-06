@@ -198,9 +198,11 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	ce := make([]pb.Entry, len(ents))
+	copy(ce, ents)
 	ov, os, oe := t.odb.IterateEntries(ents,
 		size, clusterID, nodeID, low, high, maxSize)
-	nv, ns, ne := t.ndb.IterateEntries(ents,
+	nv, ns, ne := t.ndb.IterateEntries(ce,
 		size, clusterID, nodeID, low, high, maxSize)
 	assertSameError(0, 0, oe, ne)
 	if oe != nil {
