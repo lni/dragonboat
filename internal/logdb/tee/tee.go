@@ -38,12 +38,14 @@ var (
 	plog = logger.GetLogger("LogDB")
 )
 
+var dn = logutil.DescribeNode
+
 func assertSameError(clusterID uint64, nodeID uint64, e1 error, e2 error) {
 	if errors.Is(e1, e2) || errors.Is(e2, e1) {
 		return
 	}
 	plog.Panicf("conflict errors, %s, e1 %v, e2 %v",
-		logutil.DescribeNode(clusterID, nodeID), e1, e2)
+		dn(clusterID, nodeID), e1, e2)
 }
 
 // LogDB is a special LogDB module used for testing purposes.
@@ -177,7 +179,8 @@ func (t *LogDB) GetBootstrapInfo(clusterID uint64,
 		return pb.Bootstrap{}, oe
 	}
 	if !reflect.DeepEqual(ob, nb) {
-		plog.Panicf("conflict GetBootstrapInfo values, %+v, %+v", ob, nb)
+		plog.Panicf("%s conflict GetBootstrapInfo values, %+v, %+v",
+			dn(clusterID, nodeID), ob, nb)
 	}
 	return ob, nil
 }
@@ -210,10 +213,12 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 	}
 	if os != ns {
 		plog.Infof("")
-		plog.Panicf("conflict sizes, %d, %d, %v, %v", os, ns, ov, nv)
+		plog.Panicf("%s conflict sizes, %d, %d, %+v, %+v",
+			dn(clusterID, nodeID), os, ns, ov, nv)
 	}
 	if !reflect.DeepEqual(ov, nv) {
-		plog.Panicf("conflict entry lists, %+v, %+v", ov, nv)
+		plog.Panicf("%s conflict entry lists, %+v, %+v",
+			dn(clusterID, nodeID), ov, nv)
 	}
 	return ov, os, nil
 }
@@ -230,7 +235,8 @@ func (t *LogDB) ReadRaftState(clusterID uint64,
 		return raftio.RaftState{}, oe
 	}
 	if !reflect.DeepEqual(os, ns) {
-		plog.Panicf("conflict ReadRaftState values, %+v, %+v", os, ns)
+		plog.Panicf("%s conflict ReadRaftState values, %+v, %+v",
+			dn(clusterID, nodeID), os, ns)
 	}
 	return os, nil
 }
@@ -279,7 +285,8 @@ func (t *LogDB) ListSnapshots(clusterID uint64,
 		return nil, oe
 	}
 	if !reflect.DeepEqual(ov, nv) {
-		plog.Panicf("conflict snapshot lists, %+v \n\n %+v", ov, nv)
+		plog.Panicf("%s conflict snapshot lists, \n%+v \n\n %+v",
+			dn(clusterID, nodeID), ov, nv)
 	}
 	return ov, nil
 }
