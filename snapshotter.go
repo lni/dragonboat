@@ -323,7 +323,7 @@ func (s *snapshotter) processOrphans() error {
 				}
 			}
 			if remove {
-				if err := s.removeOrphan(ss.Index, mrss); err != nil {
+				if err := s.remove(ss.Index); err != nil {
 					return err
 				}
 			} else {
@@ -342,18 +342,6 @@ func (s *snapshotter) processOrphans() error {
 		}
 	}
 	return nil
-}
-
-// TODO: remove this method when tan's snapshot compaction is no longer built on
-// the current range delete implementation.
-func (s *snapshotter) removeOrphan(index uint64, mrss pb.Snapshot) error {
-	if mrss.Index == 0 || index < mrss.Index {
-		if err := s.logdb.DeleteSnapshot(s.clusterID, s.nodeID, index); err != nil {
-			return err
-		}
-	}
-	env := s.getEnv(index)
-	return env.RemoveFinalDir()
 }
 
 func (s *snapshotter) remove(index uint64) error {
