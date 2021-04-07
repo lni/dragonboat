@@ -475,8 +475,7 @@ func (r *db) iterateEntries(ents []pb.Entry,
 		return ents, size, nil
 	}
 	if err != nil {
-		err = errors.Wrapf(err,
-			"%s failed to get max index", dn(clusterID, nodeID))
+		err = errors.Wrapf(err, "%s failed to get max index", dn(clusterID, nodeID))
 		return nil, 0, err
 	}
 	entries, sz, err := r.entries.iterate(ents, maxIndex, size,

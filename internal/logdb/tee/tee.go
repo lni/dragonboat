@@ -216,9 +216,11 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 		plog.Panicf("%s conflict sizes, %d, %d, %+v, %+v",
 			dn(clusterID, nodeID), os, ns, ov, nv)
 	}
-	if !reflect.DeepEqual(ov, nv) {
-		plog.Panicf("%s conflict entry lists, %+v, %+v",
-			dn(clusterID, nodeID), ov, nv)
+	if len(ov) != 0 || len(nv) != 0 {
+		if !reflect.DeepEqual(ov, nv) {
+			plog.Panicf("%s conflict entry lists, len: %d, %+v \n\n len: %d, %+v",
+				dn(clusterID, nodeID), len(ov), ov, len(nv), nv)
+		}
 	}
 	return ov, os, nil
 }
