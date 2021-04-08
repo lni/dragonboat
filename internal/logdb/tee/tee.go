@@ -145,9 +145,15 @@ func (t *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 		return nil, oe
 	}
 	sort.Slice(o, func(i, j int) bool {
+		if o[i].ClusterID == o[j].ClusterID {
+			return o[i].NodeID < o[j].NodeID
+		}
 		return o[i].ClusterID < o[j].ClusterID
 	})
 	sort.Slice(n, func(i, j int) bool {
+		if n[i].ClusterID == n[j].ClusterID {
+			return n[i].NodeID < n[j].NodeID
+		}
 		return n[i].ClusterID < n[j].ClusterID
 	})
 	if !reflect.DeepEqual(o, n) {
