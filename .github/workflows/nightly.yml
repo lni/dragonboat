@@ -4,7 +4,7 @@ on:
 name: Nightly
 jobs:
   monkey-test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         target: [race-monkey-test, race-ondisk-monkey-test, memfs-monkey-test, memfs-ondisk-monkey-test]
@@ -21,6 +21,7 @@ jobs:
         echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
         git config --global credential.helper "netrc -d -v"
         git clone https://github.com/lni/drummer2 drummer
+        sudo apt-get install librocksdb-dev
         cd drummer
         go get github.com/lni/dragonboat/v3@master
         make test
