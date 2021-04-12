@@ -602,36 +602,36 @@ func (n *node) pushTakeSnapshotRequest(req rsm.SSRequest) {
 	}, true)
 }
 
-func (n *node) pushSnapshot(snapshot pb.Snapshot, applied uint64) {
-	if pb.IsEmptySnapshot(snapshot) {
+func (n *node) pushSnapshot(ss pb.Snapshot, applied uint64) {
+	if pb.IsEmptySnapshot(ss) {
 		return
 	}
-	if snapshot.Index < n.pushedIndex ||
-		snapshot.Index < n.ss.getIndex() ||
-		snapshot.Index < applied {
+	if ss.Index < n.pushedIndex ||
+		ss.Index < n.ss.getIndex() ||
+		ss.Index < applied {
 		plog.Panicf("out of date snapshot, index %d, pushed %d, applied %d, ss %d",
-			snapshot.Index, n.pushedIndex, applied, n.ss.getIndex())
+			ss.Index, n.pushedIndex, applied, n.ss.getIndex())
 	}
 	n.pushTask(rsm.Task{
 		Recover: true,
-		Index:   snapshot.Index,
+		Index:   ss.Index,
 	}, true)
-	n.ss.setIndex(snapshot.Index)
-	n.pushedIndex = snapshot.Index
+	n.ss.setIndex(ss.Index)
+	n.pushedIndex = ss.Index
 }
 
 func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	plog.Infof("%s replaying raft logs", n.id())
-	snapshot, err := n.snapshotter.GetMostRecentSnapshot()
+	ss, err := n.snapshotter.GetMostRecentSnapshot()
 	if err != nil && !errors.Is(err, ErrNoSnapshot) {
 		return false, errors.Wrapf(err, "%s failed to get latest snapshot", n.id())
 	}
-	if snapshot.Index > 0 {
-		if err = n.logReader.ApplySnapshot(snapshot); err != nil {
+	if !pb.IsEmptySnapshot(ss) {
+		if err = n.logReader.ApplySnapshot(ss); err != nil {
 			return false, errors.Wrapf(err, "%s failed to apply snapshot", n.id())
 		}
 	}
-	rs, err := n.logdb.ReadRaftState(clusterID, nodeID, snapshot.Index)
+	rs, err := n.logdb.ReadRaftState(clusterID, nodeID, ss.Index)
 	if errors.Is(err, raftio.ErrNoSavedLog) {
 		return true, nil
 	}
@@ -645,7 +645,7 @@ func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 		n.logReader.SetState(rs.State)
 	}
 	n.logReader.SetRange(rs.FirstIndex, rs.EntryCount)
-	return !(snapshot.Index > 0 || rs.EntryCount > 0 || hasRaftState), nil
+	return !(ss.Index > 0 || rs.EntryCount > 0 || hasRaftState), nil
 }
 
 func (n *node) saveSnapshotRequired(applied uint64) bool {
