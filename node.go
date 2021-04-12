@@ -134,6 +134,7 @@ func newNode(peers map[uint64]string,
 	nhConfig config.NodeHostConfig,
 	createSM rsm.ManagedStateMachineFactory,
 	snapshotter *snapshotter,
+	logReader *logdb.LogReader,
 	pipeline pipeline,
 	liQueue *leaderInfoQueue,
 	getStreamSink func(uint64, uint64) *transport.Sink,
@@ -174,7 +175,7 @@ func newNode(peers map[uint64]string,
 		pendingLeaderTransfer: newPendingLeaderTransfer(),
 		nodeRegistry:          nodeRegistry,
 		snapshotter:           snapshotter,
-		logReader:             logdb.NewLogReader(config.ClusterID, config.NodeID, ldb),
+		logReader:             logReader,
 		sendRaftMessage:       sendMessage,
 		mq:                    mq,
 		logdb:                 ldb,
@@ -622,8 +623,8 @@ func (n *node) pushSnapshot(ss pb.Snapshot, applied uint64) {
 
 func (n *node) replayLog(clusterID uint64, nodeID uint64) (bool, error) {
 	plog.Infof("%s replaying raft logs", n.id())
-	ss, err := n.snapshotter.GetMostRecentSnapshot()
-	if err != nil && !errors.Is(err, ErrNoSnapshot) {
+	ss, err := n.snapshotter.GetSnapshotFromLogDB()
+	if err != nil && !n.snapshotter.IsNoSnapshotError(err) {
 		return false, errors.Wrapf(err, "%s failed to get latest snapshot", n.id())
 	}
 	if !pb.IsEmptySnapshot(ss) {

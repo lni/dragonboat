@@ -21,6 +21,7 @@ import (
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/utils/dio"
@@ -64,19 +65,22 @@ type snapshotter struct {
 	clusterID uint64
 	nodeID    uint64
 	logdb     raftio.ILogDB
+	logReader *logdb.LogReader
 	fs        vfs.IFS
 }
 
 var _ rsm.ISnapshotter = (*snapshotter)(nil)
 
 func newSnapshotter(clusterID uint64, nodeID uint64,
-	root server.SnapshotDirFunc, ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
+	root server.SnapshotDirFunc, ldb raftio.ILogDB,
+	logReader *logdb.LogReader, fs vfs.IFS) *snapshotter {
 	return &snapshotter{
+		clusterID: clusterID,
+		nodeID:    nodeID,
 		root:      root,
 		dir:       root(clusterID, nodeID),
 		logdb:     ldb,
-		clusterID: clusterID,
-		nodeID:    nodeID,
+		logReader: logReader,
 		fs:        fs,
 	}
 }
@@ -181,20 +185,17 @@ func (s *snapshotter) Load(ss pb.Snapshot,
 	return nil
 }
 
-func (s *snapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, index)
-	if err != nil {
-		return pb.Snapshot{}, err
+func (s *snapshotter) GetSnapshot() (pb.Snapshot, error) {
+	ss := s.logReader.Snapshot()
+	if pb.IsEmptySnapshot(ss) {
+		return pb.Snapshot{}, ErrNoSnapshot
 	}
-	for _, ss := range snapshots {
-		if ss.Index == index {
-			return ss, nil
-		}
-	}
-	return pb.Snapshot{}, ErrNoSnapshot
+	return ss, nil
 }
 
-func (s *snapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
+// TODO: update this once the LogDB interface is updated to have the ability to
+// query latest snapshot.
+func (s *snapshotter) GetSnapshotFromLogDB() (pb.Snapshot, error) {
 	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, math.MaxUint64)
 	if err != nil {
 		return pb.Snapshot{}, err
@@ -288,7 +289,7 @@ func (s *snapshotter) processOrphans() error {
 		return err
 	}
 	noss := false
-	mrss, err := s.GetMostRecentSnapshot()
+	mrss, err := s.GetSnapshotFromLogDB()
 	if err != nil {
 		if errors.Is(err, ErrNoSnapshot) {
 			noss = true

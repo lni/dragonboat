@@ -72,7 +72,8 @@ func getTestSnapshotter(ldb raftio.ILogDB, fs vfs.IFS) *snapshotter {
 	f := func(cid uint64, nid uint64) string {
 		return fp
 	}
-	return newSnapshotter(1, 1, f, ldb, fs)
+	lr := logdb.NewLogReader(1, 1, ldb)
+	return newSnapshotter(1, 1, f, ldb, lr, fs)
 }
 
 func runSnapshotterTest(t *testing.T,
@@ -151,16 +152,12 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if len(snapshots) != 1 {
 			t.Errorf("returned %d snapshot records, want 1", len(snapshots))
 		}
-		rs, err := s.GetSnapshot(100)
+		rs, err := s.GetSnapshotFromLogDB()
 		if err != nil {
 			t.Errorf("failed to get snapshot")
 		}
 		if rs.Index != 100 {
 			t.Errorf("returned an unexpected snapshot")
-		}
-		_, err = s.GetSnapshot(200)
-		if err != ErrNoSnapshot {
-			t.Errorf("unexpected err %v", err)
 		}
 		if _, err = fs.Stat(tmpDir); !vfs.IsNotExist(err) {
 			t.Errorf("tmp dir not removed, %v", err)

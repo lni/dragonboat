@@ -1529,7 +1529,9 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
-	ss := newSnapshotter(clusterID, nodeID, getSnapshotDir, nh.mu.logdb, nh.fs)
+	logReader := logdb.NewLogReader(clusterID, nodeID, nh.mu.logdb)
+	ss := newSnapshotter(clusterID, nodeID,
+		getSnapshotDir, nh.mu.logdb, logReader, nh.fs)
 	if err := ss.processOrphans(); err != nil {
 		panicNow(err)
 	}
@@ -1542,6 +1544,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		nh.nhConfig,
 		createStateMachine,
 		ss,
+		logReader,
 		nh.engine,
 		nh.events.leaderInfoQ,
 		nh.transport.GetStreamSink,

@@ -148,8 +148,7 @@ type INode interface {
 
 // ISnapshotter is the interface for the snapshotter object.
 type ISnapshotter interface {
-	GetSnapshot(uint64) (pb.Snapshot, error)
-	GetMostRecentSnapshot() (pb.Snapshot, error)
+	GetSnapshot() (pb.Snapshot, error)
 	Stream(IStreamable, SSMeta, pb.IChunkSink) error
 	Shrunk(ss pb.Snapshot) (bool, error)
 	Save(ISavable, SSMeta) (pb.Snapshot, SSEnv, error)
@@ -262,18 +261,19 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 
 func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 	if !t.Initial {
-		ss, err := s.snapshotter.GetSnapshot(t.Index)
+		ss, err := s.snapshotter.GetSnapshot()
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, get snapshot failed: %v", s.id(), err)
 			return pb.Snapshot{}, ErrRestoreSnapshot
 		}
 		if s.snapshotter.IsNoSnapshotError(err) {
-			plog.Errorf("%s, no snapshot", s.id())
 			return pb.Snapshot{}, err
+		}
+		if ss.Index < t.Index {
+			plog.Panicf("out of date snapshot, %d, %d", ss.Index, t.Index)
 		}
 		return ss, nil
 	}
-	ss, err := s.snapshotter.GetMostRecentSnapshot()
+	ss, err := s.snapshotter.GetSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
 		plog.Infof("%s no snapshot available during launch", s.id())
 		return pb.Snapshot{}, nil

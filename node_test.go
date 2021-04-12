@@ -223,7 +223,8 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}
-		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, fs)
+		lr := logdb.NewLogReader(testClusterID, i, ldb)
+		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, lr, fs)
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{
@@ -250,6 +251,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			nhConfig,
 			create,
 			snapshotter,
+			lr,
 			&dummyEngine{},
 			nil,
 			nil,

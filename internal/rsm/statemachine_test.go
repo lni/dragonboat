@@ -147,7 +147,7 @@ func newTestSnapshotter(fs vfs.IFS) *testSnapshotter {
 	return &testSnapshotter{fs: fs}
 }
 
-func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
+func (s *testSnapshotter) GetSnapshot() (pb.Snapshot, error) {
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	address := make(map[uint64]string)
@@ -156,7 +156,7 @@ func (s *testSnapshotter) GetSnapshot(index uint64) (pb.Snapshot, error) {
 	snap := pb.Snapshot{
 		Filepath: fp,
 		FileSize: s.dataSize,
-		Index:    index,
+		Index:    s.index,
 		Term:     2,
 		Membership: pb.Membership{
 			Addresses: address,
@@ -174,7 +174,7 @@ func (s *testSnapshotter) getFilePath(index uint64) string {
 	return s.fs.PathJoin(testSnapshotterDir, filename)
 }
 
-func (s *testSnapshotter) GetMostRecentSnapshot() (pb.Snapshot, error) {
+func (s *testSnapshotter) GetSnapshotFromLogDB() (pb.Snapshot, error) {
 	fn := fmt.Sprintf("snapshot-test.%s", snapshotFileSuffix)
 	fp := s.fs.PathJoin(testSnapshotterDir, fn)
 	snap := pb.Snapshot{
@@ -1386,6 +1386,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter(fs)
+		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
 		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
@@ -2751,6 +2752,7 @@ func TestRecoverErrorIsReturned(t *testing.T) {
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter(fs)
+		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
 		if _, err := sm2.Recover(commit); !expectedError(err) {
 			t.Fatalf("failed to return expected error %v", err)
@@ -2780,6 +2782,7 @@ func TestRestoreRemoteErrorIsReturned(t *testing.T) {
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := &errorNodeProxy{}
 		snapshotter2 := newTestSnapshotter(fs)
+		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
 		if _, err := sm2.Recover(commit); !expectedError(err) {
 			t.Fatalf("failed to return expected error %v", err)
