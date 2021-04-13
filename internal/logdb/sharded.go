@@ -214,19 +214,12 @@ func (s *ShardedDB) SaveSnapshots(updates []pb.Update) error {
 	return errors.WithStack(s.shards[p].saveSnapshots(updates))
 }
 
-// DeleteSnapshot removes the specified snapshot metadata from the log db.
-func (s *ShardedDB) DeleteSnapshot(clusterID uint64,
-	nodeID uint64, ssIndex uint64) error {
+// GetSnapshot returns the most recent snapshot associated with the specified
+// cluster.
+func (s *ShardedDB) GetSnapshot(clusterID uint64,
+	nodeID uint64) (pb.Snapshot, error) {
 	p := s.partitioner.GetPartitionID(clusterID)
-	return errors.WithStack(s.shards[p].deleteSnapshot(clusterID, nodeID, ssIndex))
-}
-
-// ListSnapshots lists all available snapshots associated with the specified
-// raft node.
-func (s *ShardedDB) ListSnapshots(clusterID uint64,
-	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
-	p := s.partitioner.GetPartitionID(clusterID)
-	ss, err := s.shards[p].listSnapshots(clusterID, nodeID, index)
+	ss, err := s.shards[p].getSnapshot(clusterID, nodeID)
 	return ss, errors.WithStack(err)
 }
 

@@ -202,7 +202,7 @@ func (lr *LogReader) lastIndex() uint64 {
 }
 
 // Snapshot returns the metadata of the lastest snapshot.
-func (lr *LogReader) Snapshot() pb.Snapshot {
+func (lr *LogReader) Snapshot() SnapshotKeeper {
 	lr.Lock()
 	defer lr.Unlock()
 	return lr.snapshot

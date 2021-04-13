@@ -15,8 +15,6 @@
 package dragonboat
 
 import (
-	"math"
-
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 
@@ -29,16 +27,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
-)
-
-const (
-	// TODO: check in monkey tests
-	// extra out of date snapshot is no longer kept. snapshot compaction is now
-	// more aggressive. when a new snapshot is generated, it implies that it
-	// would be less expensive to just transmit the latest generated snapshot.
-	// this is achieved by compacting all old snapshots so the ongoing snapshot
-	// transport jobs will be aborted.
-	snapshotsToKeep = 1
 )
 
 func compressionType(ct pb.CompressionType) dio.CompressionType {
@@ -196,21 +184,57 @@ func (s *snapshotter) GetSnapshot() (pb.Snapshot, error) {
 // TODO: update this once the LogDB interface is updated to have the ability to
 // query latest snapshot.
 func (s *snapshotter) GetSnapshotFromLogDB() (pb.Snapshot, error) {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, math.MaxUint64)
+	snapshot, err := s.logdb.GetSnapshot(s.clusterID, s.nodeID)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
-	if len(snapshots) > 0 {
-		return snapshots[len(snapshots)-1], nil
+	if !pb.IsEmptySnapshot(snapshot) {
+		return snapshot, nil
 	}
 	return pb.Snapshot{}, ErrNoSnapshot
+}
+
+func (s *snapshotter) Shrink(index uint64) error {
+	ss, err := s.logdb.GetSnapshot(s.clusterID, s.nodeID)
+	if err != nil {
+		return err
+	}
+	if ss.Index <= index {
+		return nil
+	}
+	if !ss.Dummy && !ss.Witness {
+		env := s.getEnv(index)
+		fp := env.GetFilepath()
+		shrunk := env.GetShrinkedFilepath()
+		plog.Debugf("%s shrinking %s", s.id(), s.ssid(index))
+		if err := rsm.ShrinkSnapshot(fp, shrunk, s.fs); err != nil {
+			return err
+		}
+		return rsm.ReplaceSnapshot(shrunk, fp, s.fs)
+	}
+	return nil
+}
+
+func (s *snapshotter) Compact(index uint64) error {
+	ss, err := s.logdb.GetSnapshot(s.clusterID, s.nodeID)
+	if err != nil {
+		return err
+	}
+	if ss.Index <= index {
+		plog.Panicf("invalid compaction, LogDB snapshot %d, index %d",
+			ss.Index, index)
+	}
+	if err := s.remove(ss.Index); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *snapshotter) IsNoSnapshotError(err error) bool {
 	return errors.Is(err, ErrNoSnapshot)
 }
 
-func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
+func (s *snapshotter) Commit(ss pb.Snapshot, req rsm.SSRequest) error {
 	env := s.getCustomEnv(rsm.SSMeta{
 		Index:   ss.Index,
 		Request: req,
@@ -235,52 +259,6 @@ func (s *snapshotter) commit(ss pb.Snapshot, req rsm.SSRequest) error {
 func (s *snapshotter) getFilePath(index uint64) string {
 	env := s.getEnv(index)
 	return env.GetFilepath()
-}
-
-func (s *snapshotter) shrink(shrinkTo uint64) error {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, shrinkTo)
-	if err != nil {
-		return err
-	}
-	plog.Debugf("%s has %d snapshots to shrink", s.id(), len(snapshots))
-	for idx, ss := range snapshots {
-		if ss.Index > shrinkTo {
-			plog.Panicf("%s snapshot index %d, shrink to %d",
-				s.id(), ss.Index, shrinkTo)
-		}
-		if !ss.Dummy && !ss.Witness {
-			env := s.getEnv(ss.Index)
-			fp := env.GetFilepath()
-			shrunk := env.GetShrinkedFilepath()
-			plog.Debugf("%s shrinking %s, %d", s.id(), s.ssid(ss.Index), idx)
-			if err := rsm.ShrinkSnapshot(fp, shrunk, s.fs); err != nil {
-				return err
-			}
-			if err := rsm.ReplaceSnapshot(shrunk, fp, s.fs); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *snapshotter) compact(removeUpTo uint64) error {
-	snapshots, err := s.logdb.ListSnapshots(s.clusterID, s.nodeID, removeUpTo)
-	if err != nil {
-		return err
-	}
-	if len(snapshots) <= snapshotsToKeep {
-		return nil
-	}
-	selected := snapshots[:len(snapshots)-snapshotsToKeep]
-	plog.Debugf("%s has %d snapshots to compact", s.id(), len(selected))
-	for _, ss := range selected {
-		plog.Debugf("%s compacting %s", s.id(), s.ssid(ss.Index))
-		if err := s.remove(ss.Index); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *snapshotter) processOrphans() error {
@@ -346,9 +324,6 @@ func (s *snapshotter) processOrphans() error {
 }
 
 func (s *snapshotter) remove(index uint64) error {
-	if err := s.logdb.DeleteSnapshot(s.clusterID, s.nodeID, index); err != nil {
-		return err
-	}
 	env := s.getEnv(index)
 	return env.RemoveFinalDir()
 }

@@ -19,6 +19,8 @@ import (
 	"math"
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEntryKeysOrdered(t *testing.T) {
@@ -28,9 +30,7 @@ func TestEntryKeysOrdered(t *testing.T) {
 		k1.SetEntryKey(100, 100, i)
 		k2 := p.get()
 		k2.SetEntryKey(100, 100, i+1)
-		if bytes.Compare(k1.Key(), k2.Key()) >= 0 {
-			t.Errorf("unexpected order, i %d", i)
-		}
+		require.True(t, bytes.Compare(k1.Key(), k2.Key()) < 0)
 	}
 	k1 := p.get()
 	k1.SetEntryKey(100, 100, 0)
@@ -38,31 +38,20 @@ func TestEntryKeysOrdered(t *testing.T) {
 	k2.SetEntryKey(100, 100, 1)
 	k3 := p.get()
 	k3.SetEntryKey(100, 100, math.MaxUint64)
-	if bytes.Compare(k1.Key(), k2.Key()) >= 0 || bytes.Compare(k2.Key(), k3.Key()) >= 0 {
-		t.Errorf("unexpected order")
-	}
+	require.True(t, bytes.Compare(k1.Key(), k2.Key()) < 0)
+	require.True(t, bytes.Compare(k2.Key(), k3.Key()) < 0)
 }
 
 func TestSnapshotKeysOrdered(t *testing.T) {
 	p := newLogDBKeyPool()
-	for i := uint64(0); i < 65536+10; i++ {
-		k1 := p.get()
-		k1.setSnapshotKey(100, 100, i)
-		k2 := p.get()
-		k2.setSnapshotKey(100, 100, i+1)
-		if bytes.Compare(k1.Key(), k2.Key()) >= 0 {
-			t.Errorf("unexpected order, i %d", i)
-		}
-	}
 	k1 := p.get()
-	k1.setSnapshotKey(100, 100, 0)
+	k1.makeSnapshotKey(100, 100, 0)
 	k2 := p.get()
-	k2.setSnapshotKey(100, 100, 1)
+	k2.makeSnapshotKey(100, 100, 1)
 	k3 := p.get()
-	k3.setSnapshotKey(100, 100, math.MaxUint64)
-	if bytes.Compare(k1.Key(), k2.Key()) >= 0 || bytes.Compare(k2.Key(), k3.Key()) >= 0 {
-		t.Errorf("unexpected order")
-	}
+	k3.setSnapshotKey(100, 100)
+	require.True(t, bytes.Compare(k1.Key(), k2.Key()) < 0)
+	require.True(t, bytes.Compare(k2.Key(), k3.Key()) < 0)
 }
 
 func TestNodeInfoKeyCanBeParsed(t *testing.T) {
@@ -73,8 +62,7 @@ func TestNodeInfoKeyCanBeParsed(t *testing.T) {
 		nid := rand.Uint64()
 		k1.setNodeInfoKey(cid, nid)
 		v1, v2 := parseNodeInfoKey(k1.Key())
-		if v1 != cid || v2 != nid {
-			t.Errorf("failed to parse the node info key")
-		}
+		require.Equal(t, cid, v1)
+		require.Equal(t, nid, v2)
 	}
 }

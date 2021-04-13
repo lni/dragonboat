@@ -99,12 +99,9 @@ type ILogDB interface {
 		nodeID uint64, index uint64) (<-chan struct{}, error)
 	// SaveSnapshots saves all snapshot metadata found in the pb.Update list.
 	SaveSnapshots([]pb.Update) error
-	// DeleteSnapshot removes the specified snapshot metadata from the log DB.
-	DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error
-	// ListSnapshots lists available snapshots associated with the specified
-	// Raft node for index range (0, index].
-	ListSnapshots(clusterID uint64,
-		nodeID uint64, index uint64) ([]pb.Snapshot, error)
+	// GetSnapshot returns the most recent snapshot associated with the specified
+	// cluster.
+	GetSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error)
 	// RemoveNodeData removes all data associated with the specified node.
 	RemoveNodeData(clusterID uint64, nodeID uint64) error
 	// ImportSnapshot imports the specified snapshot by creating all required

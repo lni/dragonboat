@@ -15,8 +15,6 @@
 package upgrade310
 
 import (
-	"math"
-
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -84,19 +82,17 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 		return false, err
 	}
 	for _, ni := range niList {
-		ssList, err := ldb.ListSnapshots(ni.ClusterID, ni.NodeID, math.MaxUint64)
+		ss, err := ldb.GetSnapshot(ni.ClusterID, ni.NodeID)
 		if err != nil {
 			return false, err
 		}
-		for _, ss := range ssList {
-			if ss.Type == pb.OnDiskStateMachine && ss.OnDiskIndex == 0 {
-				shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
-				if err != nil {
-					return false, err
-				}
-				if !shrunk {
-					return false, nil
-				}
+		if ss.Type == pb.OnDiskStateMachine && ss.OnDiskIndex == 0 {
+			shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
+			if err != nil {
+				return false, err
+			}
+			if !shrunk {
+				return false, nil
 			}
 		}
 	}

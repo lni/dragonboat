@@ -16,6 +16,7 @@ package logdb
 
 import (
 	"encoding/binary"
+	"math"
 	"sync"
 )
 
@@ -193,7 +194,11 @@ func (k *Key) setBootstrapKey(clusterID uint64, nodeID uint64) {
 	binary.BigEndian.PutUint64(k.key[12:], nodeID)
 }
 
-func (k *Key) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64) {
+func (k *Key) setSnapshotKey(clusterID uint64, nodeID uint64) {
+	k.makeSnapshotKey(clusterID, nodeID, math.MaxUint64)
+}
+
+func (k *Key) makeSnapshotKey(clusterID uint64, nodeID uint64, index uint64) {
 	k.useAsSnapshotKey()
 	k.key[0] = snapshotKeyHeader[0]
 	k.key[1] = snapshotKeyHeader[1]

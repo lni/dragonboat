@@ -24,6 +24,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
@@ -293,35 +294,20 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
-		v, _ := db.ListSnapshots(3, 4, math.MaxUint64)
-		if len(v) != 1 {
-			t.Fatalf("snapshot not saved")
-		}
-		if v[0].Index != snapshot1.Index {
-			t.Errorf("snapshot index %d, want %d", v[0].Index, snapshot1.Index)
-		}
-		v, _ = db.ListSnapshots(3, 3, math.MaxUint64)
-		if len(v) != 1 {
-			t.Errorf("snapshot not saved")
-		}
-		if v[0].Index != snapshot2.Index {
-			t.Errorf("snapshot index %d, want %d", v[0].Index, snapshot2.Index)
-		}
+		v, err := db.GetSnapshot(3, 4)
+		require.NoError(t, err)
+		require.Equal(t, snapshot1.Index, v.Index)
+		v, err = db.GetSnapshot(3, 3)
+		require.NoError(t, err)
+		require.Equal(t, snapshot2.Index, v.Index)
+
 		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 3)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 20 {
-			t.Errorf("max index %d, want 20", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(20), maxIndex)
 		maxIndex, err = p[3].getMaxIndex(3, 4)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 10 {
-			t.Errorf("max index %d, want 10", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(10), maxIndex)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -876,25 +862,10 @@ func TestIterateEntries(t *testing.T) {
 	runLogDBTest(t, tf, fs)
 }
 
-func TestDeleteNotExistSnapshotIsAllowed(t *testing.T) {
-	tf := func(t *testing.T, db raftio.ILogDB) {
-		if err := db.DeleteSnapshot(1, 2, 1); err != nil {
-			t.Errorf("delete snapshot failed %v", err)
-		}
-	}
-	fs := vfs.GetTestFS()
-	runLogDBTest(t, tf, fs)
-}
-
 func TestSaveSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		snapshotList, err := db.ListSnapshots(1, 2, math.MaxUint64)
-		if err != nil {
-			t.Errorf("err %v, want nil", err)
-		}
-		if len(snapshotList) > 0 {
-			t.Errorf("snapshot list sz %d, want 0", len(snapshotList))
-		}
+		snapshot, err := db.GetSnapshot(1, 2)
+		require.NoError(t, err)
 		s1 := pb.Snapshot{
 			FileSize: 1234,
 			Filepath: "f2",
@@ -917,36 +888,10 @@ func TestSaveSnapshot(t *testing.T) {
 			NodeID:    2,
 			Snapshot:  s2,
 		}
-		err = db.SaveSnapshots([]pb.Update{rec1, rec2})
-		if err != nil {
-			t.Errorf("err %v want nil", err)
-		}
-		snapshotList, err = db.ListSnapshots(1, 2, math.MaxUint64)
-		if err != nil {
-			t.Errorf("err %v, want nil", err)
-		}
-		if len(snapshotList) != 2 {
-			t.Errorf("snapshot list sz %d, want 2", len(snapshotList))
-		}
-		if snapshotList[0].Index != 1 {
-			t.Errorf("index %d want 1", snapshotList[0].Index)
-		}
-		if snapshotList[1].Index != 2 {
-			t.Errorf("index %d want 2", snapshotList[1].Index)
-		}
-		if err := db.DeleteSnapshot(1, 2, 1); err != nil {
-			t.Errorf("failed to delete snapshot %v", err)
-		}
-		snapshotList, err = db.ListSnapshots(1, 2, math.MaxUint64)
-		if err != nil {
-			t.Errorf("err %v, want nil", err)
-		}
-		if len(snapshotList) != 1 {
-			t.Errorf("snapshot list sz %d, want 1", len(snapshotList))
-		}
-		if snapshotList[0].Index != 2 {
-			t.Errorf("unexpected snapshot returned")
-		}
+		require.NoError(t, db.SaveSnapshots([]pb.Update{rec1, rec2}))
+		snapshot, err = db.GetSnapshot(1, 2)
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), snapshot.Index)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -1363,46 +1308,26 @@ func TestRemoveNodeData(t *testing.T) {
 			NodeID:        nodeID,
 			Snapshot:      ss,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
+		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
 		state, err := db.ReadRaftState(clusterID, nodeID, 1)
-		if err != nil {
-			t.Fatalf("failed to read raft state %v", err)
-		}
-		if state.FirstIndex != 1 {
-			t.Errorf("first index %d, want %d", state.FirstIndex, 1)
-		}
-		if state.EntryCount != batchSize*3+1 {
-			t.Errorf("length %d, want %d", state.EntryCount, batchSize*3+1)
-		}
-		if err := db.RemoveNodeData(clusterID, nodeID); err != nil {
-			t.Fatalf("failed to remove node data")
-		}
-		plog.Infof("RemoveNodeData done")
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), state.FirstIndex)
+		require.Equal(t, batchSize*3+1, state.EntryCount)
+		require.NoError(t, db.RemoveNodeData(clusterID, nodeID))
 		_, err = db.ReadRaftState(clusterID, nodeID, 1)
-		if !errors.Is(err, raftio.ErrNoSavedLog) {
-			t.Fatalf("raft state not deleted %v", err)
-		}
-		snapshots, err := db.ListSnapshots(clusterID, nodeID, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("failed to list snapshots %v", err)
-		}
-		if len(snapshots) != 0 {
-			t.Fatalf("snapshot not deleted")
-		}
-		if _, err := db.GetBootstrapInfo(clusterID, nodeID); !errors.Is(err, raftio.ErrNoBootstrapInfo) {
-			t.Fatalf("failed to delete bootstrap %v", err)
-		}
+		require.True(t, errors.Is(err, raftio.ErrNoSavedLog))
+
+		snapshot, err := db.GetSnapshot(clusterID, nodeID)
+		require.NoError(t, err)
+		require.True(t, pb.IsEmptySnapshot(snapshot))
+
+		_, err = db.GetBootstrapInfo(clusterID, nodeID)
+		require.True(t, errors.Is(err, raftio.ErrNoBootstrapInfo))
+
 		ents, sz, err := db.IterateEntries(nil, 0, clusterID, nodeID, 0,
 			math.MaxUint64, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("failed to get entries %v", err)
-		}
-		if len(ents) != 0 || sz != 0 {
-			t.Fatalf("entry returned")
-		}
+		require.NoError(t, err)
+		require.True(t, len(ents) == 0 && sz == 0)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -1439,68 +1364,38 @@ func TestImportSnapshot(t *testing.T) {
 			NodeID:        nodeID,
 			Snapshot:      ss,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
+		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
 		ssimport := pb.Snapshot{
 			Type:      pb.OnDiskStateMachine,
 			ClusterId: clusterID,
 			Index:     110,
 			Term:      2,
 		}
-		if err := db.ImportSnapshot(ssimport, nodeID); err != nil {
-			t.Fatalf("import snapshot failed %v", err)
-		}
-		snapshots, err := db.ListSnapshots(clusterID, nodeID, math.MaxUint64)
-		if err != nil {
-			t.Fatalf("failed to list snapshots %v", err)
-		}
-		if len(snapshots) != 1 {
-			t.Fatalf("%d snapshot rec found", len(snapshots))
-		}
-		if snapshots[0].Index != ssimport.Index {
-			t.Errorf("unexpected snapshot index %d", snapshots[0].Index)
-		}
+		require.NoError(t, db.ImportSnapshot(ssimport, nodeID))
+		snapshot, err := db.GetSnapshot(clusterID, nodeID)
+		require.NoError(t, err)
+		require.Equal(t, ssimport.Index, snapshot.Index)
+
 		bs, err := db.GetBootstrapInfo(clusterID, nodeID)
-		if err != nil {
-			t.Fatalf("failed to delete bootstrap %v", err)
-		}
-		if bs.Type != pb.OnDiskStateMachine {
-			t.Errorf("unexpected type %d", bs.Type)
-		}
+		require.NoError(t, err)
+		require.Equal(t, pb.OnDiskStateMachine, bs.Type)
+
 		state, err := db.ReadRaftState(clusterID, nodeID, 1)
-		if err != nil {
-			t.Fatalf("raft state not deleted %v", err)
-		}
-		if reflect.DeepEqual(state, raftio.RaftState{}) {
-			t.Fatalf("failed to get raft state")
-		}
-		if state.State.Commit != snapshots[0].Index {
-			t.Errorf("unexpected commit value")
-		}
+		require.NoError(t, err)
+		require.NotEqual(t, raftio.RaftState{}, state)
+		require.Equal(t, snapshot.Index, state.State.Commit)
+
 		sdb := db.(*ShardedDB).shards[2]
 		sdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
 		maxIndex, err := sdb.getMaxIndex(clusterID, nodeID)
-		if err != nil {
-			t.Errorf("failed to get max index")
-		}
-		if maxIndex != ssimport.Index {
-			t.Errorf("unexpected max index value %d", maxIndex)
-		}
-		state, err = db.ReadRaftState(clusterID, nodeID, snapshots[0].Index)
-		if err != nil {
-			t.Fatalf("raft state not deleted %v", err)
-		}
-		if reflect.DeepEqual(state, raftio.RaftState{}) {
-			t.Fatalf("failed to get raft state")
-		}
-		if state.FirstIndex != snapshots[0].Index {
-			t.Errorf("first index: %d, ss index %d", state.FirstIndex, snapshots[0].Index)
-		}
-		if state.EntryCount != 0 {
-			t.Errorf("unexpected entry count %d", state.EntryCount)
-		}
+		require.NoError(t, err)
+		require.Equal(t, ssimport.Index, maxIndex)
+
+		state, err = db.ReadRaftState(clusterID, nodeID, snapshot.Index)
+		require.NoError(t, err)
+		require.NotEqual(t, raftio.RaftState{}, state)
+		require.Equal(t, snapshot.Index, state.FirstIndex)
+		require.NotEqual(t, 0, state.EntryCount)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)

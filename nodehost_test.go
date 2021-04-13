@@ -434,11 +434,10 @@ func (n *noopLogDB) CompactEntriesTo(clusterID uint64,
 	nodeID uint64, index uint64) (<-chan struct{}, error) {
 	return nil, nil
 }
-func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error               { return nil }
-func (n *noopLogDB) SaveSnapshots([]pb.Update) error                                    { return nil }
-func (n *noopLogDB) DeleteSnapshot(clusterID uint64, nodeID uint64, index uint64) error { return nil }
-func (n *noopLogDB) ListSnapshots(clusterID uint64, nodeID uint64, index uint64) ([]pb.Snapshot, error) {
-	return nil, nil
+func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error { return nil }
+func (n *noopLogDB) SaveSnapshots([]pb.Update) error                      { return nil }
+func (n *noopLogDB) GetSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
+	return pb.Snapshot{}, nil
 }
 func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 	return nil
@@ -1803,13 +1802,13 @@ func TestSnapshotFilePayloadChecksumIsSaved(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+				ss, err := logdb.GetSnapshot(1, 1)
 				if err != nil {
 					t.Fatalf("failed to list snapshots")
 				}
-				if len(snapshots) > 0 {
+				if !pb.IsEmptySnapshot(ss) {
 					snapshotted = true
-					snapshot = snapshots[0]
+					snapshot = ss
 					break
 				}
 			}
@@ -2322,13 +2321,13 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 				if err != nil {
 					continue
 				}
-				snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+				snapshot, err := logdb.GetSnapshot(1, 1)
 				if err != nil {
 					t.Fatalf("list snapshot failed %v", err)
 				}
-				if len(snapshots) > 0 {
+				if !pb.IsEmptySnapshot(snapshot) {
 					snapshotted = true
-					ss = snapshots[0]
+					ss = snapshot
 					if !ss.Dummy {
 						t.Fatalf("dummy snapshot is not recorded as dummy")
 					}
@@ -2423,11 +2422,11 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("list snapshot failed %v", err)
 			}
-			if len(snapshots) > 0 {
+			if !pb.IsEmptySnapshot(snapshot) {
 				snapshotted = true
 				break
 			} else if i%50 == 0 {
@@ -2476,11 +2475,11 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			snapshots, err := logdb.ListSnapshots(1, 2, math.MaxUint64)
+			ss, err := logdb.GetSnapshot(1, 2)
 			if err != nil {
 				t.Fatalf("list snapshot failed %v", err)
 			}
-			if len(snapshots) >= 0 {
+			if !pb.IsEmptySnapshot(ss) {
 				snapshotted = true
 				if !sm2.Recovered() {
 					t.Fatalf("not recovered")
@@ -2488,17 +2487,15 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				if !sm1.Aborted() {
 					t.Fatalf("not aborted")
 				}
-				for _, ss := range snapshots {
-					if ss.OnDiskIndex == 0 {
-						t.Errorf("on disk index not recorded in ss")
-					}
-					shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
-					if err != nil {
-						t.Errorf("failed to check whether snapshot is shrunk %v", err)
-					}
-					if !shrunk {
-						t.Errorf("snapshot %d is not shrunk", ss.Index)
-					}
+				if ss.OnDiskIndex == 0 {
+					t.Errorf("on disk index not recorded in ss")
+				}
+				shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
+				if err != nil {
+					t.Errorf("failed to check whether snapshot is shrunk %v", err)
+				}
+				if !shrunk {
+					t.Errorf("snapshot %d is not shrunk", ss.Index)
 				}
 				break
 			} else if i%50 == 0 {
@@ -3212,17 +3209,17 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 				t.Errorf("failed to complete the requested snapshot")
 			}
 			logdb := nh.mu.logdb
-			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if len(snapshots) == 0 {
+			if pb.IsEmptySnapshot(snapshot) {
 				t.Fatalf("failed to save snapshots")
 			}
-			if snapshots[0].Index != index {
+			if snapshot.Index != index {
 				t.Errorf("unexpected index value")
 			}
-			reader, header, err := rsm.NewSnapshotReader(snapshots[0].Filepath, fs)
+			reader, header, err := rsm.NewSnapshotReader(snapshot.Filepath, fs)
 			if err != nil {
 				t.Fatalf("failed to new snapshot reader %v", err)
 			}
@@ -3419,11 +3416,11 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 				t.Fatalf("failed to stop cluster %v", err)
 			}
 			logdb := nh.mu.logdb
-			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if len(snapshots) == 0 {
+			if pb.IsEmptySnapshot(snapshot) {
 				t.Fatalf("failed to save snapshots")
 			}
 			snapshotDir := nh.env.GetSnapshotDir(nh.nhConfig.GetDeploymentID(), 1, 1)
@@ -3510,11 +3507,11 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 			if len(ents) != 0 || sz != 0 {
 				t.Fatalf("entry returned")
 			}
-			snapshots, err = logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err = logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if len(snapshots) != 0 {
+			if !pb.IsEmptySnapshot(snapshot) {
 				t.Fatalf("snapshot not deleted")
 			}
 			_, err = logdb.ReadRaftState(1, 1, 1)
@@ -3572,12 +3569,12 @@ func TestSnapshotCanBeExported(t *testing.T) {
 			}
 			index = v.SnapshotIndex()
 			logdb := nh.mu.logdb
-			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
 			// exported snapshot is not managed by the system
-			if len(snapshots) != 0 {
+			if !pb.IsEmptySnapshot(snapshot) {
 				t.Fatalf("snapshot record unexpectedly inserted into the system")
 			}
 			snapshotDir := fmt.Sprintf("snapshot-%016X", index)
@@ -3684,11 +3681,11 @@ func TestOnDiskStateMachineCanExportSnapshot(t *testing.T) {
 				t.Fatalf("never aborted")
 			}
 			logdb := nh.mu.logdb
-			snapshots, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			snapshot, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if len(snapshots) != 0 {
+			if !pb.IsEmptySnapshot(snapshot) {
 				t.Fatalf("snapshot record unexpectedly inserted into the system")
 			}
 			snapshotDir := fmt.Sprintf("snapshot-%016X", index)
@@ -4722,14 +4719,14 @@ func TestSnapshotCanBeCompressed(t *testing.T) {
 				t.Fatalf("failed to request snapshot %v", err)
 			}
 			logdb := nh.mu.logdb
-			ssList, err := logdb.ListSnapshots(1, 1, math.MaxUint64)
+			ss, err := logdb.GetSnapshot(1, 1)
 			if err != nil {
 				t.Fatalf("failed to list snapshots: %v", err)
 			}
-			if len(ssList) != 1 {
-				t.Fatalf("failed to get snapshot rec, %d", len(ssList))
+			if pb.IsEmptySnapshot(ss) {
+				t.Fatalf("failed to get snapshot rec")
 			}
-			fi, err := fs.Stat(ssList[0].Filepath)
+			fi, err := fs.Stat(ss.Filepath)
 			if err != nil {
 				t.Fatalf("failed to get file path %v", err)
 			}
@@ -4832,17 +4829,15 @@ func TestWitnessSnapshotIsCorrectlyHandled(t *testing.T) {
 			if witness.GetRecovered() > 0 {
 				t.Fatalf("unexpected recovered count %d", witness.GetRecovered())
 			}
-			snapshots, err := nh2.mu.logdb.ListSnapshots(1, 2, math.MaxUint64)
+			snapshot, err := nh2.mu.logdb.GetSnapshot(1, 2)
 			if err != nil {
 				t.Fatalf("%v", err)
 			}
-			if len(snapshots) == 0 {
+			if pb.IsEmptySnapshot(snapshot) {
 				time.Sleep(100 * time.Millisecond)
 			} else {
-				for _, ss := range snapshots {
-					if !ss.Witness {
-						t.Errorf("not a witness snapshot")
-					}
+				if !snapshot.Witness {
+					t.Errorf("not a witness snapshot")
 				}
 				return
 			}

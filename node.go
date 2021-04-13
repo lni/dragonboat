@@ -753,9 +753,6 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, errors.Wrapf(err, "%s create snapshot failed", n.id())
 	}
-	if err := n.compact(req, ss.Index); err != nil {
-		return 0, errors.Wrapf(err, "%s compact failed", n.id())
-	}
 	n.ss.setIndex(ss.Index)
 	return ss.Index, nil
 }
