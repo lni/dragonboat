@@ -62,35 +62,35 @@ func isStateEqual(a State, b State) bool {
 
 // IsProposal returns a boolean value indicating whether the entry is a
 // regular update entry.
-func (e *Entry) IsProposal() bool {
-	return e.Type == ApplicationEntry ||
-		e.Type == EncodedEntry || e.Type == MetadataEntry
+func (m *Entry) IsProposal() bool {
+	return m.Type == ApplicationEntry ||
+		m.Type == EncodedEntry || m.Type == MetadataEntry
 }
 
 // IsConfigChange returns a boolean value indicating whether the entry is for
 // config change.
-func (e *Entry) IsConfigChange() bool {
-	return e.Type == ConfigChangeEntry
+func (m *Entry) IsConfigChange() bool {
+	return m.Type == ConfigChangeEntry
 }
 
 // IsEmpty returns a boolean value indicating whether the entry is Empty.
-func (e *Entry) IsEmpty() bool {
-	if e.IsConfigChange() {
+func (m *Entry) IsEmpty() bool {
+	if m.IsConfigChange() {
 		return false
 	}
-	if e.IsSessionManaged() {
+	if m.IsSessionManaged() {
 		return false
 	}
-	return len(e.Cmd) == 0
+	return len(m.Cmd) == 0
 }
 
 // IsSessionManaged returns a boolean value indicating whether the entry is
 // session managed.
-func (e *Entry) IsSessionManaged() bool {
-	if e.IsConfigChange() {
+func (m *Entry) IsSessionManaged() bool {
+	if m.IsConfigChange() {
 		return false
 	}
-	if e.ClientID == client.NotSessionManagedClientID {
+	if m.ClientID == client.NotSessionManagedClientID {
 		return false
 	}
 	return true
@@ -98,33 +98,33 @@ func (e *Entry) IsSessionManaged() bool {
 
 // IsNoOPSession returns a boolean value indicating whether the entry is NoOP
 // session managed.
-func (e *Entry) IsNoOPSession() bool {
-	return e.SeriesID == client.NoOPSeriesID
+func (m *Entry) IsNoOPSession() bool {
+	return m.SeriesID == client.NoOPSeriesID
 }
 
 // IsNewSessionRequest returns a boolean value indicating whether the entry is
 // for reqeusting a new client.
-func (e *Entry) IsNewSessionRequest() bool {
-	return !e.IsConfigChange() &&
-		len(e.Cmd) == 0 &&
-		e.ClientID != client.NotSessionManagedClientID &&
-		e.SeriesID == client.SeriesIDForRegister
+func (m *Entry) IsNewSessionRequest() bool {
+	return !m.IsConfigChange() &&
+		len(m.Cmd) == 0 &&
+		m.ClientID != client.NotSessionManagedClientID &&
+		m.SeriesID == client.SeriesIDForRegister
 }
 
 // IsEndOfSessionRequest returns a boolean value indicating whether the entry
 // is for requesting the session to come to an end.
-func (e *Entry) IsEndOfSessionRequest() bool {
-	return !e.IsConfigChange() &&
-		len(e.Cmd) == 0 &&
-		e.ClientID != client.NotSessionManagedClientID &&
-		e.SeriesID == client.SeriesIDForUnregister
+func (m *Entry) IsEndOfSessionRequest() bool {
+	return !m.IsConfigChange() &&
+		len(m.Cmd) == 0 &&
+		m.ClientID != client.NotSessionManagedClientID &&
+		m.SeriesID == client.SeriesIDForUnregister
 }
 
 // IsUpdateEntry returns a boolean flag indicating whether the entry is a
 // regular application entry not used for session management.
-func (e *Entry) IsUpdateEntry() bool {
-	return !e.IsConfigChange() && e.IsSessionManaged() &&
-		!e.IsNewSessionRequest() && !e.IsEndOfSessionRequest()
+func (m *Entry) IsUpdateEntry() bool {
+	return !m.IsConfigChange() && m.IsSessionManaged() &&
+		!m.IsNewSessionRequest() && !m.IsEndOfSessionRequest()
 }
 
 // NewBootstrapInfo creates and returns a new bootstrap record.
@@ -214,8 +214,8 @@ func (snapshot *Snapshot) Validate(fs vfs.IFS) bool {
 }
 
 // Filename returns the filename of the external snapshot file.
-func (f *SnapshotFile) Filename() string {
-	return fmt.Sprintf("external-file-%d", f.FileId)
+func (m *SnapshotFile) Filename() string {
+	return fmt.Sprintf("external-file-%d", m.FileId)
 }
 
 // GetEntrySliceSize returns the upper limit of the entry slice size.
@@ -263,20 +263,20 @@ var (
 
 // IsLastChunk returns a boolean value indicating whether the chunk is the last
 // chunk of a snapshot.
-func (c Chunk) IsLastChunk() bool {
-	return c.ChunkCount == LastChunkCount || c.ChunkCount == c.ChunkId+1
+func (m Chunk) IsLastChunk() bool {
+	return m.ChunkCount == LastChunkCount || m.ChunkCount == m.ChunkId+1
 }
 
 // IsLastFileChunk returns a boolean value indicating whether the chunk is the
 // last chunk of a snapshot file.
-func (c Chunk) IsLastFileChunk() bool {
-	return c.FileChunkId+1 == c.FileChunkCount
+func (m Chunk) IsLastFileChunk() bool {
+	return m.FileChunkId+1 == m.FileChunkCount
 }
 
 // IsPoisonChunk returns a boolean value indicating whether the chunk is a
 // special poison chunk.
-func (c Chunk) IsPoisonChunk() bool {
-	return c.ChunkCount == PoisonChunkCount
+func (m Chunk) IsPoisonChunk() bool {
+	return m.ChunkCount == PoisonChunkCount
 }
 
 // CanDrop returns a boolean value indicating whether the message can be
