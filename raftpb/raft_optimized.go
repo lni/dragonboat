@@ -74,17 +74,17 @@ func (m *EntryBatch) SizeUpperLimit() (n int) {
 }
 
 // SizeUpperLimit returns the upper limit size of an entry.
-func (o *Entry) SizeUpperLimit() int {
+func (m *Entry) SizeUpperLimit() int {
 	l := settings.EntryNonCmdFieldsSize
-	l += len(o.Cmd)
+	l += len(m.Cmd)
 	return l
 }
 
 // Size returns the actual size of an entry
-func (o *Entry) Size() int {
+func (m *Entry) Size() int {
 	l := 1
 
-	if x := o.Term; x >= 1<<49 {
+	if x := m.Term; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -92,7 +92,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := o.Index; x >= 1<<49 {
+	if x := m.Index; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -100,7 +100,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if v := o.Type; v != 0 {
+	if v := m.Type; v != 0 {
 		x := uint32(v)
 		if v < 0 {
 			x = ^x + 1
@@ -110,7 +110,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := o.Key; x >= 1<<49 {
+	if x := m.Key; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -118,7 +118,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := o.ClientID; x >= 1<<49 {
+	if x := m.ClientID; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -126,7 +126,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := o.SeriesID; x >= 1<<49 {
+	if x := m.SeriesID; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -134,7 +134,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := o.RespondedTo; x >= 1<<49 {
+	if x := m.RespondedTo; x >= 1<<49 {
 		l += 9
 	} else if x != 0 {
 		for l += 2; x >= 0x80; l++ {
@@ -142,7 +142,7 @@ func (o *Entry) Size() int {
 		}
 	}
 
-	if x := len(o.Cmd); x != 0 {
+	if x := len(m.Cmd); x != 0 {
 		if uint64(x) > ColferSizeMax {
 			panic("max size reached")
 		}
@@ -158,15 +158,15 @@ func (o *Entry) Size() int {
 }
 
 // MarshalTo marshals the entry to the specified byte slice.
-func (o *Entry) MarshalTo(buf []byte) (int, error) {
-	v := o.marshalTo(buf)
+func (m *Entry) MarshalTo(buf []byte) (int, error) {
+	v := m.marshalTo(buf)
 	return v, nil
 }
 
-func (o *Entry) marshalTo(buf []byte) int {
+func (m *Entry) marshalTo(buf []byte) int {
 	var i int
 
-	if x := o.Term; x >= 1<<49 {
+	if x := m.Term; x >= 1<<49 {
 		buf[i] = 0 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -182,7 +182,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if x := o.Index; x >= 1<<49 {
+	if x := m.Index; x >= 1<<49 {
 		buf[i] = 1 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -198,7 +198,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if v := o.Type; v != 0 {
+	if v := m.Type; v != 0 {
 		x := uint32(v)
 		if v >= 0 {
 			buf[i] = 2
@@ -216,7 +216,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if x := o.Key; x >= 1<<49 {
+	if x := m.Key; x >= 1<<49 {
 		buf[i] = 3 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -232,7 +232,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if x := o.ClientID; x >= 1<<49 {
+	if x := m.ClientID; x >= 1<<49 {
 		buf[i] = 4 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -248,7 +248,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if x := o.SeriesID; x >= 1<<49 {
+	if x := m.SeriesID; x >= 1<<49 {
 		buf[i] = 5 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -264,7 +264,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if x := o.RespondedTo; x >= 1<<49 {
+	if x := m.RespondedTo; x >= 1<<49 {
 		buf[i] = 6 | 0x80
 		intconv.PutUint64(buf[i+1:], x)
 		i += 9
@@ -280,7 +280,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		i++
 	}
 
-	if l := len(o.Cmd); l != 0 {
+	if l := len(m.Cmd); l != 0 {
 		buf[i] = 7
 		i++
 		x := uint(l)
@@ -291,7 +291,7 @@ func (o *Entry) marshalTo(buf []byte) int {
 		}
 		buf[i] = byte(x)
 		i++
-		i += copy(buf[i:], o.Cmd)
+		i += copy(buf[i:], m.Cmd)
 	}
 
 	buf[i] = 0x7f
@@ -300,12 +300,12 @@ func (o *Entry) marshalTo(buf []byte) int {
 }
 
 // Unmarshal unmarshals the input to the current entry instance.
-func (o *Entry) Unmarshal(data []byte) error {
-	_, err := o.unmarshal(data)
+func (m *Entry) Unmarshal(data []byte) error {
+	_, err := m.unmarshal(data)
 	return err
 }
 
-func (o *Entry) unmarshal(data []byte) (int, error) {
+func (m *Entry) unmarshal(data []byte) (int, error) {
 	if len(data) == 0 {
 		return 0, io.EOF
 	}
@@ -336,7 +336,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.Term = x
+		m.Term = x
 
 		header = data[i]
 		i++
@@ -346,7 +346,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.Term = intconv.Uint64(data[start:])
+		m.Term = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -375,7 +375,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.Index = x
+		m.Index = x
 
 		header = data[i]
 		i++
@@ -385,7 +385,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.Index = intconv.Uint64(data[start:])
+		m.Index = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -413,7 +413,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.Type = EntryType(x)
+		m.Type = EntryType(x)
 
 		header = data[i]
 		i++
@@ -441,7 +441,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.Type = EntryType(^x + 1)
+		m.Type = EntryType(^x + 1)
 
 		header = data[i]
 		i++
@@ -471,7 +471,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.Key = x
+		m.Key = x
 
 		header = data[i]
 		i++
@@ -481,7 +481,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.Key = intconv.Uint64(data[start:])
+		m.Key = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -509,7 +509,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.ClientID = x
+		m.ClientID = x
 
 		header = data[i]
 		i++
@@ -519,7 +519,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.ClientID = intconv.Uint64(data[start:])
+		m.ClientID = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -548,7 +548,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.SeriesID = x
+		m.SeriesID = x
 
 		header = data[i]
 		i++
@@ -558,7 +558,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.SeriesID = intconv.Uint64(data[start:])
+		m.SeriesID = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -586,7 +586,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 				x |= (b & 0x7f) << shift
 			}
 		}
-		o.RespondedTo = x
+		m.RespondedTo = x
 
 		header = data[i]
 		i++
@@ -596,7 +596,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.RespondedTo = intconv.Uint64(data[start:])
+		m.RespondedTo = intconv.Uint64(data[start:])
 		header = data[i]
 		i++
 	}
@@ -636,7 +636,7 @@ func (o *Entry) unmarshal(data []byte) (int, error) {
 		}
 		// https://github.com/golang/go/wiki/SliceTricks
 		ic := data[start:i]
-		o.Cmd = append(ic[:0:0], ic...)
+		m.Cmd = append(ic[:0:0], ic...)
 
 		header = data[i]
 		i++
