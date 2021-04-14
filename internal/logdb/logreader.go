@@ -54,7 +54,9 @@ var dn = logutil.DescribeNode
 // into LogDB. This implementation is influenced by CockroachDB's
 // replicaRaftStorage.
 type LogReader struct {
+	sync.Mutex
 	logdb       raftio.ILogDB
+	compactor   pb.ICompactor
 	snapshot    pb.Snapshot
 	state       pb.State
 	markerIndex uint64
@@ -62,7 +64,6 @@ type LogReader struct {
 	nodeID      uint64
 	markerTerm  uint64
 	length      uint64
-	sync.Mutex
 }
 
 var _ raft.ILogDB = (*LogReader)(nil)
@@ -77,6 +78,13 @@ func NewLogReader(clusterID uint64,
 		length:    1,
 	}
 	return l
+}
+
+func (lr *LogReader) SetCompactor(c pb.ICompactor) {
+	if lr.compactor != nil {
+		panic("compactor already set")
+	}
+	lr.compactor = c
 }
 
 func (lr *LogReader) id() string {
@@ -202,7 +210,7 @@ func (lr *LogReader) lastIndex() uint64 {
 }
 
 // Snapshot returns the metadata of the lastest snapshot.
-func (lr *LogReader) Snapshot() SnapshotKeeper {
+func (lr *LogReader) Snapshot() pb.Snapshot {
 	lr.Lock()
 	defer lr.Unlock()
 	return lr.snapshot

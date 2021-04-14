@@ -6,7 +6,12 @@ package raftpb
 import (
 	"fmt"
 	"io"
+	"sync/atomic"
 )
+
+type ICompactor interface {
+	Compact(uint64) error
+}
 
 type Snapshot struct {
 	Filepath    string
@@ -22,6 +27,34 @@ type Snapshot struct {
 	Imported    bool
 	OnDiskIndex uint64
 	Witness     bool
+	// refCount will not be marshaled
+	refCount  *int32
+	compactor ICompactor
+}
+
+func (m *Snapshot) Load(c ICompactor) {
+	if m.compactor != nil {
+		panic("trying to load the snapshot again")
+	}
+	m.refCount = new(int32)
+	m.compactor = c
+}
+
+func (m *Snapshot) Ref() {
+	if m.compactor == nil {
+		panic("not loaded")
+	}
+	atomic.AddInt32(m.refCount, 1)
+}
+
+func (m *Snapshot) Unref() error {
+	if m.compactor == nil {
+		panic("not loaded")
+	}
+	if atomic.AddInt32(m.refCount, -1) == 0 {
+		return m.compactor.Compact(m.Index)
+	}
+	return nil
 }
 
 func (m *Snapshot) Marshal() (dAtA []byte, err error) {
