@@ -137,6 +137,12 @@ func (p *testNodeProxy) configChangeProcessed(index uint64, rejected bool) {
 func (p *testNodeProxy) NodeID() uint64    { return 1 }
 func (p *testNodeProxy) ClusterID() uint64 { return 1 }
 
+type noopCompactor struct{}
+
+func (noopCompactor) Compact(uint64) error { return nil }
+
+var testCompactor = &noopCompactor{}
+
 type testSnapshotter struct {
 	index    uint64
 	dataSize uint64
@@ -153,7 +159,7 @@ func (s *testSnapshotter) GetSnapshot() (pb.Snapshot, error) {
 	address := make(map[uint64]string)
 	address[1] = "localhost:1"
 	address[2] = "localhost:2"
-	snap := pb.Snapshot{
+	ss := pb.Snapshot{
 		Filepath: fp,
 		FileSize: s.dataSize,
 		Index:    s.index,
@@ -162,7 +168,8 @@ func (s *testSnapshotter) GetSnapshot() (pb.Snapshot, error) {
 			Addresses: address,
 		},
 	}
-	return snap, nil
+	ss.Load(testCompactor)
+	return ss, nil
 }
 
 func (s *testSnapshotter) Shrunk(ss pb.Snapshot) (bool, error) {
