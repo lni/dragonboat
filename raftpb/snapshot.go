@@ -38,6 +38,7 @@ func (m *Snapshot) Load(c ICompactor) {
 	}
 	m.refCount = new(int32)
 	m.compactor = c
+	m.Ref()
 }
 
 func (m *Snapshot) Ref() {
@@ -52,6 +53,7 @@ func (m *Snapshot) Unref() error {
 		panic("not loaded")
 	}
 	if atomic.AddInt32(m.refCount, -1) == 0 {
+		plog.Infof("going to call compact on %d", m.Index)
 		return m.compactor.Compact(m.Index)
 	}
 	return nil

@@ -199,14 +199,14 @@ func (s *snapshotter) Shrink(index uint64) error {
 	if err != nil {
 		return err
 	}
-	if ss.Index <= index {
+	if ss.Index < index {
 		return nil
 	}
 	if !ss.Dummy && !ss.Witness {
 		env := s.getEnv(index)
 		fp := env.GetFilepath()
 		shrunk := env.GetShrinkedFilepath()
-		plog.Debugf("%s shrinking %s", s.id(), s.ssid(index))
+		plog.Infof("%s shrinking %s", s.id(), s.ssid(index))
 		if err := rsm.ShrinkSnapshot(fp, shrunk, s.fs); err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func (s *snapshotter) Compact(index uint64) error {
 		plog.Panicf("invalid compaction, LogDB snapshot %d, index %d",
 			ss.Index, index)
 	}
-	if err := s.remove(ss.Index); err != nil {
+	if err := s.remove(index); err != nil {
 		return err
 	}
 	return nil

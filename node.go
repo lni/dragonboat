@@ -729,9 +729,9 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, errors.Wrapf(err, "%s save snapshot failed", n.id())
 	}
-	plog.Infof("%s saved snapshot, index %s, term %d, file count %d",
+	plog.Infof("%s saved %s, term %d, file count %d",
 		n.id(), n.ssid(ss.Index), ss.Term, len(ss.Files))
-	if err := n.snapshotter.commit(ss, req); err != nil {
+	if err := n.snapshotter.Commit(ss, req); err != nil {
 		if snapshotCommitAborted(err) || saveAborted(err) {
 			// saveAborted() will only be true in monkey test
 			// commit abort happens when the final dir already exists, probably due to
@@ -753,6 +753,9 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, errors.Wrapf(err, "%s create snapshot failed", n.id())
 	}
+	if err := n.compact(req, ss.Index); err != nil {
+		return 0, err
+	}
 	n.ss.setIndex(ss.Index)
 	return ss.Index, nil
 }
@@ -761,7 +764,7 @@ func (n *node) compact(req rsm.SSRequest, index uint64) error {
 	if overhead := n.compactionOverhead(req); index > overhead {
 		n.ss.setCompactLogTo(index - overhead)
 	}
-	return n.compactSnapshots(index)
+	return nil
 }
 
 func (n *node) compactionOverhead(req rsm.SSRequest) uint64 {
@@ -810,16 +813,14 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 	}
 	if index > 0 {
 		plog.Infof("%s recovered from %s", n.id(), n.ssid(index))
+		n.ss.setCompactLogTo(index)
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
 				return 0, errors.Wrapf(err, "%s sync failed", n.id())
 			}
-			if err := n.snapshotter.shrink(index); err != nil {
+			if err := n.snapshotter.Shrink(index); err != nil {
 				return 0, errors.Wrapf(err, "%s shrink failed", n.id())
 			}
-		}
-		if err := n.compactSnapshots(index); err != nil {
-			return 0, errors.Wrapf(err, "%s compact snapshots failed", n.id())
 		}
 	}
 	n.sysEvents.Publish(server.SystemEvent{
@@ -882,29 +883,19 @@ func (n *node) runSyncTask() error {
 }
 
 func (n *node) shrink(index uint64) error {
+	if index == 0 {
+		return nil
+	}
 	if n.snapshotLock.TryLock() {
 		defer n.snapshotLock.Unlock()
 		if !n.sm.OnDiskStateMachine() {
 			panic("trying to shrink snapshots on non all disk SMs")
 		}
 		plog.Debugf("%s will shrink snapshots up to %d", n.id(), index)
-		if err := n.snapshotter.shrink(index); err != nil {
+		if err := n.snapshotter.Shrink(index); err != nil {
 			return errors.Wrapf(err, "%s failed to shrink to %d", n.id(), index)
 		}
 	}
-	return nil
-}
-
-func (n *node) compactSnapshots(index uint64) error {
-	if err := n.snapshotter.compact(index); err != nil {
-		return errors.Wrapf(err, "%s snapshot compaction failed", n.id())
-	}
-	n.sysEvents.Publish(server.SystemEvent{
-		Type:      server.SnapshotCompacted,
-		ClusterID: n.clusterID,
-		NodeID:    n.nodeID,
-		Index:     index,
-	})
 	return nil
 }
 
@@ -923,7 +914,7 @@ func (n *node) removeLog() error {
 			n.nodeID, compactTo); err != nil {
 			return err
 		}
-		plog.Debugf("%s compacted log up to index %d", n.id(), compactTo)
+		plog.Infof("%s compacted log up to index %d", n.id(), compactTo)
 		n.ss.setCompactedTo(compactTo)
 		n.sysEvents.Publish(server.SystemEvent{
 			Type:      server.LogCompacted,

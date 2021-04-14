@@ -239,7 +239,7 @@ func (s *StateMachine) DestroyedC() <-chan struct{} {
 }
 
 // Recover applies the snapshot.
-func (s *StateMachine) Recover(t Task) (uint64, error) {
+func (s *StateMachine) Recover(t Task) (_ uint64, err error) {
 	ss, err := s.getSnapshot(t)
 	if err != nil {
 		return 0, err
@@ -249,6 +249,9 @@ func (s *StateMachine) Recover(t Task) (uint64, error) {
 	}
 	plog.Debugf("%s called Recover, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
+	defer func() {
+		err = firstError(err, ss.Unref())
+	}()
 	if err := s.recover(ss, t.Initial); err != nil {
 		return 0, err
 	}
@@ -269,7 +272,7 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 			return pb.Snapshot{}, err
 		}
 		if ss.Index < t.Index {
-			plog.Panicf("out of date snapshot, %d, %d", ss.Index, t.Index)
+			plog.Panicf("%s out of date snapshot, %d, %d", s.id(), ss.Index, t.Index)
 		}
 		return ss, nil
 	}

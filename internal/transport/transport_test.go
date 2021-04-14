@@ -653,7 +653,7 @@ func getTestSnapshotMessage(to uint64) raftpb.Message {
 			Term:  19,
 		},
 	}
-
+	m.Snapshot.Load(&noopCompactor{})
 	return m
 }
 
@@ -787,6 +787,10 @@ func getTestSnapshotFileSize(sz uint64) uint64 {
 		panic("unknown snapshot version")
 	}
 }
+
+type noopCompactor struct{}
+
+func (noopCompactor) Compact(uint64) error { return nil }
 
 func testSnapshotCanBeSent(t *testing.T,
 	sz uint64, maxWait uint64, mutualTLS bool, fs vfs.IFS) {

@@ -30,6 +30,7 @@ func TestLogReaderNewLogReader(t *testing.T) {
 
 func TestInitialState(t *testing.T) {
 	lr := NewLogReader(1, 1, nil)
+	lr.SetCompactor(testCompactor)
 	ps := pb.State{
 		Term:   100,
 		Vote:   112,
@@ -58,6 +59,7 @@ func TestInitialState(t *testing.T) {
 
 func TestApplySnapshotUpdateMarkerIndexTerm(t *testing.T) {
 	lr := NewLogReader(1, 1, nil)
+	lr.SetCompactor(testCompactor)
 	ss := pb.Snapshot{
 		Index: 123,
 		Term:  124,
@@ -78,17 +80,18 @@ func TestApplySnapshotUpdateMarkerIndexTerm(t *testing.T) {
 	if lr.length != 1 {
 		t.Errorf("unexpected length %d", lr.length)
 	}
-	if !reflect.DeepEqual(&ss, &lr.snapshot) {
+	if ss.Index != lr.snapshot.Index {
 		t.Errorf("snapshot not updated")
 	}
 	rs := lr.Snapshot()
-	if !reflect.DeepEqual(&ss, &rs) {
+	if ss.Index != rs.Index {
 		t.Errorf("snapshot not updated")
 	}
 }
 
 func TestLogReaderIndexRange(t *testing.T) {
 	lr := NewLogReader(1, 1, nil)
+	lr.SetCompactor(testCompactor)
 	ss := pb.Snapshot{
 		Index: 123,
 		Term:  124,

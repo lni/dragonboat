@@ -213,7 +213,11 @@ func (lr *LogReader) lastIndex() uint64 {
 func (lr *LogReader) Snapshot() pb.Snapshot {
 	lr.Lock()
 	defer lr.Unlock()
-	return lr.snapshot
+	ss := lr.snapshot
+	if !pb.IsEmptySnapshot(ss) {
+		ss.Ref()
+	}
+	return ss
 }
 
 // ApplySnapshot applies the specified snapshot.
@@ -222,6 +226,10 @@ func (lr *LogReader) ApplySnapshot(snapshot pb.Snapshot) error {
 	defer lr.Unlock()
 	if lr.snapshot.Index >= snapshot.Index {
 		return raft.ErrSnapshotOutOfDate
+	}
+	snapshot.Load(lr.compactor)
+	if !pb.IsEmptySnapshot(lr.snapshot) {
+		lr.snapshot.Unref()
 	}
 	lr.snapshot = snapshot
 	lr.markerIndex = snapshot.Index
@@ -236,6 +244,10 @@ func (lr *LogReader) CreateSnapshot(snapshot pb.Snapshot) error {
 	defer lr.Unlock()
 	if lr.snapshot.Index >= snapshot.Index {
 		return raft.ErrSnapshotOutOfDate
+	}
+	snapshot.Load(lr.compactor)
+	if !pb.IsEmptySnapshot(lr.snapshot) {
+		lr.snapshot.Unref()
 	}
 	lr.snapshot = snapshot
 	return nil

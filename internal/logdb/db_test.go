@@ -1162,6 +1162,12 @@ func TestAllWantedEntriesAreAccessible(t *testing.T) {
 	testAllWantedEntriesAreAccessible(t, batchSize+1, batchSize*3+1)
 }
 
+type noopCompactor struct{}
+
+func (noopCompactor) Compact(uint64) error { return nil }
+
+var testCompactor = &noopCompactor{}
+
 func TestReadRaftStateWithSnapshot(t *testing.T) {
 	tests := []struct {
 		snapshotIndex uint64
@@ -1220,6 +1226,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				t.Errorf("length %d, want %d", state.EntryCount, entryCount)
 			}
 			logReader := NewLogReader(clusterID, nodeID, db)
+			logReader.SetCompactor(testCompactor)
 			if err := logReader.ApplySnapshot(ss); err != nil {
 				t.Fatalf("apply snapshot failed")
 			}

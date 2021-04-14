@@ -36,6 +36,7 @@ func removeTestLogdbDir(fs vfs.IFS) {
 func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {
 	logdb := getNewLogReaderTestDB(entries, vfs.GetTestFS())
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
+	ls.SetCompactor(testCompactor)
 	if len(entries) > 0 {
 		if err := ls.Append(entries); err != nil {
 			panic(err)

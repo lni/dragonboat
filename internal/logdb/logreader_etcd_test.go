@@ -49,6 +49,7 @@ func getNewLogReaderTestDB(entries []pb.Entry, fs vfs.IFS) raftio.ILogDB {
 func getTestLogReader(entries []pb.Entry, fs vfs.IFS) *LogReader {
 	logdb := getNewLogReaderTestDB(entries, fs)
 	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
+	ls.SetCompactor(testCompactor)
 	ls.markerIndex = entries[0].Index
 	ls.markerTerm = entries[0].Term
 	ls.length = uint64(len(entries))
@@ -346,7 +347,7 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		if !reflect.DeepEqual(s.snapshot, tt.wsnap) {
+		if s.snapshot.Index != tt.wsnap.Index {
 			t.Errorf("#%d: snap = %+v, want %+v", i, s.snapshot, tt.wsnap)
 		}
 		s.logdb.Close()
@@ -398,7 +399,7 @@ func TestLogReaderGetSnapshot(t *testing.T) {
 		t.Errorf("create snapshot failed %v", err)
 	}
 	rs := s.Snapshot()
-	if !reflect.DeepEqual(&rs, &ss) {
+	if rs.Index != ss.Index {
 		t.Errorf("unexpected snapshot rec")
 	}
 }

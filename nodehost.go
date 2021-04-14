@@ -1532,6 +1532,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	logReader := logdb.NewLogReader(clusterID, nodeID, nh.mu.logdb)
 	ss := newSnapshotter(clusterID, nodeID,
 		getSnapshotDir, nh.mu.logdb, logReader, nh.fs)
+	logReader.SetCompactor(ss)
 	if err := ss.processOrphans(); err != nil {
 		panicNow(err)
 	}

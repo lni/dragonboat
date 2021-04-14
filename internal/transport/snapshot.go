@@ -81,12 +81,29 @@ func (t *Transport) getStreamSink(clusterID uint64, nodeID uint64) *Sink {
 	}
 	key := raftio.GetNodeInfo(clusterID, nodeID)
 	if job := t.createJob(key, addr, true, 0); job != nil {
+		shutdown := func() {
+			atomic.AddUint64(&t.jobs, ^uint64(0))
+		}
+		t.stopper.RunWorker(func() {
+			t.processSnapshot(job, addr)
+			shutdown()
+		})
 		return &Sink{j: job}
 	}
 	return nil
 }
 
 func (t *Transport) sendSnapshot(m pb.Message) bool {
+	if !t.doSendSnapshot(m) {
+		if err := m.Snapshot.Unref(); err != nil {
+			panic(err)
+		}
+		return false
+	}
+	return true
+}
+
+func (t *Transport) doSendSnapshot(m pb.Message) bool {
 	toNodeID := m.To
 	clusterID := m.ClusterId
 	if m.Type != pb.InstallSnapshot {
@@ -110,6 +127,16 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 	if job == nil {
 		return false
 	}
+	shutdown := func() {
+		atomic.AddUint64(&t.jobs, ^uint64(0))
+		if err := m.Snapshot.Unref(); err != nil {
+			panic(err)
+		}
+	}
+	t.stopper.RunWorker(func() {
+		t.processSnapshot(job, addr)
+		shutdown()
+	})
 	job.addSnapshot(chunks)
 	return true
 }
@@ -125,13 +152,6 @@ func (t *Transport) createJob(key raftio.NodeInfo,
 		streaming, sz, t.trans, t.stopper.ShouldStop(), t.fs)
 	job.postSend = t.postSend
 	job.preSend = t.preSend
-	shutdown := func() {
-		atomic.AddUint64(&t.jobs, ^uint64(0))
-	}
-	t.stopper.RunWorker(func() {
-		t.processSnapshot(job, addr)
-		shutdown()
-	})
 	return job
 }
 

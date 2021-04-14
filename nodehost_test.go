@@ -352,10 +352,20 @@ func (t *testSysEventListener) getSnapshotCompacted() []raftio.SnapshotInfo {
 	return copySnapshotInfo(t.snapshotCompacted)
 }
 
+func copyEntryInfo(info []raftio.EntryInfo) []raftio.EntryInfo {
+	return append([]raftio.EntryInfo{}, info...)
+}
+
 func (t *testSysEventListener) LogCompacted(info raftio.EntryInfo) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.logCompacted = append(t.logCompacted, info)
+}
+
+func (t *testSysEventListener) getLogCompacted() []raftio.EntryInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return copyEntryInfo(t.logCompacted)
 }
 
 func (t *testSysEventListener) LogDBCompacted(info raftio.EntryInfo) {
@@ -2471,6 +2481,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			_, err := nh2.SyncPropose(ctx, session, []byte("test-data"))
 			cancel()
+			plog.Infof("nh2 proposal result: %v", err)
 			if err != nil {
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -2516,8 +2527,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if len(listener.getSnapshotRecovered()) == 0 {
 			t.Fatalf("failed to be notified for recovered snapshot")
 		}
-		if len(listener.getSnapshotCompacted()) == 0 {
-			t.Fatalf("snapshot compaction not notified")
+		if len(listener.getLogCompacted()) == 0 {
+			t.Fatalf("log compaction not notified")
 		}
 		listener, ok = nh1.events.sys.ul.(*testSysEventListener)
 		if !ok {

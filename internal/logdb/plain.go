@@ -111,6 +111,7 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 		pb.MustUnmarshal(&e, data)
 		return nil
 	}
+	plog.Infof("getEntry called %d, %d, %d", clusterID, nodeID, index)
 	if err := pe.kvs.GetValue(k.Key(), op); err != nil {
 		return pb.Entry{}, err
 	}

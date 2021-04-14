@@ -225,6 +225,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		}
 		lr := logdb.NewLogReader(testClusterID, i, ldb)
 		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, lr, fs)
+		lr.SetCompactor(snapshotter)
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{

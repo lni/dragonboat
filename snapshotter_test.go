@@ -104,7 +104,7 @@ func TestFinalizeSnapshotReturnExpectedErrorWhenOutOfDate(t *testing.T) {
 		if err := env.CreateTempDir(); err != nil {
 			t.Errorf("create tmp snapshot dir failed %v", err)
 		}
-		if err := s.commit(ss, rsm.SSRequest{}); !errors.Is(err, errSnapshotOutOfDate) {
+		if err := s.Commit(ss, rsm.SSRequest{}); !errors.Is(err, errSnapshotOutOfDate) {
 			t.Errorf("unexpected error result %v", err)
 		}
 	}
@@ -140,7 +140,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 			t.Fatalf("write failed %v", err)
 		}
 		f.Close()
-		if err = s.commit(ss, rsm.SSRequest{}); err != nil {
+		if err = s.Commit(ss, rsm.SSRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)
 		}
 		snapshot, err := ldb.GetSnapshot(1, 1)
