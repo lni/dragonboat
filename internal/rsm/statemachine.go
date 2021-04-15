@@ -68,7 +68,10 @@ const (
 // SSEnv is the snapshot environment type.
 type SSEnv = server.SSEnv
 
-// SSRequest is the type for describing the details of a snapshot request.
+// DefaultSSRequest is the default SSRequest.
+var DefaultSSRequest = SSRequest{}
+
+// SSRequest contains details of a snapshot request.
 type SSRequest struct {
 	Path               string
 	Type               SSReqType

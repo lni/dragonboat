@@ -753,18 +753,15 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 		}
 		return 0, errors.Wrapf(err, "%s create snapshot failed", n.id())
 	}
-	if err := n.compact(req, ss.Index); err != nil {
-		return 0, err
-	}
+	n.compactLog(req, ss.Index)
 	n.ss.setIndex(ss.Index)
 	return ss.Index, nil
 }
 
-func (n *node) compact(req rsm.SSRequest, index uint64) error {
+func (n *node) compactLog(req rsm.SSRequest, index uint64) {
 	if overhead := n.compactionOverhead(req); index > overhead {
 		n.ss.setCompactLogTo(index - overhead)
 	}
-	return nil
 }
 
 func (n *node) compactionOverhead(req rsm.SSRequest) uint64 {
@@ -813,7 +810,6 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 	}
 	if index > 0 {
 		plog.Infof("%s recovered from %s", n.id(), n.ssid(index))
-		n.ss.setCompactLogTo(index)
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
 				return 0, errors.Wrapf(err, "%s sync failed", n.id())
@@ -822,6 +818,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 				return 0, errors.Wrapf(err, "%s shrink failed", n.id())
 			}
 		}
+		n.compactLog(rsm.DefaultSSRequest, index)
 	}
 	n.sysEvents.Publish(server.SystemEvent{
 		Type:      server.SnapshotRecovered,
