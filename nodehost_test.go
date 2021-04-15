@@ -346,12 +346,6 @@ func (t *testSysEventListener) SnapshotCompacted(info raftio.SnapshotInfo) {
 	t.snapshotCompacted = append(t.snapshotCompacted, info)
 }
 
-func (t *testSysEventListener) getSnapshotCompacted() []raftio.SnapshotInfo {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return copySnapshotInfo(t.snapshotCompacted)
-}
-
 func copyEntryInfo(info []raftio.EntryInfo) []raftio.EntryInfo {
 	return append([]raftio.EntryInfo{}, info...)
 }

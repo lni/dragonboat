@@ -270,27 +270,16 @@ func (t *LogDB) SaveSnapshots(updates []pb.Update) error {
 	return oe
 }
 
-// DeleteSnapshot ...
-func (t *LogDB) DeleteSnapshot(clusterID uint64,
-	nodeID uint64, index uint64) error {
+// GetSnapshot ...
+func (t *LogDB) GetSnapshot(clusterID uint64,
+	nodeID uint64) (pb.Snapshot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	oe := t.odb.DeleteSnapshot(clusterID, nodeID, index)
-	ne := t.ndb.DeleteSnapshot(clusterID, nodeID, index)
-	assertSameError(clusterID, nodeID, oe, ne)
-	return oe
-}
-
-// ListSnapshots ...
-func (t *LogDB) ListSnapshots(clusterID uint64,
-	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	ov, oe := t.odb.ListSnapshots(clusterID, nodeID, index)
-	nv, ne := t.ndb.ListSnapshots(clusterID, nodeID, index)
+	ov, oe := t.odb.GetSnapshot(clusterID, nodeID)
+	nv, ne := t.ndb.GetSnapshot(clusterID, nodeID)
 	assertSameError(clusterID, nodeID, oe, ne)
 	if oe != nil {
-		return nil, oe
+		return pb.Snapshot{}, oe
 	}
 	if !reflect.DeepEqual(ov, nv) {
 		plog.Panicf("%s conflict snapshot lists, \n%+v \n\n %+v",

@@ -33,6 +33,7 @@ import (
 
 const (
 	tmpSnapshotDirSuffix = "generating"
+	recvTmpDirSuffix     = "receiving"
 	rdbTestDirectory     = "rdb_test_dir_safe_to_delete"
 )
 
@@ -212,8 +213,8 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 		env2 := s.getEnv(200)
 		fd1 := env1.GetFinalDir()
 		fd2 := env2.GetFinalDir()
-		fd1 = fs.PathJoin(fd1, tmpSnapshotDirSuffix)
-		fd2 = fs.PathJoin(fd2, ".receiving")
+		fd1 = fd1 + "-100." + tmpSnapshotDirSuffix
+		fd2 = fd2 + "-100." + recvTmpDirSuffix
 		if err := fs.MkdirAll(fd1, 0755); err != nil {
 			t.Errorf("failed to create dir %v", err)
 		}
@@ -223,11 +224,80 @@ func TestZombieSnapshotDirsCanBeRemoved(t *testing.T) {
 		if err := s.processOrphans(); err != nil {
 			t.Errorf("failed to process orphaned snapshtos %s", err)
 		}
-		if _, err := fs.Stat(fd1); vfs.IsNotExist(err) {
+		if _, err := fs.Stat(fd1); !vfs.IsNotExist(err) {
 			t.Errorf("fd1 not removed")
 		}
-		if _, err := fs.Stat(fd2); vfs.IsNotExist(err) {
+		if _, err := fs.Stat(fd2); !vfs.IsNotExist(err) {
 			t.Errorf("fd2 not removed")
+		}
+	}
+	runSnapshotterTest(t, fn, fs)
+}
+
+func TestSnapshotsNotInLogDBAreRemoved(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
+		env1 := s.getEnv(100)
+		env2 := s.getEnv(200)
+		fd1 := env1.GetFinalDir()
+		fd2 := env2.GetFinalDir()
+		if err := fs.MkdirAll(fd1, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := fs.MkdirAll(fd2, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := s.processOrphans(); err != nil {
+			t.Errorf("failed to process orphaned snapshtos %s", err)
+		}
+		if _, err := fs.Stat(fd1); !vfs.IsNotExist(err) {
+			t.Errorf("fd1 %s not removed", fd1)
+		}
+		if _, err := fs.Stat(fd2); !vfs.IsNotExist(err) {
+			t.Errorf("fd2 %s not removed", fd2)
+		}
+	}
+	runSnapshotterTest(t, fn, fs)
+}
+
+func TestOnlyMostRecentSnapshotIsKept(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fn := func(t *testing.T, ldb raftio.ILogDB, s *snapshotter) {
+		env1 := s.getEnv(100)
+		env2 := s.getEnv(200)
+		env3 := s.getEnv(300)
+		s1 := pb.Snapshot{
+			FileSize: 1234,
+			Filepath: "f2",
+			Index:    200,
+			Term:     200,
+		}
+		fd1 := env1.GetFinalDir()
+		fd2 := env2.GetFinalDir()
+		fd3 := env3.GetFinalDir()
+		if err := s.saveSnapshot(s1); err != nil {
+			t.Errorf("failed to save snapshot to logdb")
+		}
+		if err := fs.MkdirAll(fd1, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := fs.MkdirAll(fd2, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := fs.MkdirAll(fd3, 0755); err != nil {
+			t.Errorf("failed to create dir %v", err)
+		}
+		if err := s.processOrphans(); err != nil {
+			t.Errorf("failed to process orphaned snapshtos %s", err)
+		}
+		if _, err := fs.Stat(fd1); !vfs.IsNotExist(err) {
+			t.Errorf("fd1 %s not removed", fd1)
+		}
+		if _, err := fs.Stat(fd2); vfs.IsNotExist(err) {
+			t.Errorf("fd2 %s removed by mistake", fd2)
+		}
+		if _, err := fs.Stat(fd3); !vfs.IsNotExist(err) {
+			t.Errorf("fd3 %s not removed", fd3)
 		}
 	}
 	runSnapshotterTest(t, fn, fs)

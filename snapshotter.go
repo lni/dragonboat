@@ -15,6 +15,8 @@
 package dragonboat
 
 import (
+	"strconv"
+
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
 
@@ -275,6 +277,12 @@ func (s *snapshotter) processOrphans() error {
 			return err
 		}
 	}
+	removeFolder := func(fdir string) error {
+		if err := s.fs.RemoveAll(fdir); err != nil {
+			return err
+		}
+		return fileutil.SyncDir(s.dir, s.fs)
+	}
 	for _, n := range files {
 		fi, err := s.fs.Stat(s.fs.PathJoin(s.dir, n))
 		if err != nil {
@@ -312,11 +320,15 @@ func (s *snapshotter) processOrphans() error {
 				}
 			}
 		} else if s.isZombie(fi.Name()) {
-			if err := s.fs.RemoveAll(fdir); err != nil {
+			if err := removeFolder(fdir); err != nil {
 				return err
 			}
-			if err := fileutil.SyncDir(s.dir, s.fs); err != nil {
-				return err
+		} else if s.isSnapshot(fi.Name()) {
+			index := s.parseIndex(fi.Name())
+			if noss || index != mrss.Index {
+				if err := removeFolder(fdir); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -362,6 +374,26 @@ func (s *snapshotter) saveSnapshot(snapshot pb.Snapshot) error {
 
 func (s *snapshotter) dirMatch(dir string) bool {
 	return server.SnapshotDirNameRe.Match([]byte(dir))
+}
+
+func (s *snapshotter) parseIndex(dir string) uint64 {
+	if parts := server.SnapshotDirNamePartsRe.FindStringSubmatch(dir); len(parts) == 2 {
+		index, err := strconv.ParseUint(parts[1], 16, 64)
+		if err != nil {
+			plog.Panicf("failed to parse index %s", parts[1])
+		}
+		return index
+	}
+	plog.Panicf("unknown snapshot fold name: %s", dir)
+	return 0
+}
+
+func (s *snapshotter) isSnapshot(dir string) bool {
+	if !s.dirMatch(dir) {
+		return false
+	}
+	fdir := s.fs.PathJoin(s.dir, dir)
+	return !fileutil.HasFlagFile(fdir, fileutil.SnapshotFlagFilename, s.fs)
 }
 
 func (s *snapshotter) isZombie(dir string) bool {

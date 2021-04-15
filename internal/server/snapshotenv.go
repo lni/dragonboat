@@ -37,6 +37,8 @@ var (
 	SnapshotFileSuffix = "gbsnap"
 	// SnapshotDirNameRe is the regex of snapshot names.
 	SnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+$`)
+	// SnapshotDirNamePartsRe is used to find the index value from snapshot folder name.
+	SnapshotDirNamePartsRe = regexp.MustCompile(`^snapshot-([0-9A-F]+)$`)
 	// GenSnapshotDirNameRe is the regex of temp snapshot directory name used when
 	// generating snapshots.
 	GenSnapshotDirNameRe = regexp.MustCompile(`^snapshot-[0-9A-F]+-[0-9A-F]+\.generating$`)

@@ -80,6 +80,7 @@ func NewLogReader(clusterID uint64,
 	return l
 }
 
+// SetCompactor sets the compactor or the LogReader instance.
 func (lr *LogReader) SetCompactor(c pb.ICompactor) {
 	if lr.compactor != nil {
 		panic("compactor already set")
@@ -229,7 +230,10 @@ func (lr *LogReader) ApplySnapshot(snapshot pb.Snapshot) error {
 	}
 	snapshot.Load(lr.compactor)
 	if !pb.IsEmptySnapshot(lr.snapshot) {
-		lr.snapshot.Unref()
+		ss := lr.snapshot
+		if err := ss.Unref(); err != nil {
+			return err
+		}
 	}
 	lr.snapshot = snapshot
 	lr.markerIndex = snapshot.Index
@@ -247,7 +251,10 @@ func (lr *LogReader) CreateSnapshot(snapshot pb.Snapshot) error {
 	}
 	snapshot.Load(lr.compactor)
 	if !pb.IsEmptySnapshot(lr.snapshot) {
-		lr.snapshot.Unref()
+		ss := lr.snapshot
+		if err := ss.Unref(); err != nil {
+			return err
+		}
 	}
 	lr.snapshot = snapshot
 	return nil
