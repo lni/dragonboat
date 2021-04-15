@@ -868,35 +868,17 @@ func (n *node) removeSnapshotFlagFile(index uint64) error {
 	return n.snapshotter.removeFlagFile(index)
 }
 
-func (n *node) runSyncTask() error {
+func (n *node) runSyncTask() {
 	if !n.sm.OnDiskStateMachine() {
-		return nil
+		return
 	}
 	if n.syncTask == nil ||
 		!n.syncTask.timeToRun(n.millisecondSinceStart()) {
-		return nil
+		return
 	}
 	if !n.sm.TaskChanBusy() {
 		n.pushTask(rsm.Task{PeriodicSync: true}, true)
 	}
-	return n.shrink(n.sm.GetSyncedIndex())
-}
-
-func (n *node) shrink(index uint64) error {
-	if index == 0 {
-		return nil
-	}
-	if n.snapshotLock.TryLock() {
-		defer n.snapshotLock.Unlock()
-		if !n.sm.OnDiskStateMachine() {
-			panic("trying to shrink snapshots on non all disk SMs")
-		}
-		plog.Debugf("%s will shrink snapshots up to %d", n.id(), index)
-		if err := n.snapshotter.Shrink(index); err != nil {
-			return errors.Wrapf(err, "%s failed to shrink to %d", n.id(), index)
-		}
-	}
-	return nil
 }
 
 func (n *node) removeLog() error {
@@ -1073,9 +1055,7 @@ func (n *node) processRaftUpdate(ud pb.Update) error {
 	if err := n.removeLog(); err != nil {
 		return err
 	}
-	if err := n.runSyncTask(); err != nil {
-		return err
-	}
+	n.runSyncTask()
 	if n.saveSnapshotRequired(ud.LastApplied) {
 		n.pushTakeSnapshotRequest(rsm.SSRequest{})
 	}
