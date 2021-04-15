@@ -237,6 +237,7 @@ func (l *entryLog) entries(start uint64, maxSize uint64) ([]pb.Entry, error) {
 	return l.getEntries(start, l.lastIndex()+1, maxSize)
 }
 
+// TODO: double check whether the inmem.snapshot can be used in upper layer
 func (l *entryLog) snapshot() pb.Snapshot {
 	if l.inmem.snapshot != nil {
 		return *l.inmem.snapshot

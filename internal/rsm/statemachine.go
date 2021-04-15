@@ -250,11 +250,11 @@ func (s *StateMachine) Recover(t Task) (_ uint64, err error) {
 	if pb.IsEmptySnapshot(ss) {
 		return 0, nil
 	}
-	plog.Debugf("%s called Recover, %s, on disk idx %d",
-		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	defer func() {
 		err = firstError(err, ss.Unref())
 	}()
+	plog.Debugf("%s called Recover, %s, on disk idx %d",
+		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	if err := s.recover(ss, t.Initial); err != nil {
 		return 0, err
 	}
@@ -266,8 +266,8 @@ func (s *StateMachine) Recover(t Task) (_ uint64, err error) {
 }
 
 func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
+	ss, err := s.snapshotter.GetSnapshot()
 	if !t.Initial {
-		ss, err := s.snapshotter.GetSnapshot()
 		if err != nil && !s.snapshotter.IsNoSnapshotError(err) {
 			return pb.Snapshot{}, ErrRestoreSnapshot
 		}
@@ -279,7 +279,6 @@ func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
 		}
 		return ss, nil
 	}
-	ss, err := s.snapshotter.GetSnapshot()
 	if s.snapshotter.IsNoSnapshotError(err) {
 		plog.Infof("%s no snapshot available during launch", s.id())
 		return pb.Snapshot{}, nil

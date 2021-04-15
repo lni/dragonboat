@@ -210,6 +210,9 @@ func (lr *LogReader) lastIndex() uint64 {
 	return lr.markerIndex + lr.length - 1
 }
 
+// TODO: check where this method is called, double check whether
+// Unref() got called as expected
+
 // Snapshot returns the metadata of the lastest snapshot.
 func (lr *LogReader) Snapshot() pb.Snapshot {
 	lr.Lock()
@@ -225,17 +228,9 @@ func (lr *LogReader) Snapshot() pb.Snapshot {
 func (lr *LogReader) ApplySnapshot(snapshot pb.Snapshot) error {
 	lr.Lock()
 	defer lr.Unlock()
-	if lr.snapshot.Index >= snapshot.Index {
-		return raft.ErrSnapshotOutOfDate
+	if err := lr.setSnapshot(snapshot); err != nil {
+		return err
 	}
-	snapshot.Load(lr.compactor)
-	if !pb.IsEmptySnapshot(lr.snapshot) {
-		ss := lr.snapshot
-		if err := ss.Unref(); err != nil {
-			return err
-		}
-	}
-	lr.snapshot = snapshot
 	lr.markerIndex = snapshot.Index
 	lr.markerTerm = snapshot.Term
 	lr.length = 1
@@ -246,13 +241,16 @@ func (lr *LogReader) ApplySnapshot(snapshot pb.Snapshot) error {
 func (lr *LogReader) CreateSnapshot(snapshot pb.Snapshot) error {
 	lr.Lock()
 	defer lr.Unlock()
+	return lr.setSnapshot(snapshot)
+}
+
+func (lr *LogReader) setSnapshot(snapshot pb.Snapshot) error {
 	if lr.snapshot.Index >= snapshot.Index {
 		return raft.ErrSnapshotOutOfDate
 	}
 	snapshot.Load(lr.compactor)
 	if !pb.IsEmptySnapshot(lr.snapshot) {
-		ss := lr.snapshot
-		if err := ss.Unref(); err != nil {
+		if err := lr.snapshot.Unref(); err != nil {
 			return err
 		}
 	}
