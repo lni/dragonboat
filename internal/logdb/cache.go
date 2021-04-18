@@ -26,6 +26,7 @@ type cache struct {
 	ps             map[raftio.NodeInfo]pb.State
 	lastEntryBatch map[raftio.NodeInfo]pb.EntryBatch
 	maxIndex       map[raftio.NodeInfo]uint64
+	snapshotIndex  map[raftio.NodeInfo]uint64
 	mu             sync.Mutex
 }
 
@@ -35,6 +36,7 @@ func newCache() *cache {
 		ps:             make(map[raftio.NodeInfo]pb.State),
 		lastEntryBatch: make(map[raftio.NodeInfo]pb.EntryBatch),
 		maxIndex:       make(map[raftio.NodeInfo]uint64),
+		snapshotIndex:  make(map[raftio.NodeInfo]uint64),
 	}
 }
 
@@ -63,6 +65,25 @@ func (r *cache) setState(clusterID uint64, nodeID uint64, st pb.State) bool {
 	}
 	r.ps[key] = st
 	return true
+}
+
+func (r *cache) setSnapshotIndex(clusterID uint64, nodeID uint64, index uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	r.snapshotIndex[key] = index
+}
+
+func (r *cache) isNewSnapshot(clusterID uint64, nodeID uint64, index uint64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	v, ok := r.snapshotIndex[key]
+	if !ok {
+		r.snapshotIndex[key] = index
+		return true
+	}
+	return index > v
 }
 
 func (r *cache) setMaxIndex(clusterID uint64, nodeID uint64, maxIndex uint64) {
