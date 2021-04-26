@@ -547,25 +547,6 @@ func (n *node) loaded() {
 	n.sm.Loaded()
 }
 
-func (n *node) entriesToApply(ents []pb.Entry) []pb.Entry {
-	if len(ents) == 0 {
-		return nil
-	}
-	if ents[len(ents)-1].Index < n.pushedIndex {
-		plog.Panicf("%s got entries [%d-%d] older than current state %d",
-			n.id(), ents[0].Index, ents[len(ents)-1].Index, n.pushedIndex)
-	}
-	firstIndex := ents[0].Index
-	if firstIndex > n.pushedIndex+1 {
-		plog.Panicf("%s has hole in to be applied logs, found: %d, want: %d",
-			n.id(), firstIndex, n.pushedIndex+1)
-	}
-	if n.pushedIndex-firstIndex+1 < uint64(len(ents)) {
-		return ents[n.pushedIndex-firstIndex+1:]
-	}
-	return nil
-}
-
 func (n *node) pushTask(rec rsm.Task, notify bool) {
 	if n.notifyCommit {
 		n.toCommitQ.Add(rec)
@@ -1041,7 +1022,7 @@ func (n *node) processSnapshot(ud pb.Update) error {
 }
 
 func (n *node) applyRaftUpdates(ud pb.Update) {
-	n.pushEntries(n.entriesToApply(ud.CommittedEntries))
+	n.pushEntries(pb.EntriesToApply(ud.CommittedEntries, n.pushedIndex, true))
 }
 
 func (n *node) processRaftUpdate(ud pb.Update) error {

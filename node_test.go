@@ -1833,7 +1833,7 @@ func TestEntriesToApply(t *testing.T) {
 				inputs = append(inputs, pb.Entry{Index: i})
 			}
 			n := &node{pushedIndex: 10}
-			results := n.entriesToApply(inputs)
+			results := pb.EntriesToApply(inputs, n.pushedIndex, true)
 			if uint64(len(results)) != tt.resultLength {
 				t.Errorf("%d, result len %d, want %d", idx, len(results), tt.resultLength)
 			}

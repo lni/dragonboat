@@ -873,21 +873,27 @@ func (s *StateMachine) handle(t []Task, a []sm.Entry) error {
 		if t[idx].IsSnapshotTask() || t[idx].isSyncTask() {
 			plog.Panicf("%s trying to handle a snapshot/sync request", s.id())
 		}
-		e := t[idx].Entries
-		update, noop := getEntryTypes(e)
+		// TODO: add a test for this
+		var entries []pb.Entry
+		func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			entries = pb.EntriesToApply(t[idx].Entries, s.index, false)
+		}()
+		update, noop := getEntryTypes(entries)
 		if batch && update && noop {
-			if err := s.handleBatch(e, a); err != nil {
+			if err := s.handleBatch(entries, a); err != nil {
 				return err
 			}
 		} else {
-			for i := range e {
-				last := idx == len(t)-1 && i == len(e)-1
-				if err := s.handleEntry(e[i], last); err != nil {
+			for i := range entries {
+				last := idx == len(t)-1 && i == len(entries)-1
+				if err := s.handleEntry(entries[i], last); err != nil {
 					return err
 				}
 			}
 		}
-		s.setLastApplied(e)
+		s.setLastApplied(entries)
 	}
 	return nil
 }

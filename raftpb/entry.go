@@ -23,3 +23,25 @@ func (m *Entry) Marshal() (dAtA []byte, err error) {
 	}
 	return dAtA[:n], nil
 }
+
+func EntriesToApply(entries []Entry, applied uint64, strict bool) []Entry {
+	if len(entries) == 0 {
+		return entries
+	}
+	lastIndex := entries[len(entries)-1].Index
+	firstIndex := entries[0].Index
+	if lastIndex <= applied {
+		if strict {
+			plog.Panicf("got entries [%d-%d] older than current state %d",
+				firstIndex, lastIndex, applied)
+		}
+		return []Entry{}
+	}
+	if firstIndex > applied+1 {
+		plog.Panicf("entry hole found: %d, want: %d", firstIndex, applied+1)
+	}
+	if applied-firstIndex+1 < uint64(len(entries)) {
+		return entries[applied-firstIndex+1:]
+	}
+	return []Entry{}
+}
