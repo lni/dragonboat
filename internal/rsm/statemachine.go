@@ -391,8 +391,6 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 			return err
 		}
 		s.applyOnDisk(ss, init)
-	} else {
-		s.apply(ss)
 	}
 	return nil
 }
@@ -428,7 +426,6 @@ func (s *StateMachine) applyOnDisk(ss pb.Snapshot, init bool) {
 	if ss.Imported && init {
 		s.onDiskInitIndex = ss.OnDiskIndex
 	}
-	s.apply(ss)
 }
 
 //TODO: add test to cover the case when ReadyToStreamSnapshot returns false
