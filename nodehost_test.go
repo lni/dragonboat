@@ -2468,7 +2468,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
-		snapshotted = false
+		ssIndex := uint64(0)
 		logdb = nh2.mu.logdb
 		waitForLeaderToBeElected(t, nh2, 1)
 		for i := uint64(2); i < 1000; i++ {
@@ -2485,7 +2485,6 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				t.Fatalf("list snapshot failed %v", err)
 			}
 			if !pb.IsEmptySnapshot(ss) {
-				snapshotted = true
 				if !sm2.Recovered() {
 					t.Fatalf("not recovered")
 				}
@@ -2502,14 +2501,20 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 				if !shrunk {
 					t.Errorf("snapshot %d is not shrunk", ss.Index)
 				}
-				break
+				if ssIndex == 0 {
+					ssIndex = ss.Index
+				} else {
+					if ssIndex != ss.Index {
+						break
+					}
+				}
 			} else if i%50 == 0 {
 				// see comments in testOnDiskStateMachineCanTakeDummySnapshot
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
-		if !snapshotted {
-			t.Fatalf("failed to take 3 snapshots")
+		if ssIndex == 0 {
+			t.Fatalf("failed to take 2 snapshots")
 		}
 		listener, ok := nh2.events.sys.ul.(*testSysEventListener)
 		if !ok {
