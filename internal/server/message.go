@@ -16,9 +16,15 @@ package server
 
 import (
 	"sync"
+	"sync/atomic"
 
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
+
+type delayed struct {
+	m    pb.Message
+	tick uint64
+}
 
 // MessageQueue is the queue used to hold Raft messages.
 type MessageQueue struct {
@@ -27,6 +33,8 @@ type MessageQueue struct {
 	left          []pb.Message
 	right         []pb.Message
 	nodrop        []pb.Message
+	delayed       []delayed
+	tick          uint64
 	cycle         uint64
 	size          uint64
 	lazyFreeCycle uint64
@@ -47,11 +55,16 @@ func NewMessageQueue(size uint64,
 		left:          make([]pb.Message, size),
 		right:         make([]pb.Message, size),
 		nodrop:        make([]pb.Message, 0),
+		delayed:       make([]delayed, 0),
 	}
 	if ch {
 		q.ch = make(chan struct{}, 1)
 	}
 	return q
+}
+
+func (q *MessageQueue) Tick() {
+	atomic.AddUint64(&q.tick, 1)
 }
 
 // Close closes the queue so no further messages can be added.
@@ -106,6 +119,20 @@ func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 	return true, false
 }
 
+func (q *MessageQueue) AddDelayed(msg pb.Message, delay uint64) bool {
+	if msg.Type != pb.SnapshotStatus {
+		panic("not a snapshot status message")
+	}
+	tick := atomic.LoadUint64(&q.tick)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.stopped {
+		return false
+	}
+	q.delayed = append(q.delayed, delayed{msg, delay + tick})
+	return true
+}
+
 // MustAdd adds the specified message to the queue.
 func (q *MessageQueue) MustAdd(msg pb.Message) bool {
 	if msg.CanDrop() {
@@ -147,6 +174,26 @@ func (q *MessageQueue) gc() {
 	}
 }
 
+func (q *MessageQueue) getDelayed() []pb.Message {
+	if len(q.delayed) == 0 {
+		return nil
+	}
+	sz := len(q.delayed)
+	var result []pb.Message
+	tick := atomic.LoadUint64(&q.tick)
+	for idx, rec := range q.delayed {
+		if rec.tick < tick {
+			result = append(result, rec.m)
+		} else {
+			q.delayed[idx-len(result)] = rec
+		}
+	}
+	if len(result) > 0 {
+		q.delayed = q.delayed[:sz-len(result)]
+	}
+	return result
+}
+
 // Get returns everything current in the queue.
 func (q *MessageQueue) Get() []pb.Message {
 	q.mu.Lock()
@@ -161,10 +208,19 @@ func (q *MessageQueue) Get() []pb.Message {
 	if q.rl.Enabled() {
 		q.rl.Set(0)
 	}
-	if len(q.nodrop) == 0 {
+	if len(q.nodrop) == 0 && len(q.delayed) == 0 {
 		return t[:sz]
 	}
-	ssm := q.nodrop
-	q.nodrop = make([]pb.Message, 0)
-	return append(ssm, t[:sz]...)
+
+	var result []pb.Message
+	if len(q.nodrop) > 0 {
+		ssm := q.nodrop
+		q.nodrop = make([]pb.Message, 0)
+		result = append(result, ssm...)
+	}
+	delayed := q.getDelayed()
+	if len(delayed) > 0 {
+		result = append(result, delayed...)
+	}
+	return append(result, t[:sz]...)
 }

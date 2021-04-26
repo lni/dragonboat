@@ -5246,11 +5246,14 @@ func TestHandleSnapshotStatus(t *testing.T) {
 	node := &node{clusterID: 1, nodeID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	h.HandleSnapshotStatus(1, 2, true)
+	for i := uint64(0); i <= streamPushDelayTick; i++ {
+		node.mq.Tick()
+	}
 	msgs := node.mq.Get()
 	if len(msgs) != 1 {
 		t.Fatalf("no msg")
 	}
-	if msgs[0].Type != pb.SnapshotStatus || !msgs[0].Reject || msgs[0].Hint != streamPushDelayTick {
+	if msgs[0].Type != pb.SnapshotStatus || !msgs[0].Reject {
 		t.Fatalf("unexpected message")
 	}
 }
@@ -5277,11 +5280,14 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	if sc != 0 || mc != 1 {
 		t.Errorf("failed to handle message batch")
 	}
+	for i := uint64(0); i <= streamConfirmedDelayTick; i++ {
+		node.mq.Tick()
+	}
 	msgs := node.mq.Get()
 	if len(msgs) != 1 {
 		t.Fatalf("no msg")
 	}
-	if msgs[0].Type != pb.SnapshotStatus || msgs[0].Reject || msgs[0].Hint != streamConfirmedDelayTick {
+	if msgs[0].Type != pb.SnapshotStatus || msgs[0].Reject {
 		t.Fatalf("unexpected message")
 	}
 }

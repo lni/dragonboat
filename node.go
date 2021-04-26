@@ -1491,6 +1491,7 @@ func (n *node) tick(tick uint64) error {
 	}
 	n.currentTick++
 	n.qs.tick()
+	n.mq.Tick()
 	if n.qs.quiesced() {
 		if err := n.p.QuiescedTick(); err != nil {
 			return err
