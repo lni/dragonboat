@@ -241,8 +241,8 @@ func TestGetWillResetTheRateLimiterSize(t *testing.T) {
 
 func TestGetDelayed(t *testing.T) {
 	q := NewMessageQueue(10, false, 0, 1024)
-	q.AddDelayed(pb.Message{From: 1, Type: pb.SnapshotReceived}, 2)
-	q.AddDelayed(pb.Message{From: 2, Type: pb.SnapshotReceived}, 10)
+	q.AddDelayed(pb.Message{From: 1, Type: pb.SnapshotStatus}, 2)
+	q.AddDelayed(pb.Message{From: 2, Type: pb.SnapshotStatus}, 10)
 	require.Equal(t, 2, len(q.delayed))
 	result := q.getDelayed()
 	require.Equal(t, 0, len(result))
@@ -262,8 +262,8 @@ func TestDelayedMessage(t *testing.T) {
 	mm := pb.Message{Type: pb.InstallSnapshot}
 	q.Add(rm)
 	q.MustAdd(mm)
-	dm1 := pb.Message{From: 1, Type: pb.SnapshotReceived}
-	dm2 := pb.Message{From: 2, Type: pb.SnapshotReceived}
+	dm1 := pb.Message{From: 1, Type: pb.SnapshotStatus}
+	dm2 := pb.Message{From: 2, Type: pb.SnapshotStatus}
 	q.AddDelayed(dm1, 2)
 	q.AddDelayed(dm2, 10)
 	q.Tick()

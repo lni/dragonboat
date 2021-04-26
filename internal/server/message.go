@@ -63,6 +63,7 @@ func NewMessageQueue(size uint64,
 	return q
 }
 
+// Tick increases the internal tick value.
 func (q *MessageQueue) Tick() {
 	atomic.AddUint64(&q.tick, 1)
 }
@@ -119,6 +120,8 @@ func (q *MessageQueue) Add(msg pb.Message) (bool, bool) {
 	return true, false
 }
 
+// AddDelayed adds the specified message to the queue and makes sure that the
+// message will stay in the queue for at least delay ticks.
 func (q *MessageQueue) AddDelayed(msg pb.Message, delay uint64) bool {
 	if msg.Type != pb.SnapshotStatus {
 		panic("not a snapshot status message")
