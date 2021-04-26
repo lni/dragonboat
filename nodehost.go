@@ -2118,11 +2118,10 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			} else if req.Type == pb.SnapshotReceived {
 				plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
 					req.ClusterId, req.From)
-				n.mq.MustAdd(pb.Message{
+				n.mq.AddDelayed(pb.Message{
 					Type: pb.SnapshotStatus,
 					From: req.From,
-					Hint: streamConfirmedDelayTick,
-				})
+				}, streamConfirmedDelayTick)
 				msgCount++
 			} else {
 				if added, stopped := n.mq.Add(req); !added || stopped {
@@ -2149,12 +2148,11 @@ func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
 		NodeID:    nodeID,
 	})
 	if n, ok := h.nh.getCluster(clusterID); ok {
-		n.mq.MustAdd(pb.Message{
+		n.mq.AddDelayed(pb.Message{
 			Type:   pb.SnapshotStatus,
 			From:   nodeID,
 			Reject: failed,
-			Hint:   streamPushDelayTick,
-		})
+		}, streamPushDelayTick)
 		h.nh.engine.setStepReady(clusterID)
 	}
 }

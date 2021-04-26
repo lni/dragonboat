@@ -1470,6 +1470,7 @@ func (n *node) tick(tick uint64) {
 	}
 	n.currentTick++
 	n.qs.tick()
+	n.mq.Tick()
 	if n.qs.quiesced() {
 		n.p.QuiescedTick()
 	} else {
