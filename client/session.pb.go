@@ -51,6 +51,13 @@ type Session struct {
 	RespondedTo uint64
 }
 
+func (*Session) ProtoMessage() {}
+
+func (m *Session) Reset() { *m = Session{} }
+func (m *Session) String() string {
+	return fmt.Sprintf("%d:%d:%d:%d", m.ClusterID, m.ClientID, m.SeriesID, m.RespondedTo)
+}
+
 // NewSession returns a new client session not registered yet. This function
 // is not expected to be directly invoked by application.
 func NewSession(clusterID uint64, rng random.Source) *Session {
