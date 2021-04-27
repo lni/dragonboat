@@ -223,8 +223,8 @@ func (s *snapshotter) Compact(index uint64) error {
 		return err
 	}
 	if ss.Index <= index {
-		plog.Panicf("invalid compaction, LogDB snapshot %d, index %d",
-			ss.Index, index)
+		plog.Panicf("%s invalid compaction, LogDB snapshot %d, index %d",
+			s.id(), ss.Index, index)
 	}
 	if err := s.remove(index); err != nil {
 		return err
