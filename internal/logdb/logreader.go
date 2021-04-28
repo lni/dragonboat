@@ -246,14 +246,18 @@ func (lr *LogReader) CreateSnapshot(snapshot pb.Snapshot) error {
 
 func (lr *LogReader) setSnapshot(snapshot pb.Snapshot) error {
 	if lr.snapshot.Index >= snapshot.Index {
+		plog.Debugf("%s called setSnapshot, existing %d, new %d",
+			lr.id(), lr.snapshot.Index, snapshot.Index)
 		return raft.ErrSnapshotOutOfDate
 	}
 	snapshot.Load(lr.compactor)
 	if !pb.IsEmptySnapshot(lr.snapshot) {
+		plog.Debugf("%s unref snapshot %d", lr.id(), lr.snapshot.Index)
 		if err := lr.snapshot.Unref(); err != nil {
 			return err
 		}
 	}
+	plog.Debugf("%s set snapshot %d", lr.id(), snapshot.Index)
 	lr.snapshot = snapshot
 	return nil
 }
@@ -297,7 +301,8 @@ func (lr *LogReader) SetRange(firstIndex uint64, length uint64) {
 	case lr.length == offset:
 		lr.length += length
 	default:
-		panic("missing log entry")
+		plog.Panicf("%s gap in log entries, marker %d, len %d, first %d, len %d",
+			lr.id(), lr.markerIndex, lr.length, firstIndex, length)
 	}
 }
 
