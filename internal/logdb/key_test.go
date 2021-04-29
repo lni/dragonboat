@@ -45,13 +45,10 @@ func TestEntryKeysOrdered(t *testing.T) {
 func TestSnapshotKeysOrdered(t *testing.T) {
 	p := newLogDBKeyPool()
 	k1 := p.get()
-	k1.makeSnapshotKey(100, 100, 0)
+	k1.setSnapshotKey(100, 100, 0)
 	k2 := p.get()
-	k2.makeSnapshotKey(100, 100, 1)
-	k3 := p.get()
-	k3.setSnapshotKey(100, 100)
+	k2.setSnapshotKey(100, 100, 1)
 	require.True(t, bytes.Compare(k1.Key(), k2.Key()) < 0)
-	require.True(t, bytes.Compare(k2.Key(), k3.Key()) < 0)
 }
 
 func TestNodeInfoKeyCanBeParsed(t *testing.T) {

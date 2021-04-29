@@ -190,7 +190,9 @@ func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 						ud.Snapshot.Index, lastIndex)
 				}
 			}
-			r.saveSnapshot(wb, ud)
+			if err := r.saveSnapshot(wb, ud); err != nil {
+				return nil
+			}
 			r.setMaxIndex(wb, ud, ud.Snapshot.Index, ctx)
 		}
 	}
@@ -205,6 +207,16 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 	if ss.Type == pb.UnknownStateMachine {
 		panic("Unknown state machine type")
 	}
+	snapshots, err := r.listSnapshots(ss.ClusterId, nodeID, math.MaxUint64)
+	if err != nil {
+		return err
+	}
+	selectedss := make([]pb.Snapshot, 0)
+	for _, curss := range snapshots {
+		if curss.Index >= ss.Index {
+			selectedss = append(selectedss, curss)
+		}
+	}
 	wb := r.getWriteBatch(nil)
 	bsrec := pb.Bootstrap{
 		Join: true,
@@ -214,14 +226,16 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 		Term:   ss.Term,
 		Commit: ss.Index,
 	}
-	r.saveRemoveNodeData(wb, ss.ClusterId, nodeID)
+	r.saveRemoveNodeData(wb, selectedss, ss.ClusterId, nodeID)
 	r.saveBootstrap(wb, ss.ClusterId, nodeID, bsrec)
 	r.saveStateAllocs(wb, ss.ClusterId, nodeID, state)
-	r.saveSnapshot(wb, pb.Update{
+	if err := r.saveSnapshot(wb, pb.Update{
 		ClusterID: ss.ClusterId,
 		NodeID:    nodeID,
 		Snapshot:  ss,
-	})
+	}); err != nil {
+		return err
+	}
 	r.saveMaxIndex(wb, ss.ClusterId, nodeID, ss.Index, nil)
 	return r.kvs.CommitWriteBatch(wb)
 }
@@ -240,14 +254,26 @@ func (r *db) saveBootstrap(wb kv.IWriteBatch,
 	wb.Put(k.Key(), data)
 }
 
-func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) {
+func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) error {
 	if pb.IsEmptySnapshot(ud.Snapshot) {
-		return
+		return nil
+	}
+	snapshots, err := r.listSnapshots(ud.ClusterID, ud.NodeID, math.MaxUint64)
+	if err != nil {
+		return err
+	}
+	for _, ss := range snapshots {
+		if ud.Snapshot.Index > ss.Index {
+			k := newKey(maxKeySize, nil)
+			k.setSnapshotKey(ud.ClusterID, ud.NodeID, ss.Index)
+			wb.Delete(k.Key())
+		}
 	}
 	k := newKey(snapshotKeySize, nil)
-	k.setSnapshotKey(ud.ClusterID, ud.NodeID)
+	k.setSnapshotKey(ud.ClusterID, ud.NodeID, ud.Snapshot.Index)
 	data := pb.MustMarshal(&ud.Snapshot)
 	wb.Put(k.Key(), data)
+	return nil
 }
 
 func (r *db) saveMaxIndex(wb kv.IWriteBatch,
@@ -324,7 +350,9 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 	for _, ud := range updates {
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
 			r.cs.isNewSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
-			r.saveSnapshot(wb, ud)
+			if err := r.saveSnapshot(wb, ud); err != nil {
+				return nil
+			}
 			toSave = true
 		}
 	}
@@ -356,8 +384,8 @@ func (r *db) listSnapshots(clusterID uint64,
 	lk := r.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.makeSnapshotKey(clusterID, nodeID, 0)
-	lk.makeSnapshotKey(clusterID, nodeID, index)
+	fk.setSnapshotKey(clusterID, nodeID, 0)
+	lk.setSnapshotKey(clusterID, nodeID, index)
 	snapshots := make([]pb.Snapshot, 0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var ss pb.Snapshot
@@ -419,7 +447,11 @@ func (r *db) removeEntriesTo(clusterID uint64,
 func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
 	wb := r.getWriteBatch(nil)
 	defer wb.Clear()
-	r.saveRemoveNodeData(wb, clusterID, nodeID)
+	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
+	if err != nil {
+		return err
+	}
+	r.saveRemoveNodeData(wb, snapshots, clusterID, nodeID)
 	if err := r.kvs.CommitWriteBatch(wb); err != nil {
 		return err
 	}
@@ -428,7 +460,7 @@ func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
 }
 
 func (r *db) saveRemoveNodeData(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64) {
+	snapshots []pb.Snapshot, clusterID uint64, nodeID uint64) {
 	stateKey := newKey(maxKeySize, nil)
 	stateKey.SetStateKey(clusterID, nodeID)
 	wb.Delete(stateKey.Key())
@@ -438,9 +470,11 @@ func (r *db) saveRemoveNodeData(wb kv.IWriteBatch,
 	miKey := newKey(maxKeySize, nil)
 	miKey.SetMaxIndexKey(clusterID, nodeID)
 	wb.Delete(miKey.Key())
-	ssKey := newKey(maxKeySize, nil)
-	ssKey.setSnapshotKey(clusterID, nodeID)
-	wb.Delete(ssKey.Key())
+	for _, ss := range snapshots {
+		k := newKey(maxKeySize, nil)
+		k.setSnapshotKey(clusterID, nodeID, ss.Index)
+		wb.Delete(k.Key())
+	}
 }
 
 func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
