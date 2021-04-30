@@ -1398,12 +1398,12 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		if len(sm2.members.members.Addresses) != 0 {
 			t.Errorf("unexpected member length")
 		}
-		index2, err := sm2.Recover(commit)
+		ss2, err := sm2.Recover(commit)
 		if err != nil {
 			t.Errorf("apply snapshot failed %v", err)
 		}
-		if index2 != index {
-			t.Errorf("last applied %d, want %d", index2, index)
+		if ss2.Index != index {
+			t.Errorf("last applied %d, want %d", ss2.Index, index)
 		}
 		hash2, _ := sm2.GetHash()
 		if hash1 != hash2 {
