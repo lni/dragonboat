@@ -764,7 +764,7 @@ func (n *node) stream(sink pb.IChunkSink) error {
 	return nil
 }
 
-func (n *node) recover(rec rsm.Task) (uint64, error) {
+func (n *node) recover(rec rsm.Task) (_ uint64, err error) {
 	n.snapshotLock.Lock()
 	defer n.snapshotLock.Unlock()
 	if rec.Initial && n.OnDiskStateMachine() {
@@ -781,7 +781,7 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 			plog.Panicf("%s new node at non-zero index %d", n.id(), idx)
 		}
 	}
-	index, err := n.sm.Recover(rec)
+	ss, err := n.sm.Recover(rec)
 	if err != nil {
 		if recoverAborted(err) {
 			plog.Warningf("%s aborted recovery", n.id())
@@ -789,25 +789,28 @@ func (n *node) recover(rec rsm.Task) (uint64, error) {
 		}
 		return 0, errors.Wrapf(err, "%s recover failed", n.id())
 	}
-	if index > 0 {
-		plog.Infof("%s recovered from %s", n.id(), n.ssid(index))
+	if !pb.IsEmptySnapshot(ss) {
+		defer func() {
+			err = firstError(err, ss.Unref())
+		}()
+		plog.Infof("%s recovered from %s", n.id(), n.ssid(ss.Index))
 		if n.OnDiskStateMachine() {
 			if err := n.sm.Sync(); err != nil {
 				return 0, errors.Wrapf(err, "%s sync failed", n.id())
 			}
-			if err := n.snapshotter.Shrink(index); err != nil {
+			if err := n.snapshotter.Shrink(ss.Index); err != nil {
 				return 0, errors.Wrapf(err, "%s shrink failed", n.id())
 			}
 		}
-		n.compactLog(rsm.DefaultSSRequest, index)
+		n.compactLog(rsm.DefaultSSRequest, ss.Index)
 	}
 	n.sysEvents.Publish(server.SystemEvent{
 		Type:      server.SnapshotRecovered,
 		ClusterID: n.clusterID,
 		NodeID:    n.nodeID,
-		Index:     index,
+		Index:     ss.Index,
 	})
-	return index, nil
+	return ss.Index, nil
 }
 
 func (n *node) streamDone() {

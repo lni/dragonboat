@@ -281,8 +281,8 @@ func step(nodes []*node) bool {
 	for _, node := range nodes {
 		if !node.initialized() {
 			commit := rsm.Task{Initial: true}
-			index, _ := node.sm.Recover(commit)
-			node.setInitialStatus(index)
+			ss, _ := node.sm.Recover(commit)
+			node.setInitialStatus(ss.Index)
 		}
 		if node.initialized() {
 			hasEvent, err := node.handleEvents()

@@ -242,27 +242,24 @@ func (s *StateMachine) DestroyedC() <-chan struct{} {
 }
 
 // Recover applies the snapshot.
-func (s *StateMachine) Recover(t Task) (_ uint64, err error) {
+func (s *StateMachine) Recover(t Task) (_ pb.Snapshot, err error) {
 	ss, err := s.getSnapshot(t)
 	if err != nil {
-		return 0, err
+		return pb.Snapshot{}, err
 	}
 	if pb.IsEmptySnapshot(ss) {
-		return 0, nil
+		return pb.Snapshot{}, nil
 	}
-	defer func() {
-		err = firstError(err, ss.Unref())
-	}()
 	plog.Debugf("%s called Recover, %s, on disk idx %d",
 		s.id(), s.ssid(ss.Index), ss.OnDiskIndex)
 	if err := s.recover(ss, t.Initial); err != nil {
-		return 0, err
+		return pb.Snapshot{}, err
 	}
 	if err := s.node.RestoreRemotes(ss); err != nil {
-		return 0, err
+		return pb.Snapshot{}, err
 	}
 	plog.Debugf("%s restored %s", s.id(), s.ssid(ss.Index))
-	return ss.Index, nil
+	return ss, nil
 }
 
 func (s *StateMachine) getSnapshot(t Task) (pb.Snapshot, error) {
