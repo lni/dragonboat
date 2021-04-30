@@ -181,7 +181,7 @@ func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 	for _, ud := range updates {
 		r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
-			r.cs.isNewSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
+			r.cs.trySaveSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
 			if len(ud.EntriesToSave) > 0 {
 				// raft/inMemory makes sure such entries no longer need to be saved
 				lastIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
@@ -349,7 +349,7 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 	toSave := false
 	for _, ud := range updates {
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
-			r.cs.isNewSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
+			r.cs.trySaveSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
 			if err := r.saveSnapshot(wb, ud); err != nil {
 				return nil
 			}

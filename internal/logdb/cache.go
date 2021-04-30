@@ -74,7 +74,8 @@ func (r *cache) setSnapshotIndex(clusterID uint64, nodeID uint64, index uint64) 
 	r.snapshotIndex[key] = index
 }
 
-func (r *cache) isNewSnapshot(clusterID uint64, nodeID uint64, index uint64) bool {
+func (r *cache) trySaveSnapshot(clusterID uint64,
+	nodeID uint64, index uint64) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}

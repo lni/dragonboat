@@ -20,7 +20,17 @@ import (
 
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/stretchr/testify/require"
 )
+
+func TestTrySaveSnapshot(t *testing.T) {
+	c := newCache()
+	require.True(t, c.trySaveSnapshot(1, 1, 10))
+	require.False(t, c.trySaveSnapshot(1, 1, 10))
+	require.False(t, c.trySaveSnapshot(1, 1, 9))
+	require.True(t, c.trySaveSnapshot(1, 1, 11))
+	require.True(t, c.trySaveSnapshot(1, 2, 10))
+}
 
 func TestCachedNodeInfoCanBeSet(t *testing.T) {
 	c := newCache()

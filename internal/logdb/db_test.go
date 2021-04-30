@@ -867,16 +867,12 @@ func TestSaveSnapshot(t *testing.T) {
 		snapshot, err := db.GetSnapshot(1, 2)
 		require.NoError(t, err)
 		s1 := pb.Snapshot{
-			FileSize: 1234,
-			Filepath: "f2",
-			Index:    1,
-			Term:     2,
+			Index: 1,
+			Term:  2,
 		}
 		s2 := pb.Snapshot{
-			FileSize: 1234,
-			Filepath: "f2",
-			Index:    2,
-			Term:     2,
+			Index: 2,
+			Term:  2,
 		}
 		rec1 := pb.Update{
 			ClusterID: 1,
@@ -892,6 +888,34 @@ func TestSaveSnapshot(t *testing.T) {
 		snapshot, err = db.GetSnapshot(1, 2)
 		require.NoError(t, err)
 		require.Equal(t, uint64(2), snapshot.Index)
+	}
+	fs := vfs.GetTestFS()
+	runLogDBTest(t, tf, fs)
+}
+
+func TestOldSnapshotIsIgnored(t *testing.T) {
+	tf := func(t *testing.T, db raftio.ILogDB) {
+		rec0 := pb.Update{
+			ClusterID: 1,
+			NodeID:    2,
+			Snapshot:  pb.Snapshot{Index: 5},
+		}
+		rec1 := pb.Update{
+			ClusterID: 1,
+			NodeID:    2,
+			Snapshot:  pb.Snapshot{Index: 20},
+		}
+		rec2 := pb.Update{
+			ClusterID: 1,
+			NodeID:    2,
+			Snapshot:  pb.Snapshot{Index: 10},
+		}
+		require.NoError(t, db.SaveSnapshots([]pb.Update{rec0}))
+		require.NoError(t, db.SaveSnapshots([]pb.Update{rec1}))
+		require.NoError(t, db.SaveSnapshots([]pb.Update{rec2}))
+		snapshot, err := db.GetSnapshot(1, 2)
+		require.NoError(t, err)
+		require.Equal(t, uint64(20), snapshot.Index)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
