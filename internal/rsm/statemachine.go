@@ -362,6 +362,14 @@ func (s *StateMachine) checkPartialSnapshotApplyOnDiskSM(ss pb.Snapshot, init bo
 }
 
 func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
+	if err := s.doRecover(ss, init); err != nil {
+		return err
+	}
+	s.apply(ss, init)
+	return nil
+}
+
+func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.GetLastApplied() >= ss.Index {
@@ -379,15 +387,17 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 		if onDisk {
 			s.checkPartialSnapshotApplyOnDiskSM(ss, init)
 		}
-		s.apply(ss)
 		return nil
 	}
 	if !onDisk {
-		return s.doRecover(ss, init)
+		if err := s.load(ss, init); err != nil {
+			return err
+		}
+		return nil
 	}
 	if s.recoverRequired(ss, init) {
 		s.checkRecoverOnDiskSM(ss, init)
-		if err := s.doRecover(ss, init); err != nil {
+		if err := s.load(ss, init); err != nil {
 			return err
 		}
 		s.applyOnDisk(ss, init)
@@ -395,24 +405,23 @@ func (s *StateMachine) recover(ss pb.Snapshot, init bool) error {
 	return nil
 }
 
-func (s *StateMachine) doRecover(ss pb.Snapshot, init bool) error {
-	index := ss.Index
-	plog.Debugf("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
-	s.logMembership("members", index, ss.Membership.Addresses)
-	s.logMembership("observers", index, ss.Membership.Observers)
-	s.logMembership("witnesses", index, ss.Membership.Witnesses)
+func (s *StateMachine) load(ss pb.Snapshot, init bool) error {
 	if err := s.snapshotter.Load(ss, s.sessions, s.sm); err != nil {
-		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(index), err)
+		plog.Errorf("%s failed to load %s, %v", s.id(), s.ssid(ss.Index), err)
 		if err == sm.ErrSnapshotStopped {
 			s.aborted = true
 		}
 		return err
 	}
-	s.apply(ss)
 	return nil
 }
 
-func (s *StateMachine) apply(ss pb.Snapshot) {
+func (s *StateMachine) apply(ss pb.Snapshot, init bool) {
+	index := ss.Index
+	plog.Debugf("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
+	s.logMembership("members", index, ss.Membership.Addresses)
+	s.logMembership("observers", index, ss.Membership.Observers)
+	s.logMembership("witnesses", index, ss.Membership.Witnesses)
 	s.members.set(ss.Membership)
 	s.lastApplied.Lock()
 	defer s.lastApplied.Unlock()
