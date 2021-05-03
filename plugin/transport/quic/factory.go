@@ -21,9 +21,11 @@ import (
 	"github.com/lni/goutils/syncutil"
 )
 
+// TransportFactory is a prototype QUIC transport factory, use at your own risk.
 type TransportFactory struct {
 }
 
+// Create a new raftio.ITransport over QUIC protocol.
 func (t *TransportFactory) Create(config config.NodeHostConfig, mHandler raftio.MessageHandler, chHandler raftio.ChunkHandler) raftio.ITransport {
 	return &quicTransport{
 		nhConfig:       config,
@@ -35,6 +37,7 @@ func (t *TransportFactory) Create(config config.NodeHostConfig, mHandler raftio.
 	}
 }
 
+// Validate address.
 func (t *TransportFactory) Validate(addr string) bool {
 	return stringutil.IsValidAddress(addr)
 }
