@@ -42,6 +42,8 @@ func (q *quicTransport) openStreamTo(ctx context.Context, target string) (quic.S
 	if err != nil {
 		return nil, err
 	}
+	tlsConf = tlsConf.Clone()
+	tlsConf.NextProtos = []string{TransportName}
 	session, err := quic.DialAddrContext(ctx, target, tlsConf, nil)
 	if err != nil {
 		return nil, err

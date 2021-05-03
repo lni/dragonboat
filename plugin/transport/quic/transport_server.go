@@ -77,6 +77,8 @@ func (q *quicTransport) Start() error {
 	if err != nil {
 		return err
 	}
+	tlsConfig = tlsConfig.Clone()
+	tlsConfig.NextProtos = []string{TransportName}
 	q.stopper.RunWorker(func() {
 		listener, err := quic.ListenAddr(address, tlsConfig, nil)
 		if err != nil {
