@@ -16,7 +16,6 @@ package quic
 
 import (
 	"context"
-	"crypto/tls"
 
 	"github.com/lni/dragonboat/v3/raftio"
 	"github.com/lucas-clemente/quic-go"
@@ -39,9 +38,9 @@ func (q *quicTransport) GetSnapshotConnection(ctx context.Context, target string
 }
 
 func (q *quicTransport) openStreamTo(ctx context.Context, target string) (quic.Stream, error) {
-	tlsConf := &tls.Config{
-		InsecureSkipVerify: true,
-		NextProtos:         []string{TransportName},
+	tlsConf, err := q.nhConfig.GetClientTLSConfig(target)
+	if err != nil {
+		return nil, err
 	}
 	session, err := quic.DialAddrContext(ctx, target, tlsConf, nil)
 	if err != nil {

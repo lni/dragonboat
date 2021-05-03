@@ -17,15 +17,9 @@ package quic
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"hash/crc32"
 	"io"
-	"math/big"
 	"time"
 
 	"github.com/lni/dragonboat/v3/config"
@@ -44,7 +38,6 @@ var (
 	magicNumber         = [2]byte{0xAE, 0x7D}
 	poisonNumber        = [2]byte{0x0, 0x0}
 	payloadBufferSize   = 2*1024*1024 + 1024*128
-	tlsHandshakeTimeout = 10 * time.Second
 	magicNumberDuration = 1 * time.Second
 	headerDuration      = 2 * time.Second
 	readDuration        = 5 * time.Second
@@ -77,38 +70,15 @@ func (q quicTransport) Name() string {
 	return TransportName
 }
 
-func generateTLSConfig() *tls.Config {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		panic(err)
-	}
-	template := x509.Certificate{SerialNumber: big.NewInt(1)}
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-	if err != nil {
-		panic(err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		panic(err)
-	}
-	return &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-		NextProtos:   []string{TransportName},
-	}
-}
-
 // Start starts the QUIC transport module.
 func (q *quicTransport) Start() error {
 	address := q.nhConfig.GetListenAddress()
-	//tlsConfig, err := q.nhConfig.GetServerTLSConfig()
-	//if err != nil {
-	//	return err
-	//}
+	tlsConfig, err := q.nhConfig.GetServerTLSConfig()
+	if err != nil {
+		return err
+	}
 	q.stopper.RunWorker(func() {
-		listener, err := quic.ListenAddr(address, generateTLSConfig(), nil)
+		listener, err := quic.ListenAddr(address, tlsConfig, nil)
 		if err != nil {
 			plog.Panicf("QUIC listener failed: %v", err)
 		}
