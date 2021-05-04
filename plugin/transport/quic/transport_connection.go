@@ -15,7 +15,6 @@
 package quic
 
 import (
-	"hash/crc32"
 	"time"
 
 	"github.com/lni/dragonboat/v3/raftio"
@@ -24,19 +23,17 @@ import (
 )
 
 type quicConnWriter struct {
-	header    []byte
-	payload   []byte
-	encrypted bool
-	str       quic.Stream
+	header  []byte
+	payload []byte
+	str     quic.Stream
 }
 
-func NewMessageConnection(str quic.Stream, encrypted bool) raftio.IConnection {
+func NewMessageConnection(str quic.Stream) raftio.IConnection {
 	return &quicMessageConnection{
 		quicConnWriter: &quicConnWriter{
-			str:       str,
-			header:    make([]byte, requestHeaderSize),
-			payload:   make([]byte, perConnBufSize),
-			encrypted: encrypted,
+			str:     str,
+			header:  make([]byte, requestHeaderSize),
+			payload: make([]byte, perConnBufSize),
 		},
 	}
 }
@@ -65,13 +62,12 @@ func (q *quicMessageConnection) Close() {
 	_ = q.str.Close()
 }
 
-func NewSnapshotConnection(str quic.Stream, encrypted bool) raftio.ISnapshotConnection {
+func NewSnapshotConnection(str quic.Stream) raftio.ISnapshotConnection {
 	return &quicSnapshotConnection{
 		quicConnWriter: &quicConnWriter{
-			str:       str,
-			header:    make([]byte, requestHeaderSize),
-			payload:   make([]byte, perConnBufSize),
-			encrypted: encrypted,
+			str:     str,
+			header:  make([]byte, requestHeaderSize),
+			payload: make([]byte, perConnBufSize),
 		},
 	}
 }
@@ -103,9 +99,6 @@ func (q *quicSnapshotConnection) Close() {
 
 func (q *quicConnWriter) writeMessage(header requestHeader, buf []byte) error {
 	header.size = uint64(len(buf))
-	if !q.encrypted {
-		header.crc = crc32.ChecksumIEEE(buf)
-	}
 	q.header = header.encode(q.header)
 	tt := time.Now().Add(magicNumberDuration).Add(headerDuration)
 	if err := q.str.SetWriteDeadline(tt); err != nil {

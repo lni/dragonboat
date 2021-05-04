@@ -33,7 +33,6 @@ func (t *TransportFactory) Create(config config.NodeHostConfig, mHandler raftio.
 		chunkHandler:   chHandler,
 		stopper:        syncutil.NewStopper(),
 		connStopper:    syncutil.NewStopper(),
-		encrypted:      config.MutualTLS,
 	}
 }
 

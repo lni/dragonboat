@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"hash/crc32"
 	"io"
 	"time"
 
@@ -51,10 +50,9 @@ var (
 
 const (
 	// TransportName is the name of the tcp transport module.
-	TransportName            = "go-quic-transport"
-	requestHeaderSize        = 18
-	raftType          uint16 = 100
-	snapshotType      uint16 = 200
+	TransportName        = "go-quic-transport"
+	raftType      uint16 = 100
+	snapshotType  uint16 = 200
 )
 
 type quicTransport struct {
@@ -63,7 +61,6 @@ type quicTransport struct {
 	connStopper    *syncutil.Stopper
 	messageHandler raftio.MessageHandler
 	chunkHandler   raftio.ChunkHandler
-	encrypted      bool
 }
 
 func (q quicTransport) Name() string {
@@ -160,7 +157,7 @@ func (q *quicTransport) serveStream(stream quic.Stream) {
 			}
 			return
 		}
-		rheader, buf, err := readMessage(stream, header, tbuf, q.encrypted)
+		rheader, buf, err := readMessage(stream, header, tbuf)
 		if err != nil {
 			return
 		}
@@ -183,7 +180,7 @@ func (q *quicTransport) serveStream(stream quic.Stream) {
 	}
 }
 
-func readMessage(conn quic.Stream, header []byte, rbuf []byte, encrypted bool) (requestHeader, []byte, error) {
+func readMessage(conn quic.Stream, header []byte, rbuf []byte) (requestHeader, []byte, error) {
 	tt := time.Now().Add(headerDuration)
 	if err := conn.SetReadDeadline(tt); err != nil {
 		return requestHeader{}, nil, err
@@ -233,10 +230,6 @@ func readMessage(conn quic.Stream, header []byte, rbuf []byte, encrypted bool) (
 	}
 	if received != rheader.size {
 		panic("unexpected size")
-	}
-	if !encrypted && crc32.ChecksumIEEE(buf) != rheader.crc {
-		plog.Errorf("invalid payload checksum")
-		return requestHeader{}, nil, ErrBadMessage
 	}
 	return rheader, buf, nil
 }

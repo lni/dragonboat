@@ -26,7 +26,7 @@ func (q *quicTransport) GetConnection(ctx context.Context, target string) (rafti
 	if err != nil {
 		return nil, err
 	}
-	return NewMessageConnection(str, q.encrypted), nil
+	return NewMessageConnection(str), nil
 }
 
 func (q *quicTransport) GetSnapshotConnection(ctx context.Context, target string) (raftio.ISnapshotConnection, error) {
@@ -34,7 +34,7 @@ func (q *quicTransport) GetSnapshotConnection(ctx context.Context, target string
 	if err != nil {
 		return nil, err
 	}
-	return NewSnapshotConnection(str, q.encrypted), nil
+	return NewSnapshotConnection(str), nil
 }
 
 func (q *quicTransport) openStreamTo(ctx context.Context, target string) (quic.Stream, error) {
