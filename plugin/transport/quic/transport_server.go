@@ -76,31 +76,43 @@ func (q *quicTransport) Start() error {
 	}
 	tlsConfig = tlsConfig.Clone()
 	tlsConfig.NextProtos = []string{TransportName}
-	q.stopper.RunWorker(func() {
-		listener, err := quic.ListenAddr(address, tlsConfig, nil)
-		if err != nil {
-			plog.Panicf("QUIC listener failed: %v", err)
-		}
-		defer func() {
-			_ = listener.Close()
-		}()
 
+	listener, err := quic.ListenAddr(address, tlsConfig, nil)
+	if err != nil {
+		plog.Panicf("QUIC listener failed: %v", err)
+	}
+
+	q.stopper.RunWorker(func() {
+		<-q.stopper.ShouldStop()
+		q.connStopper.Stop()
+		if err := listener.Close(); err != nil {
+			plog.Warningf("error closing listener: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	q.connStopper.RunWorker(func() {
+		<-q.connStopper.ShouldStop()
+		cancel()
+	})
+
+	q.stopper.RunWorker(func() {
 		for {
-			s, err := listener.Accept(context.TODO())
+			s, err := listener.Accept(ctx)
 			if err != nil {
-				plog.Errorf("QUIC listener accept failed: %v", err)
+				if !errors.Is(err, context.Canceled) {
+					plog.Infof("QUIC listener accept failed: %v", err)
+				}
 				return
 			}
 
 			q.connStopper.RunWorker(func() {
 				for {
-
-					stream, err := s.AcceptStream(context.TODO())
+					stream, err := s.AcceptStream(ctx)
 					if err != nil {
 						_ = s.CloseWithError(0, err.Error())
 						return
 					}
-
 					go q.serveStream(stream)
 				}
 			})
@@ -113,7 +125,6 @@ func (q *quicTransport) Start() error {
 func (q *quicTransport) Close() error {
 	plog.Infof("Stopping transport")
 	q.stopper.Stop()
-	q.connStopper.Stop()
 	plog.Infof("Transport stopped")
 	return nil
 }
