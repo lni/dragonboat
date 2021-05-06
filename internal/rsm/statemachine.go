@@ -168,7 +168,7 @@ type StateMachine struct {
 	snapshotter ISnapshotter
 	taskQ       *TaskQueue
 	sessions    *SessionManager
-	members     *membership
+	members     membership
 	// lastApplied is the last applied index visibile to other modules in the
 	// system. it is updated by only setting the last index and term values of
 	// the update batch. it is protected by its own mutex to minimize contention

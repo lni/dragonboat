@@ -55,18 +55,18 @@ func deepCopyMembership(m pb.Membership) pb.Membership {
 }
 
 type membership struct {
-	members   *pb.Membership
+	members   pb.Membership
 	clusterID uint64
 	nodeID    uint64
 	ordered   bool
 }
 
-func newMembership(clusterID uint64, nodeID uint64, ordered bool) *membership {
-	return &membership{
+func newMembership(clusterID uint64, nodeID uint64, ordered bool) membership {
+	return membership{
 		clusterID: clusterID,
 		nodeID:    nodeID,
 		ordered:   ordered,
-		members: &pb.Membership{
+		members: pb.Membership{
 			Addresses: make(map[uint64]string),
 			Observers: make(map[uint64]string),
 			Removed:   make(map[uint64]bool),
@@ -80,12 +80,11 @@ func (m *membership) id() string {
 }
 
 func (m *membership) set(n pb.Membership) {
-	cm := deepCopyMembership(n)
-	m.members = &cm
+	m.members = deepCopyMembership(n)
 }
 
 func (m *membership) get() pb.Membership {
-	return deepCopyMembership(*m.members)
+	return deepCopyMembership(m.members)
 }
 
 func (m *membership) getHash() uint64 {

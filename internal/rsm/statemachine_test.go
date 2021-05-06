@@ -605,7 +605,7 @@ func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
 
 func TestGetMembership(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members.members = &pb.Membership{
+		sm.members.members = pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -639,7 +639,7 @@ func TestGetMembership(t *testing.T) {
 
 func TestGetMembershipNodes(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members.members = &pb.Membership{
+		sm.members.members = pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -672,7 +672,7 @@ func TestGetMembershipNodes(t *testing.T) {
 
 func TestGetMembershipHash(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members.members = &pb.Membership{
+		sm.members.members = pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -707,7 +707,7 @@ func TestGetSSMetaPanicWhenThereIsNoMember(t *testing.T) {
 
 func TestGetSSMeta(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		sm.members.members = &pb.Membership{
+		sm.members.members = pb.Membership{
 			Addresses: map[uint64]string{
 				100: "a100",
 				234: "a234",
@@ -2578,8 +2578,8 @@ func TestPrepareIsNotCalledWhenSavingDummySnapshot(t *testing.T) {
 		if tt.onDiskSM {
 			msm.smType = pb.OnDiskStateMachine
 		}
-		m := &membership{
-			members: &pb.Membership{
+		m := membership{
+			members: pb.Membership{
 				Addresses: map[uint64]string{1: "localhost:1234"},
 			},
 		}
