@@ -2228,6 +2228,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[observer][pb.Heartbeat] = r.handleObserverHeartbeat
 	r.handlers[observer][pb.Replicate] = r.handleObserverReplicate
 	r.handlers[observer][pb.InstallSnapshot] = r.handleObserverSnapshot
+	r.handlers[observer][pb.RequestVote] = r.handleNodeRequestVote
 	r.handlers[observer][pb.Propose] = r.handleObserverPropose
 	r.handlers[observer][pb.ReadIndex] = r.handleObserverReadIndex
 	r.handlers[observer][pb.ReadIndexResp] = r.handleObserverReadIndexResp
@@ -2263,7 +2264,6 @@ func (r *raft) checkHandlerMap() {
 		{candidate, pb.SnapshotStatus},
 		{candidate, pb.Unreachable},
 		{observer, pb.Election},
-		{observer, pb.RequestVote},
 		{observer, pb.RequestVoteResp},
 		{observer, pb.ReplicateResp},
 		{observer, pb.HeartbeatResp},

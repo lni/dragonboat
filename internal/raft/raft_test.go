@@ -364,14 +364,13 @@ func TestObserverWillNotStartElection(t *testing.T) {
 	}
 }
 
-func TestObserverWillNotVoteInElection(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	if !p.isObserver() {
-		t.Errorf("not an observer")
-	}
-	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVote, LogTerm: 100, LogIndex: 100}), t)
-	if len(p.msgs) != 0 {
-		t.Errorf("observer is voting")
+func TestObserversVoteWillNotBeCounted(t *testing.T) {
+	p := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p.addNode(1)
+	p.becomeCandidate()
+	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVoteResp}), t)
+	if len(p.votes) != 0 {
+		t.Errorf("vote from observer not dropped")
 	}
 }
 
@@ -406,6 +405,39 @@ func TestObserverCanActAsRegularNodeAfterPromotion(t *testing.T) {
 	}
 	if p.state != leader {
 		t.Errorf("failed to start election")
+	}
+}
+
+// observers will not be asked to vote, however a node used to be an observer
+// may not realize its own promotion and thus can still receive RequestVote from
+// candidates that are aware of such promotion. in this case, observers have to
+// cast their votes
+func TestObserverCanVote(t *testing.T) {
+	a := newTestObserver(1, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	b := newTestObserver(2, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	c := newTestObserver(3, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	if !c.isObserver() {
+		t.Errorf("not observer")
+	}
+	a.addNode(1)
+	b.addNode(2)
+	if a.isObserver() || b.isObserver() {
+		t.Errorf("unepected observer")
+	}
+	if a.state != follower {
+		t.Errorf("not a follower")
+	}
+	if b.state != follower {
+		t.Errorf("not a follower")
+	}
+	nt := newNetwork(a, b, c)
+	nt.isolate(1)
+	nt.send(pb.Message{From: 2, To: 2, Type: pb.Election})
+	if !b.isLeader() {
+		t.Errorf("not leader")
+	}
+	if b.term == a.term || a.leaderID != NoLeader {
+		t.Errorf("a not isolated")
 	}
 }
 
