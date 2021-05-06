@@ -4,8 +4,11 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 
 ### Improvements
 
-- Better error handling
-
+- Better error handling.
+- Simplified snapshot compaction.
+- Removed dependency on protobuf.
+- Fixed snapshot notification.
+- Upgraded to a more recent version of pebble.
 
 ## v3.3 (2021-01-20)
 
