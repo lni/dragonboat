@@ -63,12 +63,12 @@ type Peer struct {
 // Launch starts or restarts a Raft node.
 func Launch(config config.Config,
 	logdb ILogDB, events server.IRaftEventListener,
-	addresses []PeerAddress, initial bool, newNode bool) *Peer {
+	addresses []PeerAddress, initial bool, newNode bool) Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	plog.Infof("%s created, initial: %t, new: %t",
 		dn(config.ClusterID, config.NodeID), initial, newNode)
 	r := newRaft(config, logdb)
-	p := &Peer{raft: r}
+	p := Peer{raft: r}
 	p.raft.events = events
 	_, lastIndex := logdb.GetRange()
 	if newNode && !config.IsObserver && !config.IsWitness {

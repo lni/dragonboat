@@ -535,8 +535,8 @@ type pendingLeaderTransfer struct {
 	leaderTransferC chan uint64
 }
 
-func newPendingLeaderTransfer() *pendingLeaderTransfer {
-	return &pendingLeaderTransfer{
+func newPendingLeaderTransfer() pendingLeaderTransfer {
+	return pendingLeaderTransfer{
 		leaderTransferC: make(chan uint64, 1),
 	}
 }
@@ -562,8 +562,8 @@ func (l *pendingLeaderTransfer) get() (uint64, bool) {
 	return 0, false
 }
 
-func newPendingSnapshot(snapshotC chan<- rsm.SSRequest) *pendingSnapshot {
-	return &pendingSnapshot{
+func newPendingSnapshot(snapshotC chan<- rsm.SSRequest) pendingSnapshot {
+	return pendingSnapshot{
 		logicalClock: newLogicalClock(),
 		snapshotC:    snapshotC,
 	}
@@ -667,8 +667,8 @@ func (p *pendingSnapshot) apply(key uint64,
 }
 
 func newPendingConfigChange(confChangeC chan<- configChangeRequest,
-	notifyCommit bool) *pendingConfigChange {
-	return &pendingConfigChange{
+	notifyCommit bool) pendingConfigChange {
+	return pendingConfigChange{
 		confChangeC:  confChangeC,
 		logicalClock: newLogicalClock(),
 		notifyCommit: notifyCommit,
@@ -782,15 +782,13 @@ func (p *pendingConfigChange) apply(key uint64, rejected bool) {
 	}
 }
 
-func newPendingReadIndex(pool *sync.Pool,
-	requests *readIndexQueue) *pendingReadIndex {
-	p := &pendingReadIndex{
+func newPendingReadIndex(pool *sync.Pool, r *readIndexQueue) pendingReadIndex {
+	return pendingReadIndex{
 		batches:      make(map[pb.SystemCtx]readBatch),
-		requests:     requests,
+		requests:     r,
 		logicalClock: newLogicalClock(),
 		pool:         pool,
 	}
-	return p
 }
 
 func (p *pendingReadIndex) close() {
@@ -970,9 +968,9 @@ func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
 }
 
 func newPendingProposal(cfg config.Config,
-	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *pendingProposal {
+	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) pendingProposal {
 	ps := pendingProposalShards
-	p := &pendingProposal{
+	p := pendingProposal{
 		shards: make([]*proposalShard, ps),
 		keyg:   make([]*keyGenerator, ps),
 		ps:     ps,

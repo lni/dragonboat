@@ -534,7 +534,7 @@ func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
 	}
 }
 
-func getPendingConfigChange(notifyCommit bool) (*pendingConfigChange,
+func getPendingConfigChange(notifyCommit bool) (pendingConfigChange,
 	chan configChangeRequest) {
 	c := make(chan configChangeRequest, 1)
 	return newPendingConfigChange(c, notifyCommit), c
@@ -809,7 +809,7 @@ func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
 // pending proposal
 //
 
-func getPendingProposal(notifyCommit bool) (*pendingProposal, *entryQueue) {
+func getPendingProposal(notifyCommit bool) (pendingProposal, *entryQueue) {
 	c := newEntryQueue(5, 0)
 	p := &sync.Pool{}
 	p.New = func() interface{} {
@@ -840,7 +840,7 @@ func TestPendingProposalCanBeCreatedAndClosed(t *testing.T) {
 	}
 }
 
-func countPendingProposal(p *pendingProposal) int {
+func countPendingProposal(p pendingProposal) int {
 	total := 0
 	for i := uint64(0); i < p.ps; i++ {
 		total += len(p.shards[i].pending)
@@ -1163,7 +1163,7 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	}
 }
 
-func getPendingReadIndex() (*pendingReadIndex, *readIndexQueue) {
+func getPendingReadIndex() (pendingReadIndex, *readIndexQueue) {
 	q := newReadIndexQueue(5)
 	p := &sync.Pool{}
 	p.New = func() interface{} {

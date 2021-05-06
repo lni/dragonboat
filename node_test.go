@@ -408,7 +408,7 @@ func isStableGroup(nodes []*node) bool {
 			hasLeader = true
 			continue
 		}
-		if node.p == nil || !node.isFollower() {
+		if !node.isFollower() {
 			inElection = true
 		}
 	}
@@ -1583,7 +1583,7 @@ func (d *dummyPipeline) setSaveReady(clusterID uint64)    {}
 func (d *dummyPipeline) setRecoverReady(clusterID uint64) {}
 
 func TestProcessUninitilizedNode(t *testing.T) {
-	n := &node{ss: &snapshotState{}, pipeline: &dummyPipeline{}}
+	n := &node{ss: snapshotState{}, pipeline: &dummyPipeline{}}
 	if !n.processUninitializedNodeStatus() {
 		t.Errorf("failed to returned the recover request")
 	}
@@ -1597,7 +1597,7 @@ func TestProcessUninitilizedNode(t *testing.T) {
 	if !req.Initial || !req.Recover {
 		t.Errorf("unexpected req")
 	}
-	n2 := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
+	n2 := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
 	n2.setInitialized()
 	if n2.processUninitializedNodeStatus() {
 		t.Errorf("unexpected recover from snapshot request")
@@ -1605,14 +1605,14 @@ func TestProcessUninitilizedNode(t *testing.T) {
 }
 
 func TestProcessRecoveringNodeCanBeSkipped(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: snapshotState{}}
 	if n.processRecoverStatus() {
 		t.Errorf("processRecoveringNode not skipped")
 	}
 }
 
 func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: snapshotState{}}
 	if n.processSaveStatus() {
 		t.Errorf("processTakingSnapshotNode not skipped")
 	}
@@ -1620,7 +1620,7 @@ func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 	n := &node{
-		ss:           &snapshotState{},
+		ss:           snapshotState{},
 		sysEvents:    newSysEventListener(nil, nil),
 		initializedC: make(chan struct{}),
 	}
@@ -1641,7 +1641,7 @@ func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 }
 
 func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
-	n := &node{ss: &snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
+	n := &node{ss: snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
 	n.ss.setRecovering()
 	if !n.processRecoverStatus() {
 		t.Errorf("not skipped")
@@ -1649,7 +1649,7 @@ func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
 }
 
 func TestTakingSnapshotNodeCanComplete(t *testing.T) {
-	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
+	n := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
 	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.setInitialized()
@@ -1667,7 +1667,7 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 			t.Fatalf("panic not triggered")
 		}
 	}()
-	n := &node{ss: &snapshotState{}}
+	n := &node{ss: snapshotState{}}
 	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.processSaveStatus()
@@ -1706,7 +1706,7 @@ func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                      
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
+	n := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.InMemStateMachine{}, nil),
@@ -1723,7 +1723,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 
 func TestNotReadyTakingSnapshotConcurrentNodeIsNotSkipped(t *testing.T) {
 	fs := vfs.GetTestFS()
-	n := &node{ss: &snapshotState{}, initializedC: make(chan struct{})}
+	n := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
 	config := config.Config{ClusterID: 1, NodeID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil),

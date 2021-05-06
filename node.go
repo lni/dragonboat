@@ -75,15 +75,14 @@ type node struct {
 	logdb                 raftio.ILogDB
 	pipeline              pipeline
 	getStreamSink         func(uint64, uint64) *transport.Sink
-	ss                    *snapshotState
+	ss                    snapshotState
 	configChangeC         <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
 	toApplyQ              *rsm.TaskQueue
 	toCommitQ             *rsm.TaskQueue
-	syncTask              *task
+	syncTask              task
 	metrics               *logDBMetrics
 	stopC                 chan struct{}
-	pendingLeaderTransfer *pendingLeaderTransfer
 	sysEvents             *sysEventListener
 	raftEvents            *raftEventListener
 	handleSnapshotStatus  func(uint64, uint64, bool)
@@ -92,13 +91,14 @@ type node struct {
 	sm                    *rsm.StateMachine
 	snapshotLock          *syncutil.Lock
 	incomingReadIndexes   *readIndexQueue
-	pendingProposals      *pendingProposal
-	pendingReadIndexes    *pendingReadIndex
-	pendingConfigChange   *pendingConfigChange
-	pendingSnapshot       *pendingSnapshot
 	incomingProposals     *entryQueue
+	pendingProposals      pendingProposal
+	pendingReadIndexes    pendingReadIndex
+	pendingConfigChange   pendingConfigChange
+	pendingSnapshot       pendingSnapshot
+	pendingLeaderTransfer pendingLeaderTransfer
 	initializedC          chan struct{}
-	p                     *raft.Peer
+	p                     raft.Peer
 	logReader             *logdb.LogReader
 	snapshotter           *snapshotter
 	mq                    *server.MessageQueue
@@ -185,7 +185,7 @@ func newNode(peers map[uint64]string,
 		notifyCommit:          notifyCommit,
 		metrics:               metrics,
 		initializedC:          make(chan struct{}),
-		ss:                    &snapshotState{},
+		ss:                    snapshotState{},
 		validateTarget:        nhConfig.GetTargetValidator(),
 		qs: &quiesceState{
 			electionTick: config.ElectionRTT * 2,
@@ -853,8 +853,7 @@ func (n *node) runSyncTask() {
 	if !n.sm.OnDiskStateMachine() {
 		return
 	}
-	if n.syncTask == nil ||
-		!n.syncTask.timeToRun(n.millisecondSinceStart()) {
+	if !n.syncTask.timeToRun(n.millisecondSinceStart()) {
 		return
 	}
 	if !n.sm.TaskChanBusy() {
@@ -1470,9 +1469,6 @@ func (n *node) processStreamStatus() bool {
 }
 
 func (n *node) tick(tick uint64) error {
-	if n.p == nil {
-		plog.Panicf("raft node is nil")
-	}
 	n.currentTick++
 	n.qs.tick()
 	n.mq.Tick()
@@ -1555,19 +1551,13 @@ func (n *node) ssid(index uint64) string {
 }
 
 func (n *node) isLeader() bool {
-	if n.p != nil {
-		leaderID, ok := n.getLeaderID()
-		return ok && n.nodeID == leaderID
-	}
-	return false
+	leaderID, ok := n.getLeaderID()
+	return ok && n.nodeID == leaderID
 }
 
 func (n *node) isFollower() bool {
-	if n.p != nil {
-		leaderID, ok := n.getLeaderID()
-		return ok && n.nodeID != leaderID
-	}
-	return false
+	leaderID, ok := n.getLeaderID()
+	return ok && n.nodeID != leaderID
 }
 
 func (n *node) initialized() bool {

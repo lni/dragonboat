@@ -231,11 +231,11 @@ type task struct {
 	lastRun    uint64
 }
 
-func newTask(interval uint64) *task {
+func newTask(interval uint64) task {
 	if interval == 0 {
 		panic("invalid interval")
 	}
-	return &task{
+	return task{
 		intervalMs: interval,
 		lastRun:    random.LockGuardedRand.Uint64() % interval,
 	}
