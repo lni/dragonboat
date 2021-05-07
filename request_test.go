@@ -209,6 +209,10 @@ func TestResultCCanReceiveRequestResults(t *testing.T) {
 					}
 				case <-rs.testErr:
 					crashed = true
+					cc := <-ch
+					if cc.code != requestCommitted {
+						t.Errorf("%d, not the expected committed result", idx)
+					}
 				}
 			}
 			select {

@@ -336,6 +336,16 @@ func (r *RequestState) ResultC() chan RequestResult {
 		return r.aggrC
 	}
 	r.aggrC = make(chan RequestResult, 2)
+	tryBridgeCommittedC := func() {
+		select {
+		case cn := <-r.committedC:
+			if cn.code != requestCommitted {
+				plog.Panicf("unexpected requestResult, %s", cn.code)
+			}
+			r.aggrC <- cn
+		default:
+		}
+	}
 	go func() {
 		if r.testErr != nil {
 			defer func() {
@@ -363,14 +373,20 @@ func (r *RequestState) ResultC() chan RequestResult {
 			r.aggrC <- cc
 		case cc := <-r.CompletedC:
 			if cc.Aborted() {
+				// this select is to make the test TestResultCCanReceiveRequestResults
+				// easier to implement for the input
+				// {true, true, requestAborted, true}
+				tryBridgeCommittedC()
 				plog.Panicf("requestAborted sent to CompletedC")
 			}
 			if cc.code == requestCommitted {
+				tryBridgeCommittedC()
 				plog.Panicf("requestCommitted sent to CompletedC")
 			}
 			select {
 			case ccn := <-r.committedC:
 				if cc.Dropped() {
+					r.aggrC <- ccn
 					plog.Panicf("applied entry dropped")
 				}
 				r.aggrC <- ccn
