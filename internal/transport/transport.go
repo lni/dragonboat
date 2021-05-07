@@ -392,7 +392,7 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 		}
 		t.stopper.RunWorker(func() {
 			affected := make(nodeMap)
-			if !t.connectAndProcess(clusterID, toNodeID, addr, sq, from, affected) {
+			if !t.connectAndProcess(addr, sq, from, affected) {
 				t.notifyUnreachable(addr, affected)
 			}
 			shutdownQueue()
@@ -412,14 +412,8 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 
 // connectAndProcess returns a boolean value indicating whether it is stopped
 // gracefully when the system is being shutdown
-func (t *Transport) connectAndProcess(clusterID uint64,
-	toNodeID uint64, remoteHost string, sq sendQueue,
-	from uint64, affected nodeMap) bool {
-	n := raftio.NodeInfo{
-		ClusterID: clusterID,
-		NodeID:    from,
-	}
-	affected[n] = struct{}{}
+func (t *Transport) connectAndProcess(remoteHost string,
+	sq sendQueue, from uint64, affected nodeMap) bool {
 	breaker := t.GetCircuitBreaker(remoteHost)
 	successes := breaker.Successes()
 	consecFailures := breaker.ConsecFailures()
@@ -434,11 +428,10 @@ func (t *Transport) connectAndProcess(clusterID uint64,
 		defer conn.Close()
 		breaker.Success()
 		if successes == 0 || consecFailures > 0 {
-			plog.Debugf("%s, message stream to %s (%s) established",
-				dn(clusterID, from), dn(clusterID, toNodeID), remoteHost)
+			plog.Debugf("message streaming to %s established", remoteHost)
 			t.sysEvents.ConnectionEstablished(remoteHost, false)
 		}
-		return t.processMessages(clusterID, toNodeID, sq, conn, affected)
+		return t.processMessages(remoteHost, sq, conn, affected)
 	}(); err != nil {
 		plog.Warningf("breaker %s to %s failed, connect and process failed: %s",
 			t.sourceID, remoteHost, err.Error())
@@ -450,9 +443,8 @@ func (t *Transport) connectAndProcess(clusterID uint64,
 	return true
 }
 
-func (t *Transport) processMessages(clusterID uint64,
-	toNodeID uint64, sq sendQueue, conn raftio.IConnection,
-	affected nodeMap) error {
+func (t *Transport) processMessages(remoteHost string,
+	sq sendQueue, conn raftio.IConnection, affected nodeMap) error {
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
 	sz := uint64(0)
@@ -471,7 +463,7 @@ func (t *Transport) processMessages(clusterID uint64,
 			return nil
 		case req := <-sq.ch:
 			n := raftio.NodeInfo{
-				ClusterID: clusterID,
+				ClusterID: req.ClusterId,
 				NodeID:    req.From,
 			}
 			affected[n] = struct{}{}
@@ -500,14 +492,14 @@ func (t *Transport) processMessages(clusterID uint64,
 			}
 			if err := t.sendMessageBatch(conn, batch); err != nil {
 				plog.Errorf("send batch failed, target %s (%v), %d",
-					dn(clusterID, toNodeID), err, len(batch.Requests))
+					remoteHost, err, len(batch.Requests))
 				return err
 			}
 			if twoBatch {
 				batch.Requests = []pb.Message{requests[len(requests)-1]}
 				if err := t.sendMessageBatch(conn, batch); err != nil {
 					plog.Errorf("send batch failed, taret node %s (%v), %d",
-						dn(clusterID, toNodeID), err, len(batch.Requests))
+						remoteHost, err, len(batch.Requests))
 					return err
 				}
 			}
