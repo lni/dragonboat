@@ -301,11 +301,6 @@ func (h *testMessageHandler) getSnapshotCount(clusterID uint64,
 	return h.getMessageCount(h.snapshotCount, clusterID, nodeID)
 }
 
-func (h *testMessageHandler) getUnreachableCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.unreachableCount, clusterID, nodeID)
-}
-
 func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
 	clusterID uint64, nodeID uint64) uint64 {
 	h.mu.Lock()
@@ -600,10 +595,6 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	time.Sleep(time.Second)
 	if !breaker.Ready() {
 		t.Errorf("breaker is not ready after wait")
-	}
-	if handler.getUnreachableCount(100, 1) == 0 {
-		t.Errorf("unreachable count %d, want 1",
-			handler.getUnreachableCount(100, 1))
 	}
 }
 
