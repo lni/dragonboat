@@ -149,21 +149,19 @@ func (n *node) getMembershipHash() uint64 {
 }
 
 func (n *node) dumpRaftInfoToLog() {
-	if n.p != nil {
-		addrMap := make(map[uint64]string)
-		m := n.sm.GetMembership()
-		for nodeID := range m.Addresses {
-			if nodeID == n.nodeID {
-				addrMap[nodeID] = n.getRaftAddress()
-			} else {
-				v, _, err := n.nodeRegistry.Resolve(n.clusterID, nodeID)
-				if err == nil {
-					addrMap[nodeID] = v
-				}
+	addrMap := make(map[uint64]string)
+	m := n.sm.GetMembership()
+	for nodeID := range m.Addresses {
+		if nodeID == n.nodeID {
+			addrMap[nodeID] = n.getRaftAddress()
+		} else {
+			v, _, err := n.nodeRegistry.Resolve(n.clusterID, nodeID)
+			if err == nil {
+				addrMap[nodeID] = v
 			}
 		}
-		n.p.DumpRaftInfoToLog(addrMap)
 	}
+	n.p.DumpRaftInfoToLog(addrMap)
 }
 
 // PartitionNode puts the node into test partition mode. All connectivity to

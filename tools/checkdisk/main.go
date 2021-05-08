@@ -110,22 +110,6 @@ func main() {
 		log.Println("using in-memory fs")
 		fs = vfs.NewMemFS()
 	}
-	if *cpupprof {
-		f, err := os.Create("cpu.pprof")
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		defer func() {
-			if err := f.Close(); err != nil {
-				panic(err)
-			}
-		}()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-		log.Println("cpu profile will be saved into file cpu.pprof")
-	}
 	if *mempprof {
 		defer func() {
 			f, err := os.Create("mem.pprof")
@@ -257,6 +241,23 @@ func main() {
 		panic(fmt.Sprintf("nhList len unexpected, %d", len(nhList)))
 	}
 	fmt.Printf("clusters are ready, will run for %d seconds\n", *seconds)
+	if *cpupprof {
+		f, err := os.Create("cpu.pprof")
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer func() {
+			if err := f.Close(); err != nil {
+				panic(err)
+			}
+		}()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+		log.Println("cpu profile will be saved into file cpu.pprof")
+	}
+
 	doneCh := make(chan struct{}, 1)
 	timer := time.NewTimer(time.Duration(*seconds) * time.Second)
 	defer timer.Stop()
