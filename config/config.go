@@ -71,6 +71,9 @@ type Config struct {
 	// non-leader node status and step down to become a follower node when it no
 	// longer has the quorum.
 	CheckQuorum bool
+	// Whether to use PreVote for this node. PreVote is described in the section
+	// 9.7 of the raft thesis.
+	PreVote bool
 	// ElectionRTT is the minimum number of message RTT between elections. Message
 	// RTT is defined by NodeHostConfig.RTTMillisecond. The Raft paper suggests it
 	// to be a magnitude greater than HeartbeatRTT, which is the interval between

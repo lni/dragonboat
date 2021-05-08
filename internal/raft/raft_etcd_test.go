@@ -857,18 +857,13 @@ func TestDuelingCandidates(t *testing.T) {
 	}
 }
 
-/*
 func TestDuelingPreCandidates(t *testing.T) {
-	cfgA := newTestConfig(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
-	cfgB := newTestConfig(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
-	cfgC := newTestConfig(3, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
-	cfgA.PreVote = true
-	cfgB.PreVote = true
-	cfgC.PreVote = true
-	a := newRaft(cfgA)
-	b := newRaft(cfgB)
-	c := newRaft(cfgC)
-
+	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	b := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	c := newTestRaft(3, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	a.preVote = true
+	b.preVote = true
+	c.preVote = true
 	nt := newNetwork(a, b, c)
 	nt.cut(1, 3)
 
@@ -894,19 +889,19 @@ func TestDuelingPreCandidates(t *testing.T) {
 	nt.send(pb.Message{From: 3, To: 3, Type: pb.Election})
 
 	wlog := &entryLog{
-		stable:    &MemoryStorage{ents: []pb.Entry{{}, {Cmd: nil, Term: 1, Index: 1}}},
+		logdb:     &TestLogDB{entries: []pb.Entry{{Cmd: nil, Term: 1, Index: 1}}},
 		committed: 1,
-		unstable:  unstable{offset: 2},
+		inmem:     inMemory{markerIndex: 2},
 	}
 	tests := []struct {
-		sm      *raft
-		state   State
-		term    uint64
+		sm       *raft
+		state    State
+		term     uint64
 		entryLog *entryLog
 	}{
 		{a, leader, 1, wlog},
 		{b, follower, 1, wlog},
-		{c, follower, 1, newLog(NewTestLogDB())},
+		{c, follower, 1, newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))},
 	}
 
 	for i, tt := range tests {
@@ -926,7 +921,7 @@ func TestDuelingPreCandidates(t *testing.T) {
 			t.Logf("#%d: empty log", i)
 		}
 	}
-}*/
+}
 
 func TestCandidateConcede(t *testing.T) {
 	tt := newNetwork(nil, nil, nil)

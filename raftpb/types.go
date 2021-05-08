@@ -6,32 +6,34 @@ package raftpb
 type MessageType int32
 
 const (
-	LocalTick         MessageType = 0
-	Election          MessageType = 1
-	LeaderHeartbeat   MessageType = 2
-	ConfigChangeEvent MessageType = 3
-	NoOP              MessageType = 4
-	Ping              MessageType = 5
-	Pong              MessageType = 6
-	Propose           MessageType = 7
-	SnapshotStatus    MessageType = 8
-	Unreachable       MessageType = 9
-	CheckQuorum       MessageType = 10
-	BatchedReadIndex  MessageType = 11
-	Replicate         MessageType = 12
-	ReplicateResp     MessageType = 13
-	RequestVote       MessageType = 14
-	RequestVoteResp   MessageType = 15
-	InstallSnapshot   MessageType = 16
-	Heartbeat         MessageType = 17
-	HeartbeatResp     MessageType = 18
-	ReadIndex         MessageType = 19
-	ReadIndexResp     MessageType = 20
-	Quiesce           MessageType = 21
-	SnapshotReceived  MessageType = 22
-	LeaderTransfer    MessageType = 23
-	TimeoutNow        MessageType = 24
-	RateLimit         MessageType = 25
+	LocalTick          MessageType = 0
+	Election           MessageType = 1
+	LeaderHeartbeat    MessageType = 2
+	ConfigChangeEvent  MessageType = 3
+	NoOP               MessageType = 4
+	Ping               MessageType = 5
+	Pong               MessageType = 6
+	Propose            MessageType = 7
+	SnapshotStatus     MessageType = 8
+	Unreachable        MessageType = 9
+	CheckQuorum        MessageType = 10
+	BatchedReadIndex   MessageType = 11
+	Replicate          MessageType = 12
+	ReplicateResp      MessageType = 13
+	RequestVote        MessageType = 14
+	RequestVoteResp    MessageType = 15
+	InstallSnapshot    MessageType = 16
+	Heartbeat          MessageType = 17
+	HeartbeatResp      MessageType = 18
+	ReadIndex          MessageType = 19
+	ReadIndexResp      MessageType = 20
+	Quiesce            MessageType = 21
+	SnapshotReceived   MessageType = 22
+	LeaderTransfer     MessageType = 23
+	TimeoutNow         MessageType = 24
+	RateLimit          MessageType = 25
+	RequestPreVote     MessageType = 26
+	RequestPreVoteResp MessageType = 27
 )
 
 var MessageType_name = map[int32]string{
@@ -61,35 +63,39 @@ var MessageType_name = map[int32]string{
 	23: "LeaderTransfer",
 	24: "TimeoutNow",
 	25: "RateLimit",
+	26: "RequestPreVote",
+	27: "RequestPreVoteResp",
 }
 
 var MessageType_value = map[string]int32{
-	"LocalTick":         0,
-	"Election":          1,
-	"LeaderHeartbeat":   2,
-	"ConfigChangeEvent": 3,
-	"NoOP":              4,
-	"Ping":              5,
-	"Pong":              6,
-	"Propose":           7,
-	"SnapshotStatus":    8,
-	"Unreachable":       9,
-	"CheckQuorum":       10,
-	"BatchedReadIndex":  11,
-	"Replicate":         12,
-	"ReplicateResp":     13,
-	"RequestVote":       14,
-	"RequestVoteResp":   15,
-	"InstallSnapshot":   16,
-	"Heartbeat":         17,
-	"HeartbeatResp":     18,
-	"ReadIndex":         19,
-	"ReadIndexResp":     20,
-	"Quiesce":           21,
-	"SnapshotReceived":  22,
-	"LeaderTransfer":    23,
-	"TimeoutNow":        24,
-	"RateLimit":         25,
+	"LocalTick":          0,
+	"Election":           1,
+	"LeaderHeartbeat":    2,
+	"ConfigChangeEvent":  3,
+	"NoOP":               4,
+	"Ping":               5,
+	"Pong":               6,
+	"Propose":            7,
+	"SnapshotStatus":     8,
+	"Unreachable":        9,
+	"CheckQuorum":        10,
+	"BatchedReadIndex":   11,
+	"Replicate":          12,
+	"ReplicateResp":      13,
+	"RequestVote":        14,
+	"RequestVoteResp":    15,
+	"InstallSnapshot":    16,
+	"Heartbeat":          17,
+	"HeartbeatResp":      18,
+	"ReadIndex":          19,
+	"ReadIndexResp":      20,
+	"Quiesce":            21,
+	"SnapshotReceived":   22,
+	"LeaderTransfer":     23,
+	"TimeoutNow":         24,
+	"RateLimit":          25,
+	"RequestPreVote":     26,
+	"RequestPreVoteResp": 27,
 }
 
 func (x MessageType) String() string {

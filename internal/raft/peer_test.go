@@ -69,13 +69,14 @@ func TestRaftAPINodeStep(t *testing.T) {
 	for i := range pb.MessageType_name {
 		s := NewTestLogDB()
 		rawNode := Launch(newTestConfig(1, 10, 1), s, nil, []PeerAddress{{NodeID: 1}}, true, true)
+		rawNode.raft.preVote = true
 		rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
 
 		msgt := pb.MessageType(i)
 		// stepping on non-local messages should be fine
 		if !isLocalMessageType(msgt) &&
 			msgt != pb.SnapshotReceived && msgt != pb.TimeoutNow {
-			ne(rawNode.Handle(pb.Message{Type: msgt}), t)
+			ne(rawNode.Handle(pb.Message{Type: msgt, Term: rawNode.raft.term}), t)
 		}
 	}
 }

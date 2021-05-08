@@ -48,7 +48,7 @@ const (
 	// NoNode is the flag used to indicate that the node id field is not set.
 	NoNode          uint64 = 0
 	noLimit         uint64 = math.MaxUint64
-	numMessageTypes uint64 = 26
+	numMessageTypes uint64 = 28
 )
 
 var (
@@ -65,6 +65,7 @@ type State uint64
 const (
 	follower State = iota
 	candidate
+	preVoteCandidate
 	leader
 	observer
 	witness
@@ -74,6 +75,7 @@ const (
 var stateNames = [...]string{
 	"Follower",
 	"Candidate",
+	"PreVoteCandidate",
 	"Leader",
 	"Observer",
 	"Witness",
@@ -233,6 +235,7 @@ type raft struct {
 	quiesce                   bool
 	isLeaderTransferTarget    bool
 	pendingConfigChange       bool
+	preVote                   bool
 }
 
 func newRaft(c config.Config, logdb ILogDB) *raft {
@@ -256,6 +259,7 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 		electionTimeout:  c.ElectionRTT,
 		heartbeatTimeout: c.HeartbeatRTT,
 		checkQuorum:      c.CheckQuorum,
+		preVote:          c.PreVote,
 		readIndex:        newReadIndex(),
 		rl:               rl,
 	}
@@ -660,11 +664,13 @@ func (r *raft) finalizeMessageTerm(m pb.Message) pb.Message {
 	if m.Term == 0 && m.Type == pb.RequestVote {
 		plog.Panicf("%s sending RequestVote with 0 term", r.describe())
 	}
-	if m.Term > 0 && m.Type != pb.RequestVote {
+	if m.Term > 0 &&
+		!isRequestVoteMessage(m.Type) && m.Type != pb.RequestPreVoteResp {
 		plog.Panicf("%s term unexpectedly set for message type %d",
 			r.describe(), m.Type)
 	}
-	if !isRequestMessage(m.Type) {
+	if !isRequestMessage(m.Type) &&
+		!isRequestVoteMessage(m.Type) && m.Type != pb.RequestPreVoteResp {
 		m.Term = r.term
 	}
 	return m
@@ -981,6 +987,25 @@ func (r *raft) becomeFollowerKE(term uint64, leaderID uint64) {
 	r.toFollowerState(term, leaderID, false)
 }
 
+func (r *raft) becomePreVoteCandidate() {
+	if !r.preVote {
+		panic("becomePreVoteCandidate called when preVote not enabled")
+	}
+	if r.isLeader() {
+		panic("transitioning to candidate state from leader")
+	}
+	if r.isObserver() {
+		panic("observer is becoming candidate")
+	}
+	if r.isWitness() {
+		panic("witness is becoming candidate")
+	}
+	r.state = preVoteCandidate
+	r.reset(r.term, true)
+	r.setLeaderID(NoLeader)
+	plog.Warningf("%s became PreVote candidate", r.describe())
+}
+
 func (r *raft) becomeCandidate() {
 	if r.isLeader() {
 		panic("transitioning to candidate state from leader")
@@ -1086,13 +1111,17 @@ func (r *raft) resetWitnesses() {
 // election related functions
 //
 
-func (r *raft) handleVoteResp(from uint64, rejected bool) int {
+func (r *raft) handleVoteResp(from uint64, rejected bool, preVote bool) int {
+	mname := "RequestVoteResp"
+	if preVote {
+		mname = "RequestPreVoteResp"
+	}
 	if rejected {
-		plog.Warningf("%s received RequestVoteResp rejection from %s",
-			r.describe(), NodeID(from))
+		plog.Warningf("%s received %s rejection from %s",
+			r.describe(), mname, NodeID(from))
 	} else {
-		plog.Warningf("%s received RequestVoteResp from %s",
-			r.describe(), NodeID(from))
+		plog.Warningf("%s received %s from %s",
+			r.describe(), mname, NodeID(from))
 	}
 	votedFor := 0
 	if _, ok := r.votes[from]; !ok {
@@ -1106,6 +1135,33 @@ func (r *raft) handleVoteResp(from uint64, rejected bool) int {
 	return votedFor
 }
 
+func (r *raft) preVoteCampaign() error {
+	r.becomePreVoteCandidate()
+	r.handleVoteResp(r.nodeID, false, true)
+	if r.isSingleNodeQuorum() {
+		return r.campaign()
+	}
+	index := r.log.lastIndex()
+	lastTerm, err := r.log.lastTerm()
+	if err != nil {
+		return err
+	}
+	for k := range r.votingMembers() {
+		if k == r.nodeID {
+			continue
+		}
+		r.send(pb.Message{
+			Term:     r.term + 1,
+			To:       k,
+			Type:     pb.RequestPreVote,
+			LogIndex: index,
+			LogTerm:  lastTerm,
+		})
+		plog.Warningf("%s sent RequestPreVote to %s", r.describe(), NodeID(k))
+	}
+	return nil
+}
+
 func (r *raft) campaign() error {
 	r.becomeCandidate()
 	term := r.term
@@ -1117,7 +1173,7 @@ func (r *raft) campaign() error {
 		}
 		r.events.CampaignLaunched(info)
 	}
-	r.handleVoteResp(r.nodeID, false)
+	r.handleVoteResp(r.nodeID, false, false)
 	if r.isSingleNodeQuorum() {
 		return r.becomeLeader()
 	}
@@ -1426,6 +1482,14 @@ func (r *raft) handleReplicateMessage(m pb.Message) error {
 // Step related functions
 //
 
+func isPreVoteMessage(t pb.MessageType) bool {
+	return t == pb.RequestPreVote || t == pb.RequestPreVoteResp
+}
+
+func isRequestVoteMessage(t pb.MessageType) bool {
+	return t == pb.RequestVote || t == pb.RequestPreVote
+}
+
 func isRequestMessage(t pb.MessageType) bool {
 	return t == pb.Propose || t == pb.ReadIndex || t == pb.LeaderTransfer
 }
@@ -1436,7 +1500,7 @@ func isLeaderMessage(t pb.MessageType) bool {
 }
 
 func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
-	if m.Type != pb.RequestVote || !r.checkQuorum || m.Term <= r.term {
+	if !isRequestVoteMessage(m.Type) || !r.checkQuorum || m.Term <= r.term {
 		return false
 	}
 	// see p42 of the raft thesis
@@ -1459,6 +1523,11 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 	return false
 }
 
+func isPreVoteMessageWithExpectedHigherTerm(m pb.Message) bool {
+	return m.Type == pb.RequestPreVote ||
+		(m.Type == pb.RequestPreVoteResp && !m.Reject)
+}
+
 // onMessageTermNotMatched handles the situation in which the incoming
 // message has a term value different from local node's term. it returns a
 // boolean flag indicating whether the message should be ignored.
@@ -1473,36 +1542,38 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 		return true
 	}
 	if m.Term > r.term {
-		plog.Warningf("%s received %s with higher term (%d) from %s",
-			r.describe(), m.Type, m.Term, NodeID(m.From))
-		leaderID := NoLeader
-		if isLeaderMessage(m.Type) {
-			leaderID = m.From
-		}
-		if r.isObserver() {
-			r.becomeObserver(m.Term, leaderID)
-		} else if r.isWitness() {
-			r.becomeWitness(m.Term, leaderID)
-		} else {
-			if m.Type == pb.RequestVote {
-				plog.Warningf("%s become followerKE after receiving higher term from %s",
-					r.describe(), NodeID(m.From))
-				// not to reset the electionTick value to avoid the risk of having the
-				// local node not being to campaign at all. if the local node generates
-				// the tick much slower than other nodes (e.g. bad config, hardware
-				// clock issue, bad scheduling, overloaded etc), it may lose the chance
-				// to ever start a campaign unless we keep its electionTick value here.
-				r.becomeFollowerKE(m.Term, leaderID)
+		if !isPreVoteMessageWithExpectedHigherTerm(m) {
+			plog.Warningf("%s received %s with higher term (%d) from %s",
+				r.describe(), m.Type, m.Term, NodeID(m.From))
+			leaderID := NoLeader
+			if isLeaderMessage(m.Type) {
+				leaderID = m.From
+			}
+			if r.isObserver() {
+				r.becomeObserver(m.Term, leaderID)
+			} else if r.isWitness() {
+				r.becomeWitness(m.Term, leaderID)
 			} else {
-				plog.Warningf("%s become follower after receiving higher term from %s",
-					r.describe(), NodeID(m.From))
-				r.becomeFollower(m.Term, leaderID)
+				if m.Type == pb.RequestVote {
+					plog.Warningf("%s become followerKE after receiving higher term from %s",
+						r.describe(), NodeID(m.From))
+					// not to reset the electionTick value to avoid the risk of having the
+					// local node not being to campaign at all. if the local node generates
+					// the tick much slower than other nodes (e.g. bad config, hardware
+					// clock issue, bad scheduling, overloaded etc), it may lose the chance
+					// to ever start a campaign unless we keep its electionTick value here.
+					r.becomeFollowerKE(m.Term, leaderID)
+				} else {
+					plog.Warningf("%s become follower after receiving higher term from %s",
+						r.describe(), NodeID(m.From))
+					r.becomeFollower(m.Term, leaderID)
+				}
 			}
 		}
 	} else if m.Term < r.term {
-		if isLeaderMessage(m.Type) && r.checkQuorum {
-			// this corner case is documented in the following etcd test
-			// TestFreeStuckCandidateWithCheckQuorum
+		if m.Type == pb.RequestPreVote ||
+			(isLeaderMessage(m.Type) && (r.checkQuorum || r.preVote)) {
+			// see test TestFreeStuckCandidateWithCheckQuorum for details
 			r.send(pb.Message{To: m.From, Type: pb.NoOP})
 		} else {
 			plog.Infof("%s ignored %s with lower term (%d) from %s",
@@ -1513,13 +1584,22 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 	return false
 }
 
+func (r *raft) inconsistentRaftConfig(m pb.Message) bool {
+	return !r.preVote && isPreVoteMessage(m.Type)
+}
+
 func (r *raft) Handle(m pb.Message) error {
+	if r.inconsistentRaftConfig(m) {
+		panic("received preVote message when preVote is not enabled")
+	}
 	if !r.onMessageTermNotMatched(m) {
-		r.doubleCheckTermMatched(m.Term)
+		if !isPreVoteMessage(m.Type) {
+			r.doubleCheckTermMatched(m.Term)
+		}
 		return r.handle(r, m)
 	}
-	plog.Infof("%s dropped %s from %s, term not matched",
-		r.describe(), m.Type, NodeID(m.From))
+	plog.Infof("%s dropped %s from %s, term %d, term not matched",
+		r.describe(), m.Type, NodeID(m.From), m.Term)
 	return nil
 }
 
@@ -1569,10 +1649,41 @@ func (r *raft) handleNodeElection(m pb.Message) error {
 			}
 			return nil
 		}
-		plog.Debugf("%s will campaign", r.describe())
+		if r.preVote {
+			plog.Debugf("%s will start a preVote campaign", r.describe())
+			return r.preVoteCampaign()
+		}
+		plog.Debugf("%s will start a campaign", r.describe())
 		return r.campaign()
 	}
 	plog.Debugf("%s is leader, ignored Election", r.describe())
+	return nil
+}
+
+func (r *raft) handleNodeRequestPreVote(m pb.Message) error {
+	resp := pb.Message{
+		To:   m.From,
+		Type: pb.RequestPreVoteResp,
+	}
+	isUpToDate, err := r.log.upToDate(m.LogIndex, m.LogTerm)
+	if err != nil {
+		return err
+	}
+	if m.Term < r.term {
+		panic("m.term < r.term")
+	}
+	if m.Term > r.term && isUpToDate {
+		resp.Term = m.Term
+		plog.Warningf("%s cast preVote from %s index %d term %d, log term: %d",
+			r.describe(), NodeID(m.From), m.LogIndex, m.Term, m.LogTerm)
+	} else {
+		// m.Term == r.term || !isUpToDate
+		plog.Warningf("%s rejected preVote %s index %d term %d,logterm %d, utd %t",
+			r.describe(), NodeID(m.From), m.LogIndex, m.Term, m.LogTerm, isUpToDate)
+		resp.Term = r.term
+		resp.Reject = true
+	}
+	r.send(resp)
 	return nil
 }
 
@@ -2110,7 +2221,7 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
 		plog.Warningf("dropped RequestVoteResp from observer")
 		return nil
 	}
-	count := r.handleVoteResp(m.From, m.Reject)
+	count := r.handleVoteResp(m.From, m.Reject, false)
 	plog.Warningf("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
 	// 3rd paragraph section 5.2 of the raft paper
@@ -2120,6 +2231,29 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
 		}
 		// get the NoOP entry committed ASAP
 		r.broadcastReplicateMessage()
+	} else if len(r.votes)-count == r.quorum() {
+		// etcd raft does this, it is not stated in the raft paper
+		r.becomeFollower(r.term, NoLeader)
+	}
+	return nil
+}
+
+//
+// handler functions for preVote candidate
+//
+
+func (r *raft) handlePreVoteCandidateRequestPreVoteResp(m pb.Message) error {
+	if _, ok := r.observers[m.From]; ok {
+		plog.Warningf("dropped RequestPreVoteResp from observer")
+		return nil
+	}
+	count := r.handleVoteResp(m.From, m.Reject, true)
+	plog.Warningf("%s received %d preVotes and %d rejections, quorum is %d",
+		r.describe(), count, len(r.votes)-count, r.quorum())
+	if count == r.quorum() {
+		if err := r.campaign(); err != nil {
+			return err
+		}
 	} else if len(r.votes)-count == r.quorum() {
 		// etcd raft does this, it is not stated in the raft paper
 		r.becomeFollower(r.term, NoLeader)
@@ -2191,9 +2325,23 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[candidate][pb.RequestVoteResp] = r.handleCandidateRequestVoteResp
 	r.handlers[candidate][pb.Election] = r.handleNodeElection
 	r.handlers[candidate][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[candidate][pb.RequestPreVote] = r.handleNodeRequestPreVote
 	r.handlers[candidate][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[candidate][pb.LocalTick] = r.handleLocalTick
 	r.handlers[candidate][pb.SnapshotReceived] = r.handleRestoreRemote
+	// prevote candidate
+	r.handlers[preVoteCandidate][pb.Heartbeat] = r.handleCandidateHeartbeat
+	r.handlers[preVoteCandidate][pb.Propose] = r.handleCandidatePropose
+	r.handlers[preVoteCandidate][pb.ReadIndex] = r.handleCandidateReadIndex
+	r.handlers[preVoteCandidate][pb.Replicate] = r.handleCandidateReplicate
+	r.handlers[preVoteCandidate][pb.InstallSnapshot] = r.handleCandidateInstallSnapshot
+	r.handlers[preVoteCandidate][pb.RequestPreVoteResp] = r.handlePreVoteCandidateRequestPreVoteResp
+	r.handlers[preVoteCandidate][pb.Election] = r.handleNodeElection
+	r.handlers[preVoteCandidate][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[preVoteCandidate][pb.RequestPreVote] = r.handleNodeRequestPreVote
+	r.handlers[preVoteCandidate][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[preVoteCandidate][pb.LocalTick] = r.handleLocalTick
+	r.handlers[preVoteCandidate][pb.SnapshotReceived] = r.handleRestoreRemote
 	// follower
 	r.handlers[follower][pb.Propose] = r.handleFollowerPropose
 	r.handlers[follower][pb.Replicate] = r.handleFollowerReplicate
@@ -2204,6 +2352,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[follower][pb.InstallSnapshot] = r.handleFollowerInstallSnapshot
 	r.handlers[follower][pb.Election] = r.handleNodeElection
 	r.handlers[follower][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[follower][pb.RequestPreVote] = r.handleNodeRequestPreVote
 	r.handlers[follower][pb.TimeoutNow] = r.handleFollowerTimeoutNow
 	r.handlers[follower][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[follower][pb.LocalTick] = r.handleLocalTick
@@ -2220,6 +2369,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.LeaderTransfer] = r.handleLeaderTransfer
 	r.handlers[leader][pb.Election] = r.handleNodeElection
 	r.handlers[leader][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[leader][pb.RequestPreVote] = r.handleNodeRequestPreVote
 	r.handlers[leader][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[leader][pb.LocalTick] = r.handleLocalTick
 	r.handlers[leader][pb.SnapshotReceived] = r.handleRestoreRemote
@@ -2229,6 +2379,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[observer][pb.Replicate] = r.handleObserverReplicate
 	r.handlers[observer][pb.InstallSnapshot] = r.handleObserverSnapshot
 	r.handlers[observer][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[observer][pb.RequestPreVote] = r.handleNodeRequestPreVote
 	r.handlers[observer][pb.Propose] = r.handleObserverPropose
 	r.handlers[observer][pb.ReadIndex] = r.handleObserverReadIndex
 	r.handlers[observer][pb.ReadIndexResp] = r.handleObserverReadIndexResp
@@ -2240,6 +2391,7 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[witness][pb.Replicate] = r.handleWitnessReplicate
 	r.handlers[witness][pb.InstallSnapshot] = r.handleWitnessSnapshot
 	r.handlers[witness][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[witness][pb.RequestPreVote] = r.handleNodeRequestPreVote
 	r.handlers[witness][pb.ConfigChangeEvent] = r.handleNodeConfigChange
 	r.handlers[witness][pb.LocalTick] = r.handleLocalTick
 	r.handlers[witness][pb.SnapshotReceived] = r.handleRestoreRemote
@@ -2255,18 +2407,26 @@ func (r *raft) checkHandlerMap() {
 		{leader, pb.Replicate},
 		{leader, pb.InstallSnapshot},
 		{leader, pb.ReadIndexResp},
+		{leader, pb.RequestPreVoteResp},
 		{follower, pb.ReplicateResp},
 		{follower, pb.HeartbeatResp},
 		{follower, pb.SnapshotStatus},
 		{follower, pb.Unreachable},
+		{follower, pb.RequestPreVoteResp},
 		{candidate, pb.ReplicateResp},
 		{candidate, pb.HeartbeatResp},
 		{candidate, pb.SnapshotStatus},
 		{candidate, pb.Unreachable},
+		{candidate, pb.RequestPreVoteResp},
+		{preVoteCandidate, pb.ReplicateResp},
+		{preVoteCandidate, pb.HeartbeatResp},
+		{preVoteCandidate, pb.SnapshotStatus},
+		{preVoteCandidate, pb.Unreachable},
 		{observer, pb.Election},
 		{observer, pb.RequestVoteResp},
 		{observer, pb.ReplicateResp},
 		{observer, pb.HeartbeatResp},
+		{observer, pb.RequestPreVoteResp},
 		{witness, pb.Election},
 		{witness, pb.Propose},
 		{witness, pb.ReadIndex},
@@ -2274,6 +2434,7 @@ func (r *raft) checkHandlerMap() {
 		{witness, pb.RequestVoteResp},
 		{witness, pb.ReplicateResp},
 		{witness, pb.HeartbeatResp},
+		{witness, pb.RequestPreVoteResp},
 	}
 	for _, tt := range checks {
 		f := r.handlers[tt.stateType][tt.msgType]

@@ -251,6 +251,39 @@ func TestRaftHelperMethods(t *testing.T) {
 	}
 }
 
+func TestBecomePreVoteCandidateFromCandidate(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	r.preVote = true
+	r.becomeFollower(2, 3)
+	r.becomeCandidate()
+	r.becomePreVoteCandidate()
+	if r.term != 3 {
+		t.Errorf("term changed")
+	}
+	if r.state != preVoteCandidate {
+		t.Errorf("state not set to preVoteCandidate")
+	}
+}
+
+func TestBecomePreVoteCandidate(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	r.preVote = true
+	r.becomeFollower(2, 3)
+	if r.term != 2 {
+		t.Errorf("term not set")
+	}
+	r.becomePreVoteCandidate()
+	if r.term != 2 {
+		t.Errorf("term changed")
+	}
+	if r.state != preVoteCandidate {
+		t.Errorf("state not set to preVoteCandidate")
+	}
+	if r.leaderID != NoLeader {
+		t.Errorf("leader unexpectedly set")
+	}
+}
+
 func TestBecomeFollowerDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.electionTick = 100
@@ -364,6 +397,17 @@ func TestObserverWillNotStartElection(t *testing.T) {
 	}
 }
 
+func TestObserversPreVoteWillNotBeCounted(t *testing.T) {
+	p := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p.preVote = true
+	p.addNode(1)
+	p.becomeCandidate()
+	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestPreVoteResp}), t)
+	if len(p.votes) != 0 {
+		t.Errorf("vote from observer not dropped")
+	}
+}
+
 func TestObserversVoteWillNotBeCounted(t *testing.T) {
 	p := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p.addNode(1)
@@ -413,9 +457,19 @@ func TestObserverCanActAsRegularNodeAfterPromotion(t *testing.T) {
 // candidates that are aware of such promotion. in this case, observers have to
 // cast their votes
 func TestObserverCanVote(t *testing.T) {
+	testObserverCanVote(t, false)
+	testObserverCanVote(t, true)
+}
+
+func testObserverCanVote(t *testing.T, preVote bool) {
 	a := newTestObserver(1, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	b := newTestObserver(2, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	c := newTestObserver(3, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	if preVote {
+		a.preVote = true
+		b.preVote = true
+		c.preVote = true
+	}
 	if !c.isObserver() {
 		t.Errorf("not observer")
 	}
@@ -1362,8 +1416,37 @@ func TestIsLeaderMessage(t *testing.T) {
 	}
 }
 
-func TestDropRequestVoteMessageFromRemovedNode(t *testing.T) {
+func TestNoOPIsSentOnSmallTermRejectedRequestPreVote(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.preVote = true
+	r.becomeFollower(10, 2)
+	ne(r.Handle(pb.Message{Type: pb.RequestPreVote, Term: 9, From: 2}), t)
+	if len(r.msgs) != 1 {
+		t.Fatalf("no message sent")
+	}
+	m := pb.Message{Type: pb.NoOP, To: 2, From: 1, Term: 10}
+	if !reflect.DeepEqual(m, r.msgs[0]) {
+		t.Errorf("not expected message")
+	}
+}
+
+func TestPreVoteRespWithHigherTerm(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.preVote = true
+	r.becomeFollower(10, 2)
+	ne(r.Handle(pb.Message{Type: pb.RequestPreVoteResp, Term: 11, From: 2}), t)
+	if r.term != 10 {
+		t.Errorf("term unexpected changed")
+	}
+	ne(r.Handle(pb.Message{Type: pb.RequestPreVoteResp, Term: 20, From: 2, Reject: true}), t)
+	if r.term != 20 {
+		t.Errorf("term not set")
+	}
+}
+
+func TestDropRequestVoteMessageFromHighTermNode(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
+	r.preVote = true
 	r.becomeFollower(10, 2)
 
 	tests := []struct {
@@ -1375,15 +1458,17 @@ func TestDropRequestVoteMessageFromRemovedNode(t *testing.T) {
 		{true, 20, true},
 		{true, 10, false},
 	}
-	for idx, tt := range tests {
-		r.checkQuorum = tt.checkQuorum
-		m := pb.Message{
-			Type: pb.RequestVote,
-			Term: tt.term,
-			From: 2,
-		}
-		if r.dropRequestVoteFromHighTermNode(m) != tt.drop {
-			t.Errorf("%d, got %t, want %t", idx, r.dropRequestVoteFromHighTermNode(m), tt.drop)
+	for _, mt := range []pb.MessageType{pb.RequestVote, pb.RequestPreVote} {
+		for idx, tt := range tests {
+			r.checkQuorum = tt.checkQuorum
+			m := pb.Message{
+				Type: mt,
+				Term: tt.term,
+				From: 2,
+			}
+			if r.dropRequestVoteFromHighTermNode(m) != tt.drop {
+				t.Errorf("%d, got %t, want %t", idx, r.dropRequestVoteFromHighTermNode(m), tt.drop)
+			}
 		}
 	}
 }
@@ -1796,10 +1881,10 @@ func TestCampaignSendExpectedMessages(t *testing.T) {
 
 func TestHandleVoteResp(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
-	v1 := r.handleVoteResp(1, false)
-	v2 := r.handleVoteResp(2, true)
-	v3 := r.handleVoteResp(3, false)
-	v4 := r.handleVoteResp(2, false)
+	v1 := r.handleVoteResp(1, false, false)
+	v2 := r.handleVoteResp(2, true, false)
+	v3 := r.handleVoteResp(3, false, false)
+	v4 := r.handleVoteResp(2, false, false)
 	if v1 != 1 || v2 != 1 || v3 != 2 || v4 != 2 {
 		t.Errorf("unexpected count")
 	}
@@ -3195,5 +3280,72 @@ func TestCheckDelayedSnapshotAck(t *testing.T) {
 	}
 	if rp.state != remoteWait || rp.snapshotIndex != 0 {
 		t.Errorf("not in remote wait state, %s", rp.state)
+	}
+}
+
+func TestElectionWithPreVote(t *testing.T) {
+	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	b := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	c := newTestRaft(3, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	a.preVote = true
+	b.preVote = true
+	c.preVote = true
+
+	nt := newNetwork(a, b, c)
+	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
+	if a.state != leader {
+		t.Errorf("state = %s, want %s", a.state, leader)
+	}
+	if b.state != follower {
+		t.Errorf("state = %s, want %s", b.state, follower)
+	}
+	if c.state != follower {
+		t.Errorf("state = %s, want %s", c.state, follower)
+	}
+}
+
+func TestInconsistentRaftConfig(t *testing.T) {
+	tests := []struct {
+		mt      pb.MessageType
+		prevote bool
+		result  bool
+	}{
+		{pb.RequestVote, true, false},
+		{pb.RequestVote, false, false},
+		{pb.RequestPreVote, true, false},
+		{pb.RequestPreVote, false, true},
+		{pb.RequestPreVoteResp, true, false},
+		{pb.RequestPreVoteResp, false, true},
+	}
+
+	for idx, tt := range tests {
+		r := raft{preVote: tt.prevote}
+		result := r.inconsistentRaftConfig(pb.Message{Type: tt.mt})
+		if result != tt.result {
+			t.Errorf("%d, unexpected result", idx)
+		}
+	}
+}
+
+func TestCastVoteToDifferentNodesIsAllowed(t *testing.T) {
+	a := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	a.preVote = true
+	a.becomeFollower(10, 3)
+	ne(a.Handle(pb.Message{Type: pb.RequestPreVote, From: 2, Term: 11}), t)
+	if len(a.msgs) != 1 {
+		t.Fatalf("no message")
+	}
+	expected := pb.Message{Type: pb.RequestPreVoteResp, From: 1, To: 2, Term: 11}
+	if !reflect.DeepEqual(expected, a.msgs[0]) {
+		t.Errorf("unexpected msg")
+	}
+	a.msgs = nil
+	ne(a.Handle(pb.Message{Type: pb.RequestPreVote, From: 3, Term: 11}), t)
+	if len(a.msgs) != 1 {
+		t.Fatalf("no message")
+	}
+	expected = pb.Message{Type: pb.RequestPreVoteResp, From: 1, To: 3, Term: 11}
+	if !reflect.DeepEqual(expected, a.msgs[0]) {
+		t.Errorf("unexpected msg")
 	}
 }
