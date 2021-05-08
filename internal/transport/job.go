@@ -19,7 +19,6 @@ import (
 	"sync/atomic"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/errors/oserror"
 	"github.com/lni/goutils/logutil"
 
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -228,14 +227,12 @@ func (j *job) sendChunks(chunks []pb.Chunk) error {
 		}
 		chunk.DeploymentId = j.deploymentID
 		if !chunk.Witness {
+			// TODO: add a test for such error
+			// TODO: add a test to show that failed sendChunks for other reasons will
+			// 			 be reported
 			data, err := loadChunkData(chunk, chunkData, j.fs)
 			if err != nil {
-				// failed to load the chunk data when the snapshot file still exists,
-				// treat this as a corruption
-				if _, err := j.fs.Stat(chunk.Filepath); !oserror.IsNotExist(err) {
-					panicNow(err)
-				}
-				return err
+				panicNow(err)
 			}
 			chunk.Data = data
 		}
