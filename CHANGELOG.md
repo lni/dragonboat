@@ -15,6 +15,10 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 - Fixed unreachable notification.
 - Upgraded to a more recent version of pebble.
 
+### Other changes
+
+- Raft observer node has been renamed as non-voting node. 
+
 ## v3.3 (2021-01-20)
 
 Dragonboat v3.3 is a major release that comes with new features and improvements. All v3.2.x users are recommended to upgrade.

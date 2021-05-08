@@ -126,9 +126,9 @@ func TestSnapshotFilepath(t *testing.T) {
 
 func TestCheckMembers(t *testing.T) {
 	membership := pb.Membership{
-		Addresses: map[uint64]string{1: "a1", 2: "a2", 3: "a3"},
-		Observers: map[uint64]string{4: "a4"},
-		Removed:   map[uint64]bool{5: true},
+		Addresses:  map[uint64]string{1: "a1", 2: "a2", 3: "a3"},
+		NonVotings: map[uint64]string{4: "a4"},
+		Removed:    map[uint64]bool{5: true},
 	}
 	tests := []struct {
 		members map[uint64]string
@@ -293,9 +293,9 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 		Checksum: make([]byte, 8),
 		Dummy:    false,
 		Membership: pb.Membership{
-			Removed:   make(map[uint64]bool),
-			Observers: make(map[uint64]string),
-			Addresses: make(map[uint64]string),
+			Removed:    make(map[uint64]bool),
+			NonVotings: make(map[uint64]string),
+			Addresses:  make(map[uint64]string),
 		},
 		Type:      pb.OnDiskStateMachine,
 		ClusterId: 345,
@@ -304,7 +304,7 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 	ss.Membership.Addresses[1] = "a1"
 	ss.Membership.Addresses[2] = "a2"
 	ss.Membership.Removed[3] = true
-	ss.Membership.Observers[4] = "a4"
+	ss.Membership.NonVotings[4] = "a4"
 	f1 := &pb.SnapshotFile{
 		Filepath: "/original_dir/external-1",
 		FileSize: 1,
@@ -353,8 +353,8 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 	if len(newss.Membership.Addresses) != 2 {
 		t.Errorf("unexpected member count")
 	}
-	if len(newss.Membership.Observers) != 0 {
-		t.Errorf("Observers not empty")
+	if len(newss.Membership.NonVotings) != 0 {
+		t.Errorf("NonVotings not empty")
 	}
 	if len(newss.Membership.Removed) != 3 {
 		t.Errorf("unexpected removed count")

@@ -71,7 +71,7 @@ func Launch(config config.Config,
 	p := Peer{raft: r}
 	p.raft.events = events
 	_, lastIndex := logdb.GetRange()
-	if newNode && !config.IsObserver && !config.IsWitness {
+	if newNode && !config.IsNonVoting && !config.IsWitness {
 		r.becomeFollower(1, NoLeader)
 	}
 	if initial && newNode {
@@ -184,7 +184,7 @@ func (p *Peer) Handle(m pb.Message) error {
 		panic("local message sent to Step")
 	}
 	_, rok := p.raft.remotes[m.From]
-	_, ook := p.raft.observers[m.From]
+	_, ook := p.raft.nonVotings[m.From]
 	_, wok := p.raft.witnesses[m.From]
 	if rok || ook || wok || !isResponseMessageType(m.Type) {
 		return p.raft.Handle(m)

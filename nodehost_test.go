@@ -1652,7 +1652,7 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 			if err != ErrTimeoutTooSmall {
 				t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 			}
-			err = nh.SyncRequestAddObserver(ctx, 1, 100, "a1.com:12345", 0)
+			err = nh.SyncRequestAddNonVoting(ctx, 1, 100, "a1.com:12345", 0)
 			if err != ErrTimeoutTooSmall {
 				t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 			}
@@ -1687,7 +1687,7 @@ func TestErrClusterNotFoundCanBeReturned(t *testing.T) {
 			if err != ErrClusterNotFound {
 				t.Errorf("failed to return ErrClusterNotFound, %v", err)
 			}
-			_, err = nh.RequestAddObserver(1234, 10, "a1", 0, pto)
+			_, err = nh.RequestAddNonVoting(1234, 10, "a1", 0, pto)
 			if err != ErrClusterNotFound {
 				t.Errorf("failed to return ErrClusterNotFound, %v", err)
 			}
@@ -2046,7 +2046,7 @@ func TestSyncRequestAddNode(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestSyncRequestAddObserver(t *testing.T) {
+func TestSyncRequestAddNonVoting(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
@@ -2054,9 +2054,9 @@ func TestSyncRequestAddObserver(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			err := nh.SyncRequestAddObserver(ctx, 1, 2, "localhost:25000", 0)
+			err := nh.SyncRequestAddNonVoting(ctx, 1, 2, "localhost:25000", 0)
 			if err != nil {
-				t.Errorf("failed to add observer %v", err)
+				t.Errorf("failed to add nonVoting %v", err)
 			}
 		},
 	}
@@ -2153,13 +2153,13 @@ func TestNodeHostNodeUserRead(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestNodeHostAddObserverRemoveNode(t *testing.T) {
+func TestNodeHostAddNonVotingRemoveNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			pto := pto(nh)
-			rs, err := nh.RequestAddObserver(1, 2, "localhost:25000", 0, pto)
+			rs, err := nh.RequestAddNonVoting(1, 2, "localhost:25000", 0, pto)
 			if err != nil {
 				t.Errorf("failed to add node %v", err)
 			}
@@ -2176,10 +2176,10 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 			if len(membership.Nodes) != 1 || len(membership.Removed) != 0 {
 				t.Errorf("unexpected nodes/removed len")
 			}
-			if len(membership.Observers) != 1 {
+			if len(membership.NonVotings) != 1 {
 				t.Errorf("unexpected nodes len")
 			}
-			_, ok := membership.Observers[2]
+			_, ok := membership.NonVotings[2]
 			if !ok {
 				t.Errorf("node 2 not added")
 			}
@@ -2201,7 +2201,7 @@ func TestNodeHostAddObserverRemoveNode(t *testing.T) {
 			if len(membership.Nodes) != 1 || len(membership.Removed) != 1 {
 				t.Errorf("unexpected nodes/removed len")
 			}
-			if len(membership.Observers) != 0 {
+			if len(membership.NonVotings) != 0 {
 				t.Errorf("unexpected nodes len")
 			}
 			_, ok = membership.Removed[2]
@@ -2619,8 +2619,8 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 					t.Errorf("unexpected state machine type")
 				}
 			}
-			if ci.IsObserver {
-				t.Errorf("unexpected IsObserver value")
+			if ci.IsNonVoting {
+				t.Errorf("unexpected IsNonVoting value")
 			}
 		}
 		result := make(map[uint64]struct{})
@@ -2673,8 +2673,8 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 					t.Errorf("unexpected state machine type")
 				}
 			}
-			if ci.IsObserver {
-				t.Errorf("unexpected IsObserver value")
+			if ci.IsNonVoting {
+				t.Errorf("unexpected IsNonVoting value")
 			}
 		}
 		stopper := syncutil.NewStopper()
@@ -2950,7 +2950,7 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
+func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
 		rc := config.Config{
@@ -2969,7 +2969,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 		peers := make(map[uint64]string)
 		peers[1] = nodeHostTestAddr1
 		if err := nh1.StartOnDiskCluster(peers, false, newSM, rc); err != nil {
-			t.Errorf("failed to start observer %v", err)
+			t.Errorf("failed to start nonVoting %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
 		rc = config.Config{
@@ -2977,7 +2977,7 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			NodeID:             2,
 			ElectionRTT:        3,
 			HeartbeatRTT:       1,
-			IsObserver:         true,
+			IsNonVoting:        true,
 			CheckQuorum:        true,
 			SnapshotEntries:    5,
 			CompactionOverhead: 2,
@@ -2986,13 +2986,13 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 			return tests.NewFakeDiskSM(0)
 		}
 		pto := pto(nh1)
-		rs, err := nh1.RequestAddObserver(1, 2, nodeHostTestAddr2, 0, pto)
+		rs, err := nh1.RequestAddNonVoting(1, 2, nodeHostTestAddr2, 0, pto)
 		if err != nil {
-			t.Fatalf("failed to add observer %v", err)
+			t.Fatalf("failed to add nonVoting %v", err)
 		}
 		<-rs.ResultC()
 		if err := nh2.StartOnDiskCluster(nil, true, newSM2, rc); err != nil {
-			t.Errorf("failed to start observer %v", err)
+			t.Errorf("failed to start nonVoting %v", err)
 		}
 		for i := 0; i < 10000; i++ {
 			nhi := nh2.GetNodeHostInfo(DefaultNodeHostInfoOption)
@@ -3000,13 +3000,13 @@ func TestIsObserverIsReturnedWhenNodeIsObserver(t *testing.T) {
 				if ci.Pending {
 					continue
 				}
-				if ci.IsObserver && ci.NodeID == 2 {
+				if ci.IsNonVoting && ci.NodeID == 2 {
 					return
 				}
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		t.Errorf("failed to get is observer flag")
+		t.Errorf("failed to get is nonVoting flag")
 	}
 	twoFakeDiskNodeHostTest(t, tf, fs)
 }
@@ -4895,8 +4895,8 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		if _, err := nh2.RequestDeleteNode(1, 3, 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("delete node not rejected on witness")
 		}
-		if _, err := nh2.RequestAddObserver(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
-			t.Fatalf("add observer not rejected on witness")
+		if _, err := nh2.RequestAddNonVoting(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
+			t.Fatalf("add nonVoting not rejected on witness")
 		}
 		if _, err := nh2.RequestAddWitness(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("add witness not rejected on witness")
@@ -5134,7 +5134,7 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			if err := nh.SyncRequestAddNode(ctx, 1, 1, "", 0); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.SyncRequestAddObserver(ctx, 1, 1, "", 0); err != ErrClosed {
+			if err := nh.SyncRequestAddNonVoting(ctx, 1, 1, "", 0); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if err := nh.SyncRequestAddWitness(ctx, 1, 1, "", 0); err != ErrClosed {
@@ -5146,7 +5146,7 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			if _, err := nh.RequestAddNode(1, 1, "", 0, time.Second); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if _, err := nh.RequestAddObserver(1, 1, "", 0, time.Second); err != ErrClosed {
+			if _, err := nh.RequestAddNonVoting(1, 1, "", 0, time.Second); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.RequestAddWitness(1, 1, "", 0, time.Second); err != ErrClosed {
@@ -5205,7 +5205,7 @@ func TestContextDeadlineIsChecked(t *testing.T) {
 			if err := nh.SyncRequestAddNode(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
-			if err := nh.SyncRequestAddObserver(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
+			if err := nh.SyncRequestAddNonVoting(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
 			if err := nh.SyncRequestAddWitness(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {

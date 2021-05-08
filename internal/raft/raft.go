@@ -57,9 +57,7 @@ var (
 	inMemGcTimeout = settings.Soft.InMemGCTimeout
 )
 
-// State is the state of a raft node defined in the raft paper, possible states
-// are leader, follower, candidate and observer. Observer is non-voting member
-// node.
+// State is the state of a raft node defined in the raft thesis.
 type State uint64
 
 const (
@@ -67,7 +65,7 @@ const (
 	candidate
 	preVoteCandidate
 	leader
-	observer
+	nonVoting
 	witness
 	numStates
 )
@@ -77,7 +75,7 @@ var stateNames = [...]string{
 	"Candidate",
 	"PreVoteCandidate",
 	"Leader",
-	"Observer",
+	"NonVoting",
 	"Witness",
 }
 
@@ -207,7 +205,7 @@ type raft struct {
 	log                       *entryLog
 	rl                        *server.InMemRateLimiter
 	remotes                   map[uint64]*remote
-	observers                 map[uint64]*remote
+	nonVotings                map[uint64]*remote
 	witnesses                 map[uint64]*remote
 	readIndex                 *readIndex
 	matched                   []uint64
@@ -254,7 +252,7 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 		droppedEntries:   make([]pb.Entry, 0),
 		log:              newEntryLog(logdb, rl),
 		remotes:          make(map[uint64]*remote),
-		observers:        make(map[uint64]*remote),
+		nonVotings:       make(map[uint64]*remote),
 		witnesses:        make(map[uint64]*remote),
 		electionTimeout:  c.ElectionRTT,
 		heartbeatTimeout: c.HeartbeatRTT,
@@ -269,8 +267,8 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 	for p := range members.Addresses {
 		r.remotes[p] = &remote{next: 1}
 	}
-	for p := range members.Observers {
-		r.observers[p] = &remote{next: 1}
+	for p := range members.NonVotings {
+		r.nonVotings[p] = &remote{next: 1}
 	}
 	for p := range members.Witnesses {
 		r.witnesses[p] = &remote{next: 1}
@@ -280,9 +278,9 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 		r.loadState(st)
 	}
 	// Set node initial state.
-	if c.IsObserver {
-		r.state = observer
-		r.becomeObserver(r.term, NoLeader)
+	if c.IsNonVoting {
+		r.state = nonVoting
+		r.becomeNonVoting(r.term, NoLeader)
 	} else if c.IsWitness {
 		r.state = witness
 		r.becomeWitness(r.term, NoLeader)
@@ -337,8 +335,8 @@ func (r *raft) isLeader() bool {
 	return r.state == leader
 }
 
-func (r *raft) isObserver() bool {
-	return r.state == observer
+func (r *raft) isNonVoting() bool {
+	return r.state == nonVoting
 }
 
 func (r *raft) isWitness() bool {
@@ -401,11 +399,11 @@ func (r *raft) leaderHasQuorum() bool {
 }
 
 func (r *raft) nodes() []uint64 {
-	nodes := make([]uint64, 0, r.numVotingMembers()+len(r.observers))
+	nodes := make([]uint64, 0, r.numVotingMembers()+len(r.nonVotings))
 	for id := range r.remotes {
 		nodes = append(nodes, id)
 	}
-	for id := range r.observers {
+	for id := range r.nonVotings {
 		nodes = append(nodes, id)
 	}
 	for id := range r.witnesses {
@@ -454,10 +452,10 @@ func (r *raft) restore(ss pb.Snapshot) (bool, error) {
 		plog.Warningf("%s, restore aborted, ss.Index <= committed", r.describe())
 		return false, nil
 	}
-	if !r.isObserver() {
-		for nid := range ss.Membership.Observers {
+	if !r.isNonVoting() {
+		for nid := range ss.Membership.NonVotings {
 			if nid == r.nodeID {
-				plog.Panicf("%s converting to observer, index %d, committed %d, %+v",
+				plog.Panicf("%s converting to nonVoting, index %d, committed %d, %+v",
 					r.describe(), ss.Index, r.log.committed, ss)
 			}
 		}
@@ -489,7 +487,7 @@ func (r *raft) restore(ss pb.Snapshot) (bool, error) {
 func (r *raft) restoreRemotes(ss pb.Snapshot) {
 	r.remotes = make(map[uint64]*remote)
 	for id := range ss.Membership.Addresses {
-		if id == r.nodeID && r.isObserver() {
+		if id == r.nodeID && r.isNonVoting() {
 			r.becomeFollower(r.term, r.leaderID)
 		}
 		if _, ok := r.witnesses[id]; ok {
@@ -507,16 +505,16 @@ func (r *raft) restoreRemotes(ss pb.Snapshot) {
 	if r.selfRemoved() && r.isLeader() {
 		r.becomeFollower(r.term, NoLeader)
 	}
-	r.observers = make(map[uint64]*remote)
-	for id := range ss.Membership.Observers {
+	r.nonVotings = make(map[uint64]*remote)
+	for id := range ss.Membership.NonVotings {
 		match := uint64(0)
 		next := r.log.lastIndex() + 1
 		if id == r.nodeID {
 			match = next - 1
 		}
-		r.setObserver(id, match, next)
-		plog.Debugf("%s restored observer progress of %s [%s]",
-			r.describe(), NodeID(id), r.observers[id])
+		r.setNonVoting(id, match, next)
+		plog.Debugf("%s restored nonVoting progress of %s [%s]",
+			r.describe(), NodeID(id), r.nonVotings[id])
 	}
 	r.witnesses = make(map[uint64]*remote)
 	for id := range ss.Membership.Witnesses {
@@ -591,7 +589,7 @@ func (r *raft) nonLeaderTick() error {
 	}
 	// section 4.2.1 of the raft thesis
 	// non-voting member or witness will not participate in election
-	if r.isObserver() || r.isWitness() {
+	if r.isNonVoting() || r.isWitness() {
 		return nil
 	}
 	// 6th paragraph section 5.2 of the raft paper
@@ -784,7 +782,7 @@ func (r *raft) sendReplicateMessage(to uint64) {
 	var rp *remote
 	if v, ok := r.remotes[to]; ok {
 		rp = v
-	} else if v, ok := r.observers[to]; ok {
+	} else if v, ok := r.nonVotings[to]; ok {
 		rp = v
 	} else {
 		rp, ok = r.witnesses[to]
@@ -816,9 +814,9 @@ func (r *raft) sendReplicateMessage(to uint64) {
 
 func (r *raft) broadcastReplicateMessage() {
 	r.mustBeLeader()
-	for nid := range r.observers {
+	for nid := range r.nonVotings {
 		if nid == r.nodeID {
-			plog.Panicf("%s observer is broadcasting Replicate msg", r.describe())
+			plog.Panicf("%s nonVoting is broadcasting Replicate msg", r.describe())
 		}
 	}
 	for _, nid := range r.nodes() {
@@ -860,7 +858,7 @@ func (r *raft) broadcastHeartbeatMessageWithHint(ctx pb.SystemCtx) {
 		}
 	}
 	if ctx == zeroCtx {
-		for id, rm := range r.observers {
+		for id, rm := range r.nonVotings {
 			r.sendHeartbeatMessage(id, zeroCtx, rm.match)
 		}
 	}
@@ -958,16 +956,16 @@ func (r *raft) toFollowerState(term uint64, leaderID uint64,
 	plog.Infof("%s became follower", r.describe())
 }
 
-func (r *raft) becomeObserver(term uint64, leaderID uint64) {
-	if !r.isObserver() {
-		panic("transitioning to observer state from non-observer")
+func (r *raft) becomeNonVoting(term uint64, leaderID uint64) {
+	if !r.isNonVoting() {
+		panic("transitioning to nonVoting state from other states")
 	}
 	if r.isWitness() {
-		panic("transitioning to observer from witness state")
+		panic("transitioning to nonVoting from witness state")
 	}
 	r.reset(term, true)
 	r.setLeaderID(leaderID)
-	plog.Infof("%s became observer", r.describe())
+	plog.Infof("%s became nonVoting", r.describe())
 }
 
 func (r *raft) becomeWitness(term uint64, leaderID uint64) {
@@ -994,8 +992,8 @@ func (r *raft) becomePreVoteCandidate() {
 	if r.isLeader() {
 		panic("transitioning to candidate state from leader")
 	}
-	if r.isObserver() {
-		panic("observer is becoming candidate")
+	if r.isNonVoting() {
+		panic("nonVoting is becoming candidate")
 	}
 	if r.isWitness() {
 		panic("witness is becoming candidate")
@@ -1010,8 +1008,8 @@ func (r *raft) becomeCandidate() {
 	if r.isLeader() {
 		panic("transitioning to candidate state from leader")
 	}
-	if r.isObserver() {
-		panic("observer is becoming candidate")
+	if r.isNonVoting() {
+		panic("nonVoting is becoming candidate")
 	}
 	if r.isWitness() {
 		panic("witness is becoming candidate")
@@ -1056,7 +1054,7 @@ func (r *raft) reset(term uint64, resetElectionTimeout bool) {
 	r.clearPendingConfigChange()
 	r.abortLeaderTransfer()
 	r.resetRemotes()
-	r.resetObservers()
+	r.resetNonVotings()
 	r.resetWitnesses()
 	r.resetMatchValueArray()
 }
@@ -1085,13 +1083,13 @@ func (r *raft) resetRemotes() {
 	}
 }
 
-func (r *raft) resetObservers() {
-	for id := range r.observers {
-		r.observers[id] = &remote{
+func (r *raft) resetNonVotings() {
+	for id := range r.nonVotings {
+		r.nonVotings[id] = &remote{
 			next: r.log.lastIndex() + 1,
 		}
 		if id == r.nodeID {
-			r.observers[id].match = r.log.lastIndex()
+			r.nonVotings[id].match = r.log.lastIndex()
 		}
 	}
 }
@@ -1209,8 +1207,8 @@ func (r *raft) campaign() error {
 //
 
 func (r *raft) selfRemoved() bool {
-	if r.isObserver() {
-		_, ok := r.observers[r.nodeID]
+	if r.isNonVoting() {
+		_, ok := r.nonVotings[r.nodeID]
 		return !ok
 	}
 	if r.isWitness() {
@@ -1230,9 +1228,9 @@ func (r *raft) addNode(nodeID uint64) {
 		// already a voting member
 		return
 	}
-	if rp, ok := r.observers[nodeID]; ok {
+	if rp, ok := r.nonVotings[nodeID]; ok {
 		// promoting to full member with inherited progress info
-		r.deleteObserver(nodeID)
+		r.deleteNonVoting(nodeID)
 		r.remotes[nodeID] = rp
 		// local peer promoted, become follower
 		if nodeID == r.nodeID {
@@ -1245,15 +1243,15 @@ func (r *raft) addNode(nodeID uint64) {
 	}
 }
 
-func (r *raft) addObserver(nodeID uint64) {
+func (r *raft) addNonVoting(nodeID uint64) {
 	r.clearPendingConfigChange()
-	if nodeID == r.nodeID && !r.isObserver() {
-		plog.Panicf("%s is not an observer", r.describe())
+	if nodeID == r.nodeID && !r.isNonVoting() {
+		plog.Panicf("%s is not a nonVoting", r.describe())
 	}
-	if _, ok := r.observers[nodeID]; ok {
+	if _, ok := r.nonVotings[nodeID]; ok {
 		return
 	}
-	r.setObserver(nodeID, 0, r.log.lastIndex()+1)
+	r.setNonVoting(nodeID, 0, r.log.lastIndex()+1)
 }
 
 func (r *raft) addWitness(nodeID uint64) {
@@ -1269,7 +1267,7 @@ func (r *raft) addWitness(nodeID uint64) {
 
 func (r *raft) removeNode(nodeID uint64) error {
 	r.deleteRemote(nodeID)
-	r.deleteObserver(nodeID)
+	r.deleteNonVoting(nodeID)
 	r.deleteWitness(nodeID)
 	r.clearPendingConfigChange()
 	// step down as leader once it is removed
@@ -1295,8 +1293,8 @@ func (r *raft) deleteRemote(nodeID uint64) {
 	delete(r.remotes, nodeID)
 }
 
-func (r *raft) deleteObserver(nodeID uint64) {
-	delete(r.observers, nodeID)
+func (r *raft) deleteNonVoting(nodeID uint64) {
+	delete(r.nonVotings, nodeID)
 }
 
 func (r *raft) deleteWitness(nodeID uint64) {
@@ -1312,10 +1310,10 @@ func (r *raft) setRemote(nodeID uint64, match uint64, next uint64) {
 	}
 }
 
-func (r *raft) setObserver(nodeID uint64, match uint64, next uint64) {
-	plog.Debugf("%s set observer %s, match %d, next %d",
+func (r *raft) setNonVoting(nodeID uint64, match uint64, next uint64) {
+	plog.Debugf("%s set nonVoting %s, match %d, next %d",
 		r.describe(), NodeID(nodeID), match, next)
-	r.observers[nodeID] = &remote{
+	r.nonVotings[nodeID] = &remote{
 		next:  next,
 		match: match,
 	}
@@ -1549,8 +1547,8 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 			if isLeaderMessage(m.Type) {
 				leaderID = m.From
 			}
-			if r.isObserver() {
-				r.becomeObserver(m.Term, leaderID)
+			if r.isNonVoting() {
+				r.becomeNonVoting(m.Term, leaderID)
 			} else if r.isWitness() {
 				r.becomeWitness(m.Term, leaderID)
 			} else {
@@ -1727,8 +1725,8 @@ func (r *raft) handleNodeConfigChange(m pb.Message) error {
 			if err := r.removeNode(nodeid); err != nil {
 				return err
 			}
-		case pb.AddObserver:
-			r.addObserver(nodeid)
+		case pb.AddNonVoting:
+			r.addNonVoting(nodeid)
 		case pb.AddWitness:
 			r.addWitness(nodeid)
 		default:
@@ -1840,7 +1838,7 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) error {
 		r.broadcastHeartbeatMessageWithHint(ctx)
 	} else {
 		r.addReadyToRead(r.log.committed, ctx)
-		_, ook := r.observers[m.From]
+		_, ook := r.nonVotings[m.From]
 		if m.From != r.nodeID && ook {
 			r.send(pb.Message{
 				To:       m.From,
@@ -2026,7 +2024,7 @@ func (r *raft) checkPendingSnapshotAck() error {
 		if err := check(r.remotes); err != nil {
 			return err
 		}
-		if err := check(r.observers); err != nil {
+		if err := check(r.nonVotings); err != nil {
 			return err
 		}
 		if err := check(r.witnesses); err != nil {
@@ -2037,30 +2035,30 @@ func (r *raft) checkPendingSnapshotAck() error {
 }
 
 //
-// message handlers used by observer, re-route them to follower handlers
+// message handlers used by nonVoting, re-route them to follower handlers
 //
 
-func (r *raft) handleObserverReplicate(m pb.Message) error {
+func (r *raft) handleNonVotingReplicate(m pb.Message) error {
 	return r.handleFollowerReplicate(m)
 }
 
-func (r *raft) handleObserverHeartbeat(m pb.Message) error {
+func (r *raft) handleNonVotingHeartbeat(m pb.Message) error {
 	return r.handleFollowerHeartbeat(m)
 }
 
-func (r *raft) handleObserverSnapshot(m pb.Message) error {
+func (r *raft) handleNonVotingSnapshot(m pb.Message) error {
 	return r.handleFollowerInstallSnapshot(m)
 }
 
-func (r *raft) handleObserverPropose(m pb.Message) error {
+func (r *raft) handleNonVotingPropose(m pb.Message) error {
 	return r.handleFollowerPropose(m)
 }
 
-func (r *raft) handleObserverReadIndex(m pb.Message) error {
+func (r *raft) handleNonVotingReadIndex(m pb.Message) error {
 	return r.handleFollowerReadIndex(m)
 }
 
-func (r *raft) handleObserverReadIndexResp(m pb.Message) error {
+func (r *raft) handleNonVotingReadIndexResp(m pb.Message) error {
 	return r.handleFollowerReadIndexResp(m)
 }
 
@@ -2217,8 +2215,8 @@ func (r *raft) handleCandidateHeartbeat(m pb.Message) error {
 }
 
 func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
-	if _, ok := r.observers[m.From]; ok {
-		plog.Warningf("dropped RequestVoteResp from observer")
+	if _, ok := r.nonVotings[m.From]; ok {
+		plog.Warningf("dropped RequestVoteResp from nonVoting")
 		return nil
 	}
 	count := r.handleVoteResp(m.From, m.Reject, false)
@@ -2243,8 +2241,8 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
 //
 
 func (r *raft) handlePreVoteCandidateRequestPreVoteResp(m pb.Message) error {
-	if _, ok := r.observers[m.From]; ok {
-		plog.Warningf("dropped RequestPreVoteResp from observer")
+	if _, ok := r.nonVotings[m.From]; ok {
+		plog.Warningf("dropped RequestPreVoteResp from nonVoting")
 		return nil
 	}
 	count := r.handleVoteResp(m.From, m.Reject, true)
@@ -2296,7 +2294,7 @@ func lw(r *raft, f func(m pb.Message, rp *remote) error) handlerFunc {
 	w := func(nm pb.Message) error {
 		if npr, ok := r.remotes[nm.From]; ok {
 			return f(nm, npr)
-		} else if nob, ok := r.observers[nm.From]; ok {
+		} else if nob, ok := r.nonVotings[nm.From]; ok {
 			return f(nm, nob)
 		} else if wob, ok := r.witnesses[nm.From]; ok {
 			return f(nm, wob)
@@ -2374,18 +2372,18 @@ func (r *raft) initializeHandlerMap() {
 	r.handlers[leader][pb.LocalTick] = r.handleLocalTick
 	r.handlers[leader][pb.SnapshotReceived] = r.handleRestoreRemote
 	r.handlers[leader][pb.RateLimit] = r.handleLeaderRateLimit
-	// observer
-	r.handlers[observer][pb.Heartbeat] = r.handleObserverHeartbeat
-	r.handlers[observer][pb.Replicate] = r.handleObserverReplicate
-	r.handlers[observer][pb.InstallSnapshot] = r.handleObserverSnapshot
-	r.handlers[observer][pb.RequestVote] = r.handleNodeRequestVote
-	r.handlers[observer][pb.RequestPreVote] = r.handleNodeRequestPreVote
-	r.handlers[observer][pb.Propose] = r.handleObserverPropose
-	r.handlers[observer][pb.ReadIndex] = r.handleObserverReadIndex
-	r.handlers[observer][pb.ReadIndexResp] = r.handleObserverReadIndexResp
-	r.handlers[observer][pb.ConfigChangeEvent] = r.handleNodeConfigChange
-	r.handlers[observer][pb.LocalTick] = r.handleLocalTick
-	r.handlers[observer][pb.SnapshotReceived] = r.handleRestoreRemote
+	// nonVoting
+	r.handlers[nonVoting][pb.Heartbeat] = r.handleNonVotingHeartbeat
+	r.handlers[nonVoting][pb.Replicate] = r.handleNonVotingReplicate
+	r.handlers[nonVoting][pb.InstallSnapshot] = r.handleNonVotingSnapshot
+	r.handlers[nonVoting][pb.RequestVote] = r.handleNodeRequestVote
+	r.handlers[nonVoting][pb.RequestPreVote] = r.handleNodeRequestPreVote
+	r.handlers[nonVoting][pb.Propose] = r.handleNonVotingPropose
+	r.handlers[nonVoting][pb.ReadIndex] = r.handleNonVotingReadIndex
+	r.handlers[nonVoting][pb.ReadIndexResp] = r.handleNonVotingReadIndexResp
+	r.handlers[nonVoting][pb.ConfigChangeEvent] = r.handleNodeConfigChange
+	r.handlers[nonVoting][pb.LocalTick] = r.handleLocalTick
+	r.handlers[nonVoting][pb.SnapshotReceived] = r.handleRestoreRemote
 	// witness
 	r.handlers[witness][pb.Heartbeat] = r.handleWitnessHeartbeat
 	r.handlers[witness][pb.Replicate] = r.handleWitnessReplicate
@@ -2422,11 +2420,11 @@ func (r *raft) checkHandlerMap() {
 		{preVoteCandidate, pb.HeartbeatResp},
 		{preVoteCandidate, pb.SnapshotStatus},
 		{preVoteCandidate, pb.Unreachable},
-		{observer, pb.Election},
-		{observer, pb.RequestVoteResp},
-		{observer, pb.ReplicateResp},
-		{observer, pb.HeartbeatResp},
-		{observer, pb.RequestPreVoteResp},
+		{nonVoting, pb.Election},
+		{nonVoting, pb.RequestVoteResp},
+		{nonVoting, pb.ReplicateResp},
+		{nonVoting, pb.HeartbeatResp},
+		{nonVoting, pb.RequestPreVoteResp},
 		{witness, pb.Election},
 		{witness, pb.Propose},
 		{witness, pb.ReadIndex},

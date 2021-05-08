@@ -106,8 +106,8 @@ func TestIsValidAddress(t *testing.T) {
 	}
 }
 
-func TestWitnessNodeCanNotBeAnObserver(t *testing.T) {
-	cfg := Config{IsWitness: true, IsObserver: true}
+func TestWitnessNodeCanNotBeNonVoting(t *testing.T) {
+	cfg := Config{IsWitness: true, IsNonVoting: true}
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("witness node can not be an observer")
 	}

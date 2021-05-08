@@ -268,7 +268,7 @@ func (n *node) applyConfigChange(cc pb.ConfigChange) error {
 		return err
 	}
 	switch cc.Type {
-	case pb.AddNode, pb.AddObserver, pb.AddWitness:
+	case pb.AddNode, pb.AddNonVoting, pb.AddWitness:
 		n.nodeRegistry.Add(n.clusterID, cc.NodeID, cc.Address)
 	case pb.RemoveNode:
 		if cc.NodeID == n.nodeID {
@@ -308,7 +308,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 	for nid, addr := range snapshot.Membership.Addresses {
 		n.nodeRegistry.Add(n.clusterID, nid, addr)
 	}
-	for nid, addr := range snapshot.Membership.Observers {
+	for nid, addr := range snapshot.Membership.NonVotings {
 		n.nodeRegistry.Add(n.clusterID, nid, addr)
 	}
 	for nid, addr := range snapshot.Membership.Witnesses {
@@ -513,9 +513,9 @@ func (n *node) requestAddNodeWithOrderID(nodeID uint64,
 	return n.requestConfigChange(pb.AddNode, nodeID, target, order, timeout)
 }
 
-func (n *node) requestAddObserverWithOrderID(nodeID uint64,
+func (n *node) requestAddNonVotingWithOrderID(nodeID uint64,
 	target string, order uint64, timeout uint64) (*RequestState, error) {
-	return n.requestConfigChange(pb.AddObserver, nodeID, target, order, timeout)
+	return n.requestConfigChange(pb.AddNonVoting, nodeID, target, order, timeout)
 }
 
 func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
@@ -1493,13 +1493,13 @@ func (n *node) notifyConfigChange() {
 	if len(m.Addresses) == 0 {
 		plog.Panicf("empty nodes %s", n.id())
 	}
-	_, isObserver := m.Observers[n.nodeID]
+	_, isNonVoting := m.NonVotings[n.nodeID]
 	_, isWitness := m.Witnesses[n.nodeID]
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,
 		IsLeader:          n.isLeader(),
-		IsObserver:        isObserver,
+		IsNonVoting:       isNonVoting,
 		IsWitness:         isWitness,
 		ConfigChangeIndex: m.ConfigChangeId,
 		Nodes:             m.Addresses,
@@ -1527,7 +1527,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		ClusterID:         ci.ClusterID,
 		NodeID:            ci.NodeID,
 		IsLeader:          n.isLeader(),
-		IsObserver:        ci.IsObserver,
+		IsNonVoting:       ci.IsNonVoting,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
 		StateMachineType:  sm.Type(n.sm.Type()),

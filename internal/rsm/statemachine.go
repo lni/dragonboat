@@ -417,7 +417,7 @@ func (s *StateMachine) apply(ss pb.Snapshot, init bool) {
 	index := ss.Index
 	plog.Debugf("%s recovering from %s, init %t", s.id(), s.ssid(index), init)
 	s.logMembership("members", index, ss.Membership.Addresses)
-	s.logMembership("observers", index, ss.Membership.Observers)
+	s.logMembership("nonVotings", index, ss.Membership.NonVotings)
 	s.logMembership("witnesses", index, ss.Membership.Witnesses)
 	s.members.set(ss.Membership)
 	s.lastApplied.Lock()

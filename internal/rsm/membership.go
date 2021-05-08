@@ -36,7 +36,7 @@ func deepCopyMembership(m pb.Membership) pb.Membership {
 		ConfigChangeId: m.ConfigChangeId,
 		Addresses:      make(map[uint64]string),
 		Removed:        make(map[uint64]bool),
-		Observers:      make(map[uint64]string),
+		NonVotings:     make(map[uint64]string),
 		Witnesses:      make(map[uint64]string),
 	}
 	for nid, addr := range m.Addresses {
@@ -45,8 +45,8 @@ func deepCopyMembership(m pb.Membership) pb.Membership {
 	for nid := range m.Removed {
 		c.Removed[nid] = true
 	}
-	for nid, addr := range m.Observers {
-		c.Observers[nid] = addr
+	for nid, addr := range m.NonVotings {
+		c.NonVotings[nid] = addr
 	}
 	for nid, addr := range m.Witnesses {
 		c.Witnesses[nid] = addr
@@ -67,10 +67,10 @@ func newMembership(clusterID uint64, nodeID uint64, ordered bool) membership {
 		nodeID:    nodeID,
 		ordered:   ordered,
 		members: pb.Membership{
-			Addresses: make(map[uint64]string),
-			Observers: make(map[uint64]string),
-			Removed:   make(map[uint64]bool),
-			Witnesses: make(map[uint64]string),
+			Addresses:  make(map[uint64]string),
+			NonVotings: make(map[uint64]string),
+			Removed:    make(map[uint64]bool),
+			Witnesses:  make(map[uint64]string),
 		},
 	}
 }
@@ -120,7 +120,7 @@ func (m *membership) isUpToDate(cc pb.ConfigChange) bool {
 
 func (m *membership) isAddRemovedNode(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode ||
-		cc.Type == pb.AddObserver ||
+		cc.Type == pb.AddNonVoting ||
 		cc.Type == pb.AddWitness {
 		_, ok := m.members.Removed[cc.NodeID]
 		return ok
@@ -128,17 +128,17 @@ func (m *membership) isAddRemovedNode(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isPromoteObserver(cc pb.ConfigChange) bool {
+func (m *membership) isPromoteNonVoting(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
-		oa, ok := m.members.Observers[cc.NodeID]
+		oa, ok := m.members.NonVotings[cc.NodeID]
 		return ok && addressEqual(oa, cc.Address)
 	}
 	return false
 }
 
-func (m *membership) isInvalidObserverPromotion(cc pb.ConfigChange) bool {
+func (m *membership) isInvalidNonVotingPromotion(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddNode {
-		oa, ok := m.members.Observers[cc.NodeID]
+		oa, ok := m.members.NonVotings[cc.NodeID]
 		return ok && !addressEqual(oa, cc.Address)
 	}
 	return false
@@ -152,8 +152,8 @@ func (m *membership) isAddExistingMember(cc pb.ConfigChange) bool {
 			return true
 		}
 	}
-	if cc.Type == pb.AddObserver {
-		_, ok := m.members.Observers[cc.NodeID]
+	if cc.Type == pb.AddNonVoting {
+		_, ok := m.members.NonVotings[cc.NodeID]
 		if ok {
 			return true
 		}
@@ -164,18 +164,18 @@ func (m *membership) isAddExistingMember(cc pb.ConfigChange) bool {
 			return true
 		}
 	}
-	if m.isPromoteObserver(cc) {
+	if m.isPromoteNonVoting(cc) {
 		return false
 	}
 	if cc.Type == pb.AddNode ||
-		cc.Type == pb.AddObserver ||
+		cc.Type == pb.AddNonVoting ||
 		cc.Type == pb.AddWitness {
 		for _, addr := range m.members.Addresses {
 			if addressEqual(addr, cc.Address) {
 				return true
 			}
 		}
-		for _, addr := range m.members.Observers {
+		for _, addr := range m.members.NonVotings {
 			if addressEqual(addr, cc.Address) {
 				return true
 			}
@@ -189,8 +189,8 @@ func (m *membership) isAddExistingMember(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddNodeAsObserver(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddObserver {
+func (m *membership) isAddNodeAsNonVoting(cc pb.ConfigChange) bool {
+	if cc.Type == pb.AddNonVoting {
 		_, ok := m.members.Addresses[cc.NodeID]
 		return ok
 	}
@@ -204,8 +204,8 @@ func (m *membership) isAddNodeAsWitness(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddWitnessAsObserver(cc pb.ConfigChange) bool {
-	if cc.Type == pb.AddObserver {
+func (m *membership) isAddWitnessAsNonVoting(cc pb.ConfigChange) bool {
+	if cc.Type == pb.AddNonVoting {
 		_, ok := m.members.Witnesses[cc.NodeID]
 		return ok
 	}
@@ -220,9 +220,9 @@ func (m *membership) isAddWitnessAsNode(cc pb.ConfigChange) bool {
 	return false
 }
 
-func (m *membership) isAddObserverAsWitness(cc pb.ConfigChange) bool {
+func (m *membership) isAddNonVotingAsWitness(cc pb.ConfigChange) bool {
 	if cc.Type == pb.AddWitness {
-		_, ok := m.members.Observers[cc.NodeID]
+		_, ok := m.members.NonVotings[cc.NodeID]
 		return ok
 	}
 	return false
@@ -241,27 +241,27 @@ func (m *membership) apply(cc pb.ConfigChange, index uint64) {
 	switch cc.Type {
 	case pb.AddNode:
 		nodeAddr := cc.Address
-		delete(m.members.Observers, cc.NodeID)
+		delete(m.members.NonVotings, cc.NodeID)
 		if _, ok := m.members.Witnesses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
 		m.members.Addresses[cc.NodeID] = nodeAddr
-	case pb.AddObserver:
+	case pb.AddNonVoting:
 		if _, ok := m.members.Addresses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
-		m.members.Observers[cc.NodeID] = cc.Address
+		m.members.NonVotings[cc.NodeID] = cc.Address
 	case pb.AddWitness:
 		if _, ok := m.members.Addresses[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
-		if _, ok := m.members.Observers[cc.NodeID]; ok {
+		if _, ok := m.members.NonVotings[cc.NodeID]; ok {
 			panic("not suppose to reach here")
 		}
 		m.members.Witnesses[cc.NodeID] = cc.Address
 	case pb.RemoveNode:
 		delete(m.members.Addresses, cc.NodeID)
-		delete(m.members.Observers, cc.NodeID)
+		delete(m.members.NonVotings, cc.NodeID)
 		delete(m.members.Witnesses, cc.NodeID)
 		m.members.Removed[cc.NodeID] = true
 	default:
@@ -274,24 +274,24 @@ var nid = logutil.NodeID
 func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	// order id requested by user
 	ccid := cc.ConfigChangeId
-	nodeBecomingObserver := m.isAddNodeAsObserver(cc)
+	nodeBecomingNonVoting := m.isAddNodeAsNonVoting(cc)
 	nodeBecomingWitness := m.isAddNodeAsWitness(cc)
 	witnessBecomingNode := m.isAddWitnessAsNode(cc)
-	witnessBecomingObserver := m.isAddWitnessAsObserver(cc)
-	observerBecomingWitness := m.isAddObserverAsWitness(cc)
+	witnessBecomingNonVoting := m.isAddWitnessAsNonVoting(cc)
+	nonVotingBecomingWitness := m.isAddNonVotingAsWitness(cc)
 	alreadyMember := m.isAddExistingMember(cc)
 	addRemovedNode := m.isAddRemovedNode(cc)
 	upToDateCC := m.isUpToDate(cc)
 	deleteOnlyNode := m.isDeleteOnlyNode(cc)
-	invalidPromotion := m.isInvalidObserverPromotion(cc)
+	invalidPromotion := m.isInvalidNonVotingPromotion(cc)
 	accepted := upToDateCC &&
 		!addRemovedNode &&
 		!alreadyMember &&
-		!nodeBecomingObserver &&
+		!nodeBecomingNonVoting &&
 		!nodeBecomingWitness &&
 		!witnessBecomingNode &&
-		!witnessBecomingObserver &&
-		!observerBecomingWitness &&
+		!witnessBecomingNonVoting &&
+		!nonVotingBecomingWitness &&
 		!deleteOnlyNode &&
 		!invalidPromotion
 	if accepted {
@@ -303,7 +303,7 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		} else if cc.Type == pb.RemoveNode {
 			plog.Infof("%s applied REMOVE ccid %d (%d), %s",
 				m.id(), ccid, index, nid(cc.NodeID))
-		} else if cc.Type == pb.AddObserver {
+		} else if cc.Type == pb.AddNonVoting {
 			plog.Infof("%s applied ADD OBSERVER ccid %d (%d), %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if cc.Type == pb.AddWitness {
@@ -322,8 +322,8 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		} else if alreadyMember {
 			plog.Warningf("%s rej add exist ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
-		} else if nodeBecomingObserver {
-			plog.Warningf("%s rej add exist as observer ccid %d (%d) %s (%s)",
+		} else if nodeBecomingNonVoting {
+			plog.Warningf("%s rej add exist as nonVoting ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if nodeBecomingWitness {
 			plog.Warningf("%s rej add exist as witness ccid %d (%d) %s (%s)",
@@ -331,16 +331,16 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 		} else if witnessBecomingNode {
 			plog.Warningf("%s rej add witness as node ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
-		} else if witnessBecomingObserver {
-			plog.Warningf("%s rej add witness as observer ccid %d (%d) %s (%s)",
+		} else if witnessBecomingNonVoting {
+			plog.Warningf("%s rej add witness as nonVoting ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
-		} else if observerBecomingWitness {
-			plog.Warningf("%s rej add observer as witness ccid %d (%d) %s (%s)",
+		} else if nonVotingBecomingWitness {
+			plog.Warningf("%s rej add nonVoting as witness ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else if deleteOnlyNode {
 			plog.Warningf("%s rej remove the only node %s", m.id(), nid(cc.NodeID))
 		} else if invalidPromotion {
-			plog.Warningf("%s rej invalid observer promotion ccid %d (%d) %s (%s)",
+			plog.Warningf("%s rej invalid nonVoting promotion ccid %d (%d) %s (%s)",
 				m.id(), ccid, index, nid(cc.NodeID), cc.Address)
 		} else {
 			plog.Panicf("config change rejected for unknown reasons")

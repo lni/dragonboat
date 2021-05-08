@@ -132,24 +132,24 @@ func (x EntryType) String() string {
 type ConfigChangeType int32
 
 const (
-	AddNode     ConfigChangeType = 0
-	RemoveNode  ConfigChangeType = 1
-	AddObserver ConfigChangeType = 2
-	AddWitness  ConfigChangeType = 3
+	AddNode      ConfigChangeType = 0
+	RemoveNode   ConfigChangeType = 1
+	AddNonVoting ConfigChangeType = 2
+	AddWitness   ConfigChangeType = 3
 )
 
 var ConfigChangeType_name = map[int32]string{
 	0: "AddNode",
 	1: "RemoveNode",
-	2: "AddObserver",
+	2: "AddNonVoting",
 	3: "AddWitness",
 }
 
 var ConfigChangeType_value = map[string]int32{
-	"AddNode":     0,
-	"RemoveNode":  1,
-	"AddObserver": 2,
-	"AddWitness":  3,
+	"AddNode":      0,
+	"RemoveNode":   1,
+	"AddNonVoting": 2,
+	"AddWitness":   3,
 }
 
 func (x ConfigChangeType) String() string {

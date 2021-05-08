@@ -169,14 +169,16 @@ type Config struct {
 	// disable such auto compactions and use NodeHost.RequestCompaction to
 	// manually request such compactions when necessary.
 	DisableAutoCompactions bool
-	// IsObserver indicates whether this is an observer Raft node without voting
-	// power. Described as non-voting members in the section 4.2.1 of Diego
-	// Ongaro's thesis, observer nodes are usually used to allow a new node to
-	// join the cluster and catch up with other existing ndoes without impacting
-	// the availability. Extra observer nodes can also be introduced to serve
-	// read-only requests without affecting system write throughput.
+	// IsNonVoting indicates whether this is a non-voting Raft node. Described as
+	// non-voting members in the section 4.2.1 of Diego Ongaro's thesis, they are
+	// used to allow a new node to join the cluster and catch up with other
+	// existing ndoes without impacting the availability. Extra non-voting nodes
+	// can also be introduced to serve read-only requests.
+	IsNonVoting bool
+	// IsObserver indicates whether this is a non-voting Raft node without voting
+	// power.
 	//
-	// Observer support is currently experimental.
+	// Deprecated: use IsNonVoting instead.
 	IsObserver bool
 	// IsWitness indicates whether this is a witness Raft node without actual log
 	// replication and do not have state machine. It is mentioned in the section
@@ -225,8 +227,11 @@ func (c *Config) Validate() error {
 	if c.IsWitness && c.SnapshotEntries > 0 {
 		return errors.New("witness node can not take snapshot")
 	}
-	if c.IsWitness && c.IsObserver {
-		return errors.New("witness node can not be an observer")
+	if c.IsObserver {
+		c.IsNonVoting = true
+	}
+	if c.IsWitness && c.IsNonVoting {
+		return errors.New("witness node can not be a non-voting node")
 	}
 	return nil
 }
@@ -284,7 +289,7 @@ type NodeHostConfig struct {
 	// by their NodeHostID values. This feature is usually used when only dynamic
 	// addresses are available. When enabled, NodeHostID values should be used
 	// as the target parameter when calling NodeHost's StartCluster,
-	// RequestAddNode, RequestAddObserver and RequestAddWitness methods.
+	// RequestAddNode, RequestAddNonVoting and RequestAddWitness methods.
 	//
 	// Enabling AddressByNodeHostID also enables the internal gossip service,
 	// NodeHostConfig.Gossip must be configured to control the behaviors of the

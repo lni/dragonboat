@@ -339,12 +339,12 @@ func checkMembers(old pb.Membership, members map[uint64]string) error {
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
-		v, ok = old.Observers[nodeID]
+		v, ok = old.NonVotings[nodeID]
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
 		if ok {
-			return errors.New("adding an observer as regular node")
+			return errors.New("adding an nonVoting as regular node")
 		}
 		v, ok = old.Witnesses[nodeID]
 		if ok && v != addr {
@@ -376,7 +376,7 @@ func getProcessedSnapshotRecord(dstDir string,
 		Membership: pb.Membership{
 			ConfigChangeId: old.Index,
 			Removed:        make(map[uint64]bool),
-			Observers:      make(map[uint64]string),
+			NonVotings:     make(map[uint64]string),
 			Addresses:      make(map[uint64]string),
 			Witnesses:      make(map[uint64]string),
 		},
@@ -391,7 +391,7 @@ func getProcessedSnapshotRecord(dstDir string,
 			ss.Membership.Removed[nid] = true
 		}
 	}
-	for nid := range old.Membership.Observers {
+	for nid := range old.Membership.NonVotings {
 		_, ok := members[nid]
 		if !ok {
 			ss.Membership.Removed[nid] = true

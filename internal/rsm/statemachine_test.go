@@ -67,8 +67,8 @@ type testNodeProxy struct {
 	applyUpdateInvoked bool
 	notifyReadClient   bool
 	addPeerCount       uint64
-	addObserver        bool
-	addObserverCount   uint64
+	addNonVoting       bool
+	addNonVotingCount  uint64
 	nodeReady          uint64
 	applyUpdateCalled  bool
 	firstIndex         uint64
@@ -115,9 +115,9 @@ func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, reject
 		if cc.Type == pb.AddNode {
 			p.addPeer = true
 			p.addPeerCount++
-		} else if cc.Type == pb.AddObserver {
-			p.addObserver = true
-			p.addObserverCount++
+		} else if cc.Type == pb.AddNonVoting {
+			p.addNonVoting = true
+			p.addNonVotingCount++
 		} else if cc.Type == pb.RemoveNode {
 			p.removePeer = true
 		}
@@ -610,7 +610,7 @@ func TestGetMembership(t *testing.T) {
 				100: "a100",
 				234: "a234",
 			},
-			Observers: map[uint64]string{
+			NonVotings: map[uint64]string{
 				200: "a200",
 				300: "a300",
 			},
@@ -628,7 +628,7 @@ func TestGetMembership(t *testing.T) {
 		if m.ConfigChangeId != 12345 {
 			t.Errorf("unexpected cid value")
 		}
-		if len(m.Addresses) != 2 || len(m.Observers) != 2 ||
+		if len(m.Addresses) != 2 || len(m.NonVotings) != 2 ||
 			len(m.Removed) != 3 || len(m.Witnesses) != 1 {
 			t.Errorf("len changed")
 		}
@@ -644,7 +644,7 @@ func TestGetMembershipNodes(t *testing.T) {
 				100: "a100",
 				234: "a234",
 			},
-			Observers: map[uint64]string{
+			NonVotings: map[uint64]string{
 				200: "a200",
 				300: "a300",
 			},
@@ -771,7 +771,7 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 	runSMTest2(t, tf, fs)
 }
 
-func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
+func TestAddNodeAsNonVotingWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
@@ -789,7 +789,7 @@ func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
 		}
 		applyConfigChangeEntry(sm,
 			123,
-			pb.AddObserver,
+			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			124)
@@ -804,12 +804,12 @@ func TestAddNodeAsObserverWillBeRejected(t *testing.T) {
 	runSMTest2(t, tf, fs)
 }
 
-func TestObserverCanBeAdded(t *testing.T) {
+func TestNonVotingCanBeAdded(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
-			pb.AddObserver,
+			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			123)
@@ -827,20 +827,20 @@ func TestObserverCanBeAdded(t *testing.T) {
 		if nodeProxy.addPeer {
 			t.Errorf("add peer unexpectedly called")
 		}
-		if !nodeProxy.addObserver {
-			t.Errorf("add observer not called")
+		if !nodeProxy.addNonVoting {
+			t.Errorf("add nonVoting not called")
 		}
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
 }
 
-func TestObserverPromotion(t *testing.T) {
+func TestNonVotingPromotion(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
-			pb.AddObserver,
+			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			123)
@@ -858,8 +858,8 @@ func TestObserverPromotion(t *testing.T) {
 		if nodeProxy.addPeer {
 			t.Errorf("add peer unexpectedly called")
 		}
-		if !nodeProxy.addObserver {
-			t.Errorf("add observer not called")
+		if !nodeProxy.addNonVoting {
+			t.Errorf("add nonVoting not called")
 		}
 		applyConfigChangeEntry(sm,
 			123,
@@ -880,20 +880,20 @@ func TestObserverPromotion(t *testing.T) {
 		if len(sm.members.members.Addresses) != 1 {
 			t.Errorf("node count != 1")
 		}
-		if len(sm.members.members.Observers) != 0 {
-			t.Errorf("observer count != 0")
+		if len(sm.members.members.NonVotings) != 0 {
+			t.Errorf("nonVoting count != 0")
 		}
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
 }
 
-func TestInvalidObserverPromotionIsRejected(t *testing.T) {
+func TestInvalidNonVotingPromotionIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
-			pb.AddObserver,
+			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			123)
@@ -911,8 +911,8 @@ func TestInvalidObserverPromotionIsRejected(t *testing.T) {
 		if nodeProxy.addPeer {
 			t.Errorf("add peer unexpectedly called")
 		}
-		if !nodeProxy.addObserver {
-			t.Errorf("add observer not called")
+		if !nodeProxy.addNonVoting {
+			t.Errorf("add nonVoting not called")
 		}
 		nodeProxy.accept = false
 		applyConfigChangeEntry(sm,
@@ -927,7 +927,7 @@ func TestInvalidObserverPromotionIsRejected(t *testing.T) {
 		}
 		_, ok := sm.members.members.Addresses[4]
 		if ok {
-			t.Errorf("expectedly promoted observer")
+			t.Errorf("expectedly promoted nonVoting")
 		}
 		if nodeProxy.accept {
 			t.Errorf("unexpectedly accepted the promotion")
@@ -968,7 +968,7 @@ func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType, fs vf
 func TestAddExistingMemberIsRejected(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testAddExistingMemberIsRejected(t, pb.AddNode, fs)
-	testAddExistingMemberIsRejected(t, pb.AddObserver, fs)
+	testAddExistingMemberIsRejected(t, pb.AddNonVoting, fs)
 }
 
 func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
@@ -977,8 +977,8 @@ func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
 		if tt == pb.AddNode {
 			sm.members.members.Addresses[5] = "localhost:1010"
-		} else if tt == pb.AddObserver {
-			sm.members.members.Observers[5] = "localhost:1010"
+		} else if tt == pb.AddNonVoting {
+			sm.members.members.NonVotings[5] = "localhost:1010"
 		} else {
 			panic("unknown tt")
 		}
@@ -1009,7 +1009,7 @@ func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
 func TestAddExistingMemberWithSameNodeIDIsRejected(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNode, fs)
-	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddObserver, fs)
+	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNonVoting, fs)
 }
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {

@@ -151,8 +151,8 @@ type ClusterInfo struct {
 	StateMachineType sm.Type
 	// IsLeader indicates whether this is a leader node.
 	IsLeader bool
-	// IsObserver indicates whether this is a non-voting observer node.
-	IsObserver bool
+	// IsNonVoting indicates whether this is a non-voting nonVoting node.
+	IsNonVoting bool
 	// IsWitness indicates whether this is a witness node without actual log.
 	IsWitness bool
 	// Pending is a boolean flag indicating whether details of the cluster node
@@ -435,7 +435,7 @@ func (nh *NodeHost) RaftAddress() string {
 // ID is assigned to each NodeHost on its initial creation and it can be used
 // to uniquely identify the NodeHost instance for its entire life cycle. When
 // the system is running in the AddressByNodeHost mode, it is used as the target
-// value when calling the StartCluster, RequestAddNode, RequestAddObserver,
+// value when calling the StartCluster, RequestAddNode, RequestAddNonVoting,
 // RequestAddWitness methods.
 func (nh *NodeHost) ID() string {
 	return nh.id.String()
@@ -598,9 +598,9 @@ type Membership struct {
 	// Nodes is a map of NodeID values to NodeHost Raft addresses for all regular
 	// Raft nodes.
 	Nodes map[uint64]string
-	// Observers is a map of NodeID values to NodeHost Raft addresses for all
-	// observers in the Raft cluster.
-	Observers map[uint64]string
+	// NonVotings is a map of NodeID values to NodeHost Raft addresses for all
+	// nonVotings in the Raft cluster.
+	NonVotings map[uint64]string
 	// Witnesses is a map of NodeID values to NodeHost Raft addrsses for all
 	// witnesses in the Raft cluster.
 	Witnesses map[uint64]string
@@ -626,7 +626,7 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 			}
 			return &Membership{
 				Nodes:          m.Addresses,
-				Observers:      m.Observers,
+				NonVotings:     m.NonVotings,
 				Witnesses:      m.Witnesses,
 				Removed:        cm(m.Removed),
 				ConfigChangeID: m.ConfigChangeId,
@@ -1026,18 +1026,28 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 	return err
 }
 
-// SyncRequestAddObserver is the synchronous variant of the RequestAddObserver
-// method. See RequestAddObserver for more details.
+// SyncRequestAddObserver is the synchronous variant of the RequestAddObserver.
+//
+// Deprecated: use SyncRequestAddNonVoting instead.
+func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
+	clusterID uint64, nodeID uint64,
+	target string, configChangeIndex uint64) error {
+	return nh.SyncRequestAddNonVoting(ctx,
+		clusterID, nodeID, target, configChangeIndex)
+}
+
+// SyncRequestAddNonVoting is the synchronous variant of the RequestAddNonVoting
+// method. See RequestAddNonVoting for more details.
 //
 // The input context object must have its deadline set.
-func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
+func (nh *NodeHost) SyncRequestAddNonVoting(ctx context.Context,
 	clusterID uint64, nodeID uint64,
 	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestAddObserver(clusterID,
+	rs, err := nh.RequestAddNonVoting(clusterID,
 		nodeID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
@@ -1107,9 +1117,9 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // Application can wait on the ResultC() channel of the returned RequestState
 // instance to get notified for the outcome.
 //
-// If there is already an observer with the same nodeID in the cluster, it will
+// If there is already an nonVoting with the same nodeID in the cluster, it will
 // be promoted to a regular node with voting power. The target parameter of the
-// RequestAddNode call is ignored when promoting an observer to a regular node.
+// RequestAddNode call is ignored when promoting an nonVoting to a regular node.
 //
 // After the node is successfully added to the Raft cluster, it is application's
 // responsibility to call StartCluster on the target NodeHost instance to
@@ -1145,23 +1155,34 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 }
 
 // RequestAddObserver is a Raft cluster membership change method for requesting
-// the specified node to be added to the specified Raft cluster as an observer
-// without voting power. It starts an asynchronous request to add the specified
-// node as an observer.
+// the specified node to be added to the specified Raft cluster as an observer.
 //
-// Such observer is able to receive replicated states from the leader node, but
+// Deprecated: use RequestAddNonVoting instead.
+func (nh *NodeHost) RequestAddObserver(clusterID uint64,
+	nodeID uint64, target Target, configChangeIndex uint64,
+	timeout time.Duration) (*RequestState, error) {
+	return nh.RequestAddNonVoting(clusterID,
+		nodeID, target, configChangeIndex, timeout)
+}
+
+// RequestAddNonVoting is a Raft cluster membership change method for requesting
+// the specified node to be added to the specified Raft cluster as an non-voting
+// member without voting power. It starts an asynchronous request to add the
+// specified node as an non-voting member.
+//
+// Such nonVoting is able to receive replicated states from the leader node, but
 // it is neither allowed to vote for leader, nor considered as a part of the
-// quorum when replicating state. An observer can be promoted to a regular node
+// quorum when replicating state. An nonVoting can be promoted to a regular node
 // with voting power by making a RequestAddNode call using its clusterID and
-// nodeID values. An observer can be removed from the cluster by calling
+// nodeID values. An nonVoting can be removed from the cluster by calling
 // RequestDeleteNode with its clusterID and nodeID values.
 //
-// Application should later call StartCluster with config.Config.IsObserver
-// set to true on the right NodeHost to actually start the observer instance.
+// Application should later call StartCluster with config.Config.IsNonVoting
+// set to true on the right NodeHost to actually start the nonVoting instance.
 //
 // See the godoc of the RequestAddNode method for the details of the target and
 // configChangeIndex parameters.
-func (nh *NodeHost) RequestAddObserver(clusterID uint64,
+func (nh *NodeHost) RequestAddNonVoting(clusterID uint64,
 	nodeID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -1172,7 +1193,7 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 		return nil, ErrClusterNotFound
 	}
 	defer nh.engine.setStepReady(clusterID)
-	return n.requestAddObserverWithOrderID(nodeID,
+	return n.requestAddNonVotingWithOrderID(nodeID,
 		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 

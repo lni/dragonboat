@@ -210,7 +210,7 @@ func TestRaftAPIProposeAndConfigChange(t *testing.T) {
 	testRaftAPIProposeAndConfigChange(pb.AddNode, NoLeader, t)
 	testRaftAPIProposeAndConfigChange(pb.AddNode, 2, t)
 	testRaftAPIProposeAndConfigChange(pb.RemoveNode, 2, t)
-	testRaftAPIProposeAndConfigChange(pb.AddObserver, 2, t)
+	testRaftAPIProposeAndConfigChange(pb.AddNonVoting, 2, t)
 }
 
 func TestGetUpdateIncludeLastAppliedValue(t *testing.T) {
@@ -364,7 +364,7 @@ func TestRaftAPIProposeAddDuplicateNode(t *testing.T) {
 	}
 	cc3 := pb.ConfigChange{Type: pb.RemoveNode, NodeID: 2}
 	ne(rawNode.ApplyConfigChange(cc3), t)
-	cc4 := pb.ConfigChange{Type: pb.AddObserver, NodeID: 3}
+	cc4 := pb.ConfigChange{Type: pb.AddNonVoting, NodeID: 3}
 	ne(rawNode.ApplyConfigChange(cc4), t)
 	cc5 := pb.ConfigChange{Type: pb.RemoveNode, NodeID: NoLeader}
 	ne(rawNode.ApplyConfigChange(cc5), t)

@@ -12,7 +12,7 @@ type Membership struct {
 	ConfigChangeId uint64
 	Addresses      map[uint64]string
 	Removed        map[uint64]bool
-	Observers      map[uint64]string
+	NonVotings     map[uint64]string
 	Witnesses      map[uint64]string
 }
 
@@ -70,11 +70,11 @@ func (m *Membership) MarshalTo(dAtA []byte) (int, error) {
 			i++
 		}
 	}
-	if len(m.Observers) > 0 {
-		for k, _ := range m.Observers {
+	if len(m.NonVotings) > 0 {
+		for k, _ := range m.NonVotings {
 			dAtA[i] = 0x22
 			i++
-			v := m.Observers[k]
+			v := m.NonVotings[k]
 			mapSize := 1 + sovRaft(uint64(k)) + 1 + len(v) + sovRaft(uint64(len(v)))
 			i = encodeVarintRaft(dAtA, i, uint64(mapSize))
 			dAtA[i] = 0x8
@@ -128,8 +128,8 @@ func (m *Membership) Size() (n int) {
 			n += mapEntrySize + 1 + sovRaft(uint64(mapEntrySize))
 		}
 	}
-	if len(m.Observers) > 0 {
-		for k, v := range m.Observers {
+	if len(m.NonVotings) > 0 {
+		for k, v := range m.NonVotings {
 			_ = k
 			_ = v
 			mapEntrySize := 1 + sovRaft(uint64(k)) + 1 + len(v) + sovRaft(uint64(len(v)))
@@ -412,7 +412,7 @@ func (m *Membership) Unmarshal(dAtA []byte) error {
 
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Observers", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field NonVotings", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -439,8 +439,8 @@ func (m *Membership) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Observers == nil {
-				m.Observers = make(map[uint64]string)
+			if m.NonVotings == nil {
+				m.NonVotings = make(map[uint64]string)
 			}
 			var mapkey uint64
 			var mapvalue string
@@ -521,7 +521,7 @@ func (m *Membership) Unmarshal(dAtA []byte) error {
 					iNdEx += skippy
 				}
 			}
-			m.Observers[mapkey] = mapvalue
+			m.NonVotings[mapkey] = mapvalue
 			iNdEx = postIndex
 
 		case 5:

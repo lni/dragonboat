@@ -2895,10 +2895,10 @@ func newNetworkWithConfig(configFunc func(config.Config), peers ...stateMachine)
 			sm.hasNotAppliedConfigChange = sm.testOnlyHasConfigChangeToApply
 			npeers[id] = sm
 		case *raft:
-			observers := make(map[uint64]bool)
+			nonVotings := make(map[uint64]bool)
 			witnesses := make(map[uint64]bool)
-			for i := range v.observers {
-				observers[i] = true
+			for i := range v.nonVotings {
+				nonVotings[i] = true
 			}
 			for i := range v.witnesses {
 				witnesses[i] = true
@@ -2906,11 +2906,11 @@ func newNetworkWithConfig(configFunc func(config.Config), peers ...stateMachine)
 
 			v.nodeID = id
 			v.remotes = make(map[uint64]*remote)
-			v.observers = make(map[uint64]*remote)
+			v.nonVotings = make(map[uint64]*remote)
 			v.witnesses = make(map[uint64]*remote)
 			for i := 0; i < size; i++ {
-				if _, ok := observers[peerAddrs[i]]; ok {
-					v.observers[peerAddrs[i]] = &remote{}
+				if _, ok := nonVotings[peerAddrs[i]]; ok {
+					v.nonVotings[peerAddrs[i]] = &remote{}
 				} else if _, ok := witnesses[peerAddrs[i]]; ok {
 					v.witnesses[peerAddrs[i]] = &remote{}
 				} else {
@@ -3060,27 +3060,27 @@ func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, 
 	return r
 }
 
-func newTestObserver(id uint64, peers []uint64, observers []uint64, election, heartbeat int, logdb ILogDB) *raft {
+func newTestNonVoting(id uint64, peers []uint64, nonVotings []uint64, election, heartbeat int, logdb ILogDB) *raft {
 	found := false
-	for _, p := range observers {
+	for _, p := range nonVotings {
 		if p == id {
 			found = true
 		}
 	}
 	if !found {
-		panic("observer node id not included in the observers list")
+		panic("nonVoting node id not included in the nonVotings list")
 	}
 	cfg := newTestConfig(id, election, heartbeat)
-	cfg.IsObserver = true
+	cfg.IsNonVoting = true
 	r := newRaft(cfg, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
 		}
 	}
-	if len(r.observers) == 0 {
-		for _, p := range observers {
-			r.observers[p] = &remote{next: 1}
+	if len(r.nonVotings) == 0 {
+		for _, p := range nonVotings {
+			r.nonVotings[p] = &remote{next: 1}
 		}
 	}
 	r.hasNotAppliedConfigChange = r.testOnlyHasConfigChangeToApply

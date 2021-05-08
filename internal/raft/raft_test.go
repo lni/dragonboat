@@ -40,7 +40,7 @@ func TestInitializeRaft(t *testing.T) {
 			6: "",
 			7: "",
 		},
-		Observers: map[uint64]string{
+		NonVotings: map[uint64]string{
 			3: "",
 			4: "",
 		},
@@ -62,8 +62,8 @@ func TestInitializeRaft(t *testing.T) {
 	if len(node.remotes) != 3 {
 		t.Errorf("remotes length not expected: %d", len(node.remotes))
 	}
-	if len(node.observers) != 2 {
-		t.Errorf("observers length not expected: %d", len(node.observers))
+	if len(node.nonVotings) != 2 {
+		t.Errorf("nonVotings length not expected: %d", len(node.nonVotings))
 	}
 	if len(node.witnesses) != 2 {
 		t.Errorf("witnesses length not expected: %d", len(node.witnesses))
@@ -78,7 +78,7 @@ func TestMustBeLeaderPanicWhenNotLeader(t *testing.T) {
 		{follower, true},
 		{candidate, true},
 		{leader, false},
-		{observer, true},
+		{nonVoting, true},
 	}
 	for idx, tt := range tests {
 		r := raft{state: tt.st}
@@ -380,10 +380,10 @@ func TestBecomeCandidateDragonboat(t *testing.T) {
 	}
 }
 
-func TestObserverWillNotStartElection(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	if !p.isObserver() {
-		t.Errorf("not an observer")
+func TestNonVotingWillNotStartElection(t *testing.T) {
+	p := newTestNonVoting(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	if !p.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	if len(p.remotes) != 0 {
 		t.Errorf("p.romotes len: %d", len(p.remotes))
@@ -397,51 +397,51 @@ func TestObserverWillNotStartElection(t *testing.T) {
 	}
 }
 
-func TestObserversPreVoteWillNotBeCounted(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+func TestNonVotingsPreVoteWillNotBeCounted(t *testing.T) {
+	p := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p.preVote = true
 	p.addNode(1)
 	p.becomeCandidate()
 	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestPreVoteResp}), t)
 	if len(p.votes) != 0 {
-		t.Errorf("vote from observer not dropped")
+		t.Errorf("vote from nonvoting not dropped")
 	}
 }
 
-func TestObserversVoteWillNotBeCounted(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+func TestNonVotingsVoteWillNotBeCounted(t *testing.T) {
+	p := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p.addNode(1)
 	p.becomeCandidate()
 	ne(p.Handle(pb.Message{From: 2, To: 1, Type: pb.RequestVoteResp}), t)
 	if len(p.votes) != 0 {
-		t.Errorf("vote from observer not dropped")
+		t.Errorf("vote from nonvoting not dropped")
 	}
 }
 
-func TestObserverCanBePromotedToVotingMember(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	if !p.isObserver() {
-		t.Errorf("not an observer")
+func TestNonVotingCanBePromotedToVotingMember(t *testing.T) {
+	p := newTestNonVoting(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	if !p.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	p.addNode(1)
-	if p.isObserver() {
+	if p.isNonVoting() {
 		t.Errorf("not promoted to regular node")
 	}
 	if len(p.remotes) != 1 {
 		t.Errorf("remotes len: %d, want 1", len(p.remotes))
 	}
-	if len(p.observers) != 0 {
-		t.Errorf("observers len: %d, want 0", len(p.observers))
+	if len(p.nonVotings) != 0 {
+		t.Errorf("nonVotings len: %d, want 0", len(p.nonVotings))
 	}
 }
 
-func TestObserverCanActAsRegularNodeAfterPromotion(t *testing.T) {
-	p := newTestObserver(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
-	if !p.isObserver() {
-		t.Errorf("not an observer")
+func TestNonVotingCanActAsRegularNodeAfterPromotion(t *testing.T) {
+	p := newTestNonVoting(1, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	if !p.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	p.addNode(1)
-	if p.isObserver() {
+	if p.isNonVoting() {
 		t.Errorf("not promoted to regular node")
 	}
 	for i := uint64(0); i <= p.randomizedElectionTimeout; i++ {
@@ -452,31 +452,31 @@ func TestObserverCanActAsRegularNodeAfterPromotion(t *testing.T) {
 	}
 }
 
-// observers will not be asked to vote, however a node used to be an observer
+// nonVotings will not be asked to vote, however a node used to be a non-voting node
 // may not realize its own promotion and thus can still receive RequestVote from
-// candidates that are aware of such promotion. in this case, observers have to
+// candidates that are aware of such promotion. in this case, nonVotings have to
 // cast their votes
-func TestObserverCanVote(t *testing.T) {
-	testObserverCanVote(t, false)
-	testObserverCanVote(t, true)
+func TestNonVotingCanVote(t *testing.T) {
+	testNonVotingCanVote(t, false)
+	testNonVotingCanVote(t, true)
 }
 
-func testObserverCanVote(t *testing.T, preVote bool) {
-	a := newTestObserver(1, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
-	b := newTestObserver(2, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
-	c := newTestObserver(3, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+func testNonVotingCanVote(t *testing.T, preVote bool) {
+	a := newTestNonVoting(1, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	b := newTestNonVoting(2, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
+	c := newTestNonVoting(3, nil, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	if preVote {
 		a.preVote = true
 		b.preVote = true
 		c.preVote = true
 	}
-	if !c.isObserver() {
-		t.Errorf("not observer")
+	if !c.isNonVoting() {
+		t.Errorf("not nonvoting")
 	}
 	a.addNode(1)
 	b.addNode(2)
-	if a.isObserver() || b.isObserver() {
-		t.Errorf("unepected observer")
+	if a.isNonVoting() || b.isNonVoting() {
+		t.Errorf("unepected nonvoting")
 	}
 	if a.state != follower {
 		t.Errorf("not a follower")
@@ -495,16 +495,16 @@ func testObserverCanVote(t *testing.T, preVote bool) {
 	}
 }
 
-func TestObserverReplication(t *testing.T) {
-	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestObserver(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+func TestNonVotingReplication(t *testing.T) {
+	p1 := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p2 := newTestNonVoting(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p1.addNode(1)
 	p2.addNode(1)
-	if p1.isObserver() {
-		t.Errorf("p1 is still observer")
+	if p1.isNonVoting() {
+		t.Errorf("p1 is still nonvoting")
 	}
-	if !p2.isObserver() {
-		t.Errorf("p2 is not observer")
+	if !p2.isNonVoting() {
+		t.Errorf("p2 is not nonvoting")
 	}
 	nt := newNetwork(p1, p2)
 	if len(p1.remotes) != 1 {
@@ -523,23 +523,23 @@ func TestObserverReplication(t *testing.T) {
 	}
 	// the no-op blank entry appended after p1 becomes the leader is also replicated
 	if committed+1 != p2.log.committed {
-		t.Errorf("entry not committed on observer: %d", p2.log.committed)
+		t.Errorf("entry not committed on nonvoting: %d", p2.log.committed)
 	}
-	if committed+1 != p1.observers[2].match {
-		t.Errorf("match value not expected: %d", p1.observers[2].match)
+	if committed+1 != p1.nonVotings[2].match {
+		t.Errorf("match value not expected: %d", p1.nonVotings[2].match)
 	}
 }
 
-func TestObserverCanPropose(t *testing.T) {
-	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestObserver(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+func TestNonVotingCanPropose(t *testing.T) {
+	p1 := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p2 := newTestNonVoting(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p1.addNode(1)
 	p2.addNode(1)
-	if p1.isObserver() {
-		t.Errorf("p1 is still observer")
+	if p1.isNonVoting() {
+		t.Errorf("p1 is still nonvoting")
 	}
-	if !p2.isObserver() {
-		t.Errorf("p2 is not observer")
+	if !p2.isNonVoting() {
+		t.Errorf("p2 is not nonvoting")
 	}
 	nt := newNetwork(p1, p2)
 	if len(p1.remotes) != 1 {
@@ -553,8 +553,8 @@ func TestObserverCanPropose(t *testing.T) {
 		ne(p1.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
-	if !p2.isObserver() {
-		t.Errorf("not observer")
+	if !p2.isNonVoting() {
+		t.Errorf("not nonvoting")
 	}
 	committed := p1.log.committed
 	for i := 0; i < 10; i++ {
@@ -565,23 +565,23 @@ func TestObserverCanPropose(t *testing.T) {
 	}
 	// the no-op blank entry appended after p1 becomes the leader is also replicated
 	if committed+10 != p2.log.committed {
-		t.Errorf("entry not committed on observer: %d", p2.log.committed)
+		t.Errorf("entry not committed on nonvoting: %d", p2.log.committed)
 	}
-	if committed+10 != p1.observers[2].match {
-		t.Errorf("match value not expected: %d", p1.observers[2].match)
+	if committed+10 != p1.nonVotings[2].match {
+		t.Errorf("match value not expected: %d", p1.nonVotings[2].match)
 	}
 }
 
-func TestObserverCanReadIndexQuorum1(t *testing.T) {
-	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p2 := newTestObserver(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+func TestNonVotingCanReadIndexQuorum1(t *testing.T) {
+	p1 := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	p2 := newTestNonVoting(2, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p1.addNode(1)
 	p2.addNode(1)
-	if p1.isObserver() {
-		t.Errorf("p1 is still observer")
+	if p1.isNonVoting() {
+		t.Errorf("p1 is still nonvoting")
 	}
-	if !p2.isObserver() {
-		t.Errorf("p2 is not observer")
+	if !p2.isNonVoting() {
+		t.Errorf("p2 is not nonvoting")
 	}
 	nt := newNetwork(p1, p2)
 	if len(p1.remotes) != 1 {
@@ -595,8 +595,8 @@ func TestObserverCanReadIndexQuorum1(t *testing.T) {
 		ne(p1.tick(), t)
 		nt.send(pb.Message{From: 1, To: 1, Type: pb.NoOP})
 	}
-	if !p2.isObserver() {
-		t.Errorf("not observer")
+	if !p2.isNonVoting() {
+		t.Errorf("not nonvoting")
 	}
 	committed := p1.log.committed
 	for i := 0; i < 10; i++ {
@@ -614,12 +614,12 @@ func TestObserverCanReadIndexQuorum1(t *testing.T) {
 	}
 }
 
-func TestObserverCanReadIndexQuorum2(t *testing.T) {
+func TestNonVotingCanReadIndexQuorum2(t *testing.T) {
 	p1 := newTestRaft(1, []uint64{1, 2}, 10, 1, NewTestLogDB())
 	p2 := newTestRaft(2, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	p3 := newTestObserver(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
-	p1.addObserver(3)
-	p2.addObserver(3)
+	p3 := newTestNonVoting(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
+	p1.addNonVoting(3)
+	p2.addNonVoting(3)
 	nt := newNetwork(p1, p2, p3)
 	nt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
 	if p1.state != leader {
@@ -628,8 +628,8 @@ func TestObserverCanReadIndexQuorum2(t *testing.T) {
 	if p2.state != follower {
 		t.Errorf("not a follower")
 	}
-	if !p3.isObserver() {
-		t.Errorf("not an observer")
+	if !p3.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	for i := uint64(0); i <= p1.randomizedElectionTimeout; i++ {
 		ne(p1.tick(), t)
@@ -651,11 +651,11 @@ func TestObserverCanReadIndexQuorum2(t *testing.T) {
 	}
 }
 
-func TestObserverCanReceiveSnapshot(t *testing.T) {
+func TestNonVotingCanReceiveSnapshot(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
 	members.Addresses[1] = "a1"
 	members.Addresses[2] = "a2"
@@ -664,9 +664,9 @@ func TestObserverCanReceiveSnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(3, []uint64{1}, []uint64{2, 3}, 10, 1, NewTestLogDB())
-	if !p1.isObserver() {
-		t.Errorf("not an observer")
+	p1 := newTestNonVoting(3, []uint64{1}, []uint64{2, 3}, 10, 1, NewTestLogDB())
+	if !p1.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	ne(p1.Handle(pb.Message{From: 2, To: 1, Type: pb.InstallSnapshot, Snapshot: ss}), t)
 	if p1.log.committed != 20 {
@@ -674,8 +674,8 @@ func TestObserverCanReceiveSnapshot(t *testing.T) {
 	}
 }
 
-func TestObserverCanReceiveHeartbeatMessage(t *testing.T) {
-	p1 := newTestObserver(2, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
+func TestNonVotingCanReceiveHeartbeatMessage(t *testing.T) {
+	p1 := newTestNonVoting(2, []uint64{1}, []uint64{2}, 10, 1, NewTestLogDB())
 	m := pb.Message{
 		From:     1,
 		To:       2,
@@ -707,21 +707,21 @@ func TestObserverCanReceiveHeartbeatMessage(t *testing.T) {
 	}
 }
 
-func TestObserverCanBeRestored(t *testing.T) {
+func TestNonVotingCanBeRestored(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
 	members.Addresses[1] = "a1"
 	members.Addresses[2] = "a2"
-	members.Observers[3] = "a3"
+	members.NonVotings[3] = "a3"
 	ss := pb.Snapshot{
 		Index:      20,
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
+	p1 := newTestNonVoting(3, []uint64{1, 2}, []uint64{3}, 10, 1, NewTestLogDB())
 	ok, err := p1.restore(ss)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -731,11 +731,11 @@ func TestObserverCanBeRestored(t *testing.T) {
 	}
 }
 
-func TestObserverCanBePromotedBySnapshot(t *testing.T) {
+func TestNonVotingCanBePromotedBySnapshot(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
 	members.Addresses[1] = "a1"
 	members.Addresses[2] = "a2"
@@ -744,9 +744,9 @@ func TestObserverCanBePromotedBySnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	if !p1.isObserver() {
-		t.Errorf("not an observer")
+	p1 := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	if !p1.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	ok, err := p1.restore(ss)
 	if err != nil {
@@ -756,18 +756,18 @@ func TestObserverCanBePromotedBySnapshot(t *testing.T) {
 		t.Errorf("failed to restore")
 	}
 	p1.restoreRemotes(ss)
-	if p1.isObserver() {
-		t.Errorf("observer not promoted")
+	if p1.isNonVoting() {
+		t.Errorf("nonvoting not promoted")
 	}
 }
 
-func TestCorrectObserverCanBePromotedBySnapshot(t *testing.T) {
+func TestCorrectNonVotingCanBePromotedBySnapshot(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
-	members.Observers[1] = "a1"
+	members.NonVotings[1] = "a1"
 	members.Addresses[2] = "a2"
 	members.Addresses[3] = "a3"
 	ss := pb.Snapshot{
@@ -775,33 +775,33 @@ func TestCorrectObserverCanBePromotedBySnapshot(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(1, []uint64{2}, []uint64{1, 3}, 10, 1, NewTestLogDB())
-	if !p1.isObserver() {
-		t.Errorf("not an observer")
+	p1 := newTestNonVoting(1, []uint64{2}, []uint64{1, 3}, 10, 1, NewTestLogDB())
+	if !p1.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
-	_, ok := p1.observers[1]
+	_, ok := p1.nonVotings[1]
 	if !ok {
-		t.Errorf("not an observer")
+		t.Errorf("not a non-voting node")
 	}
-	_, ok = p1.observers[3]
+	_, ok = p1.nonVotings[3]
 	if !ok {
-		t.Errorf("not an observer")
+		t.Errorf("not a non-voting node")
 	}
 	p1.restoreRemotes(ss)
-	if !p1.isObserver() {
-		t.Errorf("observer p1 unexpectedly promoted")
+	if !p1.isNonVoting() {
+		t.Errorf("nonvoting p1 unexpectedly promoted")
 	}
 }
 
-func TestObserverCanNotMoveNodeBackToObserverBySnapshot(t *testing.T) {
+func TestNonVotingCanNotMoveNodeBackToNonVotingBySnapshot(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
 	members.Addresses[1] = "a1"
 	members.Addresses[2] = "a2"
-	members.Observers[3] = "a3"
+	members.NonVotings[3] = "a3"
 	ss := pb.Snapshot{
 		Index:      20,
 		Term:       20,
@@ -822,43 +822,43 @@ func TestObserverCanNotMoveNodeBackToObserverBySnapshot(t *testing.T) {
 	}
 }
 
-func TestObserverCanBeAdded(t *testing.T) {
+func TestNonVotingCanBeAdded(t *testing.T) {
 	p1 := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
-	if len(p1.observers) != 0 {
-		t.Errorf("unexpected observer record")
+	if len(p1.nonVotings) != 0 {
+		t.Errorf("unexpected nonvoting record")
 	}
-	p1.addObserver(2)
-	if len(p1.observers) != 1 {
-		t.Errorf("observer not added")
+	p1.addNonVoting(2)
+	if len(p1.nonVotings) != 1 {
+		t.Errorf("nonvoting not added")
 	}
-	if p1.isObserver() {
-		t.Errorf("unexpectedly changed to observer")
+	if p1.isNonVoting() {
+		t.Errorf("unexpectedly changed to nonvoting")
 	}
 }
 
-func TestObserverCanBeRemoved(t *testing.T) {
-	p1 := newTestObserver(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
-	if len(p1.observers) != 2 {
-		t.Errorf("unexpected observer count")
+func TestNonVotingCanBeRemoved(t *testing.T) {
+	p1 := newTestNonVoting(1, nil, []uint64{1, 2}, 10, 1, NewTestLogDB())
+	if len(p1.nonVotings) != 2 {
+		t.Errorf("unexpected nonvoting count")
 	}
 	ne(p1.removeNode(2), t)
-	if len(p1.observers) != 1 {
-		t.Errorf("observer not removed")
+	if len(p1.nonVotings) != 1 {
+		t.Errorf("nonvoting not removed")
 	}
-	_, ok := p1.observers[2]
+	_, ok := p1.nonVotings[2]
 	if ok {
-		t.Errorf("observer node 2 not removed")
+		t.Errorf("nonvoting node 2 not removed")
 	}
 }
 
-func TestWitnessCanNotBecomeObserver(t *testing.T) {
+func TestWitnessCanNotBecomeNonVoting(t *testing.T) {
 	_, witness, _ := setUpLeaderAndWitness(t)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatalf("witness became follower")
 		}
 	}()
-	witness.becomeObserver(1, 1)
+	witness.becomeNonVoting(1, 1)
 }
 
 func TestWitnessCanNotBecomeFollower(t *testing.T) {
@@ -928,9 +928,9 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 
 func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 	members := pb.Membership{
-		Addresses: make(map[uint64]string),
-		Observers: make(map[uint64]string),
-		Removed:   make(map[uint64]bool),
+		Addresses:  make(map[uint64]string),
+		NonVotings: make(map[uint64]string),
+		Removed:    make(map[uint64]bool),
 	}
 	members.Addresses[1] = "a1"
 	members.Addresses[2] = "a2"
@@ -939,9 +939,9 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 		Term:       20,
 		Membership: members,
 	}
-	p1 := newTestObserver(1, []uint64{1}, []uint64{1}, 10, 1, NewTestLogDB())
-	if !p1.isObserver() {
-		t.Errorf("not an observer")
+	p1 := newTestNonVoting(1, []uint64{1}, []uint64{1}, 10, 1, NewTestLogDB())
+	if !p1.isNonVoting() {
+		t.Errorf("not a non-voting node")
 	}
 	ok, err := p1.restore(ss)
 	if err != nil {
@@ -951,8 +951,8 @@ func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
 		t.Errorf("failed to restore")
 	}
 	p1.restoreRemotes(ss)
-	if p1.isObserver() {
-		t.Errorf("observer not promoted")
+	if p1.isNonVoting() {
+		t.Errorf("nonvoting not promoted")
 	}
 
 	p1.witnesses[2] = &remote{}
@@ -1219,7 +1219,7 @@ func TestWitnessCanBeAdded(t *testing.T) {
 		t.Errorf("witness not added")
 	}
 	if p1.isWitness() {
-		t.Errorf("unexpectedly changed to observer")
+		t.Errorf("unexpectedly changed to nonvoting")
 	}
 }
 
@@ -1774,12 +1774,12 @@ func TestFollowerSelfRemoved(t *testing.T) {
 	}
 }
 
-func TestObserverSelfRemoved(t *testing.T) {
-	r := newTestObserver(1, []uint64{}, []uint64{1}, 5, 1, NewTestLogDB())
+func TestNonVotingSelfRemoved(t *testing.T) {
+	r := newTestNonVoting(1, []uint64{}, []uint64{1}, 5, 1, NewTestLogDB())
 	if r.selfRemoved() {
 		t.Errorf("unexpectedly self removed")
 	}
-	delete(r.observers, 1)
+	delete(r.nonVotings, 1)
 	if !r.selfRemoved() {
 		t.Errorf("self removed not report removed")
 	}
@@ -2198,9 +2198,9 @@ func TestRestoreRemote(t *testing.T) {
 	ss.Membership.Addresses[1] = ""
 	ss.Membership.Addresses[2] = ""
 	ss.Membership.Addresses[3] = ""
-	ss.Membership.Observers = make(map[uint64]string)
-	ss.Membership.Observers[4] = ""
-	ss.Membership.Observers[5] = ""
+	ss.Membership.NonVotings = make(map[uint64]string)
+	ss.Membership.NonVotings[4] = ""
+	ss.Membership.NonVotings[5] = ""
 	ss.Membership.Witnesses = make(map[uint64]string)
 	ss.Membership.Witnesses[6] = ""
 	ss.Membership.Witnesses[7] = ""
@@ -2208,11 +2208,11 @@ func TestRestoreRemote(t *testing.T) {
 	if len(r.remotes) != 3 {
 		t.Errorf("remotes length unexpected %d", len(r.remotes))
 	}
-	if len(r.observers) != 2 {
-		t.Errorf("observers length unexpected %d", len(r.observers))
+	if len(r.nonVotings) != 2 {
+		t.Errorf("nonVotings length unexpected %d", len(r.nonVotings))
 	}
 	if len(r.witnesses) != 2 {
-		t.Errorf("witnesses length unexpected %d", len(r.observers))
+		t.Errorf("witnesses length unexpected %d", len(r.witnesses))
 	}
 	if len(r.nodesSorted()) != 7 {
 		t.Errorf("total node length unexpected %d", len(r.nodesSorted()))

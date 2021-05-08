@@ -48,26 +48,26 @@ func TestDeepCopyMembership(t *testing.T) {
 		ConfigChangeId: 101,
 		Addresses:      make(map[uint64]string),
 		Removed:        make(map[uint64]bool),
-		Observers:      make(map[uint64]string),
+		NonVotings:     make(map[uint64]string),
 		Witnesses:      make(map[uint64]string),
 	}
 	copied := deepCopyMembership(m)
 	m.ConfigChangeId = 102
 	m.Addresses[1] = "addr1"
 	m.Removed[1] = true
-	m.Observers[1] = "addr1"
+	m.NonVotings[1] = "addr1"
 	m.Witnesses[1] = "addr1"
 	if copied.ConfigChangeId != 101 ||
 		len(copied.Addresses) != 0 ||
 		len(copied.Removed) != 0 ||
-		len(copied.Observers) != 0 {
+		len(copied.NonVotings) != 0 {
 		t.Fatalf("copied membership changed")
 	}
 	copied2 := deepCopyMembership(m)
 	if copied2.ConfigChangeId != 102 ||
 		len(copied2.Addresses) != 1 ||
 		len(copied2.Removed) != 1 ||
-		len(copied2.Observers) != 1 ||
+		len(copied2.NonVotings) != 1 ||
 		len(copied2.Witnesses) != 1 {
 		t.Fatalf("unexpected copied membership data")
 	}
@@ -79,7 +79,7 @@ func TestMembershipCanBeCreated(t *testing.T) {
 		t.Errorf("not ordered")
 	}
 	if len(m.members.Addresses) != 0 ||
-		len(m.members.Observers) != 0 ||
+		len(m.members.NonVotings) != 0 ||
 		len(m.members.Removed) != 0 ||
 		len(m.members.Witnesses) != 0 {
 		t.Errorf("unexpected data")
@@ -91,17 +91,17 @@ func TestMembershipCanBeSet(t *testing.T) {
 		ConfigChangeId: 101,
 		Addresses:      make(map[uint64]string),
 		Removed:        make(map[uint64]bool),
-		Observers:      make(map[uint64]string),
+		NonVotings:     make(map[uint64]string),
 		Witnesses:      make(map[uint64]string),
 	}
 	m.Addresses[1] = "addr1"
 	m.Removed[2] = true
-	m.Observers[3] = "addr2"
+	m.NonVotings[3] = "addr2"
 	m.Witnesses[4] = "addr3"
 	o := newMembership(1, 2, true)
 	o.set(m)
 	if len(o.members.Addresses) != 1 ||
-		len(o.members.Observers) != 1 ||
+		len(o.members.NonVotings) != 1 ||
 		len(o.members.Removed) != 1 ||
 		len(o.members.Witnesses) != 1 ||
 		o.members.ConfigChangeId != 101 {
@@ -119,7 +119,7 @@ func TestMembershipIsEmpty(t *testing.T) {
 	if !o.isEmpty() {
 		t.Errorf("not marked as empty")
 	}
-	o.members.Observers[1] = "addr1"
+	o.members.NonVotings[1] = "addr1"
 	if !o.isEmpty() {
 		t.Errorf("not marked as empty")
 	}
@@ -146,7 +146,7 @@ func TestIsDeletingOnlyNode(t *testing.T) {
 	if o.isDeleteOnlyNode(cc2) {
 		t.Errorf("not even a delete node op")
 	}
-	o.members.Observers[2] = "a2"
+	o.members.NonVotings[2] = "a2"
 	if !o.isDeleteOnlyNode(cc) {
 		t.Errorf("not considered as deleting only node")
 	}
@@ -164,7 +164,7 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
-	cc.Type = pb.AddObserver
+	cc.Type = pb.AddNonVoting
 	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
@@ -185,14 +185,14 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	if !o.isAddRemovedNode(cc) {
 		t.Errorf("not rejected")
 	}
-	cc.Type = pb.AddObserver
+	cc.Type = pb.AddNonVoting
 	cc.NodeID = 2
 	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrectly rejected")
 	}
 }
 
-func TestIsAddingNodeAsObserver(t *testing.T) {
+func TestIsAddingNodeAsNonVoting(t *testing.T) {
 	tests := []struct {
 		t      pb.ConfigChangeType
 		nodeID uint64
@@ -205,10 +205,10 @@ func TestIsAddingNodeAsObserver(t *testing.T) {
 		{pb.AddWitness, 1, []uint64{}, false},
 		{pb.RemoveNode, 1, []uint64{1}, false},
 		{pb.RemoveNode, 1, []uint64{}, false},
-		{pb.AddObserver, 1, []uint64{1}, true},
-		{pb.AddObserver, 1, []uint64{1, 2}, true},
-		{pb.AddObserver, 1, []uint64{2}, false},
-		{pb.AddObserver, 1, []uint64{}, false},
+		{pb.AddNonVoting, 1, []uint64{1}, true},
+		{pb.AddNonVoting, 1, []uint64{1, 2}, true},
+		{pb.AddNonVoting, 1, []uint64{2}, false},
+		{pb.AddNonVoting, 1, []uint64{}, false},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
@@ -219,7 +219,7 @@ func TestIsAddingNodeAsObserver(t *testing.T) {
 		for _, v := range tt.addrs {
 			o.members.Addresses[v] = "addr"
 		}
-		result := o.isAddNodeAsObserver(cc)
+		result := o.isAddNodeAsNonVoting(cc)
 		if result != tt.result {
 			t.Errorf("%d failed", idx)
 		}
@@ -258,12 +258,12 @@ func TestIsConfChangeUpToDate(t *testing.T) {
 
 func TestIsAddingExistingMember(t *testing.T) {
 	tests := []struct {
-		t         pb.ConfigChangeType
-		addrs     map[uint64]string
-		observers map[uint64]string
-		addr      string
-		nodeID    uint64
-		result    bool
+		t          pb.ConfigChangeType
+		addrs      map[uint64]string
+		nonVotings map[uint64]string
+		addr       string
+		nodeID     uint64
+		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
@@ -277,19 +277,19 @@ func TestIsAddingExistingMember(t *testing.T) {
 		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, false},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a4", 2, true},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a4", 2, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
 		for i, v := range tt.addrs {
 			o.members.Addresses[i] = v
 		}
-		for i, v := range tt.observers {
-			o.members.Observers[i] = v
+		for i, v := range tt.nonVotings {
+			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
 			Type:    tt.t,
@@ -302,13 +302,13 @@ func TestIsAddingExistingMember(t *testing.T) {
 	}
 }
 
-func TestIsPromotingObserver(t *testing.T) {
+func TestIsPromotingNonVoting(t *testing.T) {
 	tests := []struct {
-		t         pb.ConfigChangeType
-		observers map[uint64]string
-		addr      string
-		nodeID    uint64
-		result    bool
+		t          pb.ConfigChangeType
+		nonVotings map[uint64]string
+		addr       string
+		nodeID     uint64
+		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a2", 1, false},
@@ -316,33 +316,33 @@ func TestIsPromotingObserver(t *testing.T) {
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a2", 1, false},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 1, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a1", 1, false},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
-		for i, v := range tt.observers {
-			o.members.Observers[i] = v
+		for i, v := range tt.nonVotings {
+			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
 			Type:    tt.t,
 			Address: tt.addr,
 			NodeID:  tt.nodeID,
 		}
-		if result := o.isPromoteObserver(cc); result != tt.result {
+		if result := o.isPromoteNonVoting(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
 }
 
-func TestIsInvalidObserverPromotion(t *testing.T) {
+func TestIsInvalidNonVotingPromotion(t *testing.T) {
 	tests := []struct {
-		t         pb.ConfigChangeType
-		observers map[uint64]string
-		addr      string
-		nodeID    uint64
-		result    bool
+		t          pb.ConfigChangeType
+		nonVotings map[uint64]string
+		addr       string
+		nodeID     uint64
+		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, false},
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
@@ -350,21 +350,21 @@ func TestIsInvalidObserverPromotion(t *testing.T) {
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 3, false},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a2", 1, false},
 		{pb.AddWitness, map[uint64]string{1: "a1"}, "a1", 1, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 3, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a2", 1, false},
-		{pb.AddObserver, map[uint64]string{1: "a1"}, "a1", 1, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a1", 3, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a2", 1, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"}, "a1", 1, false},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
-		for i, v := range tt.observers {
-			o.members.Observers[i] = v
+		for i, v := range tt.nonVotings {
+			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
 			Type:    tt.t,
 			Address: tt.addr,
 			NodeID:  tt.nodeID,
 		}
-		if result := o.isInvalidObserverPromotion(cc); result != tt.result {
+		if result := o.isInvalidNonVotingPromotion(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
 		}
 	}
@@ -387,9 +387,9 @@ func TestApplyAddNode(t *testing.T) {
 	}
 }
 
-func TestAddNodeCanPromoteObserverToNode(t *testing.T) {
+func TestAddNodeCanPromoteNonVotingToNode(t *testing.T) {
 	o := newMembership(1, 2, true)
-	o.members.Observers[100] = "a2"
+	o.members.NonVotings[100] = "a2"
 	cc := pb.ConfigChange{
 		Type:    pb.AddNode,
 		Address: "a2",
@@ -400,16 +400,16 @@ func TestAddNodeCanPromoteObserverToNode(t *testing.T) {
 	if !ok || v != "a2" || len(o.members.Addresses) != 1 {
 		t.Errorf("node not added")
 	}
-	_, ok = o.members.Observers[100]
+	_, ok = o.members.NonVotings[100]
 	if ok {
-		t.Errorf("promoted observer not removed")
+		t.Errorf("promoted nonVoting not removed")
 	}
 }
 
-func TestApplyAddObserver(t *testing.T) {
+func TestApplyAddNonVoting(t *testing.T) {
 	o := newMembership(1, 2, true)
 	cc := pb.ConfigChange{
-		Type:    pb.AddObserver,
+		Type:    pb.AddNonVoting,
 		Address: "a1",
 		NodeID:  100,
 	}
@@ -417,26 +417,26 @@ func TestApplyAddObserver(t *testing.T) {
 	if o.members.ConfigChangeId != 1000 {
 		t.Errorf("ccid not updated")
 	}
-	v, ok := o.members.Observers[100]
-	if !ok || v != "a1" || len(o.members.Observers) != 1 {
+	v, ok := o.members.NonVotings[100]
+	if !ok || v != "a1" || len(o.members.NonVotings) != 1 {
 		t.Errorf("node not added")
 	}
 }
 
-func TestAddingExistingNodeAsObserverIsNotAllowed(t *testing.T) {
+func TestAddingExistingNodeAsNonVotingIsNotAllowed(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddObserver,
+		Type:    pb.AddNonVoting,
 		Address: "a1",
 		NodeID:  100,
 	}
 	if o.handleConfigChange(cc, 0) {
-		t.Errorf("ading existing node as observer is not rejected")
+		t.Errorf("ading existing node as nonVoting is not rejected")
 	}
 }
 
-func TestAddingExistingNodeAsObserverWillPanic(t *testing.T) {
+func TestAddingExistingNodeAsNonVotingWillPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("not panic")
@@ -445,7 +445,7 @@ func TestAddingExistingNodeAsObserverWillPanic(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddObserver,
+		Type:    pb.AddNonVoting,
 		Address: "a1",
 		NodeID:  100,
 	}
@@ -468,14 +468,14 @@ func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
 	o.apply(cc, 1000)
 }
 
-func TestAddingExistingObserverAsWitnessWillPanic(t *testing.T) {
+func TestAddingExistingNonVotingAsWitnessWillPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("not panic")
 		}
 	}()
 	o := newMembership(1, 2, true)
-	o.members.Observers[100] = "a1"
+	o.members.NonVotings[100] = "a1"
 	cc := pb.ConfigChange{
 		Type:    pb.AddWitness,
 		Address: "a1",
@@ -487,7 +487,7 @@ func TestAddingExistingObserverAsWitnessWillPanic(t *testing.T) {
 func TestApplyRemoveNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
-	o.members.Observers[100] = "a1"
+	o.members.NonVotings[100] = "a1"
 	o.members.Witnesses[100] = "a1"
 	cc := pb.ConfigChange{
 		Type:   pb.RemoveNode,
@@ -495,7 +495,7 @@ func TestApplyRemoveNode(t *testing.T) {
 	}
 	o.apply(cc, 1000)
 	if len(o.members.Addresses) != 0 ||
-		len(o.members.Observers) != 0 ||
+		len(o.members.NonVotings) != 0 ||
 		len(o.members.Witnesses) != 0 {
 		t.Errorf("node not removed")
 	}
