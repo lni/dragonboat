@@ -4823,7 +4823,7 @@ func testWitnessIO(t *testing.T,
 		newWitness := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return witness
 		}
-		if err := nh2.StartOnDiskCluster(peers, false, newWitness, rc2); err != nil {
+		if err := nh2.StartOnDiskCluster(nil, true, newWitness, rc2); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh2, 1)
