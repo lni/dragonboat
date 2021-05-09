@@ -67,20 +67,12 @@ func Launch(config config.Config,
 	checkLaunchRequest(config, addresses, initial, newNode)
 	plog.Infof("%s created, initial: %t, new: %t",
 		dn(config.ClusterID, config.NodeID), initial, newNode)
-	r := newRaft(config, logdb)
-	p := Peer{raft: r}
+	p := Peer{raft: newRaft(config, logdb)}
 	p.raft.events = events
-	_, lastIndex := logdb.GetRange()
-	if newNode && !config.IsNonVoting && !config.IsWitness {
-		r.becomeFollower(1, NoLeader)
-	}
+	p.prevState = p.raft.raftState()
 	if initial && newNode {
-		bootstrap(r, addresses)
-	}
-	if lastIndex == 0 {
-		p.prevState = emptyState
-	} else {
-		p.prevState = r.raftState()
+		p.raft.becomeFollower(1, NoLeader)
+		bootstrap(p.raft, addresses)
 	}
 	return p
 }
@@ -376,6 +368,12 @@ func checkLaunchRequest(config config.Config,
 	}
 	if len(uniqueAddressList) != len(addresses) {
 		plog.Panicf("duplicated address found %v", addresses)
+	}
+	if initial && config.IsWitness {
+		plog.Panicf("witness can not be used as initial member")
+	}
+	if initial && config.IsNonVoting {
+		plog.Panicf("non-voting can not be used as initial member")
 	}
 }
 
