@@ -531,9 +531,11 @@ func (c *NodeHostConfig) Validate() error {
 	if len(c.NodeHostDir) == 0 {
 		return errors.New("NodeHostConfig.NodeHostDir is empty")
 	}
-	if !c.MutualTLS &&
-		(len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0) {
-		plog.Warningf("CAFile/CertFile/KeyFile specified when MutualTLS is disabled")
+	if !c.MutualTLS {
+		plog.Warningf("mutual TLS disabled, communication is insecure")
+		if len(c.CAFile) > 0 || len(c.CertFile) > 0 || len(c.KeyFile) > 0 {
+			plog.Warningf("CAFile/CertFile/KeyFile specified when MutualTLS is disabled")
+		}
 	}
 	if c.MutualTLS {
 		if len(c.CAFile) == 0 {
