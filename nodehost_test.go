@@ -3776,7 +3776,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		}
 		waitForLeaderToBeElected(t, nh, 1)
 		makeProposals := func(nn *NodeHost) {
-			session := nh.GetNoOPSession(1)
+			session := nn.GetNoOPSession(1)
 			for i := 0; i < 16; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), pto)
 				_, err := nn.SyncPropose(ctx, session, []byte("test-data"))
