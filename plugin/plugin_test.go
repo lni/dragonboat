@@ -16,23 +16,28 @@ package plugin
 
 import (
 	"os"
+	"path"
 	"testing"
 
 	"github.com/lni/dragonboat/v3"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/plugin/rocksdb"
+	"github.com/lni/dragonboat/v3/plugin/transport/quic"
 )
 
-var (
+const (
 	singleNodeHostTestDir = "plugin_test_dir_safe_to_delete"
+	caFile                = "../internal/transport/tests/test-root-ca.crt"
+	certFile              = "../internal/transport/tests/localhost.crt"
+	keyFile               = "../internal/transport/tests/localhost.key"
 )
 
 func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
+	testDir := path.Join(t.TempDir(), singleNodeHostTestDir)
+	defer os.RemoveAll(testDir)
 	nhc := config.NodeHostConfig{
-		NodeHostDir:    singleNodeHostTestDir,
+		NodeHostDir:    testDir,
 		RTTMillisecond: 20,
 		RaftAddress:    "localhost:26000",
 		Expert:         config.ExpertConfig{FS: vfs.DefaultFS, LogDBFactory: f},
@@ -44,6 +49,30 @@ func testLogDBPluginCanBeUsed(t *testing.T, f config.LogDBFactory) {
 	defer nh.Close()
 }
 
+func testTransportPluginCanBeUsed(t *testing.T, f config.TransportFactory) {
+	testDir := path.Join(t.TempDir(), singleNodeHostTestDir)
+	defer os.RemoveAll(testDir)
+	nhc := config.NodeHostConfig{
+		NodeHostDir:    testDir,
+		RTTMillisecond: 20,
+		RaftAddress:    "localhost:26000",
+		Expert:         config.ExpertConfig{FS: vfs.DefaultFS, TransportFactory: f},
+		MutualTLS:      true,
+		CAFile:         caFile,
+		CertFile:       certFile,
+		KeyFile:        keyFile,
+	}
+	nh, err := dragonboat.NewNodeHost(nhc)
+	if err != nil {
+		t.Fatalf("failed to create nodehost %v", err)
+	}
+	defer nh.Close()
+}
+
 func TestLogDBPluginsCanBeUsed(t *testing.T) {
 	testLogDBPluginCanBeUsed(t, &rocksdb.Factory{})
+}
+
+func TestTransportPluginsCanBeUsed(t *testing.T) {
+	testTransportPluginCanBeUsed(t, &quic.TransportFactory{})
 }

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -74,6 +75,9 @@ func (q *quicTransport) Start() error {
 	if err != nil {
 		return err
 	}
+	if tlsConfig == nil {
+		return fmt.Errorf("TLS config is mandatory for QUIC transport")
+	}
 	tlsConfig = tlsConfig.Clone()
 	tlsConfig.NextProtos = []string{TransportName}
 
@@ -82,18 +86,14 @@ func (q *quicTransport) Start() error {
 		plog.Panicf("QUIC listener failed: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	q.stopper.RunWorker(func() {
 		<-q.stopper.ShouldStop()
+		cancel()
 		q.connStopper.Stop()
 		if err := listener.Close(); err != nil {
 			plog.Warningf("error closing listener: %v", err)
 		}
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	q.connStopper.RunWorker(func() {
-		<-q.connStopper.ShouldStop()
-		cancel()
 	})
 
 	q.stopper.RunWorker(func() {
@@ -108,12 +108,12 @@ func (q *quicTransport) Start() error {
 
 			q.connStopper.RunWorker(func() {
 				for {
-					stream, err := s.AcceptStream(ctx)
+					stream, err := s.AcceptStream(context.Background())
 					if err != nil {
 						_ = s.CloseWithError(0, err.Error())
 						return
 					}
-					go q.serveStream(stream)
+					q.serveStream(stream)
 				}
 			})
 		}
@@ -144,13 +144,18 @@ func sendPoisonAck(conn quic.Stream, poisonAck []byte) error {
 	return sendPoison(conn, poisonAck)
 }
 
-func waitPoisonAck(conn quic.Stream) {
-	ack := make([]byte, len(poisonNumber))
-	tt := time.Now().Add(keepAlivePeriod)
-	if err := conn.SetReadDeadline(tt); err != nil {
+func waitPoisonAck(conn quic.Session) {
+	str, err := conn.OpenStreamSync(context.TODO())
+	if err != nil {
+		plog.Errorf("failed to get poison ack %v", err)
 		return
 	}
-	if _, err := io.ReadFull(conn, ack); err != nil {
+	ack := make([]byte, len(poisonNumber))
+	tt := time.Now().Add(keepAlivePeriod)
+	if err := str.SetReadDeadline(tt); err != nil {
+		return
+	}
+	if _, err := io.ReadFull(str, ack); err != nil {
 		plog.Errorf("failed to get poison ack %v", err)
 		return
 	}
@@ -160,33 +165,31 @@ func (q *quicTransport) serveStream(stream quic.Stream) {
 	magicNum := make([]byte, len(magicNumber))
 	header := make([]byte, requestHeaderSize)
 	tbuf := make([]byte, payloadBufferSize)
-	for {
-		err := readMagicNumber(stream, magicNum)
-		if err != nil {
-			if err == errPoisonReceived {
-				_ = sendPoisonAck(stream, poisonNumber[:])
-			}
+	err := readMagicNumber(stream, magicNum)
+	if err != nil {
+		if err == errPoisonReceived {
+			_ = sendPoisonAck(stream, poisonNumber[:])
+		}
+		return
+	}
+	rheader, buf, err := readMessage(stream, header, tbuf)
+	if err != nil {
+		return
+	}
+	if rheader.method == raftType {
+		batch := raftpb.MessageBatch{}
+		if err := batch.Unmarshal(buf); err != nil {
 			return
 		}
-		rheader, buf, err := readMessage(stream, header, tbuf)
-		if err != nil {
+		q.messageHandler(batch)
+	} else {
+		chunk := raftpb.Chunk{}
+		if err := chunk.Unmarshal(buf); err != nil {
 			return
 		}
-		if rheader.method == raftType {
-			batch := raftpb.MessageBatch{}
-			if err := batch.Unmarshal(buf); err != nil {
-				return
-			}
-			q.messageHandler(batch)
-		} else {
-			chunk := raftpb.Chunk{}
-			if err := chunk.Unmarshal(buf); err != nil {
-				return
-			}
-			if !q.chunkHandler(chunk) {
-				plog.Errorf("chunk rejected %d", chunk.ChunkId)
-				return
-			}
+		if !q.chunkHandler(chunk) {
+			plog.Errorf("chunk rejected %d", chunk.ChunkId)
+			return
 		}
 	}
 }
