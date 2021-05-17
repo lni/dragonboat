@@ -1,9 +1,0 @@
-syntax = "proto2";
-package kvpb;
-
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-
-message PBKV {
-  optional string Key = 1;
-  optional string Val = 2;
-}
