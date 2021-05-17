@@ -89,9 +89,9 @@ type node struct {
 	sendRaftMessage       func(pb.Message)
 	validateTarget        func(string) bool
 	sm                    *rsm.StateMachine
-	snapshotLock          *syncutil.Lock
 	incomingReadIndexes   *readIndexQueue
 	incomingProposals     *entryQueue
+	snapshotLock          syncutil.Lock
 	pendingProposals      pendingProposal
 	pendingReadIndexes    pendingReadIndex
 	pendingConfigChange   pendingConfigChange

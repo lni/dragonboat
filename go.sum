@@ -160,6 +160,8 @@ github.com/labstack/echo/v4 v4.1.11/go.mod h1:i541M3Fj6f76NZtHSj7TXnyM8n2gaodfvf
 github.com/labstack/gommon v0.3.0/go.mod h1:MULnywXg0yavhxWKc+lOruYdAhDwPK9wf0OL7NoOu+k=
 github.com/lni/goutils v1.3.1-0.20210207055804-2f3468487e42 h1:Wk7Btt3WlyAFeGPFrOU8dDVCTCZhXF9EYT/aXUFrugU=
 github.com/lni/goutils v1.3.1-0.20210207055804-2f3468487e42/go.mod h1:PUPtBAnZlRPUKWUXCsYkIRWubJbtNHpTAee0sczhlf4=
+github.com/lni/goutils v1.3.1-0.20210517080819-7f56813dc438 h1:R+GuqvAnPJsA/kRZn1w9+/m0rz7HIt2yVLFUCpKhWNA=
+github.com/lni/goutils v1.3.1-0.20210517080819-7f56813dc438/go.mod h1:PUPtBAnZlRPUKWUXCsYkIRWubJbtNHpTAee0sczhlf4=
 github.com/lni/vfs v0.2.0 h1:aBE5/npL2p1XtkNBNyKKw7iTHVKdScI/HtFsulO/6qk=
 github.com/lni/vfs v0.2.0/go.mod h1:gvJ8h3lb+JKBB0Ot0xKWr2jnqm+RLMlVdlFwUleiAa4=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
