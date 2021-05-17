@@ -14,10 +14,11 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 - Fixed snapshot notification.
 - Fixed unreachable notification.
 - Upgraded to a more recent version of pebble.
+- Non-voting node (used to be called observer node) support has been marked as production ready.
 
 ### Other changes
 
-- Raft observer node has been renamed as non-voting node. 
+- Raft observer node has been renamed as non-voting node.
 
 ## v3.3 (2021-01-20)
 
