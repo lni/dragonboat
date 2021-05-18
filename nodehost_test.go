@@ -3909,7 +3909,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		rc := config.Config{
 			ClusterID:          1,
 			NodeID:             1,
-			ElectionRTT:        3,
+			ElectionRTT:        10,
 			HeartbeatRTT:       1,
 			CheckQuorum:        true,
 			SnapshotEntries:    5,
