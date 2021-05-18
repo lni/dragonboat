@@ -1869,6 +1869,7 @@ func (nh *NodeHost) sendTickMessage(clusters []*node, tick uint64) {
 			From: n.nodeID,
 			Hint: tick,
 		}
+		n.mq.Tick()
 		n.mq.Add(m)
 	}
 }
