@@ -135,6 +135,9 @@ benchmark-fsync:
 	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
 
 GOTEST=$(GO) $(TEST_OPTIONS)
+.PHONY: slow-test
+slow-test:
+	SLOW_TEST=1 $(GOTEST) $(PKGNAME)
 .PHONY: test-plugins
 test-plugins:
 	$(GOTEST) $(PKGNAME)/plugin

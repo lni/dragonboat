@@ -46,6 +46,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -5406,4 +5407,168 @@ func TestBootstrapInfoIsValidated(t *testing.T) {
 		},
 	}
 	runNodeHostTest(t, to, fs)
+}
+
+// slow tests
+
+type stressRSM struct{}
+
+func (s *stressRSM) Update([]byte) (sm.Result, error) {
+	plog.Infof("updated")
+	return sm.Result{}, nil
+}
+
+func (s *stressRSM) Lookup(interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (s *stressRSM) SaveSnapshot(w io.Writer,
+	f sm.ISnapshotFileCollection, c <-chan struct{}) error {
+	data := make([]byte, settings.SnapshotChunkSize*3)
+	_, err := w.Write(data)
+	return err
+}
+
+func (s *stressRSM) RecoverFromSnapshot(r io.Reader,
+	f []sm.SnapshotFile, c <-chan struct{}) error {
+	plog.Infof("RecoverFromSnapshot called")
+	data := make([]byte, settings.SnapshotChunkSize*3)
+	n, err := io.ReadFull(r, data)
+	if uint64(n) != settings.SnapshotChunkSize*3 {
+		return errors.New("unexpected size")
+	}
+	return err
+}
+
+func (s *stressRSM) Close() error {
+	return nil
+}
+
+// this test takes around 6 minutes on mbp and 30 seconds on a linux box with
+// proper SSD
+func TestSlowTestStressedSnapshotWorker(t *testing.T) {
+	if len(os.Getenv("SLOW_TEST")) == 0 {
+		t.Skip("skipped TestSlowTestStressedSnapshotWorker, SLOW_TEST not set")
+	}
+	fs := vfs.GetTestFS()
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	rc := config.Config{
+		ClusterID:          1,
+		NodeID:             1,
+		ElectionRTT:        10,
+		HeartbeatRTT:       1,
+		CheckQuorum:        true,
+		SnapshotEntries:    5,
+		CompactionOverhead: 1,
+	}
+	peers := make(map[uint64]string)
+	peers[1] = nodeHostTestAddr1
+	nhc1 := config.NodeHostConfig{
+		WALDir:         nh1dir,
+		NodeHostDir:    nh1dir,
+		RTTMillisecond: 5 * getRTTMillisecond(fs, nh1dir),
+		RaftAddress:    nodeHostTestAddr1,
+		Expert:         getTestExpertConfig(fs),
+	}
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create node host %v", err)
+	}
+	defer nh1.Close()
+	newRSM := func(uint64, uint64) sm.IStateMachine {
+		return &stressRSM{}
+	}
+	for i := uint64(1); i <= uint64(96); i++ {
+		rc.ClusterID = i
+		if err := nh1.StartCluster(peers, false, newRSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+		cs := nh1.GetNoOPSession(i)
+		total := 20
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_, err := nh1.SyncPropose(ctx, cs, make([]byte, 1))
+			cancel()
+			if err == ErrTimeout || err == ErrClusterNotReady {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			total--
+			if total == 0 {
+				break
+			}
+		}
+	}
+	// add another node
+	for i := uint64(1); i <= uint64(96); i++ {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			err := nh1.SyncRequestAddNode(ctx, i, 2, nodeHostTestAddr2, 0)
+			cancel()
+			if err != nil {
+				if err == ErrTimeout || err == ErrClusterNotReady {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				} else {
+					t.Fatalf("failed to add node %v", err)
+				}
+			} else {
+				break
+			}
+		}
+	}
+	plog.Infof("all nodes added")
+	nhc2 := config.NodeHostConfig{
+		WALDir:         nh2dir,
+		NodeHostDir:    nh2dir,
+		RTTMillisecond: 5 * getRTTMillisecond(fs, nh2dir),
+		RaftAddress:    nodeHostTestAddr2,
+		Expert:         getTestExpertConfig(fs),
+	}
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create node host 2 %v", err)
+	}
+	// start new nodes
+	defer nh2.Close()
+	for i := uint64(1); i <= uint64(96); i++ {
+		rc.ClusterID = i
+		rc.NodeID = 2
+		peers := make(map[uint64]string)
+		if err := nh2.StartCluster(peers, true, newRSM, rc); err != nil {
+			t.Fatalf("failed to start cluster %v", err)
+		}
+	}
+	for i := uint64(1); i <= uint64(96); i++ {
+		cs := nh2.GetNoOPSession(i)
+		total := 1000
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_, err := nh2.SyncPropose(ctx, cs, make([]byte, 1))
+			cancel()
+			if err != nil {
+				if err == ErrTimeout || err == ErrClusterNotReady {
+					total--
+					if total == 0 {
+						t.Fatalf("failed to make proposal on cluster %d", i)
+					}
+					time.Sleep(100 * time.Millisecond)
+					continue
+				} else {
+					t.Fatalf("failed to make proposal %v", err)
+				}
+			} else {
+				break
+			}
+		}
+	}
 }
