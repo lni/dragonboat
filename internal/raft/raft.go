@@ -132,7 +132,7 @@ func getLocalStatus(r *raft) Status {
 // Struct raft implements the raft protocol published in Diego Ongarno's PhD
 // thesis. Almost all features covered in Diego Ongarno's thesis have been
 // implemented, including -
-//  * leader election
+//  * leader election with pre-vote
 //  * log replication
 //  * flow control
 //  * membership configuration change
