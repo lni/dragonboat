@@ -2008,16 +2008,33 @@ func TestOrderedMembershipChange(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
+		updateConfig: func(c *config.Config) *config.Config {
+			c.OrderedConfigChange = true
+			return c
+		},
 		tf: func(nh *NodeHost) {
 			pto := pto(nh)
-			ctx, cancel := context.WithTimeout(context.Background(), 2*pto)
-			defer cancel()
-			m, err := nh.SyncGetClusterMembership(ctx, 1)
-			if err != nil {
-				t.Fatalf("get membership failed, %v", err)
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 2*pto)
+				defer cancel()
+				m, err := nh.SyncGetClusterMembership(ctx, 1)
+				if err != nil {
+					t.Fatalf("get membership failed, %v", err)
+				}
+				if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID+1); err == nil {
+					t.Fatalf("unexpectedly completed")
+				}
 			}
-			if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID); err != nil {
-				t.Errorf("failed to add node %v", err)
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 2*pto)
+				defer cancel()
+				m, err := nh.SyncGetClusterMembership(ctx, 1)
+				if err != nil {
+					t.Fatalf("get membership failed, %v", err)
+				}
+				if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID); err != nil {
+					t.Fatalf("failed to add node %v", err)
+				}
 			}
 		},
 	}
