@@ -2004,6 +2004,26 @@ func TestEntryCompression(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
+func TestOrderedMembershipChange(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			pto := pto(nh)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*pto)
+			defer cancel()
+			m, err := nh.SyncGetClusterMembership(ctx, 1)
+			if err != nil {
+				t.Fatalf("get membership failed, %v", err)
+			}
+			if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID); err != nil {
+				t.Errorf("failed to add node %v", err)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
 func TestSyncRequestDeleteNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
