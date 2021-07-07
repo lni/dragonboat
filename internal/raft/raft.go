@@ -379,7 +379,7 @@ func (r *raft) numVotingMembers() int {
 }
 
 func (r *raft) quorum() int {
-	return r.numVotingMembers()/2 + 1
+	return r.numVotingMembers()>>1 + 1
 }
 
 func (r *raft) isSingleNodeQuorum() bool {

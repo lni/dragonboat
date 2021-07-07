@@ -1273,7 +1273,7 @@ func (n *node) handleReceivedMessages() (bool, error) {
 			}
 		}
 	}
-	if count > n.config.ElectionRTT/2 {
+	if count > n.config.ElectionRTT>>1 {
 		plog.Warningf("%s had %d LocalTick msgs in one batch", n.id(), count)
 	}
 	if lazyFreeCycle > 0 {
