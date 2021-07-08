@@ -132,6 +132,8 @@ var (
 	ErrInvalidDeadline = errors.New("invalid deadline")
 	// ErrDirNotExist indicates that the specified dir does not exist.
 	ErrDirNotExist = errors.New("specified dir does not exist")
+	// ErrLogDBNotCreatedOrClosed indicates that the logdb is not created yet or closed already.
+	ErrLogDBNotCreatedOrClosed = errors.New("logdb is not created yet or closed already")
 )
 
 // ClusterInfo is a record for representing the state of a Raft cluster based
@@ -588,6 +590,15 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 		return nil, err
 	}
 	return v, nil
+}
+// GetReadOnlyLogDB returns a read-only LogDB wrapper.
+func (nh *NodeHost) GetReadOnlyLogDB() (raftio.ILogDB, error) {
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
+	if nh.mu.logdb == nil {
+		return nil, ErrLogDBNotCreatedOrClosed
+	}
+	return &logdb.ReadonlyDB{Wrapped: nh.mu.logdb}, nil
 }
 
 // Membership is the struct used to describe Raft cluster membership.
