@@ -15,12 +15,9 @@ jobs:
         go-version: 1.15.x
     - name: Test
       env:
-        DRUMMER_NIGHTLY_PASSWORD: ${{ secrets.DRUMMER_NIGHTLY_PASSWORD }}
         TARGET: ${{ matrix.target }}
       run: |
-        echo -e "machine github.com\n  login drummernightly\n password $DRUMMER_NIGHTLY_PASSWORD" > ~/.netrc
-        git config --global credential.helper "netrc -d -v"
-        git clone https://github.com/lni/drummer2 drummer
+        git clone https://github.com/lni/drummer
         sudo apt-get install librocksdb-dev
         cd drummer
         go get github.com/lni/dragonboat/v3@master
