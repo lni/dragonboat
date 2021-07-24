@@ -28,7 +28,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
-	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
+	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -39,6 +39,12 @@ var (
 )
 
 var dn = logutil.DescribeNode
+
+// MemFSTee is the interface implemented by a memfs based tee logdb.
+type MemFSTee interface {
+	IgnoreSyncs(fs *vfs.MemFS)
+	AllowSyncs(fs *vfs.MemFS)
+}
 
 func assertSameError(clusterID uint64, nodeID uint64, e1 error, e2 error) {
 	if errors.Is(e1, e2) || errors.Is(e2, e1) {
@@ -54,13 +60,6 @@ type LogDB struct {
 	stopper *syncutil.Stopper
 	odb     raftio.ILogDB
 	ndb     raftio.ILogDB
-}
-
-// NewRocksDBLogDB creates a new RocksDB based LogDB instance
-func NewRocksDBLogDB(nhConfig config.NodeHostConfig,
-	cb config.LogDBCallback,
-	dirs []string, wals []string) (raftio.ILogDB, error) {
-	return newKVLogDB(nhConfig, cb, dirs, wals, "tee-rocksdb", rocksdb.NewKVStore)
 }
 
 // NewPebbleLogDB creates a new LogDB instance.
@@ -84,22 +83,6 @@ func newKVLogDB(nhConfig config.NodeHostConfig,
 	return logdb.NewLogDB(nhConfig, cb, ndirs, nwals, false, false, f)
 }
 
-// NewTeeLogDB creates a new LogDB instance backed by a pebble and a rocksdb
-// based ILogDB.
-func NewTeeLogDB(nhConfig config.NodeHostConfig,
-	cb config.LogDBCallback,
-	dirs []string, wals []string) (raftio.ILogDB, error) {
-	odb, err := NewRocksDBLogDB(nhConfig, cb, dirs, wals)
-	if err != nil {
-		return nil, err
-	}
-	ndb, err := NewPebbleLogDB(nhConfig, cb, dirs, wals)
-	if err != nil {
-		return nil, err
-	}
-	return MakeTeeLogDB(odb, ndb), nil
-}
-
 // MakeTeeLogDB returns a LogDB instance combined from the specified odb and
 // ndb instances.
 func MakeTeeLogDB(odb raftio.ILogDB, ndb raftio.ILogDB) raftio.ILogDB {
@@ -108,6 +91,21 @@ func MakeTeeLogDB(odb raftio.ILogDB, ndb raftio.ILogDB) raftio.ILogDB {
 		odb:     odb,
 		ndb:     ndb,
 	}
+}
+
+// IgnoreSyncs ...
+func (t *LogDB) IgnoreSyncs(fs *vfs.MemFS) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	fs.SetIgnoreSyncs(true)
+}
+
+// AllowSyncs ...
+func (t *LogDB) AllowSyncs(fs *vfs.MemFS) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	fs.SetIgnoreSyncs(false)
+	fs.ResetToSyncedState()
 }
 
 // Name ...

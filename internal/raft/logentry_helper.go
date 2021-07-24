@@ -30,7 +30,7 @@ type LogTestHelper struct {
 // purpose.
 func NewLog(logdb ILogDB) *LogTestHelper {
 	return &LogTestHelper{
-		el: newEntryLog(logdb, server.NewInMemRateLimiter(0)),
+		el: newEntryLog(logdb, nil, server.NewInMemRateLimiter(0)),
 	}
 }
 

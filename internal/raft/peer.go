@@ -62,12 +62,12 @@ type Peer struct {
 
 // Launch starts or restarts a Raft node.
 func Launch(config config.Config,
-	logdb ILogDB, events server.IRaftEventListener,
+	em IEntryManager, logdb ILogDB, events server.IRaftEventListener,
 	addresses []PeerAddress, initial bool, newNode bool) Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	plog.Infof("%s created, initial: %t, new: %t",
 		dn(config.ClusterID, config.NodeID), initial, newNode)
-	p := Peer{raft: newRaft(config, logdb)}
+	p := Peer{raft: newRaft(config, em, logdb)}
 	p.raft.events = events
 	p.prevState = p.raft.raftState()
 	if initial && newNode {
@@ -75,6 +75,16 @@ func Launch(config config.Config,
 		bootstrap(p.raft, addresses)
 	}
 	return p
+}
+
+// Gc performs garbage collection for underlying in memory entries.
+func (p *Peer) Gc(now uint64) {
+	p.raft.log.inmem.gc(now)
+}
+
+// Close closes underlying in memory entries.
+func (p *Peer) Close() {
+	p.raft.close()
 }
 
 // Tick moves the logical clock forward by one tick.
@@ -275,8 +285,6 @@ func (p *Peer) HasUpdate(moreToApply bool) bool {
 // Commit commits the Update state to mark it as processed.
 func (p *Peer) Commit(ud pb.Update) {
 	p.raft.msgs = nil
-	p.raft.droppedEntries = nil
-	p.raft.droppedReadIndexes = nil
 	if !pb.IsEmptyState(ud.State) {
 		p.prevState = ud.State
 	}
@@ -308,8 +316,28 @@ func (p *Peer) HasEntryToApply() bool {
 	return p.entryLog().hasEntriesToApply()
 }
 
+// IsLeader returns a boolean value indicating whether the peer is a leader.
+func (p *Peer) IsLeader() bool {
+	s := getLocalStatus(p.raft)
+	return s.IsLeader()
+}
+
 func (p *Peer) entryLog() *entryLog {
 	return p.raft.log
+}
+
+// GetAck returns a Ack struct filled with dropped entries and read index
+// requests.
+func (p *Peer) GetAck() pb.Ack {
+	ack := pb.Ack{
+		ClusterID:          p.raft.clusterID,
+		NodeID:             p.raft.nodeID,
+		DroppedEntries:     p.raft.droppedEntries,
+		DroppedReadIndexes: p.raft.droppedReadIndexes,
+	}
+	p.raft.droppedEntries = nil
+	p.raft.droppedReadIndexes = nil
+	return ack
 }
 
 func (p *Peer) getUpdate(moreToApply bool,
@@ -344,12 +372,6 @@ func (p *Peer) getUpdate(moreToApply bool,
 	}
 	if len(p.raft.readyToRead) > 0 {
 		ud.ReadyToReads = p.raft.readyToRead
-	}
-	if len(p.raft.droppedEntries) > 0 {
-		ud.DroppedEntries = p.raft.droppedEntries
-	}
-	if len(p.raft.droppedReadIndexes) > 0 {
-		ud.DroppedReadIndexes = p.raft.droppedReadIndexes
 	}
 	return ud, nil
 }

@@ -28,6 +28,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -109,11 +110,6 @@ func runLogDBTestAs(t *testing.T,
 
 func runLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
 	runLogDBTestAs(t, false, tf, fs)
-	runLogDBTestAs(t, true, tf, fs)
-}
-
-func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
-	runLogDBTestAs(t, true, tf, fs)
 }
 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
@@ -1430,4 +1426,183 @@ func TestImportSnapshot(t *testing.T) {
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
+}
+
+type dummyBatch struct {
+	putCount int
+}
+
+func (w *dummyBatch) Destroy()                   {}
+func (w *dummyBatch) Put(key []byte, val []byte) { w.putCount++ }
+func (w *dummyBatch) Delete(key []byte)          {}
+func (w *dummyBatch) Clear()                     { w.putCount = 0 }
+func (w *dummyBatch) Count() int                 { return w.putCount }
+
+func TestSaveState(t *testing.T) {
+	db := &db{
+		cs:   newCache(),
+		keys: newLogDBKeyPool(),
+	}
+	wb := &dummyBatch{}
+	ctx := newContext(1024, 1024)
+	st := pb.State{}
+	if db.saveState(1, 1, st, wb, ctx) {
+		t.Errorf("sync required on empty st")
+	}
+	if len(db.cs.ps) != 0 {
+		t.Errorf("unexpectedly cached state")
+	}
+	if wb.Count() != 0 {
+		t.Errorf("empty st added to wb")
+	}
+	// a concrete st is saved
+	st.Vote = 1
+	if !db.saveState(1, 1, st, wb, ctx) {
+		t.Errorf("sync not requested")
+	}
+	if len(db.cs.ps) != 1 {
+		t.Errorf("st not cached")
+	}
+	if wb.Count() != 1 {
+		t.Errorf("st not added to wb")
+	}
+	// try to save the same st again
+	if db.saveState(1, 1, st, wb, ctx) {
+		t.Errorf("sync requested when saving the same st")
+	}
+	if len(db.cs.ps) != 1 {
+		t.Errorf("st not cached")
+	}
+	if wb.Count() != 1 {
+		t.Errorf("st not added to wb")
+	}
+	// change the commit value only and save again
+	wb.Clear()
+	st.Commit = 2
+	if db.saveState(1, 1, st, wb, ctx) {
+		t.Errorf("sync requested when saving the st with only commit value change")
+	}
+	if len(db.cs.ps) != 1 {
+		t.Fatalf("st not cached")
+	}
+	cst, ok := db.cs.ps[raftio.NodeInfo{ClusterID: 1, NodeID: 1}]
+	if !ok {
+		t.Fatalf("failed to get cached st")
+	}
+	if !pb.IsStateEqual(cst, st) {
+		t.Fatalf("state not cached")
+	}
+	if wb.Count() != 1 {
+		t.Errorf("st not added to wb")
+	}
+	// change the Term value and save st again
+	wb.Clear()
+	if wb.Count() != 0 {
+		t.Errorf("wb not cleared")
+	}
+	st.Term = 5
+	if !db.saveState(1, 1, st, wb, ctx) {
+		t.Errorf("sync not requested")
+	}
+	if wb.Count() != 1 {
+		t.Errorf("st not added to wb")
+	}
+	cst, ok = db.cs.ps[raftio.NodeInfo{ClusterID: 1, NodeID: 1}]
+	if !ok {
+		t.Fatalf("failed to get cached st")
+	}
+	if !pb.IsStateEqual(cst, st) {
+		t.Fatalf("state not cached")
+	}
+}
+
+type dummyKVS struct {
+	commitCalled int
+	sync         bool
+}
+
+func (d *dummyKVS) Reset() {
+	d.commitCalled = 0
+	d.sync = false
+}
+
+func (d *dummyKVS) Name() string { return "dummy" }
+func (d *dummyKVS) Close() error { return nil }
+func (d *dummyKVS) IterateValue(fk []byte,
+	lk []byte, inc bool, op func(key []byte, data []byte) (bool, error)) error {
+	return nil
+}
+func (d *dummyKVS) GetValue(key []byte, op func([]byte) error) error { return nil }
+func (d *dummyKVS) SaveValue(key []byte, value []byte) error         { return nil }
+func (d *dummyKVS) DeleteValue(key []byte) error                     { return nil }
+func (d *dummyKVS) GetWriteBatch() kv.IWriteBatch                    { return &dummyBatch{} }
+func (d *dummyKVS) CommitWriteBatch(wb kv.IWriteBatch, sync bool) error {
+	d.commitCalled++
+	d.sync = sync
+	return nil
+}
+func (d *dummyKVS) BulkRemoveEntries(firstKey []byte, lastKey []byte) error { return nil }
+func (d *dummyKVS) CompactEntries(firstKey []byte, lastKey []byte) error    { return nil }
+func (d *dummyKVS) FullCompaction() error                                   { return nil }
+
+type dummyEntryManager struct{}
+
+func (d *dummyEntryManager) binaryFormat() uint32 { return 0 }
+func (d *dummyEntryManager) record(wb kv.IWriteBatch,
+	clusterID uint64, nodeID uint64,
+	ctx IContext, entries []pb.Entry) uint64 {
+	return 100
+}
+func (d *dummyEntryManager) iterate(ents []pb.Entry, maxIndex uint64,
+	size uint64, clusterID uint64, nodeID uint64,
+	low uint64, high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
+	return nil, 0, nil
+}
+func (d *dummyEntryManager) getRange(clusterID uint64,
+	nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
+	return 0, 0, nil
+}
+func (d *dummyEntryManager) rangedOp(clusterID uint64,
+	nodeID uint64, index uint64, op func(*Key, *Key) error) error {
+	return nil
+}
+
+func TestSaveRaftUpdateUseCorrectSyncFlag(t *testing.T) {
+	db := &db{
+		cs:      newCache(),
+		keys:    newLogDBKeyPool(),
+		kvs:     &dummyKVS{},
+		entries: &dummyEntryManager{},
+	}
+	ctx := newContext(1024, 1024)
+	tests := []struct {
+		updates      []pb.Update
+		commitCalled int
+		sync         bool
+	}{
+		{[]pb.Update{}, 0, false},
+		{[]pb.Update{{EntriesToSave: []pb.Entry{{}}}}, 1, true},
+		{[]pb.Update{{Snapshot: pb.Snapshot{Index: 1}}}, 2, true},
+		{[]pb.Update{{State: pb.State{Term: 1}}}, 3, true},
+		{[]pb.Update{{State: pb.State{Term: 1, Commit: 1}}}, 4, false},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 1}}}, 5, true},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 2}, Snapshot: pb.Snapshot{Index: 2}}}, 6, true},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 3}}}, 7, false},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 3}, EntriesToSave: []pb.Entry{{}}}}, 8, true},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 4}}}, 9, false},
+		{[]pb.Update{{State: pb.State{Term: 2, Commit: 4}}}, 9, false},
+	}
+	for idx, tt := range tests {
+		ctx.Reset()
+		if err := db.saveRaftState(tt.updates, ctx); err != nil {
+			t.Errorf("%v", err)
+		}
+		if db.kvs.(*dummyKVS).commitCalled != tt.commitCalled {
+			t.Errorf("%d, commitCalled %d, want %d",
+				idx, db.kvs.(*dummyKVS).commitCalled, tt.commitCalled)
+		}
+		if db.kvs.(*dummyKVS).sync != tt.sync {
+			t.Errorf("%d, unexpected sync flag", idx)
+		}
+	}
 }

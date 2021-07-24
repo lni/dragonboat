@@ -21,7 +21,7 @@ import (
 )
 
 func TestNoOPSessionHasExpectedSeriesID(t *testing.T) {
-	cs := NewNoOPSession(120, random.LockGuardedRand)
+	cs := NewNoOPSession(120)
 	if cs.SeriesID != NoOPSeriesID {
 		t.Errorf("series id unexpected")
 	}
@@ -41,7 +41,7 @@ func testNoOPSessionNotAllowedForSessionOps(t *testing.T, f func()) {
 }
 
 func TestNoOPSessionNotAllowedForSessionOps(t *testing.T) {
-	cs := NewNoOPSession(120, random.LockGuardedRand)
+	cs := NewNoOPSession(120)
 	testNoOPSessionNotAllowedForSessionOps(t, cs.PrepareForRegister)
 	testNoOPSessionNotAllowedForSessionOps(t, cs.PrepareForUnregister)
 	testNoOPSessionNotAllowedForSessionOps(t, cs.PrepareForPropose)
@@ -58,16 +58,6 @@ func TestProposalCompleted(t *testing.T) {
 	}
 	if cs.SeriesID != cs.RespondedTo+1 {
 		t.Errorf("unexpected responded to value")
-	}
-}
-
-func TestInvalidNoOPSessionIsReported(t *testing.T) {
-	cs := Session{
-		SeriesID: NoOPSeriesID,
-		ClientID: NotSessionManagedClientID,
-	}
-	if cs.ValidForProposal(0) {
-		t.Errorf("failed to indentify invalid client session")
 	}
 }
 
@@ -93,7 +83,7 @@ func TestValidForProposal(t *testing.T) {
 }
 
 func TestValidForSessionOp(t *testing.T) {
-	cs := NewNoOPSession(120, random.LockGuardedRand)
+	cs := NewNoOPSession(120)
 	if cs.ValidForSessionOp(120) {
 		t.Errorf("vad ValidForSessionOp result")
 	}
@@ -118,7 +108,7 @@ func TestValidForSessionOp(t *testing.T) {
 }
 
 func TestIsNoOPSession(t *testing.T) {
-	s := NewNoOPSession(1, random.LockGuardedRand)
+	s := NewNoOPSession(1)
 	if !s.IsNoOPSession() {
 		t.Errorf("not considered as a noop session")
 	}

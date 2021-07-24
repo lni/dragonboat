@@ -83,11 +83,12 @@ type entryLog struct {
 	processed uint64
 }
 
-func newEntryLog(logdb ILogDB, rl *server.InMemRateLimiter) *entryLog {
+func newEntryLog(logdb ILogDB,
+	em IEntryManager, rl *server.InMemRateLimiter) *entryLog {
 	firstIndex, lastIndex := logdb.GetRange()
 	l := &entryLog{
 		logdb:     logdb,
-		inmem:     newInMemory(lastIndex, rl),
+		inmem:     newInMemory(lastIndex, em, rl),
 		committed: firstIndex - 1,
 		processed: firstIndex - 1,
 	}

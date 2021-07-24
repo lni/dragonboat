@@ -22,23 +22,14 @@ PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 # name of the package
 PKGNAME=$(shell go list)
 
-ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
-LOGDB_TAG=dragonboat_rocksdb_test
-$(info using rocksdb based log storage)
-else ifeq ($(DRAGONBOAT_LOGDB),)
 ifneq ($(MEMFS_TEST),)
 $(info using memfs based pebble)
 LOGDB_TAG=dragonboat_memfs_test
-else
+endif
+
 ifneq ($(MEMFS_TEST_TO_RUN),)
 $(info using memfs based pebble)
 LOGDB_TAG=dragonboat_memfs_test
-else
-$(info using pebble based log storage)
-endif
-endif
-else
-$(error LOGDB type $(DRAGONBOAT_LOGDB) not supported)
 endif
 
 # verbosity, use -v to see details of go build
@@ -98,17 +89,17 @@ endif
 TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
   $(RACE_DETECTOR_FLAG) $(COVER_FLAG) $(SELECTED_TEST_OPTION)
 .PHONY: dragonboat-test
-dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
-	test-multiraft test-config test-client test-server test-tools test-fs   	 \
-	test-id test-utils
+dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport     \
+	test-multiraft test-config test-client test-server test-tools test-fs   	  \
+	test-id test-utils test-tan
 .PHONY: ci-test
-ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		       \
-  test-config test-client test-server test-tests test-tools test-fs 				 \
-	test-id test-utils
+ci-test: test-raft test-raftpb test-rsm test-logdb test-transport test-config \
+	test-client test-server test-tests test-tools test-fs test-id test-utils    \
+	test-tan
 .PHONY: test
 test: dragonboat-test test-tests
 .PHONY: dev-test
-dev-test: test test-plugins
+dev-test: test
 .PHONY: actions-test
 actions-test: ci-test test-cov
 
@@ -116,11 +107,11 @@ actions-test: ci-test test-cov
 # build unit tests
 ###############################################################################
 .PHONY: unit-test-bin
-unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
+unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						  \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 .PHONY: unit-test-bin
-unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
-  test-multiraft test-config test-client test-server test-tools test-plugins \
+unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		  \
+  test-multiraft test-config test-client test-server test-tools  							\
 	test-tests test-fs test-id test-utils
 
 ###############################################################################
@@ -183,6 +174,9 @@ test-id:
 .PHONY: test-utils
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/dio
+.PHONY: test-tan
+test-tan:
+	$(GOTEST) $(PKGNAME)/internal/tan
 .PHONY: test-cov
 test-cov:
 	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic
@@ -202,8 +196,8 @@ tools-checkdisk:
 ###############################################################################
 CHECKED_PKGS=$(shell go list ./...)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
-EXTRA_LINTERS=-E misspell -E scopelint -E rowserrcheck -E depguard -E unconvert \
-	-E prealloc -E gofmt -E stylecheck
+EXTRA_LINTERS=-E misspell -E scopelint -E rowserrcheck -E depguard            \
+	-E unconvert -E prealloc -E gofmt -E stylecheck
 .PHONY: static-check
 static-check:
 	@for p in $(CHECKED_PKGS); do \

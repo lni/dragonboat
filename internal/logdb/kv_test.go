@@ -129,7 +129,7 @@ func TestKVWriteBatch(t *testing.T) {
 		if wb.Count() != 1 {
 			t.Errorf("incorrect count")
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
+		if err := kvs.CommitWriteBatch(wb, true); err != nil {
 			t.Errorf("failed to commit the write batch")
 		}
 		found := false
@@ -195,7 +195,7 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 			t.Errorf("unexpected count %d, want 2", wb.Count())
 		}
 		wb.Clear()
-		if err := kvs.CommitWriteBatch(wb); err != nil {
+		if err := kvs.CommitWriteBatch(wb, true); err != nil {
 			t.Fatalf("failed to commit write batch")
 		}
 		if err := kvs.GetValue([]byte("key-1"),
@@ -214,7 +214,7 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 
 func TestHasEntryRecord(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		has, err := hasEntryRecord(kvs, true)
+		has, err := hasEntryRecord(kvs, false)
 		if err != nil {
 			t.Fatalf("hasEntryRecord failed %v", err)
 		}
@@ -238,13 +238,6 @@ func TestHasEntryRecord(t *testing.T) {
 		if err := kvs.SaveValue(k.Key(), data); err != nil {
 			t.Fatalf("failed to save entry batch")
 		}
-		has, err = hasEntryRecord(kvs, true)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if !has {
-			t.Errorf("unexpected result")
-		}
 		has, err = hasEntryRecord(kvs, false)
 		if err != nil {
 			t.Fatalf("hasEntryRecord failed %v", err)
@@ -262,7 +255,7 @@ func TestHasEntryRecord(t *testing.T) {
 		if err := kvs.SaveValue(k.Key(), data); err != nil {
 			t.Fatalf("failed to save entry batch")
 		}
-		has, err = hasEntryRecord(kvs, true)
+		has, err = hasEntryRecord(kvs, false)
 		if err != nil {
 			t.Fatalf("hasEntryRecord failed %v", err)
 		}
@@ -291,7 +284,7 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 			data := make([]byte, 16)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
+		if err := kvs.CommitWriteBatch(wb, true); err != nil {
 			t.Fatalf("failed to commit wb %v", err)
 		}
 		fk := newKey(entryKeySize, nil)
@@ -354,7 +347,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			rand.Read(data)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
+		if err := kvs.CommitWriteBatch(wb, true); err != nil {
 			t.Fatalf("failed to commit wb %v", err)
 		}
 	}()
@@ -509,7 +502,7 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 			key.SetEntryKey(100, 1, i)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
+		if err := kvs.CommitWriteBatch(wb, true); err != nil {
 			t.Fatalf("failed to commit wb %v", err)
 		}
 		if !wal {

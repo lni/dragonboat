@@ -28,6 +28,7 @@ var (
 // inMemory is a two stage in memory log storage struct to keep log entries
 // that will be used by the raft protocol in immediate future.
 type inMemory struct {
+	em             IEntryManager
 	snapshot       *pb.Snapshot
 	rl             *server.InMemRateLimiter
 	entries        []pb.Entry
@@ -38,7 +39,16 @@ type inMemory struct {
 	shrunk         bool
 }
 
-func newInMemory(lastIndex uint64, rl *server.InMemRateLimiter) inMemory {
+// IEntryManager is the interface used for managing in memory entries on
+// certain events.
+type IEntryManager interface {
+	Release(ents []pb.Entry)
+	Gc(e pb.Entry, now uint64) bool
+	Close(e pb.Entry)
+}
+
+func newInMemory(lastIndex uint64,
+	em IEntryManager, rl *server.InMemRateLimiter) inMemory {
 	if minEntrySliceSize >= entrySliceSize {
 		panic("minEntrySliceSize >= entrySliceSize")
 	}
@@ -46,6 +56,25 @@ func newInMemory(lastIndex uint64, rl *server.InMemRateLimiter) inMemory {
 		markerIndex: lastIndex + 1,
 		savedTo:     lastIndex,
 		rl:          rl,
+		em:          em,
+	}
+}
+
+func (im *inMemory) gc(now uint64) {
+	if im.em == nil {
+		return
+	}
+	for _, e := range im.entries {
+		im.em.Gc(e, now)
+	}
+}
+
+func (im *inMemory) close() {
+	if im.em == nil {
+		return
+	}
+	for _, e := range im.entries {
+		im.em.Close(e)
 	}
 }
 
@@ -153,6 +182,7 @@ func (im *inMemory) appliedLogTo(index uint64) {
 	im.appliedToTerm = lastEntry.Term
 	newMarkerIndex := index + 1
 	applied := im.entries[:newMarkerIndex-im.markerIndex]
+	im.release(applied)
 	im.shrunk = true
 	im.entries = im.entries[newMarkerIndex-im.markerIndex:]
 	im.markerIndex = newMarkerIndex
@@ -160,6 +190,12 @@ func (im *inMemory) appliedLogTo(index uint64) {
 	im.checkMarkerIndex()
 	if im.rateLimited() {
 		im.rl.Decrease(getEntrySliceInMemSize(applied))
+	}
+}
+
+func (im *inMemory) release(ents []pb.Entry) {
+	if im.em != nil {
+		im.em.Release(ents)
 	}
 }
 
@@ -206,6 +242,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 			im.rl.Increase(getEntrySliceInMemSize(ents))
 		}
 	} else if firstNewIndex <= im.markerIndex {
+		im.release(im.entries)
 		im.markerIndex = firstNewIndex
 		// ents might come from entryQueue, copy it to its own storage
 		im.shrunk = false
@@ -215,7 +252,14 @@ func (im *inMemory) merge(ents []pb.Entry) {
 			im.rl.Set(getEntrySliceInMemSize(ents))
 		}
 	} else {
+		lastExistingIndex := im.entries[len(im.entries)-1].Index
 		existing := im.getEntries(im.markerIndex, firstNewIndex)
+		overwritten := im.getEntries(firstNewIndex, lastExistingIndex+1)
+		if overwritten[0].Index != firstNewIndex ||
+			overwritten[len(overwritten)-1].Index != lastExistingIndex {
+			panic("unexpected overwritten part")
+		}
+		im.release(overwritten)
 		checkEntriesToAppend(existing, ents)
 		im.shrunk = false
 		im.entries = im.newEntrySlice(existing)
@@ -230,6 +274,7 @@ func (im *inMemory) merge(ents []pb.Entry) {
 }
 
 func (im *inMemory) restore(ss pb.Snapshot) {
+	im.release(im.entries)
 	im.snapshot = &ss
 	im.markerIndex = ss.Index + 1
 	im.appliedToIndex = ss.Index

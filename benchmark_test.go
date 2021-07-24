@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/lni/goutils/random"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -101,7 +100,7 @@ func BenchmarkNoCompressionEncodedPayload4096Bytes(b *testing.B) {
 
 func BenchmarkAddToEntryQueue(b *testing.B) {
 	b.ReportAllocs()
-	q := newEntryQueue(1000000, 0)
+	q := newEntryQueue(1000000, 0, nil, nil)
 	total := uint32(0)
 	entry := pb.Entry{}
 	b.RunParallel(func(pb *testing.PB) {
@@ -128,10 +127,10 @@ func benchmarkProposeN(b *testing.B, sz int) {
 		return obj
 	}
 	total := uint32(0)
-	q := newEntryQueue(2048, 0)
+	q := newEntryQueue(2048, 0, nil, nil)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
-	session := client.NewNoOPSession(1, random.LockGuardedRand)
+	session := client.NewNoOPSession(1)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			v := atomic.AddUint32(&total, 1)
@@ -172,13 +171,12 @@ func BenchmarkPendingProposalNextKey(b *testing.B) {
 		obj.pool = p
 		return obj
 	}
-	q := newEntryQueue(2048, 0)
+	q := newEntryQueue(2048, 0, nil, nil)
 	cfg := config.Config{ClusterID: 1, NodeID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	b.RunParallel(func(pb *testing.PB) {
-		clientID := rand.Uint64()
 		for pb.Next() {
-			pp.nextKey(clientID)
+			pp.keyg.nextKey()
 		}
 	})
 }
@@ -556,7 +554,7 @@ func benchmarkStateMachineStep(b *testing.B, sz int, noopSession bool) {
 	idx := uint64(0)
 	var s *client.Session
 	if noopSession {
-		s = client.NewNoOPSession(1, random.LockGuardedRand)
+		s = client.NewNoOPSession(1)
 	} else {
 		s = &client.Session{
 			ClusterID: 1,

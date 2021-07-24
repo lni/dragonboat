@@ -16,9 +16,10 @@ package upgrade310
 
 import (
 	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
+	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/tan"
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -46,7 +47,7 @@ var firstError = utils.FirstError
 // upgrade the Dragonboat version.
 func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	if nhConfig.DeploymentID == 0 {
-		nhConfig.DeploymentID = 1
+		nhConfig.DeploymentID = settings.UnmanagedDeploymentID
 	}
 	if err := nhConfig.Prepare(); err != nil {
 		return false, err
@@ -65,7 +66,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 	nhDir, walDir := env.GetLogDBDirs(nhConfig.DeploymentID)
 	var ldb raftio.ILogDB
 	if nhConfig.Expert.LogDBFactory == nil {
-		ldb, err = logdb.NewDefaultLogDB(nhConfig,
+		ldb, err = tan.Factory.Create(nhConfig,
 			nil, []string{nhDir}, []string{walDir})
 	} else {
 		ldb, err = nhConfig.Expert.LogDBFactory.Create(nhConfig,

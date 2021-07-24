@@ -51,20 +51,22 @@ func (r *cache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
 	return !ok
 }
 
-func (r *cache) setState(clusterID uint64, nodeID uint64, st pb.State) bool {
+// returns a tuple of booleans to indicate (toSave, toSync)
+func (r *cache) setState(clusterID uint64,
+	nodeID uint64, st pb.State) (bool, bool) {
 	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v, ok := r.ps[key]
 	if !ok {
 		r.ps[key] = st
-		return true
-	}
-	if pb.IsStateEqual(v, st) {
-		return false
+		return true, true
 	}
 	r.ps[key] = st
-	return true
+	if pb.IsStateEqual(v, st) {
+		return false, false
+	}
+	return true, pb.StateSyncChange(v, st)
 }
 
 func (r *cache) setSnapshotIndex(clusterID uint64, nodeID uint64, index uint64) {

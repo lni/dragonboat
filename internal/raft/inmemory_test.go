@@ -559,7 +559,7 @@ func TestRateLimited(t *testing.T) {
 		{server.NewInMemRateLimiter(math.MaxUint64 - 1), true},
 	}
 	for idx, tt := range tests {
-		im := newInMemory(0, tt.rl)
+		im := newInMemory(0, nil, tt.rl)
 		if im.rateLimited() != tt.limited {
 			t.Errorf("%d, rate limited %t, want %t", idx, im.rateLimited(), tt.limited)
 		}
@@ -567,7 +567,7 @@ func TestRateLimited(t *testing.T) {
 }
 
 func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
-	im := newInMemory(0, server.NewInMemRateLimiter(10000))
+	im := newInMemory(0, nil, server.NewInMemRateLimiter(10000))
 	im.merge([]pb.Entry{{Cmd: make([]byte, 1024)}})
 	if im.rl.Get() == 0 {
 		t.Errorf("log size not updated")
@@ -579,7 +579,7 @@ func TestRateLimitClearedAfterRestoringSnapshot(t *testing.T) {
 }
 
 func TestRateLimitIsUpdatedAfterMergingEntries(t *testing.T) {
-	im := newInMemory(0, server.NewInMemRateLimiter(10000))
+	im := newInMemory(0, nil, server.NewInMemRateLimiter(10000))
 	im.merge([]pb.Entry{{Index: 1, Cmd: make([]byte, 1024)}})
 	logsz := im.rl.Get()
 	ents := []pb.Entry{
@@ -599,7 +599,7 @@ func TestRateLimitIsDecreasedAfterEntriesAreApplied(t *testing.T) {
 		{Index: 3, Cmd: make([]byte, 64)},
 		{Index: 4, Cmd: make([]byte, 128)},
 	}
-	im := newInMemory(2, server.NewInMemRateLimiter(10000))
+	im := newInMemory(2, nil, server.NewInMemRateLimiter(10000))
 	im.merge(ents)
 	if im.rl.Get() != getEntrySliceInMemSize(ents) {
 		t.Errorf("unexpected log size")
@@ -623,7 +623,7 @@ func TestRateLimitCanBeResetWhenMergingEntries(t *testing.T) {
 		{Index: 3, Cmd: make([]byte, 64)},
 		{Index: 4, Cmd: make([]byte, 128)},
 	}
-	im := newInMemory(2, server.NewInMemRateLimiter(10000))
+	im := newInMemory(2, nil, server.NewInMemRateLimiter(10000))
 	im.merge(ents)
 	ents = []pb.Entry{
 		{Index: 1, Cmd: make([]byte, 16)},
@@ -641,7 +641,7 @@ func TestRateLimitCanBeUpdatedAfterCutAndMergingEntries(t *testing.T) {
 		{Index: 3, Cmd: make([]byte, 64)},
 		{Index: 4, Cmd: make([]byte, 128)},
 	}
-	im := newInMemory(2, server.NewInMemRateLimiter(10000))
+	im := newInMemory(2, nil, server.NewInMemRateLimiter(10000))
 	im.merge(ents)
 	ents = []pb.Entry{
 		{Index: 3, Cmd: make([]byte, 1024)},

@@ -12,12 +12,13 @@ type Entry struct {
 	SeriesID    uint64
 	RespondedTo uint64
 	Cmd         []byte
+	Request     interface{}
 }
 
-func (m *Entry) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
+func (e *Entry) Marshal() (dAtA []byte, err error) {
+	size := e.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := e.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}

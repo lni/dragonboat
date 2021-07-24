@@ -22,7 +22,7 @@ import (
 )
 
 func TestEntryQueueCanBeCreated(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	if q.size != 5 || len(q.left) != 5 || len(q.right) != 5 {
 		t.Errorf("size unexpected")
 	}
@@ -32,7 +32,7 @@ func TestEntryQueueCanBeCreated(t *testing.T) {
 }
 
 func TestLazyFreeCanBeDisabled(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
@@ -47,7 +47,7 @@ func TestLazyFreeCanBeDisabled(t *testing.T) {
 }
 
 func TestLazyFreeCanBeUsed(t *testing.T) {
-	q := newEntryQueue(5, 1)
+	q := newEntryQueue(5, 1, nil, nil)
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
@@ -62,7 +62,7 @@ func TestLazyFreeCanBeUsed(t *testing.T) {
 }
 
 func TestLazyFreeCycleCanBeSet(t *testing.T) {
-	q := newEntryQueue(5, 6)
+	q := newEntryQueue(5, 6, nil, nil)
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
 	q.add(raftpb.Entry{Cmd: make([]byte, 16)})
@@ -93,7 +93,7 @@ func TestLazyFreeCycleCanBeSet(t *testing.T) {
 }
 
 func TestEntryQueueCanBePaused(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	if q.paused {
 		t.Errorf("entry queue is paused by default")
 	}
@@ -123,7 +123,7 @@ func TestEntryQueueCanBePaused(t *testing.T) {
 }
 
 func TestEntryQueueCanBeClosed(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	if q.stopped {
 		t.Errorf("entry queue is stopped by default")
 	}
@@ -140,7 +140,7 @@ func TestEntryQueueCanBeClosed(t *testing.T) {
 	if ok {
 		t.Errorf("not expect to add more")
 	}
-	q = newEntryQueue(5, 0)
+	q = newEntryQueue(5, 0, nil, nil)
 	q.close()
 	if !q.stopped {
 		t.Errorf("entry queue is not marked as stopped")
@@ -158,7 +158,7 @@ func TestEntryQueueCanBeClosed(t *testing.T) {
 }
 
 func TestEntryQueueAllowEntriesToBeAdded(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	for i := uint64(0); i < 5; i++ {
 		ok, stopped := q.add(raftpb.Entry{Index: i + 1})
 		if !ok || stopped {
@@ -180,7 +180,7 @@ func TestEntryQueueAllowEntriesToBeAdded(t *testing.T) {
 }
 
 func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
-	q := newEntryQueue(5, 0)
+	q := newEntryQueue(5, 0, nil, nil)
 	for i := 0; i < 3; i++ {
 		ok, stopped := q.add(raftpb.Entry{Index: uint64(i + 1)})
 		if !ok || stopped {
@@ -197,7 +197,7 @@ func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
 	// check whether we can keep adding entries as long as we keep getting
 	// previously written entries.
 	expectedIndex := uint64(1)
-	q = newEntryQueue(5, 0)
+	q = newEntryQueue(5, 0, nil, nil)
 	for i := 0; i < 1000; i++ {
 		ok, stopped := q.add(raftpb.Entry{Index: uint64(i + 1)})
 		if !ok || stopped {
@@ -215,6 +215,110 @@ func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
 				expectedIndex++
 			}
 		}
+	}
+}
+
+func TestBatahIsReadyWhenClientCountIsNotAvailable(t *testing.T) {
+	q := newEntryQueue(5, 0, nil, nil)
+	if !q.batchReady() {
+		t.Errorf("batch is not ready")
+	}
+}
+
+func TestBatchIsReadyWhenEnoughEntriesAreInTheQueue(t *testing.T) {
+	cc := uint64(0)
+	q := newEntryQueue(10, 0, nil, &cc)
+	cc = 10
+	for i := 0; i < 8; i++ {
+		q.add(raftpb.Entry{})
+	}
+	if q.batchReady() {
+		t.Errorf("unexpectedly reported as ready")
+	}
+	q.add(raftpb.Entry{})
+	if !q.batchReady() {
+		t.Errorf("batch not ready")
+	}
+}
+
+func TestBatchIsReadyWhenQueueReachesItsCapLimit(t *testing.T) {
+	cc := uint64(0)
+	q := newEntryQueue(5, 0, nil, &cc)
+	cc = 10
+	for i := 0; i < 5; i++ {
+		q.add(raftpb.Entry{})
+	}
+	if !q.batchReady() {
+		t.Errorf("batch not ready")
+	}
+}
+
+func TestTickCanMakeBatchReady(t *testing.T) {
+	cc := uint64(0)
+	q := newEntryQueue(20, 0, nil, &cc)
+	cc = 10
+	for i := 0; i < 10; i++ {
+		q.add(raftpb.Entry{Index: uint64(i)})
+		if q.batchReady() {
+			t.Errorf("batch unexpectedly marked as ready")
+		}
+		q.tick()
+		if q.batchReady() {
+			t.Errorf("batch unexpectedly marked as ready")
+		}
+		q.tick()
+		if !q.batchReady() {
+			t.Errorf("batch not marked as ready")
+		}
+		if v := q.get(false); len(v) != 1 {
+			t.Errorf("failed to return entries")
+		} else {
+			if v[0].Index != uint64(i) {
+				t.Errorf("unexpected index %v", v[0].Index)
+			}
+			if q.forcedTick != q.currentTick {
+				t.Errorf("tick not moved")
+			}
+		}
+	}
+}
+
+func TestAddCanMakeBatchReady(t *testing.T) {
+	cc := uint64(0)
+	q := newEntryQueue(20, 0, nil, &cc)
+	cc = 2
+	for i := 0; i < 10; i++ {
+		q.add(raftpb.Entry{Index: uint64(i)})
+		if !q.batchReady() {
+			t.Errorf("batch unexpectedly marked as not ready")
+		}
+		if v := q.get(false); len(v) != 1 {
+			t.Errorf("failed to return entries")
+		} else {
+			if v[0].Index != uint64(i) {
+				t.Errorf("unexpected index %v", v[0].Index)
+			}
+			if q.forcedTick != q.currentTick {
+				t.Errorf("tick not moved")
+			}
+		}
+	}
+}
+
+func TestEntryForcedGetIgnoreBatchReadyState(t *testing.T) {
+	cc := uint64(0)
+	q := newEntryQueue(20, 0, nil, &cc)
+	cc = 10
+	for i := 0; i < 5; i++ {
+		q.add(raftpb.Entry{Index: uint64(i)})
+	}
+	v := q.getLocked(false, false)
+	if len(v) != 0 {
+		t.Errorf("unexpected returned entries")
+	}
+	v = q.getLocked(false, true)
+	if len(v) == 0 {
+		t.Errorf("failed to force entries to be returned")
 	}
 }
 

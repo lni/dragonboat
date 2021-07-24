@@ -68,18 +68,42 @@ func TestCachedStateCanBeSet(t *testing.T) {
 		Vote:   2,
 		Commit: 3,
 	}
-	toSet := c.setState(100, 2, st)
+	toSet, toSync := c.setState(100, 2, st)
 	if !toSet {
-		t.Errorf("unexpected return value")
+		t.Errorf("save flag not set")
 	}
-	toSet = c.setState(100, 2, st)
+	if !toSync {
+		t.Errorf("sync flag not set")
+	}
+	toSet, toSync = c.setState(100, 2, st)
 	if toSet {
-		t.Errorf("unexpected return value")
+		t.Errorf("unexpected toSave value")
+	}
+	if toSync {
+		t.Errorf("unexpected toSync value")
 	}
 	st.Term = 3
-	toSet = c.setState(100, 2, st)
+	toSet, toSync = c.setState(100, 2, st)
 	if !toSet {
-		t.Errorf("unexpected return value")
+		t.Errorf("unexpected toSave value")
+	}
+	if !toSync {
+		t.Errorf("unexpected toSync value")
+	}
+	st.Commit = 100
+	toSet, toSync = c.setState(100, 2, st)
+	if !toSet {
+		t.Errorf("unexpected toSave value")
+	}
+	if toSync {
+		t.Errorf("unexpected toSync value")
+	}
+	toSet, toSync = c.setState(100, 2, st)
+	if toSet {
+		t.Errorf("unexpected toSave value")
+	}
+	if toSync {
+		t.Errorf("unexpected toSync value")
 	}
 	if len(c.ps) != 1 {
 		t.Errorf("unexpected savedState len %d", len(c.ps))

@@ -58,7 +58,7 @@ func TestInitializeRaft(t *testing.T) {
 		},
 	}
 
-	node := newRaft(newTestConfig(1, 10, 1), logdb)
+	node := newRaft(newTestConfig(1, 10, 1), nil, logdb)
 	if len(node.remotes) != 3 {
 		t.Errorf("remotes length not expected: %d", len(node.remotes))
 	}
@@ -119,7 +119,7 @@ func TestConfigViolationWillPanic(t *testing.T) {
 						test.name, test.shouldFail, r)
 				}
 			}()
-			newRaft(test.config, NewTestLogDB())
+			newRaft(test.config, nil, NewTestLogDB())
 		}()
 	}
 }
@@ -130,7 +130,7 @@ func TestNilLogdbWillPanic(t *testing.T) {
 			t.Errorf("Should have panic with nil logdb.")
 		}
 	}()
-	newRaft(newTestConfig(1, 10, 1), nil)
+	newRaft(newTestConfig(1, 10, 1), nil, nil)
 }
 
 func TestTryCommitResetsMatchArray(t *testing.T) {

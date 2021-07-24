@@ -835,7 +835,7 @@ func TestDuelingCandidates(t *testing.T) {
 	}{
 		{a, follower, 2, wlog},
 		{b, follower, 2, wlog},
-		{c, follower, 2, newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))},
+		{c, follower, 2, newEntryLog(NewTestLogDB(), nil, server.NewInMemRateLimiter(0))},
 	}
 
 	for i, tt := range tests {
@@ -901,7 +901,7 @@ func TestDuelingPreCandidates(t *testing.T) {
 	}{
 		{a, leader, 1, wlog},
 		{b, follower, 1, wlog},
-		{c, follower, 1, newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))},
+		{c, follower, 1, newEntryLog(NewTestLogDB(), nil, server.NewInMemRateLimiter(0))},
 	}
 
 	for i, tt := range tests {
@@ -1050,7 +1050,7 @@ func TestProposal(t *testing.T) {
 		send(pb.Message{From: 1, To: 1, Type: pb.Election})
 		send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: data}}})
 
-		wantLog := newEntryLog(NewTestLogDB(), server.NewInMemRateLimiter(0))
+		wantLog := newEntryLog(NewTestLogDB(), nil, server.NewInMemRateLimiter(0))
 		if tt.success {
 			wantLog = &entryLog{
 				logdb: &TestLogDB{
@@ -2614,7 +2614,7 @@ func testCampaignWhileLeader(t *testing.T) {
 	s := NewTestLogDB()
 	peers := []uint64{1}
 	cfg := newTestConfig(1, 5, 1)
-	r := newRaft(cfg, s)
+	r := newRaft(cfg, nil, s)
 	r.setTestPeers(peers)
 	if r.state != follower {
 		t.Errorf("expected new node to be follower but got %s", r.state)
@@ -2837,7 +2837,7 @@ func entsWithConfig(configFunc func(config.Config), terms ...uint64) *raft {
 	if configFunc != nil {
 		configFunc(cfg)
 	}
-	sm := newRaft(cfg, storage)
+	sm := newRaft(cfg, nil, storage)
 	sm.reset(terms[len(terms)-1], true)
 	return sm
 }
@@ -2852,7 +2852,7 @@ func votedWithConfig(configFunc func(config.Config), vote, term uint64) *raft {
 	if configFunc != nil {
 		configFunc(cfg)
 	}
-	sm := newRaft(cfg, storage)
+	sm := newRaft(cfg, nil, storage)
 	sm.reset(term, true)
 	return sm
 }
@@ -2890,7 +2890,7 @@ func newNetworkWithConfig(configFunc func(config.Config), peers ...stateMachine)
 			if configFunc != nil {
 				configFunc(cfg)
 			}
-			sm := newRaft(cfg, nstorage[id])
+			sm := newRaft(cfg, nil, nstorage[id])
 			sm.setTestPeers(peerAddrs)
 			sm.hasNotAppliedConfigChange = sm.testOnlyHasConfigChangeToApply
 			npeers[id] = sm
@@ -3033,7 +3033,7 @@ func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int
 }
 
 func newTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
-	r := newRaft(newTestConfig(id, election, heartbeat), logdb)
+	r := newRaft(newTestConfig(id, election, heartbeat), nil, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
@@ -3050,7 +3050,7 @@ func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, 
 		HeartbeatRTT:    uint64(heartbeat),
 		MaxInMemLogSize: testRateLimit,
 	}
-	r := newRaft(cfg, logdb)
+	r := newRaft(cfg, nil, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
@@ -3072,7 +3072,7 @@ func newTestNonVoting(id uint64, peers []uint64, nonVotings []uint64, election, 
 	}
 	cfg := newTestConfig(id, election, heartbeat)
 	cfg.IsNonVoting = true
-	r := newRaft(cfg, logdb)
+	r := newRaft(cfg, nil, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}
@@ -3090,7 +3090,7 @@ func newTestNonVoting(id uint64, peers []uint64, nonVotings []uint64, election, 
 func newTestWitness(id uint64, peers []uint64, witnesses []uint64, election, heartbeat int, logdb ILogDB) *raft {
 	cfg := newTestConfig(id, election, heartbeat)
 	cfg.IsWitness = true
-	r := newRaft(cfg, logdb)
+	r := newRaft(cfg, nil, logdb)
 	if len(r.remotes) == 0 {
 		for _, p := range peers {
 			r.remotes[p] = &remote{next: 1}

@@ -146,15 +146,16 @@ func TestNoOPEntryIsNotSessionManaged(t *testing.T) {
 	}
 }
 
-func TestIsEmpty(t *testing.T) {
+func TestIsRaftNoOP(t *testing.T) {
 	entries := []Entry{
 		{Type: ConfigChangeEntry},
 		{ClientID: 12345},
+		{SeriesID: 12345},
 		{Cmd: make([]byte, 1)},
 	}
 	for idx, ent := range entries {
-		if ent.IsEmpty() {
-			t.Errorf("entry %d not expected to be empty", idx)
+		if ent.IsRaftNoOP() {
+			t.Errorf("entry %d not expected to be raft noop", idx)
 		}
 	}
 	entries = []Entry{
@@ -165,7 +166,7 @@ func TestIsEmpty(t *testing.T) {
 		{},
 	}
 	for idx, ent := range entries {
-		if !ent.IsEmpty() {
+		if !ent.IsRaftNoOP() {
 			t.Errorf("entry idx %d is not empty", idx)
 		}
 	}
@@ -190,18 +191,63 @@ func TestIsSessionManaged(t *testing.T) {
 	}
 }
 
+func TestSessionManagedEntryWithEmptyPayload(t *testing.T) {
+	e := Entry{
+		Type:     ApplicationEntry,
+		ClientID: client.EmptyPayloadClientID,
+		SeriesID: client.NoOPSeriesID,
+	}
+	if e.IsConfigChange() {
+		t.Errorf("cosnidered as config change")
+	}
+	if !e.IsSessionManaged() {
+		t.Errorf("not considered as session managed")
+	}
+	// so the entry will always be passed to the SM
+	if e.IsRaftNoOP() {
+		t.Errorf("considered as raft NoOP")
+	}
+	if e.IsNewSessionRequest() || e.IsEndOfSessionRequest() {
+		t.Errorf("considered as session ops")
+	}
+	if !e.IsNoOPSession() {
+		t.Errorf("not considered as NoOP session")
+	}
+	if !e.IsUpdateEntry() {
+		t.Errorf("not considered as update entry")
+	}
+}
+
+func TestDefaultEntry(t *testing.T) {
+	e := Entry{}
+	if e.IsConfigChange() {
+		t.Errorf("cosnidered as config change")
+	}
+	if e.IsSessionManaged() {
+		t.Errorf("default entry considered as session managed")
+	}
+	if !e.IsRaftNoOP() {
+		t.Errorf("default entry considered as not raft NoOP")
+	}
+	if e.IsNewSessionRequest() || e.IsEndOfSessionRequest() {
+		t.Errorf("default entry considered as session ops")
+	}
+	if e.IsNoOPSession() {
+		t.Errorf("default entry considered as NoOP session")
+	}
+	if e.IsUpdateEntry() {
+		t.Errorf("default entry considered as update entry")
+	}
+}
+
 func TestIsNoOPSession(t *testing.T) {
-	e1 := Entry{SeriesID: client.NoOPSeriesID}
+	e1 := Entry{SeriesID: client.NoOPSeriesID, Cmd: make([]byte, 1)}
 	if !e1.IsNoOPSession() {
 		t.Errorf("not considered as noop session")
 	}
 	e2 := Entry{SeriesID: client.NoOPSeriesID + 1}
 	if e2.IsNoOPSession() {
 		t.Errorf("still considered as noop session")
-	}
-	e3 := Entry{}
-	if !e3.IsNoOPSession() {
-		t.Errorf("not a noop session")
 	}
 }
 
@@ -404,11 +450,11 @@ func TestGetEntrySliceInMemSize(t *testing.T) {
 		size uint64
 	}{
 		{[]Entry{}, 0},
-		{[]Entry{e0}, 80},
-		{[]Entry{e16}, 96},
-		{[]Entry{e64}, 144},
-		{[]Entry{e0, e64}, 224},
-		{[]Entry{e0, e16, e64}, 320},
+		{[]Entry{e0}, 96},
+		{[]Entry{e16}, 112},
+		{[]Entry{e64}, 160},
+		{[]Entry{e0, e64}, 256},
+		{[]Entry{e0, e16, e64}, 368},
 	}
 	for idx, tt := range tests {
 		result := GetEntrySliceInMemSize(tt.ents)
@@ -424,7 +470,7 @@ func TestMetadataEntry(t *testing.T) {
 		Index: 200,
 		Term:  5,
 	}
-	if !me.IsEmpty() {
+	if !me.IsRaftNoOP() {
 		t.Errorf("IsEmpty returned false")
 	}
 	if me.IsSessionManaged() {

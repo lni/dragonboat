@@ -936,7 +936,7 @@ func (s *StateMachine) handleEntry(e pb.Entry, last bool) error {
 		return s.configChange(e)
 	}
 	if !e.IsSessionManaged() {
-		if e.IsEmpty() {
+		if e.IsRaftNoOP() {
 			s.noop(e)
 			s.node.ApplyUpdate(e, sm.Result{}, false, true, last)
 		} else {
@@ -1047,7 +1047,7 @@ func (s *StateMachine) noop(e pb.Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.setApplied(e.Index, e.Term)
-	if !e.IsEmpty() || e.IsSessionManaged() {
+	if !e.IsRaftNoOP() || e.IsSessionManaged() {
 		panic("handle empty event called on non-empty event")
 	}
 }

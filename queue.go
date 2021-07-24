@@ -16,10 +16,17 @@ package dragonboat
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
+
+const (
+	minBatchedClient uint64 = 8
+)
+
+type queueCloseFn func(e pb.Entry)
 
 type entryQueue struct {
 	size          uint64
@@ -33,14 +40,21 @@ type entryQueue struct {
 	cycle         uint64
 	lazyFreeCycle uint64
 	mu            sync.Mutex
+	queueCloseFn  queueCloseFn
+	clientCount   *uint64
+	currentTick   uint64
+	forcedTick    uint64
 }
 
-func newEntryQueue(size uint64, lazyFreeCycle uint64) *entryQueue {
+func newEntryQueue(size uint64,
+	lazyFreeCycle uint64, fn queueCloseFn, clientCount *uint64) *entryQueue {
 	return &entryQueue{
 		size:          size,
 		lazyFreeCycle: lazyFreeCycle,
 		left:          make([]pb.Entry, size),
 		right:         make([]pb.Entry, size),
+		queueCloseFn:  fn,
+		clientCount:   clientCount,
 	}
 }
 
@@ -48,6 +62,19 @@ func (q *entryQueue) close() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.stopped = true
+}
+
+func (q *entryQueue) tick() {
+	q.currentTick++
+}
+
+func (q *entryQueue) release() {
+	if q.queueCloseFn != nil {
+		entries := q.getAll()
+		for _, e := range entries {
+			q.queueCloseFn(e)
+		}
+	}
 }
 
 func (q *entryQueue) targetQueue() []pb.Entry {
@@ -78,23 +105,62 @@ func (q *entryQueue) gc() {
 		if q.lazyFreeCycle == 1 {
 			for i := uint64(0); i < q.oldIdx; i++ {
 				oldq[i].Cmd = nil
+				oldq[i].Request = nil
 			}
 		} else if q.cycle%q.lazyFreeCycle == 0 {
 			for i := uint64(0); i < q.size; i++ {
 				oldq[i].Cmd = nil
+				oldq[i].Request = nil
 			}
 		}
 	}
 }
 
+func (q *entryQueue) notManyClients() bool {
+	return atomic.LoadUint64(q.clientCount) < minBatchedClient
+}
+
+func (q *entryQueue) forced() bool {
+	return q.currentTick-q.forcedTick > 1
+}
+
+func (q *entryQueue) batchReady() bool {
+	if q.clientCount == nil || q.notManyClients() || q.forced() {
+		return true
+	}
+	batched := q.targetQueue()[:q.idx]
+	if len(batched) == 0 {
+		return false
+	}
+	if uint64(len(batched)) >= (q.size * 9 / 10) {
+		return true
+	}
+	cc := atomic.LoadUint64(q.clientCount)
+	return uint64(len(batched)) >= (cc * 9 / 10)
+}
+
 func (q *entryQueue) get(paused bool) []pb.Entry {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	return q.getLocked(paused, false)
+}
+
+func (q *entryQueue) getAll() []pb.Entry {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.getLocked(false, true)
+}
+
+func (q *entryQueue) getLocked(paused bool, forced bool) []pb.Entry {
 	q.paused = paused
+	if !forced && !q.batchReady() {
+		return nil
+	}
+	t := q.targetQueue()
+	q.forcedTick = q.currentTick
 	q.cycle++
 	sz := q.idx
 	q.idx = 0
-	t := q.targetQueue()
 	q.leftInWrite = !q.leftInWrite
 	q.gc()
 	q.oldIdx = sz

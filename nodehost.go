@@ -76,6 +76,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/tan"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -273,6 +274,11 @@ var _ nodeLoader = (*NodeHost)(nil)
 var dn = logutil.DescribeNode
 
 var firstError = utils.FirstError
+
+// GetDefaultLogDBFactory returns the default LogDB factory.
+func GetDefaultLogDBFactory() config.LogDBFactory {
+	return tan.Factory
+}
 
 // NewNodeHost creates a new NodeHost instance. In a typical application, it is
 // expected to have one NodeHost on each server.
@@ -679,7 +685,12 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 // NO-OP client session must be used for making proposals on IOnDiskStateMachine
 // based user state machines.
 func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
-	return client.NewNoOPSession(clusterID, nh.env.GetRandomSource())
+	n, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil
+	}
+	n.increaseClientCount()
+	return client.NewNoOPSession(clusterID)
 }
 
 // GetNewSession starts a synchronous proposal to create, register and return
@@ -721,6 +732,11 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	n, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrClusterNotFound
+	}
+	n.increaseClientCount()
 	cs := client.NewSession(clusterID, nh.env.GetRandomSource())
 	cs.PrepareForRegister()
 	rs, err := nh.ProposeSession(cs, timeout)
@@ -745,6 +761,14 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 // Closed client session should not be used in future proposals.
 func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 	cs *client.Session) error {
+	n, ok := nh.getCluster(cs.ClusterID)
+	if !ok {
+		return ErrClusterNotFound
+	}
+	n.decreaseClientCount()
+	if cs.IsNoOPSession() {
+		return nil
+	}
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
@@ -1291,6 +1315,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	n, ok := nh.getCluster(clusterID)
 	if ok && n.nodeID == nodeID {
+		plog.Infof("stop not called")
 		return ErrClusterNotStopped
 	}
 	nh.mu.Lock()
@@ -1644,7 +1669,7 @@ func (nh *NodeHost) createLogDB() error {
 	if nh.nhConfig.Expert.LogDBFactory != nil {
 		lf = nh.nhConfig.Expert.LogDBFactory
 	} else {
-		lf = logdb.NewDefaultFactory()
+		lf = tan.Factory
 	}
 	name := lf.Name()
 	if err := nh.env.CheckLogDBType(nh.nhConfig, name); err != nil {

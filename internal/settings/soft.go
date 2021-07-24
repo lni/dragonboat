@@ -71,9 +71,6 @@ type soft struct {
 	// Multiraft
 	//
 
-	// PendingProposalShards defines the number of shards for the pending
-	// proposal data structure.
-	PendingProposalShards uint64
 	// SyncTaskInterval defines the interval in millisecond of periodic sync
 	// state machine task.
 	SyncTaskInterval uint64
@@ -188,7 +185,6 @@ func getDefaultSoftSettings() soft {
 		IncomingReadIndexQueueLength:   4096,
 		IncomingProposalQueueLength:    2048,
 		SnapshotStatusPushDelayMS:      1000,
-		PendingProposalShards:          16,
 		TaskQueueInitialCap:            24,
 		TaskQueueTargetLength:          64,
 		NodeHostRequestStatePoolShards: 8,

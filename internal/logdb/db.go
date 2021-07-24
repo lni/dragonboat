@@ -61,8 +61,7 @@ func hasEntryRecord(kvs kv.IKVStore, batched bool) (bool, error) {
 		fk.SetEntryKey(0, 0, 0)
 		lk.SetEntryKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
 	} else {
-		fk.SetEntryBatchKey(0, 0, 0)
-		lk.SetEntryBatchKey(math.MaxUint64, math.MaxUint64, math.MaxUint64)
+		panic("batched entry is no longer supported")
 	}
 	located := false
 	op := func(key []byte, data []byte) (bool, error) {
@@ -86,7 +85,7 @@ func openRDB(config config.LogDBConfig,
 	pool := newLogDBKeyPool()
 	var em entryManager
 	if batched {
-		em = newBatchedEntries(cs, pool, kvs)
+		panic("batched entry is no longer supported")
 	} else {
 		em = newPlainEntries(cs, pool, kvs)
 	}
@@ -103,8 +102,7 @@ func (r *db) name() string {
 }
 
 func (r *db) selfCheckFailed() (bool, error) {
-	_, batched := r.entries.(*batchedEntries)
-	return hasEntryRecord(r.kvs, !batched)
+	return hasEntryRecord(r.kvs, false)
 }
 
 func (r *db) binaryFormat() uint32 {
@@ -178,10 +176,14 @@ func (r *db) getRange(clusterID uint64,
 
 func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 	wb := r.getWriteBatch(ctx)
+	sync := false
 	for _, ud := range updates {
-		r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
+		if r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx) {
+			sync = true
+		}
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
 			r.cs.trySaveSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
+			sync = true
 			if len(ud.EntriesToSave) > 0 {
 				// raft/inMemory makes sure such entries no longer need to be saved
 				lastIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
@@ -196,9 +198,11 @@ func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 			r.setMaxIndex(wb, ud, ud.Snapshot.Index, ctx)
 		}
 	}
-	r.saveEntries(updates, wb, ctx)
+	if r.saveEntries(updates, wb, ctx) {
+		sync = true
+	}
 	if wb.Count() > 0 {
-		return r.kvs.CommitWriteBatch(wb)
+		return r.kvs.CommitWriteBatch(wb, sync)
 	}
 	return nil
 }
@@ -237,7 +241,7 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 		return err
 	}
 	r.saveMaxIndex(wb, ss.ClusterId, nodeID, ss.Index, nil)
-	return r.kvs.CommitWriteBatch(wb)
+	return r.kvs.CommitWriteBatch(wb, true)
 }
 
 func (r *db) setMaxIndex(wb kv.IWriteBatch,
@@ -305,25 +309,30 @@ func (r *db) saveStateAllocs(wb kv.IWriteBatch,
 }
 
 func (r *db) saveState(clusterID uint64,
-	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx IContext) {
+	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx IContext) bool {
 	if pb.IsEmptyState(st) {
-		return
+		return false
 	}
-	if !r.cs.setState(clusterID, nodeID, st) {
-		return
+	save, sync := r.cs.setState(clusterID, nodeID, st)
+	if !save {
+		if sync {
+			panic("!save && sync")
+		}
+		return false
 	}
 	data := ctx.GetValueBuffer(uint64(st.Size()))
 	result := pb.MustMarshalTo(&st, data)
 	k := ctx.GetKey()
 	k.SetStateKey(clusterID, nodeID)
 	wb.Put(k.Key(), result)
+	return sync
 }
 
 func (r *db) saveBootstrapInfo(clusterID uint64,
-	nodeID uint64, bs pb.Bootstrap) error {
+	nodeID uint64, bootstrap pb.Bootstrap) error {
 	wb := r.getWriteBatch(nil)
-	r.saveBootstrap(wb, clusterID, nodeID, bs)
-	return r.kvs.CommitWriteBatch(wb)
+	r.saveBootstrap(wb, clusterID, nodeID, bootstrap)
+	return r.kvs.CommitWriteBatch(wb, true)
 }
 
 func (r *db) getBootstrapInfo(clusterID uint64,
@@ -357,7 +366,7 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 		}
 	}
 	if toSave {
-		return r.kvs.CommitWriteBatch(wb)
+		return r.kvs.CommitWriteBatch(wb, true)
 	}
 	return nil
 }
@@ -452,7 +461,7 @@ func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
 		return err
 	}
 	r.saveRemoveNodeData(wb, snapshots, clusterID, nodeID)
-	if err := r.kvs.CommitWriteBatch(wb); err != nil {
+	if err := r.kvs.CommitWriteBatch(wb, true); err != nil {
 		return err
 	}
 	r.cs.setMaxIndex(clusterID, nodeID, 0)
@@ -484,15 +493,19 @@ func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
 	return r.entries.rangedOp(clusterID, nodeID, index, op)
 }
 
-func (r *db) saveEntries(updates []pb.Update, wb kv.IWriteBatch, ctx IContext) {
+func (r *db) saveEntries(updates []pb.Update,
+	wb kv.IWriteBatch, ctx IContext) bool {
+	sync := false
 	for _, ud := range updates {
 		if len(ud.EntriesToSave) > 0 {
+			sync = true
 			mi := r.entries.record(wb, ud.ClusterID, ud.NodeID, ctx, ud.EntriesToSave)
 			if mi > 0 {
 				r.setMaxIndex(wb, ud, mi, ctx)
 			}
 		}
 	}
+	return sync
 }
 
 func (r *db) iterateEntries(ents []pb.Entry,

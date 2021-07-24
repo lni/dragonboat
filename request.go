@@ -31,15 +31,13 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/logger"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 	sm "github.com/lni/dragonboat/v3/statemachine"
 )
 
 var (
-	defaultGCTick         uint64 = 2
-	pendingProposalShards        = settings.Soft.PendingProposalShards
+	defaultGCTick uint64 = 2
 )
 
 var (
@@ -280,6 +278,9 @@ func (o *SysOpState) ResultC() <-chan struct{} {
 	return o.completedC
 }
 
+// TODO:
+// move RequestState to the internal package
+
 // RequestState is the object used to provide request result to users.
 type RequestState struct {
 	key            uint64
@@ -287,6 +288,7 @@ type RequestState struct {
 	seriesID       uint64
 	respondedTo    uint64
 	deadline       uint64
+	ref            int32
 	readyToRead    ready
 	readyToRelease ready
 	aggrC          chan RequestResult
@@ -300,6 +302,12 @@ type RequestState struct {
 	pool         *sync.Pool
 	notifyCommit bool
 	testErr      chan struct{}
+}
+
+func (r *RequestState) unref() {
+	if atomic.AddInt32(&r.ref, -1) == 0 {
+		r.release()
+	}
 }
 
 // AppliedC returns a channel of RequestResult for delivering request result.
@@ -429,7 +437,6 @@ func (r *RequestState) notify(result RequestResult) {
 	case r.CompletedC <- result:
 		r.readyToRelease.set()
 	default:
-		plog.Panicf("RequestState.CompletedC is full")
 	}
 }
 
@@ -437,12 +444,16 @@ func (r *RequestState) notify(result RequestResult) {
 // reused. Release is normally called after all RequestResult values have been
 // received from the ResultC() channel.
 func (r *RequestState) Release() {
+	r.unref()
+}
+
+func (r *RequestState) release() {
 	if r.pool != nil {
 		if !r.readyToRelease.ready() {
 			return
 		}
-		r.notifyCommit = false
 		r.deadline = 0
+		r.notifyCommit = false
 		r.key = 0
 		r.seriesID = 0
 		r.clientID = 0
@@ -483,7 +494,7 @@ func (r *RequestState) mustBeReadyForLocalRead() {
 	}
 }
 
-type proposalShard struct {
+type pendingProposal struct {
 	mu             sync.Mutex
 	proposals      *entryQueue
 	pending        map[uint64]*RequestState
@@ -492,6 +503,7 @@ type proposalShard struct {
 	stopped        bool
 	notifyCommit   bool
 	expireNotified uint64
+	keyg           *keyGenerator
 	logicalClock
 }
 
@@ -505,12 +517,6 @@ func (k *keyGenerator) nextKey() uint64 {
 	v := k.rand.Uint64()
 	k.randMu.Unlock()
 	return v
-}
-
-type pendingProposal struct {
-	shards []*proposalShard
-	keyg   []*keyGenerator
-	ps     uint64
 }
 
 type readBatch struct {
@@ -622,6 +628,7 @@ func (p *pendingSnapshot) request(st rsm.SSReqType,
 		CompactionOverhead: overhead,
 	}
 	req := &RequestState{
+		ref:          1,
 		key:          ssreq.Key,
 		deadline:     p.getTick() + timeoutTick,
 		CompletedC:   make(chan RequestResult, 1),
@@ -723,6 +730,7 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 		data: data,
 	}
 	req := &RequestState{
+		ref:          2,
 		key:          ccreq.key,
 		deadline:     p.getTick() + timeoutTick,
 		CompletedC:   make(chan RequestResult, 1),
@@ -832,6 +840,7 @@ func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 		return nil, ErrTimeoutTooSmall
 	}
 	req := p.pool.Get().(*RequestState)
+	req.ref = 1
 	req.reuse(false)
 	req.notifyCommit = false
 	req.deadline = p.getTick() + timeoutTick
@@ -972,10 +981,10 @@ func (p *pendingReadIndex) gc(now uint64) {
 	}
 }
 
-func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
+func getRng(clusterID uint64, nodeID uint64) *keyGenerator {
 	pid := os.Getpid()
 	nano := time.Now().UnixNano()
-	seedStr := fmt.Sprintf("%d-%d-%d-%d-%d", pid, nano, clusterID, nodeID, shard)
+	seedStr := fmt.Sprintf("%d-%d-%d-%d", pid, nano, clusterID, nodeID)
 	m := sha512.New()
 	fileutil.MustWrite(m, []byte(seedStr))
 	sum := m.Sum(nil)
@@ -985,93 +994,70 @@ func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
 
 func newPendingProposal(cfg config.Config,
 	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) pendingProposal {
-	ps := pendingProposalShards
-	p := pendingProposal{
-		shards: make([]*proposalShard, ps),
-		keyg:   make([]*keyGenerator, ps),
-		ps:     ps,
+	gcTick := defaultGCTick
+	if gcTick == 0 {
+		plog.Panicf("invalid gcTick")
 	}
-	for i := uint64(0); i < ps; i++ {
-		p.shards[i] = newPendingProposalShard(cfg, notifyCommit, pool, proposals)
-		p.keyg[i] = getRng(cfg.ClusterID, cfg.NodeID, i)
-	}
-	return p
-}
-
-func (p *pendingProposal) propose(session *client.Session,
-	cmd []byte, timeoutTick uint64) (*RequestState, error) {
-	key := p.nextKey(session.ClientID)
-	pp := p.shards[key%p.ps]
-	return pp.propose(session, cmd, key, timeoutTick)
-}
-
-func (p *pendingProposal) close() {
-	for _, pp := range p.shards {
-		pp.close()
-	}
-}
-
-func (p *pendingProposal) committed(clientID uint64,
-	seriesID uint64, key uint64) {
-	pp := p.shards[key%p.ps]
-	pp.committed(clientID, seriesID, key)
-}
-
-func (p *pendingProposal) dropped(clientID uint64,
-	seriesID uint64, key uint64) {
-	pp := p.shards[key%p.ps]
-	pp.dropped(clientID, seriesID, key)
-}
-
-func (p *pendingProposal) applied(clientID uint64,
-	seriesID uint64, key uint64, result sm.Result, rejected bool) {
-	pp := p.shards[key%p.ps]
-	pp.applied(clientID, seriesID, key, result, rejected)
-}
-
-func (p *pendingProposal) nextKey(clientID uint64) uint64 {
-	return p.keyg[clientID%p.ps].nextKey()
-}
-
-func (p *pendingProposal) tick(tick uint64) {
-	for i := uint64(0); i < p.ps; i++ {
-		p.shards[i].tick(tick)
-	}
-}
-
-func (p *pendingProposal) gc() {
-	for i := uint64(0); i < p.ps; i++ {
-		pp := p.shards[i]
-		pp.gc()
-	}
-}
-
-func newPendingProposalShard(cfg config.Config,
-	notifyCommit bool, pool *sync.Pool, proposals *entryQueue) *proposalShard {
-	p := &proposalShard{
+	return pendingProposal{
 		proposals:    proposals,
 		pending:      make(map[uint64]*RequestState),
 		logicalClock: newLogicalClock(),
 		pool:         pool,
 		cfg:          cfg,
 		notifyCommit: notifyCommit,
+		keyg:         getRng(cfg.ClusterID, cfg.NodeID),
 	}
-	return p
 }
 
-func (p *proposalShard) propose(session *client.Session,
-	cmd []byte, key uint64, timeoutTick uint64) (*RequestState, error) {
+func (p *pendingProposal) fallback(entries []pb.Entry) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for idx, e := range entries {
+		key := p.keyg.nextKey()
+		entries[idx].Key = key
+		req := e.Request.(*RequestState)
+		req.key = key
+		p.pending[key] = req
+	}
+}
+
+func (p *pendingProposal) propose(session *client.Session,
+	cmd []byte, timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
 	}
 	if rsm.GetMaxBlockSize(p.cfg.EntryCompressionType) < uint64(len(cmd)) {
 		return nil, ErrPayloadTooBig
 	}
+	clientID := session.ClientID
+	if session.IsNoOPSession() && len(cmd) == 0 {
+		clientID = client.EmptyPayloadClientID
+	}
+	req := p.pool.Get().(*RequestState)
+	req.reuse(p.notifyCommit)
+	req.ref = 2
+	req.clientID = clientID
+	req.seriesID = session.SeriesID
+	req.deadline = p.getTick() + timeoutTick
+	req.notifyCommit = p.notifyCommit
+	if req.aggrC != nil {
+		plog.Panicf("aggrC not nil")
+	}
+	if len(req.CompletedC) > 0 {
+		req.CompletedC = make(chan RequestResult, 1)
+	}
+	if p.notifyCommit {
+		if len(req.committedC) > 0 || req.committedC == nil {
+			req.committedC = make(chan RequestResult, 1)
+		}
+	} else {
+		req.committedC = nil
+	}
 	entry := pb.Entry{
-		Key:         key,
-		ClientID:    session.ClientID,
+		ClientID:    clientID,
 		SeriesID:    session.SeriesID,
 		RespondedTo: session.RespondedTo,
+		Request:     req,
 	}
 	if len(cmd) == 0 {
 		entry.Type = pb.ApplicationEntry
@@ -1079,31 +1065,14 @@ func (p *proposalShard) propose(session *client.Session,
 		entry.Type = pb.EncodedEntry
 		entry.Cmd = preparePayload(p.cfg.EntryCompressionType, cmd)
 	}
-	req := p.pool.Get().(*RequestState)
-	req.reuse(p.notifyCommit)
-	req.clientID = session.ClientID
-	req.seriesID = session.SeriesID
-	req.key = entry.Key
-	req.deadline = p.getTick() + timeoutTick
-	req.notifyCommit = p.notifyCommit
-
-	p.mu.Lock()
-	p.pending[entry.Key] = req
-	p.mu.Unlock()
 
 	added, stopped := p.proposals.add(entry)
 	if stopped {
-		plog.Warningf("%s dropped proposal, cluster stopped",
+		plog.Debugf("%s dropped proposal, cluster stopped",
 			dn(p.cfg.ClusterID, p.cfg.NodeID))
-		p.mu.Lock()
-		delete(p.pending, entry.Key)
-		p.mu.Unlock()
 		return nil, ErrClusterClosed
 	}
 	if !added {
-		p.mu.Lock()
-		delete(p.pending, entry.Key)
-		p.mu.Unlock()
 		plog.Debugf("%s dropped proposal, overloaded",
 			dn(p.cfg.ClusterID, p.cfg.NodeID))
 		return nil, ErrSystemBusy
@@ -1111,7 +1080,7 @@ func (p *proposalShard) propose(session *client.Session,
 	return req, nil
 }
 
-func (p *proposalShard) close() {
+func (p *pendingProposal) close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.stopped = true
@@ -1123,25 +1092,24 @@ func (p *proposalShard) close() {
 	}
 }
 
-func (p *proposalShard) getProposal(clientID uint64,
+func (p *pendingProposal) getProposal(clientID uint64,
 	seriesID uint64, key uint64, now uint64) *RequestState {
 	return p.takeProposal(clientID, seriesID, key, now, true)
 }
 
-func (p *proposalShard) borrowProposal(clientID uint64,
+func (p *pendingProposal) borrowProposal(clientID uint64,
 	seriesID uint64, key uint64, now uint64) *RequestState {
 	return p.takeProposal(clientID, seriesID, key, now, false)
 }
 
-func (p *proposalShard) takeProposal(clientID uint64,
+func (p *pendingProposal) takeProposal(clientID uint64,
 	seriesID uint64, key uint64, now uint64, remove bool) *RequestState {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.stopped {
 		return nil
 	}
-	ps, ok := p.pending[key]
-	if ok && ps.deadline >= now {
+	if ps, ok := p.pending[key]; ok && ps.deadline >= now {
 		if ps.clientID == clientID && ps.seriesID == seriesID {
 			if remove {
 				delete(p.pending, key)
@@ -1152,19 +1120,19 @@ func (p *proposalShard) takeProposal(clientID uint64,
 	return nil
 }
 
-func (p *proposalShard) committed(clientID uint64, seriesID uint64, key uint64) {
+func (p *pendingProposal) committed(clientID uint64, seriesID uint64, key uint64) {
 	if ps := p.borrowProposal(clientID, seriesID, key, p.getTick()); ps != nil {
 		ps.committed()
 	}
 }
 
-func (p *proposalShard) dropped(clientID uint64, seriesID uint64, key uint64) {
+func (p *pendingProposal) dropped(clientID uint64, seriesID uint64, key uint64) {
 	if ps := p.getProposal(clientID, seriesID, key, p.getTick()); ps != nil {
 		ps.dropped()
 	}
 }
 
-func (p *proposalShard) applied(clientID uint64,
+func (p *pendingProposal) applied(clientID uint64,
 	seriesID uint64, key uint64, result sm.Result, rejected bool) {
 	now := p.getTick()
 	var code RequestResultCode
@@ -1182,11 +1150,19 @@ func (p *proposalShard) applied(clientID uint64,
 	}
 }
 
-func (p *proposalShard) gc() {
-	p.gcAt(p.getTick())
+func (p *pendingProposal) timeout(clientID uint64, seriesID uint64, key uint64) {
+	now := p.getTick()
+	if ps := p.getProposal(clientID, seriesID, key, now); ps != nil {
+		ps.timeout()
+	}
 }
 
-func (p *proposalShard) gcAt(now uint64) {
+func (p *pendingProposal) gc() {
+	now := p.getTick()
+	p.gcAt(now)
+}
+
+func (p *pendingProposal) gcAt(now uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.stopped {
@@ -1197,7 +1173,7 @@ func (p *proposalShard) gcAt(now uint64) {
 	}
 	p.lastGcTime = now
 	for key, rec := range p.pending {
-		if rec.deadline < now {
+		if deadline := rec.deadline; deadline > 0 && deadline < now {
 			rec.timeout()
 			delete(p.pending, key)
 		}

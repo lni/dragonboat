@@ -56,10 +56,6 @@ func (nh *NodeHost) Clusters() []*node {
 	return result
 }
 
-func SetPendingProposalShards(sz uint64) {
-	pendingProposalShards = sz
-}
-
 func SetTaskBatchSize(sz uint64) {
 	taskBatchSize = sz
 }

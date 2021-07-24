@@ -67,7 +67,7 @@ type IKVStore interface {
 	GetWriteBatch() IWriteBatch
 	// CommitWriteBatch atomically writes everything included in the write batch
 	// to the underlying key-value store.
-	CommitWriteBatch(wb IWriteBatch) error
+	CommitWriteBatch(wb IWriteBatch, sync bool) error
 	// BulkRemoveEntries removes entries specified by the range [firstKey,
 	// lastKey). BulkRemoveEntries is called in the main execution thread of raft,
 	// it is suppose to immediately return without significant delay.

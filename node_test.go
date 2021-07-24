@@ -721,7 +721,7 @@ func TestMakingProposalOnWitnessNodeWillBeRejected(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		n.config.IsWitness = true
-		cs := client.NewNoOPSession(n.clusterID, random.NewLockedRand())
+		cs := client.NewNoOPSession(n.clusterID)
 		_, err := n.propose(cs, make([]byte, 1), 10)
 		if err != ErrInvalidOperation {
 			t.Errorf("making proposal not rejected")

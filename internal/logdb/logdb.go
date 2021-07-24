@@ -106,16 +106,7 @@ func NewDefaultLogDB(config config.NodeHostConfig,
 	callback config.LogDBCallback,
 	dirs []string, lldirs []string) (raftio.ILogDB, error) {
 	return NewLogDB(config,
-		callback, dirs, lldirs, false, true, newDefaultKVStore)
-}
-
-// NewDefaultBatchedLogDB creates a Log DB instance using the default KV store
-// implementation with batched entry support.
-func NewDefaultBatchedLogDB(config config.NodeHostConfig,
-	callback config.LogDBCallback,
-	dirs []string, lldirs []string) (raftio.ILogDB, error) {
-	return NewLogDB(config,
-		callback, dirs, lldirs, true, false, newDefaultKVStore)
+		callback, dirs, lldirs, false, false, newDefaultKVStore)
 }
 
 // NewLogDB creates a Log DB instance based on provided configuration

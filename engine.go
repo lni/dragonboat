@@ -1075,6 +1075,9 @@ func (e *engine) load(workerID uint64,
 		ready.getPartitioner(), from)
 	e.loaded.update(workerID, from, result)
 	for _, n := range offloaded {
+		if from == fromStepWorker {
+			n.release()
+		}
 		n.offloaded()
 	}
 	return result, cci
@@ -1088,7 +1091,7 @@ func (e *engine) commitWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-e.commitStopper.ShouldStop():
-			e.offloadNodeMap(nodes)
+			e.offloadNodeMap(nodes, false)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadCommitNodes(workerID, cci, nodes)
@@ -1136,7 +1139,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-e.taskStopper.ShouldStop():
-			e.offloadNodeMap(nodes)
+			e.offloadNodeMap(nodes, false)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
@@ -1209,7 +1212,7 @@ func (e *engine) stepWorkerMain(workerID uint64) {
 	for {
 		select {
 		case <-stopC:
-			e.offloadNodeMap(nodes)
+			e.offloadNodeMap(nodes, true)
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadStepNodes(workerID, cci, nodes)
@@ -1307,8 +1310,6 @@ func (e *engine) processSteps(workerID uint64,
 		node := nodes[ud.ClusterID]
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
-		node.processDroppedEntries(ud)
-		node.processDroppedReadIndexes(ud)
 	}
 	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
 		return err
@@ -1329,6 +1330,16 @@ func (e *engine) processSteps(workerID uint64,
 	}
 	if lazyFreeCycle > 0 {
 		resetNodeUpdate(nodeUpdates)
+	}
+	// when some entries are being dropped, it usually means the leader is not
+	// ready, it is a slow path.
+	for cid := range active {
+		if node, ok := nodes[cid]; ok {
+			if ack, hasAck := node.getAck(); hasAck {
+				node.processDroppedEntries(ack)
+				node.processDroppedReadIndexes(ack)
+			}
+		}
 	}
 	return nil
 }
@@ -1429,7 +1440,6 @@ func (e *engine) setSaveReady(clusterID uint64) {
 func (e *engine) setRecoverReady(clusterID uint64) {
 	e.wp.recoverReady.clusterReady(clusterID)
 }
-
 func (e *engine) setCCIReady(clusterID uint64) {
 	e.stepCCIReady.clusterReady(clusterID)
 	e.commitCCIReady.clusterReady(clusterID)
@@ -1437,8 +1447,11 @@ func (e *engine) setCCIReady(clusterID uint64) {
 	e.wp.cciReady.clusterReady(clusterID)
 }
 
-func (e *engine) offloadNodeMap(nodes map[uint64]*node) {
-	for _, node := range nodes {
-		node.offloaded()
+func (e *engine) offloadNodeMap(nodes map[uint64]*node, fromStepWorker bool) {
+	for _, n := range nodes {
+		if fromStepWorker {
+			n.release()
+		}
+		n.offloaded()
 	}
 }

@@ -145,6 +145,7 @@ type KV struct {
 	opts     *pebble.Options
 	ro       *pebble.IterOptions
 	wo       *pebble.WriteOptions
+	nosync   *pebble.WriteOptions
 	event    *eventListener
 	callback kv.LogDBCallback
 	config   config.LogDBConfig
@@ -191,6 +192,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	cache := pebble.NewCache(cacheSize)
 	ro := &pebble.IterOptions{}
 	wo := &pebble.WriteOptions{Sync: true}
+	noSyncWO := &pebble.WriteOptions{Sync: false}
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,
@@ -208,6 +210,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	kv := &KV{
 		ro:       ro,
 		wo:       wo,
+		nosync:   noSyncWO,
 		opts:     opts,
 		config:   config,
 		callback: callback,
@@ -338,15 +341,16 @@ func (r *KV) GetWriteBatch() kv.IWriteBatch {
 }
 
 // CommitWriteBatch ...
-func (r *KV) CommitWriteBatch(wb kv.IWriteBatch) error {
+func (r *KV) CommitWriteBatch(wb kv.IWriteBatch, sync bool) error {
 	pwb, ok := wb.(*pebbleWriteBatch)
 	if !ok {
 		panic("unknown type")
 	}
-	if pwb.db != r.db {
-		panic("pwb.db != r.db")
+	wo := r.wo
+	if !sync {
+		wo = r.nosync
 	}
-	return r.db.Apply(pwb.wb, r.wo)
+	return r.db.Apply(pwb.wb, wo)
 }
 
 // BulkRemoveEntries ...

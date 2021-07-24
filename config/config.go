@@ -940,6 +940,10 @@ type ExpertConfig struct {
 	// TestGossipProbeInterval define the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration
+	// AdaptiveBatching defines whether to enable the adaptive batching support.
+	// Once enabled, proposal batching will use active client count information
+	// to determine the batching delays.
+	AdaptiveBatching bool
 }
 
 // GossipConfig contains configurations for the gossip service. Gossip service

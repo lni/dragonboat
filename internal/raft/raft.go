@@ -132,7 +132,7 @@ func getLocalStatus(r *raft) Status {
 // Struct raft implements the raft protocol published in Diego Ongarno's PhD
 // thesis. Almost all features covered in Diego Ongarno's thesis have been
 // implemented, including -
-//  * leader election with pre-vote
+//  * leader election
 //  * log replication
 //  * flow control
 //  * membership configuration change
@@ -199,6 +199,7 @@ var dn = logutil.DescribeNode
 type raft struct {
 	handlers                  [numStates][numMessageTypes]handlerFunc
 	events                    server.IRaftEventListener
+	em                        IEntryManager
 	hasNotAppliedConfigChange func() bool
 	votes                     map[uint64]bool
 	handle                    stepFunc
@@ -236,7 +237,7 @@ type raft struct {
 	preVote                   bool
 }
 
-func newRaft(c config.Config, logdb ILogDB) *raft {
+func newRaft(c config.Config, em IEntryManager, logdb ILogDB) *raft {
 	if err := c.Validate(); err != nil {
 		panic(err)
 	}
@@ -250,7 +251,7 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 		leaderID:         NoLeader,
 		msgs:             make([]pb.Message, 0),
 		droppedEntries:   make([]pb.Entry, 0),
-		log:              newEntryLog(logdb, rl),
+		log:              newEntryLog(logdb, em, rl),
 		remotes:          make(map[uint64]*remote),
 		nonVotings:       make(map[uint64]*remote),
 		witnesses:        make(map[uint64]*remote),
@@ -260,6 +261,7 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 		preVote:          c.PreVote,
 		readIndex:        newReadIndex(),
 		rl:               rl,
+		em:               em,
 	}
 	plog.Infof("%s raft log rate limit enabled: %t, %d",
 		dn(r.clusterID, r.nodeID), r.rl.Enabled(), c.MaxInMemLogSize)
@@ -292,6 +294,13 @@ func newRaft(c config.Config, logdb ILogDB) *raft {
 	r.checkHandlerMap()
 	r.handle = defaultHandle
 	return r
+}
+
+func (r *raft) close() {
+	if r.em != nil {
+		r.em.Release(r.droppedEntries)
+	}
+	r.log.inmem.close()
 }
 
 func (r *raft) setTestPeers(peers []uint64) {
@@ -329,6 +338,10 @@ func (r *raft) describe() string {
 
 func (r *raft) isCandidate() bool {
 	return r.state == candidate
+}
+
+func (r *raft) noLeader() bool {
+	return r.leaderID == NoLeader
 }
 
 func (r *raft) isLeader() bool {
@@ -684,7 +697,7 @@ func (r *raft) sendRateLimitMessage() {
 	if r.isLeader() {
 		plog.Panicf("leader node called sendRateLimitMessage")
 	}
-	if r.leaderID == NoLeader {
+	if r.noLeader() {
 		plog.Infof("%s rate limit message skipped, no leader", r.describe())
 		return
 	}
@@ -1515,7 +1528,7 @@ func (r *raft) dropRequestVoteFromHighTermNode(m pb.Message) bool {
 	// to have quorum. we thus drop such RequestVote to minimize interruption by
 	// network partitioned nodes with higher term.
 	// this idea is from the last paragraph of the section 6 of the raft paper
-	if r.leaderID != NoLeader && r.electionTick < r.electionTimeout {
+	if !r.noLeader() && r.electionTick < r.electionTimeout {
 		return true
 	}
 	return false
@@ -2083,12 +2096,15 @@ func (r *raft) handleWitnessSnapshot(m pb.Message) error {
 //
 
 func (r *raft) handleFollowerPropose(m pb.Message) error {
-	if r.leaderID == NoLeader {
+	if r.noLeader() {
 		plog.Warningf("%s dropped proposal, no leader", r.describe())
 		r.reportDroppedProposal(m)
 		return nil
 	}
 	m.To = r.leaderID
+	// FIXME:
+	// remove this logging message
+	plog.Debugf("%s forwarding proposals to %s", r.describe(), NodeID(m.To))
 	// the message might be queued by the transport layer, this violates the
 	// requirement of the entryQueue.get() func. copy the m.Entries to its
 	// own space.
@@ -2114,7 +2130,7 @@ func (r *raft) handleFollowerHeartbeat(m pb.Message) error {
 }
 
 func (r *raft) handleFollowerReadIndex(m pb.Message) error {
-	if r.leaderID == NoLeader {
+	if r.noLeader() {
 		plog.Warningf("%s dropped ReadIndex, no leader", r.describe())
 		r.reportDroppedReadIndex(m)
 		return nil
@@ -2125,7 +2141,7 @@ func (r *raft) handleFollowerReadIndex(m pb.Message) error {
 }
 
 func (r *raft) handleFollowerLeaderTransfer(m pb.Message) error {
-	if r.leaderID == NoLeader {
+	if r.noLeader() {
 		plog.Warningf("%s dropped LeaderTransfer, no leader", r.describe())
 		return nil
 	}

@@ -86,6 +86,9 @@ func (p *testNodeProxy) ShouldStop() <-chan struct{} {
 
 func (p *testNodeProxy) ApplyUpdate(entry pb.Entry,
 	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
+	if ignored {
+		return
+	}
 	if !p.applyUpdateCalled {
 		p.applyUpdateCalled = true
 		p.firstIndex = entry.Index
@@ -1844,18 +1847,18 @@ func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
 func TestNonUpdateEntryIsNotBatched(t *testing.T) {
 	cce := pb.Entry{Type: pb.ConfigChangeEntry}
 	notSessionManaged := pb.Entry{ClientID: client.NotSessionManagedClientID}
-	newSessionEntry := pb.Entry{SeriesID: client.SeriesIDForRegister}
-	unSessionEntry := pb.Entry{SeriesID: client.SeriesIDForUnregister}
+	newSessionEntry := pb.Entry{ClientID: 1234, SeriesID: client.SeriesIDForRegister}
+	unSessionEntry := pb.Entry{ClientID: 1234, SeriesID: client.SeriesIDForUnregister}
 	entries := []pb.Entry{cce, notSessionManaged, newSessionEntry, unSessionEntry}
-	for _, e := range entries {
+	for idx, e := range entries {
 		if e.IsUpdateEntry() {
-			t.Errorf("incorrectly considered as update entry")
+			t.Errorf("incorrectly considered entry %d as update entry", idx)
 		}
 	}
-	for _, e := range entries {
+	for idx, e := range entries {
 		updates, _ := getEntryTypes([]pb.Entry{e})
 		if updates {
-			t.Errorf("incorrectly considered as update entry")
+			t.Errorf("incorrectly considered entry %d as update entry", idx)
 		}
 	}
 }

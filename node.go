@@ -69,12 +69,44 @@ func (l *logDBMetrics) isBusy() bool {
 	return atomic.LoadInt32(&l.busy) != 0
 }
 
+type entryManager struct {
+	id string
+}
+
+func (em *entryManager) Release(ents []pb.Entry) {
+	for _, e := range ents {
+		if req, ok := e.Request.(*RequestState); ok {
+			if !req.readyToRelease.ready() {
+				req.timeout()
+			}
+			req.unref()
+		}
+	}
+}
+
+func (em *entryManager) Gc(e pb.Entry, now uint64) bool {
+	if req, ok := e.Request.(*RequestState); ok {
+		if deadline := req.deadline; deadline > 0 && deadline < now {
+			req.timeout()
+			return true
+		}
+	}
+	return false
+}
+
+func (em *entryManager) Close(e pb.Entry) {
+	if req, ok := e.Request.(*RequestState); ok {
+		req.terminated()
+	}
+}
+
 type node struct {
 	clusterInfo           atomic.Value
 	nodeRegistry          transport.INodeRegistry
 	logdb                 raftio.ILogDB
 	pipeline              pipeline
 	getStreamSink         func(uint64, uint64) *transport.Sink
+	clientCount           *uint64
 	ss                    snapshotState
 	configChangeC         <-chan configChangeRequest
 	snapshotC             <-chan rsm.SSRequest
@@ -145,8 +177,19 @@ func newNode(peers map[uint64]string,
 	ldb raftio.ILogDB,
 	metrics *logDBMetrics,
 	sysEvents *sysEventListener) (*node, error) {
+	queueCloseFn := func(e pb.Entry) {
+		if req, ok := e.Request.(*RequestState); ok {
+			req.terminated()
+		}
+	}
+	var clientCount *uint64 = nil
+	if nhConfig.Expert.AdaptiveBatching {
+		cc := uint64(0)
+		clientCount = &cc
+	}
+	proposals := newEntryQueue(incomingProposalsMaxLen,
+		lazyFreeCycle, queueCloseFn, clientCount)
 	notifyCommit := nhConfig.NotifyCommit
-	proposals := newEntryQueue(incomingProposalsMaxLen, lazyFreeCycle)
 	readIndexes := newReadIndexQueue(incomingReadIndexMaxLen)
 	configChangeC := make(chan configChangeRequest, 1)
 	snapshotC := make(chan rsm.SSRequest, 1)
@@ -160,6 +203,7 @@ func newNode(peers map[uint64]string,
 		instanceID:            atomic.AddUint64(&instanceID, 1),
 		tickMillisecond:       nhConfig.RTTMillisecond,
 		config:                config,
+		clientCount:           clientCount,
 		incomingProposals:     proposals,
 		incomingReadIndexes:   readIndexes,
 		configChangeC:         configChangeC,
@@ -236,18 +280,17 @@ func (n *node) commitReady() {
 }
 
 func (n *node) ApplyUpdate(e pb.Entry,
-	result sm.Result, rejected bool, ignored bool, notifyRead bool) {
+	result sm.Result, rejected bool, ignored bool, notifyReadClient bool) {
 	if n.isWitness() {
 		return
 	}
-	if notifyRead {
+	if notifyReadClient {
 		n.pendingReadIndexes.applied(e.Index)
 	}
 	if !ignored {
-		if e.Key == 0 {
-			plog.Panicf("key is 0")
-		}
-		n.pendingProposals.applied(e.ClientID, e.SeriesID, e.Key, result, rejected)
+		n.applyEntry(e, result, rejected)
+	} else {
+		n.notifyIgnoredEntry(e)
 	}
 }
 
@@ -328,6 +371,34 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 	return nil
 }
 
+func (n *node) dropEntry(e pb.Entry) {
+	if req, ok := e.Request.(*RequestState); ok {
+		req.dropped()
+	} else {
+		n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
+	}
+}
+
+func (n *node) notifyIgnoredEntry(e pb.Entry) {
+	if req, ok := e.Request.(*RequestState); ok {
+		req.timeout()
+	} else {
+		n.pendingProposals.timeout(e.ClientID, e.SeriesID, e.Key)
+	}
+}
+
+func (n *node) applyEntry(e pb.Entry, result sm.Result, rejected bool) {
+	if req, ok := e.Request.(*RequestState); ok {
+		if rejected {
+			req.notify(RequestResult{code: requestRejected, result: result})
+		} else {
+			req.notify(RequestResult{code: requestCompleted, result: result})
+		}
+	} else {
+		n.pendingProposals.applied(e.ClientID, e.SeriesID, e.Key, result, rejected)
+	}
+}
+
 func (n *node) startRaft(cfg config.Config,
 	peers map[uint64]string, initial bool) (bool, error) {
 	newNode, err := n.replayLog(cfg.ClusterID, cfg.NodeID)
@@ -338,7 +409,8 @@ func (n *node) startRaft(cfg config.Config,
 	for k, v := range peers {
 		pas = append(pas, raft.PeerAddress{NodeID: k, Address: v})
 	}
-	n.p = raft.Launch(cfg, n.logReader, n.raftEvents, pas, initial, newNode)
+	em := &entryManager{id: n.id()}
+	n.p = raft.Launch(cfg, em, n.logReader, n.raftEvents, pas, initial, newNode)
 	return newNode, nil
 }
 
@@ -350,6 +422,11 @@ func (n *node) close() {
 	n.pendingProposals.close()
 	n.pendingConfigChange.close()
 	n.pendingSnapshot.close()
+}
+
+func (n *node) release() {
+	n.p.Close()
+	n.incomingProposals.release()
 }
 
 func (n *node) stopped() bool {
@@ -967,16 +1044,18 @@ func (n *node) getUpdate() (pb.Update, bool, error) {
 	return pb.Update{}, false, nil
 }
 
-func (n *node) processDroppedReadIndexes(ud pb.Update) {
+func (n *node) processDroppedReadIndexes(ud pb.Ack) {
 	for _, sysctx := range ud.DroppedReadIndexes {
 		n.pendingReadIndexes.dropped(sysctx)
 	}
 }
 
-func (n *node) processDroppedEntries(ud pb.Update) {
+func (n *node) processDroppedEntries(ud pb.Ack) {
 	for _, e := range ud.DroppedEntries {
-		if e.IsProposal() {
-			n.pendingProposals.dropped(e.ClientID, e.SeriesID, e.Key)
+		if e.Type == pb.ApplicationEntry ||
+			e.Type == pb.EncodedEntry ||
+			e.Type == pb.MetadataEntry {
+			n.dropEntry(e)
 		} else if e.Type == pb.ConfigChangeEntry {
 			n.pendingConfigChange.dropped(e.Key)
 		} else {
@@ -989,8 +1068,15 @@ func (n *node) notifyCommittedEntries() {
 	tasks := n.toCommitQ.GetAll()
 	for _, t := range tasks {
 		for _, e := range t.Entries {
-			if e.IsProposal() {
-				n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
+			if e.Type == pb.ApplicationEntry ||
+				e.Type == pb.EncodedEntry ||
+				e.Type == pb.MetadataEntry {
+				req, ok := e.Request.(*RequestState)
+				if ok {
+					req.committed()
+				} else {
+					n.pendingProposals.committed(e.ClientID, e.SeriesID, e.Key)
+				}
 			} else if e.Type == pb.ConfigChangeEntry {
 				n.pendingConfigChange.committed(e.Key)
 			} else {
@@ -1060,6 +1146,15 @@ func (n *node) updateAppliedIndex() uint64 {
 	n.appliedIndex = n.sm.GetLastApplied()
 	n.p.NotifyRaftLastApplied(n.appliedIndex)
 	return n.appliedIndex
+}
+
+func (n *node) getAck() (pb.Ack, bool) {
+	n.raftMu.Lock()
+	defer n.raftMu.Unlock()
+	if n.initialized() {
+		return n.p.GetAck(), true
+	}
+	return pb.Ack{}, false
 }
 
 func (n *node) stepNode() (pb.Update, bool, error) {
@@ -1143,6 +1238,7 @@ func (n *node) handleEvents() (bool, error) {
 
 func (n *node) gc() {
 	if n.gcTick != n.currentTick {
+		n.p.Gc(n.pendingProposals.getTick())
 		n.pendingProposals.gc()
 		n.pendingConfigChange.gc()
 		n.pendingSnapshot.gc()
@@ -1193,6 +1289,9 @@ func (n *node) handleProposals() (bool, error) {
 	}
 	paused := logDBBusy || n.rateLimited
 	if entries := n.incomingProposals.get(paused); len(entries) > 0 {
+		if !n.p.IsLeader() {
+			n.pendingProposals.fallback(entries)
+		}
 		if err := n.p.ProposeEntries(entries); err != nil {
 			return false, err
 		}
@@ -1222,13 +1321,13 @@ func (n *node) handleConfigChange() (bool, error) {
 	case req, ok := <-n.configChangeC:
 		if !ok {
 			n.configChangeC = nil
-		} else {
-			n.qs.record(pb.ConfigChangeEvent)
-			var cc pb.ConfigChange
-			pb.MustUnmarshal(&cc, req.data)
-			if err := n.p.ProposeConfigChange(cc, req.key); err != nil {
-				return false, err
-			}
+			return true, nil
+		}
+		n.qs.record(pb.ConfigChangeEvent)
+		var cc pb.ConfigChange
+		pb.MustUnmarshal(&cc, req.data)
+		if err := n.p.ProposeConfigChange(cc, req.key); err != nil {
+			return false, err
 		}
 	default:
 		return false, nil
@@ -1484,6 +1583,7 @@ func (n *node) tick(tick uint64) error {
 	n.pendingProposals.tick(tick)
 	n.pendingReadIndexes.tick(tick)
 	n.pendingConfigChange.tick(tick)
+	n.incomingProposals.tick()
 	return nil
 }
 
@@ -1582,4 +1682,16 @@ func (n *node) millisecondSinceStart() uint64 {
 
 func (n *node) getRaftAddress() string {
 	return n.raftAddress
+}
+
+func (n *node) increaseClientCount() {
+	if n.clientCount != nil {
+		atomic.AddUint64(n.clientCount, 1)
+	}
+}
+
+func (n *node) decreaseClientCount() {
+	if n.clientCount != nil {
+		atomic.AddUint64(n.clientCount, ^uint64(0))
+	}
 }

@@ -39,6 +39,17 @@ const (
 	NoNode uint64 = 0
 )
 
+// Ack is used to describe dropped entries and read index requests.
+type Ack struct {
+	ClusterID uint64
+	NodeID    uint64
+	// DroppedEntries is a list of entries dropped when no leader is available
+	DroppedEntries []Entry
+	// DroppedReadIndexes is a list of read index requests  dropped when no leader
+	// is available.
+	DroppedReadIndexes []SystemCtx
+}
+
 // IsEmptyState returns a boolean flag indicating whether the given State is
 // empty.
 func IsEmptyState(st State) bool {
@@ -56,41 +67,50 @@ func IsStateEqual(a State, b State) bool {
 	return isStateEqual(a, b)
 }
 
+// StateSyncChange returns a boolean value indicating whether the state change
+// requires a fsync().
+func StateSyncChange(a, b State) bool {
+	return a.Term != b.Term || a.Vote != b.Vote
+}
+
 func isStateEqual(a State, b State) bool {
 	return a.Term == b.Term && a.Vote == b.Vote && a.Commit == b.Commit
 }
 
 // IsProposal returns a boolean value indicating whether the entry is a
 // regular update entry.
-func (m *Entry) IsProposal() bool {
-	return m.Type == ApplicationEntry ||
-		m.Type == EncodedEntry || m.Type == MetadataEntry
+func (e *Entry) IsProposal() bool {
+	return e.Type == ApplicationEntry ||
+		e.Type == EncodedEntry || e.Type == MetadataEntry
 }
 
 // IsConfigChange returns a boolean value indicating whether the entry is for
 // config change.
-func (m *Entry) IsConfigChange() bool {
-	return m.Type == ConfigChangeEntry
+func (e *Entry) IsConfigChange() bool {
+	return e.Type == ConfigChangeEntry
 }
 
-// IsEmpty returns a boolean value indicating whether the entry is Empty.
-func (m *Entry) IsEmpty() bool {
-	if m.IsConfigChange() {
+// IsRaftNoOP returns a boolean value indicating whether the entry is Empty.
+func (e *Entry) IsRaftNoOP() bool {
+	if e.IsConfigChange() {
 		return false
 	}
-	if m.IsSessionManaged() {
+	if e.IsSessionManaged() {
 		return false
 	}
-	return len(m.Cmd) == 0
+	return len(e.Cmd) == 0
 }
 
 // IsSessionManaged returns a boolean value indicating whether the entry is
 // session managed.
-func (m *Entry) IsSessionManaged() bool {
-	if m.IsConfigChange() {
+func (e *Entry) IsSessionManaged() bool {
+	if e.IsConfigChange() {
 		return false
 	}
-	if m.ClientID == client.NotSessionManagedClientID {
+	// NoOP entry issued by raft after taking leadership
+	if len(e.Cmd) == 0 &&
+		e.ClientID == client.NotSessionManagedClientID &&
+		e.SeriesID == client.NoOPSeriesID {
 		return false
 	}
 	return true
@@ -98,33 +118,48 @@ func (m *Entry) IsSessionManaged() bool {
 
 // IsNoOPSession returns a boolean value indicating whether the entry is NoOP
 // session managed.
-func (m *Entry) IsNoOPSession() bool {
-	return m.SeriesID == client.NoOPSeriesID
+func (e *Entry) IsNoOPSession() bool {
+	if e.Type == MetadataEntry {
+		return true
+	}
+	if !e.IsSessionManaged() {
+		return false
+	}
+	// v2
+	if e.SeriesID == client.NoOPSeriesID &&
+		(e.ClientID == client.NoOPClientID || e.ClientID == client.EmptyPayloadClientID) {
+		return true
+	}
+	// v1
+	if e.SeriesID == client.NoOPSeriesID {
+		return true
+	}
+	return false
 }
 
 // IsNewSessionRequest returns a boolean value indicating whether the entry is
 // for reqeusting a new client.
-func (m *Entry) IsNewSessionRequest() bool {
-	return !m.IsConfigChange() &&
-		len(m.Cmd) == 0 &&
-		m.ClientID != client.NotSessionManagedClientID &&
-		m.SeriesID == client.SeriesIDForRegister
+func (e *Entry) IsNewSessionRequest() bool {
+	return !e.IsConfigChange() &&
+		len(e.Cmd) == 0 &&
+		e.ClientID != client.NotSessionManagedClientID &&
+		e.SeriesID == client.SeriesIDForRegister
 }
 
 // IsEndOfSessionRequest returns a boolean value indicating whether the entry
 // is for requesting the session to come to an end.
-func (m *Entry) IsEndOfSessionRequest() bool {
-	return !m.IsConfigChange() &&
-		len(m.Cmd) == 0 &&
-		m.ClientID != client.NotSessionManagedClientID &&
-		m.SeriesID == client.SeriesIDForUnregister
+func (e *Entry) IsEndOfSessionRequest() bool {
+	return !e.IsConfigChange() &&
+		len(e.Cmd) == 0 &&
+		e.ClientID != client.NotSessionManagedClientID &&
+		e.SeriesID == client.SeriesIDForUnregister
 }
 
 // IsUpdateEntry returns a boolean flag indicating whether the entry is a
 // regular application entry not used for session management.
-func (m *Entry) IsUpdateEntry() bool {
-	return !m.IsConfigChange() && m.IsSessionManaged() &&
-		!m.IsNewSessionRequest() && !m.IsEndOfSessionRequest()
+func (e *Entry) IsUpdateEntry() bool {
+	return !e.IsConfigChange() && e.IsSessionManaged() &&
+		!e.IsNewSessionRequest() && !e.IsEndOfSessionRequest()
 }
 
 // NewBootstrapInfo creates and returns a new bootstrap record.
