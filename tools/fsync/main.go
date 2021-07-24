@@ -8,7 +8,9 @@ import (
 )
 
 const (
-	BATCH   = 10000
+	// BATCH is the number of write operations to repeat
+	BATCH = 10000
+	// BUCKETS is the number of parallel write jobs
 	BUCKETS = 16
 )
 
