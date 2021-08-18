@@ -1144,8 +1144,6 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			if err := e.processApplies(a, nodes, batch, entries); err != nil {
 				panicNow(err)
 			}
-			batch = make([]rsm.Task, 0, taskBatchSize)
-			entries = make([]sm.Entry, 0, taskBatchSize)
 		case <-e.applyCCIReady.waitCh(workerID):
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 		case <-e.applyWorkReady.waitCh(workerID):
