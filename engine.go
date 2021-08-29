@@ -1125,6 +1125,7 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 	batch := make([]rsm.Task, 0, taskBatchSize)
 	entries := make([]sm.Entry, 0, taskBatchSize)
 	cci := uint64(0)
+	count := uint64(0)
 	for {
 		select {
 		case <-e.taskStopper.ShouldStop():
@@ -1132,9 +1133,13 @@ func (e *engine) applyWorkerMain(workerID uint64) {
 			return
 		case <-ticker.C:
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
-			e.processApplies(make(map[uint64]struct{}), nodes, batch, entries)
-			batch = make([]rsm.Task, 0, taskBatchSize)
-			entries = make([]sm.Entry, 0, taskBatchSize)
+			a := make(map[uint64]struct{})
+			e.processApplies(a, nodes, batch, entries)
+			count++
+			if count%200 == 0 {
+				batch = make([]rsm.Task, 0, taskBatchSize)
+				entries = make([]sm.Entry, 0, taskBatchSize)
+			}
 		case <-e.applyCCIReady.waitCh(workerID):
 			nodes, cci = e.loadApplyNodes(workerID, cci, nodes)
 		case <-e.applyWorkReady.waitCh(workerID):
