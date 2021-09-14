@@ -142,7 +142,7 @@ func (lr *LogReader) entriesLocked(low uint64,
 	maxEntries := maxEntrySliceSize / uint64(unsafe.Sizeof(pb.Entry{}))
 	if high-low > maxEntries {
 		high = low + maxEntries
-		plog.Warningf("%s limited high to %d in logReader.entriesLocked", high)
+		plog.Warningf("%s limited high to %d in logReader.entriesLocked", lr.id(), high)
 	}
 	ents := make([]pb.Entry, 0, high-low)
 	size := uint64(0)
