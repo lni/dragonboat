@@ -65,6 +65,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 
@@ -279,14 +280,14 @@ var firstError = utils.FirstError
 func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	logBuildTagsAndVersion()
 	if err := nhConfig.Validate(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "validate config")
 	}
 	if err := nhConfig.Prepare(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "prepare config")
 	}
 	env, err := server.NewEnv(nhConfig, nhConfig.Expert.FS)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "server new env")
 	}
 	nh := &NodeHost{
 		env:      env,
@@ -322,16 +323,16 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	plog.Infof("DeploymentID set to %d", did)
 	if err := nh.createLogDB(); err != nil {
 		nh.Close()
-		return nil, err
+		return nil, errors.Wrap(err, "create LogDB")
 	}
 	if err := nh.loadNodeHostID(); err != nil {
 		nh.Close()
-		return nil, err
+		return nil, errors.Wrap(err, "load node host id")
 	}
 	plog.Infof("NodeHost ID: %s", nh.id.String())
 	if err := nh.createNodeRegistry(); err != nil {
 		nh.Close()
-		return nil, err
+		return nil, errors.Wrap(err, "create node registry")
 	}
 	errorInjection := false
 	if nhConfig.Expert.FS != nil {
@@ -342,7 +343,7 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 		nh.nhConfig.NotifyCommit, errorInjection, nh.env, nh.mu.logdb)
 	if err := nh.createTransport(); err != nil {
 		nh.Close()
-		return nil, err
+		return nil, errors.Wrap(err, "create transport")
 	}
 	nh.stopper.RunWorker(func() {
 		nh.nodeMonitorMain()
