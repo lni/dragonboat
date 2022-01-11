@@ -400,11 +400,14 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	if sq.rateLimited() {
 		return false, rateLimited
 	}
+
+	sq.increase(req)
+
 	select {
 	case sq.ch <- req:
-		sq.increase(req)
 		return true, success
 	default:
+		sq.decrease(req)
 		return false, chanIsFull
 	}
 }
