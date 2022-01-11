@@ -408,6 +408,7 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	case sq.ch <- req:
 		return true, success
 	default:
+		sq.decrease(req)
 		return false, chanIsFull
 	}
 }
