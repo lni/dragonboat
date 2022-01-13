@@ -4,7 +4,7 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 
 ### New features
 
-- Raft Pre-Vote support.
+- Experimental Raft Pre-Vote support.
 
 ### Improvements
 
