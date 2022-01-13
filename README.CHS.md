@@ -8,7 +8,6 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
-* 2022-01-13 Dragonboat v3.4 已发布，请查看[CHANGELOG](CHANGELOG.md)获知所有更新情况。
 * 2021-01-20 Dragonboat v3.3 已发布，请查看[CHANGELOG](CHANGELOG.md)获知所有更新情况。
 
 ## 关于 ##

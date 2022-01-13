@@ -8,7 +8,6 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## News ##
-* 2022-01-13 Dragonboat v3.4 has been released, please check [CHANGELOG](CHANGELOG.md) for all changes.
 * 2021-01-20 Dragonboat v3.3 has been released, please check [CHANGELOG](CHANGELOG.md) for all changes.
 
 ## About ##
