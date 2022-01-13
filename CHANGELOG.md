@@ -1,4 +1,4 @@
-## v3.4 (TBD)
+## v3.4 (2022-01-13)
 
 Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended to upgrade.
 
