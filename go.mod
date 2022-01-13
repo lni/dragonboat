@@ -9,6 +9,7 @@ require (
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
 	github.com/lni/goutils v1.3.0
 	github.com/stretchr/testify v1.6.1
+	golang.org/x/sys v0.0.0-20220111092808-5a964db01320 // indirect
 )
 
 go 1.14
