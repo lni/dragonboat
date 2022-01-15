@@ -1028,6 +1028,7 @@ func (n *node) applyRaftUpdates(ud pb.Update) {
 }
 
 func (n *node) processRaftUpdate(ud pb.Update) error {
+	n.p.CheckVolatile()
 	if err := n.logReader.Append(ud.EntriesToSave); err != nil {
 		return err
 	}

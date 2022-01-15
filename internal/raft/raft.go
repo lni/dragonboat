@@ -932,12 +932,7 @@ func (r *raft) appendEntries(entries []pb.Entry) error {
 		entries[i].Index = lastIndex + 1 + uint64(i)
 	}
 	r.log.append(entries)
-	r.remotes[r.nodeID].tryUpdate(r.log.lastIndex())
-	if r.isSingleNodeQuorum() {
-		if _, err := r.tryCommit(); err != nil {
-			return err
-		}
-	}
+	r.remotes[r.nodeID].tryUpdateVolatile(r.log.lastIndex())
 	return nil
 }
 
@@ -2440,4 +2435,25 @@ func (r *raft) checkHandlerMap() {
 			panic("unexpected msg handler")
 		}
 	}
+}
+
+func (r *raft) checkVolatile()  {
+	self := r.remotes[r.nodeID]
+	if self == nil {
+		return
+	}
+
+	if self.volatileMatch <= self.match {
+		self.volatileMatch = 0
+		return
+	}
+
+	//self.setActive() seems no need
+	self.match = self.volatileMatch
+	if r.isLeader() {
+		if ok, err := r.tryCommit(); err == nil && ok {
+			r.broadcastReplicateMessage()
+		}
+	}
+	self.volatileMatch = 0
 }

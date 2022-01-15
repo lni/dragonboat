@@ -354,6 +354,10 @@ func (p *Peer) getUpdate(moreToApply bool,
 	return ud, nil
 }
 
+func (p *Peer) CheckVolatile() {
+	p.raft.checkVolatile()
+}
+
 func checkLaunchRequest(config config.Config,
 	addresses []PeerAddress, initial bool, newNode bool) {
 	if config.NodeID == 0 {

@@ -72,6 +72,7 @@ func (r remoteStateType) String() string {
 type remote struct {
 	// called matchIndex/nextIndex in the etcd raft paper
 	match         uint64
+	volatileMatch uint64
 	next          uint64
 	snapshotIndex uint64
 	state         remoteStateType
@@ -142,6 +143,18 @@ func (r *remote) becomeSnapshot(index uint64) {
 
 func (r *remote) clearPendingSnapshot() {
 	r.snapshotIndex = 0
+}
+
+func (r *remote) tryUpdateVolatile(index uint64) bool {
+	if r.next < index+1 {
+		r.next = index + 1
+	}
+	if r.match < index {
+		r.waitToRetry()
+		r.volatileMatch = index
+		return true
+	}
+	return false
 }
 
 func (r *remote) tryUpdate(index uint64) bool {
