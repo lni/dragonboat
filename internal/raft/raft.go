@@ -538,7 +538,7 @@ func (r *raft) timeForElection() bool {
 	return r.electionTick >= r.randomizedElectionTimeout
 }
 
-func (r *raft) timeForHearbeat() bool {
+func (r *raft) timeForHeartbeat() bool {
 	return r.heartbeatTick >= r.heartbeatTimeout
 }
 
@@ -629,7 +629,7 @@ func (r *raft) leaderTick() error {
 		r.abortLeaderTransfer()
 	}
 	r.heartbeatTick++
-	if r.timeForHearbeat() {
+	if r.timeForHeartbeat() {
 		r.heartbeatTick = 0
 		if err := r.Handle(pb.Message{
 			From: r.nodeID,
