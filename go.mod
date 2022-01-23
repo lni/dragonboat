@@ -13,3 +13,4 @@ require (
 )
 
 go 1.14
+replace github.com/lni/goutils v1.3.1-0.20210517080819-7f56813dc438 => github.com/vitalyisaev2/goutils v1.3.1-0.20211116144502-b2caaddb8815

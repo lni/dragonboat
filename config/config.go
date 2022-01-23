@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/stringutil"
 
@@ -474,7 +475,7 @@ type TargetValidator func(string) bool
 
 // RaftAddressValidator is the validator used to validate user specified
 // RaftAddress values.
-type RaftAddressValidator func(string) bool
+type RaftAddressValidator func(string) error
 
 // LogDBFactory is the interface used for creating custom logdb modules.
 type LogDBFactory interface {
@@ -566,11 +567,13 @@ func (c *NodeHostConfig) Validate() error {
 		return errors.New("gossip service not configured")
 	}
 	validate := c.GetRaftAddressValidator()
-	if !validate(c.RaftAddress) {
-		return errors.New("invalid NodeHost address")
+	if err := validate(c.RaftAddress); err != nil {
+		return errors.Wrapf(err, "invalid RaftAddress '%s'", c.RaftAddress)
 	}
-	if len(c.ListenAddress) > 0 && !validate(c.ListenAddress) {
-		return errors.New("invalid ListenAddress")
+	if len(c.ListenAddress) > 0 {
+		if err := validate(c.ListenAddress); err != nil {
+			return errors.Wrapf(err, "invalid ListenAddress '%s'", c.ListenAddress)
+		}
 	}
 	if !c.Gossip.IsEmpty() {
 		if err := c.Gossip.Validate(); err != nil {
@@ -735,9 +738,14 @@ func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetRaftAddressValidator() RaftAddressValidator {
 	if c.Expert.TransportFactory != nil {
-		return c.Expert.TransportFactory.Validate
+		return func(value string) error {
+			if !c.Expert.TransportFactory.Validate(value) {
+				return errors.New("invalid value")
+			}
+			return nil
+		}
 	}
-	return stringutil.IsValidAddress
+	return stringutil.IsValidAddressErr
 }
 
 // IsValidAddress returns a boolean value indicating whether the input address

@@ -229,6 +229,8 @@ github.com/valyala/fasttemplate v1.0.1/go.mod h1:UQGH1tvbgY+Nz5t2n7tXsz52dQxojPU
 github.com/valyala/histogram v1.0.1 h1:FzA7n2Tz/wKRMejgu3PV1vw3htAklTjjuoI6z3d4KDg=
 github.com/valyala/histogram v1.0.1/go.mod h1:lQy0xA4wUz2+IUnf97SivorsJIp8FxsnRd6x25q7Mto=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
+github.com/vitalyisaev2/goutils v1.3.1-0.20211116144502-b2caaddb8815 h1:qPStcAla6uF0cITLeDaOx1+cg9p+BD3ThnkUAP70H10=
+github.com/vitalyisaev2/goutils v1.3.1-0.20211116144502-b2caaddb8815/go.mod h1:wfcJxczc56vX0c1GHUDmt8/fWY/nZzZpErf7JjrHxho=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
 github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415/go.mod h1:GwrjFmJcFw6At/Gs6z4yjiIwzuJ1/+UwLxMQDVQXShQ=
 github.com/xeipuuv/gojsonschema v1.2.0/go.mod h1:anYRn/JVcOK2ZgGU+IjEV4nwlhoK5sQluxsYJ78Id3Y=
