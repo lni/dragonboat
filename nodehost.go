@@ -228,6 +228,22 @@ type SnapshotOption struct {
 	OverrideCompactionOverhead bool
 }
 
+// ReadonlyLogReader provides safe readonly access to the underlying logdb.
+type ReadonlyLogReader interface {
+	// GetRange returns the range of the entries in LogDB.
+	GetRange() (uint64, uint64)
+	// NodeState returns the state of the node persistent in LogDB.
+	NodeState() (pb.State, pb.Membership)
+	// Term returns the entry term of the specified entry.
+	Term(index uint64) (uint64, error)
+	// Entries returns entries between [low, high) with total size of entries
+	// limited to maxSize bytes.
+	Entries(low uint64, high uint64, maxSize uint64) ([]pb.Entry, error)
+	// Snapshot returns the metadata for the most recent snapshot known to the
+	// LogDB.
+	Snapshot() pb.Snapshot
+}
+
 // DefaultSnapshotOption is the default SnapshotOption value to use when
 // requesting a snapshot to be generated. This default option causes a regular
 // snapshot to be generated.
@@ -591,14 +607,19 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 	}
 	return v, nil
 }
-// GetReadOnlyLogDB returns a read-only LogDB wrapper.
-func (nh *NodeHost) GetReadOnlyLogDB() (raftio.ILogDB, error) {
+
+// GetLogReader returns a read-only LogDB reader.
+func (nh *NodeHost) GetLogReader(clusterID uint64) (ReadonlyLogReader, error) {
 	nh.mu.RLock()
 	defer nh.mu.RUnlock()
 	if nh.mu.logdb == nil {
 		return nil, ErrLogDBNotCreatedOrClosed
 	}
-	return &logdb.ReadonlyDB{Wrapped: nh.mu.logdb}, nil
+	n, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrLogDBNotCreatedOrClosed
+	}
+	return n.logReader, nil
 }
 
 // Membership is the struct used to describe Raft cluster membership.
