@@ -127,14 +127,13 @@ jobs:
        uses: actions/setup-go@v2
        with:
          go-version: 1.18.x
-     - name: Install golangci-lint
+     - name: Checkout code
+       uses: actions/checkout@v2
+     - name: Static check
        run: |
         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.45.2
         go get -u github.com/kisielk/errcheck
         go get -u golang.org/x/lint/golint
         go get -u github.com/gordonklaus/ineffassign
         sudo apt-get install librocksdb-dev
-     - name: Checkout code
-       uses: actions/checkout@v2
-     - name: Static check
-       run: make static-check
+        make static-check
