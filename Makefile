@@ -200,9 +200,13 @@ tools-checkdisk:
 ###############################################################################
 # static checks
 ###############################################################################
-CHECKED_PKGS=$(shell go list ./...)
+.PHONY: install-static-check-tools
+install-static-check-tools:
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.45.2
+
+CHECKED_PKGS=$(shell go list ./... | grep -v rocksdb)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
-EXTRA_LINTERS=-E misspell -E scopelint -E rowserrcheck -E depguard -E unconvert \
+EXTRA_LINTERS=-E misspell -E rowserrcheck -E depguard -E unconvert \
 	-E prealloc -E gofmt -E stylecheck
 .PHONY: static-check
 static-check:
@@ -212,7 +216,7 @@ static-check:
 		errcheck -blank -ignoretests $$p; \
 	done;
 	@for p in $(CHECKED_DIRS); do \
-		ineffassign $$p; \
+		#ineffassign $$p; \
 		golangci-lint run $(EXTRA_LINTERS) $$p; \
 	done;
 
@@ -222,7 +226,7 @@ static-check:
 extra-static-check: override EXTRA_LINTERS :=-E dupl
 extra-static-check:
 	for p in $(CHECKED_DIRS); do \
-    golangci-lint run $(EXTRA_LINTERS) $$p; \
+		golangci-lint run $(EXTRA_LINTERS) $$p; \
   done;
 
 ###############################################################################

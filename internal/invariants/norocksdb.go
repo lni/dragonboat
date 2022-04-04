@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !dragonboat_rocksdb_test
 // +build !dragonboat_rocksdb_test
 
 package invariants

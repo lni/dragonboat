@@ -864,7 +864,7 @@ func TestIterateEntries(t *testing.T) {
 
 func TestSaveSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		snapshot, err := db.GetSnapshot(1, 2)
+		_, err := db.GetSnapshot(1, 2)
 		require.NoError(t, err)
 		s1 := pb.Snapshot{
 			Index: 1,
@@ -885,7 +885,7 @@ func TestSaveSnapshot(t *testing.T) {
 			Snapshot:  s2,
 		}
 		require.NoError(t, db.SaveSnapshots([]pb.Update{rec1, rec2}))
-		snapshot, err = db.GetSnapshot(1, 2)
+		snapshot, err := db.GetSnapshot(1, 2)
 		require.NoError(t, err)
 		require.Equal(t, uint64(2), snapshot.Index)
 	}

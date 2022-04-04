@@ -49,7 +49,9 @@ func main() {
 		sequentialWrite()
 	}
 	for _, f := range fs {
-		f.Close()
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
 	}
 }
 

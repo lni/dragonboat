@@ -344,7 +344,7 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
 	}
 	if ps.pending == nil {
 		t.Errorf("pending not set")
@@ -390,7 +390,7 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
 	}
 	ss, err = ps.request(rsm.UserRequested, "", false, 0, 100)
 	if err != ErrSystemBusy {
@@ -406,7 +406,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 20)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Errorf("nil ss returned")
@@ -444,7 +444,7 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
 	}
 	ps.apply(ss.key, false, false, 123)
 	select {
@@ -468,7 +468,7 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 		t.Errorf("failed to request snapshot")
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
 	}
 	ps.apply(ss.key, true, false, 123)
 	select {
@@ -495,7 +495,7 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 		t.Errorf("nil ss returned")
 	}
 	if ps.pending == nil {
-		t.Errorf("pending not set")
+		t.Fatalf("pending not set")
 	}
 	ps.apply(ss.key+1, false, false, 123)
 	if ps.pending == nil {
