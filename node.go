@@ -521,6 +521,16 @@ func (n *node) destroy() error {
 	return n.sm.Close()
 }
 
+func (n *node) destroyed() bool {
+	select {
+	case <-n.sm.DestroyedC():
+		return true
+	default:
+	}
+
+	return false
+}
+
 func (n *node) offloaded() {
 	if n.sm.Offloaded() {
 		n.pipeline.setCloseReady(n)

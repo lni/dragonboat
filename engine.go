@@ -776,23 +776,28 @@ func (w *closeWorker) completed() {
 }
 
 func (w *closeWorker) handle(req closeReq) error {
+	if req.node.destroyed() {
+		return nil
+	}
 	return req.node.destroy()
 }
 
 type closeWorkerPool struct {
 	workers       []*closeWorker
 	ready         chan closeReq
-	busy          map[uint64]struct{}
-	pending       []*node
+	busy          map[uint64]uint64
+	processing    map[uint64]struct{}
 	workerStopper *syncutil.Stopper
 	poolStopper   *syncutil.Stopper
+	pending       []*node
 }
 
 func newCloseWorkerPool(closeWorkerCount uint64) *closeWorkerPool {
 	w := &closeWorkerPool{
 		workers:       make([]*closeWorker, closeWorkerCount),
 		ready:         make(chan closeReq, 1),
-		busy:          make(map[uint64]struct{}, closeWorkerCount),
+		busy:          make(map[uint64]uint64, closeWorkerCount),
+		processing:    make(map[uint64]struct{}, closeWorkerCount),
 		pending:       make([]*node, 0),
 		workerStopper: syncutil.NewStopper(),
 		poolStopper:   syncutil.NewStopper(),
@@ -902,14 +907,20 @@ func (p *closeWorkerPool) isIdle() bool {
 }
 
 func (p *closeWorkerPool) completed(workerID uint64) {
-	if _, ok := p.busy[workerID]; !ok {
-		plog.Panicf("close worker %d is not in busy state")
+	clusterID, ok := p.busy[workerID]
+	if !ok {
+		plog.Panicf("close worker %d is not in busy state", workerID)
 	}
+	if _, ok := p.processing[clusterID]; !ok {
+		plog.Panicf("cluster %d is not being processed", clusterID)
+	}
+	delete(p.processing, clusterID)
 	delete(p.busy, workerID)
 }
 
-func (p *closeWorkerPool) setBusy(workerID uint64) {
-	p.busy[workerID] = struct{}{}
+func (p *closeWorkerPool) setBusy(workerID uint64, clusterID uint64) {
+	p.processing[clusterID] = struct{}{}
+	p.busy[workerID] = clusterID
 }
 
 func (p *closeWorkerPool) getWorker() *closeWorker {
@@ -929,21 +940,33 @@ func (p *closeWorkerPool) schedule() {
 	}
 }
 
+func (p *closeWorkerPool) canSchedule(n *node) bool {
+	_, ok := p.processing[n.clusterID]
+	return !ok
+}
+
 func (p *closeWorkerPool) scheduleWorker() bool {
 	w := p.getWorker()
 	if w == nil {
 		return false
 	}
-	if len(p.pending) > 0 {
-		p.scheduleReq(p.pending[0], w)
+
+	for i := 0; i < len(p.pending); i++ {
+		node := p.pending[0]
 		p.removeFromPending(0)
-		return true
+		if p.canSchedule(node) {
+			p.scheduleReq(node, w)
+			return true
+		} else {
+			p.pending = append(p.pending, node)
+		}
 	}
+
 	return false
 }
 
 func (p *closeWorkerPool) scheduleReq(n *node, w *closeWorker) {
-	p.setBusy(w.workerID)
+	p.setBusy(w.workerID, n.clusterID)
 	select {
 	case w.requestC <- closeReq{node: n}:
 	default:
