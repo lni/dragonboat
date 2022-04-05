@@ -1647,7 +1647,9 @@ func (r *raft) handleNodeElection(m pb.Message) error {
 			}
 			return nil
 		}
-		if r.preVote {
+		// prevote is enabled, but the user explicitly requested the leadership to
+		// be transfered, so skip the pre-vote stage
+		if r.preVote && !r.isLeaderTransferTarget {
 			plog.Debugf("%s will start a preVote campaign", r.describe())
 			return r.preVoteCampaign()
 		}
