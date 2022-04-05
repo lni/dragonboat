@@ -210,24 +210,12 @@ EXTRA_LINTERS=-E misspell -E rowserrcheck -E depguard -E unconvert \
 	-E prealloc -E gofmt -E stylecheck
 .PHONY: static-check
 static-check:
-	@for p in $(CHECKED_PKGS); do \
-		go vet -tests=false $$p; \
-		golint $$p; \
-		errcheck -blank -ignoretests $$p; \
-	done;
 	@for p in $(CHECKED_DIRS); do \
-		#ineffassign $$p; \
 		golangci-lint run $(EXTRA_LINTERS) $$p; \
 	done;
 
-# -E dupl is not included in regular static check as there are duplicated code
-# in auto generated code
-.PHONY: extra-static-check
 extra-static-check: override EXTRA_LINTERS :=-E dupl
-extra-static-check:
-	for p in $(CHECKED_DIRS); do \
-		golangci-lint run $(EXTRA_LINTERS) $$p; \
-  done;
+extra-static-check: static-check
 
 ###############################################################################
 # clean
