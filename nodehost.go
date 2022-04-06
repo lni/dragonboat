@@ -132,6 +132,8 @@ var (
 	ErrInvalidDeadline = errors.New("invalid deadline")
 	// ErrDirNotExist indicates that the specified dir does not exist.
 	ErrDirNotExist = errors.New("specified dir does not exist")
+	// ErrLogDBNotCreatedOrClosed indicates that the logdb is not created yet or closed already.
+	ErrLogDBNotCreatedOrClosed = errors.New("logdb is not created yet or closed already")
 )
 
 // ClusterInfo is a record for representing the state of a Raft cluster based
@@ -224,6 +226,22 @@ type SnapshotOption struct {
 	// should override the compaction overhead setting specified in node's config.
 	// This field is ignored when exporting a snapshot.
 	OverrideCompactionOverhead bool
+}
+
+// ReadonlyLogReader provides safe readonly access to the underlying logdb.
+type ReadonlyLogReader interface {
+	// GetRange returns the range of the entries in LogDB.
+	GetRange() (uint64, uint64)
+	// NodeState returns the state of the node persistent in LogDB.
+	NodeState() (pb.State, pb.Membership)
+	// Term returns the entry term of the specified entry.
+	Term(index uint64) (uint64, error)
+	// Entries returns entries between [low, high) with total size of entries
+	// limited to maxSize bytes.
+	Entries(low uint64, high uint64, maxSize uint64) ([]pb.Entry, error)
+	// Snapshot returns the metadata for the most recent snapshot known to the
+	// LogDB.
+	Snapshot() pb.Snapshot
 }
 
 // DefaultSnapshotOption is the default SnapshotOption value to use when
@@ -588,6 +606,20 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 		return nil, err
 	}
 	return v, nil
+}
+
+// GetLogReader returns a read-only LogDB reader.
+func (nh *NodeHost) GetLogReader(clusterID uint64) (ReadonlyLogReader, error) {
+	nh.mu.RLock()
+	defer nh.mu.RUnlock()
+	if nh.mu.logdb == nil {
+		return nil, ErrLogDBNotCreatedOrClosed
+	}
+	n, ok := nh.getCluster(clusterID)
+	if !ok {
+		return nil, ErrLogDBNotCreatedOrClosed
+	}
+	return n.logReader, nil
 }
 
 // Membership is the struct used to describe Raft cluster membership.
