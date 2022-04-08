@@ -363,7 +363,7 @@ func (r *KV) BulkRemoveEntries(fk []byte, lk []byte) (err error) {
 
 // CompactEntries ...
 func (r *KV) CompactEntries(fk []byte, lk []byte) error {
-	return r.db.Compact(fk, lk)
+	return r.db.Compact(fk, lk, false)
 }
 
 // FullCompaction ...
@@ -374,5 +374,5 @@ func (r *KV) FullCompaction() error {
 		fk[i] = 0
 		lk[i] = 0xFF
 	}
-	return r.db.Compact(fk, lk)
+	return r.db.Compact(fk, lk, false)
 }
