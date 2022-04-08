@@ -58,9 +58,14 @@ func NewPebbleFS(fs IFS) pvfs.FS {
 	return &PebbleFS{fs}
 }
 
-// GetFreeSpace ...
-func (p *PebbleFS) GetFreeSpace(path string) (uint64, error) {
-	return p.fs.GetFreeSpace(path)
+// GetDiskUsage ...
+func (p *PebbleFS) GetDiskUsage(path string) (pvfs.DiskUsage, error) {
+	du, err := p.fs.GetDiskUsage(path)
+	return pvfs.DiskUsage{
+		AvailBytes: du.AvailBytes,
+		TotalBytes: du.TotalBytes,
+		UsedBytes:  du.UsedBytes,
+	}, err
 }
 
 // Create ...
