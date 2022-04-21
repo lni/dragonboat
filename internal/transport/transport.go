@@ -227,6 +227,19 @@ func NewTransport(nhConfig config.NodeHostConfig,
 		t.snapshotReceived, t.dir, t.nhConfig.GetDeploymentID(), fs)
 	t.trans = create(nhConfig, t.handleRequest, chunks.Add)
 	t.chunks = chunks
+	t.ctx, t.cancel = context.WithCancel(context.Background())
+	t.mu.queues = make(map[string]sendQueue)
+	t.mu.breakers = make(map[string]*circuit.Breaker)
+	msgConn := func() float64 {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		return float64(len(t.mu.queues))
+	}
+	ssCount := func() float64 {
+		return float64(atomic.LoadUint64(&t.jobs))
+	}
+	t.metrics = newTransportMetrics(true, msgConn, ssCount)
+
 	plog.Infof("transport type: %s", t.trans.Name())
 	if err := t.trans.Start(); err != nil {
 		plog.Errorf("transport failed to start %v", err)
@@ -247,18 +260,6 @@ func NewTransport(nhConfig config.NodeHostConfig,
 			}
 		}
 	})
-	t.ctx, t.cancel = context.WithCancel(context.Background())
-	t.mu.queues = make(map[string]sendQueue)
-	t.mu.breakers = make(map[string]*circuit.Breaker)
-	msgConn := func() float64 {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		return float64(len(t.mu.queues))
-	}
-	ssCount := func() float64 {
-		return float64(atomic.LoadUint64(&t.jobs))
-	}
-	t.metrics = newTransportMetrics(true, msgConn, ssCount)
 	return t, nil
 }
 
