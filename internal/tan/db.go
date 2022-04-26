@@ -130,11 +130,11 @@ func (d *db) write(u pb.Update, buf []byte) (bool, error) {
 	return sync, d.doWriteLocked(u, data)
 }
 
-func (d *db) doWriteLocked(u pb.Update, buf []byte) error {
+func (d *db) doWriteLocked(u pb.Update, data []byte) error {
 	if err := d.makeRoomForWrite(); err != nil {
 		return err
 	}
-	offset, err := d.mu.logWriter.writeRecord(buf)
+	offset, err := d.mu.logWriter.writeRecord(data)
 	if err != nil {
 		return err
 	}
