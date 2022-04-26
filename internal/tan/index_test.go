@@ -852,9 +852,9 @@ func TestIndexSaveLoad(t *testing.T) {
 	}
 	ni1 := raftio.NodeInfo{ClusterID: 2, NodeID: 3}
 	ni2 := raftio.NodeInfo{ClusterID: 3, NodeID: 4}
-	state := newState()
-	state.indexes[ni1] = i1
-	state.indexes[ni2] = i2
+	nodeStates := newNodeStates()
+	nodeStates.indexes[ni1] = i1
+	nodeStates.indexes[ni2] = i2
 	fs := vfs.NewMem()
 	dirname := "db-dir"
 	require.NoError(t, fs.MkdirAll(dirname, 0755))
@@ -863,9 +863,9 @@ func TestIndexSaveLoad(t *testing.T) {
 	defer dir.Close()
 	i1entries := i1.currEntries
 	i2entries := i2.currEntries
-	require.NoError(t, state.save(dirname, dir, fileNum(1), fs))
+	require.NoError(t, nodeStates.save(dirname, dir, fileNum(1), fs))
 
-	loaded := newState()
+	loaded := newNodeStates()
 	require.NoError(t, loaded.load(dirname, fileNum(1), fs))
 	require.Equal(t, 2, len(loaded.indexes))
 	require.Equal(t, i1.clusterID, loaded.indexes[ni1].clusterID)
@@ -887,8 +887,8 @@ func TestIndexLoadIsAppendOnly(t *testing.T) {
 		},
 	}
 	ni1 := raftio.NodeInfo{ClusterID: 2, NodeID: 3}
-	state := newState()
-	state.indexes[ni1] = i
+	nodeStates := newNodeStates()
+	nodeStates.indexes[ni1] = i
 	currEntries := i.currEntries
 	fs := vfs.NewMem()
 	dirname := "db-dir"
@@ -896,8 +896,8 @@ func TestIndexLoadIsAppendOnly(t *testing.T) {
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
 	defer dir.Close()
-	require.NoError(t, state.save(dirname, dir, fileNum(5), fs))
-	loaded := newState()
+	require.NoError(t, nodeStates.save(dirname, dir, fileNum(5), fs))
+	loaded := newNodeStates()
 	require.NoError(t, loaded.load(dirname, fileNum(5), fs))
 	require.Equal(t, currEntries, loaded.indexes[ni1].entries)
 }
@@ -1011,7 +1011,7 @@ func TestSnapshotCompaction(t *testing.T) {
 }
 
 func TestStateGetObsolete(t *testing.T) {
-	state := newState()
+	nodeStates := newNodeStates()
 	ni1 := raftio.NodeInfo{ClusterID: 1, NodeID: 1}
 	ni2 := raftio.NodeInfo{ClusterID: 2, NodeID: 1}
 	index1 := &nodeIndex{}
@@ -1019,10 +1019,10 @@ func TestStateGetObsolete(t *testing.T) {
 	index1.entries.append(indexEntry{1, 100, 5, 10, 10})
 	index1.entries.append(indexEntry{101, 102, 10, 10, 10})
 	index2.entries.append(indexEntry{1, 100, 20, 10, 10})
-	state.indexes[ni1] = index1
-	state.indexes[ni2] = index2
+	nodeStates.indexes[ni1] = index1
+	nodeStates.indexes[ni2] = index2
 	input := []fileNum{1, 2, 5, 6, 10, 20, 25}
 	expected := []fileNum{1, 2, 6, 25}
-	result := state.getObsolete(input)
+	result := nodeStates.getObsolete(input)
 	require.Equal(t, expected, result)
 }

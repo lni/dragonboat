@@ -128,7 +128,7 @@ func TestBasicDBReadWrite(t *testing.T) {
 			_, err = db.write(u2, buf)
 			require.NoError(t, err)
 
-			require.Equal(t, u2.State, db.mu.state.getState(2, 3))
+			require.Equal(t, u2.State, db.mu.nodeStates.getState(2, 3))
 			rs, err := db.getRaftState(2, 3, 200)
 			require.NoError(t, err)
 			require.Equal(t, u2.State, rs.State)
@@ -563,7 +563,7 @@ func TestDBIndexIsSavedOnClose(t *testing.T) {
 		}
 		dirname = db.dirname
 		logNum = db.mu.logNum
-		index = db.mu.state.getIndex(2, 3).currEntries.entries
+		index = db.mu.nodeStates.getIndex(2, 3).currEntries.entries
 	}
 	runTanTest(t, nil, tf, fs)
 	fn := makeFilename(fs, dirname, fileTypeIndex, logNum)
@@ -595,8 +595,8 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		require.NoError(t, db.removeEntries(2, 3, 500))
 		logNum = db.mu.logNum
-		savedIndex = db.mu.state.getIndex(2, 3).entries
-		snapshot = db.mu.state.getIndex(2, 3).snapshot
+		savedIndex = db.mu.nodeStates.getIndex(2, 3).entries
+		snapshot = db.mu.nodeStates.getIndex(2, 3).snapshot
 	}
 	runTanTest(t, nil, tf, fs)
 
@@ -604,9 +604,9 @@ func TestRebuildIndex(t *testing.T) {
 	require.NoError(t, fs.RemoveAll(fn))
 
 	tf = func(t *testing.T, db *db) {
-		require.Equal(t, savedIndex, db.mu.state.getIndex(2, 3).entries)
-		require.Equal(t, snapshot, db.mu.state.getIndex(2, 3).snapshot)
-		require.Equal(t, uint64(500), db.mu.state.compactedTo(2, 3))
+		require.Equal(t, savedIndex, db.mu.nodeStates.getIndex(2, 3).entries)
+		require.Equal(t, snapshot, db.mu.nodeStates.getIndex(2, 3).snapshot)
+		require.Equal(t, uint64(500), db.mu.nodeStates.compactedTo(2, 3))
 	}
 	runTanTest(t, nil, tf, fs)
 }

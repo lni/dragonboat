@@ -39,7 +39,7 @@ func open(name string, dirname string, opts *Options) (*db, error) {
 		deleteobsoleteWorker: syncutil.NewStopper(),
 	}
 	d.mu.versions = &versionSet{}
-	d.mu.state = newState()
+	d.mu.nodeStates = newNodeStates()
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -123,7 +123,7 @@ func open(name string, dirname string, opts *Options) (*db, error) {
 		if _, ok := logFiles[indexFile.num]; !ok {
 			plog.Panicf("log file %d missing", indexFile.num)
 		}
-		if err := d.mu.state.load(dirname, indexFile.num, opts.FS); err != nil {
+		if err := d.mu.nodeStates.load(dirname, indexFile.num, opts.FS); err != nil {
 			// TODO: we can actually regenerate the index when it is corrupted
 			return nil, err
 		}
@@ -148,7 +148,7 @@ func open(name string, dirname string, opts *Options) (*db, error) {
 	d.updateReadStateLocked(nil)
 
 	// indexes are populated when d.mu.state.load() is called above
-	for _, index := range d.mu.state.indexes {
+	for _, index := range d.mu.nodeStates.indexes {
 		if index.entries.compactedTo > 0 {
 			if err := d.compactionLocked(index); err != nil {
 				return nil, err
@@ -212,7 +212,7 @@ func (d *db) rebuildLogAndIndex(logNum fileNum) (err error) {
 		}
 	}
 	// save to index file
-	return d.mu.state.save(d.dirname, d.dataDir, logNum, d.opts.FS)
+	return d.mu.nodeStates.save(d.dirname, d.dataDir, logNum, d.opts.FS)
 }
 
 func (d *db) rebuildLog(logNum fileNum) (err error) {
@@ -268,7 +268,7 @@ func (d *db) rebuildLog(logNum fileNum) (err error) {
 }
 
 func (d *db) saveIndex() error {
-	return d.mu.state.save(d.dirname, d.dataDir, d.mu.logNum, d.opts.FS)
+	return d.mu.nodeStates.save(d.dirname, d.dataDir, d.mu.logNum, d.opts.FS)
 }
 
 func (d *db) close() error {

@@ -76,12 +76,12 @@ type db struct {
 	// where/how log data is maintained
 	mu struct {
 		sync.Mutex
-		offset    int64
-		logNum    fileNum
-		logFile   vfs.File
-		logWriter *writer
-		versions  *versionSet
-		state     *state
+		offset     int64
+		logNum     fileNum
+		logFile    vfs.File
+		logWriter  *writer
+		versions   *versionSet
+		nodeStates *nodeStates
 	}
 }
 
@@ -105,7 +105,7 @@ func (d *db) write(u pb.Update, buf []byte) (bool, error) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	st := d.mu.state.getState(u.ClusterID, u.NodeID)
+	st := d.mu.nodeStates.getState(u.ClusterID, u.NodeID)
 	if pb.IsStateEqual(u.State, st) &&
 		pb.IsEmptySnapshot(u.Snapshot) && len(u.EntriesToSave) == 0 {
 		return false, nil
@@ -115,17 +115,17 @@ func (d *db) write(u pb.Update, buf []byte) (bool, error) {
 	return sync, d.doWriteLocked(u, data)
 }
 
-func (d *db) doWriteLocked(u pb.Update, buf []byte) error {
+func (d *db) doWriteLocked(u pb.Update, data []byte) error {
 	if err := d.makeRoomForWrite(); err != nil {
 		return err
 	}
-	offset, err := d.mu.logWriter.writeRecord(buf)
+	offset, err := d.mu.logWriter.writeRecord(data)
 	if err != nil {
 		return err
 	}
 	d.updateIndex(u, d.mu.offset, d.mu.logNum)
 	d.mu.offset = offset
-	d.mu.state.setState(u.ClusterID, u.NodeID, u.State)
+	d.mu.nodeStates.setState(u.ClusterID, u.NodeID, u.State)
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (d *db) sync() error {
 // updateIndex records the fileNum and position of the written update into the
 // index.
 func (d *db) updateIndex(update pb.Update, pos int64, logNum fileNum) {
-	index := d.mu.state.getIndex(update.ClusterID, update.NodeID)
+	index := d.mu.nodeStates.getIndex(update.ClusterID, update.NodeID)
 	compactedTo, compactionUpdate := isCompactionUpdate(update)
 	ei := indexEntry{
 		pos:     pos,
@@ -195,7 +195,7 @@ func (d *db) switchToNewLog() error {
 func (d *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ies, ok := readState.state.querySnapshot(clusterID, nodeID)
+	ies, ok := readState.nodeStates.querySnapshot(clusterID, nodeID)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {
@@ -223,8 +223,8 @@ func (d *db) getRaftState(clusterID uint64, nodeID uint64,
 	lastIndex uint64) (raftio.RaftState, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ie, ok := readState.state.queryState(clusterID, nodeID)
-	ies, _ := readState.state.query(clusterID, nodeID, lastIndex+1, math.MaxUint64)
+	ie, ok := readState.nodeStates.queryState(clusterID, nodeID)
+	ies, _ := readState.nodeStates.query(clusterID, nodeID, lastIndex+1, math.MaxUint64)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {
@@ -262,8 +262,8 @@ func (d *db) getEntries(clusterID uint64, nodeID uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ies, ok := readState.state.query(clusterID, nodeID, low, high)
-	compactedTo := readState.state.compactedTo(clusterID, nodeID)
+	ies, ok := readState.nodeStates.query(clusterID, nodeID, low, high)
+	compactedTo := readState.nodeStates.compactedTo(clusterID, nodeID)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {
