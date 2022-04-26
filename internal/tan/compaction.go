@@ -40,7 +40,7 @@ func (d *db) remove(clusterID uint64, nodeID uint64, index uint64) error {
 	if err := d.doWriteLocked(update, data); err != nil {
 		return err
 	}
-	nodeIndex := d.mu.state.getIndex(clusterID, nodeID)
+	nodeIndex := d.mu.nodeStates.getIndex(clusterID, nodeID)
 	nodeIndex.currEntries.setCompactedTo(index)
 	nodeIndex.entries.setCompactedTo(index)
 	return d.compactionLocked(nodeIndex)
@@ -48,7 +48,7 @@ func (d *db) remove(clusterID uint64, nodeID uint64, index uint64) error {
 
 func (d *db) compactionLocked(index *nodeIndex) error {
 	if obsolete := index.compaction(); len(obsolete) > 0 {
-		obsolete = d.mu.state.getObsolete(obsolete)
+		obsolete = d.mu.nodeStates.getObsolete(obsolete)
 		if len(obsolete) > 0 {
 			ve := versionEdit{
 				deletedFiles: make(map[deletedFileEntry]*fileMetadata),
@@ -228,7 +228,7 @@ func (d *db) removeAllLocked(clusterID uint64, nodeID uint64, newLog bool) error
 			return err
 		}
 	}
-	index := d.mu.state.getIndex(clusterID, nodeID)
+	index := d.mu.nodeStates.getIndex(clusterID, nodeID)
 	index.removeAll()
 	v := d.mu.versions.currentVersion()
 	ve := versionEdit{
