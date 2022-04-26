@@ -130,11 +130,11 @@ func TestRemovedEntriesMultiplexedLogSetup(t *testing.T) {
 			},
 		}
 		require.NoError(t, ldb.SaveRaftState(updates, 1))
-		db, err := ldb.shards.getDB(1, 1)
+		db, err := ldb.collection.getDB(1, 1)
 		require.NoError(t, err)
 		require.NoError(t, db.switchToNewLog())
 	}
-	db, err := ldb.shards.getDB(1, 1)
+	db, err := ldb.collection.getDB(1, 1)
 	require.NoError(t, err)
 	current := db.mu.versions.currentVersion()
 	fileCount := len(current.files)

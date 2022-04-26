@@ -41,7 +41,7 @@ var Factory = factory{}
 
 type factory struct{}
 
-// Create creates a new tan instance.
+// Create creates a new tan LogDB instance in regular mode.
 func (factory) Create(cfg config.NodeHostConfig,
 	cb config.LogDBCallback, dirs []string, wals []string) (raftio.ILogDB, error) {
 	return CreateTan(cfg, cb, dirs, wals)
@@ -64,18 +64,25 @@ func (factory) Name() string {
 	return tanLogDBName
 }
 
-// LogDB is the tan ILogDB type used to interface with dragonboat
+// LogDB is the tan ILogDB type used to interface with dragonboat. To efficiently
+// support running multiple raft nodes on the same server, we need multiple tan
+// db instances to manage raft logs and metadata belong to those raft nodes. Two
+// modes are supported in doing so, one way is to let each raft node to own a
+// dedicated tan db for deployment when you have a relatively small number of
+// raft nodes, this is called the regular mode. Another way is to share the same
+// tan db among multiple raft nodes so there won't be an excessive amount of tan
+// db instances, we call this the multiplexed log mode.
 type LogDB struct {
-	mu        sync.Mutex
-	fileLock  io.Closer
-	dirname   string
-	dir       vfs.File
-	bsDirname string
-	bsDir     vfs.File
-	fs        vfs.FS
-	buffers   [][]byte
-	wgs       []*sync.WaitGroup
-	shards    *shards
+	mu         sync.Mutex
+	fileLock   io.Closer
+	dirname    string
+	dir        vfs.File
+	bsDirname  string
+	bsDir      vfs.File
+	fs         vfs.FS
+	buffers    [][]byte
+	wgs        []*sync.WaitGroup
+	collection collection
 }
 
 // CreateTan creates and return a regular tan instance. Each raft node will
@@ -102,11 +109,11 @@ func createTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	}
 	dirname := cfg.Expert.FS.PathJoin(dirs[0], defaultDBName)
 	ldb := &LogDB{
-		dirname: dirname,
-		fs:      cfg.Expert.FS,
-		buffers: make([][]byte, defaultShards),
-		wgs:     make([]*sync.WaitGroup, defaultShards),
-		shards:  newShards(dirname, cfg.Expert.FS, singleNodeLog),
+		dirname:    dirname,
+		fs:         cfg.Expert.FS,
+		buffers:    make([][]byte, defaultShards),
+		wgs:        make([]*sync.WaitGroup, defaultShards),
+		collection: newCollection(dirname, cfg.Expert.FS, singleNodeLog),
 	}
 
 	for i := 0; i < len(ldb.buffers); i++ {
@@ -184,7 +191,7 @@ func (l *LogDB) Close() (err error) {
 	func() {
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		err = firstError(err, l.shards.iterate(func(db *db) error {
+		err = firstError(err, l.collection.iterate(func(db *db) error {
 			return db.close()
 		}))
 	}()
@@ -232,7 +239,7 @@ func (l *LogDB) GetBootstrapInfo(clusterID uint64,
 // SaveRaftState atomically saves the Raft states, log entries and snapshots
 // metadata found in the pb.Update list to the log DB.
 func (l *LogDB) SaveRaftState(updates []pb.Update, shardID uint64) error {
-	if l.shards.multiplexedLog() {
+	if l.collection.multiplexedLog() {
 		return l.concurrentSaveState(updates, shardID)
 	}
 	return l.sequentialSaveState(updates, shardID)
@@ -246,14 +253,13 @@ func (l *LogDB) concurrentSaveState(updates []pb.Update, shardID uint64) error {
 		buf = make([]byte, defaultBufferSize)
 	}
 	syncLog := false
-	var shard *db
+	var selected *db
 	var usedShardID uint64
 	for idx, ud := range updates {
-		ml := l.shards.shards.(*multiplexedLogShard)
 		if idx == 0 {
-			usedShardID = ml.shardID(ud.ClusterID)
+			usedShardID = l.collection.key(ud.ClusterID)
 		} else {
-			if usedShardID != ml.shardID(ud.ClusterID) {
+			if usedShardID != l.collection.key(ud.ClusterID) {
 				panic("shard ID changed")
 			}
 		}
@@ -261,8 +267,8 @@ func (l *LogDB) concurrentSaveState(updates []pb.Update, shardID uint64) error {
 		if err != nil {
 			return err
 		}
-		if shard == nil {
-			shard = db
+		if selected == nil {
+			selected = db
 		}
 		sync, err := db.write(ud, buf)
 		if err != nil {
@@ -272,8 +278,8 @@ func (l *LogDB) concurrentSaveState(updates []pb.Update, shardID uint64) error {
 			syncLog = true
 		}
 	}
-	if syncLog && shard != nil {
-		if err := shard.sync(); err != nil {
+	if syncLog && selected != nil {
+		if err := selected.sync(); err != nil {
 			return err
 		}
 	}
@@ -439,5 +445,5 @@ func (l *LogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
 func (l *LogDB) getDB(clusterID uint64, nodeID uint64) (*db, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.shards.getDB(clusterID, nodeID)
+	return l.collection.getDB(clusterID, nodeID)
 }
