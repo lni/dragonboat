@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
+	"sort"
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/vfs"
@@ -170,22 +171,6 @@ func (i *index) update(e indexEntry) {
 	}
 }
 
-func binarySearch(entries []indexEntry,
-	start int, end int, raftIndex uint64) (int, bool) {
-	if start == end {
-		if entries[start].start <= raftIndex && entries[start].end >= raftIndex {
-			return start, true
-		}
-		return 0, false
-	}
-	mid := start + (end-start)/2
-	left := entries[start : mid+1]
-	if left[0].start <= raftIndex && left[len(left)-1].end >= raftIndex {
-		return binarySearch(entries, start, mid, raftIndex)
-	}
-	return binarySearch(entries, mid+1, end, raftIndex)
-}
-
 func (i *index) query(low uint64, high uint64) ([]indexEntry, bool) {
 	if high < low {
 		panic("high < low")
@@ -193,10 +178,17 @@ func (i *index) query(low uint64, high uint64) ([]indexEntry, bool) {
 	if len(i.entries) == 0 {
 		return []indexEntry{}, false
 	}
-	startIdx, ok := binarySearch(i.entries, 0, len(i.entries)-1, low)
-	if !ok {
+
+	startIdx := sort.Search(len(i.entries), func(pos int) bool {
+		return low <= i.entries[pos].end
+	})
+	if !(startIdx < len(i.entries)) {
 		return []indexEntry{}, false
 	}
+	if !(low >= i.entries[startIdx].start) {
+		return []indexEntry{}, false
+	}
+
 	var result []indexEntry
 	for idx := startIdx; idx < len(i.entries); idx++ {
 		if high <= i.entries[idx].start {
