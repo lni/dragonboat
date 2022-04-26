@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -68,7 +67,7 @@ func testGeneratorWriter(
 		if err != nil {
 			t.Fatalf("reader.Next: %v", err)
 		}
-		x, err := ioutil.ReadAll(rr)
+		x, err := io.ReadAll(rr)
 		if err != nil {
 			t.Fatalf("ReadAll: %v", err)
 		}
@@ -214,7 +213,7 @@ func TestFlush(t *testing.T) {
 	wants := []int64{1, 2, 10000, 40000}
 	for i, want := range wants {
 		rr, _ := r.next()
-		n, err := io.Copy(ioutil.Discard, rr)
+		n, err := io.Copy(io.Discard, rr)
 		if err != nil {
 			t.Fatalf("read #%d: %v", i, err)
 		}
@@ -401,7 +400,7 @@ func TestBasicRecover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	r0Data, err := ioutil.ReadAll(r0)
+	r0Data, err := io.ReadAll(r0)
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
@@ -433,7 +432,7 @@ func TestBasicRecover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	r2Data, err := ioutil.ReadAll(r2)
+	r2Data, err := io.ReadAll(r2)
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
@@ -467,7 +466,7 @@ func TestRecoverSingleBlock(t *testing.T) {
 	}
 
 	// Reading deeper should yield a checksum mismatch.
-	_, err = ioutil.ReadAll(r0)
+	_, err = io.ReadAll(r0)
 	if err == nil {
 		t.Fatal("Expected a checksum mismatch error, got nil")
 	}
@@ -487,7 +486,7 @@ func TestRecoverSingleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	r2Data, _ := ioutil.ReadAll(r2)
+	r2Data, _ := io.ReadAll(r2)
 	if !bytes.Equal(r2Data, recs.records[2]) {
 		t.Fatal("Unexpected output in r2's data")
 	}
@@ -525,7 +524,7 @@ func TestRecoverMultipleBlocks(t *testing.T) {
 	}
 
 	// Reading deeper should yield a checksum mismatch.
-	_, err = ioutil.ReadAll(r0)
+	_, err = io.ReadAll(r0)
 	if err == nil {
 		t.Fatal("Exptected a checksum mismatch error, got nil")
 	}
@@ -545,7 +544,7 @@ func TestRecoverMultipleBlocks(t *testing.T) {
 		t.Fatalf("Next: %v", err)
 	}
 
-	r4Data, _ := ioutil.ReadAll(r4)
+	r4Data, _ := io.ReadAll(r4)
 	if !bytes.Equal(r4Data, recs.records[4]) {
 		t.Fatal("Unexpected output in r4's data")
 	}
@@ -647,7 +646,7 @@ func TestReaderOffset(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Next: %v", err)
 		}
-		if _, err = ioutil.ReadAll(rec); err != nil {
+		if _, err = io.ReadAll(rec); err != nil {
 			t.Fatalf("ReadAll: %v", err)
 		}
 	}
@@ -681,7 +680,7 @@ func TestSeekRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	rData, _ := ioutil.ReadAll(rec)
+	rData, _ := io.ReadAll(rec)
 	if !bytes.Equal(rData, recs.records[1]) {
 		t.Fatalf("Unexpected output in record 1's data, got %v want %v", rData, recs.records[1])
 	}
@@ -710,7 +709,7 @@ func TestSeekRecord(t *testing.T) {
 				t.Fatalf("Next: %v", err)
 			}
 
-			rData, _ := ioutil.ReadAll(rec)
+			rData, _ := io.ReadAll(rec)
 			if !bytes.Equal(rData, recs.records[i]) {
 				t.Fatalf("Unexpected output in record #%d's data, got %v want %v", i, rData, recs.records[i])
 			}
