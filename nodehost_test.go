@@ -2795,6 +2795,9 @@ func TestLogDBRateLimit(t *testing.T) {
 			return c
 		},
 		tf: func(nh *NodeHost) {
+			if nh.mu.logdb.Name() == "Tan" {
+				t.Skip("skipped, using tan logdb")
+			}
 			for i := 0; i < 10240; i++ {
 				pto := pto(nh)
 				session := nh.GetNoOPSession(1)
@@ -5007,6 +5010,9 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 		fsErrorInjection: true,
 		defaultTestNode:  true,
 		tf: func(nh *NodeHost) {
+			if nh.mu.logdb.Name() == "Tan" {
+				t.Skip("skipped, using tan logdb")
+			}
 			inj.SetIndex(0)
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)

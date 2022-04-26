@@ -76,6 +76,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
+	"github.com/lni/dragonboat/v3/internal/tan"
 	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/utils"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -1676,7 +1677,7 @@ func (nh *NodeHost) createLogDB() error {
 	if nh.nhConfig.Expert.LogDBFactory != nil {
 		lf = nh.nhConfig.Expert.LogDBFactory
 	} else {
-		lf = logdb.NewDefaultFactory()
+		lf = tan.Factory
 	}
 	name := lf.Name()
 	if err := nh.env.CheckLogDBType(nh.nhConfig, name); err != nil {
