@@ -35,7 +35,7 @@ import "sync/atomic"
 type readState struct {
 	db      *db
 	refcnt  int32
-	current *version
+	version *version
 	state   *state
 }
 
@@ -52,7 +52,7 @@ func (s *readState) unref() {
 	if atomic.AddInt32(&s.refcnt, -1) != 0 {
 		return
 	}
-	s.current.unref()
+	s.version.unref()
 
 	// TODO:
 	// re-enable the obsolete file deletion
@@ -70,7 +70,7 @@ func (s *readState) unrefLocked() {
 	if atomic.AddInt32(&s.refcnt, -1) != 0 {
 		return
 	}
-	s.current.unrefLocked()
+	s.version.unrefLocked()
 
 	// NB: Unlike readState.unref(), we don't attempt to cleanup newly obsolete
 	// tables as unrefLocked() is only called during DB shutdown to release the
@@ -94,10 +94,10 @@ func (d *db) updateReadStateLocked(checker func(*db) error) {
 	s := &readState{
 		db:      d,
 		refcnt:  1,
-		current: d.mu.versions.currentVersion(),
+		version: d.mu.versions.currentVersion(),
 		state:   d.mu.state,
 	}
-	s.current.ref()
+	s.version.ref()
 
 	d.readState.Lock()
 	old := d.readState.val
