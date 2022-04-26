@@ -196,11 +196,11 @@ func (b *bulkVersionEdit) accumulate(ve *versionEdit) error {
 			// m is nil only when replaying a MANIFEST.
 			if b.addedByFileNum == nil {
 				return errors.Errorf("deleted file %s's metadata is absent and bve.addedByFileNum is nil",
-					m.fileNum)
+					fn.fileNum)
 			}
 			m = b.addedByFileNum[fn.fileNum]
 			if m == nil {
-				return errors.Errorf("file deleted %s before it was inserted", m.fileNum)
+				return errors.Errorf("file deleted %s before it was inserted", fn.fileNum)
 			}
 		}
 		b.deleted[m.fileNum] = m
