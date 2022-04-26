@@ -25,6 +25,9 @@ import (
 	"github.com/lni/vfs"
 )
 
+// getBootstrap returns saved bootstrap record. Bootstrap records are saved
+// side by side with the tan db itself, so strictly speaking, they are not
+// a part of the tan db.
 func getBootstrap(fs vfs.FS, dirname string,
 	clusterID uint64, nodeID uint64) (rec pb.Bootstrap, err error) {
 	filename := makeBootstrapFilename(fs, dirname, clusterID, nodeID, false)

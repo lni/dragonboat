@@ -53,31 +53,8 @@ var (
 	ErrNoState = errors.New("no state record")
 )
 
-//
-// the current implementation uses a log file for each node. this design has
-// the following limitations -
-//  * excessive amount of opened files when there are large number of nodes
-//  * each of such opened files have to be fsynced after each write
-//
-// as future plans, we can group multiple nodes into a group and use a log file
-// for each of such group. the biggest drawback of this approach is the fact
-// that compactions will be slightly more complicated as multiple nodes need to
-// be coordinated for their snapshot status to determine the portion of the log
-// files that can be deleted within each such group.
-//
-// on disk state machines are the targeted users of such new design as such SMs
-// can be snapshotted at much lower costs when compared to in-memory SMs,
-// applications that snapshot frequently will be able to get the log compacted
-// more often at acceptable snapshotting overheads.
-//
-// members of each group might change after restart, however this is fine as we
-// never write to existing log files after restart and we can still have read
-// only accesses to those existing log files from other groups. entry log
-// indexes need to have the clusterID value stored, i.e. (clusterID, start, end,
-// logNum, pos). On restart, all index files on disk need to be loaded to build
-// a map of clusterID -> index that will be shared by all groups.
-//
-
+// db is basically an instance of the core tan storage, it holds required
+// resources and manages log and index data.
 type db struct {
 	name     string
 	closed   atomic.Value
@@ -86,14 +63,17 @@ type db struct {
 	dataDir  vfs.File
 	dirname  string
 
+	// for asynchronously delete files in the background
 	deleteObsoleteCh     chan struct{}
 	deleteobsoleteWorker *syncutil.Stopper
 
+	// help to determine what is the current visible view of the data
 	readState struct {
 		sync.RWMutex
 		val *readState
 	}
 
+	// where/how log data is maintained
 	mu struct {
 		sync.Mutex
 		offset    int64
@@ -109,6 +89,11 @@ func stateSyncChange(a, b pb.State) bool {
 	return a.Term != b.Term || a.Vote != b.Vote
 }
 
+// write writes the update instance to the log and returns a boolean flag
+// indicating whether a fsync() operation is required. Each pb.Update instance
+// contains any number of raft entries, it is also possible to have raft
+// snapshot info and raft state in it. Each of such pb.Update written into the
+// db is the unit of
 func (d *db) write(u pb.Update, buf []byte) (bool, error) {
 	sz := u.SizeUpperLimit()
 	if sz > len(buf) {
@@ -144,10 +129,13 @@ func (d *db) doWriteLocked(u pb.Update, buf []byte) error {
 	return nil
 }
 
+// sync issues a fsync() operation on the underlying log file.
 func (d *db) sync() error {
 	return d.mu.logFile.Sync()
 }
 
+// updateIndex records the fileNum and position of the written update into the
+// index.
 func (d *db) updateIndex(update pb.Update, pos int64, logNum fileNum) {
 	index := d.mu.state.getIndex(update.ClusterID, update.NodeID)
 	compactedTo, compactionUpdate := isCompactionUpdate(update)
@@ -191,6 +179,8 @@ func (d *db) makeRoomForWrite() error {
 	return d.switchToNewLog()
 }
 
+// switchToNewLog flushes the index of the current log file to disk, update the
+// readState hold by the db and then switch to a new log file.
 func (d *db) switchToNewLog() error {
 	if err := d.saveIndex(); err != nil {
 		return err
@@ -199,7 +189,9 @@ func (d *db) switchToNewLog() error {
 	return d.createNewLog()
 }
 
-// getSnapshot returns the latest snapshot
+// getSnapshot returns the latest snapshot in the db. we record all seen
+// snapshots into the db, but will only query for the most recent snapshot
+// inserted into the db.
 func (d *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
@@ -223,6 +215,10 @@ func (d *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
 	return snapshot, nil
 }
 
+// getRaftState returns the raft state. Such a raft state record contains a
+// pb.State value and raft entry details expressed as FirstIndex of the entry
+// and EntryCount. The pb.State value returned in the State field of
+// raftio.RaftState is the latest raft state written into the db.
 func (d *db) getRaftState(clusterID uint64, nodeID uint64,
 	lastIndex uint64) (raftio.RaftState, error) {
 	d.mu.Lock()
@@ -258,6 +254,9 @@ func (d *db) getRaftState(clusterID uint64, nodeID uint64,
 	return st, nil
 }
 
+// getEntries queries the db to return raft entries between [low, high), the
+// max size of the returned entries is maxSize bytes. The results will be
+// appended into the input entries slice which is already size bytes in size.
 func (d *db) getEntries(clusterID uint64, nodeID uint64,
 	entries []pb.Entry, size uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
@@ -310,6 +309,9 @@ func (d *db) getEntries(clusterID uint64, nodeID uint64,
 	return entries, size, nil
 }
 
+// readLog queries the db for the saved pb.Update record identified by the
+// specified indexEntry parameter. For each encountered pb.Update record,
+// h will be invoked with the encountered pb.Update value passed to it.
 func (d *db) readLog(ie indexEntry,
 	h func(u pb.Update, offset int64) bool) (err error) {
 	fn := makeFilename(d.opts.FS, d.dirname, fileTypeLog, ie.fileNum)

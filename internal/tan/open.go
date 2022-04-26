@@ -27,6 +27,7 @@ import (
 	"github.com/lni/goutils/syncutil"
 )
 
+// open opens the tan db located in the folder called dirname.
 func open(name string, dirname string, opts *Options) (*db, error) {
 	opts = opts.EnsureDefaults()
 	d := &db{
@@ -215,11 +216,13 @@ func (d *db) rebuildLogAndIndex(logNum fileNum) (err error) {
 }
 
 func (d *db) rebuildLog(logNum fileNum) (err error) {
+	// it is possible to have the last log file to contain a corrupted chunk or
+	// block on the tail, e.g. power got cut after partially written chunk or
+	// block. for those situations, the log file itself is totally fine, we just
+	// need to remove the final chunk or block.
 	// in theory, we should be able to just truncate the log file to the last
-	// reported offset. however, there are too many uncertainities - shall we
-	// fsync the file? what happens if the hose crashes in the middle of such
-	// truncate? is the filesystem bug free in this aspect?
-	// to be safe, let's just copy the log
+	// reported offset. however, for simplicity, let's just copy the log and skip
+	// the last broken chunk or block.
 	fn := makeFilename(d.opts.FS, d.dirname, fileTypeLogTemp, logNum)
 	ln := makeFilename(d.opts.FS, d.dirname, fileTypeLog, logNum)
 	f, err := d.opts.FS.Create(fn)

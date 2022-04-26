@@ -32,12 +32,13 @@ import (
 var errCorruptIndexFile = errors.New("corrupt index file")
 
 const (
-	// when within the same []pb.Update, reads can be amplified up to
-	// indexBlockSize bytes. in other words, within the same log file, each index
-	// covers up to indexBlockSize bytes.
+	// each indexEntry covers up to indexBlockSize bytes within the same log file.
 	indexBlockSize int64 = 1024 * 128
 )
 
+// indexEntry represents an entry in the index. Each indexEntry points to a
+// kind of record in the db, it might be a slice of continous raft entries,
+// a raft state record or a raft snapshot record.
 type indexEntry struct {
 	start   uint64
 	end     uint64
@@ -54,6 +55,9 @@ func (e *indexEntry) indexBlock() int64 {
 	return e.pos / indexBlockSize
 }
 
+// merge merges two indexEntry records. This is for raft entry indexes as we
+// focus on scan performance, we don't need to index individual raft entries in
+// the db, they are stored continously by their raft entry index value anyway.
 func (e *indexEntry) merge(n indexEntry) (indexEntry, indexEntry, bool) {
 	if e.end+1 == n.start && e.pos+e.length == n.pos &&
 		e.fileNum == n.fileNum && e.indexBlock() == n.indexBlock() {
@@ -72,6 +76,7 @@ func (e *indexEntry) update(n indexEntry) (indexEntry, indexEntry, bool, bool) {
 		return m, indexEntry{}, true, false
 	}
 	// overwrite
+	// for raft entries, new writes always overwrite old entries
 	if n.start == e.start {
 		return n, indexEntry{}, true, false
 	}
@@ -88,10 +93,12 @@ func (e *indexEntry) update(n indexEntry) (indexEntry, indexEntry, bool, bool) {
 	return keep, n, false, false
 }
 
+// whether the indexEntry points to a state record
 func (e *indexEntry) isState() bool {
 	return e.end == stateFlag
 }
 
+// whether the indexEntry points to a snapshot record
 func (e *indexEntry) isSnapshot() bool {
 	return e.end == snapshotFlag
 }
@@ -121,6 +128,7 @@ func (e indexEncoder) writeUvarint(u uint64) {
 	e.Write(buf[:n])
 }
 
+// index is the index to raft entry records in the db
 type index struct {
 	entries []indexEntry
 	// entries between (0, compactedTo) are ready for compaction
@@ -266,6 +274,8 @@ func (i *index) compaction() fileNum {
 	return i.entryCompaction()
 }
 
+// entryCompaction calculates and returns the max log file fileNum that is
+// considered as obsolete and can be safely deleted.
 func (i *index) entryCompaction() fileNum {
 	maxObsoleteFileNum := fileNum(math.MaxUint64)
 	if i.size() == 0 {
@@ -291,6 +301,7 @@ func (i *index) entryCompaction() fileNum {
 	return maxObsoleteFileNum
 }
 
+// removeObsolete removes obsolete indexEntry records from the index
 func (i *index) removeObsolete(maxObsoleteFileNum fileNum) []fileNum {
 	var obsolete []fileNum
 	index := 0
@@ -311,10 +322,13 @@ func (i *index) removeObsolete(maxObsoleteFileNum fileNum) []fileNum {
 	return nil
 }
 
+// nodeIndex is the index for all records that belong to a single raft node
 type nodeIndex struct {
-	clusterID   uint64
-	nodeID      uint64
-	entries     index
+	clusterID uint64
+	nodeID    uint64
+	// entries contains all indexEntry records
+	entries index
+	// currEntries contains only indexEntry records that belong to the current log file
 	currEntries index
 	snapshot    indexEntry
 	state       indexEntry

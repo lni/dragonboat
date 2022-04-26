@@ -64,7 +64,7 @@ func (factory) Name() string {
 	return tanLogDBName
 }
 
-// LogDB is the tan ILogDB type
+// LogDB is the tan ILogDB type used to interface with dragonboat
 type LogDB struct {
 	mu        sync.Mutex
 	fileLock  io.Closer
@@ -78,14 +78,18 @@ type LogDB struct {
 	shards    *shards
 }
 
-// CreateTan creates and return a tan instance.
+// CreateTan creates and return a regular tan instance. Each raft node will
+// be backed by a dedicated log file.
 func CreateTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, wals []string) (*LogDB, error) {
 	return createTan(cfg, cb, dirs, wals, true)
 }
 
 // CreateLogMultiplexedTan creates and returns a tan instance that uses
-// multiplexed log files.
+// multiplexed log files. A multiplexed log allow multiple raft clusters to
+// share the same underlying physical log file, this is required when you
+// want to run thousands of raft nodes on the same server without having
+// thousands action log files.
 func CreateLogMultiplexedTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, wals []string) (*LogDB, error) {
 	return createTan(cfg, cb, dirs, wals, false)
