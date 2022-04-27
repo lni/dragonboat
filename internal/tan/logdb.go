@@ -12,6 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+Tan is a log file based LogDB implementation for dragonboat.
+
+Each dragonboat instance owns a tan LogDB instance, which manages all tan
+db instances hold by a container instance called collection. Each raft node
+is backed one of those tan db instance.
+
+To allow N raft nodes to share M tan db instance, there are two obvious ways
+to do it, known as the regular mode, one way is to let each raft node to own
+a dedicated tan db. Another way is to share the same tan db among multiple
+raft nodes so there won't be an excessive amount of tan db instances, we call
+this the multiplexed log mode. Such 1:1 and n:m mapping relationships are
+managed by a regularKeeper or a multiplexedKeeper intance both of which are
+of the dbKeeper interface as defined in db_keeper.go. This allows the upper
+layer to get the relevant tan db by just providing the clusterID and nodeID
+values of the raft node with the mapping details hidden from the outside.
+
+Each tan db instance owns a log file which will be used for storing all log
+data. For data written into the same tan db from different raft nodes, they
+will be indexed into different tan nodeIndex instances stored as a part of
+db.mu.nodeStates. This means each raft node will have its own nodeIndex.
+*/
 package tan
 
 import (
@@ -64,14 +86,7 @@ func (factory) Name() string {
 	return tanLogDBName
 }
 
-// LogDB is the tan ILogDB type used to interface with dragonboat. To efficiently
-// support running multiple raft nodes on the same server, we need multiple tan
-// db instances to manage raft logs and metadata belong to those raft nodes. Two
-// modes are supported in doing so, one way is to let each raft node to own a
-// dedicated tan db for deployment when you have a relatively small number of
-// raft nodes, this is called the regular mode. Another way is to share the same
-// tan db among multiple raft nodes so there won't be an excessive amount of tan
-// db instances, we call this the multiplexed log mode.
+// LogDB is the tan ILogDB type used to interface with dragonboat.
 type LogDB struct {
 	mu         sync.Mutex
 	fileLock   io.Closer

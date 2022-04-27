@@ -34,6 +34,8 @@ type dbKeeper interface {
 	iterate(f func(*db) error) error
 }
 
+var _ dbKeeper = (*regularKeeper)(nil)
+
 // regularKeeper assigns a unique tan db instance to each raft node.
 type regularKeeper struct {
 	dbs map[raftio.NodeInfo]*db
@@ -76,6 +78,8 @@ func (k *regularKeeper) iterate(f func(*db) error) error {
 	}
 	return nil
 }
+
+var _ dbKeeper = (*multiplexedKeeper)(nil)
 
 // multiplexedKeeper divide all raft nodes into groups and assign nodes within
 // the same group to a unique tan db instance. Each raft node is assigned to
