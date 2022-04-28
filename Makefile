@@ -129,7 +129,9 @@ unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
 .PHONY: benchmark
 benchmark:
 	$(GOTEST) $(SELECTED_BENCH_OPTION)
-
+.PHONY: benchmark-tan
+benchmark-tan:
+	$(GOTEST) $(SELECTED_BENCH_OPTION) $(PKGNAME)/internal/tan
 .PHONY: benchmark-fsync
 benchmark-fsync:
 	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
