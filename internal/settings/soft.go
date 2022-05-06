@@ -66,6 +66,8 @@ type soft struct {
 	// InMemGCTimeout defines how often dragonboat collects partial object.
 	// It is defined in terms of number of ticks.
 	InMemGCTimeout uint64
+	// MaxApplyEntrySize defines the max size of entries to apply.
+	MaxApplyEntrySize uint64
 
 	//
 	// Multiraft
@@ -184,6 +186,7 @@ func getDefaultSoftSettings() soft {
 		MaxEntrySize:                   MaxMessageBatchSize,
 		InMemGCTimeout:                 100,
 		InMemEntrySliceSize:            512,
+		MaxApplyEntrySize:              64 * 1024 * 1024,
 		MinEntrySliceFreeSize:          96,
 		IncomingReadIndexQueueLength:   4096,
 		IncomingProposalQueueLength:    2048,

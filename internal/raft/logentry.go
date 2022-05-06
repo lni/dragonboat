@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	maxEntriesToApplySize = settings.Soft.MaxEntrySize
+	maxEntriesToApplySize = settings.Soft.MaxApplyEntrySize
 )
 
 // ErrCompacted is the error returned to indicate that the requested entries
