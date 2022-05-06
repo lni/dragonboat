@@ -93,6 +93,16 @@ func (p *Peer) QuiescedTick() error {
 	})
 }
 
+func (p *Peer) QueryRaftLog(firstIndex uint64,
+	lastIndex uint64, maxSize uint64) error {
+	return p.raft.Handle(pb.Message{
+		Type: pb.LogQuery,
+		From: firstIndex,
+		To:   lastIndex,
+		Hint: maxSize,
+	})
+}
+
 // RequestLeaderTransfer makes a request to transfer the leadership to the
 // specified target node.
 func (p *Peer) RequestLeaderTransfer(target uint64) error {
@@ -246,6 +256,9 @@ func (p *Peer) HasUpdate(moreToApply bool) bool {
 	if len(r.log.entriesToSave()) > 0 {
 		return true
 	}
+	if r.logQueryResult != nil {
+		return true
+	}
 	if len(r.msgs) > 0 {
 		return true
 	}
@@ -275,6 +288,7 @@ func (p *Peer) HasUpdate(moreToApply bool) bool {
 // Commit commits the Update state to mark it as processed.
 func (p *Peer) Commit(ud pb.Update) {
 	p.raft.msgs = nil
+	p.raft.logQueryResult = nil
 	p.raft.droppedEntries = nil
 	p.raft.droppedReadIndexes = nil
 	if !pb.IsEmptyState(ud.State) {
@@ -321,6 +335,9 @@ func (p *Peer) getUpdate(moreToApply bool,
 		Messages:      p.raft.msgs,
 		LastApplied:   lastApplied,
 		FastApply:     true,
+	}
+	if p.raft.logQueryResult != nil {
+		ud.LogQueryResult = *p.raft.logQueryResult
 	}
 	for idx := range ud.Messages {
 		ud.Messages[idx].ClusterId = p.raft.clusterID

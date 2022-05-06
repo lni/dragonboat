@@ -277,6 +277,12 @@ func (l *entryLog) getEntriesToApply(limit uint64) ([]pb.Entry, error) {
 	return nil, nil
 }
 
+func (l *entryLog) getCommittedEntries(low uint64,
+	high uint64, maxSize uint64) ([]pb.Entry, error) {
+	high = min(high, l.committed+1)
+	return l.getEntries(low, high, maxSize)
+}
+
 func (l *entryLog) entriesToSave() []pb.Entry {
 	return l.inmem.entriesToSave()
 }
