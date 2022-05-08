@@ -22,6 +22,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/lni/dragonboat/v3/internal/server"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -3348,4 +3350,99 @@ func TestCastVoteToDifferentNodesIsAllowed(t *testing.T) {
 	if !reflect.DeepEqual(expected, a.msgs[0]) {
 		t.Errorf("unexpected msg")
 	}
+}
+
+func TestHandleLogQuery(t *testing.T) {
+	p := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	assert.NoError(t, p.Handle(pb.Message{From: 1, To: 1, Type: pb.Election}))
+	assert.Equal(t, leader, p.state)
+	committed := p.log.committed
+	for i := 0; i < 10; i++ {
+		assert.NoError(t, p.Handle(pb.Message{
+			From:    1,
+			To:      1,
+			Type:    pb.Propose,
+			Entries: []pb.Entry{{Cmd: []byte("test-data")}},
+		}))
+	}
+	assert.Equal(t, committed+10, p.log.committed)
+	assert.NoError(t, p.Handle(pb.Message{
+		Type: pb.LogQuery,
+		From: 1,
+		To:   committed + 11,
+		Hint: math.MaxUint64,
+	}))
+	entries, err := p.log.getEntries(1, 12, math.MaxUint64)
+	assert.NoError(t, err)
+	expected := &pb.LogQueryResult{
+		FirstIndex: p.log.firstIndex(),
+		LastIndex:  p.log.committed + 1,
+		Error:      nil,
+		Entries:    entries,
+	}
+	assert.Equal(t, expected, p.logQueryResult)
+}
+
+func TestHandleLogQueryWillPanicWhenRepeatedlyCalled(t *testing.T) {
+	p := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	assert.NoError(t, p.Handle(pb.Message{From: 1, To: 1, Type: pb.Election}))
+	assert.Equal(t, leader, p.state)
+	committed := p.log.committed
+	for i := 0; i < 10; i++ {
+		assert.NoError(t, p.Handle(pb.Message{
+			From:    1,
+			To:      1,
+			Type:    pb.Propose,
+			Entries: []pb.Entry{{Cmd: []byte("test-data")}},
+		}))
+	}
+	assert.Equal(t, committed+10, p.log.committed)
+	assert.Nil(t, p.logQueryResult)
+	assert.NoError(t, p.Handle(pb.Message{
+		Type: pb.LogQuery,
+		From: 1,
+		To:   committed + 11,
+		Hint: math.MaxUint64,
+	}))
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("panic not triggered")
+		}
+	}()
+	assert.NotNil(t, p.logQueryResult)
+	assert.NoError(t, p.Handle(pb.Message{
+		Type: pb.LogQuery,
+		From: 1,
+		To:   committed + 11,
+		Hint: math.MaxUint64,
+	}))
+}
+
+func TestHandleLogQueryCanHandleRangeError(t *testing.T) {
+	p := newTestRaft(1, []uint64{1}, 10, 1, NewTestLogDB())
+	assert.NoError(t, p.Handle(pb.Message{From: 1, To: 1, Type: pb.Election}))
+	assert.Equal(t, leader, p.state)
+	committed := p.log.committed
+	for i := 0; i < 10; i++ {
+		assert.NoError(t, p.Handle(pb.Message{
+			From:    1,
+			To:      1,
+			Type:    pb.Propose,
+			Entries: []pb.Entry{{Cmd: []byte("test-data")}},
+		}))
+	}
+	assert.Equal(t, committed+10, p.log.committed)
+	assert.NoError(t, p.Handle(pb.Message{
+		Type: pb.LogQuery,
+		From: 13,
+		To:   14,
+		Hint: math.MaxUint64,
+	}))
+	expected := &pb.LogQueryResult{
+		FirstIndex: p.log.firstIndex(),
+		LastIndex:  p.log.committed + 1,
+		Error:      ErrCompacted,
+		Entries:    nil,
+	}
+	assert.Equal(t, expected, p.logQueryResult)
 }

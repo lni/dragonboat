@@ -37,6 +37,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/lni/dragonboat/v3/config"
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
@@ -831,4 +833,46 @@ func TestSetFastApply(t *testing.T) {
 			t.Fatalf("%d, fast apply not expected", tidx)
 		}
 	}
+}
+
+func TestRaftAPIQueryRaftLog(t *testing.T) {
+	s := NewTestLogDB()
+	var err error
+	rawNode := Launch(newTestConfig(1, 10, 1), s, nil, []PeerAddress{{NodeID: 1}}, true, true)
+	rawNode.raft.hasNotAppliedConfigChange = rawNode.raft.testOnlyHasConfigChangeToApply
+	ud, err := rawNode.GetUpdate(true, 0)
+	assert.NoError(t, err)
+	assert.NoError(t, s.Append(ud.EntriesToSave))
+	rawNode.Commit(ud)
+
+	rawNode.Campaign()
+	var lastIndex uint64
+	for {
+		ud, err = rawNode.GetUpdate(true, 0)
+		assert.NoError(t, err)
+		assert.NoError(t, s.Append(ud.EntriesToSave))
+		// Once we are the leader, propose a command and a ConfigChange.
+		if rawNode.raft.leaderID == rawNode.raft.nodeID {
+			ne(rawNode.ProposeEntries([]pb.Entry{{Cmd: []byte("somedata")}}), t)
+		}
+		rawNode.Commit(ud)
+		// Exit when we have four entries: one ConfigChange, one no-op for the election,
+		// our proposed command and proposed ConfigChange.
+		_, lastIndex = s.GetRange()
+		if lastIndex >= 4 {
+			break
+		}
+	}
+	entries, err := s.Entries(lastIndex-1, lastIndex+1, noLimit)
+	assert.NoError(t, err)
+	assert.NoError(t, rawNode.QueryRaftLog(lastIndex-1, lastIndex+1, noLimit))
+	assert.NotNil(t, rawNode.raft.logQueryResult)
+	ud, err = rawNode.GetUpdate(true, 0)
+	assert.NoError(t, err)
+	assert.NotNil(t, rawNode.raft.logQueryResult)
+	assert.False(t, ud.LogQueryResult.IsEmpty())
+	assert.Nil(t, ud.LogQueryResult.Error)
+	rawNode.Commit(ud)
+	assert.Nil(t, rawNode.raft.logQueryResult)
+	assert.Equal(t, entries, ud.LogQueryResult.Entries)
 }

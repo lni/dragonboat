@@ -796,6 +796,13 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 	return nil
 }
 
+// QueryRaftLog starts an asynchronous query for raft logs in the specified
+// range [firstIndex, lastIndex) on the given raft cluster. The returned
+// raft log entries are limited to maxSize in bytes.
+//
+// This method returns a RequestState instance or an error immediately. User
+// can use the CompletedC channel of the returned RequestState to get notified
+// when the query result becomes available.
 func (nh *NodeHost) QueryRaftLog(clusterID uint64, firstIndex uint64,
 	lastIndex uint64, maxSize uint64) (*RequestState, error) {
 	return nh.queryRaftLog(clusterID, firstIndex, lastIndex, maxSize)

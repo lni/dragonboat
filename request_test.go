@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/rsm"
@@ -1425,5 +1427,96 @@ func TestReadIndexAllocationCount(t *testing.T) {
 	})
 	if ac != 0 {
 		t.Fatalf("ac %f, want 0", ac)
+	}
+}
+
+func TestPendingRaftLogQueryCanBeCreated(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	assert.Nil(t, p.mu.pending)
+}
+
+func TestPendingRaftLogQueryCanBeClosed(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	rs, err := p.add(100, 200, 300)
+	assert.NoError(t, err)
+	assert.NotNil(t, p.mu.pending)
+	p.close()
+	assert.Nil(t, p.mu.pending)
+	select {
+	case v := <-rs.CompletedC:
+		assert.True(t, v.Terminated())
+	default:
+		t.Fatalf("not terminated")
+	}
+}
+
+func TestPendingRaftLogQueryCanAddRequest(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	rs, err := p.add(100, 200, 300)
+	assert.NotNil(t, rs)
+	assert.NoError(t, err)
+	rs, err = p.add(200, 200, 300)
+	assert.Equal(t, ErrSystemBusy, err)
+	assert.Nil(t, rs)
+	assert.NotNil(t, p.mu.pending)
+	assert.Equal(t, LogRange{FirstIndex: 100, LastIndex: 200}, p.mu.pending.logRange)
+	assert.Equal(t, uint64(300), p.mu.pending.maxSize)
+	assert.NotNil(t, p.mu.pending.CompletedC)
+}
+
+func TestPendingRaftLogQueryGet(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	assert.Nil(t, p.get())
+	rs, err := p.add(100, 200, 300)
+	assert.NoError(t, err)
+	assert.NotNil(t, p.mu.pending)
+	result := p.get()
+	assert.Equal(t, rs, result)
+	assert.Equal(t, LogRange{FirstIndex: 100, LastIndex: 200}, result.logRange)
+	assert.Equal(t, uint64(300), result.maxSize)
+	assert.NotNil(t, result.CompletedC)
+}
+
+func TestPendingRaftLogQueryGetWhenReturnedIsCalledWithoutPendingRequest(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("failed to panic")
+		}
+	}()
+	p := newPendingRaftLogQuery()
+	p.returned(false, LogRange{}, nil)
+}
+
+func TestPendingRaftLogQueryCanReturnOutOfRangeError(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	rs, err := p.add(100, 200, 300)
+	assert.NoError(t, err)
+	lr := LogRange{FirstIndex: 150, LastIndex: 200}
+	p.returned(true, lr, nil)
+	select {
+	case v := <-rs.CompletedC:
+		assert.True(t, v.RequestOutOfRange())
+		_, rrl := v.RaftLogs()
+		assert.Equal(t, lr, rrl)
+	default:
+		t.Fatalf("no result available")
+	}
+}
+
+func TestPendingRaftLogQueryCanReturnResults(t *testing.T) {
+	p := newPendingRaftLogQuery()
+	rs, err := p.add(100, 200, 300)
+	assert.NoError(t, err)
+	entries := []pb.Entry{{Index: 1}, {Index: 2}}
+	lr := LogRange{FirstIndex: 100, LastIndex: 180}
+	p.returned(false, lr, entries)
+	select {
+	case v := <-rs.CompletedC:
+		assert.True(t, v.Completed())
+		rentries, rrl := v.RaftLogs()
+		assert.Equal(t, lr, rrl)
+		assert.Equal(t, entries, rentries)
+	default:
+		t.Fatalf("no result available")
 	}
 }

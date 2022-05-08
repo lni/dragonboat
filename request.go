@@ -1254,6 +1254,7 @@ func (p *pendingRaftLogQuery) close() {
 	defer p.mu.Unlock()
 	if p.mu.pending != nil {
 		p.mu.pending.terminated()
+		p.mu.pending = nil
 	}
 }
 
@@ -1277,9 +1278,7 @@ func (p *pendingRaftLogQuery) add(firstIndex uint64,
 func (p *pendingRaftLogQuery) get() *RequestState {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	req := p.mu.pending
-	p.mu.pending = nil
-	return req
+	return p.mu.pending
 }
 
 func (p *pendingRaftLogQuery) returned(outOfRange bool,
@@ -1295,14 +1294,16 @@ func (p *pendingRaftLogQuery) returned(outOfRange bool,
 
 	if outOfRange {
 		req.notify(RequestResult{
-			code:     requestOutOfRange,
-			logRange: logRange,
+			logQueryResult: true,
+			code:           requestOutOfRange,
+			logRange:       logRange,
 		})
 	} else {
 		req.notify(RequestResult{
-			code:     requestCompleted,
-			logRange: logRange,
-			entries:  entries,
+			logQueryResult: true,
+			code:           requestCompleted,
+			logRange:       logRange,
+			entries:        entries,
 		})
 	}
 }
