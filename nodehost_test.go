@@ -37,6 +37,7 @@ import (
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
 	"github.com/lni/goutils/syncutil"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -2983,6 +2984,61 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 			if !bytes.Equal(result.Data, cmd) {
 				t.Errorf("unexpected result data")
 			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestRaftLogQuery(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			for i := 0; i < 10; i++ {
+				makeTestProposal(nh, 10)
+			}
+			rs, err := nh.QueryRaftLog(1, 1, 11, math.MaxUint64)
+			assert.NoError(t, err)
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			select {
+			case v := <-rs.CompletedC:
+				assert.True(t, v.Completed())
+				entries, logRange := v.RaftLogs()
+				assert.Equal(t, 10, len(entries))
+				assert.Equal(t, LogRange{FirstIndex: 1, LastIndex: 13}, logRange)
+			case <-ticker.C:
+				t.Fatalf("no results")
+			}
+			rs.Release()
+
+			// this should be fine
+			rs, err = nh.QueryRaftLog(1, 1, 1000, math.MaxUint64)
+			assert.NoError(t, err)
+			select {
+			case v := <-rs.CompletedC:
+				assert.True(t, v.Completed())
+				entries, logRange := v.RaftLogs()
+				assert.Equal(t, 12, len(entries))
+				assert.Equal(t, LogRange{FirstIndex: 1, LastIndex: 13}, logRange)
+			case <-ticker.C:
+				t.Fatalf("no results")
+			}
+			rs.Release()
+
+			// OutOfRange expected
+			rs, err = nh.QueryRaftLog(1, 13, 1000, math.MaxUint64)
+			assert.NoError(t, err)
+			select {
+			case v := <-rs.CompletedC:
+				assert.True(t, v.RequestOutOfRange())
+				entries, logRange := v.RaftLogs()
+				assert.Equal(t, 0, len(entries))
+				assert.Equal(t, LogRange{FirstIndex: 1, LastIndex: 13}, logRange)
+			case <-ticker.C:
+				t.Fatalf("no results")
+			}
+			rs.Release()
 		},
 	}
 	runNodeHostTest(t, to, fs)

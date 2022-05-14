@@ -77,7 +77,7 @@ var (
 	ErrRejected = errors.New("request rejected")
 	// ErrClusterNotReady indicates that the request has been dropped as the
 	// specified raft cluster is not ready to handle the request. Unknown leader
-	// is the most common cause of this error, trying to use a cluster not fully
+	// is the most common cause of this Error, trying to use a cluster not fully
 	// initialized is another major cause of ErrClusterNotReady.
 	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
@@ -118,6 +118,12 @@ func IsTempError(err error) bool {
 		errors.Is(err, ErrClosed)
 }
 
+// LogRange defines the range [FirstIndex, lastIndex) of the raft log.
+type LogRange struct {
+	FirstIndex uint64
+	LastIndex  uint64
+}
+
 // RequestResultCode is the result code returned to the client to indicate the
 // outcome of the request.
 type RequestResultCode int
@@ -130,7 +136,16 @@ type RequestResult struct {
 	// instance. Result is only available when making a proposal and the Code
 	// value is RequestCompleted.
 	result         sm.Result
+	entries        []pb.Entry
+	logRange       LogRange
 	snapshotResult bool
+	logQueryResult bool
+}
+
+// RequestOutOfRange returns a boolean value indicating whether the request
+// is out of range.
+func (rr *RequestResult) RequestOutOfRange() bool {
+	return rr.code == requestOutOfRange
 }
 
 // Timeout returns a boolean value indicating whether the request timed out.
@@ -192,9 +207,18 @@ func (rr *RequestResult) SnapshotIndex() uint64 {
 	return rr.result.Value
 }
 
+// RaftLogs returns the raft log query result.
+func (rr *RequestResult) RaftLogs() ([]pb.Entry, LogRange) {
+	if !rr.logQueryResult {
+		panic("not a raft log query result")
+	}
+	return rr.entries, rr.logRange
+}
+
 // GetResult returns the result value of the request. When making a proposal,
 // the returned result is the value returned by the Update method of the
-// IStateMachine instance.
+// IStateMachine instance. Returned result is only valid if the RequestResultCode
+// value is RequestCompleted.
 func (rr *RequestResult) GetResult() sm.Result {
 	return rr.result
 }
@@ -207,6 +231,7 @@ const (
 	requestDropped
 	requestAborted
 	requestCommitted
+	requestOutOfRange
 )
 
 var requestResultCodeName = [...]string{
@@ -217,6 +242,7 @@ var requestResultCodeName = [...]string{
 	"RequestDropped",
 	"RequestAborted",
 	"RequestCommitted",
+	"RequestOutOfRange",
 }
 
 func (c RequestResultCode) String() string {
@@ -287,6 +313,8 @@ type RequestState struct {
 	seriesID       uint64
 	respondedTo    uint64
 	deadline       uint64
+	logRange       LogRange
+	maxSize        uint64
 	readyToRead    ready
 	readyToRelease ready
 	aggrC          chan RequestResult
@@ -442,6 +470,8 @@ func (r *RequestState) Release() {
 			return
 		}
 		r.notifyCommit = false
+		r.logRange = LogRange{}
+		r.maxSize = 0
 		r.deadline = 0
 		r.key = 0
 		r.seriesID = 0
@@ -1206,4 +1236,74 @@ func (p *proposalShard) gcAt(now uint64) {
 
 func preparePayload(ct config.CompressionType, cmd []byte) []byte {
 	return rsm.GetEncoded(rsm.ToDioType(ct), cmd, nil)
+}
+
+type pendingRaftLogQuery struct {
+	mu struct {
+		sync.Mutex
+		pending *RequestState
+	}
+}
+
+func newPendingRaftLogQuery() pendingRaftLogQuery {
+	return pendingRaftLogQuery{}
+}
+
+func (p *pendingRaftLogQuery) close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.mu.pending != nil {
+		p.mu.pending.terminated()
+		p.mu.pending = nil
+	}
+}
+
+func (p *pendingRaftLogQuery) add(firstIndex uint64,
+	lastIndex uint64, maxSize uint64) (*RequestState, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.mu.pending != nil {
+		return nil, ErrSystemBusy
+	}
+	req := &RequestState{
+		logRange:   LogRange{FirstIndex: firstIndex, LastIndex: lastIndex},
+		maxSize:    maxSize,
+		CompletedC: make(chan RequestResult, 1),
+	}
+	p.mu.pending = req
+
+	return req, nil
+}
+
+func (p *pendingRaftLogQuery) get() *RequestState {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.mu.pending
+}
+
+func (p *pendingRaftLogQuery) returned(outOfRange bool,
+	logRange LogRange, entries []pb.Entry) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.mu.pending == nil {
+		panic("no pending raft log query")
+	}
+
+	req := p.mu.pending
+	p.mu.pending = nil
+
+	if outOfRange {
+		req.notify(RequestResult{
+			logQueryResult: true,
+			code:           requestOutOfRange,
+			logRange:       logRange,
+		})
+	} else {
+		req.notify(RequestResult{
+			logQueryResult: true,
+			code:           requestCompleted,
+			logRange:       logRange,
+			entries:        entries,
+		})
+	}
 }

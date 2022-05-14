@@ -20,6 +20,18 @@ import (
 	"io"
 )
 
+type LogQueryResult struct {
+	FirstIndex uint64
+	LastIndex  uint64
+	Error      error
+	Entries    []Entry
+}
+
+func (r *LogQueryResult) IsEmpty() bool {
+	return r.FirstIndex == 0 && r.LastIndex == 0 &&
+		r.Error == nil && len(r.Entries) == 0
+}
+
 // SystemCtx is used to identify a ReadIndex operation.
 type SystemCtx struct {
 	Low  uint64
@@ -86,6 +98,7 @@ type Update struct {
 	// DroppedReadIndexes is a list of read index requests  dropped when no leader
 	// is available.
 	DroppedReadIndexes []SystemCtx
+	LogQueryResult     LogQueryResult
 }
 
 // HasUpdate returns a boolean value indicating whether the returned Update

@@ -97,6 +97,7 @@ type node struct {
 	pendingConfigChange   pendingConfigChange
 	pendingSnapshot       pendingSnapshot
 	pendingLeaderTransfer pendingLeaderTransfer
+	pendingRaftLogQuery   pendingRaftLogQuery
 	initializedC          chan struct{}
 	p                     raft.Peer
 	logReader             *logdb.LogReader
@@ -173,6 +174,7 @@ func newNode(peers map[uint64]string,
 		pendingConfigChange:   newPendingConfigChange(configChangeC, notifyCommit),
 		pendingSnapshot:       newPendingSnapshot(snapshotC),
 		pendingLeaderTransfer: newPendingLeaderTransfer(),
+		pendingRaftLogQuery:   newPendingRaftLogQuery(),
 		nodeRegistry:          nodeRegistry,
 		snapshotter:           snapshotter,
 		logReader:             logReader,
@@ -299,6 +301,22 @@ func (n *node) configChangeProcessed(key uint64, rejected bool) error {
 	return nil
 }
 
+func (n *node) processLogQuery(r pb.LogQueryResult) {
+	if r.IsEmpty() {
+		return
+	}
+	outOfRange := false
+	if r.Error != nil {
+		if errors.Is(r.Error, raft.ErrCompacted) {
+			outOfRange = true
+		} else {
+			panic(r.Error)
+		}
+	}
+	n.pendingRaftLogQuery.returned(outOfRange,
+		LogRange{FirstIndex: r.FirstIndex, LastIndex: r.LastIndex}, r.Entries)
+}
+
 func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 	if snapshot.Membership.ConfigChangeId == 0 {
 		plog.Panicf("invalid ConfChangeId")
@@ -350,6 +368,7 @@ func (n *node) close() {
 	n.pendingProposals.close()
 	n.pendingConfigChange.close()
 	n.pendingSnapshot.close()
+	n.pendingRaftLogQuery.close()
 }
 
 func (n *node) stopped() bool {
@@ -476,6 +495,17 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 		opt.OverrideCompactionOverhead,
 		opt.CompactionOverhead,
 		timeout)
+}
+
+func (n *node) queryRaftLog(firstIndex uint64,
+	lastIndex uint64, maxSize uint64) (*RequestState, error) {
+	if !n.initialized() {
+		return nil, ErrClusterNotReady
+	}
+	if n.isWitness() {
+		return nil, ErrInvalidOperation
+	}
+	return n.pendingRaftLogQuery.add(firstIndex, lastIndex, maxSize)
 }
 
 func (n *node) reportIgnoredSnapshotRequest(key uint64) {
@@ -1144,6 +1174,13 @@ func (n *node) handleEvents() (bool, error) {
 	if n.handleCompaction() {
 		hasEvent = true
 	}
+	event, err = n.handleLogQuery()
+	if err != nil {
+		return false, err
+	}
+	if event {
+		hasEvent = true
+	}
 	n.gc()
 	if hasEvent {
 		n.pendingReadIndexes.applied(lastApplied)
@@ -1162,6 +1199,17 @@ func (n *node) gc() {
 
 func (n *node) handleCompaction() bool {
 	return n.ss.hasCompactedTo() || n.ss.hasCompactLogTo()
+}
+
+func (n *node) handleLogQuery() (bool, error) {
+	if req := n.pendingRaftLogQuery.get(); req != nil {
+		if err := n.p.QueryRaftLog(req.logRange.FirstIndex,
+			req.logRange.LastIndex, req.maxSize); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (n *node) handleLeaderTransfer() (bool, error) {
