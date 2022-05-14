@@ -15,7 +15,9 @@
 package raftpb
 
 import (
+	"bytes"
 	"encoding/binary"
+	"io"
 )
 
 // SystemCtx is used to identify a ReadIndex operation.
@@ -101,7 +103,9 @@ func (u *Update) HasUpdate() bool {
 // MarshalTo encodes the fields that need to be persisted to the specified
 // buffer.
 func (u *Update) MarshalTo(buf []byte) (int, error) {
-	offset := 0
+	n1 := binary.PutUvarint(buf, u.ClusterID)
+	n2 := binary.PutUvarint(buf[n1:], u.NodeID)
+	offset := n1 + n2
 	if IsEmptyState(u.State) {
 		buf[offset] = 0
 		offset++
@@ -141,9 +145,32 @@ func (u *Update) MarshalTo(buf []byte) (int, error) {
 	return offset, nil
 }
 
+type countedByteReader struct {
+	reader io.ByteReader
+	count  int
+}
+
+func (r *countedByteReader) ReadByte() (byte, error) {
+	v, err := r.reader.ReadByte()
+	r.count++
+	return v, err
+}
+
 // Unmarshal decodes the Update state from the input buf.
 func (u *Update) Unmarshal(buf []byte) error {
-	offset := 0
+	r := &countedByteReader{
+		reader: bytes.NewReader(buf),
+	}
+	var err error
+	u.ClusterID, err = binary.ReadUvarint(r)
+	if err != nil {
+		return err
+	}
+	u.NodeID, err = binary.ReadUvarint(r)
+	if err != nil {
+		return err
+	}
+	offset := r.count
 	if buf[offset] == 0 {
 		offset++
 	} else {
@@ -181,7 +208,7 @@ func (u *Update) Unmarshal(buf []byte) error {
 // SizeUpperLimit returns the upper limit of the estimated size of marshalled
 // Update instance.
 func (u *Update) SizeUpperLimit() int {
-	sz := 2 + 4
+	sz := 2 + 4 + 16
 	sz += int(GetEntrySliceSize(u.EntriesToSave))
 	sz += u.State.SizeUpperLimit()
 	if !IsEmptySnapshot(u.Snapshot) {

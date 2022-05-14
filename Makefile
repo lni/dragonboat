@@ -100,11 +100,11 @@ TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
 .PHONY: dragonboat-test
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
-	test-id test-utils
+	test-id test-utils test-tan
 .PHONY: ci-test
 ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		       \
   test-config test-client test-server test-tests test-tools test-fs 				 \
-	test-id test-utils
+	test-id test-utils test-tan
 .PHONY: test
 test: dragonboat-test test-tests
 .PHONY: dev-test
@@ -121,7 +121,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 .PHONY: unit-test-bin
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools test-plugins \
-	test-tests test-fs test-id test-utils
+	test-tests test-fs test-id test-utils test-tan
 
 ###############################################################################
 # fast tests executed for every git push
@@ -129,7 +129,9 @@ unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
 .PHONY: benchmark
 benchmark:
 	$(GOTEST) $(SELECTED_BENCH_OPTION)
-
+.PHONY: benchmark-tan
+benchmark-tan:
+	$(GOTEST) $(SELECTED_BENCH_OPTION) $(PKGNAME)/internal/tan
 .PHONY: benchmark-fsync
 benchmark-fsync:
 	$(GOTEST)	-run ^$$ -bench=BenchmarkFSyncLatency
@@ -183,6 +185,9 @@ test-id:
 .PHONY: test-utils
 test-utils:
 	$(GOTEST) $(PKGNAME)/internal/utils/dio
+.PHONY: test-tan
+test-tan:
+	$(GOTEST) $(PKGNAME)/internal/tan
 .PHONY: test-cov
 test-cov:
 	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic

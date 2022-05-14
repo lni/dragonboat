@@ -17,18 +17,47 @@ package tee
 import (
 	"github.com/lni/dragonboat/v3/config"
 	tl "github.com/lni/dragonboat/v3/internal/logdb/tee"
+	"github.com/lni/dragonboat/v3/internal/tan"
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
-// CreateTeeLogDB creates a special Tee LogDB module for testing purposes.
-// Tee LogDB uses RocksDB and Pebble side by side, all writes and reads are
-// issued to both so read results can be compared to detect any potential
-// discrepancies. Assuming the RocksDB implementation as the gold standard,
-// the Tee LogDB module helps us to find potential issues in Pebble and our
-// LogDB implementation.
-//
-// CreateTeeLogDB is provided here to allow Drummer to use the Tee LogDB.
-func CreateTeeLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
+// MemFSTee is the interface implemented by a memfs based tee logdb.
+type MemFSTee = tl.MemFSTee
+
+// CreateTanPebbleLogDB creates a Tee LogDB backed by Tan and Pebble.
+func CreateTanPebbleLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {
-	return tl.NewTeeLogDB(cfg, cb, dirs, wals)
+	ndirs := make([]string, 0)
+	nwals := make([]string, 0)
+	fs := cfg.Expert.FS
+	for _, v := range dirs {
+		ndirs = append(ndirs, fs.PathJoin(v, "tee-tan"))
+	}
+	for _, v := range wals {
+		nwals = append(nwals, fs.PathJoin(v, "tee-tan"))
+	}
+	tdb, err := tan.CreateTan(cfg, cb, ndirs, nwals)
+	if err != nil {
+		return nil, err
+	}
+	pdb, err := tl.NewPebbleLogDB(cfg, cb, dirs, wals)
+	if err != nil {
+		return nil, err
+	}
+	return tl.MakeTeeLogDB(tdb, pdb), nil
+}
+
+// TanPebbleLogDBFactory is the factory for creating a tan and pebble backed
+// tee LogDB instance.
+var TanPebbleLogDBFactory = tanPebbleLogDBFactory{}
+
+type tanPebbleLogDBFactory struct{}
+
+func (tanPebbleLogDBFactory) Create(cfg config.NodeHostConfig,
+	cb config.LogDBCallback, dirs []string, wals []string) (raftio.ILogDB, error) {
+	return CreateTanPebbleLogDB(cfg, cb, dirs, wals)
+}
+
+func (tanPebbleLogDBFactory) Name() string {
+	return "tan-pebble-tee"
 }
