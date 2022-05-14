@@ -4739,9 +4739,9 @@ func TestV2DataCanBeHandled(t *testing.T) {
 		},
 		tf: func(nh *NodeHost) {
 			name := nh.mu.logdb.Name()
-			if name != "sharded-pebble" && name != "sharded-rocksdb" {
+			if name != "sharded-pebble" {
 				// v2-rocksdb-batched.tar.bz2 contains rocksdb format data
-				t.Skip("skipped as not using rocksdb")
+				t.Skip("skipped as not using rocksdb compatible logdb")
 			}
 			logdb := nh.mu.logdb
 			rs, err := logdb.ReadRaftState(2, 1, 0)
