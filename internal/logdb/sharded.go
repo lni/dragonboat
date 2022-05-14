@@ -30,7 +30,7 @@ import (
 	pb "github.com/lni/dragonboat/v3/raftpb"
 )
 
-// ShardedDB is a LogDB implementation using sharded rocksdb instances.
+// ShardedDB is a LogDB implementation using sharded ILogDB instances.
 type ShardedDB struct {
 	partitioner          server.IPartitioner
 	compactions          *compactions

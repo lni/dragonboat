@@ -21,9 +21,6 @@ import (
 	"github.com/lni/dragonboat/v3/raftio"
 )
 
-// MemFSTee is the interface implemented by a memfs based tee logdb.
-type MemFSTee = tl.MemFSTee
-
 // CreateTanPebbleLogDB creates a Tee LogDB backed by Tan and Pebble.
 func CreateTanPebbleLogDB(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {

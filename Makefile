@@ -23,8 +23,7 @@ PKGROOT=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 PKGNAME=$(shell go list)
 
 ifeq ($(DRAGONBOAT_LOGDB),rocksdb)
-LOGDB_TAG=dragonboat_rocksdb_test
-$(info using rocksdb based log storage)
+$(error rocksdb is no longer supported)
 else ifeq ($(DRAGONBOAT_LOGDB),)
 ifneq ($(MEMFS_TEST),)
 $(info using memfs based pebble)
@@ -108,7 +107,7 @@ ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		       \
 .PHONY: test
 test: dragonboat-test test-tests
 .PHONY: dev-test
-dev-test: test test-plugins
+dev-test: test
 .PHONY: actions-test
 actions-test: ci-test test-cov
 
@@ -120,7 +119,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 	-count=1 $(VERBOSE) $(RACE_DETECTOR_FLAG) $(SELECTED_TEST_OPTION) 
 .PHONY: unit-test-bin
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
-  test-multiraft test-config test-client test-server test-tools test-plugins \
+  test-multiraft test-config test-client test-server test-tools \
 	test-tests test-fs test-id test-utils test-tan
 
 ###############################################################################
@@ -140,9 +139,6 @@ GOTEST=$(GO) $(TEST_OPTIONS)
 .PHONY: slow-test
 slow-test:
 	SLOW_TEST=1 $(GOTEST) $(PKGNAME)
-.PHONY: test-plugins
-test-plugins:
-	$(GOTEST) $(PKGNAME)/plugin
 .PHONY: test-server
 test-server:
 	$(GOTEST) $(PKGNAME)/internal/server
@@ -209,7 +205,7 @@ tools-checkdisk:
 install-static-check-tools:
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.45.2
 
-CHECKED_PKGS=$(shell go list ./... | grep -v rocksdb)
+CHECKED_PKGS=$(shell go list ./...)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
 EXTRA_LINTERS=-E misspell -E rowserrcheck -E depguard -E unconvert \
 	-E prealloc -E gofmt -E stylecheck

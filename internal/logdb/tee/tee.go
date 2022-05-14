@@ -28,7 +28,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv/pebble"
-	"github.com/lni/dragonboat/v3/internal/logdb/kv/rocksdb"
+	"github.com/lni/dragonboat/v3/internal/tan"
 	"github.com/lni/dragonboat/v3/logger"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -56,11 +56,11 @@ type LogDB struct {
 	ndb     raftio.ILogDB
 }
 
-// NewRocksDBLogDB creates a new RocksDB based LogDB instance
-func NewRocksDBLogDB(nhConfig config.NodeHostConfig,
+// NewTanLogDB creates a new RocksDB based LogDB instance
+func NewTanLogDB(nhConfig config.NodeHostConfig,
 	cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {
-	return newKVLogDB(nhConfig, cb, dirs, wals, "tee-rocksdb", rocksdb.NewKVStore)
+	return tan.Factory.Create(nhConfig, cb, dirs, wals)
 }
 
 // NewPebbleLogDB creates a new LogDB instance.
@@ -84,12 +84,12 @@ func newKVLogDB(nhConfig config.NodeHostConfig,
 	return logdb.NewLogDB(nhConfig, cb, ndirs, nwals, false, false, f)
 }
 
-// NewTeeLogDB creates a new LogDB instance backed by a pebble and a rocksdb
+// NewTeeLogDB creates a new LogDB instance backed by a pebble and a tan
 // based ILogDB.
 func NewTeeLogDB(nhConfig config.NodeHostConfig,
 	cb config.LogDBCallback,
 	dirs []string, wals []string) (raftio.ILogDB, error) {
-	odb, err := NewRocksDBLogDB(nhConfig, cb, dirs, wals)
+	odb, err := NewTanLogDB(nhConfig, cb, dirs, wals)
 	if err != nil {
 		return nil, err
 	}

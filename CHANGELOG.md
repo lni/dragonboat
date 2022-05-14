@@ -5,6 +5,7 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 ### New features
 
 - Experimental Raft Pre-Vote support.
+- Experimental LogDB implementation called tan, it is significantly faster than Key-Value store based approach.
 
 ### Improvements
 
@@ -19,6 +20,7 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 ### Other changes
 
 - Raft observer node has been renamed as non-voting node.
+- RocksDB support has been removed as Pebble provides bidirectional compatible with RocksDB. 
 
 ## v3.3 (2021-01-20)
 
