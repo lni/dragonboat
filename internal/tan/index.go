@@ -32,7 +32,7 @@ const (
 )
 
 // indexEntry represents an entry in the index. Each indexEntry points to a
-// kind of record in the db, it might be a slice of continous raft entries,
+// kind of record in the db, it might be a slice of continuous raft entries,
 // a raft state record or a raft snapshot record.
 type indexEntry struct {
 	start   uint64
@@ -52,7 +52,7 @@ func (e *indexEntry) indexBlock() int64 {
 
 // merge merges two indexEntry records. This is for raft entry indexes as we
 // focus on scan performance, we don't need to index individual raft entries in
-// the db, they are stored continously by their raft entry index value anyway.
+// the db, they are stored continuously by their raft entry index value anyway.
 func (e *indexEntry) merge(n indexEntry) (indexEntry, indexEntry, bool) {
 	if e.end+1 == n.start && e.pos+e.length == n.pos &&
 		e.fileNum == n.fileNum && e.indexBlock() == n.indexBlock() {

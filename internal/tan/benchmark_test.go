@@ -48,7 +48,7 @@ func benchmarkWrite(b *testing.B, sz int) {
 	u := pb.Update{
 		ClusterID: 100,
 		EntriesToSave: []pb.Entry{
-			pb.Entry{Cmd: make([]byte, sz)},
+			{Cmd: make([]byte, sz)},
 		},
 	}
 	buf := make([]byte, sz*2)
