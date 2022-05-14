@@ -31,11 +31,11 @@ import (
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/raft"
+	"github.com/lni/dragonboat/v3/internal/registry"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/tests"
-	"github.com/lni/dragonboat/v3/internal/transport"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
 	pb "github.com/lni/dragonboat/v3/raftpb"
@@ -243,7 +243,7 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			return rsm.NewNativeSM(cfg, rsm.NewInMemStateMachine(noopSM), done)
 		}
 		// node registry
-		nr := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+		nr := registry.NewNodeRegistry(settings.Soft.StreamConnections, nil)
 		ch := router.getQ(testClusterID, i)
 		nhConfig := config.NodeHostConfig{RTTMillisecond: tickMillisecond}
 		node, err := newNode(peers,

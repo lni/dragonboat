@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/logdb"
 	"github.com/lni/dragonboat/v3/internal/raft"
+	"github.com/lni/dragonboat/v3/internal/registry"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -71,7 +72,7 @@ func (l *logDBMetrics) isBusy() bool {
 
 type node struct {
 	clusterInfo           atomic.Value
-	nodeRegistry          transport.INodeRegistry
+	nodeRegistry          registry.INodeRegistry
 	logdb                 raftio.ILogDB
 	pipeline              pipeline
 	getStreamSink         func(uint64, uint64) *transport.Sink
@@ -141,7 +142,7 @@ func newNode(peers map[uint64]string,
 	getStreamSink func(uint64, uint64) *transport.Sink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
-	nodeRegistry transport.INodeRegistry,
+	nodeRegistry registry.INodeRegistry,
 	pool *sync.Pool,
 	ldb raftio.ILogDB,
 	metrics *logDBMetrics,

@@ -73,6 +73,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/invariants"
 	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/registry"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -272,7 +273,7 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
-	nodes        transport.INodeRegistry
+	nodes        registry.INodeRegistry
 	fs           vfs.IFS
 	transport    transport.ITransport
 	id           *id.NodeHostID
@@ -1419,7 +1420,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 }
 
 func (nh *NodeHost) getGossipInfo() GossipInfo {
-	if r, ok := nh.nodes.(*transport.NodeHostIDRegistry); ok {
+	if r, ok := nh.nodes.(*registry.NodeHostIDRegistry); ok {
 		return GossipInfo{
 			Enabled:             true,
 			AdvertiseAddress:    r.AdvertiseAddress(),
@@ -1775,7 +1776,7 @@ func (nh *NodeHost) createNodeRegistry() error {
 	// more tests here required
 	if nh.nhConfig.AddressByNodeHostID {
 		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
-		r, err := transport.NewNodeHostIDRegistry(nh.ID(),
+		r, err := registry.NewNodeHostIDRegistry(nh.ID(),
 			nh.nhConfig, streamConnections, validator)
 		if err != nil {
 			return err
@@ -1783,7 +1784,7 @@ func (nh *NodeHost) createNodeRegistry() error {
 		nh.nodes = r
 	} else {
 		plog.Infof("using regular node registry")
-		nh.nodes = transport.NewNodeRegistry(streamConnections, validator)
+		nh.nodes = registry.NewNodeRegistry(streamConnections, validator)
 	}
 	return nil
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transport
+package registry
 
 import (
 	"fmt"
@@ -31,6 +31,12 @@ var (
 	// is unknown.
 	ErrUnknownTarget = errors.New("target address unknown")
 )
+
+// IResolver converts the (cluster id, node id( tuple to network address.
+type IResolver interface {
+	Resolve(uint64, uint64) (string, string, error)
+	Add(uint64, uint64, string)
+}
 
 // INodeRegistry is the local registry interface used to keep all known
 // nodes in the system..

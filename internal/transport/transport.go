@@ -54,6 +54,7 @@ import (
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/invariants"
+	"github.com/lni/dragonboat/v3/internal/registry"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
@@ -80,12 +81,6 @@ var (
 	errBatchSendSkipped = errors.New("batch skipped")
 	dn                  = logutil.DescribeNode
 )
-
-// IResolver converts the (cluster id, node id( tuple to network address.
-type IResolver interface {
-	Resolve(uint64, uint64) (string, string, error)
-	Add(uint64, uint64, string)
-}
 
 // IMessageHandler is the interface required to handle incoming raft requests.
 type IMessageHandler interface {
@@ -187,7 +182,7 @@ type Transport struct {
 	preSend      atomic.Value
 	postSend     atomic.Value
 	msgHandler   IMessageHandler
-	resolver     IResolver
+	resolver     registry.IResolver
 	trans        raftio.ITransport
 	fs           vfs.IFS
 	stopper      *syncutil.Stopper
@@ -205,7 +200,7 @@ var _ ITransport = (*Transport)(nil)
 
 // NewTransport creates a new Transport object.
 func NewTransport(nhConfig config.NodeHostConfig,
-	handler IMessageHandler, env *server.Env, resolver IResolver,
+	handler IMessageHandler, env *server.Env, resolver registry.IResolver,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	sourceID := nhConfig.RaftAddress

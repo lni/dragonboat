@@ -27,6 +27,7 @@ import (
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb"
+	"github.com/lni/dragonboat/v3/internal/registry"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -425,8 +426,8 @@ func benchmarkTransport(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to new context %v", err)
 	}
-	nodes1 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
-	nodes2 := transport.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	nodes1 := registry.NewNodeRegistry(settings.Soft.StreamConnections, nil)
+	nodes2 := registry.NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes1.Add(1, 2, addr2)
 	handler1 := &benchmarkMessageHandler{
 		ch:       make(chan struct{}, 1),

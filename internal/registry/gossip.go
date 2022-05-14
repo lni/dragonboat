@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transport
+package registry
 
 import (
 	"net"
@@ -25,7 +25,12 @@ import (
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/config"
+	"github.com/lni/dragonboat/v3/internal/utils"
+	"github.com/lni/dragonboat/v3/logger"
 )
+
+var firstError = utils.FirstError
+var plog = logger.GetLogger("registry")
 
 // NodeHostIDRegistry is a node registry backed by gossip. It is capable of
 // supporting NodeHosts with dynamic RaftAddress values.
