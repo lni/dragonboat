@@ -495,6 +495,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 		opt.ExportPath,
 		opt.OverrideCompactionOverhead,
 		opt.CompactionOverhead,
+		opt.CompactionIndex,
 		timeout)
 }
 
@@ -781,16 +782,29 @@ func (n *node) doSave(req rsm.SSRequest) (uint64, error) {
 }
 
 func (n *node) compactLog(req rsm.SSRequest, index uint64) {
-	if overhead := n.compactionOverhead(req); index > overhead {
-		n.ss.setCompactLogTo(index - overhead)
+	if compactionIndex, ok := n.getCompactionIndex(req, index); ok {
+		n.ss.setCompactLogTo(compactionIndex)
 	}
 }
 
-func (n *node) compactionOverhead(req rsm.SSRequest) uint64 {
+func (n *node) getCompactionIndex(req rsm.SSRequest, index uint64) (uint64, bool) {
 	if req.OverrideCompaction {
-		return req.CompactionOverhead
+		if req.CompactionIndex > 0 {
+			if index >= req.CompactionIndex+1 {
+				return req.CompactionIndex, true
+			}
+			return 0, false
+		}
+		if index > req.CompactionOverhead {
+			return index - req.CompactionOverhead, true
+		}
+		return 0, false
 	}
-	return n.config.CompactionOverhead
+	if index > n.config.CompactionOverhead {
+		return index - n.config.CompactionOverhead, true
+	}
+
+	return 0, false
 }
 
 func (n *node) stream(sink pb.IChunkSink) error {

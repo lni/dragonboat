@@ -215,8 +215,14 @@ type SnapshotOption struct {
 	ExportPath string
 	// CompactionOverhead is the compaction overhead value to use for the
 	// requested snapshot operation when OverrideCompactionOverhead is set to
-	// true. This field is ignored when exporting a snapshot.
+	// true. This field is ignored when exporting a snapshot. ErrInvalidOption
+	// will be returned if both CompactionOverhead and CompactionIndex are set.
 	CompactionOverhead uint64
+	// CompactionIndex specifies the raft log index before which all log entries
+	// can be compacted after creating the snapshot. This option is only considered
+	// when OverrideCompactionOverhead is set to true, ErrInvalidOption will be
+	// returned if both CompactionOverhead and CompactionIndex are set.
+	CompactionIndex uint64
 	// Exported is a boolean flag indicating whether to export the requested
 	// snapshot. For an exported snapshot, users are responsible for managing the
 	// snapshot files. An exported snapshot is usually used to repair the cluster
@@ -227,6 +233,22 @@ type SnapshotOption struct {
 	// should override the compaction overhead setting specified in node's config.
 	// This field is ignored when exporting a snapshot.
 	OverrideCompactionOverhead bool
+}
+
+// Validate checks the SnapshotOption and return error when there is any
+// invalid option found.
+func (o SnapshotOption) Validate() error {
+	if o.OverrideCompactionOverhead {
+		if o.CompactionOverhead > 0 && o.CompactionIndex > 0 {
+			plog.Errorf("both CompactionOverhead and CompactionIndex are set")
+			return ErrInvalidOption
+		}
+	} else {
+		if o.CompactionOverhead > 0 || o.CompactionIndex > 0 {
+			plog.Warningf("CompactionOverhead and CompactionIndex will be ignored")
+		}
+	}
+	return nil
 }
 
 // ReadonlyLogReader provides safe readonly access to the underlying logdb.
@@ -991,6 +1013,9 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 	n, ok := nh.getCluster(clusterID)
 	if !ok {
 		return nil, ErrClusterNotFound
+	}
+	if err := opt.Validate(); err != nil {
+		return nil, err
 	}
 	defer nh.engine.setStepReady(clusterID)
 	return n.requestSnapshot(opt, nh.getTimeoutTick(timeout))

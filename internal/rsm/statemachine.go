@@ -77,6 +77,7 @@ type SSRequest struct {
 	Type               SSReqType
 	Key                uint64
 	CompactionOverhead uint64
+	CompactionIndex    uint64
 	OverrideCompaction bool
 }
 

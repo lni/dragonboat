@@ -1673,7 +1673,7 @@ func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
 	n.processSaveStatus()
 }
 
-func TestGetCompactionOverhead(t *testing.T) {
+func TestGetCompactionIndex(t *testing.T) {
 	cfg := config.Config{
 		CompactionOverhead: 234,
 	}
@@ -1686,11 +1686,21 @@ func TestGetCompactionOverhead(t *testing.T) {
 		OverrideCompaction: false,
 		CompactionOverhead: 456,
 	}
-	if v := n.compactionOverhead(req1); v != 123 {
+	req3 := rsm.SSRequest{
+		OverrideCompaction: true,
+		CompactionIndex:    300,
+	}
+	if v, _ := n.getCompactionIndex(req1, 200); v != 77 {
 		t.Errorf("snapshot overhead override not applied")
 	}
-	if v := n.compactionOverhead(req2); v != 234 {
+	if v, _ := n.getCompactionIndex(req2, 500); v != 266 {
 		t.Errorf("snapshot overhead override unexpectedly applied")
+	}
+	if v, _ := n.getCompactionIndex(req3, 500); v != 300 {
+		t.Errorf("snapshot index not correctly set")
+	}
+	if v, ok := n.getCompactionIndex(req3, 299); v != 0 || ok {
+		t.Errorf("snapshot index unexpectedly set")
 	}
 }
 

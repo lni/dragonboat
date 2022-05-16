@@ -47,6 +47,8 @@ var (
 )
 
 var (
+	// ErrInvalidOption indicates that the specified option is invalid.
+	ErrInvalidOption = errors.New("invalid option")
 	// ErrInvalidOperation indicates that the requested operation is not allowed.
 	// e.g. making read or write requests on witness node are not allowed.
 	ErrInvalidOperation = errors.New("invalid operation")
@@ -631,7 +633,7 @@ func (p *pendingSnapshot) close() {
 }
 
 func (p *pendingSnapshot) request(st rsm.SSReqType,
-	path string, override bool, overhead uint64,
+	path string, override bool, overhead uint64, index uint64,
 	timeoutTick uint64) (*RequestState, error) {
 	if timeoutTick == 0 {
 		return nil, ErrTimeoutTooSmall
@@ -650,6 +652,7 @@ func (p *pendingSnapshot) request(st rsm.SSReqType,
 		Key:                random.LockGuardedRand.Uint64(),
 		OverrideCompaction: override,
 		CompactionOverhead: overhead,
+		CompactionIndex:    index,
 	}
 	req := &RequestState{
 		key:          ssreq.Key,

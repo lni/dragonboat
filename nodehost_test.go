@@ -3039,6 +3039,48 @@ func TestRaftLogQuery(t *testing.T) {
 				t.Fatalf("no results")
 			}
 			rs.Release()
+
+			// generate a snapshot, a compaction will be requested in the background
+			// then query compacted log will fail.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			opts := SnapshotOption{
+				CompactionIndex:            10,
+				OverrideCompactionOverhead: true,
+			}
+			_, err = nh.SyncRequestSnapshot(ctx, 1, opts)
+			assert.NoError(t, err)
+			done := false
+			for i := 0; i < 1000; i++ {
+				func() {
+					rs, err := nh.QueryRaftLog(1, 1, 11, math.MaxUint64)
+					assert.NoError(t, err)
+					ticker := time.NewTicker(2 * time.Second)
+					defer ticker.Stop()
+					select {
+					case v := <-rs.CompletedC:
+						if v.Completed() {
+							time.Sleep(10 * time.Millisecond)
+							return
+						}
+						assert.True(t, v.RequestOutOfRange())
+						entries, logRange := v.RaftLogs()
+						assert.Equal(t, 0, len(entries))
+						assert.Equal(t, LogRange{FirstIndex: 11, LastIndex: 13}, logRange)
+						done = true
+						return
+					case <-ticker.C:
+						t.Fatalf("no results")
+					}
+					rs.Release()
+				}()
+				if done {
+					return
+				}
+				if i == 999 {
+					t.Fatalf("failed to observe RequestOutOfRange error")
+				}
+			}
 		},
 	}
 	runNodeHostTest(t, to, fs)
@@ -3627,6 +3669,29 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 				t.Fatalf("failed to request compaction %v", err)
 			}
 			<-sysop.ResultC()
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
+func TestSnapshotOptionIsChecked(t *testing.T) {
+	fs := vfs.GetTestFS()
+	to := &testOption{
+		defaultTestNode: true,
+		tf: func(nh *NodeHost) {
+			opts := SnapshotOption{
+				OverrideCompactionOverhead: true,
+				CompactionIndex:            100,
+				CompactionOverhead:         10,
+			}
+			assert.Equal(t, ErrInvalidOption, opts.Validate())
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_, err := nh.SyncRequestSnapshot(ctx, 1, opts)
+			assert.Equal(t, ErrInvalidOption, err)
+			rs, err := nh.RequestSnapshot(1, opts, time.Second)
+			assert.Equal(t, ErrInvalidOption, err)
+			assert.Nil(t, rs)
 		},
 	}
 	runNodeHostTest(t, to, fs)
