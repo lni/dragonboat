@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //go:build !dragonboat_memfs_test
+// +build !dragonboat_memfs_test
 
 package logdb
 
