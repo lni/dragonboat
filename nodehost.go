@@ -139,30 +139,7 @@ var (
 
 // ClusterInfo is a record for representing the state of a Raft cluster based
 // on the knowledge of the local NodeHost instance.
-type ClusterInfo struct {
-	// Nodes is a map of member node IDs to their Raft addresses.
-	Nodes map[uint64]string
-	// ClusterID is the cluster ID of the Raft cluster node.
-	ClusterID uint64
-	// NodeID is the node ID of the Raft cluster node.
-	NodeID uint64
-	// ConfigChangeIndex is the current config change index of the Raft node.
-	// ConfigChangeIndex is Raft Log index of the last applied membership
-	// change entry.
-	ConfigChangeIndex uint64
-	// StateMachineType is the type of the state machine.
-	StateMachineType sm.Type
-	// IsLeader indicates whether this is a leader node.
-	IsLeader bool
-	// IsNonVoting indicates whether this is a non-voting nonVoting node.
-	IsNonVoting bool
-	// IsWitness indicates whether this is a witness node without actual log.
-	IsWitness bool
-	// Pending is a boolean flag indicating whether details of the cluster node
-	// is not available. The Pending flag is set to true usually because the node
-	// has not had anything applied yet.
-	Pending bool
-}
+type ClusterInfo = registry.ClusterInfo
 
 // GossipInfo contains details of the gossip service.
 type GossipInfo struct {
@@ -295,6 +272,7 @@ type NodeHost struct {
 		raft        raftio.IRaftEventListener
 		sys         *sysEventListener
 	}
+	registry     INodeHostRegistry
 	nodes        registry.INodeRegistry
 	fs           vfs.IFS
 	transport    transport.ITransport
@@ -480,6 +458,12 @@ func (nh *NodeHost) RaftAddress() string {
 // RequestAddWitness methods.
 func (nh *NodeHost) ID() string {
 	return nh.id.String()
+}
+
+// GetNodeHostRegistry returns the NodeHostRegistry instance that can be used
+// to query NodeHost details shared between NodeHost instances by gossip.
+func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
+	return nh.registry, nh.nhConfig.AddressByNodeHostID
 }
 
 // StartCluster adds the specified Raft cluster node to the NodeHost and starts
@@ -1445,7 +1429,7 @@ func (nh *NodeHost) GetNodeHostInfo(opt NodeHostInfoOption) *NodeHostInfo {
 }
 
 func (nh *NodeHost) getGossipInfo() GossipInfo {
-	if r, ok := nh.nodes.(*registry.NodeHostIDRegistry); ok {
+	if r, ok := nh.nodes.(*registry.GossipRegistry); ok {
 		return GossipInfo{
 			Enabled:             true,
 			AdvertiseAddress:    r.AdvertiseAddress(),
@@ -1801,11 +1785,12 @@ func (nh *NodeHost) createNodeRegistry() error {
 	// more tests here required
 	if nh.nhConfig.AddressByNodeHostID {
 		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
-		r, err := registry.NewNodeHostIDRegistry(nh.ID(),
+		r, err := registry.NewGossipRegistry(nh.ID(), nh.getClusterInfo,
 			nh.nhConfig, streamConnections, validator)
 		if err != nil {
 			return err
 		}
+		nh.registry = r.GetNodeHostRegistry()
 		nh.nodes = r
 	} else {
 		plog.Infof("using regular node registry")
@@ -1854,15 +1839,10 @@ func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error 
 
 func (nh *NodeHost) getClusterInfo() []ClusterInfo {
 	clusterInfoList := make([]ClusterInfo, 0)
-	nodes := make([]*node, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
-		nodes = append(nodes, node)
+		clusterInfoList = append(clusterInfoList, node.getClusterInfo())
 		return true
 	})
-	for _, n := range nodes {
-		clusterInfo := n.getClusterInfo()
-		clusterInfoList = append(clusterInfoList, *clusterInfo)
-	}
 	return clusterInfoList
 }
 

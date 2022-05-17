@@ -32,62 +32,69 @@ import (
 var firstError = utils.FirstError
 var plog = logger.GetLogger("registry")
 
-// NodeHostIDRegistry is a node registry backed by gossip. It is capable of
+type getClusterInfo func() []ClusterInfo
+
+// GossipRegistry is a node registry backed by gossip. It is capable of
 // supporting NodeHosts with dynamic RaftAddress values.
-type NodeHostIDRegistry struct {
+type GossipRegistry struct {
 	nodes  *Registry
 	gossip *gossipManager
 }
 
-// NewNodeHostIDRegistry creates a new NodeHostIDRegistry instance.
-func NewNodeHostIDRegistry(nhid string,
+// NewGossipRegistry creates a new GossipRegistry instance.
+func NewGossipRegistry(nhid string, f getClusterInfo,
 	nhConfig config.NodeHostConfig, streamConnections uint64,
-	v config.TargetValidator) (INodeRegistry, error) {
-	gossip, err := newGossipManager(nhid, nhConfig)
+	v config.TargetValidator) (*GossipRegistry, error) {
+	gossip, err := newGossipManager(nhid, f, nhConfig)
 	if err != nil {
 		return nil, err
 	}
-	r := &NodeHostIDRegistry{
+	r := &GossipRegistry{
 		nodes:  NewNodeRegistry(streamConnections, v),
 		gossip: gossip,
 	}
 	return r, nil
 }
 
-// Close closes the NodeHostIDRegistry instance.
-func (n *NodeHostIDRegistry) Close() error {
+// GetNodeHostRegistry returns the NodeHostRegistry backed by gossip.
+func (n *GossipRegistry) GetNodeHostRegistry() *NodeHostRegistry {
+	return n.gossip.GetNodeHostRegistry()
+}
+
+// Close closes the GossipRegistry instance.
+func (n *GossipRegistry) Close() error {
 	return n.gossip.Close()
 }
 
 // AdvertiseAddress returns the advertise address of the gossip service.
-func (n *NodeHostIDRegistry) AdvertiseAddress() string {
+func (n *GossipRegistry) AdvertiseAddress() string {
 	return n.gossip.advertiseAddress()
 }
 
 // NumMembers returns the number of live nodes known by the gossip service.
-func (n *NodeHostIDRegistry) NumMembers() int {
+func (n *GossipRegistry) NumMembers() int {
 	return n.gossip.numMembers()
 }
 
 // Add adds a new node with its known NodeHostID to the registry.
-func (n *NodeHostIDRegistry) Add(clusterID uint64,
+func (n *GossipRegistry) Add(clusterID uint64,
 	nodeID uint64, target string) {
 	n.nodes.Add(clusterID, nodeID, target)
 }
 
 // Remove removes the specified node from the registry.
-func (n *NodeHostIDRegistry) Remove(clusterID uint64, nodeID uint64) {
+func (n *GossipRegistry) Remove(clusterID uint64, nodeID uint64) {
 	n.nodes.Remove(clusterID, nodeID)
 }
 
 // RemoveCluster removes the specified node from the registry.
-func (n *NodeHostIDRegistry) RemoveCluster(clusterID uint64) {
+func (n *GossipRegistry) RemoveCluster(clusterID uint64) {
 	n.nodes.RemoveCluster(clusterID)
 }
 
 // Resolve returns the current RaftAddress and connection key of the specified
 // node. It returns ErrUnknownTarget when the RaftAddress is unknown.
-func (n *NodeHostIDRegistry) Resolve(clusterID uint64,
+func (n *GossipRegistry) Resolve(clusterID uint64,
 	nodeID uint64) (string, string, error) {
 	target, key, err := n.nodes.Resolve(clusterID, nodeID)
 	if err != nil {
@@ -137,16 +144,42 @@ func (d *eventDelegate) start() {
 }
 
 type delegate struct {
-	raftAddress string
+	raftAddress    string
+	getClusterInfo getClusterInfo
+	view           *view
 }
 
 func (d *delegate) NodeMeta(limit int) []byte {
 	return []byte(d.raftAddress)
 }
-func (d *delegate) NotifyMsg([]byte)                           {}
-func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte { return nil }
-func (d *delegate) LocalState(join bool) []byte                { return nil }
-func (d *delegate) MergeRemoteState(buf []byte, join bool)     {}
+func (d *delegate) NotifyMsg(buf []byte) {
+	d.view.updateFrom(buf)
+}
+
+func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
+	if d.getClusterInfo != nil {
+		d.view.update(d.getClusterInfo())
+	}
+	data := d.view.getGossipData(limit - overhead)
+	if data == nil {
+		return nil
+	}
+
+	result := make([][]byte, 1)
+	result[0] = data
+	return result
+}
+
+func (d *delegate) MergeRemoteState(buf []byte, join bool) {
+	d.view.updateFrom(buf)
+}
+
+func (d *delegate) LocalState(join bool) []byte {
+	if d.getClusterInfo != nil {
+		d.view.update(d.getClusterInfo())
+	}
+	return d.view.getFullSyncData()
+}
 
 func parseAddress(addr string) (string, int, error) {
 	host, sp, err := net.SplitHostPort(addr)
@@ -165,16 +198,21 @@ type gossipManager struct {
 	cfg      *memberlist.Config
 	list     *memberlist.Memberlist
 	ed       *eventDelegate
+	view     *view
 	stopper  *syncutil.Stopper
 }
 
-func newGossipManager(nhid string,
+func newGossipManager(nhid string, f getClusterInfo,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
 	stopper := syncutil.NewStopper()
 	ed := newEventDelegate(stopper)
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Logger = newGossipLogWrapper()
 	cfg.Name = nhid
+	cfg.PushPullInterval = 500 * time.Millisecond
+	cfg.GossipInterval = 250 * time.Millisecond
+	cfg.GossipNodes = 6
+	cfg.UDPBufferSize = 32 * 1024
 	if nhConfig.Expert.TestGossipProbeInterval > 0 {
 		plog.Infof("gossip probe interval set to %s",
 			nhConfig.Expert.TestGossipProbeInterval)
@@ -194,8 +232,14 @@ func newGossipManager(nhid string,
 		cfg.AdvertiseAddr = aAddr
 		cfg.AdvertisePort = aPort
 	}
-	cfg.Delegate = &delegate{raftAddress: nhConfig.RaftAddress}
+	view := newView(nhConfig.GetDeploymentID())
+	cfg.Delegate = &delegate{
+		raftAddress:    nhConfig.RaftAddress,
+		getClusterInfo: f,
+		view:           view,
+	}
 	cfg.Events = ed
+
 	list, err := memberlist.Create(cfg)
 	if err != nil {
 		plog.Errorf("failed to create memberlist, %v", err)
@@ -208,6 +252,7 @@ func newGossipManager(nhid string,
 		cfg:      cfg,
 		list:     list,
 		ed:       ed,
+		view:     view,
 		stopper:  stopper,
 	}
 	g.join(seed)
@@ -249,6 +294,12 @@ func (g *gossipManager) Close() error {
 		cerr = errors.Wrapf(cerr, "shutdown memberlist failed")
 	}
 	return firstError(err, cerr)
+}
+
+func (g *gossipManager) GetNodeHostRegistry() *NodeHostRegistry {
+	return &NodeHostRegistry{
+		view: g.view,
+	}
 }
 
 func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {

@@ -1584,10 +1584,10 @@ func (n *node) notifyConfigChange() {
 	})
 }
 
-func (n *node) getClusterInfo() *ClusterInfo {
+func (n *node) getClusterInfo() ClusterInfo {
 	v := n.clusterInfo.Load()
 	if v == nil {
-		return &ClusterInfo{
+		return ClusterInfo{
 			ClusterID:        n.clusterID,
 			NodeID:           n.nodeID,
 			Pending:          true,
@@ -1595,7 +1595,7 @@ func (n *node) getClusterInfo() *ClusterInfo {
 		}
 	}
 	ci := v.(*ClusterInfo)
-	return &ClusterInfo{
+	return ClusterInfo{
 		ClusterID:         ci.ClusterID,
 		NodeID:            ci.NodeID,
 		IsLeader:          n.isLeader(),

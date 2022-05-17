@@ -24,7 +24,7 @@ import (
 	"github.com/lni/dragonboat/v3/internal/id"
 )
 
-func TestNodeHostIDRegistry(t *testing.T) {
+func TestGossipRegistry(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	nhid := "nhid-12345"
 	nhConfig := config.NodeHostConfig{
@@ -35,7 +35,7 @@ func TestNodeHostIDRegistry(t *testing.T) {
 			Seed:             []string{"127.0.0.1:26002"},
 		},
 	}
-	r, err := NewNodeHostIDRegistry(nhid, nhConfig, 1, id.IsNodeHostID)
+	r, err := NewGossipRegistry(nhid, nil, nhConfig, 1, id.IsNodeHostID)
 	if err != nil {
 		t.Fatalf("failed to create the registry, %v", err)
 	}
@@ -44,7 +44,7 @@ func TestNodeHostIDRegistry(t *testing.T) {
 			t.Fatalf("failed to close registry %v", err)
 		}
 	}()
-	if r.(*NodeHostIDRegistry).NumMembers() != 1 {
+	if r.NumMembers() != 1 {
 		t.Errorf("num member result unexpected")
 	}
 	r.Add(123, 456, nhid)
@@ -87,7 +87,7 @@ func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 			Seed:             []string{"127.0.0.1:26002"},
 		},
 	}
-	m, err := newGossipManager(nhid, nhConfig)
+	m, err := newGossipManager(nhid, nil, nhConfig)
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}
@@ -137,7 +137,7 @@ func TestGossipManagerCanGossip(t *testing.T) {
 			Seed:             []string{"127.0.0.1:26001"},
 		},
 	}
-	m1, err := newGossipManager(nhid1, nhConfig1)
+	m1, err := newGossipManager(nhid1, nil, nhConfig1)
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}
@@ -146,7 +146,7 @@ func TestGossipManagerCanGossip(t *testing.T) {
 			t.Fatalf("failed to close gossip manager %v", err)
 		}
 	}()
-	m2, err := newGossipManager(nhid2, nhConfig2)
+	m2, err := newGossipManager(nhid2, nil, nhConfig2)
 	if err != nil {
 		t.Fatalf("gossip manager failed to start, %v", err)
 	}

@@ -184,6 +184,9 @@ test-utils:
 .PHONY: test-tan
 test-tan:
 	$(GOTEST) $(PKGNAME)/internal/tan
+.PHONY: test-registry
+test-registry:
+	$(GOTEST) $(PKGNAME)/internal/registry
 .PHONY: test-cov
 test-cov:
 	$(GOTEST) -coverprofile=coverage.txt -covermode=atomic
