@@ -53,6 +53,44 @@ func TestGetFullSyncData(t *testing.T) {
 	assert.Equal(t, v, v2)
 }
 
+func TestConfigChangeIndexIsChecked(t *testing.T) {
+	v := newView(123)
+	cil := getTestClusterInfo()
+	v.update(cil)
+
+	update := []ClusterInfo{
+		{
+			ClusterID:         1340,
+			ConfigChangeIndex: 300,
+			Nodes: map[uint64]string{
+				1200: "myaddress1",
+				4300: "theiraddress2",
+			},
+		},
+	}
+	v.update(update)
+	ci, ok := v.mu.nodehosts[1340]
+	assert.True(t, ok)
+	assert.Equal(t, uint64(126200), ci.ConfigChangeIndex)
+	assert.Equal(t, 3, len(ci.Nodes))
+
+	update = []ClusterInfo{
+		{
+			ClusterID:         1340,
+			ConfigChangeIndex: 226200,
+			Nodes: map[uint64]string{
+				1200: "myaddress1",
+				4300: "theiraddress2",
+			},
+		},
+	}
+	v.update(update)
+	ci, ok = v.mu.nodehosts[1340]
+	assert.True(t, ok)
+	assert.Equal(t, uint64(226200), ci.ConfigChangeIndex)
+	assert.Equal(t, 2, len(ci.Nodes))
+}
+
 func TestDeploymentIDIsChecked(t *testing.T) {
 	v := newView(123)
 	cil := getTestClusterInfo()

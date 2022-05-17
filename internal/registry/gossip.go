@@ -212,7 +212,11 @@ type delegate struct {
 }
 
 func (d *delegate) NodeMeta(limit int) []byte {
-	return d.meta.marshal()
+	m := d.meta.marshal()
+	if len(m) > limit {
+		panic("meta message is too big")
+	}
+	return m
 }
 
 func (d *delegate) NotifyMsg(buf []byte) {
@@ -226,6 +230,9 @@ func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
 	data := d.view.getGossipData(limit - overhead)
 	if data == nil {
 		return nil
+	}
+	if len(data) > limit-overhead {
+		panic("broadcast message is too big")
 	}
 
 	result := make([][]byte, 1)
