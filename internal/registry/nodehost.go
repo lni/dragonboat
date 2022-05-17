@@ -26,6 +26,8 @@ func (r *NodeHostRegistry) NumOfClusters() int {
 	return r.view.nodeHostCount()
 }
 
+// GetMeta returns gossip metadata associated with the specified NodeHost
+// instance.
 func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
 	m, ok := r.store.get(nhID)
 	if !ok {
