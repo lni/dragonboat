@@ -18,4 +18,5 @@ package dragonboat
 // instances via gossip.
 type INodeHostRegistry interface {
 	NumOfClusters() int
+	GetMeta(nhID string) ([]byte, bool)
 }

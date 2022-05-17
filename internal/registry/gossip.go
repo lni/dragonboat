@@ -15,6 +15,9 @@
 package registry
 
 import (
+	"bytes"
+	"encoding/binary"
+	"encoding/gob"
 	"net"
 	"strconv"
 	"sync"
@@ -33,6 +36,61 @@ var firstError = utils.FirstError
 var plog = logger.GetLogger("registry")
 
 type getClusterInfo func() []ClusterInfo
+
+type meta struct {
+	RaftAddress string
+	Data        []byte
+}
+
+func (m *meta) marshal() []byte {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(m); err != nil {
+		panic(err)
+	}
+	data := buf.Bytes()
+	result := make([]byte, len(data)+2)
+	binary.BigEndian.PutUint16(result, uint16(len(data)))
+	copy(result[2:], data)
+	return result
+}
+
+func (m *meta) unmarshal(data []byte) bool {
+	if len(data) <= 2 {
+		return false
+	}
+	sz := binary.BigEndian.Uint16(data)
+	if sz > 512 {
+		return false
+	}
+	data = data[:sz+2]
+	buf := bytes.NewBuffer(data[2:])
+	dec := gob.NewDecoder(buf)
+	if err := dec.Decode(m); err != nil {
+		return false
+	}
+	return true
+}
+
+type metaStore struct {
+	nodes sync.Map
+}
+
+func (m *metaStore) put(name string, md meta) {
+	m.nodes.Store(name, md)
+}
+
+func (m *metaStore) get(name string) (meta, bool) {
+	v, ok := m.nodes.Load(name)
+	if ok {
+		return v.(meta), true
+	}
+	return meta{}, false
+}
+
+func (m *metaStore) delete(name string) {
+	m.nodes.Delete(name)
+}
 
 // GossipRegistry is a node registry backed by gossip. It is capable of
 // supporting NodeHosts with dynamic RaftAddress values.
@@ -111,14 +169,15 @@ type eventDelegate struct {
 	memberlist.ChannelEventDelegate
 	ch      chan memberlist.NodeEvent
 	stopper *syncutil.Stopper
-	nodes   sync.Map
+	store   *metaStore
 }
 
-func newEventDelegate(s *syncutil.Stopper) *eventDelegate {
+func newEventDelegate(s *syncutil.Stopper, store *metaStore) *eventDelegate {
 	ch := make(chan memberlist.NodeEvent, 10)
 	ed := &eventDelegate{
 		stopper:              s,
 		ch:                   ch,
+		store:                store,
 		ChannelEventDelegate: memberlist.ChannelEventDelegate{Ch: ch},
 	}
 	return ed
@@ -132,9 +191,12 @@ func (d *eventDelegate) start() {
 				return
 			case e := <-d.ch:
 				if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
-					d.nodes.Store(e.Node.Name, string(e.Node.Meta))
+					var m meta
+					if m.unmarshal(e.Node.Meta) {
+						d.store.put(e.Node.Name, m)
+					}
 				} else if e.Event == memberlist.NodeLeave {
-					d.nodes.Delete(e.Node.Name)
+					d.store.delete(e.Node.Name)
 				} else {
 					panic("unknown event type")
 				}
@@ -144,14 +206,15 @@ func (d *eventDelegate) start() {
 }
 
 type delegate struct {
-	raftAddress    string
 	getClusterInfo getClusterInfo
+	meta           meta
 	view           *view
 }
 
 func (d *delegate) NodeMeta(limit int) []byte {
-	return []byte(d.raftAddress)
+	return d.meta.marshal()
 }
+
 func (d *delegate) NotifyMsg(buf []byte) {
 	d.view.updateFrom(buf)
 }
@@ -199,13 +262,15 @@ type gossipManager struct {
 	list     *memberlist.Memberlist
 	ed       *eventDelegate
 	view     *view
+	store    *metaStore
 	stopper  *syncutil.Stopper
 }
 
 func newGossipManager(nhid string, f getClusterInfo,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
 	stopper := syncutil.NewStopper()
-	ed := newEventDelegate(stopper)
+	store := &metaStore{}
+	ed := newEventDelegate(stopper, store)
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Logger = newGossipLogWrapper()
 	cfg.Name = nhid
@@ -233,8 +298,12 @@ func newGossipManager(nhid string, f getClusterInfo,
 		cfg.AdvertisePort = aPort
 	}
 	view := newView(nhConfig.GetDeploymentID())
+	meta := meta{
+		RaftAddress: nhConfig.RaftAddress,
+		Data:        nhConfig.Gossip.Meta,
+	}
 	cfg.Delegate = &delegate{
-		raftAddress:    nhConfig.RaftAddress,
+		meta:           meta,
 		getClusterInfo: f,
 		view:           view,
 	}
@@ -253,6 +322,7 @@ func newGossipManager(nhid string, f getClusterInfo,
 		list:     list,
 		ed:       ed,
 		view:     view,
+		store:    store,
 		stopper:  stopper,
 	}
 	g.join(seed)
@@ -298,7 +368,8 @@ func (g *gossipManager) Close() error {
 
 func (g *gossipManager) GetNodeHostRegistry() *NodeHostRegistry {
 	return &NodeHostRegistry{
-		view: g.view,
+		view:  g.view,
+		store: g.store,
 	}
 }
 
@@ -306,8 +377,8 @@ func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
 	if g.cfg.Name == nhid {
 		return g.nhConfig.RaftAddress, true
 	}
-	if v, ok := g.ed.nodes.Load(nhid); ok {
-		return v.(string), true
+	if v, ok := g.ed.store.get(nhid); ok {
+		return v.RaftAddress, true
 	}
 	return "", false
 }

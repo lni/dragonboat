@@ -970,6 +970,9 @@ type GossipConfig struct {
 	// include AdvertiseAddresses from other NodeHost instances that you plan to
 	// launch shortly afterwards.
 	Seed []string
+	// Meta is the extra metadata to be included in gossip node's Meta field. It
+	// will be propagated to all other NodeHost instances via gossip.
+	Meta []byte
 }
 
 // IsEmpty returns a boolean flag indicating whether the GossipConfig instance

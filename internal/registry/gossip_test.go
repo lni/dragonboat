@@ -19,10 +19,34 @@ import (
 	"time"
 
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/id"
 )
+
+func TestMeta(t *testing.T) {
+	m := meta{
+		RaftAddress: "localhost:9090",
+		Data:        []byte("localhost:1080"),
+	}
+	data := m.marshal()
+	m2 := meta{}
+	assert.True(t, m2.unmarshal(data))
+	assert.Equal(t, m, m2)
+}
+
+func TestMetaStore(t *testing.T) {
+	m := metaStore{}
+	meta := meta{RaftAddress: "localhost:9090"}
+	m.put("123", meta)
+	v, ok := m.get("123")
+	assert.True(t, ok)
+	assert.Equal(t, meta, v)
+	m.delete("123")
+	_, ok = m.get("123")
+	assert.False(t, ok)
+}
 
 func TestGossipRegistry(t *testing.T) {
 	defer leaktest.AfterTest(t)()

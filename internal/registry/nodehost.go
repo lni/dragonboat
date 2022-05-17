@@ -16,11 +16,20 @@ package registry
 
 // NodeHostRegistry is a NodeHost info registry backed by gossip.
 type NodeHostRegistry struct {
-	view *view
+	store *metaStore
+	view  *view
 }
 
 // NumOfClusters returns the number of clusters known to the current NodeHost
 // instance.
 func (r *NodeHostRegistry) NumOfClusters() int {
 	return r.view.nodeHostCount()
+}
+
+func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
+	m, ok := r.store.get(nhID)
+	if !ok {
+		return nil, false
+	}
+	return m.Data, true
 }

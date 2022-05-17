@@ -915,6 +915,134 @@ func testAddressByNodeHostID(t *testing.T,
 	t.Fatalf("failed to make proposal")
 }
 
+func TestNodeHostRegistry(t *testing.T) {
+	fs := vfs.GetTestFS()
+	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	addr1 := nodeHostTestAddr1
+	addr2 := nodeHostTestAddr2
+	nhc1 := config.NodeHostConfig{
+		NodeHostDir:         datadir1,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
+		RaftAddress:         addr1,
+		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
+	}
+	nhc1.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25001",
+		AdvertiseAddress: "127.0.0.1:25001",
+		Seed:             []string{"127.0.0.1:25002"},
+	}
+	nhc2 := config.NodeHostConfig{
+		NodeHostDir:         datadir2,
+		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
+		RaftAddress:         addr2,
+		AddressByNodeHostID: true,
+		Expert: config.ExpertConfig{
+			FS:                      fs,
+			TestGossipProbeInterval: 50 * time.Millisecond,
+		},
+	}
+	nhc2.Gossip = config.GossipConfig{
+		BindAddress:      "127.0.0.1:25002",
+		AdvertiseAddress: "127.0.0.1:25002",
+		Seed:             []string{"127.0.0.1:25001"},
+	}
+	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhc1.Gossip.Meta = []byte(testNodeHostID1)
+	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc2.Gossip.Meta = []byte(testNodeHostID2)
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create nh, %v", err)
+	}
+	defer nh1.Close()
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create nh2, %v", err)
+	}
+	defer nh2.Close()
+	peers := make(map[uint64]string)
+	peers[1] = testNodeHostID1
+	createSM := func(uint64, uint64) sm.IStateMachine {
+		return &PST{}
+	}
+	rc := config.Config{
+		ClusterID:       1,
+		NodeID:          1,
+		ElectionRTT:     10,
+		HeartbeatRTT:    1,
+		SnapshotEntries: 0,
+	}
+	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.ClusterID = 2
+	peers[1] = testNodeHostID2
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.ClusterID = 3
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	waitForLeaderToBeElected(t, nh2, 2)
+	waitForLeaderToBeElected(t, nh2, 3)
+	good := false
+	for i := 0; i < 1000; i++ {
+		r1, ok := nh1.GetNodeHostRegistry()
+		assert.True(t, ok)
+		r2, ok := nh2.GetNodeHostRegistry()
+		assert.True(t, ok)
+		if r1.NumOfClusters() != 3 || r2.NumOfClusters() != 3 {
+			time.Sleep(10 * time.Millisecond)
+		} else {
+			good = true
+			break
+		}
+	}
+	if !good {
+		t.Fatalf("registry failed to report the expected num of clusters")
+	}
+	rc.ClusterID = 100
+	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh2, 100)
+	for i := 0; i < 1000; i++ {
+		r1, ok := nh1.GetNodeHostRegistry()
+		assert.True(t, ok)
+		r2, ok := nh2.GetNodeHostRegistry()
+		assert.True(t, ok)
+		if r1.NumOfClusters() != 4 || r2.NumOfClusters() != 4 {
+			time.Sleep(10 * time.Millisecond)
+		} else {
+			v1, ok := r1.GetMeta(testNodeHostID1)
+			assert.True(t, ok)
+			assert.Equal(t, testNodeHostID1, string(v1))
+			v2, ok := r1.GetMeta(testNodeHostID2)
+			assert.True(t, ok)
+			assert.Equal(t, testNodeHostID2, string(v2))
+			return
+		}
+	}
+	t.Fatalf("failed to report the expected num of clusters")
+}
+
 func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
