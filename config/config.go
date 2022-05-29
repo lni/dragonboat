@@ -936,7 +936,7 @@ type ExpertConfig struct {
 	FS IFS
 	// TestNodeHostID is the NodeHostID value to be used by the NodeHost instance.
 	// This field is expected to be used in tests only.
-	TestNodeHostID uint64
+	TestNodeHostID string
 	// TestGossipProbeInterval define the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration

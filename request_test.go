@@ -49,7 +49,6 @@ func TestIsTempError(t *testing.T) {
 		{ErrRejected, false},
 		{ErrClusterNotReady, true},
 		{ErrInvalidTarget, false},
-		{ErrInvalidNodeHostID, false},
 		{ErrBadKey, false},
 		{ErrPendingLeaderTransferExist, true},
 		{ErrPendingConfigChangeExist, true},

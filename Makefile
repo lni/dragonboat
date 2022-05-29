@@ -99,11 +99,11 @@ TEST_OPTIONS=test $(GOCMDTAGS) -timeout=2400s -count=1 $(VERBOSE) \
 .PHONY: dragonboat-test
 dragonboat-test: test-raft test-raftpb test-rsm test-logdb test-transport    \
 	test-multiraft test-config test-client test-server test-tools test-fs   	 \
-	test-id test-utils test-tan
+	test-id test-utils test-tan test-registry
 .PHONY: ci-test
 ci-test: test-raft test-raftpb test-rsm test-logdb test-transport 		       \
   test-config test-client test-server test-tests test-tools test-fs 				 \
-	test-id test-utils test-tan
+	test-id test-utils test-tan test-registry
 .PHONY: test
 test: dragonboat-test test-tests
 .PHONY: dev-test
@@ -120,7 +120,7 @@ unit-test-bin: TEST_OPTIONS=test -c -o $@.bin -tags=$(TESTTAGS) 						 \
 .PHONY: unit-test-bin
 unit-test-bin: test-raft test-raftpb test-rsm test-logdb test-transport 		 \
   test-multiraft test-config test-client test-server test-tools \
-	test-tests test-fs test-id test-utils test-tan
+	test-tests test-fs test-id test-utils test-tan test-registry
 
 ###############################################################################
 # fast tests executed for every git push

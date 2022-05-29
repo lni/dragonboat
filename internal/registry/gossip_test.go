@@ -25,6 +25,11 @@ import (
 	"github.com/lni/dragonboat/v3/internal/id"
 )
 
+const (
+	testNodeHostID1 = "123e4567-e89b-12d3-a456-426614174000"
+	testNodeHostID2 = "123e4567-e89b-12d3-a456-426614174001"
+)
+
 func TestMeta(t *testing.T) {
 	m := meta{
 		RaftAddress: "localhost:9090",
@@ -50,7 +55,7 @@ func TestMetaStore(t *testing.T) {
 
 func TestGossipRegistry(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	nhid := "nhid-12345"
+	nhid := testNodeHostID1
 	nhConfig := config.NodeHostConfig{
 		RaftAddress: "localhost:27001",
 		Gossip: config.GossipConfig{
@@ -102,7 +107,7 @@ func TestGossipRegistry(t *testing.T) {
 
 func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	nhid := "nhid-12345"
+	nhid := testNodeHostID1
 	nhConfig := config.NodeHostConfig{
 		RaftAddress: "localhost:27001",
 		Gossip: config.GossipConfig{
@@ -137,7 +142,7 @@ func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 
 func TestGossipManagerCanGossip(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	nhid1 := "nhid-12345"
+	nhid1 := testNodeHostID1
 	nhConfig1 := config.NodeHostConfig{
 		RaftAddress: "localhost:27001",
 		Expert: config.ExpertConfig{
@@ -149,7 +154,7 @@ func TestGossipManagerCanGossip(t *testing.T) {
 			Seed:             []string{"127.0.0.1:26002"},
 		},
 	}
-	nhid2 := "nhid-67890"
+	nhid2 := testNodeHostID2
 	nhConfig2 := config.NodeHostConfig{
 		RaftAddress: "localhost:27002",
 		Expert: config.ExpertConfig{

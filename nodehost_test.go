@@ -61,8 +61,8 @@ import (
 
 const (
 	defaultTestPort = 26001
-	testNodeHostID1 = "nhid-12345"
-	testNodeHostID2 = "nhid-12346"
+	testNodeHostID1 = "123e4567-e89b-12d3-a456-426614174000"
+	testNodeHostID2 = "123e4567-e89b-12d3-a456-426614174001"
 )
 
 func getTestPort() int {
@@ -852,16 +852,16 @@ func testAddressByNodeHostID(t *testing.T,
 			Seed:             []string{"127.0.0.1:25001"},
 		}
 	}
-	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	nhid1, err := id.NewUUID(testNodeHostID1)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.Value()
-	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	nhc1.Expert.TestNodeHostID = nhid1.String()
+	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc2.Expert.TestNodeHostID = nhid2.String()
 	nhc1.Expert.TransportFactory = factory
 	nhc2.Expert.TransportFactory = factory
 	nh1, err := NewNodeHost(nhc1)
@@ -953,17 +953,17 @@ func TestNodeHostRegistry(t *testing.T) {
 		AdvertiseAddress: "127.0.0.1:25002",
 		Seed:             []string{"127.0.0.1:25001"},
 	}
-	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	nhid1, err := id.NewUUID(testNodeHostID1)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.Value()
+	nhc1.Expert.TestNodeHostID = nhid1.String()
 	nhc1.Gossip.Meta = []byte(testNodeHostID1)
-	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc2.Expert.TestNodeHostID = nhid2.String()
 	nhc2.Gossip.Meta = []byte(testNodeHostID2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
@@ -1071,16 +1071,16 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 			TestGossipProbeInterval: 50 * time.Millisecond,
 		},
 	}
-	nhid1, err := id.ParseNodeHostID(testNodeHostID1)
+	nhid1, err := id.NewUUID(testNodeHostID1)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.Value()
-	nhid2, err := id.ParseNodeHostID(testNodeHostID2)
+	nhc1.Expert.TestNodeHostID = nhid1.String()
+	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.Value()
+	nhc2.Expert.TestNodeHostID = nhid2.String()
 	nhc1.Gossip = config.GossipConfig{
 		BindAddress:      "127.0.0.1:25001",
 		AdvertiseAddress: "127.0.0.1:25001",
@@ -1701,7 +1701,7 @@ func TestNodeHostIDIsStatic(t *testing.T) {
 
 func TestNodeHostIDCanBeSet(t *testing.T) {
 	fs := vfs.GetTestFS()
-	nhid := uint64(1234567890)
+	nhid := testNodeHostID1
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
 			c.Expert.TestNodeHostID = nhid
@@ -1709,7 +1709,7 @@ func TestNodeHostIDCanBeSet(t *testing.T) {
 		},
 		noElection: true,
 		tf: func(nh *NodeHost) {
-			nhid, err := id.NewNodeHostID(nhid)
+			nhid, err := id.NewUUID(nhid)
 			if err != nil {
 				t.Fatalf("failed to create NodeHostID")
 			}

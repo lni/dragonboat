@@ -276,7 +276,7 @@ type NodeHost struct {
 	nodes        registry.INodeRegistry
 	fs           vfs.IFS
 	transport    transport.ITransport
-	id           *id.NodeHostID
+	id           *id.UUID
 	stopper      *syncutil.Stopper
 	msgHandler   *messageHandler
 	env          *server.Env
@@ -1665,14 +1665,14 @@ func (nh *NodeHost) cciUpdated() {
 }
 
 func (nh *NodeHost) loadNodeHostID() error {
-	if nh.nhConfig.Expert.TestNodeHostID == 0 {
+	if len(nh.nhConfig.Expert.TestNodeHostID) == 0 {
 		nhid, err := nh.env.LoadNodeHostID()
 		if err != nil {
 			return err
 		}
 		nh.id = nhid
 	} else {
-		nhid, err := id.NewNodeHostID(nh.nhConfig.Expert.TestNodeHostID)
+		nhid, err := id.NewUUID(nh.nhConfig.Expert.TestNodeHostID)
 		if err != nil {
 			return err
 		}

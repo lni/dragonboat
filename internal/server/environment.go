@@ -82,7 +82,7 @@ type Env struct {
 	fs           vfs.IFS
 	randomSource random.Source
 	partitioner  IPartitioner
-	nhid         *id.NodeHostID
+	nhid         *id.UUID
 	flocks       map[string]io.Closer
 	hostname     string
 	nhConfig     config.NodeHostConfig
@@ -208,9 +208,9 @@ func (env *Env) NodeHostID() string {
 // LoadNodeHostID loads the NodeHost ID value from the ID file. A new ID file
 // will be created with a randomly assigned NodeHostID when running for the
 // first time.
-func (env *Env) LoadNodeHostID() (*id.NodeHostID, error) {
+func (env *Env) LoadNodeHostID() (*id.UUID, error) {
 	dir, _ := env.getDataDirs()
-	nhID := id.NewRandomNodeHostID()
+	nhID := id.New()
 	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
 		if err := fileutil.GetFlagFileContent(dir,
 			idFilename, nhID, env.fs); err != nil {
@@ -228,7 +228,7 @@ func (env *Env) LoadNodeHostID() (*id.NodeHostID, error) {
 
 // SetNodeHostID sets the NodeHostID value recorded in Env. This is typically
 // invoked by tests.
-func (env *Env) SetNodeHostID(nhid *id.NodeHostID) {
+func (env *Env) SetNodeHostID(nhid *id.UUID) {
 	if env.nhid != nil {
 		panic("trying to change NodeHostID")
 	}

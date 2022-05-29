@@ -16,101 +16,45 @@ package id
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIsNodeHostID(t *testing.T) {
-	nhidTests := []string{
-		"nhid-1",
-		"nhid-123456789",
-		"nhid-4023449441798808321",
-	}
-	notnhidTests := []string{
-		"",
-		"nhid-0",
-		"1234567890",
-		"nhid1234567890",
-		"nhid4023449441798808321",
-		"NHID-4023449441798808321",
-		"nhi-4023449441798808321",
-	}
-	for _, v := range nhidTests {
-		if !IsNodeHostID(v) {
-			t.Errorf("%s not considered as a nhid", v)
-		}
-	}
-	for _, v := range notnhidTests {
-		if IsNodeHostID(v) {
-			t.Errorf("%s considered as a nhid", v)
-		}
-	}
+	v := New()
+	assert.True(t, IsNodeHostID(v.String()))
+	assert.False(t, IsNodeHostID("this is not a uuid"))
 }
 
-func TestParseNodeHostID(t *testing.T) {
-	nhidTests := []string{
-		"nhid-1",
-		"nhid-123456789",
-		"nhid-4023449441798808321",
+func TestNew(t *testing.T) {
+	values := make(map[string]struct{})
+	for i := 0; i < 1000; i++ {
+		u := New()
+		values[u.String()] = struct{}{}
 	}
-	notnhidTests := []string{
-		"",
-		"nhid-0",
-		"1234567890",
-		"nhid1234567890",
-		"nhid4023449441798808321",
-		"NHID-4023449441798808321",
-		"nhi-4023449441798808321",
-	}
-	for _, v := range nhidTests {
-		if _, err := ParseNodeHostID(v); err != nil {
-			t.Errorf("%s considered as a nhid", v)
-		}
-	}
-	for _, v := range notnhidTests {
-		if _, err := ParseNodeHostID(v); err == nil {
-			t.Errorf("%s not considered as a nhid", v)
-		}
-	}
+	assert.Equal(t, 1000, len(values))
 }
 
-func TestZeroIDNotAllowed(t *testing.T) {
-	if _, err := NewNodeHostID(0); err == nil {
-		t.Errorf("0 nhid allowed")
-	}
+func TestNewUUID(t *testing.T) {
+	u := New()
+	v, err := NewUUID(u.String())
+	assert.NoError(t, err)
+	assert.Equal(t, u.String(), v.String())
 }
 
-func TestNHIDCanBeMarshaled(t *testing.T) {
-	for _, v := range []uint64{1, 123, 1234567890, 4023449441798808321} {
-		nhid, err := NewNodeHostID(v)
-		if err != nil {
-			t.Fatalf("failed to get nhid")
-		}
-		data, err := nhid.Marshal()
-		if err != nil {
-			t.Fatalf("failed to marshal %v", err)
-		}
-		nn := &NodeHostID{}
-		if err := nn.Unmarshal(data); err != nil {
-			t.Fatalf("failed to unmarshal %v", err)
-		}
-		if nn.Value() != v {
-			t.Errorf("value changed, got %d, expect %d", nn.Value(), v)
-		}
-	}
-}
+func TestMarshalUnMarshal(t *testing.T) {
+	v := New()
+	data, err := v.Marshal()
+	assert.NoError(t, err)
+	v2 := New()
+	assert.NoError(t, v2.Unmarshal(data))
+	assert.Equal(t, v.String(), v2.String())
 
-func TestString(t *testing.T) {
-	nhidTests := []string{
-		"nhid-1",
-		"nhid-123456789",
-		"nhid-4023449441798808321",
-	}
-	for _, v := range nhidTests {
-		nhid, err := ParseNodeHostID(v)
-		if err != nil {
-			t.Fatalf("failed to parse nhid")
-		}
-		if v != nhid.String() {
-			t.Fatalf("string value changed, got %s, expect %s", nhid.String(), v)
-		}
-	}
+	v3 := New()
+	data, err = v3.Marshal()
+	data2 := make([]byte, len(data))
+	l, err := v3.MarshalTo(data2)
+	assert.NoError(t, err)
+	assert.Equal(t, len(data), l)
+	assert.Equal(t, data, data2)
 }
