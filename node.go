@@ -20,7 +20,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
-	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v3/client"
 	"github.com/lni/dragonboat/v3/config"
@@ -92,7 +91,7 @@ type node struct {
 	sm                    *rsm.StateMachine
 	incomingReadIndexes   *readIndexQueue
 	incomingProposals     *entryQueue
-	snapshotLock          syncutil.Lock
+	snapshotLock          sync.Mutex
 	pendingProposals      pendingProposal
 	pendingReadIndexes    pendingReadIndex
 	pendingConfigChange   pendingConfigChange
@@ -182,7 +181,6 @@ func newNode(peers map[uint64]string,
 		sendRaftMessage:       sendMessage,
 		mq:                    mq,
 		logdb:                 ldb,
-		snapshotLock:          syncutil.NewLock(),
 		syncTask:              newTask(syncTaskInterval),
 		sysEvents:             sysEvents,
 		notifyCommit:          notifyCommit,
