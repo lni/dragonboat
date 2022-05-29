@@ -52,6 +52,7 @@ func TestMarshalUnMarshal(t *testing.T) {
 
 	v3 := New()
 	data, err = v3.Marshal()
+	assert.NoError(t, err)
 	data2 := make([]byte, len(data))
 	l, err := v3.MarshalTo(data2)
 	assert.NoError(t, err)

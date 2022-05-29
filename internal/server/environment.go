@@ -36,6 +36,8 @@ import (
 
 var (
 	plog = logger.GetLogger("server")
+	// ErrNodeHostIDChanged indicates that NodeHostID changed.
+	ErrNodeHostIDChanged = errors.New("NodeHostID changed")
 	// ErrHardSettingChanged indicates that one or more of the hard settings
 	// changed.
 	ErrHardSettingChanged = errors.New("hard setting changed")
@@ -205,25 +207,62 @@ func (env *Env) NodeHostID() string {
 	return env.nhid.String()
 }
 
-// LoadNodeHostID loads the NodeHost ID value from the ID file. A new ID file
-// will be created with a randomly assigned NodeHostID when running for the
-// first time.
-func (env *Env) LoadNodeHostID() (*id.UUID, error) {
-	dir, _ := env.getDataDirs()
-	nhID := id.New()
-	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
-		if err := fileutil.GetFlagFileContent(dir,
-			idFilename, nhID, env.fs); err != nil {
-			return nil, err
+// PrepareNodeHostID prepares NodeHostID and stores it in the expected data
+// file.
+func (env *Env) PrepareNodeHostID(nhID string) (*id.UUID, error) {
+	v, err := env.loadNodeHostID()
+	if err != nil {
+		return nil, err
+	}
+	if v != nil {
+		// we already have NodeHostID registered
+		if len(nhID) > 0 {
+			n, err := id.NewUUID(nhID)
+			if err != nil {
+				return nil, err
+			}
+			if v.String() != n.String() {
+				return nil, errors.Wrapf(ErrNodeHostIDChanged, "existing %s, new %s",
+					v.String(), n.String())
+			}
 		}
-	} else {
-		if err := fileutil.CreateFlagFile(dir,
-			idFilename, nhID, env.fs); err != nil {
+		env.nhid = v
+		return v, nil
+	}
+	// we don't have NodeHostID registered
+	v = id.New()
+	if len(nhID) > 0 {
+		v, err = id.NewUUID(nhID)
+		if err != nil {
 			return nil, err
 		}
 	}
-	env.nhid = nhID
-	return nhID, nil
+	if err := env.storeNodeHostID(v); err != nil {
+		return nil, err
+	}
+	env.nhid = v
+	return v, nil
+}
+
+func (env *Env) storeNodeHostID(nhID *id.UUID) error {
+	dir, _ := env.getDataDirs()
+	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
+		panic("trying to overwrite NodeHostID file")
+	}
+	return fileutil.CreateFlagFile(dir, idFilename, nhID, env.fs)
+}
+
+func (env *Env) loadNodeHostID() (*id.UUID, error) {
+	dir, _ := env.getDataDirs()
+	var storedUUID id.UUID
+	if fileutil.HasFlagFile(dir, idFilename, env.fs) {
+		if err := fileutil.GetFlagFileContent(dir,
+			idFilename, &storedUUID, env.fs); err != nil {
+			return nil, err
+		}
+		return &storedUUID, nil
+	}
+	return nil, nil
 }
 
 // SetNodeHostID sets the NodeHostID value recorded in Env. This is typically

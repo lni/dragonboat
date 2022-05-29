@@ -252,6 +252,12 @@ type NodeHostConfig struct {
 	// thus allowing all NodeHost instances with deployment ID 0 to communicate
 	// with each other.
 	DeploymentID uint64
+	// NodeHostID specifies what NodeHostID to use. By default, when NodeHostID
+	// is empty, a random UUID will be generated and recorded by the system.
+	// Specifying a concrete NodeHostID here will cause the specified NodeHostID
+	// value to be used. NodeHostID is only used when AddressByNodeHostID is
+	// set to true.
+	NodeHostID string
 	// WALDir is the directory used for storing the WAL of Raft entries. It is
 	// recommended to use low latency storage such as NVME SSD with power loss
 	// protection to store such WAL data. Leave WALDir to have zero value will
@@ -934,9 +940,6 @@ type ExpertConfig struct {
 	LogDB LogDBConfig
 	// FS is the filesystem instance used in tests.
 	FS IFS
-	// TestNodeHostID is the NodeHostID value to be used by the NodeHost instance.
-	// This field is expected to be used in tests only.
-	TestNodeHostID string
 	// TestGossipProbeInterval define the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration

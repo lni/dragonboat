@@ -19,8 +19,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
+	"github.com/lni/dragonboat/v3/internal/id"
 	"github.com/lni/dragonboat/v3/internal/settings"
 	"github.com/lni/dragonboat/v3/internal/vfs"
 	"github.com/lni/dragonboat/v3/raftio"
@@ -257,6 +260,71 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 		t.Fatalf("failed to stop env %v", err)
 	}
 	reportLeakedFD(fs, t)
+}
+
+func TestNodeHostIDCanBeGenerated(t *testing.T) {
+	fs := vfs.GetTestFS()
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	c := getTestNodeHostConfig()
+	env, err := NewEnv(c, fs)
+	if err != nil {
+		t.Fatalf("failed to create env %v", err)
+	}
+	v, err := env.PrepareNodeHostID("")
+	if err != nil {
+		t.Fatalf("failed to prepare nodehost id %v", err)
+	}
+	if len(v.String()) == 0 {
+		t.Fatalf("failed to generate UUID")
+	}
+}
+
+func TestPrepareNodeHostIDWillReportNodeHostIDChange(t *testing.T) {
+	fs := vfs.GetTestFS()
+	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer func() {
+		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
+			t.Fatalf("%v", err)
+		}
+	}()
+	c := getTestNodeHostConfig()
+	env, err := NewEnv(c, fs)
+	if err != nil {
+		t.Fatalf("failed to create env %v", err)
+	}
+	v, err := env.PrepareNodeHostID("")
+	if err != nil {
+		t.Fatalf("failed to prepare nodehost id %v", err)
+	}
+	// using the same uuid is okay
+	v2, err := env.PrepareNodeHostID(v.String())
+	if err != nil {
+		t.Fatalf("failed to prepare nodehost id %v", err)
+	}
+	if v2.String() != v.String() {
+		t.Fatalf("returned UUID is unexpected")
+	}
+	// change it is not allowed
+	v3 := id.New()
+	_, err = env.PrepareNodeHostID(v3.String())
+	if !errors.Is(err, ErrNodeHostIDChanged) {
+		t.Fatalf("failed to report ErrNodeHostIDChanged")
+	}
 }
 
 func TestRemoveSavedSnapshots(t *testing.T) {

@@ -1665,20 +1665,11 @@ func (nh *NodeHost) cciUpdated() {
 }
 
 func (nh *NodeHost) loadNodeHostID() error {
-	if len(nh.nhConfig.Expert.TestNodeHostID) == 0 {
-		nhid, err := nh.env.LoadNodeHostID()
-		if err != nil {
-			return err
-		}
-		nh.id = nhid
-	} else {
-		nhid, err := id.NewUUID(nh.nhConfig.Expert.TestNodeHostID)
-		if err != nil {
-			return err
-		}
-		nh.id = nhid
-		nh.env.SetNodeHostID(nh.id)
+	v, err := nh.env.PrepareNodeHostID(nh.nhConfig.NodeHostID)
+	if err != nil {
+		return err
 	}
+	nh.id = v
 	return nil
 }
 

@@ -856,12 +856,12 @@ func testAddressByNodeHostID(t *testing.T,
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.String()
+	nhc1.NodeHostID = nhid1.String()
 	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.String()
+	nhc2.NodeHostID = nhid2.String()
 	nhc1.Expert.TransportFactory = factory
 	nhc2.Expert.TransportFactory = factory
 	nh1, err := NewNodeHost(nhc1)
@@ -957,13 +957,13 @@ func TestNodeHostRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.String()
+	nhc1.NodeHostID = nhid1.String()
 	nhc1.Gossip.Meta = []byte(testNodeHostID1)
 	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.String()
+	nhc2.NodeHostID = nhid2.String()
 	nhc2.Gossip.Meta = []byte(testNodeHostID2)
 	nh1, err := NewNodeHost(nhc1)
 	if err != nil {
@@ -1075,12 +1075,12 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc1.Expert.TestNodeHostID = nhid1.String()
+	nhc1.NodeHostID = nhid1.String()
 	nhid2, err := id.NewUUID(testNodeHostID2)
 	if err != nil {
 		t.Fatalf("failed to parse nhid")
 	}
-	nhc2.Expert.TestNodeHostID = nhid2.String()
+	nhc2.NodeHostID = nhid2.String()
 	nhc1.Gossip = config.GossipConfig{
 		BindAddress:      "127.0.0.1:25001",
 		AdvertiseAddress: "127.0.0.1:25001",
@@ -1704,7 +1704,7 @@ func TestNodeHostIDCanBeSet(t *testing.T) {
 	nhid := testNodeHostID1
 	to := &testOption{
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.Expert.TestNodeHostID = nhid
+			c.NodeHostID = nhid
 			return c
 		},
 		noElection: true,
@@ -4602,6 +4602,30 @@ func TestNodeHostFileLock(t *testing.T) {
 			if err == nil {
 				defer cnh.Close()
 			}
+		}
+	}
+	runNodeHostTestDC(t, tf, !*spawnChild, fs)
+}
+
+func TestChangeNodeHostID(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func() {
+		nhc := config.NodeHostConfig{
+			NodeHostDir:    singleNodeHostTestDir,
+			RTTMillisecond: getRTTMillisecond(fs, singleNodeHostTestDir),
+			RaftAddress:    nodeHostTestAddr1,
+			Expert:         getTestExpertConfig(fs),
+		}
+		nh, err := NewNodeHost(nhc)
+		if err != nil {
+			t.Fatalf("failed to create nodehost %v", err)
+		}
+		nh.Close()
+		v := id.New()
+		nhc.NodeHostID = v.String()
+		_, err = NewNodeHost(nhc)
+		if err == nil || !errors.Is(err, server.ErrNodeHostIDChanged) {
+			t.Fatalf("failed to reject changed NodeHostID %v", err)
 		}
 	}
 	runNodeHostTestDC(t, tf, !*spawnChild, fs)
