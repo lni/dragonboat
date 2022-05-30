@@ -1337,6 +1337,7 @@ func (e *engine) processSteps(workerID uint64,
 		node.processDroppedEntries(ud)
 		node.processDroppedReadIndexes(ud)
 		node.processLogQuery(ud.LogQueryResult)
+		node.processLeaderUpdate(ud.LeaderUpdate)
 	}
 	if err := e.logdb.SaveRaftState(nodeUpdates, workerID); err != nil {
 		return err

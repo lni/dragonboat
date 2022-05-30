@@ -36,13 +36,13 @@ type raftEventListener struct {
 	readIndexDropped    *metrics.Counter
 	proposalDropped     *metrics.Counter
 	replicationRejected *metrics.Counter
-	leaderID            *uint64
 	snapshotRejected    *metrics.Counter
 	queue               *leaderInfoQueue
 	hasLeader           *metrics.Gauge
 	term                *metrics.Gauge
 	campaignLaunched    *metrics.Counter
 	campaignSkipped     *metrics.Counter
+	leaderID            uint64
 	termValue           uint64
 	nodeID              uint64
 	clusterID           uint64
@@ -52,12 +52,10 @@ type raftEventListener struct {
 var _ server.IRaftEventListener = (*raftEventListener)(nil)
 
 func newRaftEventListener(clusterID uint64, nodeID uint64,
-	leaderID *uint64, useMetrics bool,
-	queue *leaderInfoQueue) *raftEventListener {
+	useMetrics bool, queue *leaderInfoQueue) *raftEventListener {
 	el := &raftEventListener{
 		clusterID: clusterID,
 		nodeID:    nodeID,
-		leaderID:  leaderID,
 		metrics:   useMetrics,
 		queue:     queue,
 	}
@@ -77,7 +75,7 @@ func newRaftEventListener(clusterID uint64, nodeID uint64,
 		el.readIndexDropped = metrics.GetOrCreateCounter(name)
 		name = fmt.Sprintf(`dragonboat_raftnode_has_leader%s`, label)
 		el.hasLeader = metrics.GetOrCreateGauge(name, func() float64 {
-			if atomic.LoadUint64(leaderID) == raftio.NoLeader {
+			if atomic.LoadUint64(&el.leaderID) == raftio.NoLeader {
 				return 0.0
 			}
 			return 1.0
@@ -94,7 +92,7 @@ func (e *raftEventListener) close() {
 }
 
 func (e *raftEventListener) LeaderUpdated(info server.LeaderInfo) {
-	atomic.StoreUint64(e.leaderID, info.LeaderID)
+	atomic.StoreUint64(&e.leaderID, info.LeaderID)
 	atomic.StoreUint64(&e.termValue, info.Term)
 	if e.queue != nil {
 		ui := raftio.LeaderInfo{

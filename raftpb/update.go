@@ -20,6 +20,13 @@ import (
 	"io"
 )
 
+// LeaderUpdate describes updated leader
+type LeaderUpdate struct {
+	LeaderID uint64
+	Term     uint64
+}
+
+// LogQueryResult is the result of log query.
 type LogQueryResult struct {
 	FirstIndex uint64
 	LastIndex  uint64
@@ -27,6 +34,8 @@ type LogQueryResult struct {
 	Entries    []Entry
 }
 
+// IsEmpty returns a boolean value indicating whether the LogQueryResult is
+// empty.
 func (r *LogQueryResult) IsEmpty() bool {
 	return r.FirstIndex == 0 && r.LastIndex == 0 &&
 		r.Error == nil && len(r.Entries) == 0
@@ -99,6 +108,7 @@ type Update struct {
 	// is available.
 	DroppedReadIndexes []SystemCtx
 	LogQueryResult     LogQueryResult
+	LeaderUpdate       LeaderUpdate
 }
 
 // HasUpdate returns a boolean value indicating whether the returned Update

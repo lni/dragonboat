@@ -521,6 +521,7 @@ func TestRaftAPILaunch(t *testing.T) {
 				{Type: pb.ConfigChangeEntry, Term: 1, Index: 1, Cmd: ccdata},
 			},
 			UpdateCommit: pb.UpdateCommit{Processed: 1, StableLogTo: 1, StableLogTerm: 1},
+			LeaderUpdate: pb.LeaderUpdate{LeaderID: 0, Term: 1},
 		},
 		{
 			NodeID:           1,
@@ -596,6 +597,7 @@ func TestRaftAPIRestart(t *testing.T) {
 		CommittedEntries: entries[:st.Commit],
 		UpdateCommit:     pb.UpdateCommit{Processed: 1},
 		FastApply:        true,
+		LeaderUpdate:     pb.LeaderUpdate{LeaderID: 0, Term: 1},
 	}
 
 	storage := NewTestLogDB()
@@ -637,6 +639,7 @@ func TestRaftAPIRestartFromSnapshot(t *testing.T) {
 		CommittedEntries: entries,
 		UpdateCommit:     pb.UpdateCommit{Processed: 3},
 		FastApply:        true,
+		LeaderUpdate:     pb.LeaderUpdate{LeaderID: 0, Term: 1},
 	}
 
 	s := NewTestLogDB()

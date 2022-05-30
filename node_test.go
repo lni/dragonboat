@@ -317,6 +317,7 @@ func step(nodes []*node) bool {
 		node.applyRaftUpdates(ud)
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
+		node.processLeaderUpdate(ud.LeaderUpdate)
 	}
 	// persistent state and entries are saved first
 	// then the snapshot. order can not be changed.

@@ -3446,3 +3446,10 @@ func TestHandleLogQueryCanHandleRangeError(t *testing.T) {
 	}
 	assert.Equal(t, expected, p.logQueryResult)
 }
+
+func TestSetLeaderIDWillSetLeaderInfo(t *testing.T) {
+	r := raft{term: 200}
+	r.setLeaderID(100)
+	assert.Equal(t, uint64(100), r.leaderID)
+	assert.Equal(t, &pb.LeaderUpdate{LeaderID: 100, Term: 200}, r.leaderUpdate)
+}

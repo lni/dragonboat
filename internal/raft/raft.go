@@ -208,6 +208,7 @@ type raft struct {
 	nonVotings                map[uint64]*remote
 	witnesses                 map[uint64]*remote
 	logQueryResult            *pb.LogQueryResult
+	leaderUpdate              *pb.LeaderUpdate
 	readIndex                 *readIndex
 	matched                   []uint64
 	msgs                      []pb.Message
@@ -352,6 +353,10 @@ func (r *raft) mustBeLeader() {
 
 func (r *raft) setLeaderID(leaderID uint64) {
 	r.leaderID = leaderID
+	r.leaderUpdate = &pb.LeaderUpdate{
+		LeaderID: leaderID,
+		Term:     r.term,
+	}
 	if r.events != nil {
 		if (r.term == 0 && leaderID == NoLeader) ||
 			leaderID != r.prevLeader.LeaderID || r.term != r.prevLeader.Term {

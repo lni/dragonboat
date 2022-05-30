@@ -41,7 +41,12 @@ type ClusterInfo struct {
 	// StateMachineType is the type of the state machine.
 	StateMachineType sm.Type
 	// IsLeader indicates whether this is a leader node.
+	// Deprecated: Use LeaderID and Term instead.
 	IsLeader bool
+	// LeaderID is the node ID of the current leader
+	LeaderID uint64
+	// Term is the term of the current leader
+	Term uint64
 	// IsNonVoting indicates whether this is a non-voting nonVoting node.
 	IsNonVoting bool
 	// IsWitness indicates whether this is a witness node without actual log.

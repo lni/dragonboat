@@ -69,8 +69,14 @@ func (l *logDBMetrics) isBusy() bool {
 	return atomic.LoadInt32(&l.busy) != 0
 }
 
+type leaderInfo struct {
+	leaderID uint64
+	term     uint64
+}
+
 type node struct {
 	clusterInfo           atomic.Value
+	leaderInfo            atomic.Value
 	nodeRegistry          registry.INodeRegistry
 	logdb                 raftio.ILogDB
 	pipeline              pipeline
@@ -114,7 +120,6 @@ type node struct {
 	tickMillisecond       uint64
 	clusterID             uint64
 	nodeID                uint64
-	leaderID              uint64
 	instanceID            uint64
 	initializedFlag       uint64
 	closeOnce             sync.Once
@@ -203,7 +208,7 @@ func newNode(peers map[uint64]string,
 	rn.toApplyQ = sm.TaskQ()
 	rn.sm = sm
 	rn.raftEvents = newRaftEventListener(config.ClusterID,
-		config.NodeID, &rn.leaderID, nhConfig.EnableMetrics, liQueue)
+		config.NodeID, nhConfig.EnableMetrics, liQueue)
 	new, err := rn.startRaft(config, peers, initialMember)
 	if err != nil {
 		return nil, err
@@ -298,6 +303,17 @@ func (n *node) configChangeProcessed(key uint64, rejected bool) error {
 	}
 	n.pendingConfigChange.apply(key, rejected)
 	return nil
+}
+
+func (n *node) processLeaderUpdate(u pb.LeaderUpdate) {
+	if u.Term == 0 {
+		return
+	}
+	leaderInfo := &leaderInfo{
+		leaderID: u.LeaderID,
+		term:     u.Term,
+	}
+	n.leaderInfo.Store(leaderInfo)
 }
 
 func (n *node) processLogQuery(r pb.LogQueryResult) {
@@ -554,8 +570,12 @@ func (n *node) requestAddWitnessWithOrderID(nodeID uint64,
 }
 
 func (n *node) getLeaderID() (uint64, bool) {
-	v := atomic.LoadUint64(&n.leaderID)
-	return v, v != raft.NoLeader
+	lv := n.leaderInfo.Load()
+	if lv == nil {
+		return 0, false
+	}
+	leaderInfo := lv.(*leaderInfo)
+	return leaderInfo.leaderID, leaderInfo.leaderID != raft.NoLeader
 }
 
 func (n *node) destroy() error {
@@ -1568,7 +1588,6 @@ func (n *node) notifyConfigChange() {
 	ci := &ClusterInfo{
 		ClusterID:         n.clusterID,
 		NodeID:            n.nodeID,
-		IsLeader:          n.isLeader(),
 		IsNonVoting:       isNonVoting,
 		IsWitness:         isWitness,
 		ConfigChangeIndex: m.ConfigChangeId,
@@ -1593,10 +1612,21 @@ func (n *node) getClusterInfo() ClusterInfo {
 		}
 	}
 	ci := v.(*ClusterInfo)
+
+	leaderID := uint64(0)
+	term := uint64(0)
+	lv := n.leaderInfo.Load()
+	if lv != nil {
+		leaderInfo := lv.(*leaderInfo)
+		leaderID = leaderInfo.leaderID
+		term = leaderInfo.term
+	}
+
 	return ClusterInfo{
 		ClusterID:         ci.ClusterID,
 		NodeID:            ci.NodeID,
-		IsLeader:          n.isLeader(),
+		LeaderID:          leaderID,
+		Term:              term,
 		IsNonVoting:       ci.IsNonVoting,
 		ConfigChangeIndex: ci.ConfigChangeIndex,
 		Nodes:             ci.Nodes,
@@ -1621,13 +1651,27 @@ func (n *node) ssid(index uint64) string {
 }
 
 func (n *node) isLeader() bool {
-	leaderID, ok := n.getLeaderID()
-	return ok && n.nodeID == leaderID
+	v := n.leaderInfo.Load()
+	if v == nil {
+		return false
+	}
+	leaderInfo := v.(*leaderInfo)
+	if leaderInfo.term == 0 {
+		return false
+	}
+	return n.nodeID == leaderInfo.leaderID
 }
 
 func (n *node) isFollower() bool {
-	leaderID, ok := n.getLeaderID()
-	return ok && n.nodeID != leaderID
+	v := n.leaderInfo.Load()
+	if v == nil {
+		return false
+	}
+	leaderInfo := v.(*leaderInfo)
+	if leaderInfo.term == 0 {
+		return false
+	}
+	return n.nodeID != leaderInfo.leaderID
 }
 
 func (n *node) initialized() bool {

@@ -4797,15 +4797,24 @@ func TestLeaderInfoIsReported(t *testing.T) {
 	to := &testOption{
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
-			nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
-			if len(nhi.ClusterInfoList) != 1 {
-				t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
+			leaderAvailable := false
+			for i := 0; i < 500; i++ {
+				nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
+				if len(nhi.ClusterInfoList) != 1 {
+					t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
+				}
+				if nhi.ClusterInfoList[0].ClusterID != 1 {
+					t.Fatalf("unexpected cluster id")
+				}
+				if nhi.ClusterInfoList[0].LeaderID != 1 {
+					time.Sleep(20 * time.Millisecond)
+				} else {
+					leaderAvailable = true
+					break
+				}
 			}
-			if nhi.ClusterInfoList[0].ClusterID != 1 {
-				t.Fatalf("unexpected cluster id")
-			}
-			if !nhi.ClusterInfoList[0].IsLeader {
-				t.Errorf("not leader")
+			if !leaderAvailable {
+				t.Fatalf("failed to get leader info")
 			}
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
@@ -4818,7 +4827,7 @@ func TestLeaderInfoIsReported(t *testing.T) {
 				if len(nhi.ClusterInfoList) != 1 {
 					t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
 				}
-				if nhi.ClusterInfoList[0].IsLeader {
+				if nhi.ClusterInfoList[0].LeaderID == 1 {
 					time.Sleep(20 * time.Millisecond)
 				} else {
 					return
@@ -4842,11 +4851,11 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 				t.Fatalf("failed to add node %v", err)
 			}
 			for i := 0; i < 1000; i++ {
-				leaderID, ok, err := nh.GetLeaderID(1)
+				_, ok, err := nh.GetLeaderID(1)
 				if err != nil {
 					t.Fatalf("failed to get leader id %v", err)
 				}
-				if err == nil && !ok && leaderID == 0 {
+				if err == nil && !ok {
 					break
 				}
 				time.Sleep(10 * time.Millisecond)

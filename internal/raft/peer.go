@@ -259,6 +259,9 @@ func (p *Peer) HasUpdate(moreToApply bool) bool {
 	if r.logQueryResult != nil {
 		return true
 	}
+	if r.leaderUpdate != nil {
+		return true
+	}
 	if len(r.msgs) > 0 {
 		return true
 	}
@@ -289,6 +292,7 @@ func (p *Peer) HasUpdate(moreToApply bool) bool {
 func (p *Peer) Commit(ud pb.Update) {
 	p.raft.msgs = nil
 	p.raft.logQueryResult = nil
+	p.raft.leaderUpdate = nil
 	p.raft.droppedEntries = nil
 	p.raft.droppedReadIndexes = nil
 	if !pb.IsEmptyState(ud.State) {
@@ -338,6 +342,9 @@ func (p *Peer) getUpdate(moreToApply bool,
 	}
 	if p.raft.logQueryResult != nil {
 		ud.LogQueryResult = *p.raft.logQueryResult
+	}
+	if p.raft.leaderUpdate != nil {
+		ud.LeaderUpdate = *p.raft.leaderUpdate
 	}
 	for idx := range ud.Messages {
 		ud.Messages[idx].ClusterId = p.raft.clusterID
