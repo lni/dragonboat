@@ -296,6 +296,7 @@ func newGossipManager(nhid string, f getClusterInfo,
 	}
 	cfg.BindAddr = bindAddr
 	cfg.BindPort = bindPort
+	plog.Infof("gossip bind address %s port %d", cfg.BindAddr, cfg.BindPort)
 	if len(nhConfig.Gossip.AdvertiseAddress) > 0 {
 		aAddr, aPort, err := parseAddress(nhConfig.Gossip.AdvertiseAddress)
 		if err != nil {
@@ -303,6 +304,7 @@ func newGossipManager(nhid string, f getClusterInfo,
 		}
 		cfg.AdvertiseAddr = aAddr
 		cfg.AdvertisePort = aPort
+		plog.Infof("gossip advertise address %s port %d", aAddr, aPort)
 	}
 	view := newView(nhConfig.GetDeploymentID())
 	meta := meta{
@@ -335,13 +337,13 @@ func newGossipManager(nhid string, f getClusterInfo,
 	g.join(seed)
 	g.ed.start()
 	g.stopper.RunWorker(func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if len(g.list.Members()) > 1 {
-					return
+					continue
 				}
 				g.join(seed)
 			case <-g.stopper.ShouldStop():
