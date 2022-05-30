@@ -106,6 +106,6 @@ func TestGetGossipData(t *testing.T) {
 	v := newView(123)
 	cil := getTestClusterInfo()
 	v.update(cil)
-	data := v.getGossipData(320)
+	data := v.getGossipData(330)
 	assert.True(t, len(data) > 0)
 }

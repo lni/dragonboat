@@ -35,3 +35,21 @@ func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
 	}
 	return m.Data, true
 }
+
+// GetClusterInfo returns the cluster info for the specified cluster if it is
+// available in the gossip view.
+func (r *NodeHostRegistry) GetClusterInfo(clusterID uint64) (ClusterInfo, bool) {
+	r.view.mu.Lock()
+	defer r.view.mu.Unlock()
+
+	ci, ok := r.view.mu.nodehosts[clusterID]
+	if !ok {
+		return ClusterInfo{}, false
+	}
+	result := ci
+	result.Nodes = make(map[uint64]string)
+	for clusterID, target := range ci.Nodes {
+		result.Nodes[clusterID] = target
+	}
+	return result, true
+}

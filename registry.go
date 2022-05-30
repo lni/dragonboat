@@ -19,4 +19,5 @@ package dragonboat
 type INodeHostRegistry interface {
 	NumOfClusters() int
 	GetMeta(nhID string) ([]byte, bool)
+	GetClusterInfo(clusterID uint64) (ClusterInfo, bool)
 }
