@@ -141,6 +141,10 @@ var (
 // on the knowledge of the local NodeHost instance.
 type ClusterInfo = registry.ClusterInfo
 
+// ClusterView is a record for representing the state of a Raft cluster based
+// on the knowledge of distributed NodeHost instances as shared by gossip.
+type ClusterView = registry.ClusterView
+
 // GossipInfo contains details of the gossip service.
 type GossipInfo struct {
 	// AdvertiseAddress is the advertise address used by the gossip service.

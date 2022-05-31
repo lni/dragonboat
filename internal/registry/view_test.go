@@ -18,10 +18,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/lni/dragonboat/v3/internal/raft"
 )
 
-func getTestClusterInfo() []ClusterInfo {
-	ci1 := ClusterInfo{
+func getTestClusterView() []ClusterView {
+	cv1 := ClusterView{
 		ClusterID:         100,
 		ConfigChangeIndex: 200,
 		Nodes: map[uint64]string{
@@ -30,7 +32,7 @@ func getTestClusterInfo() []ClusterInfo {
 			400: "address3",
 		},
 	}
-	ci2 := ClusterInfo{
+	cv2 := ClusterView{
 		ClusterID:         1340,
 		ConfigChangeIndex: 126200,
 		Nodes: map[uint64]string{
@@ -39,13 +41,13 @@ func getTestClusterInfo() []ClusterInfo {
 			6400: "heraddress3",
 		},
 	}
-	return []ClusterInfo{ci1, ci2}
+	return []ClusterView{cv1, cv2}
 }
 
 func TestGetFullSyncData(t *testing.T) {
 	v := newView(123)
-	cil := getTestClusterInfo()
-	v.update(cil)
+	cv := getTestClusterView()
+	v.update(cv)
 	data := v.getFullSyncData()
 
 	v2 := newView(123)
@@ -55,10 +57,10 @@ func TestGetFullSyncData(t *testing.T) {
 
 func TestConfigChangeIndexIsChecked(t *testing.T) {
 	v := newView(123)
-	cil := getTestClusterInfo()
-	v.update(cil)
+	cv := getTestClusterView()
+	v.update(cv)
 
-	update := []ClusterInfo{
+	update := []ClusterView{
 		{
 			ClusterID:         1340,
 			ConfigChangeIndex: 300,
@@ -69,12 +71,12 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 		},
 	}
 	v.update(update)
-	ci, ok := v.mu.nodehosts[1340]
+	c, ok := v.mu.clusters[1340]
 	assert.True(t, ok)
-	assert.Equal(t, uint64(126200), ci.ConfigChangeIndex)
-	assert.Equal(t, 3, len(ci.Nodes))
+	assert.Equal(t, uint64(126200), c.ConfigChangeIndex)
+	assert.Equal(t, 3, len(c.Nodes))
 
-	update = []ClusterInfo{
+	update = []ClusterView{
 		{
 			ClusterID:         1340,
 			ConfigChangeIndex: 226200,
@@ -85,27 +87,145 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 		},
 	}
 	v.update(update)
-	ci, ok = v.mu.nodehosts[1340]
+	c, ok = v.mu.clusters[1340]
 	assert.True(t, ok)
-	assert.Equal(t, uint64(226200), ci.ConfigChangeIndex)
-	assert.Equal(t, 2, len(ci.Nodes))
+	assert.Equal(t, uint64(226200), c.ConfigChangeIndex)
+	assert.Equal(t, 2, len(c.Nodes))
 }
 
 func TestDeploymentIDIsChecked(t *testing.T) {
 	v := newView(123)
-	cil := getTestClusterInfo()
-	v.update(cil)
+	cv := getTestClusterView()
+	v.update(cv)
 	data := v.getFullSyncData()
 
 	v2 := newView(321)
 	v2.updateFrom(data)
-	assert.Equal(t, 0, len(v2.mu.nodehosts))
+	assert.Equal(t, 0, len(v2.mu.clusters))
 }
 
 func TestGetGossipData(t *testing.T) {
 	v := newView(123)
-	cil := getTestClusterInfo()
-	v.update(cil)
+	cv := getTestClusterView()
+	v.update(cv)
 	data := v.getGossipData(340)
 	assert.True(t, len(data) > 0)
+}
+
+func TestUpdateMembershipView(t *testing.T) {
+	v := newView(0)
+	cv := ClusterView{
+		ClusterID:         123,
+		ConfigChangeIndex: 100,
+		Nodes:             make(map[uint64]string),
+	}
+	cv.Nodes[1] = "t1"
+	cv.Nodes[2] = "t2"
+	v.mu.clusters[123] = cv
+
+	ncv := ClusterView{
+		ClusterID:         123,
+		ConfigChangeIndex: 200,
+		Nodes:             make(map[uint64]string),
+	}
+	ncv.Nodes[1] = "t1"
+	ncv.Nodes[2] = "t2"
+	ncv.Nodes[3] = "t3"
+	updates := []ClusterView{ncv}
+	v.update(updates)
+
+	result, ok := v.mu.clusters[123]
+	assert.True(t, ok)
+	assert.Equal(t, ncv, result)
+}
+
+func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
+	v := newView(0)
+	cv := ClusterView{
+		ClusterID:         123,
+		ConfigChangeIndex: 100,
+		Nodes:             make(map[uint64]string),
+	}
+	cv.Nodes[1] = "t1"
+	cv.Nodes[2] = "t2"
+	v.mu.clusters[123] = cv
+
+	ncv := ClusterView{
+		ClusterID:         123,
+		ConfigChangeIndex: 10,
+		Nodes:             make(map[uint64]string),
+	}
+	ncv.Nodes[1] = "t1"
+	ncv.Nodes[2] = "t2"
+	ncv.Nodes[3] = "t3"
+	updates := []ClusterView{ncv}
+	v.update(updates)
+
+	result, ok := v.mu.clusters[123]
+	assert.True(t, ok)
+	assert.Equal(t, cv, result)
+}
+
+func TestUpdateLeadershipView(t *testing.T) {
+	v := newView(0)
+	cv := ClusterView{
+		ClusterID: 123,
+		LeaderID:  10,
+		Term:      20,
+	}
+	v.mu.clusters[123] = cv
+
+	ncv := ClusterView{
+		ClusterID: 123,
+		LeaderID:  11,
+		Term:      21,
+	}
+	updates := []ClusterView{ncv}
+	v.update(updates)
+
+	result, ok := v.mu.clusters[123]
+	assert.True(t, ok)
+	assert.Equal(t, ncv, result)
+}
+
+func TestInitialLeaderInfoCanBeRecorded(t *testing.T) {
+	v := newView(0)
+	cv := ClusterView{
+		ClusterID: 123,
+	}
+	v.mu.clusters[123] = cv
+
+	ncv := ClusterView{
+		ClusterID: 123,
+		LeaderID:  11,
+		Term:      21,
+	}
+	updates := []ClusterView{ncv}
+	v.update(updates)
+
+	result, ok := v.mu.clusters[123]
+	assert.True(t, ok)
+	assert.Equal(t, ncv, result)
+}
+
+func TestUnknownLeaderIsIgnored(t *testing.T) {
+	v := newView(0)
+	cv := ClusterView{
+		ClusterID: 123,
+		LeaderID:  10,
+		Term:      20,
+	}
+	v.mu.clusters[123] = cv
+
+	ncv := ClusterView{
+		ClusterID: 123,
+		LeaderID:  raft.NoLeader,
+		Term:      21,
+	}
+	updates := []ClusterView{ncv}
+	v.update(updates)
+
+	result, ok := v.mu.clusters[123]
+	assert.True(t, ok)
+	assert.Equal(t, cv, result)
 }

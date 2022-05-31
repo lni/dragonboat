@@ -225,7 +225,7 @@ func (d *delegate) NotifyMsg(buf []byte) {
 
 func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
 	if d.getClusterInfo != nil {
-		d.view.update(d.getClusterInfo())
+		d.view.update(toClusterViewList(d.getClusterInfo()))
 	}
 	data := d.view.getGossipData(limit - overhead)
 	if data == nil {
@@ -246,7 +246,7 @@ func (d *delegate) MergeRemoteState(buf []byte, join bool) {
 
 func (d *delegate) LocalState(join bool) []byte {
 	if d.getClusterInfo != nil {
-		d.view.update(d.getClusterInfo())
+		d.view.update(toClusterViewList(d.getClusterInfo()))
 	}
 	return d.view.getFullSyncData()
 }

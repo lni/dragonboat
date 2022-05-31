@@ -16,13 +16,19 @@ package registry
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"math/rand"
 	"sync"
 
 	"github.com/pierrec/lz4/v4"
 
+	"github.com/lni/dragonboat/v3/internal/raft"
 	sm "github.com/lni/dragonboat/v3/statemachine"
+)
+
+var (
+	binaryEnc = binary.BigEndian
 )
 
 // ClusterInfo is a record for representing the state of a Raft cluster based
@@ -57,17 +63,41 @@ type ClusterInfo struct {
 	Pending bool
 }
 
+// ClusterView is the view of a cluster from gossip's point of view.
+type ClusterView struct {
+	ClusterID         uint64
+	Nodes             map[uint64]string
+	ConfigChangeIndex uint64
+	LeaderID          uint64
+	Term              uint64
+}
+
+func toClusterViewList(input []ClusterInfo) []ClusterView {
+	result := make([]ClusterView, 0)
+	for _, ci := range input {
+		cv := ClusterView{
+			ClusterID:         ci.ClusterID,
+			Nodes:             ci.Nodes,
+			ConfigChangeIndex: ci.ConfigChangeIndex,
+			LeaderID:          ci.LeaderID,
+			Term:              ci.Term,
+		}
+		result = append(result, cv)
+	}
+	return result
+}
+
 type sharedInfo struct {
 	DeploymentID uint64
-	ClusterInfo  []ClusterInfo
+	ClusterInfo  []ClusterView
 }
 
 type view struct {
 	deploymentID uint64
-	// clusterID -> ClusterInfo
+	// clusterID -> ClusterView
 	mu struct {
 		sync.Mutex
-		nodehosts map[uint64]ClusterInfo
+		clusters map[uint64]ClusterView
 	}
 }
 
@@ -75,42 +105,51 @@ func newView(deploymentID uint64) *view {
 	v := &view{
 		deploymentID: deploymentID,
 	}
-	v.mu.nodehosts = make(map[uint64]ClusterInfo)
+	v.mu.clusters = make(map[uint64]ClusterView)
 	return v
 }
 
-func (v *view) nodeHostCount() int {
+func (v *view) clusterCount() int {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return len(v.mu.nodehosts)
+	return len(v.mu.clusters)
 }
 
-func (v *view) update(u []ClusterInfo) {
+func mergeClusterInfo(current ClusterView, update ClusterView) ClusterView {
+	if current.ConfigChangeIndex < update.ConfigChangeIndex {
+		current.Nodes = update.Nodes
+		current.ConfigChangeIndex = update.ConfigChangeIndex
+	}
+	// we only keep which replica is the last known leader
+	if update.LeaderID != raft.NoLeader {
+		if current.LeaderID == raft.NoLeader || update.Term > current.Term {
+			current.LeaderID = update.LeaderID
+			current.Term = update.Term
+		}
+	}
+
+	return current
+}
+
+func (v *view) update(updates []ClusterView) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	for _, ci := range u {
-		if ci.Pending {
-			continue
-		}
-		current, ok := v.mu.nodehosts[ci.ClusterID]
+	for _, u := range updates {
+		current, ok := v.mu.clusters[u.ClusterID]
 		if !ok {
-			v.mu.nodehosts[ci.ClusterID] = ci
-		} else {
-			if ci.ConfigChangeIndex < current.ConfigChangeIndex {
-				continue
-			}
-			v.mu.nodehosts[ci.ClusterID] = ci
+			current = ClusterView{ClusterID: u.ClusterID}
 		}
+		v.mu.clusters[u.ClusterID] = mergeClusterInfo(current, u)
 	}
 }
 
-func (v *view) toShuffledList() []ClusterInfo {
-	ci := make([]ClusterInfo, 0)
+func (v *view) toShuffledList() []ClusterView {
+	ci := make([]ClusterView, 0)
 	func() {
 		v.mu.Lock()
 		defer v.mu.Unlock()
-		for _, v := range v.mu.nodehosts {
+		for _, v := range v.mu.clusters {
 			ci = append(ci, v)
 		}
 	}()
@@ -119,7 +158,7 @@ func (v *view) toShuffledList() []ClusterInfo {
 	return ci
 }
 
-func getCompressedData(deploymentID uint64, l []ClusterInfo, n int) []byte {
+func getCompressedData(deploymentID uint64, l []ClusterView, n int) []byte {
 	if n == 0 {
 		return nil
 	}
@@ -133,13 +172,14 @@ func getCompressedData(deploymentID uint64, l []ClusterInfo, n int) []byte {
 		panic(err)
 	}
 	data := buf.Bytes()
-	compressed := make([]byte, lz4.CompressBlockBound(len(data)))
+	compressed := make([]byte, lz4.CompressBlockBound(len(data))+4)
 	var compressor lz4.Compressor
-	n, err := compressor.CompressBlock(data, compressed)
+	n, err := compressor.CompressBlock(data, compressed[4:])
 	if err != nil {
 		panic(err)
 	}
-	return compressed[:n]
+	binaryEnc.PutUint32(compressed, uint32(len(data)))
+	return compressed[:n+4]
 }
 
 func (v *view) getFullSyncData() []byte {
@@ -175,8 +215,12 @@ func (v *view) getGossipData(limit int) []byte {
 }
 
 func (v *view) updateFrom(data []byte) {
-	dst := make([]byte, 64*1024)
-	n, err := lz4.UncompressBlock(data, dst)
+	if len(data) <= 4 {
+		panic("unexpected size")
+	}
+	sz := binaryEnc.Uint32(data)
+	dst := make([]byte, sz)
+	n, err := lz4.UncompressBlock(data[4:], dst)
 	if err != nil {
 		return
 	}
