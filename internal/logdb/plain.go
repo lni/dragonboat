@@ -37,7 +37,7 @@ func newPlainEntries(cs *cache, keys *keyPool, kvs kv.IKVStore) entryManager {
 }
 
 func (pe *plainEntries) record(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64 {
+	shardID uint64, replicaID uint64, ctx IContext, entries []pb.Entry) uint64 {
 	idx := 0
 	maxIndex := uint64(0)
 	for idx < len(entries) {
@@ -49,7 +49,7 @@ func (pe *plainEntries) record(wb kv.IWriteBatch,
 		}
 		data = pb.MustMarshalTo(&ent, data)
 		k := ctx.GetKey()
-		k.SetEntryKey(clusterID, nodeID, ent.Index)
+		k.SetEntryKey(shardID, replicaID, ent.Index)
 		wb.Put(k.Key(), data)
 		if ent.Index > maxIndex {
 			maxIndex = ent.Index
@@ -60,10 +60,10 @@ func (pe *plainEntries) record(wb kv.IWriteBatch,
 }
 
 func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
-	size uint64, clusterID uint64, nodeID uint64,
+	size uint64, shardID uint64, replicaID uint64,
 	low uint64, high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	if low+1 == high && low <= maxIndex {
-		e, err := pe.getEntry(clusterID, nodeID, low)
+		e, err := pe.getEntry(shardID, replicaID, low)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -78,8 +78,8 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 	lk := pe.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.SetEntryKey(clusterID, nodeID, low)
-	lk.SetEntryKey(clusterID, nodeID, high)
+	fk.SetEntryKey(shardID, replicaID, low)
+	lk.SetEntryKey(shardID, replicaID, high)
 	expectedIndex := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var e pb.Entry
@@ -101,11 +101,11 @@ func (pe *plainEntries) iterate(ents []pb.Entry, maxIndex uint64,
 	return ents, size, nil
 }
 
-func (pe *plainEntries) getEntry(clusterID uint64,
-	nodeID uint64, index uint64) (pb.Entry, error) {
+func (pe *plainEntries) getEntry(shardID uint64,
+	replicaID uint64, index uint64) (pb.Entry, error) {
 	k := pe.keys.get()
 	defer k.Release()
-	k.SetEntryKey(clusterID, nodeID, index)
+	k.SetEntryKey(shardID, replicaID, index)
 	var e pb.Entry
 	op := func(data []byte) error {
 		pb.MustUnmarshal(&e, data)
@@ -117,14 +117,14 @@ func (pe *plainEntries) getEntry(clusterID uint64,
 	return e, nil
 }
 
-func (pe *plainEntries) getRange(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
+func (pe *plainEntries) getRange(shardID uint64,
+	replicaID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
 	fk := pe.keys.get()
 	lk := pe.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.SetEntryKey(clusterID, nodeID, snapshotIndex)
-	lk.SetEntryKey(clusterID, nodeID, maxIndex)
+	fk.SetEntryKey(shardID, replicaID, snapshotIndex)
+	lk.SetEntryKey(shardID, replicaID, maxIndex)
 	firstIndex := uint64(0)
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
@@ -148,14 +148,14 @@ func (pe *plainEntries) getRange(clusterID uint64,
 	return firstIndex, length, nil
 }
 
-func (pe *plainEntries) rangedOp(clusterID uint64,
-	nodeID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
+func (pe *plainEntries) rangedOp(shardID uint64,
+	replicaID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
 	fk := pe.keys.get()
 	lk := pe.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.SetEntryKey(clusterID, nodeID, 0)
-	lk.SetEntryKey(clusterID, nodeID, index)
+	fk.SetEntryKey(shardID, replicaID, 0)
+	lk.SetEntryKey(shardID, replicaID, index)
 	return op(fk, lk)
 }
 

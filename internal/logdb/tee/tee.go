@@ -40,12 +40,12 @@ var (
 
 var dn = logutil.DescribeNode
 
-func assertSameError(clusterID uint64, nodeID uint64, e1 error, e2 error) {
+func assertSameError(shardID uint64, replicaID uint64, e1 error, e2 error) {
 	if errors.Is(e1, e2) || errors.Is(e2, e1) {
 		return
 	}
 	plog.Panicf("conflict errors, %s, e1 %v, e2 %v",
-		dn(clusterID, nodeID), e1, e2)
+		dn(shardID, replicaID), e1, e2)
 }
 
 // LogDB is a special LogDB module used for testing purposes.
@@ -145,16 +145,16 @@ func (t *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 		return nil, oe
 	}
 	sort.Slice(o, func(i, j int) bool {
-		if o[i].ClusterID == o[j].ClusterID {
-			return o[i].NodeID < o[j].NodeID
+		if o[i].ShardID == o[j].ShardID {
+			return o[i].ReplicaID < o[j].ReplicaID
 		}
-		return o[i].ClusterID < o[j].ClusterID
+		return o[i].ShardID < o[j].ShardID
 	})
 	sort.Slice(n, func(i, j int) bool {
-		if n[i].ClusterID == n[j].ClusterID {
-			return n[i].NodeID < n[j].NodeID
+		if n[i].ShardID == n[j].ShardID {
+			return n[i].ReplicaID < n[j].ReplicaID
 		}
-		return n[i].ClusterID < n[j].ClusterID
+		return n[i].ShardID < n[j].ShardID
 	})
 	if !reflect.DeepEqual(o, n) {
 		plog.Panicf("conflict NodeInfo list, %+v, %+v", o, n)
@@ -163,30 +163,30 @@ func (t *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 }
 
 // SaveBootstrapInfo ...
-func (t *LogDB) SaveBootstrapInfo(clusterID uint64,
-	nodeID uint64, bootstrap pb.Bootstrap) error {
+func (t *LogDB) SaveBootstrapInfo(shardID uint64,
+	replicaID uint64, bootstrap pb.Bootstrap) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	oe := t.odb.SaveBootstrapInfo(clusterID, nodeID, bootstrap)
-	ne := t.ndb.SaveBootstrapInfo(clusterID, nodeID, bootstrap)
-	assertSameError(clusterID, nodeID, oe, ne)
+	oe := t.odb.SaveBootstrapInfo(shardID, replicaID, bootstrap)
+	ne := t.ndb.SaveBootstrapInfo(shardID, replicaID, bootstrap)
+	assertSameError(shardID, replicaID, oe, ne)
 	return oe
 }
 
 // GetBootstrapInfo ...
-func (t *LogDB) GetBootstrapInfo(clusterID uint64,
-	nodeID uint64) (pb.Bootstrap, error) {
+func (t *LogDB) GetBootstrapInfo(shardID uint64,
+	replicaID uint64) (pb.Bootstrap, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	ob, oe := t.odb.GetBootstrapInfo(clusterID, nodeID)
-	nb, ne := t.ndb.GetBootstrapInfo(clusterID, nodeID)
-	assertSameError(clusterID, nodeID, oe, ne)
+	ob, oe := t.odb.GetBootstrapInfo(shardID, replicaID)
+	nb, ne := t.ndb.GetBootstrapInfo(shardID, replicaID)
+	assertSameError(shardID, replicaID, oe, ne)
 	if oe != nil {
 		return pb.Bootstrap{}, oe
 	}
 	if !reflect.DeepEqual(ob, nb) {
 		plog.Panicf("%s conflict GetBootstrapInfo values, %+v, %+v",
-			dn(clusterID, nodeID), ob, nb)
+			dn(shardID, replicaID), ob, nb)
 	}
 	return ob, nil
 }
@@ -203,16 +203,16 @@ func (t *LogDB) SaveRaftState(updates []pb.Update, shardID uint64) error {
 
 // IterateEntries ...
 func (t *LogDB) IterateEntries(ents []pb.Entry,
-	size uint64, clusterID uint64, nodeID uint64, low uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	ce := make([]pb.Entry, len(ents))
 	copy(ce, ents)
 	ov, os, oe := t.odb.IterateEntries(ents,
-		size, clusterID, nodeID, low, high, maxSize)
+		size, shardID, replicaID, low, high, maxSize)
 	nv, ns, ne := t.ndb.IterateEntries(ce,
-		size, clusterID, nodeID, low, high, maxSize)
+		size, shardID, replicaID, low, high, maxSize)
 	assertSameError(0, 0, oe, ne)
 	if oe != nil {
 		return nil, 0, oe
@@ -220,43 +220,43 @@ func (t *LogDB) IterateEntries(ents []pb.Entry,
 	if os != ns {
 		plog.Infof("")
 		plog.Panicf("%s conflict sizes, %d, %d, %+v, %+v",
-			dn(clusterID, nodeID), os, ns, ov, nv)
+			dn(shardID, replicaID), os, ns, ov, nv)
 	}
 	if len(ov) != 0 || len(nv) != 0 {
 		if !reflect.DeepEqual(ov, nv) {
 			plog.Panicf("%s conflict entry lists, len: %d, %+v \n\n len: %d, %+v",
-				dn(clusterID, nodeID), len(ov), ov, len(nv), nv)
+				dn(shardID, replicaID), len(ov), ov, len(nv), nv)
 		}
 	}
 	return ov, os, nil
 }
 
 // ReadRaftState ...
-func (t *LogDB) ReadRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
+func (t *LogDB) ReadRaftState(shardID uint64,
+	replicaID uint64, lastIndex uint64) (raftio.RaftState, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	os, oe := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
-	ns, ne := t.odb.ReadRaftState(clusterID, nodeID, lastIndex)
-	assertSameError(clusterID, nodeID, oe, ne)
+	os, oe := t.odb.ReadRaftState(shardID, replicaID, lastIndex)
+	ns, ne := t.odb.ReadRaftState(shardID, replicaID, lastIndex)
+	assertSameError(shardID, replicaID, oe, ne)
 	if oe != nil {
 		return raftio.RaftState{}, oe
 	}
 	if !reflect.DeepEqual(os, ns) {
 		plog.Panicf("%s conflict ReadRaftState values, %+v, %+v",
-			dn(clusterID, nodeID), os, ns)
+			dn(shardID, replicaID), os, ns)
 	}
 	return os, nil
 }
 
 // RemoveEntriesTo ...
-func (t *LogDB) RemoveEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) error {
+func (t *LogDB) RemoveEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	oe := t.odb.RemoveEntriesTo(clusterID, nodeID, index)
-	ne := t.ndb.RemoveEntriesTo(clusterID, nodeID, index)
-	assertSameError(clusterID, nodeID, oe, ne)
+	oe := t.odb.RemoveEntriesTo(shardID, replicaID, index)
+	ne := t.ndb.RemoveEntriesTo(shardID, replicaID, index)
+	assertSameError(shardID, replicaID, oe, ne)
 	return oe
 }
 
@@ -271,52 +271,52 @@ func (t *LogDB) SaveSnapshots(updates []pb.Update) error {
 }
 
 // GetSnapshot ...
-func (t *LogDB) GetSnapshot(clusterID uint64,
-	nodeID uint64) (pb.Snapshot, error) {
+func (t *LogDB) GetSnapshot(shardID uint64,
+	replicaID uint64) (pb.Snapshot, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	ov, oe := t.odb.GetSnapshot(clusterID, nodeID)
-	nv, ne := t.ndb.GetSnapshot(clusterID, nodeID)
-	assertSameError(clusterID, nodeID, oe, ne)
+	ov, oe := t.odb.GetSnapshot(shardID, replicaID)
+	nv, ne := t.ndb.GetSnapshot(shardID, replicaID)
+	assertSameError(shardID, replicaID, oe, ne)
 	if oe != nil {
 		return pb.Snapshot{}, oe
 	}
 	if !reflect.DeepEqual(ov, nv) {
 		plog.Panicf("%s conflict snapshot lists, \n%+v \n\n %+v",
-			dn(clusterID, nodeID), ov, nv)
+			dn(shardID, replicaID), ov, nv)
 	}
 	return ov, nil
 }
 
 // RemoveNodeData ...
-func (t *LogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
+func (t *LogDB) RemoveNodeData(shardID uint64, replicaID uint64) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	oe := t.odb.RemoveNodeData(clusterID, nodeID)
-	ne := t.ndb.RemoveNodeData(clusterID, nodeID)
-	assertSameError(clusterID, nodeID, oe, ne)
+	oe := t.odb.RemoveNodeData(shardID, replicaID)
+	ne := t.ndb.RemoveNodeData(shardID, replicaID)
+	assertSameError(shardID, replicaID, oe, ne)
 	return oe
 }
 
 // ImportSnapshot ...
-func (t *LogDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
+func (t *LogDB) ImportSnapshot(ss pb.Snapshot, replicaID uint64) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	oe := t.odb.ImportSnapshot(ss, nodeID)
-	ne := t.ndb.ImportSnapshot(ss, nodeID)
-	assertSameError(ss.ClusterId, nodeID, oe, ne)
+	oe := t.odb.ImportSnapshot(ss, replicaID)
+	ne := t.ndb.ImportSnapshot(ss, replicaID)
+	assertSameError(ss.ClusterId, replicaID, oe, ne)
 	return oe
 }
 
 // CompactEntriesTo ...
-func (t *LogDB) CompactEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) (<-chan struct{}, error) {
+func (t *LogDB) CompactEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) (<-chan struct{}, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	done := make(chan struct{}, 1)
-	oc, oe := t.odb.CompactEntriesTo(clusterID, nodeID, index)
-	nc, ne := t.ndb.CompactEntriesTo(clusterID, nodeID, index)
-	assertSameError(clusterID, nodeID, oe, ne)
+	oc, oe := t.odb.CompactEntriesTo(shardID, replicaID, index)
+	nc, ne := t.ndb.CompactEntriesTo(shardID, replicaID, index)
+	assertSameError(shardID, replicaID, oe, ne)
 	if oe != nil {
 		return nil, oe
 	}

@@ -35,7 +35,7 @@ func removeTestLogdbDir(fs vfs.IFS) {
 
 func getTestLogReaderWithoutCache(entries []pb.Entry) *LogReader {
 	logdb := getNewLogReaderTestDB(entries, vfs.GetTestFS())
-	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
+	ls := NewLogReader(LogReaderTestShardID, LogReaderTestReplicaID, logdb)
 	ls.SetCompactor(testCompactor)
 	if len(entries) > 0 {
 		if err := ls.Append(entries); err != nil {
@@ -709,8 +709,8 @@ func TestRLLTSlice(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 		ud := pb.Update{
-			ClusterID:     LogReaderTestClusterID,
-			NodeID:        LogReaderTestNodeID,
+			ShardID:       LogReaderTestShardID,
+			ReplicaID:     LogReaderTestReplicaID,
 			EntriesToSave: []pb.Entry{{Index: offset + i, Term: offset + i}},
 		}
 		if err := stable.logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {

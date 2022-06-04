@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build dragonboat_monkeytest
 // +build dragonboat_monkeytest
 
 package raft
@@ -46,7 +47,7 @@ func (p *Peer) GetRateLimiter() *server.InMemRateLimiter {
 
 func (r *raft) dumpRaftInfoToLog(addrs map[uint64]string) {
 	var flag string
-	if r.leaderID == r.nodeID {
+	if r.leaderID == r.replicaID {
 		flag = "***"
 	} else {
 		flag = "###"
@@ -58,7 +59,7 @@ func (r *raft) dumpRaftInfoToLog(addrs map[uint64]string) {
 			mplog.Infof("---> node %d is missing", id)
 		} else {
 			mplog.Infof(" %s,addr:%s,match:%d,next:%d,state:%s,paused:%v,ra:%v,ps:%d",
-				NodeID(id), v, rp.match, rp.next, rp.state, rp.isPaused(),
+				ReplicaID(id), v, rp.match, rp.next, rp.state, rp.isPaused(),
 				rp.isActive(), rp.snapshotIndex)
 		}
 	}

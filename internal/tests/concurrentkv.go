@@ -47,18 +47,18 @@ type KVJson struct {
 // ConcurrentKVTest is a in memory key-value store struct used for testing
 // purposes. Note that both key/value are suppose to be valid utf-8 strings.
 type ConcurrentKVTest struct {
-	ClusterID        uint64
-	NodeID           uint64
+	ShardID          uint64
+	ReplicaID        uint64
 	kvdata           unsafe.Pointer
 	externalFileTest bool
 	closed           uint32
 }
 
 // NewConcurrentKVTest creates and return a new KVTest object.
-func NewConcurrentKVTest(clusterID uint64, nodeID uint64) sm.IConcurrentStateMachine {
+func NewConcurrentKVTest(shardID uint64, replicaID uint64) sm.IConcurrentStateMachine {
 	s := &ConcurrentKVTest{
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 	}
 	kvdata := &kvdata{junk: make([]byte, 3*1024)}
 	// write some junk data consistent across the cluster
@@ -126,7 +126,7 @@ func (s *ConcurrentKVTest) SaveSnapshot(ctx interface{},
 	if s.isClosed() {
 		panic("save snapshot called after Close()")
 	}
-	delay := getLargeRandomDelay(s.ClusterID)
+	delay := getLargeRandomDelay(s.ShardID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10
@@ -170,7 +170,7 @@ func (s *ConcurrentKVTest) RecoverFromSnapshot(r io.Reader,
 	if s.isClosed() {
 		panic("recover from snapshot called after Close()")
 	}
-	delay := getLargeRandomDelay(s.ClusterID)
+	delay := getLargeRandomDelay(s.ShardID)
 	fmt.Printf("random delay %d ms\n", delay)
 	for delay > 0 {
 		delay -= 10

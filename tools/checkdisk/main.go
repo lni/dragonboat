@@ -71,7 +71,7 @@ func (batchedLogDBFactory) Name() string {
 
 type dummyStateMachine struct{}
 
-func newDummyStateMachine(clusterID uint64, nodeID uint64) sm.IStateMachine {
+func newDummyStateMachine(shardID uint64, replicaID uint64) sm.IStateMachine {
 	return &dummyStateMachine{}
 }
 
@@ -184,8 +184,8 @@ func main() {
 		defer nh2.Close()
 	}
 	rc := config.Config{
-		ClusterID:       1,
-		NodeID:          1,
+		ShardID:         1,
+		ReplicaID:       1,
 		ElectionRTT:     10,
 		HeartbeatRTT:    1,
 		CheckQuorum:     true,
@@ -198,13 +198,13 @@ func main() {
 	}
 	nhList := make([]*dragonboat.NodeHost, 0)
 	for i := uint64(1); i <= uint64(*clustercount); i++ {
-		rc.ClusterID = i
+		rc.ShardID = i
 		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
 		}
 		if *twonh {
 			rc2 := rc
-			rc2.NodeID = 2
+			rc2.ReplicaID = 2
 			if err := nh2.StartCluster(nodes, false, newDummyStateMachine, rc2); err != nil {
 				panic(err)
 			}
@@ -272,9 +272,9 @@ func main() {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			workerID := i
 			stopper.RunWorker(func() {
-				clusterID := (workerID % uint64(*clustercount)) + 1
-				nh := nhList[clusterID-1]
-				cs := nh.GetNoOPSession(clusterID)
+				shardID := (workerID % uint64(*clustercount)) + 1
+				nh := nhList[shardID-1]
+				cs := nh.GetNoOPSession(shardID)
 				cmd := make([]byte, 16)
 				results[workerID] = 0
 				for {
@@ -303,11 +303,11 @@ func main() {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			workerID := i
 			stopper.RunWorker(func() {
-				clusterID := (workerID % uint64(*clustercount)) + 1
-				nh := nhList[clusterID-1]
+				shardID := (workerID % uint64(*clustercount)) + 1
+				nh := nhList[shardID-1]
 				for {
 					for j := 0; j < 32; j++ {
-						rs, err := nh.ReadIndex(clusterID, 4*time.Second)
+						rs, err := nh.ReadIndex(shardID, 4*time.Second)
 						if err != nil {
 							panic(err)
 						}

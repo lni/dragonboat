@@ -63,10 +63,11 @@ const (
 
 // Config is used to configure Raft nodes.
 type Config struct {
-	// NodeID is a non-zero value used to identify a node within a Raft cluster.
-	NodeID uint64
-	// ClusterID is the unique value used to identify a Raft cluster.
-	ClusterID uint64
+	// ReplicaID is a non-zero value used to identify a node within a Raft cluster.
+	ReplicaID uint64
+	// ShardID is the unique value used to identify a Raft group that contains
+	// multiple replicas.
+	ShardID uint64
 	// CheckQuorum specifies whether the leader node should periodically check
 	// non-leader node status and step down to become a follower node when it no
 	// longer has the quorum.
@@ -197,8 +198,8 @@ type Config struct {
 // Validate validates the Config instance and return an error when any member
 // field is considered as invalid.
 func (c *Config) Validate() error {
-	if c.NodeID == 0 {
-		return errors.New("invalid NodeID, it must be >= 1")
+	if c.ReplicaID == 0 {
+		return errors.New("invalid ReplicaID, it must be >= 1")
 	}
 	if c.HeartbeatRTT == 0 {
 		return errors.New("HeartbeatRTT must be > 0")

@@ -303,17 +303,17 @@ func TestGetFromLeaderInfoQueue(t *testing.T) {
 	if ok {
 		t.Errorf("unexpectedly returned leader info")
 	}
-	v1 := raftio.LeaderInfo{ClusterID: 101}
-	v2 := raftio.LeaderInfo{ClusterID: 2002}
+	v1 := raftio.LeaderInfo{ShardID: 101}
+	v2 := raftio.LeaderInfo{ShardID: 2002}
 	q.addLeaderInfo(v1)
 	q.addLeaderInfo(v2)
 	rv1, ok1 := q.getLeaderInfo()
 	rv2, ok2 := q.getLeaderInfo()
 	_, ok3 := q.getLeaderInfo()
-	if !ok1 || rv1.ClusterID != v1.ClusterID {
+	if !ok1 || rv1.ShardID != v1.ShardID {
 		t.Errorf("unexpected result")
 	}
-	if !ok2 || rv2.ClusterID != v2.ClusterID {
+	if !ok2 || rv2.ShardID != v2.ShardID {
 		t.Errorf("unexpected result")
 	}
 	if ok3 {

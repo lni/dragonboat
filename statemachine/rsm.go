@@ -224,4 +224,4 @@ type IStateMachine interface {
 
 // CreateStateMachineFunc is a factory function type for creating IStateMachine
 // instances.
-type CreateStateMachineFunc func(clusterID uint64, nodeID uint64) IStateMachine
+type CreateStateMachineFunc func(shardID uint64, replicaID uint64) IStateMachine

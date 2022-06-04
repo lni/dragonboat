@@ -133,8 +133,8 @@ func (cw *ChunkWriter) getHeader() []byte {
 
 func (cw *ChunkWriter) getChunk() pb.Chunk {
 	return pb.Chunk{
-		ClusterId:   cw.sink.ClusterID(),
-		NodeId:      cw.sink.ToNodeID(),
+		ClusterId:   cw.sink.ShardID(),
+		NodeId:      cw.sink.ToReplicaID(),
 		From:        cw.meta.From,
 		ChunkId:     cw.chunkID,
 		FileChunkId: cw.chunkID,

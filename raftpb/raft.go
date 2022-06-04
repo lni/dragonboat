@@ -248,8 +248,8 @@ type IChunkSink interface {
 	// return (sent, stopped)
 	Receive(chunk Chunk) (bool, bool)
 	Close() error
-	ClusterID() uint64
-	ToNodeID() uint64
+	ShardID() uint64
+	ToReplicaID() uint64
 }
 
 var (

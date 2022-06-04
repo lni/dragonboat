@@ -22,8 +22,8 @@ import (
 
 type task struct {
 	done      chan struct{}
-	clusterID uint64
-	nodeID    uint64
+	shardID   uint64
+	replicaID uint64
 	index     uint64
 }
 
@@ -53,8 +53,8 @@ func (p *compactions) addTask(task task) chan struct{} {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	key := raftio.NodeInfo{
-		ClusterID: task.clusterID,
-		NodeID:    task.nodeID,
+		ShardID:   task.shardID,
+		ReplicaID: task.replicaID,
 	}
 	ci := compactionInfo{index: task.index}
 	v, ok := p.pendings[key]
@@ -75,8 +75,8 @@ func (p *compactions) getTask() (task, bool) {
 	defer p.mu.Unlock()
 	for k, v := range p.pendings {
 		task := task{
-			clusterID: k.ClusterID,
-			nodeID:    k.NodeID,
+			shardID:   k.ShardID,
+			replicaID: k.ReplicaID,
 			index:     v.index,
 			done:      v.done,
 		}

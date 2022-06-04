@@ -518,13 +518,13 @@ func testLeaderCycle(t *testing.T) {
 
 		for _, peer := range n.peers {
 			sm := peer.(*raft)
-			if sm.nodeID == campaignerID && sm.state != leader {
+			if sm.replicaID == campaignerID && sm.state != leader {
 				t.Errorf("campaigning node %d state = %v, want leader",
-					sm.nodeID, sm.state)
-			} else if sm.nodeID != campaignerID && sm.state != follower {
+					sm.replicaID, sm.state)
+			} else if sm.replicaID != campaignerID && sm.state != follower {
 				t.Errorf("after campaign of node %d, "+
 					"node %d had state = %v, want follower",
-					campaignerID, sm.nodeID, sm.state)
+					campaignerID, sm.replicaID, sm.state)
 			}
 		}
 	}
@@ -1919,7 +1919,7 @@ func TestReadOnlyOptionSafe(t *testing.T) {
 			nt.send(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{}}})
 		}
 
-		nt.send(pb.Message{From: tt.sm.nodeID, To: tt.sm.nodeID, Type: pb.ReadIndex, Hint: tt.wctx.Low, HintHigh: tt.wctx.High})
+		nt.send(pb.Message{From: tt.sm.replicaID, To: tt.sm.replicaID, Type: pb.ReadIndex, Hint: tt.wctx.Low, HintHigh: tt.wctx.High})
 
 		r := tt.sm
 		if len(r.readyToRead) == 0 {
@@ -2675,8 +2675,8 @@ func TestCommitAfterRemoveNode(t *testing.T) {
 
 	// Begin to remove the second node.
 	cc := pb.ConfigChange{
-		Type:   pb.RemoveNode,
-		NodeID: 2,
+		Type:      pb.RemoveNode,
+		ReplicaID: 2,
 	}
 	ccData, err := cc.Marshal()
 	if err != nil {
@@ -2933,7 +2933,7 @@ func newNetworkWithConfig(configFunc func(config.Config), peers ...stateMachine)
 				witnesses[i] = true
 			}
 
-			v.nodeID = id
+			v.replicaID = id
 			v.remotes = make(map[uint64]*remote)
 			v.nonVotings = make(map[uint64]*remote)
 			v.witnesses = make(map[uint64]*remote)
@@ -3054,7 +3054,7 @@ func newTestConfig(id uint64, election, heartbeat int) config.Config {
 
 func newRateLimitedTestConfig(id uint64, election, heartbeat int, maxLogSize int) config.Config {
 	return config.Config{
-		NodeID:          id,
+		ReplicaID:       id,
 		ElectionRTT:     uint64(election),
 		HeartbeatRTT:    uint64(heartbeat),
 		MaxInMemLogSize: uint64(maxLogSize),
@@ -3074,7 +3074,7 @@ func newTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogD
 
 func newRateLimitedTestRaft(id uint64, peers []uint64, election, heartbeat int, logdb ILogDB) *raft {
 	cfg := config.Config{
-		NodeID:          id,
+		ReplicaID:       id,
 		ElectionRTT:     uint64(election),
 		HeartbeatRTT:    uint64(heartbeat),
 		MaxInMemLogSize: testRateLimit,

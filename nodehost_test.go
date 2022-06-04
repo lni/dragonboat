@@ -172,8 +172,8 @@ func getTestNodeHostConfig(fs vfs.IFS) *config.NodeHostConfig {
 
 func getTestConfig() *config.Config {
 	return &config.Config{
-		NodeID:       1,
-		ClusterID:    1,
+		ReplicaID:    1,
+		ShardID:      1,
 		ElectionRTT:  3,
 		HeartbeatRTT: 1,
 		CheckQuorum:  true,
@@ -413,39 +413,39 @@ func (t *TimeoutStateMachine) Close() error {
 type noopLogDB struct {
 }
 
-func (n *noopLogDB) BinaryFormat() uint32                                      { return 0 }
-func (n *noopLogDB) Name() string                                              { return "noopLogDB" }
-func (n *noopLogDB) Close() error                                              { return nil }
-func (n *noopLogDB) HasNodeInfo(clusterID uint64, nodeID uint64) (bool, error) { return true, nil }
-func (n *noopLogDB) CreateNodeInfo(clusterID uint64, nodeID uint64) error      { return nil }
-func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                  { return nil, nil }
-func (n *noopLogDB) SaveBootstrapInfo(clusterID uint64, nodeID uint64, bs pb.Bootstrap) error {
+func (n *noopLogDB) BinaryFormat() uint32                                       { return 0 }
+func (n *noopLogDB) Name() string                                               { return "noopLogDB" }
+func (n *noopLogDB) Close() error                                               { return nil }
+func (n *noopLogDB) HasNodeInfo(shardID uint64, replicaID uint64) (bool, error) { return true, nil }
+func (n *noopLogDB) CreateNodeInfo(shardID uint64, replicaID uint64) error      { return nil }
+func (n *noopLogDB) ListNodeInfo() ([]raftio.NodeInfo, error)                   { return nil, nil }
+func (n *noopLogDB) SaveBootstrapInfo(shardID uint64, replicaID uint64, bs pb.Bootstrap) error {
 	return nil
 }
-func (n *noopLogDB) GetBootstrapInfo(clusterID uint64, nodeID uint64) (pb.Bootstrap, error) {
+func (n *noopLogDB) GetBootstrapInfo(shardID uint64, replicaID uint64) (pb.Bootstrap, error) {
 	return pb.Bootstrap{}, nil
 }
 func (n *noopLogDB) SaveRaftState(updates []pb.Update, workerID uint64) error { return nil }
 func (n *noopLogDB) IterateEntries(ents []pb.Entry,
-	size uint64, clusterID uint64, nodeID uint64, low uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	return nil, 0, nil
 }
-func (n *noopLogDB) ReadRaftState(clusterID uint64, nodeID uint64,
+func (n *noopLogDB) ReadRaftState(shardID uint64, replicaID uint64,
 	lastIndex uint64) (raftio.RaftState, error) {
 	return raftio.RaftState{}, nil
 }
-func (n *noopLogDB) RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error { return nil }
-func (n *noopLogDB) CompactEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) (<-chan struct{}, error) {
+func (n *noopLogDB) RemoveEntriesTo(shardID uint64, replicaID uint64, index uint64) error { return nil }
+func (n *noopLogDB) CompactEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) (<-chan struct{}, error) {
 	return nil, nil
 }
-func (n *noopLogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error { return nil }
-func (n *noopLogDB) SaveSnapshots([]pb.Update) error                      { return nil }
-func (n *noopLogDB) GetSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
+func (n *noopLogDB) RemoveNodeData(shardID uint64, replicaID uint64) error { return nil }
+func (n *noopLogDB) SaveSnapshots([]pb.Update) error                       { return nil }
+func (n *noopLogDB) GetSnapshot(shardID uint64, replicaID uint64) (pb.Snapshot, error) {
 	return pb.Snapshot{}, nil
 }
-func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
+func (n *noopLogDB) ImportSnapshot(snapshot pb.Snapshot, replicaID uint64) error {
 	return nil
 }
 
@@ -503,9 +503,9 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 	peers := make(map[uint64]string)
 	if !to.join {
 		if !nh.nhConfig.AddressByNodeHostID {
-			peers[cfg.ClusterID] = nh.RaftAddress()
+			peers[cfg.ShardID] = nh.RaftAddress()
 		} else {
-			peers[cfg.ClusterID] = nh.ID()
+			peers[cfg.ShardID] = nh.ID()
 		}
 	}
 	if to.createSM != nil {
@@ -886,8 +886,8 @@ func testAddressByNodeHostID(t *testing.T,
 		return &PST{}
 	}
 	rc := config.Config{
-		ClusterID:       1,
-		NodeID:          1,
+		ShardID:         1,
+		ReplicaID:       1,
 		ElectionRTT:     10,
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
@@ -895,7 +895,7 @@ func testAddressByNodeHostID(t *testing.T,
 	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
-	rc.NodeID = 2
+	rc.ReplicaID = 2
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
@@ -981,8 +981,8 @@ func TestNodeHostRegistry(t *testing.T) {
 		return &PST{}
 	}
 	rc := config.Config{
-		ClusterID:       1,
-		NodeID:          1,
+		ShardID:         1,
+		ReplicaID:       1,
 		ElectionRTT:     10,
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
@@ -990,12 +990,12 @@ func TestNodeHostRegistry(t *testing.T) {
 	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
-	rc.ClusterID = 2
+	rc.ShardID = 2
 	peers[1] = testNodeHostID2
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
-	rc.ClusterID = 3
+	rc.ShardID = 3
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
@@ -1018,7 +1018,7 @@ func TestNodeHostRegistry(t *testing.T) {
 	if !good {
 		t.Fatalf("registry failed to report the expected num of clusters")
 	}
-	rc.ClusterID = 100
+	rc.ShardID = 100
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
@@ -1108,8 +1108,8 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		return &PST{}
 	}
 	rc := config.Config{
-		ClusterID:       1,
-		NodeID:          1,
+		ShardID:         1,
+		ReplicaID:       1,
 		ElectionRTT:     3,
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
@@ -1117,7 +1117,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	if err := nh1.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
-	rc.NodeID = 2
+	rc.ReplicaID = 2
 	if err := nh2.StartCluster(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
@@ -1282,7 +1282,7 @@ func createConcurrentTestNodeHost(addr string,
 	concurrent bool, fs vfs.IFS) (*NodeHost, error) {
 	// config for raft
 	rc := config.Config{
-		NodeID:             uint64(1),
+		ReplicaID:          uint64(1),
 		ElectionRTT:        3,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
@@ -1319,11 +1319,11 @@ func createConcurrentTestNodeHost(addr string,
 			return &tests.TestSnapshot{}
 		}
 	}
-	rc.ClusterID = 1 + nhc.Expert.Engine.ApplyShards
+	rc.ShardID = 1 + nhc.Expert.Engine.ApplyShards
 	if err := nh.StartConcurrentCluster(peers, false, newConcurrentSM, rc); err != nil {
 		return nil, err
 	}
-	rc.ClusterID = 1
+	rc.ShardID = 1
 	if err := nh.StartCluster(peers, false, newSM, rc); err != nil {
 		return nil, err
 	}
@@ -1422,7 +1422,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	datadir1 string, datadir2 string,
 	fs vfs.IFS) (*NodeHost, *NodeHost, *tests.NoOP, *tests.NoOP, error) {
 	rc := config.Config{
-		ClusterID:       1,
+		ShardID:         1,
 		ElectionRTT:     3,
 		HeartbeatRTT:    1,
 		CheckQuorum:     true,
@@ -1455,17 +1455,17 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	}
 	sm1 := &tests.NoOP{}
 	sm2 := &tests.NoOP{}
-	newRSM1 := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+	newRSM1 := func(shardID uint64, replicaID uint64) sm.IStateMachine {
 		return sm1
 	}
-	newRSM2 := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+	newRSM2 := func(shardID uint64, replicaID uint64) sm.IStateMachine {
 		return sm2
 	}
-	rc.NodeID = 1
+	rc.ReplicaID = 1
 	if err := nh1.StartCluster(peers, false, newRSM1, rc); err != nil {
 		return nil, nil, nil, nil, err
 	}
-	rc.NodeID = 2
+	rc.ReplicaID = 2
 	if err := nh2.StartCluster(peers, false, newRSM2, rc); err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -1521,9 +1521,9 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 	reportLeakedFD(fs, t)
 }
 
-func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, clusterID uint64) {
+func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, shardID uint64) {
 	for i := 0; i < 200; i++ {
-		_, ready, err := nh.GetLeaderID(clusterID)
+		_, ready, err := nh.GetLeaderID(shardID)
 		if err == nil && ready {
 			return
 		}
@@ -1621,7 +1621,7 @@ func TestSnapshotCanBeStopped(t *testing.T) {
 			c.SnapshotEntries = 10
 			return c
 		},
-		createSM: func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		createSM: func(shardID uint64, replicaID uint64) sm.IStateMachine {
 			return pst
 		},
 		tf: func(nh *NodeHost) {
@@ -1644,7 +1644,7 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 			c.SnapshotEntries = 10
 			return c
 		},
-		createSM: func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+		createSM: func(shardID uint64, replicaID uint64) sm.IStateMachine {
 			return pst
 		},
 		tf: func(nh *NodeHost) {
@@ -2082,7 +2082,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 			}
 			waitNodeInfoEvent(t, listener.getNodeReady, 1)
 			ni := listener.getNodeReady()[0]
-			if ni.ClusterID != 1 || ni.NodeID != 1 {
+			if ni.ShardID != 1 || ni.ReplicaID != 1 {
 				t.Fatalf("incorrect node ready info")
 			}
 		},
@@ -2188,7 +2188,7 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 			}
 			waitNodeInfoEvent(t, listener.getMembershipChanged, 2)
 			ni := listener.getMembershipChanged()[1]
-			if ni.ClusterID != 1 || ni.NodeID != 1 {
+			if ni.ShardID != 1 || ni.ReplicaID != 1 {
 				t.Fatalf("incorrect node ready info")
 			}
 		},
@@ -2560,8 +2560,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
 		rc := config.Config{
-			ClusterID:               1,
-			NodeID:                  1,
+			ShardID:                 1,
+			ReplicaID:               1,
 			ElectionRTT:             3,
 			HeartbeatRTT:            1,
 			CheckQuorum:             true,
@@ -2618,8 +2618,8 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			t.Fatalf("failed to complete the add node request")
 		}
 		rc = config.Config{
-			ClusterID:          1,
-			NodeID:             2,
+			ShardID:            1,
+			ReplicaID:          2,
 			ElectionRTT:        3,
 			HeartbeatRTT:       1,
 			CheckQuorum:        true,
@@ -2718,14 +2718,14 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 	done := uint32(0)
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhc := nh.NodeHostConfig()
-		clusterID := 1 + nhc.Expert.Engine.ApplyShards
+		shardID := 1 + nhc.Expert.Engine.ApplyShards
 		count := uint32(0)
 		stopper := syncutil.NewStopper()
 		pto := pto(nh)
 		stopper.RunWorker(func() {
 			for i := 0; i < 10000; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), pto)
-				session := nh.GetNoOPSession(clusterID)
+				session := nh.GetNoOPSession(shardID)
 				_, err := nh.SyncPropose(ctx, session, []byte("test"))
 				cancel()
 				if err == ErrTimeout {
@@ -2744,7 +2744,7 @@ func TestConcurrentStateMachineLookup(t *testing.T) {
 				if i%5 == 0 {
 					time.Sleep(time.Millisecond)
 				}
-				rs, err := nh.ReadIndex(clusterID, pto)
+				rs, err := nh.ReadIndex(shardID, pto)
 				if err != nil {
 					continue
 				}
@@ -2778,10 +2778,10 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhc := nh.NodeHostConfig()
-		clusterID := 1 + nhc.Expert.Engine.ApplyShards
+		shardID := 1 + nhc.Expert.Engine.ApplyShards
 		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
-			if ci.ClusterID == clusterID {
+			if ci.ShardID == shardID {
 				if ci.StateMachineType != sm.ConcurrentStateMachine {
 					t.Errorf("unexpected state machine type")
 				}
@@ -2791,7 +2791,7 @@ func TestConcurrentStateMachineSaveSnapshot(t *testing.T) {
 			}
 		}
 		result := make(map[uint64]struct{})
-		session := nh.GetNoOPSession(clusterID)
+		session := nh.GetNoOPSession(shardID)
 		pto := pto(nh)
 		for i := 0; i < 10000; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
@@ -2815,11 +2815,11 @@ func TestErrorCanBeReturnedWhenLookingUpConcurrentStateMachine(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhc := nh.NodeHostConfig()
-		clusterID := 1 + nhc.Expert.Engine.ApplyShards
+		shardID := 1 + nhc.Expert.Engine.ApplyShards
 		for i := 0; i < 100; i++ {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
-			_, err := nh.SyncRead(ctx, clusterID, []byte("test"))
+			_, err := nh.SyncRead(ctx, shardID, []byte("test"))
 			cancel()
 			if err != sm.ErrSnapshotStopped {
 				t.Fatalf("error not returned")
@@ -2835,7 +2835,7 @@ func TestRegularStateMachineDoesNotAllowConucrrentUpdate(t *testing.T) {
 	tf := func(t *testing.T, nh *NodeHost) {
 		nhi := nh.GetNodeHostInfo(DefaultNodeHostInfoOption)
 		for _, ci := range nhi.ClusterInfoList {
-			if ci.ClusterID == 1 {
+			if ci.ShardID == 1 {
 				if ci.StateMachineType != sm.RegularStateMachine {
 					t.Errorf("unexpected state machine type")
 				}
@@ -3218,8 +3218,8 @@ func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
 		rc := config.Config{
-			ClusterID:               1,
-			NodeID:                  1,
+			ShardID:                 1,
+			ReplicaID:               1,
 			ElectionRTT:             3,
 			HeartbeatRTT:            1,
 			CheckQuorum:             true,
@@ -3237,8 +3237,8 @@ func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
 		rc = config.Config{
-			ClusterID:          1,
-			NodeID:             2,
+			ShardID:            1,
+			ReplicaID:          2,
 			ElectionRTT:        3,
 			HeartbeatRTT:       1,
 			IsNonVoting:        true,
@@ -3264,7 +3264,7 @@ func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 				if ci.Pending {
 					continue
 				}
-				if ci.IsNonVoting && ci.NodeID == 2 {
+				if ci.IsNonVoting && ci.ReplicaID == 2 {
 					return
 				}
 			}
@@ -3327,7 +3327,7 @@ func TestSyncRequestSnapshot(t *testing.T) {
 			}
 			waitSnapshotInfoEvent(t, listener.getSnapshotCreated, 1)
 			si := listener.getSnapshotCreated()[0]
-			if si.ClusterID != 1 || si.NodeID != 1 {
+			if si.ShardID != 1 || si.ReplicaID != 1 {
 				t.Fatalf("incorrect created snapshot info")
 			}
 		},
@@ -3610,7 +3610,7 @@ func TestSyncRemoveData(t *testing.T) {
 			}
 			waitNodeInfoEvent(t, listener.getNodeUnloaded, 1)
 			ni := listener.getNodeUnloaded()[0]
-			if ni.ClusterID != 1 || ni.NodeID != 1 {
+			if ni.ShardID != 1 || ni.ReplicaID != 1 {
 				t.Fatalf("incorrect node unloaded info")
 			}
 		},
@@ -3653,7 +3653,7 @@ func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
 			rc := getTestConfig()
 			peers := make(map[uint64]string)
 			peers[1] = nh.RaftAddress()
-			newPST := func(clusterID uint64, nodeID uint64) sm.IStateMachine {
+			newPST := func(shardID uint64, replicaID uint64) sm.IStateMachine {
 				return &PST{}
 			}
 			if err := nh.StartCluster(peers, false, newPST, *rc); err != ErrNodeRemoved {
@@ -4033,8 +4033,8 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 	newDir bool, ct config.CompressionType, fs vfs.IFS) {
 	tf := func() {
 		rc := config.Config{
-			ClusterID:               1,
-			NodeID:                  1,
+			ShardID:                 1,
+			ReplicaID:               1,
 			ElectionRTT:             3,
 			HeartbeatRTT:            1,
 			CheckQuorum:             true,
@@ -4194,8 +4194,8 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 		nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
 		rc := config.Config{
-			ClusterID:          1,
-			NodeID:             1,
+			ShardID:            1,
+			ReplicaID:          1,
 			ElectionRTT:        10,
 			HeartbeatRTT:       1,
 			CheckQuorum:        true,
@@ -4325,7 +4325,7 @@ func TestClusterWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		if err := rnh1.StartOnDiskCluster(nil, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
-		rc.NodeID = 10
+		rc.ReplicaID = 10
 		if err := rnh2.StartOnDiskCluster(nil, false, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
@@ -4349,11 +4349,11 @@ func (c *chunks) onReceive(pb.MessageBatch) {
 	c.received++
 }
 
-func (c *chunks) confirm(clusterID uint64, nodeID uint64, index uint64) {
+func (c *chunks) confirm(shardID uint64, replicaID uint64, index uint64) {
 	c.confirmed++
 }
 
-func (c *chunks) getSnapshotDirFunc(clusterID uint64, nodeID uint64) string {
+func (c *chunks) getSnapshotDirFunc(shardID uint64, replicaID uint64) string {
 	return testSnapshotDir
 }
 
@@ -4371,11 +4371,11 @@ func (s *testSink2) Close() error {
 	return nil
 }
 
-func (s *testSink2) ClusterID() uint64 {
+func (s *testSink2) ShardID() uint64 {
 	return 2000
 }
 
-func (s *testSink2) ToNodeID() uint64 {
+func (s *testSink2) ToReplicaID() uint64 {
 	return 300
 }
 
@@ -4398,11 +4398,11 @@ func (s *dataCorruptionSink) Close() error {
 	return nil
 }
 
-func (s *dataCorruptionSink) ClusterID() uint64 {
+func (s *dataCorruptionSink) ShardID() uint64 {
 	return 2000
 }
 
-func (s *dataCorruptionSink) ToNodeID() uint64 {
+func (s *dataCorruptionSink) ToReplicaID() uint64 {
 	return 300
 }
 
@@ -4803,7 +4803,7 @@ func TestLeaderInfoIsReported(t *testing.T) {
 				if len(nhi.ClusterInfoList) != 1 {
 					t.Errorf("unexpected len: %d", len(nhi.ClusterInfoList))
 				}
-				if nhi.ClusterInfoList[0].ClusterID != 1 {
+				if nhi.ClusterInfoList[0].ShardID != 1 {
 					t.Fatalf("unexpected cluster id")
 				}
 				if nhi.ClusterInfoList[0].LeaderID != 1 {
@@ -4945,26 +4945,26 @@ func TestRaftEventsAreReported(t *testing.T) {
 				}
 			}
 			exp0 := raftio.LeaderInfo{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				LeaderID:  raftio.NoLeader,
 				Term:      1,
 			}
 			exp1 := raftio.LeaderInfo{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				LeaderID:  raftio.NoLeader,
 				Term:      2,
 			}
 			exp2 := raftio.LeaderInfo{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				LeaderID:  1,
 				Term:      2,
 			}
 			exp3 := raftio.LeaderInfo{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				LeaderID:  raftio.NoLeader,
 				Term:      2,
 			}
@@ -5090,8 +5090,8 @@ func testWitnessIO(t *testing.T,
 	witnessTestFunc func(*NodeHost, *NodeHost, *tests.SimDiskSM), fs vfs.IFS) {
 	tf := func() {
 		rc := config.Config{
-			ClusterID:    1,
-			NodeID:       1,
+			ShardID:      1,
+			ReplicaID:    1,
 			ElectionRTT:  3,
 			HeartbeatRTT: 1,
 			CheckQuorum:  true,
@@ -5134,7 +5134,7 @@ func testWitnessIO(t *testing.T,
 		}
 		cancel()
 		rc2 := rc
-		rc2.NodeID = 2
+		rc2.ReplicaID = 2
 		rc2.IsWitness = true
 		nhc2 := nhc1
 		nhc2.RaftAddress = nodeHostTestAddr2
@@ -5573,7 +5573,7 @@ func TestHandleSnapshotStatus(t *testing.T) {
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
-	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	node := &node{shardID: 1, replicaID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	h.HandleSnapshotStatus(1, 2, true)
 	for i := uint64(0); i <= streamPushDelayTick; i++ {
@@ -5601,7 +5601,7 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
-	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	node := &node{shardID: 1, replicaID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	mb := pb.MessageBatch{
 		Requests: []pb.Message{{To: 1, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
@@ -5635,7 +5635,7 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
-	node := &node{clusterID: 1, nodeID: 1, mq: mq}
+	node := &node{shardID: 1, replicaID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	mb := pb.MessageBatch{
 		Requests: []pb.Message{{To: 3, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
@@ -5701,10 +5701,10 @@ func TestNodeCanNotStartWhenStillLoadedInEngine(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			nodes := make(map[uint64]*node)
-			nodes[2] = &node{clusterID: 2, nodeID: 1}
+			nodes[2] = &node{shardID: 2, replicaID: 1}
 			nh.engine.loaded.update(1, fromStepWorker, nodes)
 			if err := nh.startCluster(nil, false, nil,
-				config.Config{ClusterID: 2, NodeID: 1},
+				config.Config{ShardID: 2, ReplicaID: 1},
 				pb.RegularStateMachine); err != ErrClusterAlreadyExist {
 				t.Errorf("failed to return ErrClusterAlreadyExist, %v", err)
 			}
@@ -5719,7 +5719,7 @@ func TestBootstrapInfoIsValidated(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			if _, _, err := nh.bootstrapCluster(nil, false,
-				config.Config{ClusterID: 1, NodeID: 1},
+				config.Config{ShardID: 1, ReplicaID: 1},
 				pb.OnDiskStateMachine); err != ErrInvalidClusterSettings {
 				t.Errorf("failed to fail the boostrap, %v", err)
 			}
@@ -5781,8 +5781,8 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 	nh1dir := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	nh2dir := fs.PathJoin(singleNodeHostTestDir, "nh2")
 	rc := config.Config{
-		ClusterID:          1,
-		NodeID:             1,
+		ShardID:            1,
+		ReplicaID:          1,
 		ElectionRTT:        10,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
@@ -5807,7 +5807,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 		return &stressRSM{}
 	}
 	for i := uint64(1); i <= uint64(96); i++ {
-		rc.ClusterID = i
+		rc.ShardID = i
 		if err := nh1.StartCluster(peers, false, newRSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
@@ -5860,8 +5860,8 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 	// start new nodes
 	defer nh2.Close()
 	for i := uint64(1); i <= uint64(96); i++ {
-		rc.ClusterID = i
-		rc.NodeID = 2
+		rc.ShardID = i
+		rc.ReplicaID = 2
 		peers := make(map[uint64]string)
 		if err := nh2.StartCluster(peers, true, newRSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)

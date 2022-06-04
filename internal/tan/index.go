@@ -319,8 +319,8 @@ func (i *index) removeObsolete(maxObsoleteFileNum fileNum) []fileNum {
 
 // nodeIndex is the index for all records that belong to a single raft node
 type nodeIndex struct {
-	clusterID uint64
-	nodeID    uint64
+	shardID   uint64
+	replicaID uint64
 	// entries contains all indexEntry records
 	entries index
 	// currEntries contains only indexEntry records that belong to the current log file

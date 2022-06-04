@@ -87,8 +87,8 @@ func TestBasicDBReadWrite(t *testing.T) {
 				cmd = make([]byte, size)
 			}
 			u1 := pb.Update{
-				ClusterID: 2,
-				NodeID:    3,
+				ShardID:   2,
+				ReplicaID: 3,
 				State: pb.State{
 					Commit: 100,
 					Term:   5,
@@ -105,8 +105,8 @@ func TestBasicDBReadWrite(t *testing.T) {
 				},
 			}
 			u2 := pb.Update{
-				ClusterID: 2,
-				NodeID:    3,
+				ShardID:   2,
+				ReplicaID: 3,
 				State: pb.State{
 					Commit: 200,
 					Term:   10,
@@ -209,7 +209,7 @@ func TestEntryOverwrite(t *testing.T) {
 			fs := vfs.NewMem()
 			tf := func(t *testing.T, db *db) {
 				for _, ir := range input {
-					u := pb.Update{ClusterID: 2, NodeID: 3}
+					u := pb.Update{ShardID: 2, ReplicaID: 3}
 					for j := ir.start; j <= ir.end; j++ {
 						u.EntriesToSave = append(u.EntriesToSave, pb.Entry{Index: j, Term: ir.term})
 					}
@@ -238,31 +238,31 @@ func TestEmptyEntryUpdate(t *testing.T) {
 	fs := vfs.NewMem()
 	tf := func(t *testing.T, db *db) {
 		u1 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			EntriesToSave: []pb.Entry{
 				{Index: 1, Term: 5},
 			},
 		}
 		u2 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			Snapshot: pb.Snapshot{
 				Index: 1,
 				Term:  5,
 			},
 		}
 		u3 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 1,
 				Term:   5,
 			},
 		}
 		u4 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			EntriesToSave: []pb.Entry{
 				{Index: 2, Term: 5},
 			},
@@ -288,24 +288,24 @@ func TestSnapshotUpdate(t *testing.T) {
 	fs := vfs.NewMem()
 	tf := func(t *testing.T, db *db) {
 		u1 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			Snapshot: pb.Snapshot{
 				Index: 100,
 				Term:  5,
 			},
 		}
 		u2 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			Snapshot: pb.Snapshot{
 				Index: 90,
 				Term:  5,
 			},
 		}
 		u3 := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			Snapshot: pb.Snapshot{
 				Index: 80,
 				Term:  5,
@@ -338,8 +338,8 @@ func TestLogRotation(t *testing.T) {
 		_, err := opts.FS.Stat(fn)
 		require.NoError(t, err)
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 100,
 				Term:   5,
@@ -389,8 +389,8 @@ func TestDBRestart(t *testing.T) {
 	var logNum fileNum
 	tf := func(t *testing.T, db *db) {
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 100,
 				Term:   5,
@@ -415,8 +415,8 @@ func TestDBRestart(t *testing.T) {
 		// this will write an entry with index 100 term 6
 		// query should return this entry
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 100,
 				Term:   5,
@@ -475,8 +475,8 @@ func TestDBConcurrentAccess(t *testing.T) {
 		buf := make([]byte, 1024)
 		for i := uint64(1); i <= uint64(1000); i++ {
 			u := pb.Update{
-				ClusterID: 2,
-				NodeID:    3,
+				ShardID:   2,
+				ReplicaID: 3,
 				State: pb.State{
 					Commit: i,
 					Term:   6,
@@ -508,8 +508,8 @@ func TestDBConcurrentAccess(t *testing.T) {
 				}
 			} else {
 				u := pb.Update{
-					ClusterID: 2,
-					NodeID:    3,
+					ShardID:   2,
+					ReplicaID: 3,
 					State: pb.State{
 						Commit: i,
 						Term:   5,
@@ -552,8 +552,8 @@ func TestDBIndexIsSavedOnClose(t *testing.T) {
 		buf := make([]byte, 1024)
 		for i := uint64(1); i <= uint64(10); i++ {
 			u := pb.Update{
-				ClusterID: 2,
-				NodeID:    3,
+				ShardID:   2,
+				ReplicaID: 3,
 				EntriesToSave: []pb.Entry{
 					{Index: i, Term: 6},
 				},
@@ -583,8 +583,8 @@ func TestRebuildIndex(t *testing.T) {
 		buf := make([]byte, 1024)
 		for i := uint64(1); i <= uint64(1000); i++ {
 			u := pb.Update{
-				ClusterID: 2,
-				NodeID:    3,
+				ShardID:   2,
+				ReplicaID: 3,
 				EntriesToSave: []pb.Entry{
 					{Index: i, Term: 5},
 				},
@@ -630,8 +630,8 @@ func TestRebuildLog(t *testing.T) {
 	buf := make([]byte, 1024)
 	for i := uint64(1); i <= uint64(20); i++ {
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			EntriesToSave: []pb.Entry{
 				{Index: i, Term: 5, Cmd: make([]byte, 32)},
 			},

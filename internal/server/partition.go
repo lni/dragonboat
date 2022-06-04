@@ -15,12 +15,12 @@
 package server
 
 var (
-	defaultClusterIDMod uint64 = 512
+	defaultShardIDMod uint64 = 512
 )
 
 // IPartitioner is the interface for partitioning clusters.
 type IPartitioner interface {
-	GetPartitionID(clusterID uint64) uint64
+	GetPartitionID(shardID uint64) uint64
 }
 
 // FixedPartitioner is the IPartitioner with fixed capacity and naive
@@ -35,8 +35,8 @@ func NewFixedPartitioner(capacity uint64) *FixedPartitioner {
 }
 
 // GetPartitionID returns the partition ID for the specified raft cluster.
-func (p *FixedPartitioner) GetPartitionID(clusterID uint64) uint64 {
-	return clusterID % p.capacity
+func (p *FixedPartitioner) GetPartitionID(shardID uint64) uint64 {
+	return shardID % p.capacity
 }
 
 // DoubleFixedPartitioner is the IPartitioner with two fixed capacity and naive
@@ -56,6 +56,6 @@ func NewDoubleFixedPartitioner(capacity uint64,
 }
 
 // GetPartitionID returns the partition ID for the specified raft cluster.
-func (p *DoubleFixedPartitioner) GetPartitionID(clusterID uint64) uint64 {
-	return (clusterID % p.workerCount) % p.capacity
+func (p *DoubleFixedPartitioner) GetPartitionID(shardID uint64) uint64 {
+	return (shardID % p.workerCount) % p.capacity
 }

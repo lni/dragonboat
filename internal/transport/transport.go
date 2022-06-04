@@ -85,9 +85,9 @@ var (
 // IMessageHandler is the interface required to handle incoming raft requests.
 type IMessageHandler interface {
 	HandleMessageBatch(batch pb.MessageBatch) (uint64, uint64)
-	HandleUnreachable(clusterID uint64, nodeID uint64)
-	HandleSnapshotStatus(clusterID uint64, nodeID uint64, rejected bool)
-	HandleSnapshot(clusterID uint64, nodeID uint64, from uint64)
+	HandleUnreachable(shardID uint64, replicaID uint64)
+	HandleSnapshotStatus(shardID uint64, replicaID uint64, rejected bool)
+	HandleSnapshot(shardID uint64, replicaID uint64, from uint64)
 }
 
 // ITransport is the interface of the transport layer used for exchanging
@@ -96,7 +96,7 @@ type ITransport interface {
 	Name() string
 	Send(pb.Message) bool
 	SendSnapshot(pb.Message) bool
-	GetStreamSink(clusterID uint64, nodeID uint64) *Sink
+	GetStreamSink(shardID uint64, replicaID uint64) *Sink
 	Close() error
 }
 
@@ -327,15 +327,15 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 	t.metrics.receivedMessages(ssCount, msgCount, dropedMsgCount)
 }
 
-func (t *Transport) snapshotReceived(clusterID uint64,
-	nodeID uint64, from uint64) {
-	t.msgHandler.HandleSnapshot(clusterID, nodeID, from)
+func (t *Transport) snapshotReceived(shardID uint64,
+	replicaID uint64, from uint64) {
+	t.msgHandler.HandleSnapshot(shardID, replicaID, from)
 }
 
 func (t *Transport) notifyUnreachable(addr string, affected nodeMap) {
 	plog.Warningf("%s became unreachable, affected %d nodes", addr, len(affected))
 	for n := range affected {
-		t.msgHandler.HandleUnreachable(n.ClusterID, n.NodeID)
+		t.msgHandler.HandleUnreachable(n.ShardID, n.ReplicaID)
 	}
 }
 
@@ -355,13 +355,13 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	if req.Type == pb.InstallSnapshot {
 		panic("snapshot message must be sent via its own channel.")
 	}
-	toNodeID := req.To
-	clusterID := req.ClusterId
+	toReplicaID := req.To
+	shardID := req.ClusterId
 	from := req.From
-	addr, key, err := t.resolver.Resolve(clusterID, toNodeID)
+	addr, key, err := t.resolver.Resolve(shardID, toReplicaID)
 	if err != nil {
 		plog.Warningf("%s do not have the address for %s, dropping a message",
-			t.sourceID, dn(clusterID, toNodeID))
+			t.sourceID, dn(shardID, toReplicaID))
 		return false, unknownTarget
 	}
 	// fail fast
@@ -462,8 +462,8 @@ func (t *Transport) processMessages(remoteHost string,
 			return nil
 		case req := <-sq.ch:
 			n := raftio.NodeInfo{
-				ClusterID: req.ClusterId,
-				NodeID:    req.From,
+				ShardID:   req.ClusterId,
+				ReplicaID: req.From,
 			}
 			affected[n] = struct{}{}
 			sq.decrease(req)

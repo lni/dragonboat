@@ -44,23 +44,23 @@ type raftEventListener struct {
 	campaignSkipped     *metrics.Counter
 	leaderID            uint64
 	termValue           uint64
-	nodeID              uint64
-	clusterID           uint64
+	replicaID           uint64
+	shardID             uint64
 	metrics             bool
 }
 
 var _ server.IRaftEventListener = (*raftEventListener)(nil)
 
-func newRaftEventListener(clusterID uint64, nodeID uint64,
+func newRaftEventListener(shardID uint64, replicaID uint64,
 	useMetrics bool, queue *leaderInfoQueue) *raftEventListener {
 	el := &raftEventListener{
-		clusterID: clusterID,
-		nodeID:    nodeID,
+		shardID:   shardID,
+		replicaID: replicaID,
 		metrics:   useMetrics,
 		queue:     queue,
 	}
 	if useMetrics {
-		label := fmt.Sprintf(`{clusterid="%d",nodeid="%d"}`, clusterID, nodeID)
+		label := fmt.Sprintf(`{clusterid="%d",nodeid="%d"}`, shardID, replicaID)
 		name := fmt.Sprintf(`dragonboat_raftnode_campaign_launched_total%s`, label)
 		el.campaignLaunched = metrics.GetOrCreateCounter(name)
 		name = fmt.Sprintf(`dragonboat_raftnode_campaign_skipped_total%s`, label)
@@ -96,8 +96,8 @@ func (e *raftEventListener) LeaderUpdated(info server.LeaderInfo) {
 	atomic.StoreUint64(&e.termValue, info.Term)
 	if e.queue != nil {
 		ui := raftio.LeaderInfo{
-			ClusterID: info.ClusterID,
-			NodeID:    info.NodeID,
+			ShardID:   info.ShardID,
+			ReplicaID: info.ReplicaID,
 			Term:      info.Term,
 			LeaderID:  info.LeaderID,
 		}
@@ -209,8 +209,8 @@ func (l *sysEventListener) handle(e server.SystemEvent) {
 
 func getSnapshotInfo(e server.SystemEvent) raftio.SnapshotInfo {
 	return raftio.SnapshotInfo{
-		ClusterID: e.ClusterID,
-		NodeID:    e.NodeID,
+		ShardID:   e.ShardID,
+		ReplicaID: e.ReplicaID,
 		From:      e.From,
 		Index:     e.Index,
 	}
@@ -218,15 +218,15 @@ func getSnapshotInfo(e server.SystemEvent) raftio.SnapshotInfo {
 
 func getNodeInfo(e server.SystemEvent) raftio.NodeInfo {
 	return raftio.NodeInfo{
-		ClusterID: e.ClusterID,
-		NodeID:    e.NodeID,
+		ShardID:   e.ShardID,
+		ReplicaID: e.ReplicaID,
 	}
 }
 
 func getEntryInfo(e server.SystemEvent) raftio.EntryInfo {
 	return raftio.EntryInfo{
-		ClusterID: e.ClusterID,
-		NodeID:    e.NodeID,
+		ShardID:   e.ShardID,
+		ReplicaID: e.ReplicaID,
 		Index:     e.Index,
 	}
 }

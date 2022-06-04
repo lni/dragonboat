@@ -78,16 +78,16 @@ func TestFollowerStateCanBeSet(t *testing.T) {
 		t.Errorf("not all state recorded")
 	}
 	tests := []struct {
-		nodeID uint64
-		v      uint64
-		tick   uint64
+		replicaID uint64
+		v         uint64
+		tick      uint64
 	}{
 		{100, 1, 0},
 		{101, 4, 2},
 		{102, 200, 2},
 	}
 	for idx, tt := range tests {
-		rec, ok := r.followerSizes[tt.nodeID]
+		rec, ok := r.followerSizes[tt.replicaID]
 		if !ok {
 			t.Errorf("%d, state not found", idx)
 		}

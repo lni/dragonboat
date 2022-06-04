@@ -826,7 +826,7 @@ func getPendingProposal(notifyCommit bool) (pendingProposal, *entryQueue) {
 		}
 		return obj
 	}
-	cfg := config.Config{ClusterID: 100, NodeID: 120}
+	cfg := config.Config{ShardID: 100, ReplicaID: 120}
 	return newPendingProposal(cfg, notifyCommit, p, c), c
 }
 
@@ -1378,7 +1378,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	}
 	total := uint32(0)
 	q := newEntryQueue(2048, 0)
-	cfg := config.Config{ClusterID: 1, NodeID: 1}
+	cfg := config.Config{ShardID: 1, ReplicaID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	session := client.NewNoOPSession(1, random.LockGuardedRand)
 	ac := testing.AllocsPerRun(10000, func() {

@@ -233,4 +233,4 @@ type IOnDiskStateMachine interface {
 
 // CreateOnDiskStateMachineFunc is a factory function type for creating
 // IOnDiskStateMachine instances.
-type CreateOnDiskStateMachineFunc func(clusterID uint64, nodeID uint64) IOnDiskStateMachine
+type CreateOnDiskStateMachineFunc func(shardID uint64, replicaID uint64) IOnDiskStateMachine

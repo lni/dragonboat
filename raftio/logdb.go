@@ -36,8 +36,8 @@ type Metrics struct {
 
 // NodeInfo is used to identify a Raft node.
 type NodeInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 }
 
 // RaftState is the persistent Raft state found in the Log DB.
@@ -53,7 +53,7 @@ type RaftState struct {
 // GetNodeInfo returns a NodeInfo instance with the specified cluster ID
 // and node ID.
 func GetNodeInfo(cid uint64, nid uint64) NodeInfo {
-	return NodeInfo{ClusterID: cid, NodeID: nid}
+	return NodeInfo{ShardID: cid, ReplicaID: nid}
 }
 
 // ILogDB is the interface implemented by the log DB for persistently store
@@ -69,12 +69,12 @@ type ILogDB interface {
 	// ListNodeInfo lists all available NodeInfo found in the log DB.
 	ListNodeInfo() ([]NodeInfo, error)
 	// SaveBootstrapInfo saves the specified bootstrap info to the log DB.
-	SaveBootstrapInfo(clusterID uint64,
-		nodeID uint64, bootstrap pb.Bootstrap) error
+	SaveBootstrapInfo(shardID uint64,
+		replicaID uint64, bootstrap pb.Bootstrap) error
 	// GetBootstrapInfo returns saved bootstrap info from log DB. It returns
 	// ErrNoBootstrapInfo when there is no previously saved bootstrap info for
 	// the specified node.
-	GetBootstrapInfo(clusterID uint64, nodeID uint64) (pb.Bootstrap, error)
+	GetBootstrapInfo(shardID uint64, replicaID uint64) (pb.Bootstrap, error)
 	// SaveRaftState atomically saves the Raft states, log entries and snapshots
 	// metadata found in the pb.Update list to the log DB. shardID is a 1-based
 	// ID of the worker invoking the SaveRaftState method, as each worker
@@ -86,25 +86,25 @@ type ILogDB interface {
 	// limit of maxSize bytes. It returns the located log entries, their total
 	// size in bytes and the occurred error.
 	IterateEntries(ents []pb.Entry,
-		size uint64, clusterID uint64, nodeID uint64, low uint64,
+		size uint64, shardID uint64, replicaID uint64, low uint64,
 		high uint64, maxSize uint64) ([]pb.Entry, uint64, error)
 	// ReadRaftState returns the persistented raft state found in Log DB.
-	ReadRaftState(clusterID uint64,
-		nodeID uint64, lastIndex uint64) (RaftState, error)
+	ReadRaftState(shardID uint64,
+		replicaID uint64, lastIndex uint64) (RaftState, error)
 	// RemoveEntriesTo removes entries with indexes between (0, index].
-	RemoveEntriesTo(clusterID uint64, nodeID uint64, index uint64) error
+	RemoveEntriesTo(shardID uint64, replicaID uint64, index uint64) error
 	// CompactEntriesTo reclaims underlying storage space used for storing
 	// entries up to the specified index.
-	CompactEntriesTo(clusterID uint64,
-		nodeID uint64, index uint64) (<-chan struct{}, error)
+	CompactEntriesTo(shardID uint64,
+		replicaID uint64, index uint64) (<-chan struct{}, error)
 	// SaveSnapshots saves all snapshot metadata found in the pb.Update list.
 	SaveSnapshots([]pb.Update) error
 	// GetSnapshot returns the most recent snapshot associated with the specified
 	// cluster.
-	GetSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error)
+	GetSnapshot(shardID uint64, replicaID uint64) (pb.Snapshot, error)
 	// RemoveNodeData removes all data associated with the specified node.
-	RemoveNodeData(clusterID uint64, nodeID uint64) error
+	RemoveNodeData(shardID uint64, replicaID uint64) error
 	// ImportSnapshot imports the specified snapshot by creating all required
 	// metadata in the logdb.
-	ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error
+	ImportSnapshot(snapshot pb.Snapshot, replicaID uint64) error
 }

@@ -68,7 +68,7 @@ var firstError = utils.FirstError
 // tool by always replace permanently dead nodes with available ones in time.
 //
 // ImportSnapshot imports the exported snapshot available in the specified
-// srcDir directory to the system and rewrites the history of node nodeID so
+// srcDir directory to the system and rewrites the history of node replicaID so
 // the node owns the imported snapshot and the membership of the Raft cluster
 // is rewritten to the details specified in memberNodes.
 //
@@ -76,17 +76,17 @@ var firstError = utils.FirstError
 // Dragonboat based application. The NodeHost instance must be stopped on that
 // host when invoking the function ImportSnapshot.
 //
-// As an example, consider a Raft cluster with three nodes with the NodeID
+// As an example, consider a Raft cluster with three nodes with the ReplicaID
 // values being 1, 2 and 3, they run on three distributed hostss each with a
 // running NodeHost instance and the RaftAddress values are m1, m2 and
-// m3. The ClusterID value of the Raft cluster is 100. Let's say hosts
+// m3. The ShardID value of the Raft cluster is 100. Let's say hosts
 // identified by m2 and m3 suddenly become permanently gone and thus cause the
 // Raft cluster to lose its quorum nodes. To repair the cluster, we can use the
 // ImportSnapshot function to overwrite the state and membership of the Raft
 // cluster.
 //
 // Assuming we have two other running hosts identified as m4 and m5, we want to
-// have two new nodes with NodeID 4 and 5 to replace the permanently lost ndoes
+// have two new nodes with ReplicaID 4 and 5 to replace the permanently lost ndoes
 // 2 and 3. In this case, the memberNodes map should contain the following
 // content:
 //
@@ -117,7 +117,7 @@ var firstError = utils.FirstError
 //
 // Once ImportSnapshot is called on all three of those hosts, we end up having
 // the history of the Raft cluster overwritten to the state in which -
-// * there are 3 nodes in the Raft cluster, the NodeID values are 1, 4 and 5.
+// * there are 3 nodes in the Raft cluster, the ReplicaID values are 1, 4 and 5.
 //   they run on hosts m1, m4 and m5.
 // * nodes 2 and 3 are permanently removed from the cluster. you should never
 //   restart any of them as both hosts m2 and m3 are suppose to be permanently
@@ -132,7 +132,7 @@ var firstError = utils.FirstError
 // It is your applications's responsibility to let m4 and m5 to be aware that
 // node 4 and 5 are now running there.
 func ImportSnapshot(nhConfig config.NodeHostConfig,
-	srcDir string, memberNodes map[uint64]string, nodeID uint64) (err error) {
+	srcDir string, memberNodes map[uint64]string, replicaID uint64) (err error) {
 	if nhConfig.DeploymentID == 0 {
 		plog.Infof("NodeHostConfig.DeploymentID not set, default to %d",
 			unmanagedDeploymentID)
@@ -145,7 +145,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	fs := nhConfig.Expert.FS
-	if err := checkImportSettings(nhConfig, memberNodes, nodeID); err != nil {
+	if err := checkImportSettings(nhConfig, memberNodes, replicaID); err != nil {
 		return err
 	}
 	ssfp, err := getSnapshotFilepath(srcDir, fs)
@@ -188,7 +188,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	ssDir := env.GetSnapshotDir(nhConfig.DeploymentID,
-		oldss.ClusterId, nodeID)
+		oldss.ClusterId, replicaID)
 	exist, err := fileutil.Exist(ssDir, fs)
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		}
 	} else {
 		if err := env.CreateSnapshotDir(nhConfig.DeploymentID,
-			oldss.ClusterId, nodeID); err != nil {
+			oldss.ClusterId, replicaID); err != nil {
 			return err
 		}
 	}
@@ -207,7 +207,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return env.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	ssEnv := server.NewSSEnv(getSnapshotDir,
-		oldss.ClusterId, nodeID, oldss.Index, nodeID, server.SnapshotMode, fs)
+		oldss.ClusterId, replicaID, oldss.Index, replicaID, server.SnapshotMode, fs)
 	if err := ssEnv.CreateTempDir(); err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 	if err := ssEnv.FinalizeSnapshot(&ss); err != nil {
 		return err
 	}
-	return logdb.ImportSnapshot(ss, nodeID)
+	return logdb.ImportSnapshot(ss, replicaID)
 }
 
 func cleanupSnapshotDir(dir string, fs vfs.IFS) error {
@@ -250,8 +250,8 @@ func cleanupSnapshotDir(dir string, fs vfs.IFS) error {
 }
 
 func checkImportSettings(nhConfig config.NodeHostConfig,
-	memberNodes map[uint64]string, nodeID uint64) error {
-	addr, ok := memberNodes[nodeID]
+	memberNodes map[uint64]string, replicaID uint64) error {
+	addr, ok := memberNodes[replicaID]
 	if !ok {
 		plog.Errorf("node ID not found in the memberNode map")
 		return ErrInvalidMembers
@@ -334,26 +334,26 @@ func getSnapshotRecord(dir string,
 }
 
 func checkMembers(old pb.Membership, members map[uint64]string) error {
-	for nodeID, addr := range members {
-		v, ok := old.Addresses[nodeID]
+	for replicaID, addr := range members {
+		v, ok := old.Addresses[replicaID]
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
-		v, ok = old.NonVotings[nodeID]
+		v, ok = old.NonVotings[replicaID]
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
 		if ok {
 			return errors.New("adding an nonVoting as regular node")
 		}
-		v, ok = old.Witnesses[nodeID]
+		v, ok = old.Witnesses[replicaID]
 		if ok && v != addr {
 			return errors.New("node address changed")
 		}
 		if ok {
 			return errors.New("adding a witness as regular node")
 		}
-		_, ok = old.Removed[nodeID]
+		_, ok = old.Removed[replicaID]
 		if ok {
 			return errors.New("adding a removed node")
 		}

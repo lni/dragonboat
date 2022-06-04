@@ -833,8 +833,8 @@ func TestIndexEncodeDecode(t *testing.T) {
 
 func TestIndexSaveLoad(t *testing.T) {
 	i1 := &nodeIndex{
-		clusterID: 2,
-		nodeID:    3,
+		shardID:   2,
+		replicaID: 3,
 		currEntries: index{
 			entries: []indexEntry{{1, 100, 5, 100, 10}},
 		},
@@ -842,16 +842,16 @@ func TestIndexSaveLoad(t *testing.T) {
 		state:    indexEntry{6, stateFlag, 5, 20, 10},
 	}
 	i2 := &nodeIndex{
-		clusterID: 3,
-		nodeID:    4,
+		shardID:   3,
+		replicaID: 4,
 		currEntries: index{
 			entries: []indexEntry{{1, 100, 5, 100, 10}, {101, 102, 6, 100, 10}},
 		},
 		snapshot: indexEntry{30, snapshotFlag, 5, 110, 10},
 		state:    indexEntry{6, stateFlag, 5, 20, 10},
 	}
-	ni1 := raftio.NodeInfo{ClusterID: 2, NodeID: 3}
-	ni2 := raftio.NodeInfo{ClusterID: 3, NodeID: 4}
+	ni1 := raftio.NodeInfo{ShardID: 2, ReplicaID: 3}
+	ni2 := raftio.NodeInfo{ShardID: 3, ReplicaID: 4}
 	nodeStates := newNodeStates()
 	nodeStates.indexes[ni1] = i1
 	nodeStates.indexes[ni2] = i2
@@ -868,8 +868,8 @@ func TestIndexSaveLoad(t *testing.T) {
 	loaded := newNodeStates()
 	require.NoError(t, loaded.load(dirname, fileNum(1), fs))
 	require.Equal(t, 2, len(loaded.indexes))
-	require.Equal(t, i1.clusterID, loaded.indexes[ni1].clusterID)
-	require.Equal(t, i1.nodeID, loaded.indexes[ni1].nodeID)
+	require.Equal(t, i1.shardID, loaded.indexes[ni1].shardID)
+	require.Equal(t, i1.replicaID, loaded.indexes[ni1].replicaID)
 	require.Equal(t, i1entries, loaded.indexes[ni1].entries)
 	require.Equal(t, i2entries, loaded.indexes[ni2].entries)
 	require.Equal(t, i1.snapshot, loaded.indexes[ni1].snapshot)
@@ -880,13 +880,13 @@ func TestIndexSaveLoad(t *testing.T) {
 
 func TestIndexLoadIsAppendOnly(t *testing.T) {
 	i := &nodeIndex{
-		clusterID: 2,
-		nodeID:    3,
+		shardID:   2,
+		replicaID: 3,
 		currEntries: index{
 			entries: []indexEntry{{101, 102, 2, 0, 10}, {102, 104, 2, 58, 10}},
 		},
 	}
-	ni1 := raftio.NodeInfo{ClusterID: 2, NodeID: 3}
+	ni1 := raftio.NodeInfo{ShardID: 2, ReplicaID: 3}
 	nodeStates := newNodeStates()
 	nodeStates.indexes[ni1] = i
 	currEntries := i.currEntries
@@ -1012,8 +1012,8 @@ func TestSnapshotCompaction(t *testing.T) {
 
 func TestStateGetObsolete(t *testing.T) {
 	nodeStates := newNodeStates()
-	ni1 := raftio.NodeInfo{ClusterID: 1, NodeID: 1}
-	ni2 := raftio.NodeInfo{ClusterID: 2, NodeID: 1}
+	ni1 := raftio.NodeInfo{ShardID: 1, ReplicaID: 1}
+	ni2 := raftio.NodeInfo{ShardID: 2, ReplicaID: 1}
 	index1 := &nodeIndex{}
 	index2 := &nodeIndex{}
 	index1.entries.append(indexEntry{1, 100, 5, 10, 10})

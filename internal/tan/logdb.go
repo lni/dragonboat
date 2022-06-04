@@ -26,7 +26,7 @@ raft nodes so there won't be an excessive amount of tan db instances, we call
 this the multiplexed log mode. Such 1:1 and n:m mapping relationships are
 managed by a regularKeeper or a multiplexedKeeper intance both of which are
 of the dbKeeper interface as defined in db_keeper.go. This allows the upper
-layer to get the relevant tan db by just providing the clusterID and nodeID
+layer to get the relevant tan db by just providing the shardID and replicaID
 values of the raft node with the mapping details hidden from the outside.
 
 Each tan db instance owns a log file which will be used for storing all log
@@ -184,15 +184,15 @@ func (l *LogDB) cleanupBootstrapDir() error {
 // TODO: remove the following two methods
 
 // DeleteSnapshot ...
-func (l *LogDB) DeleteSnapshot(clusterID uint64,
-	nodeID uint64, index uint64) error {
+func (l *LogDB) DeleteSnapshot(shardID uint64,
+	replicaID uint64, index uint64) error {
 	panic("depreciated")
 }
 
 // ListSnapshots lists available snapshots associated with the specified
 // Raft node for index range (0, index].
-func (l *LogDB) ListSnapshots(clusterID uint64,
-	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
+func (l *LogDB) ListSnapshots(shardID uint64,
+	replicaID uint64, index uint64) ([]pb.Snapshot, error) {
 	panic("depreciated")
 }
 
@@ -229,26 +229,26 @@ func (l *LogDB) ListNodeInfo() ([]raftio.NodeInfo, error) {
 	}
 	result := make([]raftio.NodeInfo, 0)
 	for _, file := range files {
-		clusterID, nodeID, ok := parseBootstrapFilename(file)
+		shardID, replicaID, ok := parseBootstrapFilename(file)
 		if ok {
-			result = append(result, raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID})
+			result = append(result, raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID})
 		}
 	}
 	return result, nil
 }
 
 // SaveBootstrapInfo saves the specified bootstrap info to the log DB.
-func (l *LogDB) SaveBootstrapInfo(clusterID uint64,
-	nodeID uint64, rec pb.Bootstrap) error {
-	return saveBootstrap(l.fs, l.bsDirname, l.bsDir, clusterID, nodeID, rec)
+func (l *LogDB) SaveBootstrapInfo(shardID uint64,
+	replicaID uint64, rec pb.Bootstrap) error {
+	return saveBootstrap(l.fs, l.bsDirname, l.bsDir, shardID, replicaID, rec)
 }
 
 // GetBootstrapInfo returns saved bootstrap info from log DB. It returns
 // ErrNoBootstrapInfo when there is no previously saved bootstrap info for
 // the specified node.
-func (l *LogDB) GetBootstrapInfo(clusterID uint64,
-	nodeID uint64) (pb.Bootstrap, error) {
-	return getBootstrap(l.fs, l.bsDirname, clusterID, nodeID)
+func (l *LogDB) GetBootstrapInfo(shardID uint64,
+	replicaID uint64) (pb.Bootstrap, error) {
+	return getBootstrap(l.fs, l.bsDirname, shardID, replicaID)
 }
 
 // SaveRaftState atomically saves the Raft states, log entries and snapshots
@@ -272,13 +272,13 @@ func (l *LogDB) concurrentSaveState(updates []pb.Update, shardID uint64) error {
 	var usedShardID uint64
 	for idx, ud := range updates {
 		if idx == 0 {
-			usedShardID = l.collection.key(ud.ClusterID)
+			usedShardID = l.collection.key(ud.ShardID)
 		} else {
-			if usedShardID != l.collection.key(ud.ClusterID) {
+			if usedShardID != l.collection.key(ud.ShardID) {
 				panic("shard ID changed")
 			}
 		}
-		db, err := l.getDB(ud.ClusterID, ud.NodeID)
+		db, err := l.getDB(ud.ShardID, ud.ReplicaID)
 		if err != nil {
 			return err
 		}
@@ -315,7 +315,7 @@ func (l *LogDB) sequentialSaveState(updates []pb.Update, shardID uint64) error {
 		wg = new(sync.WaitGroup)
 	}
 	for _, ud := range updates {
-		db, err := l.getDB(ud.ClusterID, ud.NodeID)
+		db, err := l.getDB(ud.ShardID, ud.ReplicaID)
 		if err != nil {
 			return err
 		}
@@ -342,33 +342,33 @@ func (l *LogDB) sequentialSaveState(updates []pb.Update, shardID uint64) error {
 // limit of maxSize bytes. It returns the located log entries, their total
 // size in bytes and the occurred error.
 func (l *LogDB) IterateEntries(ents []pb.Entry,
-	size uint64, clusterID uint64, nodeID uint64, low uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
-	db, err := l.getDB(clusterID, nodeID)
+	db, err := l.getDB(shardID, replicaID)
 	if err != nil {
 		return nil, 0, err
 	}
-	return db.getEntries(clusterID, nodeID, ents, size, low, high, maxSize)
+	return db.getEntries(shardID, replicaID, ents, size, low, high, maxSize)
 }
 
 // ReadRaftState returns the persistented raft state found in Log DB.
-func (l *LogDB) ReadRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
-	db, err := l.getDB(clusterID, nodeID)
+func (l *LogDB) ReadRaftState(shardID uint64,
+	replicaID uint64, lastIndex uint64) (raftio.RaftState, error) {
+	db, err := l.getDB(shardID, replicaID)
 	if err != nil {
 		return raftio.RaftState{}, err
 	}
-	return db.getRaftState(clusterID, nodeID, lastIndex)
+	return db.getRaftState(shardID, replicaID, lastIndex)
 }
 
 // RemoveEntriesTo removes entries between (0, index].
-func (l *LogDB) RemoveEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) error {
-	db, err := l.getDB(clusterID, nodeID)
+func (l *LogDB) RemoveEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) error {
+	db, err := l.getDB(shardID, replicaID)
 	if err != nil {
 		return err
 	}
-	if err := db.removeEntries(clusterID, nodeID, index); err != nil {
+	if err := db.removeEntries(shardID, replicaID, index); err != nil {
 		return err
 	}
 	return db.sync()
@@ -376,8 +376,8 @@ func (l *LogDB) RemoveEntriesTo(clusterID uint64,
 
 // CompactEntriesTo reclaims underlying storage space used for storing
 // entries up to the specified index.
-func (l *LogDB) CompactEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) (<-chan struct{}, error) {
+func (l *LogDB) CompactEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) (<-chan struct{}, error) {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
 	return ch, nil
@@ -390,13 +390,13 @@ func (l *LogDB) SaveSnapshots(updates []pb.Update) error {
 		if pb.IsEmptySnapshot(ud.Snapshot) {
 			continue
 		}
-		db, err := l.getDB(ud.ClusterID, ud.NodeID)
+		db, err := l.getDB(ud.ShardID, ud.ReplicaID)
 		if err != nil {
 			return err
 		}
 		wu := pb.Update{
-			ClusterID: ud.ClusterID,
-			NodeID:    ud.NodeID,
+			ShardID:   ud.ShardID,
+			ReplicaID: ud.ReplicaID,
 			Snapshot:  ud.Snapshot,
 		}
 		if _, err := db.write(wu, buf); err != nil {
@@ -411,26 +411,26 @@ func (l *LogDB) SaveSnapshots(updates []pb.Update) error {
 
 // GetSnapshot lists available snapshots associated with the specified
 // Raft node for index range (0, index].
-func (l *LogDB) GetSnapshot(clusterID uint64,
-	nodeID uint64) (pb.Snapshot, error) {
-	db, err := l.getDB(clusterID, nodeID)
+func (l *LogDB) GetSnapshot(shardID uint64,
+	replicaID uint64) (pb.Snapshot, error) {
+	db, err := l.getDB(shardID, replicaID)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
-	return db.getSnapshot(clusterID, nodeID)
+	return db.getSnapshot(shardID, replicaID)
 }
 
 // RemoveNodeData removes all data associated with the specified node.
-func (l *LogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
-	db, err := l.getDB(clusterID, nodeID)
+func (l *LogDB) RemoveNodeData(shardID uint64, replicaID uint64) error {
+	db, err := l.getDB(shardID, replicaID)
 	if err != nil {
 		return err
 	}
-	if err := db.removeAll(clusterID, nodeID); err != nil {
+	if err := db.removeAll(shardID, replicaID); err != nil {
 		return err
 	}
 	if err := removeBootstrap(l.fs,
-		l.bsDirname, l.bsDir, clusterID, nodeID); err != nil {
+		l.bsDirname, l.bsDir, shardID, replicaID); err != nil {
 		return err
 	}
 	return db.sync()
@@ -438,27 +438,27 @@ func (l *LogDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
 
 // ImportSnapshot imports the specified snapshot by creating all required
 // metadata in the logdb.
-func (l *LogDB) ImportSnapshot(snapshot pb.Snapshot, nodeID uint64) error {
+func (l *LogDB) ImportSnapshot(snapshot pb.Snapshot, replicaID uint64) error {
 	bs := pb.Bootstrap{
 		Join: true,
 		Type: snapshot.Type,
 	}
 	if err := saveBootstrap(l.fs,
-		l.bsDirname, l.bsDir, snapshot.ClusterId, nodeID, bs); err != nil {
+		l.bsDirname, l.bsDir, snapshot.ClusterId, replicaID, bs); err != nil {
 		return err
 	}
-	db, err := l.getDB(snapshot.ClusterId, nodeID)
+	db, err := l.getDB(snapshot.ClusterId, replicaID)
 	if err != nil {
 		return err
 	}
-	if err := db.importSnapshot(snapshot.ClusterId, nodeID, snapshot); err != nil {
+	if err := db.importSnapshot(snapshot.ClusterId, replicaID, snapshot); err != nil {
 		return err
 	}
 	return db.sync()
 }
 
-func (l *LogDB) getDB(clusterID uint64, nodeID uint64) (*db, error) {
+func (l *LogDB) getDB(shardID uint64, replicaID uint64) (*db, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.collection.getDB(clusterID, nodeID)
+	return l.collection.getDB(shardID, replicaID)
 }

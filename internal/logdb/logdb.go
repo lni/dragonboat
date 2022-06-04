@@ -36,16 +36,16 @@ var (
 // usually obtained by calling the GetKey() function of the IContext
 // instance.
 type IReusableKey interface {
-	SetEntryBatchKey(clusterID uint64, nodeID uint64, index uint64)
+	SetEntryBatchKey(shardID uint64, replicaID uint64, index uint64)
 	// SetEntryKey sets the key to be an entry key for the specified Raft node
 	// with the specified entry index.
-	SetEntryKey(clusterID uint64, nodeID uint64, index uint64)
+	SetEntryKey(shardID uint64, replicaID uint64, index uint64)
 	// SetStateKey sets the key to be an persistent state key suitable
 	// for the specified Raft cluster node.
-	SetStateKey(clusterID uint64, nodeID uint64)
+	SetStateKey(shardID uint64, replicaID uint64)
 	// SetMaxIndexKey sets the key to be the max possible index key for the
 	// specified Raft cluster node.
-	SetMaxIndexKey(clusterID uint64, nodeID uint64)
+	SetMaxIndexKey(shardID uint64, replicaID uint64)
 	// Key returns the underlying byte slice of the key.
 	Key() []byte
 	// Release releases the key instance so it can be reused in the future.

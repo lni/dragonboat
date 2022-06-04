@@ -38,18 +38,18 @@ func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
 
 // GetClusterInfo returns the cluster info for the specified cluster if it is
 // available in the gossip view.
-func (r *NodeHostRegistry) GetClusterInfo(clusterID uint64) (ClusterView, bool) {
+func (r *NodeHostRegistry) GetClusterInfo(shardID uint64) (ClusterView, bool) {
 	r.view.mu.Lock()
 	defer r.view.mu.Unlock()
 
-	ci, ok := r.view.mu.clusters[clusterID]
+	ci, ok := r.view.mu.clusters[shardID]
 	if !ok {
 		return ClusterView{}, false
 	}
 	result := ci
 	result.Nodes = make(map[uint64]string)
-	for clusterID, target := range ci.Nodes {
-		result.Nodes[clusterID] = target
+	for shardID, target := range ci.Nodes {
+		result.Nodes[shardID] = target
 	}
 	return result, true
 }

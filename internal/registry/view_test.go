@@ -24,7 +24,7 @@ import (
 
 func getTestClusterView() []ClusterView {
 	cv1 := ClusterView{
-		ClusterID:         100,
+		ShardID:           100,
 		ConfigChangeIndex: 200,
 		Nodes: map[uint64]string{
 			200: "address1",
@@ -33,7 +33,7 @@ func getTestClusterView() []ClusterView {
 		},
 	}
 	cv2 := ClusterView{
-		ClusterID:         1340,
+		ShardID:           1340,
 		ConfigChangeIndex: 126200,
 		Nodes: map[uint64]string{
 			1200: "myaddress1",
@@ -62,7 +62,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 
 	update := []ClusterView{
 		{
-			ClusterID:         1340,
+			ShardID:           1340,
 			ConfigChangeIndex: 300,
 			Nodes: map[uint64]string{
 				1200: "myaddress1",
@@ -78,7 +78,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 
 	update = []ClusterView{
 		{
-			ClusterID:         1340,
+			ShardID:           1340,
 			ConfigChangeIndex: 226200,
 			Nodes: map[uint64]string{
 				1200: "myaddress1",
@@ -115,7 +115,7 @@ func TestGetGossipData(t *testing.T) {
 func TestUpdateMembershipView(t *testing.T) {
 	v := newView(0)
 	cv := ClusterView{
-		ClusterID:         123,
+		ShardID:           123,
 		ConfigChangeIndex: 100,
 		Nodes:             make(map[uint64]string),
 	}
@@ -124,7 +124,7 @@ func TestUpdateMembershipView(t *testing.T) {
 	v.mu.clusters[123] = cv
 
 	ncv := ClusterView{
-		ClusterID:         123,
+		ShardID:           123,
 		ConfigChangeIndex: 200,
 		Nodes:             make(map[uint64]string),
 	}
@@ -142,7 +142,7 @@ func TestUpdateMembershipView(t *testing.T) {
 func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 	v := newView(0)
 	cv := ClusterView{
-		ClusterID:         123,
+		ShardID:           123,
 		ConfigChangeIndex: 100,
 		Nodes:             make(map[uint64]string),
 	}
@@ -151,7 +151,7 @@ func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 	v.mu.clusters[123] = cv
 
 	ncv := ClusterView{
-		ClusterID:         123,
+		ShardID:           123,
 		ConfigChangeIndex: 10,
 		Nodes:             make(map[uint64]string),
 	}
@@ -169,16 +169,16 @@ func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 func TestUpdateLeadershipView(t *testing.T) {
 	v := newView(0)
 	cv := ClusterView{
-		ClusterID: 123,
-		LeaderID:  10,
-		Term:      20,
+		ShardID:  123,
+		LeaderID: 10,
+		Term:     20,
 	}
 	v.mu.clusters[123] = cv
 
 	ncv := ClusterView{
-		ClusterID: 123,
-		LeaderID:  11,
-		Term:      21,
+		ShardID:  123,
+		LeaderID: 11,
+		Term:     21,
 	}
 	updates := []ClusterView{ncv}
 	v.update(updates)
@@ -191,14 +191,14 @@ func TestUpdateLeadershipView(t *testing.T) {
 func TestInitialLeaderInfoCanBeRecorded(t *testing.T) {
 	v := newView(0)
 	cv := ClusterView{
-		ClusterID: 123,
+		ShardID: 123,
 	}
 	v.mu.clusters[123] = cv
 
 	ncv := ClusterView{
-		ClusterID: 123,
-		LeaderID:  11,
-		Term:      21,
+		ShardID:  123,
+		LeaderID: 11,
+		Term:     21,
 	}
 	updates := []ClusterView{ncv}
 	v.update(updates)
@@ -211,16 +211,16 @@ func TestInitialLeaderInfoCanBeRecorded(t *testing.T) {
 func TestUnknownLeaderIsIgnored(t *testing.T) {
 	v := newView(0)
 	cv := ClusterView{
-		ClusterID: 123,
-		LeaderID:  10,
-		Term:      20,
+		ShardID:  123,
+		LeaderID: 10,
+		Term:     20,
 	}
 	v.mu.clusters[123] = cv
 
 	ncv := ClusterView{
-		ClusterID: 123,
-		LeaderID:  raft.NoLeader,
-		Term:      21,
+		ShardID:  123,
+		LeaderID: raft.NoLeader,
+		Term:     21,
 	}
 	updates := []ClusterView{ncv}
 	v.update(updates)

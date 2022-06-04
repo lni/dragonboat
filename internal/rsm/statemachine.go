@@ -111,8 +111,8 @@ type SSMeta struct {
 type Task struct {
 	Entries      []pb.Entry
 	SSRequest    SSRequest
-	ClusterID    uint64
-	NodeID       uint64
+	ShardID      uint64
+	ReplicaID    uint64
 	Index        uint64
 	Save         bool
 	Stream       bool
@@ -136,8 +136,8 @@ func (t *Task) isSyncTask() bool {
 }
 
 // SMFactoryFunc is the function type for creating an IStateMachine instance
-type SMFactoryFunc func(clusterID uint64,
-	nodeID uint64, done <-chan struct{}) IManagedStateMachine
+type SMFactoryFunc func(shardID uint64,
+	replicaID uint64, done <-chan struct{}) IManagedStateMachine
 
 // INode is the interface of a dragonboat node.
 type INode interface {
@@ -145,8 +145,8 @@ type INode interface {
 	RestoreRemotes(pb.Snapshot) error
 	ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)
 	ApplyConfigChange(pb.ConfigChange, uint64, bool) error
-	NodeID() uint64
-	ClusterID() uint64
+	ReplicaID() uint64
+	ShardID() uint64
 	ShouldStop() <-chan struct{}
 }
 
@@ -207,7 +207,7 @@ func NewStateMachine(sm IManagedStateMachine,
 		taskQ:       NewTaskQueue(),
 		node:        node,
 		sessions:    NewSessionManager(),
-		members:     newMembership(node.ClusterID(), node.NodeID(), ordered),
+		members:     newMembership(node.ShardID(), node.ReplicaID(), ordered),
 		isWitness:   cfg.IsWitness,
 		sct:         cfg.SnapshotCompressionType,
 		fs:          fs,
@@ -652,7 +652,7 @@ func (s *StateMachine) logMembership(name string,
 	index uint64, members map[uint64]string) {
 	plog.Debugf("%d %s included in %s", len(members), name, s.ssid(index))
 	for nid, addr := range members {
-		plog.Debugf("\t%s : %s", logutil.NodeID(nid), addr)
+		plog.Debugf("\t%s : %s", logutil.ReplicaID(nid), addr)
 	}
 }
 
@@ -667,7 +667,7 @@ func (s *StateMachine) getSSMeta(c interface{}, r SSRequest) (SSMeta, error) {
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, sessionBufferInitialCap))
 	meta := SSMeta{
-		From:            s.node.NodeID(),
+		From:            s.node.ReplicaID(),
 		Ctx:             c,
 		Index:           s.index,
 		Term:            s.term,
@@ -1103,9 +1103,9 @@ func (s *StateMachine) update(e pb.Entry) (sm.Result, bool, bool, error) {
 }
 
 func (s *StateMachine) id() string {
-	return logutil.DescribeSM(s.node.ClusterID(), s.node.NodeID())
+	return logutil.DescribeSM(s.node.ShardID(), s.node.ReplicaID())
 }
 
 func (s *StateMachine) ssid(index uint64) string {
-	return logutil.DescribeSS(s.node.ClusterID(), s.node.NodeID(), index)
+	return logutil.DescribeSS(s.node.ShardID(), s.node.ReplicaID(), index)
 }

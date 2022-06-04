@@ -105,7 +105,7 @@ func (d *db) write(u pb.Update, buf []byte) (bool, error) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	st := d.mu.nodeStates.getState(u.ClusterID, u.NodeID)
+	st := d.mu.nodeStates.getState(u.ShardID, u.ReplicaID)
 	if pb.IsStateEqual(u.State, st) &&
 		pb.IsEmptySnapshot(u.Snapshot) && len(u.EntriesToSave) == 0 {
 		return false, nil
@@ -125,7 +125,7 @@ func (d *db) doWriteLocked(u pb.Update, data []byte) error {
 	}
 	d.updateIndex(u, d.mu.offset, d.mu.logNum)
 	d.mu.offset = offset
-	d.mu.nodeStates.setState(u.ClusterID, u.NodeID, u.State)
+	d.mu.nodeStates.setState(u.ShardID, u.ReplicaID, u.State)
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (d *db) sync() error {
 // updateIndex records the fileNum and position of the written update into the
 // index.
 func (d *db) updateIndex(update pb.Update, pos int64, logNum fileNum) {
-	index := d.mu.nodeStates.getIndex(update.ClusterID, update.NodeID)
+	index := d.mu.nodeStates.getIndex(update.ShardID, update.ReplicaID)
 	compactedTo, compactionUpdate := isCompactionUpdate(update)
 	ei := indexEntry{
 		pos:     pos,
@@ -192,10 +192,10 @@ func (d *db) switchToNewLog() error {
 // getSnapshot returns the latest snapshot in the db. we record all seen
 // snapshots into the db, but will only query for the most recent snapshot
 // inserted into the db.
-func (d *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
+func (d *db) getSnapshot(shardID uint64, replicaID uint64) (pb.Snapshot, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ies, ok := readState.nodeStates.querySnapshot(clusterID, nodeID)
+	ies, ok := readState.nodeStates.querySnapshot(shardID, replicaID)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {
@@ -219,12 +219,12 @@ func (d *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
 // pb.State value and raft entry details expressed as FirstIndex of the entry
 // and EntryCount. The pb.State value returned in the State field of
 // raftio.RaftState is the latest raft state written into the db.
-func (d *db) getRaftState(clusterID uint64, nodeID uint64,
+func (d *db) getRaftState(shardID uint64, replicaID uint64,
 	lastIndex uint64) (raftio.RaftState, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ie, ok := readState.nodeStates.queryState(clusterID, nodeID)
-	ies, _ := readState.nodeStates.query(clusterID, nodeID, lastIndex+1, math.MaxUint64)
+	ie, ok := readState.nodeStates.queryState(shardID, replicaID)
+	ies, _ := readState.nodeStates.query(shardID, replicaID, lastIndex+1, math.MaxUint64)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {
@@ -257,13 +257,13 @@ func (d *db) getRaftState(clusterID uint64, nodeID uint64,
 // getEntries queries the db to return raft entries between [low, high), the
 // max size of the returned entries is maxSize bytes. The results will be
 // appended into the input entries slice which is already size bytes in size.
-func (d *db) getEntries(clusterID uint64, nodeID uint64,
+func (d *db) getEntries(shardID uint64, replicaID uint64,
 	entries []pb.Entry, size uint64, low uint64,
 	high uint64, maxSize uint64) ([]pb.Entry, uint64, error) {
 	d.mu.Lock()
 	readState := d.loadReadState()
-	ies, ok := readState.nodeStates.query(clusterID, nodeID, low, high)
-	compactedTo := readState.nodeStates.compactedTo(clusterID, nodeID)
+	ies, ok := readState.nodeStates.query(shardID, replicaID, low, high)
+	compactedTo := readState.nodeStates.compactedTo(shardID, replicaID)
 	d.mu.Unlock()
 	defer readState.unref()
 	if !ok {

@@ -29,8 +29,8 @@ import (
 // side by side with the tan db itself, so strictly speaking, they are not
 // a part of the tan db.
 func getBootstrap(fs vfs.FS, dirname string,
-	clusterID uint64, nodeID uint64) (rec pb.Bootstrap, err error) {
-	filename := makeBootstrapFilename(fs, dirname, clusterID, nodeID, false)
+	shardID uint64, replicaID uint64) (rec pb.Bootstrap, err error) {
+	filename := makeBootstrapFilename(fs, dirname, shardID, replicaID, false)
 	f, err := fs.Open(filename)
 	if err != nil {
 		if oserror.IsNotExist(err) {
@@ -56,10 +56,10 @@ func getBootstrap(fs vfs.FS, dirname string,
 
 func saveBootstrap(fs vfs.FS,
 	dirname string, dataDir vfs.File,
-	clusterID uint64, nodeID uint64, rec pb.Bootstrap) (err error) {
+	shardID uint64, replicaID uint64, rec pb.Bootstrap) (err error) {
 	buf := pb.MustMarshal(&rec)
-	fn := makeBootstrapFilename(fs, dirname, clusterID, nodeID, true)
-	ffn := makeBootstrapFilename(fs, dirname, clusterID, nodeID, false)
+	fn := makeBootstrapFilename(fs, dirname, shardID, replicaID, true)
+	ffn := makeBootstrapFilename(fs, dirname, shardID, replicaID, false)
 	f, err := fs.Create(fn)
 	if err != nil {
 		return err
@@ -83,8 +83,8 @@ func saveBootstrap(fs vfs.FS,
 }
 
 func removeBootstrap(fs vfs.FS, dirname string, dataDir vfs.File,
-	clusterID uint64, nodeID uint64) error {
-	fn := makeBootstrapFilename(fs, dirname, clusterID, nodeID, false)
+	shardID uint64, replicaID uint64) error {
+	fn := makeBootstrapFilename(fs, dirname, shardID, replicaID, false)
 	if _, err := fs.Stat(fn); oserror.IsNotExist(err) {
 		return nil
 	}

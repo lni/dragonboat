@@ -36,10 +36,10 @@ var (
 type ClusterInfo struct {
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
-	// ClusterID is the cluster ID of the Raft cluster node.
-	ClusterID uint64
-	// NodeID is the node ID of the Raft cluster node.
-	NodeID uint64
+	// ShardID is the cluster ID of the Raft cluster node.
+	ShardID uint64
+	// ReplicaID is the node ID of the Raft cluster node.
+	ReplicaID uint64
 	// ConfigChangeIndex is the current config change index of the Raft node.
 	// ConfigChangeIndex is Raft Log index of the last applied membership
 	// change entry.
@@ -65,7 +65,7 @@ type ClusterInfo struct {
 
 // ClusterView is the view of a cluster from gossip's point of view.
 type ClusterView struct {
-	ClusterID         uint64
+	ShardID           uint64
 	Nodes             map[uint64]string
 	ConfigChangeIndex uint64
 	LeaderID          uint64
@@ -76,7 +76,7 @@ func toClusterViewList(input []ClusterInfo) []ClusterView {
 	result := make([]ClusterView, 0)
 	for _, ci := range input {
 		cv := ClusterView{
-			ClusterID:         ci.ClusterID,
+			ShardID:           ci.ShardID,
 			Nodes:             ci.Nodes,
 			ConfigChangeIndex: ci.ConfigChangeIndex,
 			LeaderID:          ci.LeaderID,
@@ -94,7 +94,7 @@ type sharedInfo struct {
 
 type view struct {
 	deploymentID uint64
-	// clusterID -> ClusterView
+	// shardID -> ClusterView
 	mu struct {
 		sync.Mutex
 		clusters map[uint64]ClusterView
@@ -136,11 +136,11 @@ func (v *view) update(updates []ClusterView) {
 	defer v.mu.Unlock()
 
 	for _, u := range updates {
-		current, ok := v.mu.clusters[u.ClusterID]
+		current, ok := v.mu.clusters[u.ShardID]
 		if !ok {
-			current = ClusterView{ClusterID: u.ClusterID}
+			current = ClusterView{ShardID: u.ShardID}
 		}
-		v.mu.clusters[u.ClusterID] = mergeClusterInfo(current, u)
+		v.mu.clusters[u.ShardID] = mergeClusterInfo(current, u)
 	}
 }
 

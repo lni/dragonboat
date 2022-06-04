@@ -20,8 +20,8 @@ The NodeHost struct is the facade interface for all features provided by the
 dragonboat package. Each NodeHost instance usually runs on a separate server
 managing CPU, storage and network resources used for achieving consensus. Each
 NodeHost manages Raft nodes from different Raft groups known as Raft clusters.
-Each Raft cluster is identified by its ClusterID, it usually consists of
-multiple nodes (also known as replicas) each identified by a NodeID value.
+Each Raft cluster is identified by its ShardID, it usually consists of
+multiple nodes (also known as replicas) each identified by a ReplicaID value.
 Nodes from the same Raft cluster suppose to be distributed on different NodeHost
 instances across the network, this brings fault tolerance for machine and
 network failures as application data stored in the Raft cluster will be
@@ -392,15 +392,15 @@ func (nh *NodeHost) Close() {
 	nodes := make([]raftio.NodeInfo, 0)
 	nh.forEachCluster(func(cid uint64, node *node) bool {
 		nodes = append(nodes, raftio.NodeInfo{
-			ClusterID: node.clusterID,
-			NodeID:    node.nodeID,
+			ShardID:   node.shardID,
+			ReplicaID: node.replicaID,
 		})
 		return true
 	})
 	for _, node := range nodes {
-		if err := nh.stopNode(node.ClusterID, node.NodeID, true); err != nil {
+		if err := nh.stopNode(node.ShardID, node.ReplicaID, true); err != nil {
 			plog.Errorf("failed to remove cluster %s",
-				logutil.ClusterID(node.ClusterID))
+				logutil.ShardID(node.ShardID))
 		}
 	}
 	plog.Debugf("%s is stopping the nh stopper", nh.describe())
@@ -488,7 +488,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 // cluster. create is a factory function for creating the IStateMachine instance,
 // cfg is the configuration instance that will be passed to the underlying Raft
 // node object, the cluster ID and node ID of the involved node are specified in
-// the ClusterID and NodeID fields of the provided cfg parameter.
+// the ShardID and ReplicaID fields of the provided cfg parameter.
 //
 // Note that this method is not for changing the membership of the specified
 // Raft cluster, it launches a node that is already a member of the Raft
@@ -505,9 +505,9 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 //    and those joined later.
 func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
-	cf := func(clusterID uint64, nodeID uint64,
+	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := create(clusterID, nodeID)
+		sm := create(shardID, replicaID)
 		return rsm.NewNativeSM(cfg, rsm.NewInMemStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers, join, cf, cfg, pb.RegularStateMachine)
@@ -517,9 +517,9 @@ func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 // to start a Raft node backed by a concurrent state machine.
 func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
-	cf := func(clusterID uint64, nodeID uint64,
+	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := create(clusterID, nodeID)
+		sm := create(shardID, replicaID)
 		return rsm.NewNativeSM(cfg, rsm.NewConcurrentStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
@@ -530,9 +530,9 @@ func (nh *NodeHost) StartConcurrentCluster(initialMembers map[uint64]Target,
 // start a Raft node backed by an IOnDiskStateMachine.
 func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
-	cf := func(clusterID uint64, nodeID uint64,
+	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
-		sm := create(clusterID, nodeID)
+		sm := create(shardID, replicaID)
 		return rsm.NewNativeSM(cfg, rsm.NewOnDiskStateMachine(sm), done)
 	}
 	return nh.startCluster(initialMembers,
@@ -543,22 +543,22 @@ func (nh *NodeHost) StartOnDiskCluster(initialMembers map[uint64]Target,
 //
 // Note that this is not the membership change operation required to remove the
 // node from the Raft cluster.
-func (nh *NodeHost) StopCluster(clusterID uint64) error {
+func (nh *NodeHost) StopCluster(shardID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	return nh.stopNode(clusterID, 0, false)
+	return nh.stopNode(shardID, 0, false)
 }
 
 // StopNode stops the specified Raft node.
 //
 // Note that this is not the membership change operation required to remove the
 // node from the Raft cluster.
-func (nh *NodeHost) StopNode(clusterID uint64, nodeID uint64) error {
+func (nh *NodeHost) StopNode(shardID uint64, replicaID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	return nh.stopNode(clusterID, nodeID, true)
+	return nh.stopNode(shardID, replicaID, true)
 }
 
 // SyncPropose makes a synchronous proposal on the Raft cluster specified by
@@ -603,9 +603,9 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 // method of the IStateMachine or IOnDiskStateMachine after the system
 // determines that it is safe to perform the local read. It returns the query
 // result from the Lookup method or the error encountered.
-func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
+func (nh *NodeHost) SyncRead(ctx context.Context, shardID uint64,
 	query interface{}) (interface{}, error) {
-	v, err := nh.linearizableRead(ctx, clusterID,
+	v, err := nh.linearizableRead(ctx, shardID,
 		func(node *node) (interface{}, error) {
 			data, err := node.sm.Lookup(query)
 			if errors.Is(err, rsm.ErrClusterClosed) {
@@ -620,13 +620,13 @@ func (nh *NodeHost) SyncRead(ctx context.Context, clusterID uint64,
 }
 
 // GetLogReader returns a read-only LogDB reader.
-func (nh *NodeHost) GetLogReader(clusterID uint64) (ReadonlyLogReader, error) {
+func (nh *NodeHost) GetLogReader(shardID uint64) (ReadonlyLogReader, error) {
 	nh.mu.RLock()
 	defer nh.mu.RUnlock()
 	if nh.mu.logdb == nil {
 		return nil, ErrLogDBNotCreatedOrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrLogDBNotCreatedOrClosed
 	}
@@ -638,16 +638,16 @@ type Membership struct {
 	// ConfigChangeID is the Raft entry index of the last applied membership
 	// change entry.
 	ConfigChangeID uint64
-	// Nodes is a map of NodeID values to NodeHost Raft addresses for all regular
+	// Nodes is a map of ReplicaID values to NodeHost Raft addresses for all regular
 	// Raft nodes.
 	Nodes map[uint64]string
-	// NonVotings is a map of NodeID values to NodeHost Raft addresses for all
+	// NonVotings is a map of ReplicaID values to NodeHost Raft addresses for all
 	// nonVotings in the Raft cluster.
 	NonVotings map[uint64]string
-	// Witnesses is a map of NodeID values to NodeHost Raft addrsses for all
+	// Witnesses is a map of ReplicaID values to NodeHost Raft addrsses for all
 	// witnesses in the Raft cluster.
 	Witnesses map[uint64]string
-	// Removed is a set of NodeID values that have been removed from the Raft
+	// Removed is a set of ReplicaID values that have been removed from the Raft
 	// cluster. They are not allowed to be added back to the cluster.
 	Removed map[uint64]struct{}
 }
@@ -656,8 +656,8 @@ type Membership struct {
 // information from the specified Raft cluster. The specified context parameter
 // must has the timeout value set.
 func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
-	clusterID uint64) (*Membership, error) {
-	v, err := nh.linearizableRead(ctx, clusterID,
+	shardID uint64) (*Membership, error) {
+	v, err := nh.linearizableRead(ctx, shardID,
 		func(node *node) (interface{}, error) {
 			m := node.sm.GetMembership()
 			cm := func(input map[uint64]bool) map[uint64]struct{} {
@@ -687,18 +687,18 @@ func (nh *NodeHost) SyncGetClusterMembership(ctx context.Context,
 // Deprecated: Use NodeHost.SyncGetClusterMembership instead.
 // NodeHost.GetClusterMembership will be removed in v4.0.
 func (nh *NodeHost) GetClusterMembership(ctx context.Context,
-	clusterID uint64) (*Membership, error) {
-	return nh.SyncGetClusterMembership(ctx, clusterID)
+	shardID uint64) (*Membership, error) {
+	return nh.SyncGetClusterMembership(ctx, shardID)
 }
 
 // GetLeaderID returns the leader node ID of the specified Raft cluster based
 // on local node's knowledge. The returned boolean value indicates whether the
 // leader information is available.
-func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
+func (nh *NodeHost) GetLeaderID(shardID uint64) (uint64, bool, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return 0, false, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	v, ok := nh.getCluster(shardID)
 	if !ok {
 		return 0, false, ErrClusterNotFound
 	}
@@ -721,8 +721,8 @@ func (nh *NodeHost) GetLeaderID(clusterID uint64) (uint64, bool, error) {
 //
 // NO-OP client session must be used for making proposals on IOnDiskStateMachine
 // based user state machines.
-func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
-	return client.NewNoOPSession(clusterID, nh.env.GetRandomSource())
+func (nh *NodeHost) GetNoOPSession(shardID uint64) *client.Session {
+	return client.NewNoOPSession(shardID, nh.env.GetRandomSource())
 }
 
 // GetNewSession starts a synchronous proposal to create, register and return
@@ -731,8 +731,8 @@ func (nh *NodeHost) GetNoOPSession(clusterID uint64) *client.Session {
 // Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
 // be removed in v4.0.
 func (nh *NodeHost) GetNewSession(ctx context.Context,
-	clusterID uint64) (*client.Session, error) {
-	return nh.SyncGetSession(ctx, clusterID)
+	shardID uint64) (*client.Session, error) {
+	return nh.SyncGetSession(ctx, shardID)
 }
 
 // CloseSession closes the specified client session by unregistering it from the
@@ -759,12 +759,12 @@ func (nh *NodeHost) CloseSession(ctx context.Context,
 // machines. NO-OP client session must be used on IOnDiskStateMachine based
 // state machines.
 func (nh *NodeHost) SyncGetSession(ctx context.Context,
-	clusterID uint64) (*client.Session, error) {
+	shardID uint64) (*client.Session, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cs := client.NewSession(clusterID, nh.env.GetRandomSource())
+	cs := client.NewSession(shardID, nh.env.GetRandomSource())
 	cs.PrepareForRegister()
 	rs, err := nh.ProposeSession(cs, timeout)
 	if err != nil {
@@ -814,9 +814,9 @@ func (nh *NodeHost) SyncCloseSession(ctx context.Context,
 // This method returns a RequestState instance or an error immediately. User
 // can use the CompletedC channel of the returned RequestState to get notified
 // when the query result becomes available.
-func (nh *NodeHost) QueryRaftLog(clusterID uint64, firstIndex uint64,
+func (nh *NodeHost) QueryRaftLog(shardID uint64, firstIndex uint64,
 	lastIndex uint64, maxSize uint64) (*RequestState, error) {
-	return nh.queryRaftLog(clusterID, firstIndex, lastIndex, maxSize)
+	return nh.queryRaftLog(shardID, firstIndex, lastIndex, maxSize)
 }
 
 // Propose starts an asynchronous proposal on the Raft cluster specified by the
@@ -851,7 +851,7 @@ func (nh *NodeHost) Propose(session *client.Session, cmd []byte,
 // completion (RequestResult.Completed() is true) of the operation.
 func (nh *NodeHost) ProposeSession(session *client.Session,
 	timeout time.Duration) (*RequestState, error) {
-	n, ok := nh.getCluster(session.ClusterID)
+	n, ok := nh.getCluster(session.ShardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
@@ -862,7 +862,7 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 	if !n.supportClientSession() && !session.IsNoOPSession() {
 		plog.Panicf("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
-	defer nh.engine.setStepReady(session.ClusterID)
+	defer nh.engine.setStepReady(session.ShardID)
 	return n.proposeSession(session, nh.getTimeoutTick(timeout))
 }
 
@@ -873,9 +873,9 @@ func (nh *NodeHost) ProposeSession(session *client.Session,
 // ReadIndex operation. On a successful completion, the ReadLocalNode method
 // can then be invoked to query the state of the IStateMachine or
 // IOnDiskStateMachine with linearizability guarantee.
-func (nh *NodeHost) ReadIndex(clusterID uint64,
+func (nh *NodeHost) ReadIndex(shardID uint64,
 	timeout time.Duration) (*RequestState, error) {
-	rs, _, err := nh.readIndex(clusterID, timeout)
+	rs, _, err := nh.readIndex(shardID, timeout)
 	return rs, err
 }
 
@@ -924,7 +924,7 @@ var staleReadCalled uint32
 
 // StaleRead queries the specified Raft node directly without any
 // linearizability guarantee.
-func (nh *NodeHost) StaleRead(clusterID uint64,
+func (nh *NodeHost) StaleRead(shardID uint64,
 	query interface{}) (interface{}, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
@@ -932,7 +932,7 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
 		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
@@ -957,12 +957,12 @@ func (nh *NodeHost) StaleRead(clusterID uint64,
 // SyncRequestSnapshot returns the index of the created snapshot or the error
 // encountered.
 func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
-	clusterID uint64, opt SnapshotOption) (uint64, error) {
+	shardID uint64, opt SnapshotOption) (uint64, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return 0, err
 	}
-	rs, err := nh.RequestSnapshot(clusterID, opt, timeout)
+	rs, err := nh.RequestSnapshot(shardID, opt, timeout)
 	if err != nil {
 		return 0, err
 	}
@@ -993,19 +993,19 @@ func (nh *NodeHost) SyncRequestSnapshot(ctx context.Context,
 //
 // Requested snapshot operation will be rejected if there is already an existing
 // snapshot in the system at the same Raft log index.
-func (nh *NodeHost) RequestSnapshot(clusterID uint64,
+func (nh *NodeHost) RequestSnapshot(shardID uint64,
 	opt SnapshotOption, timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	if err := opt.Validate(); err != nil {
 		return nil, err
 	}
-	defer nh.engine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(shardID)
 	return n.requestSnapshot(opt, nh.getTimeoutTick(timeout))
 }
 
@@ -1023,26 +1023,26 @@ func (nh *NodeHost) RequestSnapshot(clusterID uint64,
 // The returned *SysOpState instance can be used to get notified when the
 // requested compaction is completed. ErrRejected is returned when there is
 // nothing to be reclaimed.
-func (nh *NodeHost) RequestCompaction(clusterID uint64,
-	nodeID uint64) (*SysOpState, error) {
+func (nh *NodeHost) RequestCompaction(shardID uint64,
+	replicaID uint64) (*SysOpState, error) {
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		// assume this is a node that has already been removed via RemoveData
-		done, err := nh.mu.logdb.CompactEntriesTo(clusterID, nodeID, math.MaxUint64)
+		done, err := nh.mu.logdb.CompactEntriesTo(shardID, replicaID, math.MaxUint64)
 		if err != nil {
 			return nil, err
 		}
 		return &SysOpState{completedC: done}, nil
 	}
-	if n.nodeID != nodeID {
+	if n.replicaID != replicaID {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.engine.setStepReady(clusterID)
+	defer nh.engine.setStepReady(shardID)
 	return n.requestCompaction()
 }
 
@@ -1051,12 +1051,12 @@ func (nh *NodeHost) RequestCompaction(clusterID uint64,
 //
 // The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
-	clusterID uint64, nodeID uint64, configChangeIndex uint64) error {
+	shardID uint64, replicaID uint64, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestDeleteNode(clusterID, nodeID, configChangeIndex, timeout)
+	rs, err := nh.RequestDeleteNode(shardID, replicaID, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1069,14 +1069,14 @@ func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 //
 // The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
-	clusterID uint64, nodeID uint64,
+	shardID uint64, replicaID uint64,
 	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestAddNode(clusterID,
-		nodeID, target, configChangeIndex, timeout)
+	rs, err := nh.RequestAddNode(shardID,
+		replicaID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1088,10 +1088,10 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 //
 // Deprecated: use SyncRequestAddNonVoting instead.
 func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
-	clusterID uint64, nodeID uint64,
+	shardID uint64, replicaID uint64,
 	target string, configChangeIndex uint64) error {
 	return nh.SyncRequestAddNonVoting(ctx,
-		clusterID, nodeID, target, configChangeIndex)
+		shardID, replicaID, target, configChangeIndex)
 }
 
 // SyncRequestAddNonVoting is the synchronous variant of the RequestAddNonVoting
@@ -1099,14 +1099,14 @@ func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
 //
 // The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddNonVoting(ctx context.Context,
-	clusterID uint64, nodeID uint64,
+	shardID uint64, replicaID uint64,
 	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestAddNonVoting(clusterID,
-		nodeID, target, configChangeIndex, timeout)
+	rs, err := nh.RequestAddNonVoting(shardID,
+		replicaID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1119,14 +1119,14 @@ func (nh *NodeHost) SyncRequestAddNonVoting(ctx context.Context,
 //
 // The input context object must have its deadline set.
 func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
-	clusterID uint64, nodeID uint64,
+	shardID uint64, replicaID uint64,
 	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestAddWitness(clusterID,
-		nodeID, target, configChangeIndex, timeout)
+	rs, err := nh.RequestAddWitness(shardID,
+		replicaID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1154,19 +1154,19 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 // SyncGetClusterMembership method. The requested delete node operation will be
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
-func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
-	nodeID uint64,
+func (nh *NodeHost) RequestDeleteNode(shardID uint64,
+	replicaID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	tt := nh.getTimeoutTick(timeout)
-	defer nh.engine.setStepReady(clusterID)
-	return n.requestDeleteNodeWithOrderID(nodeID, configChangeIndex, tt)
+	defer nh.engine.setStepReady(shardID)
+	return n.requestDeleteNodeWithOrderID(replicaID, configChangeIndex, tt)
 }
 
 // RequestAddNode is a Raft cluster membership change method for requesting the
@@ -1175,7 +1175,7 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // Application can wait on the ResultC() channel of the returned RequestState
 // instance to get notified for the outcome.
 //
-// If there is already an nonVoting with the same nodeID in the cluster, it will
+// If there is already an nonVoting with the same replicaID in the cluster, it will
 // be promoted to a regular node with voting power. The target parameter of the
 // RequestAddNode call is ignored when promoting an nonVoting to a regular node.
 //
@@ -1197,18 +1197,18 @@ func (nh *NodeHost) RequestDeleteNode(clusterID uint64,
 // SyncGetClusterMembership method. The requested add node operation will be
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetClusterMembership method.
-func (nh *NodeHost) RequestAddNode(clusterID uint64,
-	nodeID uint64, target Target, configChangeIndex uint64,
+func (nh *NodeHost) RequestAddNode(shardID uint64,
+	replicaID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.engine.setStepReady(clusterID)
-	return n.requestAddNodeWithOrderID(nodeID,
+	defer nh.engine.setStepReady(shardID)
+	return n.requestAddNodeWithOrderID(replicaID,
 		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
@@ -1216,11 +1216,11 @@ func (nh *NodeHost) RequestAddNode(clusterID uint64,
 // the specified node to be added to the specified Raft cluster as an observer.
 //
 // Deprecated: use RequestAddNonVoting instead.
-func (nh *NodeHost) RequestAddObserver(clusterID uint64,
-	nodeID uint64, target Target, configChangeIndex uint64,
+func (nh *NodeHost) RequestAddObserver(shardID uint64,
+	replicaID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
-	return nh.RequestAddNonVoting(clusterID,
-		nodeID, target, configChangeIndex, timeout)
+	return nh.RequestAddNonVoting(shardID,
+		replicaID, target, configChangeIndex, timeout)
 }
 
 // RequestAddNonVoting is a Raft cluster membership change method for requesting
@@ -1231,27 +1231,27 @@ func (nh *NodeHost) RequestAddObserver(clusterID uint64,
 // Such nonVoting is able to receive replicated states from the leader node, but
 // it is neither allowed to vote for leader, nor considered as a part of the
 // quorum when replicating state. An nonVoting can be promoted to a regular node
-// with voting power by making a RequestAddNode call using its clusterID and
-// nodeID values. An nonVoting can be removed from the cluster by calling
-// RequestDeleteNode with its clusterID and nodeID values.
+// with voting power by making a RequestAddNode call using its shardID and
+// replicaID values. An nonVoting can be removed from the cluster by calling
+// RequestDeleteNode with its shardID and replicaID values.
 //
 // Application should later call StartCluster with config.Config.IsNonVoting
 // set to true on the right NodeHost to actually start the nonVoting instance.
 //
 // See the godoc of the RequestAddNode method for the details of the target and
 // configChangeIndex parameters.
-func (nh *NodeHost) RequestAddNonVoting(clusterID uint64,
-	nodeID uint64, target Target, configChangeIndex uint64,
+func (nh *NodeHost) RequestAddNonVoting(shardID uint64,
+	replicaID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.engine.setStepReady(clusterID)
-	return n.requestAddNonVotingWithOrderID(nodeID,
+	defer nh.engine.setStepReady(shardID)
+	return n.requestAddNonVotingWithOrderID(replicaID,
 		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
@@ -1270,38 +1270,38 @@ func (nh *NodeHost) RequestAddNonVoting(clusterID uint64,
 //
 // See the godoc of the RequestAddNode method for the details of the target and
 // configChangeIndex parameters.
-func (nh *NodeHost) RequestAddWitness(clusterID uint64,
-	nodeID uint64, target Target, configChangeIndex uint64,
+func (nh *NodeHost) RequestAddWitness(shardID uint64,
+	replicaID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
-	defer nh.engine.setStepReady(clusterID)
-	return n.requestAddWitnessWithOrderID(nodeID,
+	defer nh.engine.setStepReady(shardID)
+	return n.requestAddWitnessWithOrderID(replicaID,
 		target, configChangeIndex, nh.getTimeoutTick(timeout))
 }
 
 // RequestLeaderTransfer makes a request to transfer the leadership of the
-// specified Raft cluster to the target node identified by targetNodeID. It
+// specified Raft cluster to the target node identified by targetReplicaID. It
 // returns an error if the request fails to be started. There is no guarantee
 // that such request can be fulfilled.
-func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
-	targetNodeID uint64) error {
+func (nh *NodeHost) RequestLeaderTransfer(shardID uint64,
+	targetReplicaID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return ErrClusterNotFound
 	}
 	plog.Debugf("RequestLeaderTransfer called on cluster %d target nodeid %d",
-		clusterID, targetNodeID)
-	defer nh.engine.setStepReady(clusterID)
-	return n.requestLeaderTransfer(targetNodeID)
+		shardID, targetReplicaID)
+	defer nh.engine.setStepReady(shardID)
+	return n.requestLeaderTransfer(targetReplicaID)
 }
 
 // SyncRemoveData is the synchronous variant of the RemoveData. It waits for
@@ -1311,17 +1311,17 @@ func (nh *NodeHost) RequestLeaderTransfer(clusterID uint64,
 // Similar to RemoveData, calling SyncRemoveData on a node that is still a Raft
 // cluster member will corrupt the Raft cluster.
 func (nh *NodeHost) SyncRemoveData(ctx context.Context,
-	clusterID uint64, nodeID uint64) error {
+	shardID uint64, replicaID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
 	if _, ok := ctx.Deadline(); !ok {
 		return ErrDeadlineNotSet
 	}
-	if _, ok := nh.getCluster(clusterID); ok {
+	if _, ok := nh.getCluster(shardID); ok {
 		return ErrClusterNotStopped
 	}
-	if ch := nh.engine.destroyedC(clusterID, nodeID); ch != nil {
+	if ch := nh.engine.destroyedC(shardID, replicaID); ch != nil {
 		select {
 		case <-ch:
 		case <-ctx.Done():
@@ -1332,7 +1332,7 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 			}
 		}
 	}
-	err := nh.RemoveData(clusterID, nodeID)
+	err := nh.RemoveData(shardID, replicaID)
 	if errors.Is(err, ErrClusterNotStopped) {
 		panic("node not stopped")
 	}
@@ -1346,9 +1346,9 @@ func (nh *NodeHost) SyncRemoveData(ctx context.Context,
 //
 // RemoveData returns ErrClusterNotStopped when the specified node has not been
 // fully offloaded from the NodeHost instance.
-func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
-	n, ok := nh.getCluster(clusterID)
-	if ok && n.nodeID == nodeID {
+func (nh *NodeHost) RemoveData(shardID uint64, replicaID uint64) error {
+	n, ok := nh.getCluster(shardID)
+	if ok && n.replicaID == replicaID {
 		return ErrClusterNotStopped
 	}
 	nh.mu.Lock()
@@ -1356,16 +1356,16 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	if nh.engine.nodeLoaded(clusterID, nodeID) {
+	if nh.engine.nodeLoaded(shardID, replicaID) {
 		return ErrClusterNotStopped
 	}
-	plog.Debugf("%s called RemoveData", dn(clusterID, nodeID))
-	if err := nh.mu.logdb.RemoveNodeData(clusterID, nodeID); err != nil {
+	plog.Debugf("%s called RemoveData", dn(shardID, replicaID))
+	if err := nh.mu.logdb.RemoveNodeData(shardID, replicaID); err != nil {
 		panicNow(err)
 	}
 	// mark the snapshot dir as removed
 	did := nh.nhConfig.GetDeploymentID()
-	if err := nh.env.RemoveSnapshotDir(did, clusterID, nodeID); err != nil {
+	if err := nh.env.RemoveSnapshotDir(did, shardID, replicaID); err != nil {
 		panicNow(err)
 	}
 	return nil
@@ -1375,11 +1375,11 @@ func (nh *NodeHost) RemoveData(clusterID uint64, nodeID uint64) error {
 // proposals or read index operations without locating the node repeatedly in
 // the NodeHost. A possible use case is when loading a large data set say with
 // billions of proposals into the dragonboat based system.
-func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
+func (nh *NodeHost) GetNodeUser(shardID uint64) (INodeUser, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
@@ -1392,13 +1392,13 @@ func (nh *NodeHost) GetNodeUser(clusterID uint64) (INodeUser, error) {
 
 // HasNodeInfo returns a boolean value indicating whether the specified node
 // has been bootstrapped on the current NodeHost instance.
-func (nh *NodeHost) HasNodeInfo(clusterID uint64, nodeID uint64) bool {
+func (nh *NodeHost) HasNodeInfo(shardID uint64, replicaID uint64) bool {
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return false
 	}
-	if _, err := nh.mu.logdb.GetBootstrapInfo(clusterID, nodeID); err != nil {
+	if _, err := nh.mu.logdb.GetBootstrapInfo(shardID, replicaID); err != nil {
 		if errors.Is(err, raftio.ErrNoBootstrapInfo) {
 			return false
 		}
@@ -1448,7 +1448,7 @@ func (nh *NodeHost) propose(s *client.Session,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(s.ClusterID)
+	v, ok := nh.getCluster(s.ShardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
@@ -1456,16 +1456,16 @@ func (nh *NodeHost) propose(s *client.Session,
 		panic("IOnDiskStateMachine based nodes must use NoOPSession")
 	}
 	req, err := v.propose(s, cmd, nh.getTimeoutTick(timeout))
-	nh.engine.setStepReady(s.ClusterID)
+	nh.engine.setStepReady(s.ShardID)
 	return req, err
 }
 
-func (nh *NodeHost) readIndex(clusterID uint64,
+func (nh *NodeHost) readIndex(shardID uint64,
 	timeout time.Duration) (*RequestState, *node, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, nil, ErrClosed
 	}
-	n, ok := nh.getCluster(clusterID)
+	n, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, nil, ErrClusterNotFound
 	}
@@ -1473,31 +1473,31 @@ func (nh *NodeHost) readIndex(clusterID uint64,
 	if err != nil {
 		return nil, nil, err
 	}
-	nh.engine.setStepReady(clusterID)
+	nh.engine.setStepReady(shardID)
 	return req, n, err
 }
 
-func (nh *NodeHost) queryRaftLog(clusterID uint64,
+func (nh *NodeHost) queryRaftLog(shardID uint64,
 	firstIndex uint64, lastIndex uint64, maxSize uint64) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
 	}
-	v, ok := nh.getCluster(clusterID)
+	v, ok := nh.getCluster(shardID)
 	if !ok {
 		return nil, ErrClusterNotFound
 	}
 	req, err := v.queryRaftLog(firstIndex, lastIndex, maxSize)
-	nh.engine.setStepReady(clusterID)
+	nh.engine.setStepReady(shardID)
 	return req, err
 }
 
 func (nh *NodeHost) linearizableRead(ctx context.Context,
-	clusterID uint64, f func(n *node) (interface{}, error)) (interface{}, error) {
+	shardID uint64, f func(n *node) (interface{}, error)) (interface{}, error) {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rs, node, err := nh.readIndex(clusterID, timeout)
+	rs, node, err := nh.readIndex(shardID, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -1508,8 +1508,8 @@ func (nh *NodeHost) linearizableRead(ctx context.Context,
 	return f(node)
 }
 
-func (nh *NodeHost) getCluster(clusterID uint64) (*node, bool) {
-	n, ok := nh.mu.clusters.Load(clusterID)
+func (nh *NodeHost) getCluster(shardID uint64) (*node, bool) {
+	n, ok := nh.mu.clusters.Load(shardID)
 	if !ok {
 		return nil, false
 	}
@@ -1547,7 +1547,7 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
-	bi, err := nh.mu.logdb.GetBootstrapInfo(cfg.ClusterID, cfg.NodeID)
+	bi, err := nh.mu.logdb.GetBootstrapInfo(cfg.ShardID, cfg.ReplicaID)
 	if errors.Is(err, raftio.ErrNoBootstrapInfo) {
 		if !join && len(initialMembers) == 0 {
 			return nil, false, ErrClusterNotBootstrapped
@@ -1557,7 +1557,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 			members = initialMembers
 		}
 		bi = pb.NewBootstrapInfo(join, smType, initialMembers)
-		err := nh.mu.logdb.SaveBootstrapInfo(cfg.ClusterID, cfg.NodeID, bi)
+		err := nh.mu.logdb.SaveBootstrapInfo(cfg.ShardID, cfg.ReplicaID, bi)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1567,7 +1567,7 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	}
 	if !bi.Validate(initialMembers, join, smType) {
 		plog.Errorf("bootstrap info validation failed, %s, %v, %t, %v, %t",
-			dn(cfg.ClusterID, cfg.NodeID),
+			dn(cfg.ShardID, cfg.ReplicaID),
 			bi.Addresses, bi.Join, initialMembers, join)
 		return nil, false, ErrInvalidClusterSettings
 	}
@@ -1577,8 +1577,8 @@ func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	join bool, createStateMachine rsm.ManagedStateMachineFactory,
 	cfg config.Config, smType pb.StateMachineType) error {
-	clusterID := cfg.ClusterID
-	nodeID := cfg.NodeID
+	shardID := cfg.ShardID
+	replicaID := cfg.ReplicaID
 	validator := nh.nhConfig.GetTargetValidator()
 	for _, target := range initialMembers {
 		if !validator(target) {
@@ -1590,10 +1590,10 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
-	if _, ok := nh.mu.clusters.Load(clusterID); ok {
+	if _, ok := nh.mu.clusters.Load(shardID); ok {
 		return ErrClusterAlreadyExist
 	}
-	if nh.engine.nodeLoaded(clusterID, nodeID) {
+	if nh.engine.nodeLoaded(shardID, replicaID) {
 		// node is still loaded in the execution engine, e.g. processing snapshot
 		return ErrClusterAlreadyExist
 	}
@@ -1608,12 +1608,12 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		panicNow(err)
 	}
 	for k, v := range peers {
-		if k != nodeID {
-			nh.nodes.Add(clusterID, k, v)
+		if k != replicaID {
+			nh.nodes.Add(shardID, k, v)
 		}
 	}
 	did := nh.nhConfig.GetDeploymentID()
-	if err := nh.env.CreateSnapshotDir(did, clusterID, nodeID); err != nil {
+	if err := nh.env.CreateSnapshotDir(did, shardID, replicaID); err != nil {
 		if errors.Is(err, server.ErrDirMarkedAsDeleted) {
 			return ErrNodeRemoved
 		}
@@ -1622,8 +1622,8 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	getSnapshotDir := func(cid uint64, nid uint64) string {
 		return nh.env.GetSnapshotDir(did, cid, nid)
 	}
-	logReader := logdb.NewLogReader(clusterID, nodeID, nh.mu.logdb)
-	ss := newSnapshotter(clusterID, nodeID,
+	logReader := logdb.NewLogReader(shardID, replicaID, nh.mu.logdb)
+	ss := newSnapshotter(shardID, replicaID,
 		getSnapshotDir, nh.mu.logdb, logReader, nh.fs)
 	logReader.SetCompactor(ss)
 	if err := ss.processOrphans(); err != nil {
@@ -1631,7 +1631,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 	}
 	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
 		nh.nhConfig.Expert.LogDB.Shards)
-	shard := p.GetPartitionID(clusterID)
+	shard := p.GetPartitionID(shardID)
 	rn, err := newNode(peers,
 		im,
 		cfg,
@@ -1645,7 +1645,7 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		nh.msgHandler.HandleSnapshotStatus,
 		nh.sendMessage,
 		nh.nodes,
-		nh.requestPools[nodeID%requestPoolShards],
+		nh.requestPools[replicaID%requestPoolShards],
 		nh.mu.logdb,
 		nh.getLogDBMetrics(shard),
 		nh.events.sys)
@@ -1653,11 +1653,11 @@ func (nh *NodeHost) startCluster(initialMembers map[uint64]Target,
 		panicNow(err)
 	}
 	rn.loaded()
-	nh.mu.clusters.Store(clusterID, rn)
+	nh.mu.clusters.Store(shardID, rn)
 	nh.mu.cci++
 	nh.cciUpdated()
-	nh.engine.setCCIReady(clusterID)
-	nh.engine.setApplyReady(clusterID)
+	nh.engine.setCCIReady(shardID)
+	nh.engine.setApplyReady(shardID)
 	return nil
 }
 
@@ -1808,27 +1808,27 @@ func (nh *NodeHost) createTransport() error {
 	return nil
 }
 
-func (nh *NodeHost) stopNode(clusterID uint64, nodeID uint64, check bool) error {
+func (nh *NodeHost) stopNode(shardID uint64, replicaID uint64, check bool) error {
 	nh.mu.Lock()
 	defer nh.mu.Unlock()
-	v, ok := nh.mu.clusters.Load(clusterID)
+	v, ok := nh.mu.clusters.Load(shardID)
 	if !ok {
 		return ErrClusterNotFound
 	}
 	n := v.(*node)
-	if check && n.nodeID != nodeID {
+	if check && n.replicaID != replicaID {
 		return ErrClusterNotFound
 	}
-	nh.mu.clusters.Delete(clusterID)
+	nh.mu.clusters.Delete(shardID)
 	nh.mu.cci++
 	nh.cciUpdated()
-	nh.engine.setCCIReady(clusterID)
+	nh.engine.setCCIReady(shardID)
 	n.close()
 	n.offloaded()
-	nh.engine.setStepReady(clusterID)
-	nh.engine.setCommitReady(clusterID)
-	nh.engine.setApplyReady(clusterID)
-	nh.engine.setRecoverReady(clusterID)
+	nh.engine.setStepReady(shardID)
+	nh.engine.setCommitReady(shardID)
+	nh.engine.setApplyReady(shardID)
+	nh.engine.setRecoverReady(shardID)
 	return nil
 }
 
@@ -1913,8 +1913,8 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 		}
 		nh.events.sys.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotStarted,
-			ClusterID: msg.ClusterId,
-			NodeID:    msg.To,
+			ShardID:   msg.ClusterId,
+			ReplicaID: msg.To,
 			From:      msg.From,
 		})
 	}
@@ -1924,8 +1924,8 @@ func (nh *NodeHost) sendTickMessage(clusters []*node, tick uint64) {
 	for _, n := range clusters {
 		m := pb.Message{
 			Type: pb.LocalTick,
-			To:   n.nodeID,
-			From: n.nodeID,
+			To:   n.replicaID,
+			From: n.replicaID,
 			Hint: tick,
 		}
 		n.mq.Tick()
@@ -1959,7 +1959,7 @@ func (nh *NodeHost) nodeMonitorMain() {
 		if !ok && index < len(nodes) {
 			// node closed
 			n := nodes[index]
-			if err := nh.stopNode(n.clusterID, n.nodeID, true); err != nil {
+			if err := nh.stopNode(n.shardID, n.replicaID, true); err != nil {
 				plog.Debugf("stopNode failed %v", err)
 			}
 		} else if index == len(nodes) {
@@ -2018,10 +2018,10 @@ func getRequestState(ctx context.Context, rs *RequestState) (sm.Result, error) {
 // without locating the Raft node in NodeHost's node list first. It is useful
 // when doing bulk load operations on selected clusters.
 type INodeUser interface {
-	// ClusterID is the cluster ID of the node.
-	ClusterID() uint64
-	// NodeID is the node ID of the node.
-	NodeID() uint64
+	// ShardID is the cluster ID of the node.
+	ShardID() uint64
+	// ReplicaID is the node ID of the node.
+	ReplicaID() uint64
 	// Propose starts an asynchronous proposal on the Raft cluster represented by
 	// the INodeUser instance. Its semantics is the same as the Propose() method
 	// in NodeHost.
@@ -2036,23 +2036,23 @@ type INodeUser interface {
 type nodeUser struct {
 	nh           *NodeHost
 	node         *node
-	setStepReady func(clusterID uint64)
+	setStepReady func(shardID uint64)
 }
 
 var _ INodeUser = (*nodeUser)(nil)
 
-func (nu *nodeUser) ClusterID() uint64 {
-	return nu.node.clusterID
+func (nu *nodeUser) ShardID() uint64 {
+	return nu.node.shardID
 }
 
-func (nu *nodeUser) NodeID() uint64 {
-	return nu.node.nodeID
+func (nu *nodeUser) ReplicaID() uint64 {
+	return nu.node.replicaID
 }
 
 func (nu *nodeUser) Propose(s *client.Session,
 	cmd []byte, timeout time.Duration) (*RequestState, error) {
 	req, err := nu.node.propose(s, cmd, nu.nh.getTimeoutTick(timeout))
-	nu.setStepReady(s.ClusterID)
+	nu.setStepReady(s.ShardID)
 	return req, err
 }
 
@@ -2109,9 +2109,9 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 			plog.Panicf("to field not set, %s", req.Type)
 		}
 		if n, ok := nh.getCluster(req.ClusterId); ok {
-			if n.nodeID != req.To {
+			if n.replicaID != req.To {
 				plog.Warningf("ignored a %s message sent to %s but received by %s",
-					req.Type, dn(req.ClusterId, req.To), dn(req.ClusterId, n.nodeID))
+					req.Type, dn(req.ClusterId, req.To), dn(req.ClusterId, n.replicaID))
 				continue
 			}
 			if req.Type == pb.InstallSnapshot {
@@ -2138,53 +2138,53 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 	return snapshotCount, msgCount
 }
 
-func (h *messageHandler) HandleSnapshotStatus(clusterID uint64,
-	nodeID uint64, failed bool) {
+func (h *messageHandler) HandleSnapshotStatus(shardID uint64,
+	replicaID uint64, failed bool) {
 	eventType := server.SendSnapshotCompleted
 	if failed {
 		eventType = server.SendSnapshotAborted
 	}
 	h.nh.events.sys.Publish(server.SystemEvent{
 		Type:      eventType,
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 	})
-	if n, ok := h.nh.getCluster(clusterID); ok {
+	if n, ok := h.nh.getCluster(shardID); ok {
 		n.mq.AddDelayed(pb.Message{
 			Type:   pb.SnapshotStatus,
-			From:   nodeID,
+			From:   replicaID,
 			Reject: failed,
 		}, streamPushDelayTick)
-		h.nh.engine.setStepReady(clusterID)
+		h.nh.engine.setStepReady(shardID)
 	}
 }
 
-func (h *messageHandler) HandleUnreachable(clusterID uint64, nodeID uint64) {
-	if n, ok := h.nh.getCluster(clusterID); ok {
+func (h *messageHandler) HandleUnreachable(shardID uint64, replicaID uint64) {
+	if n, ok := h.nh.getCluster(shardID); ok {
 		m := pb.Message{
 			Type: pb.Unreachable,
-			From: nodeID,
-			To:   n.nodeID,
+			From: replicaID,
+			To:   n.replicaID,
 		}
 		n.mq.MustAdd(m)
-		h.nh.engine.setStepReady(clusterID)
+		h.nh.engine.setStepReady(shardID)
 	}
 }
 
-func (h *messageHandler) HandleSnapshot(clusterID uint64,
-	nodeID uint64, from uint64) {
+func (h *messageHandler) HandleSnapshot(shardID uint64,
+	replicaID uint64, from uint64) {
 	m := pb.Message{
 		To:        from,
-		From:      nodeID,
-		ClusterId: clusterID,
+		From:      replicaID,
+		ClusterId: shardID,
 		Type:      pb.SnapshotReceived,
 	}
 	h.nh.sendMessage(m)
-	plog.Debugf("%s sent SnapshotReceived to %d", dn(clusterID, nodeID), from)
+	plog.Debugf("%s sent SnapshotReceived to %d", dn(shardID, replicaID), from)
 	h.nh.events.sys.Publish(server.SystemEvent{
 		Type:      server.SnapshotReceived,
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 		From:      from,
 	})
 }

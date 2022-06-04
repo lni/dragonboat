@@ -88,9 +88,9 @@ func TestListNodeInfo(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nodes))
 	for _, n := range nodes {
-		require.True(t, n.ClusterID == 1 && n.NodeID == 1 ||
-			n.ClusterID == 2 && n.NodeID == 2 ||
-			n.ClusterID == 3 && n.NodeID == 3)
+		require.True(t, n.ShardID == 1 && n.ReplicaID == 1 ||
+			n.ShardID == 2 && n.ReplicaID == 2 ||
+			n.ShardID == 3 && n.ReplicaID == 3)
 	}
 }
 
@@ -116,13 +116,13 @@ func TestSaveSnapshots(t *testing.T) {
 	require.NoError(t, err)
 	updates := []pb.Update{
 		{
-			ClusterID: 1,
-			NodeID:    1,
+			ShardID:   1,
+			ReplicaID: 1,
 			Snapshot:  pb.Snapshot{Index: 100, Term: 10},
 		},
 		{
-			ClusterID: 2,
-			NodeID:    1,
+			ShardID:   2,
+			ReplicaID: 1,
 			Snapshot:  pb.Snapshot{Index: 200, Term: 10},
 		},
 	}
@@ -146,8 +146,8 @@ func TestSaveRaftState(t *testing.T) {
 	require.NoError(t, err)
 	updates := []pb.Update{
 		{
-			ClusterID: 1,
-			NodeID:    1,
+			ShardID:   1,
+			ReplicaID: 1,
 			Snapshot:  pb.Snapshot{Index: 100, Term: 10},
 			State:     pb.State{Commit: 100, Term: 10},
 			EntriesToSave: []pb.Entry{
@@ -156,8 +156,8 @@ func TestSaveRaftState(t *testing.T) {
 			},
 		},
 		{
-			ClusterID: 17,
-			NodeID:    1,
+			ShardID:   17,
+			ReplicaID: 1,
 			Snapshot:  pb.Snapshot{Index: 200, Term: 10},
 			State:     pb.State{Commit: 200, Term: 10},
 			EntriesToSave: []pb.Entry{
@@ -199,8 +199,8 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 	for i := uint64(0); i < 16; i++ {
 		updates := []pb.Update{
 			{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(100), Term: 10},
 				State:     pb.State{Commit: i * uint64(100), Term: 10},
 				EntriesToSave: []pb.Entry{
@@ -209,8 +209,8 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 				},
 			},
 			{
-				ClusterID: 17,
-				NodeID:    1,
+				ShardID:   17,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(200), Term: 20},
 				State:     pb.State{Commit: i * uint64(200), Term: 20},
 				EntriesToSave: []pb.Entry{
@@ -225,8 +225,8 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 	for i := uint64(0); i < 16; i++ {
 		updates := []pb.Update{
 			{
-				ClusterID: 2,
-				NodeID:    1,
+				ShardID:   2,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(100), Term: 30},
 				State:     pb.State{Commit: i * uint64(100), Term: 30},
 				EntriesToSave: []pb.Entry{
@@ -235,8 +235,8 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 				},
 			},
 			{
-				ClusterID: 18,
-				NodeID:    1,
+				ShardID:   18,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(100), Term: 40},
 				State:     pb.State{Commit: i * uint64(100), Term: 40},
 				EntriesToSave: []pb.Entry{

@@ -133,12 +133,12 @@ func TestIsDeletingOnlyNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[1] = "a1"
 	cc := pb.ConfigChange{
-		Type:   pb.RemoveNode,
-		NodeID: 1,
+		Type:      pb.RemoveNode,
+		ReplicaID: 1,
 	}
 	cc2 := pb.ConfigChange{
-		Type:   pb.AddNode,
-		NodeID: 1,
+		Type:      pb.AddNode,
+		ReplicaID: 1,
 	}
 	if !o.isDeleteOnlyNode(cc) {
 		t.Errorf("not considered as deleting only node")
@@ -160,7 +160,7 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	cc := pb.ConfigChange{}
 	cc.Type = pb.AddNode
-	cc.NodeID = 1
+	cc.ReplicaID = 1
 	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrect result")
 	}
@@ -186,7 +186,7 @@ func TestIsAddingRemovedNode(t *testing.T) {
 		t.Errorf("not rejected")
 	}
 	cc.Type = pb.AddNonVoting
-	cc.NodeID = 2
+	cc.ReplicaID = 2
 	if o.isAddRemovedNode(cc) {
 		t.Errorf("incorrectly rejected")
 	}
@@ -194,10 +194,10 @@ func TestIsAddingRemovedNode(t *testing.T) {
 
 func TestIsAddingNodeAsNonVoting(t *testing.T) {
 	tests := []struct {
-		t      pb.ConfigChangeType
-		nodeID uint64
-		addrs  []uint64
-		result bool
+		t         pb.ConfigChangeType
+		replicaID uint64
+		addrs     []uint64
+		result    bool
 	}{
 		{pb.AddNode, 1, []uint64{1}, false},
 		{pb.AddNode, 1, []uint64{}, false},
@@ -213,8 +213,8 @@ func TestIsAddingNodeAsNonVoting(t *testing.T) {
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
 		cc := pb.ConfigChange{
-			Type:   tt.t,
-			NodeID: tt.nodeID,
+			Type:      tt.t,
+			ReplicaID: tt.replicaID,
 		}
 		for _, v := range tt.addrs {
 			o.members.Addresses[v] = "addr"
@@ -262,7 +262,7 @@ func TestIsAddingExistingMember(t *testing.T) {
 		addrs      map[uint64]string
 		nonVotings map[uint64]string
 		addr       string
-		nodeID     uint64
+		replicaID  uint64
 		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
@@ -292,9 +292,9 @@ func TestIsAddingExistingMember(t *testing.T) {
 			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
-			Type:    tt.t,
-			Address: tt.addr,
-			NodeID:  tt.nodeID,
+			Type:      tt.t,
+			Address:   tt.addr,
+			ReplicaID: tt.replicaID,
 		}
 		if result := o.isAddExistingMember(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
@@ -307,7 +307,7 @@ func TestIsPromotingNonVoting(t *testing.T) {
 		t          pb.ConfigChangeType
 		nonVotings map[uint64]string
 		addr       string
-		nodeID     uint64
+		replicaID  uint64
 		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 3, false},
@@ -326,9 +326,9 @@ func TestIsPromotingNonVoting(t *testing.T) {
 			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
-			Type:    tt.t,
-			Address: tt.addr,
-			NodeID:  tt.nodeID,
+			Type:      tt.t,
+			Address:   tt.addr,
+			ReplicaID: tt.replicaID,
 		}
 		if result := o.isPromoteNonVoting(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
@@ -341,7 +341,7 @@ func TestIsInvalidNonVotingPromotion(t *testing.T) {
 		t          pb.ConfigChangeType
 		nonVotings map[uint64]string
 		addr       string
-		nodeID     uint64
+		replicaID  uint64
 		result     bool
 	}{
 		{pb.AddNode, map[uint64]string{1: "a1"}, "a1", 1, false},
@@ -360,9 +360,9 @@ func TestIsInvalidNonVotingPromotion(t *testing.T) {
 			o.members.NonVotings[i] = v
 		}
 		cc := pb.ConfigChange{
-			Type:    tt.t,
-			Address: tt.addr,
-			NodeID:  tt.nodeID,
+			Type:      tt.t,
+			Address:   tt.addr,
+			ReplicaID: tt.replicaID,
 		}
 		if result := o.isInvalidNonVotingPromotion(cc); result != tt.result {
 			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
@@ -373,9 +373,9 @@ func TestIsInvalidNonVotingPromotion(t *testing.T) {
 func TestApplyAddNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	cc := pb.ConfigChange{
-		Type:    pb.AddNode,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddNode,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
@@ -391,9 +391,9 @@ func TestAddNodeCanPromoteNonVotingToNode(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.NonVotings[100] = "a2"
 	cc := pb.ConfigChange{
-		Type:    pb.AddNode,
-		Address: "a2",
-		NodeID:  100,
+		Type:      pb.AddNode,
+		Address:   "a2",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 	v, ok := o.members.Addresses[100]
@@ -409,9 +409,9 @@ func TestAddNodeCanPromoteNonVotingToNode(t *testing.T) {
 func TestApplyAddNonVoting(t *testing.T) {
 	o := newMembership(1, 2, true)
 	cc := pb.ConfigChange{
-		Type:    pb.AddNonVoting,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddNonVoting,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 	if o.members.ConfigChangeId != 1000 {
@@ -427,9 +427,9 @@ func TestAddingExistingNodeAsNonVotingIsNotAllowed(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddNonVoting,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddNonVoting,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	if o.handleConfigChange(cc, 0) {
 		t.Errorf("ading existing node as nonVoting is not rejected")
@@ -445,9 +445,9 @@ func TestAddingExistingNodeAsNonVotingWillPanic(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddNonVoting,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddNonVoting,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 }
@@ -461,9 +461,9 @@ func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddWitness,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddWitness,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 }
@@ -477,9 +477,9 @@ func TestAddingExistingNonVotingAsWitnessWillPanic(t *testing.T) {
 	o := newMembership(1, 2, true)
 	o.members.NonVotings[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:    pb.AddWitness,
-		Address: "a1",
-		NodeID:  100,
+		Type:      pb.AddWitness,
+		Address:   "a1",
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 }
@@ -490,8 +490,8 @@ func TestApplyRemoveNode(t *testing.T) {
 	o.members.NonVotings[100] = "a1"
 	o.members.Witnesses[100] = "a1"
 	cc := pb.ConfigChange{
-		Type:   pb.RemoveNode,
-		NodeID: 100,
+		Type:      pb.RemoveNode,
+		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
 	if len(o.members.Addresses) != 0 ||

@@ -49,8 +49,8 @@ func TestCachedNodeInfoCanBeSet(t *testing.T) {
 		t.Errorf("unexpected map len")
 	}
 	ni := raftio.NodeInfo{
-		ClusterID: 100,
-		NodeID:    2,
+		ShardID:   100,
+		ReplicaID: 2,
 	}
 	_, ok := c.nodeInfo[ni]
 	if !ok {
@@ -85,8 +85,8 @@ func TestCachedStateCanBeSet(t *testing.T) {
 		t.Errorf("unexpected savedState len %d", len(c.ps))
 	}
 	ni := raftio.NodeInfo{
-		ClusterID: 100,
-		NodeID:    2,
+		ShardID:   100,
+		ReplicaID: 2,
 	}
 	v, ok := c.ps[ni]
 	if !ok {

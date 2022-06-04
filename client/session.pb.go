@@ -45,7 +45,7 @@ var (
 
 // Session is the struct used to keep tracking the progress of a client.
 type Session struct {
-	ClusterID   uint64
+	ShardID     uint64
 	ClientID    uint64
 	SeriesID    uint64
 	RespondedTo uint64
@@ -55,19 +55,19 @@ func (*Session) ProtoMessage() {}
 
 func (m *Session) Reset() { *m = Session{} }
 func (m *Session) String() string {
-	return fmt.Sprintf("%d:%d:%d:%d", m.ClusterID, m.ClientID, m.SeriesID, m.RespondedTo)
+	return fmt.Sprintf("%d:%d:%d:%d", m.ShardID, m.ClientID, m.SeriesID, m.RespondedTo)
 }
 
 // NewSession returns a new client session not registered yet. This function
 // is not expected to be directly invoked by application.
-func NewSession(clusterID uint64, rng random.Source) *Session {
+func NewSession(shardID uint64, rng random.Source) *Session {
 	for {
 		cid := rng.Uint64()
 		if cid != NotSessionManagedClientID {
 			return &Session{
-				ClusterID: clusterID,
-				ClientID:  cid,
-				SeriesID:  NoOPSeriesID + 1,
+				ShardID:  shardID,
+				ClientID: cid,
+				SeriesID: NoOPSeriesID + 1,
 			}
 		}
 	}
@@ -76,14 +76,14 @@ func NewSession(clusterID uint64, rng random.Source) *Session {
 // NewNoOPSession creates a new NoOP client session ready to be used for
 // making proposals. This function is not expected to be directly invoked by
 // application.
-func NewNoOPSession(clusterID uint64, rng random.Source) *Session {
+func NewNoOPSession(shardID uint64, rng random.Source) *Session {
 	for {
 		cid := rng.Uint64()
 		if cid != NotSessionManagedClientID {
 			return &Session{
-				ClusterID: clusterID,
-				ClientID:  cid,
-				SeriesID:  NoOPSeriesID,
+				ShardID:  shardID,
+				ClientID: cid,
+				SeriesID: NoOPSeriesID,
 			}
 		}
 	}
@@ -106,7 +106,7 @@ func (m *Session) MarshalTo(dAtA []byte) (int, error) {
 	_ = l
 	dAtA[i] = 0x8
 	i++
-	i = encodeVarintSession(dAtA, i, uint64(m.ClusterID))
+	i = encodeVarintSession(dAtA, i, uint64(m.ShardID))
 	dAtA[i] = 0x10
 	i++
 	i = encodeVarintSession(dAtA, i, uint64(m.ClientID))
@@ -134,7 +134,7 @@ func (m *Session) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovSession(uint64(m.ClusterID))
+	n += 1 + sovSession(uint64(m.ShardID))
 	n += 1 + sovSession(uint64(m.ClientID))
 	n += 1 + sovSession(uint64(m.SeriesID))
 	n += 1 + sovSession(uint64(m.RespondedTo))
@@ -183,9 +183,9 @@ func (m *Session) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ClusterID", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardID", wireType)
 			}
-			m.ClusterID = 0
+			m.ShardID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowSession
@@ -195,7 +195,7 @@ func (m *Session) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ClusterID |= (uint64(b) & 0x7F) << shift
+				m.ShardID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -385,10 +385,10 @@ func (m *Session) IsNoOPSession() bool {
 	return m.SeriesID == NoOPSeriesID
 }
 
-// ClusterIDMustMatch asserts that the input cluster id matches the cluster id
+// ShardIDMustMatch asserts that the input cluster id matches the cluster id
 // of the client session.
-func (m *Session) ClusterIDMustMatch(clusterID uint64) {
-	if m.ClusterID != clusterID {
+func (m *Session) ShardIDMustMatch(shardID uint64) {
+	if m.ShardID != shardID {
 		panic("cluster id do not match")
 	}
 }
@@ -436,11 +436,11 @@ func (m *Session) assertRegularSession() {
 
 // ValidForProposal checks whether the client session object is valid for
 // making proposals.
-func (m *Session) ValidForProposal(clusterID uint64) bool {
+func (m *Session) ValidForProposal(shardID uint64) bool {
 	if m.SeriesID == NoOPSeriesID && m.ClientID == NotSessionManagedClientID {
 		return false
 	}
-	if m.ClusterID != clusterID {
+	if m.ShardID != shardID {
 		return false
 	}
 	if m.ClientID == NotSessionManagedClientID {
@@ -459,8 +459,8 @@ func (m *Session) ValidForProposal(clusterID uint64) bool {
 // ValidForSessionOp checks whether the client session is valid for
 // making client session related proposals, e.g. registering or unregistering
 // a client session.
-func (m *Session) ValidForSessionOp(clusterID uint64) bool {
-	if m.ClusterID != clusterID {
+func (m *Session) ValidForSessionOp(shardID uint64) bool {
+	if m.ShardID != shardID {
 		return false
 	}
 	if m.ClientID == NotSessionManagedClientID ||

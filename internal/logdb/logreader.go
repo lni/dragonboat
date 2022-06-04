@@ -60,8 +60,8 @@ type LogReader struct {
 	snapshot    pb.Snapshot
 	state       pb.State
 	markerIndex uint64
-	clusterID   uint64
-	nodeID      uint64
+	shardID     uint64
+	replicaID   uint64
 	markerTerm  uint64
 	length      uint64
 }
@@ -69,12 +69,12 @@ type LogReader struct {
 var _ raft.ILogDB = (*LogReader)(nil)
 
 // NewLogReader creates and returns a new LogReader instance.
-func NewLogReader(clusterID uint64,
-	nodeID uint64, logdb raftio.ILogDB) *LogReader {
+func NewLogReader(shardID uint64,
+	replicaID uint64, logdb raftio.ILogDB) *LogReader {
 	l := &LogReader{
 		logdb:     logdb,
-		clusterID: clusterID,
-		nodeID:    nodeID,
+		shardID:   shardID,
+		replicaID: replicaID,
 		length:    1,
 	}
 	return l
@@ -90,7 +90,7 @@ func (lr *LogReader) SetCompactor(c pb.ICompactor) {
 
 func (lr *LogReader) id() string {
 	return fmt.Sprintf("logreader %s index %d term %d length %d",
-		dn(lr.clusterID, lr.nodeID), lr.markerIndex, lr.markerTerm, lr.length)
+		dn(lr.shardID, lr.replicaID), lr.markerIndex, lr.markerTerm, lr.length)
 }
 
 // NodeState returns the initial state.
@@ -147,8 +147,8 @@ func (lr *LogReader) entriesLocked(low uint64,
 	ents := make([]pb.Entry, 0, high-low)
 	size := uint64(0)
 	hitIndex := low
-	ents, size, err := lr.logdb.IterateEntries(ents, size, lr.clusterID,
-		lr.nodeID, hitIndex, high, maxSize)
+	ents, size, err := lr.logdb.IterateEntries(ents, size, lr.shardID,
+		lr.replicaID, hitIndex, high, maxSize)
 	if err != nil {
 		return nil, 0, err
 	}

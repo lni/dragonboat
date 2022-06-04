@@ -49,8 +49,8 @@ import (
 
 // PeerAddress is the basic info for a peer in the Raft cluster.
 type PeerAddress struct {
-	Address string
-	NodeID  uint64
+	Address   string
+	ReplicaID uint64
 }
 
 // Peer is the interface struct for interacting with the underlying Raft
@@ -66,7 +66,7 @@ func Launch(config config.Config,
 	addresses []PeerAddress, initial bool, newNode bool) Peer {
 	checkLaunchRequest(config, addresses, initial, newNode)
 	plog.Infof("%s created, initial: %t, new: %t",
-		dn(config.ClusterID, config.NodeID), initial, newNode)
+		dn(config.ShardID, config.ReplicaID), initial, newNode)
 	p := Peer{raft: newRaft(config, logdb)}
 	p.raft.events = events
 	p.prevState = p.raft.raftState()
@@ -108,7 +108,7 @@ func (p *Peer) QueryRaftLog(firstIndex uint64,
 func (p *Peer) RequestLeaderTransfer(target uint64) error {
 	return p.raft.Handle(pb.Message{
 		Type: pb.LeaderTransfer,
-		To:   p.raft.nodeID,
+		To:   p.raft.replicaID,
 		Hint: target,
 	})
 }
@@ -118,7 +118,7 @@ func (p *Peer) RequestLeaderTransfer(target uint64) error {
 func (p *Peer) ProposeEntries(ents []pb.Entry) error {
 	return p.raft.Handle(pb.Message{
 		Type:    pb.Propose,
-		From:    p.raft.nodeID,
+		From:    p.raft.replicaID,
 		Entries: ents,
 	})
 }
@@ -134,14 +134,14 @@ func (p *Peer) ProposeConfigChange(cc pb.ConfigChange, key uint64) error {
 
 // ApplyConfigChange applies a raft membership change to the local raft node.
 func (p *Peer) ApplyConfigChange(cc pb.ConfigChange) error {
-	if cc.NodeID == NoLeader {
+	if cc.ReplicaID == NoLeader {
 		p.raft.clearPendingConfigChange()
 		return nil
 	}
 	return p.raft.Handle(pb.Message{
 		Type:     pb.ConfigChangeEvent,
 		Reject:   false,
-		Hint:     cc.NodeID,
+		Hint:     cc.ReplicaID,
 		HintHigh: uint64(cc.Type),
 	})
 }
@@ -163,19 +163,19 @@ func (p *Peer) RestoreRemotes(ss pb.Snapshot) error {
 }
 
 // ReportUnreachableNode marks the specified node as not reachable.
-func (p *Peer) ReportUnreachableNode(nodeID uint64) error {
+func (p *Peer) ReportUnreachableNode(replicaID uint64) error {
 	return p.raft.Handle(pb.Message{
 		Type: pb.Unreachable,
-		From: nodeID,
+		From: replicaID,
 	})
 }
 
 // ReportSnapshotStatus reports the status of the snapshot to the local raft
 // node.
-func (p *Peer) ReportSnapshotStatus(nodeID uint64, reject bool) error {
+func (p *Peer) ReportSnapshotStatus(replicaID uint64, reject bool) error {
 	return p.raft.Handle(pb.Message{
 		Type:   pb.SnapshotStatus,
-		From:   nodeID,
+		From:   replicaID,
 		Reject: reject,
 	})
 }
@@ -333,8 +333,8 @@ func (p *Peer) entryLog() *entryLog {
 func (p *Peer) getUpdate(moreToApply bool,
 	lastApplied uint64) (pb.Update, error) {
 	ud := pb.Update{
-		ClusterID:     p.raft.clusterID,
-		NodeID:        p.raft.nodeID,
+		ShardID:       p.raft.shardID,
+		ReplicaID:     p.raft.replicaID,
 		EntriesToSave: p.entryLog().entriesToSave(),
 		Messages:      p.raft.msgs,
 		LastApplied:   lastApplied,
@@ -347,7 +347,7 @@ func (p *Peer) getUpdate(moreToApply bool,
 		ud.LeaderUpdate = *p.raft.leaderUpdate
 	}
 	for idx := range ud.Messages {
-		ud.Messages[idx].ClusterId = p.raft.clusterID
+		ud.Messages[idx].ClusterId = p.raft.shardID
 	}
 	if moreToApply {
 		toApply, err := p.entryLog().entriesToApply()
@@ -380,8 +380,8 @@ func (p *Peer) getUpdate(moreToApply bool,
 
 func checkLaunchRequest(config config.Config,
 	addresses []PeerAddress, initial bool, newNode bool) {
-	if config.NodeID == 0 {
-		panic("config.NodeID must not be zero")
+	if config.ReplicaID == 0 {
+		panic("config.ReplicaID must not be zero")
 	}
 	if initial && newNode && len(addresses) == 0 {
 		panic("addresses must be specified")
@@ -403,15 +403,15 @@ func checkLaunchRequest(config config.Config,
 
 func bootstrap(r *raft, addresses []PeerAddress) {
 	sort.Slice(addresses, func(i, j int) bool {
-		return addresses[i].NodeID < addresses[j].NodeID
+		return addresses[i].ReplicaID < addresses[j].ReplicaID
 	})
 	ents := make([]pb.Entry, len(addresses))
 	for i, peer := range addresses {
 		plog.Infof("%s added bootstrap ConfigChangeAddNode, %d, %s",
-			r.describe(), peer.NodeID, peer.Address)
+			r.describe(), peer.ReplicaID, peer.Address)
 		cc := pb.ConfigChange{
 			Type:       pb.AddNode,
-			NodeID:     peer.NodeID,
+			ReplicaID:  peer.ReplicaID,
 			Initialize: true,
 			Address:    peer.Address,
 		}
@@ -425,7 +425,7 @@ func bootstrap(r *raft, addresses []PeerAddress) {
 	r.log.append(ents)
 	r.log.committed = uint64(len(ents))
 	for _, peer := range addresses {
-		r.addNode(peer.NodeID)
+		r.addNode(peer.ReplicaID)
 	}
 }
 

@@ -35,15 +35,15 @@ var (
 type entryManager interface {
 	binaryFormat() uint32
 	record(wb kv.IWriteBatch,
-		clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64
+		shardID uint64, replicaID uint64, ctx IContext, entries []pb.Entry) uint64
 	iterate(ents []pb.Entry, maxIndex uint64,
-		size uint64, clusterID uint64, nodeID uint64,
+		size uint64, shardID uint64, replicaID uint64,
 		low uint64, high uint64, maxSize uint64) ([]pb.Entry, uint64, error)
-	getRange(clusterID uint64,
-		nodeID uint64, snapshotIndex uint64,
+	getRange(shardID uint64,
+		replicaID uint64, snapshotIndex uint64,
 		maxIndex uint64) (uint64, uint64, error)
-	rangedOp(clusterID uint64,
-		nodeID uint64, index uint64, op func(*Key, *Key) error) error
+	rangedOp(shardID uint64,
+		replicaID uint64, index uint64, op func(*Key, *Key) error) error
 }
 
 // db is the struct used to manage log DB.
@@ -144,13 +144,13 @@ func (r *db) listNodeInfo() ([]raftio.NodeInfo, error) {
 	return ni, nil
 }
 
-func (r *db) readRaftState(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64) (raftio.RaftState, error) {
-	firstIndex, length, err := r.getRange(clusterID, nodeID, snapshotIndex)
+func (r *db) readRaftState(shardID uint64,
+	replicaID uint64, snapshotIndex uint64) (raftio.RaftState, error) {
+	firstIndex, length, err := r.getRange(shardID, replicaID, snapshotIndex)
 	if err != nil {
 		return raftio.RaftState{}, err
 	}
-	state, err := r.getState(clusterID, nodeID)
+	state, err := r.getState(shardID, replicaID)
 	if err != nil {
 		return raftio.RaftState{}, err
 	}
@@ -161,9 +161,9 @@ func (r *db) readRaftState(clusterID uint64,
 	}, nil
 }
 
-func (r *db) getRange(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64) (uint64, uint64, error) {
-	maxIndex, err := r.getMaxIndex(clusterID, nodeID)
+func (r *db) getRange(shardID uint64,
+	replicaID uint64, snapshotIndex uint64) (uint64, uint64, error) {
+	maxIndex, err := r.getMaxIndex(shardID, replicaID)
 	if err == raftio.ErrNoSavedLog {
 		return snapshotIndex, 0, nil
 	}
@@ -173,15 +173,15 @@ func (r *db) getRange(clusterID uint64,
 	if snapshotIndex == maxIndex {
 		return snapshotIndex, 0, nil
 	}
-	return r.entries.getRange(clusterID, nodeID, snapshotIndex, maxIndex)
+	return r.entries.getRange(shardID, replicaID, snapshotIndex, maxIndex)
 }
 
 func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 	wb := r.getWriteBatch(ctx)
 	for _, ud := range updates {
-		r.saveState(ud.ClusterID, ud.NodeID, ud.State, wb, ctx)
+		r.saveState(ud.ShardID, ud.ReplicaID, ud.State, wb, ctx)
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
-			r.cs.trySaveSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
+			r.cs.trySaveSnapshot(ud.ShardID, ud.ReplicaID, ud.Snapshot.Index) {
 			if len(ud.EntriesToSave) > 0 {
 				// raft/inMemory makes sure such entries no longer need to be saved
 				lastIndex := ud.EntriesToSave[len(ud.EntriesToSave)-1].Index
@@ -203,11 +203,11 @@ func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 	return nil
 }
 
-func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
+func (r *db) importSnapshot(ss pb.Snapshot, replicaID uint64) error {
 	if ss.Type == pb.UnknownStateMachine {
 		panic("Unknown state machine type")
 	}
-	snapshots, err := r.listSnapshots(ss.ClusterId, nodeID, math.MaxUint64)
+	snapshots, err := r.listSnapshots(ss.ClusterId, replicaID, math.MaxUint64)
 	if err != nil {
 		return err
 	}
@@ -226,30 +226,30 @@ func (r *db) importSnapshot(ss pb.Snapshot, nodeID uint64) error {
 		Term:   ss.Term,
 		Commit: ss.Index,
 	}
-	r.saveRemoveNodeData(wb, selectedss, ss.ClusterId, nodeID)
-	r.saveBootstrap(wb, ss.ClusterId, nodeID, bsrec)
-	r.saveStateAllocs(wb, ss.ClusterId, nodeID, state)
+	r.saveRemoveNodeData(wb, selectedss, ss.ClusterId, replicaID)
+	r.saveBootstrap(wb, ss.ClusterId, replicaID, bsrec)
+	r.saveStateAllocs(wb, ss.ClusterId, replicaID, state)
 	if err := r.saveSnapshot(wb, pb.Update{
-		ClusterID: ss.ClusterId,
-		NodeID:    nodeID,
+		ShardID:   ss.ClusterId,
+		ReplicaID: replicaID,
 		Snapshot:  ss,
 	}); err != nil {
 		return err
 	}
-	r.saveMaxIndex(wb, ss.ClusterId, nodeID, ss.Index, nil)
+	r.saveMaxIndex(wb, ss.ClusterId, replicaID, ss.Index, nil)
 	return r.kvs.CommitWriteBatch(wb)
 }
 
 func (r *db) setMaxIndex(wb kv.IWriteBatch,
 	ud pb.Update, maxIndex uint64, ctx IContext) {
-	r.cs.setMaxIndex(ud.ClusterID, ud.NodeID, maxIndex)
-	r.saveMaxIndex(wb, ud.ClusterID, ud.NodeID, maxIndex, ctx)
+	r.cs.setMaxIndex(ud.ShardID, ud.ReplicaID, maxIndex)
+	r.saveMaxIndex(wb, ud.ShardID, ud.ReplicaID, maxIndex, ctx)
 }
 
 func (r *db) saveBootstrap(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, bs pb.Bootstrap) {
+	shardID uint64, replicaID uint64, bs pb.Bootstrap) {
 	k := newKey(maxKeySize, nil)
-	k.setBootstrapKey(clusterID, nodeID)
+	k.setBootstrapKey(shardID, replicaID)
 	data := pb.MustMarshal(&bs)
 	wb.Put(k.Key(), data)
 }
@@ -258,26 +258,26 @@ func (r *db) saveSnapshot(wb kv.IWriteBatch, ud pb.Update) error {
 	if pb.IsEmptySnapshot(ud.Snapshot) {
 		return nil
 	}
-	snapshots, err := r.listSnapshots(ud.ClusterID, ud.NodeID, math.MaxUint64)
+	snapshots, err := r.listSnapshots(ud.ShardID, ud.ReplicaID, math.MaxUint64)
 	if err != nil {
 		return err
 	}
 	for _, ss := range snapshots {
 		if ud.Snapshot.Index > ss.Index {
 			k := newKey(maxKeySize, nil)
-			k.setSnapshotKey(ud.ClusterID, ud.NodeID, ss.Index)
+			k.setSnapshotKey(ud.ShardID, ud.ReplicaID, ss.Index)
 			wb.Delete(k.Key())
 		}
 	}
 	k := newKey(snapshotKeySize, nil)
-	k.setSnapshotKey(ud.ClusterID, ud.NodeID, ud.Snapshot.Index)
+	k.setSnapshotKey(ud.ShardID, ud.ReplicaID, ud.Snapshot.Index)
 	data := pb.MustMarshal(&ud.Snapshot)
 	wb.Put(k.Key(), data)
 	return nil
 }
 
 func (r *db) saveMaxIndex(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, index uint64, ctx IContext) {
+	shardID uint64, replicaID uint64, index uint64, ctx IContext) {
 	var data []byte
 	var k IReusableKey
 	if ctx != nil {
@@ -292,44 +292,44 @@ func (r *db) saveMaxIndex(wb kv.IWriteBatch,
 	} else {
 		k = newKey(maxKeySize, nil)
 	}
-	k.SetMaxIndexKey(clusterID, nodeID)
+	k.SetMaxIndexKey(shardID, replicaID)
 	wb.Put(k.Key(), data)
 }
 
 func (r *db) saveStateAllocs(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, st pb.State) {
+	shardID uint64, replicaID uint64, st pb.State) {
 	data := pb.MustMarshal(&st)
 	k := newKey(snapshotKeySize, nil)
-	k.SetStateKey(clusterID, nodeID)
+	k.SetStateKey(shardID, replicaID)
 	wb.Put(k.Key(), data)
 }
 
-func (r *db) saveState(clusterID uint64,
-	nodeID uint64, st pb.State, wb kv.IWriteBatch, ctx IContext) {
+func (r *db) saveState(shardID uint64,
+	replicaID uint64, st pb.State, wb kv.IWriteBatch, ctx IContext) {
 	if pb.IsEmptyState(st) {
 		return
 	}
-	if !r.cs.setState(clusterID, nodeID, st) {
+	if !r.cs.setState(shardID, replicaID, st) {
 		return
 	}
 	data := ctx.GetValueBuffer(uint64(st.Size()))
 	result := pb.MustMarshalTo(&st, data)
 	k := ctx.GetKey()
-	k.SetStateKey(clusterID, nodeID)
+	k.SetStateKey(shardID, replicaID)
 	wb.Put(k.Key(), result)
 }
 
-func (r *db) saveBootstrapInfo(clusterID uint64,
-	nodeID uint64, bs pb.Bootstrap) error {
+func (r *db) saveBootstrapInfo(shardID uint64,
+	replicaID uint64, bs pb.Bootstrap) error {
 	wb := r.getWriteBatch(nil)
-	r.saveBootstrap(wb, clusterID, nodeID, bs)
+	r.saveBootstrap(wb, shardID, replicaID, bs)
 	return r.kvs.CommitWriteBatch(wb)
 }
 
-func (r *db) getBootstrapInfo(clusterID uint64,
-	nodeID uint64) (pb.Bootstrap, error) {
+func (r *db) getBootstrapInfo(shardID uint64,
+	replicaID uint64) (pb.Bootstrap, error) {
 	k := newKey(maxKeySize, nil)
-	k.setBootstrapKey(clusterID, nodeID)
+	k.setBootstrapKey(shardID, replicaID)
 	bootstrap := pb.Bootstrap{}
 	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
@@ -349,7 +349,7 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 	toSave := false
 	for _, ud := range updates {
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
-			r.cs.trySaveSnapshot(ud.ClusterID, ud.NodeID, ud.Snapshot.Index) {
+			r.cs.trySaveSnapshot(ud.ShardID, ud.ReplicaID, ud.Snapshot.Index) {
 			if err := r.saveSnapshot(wb, ud); err != nil {
 				return nil
 			}
@@ -362,14 +362,14 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 	return nil
 }
 
-func (r *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
-	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
+func (r *db) getSnapshot(shardID uint64, replicaID uint64) (pb.Snapshot, error) {
+	snapshots, err := r.listSnapshots(shardID, replicaID, math.MaxUint64)
 	if err != nil {
 		return pb.Snapshot{}, err
 	}
 	if len(snapshots) > 0 {
 		ss := snapshots[len(snapshots)-1]
-		r.cs.setSnapshotIndex(clusterID, nodeID, ss.Index)
+		r.cs.setSnapshotIndex(shardID, replicaID, ss.Index)
 		return ss, nil
 	}
 	return pb.Snapshot{}, nil
@@ -378,14 +378,14 @@ func (r *db) getSnapshot(clusterID uint64, nodeID uint64) (pb.Snapshot, error) {
 // previously, snapshots are stored with its index value as the least
 // significant part of the key. from v3.4, we only store the latest snapshot in
 // LogDB and the least significant part of the key is set to math.MaxUint64.
-func (r *db) listSnapshots(clusterID uint64,
-	nodeID uint64, index uint64) ([]pb.Snapshot, error) {
+func (r *db) listSnapshots(shardID uint64,
+	replicaID uint64, index uint64) ([]pb.Snapshot, error) {
 	fk := r.keys.get()
 	lk := r.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.setSnapshotKey(clusterID, nodeID, 0)
-	lk.setSnapshotKey(clusterID, nodeID, index)
+	fk.setSnapshotKey(shardID, replicaID, 0)
+	lk.setSnapshotKey(shardID, replicaID, index)
 	snapshots := make([]pb.Snapshot, 0)
 	op := func(key []byte, data []byte) (bool, error) {
 		var ss pb.Snapshot
@@ -399,13 +399,13 @@ func (r *db) listSnapshots(clusterID uint64,
 	return snapshots, nil
 }
 
-func (r *db) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
-	if v, ok := r.cs.getMaxIndex(clusterID, nodeID); ok {
+func (r *db) getMaxIndex(shardID uint64, replicaID uint64) (uint64, error) {
+	if v, ok := r.cs.getMaxIndex(shardID, replicaID); ok {
 		return v, nil
 	}
 	k := r.keys.get()
 	defer k.Release()
-	k.SetMaxIndexKey(clusterID, nodeID)
+	k.SetMaxIndexKey(shardID, replicaID)
 	maxIndex := uint64(0)
 	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
@@ -419,10 +419,10 @@ func (r *db) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, error) {
 	return maxIndex, nil
 }
 
-func (r *db) getState(clusterID uint64, nodeID uint64) (pb.State, error) {
+func (r *db) getState(shardID uint64, replicaID uint64) (pb.State, error) {
 	k := r.keys.get()
 	defer k.Release()
-	k.SetStateKey(clusterID, nodeID)
+	k.SetStateKey(shardID, replicaID)
 	hs := pb.State{}
 	if err := r.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
@@ -436,58 +436,58 @@ func (r *db) getState(clusterID uint64, nodeID uint64) (pb.State, error) {
 	return hs, nil
 }
 
-func (r *db) removeEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) error {
+func (r *db) removeEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) error {
 	op := func(fk *Key, lk *Key) error {
 		return r.kvs.BulkRemoveEntries(fk.Key(), lk.Key())
 	}
-	return r.entries.rangedOp(clusterID, nodeID, index, op)
+	return r.entries.rangedOp(shardID, replicaID, index, op)
 }
 
-func (r *db) removeNodeData(clusterID uint64, nodeID uint64) error {
+func (r *db) removeNodeData(shardID uint64, replicaID uint64) error {
 	wb := r.getWriteBatch(nil)
 	defer wb.Clear()
-	snapshots, err := r.listSnapshots(clusterID, nodeID, math.MaxUint64)
+	snapshots, err := r.listSnapshots(shardID, replicaID, math.MaxUint64)
 	if err != nil {
 		return err
 	}
-	r.saveRemoveNodeData(wb, snapshots, clusterID, nodeID)
+	r.saveRemoveNodeData(wb, snapshots, shardID, replicaID)
 	if err := r.kvs.CommitWriteBatch(wb); err != nil {
 		return err
 	}
-	r.cs.setMaxIndex(clusterID, nodeID, 0)
-	return r.removeEntriesTo(clusterID, nodeID, math.MaxUint64)
+	r.cs.setMaxIndex(shardID, replicaID, 0)
+	return r.removeEntriesTo(shardID, replicaID, math.MaxUint64)
 }
 
 func (r *db) saveRemoveNodeData(wb kv.IWriteBatch,
-	snapshots []pb.Snapshot, clusterID uint64, nodeID uint64) {
+	snapshots []pb.Snapshot, shardID uint64, replicaID uint64) {
 	stateKey := newKey(maxKeySize, nil)
-	stateKey.SetStateKey(clusterID, nodeID)
+	stateKey.SetStateKey(shardID, replicaID)
 	wb.Delete(stateKey.Key())
 	bsKey := newKey(maxKeySize, nil)
-	bsKey.setBootstrapKey(clusterID, nodeID)
+	bsKey.setBootstrapKey(shardID, replicaID)
 	wb.Delete(bsKey.Key())
 	miKey := newKey(maxKeySize, nil)
-	miKey.SetMaxIndexKey(clusterID, nodeID)
+	miKey.SetMaxIndexKey(shardID, replicaID)
 	wb.Delete(miKey.Key())
 	for _, ss := range snapshots {
 		k := newKey(maxKeySize, nil)
-		k.setSnapshotKey(clusterID, nodeID, ss.Index)
+		k.setSnapshotKey(shardID, replicaID, ss.Index)
 		wb.Delete(k.Key())
 	}
 }
 
-func (r *db) compact(clusterID uint64, nodeID uint64, index uint64) error {
+func (r *db) compact(shardID uint64, replicaID uint64, index uint64) error {
 	op := func(fk *Key, lk *Key) error {
 		return r.kvs.CompactEntries(fk.Key(), lk.Key())
 	}
-	return r.entries.rangedOp(clusterID, nodeID, index, op)
+	return r.entries.rangedOp(shardID, replicaID, index, op)
 }
 
 func (r *db) saveEntries(updates []pb.Update, wb kv.IWriteBatch, ctx IContext) {
 	for _, ud := range updates {
 		if len(ud.EntriesToSave) > 0 {
-			mi := r.entries.record(wb, ud.ClusterID, ud.NodeID, ctx, ud.EntriesToSave)
+			mi := r.entries.record(wb, ud.ShardID, ud.ReplicaID, ctx, ud.EntriesToSave)
 			if mi > 0 {
 				r.setMaxIndex(wb, ud, mi, ctx)
 			}
@@ -496,19 +496,19 @@ func (r *db) saveEntries(updates []pb.Update, wb kv.IWriteBatch, ctx IContext) {
 }
 
 func (r *db) iterateEntries(ents []pb.Entry,
-	size uint64, clusterID uint64, nodeID uint64, low uint64, high uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64, high uint64,
 	maxSize uint64) ([]pb.Entry, uint64, error) {
-	maxIndex, err := r.getMaxIndex(clusterID, nodeID)
+	maxIndex, err := r.getMaxIndex(shardID, replicaID)
 	if err == raftio.ErrNoSavedLog {
 		return ents, size, nil
 	}
 	if err != nil {
-		err = errors.Wrapf(err, "%s failed to get max index", dn(clusterID, nodeID))
+		err = errors.Wrapf(err, "%s failed to get max index", dn(shardID, replicaID))
 		return nil, 0, err
 	}
 	entries, sz, err := r.entries.iterate(ents, maxIndex, size,
-		clusterID, nodeID, low, high, maxSize)
+		shardID, replicaID, low, high, maxSize)
 	err = errors.Wrapf(err, "%s failed to iterate entries, %d, %d, %d, %d",
-		dn(clusterID, nodeID), low, high, maxSize, maxIndex)
+		dn(shardID, replicaID), low, high, maxSize, maxIndex)
 	return entries, sz, err
 }

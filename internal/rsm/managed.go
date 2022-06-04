@@ -93,8 +93,8 @@ func (cw *countedWriter) Write(data []byte) (int, error) {
 
 // ManagedStateMachineFactory is the factory function type for creating an
 // IManagedStateMachine instance.
-type ManagedStateMachineFactory func(clusterID uint64,
-	nodeID uint64, stopc <-chan struct{}) IManagedStateMachine
+type ManagedStateMachineFactory func(shardID uint64,
+	replicaID uint64, stopc <-chan struct{}) IManagedStateMachine
 
 // NativeSM is the IManagedStateMachine object used to manage native
 // data store in Golang.
@@ -122,8 +122,8 @@ func NewNativeSM(config config.Config, ism IStateMachine,
 		ue:     make([]sm.Entry, 1),
 	}
 	s.OffloadedStatus.DestroyedC = make(chan struct{})
-	s.OffloadedStatus.clusterID = config.ClusterID
-	s.OffloadedStatus.nodeID = config.NodeID
+	s.OffloadedStatus.shardID = config.ShardID
+	s.OffloadedStatus.replicaID = config.ReplicaID
 	return s
 }
 

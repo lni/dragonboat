@@ -55,15 +55,15 @@ func (s *Sink) Close() error {
 	return nil
 }
 
-// ClusterID returns the cluster ID of the source node.
-func (s *Sink) ClusterID() uint64 {
-	return s.j.clusterID
+// ShardID returns the cluster ID of the source node.
+func (s *Sink) ShardID() uint64 {
+	return s.j.shardID
 }
 
-// ToNodeID returns the node ID of the node intended to get and handle the
+// ToReplicaID returns the node ID of the node intended to get and handle the
 // received snapshot chunk.
-func (s *Sink) ToNodeID() uint64 {
-	return s.j.nodeID
+func (s *Sink) ToReplicaID() uint64 {
+	return s.j.replicaID
 }
 
 type job struct {
@@ -78,18 +78,18 @@ type job struct {
 	stopc        chan struct{}
 	failed       chan struct{}
 	deploymentID uint64
-	nodeID       uint64
-	clusterID    uint64
+	replicaID    uint64
+	shardID      uint64
 	streaming    bool
 }
 
 func newJob(ctx context.Context,
-	clusterID uint64, nodeID uint64,
+	shardID uint64, replicaID uint64,
 	did uint64, streaming bool, sz int, transport raftio.ITransport,
 	stopc chan struct{}, fs vfs.IFS) *job {
 	j := &job{
-		clusterID:    clusterID,
-		nodeID:       nodeID,
+		shardID:      shardID,
+		replicaID:    replicaID,
 		deploymentID: did,
 		streaming:    streaming,
 		ctx:          ctx,
@@ -137,10 +137,10 @@ func (j *job) addSnapshot(chunks []pb.Chunk) {
 func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
 		plog.Debugf("%s is sending chunk %d to %s",
-			logutil.NodeID(chunk.From), chunk.ChunkId,
+			logutil.ReplicaID(chunk.From), chunk.ChunkId,
 			dn(chunk.ClusterId, chunk.NodeId))
 	} else {
-		plog.Debugf("sending a poison chunk to %s", dn(j.clusterID, j.nodeID))
+		plog.Debugf("sending a poison chunk to %s", dn(j.shardID, j.replicaID))
 	}
 
 	select {
@@ -152,7 +152,7 @@ func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 		}
 		return true, false
 	case <-j.failed:
-		plog.Warningf("stream snapshot to %s failed", dn(j.clusterID, j.nodeID))
+		plog.Warningf("stream snapshot to %s failed", dn(j.shardID, j.replicaID))
 		return false, false
 	case <-j.stopc:
 		return false, true
@@ -177,7 +177,7 @@ func (j *job) streamSnapshot() error {
 	for {
 		select {
 		case <-j.stopc:
-			plog.Warningf("stream snapshot to %s stopped", dn(j.clusterID, j.nodeID))
+			plog.Warningf("stream snapshot to %s stopped", dn(j.shardID, j.replicaID))
 			return ErrStopped
 		case chunk := <-j.ch:
 			chunk.DeploymentId = j.deploymentID

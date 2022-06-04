@@ -185,10 +185,10 @@ func (s *ShardedDB) SaveRaftStateCtx(updates []pb.Update, ctx IContext) error {
 }
 
 // ReadRaftState returns the persistent state of the specified raft node.
-func (s *ShardedDB) ReadRaftState(clusterID uint64,
-	nodeID uint64, lastIndex uint64) (raftio.RaftState, error) {
-	p := s.partitioner.GetPartitionID(clusterID)
-	rs, err := s.shards[p].readRaftState(clusterID, nodeID, lastIndex)
+func (s *ShardedDB) ReadRaftState(shardID uint64,
+	replicaID uint64, lastIndex uint64) (raftio.RaftState, error) {
+	p := s.partitioner.GetPartitionID(shardID)
+	rs, err := s.shards[p].readRaftState(shardID, replicaID, lastIndex)
 	return rs, errors.WithStack(err)
 }
 
@@ -216,46 +216,46 @@ func (s *ShardedDB) SaveSnapshots(updates []pb.Update) error {
 
 // GetSnapshot returns the most recent snapshot associated with the specified
 // cluster.
-func (s *ShardedDB) GetSnapshot(clusterID uint64,
-	nodeID uint64) (pb.Snapshot, error) {
-	p := s.partitioner.GetPartitionID(clusterID)
-	ss, err := s.shards[p].getSnapshot(clusterID, nodeID)
+func (s *ShardedDB) GetSnapshot(shardID uint64,
+	replicaID uint64) (pb.Snapshot, error) {
+	p := s.partitioner.GetPartitionID(shardID)
+	ss, err := s.shards[p].getSnapshot(shardID, replicaID)
 	return ss, errors.WithStack(err)
 }
 
 // SaveBootstrapInfo saves the specified bootstrap info for the given node.
-func (s *ShardedDB) SaveBootstrapInfo(clusterID uint64,
-	nodeID uint64, bootstrap pb.Bootstrap) error {
-	p := s.partitioner.GetPartitionID(clusterID)
-	err := s.shards[p].saveBootstrapInfo(clusterID, nodeID, bootstrap)
+func (s *ShardedDB) SaveBootstrapInfo(shardID uint64,
+	replicaID uint64, bootstrap pb.Bootstrap) error {
+	p := s.partitioner.GetPartitionID(shardID)
+	err := s.shards[p].saveBootstrapInfo(shardID, replicaID, bootstrap)
 	return errors.WithStack(err)
 }
 
 // GetBootstrapInfo returns the saved bootstrap info for the given node.
-func (s *ShardedDB) GetBootstrapInfo(clusterID uint64,
-	nodeID uint64) (pb.Bootstrap, error) {
-	p := s.partitioner.GetPartitionID(clusterID)
-	bs, err := s.shards[p].getBootstrapInfo(clusterID, nodeID)
+func (s *ShardedDB) GetBootstrapInfo(shardID uint64,
+	replicaID uint64) (pb.Bootstrap, error) {
+	p := s.partitioner.GetPartitionID(shardID)
+	bs, err := s.shards[p].getBootstrapInfo(shardID, replicaID)
 	return bs, errors.WithStack(err)
 }
 
 // IterateEntries returns a list of saved entries starting with index low up to
 // index high with a max size of maxSize.
 func (s *ShardedDB) IterateEntries(ents []pb.Entry,
-	size uint64, clusterID uint64, nodeID uint64, low uint64, high uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64, high uint64,
 	maxSize uint64) ([]pb.Entry, uint64, error) {
-	p := s.partitioner.GetPartitionID(clusterID)
+	p := s.partitioner.GetPartitionID(shardID)
 	entries, sz, err := s.shards[p].iterateEntries(ents,
-		size, clusterID, nodeID, low, high, maxSize)
+		size, shardID, replicaID, low, high, maxSize)
 	return entries, sz, errors.WithStack(err)
 }
 
 // RemoveEntriesTo removes entries associated with the specified raft node up
 // to the specified index.
-func (s *ShardedDB) RemoveEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) error {
-	p := s.partitioner.GetPartitionID(clusterID)
-	if err := s.shards[p].removeEntriesTo(clusterID, nodeID, index); err != nil {
+func (s *ShardedDB) RemoveEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) error {
+	p := s.partitioner.GetPartitionID(shardID)
+	if err := s.shards[p].removeEntriesTo(shardID, replicaID, index); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil
@@ -263,23 +263,23 @@ func (s *ShardedDB) RemoveEntriesTo(clusterID uint64,
 
 // CompactEntriesTo reclaims underlying storage space used for storing
 // entries up to the specified index.
-func (s *ShardedDB) CompactEntriesTo(clusterID uint64,
-	nodeID uint64, index uint64) (<-chan struct{}, error) {
-	done := s.addCompaction(clusterID, nodeID, index)
+func (s *ShardedDB) CompactEntriesTo(shardID uint64,
+	replicaID uint64, index uint64) (<-chan struct{}, error) {
+	done := s.addCompaction(shardID, replicaID, index)
 	return done, nil
 }
 
 // RemoveNodeData deletes all node data that belongs to the specified node.
-func (s *ShardedDB) RemoveNodeData(clusterID uint64, nodeID uint64) error {
-	p := s.partitioner.GetPartitionID(clusterID)
-	return errors.WithStack(s.shards[p].removeNodeData(clusterID, nodeID))
+func (s *ShardedDB) RemoveNodeData(shardID uint64, replicaID uint64) error {
+	p := s.partitioner.GetPartitionID(shardID)
+	return errors.WithStack(s.shards[p].removeNodeData(shardID, replicaID))
 }
 
 // ImportSnapshot imports the snapshot record and other metadata records to the
 // system.
-func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, nodeID uint64) error {
+func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, replicaID uint64) error {
 	p := s.partitioner.GetPartitionID(ss.ClusterId)
-	return errors.WithStack(s.shards[p].importSnapshot(ss, nodeID))
+	return errors.WithStack(s.shards[p].importSnapshot(ss, replicaID))
 }
 
 // Close closes the ShardedDB instance.
@@ -297,7 +297,7 @@ func (s *ShardedDB) Close() (err error) {
 func (s *ShardedDB) getParititionID(updates []pb.Update) uint64 {
 	pid := uint64(math.MaxUint64)
 	for _, ud := range updates {
-		id := s.partitioner.GetPartitionID(ud.ClusterID)
+		id := s.partitioner.GetPartitionID(ud.ShardID)
 		if pid == math.MaxUint64 {
 			pid = id
 		} else if pid != id {
@@ -328,11 +328,11 @@ func (s *ShardedDB) compactionWorkerMain() {
 	}
 }
 
-func (s *ShardedDB) addCompaction(clusterID uint64,
-	nodeID uint64, index uint64) chan struct{} {
+func (s *ShardedDB) addCompaction(shardID uint64,
+	replicaID uint64, index uint64) chan struct{} {
 	task := task{
-		clusterID: clusterID,
-		nodeID:    nodeID,
+		shardID:   shardID,
+		replicaID: replicaID,
 		index:     index,
 	}
 	done := s.compactions.addTask(task)
@@ -346,15 +346,15 @@ func (s *ShardedDB) addCompaction(clusterID uint64,
 func (s *ShardedDB) compact() error {
 	for {
 		if t, hasTask := s.compactions.getTask(); hasTask {
-			idx := s.partitioner.GetPartitionID(t.clusterID)
+			idx := s.partitioner.GetPartitionID(t.shardID)
 			shard := s.shards[idx]
-			if err := shard.compact(t.clusterID, t.nodeID, t.index); err != nil {
+			if err := shard.compact(t.shardID, t.replicaID, t.index); err != nil {
 				return err
 			}
 			atomic.AddUint64(&s.completedCompactions, 1)
 			close(t.done)
 			plog.Infof("%s completed LogDB compaction up to index %d",
-				dn(t.clusterID, t.nodeID), t.index)
+				dn(t.shardID, t.replicaID), t.index)
 			select {
 			case <-s.stopper.ShouldStop():
 				return nil

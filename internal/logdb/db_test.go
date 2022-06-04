@@ -156,7 +156,7 @@ func TestBootstrapInfoCanBeSavedAndChecked(t *testing.T) {
 		if len(ni) != 1 {
 			t.Errorf("failed to get node info list")
 		}
-		if ni[0].ClusterID != 1 || ni[0].NodeID != 2 {
+		if ni[0].ShardID != 1 || ni[0].ReplicaID != 2 {
 			t.Errorf("unexpected cluster id/node id, %v", ni[0])
 		}
 		if err := db.SaveBootstrapInfo(2, 3, bs); err != nil {
@@ -181,8 +181,8 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		ud1 := pb.Update{
 			EntriesToSave: []pb.Entry{{Index: 2}, {Index: 3}, {Index: 4}},
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud1}, 1)
 		if err != nil {
@@ -197,8 +197,8 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			t.Errorf("max index %d, want 4", maxIndex)
 		}
 		ud2 := pb.Update{
-			ClusterID: 3,
-			NodeID:    4,
+			ShardID:   3,
+			ReplicaID: 4,
 			Snapshot:  pb.Snapshot{Index: 3},
 		}
 		err = db.SaveRaftState([]pb.Update{ud2}, 1)
@@ -221,8 +221,8 @@ func TestSaveSnapshotTogetherWithUnexpectedEntriesWillPanic(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		ud1 := pb.Update{
 			EntriesToSave: []pb.Entry{{Index: 2}, {Index: 3}, {Index: 4}},
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 			Snapshot:      pb.Snapshot{Index: 5},
 		}
 		err := db.SaveRaftState([]pb.Update{ud1}, 1)
@@ -261,8 +261,8 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		ud1 := pb.Update{
 			EntriesToSave: []pb.Entry{e1},
 			State:         hs1,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 			Snapshot:      snapshot1,
 		}
 		hs2 := pb.State{
@@ -285,8 +285,8 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		ud2 := pb.Update{
 			EntriesToSave: []pb.Entry{e2},
 			State:         hs2,
-			ClusterID:     3,
-			NodeID:        3,
+			ShardID:       3,
+			ReplicaID:     3,
 			Snapshot:      snapshot2,
 		}
 		uds := []pb.Update{ud1, ud2}
@@ -326,8 +326,8 @@ func TestSnapshotOnlyNodeIsHandledByReadRaftState(t *testing.T) {
 		}
 		ud := pb.Update{
 			State:     hs,
-			ClusterID: 3,
-			NodeID:    4,
+			ShardID:   3,
+			ReplicaID: 4,
 			Snapshot:  ss,
 		}
 		if err := db.SaveRaftState([]pb.Update{ud}, 1); err != nil {
@@ -352,8 +352,8 @@ func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) 
 			Term:  2,
 		}
 		ud := pb.Update{
-			ClusterID: 3,
-			NodeID:    4,
+			ShardID:   3,
+			ReplicaID: 4,
 			Snapshot:  ss,
 		}
 		if err := db.SaveRaftState([]pb.Update{ud}, 1); err != nil {
@@ -389,8 +389,8 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -399,8 +399,8 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -442,8 +442,8 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -483,8 +483,8 @@ func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 	}
 	ud := pb.Update{
 		State:     hs,
-		ClusterID: 3,
-		NodeID:    4,
+		ShardID:   3,
+		ReplicaID: 4,
 	}
 	for i := uint64(1); i <= 10; i++ {
 		term := uint64(1)
@@ -538,8 +538,8 @@ func TestStateIsUpdated(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -562,8 +562,8 @@ func TestStateIsUpdated(t *testing.T) {
 		ud2 := pb.Update{
 			EntriesToSave: []pb.Entry{},
 			State:         hs2,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud2}, 1)
 		if err != nil {
@@ -599,8 +599,8 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -623,8 +623,8 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e1},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -664,8 +664,8 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -679,7 +679,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 			t.Errorf("ents sz %d, want 2", rs.EntryCount)
 		}
 		// save the same data but with different node id
-		ud.NodeID = 5
+		ud.ReplicaID = 5
 		err = db.SaveRaftState([]pb.Update{ud}, 2)
 		if err != nil {
 			t.Errorf("failed to save single de rec")
@@ -692,8 +692,8 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 			t.Errorf("ents sz %d, want 2", rs.EntryCount)
 		}
 		// save the same data but with different cluster id
-		ud.NodeID = 4
-		ud.ClusterID = 4
+		ud.ReplicaID = 4
+		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)
 		if err != nil {
 			t.Errorf("failed to save single de rec")
@@ -742,15 +742,15 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2, e3},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save single de rec")
 		}
 		// save the same data again but under a different node id
-		ud.NodeID = 5
+		ud.ReplicaID = 5
 		err = db.SaveRaftState([]pb.Update{ud}, 2)
 		if err != nil {
 			t.Errorf("failed to save updated de rec")
@@ -760,8 +760,8 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 			t.Errorf("ents sz %d, want 3", len(ents))
 		}
 		// save the same data again but under a different cluster id
-		ud.NodeID = 4
-		ud.ClusterID = 4
+		ud.ReplicaID = 4
+		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)
 		if err != nil {
 			t.Errorf("failed to save updated de rec")
@@ -807,8 +807,8 @@ func TestIterateEntries(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2, e3},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -841,8 +841,8 @@ func TestIterateEntries(t *testing.T) {
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
 			State:         hs,
-			ClusterID:     3,
-			NodeID:        4,
+			ShardID:       3,
+			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -875,13 +875,13 @@ func TestSaveSnapshot(t *testing.T) {
 			Term:  2,
 		}
 		rec1 := pb.Update{
-			ClusterID: 1,
-			NodeID:    2,
+			ShardID:   1,
+			ReplicaID: 2,
 			Snapshot:  s1,
 		}
 		rec2 := pb.Update{
-			ClusterID: 1,
-			NodeID:    2,
+			ShardID:   1,
+			ReplicaID: 2,
 			Snapshot:  s2,
 		}
 		require.NoError(t, db.SaveSnapshots([]pb.Update{rec1, rec2}))
@@ -896,18 +896,18 @@ func TestSaveSnapshot(t *testing.T) {
 func TestOldSnapshotIsIgnored(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		rec0 := pb.Update{
-			ClusterID: 1,
-			NodeID:    2,
+			ShardID:   1,
+			ReplicaID: 2,
 			Snapshot:  pb.Snapshot{Index: 5},
 		}
 		rec1 := pb.Update{
-			ClusterID: 1,
-			NodeID:    2,
+			ShardID:   1,
+			ReplicaID: 2,
 			Snapshot:  pb.Snapshot{Index: 20},
 		}
 		rec2 := pb.Update{
-			ClusterID: 1,
-			NodeID:    2,
+			ShardID:   1,
+			ReplicaID: 2,
 			Snapshot:  pb.Snapshot{Index: 10},
 		}
 		require.NoError(t, db.SaveSnapshots([]pb.Update{rec0}))
@@ -933,8 +933,8 @@ func TestParseNodeInfoKeyPanicOnUnexpectedKeySize(t *testing.T) {
 
 func TestSaveEntriesWithIndexGap(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		e1 := pb.Entry{
 			Term:  1,
 			Index: 1,
@@ -947,8 +947,8 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 		}
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -966,15 +966,15 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 		}
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e1, e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
 		ents, _, err := db.IterateEntries([]pb.Entry{}, 0,
-			clusterID, nodeID, 1, 6, math.MaxUint64)
+			shardID, replicaID, 1, 6, math.MaxUint64)
 		if err != nil {
 			t.Errorf("iterate entries failed %v", err)
 		}
@@ -985,7 +985,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			t.Errorf("unexpected index")
 		}
 		ents, _, err = db.IterateEntries([]pb.Entry{}, 0,
-			clusterID, nodeID, 3, 6, math.MaxUint64)
+			shardID, replicaID, 3, 6, math.MaxUint64)
 		if err != nil {
 			t.Errorf("iterate entries failed %v", err)
 		}
@@ -993,7 +993,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			t.Errorf("ents sz %d, want 0", len(ents))
 		}
 		ents, _, err = db.IterateEntries([]pb.Entry{}, 0,
-			clusterID, nodeID, 4, 6, math.MaxUint64)
+			shardID, replicaID, 4, 6, math.MaxUint64)
 		if err != nil {
 			t.Errorf("iterate entries failed %v", err)
 		}
@@ -1010,8 +1010,8 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 
 func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		ents := make([]pb.Entry, 0)
 		for i := first; i <= last; i++ {
 			e := pb.Entry{
@@ -1024,15 +1024,15 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         pb.State{Commit: 1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
 		results, _, err := db.IterateEntries(nil,
-			0, clusterID, nodeID, first, last+1, math.MaxUint64)
+			0, shardID, replicaID, first, last+1, math.MaxUint64)
 		if err != nil {
 			t.Errorf("failed to get entries %v", err)
 		}
@@ -1045,7 +1045,7 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 		if results[0].Index != first {
 			t.Errorf("first index %d, want %d", results[0].Index, first)
 		}
-		rs, err := db.ReadRaftState(clusterID, nodeID, first-1)
+		rs, err := db.ReadRaftState(shardID, replicaID, first-1)
 		if err != nil {
 			t.Fatalf("failed to get entry range %v", err)
 		}
@@ -1080,8 +1080,8 @@ func TestRemoveEntriesTo(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	clusterID := uint64(0)
-	nodeID := uint64(4)
+	shardID := uint64(0)
+	replicaID := uint64(4)
 	ents := make([]pb.Entry, 0)
 	maxIndex := uint64(1024)
 	skipSizeCheck := false
@@ -1111,17 +1111,17 @@ func TestRemoveEntriesTo(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         pb.State{Commit: 1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
-		if err := db.RemoveEntriesTo(clusterID, nodeID, maxIndex); err != nil {
+		if err := db.RemoveEntriesTo(shardID, replicaID, maxIndex); err != nil {
 			t.Fatalf("failed to remove entries, %v", err)
 		}
-		done, err := db.CompactEntriesTo(clusterID, nodeID, maxIndex)
+		done, err := db.CompactEntriesTo(shardID, replicaID, maxIndex)
 		if err != nil {
 			t.Fatalf("failed to compact entries to, %v", err)
 		}
@@ -1143,7 +1143,7 @@ func TestRemoveEntriesTo(t *testing.T) {
 			t.Fatalf("done chan not closed")
 		}
 		results, _, err := db.IterateEntries(nil,
-			0, clusterID, nodeID, 1, 100, math.MaxUint64)
+			0, shardID, replicaID, 1, 100, math.MaxUint64)
 		if err != nil {
 			t.Errorf("iterate entries failed %v", err)
 		}
@@ -1208,8 +1208,8 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 		firstIndex := tt.firstIndex
 		lastIndex := tt.lastIndex
 		tf := func(t *testing.T, db raftio.ILogDB) {
-			clusterID := uint64(0)
-			nodeID := uint64(4)
+			shardID := uint64(0)
+			replicaID := uint64(4)
 			ents := make([]pb.Entry, 0)
 			hs := pb.State{
 				Term:   1,
@@ -1232,14 +1232,14 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				EntriesToSave: ents,
 				State:         hs,
 				Snapshot:      ss,
-				ClusterID:     clusterID,
-				NodeID:        nodeID,
+				ShardID:       shardID,
+				ReplicaID:     replicaID,
 			}
 			err := db.SaveRaftState([]pb.Update{ud}, 1)
 			if err != nil {
 				t.Fatalf("failed to save recs")
 			}
-			state, err := db.ReadRaftState(clusterID, nodeID, ss.Index)
+			state, err := db.ReadRaftState(shardID, replicaID, ss.Index)
 			if err != nil {
 				t.Fatalf("failed to read raft state %v", err)
 			}
@@ -1249,7 +1249,7 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 			if state.EntryCount != entryCount {
 				t.Errorf("length %d, want %d", state.EntryCount, entryCount)
 			}
-			logReader := NewLogReader(clusterID, nodeID, db)
+			logReader := NewLogReader(shardID, replicaID, db)
 			logReader.SetCompactor(testCompactor)
 			if err := logReader.ApplySnapshot(ss); err != nil {
 				t.Fatalf("apply snapshot failed")
@@ -1267,8 +1267,8 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 
 func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		ents := make([]pb.Entry, 0)
 		hs := pb.State{
 			Term:   1,
@@ -1286,14 +1286,14 @@ func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         hs,
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Fatalf("failed to save recs")
 		}
-		state, err := db.ReadRaftState(clusterID, nodeID, 1)
+		state, err := db.ReadRaftState(shardID, replicaID, 1)
 		if err != nil {
 			t.Fatalf("failed to read raft state %v", err)
 		}
@@ -1310,8 +1310,8 @@ func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 
 func TestRemoveNodeData(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		ents := make([]pb.Entry, 0)
 		hs := pb.State{
 			Term:   1,
@@ -1335,27 +1335,27 @@ func TestRemoveNodeData(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         hs,
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 			Snapshot:      ss,
 		}
 		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
-		state, err := db.ReadRaftState(clusterID, nodeID, 1)
+		state, err := db.ReadRaftState(shardID, replicaID, 1)
 		require.NoError(t, err)
 		require.Equal(t, uint64(1), state.FirstIndex)
 		require.Equal(t, batchSize*3+1, state.EntryCount)
-		require.NoError(t, db.RemoveNodeData(clusterID, nodeID))
-		_, err = db.ReadRaftState(clusterID, nodeID, 1)
+		require.NoError(t, db.RemoveNodeData(shardID, replicaID))
+		_, err = db.ReadRaftState(shardID, replicaID, 1)
 		require.True(t, errors.Is(err, raftio.ErrNoSavedLog))
 
-		snapshot, err := db.GetSnapshot(clusterID, nodeID)
+		snapshot, err := db.GetSnapshot(shardID, replicaID)
 		require.NoError(t, err)
 		require.True(t, pb.IsEmptySnapshot(snapshot))
 
-		_, err = db.GetBootstrapInfo(clusterID, nodeID)
+		_, err = db.GetBootstrapInfo(shardID, replicaID)
 		require.True(t, errors.Is(err, raftio.ErrNoBootstrapInfo))
 
-		ents, sz, err := db.IterateEntries(nil, 0, clusterID, nodeID, 0,
+		ents, sz, err := db.IterateEntries(nil, 0, shardID, replicaID, 0,
 			math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
 		require.True(t, len(ents) == 0 && sz == 0)
@@ -1366,8 +1366,8 @@ func TestRemoveNodeData(t *testing.T) {
 
 func TestImportSnapshot(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(2)
-		nodeID := uint64(4)
+		shardID := uint64(2)
+		replicaID := uint64(4)
 		ents := make([]pb.Entry, 0)
 		hs := pb.State{
 			Term:   1,
@@ -1391,38 +1391,38 @@ func TestImportSnapshot(t *testing.T) {
 		ud := pb.Update{
 			EntriesToSave: ents,
 			State:         hs,
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 			Snapshot:      ss,
 		}
 		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
 		ssimport := pb.Snapshot{
 			Type:      pb.OnDiskStateMachine,
-			ClusterId: clusterID,
+			ClusterId: shardID,
 			Index:     110,
 			Term:      2,
 		}
-		require.NoError(t, db.ImportSnapshot(ssimport, nodeID))
-		snapshot, err := db.GetSnapshot(clusterID, nodeID)
+		require.NoError(t, db.ImportSnapshot(ssimport, replicaID))
+		snapshot, err := db.GetSnapshot(shardID, replicaID)
 		require.NoError(t, err)
 		require.Equal(t, ssimport.Index, snapshot.Index)
 
-		bs, err := db.GetBootstrapInfo(clusterID, nodeID)
+		bs, err := db.GetBootstrapInfo(shardID, replicaID)
 		require.NoError(t, err)
 		require.Equal(t, pb.OnDiskStateMachine, bs.Type)
 
-		state, err := db.ReadRaftState(clusterID, nodeID, 1)
+		state, err := db.ReadRaftState(shardID, replicaID, 1)
 		require.NoError(t, err)
 		require.NotEqual(t, raftio.RaftState{}, state)
 		require.Equal(t, snapshot.Index, state.State.Commit)
 
 		sdb := db.(*ShardedDB).shards[2]
 		sdb.cs.maxIndex = make(map[raftio.NodeInfo]uint64)
-		maxIndex, err := sdb.getMaxIndex(clusterID, nodeID)
+		maxIndex, err := sdb.getMaxIndex(shardID, replicaID)
 		require.NoError(t, err)
 		require.Equal(t, ssimport.Index, maxIndex)
 
-		state, err = db.ReadRaftState(clusterID, nodeID, snapshot.Index)
+		state, err = db.ReadRaftState(shardID, replicaID, snapshot.Index)
 		require.NoError(t, err)
 		require.NotEqual(t, raftio.RaftState{}, state)
 		require.Equal(t, snapshot.Index, state.FirstIndex)

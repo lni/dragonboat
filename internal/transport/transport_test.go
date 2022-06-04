@@ -78,23 +78,23 @@ func newTestSnapshotDir(fs vfs.IFS) *testSnapshotDir {
 	return &testSnapshotDir{fs: fs}
 }
 
-func (g *testSnapshotDir) GetSnapshotRootDir(clusterID uint64,
-	nodeID uint64) string {
-	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
+func (g *testSnapshotDir) GetSnapshotRootDir(shardID uint64,
+	replicaID uint64) string {
+	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", shardID, replicaID)
 	return g.fs.PathJoin(snapshotDir, snapNodeDir)
 }
 
-func (g *testSnapshotDir) GetSnapshotDir(clusterID uint64,
-	nodeID uint64, lastApplied uint64) string {
-	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
+func (g *testSnapshotDir) GetSnapshotDir(shardID uint64,
+	replicaID uint64, lastApplied uint64) string {
+	snapNodeDir := fmt.Sprintf("snapshot-%d-%d", shardID, replicaID)
 	snapDir := fmt.Sprintf("snapshot-%016X", lastApplied)
 	d := g.fs.PathJoin(snapshotDir, snapNodeDir, snapDir)
 	return d
 }
 
-func (g *testSnapshotDir) getSnapshotFileMD5(clusterID uint64,
-	nodeID uint64, index uint64, filename string) ([]byte, error) {
-	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
+func (g *testSnapshotDir) getSnapshotFileMD5(shardID uint64,
+	replicaID uint64, index uint64, filename string) ([]byte, error) {
+	snapDir := g.GetSnapshotDir(shardID, replicaID, index)
 	fp := g.fs.PathJoin(snapDir, filename)
 	f, err := g.fs.Open(fp)
 	if err != nil {
@@ -108,9 +108,9 @@ func (g *testSnapshotDir) getSnapshotFileMD5(clusterID uint64,
 	return h.Sum(nil), nil
 }
 
-func (g *testSnapshotDir) generateSnapshotExternalFile(clusterID uint64,
-	nodeID uint64, index uint64, filename string, sz uint64) {
-	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
+func (g *testSnapshotDir) generateSnapshotExternalFile(shardID uint64,
+	replicaID uint64, index uint64, filename string, sz uint64) {
+	snapDir := g.GetSnapshotDir(shardID, replicaID, index)
 	if err := g.fs.MkdirAll(snapDir, 0755); err != nil {
 		panic(err)
 	}
@@ -131,9 +131,9 @@ func (g *testSnapshotDir) generateSnapshotExternalFile(clusterID uint64,
 	f.Close()
 }
 
-func (g *testSnapshotDir) generateSnapshotFile(clusterID uint64,
-	nodeID uint64, index uint64, filename string, sz uint64, fs vfs.IFS) {
-	snapDir := g.GetSnapshotDir(clusterID, nodeID, index)
+func (g *testSnapshotDir) generateSnapshotFile(shardID uint64,
+	replicaID uint64, index uint64, filename string, sz uint64, fs vfs.IFS) {
+	snapDir := g.GetSnapshotDir(shardID, replicaID, index)
 	if err := g.fs.MkdirAll(snapDir, 0755); err != nil {
 		panic(err)
 	}
@@ -220,11 +220,11 @@ func (h *testMessageHandler) HandleMessageBatch(reqs raftpb.MessageBatch) (uint6
 	return ss, msg
 }
 
-func (h *testMessageHandler) HandleSnapshotStatus(clusterID uint64,
-	nodeID uint64, failed bool) {
+func (h *testMessageHandler) HandleSnapshotStatus(shardID uint64,
+	replicaID uint64, failed bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	epk := raftio.GetNodeInfo(clusterID, nodeID)
+	epk := raftio.GetNodeInfo(shardID, replicaID)
 	var p *map[raftio.NodeInfo]uint64
 	if failed {
 		p = &h.snapshotFailedCount
@@ -239,11 +239,11 @@ func (h *testMessageHandler) HandleSnapshotStatus(clusterID uint64,
 	}
 }
 
-func (h *testMessageHandler) HandleUnreachable(clusterID uint64,
-	nodeID uint64) {
+func (h *testMessageHandler) HandleUnreachable(shardID uint64,
+	replicaID uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	epk := raftio.GetNodeInfo(clusterID, nodeID)
+	epk := raftio.GetNodeInfo(shardID, replicaID)
 	v, ok := h.unreachableCount[epk]
 	if ok {
 		h.unreachableCount[epk] = v + 1
@@ -252,18 +252,18 @@ func (h *testMessageHandler) HandleUnreachable(clusterID uint64,
 	}
 }
 
-func (h *testMessageHandler) HandleSnapshot(clusterID uint64,
-	nodeID uint64, from uint64) {
+func (h *testMessageHandler) HandleSnapshot(shardID uint64,
+	replicaID uint64, from uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	epk := raftio.GetNodeInfo(clusterID, nodeID)
+	epk := raftio.GetNodeInfo(shardID, replicaID)
 	v, ok := h.receivedSnapshotCount[epk]
 	if ok {
 		h.receivedSnapshotCount[epk] = v + 1
 	} else {
 		h.receivedSnapshotCount[epk] = 1
 	}
-	epk.NodeID = from
+	epk.ReplicaID = from
 	v, ok = h.receivedSnapshotFromCount[epk]
 	if ok {
 		h.receivedSnapshotFromCount[epk] = v + 1
@@ -272,41 +272,41 @@ func (h *testMessageHandler) HandleSnapshot(clusterID uint64,
 	}
 }
 
-func (h *testMessageHandler) getReceivedSnapshotCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.receivedSnapshotCount, clusterID, nodeID)
+func (h *testMessageHandler) getReceivedSnapshotCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.receivedSnapshotCount, shardID, replicaID)
 }
 
-func (h *testMessageHandler) getReceivedSnapshotFromCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.receivedSnapshotFromCount, clusterID, nodeID)
+func (h *testMessageHandler) getReceivedSnapshotFromCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.receivedSnapshotFromCount, shardID, replicaID)
 }
 
-func (h *testMessageHandler) getRequestCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.requestCount, clusterID, nodeID)
+func (h *testMessageHandler) getRequestCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.requestCount, shardID, replicaID)
 }
 
-func (h *testMessageHandler) getFailedSnapshotCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.snapshotFailedCount, clusterID, nodeID)
+func (h *testMessageHandler) getFailedSnapshotCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.snapshotFailedCount, shardID, replicaID)
 }
 
-func (h *testMessageHandler) getSnapshotSuccessCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.snapshotSuccessCount, clusterID, nodeID)
+func (h *testMessageHandler) getSnapshotSuccessCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.snapshotSuccessCount, shardID, replicaID)
 }
 
-func (h *testMessageHandler) getSnapshotCount(clusterID uint64,
-	nodeID uint64) uint64 {
-	return h.getMessageCount(h.snapshotCount, clusterID, nodeID)
+func (h *testMessageHandler) getSnapshotCount(shardID uint64,
+	replicaID uint64) uint64 {
+	return h.getMessageCount(h.snapshotCount, shardID, replicaID)
 }
 
 func (h *testMessageHandler) getMessageCount(m map[raftio.NodeInfo]uint64,
-	clusterID uint64, nodeID uint64) uint64 {
+	shardID uint64, replicaID uint64) uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	epk := raftio.GetNodeInfo(clusterID, nodeID)
+	epk := raftio.GetNodeInfo(shardID, replicaID)
 	v, ok := m[epk]
 	if ok {
 		return v

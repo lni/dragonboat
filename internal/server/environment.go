@@ -95,7 +95,7 @@ func NewEnv(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Env, error) {
 	s := &Env{
 		randomSource: random.NewLockedRand(),
 		nhConfig:     nhConfig,
-		partitioner:  NewFixedPartitioner(defaultClusterIDMod),
+		partitioner:  NewFixedPartitioner(defaultShardIDMod),
 		flocks:       make(map[string]io.Closer),
 		fs:           fs,
 	}
@@ -124,17 +124,17 @@ func (env *Env) GetRandomSource() random.Source {
 }
 
 // GetSnapshotDir returns the snapshot directory name.
-func (env *Env) GetSnapshotDir(did uint64, clusterID uint64,
-	nodeID uint64) string {
-	parts, _, _ := env.getSnapshotDirParts(did, clusterID, nodeID)
+func (env *Env) GetSnapshotDir(did uint64, shardID uint64,
+	replicaID uint64) string {
+	parts, _, _ := env.getSnapshotDirParts(did, shardID, replicaID)
 	return env.fs.PathJoin(parts...)
 }
 
 func (env *Env) getSnapshotDirParts(did uint64,
-	clusterID uint64, nodeID uint64) ([]string, string, []string) {
+	shardID uint64, replicaID uint64) ([]string, string, []string) {
 	dd := env.getDeploymentIDSubDirName(did)
-	pd := fmt.Sprintf("snapshot-part-%d", env.partitioner.GetPartitionID(clusterID))
-	sd := fmt.Sprintf("snapshot-%d-%d", clusterID, nodeID)
+	pd := fmt.Sprintf("snapshot-part-%d", env.partitioner.GetPartitionID(shardID))
+	sd := fmt.Sprintf("snapshot-%d-%d", shardID, replicaID)
 	dir := env.nhConfig.NodeHostDir
 	parts := make([]string, 0)
 	toBeCreated := make([]string, 0)
@@ -177,8 +177,8 @@ func (env *Env) CreateNodeHostDir(did uint64) (string, string, error) {
 
 // CreateSnapshotDir creates the snapshot directory for the specified node.
 func (env *Env) CreateSnapshotDir(did uint64,
-	clusterID uint64, nodeID uint64) error {
-	_, path, parts := env.getSnapshotDirParts(did, clusterID, nodeID)
+	shardID uint64, replicaID uint64) error {
+	_, path, parts := env.getSnapshotDirParts(did, shardID, replicaID)
 	for _, part := range parts {
 		path = env.fs.PathJoin(path, part)
 		exist, err := fileutil.Exist(path, env.fs)
@@ -302,14 +302,14 @@ func (env *Env) LockNodeHostDir() error {
 // RemoveSnapshotDir marks the node snapshot directory as removed and have all
 // existing snapshots deleted.
 func (env *Env) RemoveSnapshotDir(did uint64,
-	clusterID uint64, nodeID uint64) error {
-	dir := env.GetSnapshotDir(did, clusterID, nodeID)
+	shardID uint64, replicaID uint64) error {
+	dir := env.GetSnapshotDir(did, shardID, replicaID)
 	exist, err := fileutil.Exist(dir, env.fs)
 	if err != nil {
 		return err
 	}
 	if exist {
-		if err := env.markSnapshotDirRemoved(did, clusterID, nodeID); err != nil {
+		if err := env.markSnapshotDirRemoved(did, shardID, replicaID); err != nil {
 			return err
 		}
 		if err := removeSavedSnapshots(dir, env.fs); err != nil {
@@ -319,9 +319,9 @@ func (env *Env) RemoveSnapshotDir(did uint64,
 	return nil
 }
 
-func (env *Env) markSnapshotDirRemoved(did uint64, clusterID uint64,
-	nodeID uint64) error {
-	dir := env.GetSnapshotDir(did, clusterID, nodeID)
+func (env *Env) markSnapshotDirRemoved(did uint64, shardID uint64,
+	replicaID uint64) error {
+	dir := env.GetSnapshotDir(did, shardID, replicaID)
 	s := &raftpb.RaftDataStatus{}
 	return fileutil.MarkDirAsDeleted(dir, s, env.fs)
 }

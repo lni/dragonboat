@@ -40,8 +40,8 @@ func newCache() *cache {
 	}
 }
 
-func (r *cache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (r *cache) setNodeInfo(shardID uint64, replicaID uint64) bool {
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_, ok := r.nodeInfo[key]
@@ -51,8 +51,8 @@ func (r *cache) setNodeInfo(clusterID uint64, nodeID uint64) bool {
 	return !ok
 }
 
-func (r *cache) setState(clusterID uint64, nodeID uint64, st pb.State) bool {
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (r *cache) setState(shardID uint64, replicaID uint64, st pb.State) bool {
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v, ok := r.ps[key]
@@ -67,18 +67,18 @@ func (r *cache) setState(clusterID uint64, nodeID uint64, st pb.State) bool {
 	return true
 }
 
-func (r *cache) setSnapshotIndex(clusterID uint64, nodeID uint64, index uint64) {
+func (r *cache) setSnapshotIndex(shardID uint64, replicaID uint64, index uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	r.snapshotIndex[key] = index
 }
 
-func (r *cache) trySaveSnapshot(clusterID uint64,
-	nodeID uint64, index uint64) bool {
+func (r *cache) trySaveSnapshot(shardID uint64,
+	replicaID uint64, index uint64) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	v, ok := r.snapshotIndex[key]
 	if !ok {
 		r.snapshotIndex[key] = index
@@ -87,17 +87,17 @@ func (r *cache) trySaveSnapshot(clusterID uint64,
 	return index > v
 }
 
-func (r *cache) setMaxIndex(clusterID uint64, nodeID uint64, maxIndex uint64) {
+func (r *cache) setMaxIndex(shardID uint64, replicaID uint64, maxIndex uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	r.maxIndex[key] = maxIndex
 }
 
-func (r *cache) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, bool) {
+func (r *cache) getMaxIndex(shardID uint64, replicaID uint64) (uint64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	v, ok := r.maxIndex[key]
 	if !ok {
 		return 0, false
@@ -105,11 +105,11 @@ func (r *cache) getMaxIndex(clusterID uint64, nodeID uint64) (uint64, bool) {
 	return v, true
 }
 
-func (r *cache) setLastBatch(clusterID uint64,
-	nodeID uint64, eb pb.EntryBatch) {
+func (r *cache) setLastBatch(shardID uint64,
+	replicaID uint64, eb pb.EntryBatch) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	oeb, ok := r.lastEntryBatch[key]
 	if !ok {
 		oeb = pb.EntryBatch{Entries: make([]pb.Entry, 0, len(eb.Entries))}
@@ -120,11 +120,11 @@ func (r *cache) setLastBatch(clusterID uint64,
 	r.lastEntryBatch[key] = oeb
 }
 
-func (r *cache) getLastBatch(clusterID uint64,
-	nodeID uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
+func (r *cache) getLastBatch(shardID uint64,
+	replicaID uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+	key := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	v, ok := r.lastEntryBatch[key]
 	if !ok {
 		return v, false

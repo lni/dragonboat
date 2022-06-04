@@ -30,9 +30,9 @@ func TestTaskQueueCanBeCreated(t *testing.T) {
 }
 
 func TestAddToTaskQueue(t *testing.T) {
-	t1 := Task{ClusterID: 1}
-	t2 := Task{ClusterID: 2}
-	t3 := Task{ClusterID: 3}
+	t1 := Task{ShardID: 1}
+	t2 := Task{ShardID: 2}
+	t3 := Task{ShardID: 3}
 	tq := NewTaskQueue()
 	tq.Add(t1)
 	tq.Add(t2)
@@ -48,9 +48,9 @@ func TestAddToTaskQueue(t *testing.T) {
 }
 
 func TestGetCanReturnAddedTaskFromTaskQueue(t *testing.T) {
-	t1 := Task{ClusterID: 1}
-	t2 := Task{ClusterID: 2}
-	t3 := Task{ClusterID: 3}
+	t1 := Task{ShardID: 1}
+	t2 := Task{ShardID: 2}
+	t3 := Task{ShardID: 3}
 	tq := NewTaskQueue()
 	tq.Add(t1)
 	tq.Add(t2)
@@ -72,7 +72,7 @@ func TestGetCanReturnAddedTaskFromTaskQueue(t *testing.T) {
 func TestTaskQueueResize(t *testing.T) {
 	tq := NewTaskQueue()
 	for i := uint64(0); i < initialTaskQueueCap*3; i++ {
-		task := Task{ClusterID: i}
+		task := Task{ShardID: i}
 		tq.Add(task)
 	}
 	if initCap := uint64(cap(tq.tasks)); initCap < initialTaskQueueCap*3 {
@@ -94,13 +94,13 @@ func TestTaskQueueResize(t *testing.T) {
 func TestMoreEntryToApply(t *testing.T) {
 	tq := NewTaskQueue()
 	for i := uint64(0); i < taskQueueBusyCap-1; i++ {
-		task := Task{ClusterID: i}
+		task := Task{ShardID: i}
 		tq.Add(task)
 		if !tq.MoreEntryToApply() {
 			t.Errorf("unexpectedly reported no more entry to apply")
 		}
 	}
-	task := Task{ClusterID: 0}
+	task := Task{ShardID: 0}
 	tq.Add(task)
 	if tq.MoreEntryToApply() {
 		t.Errorf("entry not limited")
@@ -108,9 +108,9 @@ func TestMoreEntryToApply(t *testing.T) {
 }
 
 func TestTaskQueueGetAll(t *testing.T) {
-	t1 := Task{ClusterID: 1}
-	t2 := Task{ClusterID: 2}
-	t3 := Task{ClusterID: 3}
+	t1 := Task{ShardID: 1}
+	t2 := Task{ShardID: 2}
+	t3 := Task{ShardID: 3}
 	tq := NewTaskQueue()
 	all := tq.GetAll()
 	if len(all) != 0 {

@@ -178,9 +178,9 @@ func newReadyCluster() *readyCluster {
 	return r
 }
 
-func (r *readyCluster) setClusterReady(clusterID uint64) {
+func (r *readyCluster) setClusterReady(shardID uint64) {
 	r.mu.Lock()
-	r.ready[clusterID] = struct{}{}
+	r.ready[shardID] = struct{}{}
 	r.mu.Unlock()
 }
 

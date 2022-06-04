@@ -135,26 +135,26 @@ func (n *GossipRegistry) NumMembers() int {
 }
 
 // Add adds a new node with its known NodeHostID to the registry.
-func (n *GossipRegistry) Add(clusterID uint64,
-	nodeID uint64, target string) {
-	n.nodes.Add(clusterID, nodeID, target)
+func (n *GossipRegistry) Add(shardID uint64,
+	replicaID uint64, target string) {
+	n.nodes.Add(shardID, replicaID, target)
 }
 
 // Remove removes the specified node from the registry.
-func (n *GossipRegistry) Remove(clusterID uint64, nodeID uint64) {
-	n.nodes.Remove(clusterID, nodeID)
+func (n *GossipRegistry) Remove(shardID uint64, replicaID uint64) {
+	n.nodes.Remove(shardID, replicaID)
 }
 
 // RemoveCluster removes the specified node from the registry.
-func (n *GossipRegistry) RemoveCluster(clusterID uint64) {
-	n.nodes.RemoveCluster(clusterID)
+func (n *GossipRegistry) RemoveCluster(shardID uint64) {
+	n.nodes.RemoveCluster(shardID)
 }
 
 // Resolve returns the current RaftAddress and connection key of the specified
 // node. It returns ErrUnknownTarget when the RaftAddress is unknown.
-func (n *GossipRegistry) Resolve(clusterID uint64,
-	nodeID uint64) (string, string, error) {
-	target, key, err := n.nodes.Resolve(clusterID, nodeID)
+func (n *GossipRegistry) Resolve(shardID uint64,
+	replicaID uint64) (string, string, error) {
+	target, key, err := n.nodes.Resolve(shardID, replicaID)
 	if err != nil {
 		return "", "", err
 	}

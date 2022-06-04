@@ -57,7 +57,7 @@ var finalizeLock sync.Mutex
 
 // SnapshotDirFunc is the function type that returns the snapshot dir
 // for the specified raft node.
-type SnapshotDirFunc func(clusterID uint64, nodeID uint64) string
+type SnapshotDirFunc func(shardID uint64, replicaID uint64) string
 
 // Mode is the snapshot env mode.
 type Mode uint64
@@ -128,7 +128,7 @@ type SSEnv struct {
 
 // NewSSEnv creates and returns a new SSEnv instance.
 func NewSSEnv(f SnapshotDirFunc,
-	clusterID uint64, nodeID uint64, index uint64,
+	shardID uint64, replicaID uint64, index uint64,
 	from uint64, mode Mode, fs vfs.IFS) SSEnv {
 	var tmpSuffix string
 	if mode == SnapshotMode {
@@ -136,7 +136,7 @@ func NewSSEnv(f SnapshotDirFunc,
 	} else {
 		tmpSuffix = recvTmpDirSuffix
 	}
-	rootDir := f(clusterID, nodeID)
+	rootDir := f(shardID, replicaID)
 	fp := fs.PathJoin(getFinalDirName(rootDir, index), getFilename(index))
 	return SSEnv{
 		index:    index,

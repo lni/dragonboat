@@ -27,10 +27,10 @@ import (
 // dbKeeper keeps all tan db instances managed by a tan LogDB.
 type dbKeeper interface {
 	multiplexedLog() bool
-	name(clusterID uint64, nodeID uint64) string
-	key(clusterID uint64) uint64
-	get(clusterID uint64, nodeID uint64) (*db, bool)
-	set(clusterID uint64, nodeID uint64, db *db)
+	name(shardID uint64, replicaID uint64) string
+	key(shardID uint64) uint64
+	get(shardID uint64, replicaID uint64) (*db, bool)
+	set(shardID uint64, replicaID uint64, db *db)
 	iterate(f func(*db) error) error
 }
 
@@ -51,22 +51,22 @@ func (k *regularKeeper) multiplexedLog() bool {
 	return false
 }
 
-func (k *regularKeeper) name(clusterID uint64, nodeID uint64) string {
-	return fmt.Sprintf("node-%d-%d", clusterID, nodeID)
+func (k *regularKeeper) name(shardID uint64, replicaID uint64) string {
+	return fmt.Sprintf("node-%d-%d", shardID, replicaID)
 }
 
-func (k *regularKeeper) key(clusterID uint64) uint64 {
+func (k *regularKeeper) key(shardID uint64) uint64 {
 	panic("not suppose to be called")
 }
 
-func (k *regularKeeper) get(clusterID uint64, nodeID uint64) (*db, bool) {
-	ni := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (k *regularKeeper) get(shardID uint64, replicaID uint64) (*db, bool) {
+	ni := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	v, ok := k.dbs[ni]
 	return v, ok
 }
 
-func (k *regularKeeper) set(clusterID uint64, nodeID uint64, db *db) {
-	ni := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (k *regularKeeper) set(shardID uint64, replicaID uint64, db *db) {
+	ni := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	k.dbs[ni] = db
 }
 
@@ -96,21 +96,21 @@ func (k *multiplexedKeeper) multiplexedLog() bool {
 	return true
 }
 
-func (k *multiplexedKeeper) name(clusterID uint64, nodeID uint64) string {
-	return fmt.Sprintf("shard-%d", k.key(clusterID))
+func (k *multiplexedKeeper) name(shardID uint64, replicaID uint64) string {
+	return fmt.Sprintf("shard-%d", k.key(shardID))
 }
 
-func (k *multiplexedKeeper) key(clusterID uint64) uint64 {
-	return clusterID % 16
+func (k *multiplexedKeeper) key(shardID uint64) uint64 {
+	return shardID % 16
 }
 
-func (k *multiplexedKeeper) get(clusterID uint64, nodeID uint64) (*db, bool) {
-	v, ok := k.dbs[k.key(clusterID)]
+func (k *multiplexedKeeper) get(shardID uint64, replicaID uint64) (*db, bool) {
+	v, ok := k.dbs[k.key(shardID)]
 	return v, ok
 }
 
-func (k *multiplexedKeeper) set(clusterID uint64, nodeID uint64, db *db) {
-	k.dbs[k.key(clusterID)] = db
+func (k *multiplexedKeeper) set(shardID uint64, replicaID uint64, db *db) {
+	k.dbs[k.key(shardID)] = db
 }
 
 func (k *multiplexedKeeper) iterate(f func(*db) error) error {
@@ -147,16 +147,16 @@ func (c *collection) multiplexedLog() bool {
 	return c.keeper.multiplexedLog()
 }
 
-func (c *collection) key(clusterID uint64) uint64 {
-	return c.keeper.key(clusterID)
+func (c *collection) key(shardID uint64) uint64 {
+	return c.keeper.key(shardID)
 }
 
-func (c *collection) getDB(clusterID uint64, nodeID uint64) (*db, error) {
-	db, ok := c.keeper.get(clusterID, nodeID)
+func (c *collection) getDB(shardID uint64, replicaID uint64) (*db, error) {
+	db, ok := c.keeper.get(shardID, replicaID)
 	if ok {
 		return db, nil
 	}
-	name := c.keeper.name(clusterID, nodeID)
+	name := c.keeper.name(shardID, replicaID)
 	dbdir := c.fs.PathJoin(c.dirname, name)
 	if err := c.prepareDir(dbdir); err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (c *collection) getDB(clusterID uint64, nodeID uint64) (*db, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.keeper.set(clusterID, nodeID, db)
+	c.keeper.set(shardID, replicaID, db)
 	return db, nil
 }
 

@@ -73,7 +73,7 @@ func TestAllClustersReady(t *testing.T) {
 	wr := newWorkReady(4)
 	nodes := make([]*node, 0)
 	for i := uint64(0); i < uint64(4); i++ {
-		nodes = append(nodes, &node{clusterID: i})
+		nodes = append(nodes, &node{shardID: i})
 	}
 	wr.allClustersReady(nodes)
 	for i := uint64(0); i < uint64(4); i++ {
@@ -93,7 +93,7 @@ func TestAllClustersReady(t *testing.T) {
 		}
 	}
 	nodes = nodes[:0]
-	nodes = append(nodes, []*node{{clusterID: 0}, {clusterID: 2}, {clusterID: 3}}...)
+	nodes = append(nodes, []*node{{shardID: 0}, {shardID: 2}, {shardID: 3}}...)
 	wr.allClustersReady(nodes)
 	ch := wr.channels[1]
 	select {
@@ -147,7 +147,7 @@ func TestWorkCanBeSetAsReady(t *testing.T) {
 	}
 }
 
-func TestReturnedReadyMapContainsReadyClusterID(t *testing.T) {
+func TestReturnedReadyMapContainsReadyShardID(t *testing.T) {
 	wr := newWorkReady(4)
 	wr.clusterReady(0)
 	wr.clusterReady(4)
@@ -182,20 +182,20 @@ func TestLoadedNodes(t *testing.T) {
 	}
 	nodes := make(map[uint64]*node)
 	n := &node{}
-	n.nodeID = 3
+	n.replicaID = 3
 	nodes[2] = n
 	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) == nil {
 		t.Errorf("unexpectedly returned false")
 	}
-	n.nodeID = 4
+	n.replicaID = 4
 	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
 	}
 	nodes = make(map[uint64]*node)
 	nodes[5] = n
-	n.nodeID = 3
+	n.replicaID = 3
 	lns.update(1, fromStepWorker, nodes)
 	if lns.get(2, 3) != nil {
 		t.Errorf("unexpectedly returned true")
@@ -204,18 +204,18 @@ func TestLoadedNodes(t *testing.T) {
 
 func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
 	m := make(map[uint64]*node)
-	m[1] = &node{clusterID: 100, nodeID: 100}
-	m[2] = &node{clusterID: 200, nodeID: 200}
+	m[1] = &node{shardID: 100, replicaID: 100}
+	m[2] = &node{shardID: 200, replicaID: 200}
 	l := newLoadedNodes()
 	l.updateFromBusySSNodes(m)
 	nm := l.nodes[nodeType{workerID: 0, from: fromWorker}]
 	if len(nm) != 2 {
 		t.Errorf("unexpected map len")
 	}
-	if n, ok := nm[100]; !ok || n.clusterID != 100 {
+	if n, ok := nm[100]; !ok || n.shardID != 100 {
 		t.Errorf("failed to locate the node")
 	}
-	if n, ok := nm[200]; !ok || n.clusterID != 200 {
+	if n, ok := nm[200]; !ok || n.shardID != 200 {
 		t.Errorf("failed to locate the node")
 	}
 }
@@ -238,7 +238,7 @@ func TestWPRemoveFromPending(t *testing.T) {
 			if i == tt.idx {
 				cid = uint64(0)
 			}
-			r := tsn{task: rsm.Task{ClusterID: cid}}
+			r := tsn{task: rsm.Task{ShardID: cid}}
 			w.pending = append(w.pending, r)
 		}
 		if uint64(len(w.pending)) != tt.length {
@@ -249,7 +249,7 @@ func TestWPRemoveFromPending(t *testing.T) {
 			t.Errorf("unexpected length")
 		}
 		for _, p := range w.pending {
-			if p.task.ClusterID == 0 {
+			if p.task.ShardID == 0 {
 				t.Errorf("%d, pending not removed, %+v", idx, w.pending)
 			}
 		}

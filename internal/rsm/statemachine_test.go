@@ -134,8 +134,8 @@ func (p *testNodeProxy) configChangeProcessed(index uint64, rejected bool) {
 	}
 }
 
-func (p *testNodeProxy) NodeID() uint64    { return 1 }
-func (p *testNodeProxy) ClusterID() uint64 { return 1 }
+func (p *testNodeProxy) ReplicaID() uint64 { return 1 }
+func (p *testNodeProxy) ShardID() uint64   { return 1 }
 
 type noopCompactor struct{}
 
@@ -275,7 +275,7 @@ func (s *testSnapshotter) Load(ss pb.Snapshot,
 func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
@@ -293,7 +293,7 @@ func runSMTest2(t *testing.T,
 	createTestDir(fs)
 	defer removeTestDir(fs)
 	store := tests.NewKVTest(1, 1)
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	store.(*tests.KVTest).DisableLargeDelay()
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
@@ -316,7 +316,7 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	createTestDir(fs)
 	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -364,7 +364,7 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	store := &tests.ConcurrentUpdate{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	sm := NewStateMachine(ds, nil, config, nodeProxy, fs)
@@ -409,7 +409,7 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 	createTestDir(fs)
 	defer removeTestDir(fs)
 	store := tests.NewConcurrentKVTest(1, 1)
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -468,7 +468,7 @@ func TestHandleAllocationCount(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	store := &tests.NoOP{NoAlloc: true}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -509,7 +509,7 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	createTestDir(fs)
 	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -560,12 +560,12 @@ func TestStateMachineCanBeCreated(t *testing.T) {
 }
 
 func applyConfigChangeEntry(sm *StateMachine,
-	configChangeID uint64, configType pb.ConfigChangeType, NodeID uint64,
+	configChangeID uint64, configType pb.ConfigChangeType, ReplicaID uint64,
 	addressToAdd string, index uint64) {
 	cc := pb.ConfigChange{
 		ConfigChangeId: configChangeID,
 		Type:           configType,
-		NodeID:         NodeID,
+		ReplicaID:      ReplicaID,
 	}
 	if addressToAdd != "" {
 		cc.Address = addressToAdd
@@ -971,7 +971,7 @@ func TestAddExistingMemberIsRejected(t *testing.T) {
 	testAddExistingMemberIsRejected(t, pb.AddNonVoting, fs)
 }
 
-func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
+func testAddExistingMemberWithSameReplicaIDIsRejected(t *testing.T,
 	tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
@@ -1006,10 +1006,10 @@ func testAddExistingMemberWithSameNodeIDIsRejected(t *testing.T,
 	runSMTest2(t, tf, fs)
 }
 
-func TestAddExistingMemberWithSameNodeIDIsRejected(t *testing.T) {
+func TestAddExistingMemberWithSameReplicaIDIsRejected(t *testing.T) {
 	fs := vfs.GetTestFS()
-	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNode, fs)
-	testAddExistingMemberWithSameNodeIDIsRejected(t, pb.AddNonVoting, fs)
+	testAddExistingMemberWithSameReplicaIDIsRejected(t, pb.AddNode, fs)
+	testAddExistingMemberWithSameReplicaIDIsRejected(t, pb.AddNonVoting, fs)
 }
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {
@@ -1388,7 +1388,7 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 			Index: index,
 		}
 		store2 := tests.NewKVTest(1, 1)
-		config := config.Config{ClusterID: 1, NodeID: 1}
+		config := config.Config{ShardID: 1, ReplicaID: 1}
 		store2.(*tests.KVTest).DisableLargeDelay()
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
@@ -2643,7 +2643,7 @@ func TestUpdateErrorIsReturned(t *testing.T) {
 	defer removeTestDir(fs)
 	defer reportLeakedFD(fs, t)
 	store := &errorUpdateSM{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -2674,8 +2674,8 @@ func (e *errorNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
 func (e *errorNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool) error {
 	return errReturnedError
 }
-func (e *errorNodeProxy) NodeID() uint64              { return 1 }
-func (e *errorNodeProxy) ClusterID() uint64           { return 1 }
+func (e *errorNodeProxy) ReplicaID() uint64           { return 1 }
+func (e *errorNodeProxy) ShardID() uint64             { return 1 }
 func (e *errorNodeProxy) ShouldStop() <-chan struct{} { return make(chan struct{}) }
 
 func TestConfigChangeErrorIsReturned(t *testing.T) {
@@ -2685,7 +2685,7 @@ func TestConfigChangeErrorIsReturned(t *testing.T) {
 	defer removeTestDir(fs)
 	defer reportLeakedFD(fs, t)
 	store := &errorUpdateSM{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := &errorNodeProxy{}
 	snapshotter := newTestSnapshotter(fs)
@@ -2693,7 +2693,7 @@ func TestConfigChangeErrorIsReturned(t *testing.T) {
 	cc := pb.ConfigChange{
 		ConfigChangeId: 1,
 		Type:           pb.AddNode,
-		NodeID:         2,
+		ReplicaID:      2,
 		Address:        "localhost:1222",
 	}
 	data, err := cc.Marshal()
@@ -2726,7 +2726,7 @@ func TestSaveErrorIsReturned(t *testing.T) {
 	defer removeTestDir(fs)
 	defer reportLeakedFD(fs, t)
 	store := &errorUpdateSM{}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	ds := NewNativeSM(config, NewInMemStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
@@ -2755,7 +2755,7 @@ func TestRecoverErrorIsReturned(t *testing.T) {
 			Index: index,
 		}
 		store2 := &errorUpdateSM{}
-		config := config.Config{ClusterID: 1, NodeID: 1}
+		config := config.Config{ShardID: 1, ReplicaID: 1}
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := newTestNodeProxy()
 		snapshotter2 := newTestSnapshotter(fs)
@@ -2785,7 +2785,7 @@ func TestRestoreRemoteErrorIsReturned(t *testing.T) {
 		}
 		store2 := tests.NewKVTest(1, 1)
 		store2.(*tests.KVTest).DisableLargeDelay()
-		config := config.Config{ClusterID: 1, NodeID: 1}
+		config := config.Config{ShardID: 1, ReplicaID: 1}
 		ds2 := NewNativeSM(config, NewInMemStateMachine(store2), make(chan struct{}))
 		nodeProxy2 := &errorNodeProxy{}
 		snapshotter2 := newTestSnapshotter(fs)

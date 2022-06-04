@@ -159,13 +159,13 @@ func newBatchedEntries(cs *cache,
 }
 
 func (be *batchedEntries) iterate(ents []pb.Entry, maxIndex uint64,
-	size uint64, clusterID uint64, nodeID uint64, low uint64, high uint64,
+	size uint64, shardID uint64, replicaID uint64, low uint64, high uint64,
 	maxSize uint64) ([]pb.Entry, uint64, error) {
 	if high > maxIndex+1 {
 		high = maxIndex + 1
 	}
 	lowID, highID := getBatchIDRange(low, high)
-	ebs, err := be.iterateBatches(clusterID, nodeID, lowID, highID)
+	ebs, err := be.iterateBatches(shardID, replicaID, lowID, highID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -194,11 +194,11 @@ func (be *batchedEntries) iterate(ents []pb.Entry, maxIndex uint64,
 	return ents, entriesSize(ents), nil
 }
 
-func (be *batchedEntries) iterateBatches(clusterID uint64,
-	nodeID uint64, low uint64, high uint64) ([]pb.EntryBatch, error) {
+func (be *batchedEntries) iterateBatches(shardID uint64,
+	replicaID uint64, low uint64, high uint64) ([]pb.EntryBatch, error) {
 	ents := make([]pb.EntryBatch, 0)
 	if low+1 == high {
-		e, ok := be.getBatchFromDB(clusterID, nodeID, low)
+		e, ok := be.getBatchFromDB(shardID, replicaID, low)
 		if !ok {
 			return []pb.EntryBatch{}, nil
 		}
@@ -209,8 +209,8 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 	lk := be.keys.get()
 	defer fk.Release()
 	defer lk.Release()
-	fk.SetEntryBatchKey(clusterID, nodeID, low)
-	lk.SetEntryBatchKey(clusterID, nodeID, high)
+	fk.SetEntryBatchKey(shardID, replicaID, low)
+	lk.SetEntryBatchKey(shardID, replicaID, high)
 	expectedID := low
 	op := func(key []byte, data []byte) (bool, error) {
 		var eb pb.EntryBatch
@@ -228,15 +228,15 @@ func (be *batchedEntries) iterateBatches(clusterID uint64,
 	return ents, nil
 }
 
-func (be *batchedEntries) getRange(clusterID uint64,
-	nodeID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
+func (be *batchedEntries) getRange(shardID uint64,
+	replicaID uint64, snapshotIndex uint64, maxIndex uint64) (uint64, uint64, error) {
 	fk := be.keys.get()
 	lk := be.keys.get()
 	defer fk.Release()
 	defer lk.Release()
 	low, high := getBatchIDRange(snapshotIndex, maxIndex+1)
-	fk.SetEntryBatchKey(clusterID, nodeID, low)
-	lk.SetEntryBatchKey(clusterID, nodeID, high)
+	fk.SetEntryBatchKey(shardID, replicaID, low)
+	lk.SetEntryBatchKey(shardID, replicaID, high)
 	firstIndex := uint64(0)
 	length := uint64(0)
 	op := func(key []byte, data []byte) (bool, error) {
@@ -270,8 +270,8 @@ func (be *batchedEntries) getRange(clusterID uint64,
 	return firstIndex, length, nil
 }
 
-func (be *batchedEntries) rangedOp(clusterID uint64,
-	nodeID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
+func (be *batchedEntries) rangedOp(shardID uint64,
+	replicaID uint64, index uint64, op func(fk *Key, lk *Key) error) error {
 	fk := be.keys.get()
 	lk := be.keys.get()
 	defer fk.Release()
@@ -280,13 +280,13 @@ func (be *batchedEntries) rangedOp(clusterID uint64,
 	if batchID == 0 || batchID == 1 {
 		return nil
 	}
-	fk.SetEntryBatchKey(clusterID, nodeID, 0)
-	lk.SetEntryBatchKey(clusterID, nodeID, batchID-1)
+	fk.SetEntryBatchKey(shardID, replicaID, 0)
+	lk.SetEntryBatchKey(shardID, replicaID, batchID-1)
 	return op(fk, lk)
 }
 
 func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, eb pb.EntryBatch,
+	shardID uint64, replicaID uint64, eb pb.EntryBatch,
 	firstBatchID uint64, lastBatchID uint64, ctx IContext) {
 	if len(eb.Entries) == 0 {
 		return
@@ -295,12 +295,12 @@ func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 	var meb pb.EntryBatch
 	if firstBatchID == batchID {
 		lb := ctx.GetLastEntryBatch()
-		meb = be.getMergedFirstBatch(clusterID, nodeID, eb, lb)
+		meb = be.getMergedFirstBatch(shardID, replicaID, eb, lb)
 	} else {
 		meb = eb
 	}
 	if lastBatchID == batchID {
-		be.cs.setLastBatch(clusterID, nodeID, meb)
+		be.cs.setLastBatch(shardID, replicaID, meb)
 	}
 	if len(meb.Entries) > 1 {
 		meb = compactBatchFields(meb)
@@ -309,12 +309,12 @@ func (be *batchedEntries) recordBatch(wb kv.IWriteBatch,
 	data := ctx.GetValueBuffer(uint64(szul))
 	data = pb.MustMarshalTo(&meb, data)
 	k := ctx.GetKey()
-	k.SetEntryBatchKey(clusterID, nodeID, batchID)
+	k.SetEntryBatchKey(shardID, replicaID, batchID)
 	wb.Put(k.Key(), data)
 }
 
 func (be *batchedEntries) record(wb kv.IWriteBatch,
-	clusterID uint64, nodeID uint64, ctx IContext, entries []pb.Entry) uint64 {
+	shardID uint64, replicaID uint64, ctx IContext, entries []pb.Entry) uint64 {
 	if len(entries) == 0 {
 		panic("empty entries")
 	}
@@ -332,7 +332,7 @@ func (be *batchedEntries) record(wb kv.IWriteBatch,
 		}
 		batchID := getBatchID(ent.Index)
 		if batchID != currentBatchIdx {
-			be.recordBatch(wb, clusterID, nodeID, eb, firstBatchID, lastBatchID, ctx)
+			be.recordBatch(wb, shardID, replicaID, eb, firstBatchID, lastBatchID, ctx)
 			eb.Entries = eb.Entries[:0]
 			currentBatchIdx = batchID
 		}
@@ -340,17 +340,17 @@ func (be *batchedEntries) record(wb kv.IWriteBatch,
 		idx++
 	}
 	if len(eb.Entries) > 0 {
-		be.recordBatch(wb, clusterID, nodeID, eb, firstBatchID, lastBatchID, ctx)
+		be.recordBatch(wb, shardID, replicaID, eb, firstBatchID, lastBatchID, ctx)
 	}
 	return maxIndex
 }
 
-func (be *batchedEntries) getBatchFromDB(clusterID uint64,
-	nodeID uint64, batchID uint64) (pb.EntryBatch, bool) {
+func (be *batchedEntries) getBatchFromDB(shardID uint64,
+	replicaID uint64, batchID uint64) (pb.EntryBatch, bool) {
 	var e pb.EntryBatch
 	k := be.keys.get()
 	defer k.Release()
-	k.SetEntryBatchKey(clusterID, nodeID, batchID)
+	k.SetEntryBatchKey(shardID, replicaID, batchID)
 	if err := be.kvs.GetValue(k.Key(), func(data []byte) error {
 		if len(data) == 0 {
 			return errors.New("no such entry")
@@ -366,12 +366,12 @@ func (be *batchedEntries) getBatchFromDB(clusterID uint64,
 	return e, true
 }
 
-func (be *batchedEntries) getLastBatch(clusterID uint64,
-	nodeID uint64, firstIndex uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
+func (be *batchedEntries) getLastBatch(shardID uint64,
+	replicaID uint64, firstIndex uint64, lb pb.EntryBatch) (pb.EntryBatch, bool) {
 	batchID := getBatchID(firstIndex)
-	lb, ok := be.cs.getLastBatch(clusterID, nodeID, lb)
+	lb, ok := be.cs.getLastBatch(shardID, replicaID, lb)
 	if !ok || batchID < getBatchID(lb.Entries[0].Index) {
-		lb, ok = be.getBatchFromDB(clusterID, nodeID, batchID)
+		lb, ok = be.getBatchFromDB(shardID, replicaID, batchID)
 		if !ok {
 			return pb.EntryBatch{}, false
 		}
@@ -379,13 +379,13 @@ func (be *batchedEntries) getLastBatch(clusterID uint64,
 	return lb, true
 }
 
-func (be *batchedEntries) getMergedFirstBatch(clusterID uint64,
-	nodeID uint64, eb pb.EntryBatch, lb pb.EntryBatch) pb.EntryBatch {
+func (be *batchedEntries) getMergedFirstBatch(shardID uint64,
+	replicaID uint64, eb pb.EntryBatch, lb pb.EntryBatch) pb.EntryBatch {
 	// batch aligned
 	if eb.Entries[0].Index%batchSize == 0 {
 		return eb
 	}
-	lb, ok := be.getLastBatch(clusterID, nodeID, eb.Entries[0].Index, lb)
+	lb, ok := be.getLastBatch(shardID, replicaID, eb.Entries[0].Index, lb)
 	if !ok {
 		return eb
 	}

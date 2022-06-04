@@ -22,8 +22,8 @@ import (
 // offloaded from various system components.
 type OffloadedStatus struct {
 	DestroyedC  chan struct{}
-	clusterID   uint64
-	nodeID      uint64
+	shardID     uint64
+	replicaID   uint64
 	loadedCount uint64
 	destroyed   bool
 }

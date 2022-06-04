@@ -144,9 +144,9 @@ func (r *InMemRateLimiter) Reset() {
 	r.followerSizes = make(map[uint64]followerState)
 }
 
-// SetFollowerState sets the follower rate identiified by nodeID to sz bytes.
-func (r *InMemRateLimiter) SetFollowerState(nodeID uint64, sz uint64) {
-	r.followerSizes[nodeID] = followerState{
+// SetFollowerState sets the follower rate identiified by replicaID to sz bytes.
+func (r *InMemRateLimiter) SetFollowerState(replicaID uint64, sz uint64) {
+	r.followerSizes[replicaID] = followerState{
 		tick:         r.tick,
 		inMemLogSize: sz,
 	}

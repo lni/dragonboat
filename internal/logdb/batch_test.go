@@ -287,8 +287,8 @@ func TestGetMergedFirstBatch(t *testing.T) {
 
 func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		e1 := pb.Entry{
 			Term:  1,
 			Index: 1,
@@ -296,8 +296,8 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 		}
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -311,21 +311,21 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 		}
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID, replicaID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
 		if maxIndex != nextIndex {
 			t.Errorf("unexpected max index")
 		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 1)
 		if !ok {
 			t.Errorf("failed to get the eb")
 		}
@@ -342,12 +342,12 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 
 func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		ud := pb.Update{
 			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		for i := uint64(1); i < batchSize+4; i++ {
 			e := pb.Entry{Index: i, Term: 1}
@@ -359,8 +359,8 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 		}
 		ud = pb.Update{
 			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		for i := batchSize - 4; i <= batchSize+2; i++ {
 			e := pb.Entry{Index: i, Term: 2}
@@ -370,14 +370,14 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to save recs")
 		}
-		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(clusterID, nodeID)
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID, replicaID)
 		if err != nil {
 			t.Errorf("failed to get max index")
 		}
 		if maxIndex != batchSize+2 {
 			t.Errorf("unexpected max index")
 		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 0)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 0)
 		if !ok {
 			t.Errorf("failed to get the eb")
 		}
@@ -406,8 +406,8 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 
 func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		clusterID := uint64(0)
-		nodeID := uint64(4)
+		shardID := uint64(0)
+		replicaID := uint64(4)
 		e1 := pb.Entry{
 			Term:  1,
 			Index: 1,
@@ -415,8 +415,8 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 		}
 		ud := pb.Update{
 			EntriesToSave: []pb.Entry{e1},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -429,8 +429,8 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 		}
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
 		if err != nil {
@@ -438,8 +438,8 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 		}
 		ud = pb.Update{
 			EntriesToSave: make([]pb.Entry, 0),
-			ClusterID:     clusterID,
-			NodeID:        nodeID,
+			ShardID:       shardID,
+			ReplicaID:     replicaID,
 		}
 		for idx := uint64(3); idx <= batchSize+1; idx++ {
 			e := pb.Entry{
@@ -453,14 +453,14 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			t.Errorf("failed to save recs")
 		}
 		ents, _, err := db.IterateEntries([]pb.Entry{}, 0,
-			clusterID, nodeID, 1, batchSize+2, math.MaxUint64)
+			shardID, replicaID, 1, batchSize+2, math.MaxUint64)
 		if err != nil {
 			t.Errorf("iterate entries failed %v", err)
 		}
 		if uint64(len(ents)) != batchSize+1 {
 			t.Errorf("ents sz %d, want %d", len(ents), batchSize+1)
 		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(clusterID, nodeID, 1)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 1)
 		if !ok {
 			t.Errorf("failed to get first batch")
 		}

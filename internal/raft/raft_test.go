@@ -235,8 +235,8 @@ func TestOneNodeWithHigherTermAndOneNodeWithMostRecentLogCanCompleteElection(t *
 }
 
 func TestRaftHelperMethods(t *testing.T) {
-	v := NodeID(100)
-	v2 := ClusterID(100)
+	v := ReplicaID(100)
+	v2 := ShardID(100)
 	if v != "n00100" || v2 != "c00100" {
 		t.Errorf("unexpected node id / cluster id value")
 	}
@@ -248,7 +248,7 @@ func TestRaftHelperMethods(t *testing.T) {
 	addrMap[2] = "address2"
 	addrMap[3] = "address3"
 	status := getLocalStatus(r)
-	if status.IsLeader() || !status.IsFollower() || status.NodeID != 1 {
+	if status.IsLeader() || !status.IsFollower() || status.ReplicaID != 1 {
 		t.Errorf("unexpected status value")
 	}
 }
@@ -374,7 +374,7 @@ func TestBecomeCandidateDragonboat(t *testing.T) {
 	if r.state != candidate {
 		t.Errorf("not in candidate state")
 	}
-	if r.vote != r.nodeID {
+	if r.vote != r.replicaID {
 		t.Errorf("vote not set")
 	}
 	if r.electionTick != 0 {
@@ -920,12 +920,12 @@ func TestWitnessCannotBePromotedToFullMember(t *testing.T) {
 			t.Errorf("Should panic while promoting from witness")
 		}
 	}()
-	nodeID := uint64(1)
-	p := newTestWitness(nodeID, nil, []uint64{1}, 10, 1, NewTestLogDB())
+	replicaID := uint64(1)
+	p := newTestWitness(replicaID, nil, []uint64{1}, 10, 1, NewTestLogDB())
 	if !p.isWitness() {
 		t.Errorf("not an witness")
 	}
-	p.addNode(nodeID)
+	p.addNode(replicaID)
 }
 
 func TestNonWitnessWouldPanicWhenRemoteSnapshotAssumeAsWitness(t *testing.T) {
@@ -1819,7 +1819,7 @@ func TestFullMemberWithOneWitnessCouldMakeProgressWithOneMemberDrop(t *testing.T
 	peers := []*raft{p1, p2, p3, p4}
 	for _, p := range peers {
 		if p.log.committed != committed+1 {
-			t.Errorf("new propose should have committed for member %v", p.nodeID)
+			t.Errorf("new propose should have committed for member %v", p.replicaID)
 		}
 	}
 
@@ -1829,8 +1829,8 @@ func TestFullMemberWithOneWitnessCouldMakeProgressWithOneMemberDrop(t *testing.T
 
 	for _, p := range peers {
 		// Only p3 will lag behind.
-		if p.log.committed != committed+2 && p.nodeID != 3 {
-			t.Errorf("new propose should have committed for member %v", p.nodeID)
+		if p.log.committed != committed+2 && p.replicaID != 3 {
+			t.Errorf("new propose should have committed for member %v", p.replicaID)
 		}
 	}
 }

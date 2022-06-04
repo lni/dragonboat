@@ -53,13 +53,13 @@ func generateRandomDelay() {
 	}
 }
 
-func getLargeRandomDelay(clusterID uint64) uint64 {
+func getLargeRandomDelay(shardID uint64) uint64 {
 	// in IO error injection test, we don't want such delays
 	ioei := os.Getenv("IOEI")
 	if len(ioei) > 0 {
 		return 0
 	}
-	pcs := fmt.Sprintf("IOEI-%d", clusterID)
+	pcs := fmt.Sprintf("IOEI-%d", shardID)
 	ioei = os.Getenv(pcs)
 	if len(ioei) > 0 {
 		return 0
@@ -83,8 +83,8 @@ func getLargeRandomDelay(clusterID uint64) uint64 {
 // KVTest is a in memory key-value store struct used for testing purposes.
 // Note that both key/value are suppose to be valid utf-8 strings.
 type KVTest struct {
-	ClusterID        uint64            `json:"-"`
-	NodeID           uint64            `json:"-"`
+	ShardID          uint64            `json:"-"`
+	ReplicaID        uint64            `json:"-"`
 	KVStore          map[string]string `json:"KVStore"`
 	Count            uint64            `json:"Count"`
 	Junk             []byte            `json:"Junk"`
@@ -96,11 +96,11 @@ type KVTest struct {
 }
 
 // NewKVTest creates and return a new KVTest object.
-func NewKVTest(clusterID uint64, nodeID uint64) sm.IStateMachine {
+func NewKVTest(shardID uint64, replicaID uint64) sm.IStateMachine {
 	s := &KVTest{
 		KVStore:   make(map[string]string),
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 		Junk:      make([]byte, 3*1024),
 	}
 	v := os.Getenv("EXTERNALFILETEST")
@@ -168,7 +168,7 @@ func (s *KVTest) saveExternalFile(fileCollection sm.ISnapshotFileCollection) {
 	}
 	rn := random.LockGuardedRand.Uint64()
 	fn := fmt.Sprintf("external-%d-%d-%d-%d.data",
-		s.ClusterID, s.NodeID, s.Count, rn)
+		s.ShardID, s.ReplicaID, s.Count, rn)
 	fp := filepath.Join(dir, fn)
 	f, err := os.Create(fp)
 	if err != nil {
@@ -186,7 +186,7 @@ func (s *KVTest) saveExternalFile(fileCollection sm.ISnapshotFileCollection) {
 	fileCollection.AddFile(1, fp, []byte(content))
 }
 
-func checkExternalFile(files []sm.SnapshotFile, clusterID uint64) {
+func checkExternalFile(files []sm.SnapshotFile, shardID uint64) {
 	if len(files) != 1 {
 		panic("snapshot external file missing")
 	}
@@ -217,7 +217,7 @@ func (s *KVTest) SaveSnapshot(w io.Writer,
 	if s.externalFileTest {
 		s.saveExternalFile(fileCollection)
 	}
-	delay := getLargeRandomDelay(s.ClusterID)
+	delay := getLargeRandomDelay(s.ShardID)
 	if s.noLargeDelay {
 		delay = 0
 	}
@@ -253,9 +253,9 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 		panic("recover from snapshot called after Close()")
 	}
 	if s.externalFileTest {
-		checkExternalFile(files, s.ClusterID)
+		checkExternalFile(files, s.ShardID)
 	}
-	delay := getLargeRandomDelay(s.ClusterID)
+	delay := getLargeRandomDelay(s.ShardID)
 	if s.noLargeDelay {
 		delay = 0
 	}
@@ -289,7 +289,7 @@ func (s *KVTest) RecoverFromSnapshot(r io.Reader,
 // Close closes the IStateMachine instance
 func (s *KVTest) Close() error {
 	s.closed = true
-	log.Printf("%d:%dKVStore has been closed", s.ClusterID, s.NodeID)
+	log.Printf("%d:%dKVStore has been closed", s.ShardID, s.ReplicaID)
 	return nil
 }
 

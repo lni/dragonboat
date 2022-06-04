@@ -11,7 +11,7 @@ import (
 type ConfigChange struct {
 	ConfigChangeId uint64
 	Type           ConfigChangeType
-	NodeID         uint64
+	ReplicaID      uint64
 	Address        string
 	Initialize     bool
 }
@@ -39,7 +39,7 @@ func (m *ConfigChange) MarshalTo(dAtA []byte) (int, error) {
 	i = encodeVarintRaft(dAtA, i, uint64(m.Type))
 	dAtA[i] = 0x18
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.NodeID))
+	i = encodeVarintRaft(dAtA, i, uint64(m.ReplicaID))
 	dAtA[i] = 0x22
 	i++
 	i = encodeVarintRaft(dAtA, i, uint64(len(m.Address)))
@@ -63,7 +63,7 @@ func (m *ConfigChange) Size() (n int) {
 	_ = l
 	n += 1 + sovRaft(uint64(m.ConfigChangeId))
 	n += 1 + sovRaft(uint64(m.Type))
-	n += 1 + sovRaft(uint64(m.NodeID))
+	n += 1 + sovRaft(uint64(m.ReplicaID))
 	l = len(m.Address)
 	n += 1 + l + sovRaft(uint64(l))
 	n += 2
@@ -139,9 +139,9 @@ func (m *ConfigChange) Unmarshal(dAtA []byte) error {
 			}
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReplicaID", wireType)
 			}
-			m.NodeID = 0
+			m.ReplicaID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowRaft
@@ -151,7 +151,7 @@ func (m *ConfigChange) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.NodeID |= uint64(b&0x7F) << shift
+				m.ReplicaID |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

@@ -72,8 +72,8 @@ type UpdateCommit struct {
 // processed by raft's upper layer to progress the raft node modelled as state
 // machine.
 type Update struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	// The current persistent state of a raft node. It must be stored onto
 	// persistent storage before any non-replication can be sent to other nodes.
 	// isStateEqual(emptyState) returns true when the state is empty.
@@ -126,8 +126,8 @@ func (u *Update) HasUpdate() bool {
 // MarshalTo encodes the fields that need to be persisted to the specified
 // buffer.
 func (u *Update) MarshalTo(buf []byte) (int, error) {
-	n1 := binary.PutUvarint(buf, u.ClusterID)
-	n2 := binary.PutUvarint(buf[n1:], u.NodeID)
+	n1 := binary.PutUvarint(buf, u.ShardID)
+	n2 := binary.PutUvarint(buf[n1:], u.ReplicaID)
 	offset := n1 + n2
 	if IsEmptyState(u.State) {
 		buf[offset] = 0
@@ -185,11 +185,11 @@ func (u *Update) Unmarshal(buf []byte) error {
 		reader: bytes.NewReader(buf),
 	}
 	var err error
-	u.ClusterID, err = binary.ReadUvarint(r)
+	u.ShardID, err = binary.ReadUvarint(r)
 	if err != nil {
 		return err
 	}
-	u.NodeID, err = binary.ReadUvarint(r)
+	u.ReplicaID, err = binary.ReadUvarint(r)
 	if err != nil {
 		return err
 	}

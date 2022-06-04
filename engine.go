@@ -88,11 +88,11 @@ func newLoadedNodes() *loadedNodes {
 	}
 }
 
-func (l *loadedNodes) get(clusterID uint64, nodeID uint64) *node {
+func (l *loadedNodes) get(shardID uint64, replicaID uint64) *node {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, m := range l.nodes {
-		if n, ok := m[clusterID]; ok && n.nodeID == nodeID {
+		if n, ok := m[shardID]; ok && n.replicaID == replicaID {
 			return n
 		}
 	}
@@ -112,7 +112,7 @@ func (l *loadedNodes) updateFromBusySSNodes(nodes map[uint64]*node) {
 	l.updateFromLoadedSSNodes(fromWorker, nodes)
 }
 
-// nodes is a map of clusterID -> *node
+// nodes is a map of shardID -> *node
 func (l *loadedNodes) updateFromLoadedSSNodes(from from,
 	nodes map[uint64]*node) {
 	l.mu.Lock()
@@ -120,7 +120,7 @@ func (l *loadedNodes) updateFromLoadedSSNodes(from from,
 	nt := nodeType{workerID: 0, from: from}
 	nm := make(map[uint64]*node, len(nodes))
 	for _, n := range nodes {
-		nm[n.clusterID] = n
+		nm[n.shardID] = n
 	}
 	l.nodes[nt] = nm
 }
@@ -161,14 +161,14 @@ func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
 	var notified bitmap
 	for _, ud := range updates {
 		if len(ud.CommittedEntries) > 0 {
-			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
+			idx := wr.partitioner.GetPartitionID(ud.ShardID)
 			readyMap := wr.maps[idx]
-			readyMap.setClusterReady(ud.ClusterID)
+			readyMap.setClusterReady(ud.ShardID)
 		}
 	}
 	for _, ud := range updates {
 		if len(ud.CommittedEntries) > 0 {
-			idx := wr.partitioner.GetPartitionID(ud.ClusterID)
+			idx := wr.partitioner.GetPartitionID(ud.ShardID)
 			if !notified.contains(idx) {
 				notified.add(idx)
 				wr.notify(idx)
@@ -196,12 +196,12 @@ func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 func (wr *workReady) allClustersReady(nodes []*node) {
 	var notified bitmap
 	for _, n := range nodes {
-		idx := wr.partitioner.GetPartitionID(n.clusterID)
+		idx := wr.partitioner.GetPartitionID(n.shardID)
 		readyMap := wr.maps[idx]
-		readyMap.setClusterReady(n.clusterID)
+		readyMap.setClusterReady(n.shardID)
 	}
 	for _, n := range nodes {
-		idx := wr.partitioner.GetPartitionID(n.clusterID)
+		idx := wr.partitioner.GetPartitionID(n.shardID)
 		if !notified.contains(idx) {
 			notified.add(idx)
 			wr.notify(idx)
@@ -209,10 +209,10 @@ func (wr *workReady) allClustersReady(nodes []*node) {
 	}
 }
 
-func (wr *workReady) clusterReady(clusterID uint64) {
-	idx := wr.partitioner.GetPartitionID(clusterID)
+func (wr *workReady) clusterReady(shardID uint64) {
+	idx := wr.partitioner.GetPartitionID(shardID)
 	readyMap := wr.maps[idx]
-	readyMap.setClusterReady(clusterID)
+	readyMap.setClusterReady(shardID)
 	wr.notify(idx)
 }
 
@@ -230,7 +230,7 @@ type job struct {
 	sink       getSink
 	task       rsm.Task
 	instanceID uint64
-	clusterID  uint64
+	shardID    uint64
 }
 
 type ssWorker struct {
@@ -516,24 +516,24 @@ func (p *workerPool) completed(workerID uint64) {
 	if !ok {
 		plog.Panicf("worker %d is not busy", workerID)
 	}
-	if _, ok := p.saving[n.clusterID]; ok {
+	if _, ok := p.saving[n.shardID]; ok {
 		plog.Debugf("%s completed saveRequested", n.id())
-		delete(p.saving, n.clusterID)
+		delete(p.saving, n.shardID)
 		count++
 	}
-	if _, ok := p.recovering[n.clusterID]; ok {
+	if _, ok := p.recovering[n.shardID]; ok {
 		plog.Debugf("%s completed recoverRequested", n.id())
-		delete(p.recovering, n.clusterID)
+		delete(p.recovering, n.shardID)
 		count++
 	}
-	if sc, ok := p.streaming[n.clusterID]; ok {
+	if sc, ok := p.streaming[n.shardID]; ok {
 		plog.Debugf("%s completed streamRequested", n.id())
 		if sc == 0 {
 			plog.Panicf("node completed streaming when not streaming")
 		} else if sc == 1 {
-			delete(p.streaming, n.clusterID)
+			delete(p.streaming, n.shardID)
 		} else {
-			p.streaming[n.clusterID] = sc - 1
+			p.streaming[n.shardID] = sc - 1
 		}
 		count++
 	}
@@ -546,36 +546,36 @@ func (p *workerPool) completed(workerID uint64) {
 	p.setIdle(workerID)
 }
 
-func (p *workerPool) inProgress(clusterID uint64) bool {
-	_, ok1 := p.saving[clusterID]
-	_, ok2 := p.recovering[clusterID]
-	_, ok3 := p.streaming[clusterID]
+func (p *workerPool) inProgress(shardID uint64) bool {
+	_, ok1 := p.saving[shardID]
+	_, ok2 := p.recovering[shardID]
+	_, ok3 := p.streaming[shardID]
 	return ok1 || ok2 || ok3
 }
 
-func (p *workerPool) canStream(clusterID uint64) bool {
-	if _, ok := p.saving[clusterID]; ok {
+func (p *workerPool) canStream(shardID uint64) bool {
+	if _, ok := p.saving[shardID]; ok {
 		return false
 	}
-	_, ok := p.recovering[clusterID]
+	_, ok := p.recovering[shardID]
 	return !ok
 }
 
-func (p *workerPool) canSave(clusterID uint64) bool {
-	return !p.inProgress(clusterID)
+func (p *workerPool) canSave(shardID uint64) bool {
+	return !p.inProgress(shardID)
 }
 
-func (p *workerPool) canRecover(clusterID uint64) bool {
-	return !p.inProgress(clusterID)
+func (p *workerPool) canRecover(shardID uint64) bool {
+	return !p.inProgress(shardID)
 }
 
 func (p *workerPool) canSchedule(j job) bool {
 	if j.task.Recover {
-		return p.canRecover(j.clusterID)
+		return p.canRecover(j.shardID)
 	} else if j.task.Save {
-		return p.canSave(j.clusterID)
+		return p.canSave(j.shardID)
 	} else if j.task.Stream {
-		return p.canStream(j.clusterID)
+		return p.canStream(j.shardID)
 	} else {
 		plog.Panicf("unknown task type %+v", j.task)
 	}
@@ -602,25 +602,25 @@ func (p *workerPool) setBusy(n *node, workerID uint64) {
 }
 
 func (p *workerPool) startStreaming(n *node) {
-	if count, ok := p.streaming[n.clusterID]; !ok {
-		p.streaming[n.clusterID] = 1
+	if count, ok := p.streaming[n.shardID]; !ok {
+		p.streaming[n.shardID] = 1
 	} else {
-		p.streaming[n.clusterID] = count + 1
+		p.streaming[n.shardID] = count + 1
 	}
 }
 
 func (p *workerPool) startSaving(n *node) {
-	if _, ok := p.saving[n.clusterID]; ok {
+	if _, ok := p.saving[n.shardID]; ok {
 		plog.Panicf("%s trying to start saving again", n.id())
 	}
-	p.saving[n.clusterID] = struct{}{}
+	p.saving[n.shardID] = struct{}{}
 }
 
 func (p *workerPool) startRecovering(n *node) {
-	if _, ok := p.recovering[n.clusterID]; ok {
+	if _, ok := p.recovering[n.shardID]; ok {
 		plog.Panicf("%s trying to start recovering again", n.id())
 	}
-	p.recovering[n.clusterID] = struct{}{}
+	p.recovering[n.shardID] = struct{}{}
 }
 
 func (p *workerPool) start(j job, n *node, workerID uint64) {
@@ -654,7 +654,7 @@ func (p *workerPool) scheduleWorker() bool {
 		return false
 	}
 	for idx, j := range p.pending {
-		n, ok := p.nodes[j.clusterID]
+		n, ok := p.nodes[j.shardID]
 		if !ok {
 			p.removeFromPending(idx)
 			return true
@@ -674,8 +674,8 @@ func (p *workerPool) removeFromPending(idx int) {
 	p.pending = p.pending[:sz-1]
 }
 
-func (p *workerPool) getSaveJob(clusterID uint64) (job, bool) {
-	n, ok := p.nodes[clusterID]
+func (p *workerPool) getSaveJob(shardID uint64) (job, bool) {
+	n, ok := p.nodes[shardID]
 	if !ok {
 		return job{}, false
 	}
@@ -687,12 +687,12 @@ func (p *workerPool) getSaveJob(clusterID uint64) (job, bool) {
 		task:       req,
 		node:       n,
 		instanceID: n.instanceID,
-		clusterID:  clusterID,
+		shardID:    shardID,
 	}, true
 }
 
-func (p *workerPool) getRecoverJob(clusterID uint64) (job, bool) {
-	n, ok := p.nodes[clusterID]
+func (p *workerPool) getRecoverJob(shardID uint64) (job, bool) {
+	n, ok := p.nodes[shardID]
 	if !ok {
 		return job{}, false
 	}
@@ -704,12 +704,12 @@ func (p *workerPool) getRecoverJob(clusterID uint64) (job, bool) {
 		task:       req,
 		node:       n,
 		instanceID: n.instanceID,
-		clusterID:  clusterID,
+		shardID:    shardID,
 	}, true
 }
 
-func (p *workerPool) getStreamJob(clusterID uint64) (job, bool) {
-	n, ok := p.nodes[clusterID]
+func (p *workerPool) getStreamJob(shardID uint64) (job, bool) {
+	n, ok := p.nodes[shardID]
 	if !ok {
 		return job{}, false
 	}
@@ -722,7 +722,7 @@ func (p *workerPool) getStreamJob(clusterID uint64) (job, bool) {
 		node:       n,
 		sink:       sinkFn,
 		instanceID: n.instanceID,
-		clusterID:  clusterID,
+		shardID:    shardID,
 	}, true
 }
 
@@ -912,20 +912,20 @@ func (p *closeWorkerPool) isIdle() bool {
 }
 
 func (p *closeWorkerPool) completed(workerID uint64) {
-	clusterID, ok := p.busy[workerID]
+	shardID, ok := p.busy[workerID]
 	if !ok {
 		plog.Panicf("close worker %d is not in busy state", workerID)
 	}
-	if _, ok := p.processing[clusterID]; !ok {
-		plog.Panicf("cluster %d is not being processed", clusterID)
+	if _, ok := p.processing[shardID]; !ok {
+		plog.Panicf("cluster %d is not being processed", shardID)
 	}
-	delete(p.processing, clusterID)
+	delete(p.processing, shardID)
 	delete(p.busy, workerID)
 }
 
-func (p *closeWorkerPool) setBusy(workerID uint64, clusterID uint64) {
-	p.processing[clusterID] = struct{}{}
-	p.busy[workerID] = clusterID
+func (p *closeWorkerPool) setBusy(workerID uint64, shardID uint64) {
+	p.processing[shardID] = struct{}{}
+	p.busy[workerID] = shardID
 }
 
 func (p *closeWorkerPool) getWorker() *closeWorker {
@@ -946,7 +946,7 @@ func (p *closeWorkerPool) schedule() {
 }
 
 func (p *closeWorkerPool) canSchedule(n *node) bool {
-	_, ok := p.processing[n.clusterID]
+	_, ok := p.processing[n.shardID]
 	return !ok
 }
 
@@ -971,7 +971,7 @@ func (p *closeWorkerPool) scheduleWorker() bool {
 }
 
 func (p *closeWorkerPool) scheduleReq(n *node, w *closeWorker) {
-	p.setBusy(w.workerID, n.clusterID)
+	p.setBusy(w.workerID, n.shardID)
 	select {
 	case w.requestC <- closeReq{node: n}:
 	default:
@@ -1080,12 +1080,12 @@ func (e *engine) close() error {
 	return firstError(err, e.cp.close())
 }
 
-func (e *engine) nodeLoaded(clusterID uint64, nodeID uint64) bool {
-	return e.loaded.get(clusterID, nodeID) != nil
+func (e *engine) nodeLoaded(shardID uint64, replicaID uint64) bool {
+	return e.loaded.get(shardID, replicaID) != nil
 }
 
-func (e *engine) destroyedC(clusterID uint64, nodeID uint64) <-chan struct{} {
-	if n := e.loaded.get(clusterID, nodeID); n != nil {
+func (e *engine) destroyedC(shardID uint64, replicaID uint64) <-chan struct{} {
+	if n := e.loaded.get(shardID, replicaID); n != nil {
 		return n.sm.DestroyedC()
 	}
 	return nil
@@ -1140,8 +1140,8 @@ func (e *engine) processCommits(idmap map[uint64]struct{},
 			idmap[k] = struct{}{}
 		}
 	}
-	for clusterID := range idmap {
-		node, ok := nodes[clusterID]
+	for shardID := range idmap {
+		node, ok := nodes[shardID]
 		if !ok || node.stopped() {
 			continue
 		}
@@ -1207,8 +1207,8 @@ func (e *engine) processApplies(idmap map[uint64]struct{},
 			idmap[k] = struct{}{}
 		}
 	}
-	for clusterID := range idmap {
-		node, ok := nodes[clusterID]
+	for shardID := range idmap {
+		node, ok := nodes[shardID]
 		if !ok || node.stopped() {
 			continue
 		}
@@ -1331,7 +1331,7 @@ func (e *engine) processSteps(workerID uint64,
 	// see raft thesis section 10.2.1 on details why we send Replicate message
 	// before those entries are persisted to disk
 	for _, ud := range nodeUpdates {
-		node := nodes[ud.ClusterID]
+		node := nodes[ud.ShardID]
 		node.sendReplicateMessages(ud)
 		node.processReadyToRead(ud)
 		node.processDroppedEntries(ud)
@@ -1349,7 +1349,7 @@ func (e *engine) processSteps(workerID uint64,
 		return err
 	}
 	for _, ud := range nodeUpdates {
-		node := nodes[ud.ClusterID]
+		node := nodes[ud.ShardID]
 		if err := node.processRaftUpdate(ud); err != nil {
 			return err
 		}
@@ -1374,7 +1374,7 @@ func resetNodeUpdate(nodeUpdates []pb.Update) {
 
 func (e *engine) processMoreCommittedEntries(ud pb.Update) {
 	if ud.MoreCommittedEntries {
-		e.setStepReady(ud.ClusterID)
+		e.setStepReady(ud.ShardID)
 	}
 }
 
@@ -1385,7 +1385,7 @@ func (e *engine) applySnapshotAndUpdate(updates []pb.Update,
 		if ud.FastApply != fastApply {
 			continue
 		}
-		node := nodes[ud.ClusterID]
+		node := nodes[ud.ShardID]
 		if node.notifyCommit {
 			notifyCommit = true
 		}
@@ -1406,7 +1406,7 @@ func (e *engine) onSnapshotSaved(updates []pb.Update,
 	nodes map[uint64]*node) error {
 	for _, ud := range updates {
 		if !pb.IsEmptySnapshot(ud.Snapshot) {
-			node := nodes[ud.ClusterID]
+			node := nodes[ud.ShardID]
 			if err := node.removeSnapshotFlagFile(ud.Snapshot.Index); err != nil {
 				return err
 			}
@@ -1427,43 +1427,43 @@ func (e *engine) setAllStepReady(nodes []*node) {
 	e.stepWorkReady.allClustersReady(nodes)
 }
 
-func (e *engine) setStepReady(clusterID uint64) {
-	e.stepWorkReady.clusterReady(clusterID)
+func (e *engine) setStepReady(shardID uint64) {
+	e.stepWorkReady.clusterReady(shardID)
 }
 
 func (e *engine) setCommitReadyByUpdates(updates []pb.Update) {
 	e.commitWorkReady.clusterReadyByUpdates(updates)
 }
 
-func (e *engine) setCommitReady(clusterID uint64) {
-	e.commitWorkReady.clusterReady(clusterID)
+func (e *engine) setCommitReady(shardID uint64) {
+	e.commitWorkReady.clusterReady(shardID)
 }
 
 func (e *engine) setApplyReadyByUpdates(updates []pb.Update) {
 	e.applyWorkReady.clusterReadyByUpdates(updates)
 }
 
-func (e *engine) setApplyReady(clusterID uint64) {
-	e.applyWorkReady.clusterReady(clusterID)
+func (e *engine) setApplyReady(shardID uint64) {
+	e.applyWorkReady.clusterReady(shardID)
 }
 
-func (e *engine) setStreamReady(clusterID uint64) {
-	e.wp.streamReady.clusterReady(clusterID)
+func (e *engine) setStreamReady(shardID uint64) {
+	e.wp.streamReady.clusterReady(shardID)
 }
 
-func (e *engine) setSaveReady(clusterID uint64) {
-	e.wp.saveReady.clusterReady(clusterID)
+func (e *engine) setSaveReady(shardID uint64) {
+	e.wp.saveReady.clusterReady(shardID)
 }
 
-func (e *engine) setRecoverReady(clusterID uint64) {
-	e.wp.recoverReady.clusterReady(clusterID)
+func (e *engine) setRecoverReady(shardID uint64) {
+	e.wp.recoverReady.clusterReady(shardID)
 }
 
-func (e *engine) setCCIReady(clusterID uint64) {
-	e.stepCCIReady.clusterReady(clusterID)
-	e.commitCCIReady.clusterReady(clusterID)
-	e.applyCCIReady.clusterReady(clusterID)
-	e.wp.cciReady.clusterReady(clusterID)
+func (e *engine) setCCIReady(shardID uint64) {
+	e.stepCCIReady.clusterReady(shardID)
+	e.commitCCIReady.clusterReady(shardID)
+	e.applyCCIReady.clusterReady(shardID)
+	e.wp.cciReady.clusterReady(shardID)
 }
 
 func (e *engine) offloadNodeMap(nodes map[uint64]*node) {

@@ -21,8 +21,8 @@ import (
 )
 
 type quiesceState struct {
-	clusterID           uint64
-	nodeID              uint64
+	shardID             uint64
+	replicaID           uint64
 	currentTick         uint64
 	electionTick        uint64
 	quiescedSince       uint64
@@ -74,7 +74,7 @@ func (q *quiesceState) record(msgType pb.MessageType) {
 	if q.quiesced() {
 		q.exitQuiesce()
 		plog.Infof("%s exited from quiesce, msg type %s, current tick %d",
-			dn(q.clusterID, q.nodeID), msgType, q.currentTick)
+			dn(q.shardID, q.replicaID), msgType, q.currentTick)
 	}
 }
 
@@ -102,7 +102,7 @@ func (q *quiesceState) tryEnterQuiesce() {
 	}
 	if !q.quiesced() {
 		plog.Infof("%s going to enter quiesce due to quiesce message",
-			dn(q.clusterID, q.nodeID))
+			dn(q.shardID, q.replicaID))
 		q.enterQuiesce()
 	}
 }
@@ -111,7 +111,7 @@ func (q *quiesceState) enterQuiesce() {
 	q.quiescedSince = q.currentTick
 	q.idleSince = q.currentTick
 	q.setNewQuiesceStateFlag()
-	plog.Infof("%s entered quiesce", dn(q.clusterID, q.nodeID))
+	plog.Infof("%s entered quiesce", dn(q.shardID, q.replicaID))
 }
 
 func (q *quiesceState) exitQuiesce() {

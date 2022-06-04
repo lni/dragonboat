@@ -42,10 +42,10 @@ type IResolver interface {
 // nodes in the system..
 type INodeRegistry interface {
 	Close() error
-	Add(clusterID uint64, nodeID uint64, url string)
-	Remove(clusterID uint64, nodeID uint64)
-	RemoveCluster(clusterID uint64)
-	Resolve(clusterID uint64, nodeID uint64) (string, string, error)
+	Add(shardID uint64, replicaID uint64, url string)
+	Remove(shardID uint64, replicaID uint64)
+	RemoveCluster(shardID uint64)
+	Resolve(shardID uint64, replicaID uint64) (string, string, error)
 }
 
 var _ INodeRegistry = (*Registry)(nil)
@@ -72,38 +72,38 @@ func NewNodeRegistry(streamConnections uint64, v config.TargetValidator) *Regist
 func (n *Registry) Close() error { return nil }
 
 // Add adds the specified node and its target info to the registry.
-func (n *Registry) Add(clusterID uint64, nodeID uint64, target string) {
+func (n *Registry) Add(shardID uint64, replicaID uint64, target string) {
 	if n.validate != nil && !n.validate(target) {
 		plog.Panicf("invalid target %s", target)
 	}
-	key := raftio.GetNodeInfo(clusterID, nodeID)
+	key := raftio.GetNodeInfo(shardID, replicaID)
 	v, ok := n.addr.LoadOrStore(key, target)
 	if ok {
 		if v.(string) != target {
 			plog.Panicf("inconsistent target for %s, %s:%s",
-				logutil.DescribeNode(clusterID, nodeID), v, target)
+				logutil.DescribeNode(shardID, replicaID), v, target)
 		}
 	}
 }
 
-func (n *Registry) getConnectionKey(addr string, clusterID uint64) string {
+func (n *Registry) getConnectionKey(addr string, shardID uint64) string {
 	if n.partitioner == nil {
 		return addr
 	}
-	return fmt.Sprintf("%s-%d", addr, n.partitioner.GetPartitionID(clusterID))
+	return fmt.Sprintf("%s-%d", addr, n.partitioner.GetPartitionID(shardID))
 }
 
 // Remove removes a remote from the node registry.
-func (n *Registry) Remove(clusterID uint64, nodeID uint64) {
-	n.addr.Delete(raftio.GetNodeInfo(clusterID, nodeID))
+func (n *Registry) Remove(shardID uint64, replicaID uint64) {
+	n.addr.Delete(raftio.GetNodeInfo(shardID, replicaID))
 }
 
 // RemoveCluster removes all nodes info associated with the specified cluster
-func (n *Registry) RemoveCluster(clusterID uint64) {
+func (n *Registry) RemoveCluster(shardID uint64) {
 	var toRemove []raftio.NodeInfo
 	n.addr.Range(func(k, v interface{}) bool {
 		ni := k.(raftio.NodeInfo)
-		if ni.ClusterID == clusterID {
+		if ni.ShardID == shardID {
 			toRemove = append(toRemove, ni)
 		}
 		return true
@@ -114,11 +114,11 @@ func (n *Registry) RemoveCluster(clusterID uint64) {
 }
 
 // Resolve looks up the Addr of the specified node.
-func (n *Registry) Resolve(clusterID uint64, nodeID uint64) (string, string, error) {
-	key := raftio.GetNodeInfo(clusterID, nodeID)
+func (n *Registry) Resolve(shardID uint64, replicaID uint64) (string, string, error) {
+	key := raftio.GetNodeInfo(shardID, replicaID)
 	addr, ok := n.addr.Load(key)
 	if !ok {
 		return "", "", ErrUnknownTarget
 	}
-	return addr.(string), n.getConnectionKey(addr.(string), clusterID), nil
+	return addr.(string), n.getConnectionKey(addr.(string), shardID), nil
 }

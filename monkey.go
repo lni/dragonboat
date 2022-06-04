@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build dragonboat_monkeytest
 // +build dragonboat_monkeytest
 
 package dragonboat
@@ -151,13 +152,13 @@ func (n *node) getMembershipHash() uint64 {
 func (n *node) dumpRaftInfoToLog() {
 	addrMap := make(map[uint64]string)
 	m := n.sm.GetMembership()
-	for nodeID := range m.Addresses {
-		if nodeID == n.nodeID {
-			addrMap[nodeID] = n.getRaftAddress()
+	for replicaID := range m.Addresses {
+		if replicaID == n.replicaID {
+			addrMap[replicaID] = n.getRaftAddress()
 		} else {
-			v, _, err := n.nodeRegistry.Resolve(n.clusterID, nodeID)
+			v, _, err := n.nodeRegistry.Resolve(n.shardID, replicaID)
 			if err == nil {
-				addrMap[nodeID] = v
+				addrMap[replicaID] = v
 			}
 		}
 	}

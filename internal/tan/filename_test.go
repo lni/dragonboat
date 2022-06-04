@@ -66,10 +66,10 @@ func TestMakeBootstrapFilename(t *testing.T) {
 
 func TestParseBootstrapFilename(t *testing.T) {
 	fn := "BOOTSTRAP-2-3"
-	clusterID, nodeID, ok := parseBootstrapFilename(fn)
+	shardID, replicaID, ok := parseBootstrapFilename(fn)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(2), clusterID)
-	require.Equal(t, uint64(3), nodeID)
+	require.Equal(t, uint64(2), shardID)
+	require.Equal(t, uint64(3), replicaID)
 	fn = "BOOTSTRAP-2-"
 	_, _, ok = parseBootstrapFilename(fn)
 	require.Equal(t, false, ok)

@@ -26,24 +26,24 @@ const (
 
 // LeaderInfo contains leader info.
 type LeaderInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	Term      uint64
 	LeaderID  uint64
 }
 
 // CampaignInfo contains campaign info.
 type CampaignInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	PreVote   bool
 	Term      uint64
 }
 
 // SnapshotInfo contains info of a snapshot.
 type SnapshotInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	From      uint64
 	Index     uint64
 	Term      uint64
@@ -51,8 +51,8 @@ type SnapshotInfo struct {
 
 // ReplicationInfo contains info of a replication message.
 type ReplicationInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	From      uint64
 	Index     uint64
 	Term      uint64
@@ -61,14 +61,14 @@ type ReplicationInfo struct {
 // ProposalInfo contains info on proposals.
 type ProposalInfo struct {
 	Entries   []pb.Entry
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 }
 
 // ReadIndexInfo contains info on read index requests.
 type ReadIndexInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 }
 
 // IRaftEventListener is the event listener used by the Raft implementation.
@@ -123,8 +123,8 @@ const (
 type SystemEvent struct {
 	Address            string
 	Type               SystemEventType
-	ClusterID          uint64
-	NodeID             uint64
+	ShardID            uint64
+	ReplicaID          uint64
 	From               uint64
 	Index              uint64
 	SnapshotConnection bool

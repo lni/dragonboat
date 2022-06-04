@@ -22,8 +22,8 @@ const (
 
 // LeaderInfo contains info on Raft leader.
 type LeaderInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	Term      uint64
 	LeaderID  uint64
 }
@@ -36,15 +36,15 @@ type IRaftEventListener interface {
 
 // EntryInfo contains info on log entries.
 type EntryInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	Index     uint64
 }
 
 // SnapshotInfo contains info of the snapshot.
 type SnapshotInfo struct {
-	ClusterID uint64
-	NodeID    uint64
+	ShardID   uint64
+	ReplicaID uint64
 	From      uint64
 	Index     uint64
 }

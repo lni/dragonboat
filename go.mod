@@ -6,10 +6,11 @@ require (
 	github.com/cockroachdb/errors v1.9.0
 	github.com/cockroachdb/pebble v0.0.0-20220407171941-2120d145e292
 	github.com/golang/snappy v0.0.4
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.3.1
 	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
 	github.com/kr/pretty v0.3.0
-	github.com/lni/goutils v1.3.1-0.20220404072553-ddb2075d2587
+	github.com/lni/goutils v1.3.1-0.20220604063047-388d67b4dbc4
 	github.com/lni/vfs v0.2.1-0.20220408085249-8be85be1c3c1
 	github.com/pierrec/lz4/v4 v4.1.14
 	github.com/stretchr/testify v1.7.0
@@ -26,7 +27,6 @@ require (
 	github.com/getsentry/sentry-go v0.12.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/go-msgpack v0.5.3 // indirect
@@ -36,7 +36,6 @@ require (
 	github.com/klauspost/compress v1.11.7 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/miekg/dns v1.1.26 // indirect
-	github.com/niubaoshu/gotiny v0.0.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect

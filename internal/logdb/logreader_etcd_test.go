@@ -29,16 +29,16 @@ import (
 // most tests below are ported from etcd rafts
 
 const (
-	LogReaderTestClusterID uint64 = 2
-	LogReaderTestNodeID    uint64 = 12345
+	LogReaderTestShardID   uint64 = 2
+	LogReaderTestReplicaID uint64 = 12345
 )
 
 func getNewLogReaderTestDB(entries []pb.Entry, fs vfs.IFS) raftio.ILogDB {
 	logdb := getNewTestDB("db-dir", "wal-db-dir", false, fs)
 	ud := pb.Update{
 		EntriesToSave: entries,
-		ClusterID:     LogReaderTestClusterID,
-		NodeID:        LogReaderTestNodeID,
+		ShardID:       LogReaderTestShardID,
+		ReplicaID:     LogReaderTestReplicaID,
 	}
 	if err := logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 		panic(err)
@@ -48,7 +48,7 @@ func getNewLogReaderTestDB(entries []pb.Entry, fs vfs.IFS) raftio.ILogDB {
 
 func getTestLogReader(entries []pb.Entry, fs vfs.IFS) *LogReader {
 	logdb := getNewLogReaderTestDB(entries, fs)
-	ls := NewLogReader(LogReaderTestClusterID, LogReaderTestNodeID, logdb)
+	ls := NewLogReader(LogReaderTestShardID, LogReaderTestReplicaID, logdb)
 	ls.SetCompactor(testCompactor)
 	ls.markerIndex = entries[0].Index
 	ls.markerTerm = entries[0].Term
@@ -253,8 +253,8 @@ func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 		// put tt.entries to logdb
 		ud := pb.Update{
 			EntriesToSave: tt.entries,
-			ClusterID:     LogReaderTestClusterID,
-			NodeID:        LogReaderTestNodeID,
+			ShardID:       LogReaderTestShardID,
+			ReplicaID:     LogReaderTestReplicaID,
 		}
 		if err := s.logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
 			t.Fatalf("%v", err)

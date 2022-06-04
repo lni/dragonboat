@@ -89,55 +89,55 @@ func (k *Key) SetMaximumKey() {
 }
 
 // SetEntryBatchKey sets the key value opf the entry batch.
-func (k *Key) SetEntryBatchKey(clusterID uint64,
-	nodeID uint64, batchID uint64) {
+func (k *Key) SetEntryBatchKey(shardID uint64,
+	replicaID uint64, batchID uint64) {
 	k.useAsEntryKey()
 	k.key[0] = entryBatchKeyHeader[0]
 	k.key[1] = entryBatchKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 	binary.BigEndian.PutUint64(k.key[20:], batchID)
 }
 
 // SetEntryKey sets the key value to the specified entry key.
-func (k *Key) SetEntryKey(clusterID uint64, nodeID uint64, index uint64) {
+func (k *Key) SetEntryKey(shardID uint64, replicaID uint64, index uint64) {
 	k.useAsEntryKey()
 	k.key[0] = entryKeyHeader[0]
 	k.key[1] = entryKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
 	// the 8 bytes node ID is actually not required in the key. it is stored as
 	// an extra safenet - we don't know what we don't know, it is used as extra
 	// protection between different node instances when things get ugly.
 	// the wasted 8 bytes per entry is not a big deal - storing the index is
 	// wasteful as well.
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 	binary.BigEndian.PutUint64(k.key[20:], index)
 }
 
 // SetStateKey sets the key value to the specified State.
-func (k *Key) SetStateKey(clusterID uint64, nodeID uint64) {
+func (k *Key) SetStateKey(shardID uint64, replicaID uint64) {
 	k.useAsStateKey()
 	k.key[0] = persistentStateKeyHeader[0]
 	k.key[1] = persistentStateKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 }
 
 // SetMaxIndexKey sets the key value to the max index record key.
-func (k *Key) SetMaxIndexKey(clusterID uint64, nodeID uint64) {
+func (k *Key) SetMaxIndexKey(shardID uint64, replicaID uint64) {
 	k.useAsMaxIndexKey()
 	k.key[0] = maxIndexKeyHeader[0]
 	k.key[1] = maxIndexKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 }
 
 func (k *Key) useAsEntryKey() {
@@ -173,34 +173,34 @@ func parseNodeInfoKey(data []byte) (uint64, uint64) {
 	return cid, nid
 }
 
-func (k *Key) setNodeInfoKey(clusterID uint64, nodeID uint64) {
+func (k *Key) setNodeInfoKey(shardID uint64, replicaID uint64) {
 	k.useAsNodeInfoKey()
 	k.key[0] = nodeInfoKeyHeader[0]
 	k.key[1] = nodeInfoKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 }
 
-func (k *Key) setBootstrapKey(clusterID uint64, nodeID uint64) {
+func (k *Key) setBootstrapKey(shardID uint64, replicaID uint64) {
 	k.useAsBootstrapKey()
 	k.key[0] = bootstrapKeyHeader[0]
 	k.key[1] = bootstrapKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 }
 
-func (k *Key) setSnapshotKey(clusterID uint64, nodeID uint64, index uint64) {
+func (k *Key) setSnapshotKey(shardID uint64, replicaID uint64, index uint64) {
 	k.useAsSnapshotKey()
 	k.key[0] = snapshotKeyHeader[0]
 	k.key[1] = snapshotKeyHeader[1]
 	k.key[2] = 0
 	k.key[3] = 0
-	binary.BigEndian.PutUint64(k.key[4:], clusterID)
-	binary.BigEndian.PutUint64(k.key[12:], nodeID)
+	binary.BigEndian.PutUint64(k.key[4:], shardID)
+	binary.BigEndian.PutUint64(k.key[12:], replicaID)
 	binary.BigEndian.PutUint64(k.key[20:], index)
 }
 

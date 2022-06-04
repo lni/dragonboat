@@ -35,15 +35,15 @@ func newNodeStates() *nodeStates {
 	}
 }
 
-func (s *nodeStates) checkNodeInfo(clusterID uint64, nodeID uint64) {
-	if clusterID == 0 && nodeID == 0 {
-		panic("clusterID/nodeID are both empty")
+func (s *nodeStates) checkNodeInfo(shardID uint64, replicaID uint64) {
+	if shardID == 0 && replicaID == 0 {
+		panic("shardID/replicaID are both empty")
 	}
 }
 
-func (s *nodeStates) getState(clusterID uint64, nodeID uint64) pb.State {
-	s.checkNodeInfo(clusterID, nodeID)
-	ni := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (s *nodeStates) getState(shardID uint64, replicaID uint64) pb.State {
+	s.checkNodeInfo(shardID, replicaID)
+	ni := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	st, ok := s.states[ni]
 	if !ok {
 		st = pb.State{}
@@ -52,18 +52,18 @@ func (s *nodeStates) getState(clusterID uint64, nodeID uint64) pb.State {
 	return st
 }
 
-func (s *nodeStates) setState(clusterID uint64, nodeID uint64, st pb.State) {
-	s.checkNodeInfo(clusterID, nodeID)
-	ni := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (s *nodeStates) setState(shardID uint64, replicaID uint64, st pb.State) {
+	s.checkNodeInfo(shardID, replicaID)
+	ni := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	s.states[ni] = st
 }
 
-func (s *nodeStates) getIndex(clusterID uint64, nodeID uint64) *nodeIndex {
-	s.checkNodeInfo(clusterID, nodeID)
-	ni := raftio.NodeInfo{ClusterID: clusterID, NodeID: nodeID}
+func (s *nodeStates) getIndex(shardID uint64, replicaID uint64) *nodeIndex {
+	s.checkNodeInfo(shardID, replicaID)
+	ni := raftio.NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 	idx, ok := s.indexes[ni]
 	if !ok {
-		idx = &nodeIndex{clusterID: clusterID, nodeID: nodeID}
+		idx = &nodeIndex{shardID: shardID, replicaID: replicaID}
 		s.indexes[ni] = idx
 	}
 	return idx
@@ -103,12 +103,12 @@ func (s *nodeStates) save(dirname string,
 		if err != nil {
 			return err
 		}
-		if ni.ClusterID != n.clusterID || ni.NodeID != n.nodeID {
-			panic("inconsistent clusterID/nodeID")
+		if ni.ShardID != n.shardID || ni.ReplicaID != n.replicaID {
+			panic("inconsistent shardID/replicaID")
 		}
 		e := indexEncoder{new(bytes.Buffer)}
-		e.writeUvarint(n.clusterID)
-		e.writeUvarint(n.nodeID)
+		e.writeUvarint(n.shardID)
+		e.writeUvarint(n.replicaID)
 		if _, err := rw.Write(e.Bytes()); err != nil {
 			return err
 		}
@@ -167,15 +167,15 @@ func (s *nodeStates) load(dirname string, fn fileNum, fs vfs.FS) (err error) {
 			return err
 		}
 		d = &indexDecoder{bufio.NewReader(rr)}
-		clusterID, err := d.readUvarint()
+		shardID, err := d.readUvarint()
 		if err != nil {
 			return err
 		}
-		nodeID, err := d.readUvarint()
+		replicaID, err := d.readUvarint()
 		if err != nil {
 			return err
 		}
-		n := s.getIndex(clusterID, nodeID)
+		n := s.getIndex(shardID, replicaID)
 		if n.currEntries.size() > 0 {
 			panic("current entries not empty")
 		}
@@ -239,24 +239,24 @@ func (s *nodeStates) load(dirname string, fn fileNum, fs vfs.FS) (err error) {
 	return nil
 }
 
-func (s *nodeStates) querySnapshot(clusterID uint64, nodeID uint64) (indexEntry, bool) {
-	n := s.getIndex(clusterID, nodeID)
+func (s *nodeStates) querySnapshot(shardID uint64, replicaID uint64) (indexEntry, bool) {
+	n := s.getIndex(shardID, replicaID)
 	return n.querySnapshot()
 }
 
-func (s *nodeStates) queryState(clusterID uint64, nodeID uint64) (indexEntry, bool) {
-	n := s.getIndex(clusterID, nodeID)
+func (s *nodeStates) queryState(shardID uint64, replicaID uint64) (indexEntry, bool) {
+	n := s.getIndex(shardID, replicaID)
 	return n.getState()
 }
 
-func (s *nodeStates) query(clusterID uint64, nodeID uint64,
+func (s *nodeStates) query(shardID uint64, replicaID uint64,
 	low uint64, high uint64) ([]indexEntry, bool) {
-	n := s.getIndex(clusterID, nodeID)
+	n := s.getIndex(shardID, replicaID)
 	return n.query(low, high)
 }
 
-func (s *nodeStates) compactedTo(clusterID uint64, nodeID uint64) uint64 {
-	n := s.getIndex(clusterID, nodeID)
+func (s *nodeStates) compactedTo(shardID uint64, replicaID uint64) uint64 {
+	n := s.getIndex(shardID, replicaID)
 	return n.entries.compactedTo
 }
 

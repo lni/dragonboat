@@ -27,20 +27,20 @@ import (
 // when compacting entries, a compaction update is written to the log to record
 // the op. the compactedTo field of the index.entries and index.currEntries are
 // set.
-func (d *db) removeEntries(clusterID uint64, nodeID uint64, index uint64) error {
-	return d.remove(clusterID, nodeID, index)
+func (d *db) removeEntries(shardID uint64, replicaID uint64, index uint64) error {
+	return d.remove(shardID, replicaID, index)
 }
 
-func (d *db) remove(clusterID uint64, nodeID uint64, index uint64) error {
+func (d *db) remove(shardID uint64, replicaID uint64, index uint64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	update := getCompactionUpdate(clusterID, nodeID, index)
+	update := getCompactionUpdate(shardID, replicaID, index)
 	buf := make([]byte, update.SizeUpperLimit())
 	data := pb.MustMarshalTo(&update, buf)
 	if err := d.doWriteLocked(update, data); err != nil {
 		return err
 	}
-	nodeIndex := d.mu.nodeStates.getIndex(clusterID, nodeID)
+	nodeIndex := d.mu.nodeStates.getIndex(shardID, replicaID)
 	nodeIndex.currEntries.setCompactedTo(index)
 	nodeIndex.entries.setCompactedTo(index)
 	return d.compactionLocked(nodeIndex)
@@ -189,28 +189,28 @@ func (d *db) deleteObsoleteFiles() error {
 	return nil
 }
 
-func (d *db) removeAll(clusterID uint64, nodeID uint64) error {
+func (d *db) removeAll(shardID uint64, replicaID uint64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.removeAllLocked(clusterID, nodeID, false)
+	return d.removeAllLocked(shardID, replicaID, false)
 }
 
-func (d *db) importSnapshot(clusterID uint64,
-	nodeID uint64, ss pb.Snapshot) error {
+func (d *db) importSnapshot(shardID uint64,
+	replicaID uint64, ss pb.Snapshot) error {
 	// TODO: need to remove the bootstrap record first
-	return d.installSnapshot(clusterID, nodeID, ss)
+	return d.installSnapshot(shardID, replicaID, ss)
 }
 
-func (d *db) installSnapshot(clusterID uint64,
-	nodeID uint64, ss pb.Snapshot) error {
+func (d *db) installSnapshot(shardID uint64,
+	replicaID uint64, ss pb.Snapshot) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if err := d.removeAllLocked(clusterID, nodeID, true); err != nil {
+	if err := d.removeAllLocked(shardID, replicaID, true); err != nil {
 		return err
 	}
 	update := pb.Update{
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 		State: pb.State{
 			Commit: ss.Index,
 			Term:   ss.Term,
@@ -222,13 +222,13 @@ func (d *db) installSnapshot(clusterID uint64,
 	return d.doWriteLocked(update, data)
 }
 
-func (d *db) removeAllLocked(clusterID uint64, nodeID uint64, newLog bool) error {
+func (d *db) removeAllLocked(shardID uint64, replicaID uint64, newLog bool) error {
 	if newLog {
 		if err := d.createNewLog(); err != nil {
 			return err
 		}
 	}
-	index := d.mu.nodeStates.getIndex(clusterID, nodeID)
+	index := d.mu.nodeStates.getIndex(shardID, replicaID)
 	index.removeAll()
 	v := d.mu.versions.currentVersion()
 	ve := versionEdit{
@@ -259,10 +259,10 @@ func isCompactionUpdate(update pb.Update) (uint64, bool) {
 	return 0, false
 }
 
-func getCompactionUpdate(clusterID uint64, nodeID uint64, index uint64) pb.Update {
+func getCompactionUpdate(shardID uint64, replicaID uint64, index uint64) pb.Update {
 	return pb.Update{
-		ClusterID: clusterID,
-		NodeID:    nodeID,
+		ShardID:   shardID,
+		ReplicaID: replicaID,
 		State:     pb.State{Commit: index, Term: compactionFlag},
 	}
 }

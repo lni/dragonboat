@@ -47,7 +47,7 @@ const (
 	logdbDir                  = "logdb_test_dir_safe_to_delete"
 	lowLatencyLogDBDir        = "logdb_ll_test_dir_safe_to_delete"
 	snapDir                   = "snap_test_dir_safe_to_delete/snap-%d-%d"
-	testClusterID      uint64 = 1100
+	testShardID        uint64 = 1100
 	tickMillisecond    uint64 = 50
 )
 
@@ -93,17 +93,17 @@ func mustHasLeaderNode(nodes []*node, t *testing.T) *node {
 }
 
 type testRouter struct {
-	clusterID uint64
-	qm        map[uint64]*server.MessageQueue
-	dropRate  uint8
+	shardID  uint64
+	qm       map[uint64]*server.MessageQueue
+	dropRate uint8
 }
 
-func newTestRouter(clusterID uint64, nodeIDList []uint64) *testRouter {
+func newTestRouter(shardID uint64, replicaIDList []uint64) *testRouter {
 	m := make(map[uint64]*server.MessageQueue)
-	for _, nodeID := range nodeIDList {
-		m[nodeID] = server.NewMessageQueue(1000, false, 0, 1024*1024*256)
+	for _, replicaID := range replicaIDList {
+		m[replicaID] = server.NewMessageQueue(1000, false, 0, 1024*1024*256)
 	}
-	return &testRouter{qm: m, clusterID: clusterID}
+	return &testRouter{qm: m, shardID: shardID}
 }
 
 func (r *testRouter) shouldDrop(msg pb.Message) bool {
@@ -120,7 +120,7 @@ func (r *testRouter) shouldDrop(msg pb.Message) bool {
 }
 
 func (r *testRouter) send(msg pb.Message) {
-	if msg.ClusterId != r.clusterID {
+	if msg.ClusterId != r.shardID {
 		panic("cluster id does not match")
 	}
 	if r.shouldDrop(msg) {
@@ -131,20 +131,20 @@ func (r *testRouter) send(msg pb.Message) {
 	}
 }
 
-func (r *testRouter) getQ(clusterID uint64,
-	nodeID uint64) *server.MessageQueue {
-	if clusterID != r.clusterID {
+func (r *testRouter) getQ(shardID uint64,
+	replicaID uint64) *server.MessageQueue {
+	if shardID != r.shardID {
 		panic("cluster id does not match")
 	}
-	q, ok := r.qm[nodeID]
+	q, ok := r.qm[replicaID]
 	if !ok {
 		panic("node id not found in the test msg router")
 	}
 	return q
 }
 
-func (r *testRouter) addQ(nodeID uint64, q *server.MessageQueue) {
-	r.qm[nodeID] = q
+func (r *testRouter) addQ(replicaID uint64, q *server.MessageQueue) {
+	r.qm[replicaID] = q
 }
 
 func cleanupTestDir(fs vfs.IFS) {
@@ -161,25 +161,25 @@ func getTestRaftNodes(count int, ordered bool,
 type dummyEngine struct {
 }
 
-func (d *dummyEngine) setCloseReady(n *node)            {}
-func (d *dummyEngine) setStepReady(clusterID uint64)    {}
-func (d *dummyEngine) setCommitReady(clusterID uint64)  {}
-func (d *dummyEngine) setApplyReady(clusterID uint64)   {}
-func (d *dummyEngine) setStreamReady(clusterID uint64)  {}
-func (d *dummyEngine) setSaveReady(clusterID uint64)    {}
-func (d *dummyEngine) setRecoverReady(clusterID uint64) {}
+func (d *dummyEngine) setCloseReady(n *node)          {}
+func (d *dummyEngine) setStepReady(shardID uint64)    {}
+func (d *dummyEngine) setCommitReady(shardID uint64)  {}
+func (d *dummyEngine) setApplyReady(shardID uint64)   {}
+func (d *dummyEngine) setStreamReady(shardID uint64)  {}
+func (d *dummyEngine) setSaveReady(shardID uint64)    {}
+func (d *dummyEngine) setRecoverReady(shardID uint64) {}
 
 func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 	ldb raftio.ILogDB, fs vfs.IFS) ([]*node, []*rsm.StateMachine,
 	*testRouter, raftio.ILogDB) {
 	nodes := make([]*node, 0)
 	smList := make([]*rsm.StateMachine, 0)
-	nodeIDList := make([]uint64, 0)
+	replicaIDList := make([]uint64, 0)
 	// peers map
 	peers := make(map[uint64]string)
 	endID := startID + uint64(count-1)
 	for i := startID; i <= endID; i++ {
-		nodeIDList = append(nodeIDList, i)
+		replicaIDList = append(replicaIDList, i)
 		peers[i] = fmt.Sprintf("peer:%d", 12345+i)
 	}
 	// pools
@@ -212,10 +212,10 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		}
 	}
 	// message router
-	router := newTestRouter(testClusterID, nodeIDList)
+	router := newTestRouter(testShardID, replicaIDList)
 	for i := startID; i <= endID; i++ {
 		// create the snapshotter object
-		nodeSnapDir := fmt.Sprintf(snapDir, testClusterID, i)
+		nodeSnapDir := fmt.Sprintf(snapDir, testShardID, i)
 		snapdir := fs.PathJoin(raftTestTopDir, nodeSnapDir)
 		if err := fs.MkdirAll(snapdir, 0755); err != nil {
 			panic(err)
@@ -223,14 +223,14 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 		rootDirFunc := func(cid uint64, nid uint64) string {
 			return snapdir
 		}
-		lr := logdb.NewLogReader(testClusterID, i, ldb)
-		snapshotter := newSnapshotter(testClusterID, i, rootDirFunc, ldb, lr, fs)
+		lr := logdb.NewLogReader(testShardID, i, ldb)
+		snapshotter := newSnapshotter(testShardID, i, rootDirFunc, ldb, lr, fs)
 		lr.SetCompactor(snapshotter)
 		// create the sm
 		noopSM := &tests.NoOP{}
 		cfg := config.Config{
-			NodeID:              i,
-			ClusterID:           testClusterID,
+			ReplicaID:           i,
+			ShardID:             testShardID,
 			ElectionRTT:         20,
 			HeartbeatRTT:        2,
 			CheckQuorum:         true,
@@ -238,13 +238,13 @@ func doGetTestRaftNodes(startID uint64, count int, ordered bool,
 			CompactionOverhead:  10,
 			OrderedConfigChange: ordered,
 		}
-		create := func(clusterID uint64, nodeID uint64,
+		create := func(shardID uint64, replicaID uint64,
 			done <-chan struct{}) rsm.IManagedStateMachine {
 			return rsm.NewNativeSM(cfg, rsm.NewInMemStateMachine(noopSM), done)
 		}
 		// node registry
 		nr := registry.NewNodeRegistry(settings.Soft.StreamConnections, nil)
-		ch := router.getQ(testClusterID, i)
+		ch := router.getQ(testShardID, i)
 		nhConfig := config.NodeHostConfig{RTTMillisecond: tickMillisecond}
 		node, err := newNode(peers,
 			true,
@@ -358,8 +358,8 @@ func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 	r *testRouter) {
 	for _, node := range nodes {
 		tick := node.pendingReadIndexes.getTick() + 1
-		tickMsg := pb.Message{Type: pb.LocalTick, To: node.nodeID, Hint: tick}
-		tickMsg.ClusterId = testClusterID
+		tickMsg := pb.Message{Type: pb.LocalTick, To: node.replicaID, Hint: tick}
+		tickMsg.ClusterId = testShardID
 		r.send(tickMsg)
 	}
 	step(nodes)
@@ -373,8 +373,8 @@ func stepNodes(nodes []*node, smList []*rsm.StateMachine,
 			tick := node.pendingReadIndexes.getTick() + 1
 			tickMsg := pb.Message{
 				Type:      pb.LocalTick,
-				To:        node.nodeID,
-				ClusterId: testClusterID,
+				To:        node.replicaID,
+				ClusterId: testShardID,
 				Hint:      tick,
 			}
 			r.send(tickMsg)
@@ -452,7 +452,7 @@ func getMaxLastApplied(smList []*rsm.StateMachine) uint64 {
 func getProposalTestClient(n *node,
 	nodes []*node, smList []*rsm.StateMachine,
 	router *testRouter) (*client.Session, bool) {
-	cs := client.NewSession(n.clusterID, random.NewLockedRand())
+	cs := client.NewSession(n.shardID, random.NewLockedRand())
 	cs.PrepareForRegister()
 	rs, err := n.pendingProposals.propose(cs, nil, 50)
 	if err != nil {
@@ -722,7 +722,7 @@ func TestMakingProposalOnWitnessNodeWillBeRejected(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		n.config.IsWitness = true
-		cs := client.NewNoOPSession(n.clusterID, random.NewLockedRand())
+		cs := client.NewNoOPSession(n.shardID, random.NewLockedRand())
 		_, err := n.propose(cs, make([]byte, 1), 10)
 		if err != ErrInvalidOperation {
 			t.Errorf("making proposal not rejected")
@@ -883,26 +883,26 @@ func TestProposalsWithIllFormedSessionAreChecked(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		s1 := client.NewSession(n.clusterID, random.NewLockedRand())
+		s1 := client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForRegister
 		_, err := n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
-		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
+		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForUnregister
 		_, err = n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
-		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
+		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 100
-		s1.ClusterID = 123456
+		s1.ShardID = 123456
 		_, err = n.propose(s1, nil, 10)
 		if err != ErrInvalidSession {
 			t.Errorf("not rejected")
 		}
-		s1 = client.NewSession(n.clusterID, random.NewLockedRand())
+		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 1
 		s1.ClientID = 0
 		_, err = n.propose(s1, nil, 10)
@@ -918,7 +918,7 @@ func TestProposalsWithCorruptedSessionWillPanic(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		s1 := client.NewSession(n.clusterID, random.NewLockedRand())
+		s1 := client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 100
 		s1.RespondedTo = 200
 		defer func() {
@@ -1248,7 +1248,7 @@ func TestNodeCanBeAdded2(t *testing.T) {
 		mustComplete(rs, t)
 		for _, node := range nodes {
 			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.nodeID)
+				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
 			}
 			if !sliceEqual([]uint64{1, 2, 3, 4}, getMemberNodes(node.sm)) {
 				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
@@ -1286,7 +1286,7 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 		mustReject(rs, t)
 		for _, node := range nodes {
 			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.nodeID)
+				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
 			}
 			if !sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)) {
 				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
@@ -1302,7 +1302,7 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 		mustComplete(rs, t)
 		for _, node := range nodes {
 			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.nodeID)
+				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
 			}
 			if !sliceEqual([]uint64{1, 2, 3, 5}, getMemberNodes(node.sm)) {
 				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
@@ -1325,7 +1325,7 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 		mustReject(rs, t)
 		for _, node := range nodes {
 			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.nodeID)
+				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
 			}
 			if !sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)) {
 				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
@@ -1340,7 +1340,7 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		for _, node := range nodes {
-			if node.nodeID == 2 {
+			if node.replicaID == 2 {
 				continue
 			}
 			if !sliceEqual([]uint64{1, 3}, getMemberNodes(node.sm)) {
@@ -1400,7 +1400,7 @@ func TestSnapshotCanBeMade(t *testing.T) {
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			sd := fmt.Sprintf(snapDir, testClusterID, node.nodeID)
+			sd := fmt.Sprintf(snapDir, testShardID, node.replicaID)
 			dir := fs.PathJoin(raftTestTopDir, sd)
 			count, err := getSnapshotFileCount(dir, fs)
 			if err != nil {
@@ -1483,7 +1483,7 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	}
 	closeProposalTestClient(n, nodes, smList, router, session)
 	for _, node := range nodes {
-		sd := fmt.Sprintf(snapDir, testClusterID, node.nodeID)
+		sd := fmt.Sprintf(snapDir, testShardID, node.replicaID)
 		dir := fs.PathJoin(raftTestTopDir, sd)
 		count, err := getSnapshotFileCount(dir, fs)
 		if err != nil {
@@ -1554,7 +1554,7 @@ func TestPayloadTooBig(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		cfg := config.Config{
-			NodeID:          1,
+			ReplicaID:       1,
 			HeartbeatRTT:    1,
 			ElectionRTT:     10,
 			MaxInMemLogSize: tt.maxInMemLogSize,
@@ -1575,13 +1575,13 @@ func TestPayloadTooBig(t *testing.T) {
 
 type dummyPipeline struct{}
 
-func (d *dummyPipeline) setCloseReady(*node)              {}
-func (d *dummyPipeline) setStepReady(clusterID uint64)    {}
-func (d *dummyPipeline) setCommitReady(clusterID uint64)  {}
-func (d *dummyPipeline) setApplyReady(clusterID uint64)   {}
-func (d *dummyPipeline) setStreamReady(clusterID uint64)  {}
-func (d *dummyPipeline) setSaveReady(clusterID uint64)    {}
-func (d *dummyPipeline) setRecoverReady(clusterID uint64) {}
+func (d *dummyPipeline) setCloseReady(*node)            {}
+func (d *dummyPipeline) setStepReady(shardID uint64)    {}
+func (d *dummyPipeline) setCommitReady(shardID uint64)  {}
+func (d *dummyPipeline) setApplyReady(shardID uint64)   {}
+func (d *dummyPipeline) setStreamReady(shardID uint64)  {}
+func (d *dummyPipeline) setSaveReady(shardID uint64)    {}
+func (d *dummyPipeline) setRecoverReady(shardID uint64) {}
 
 func TestProcessUninitilizedNode(t *testing.T) {
 	n := &node{ss: snapshotState{}, pipeline: &dummyPipeline{}}
@@ -1711,14 +1711,14 @@ func (np *testDummyNodeProxy) StepReady()                                       
 func (np *testDummyNodeProxy) RestoreRemotes(pb.Snapshot) error                      { return nil }
 func (np *testDummyNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool)     {}
 func (np *testDummyNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool) error { return nil }
-func (np *testDummyNodeProxy) NodeID() uint64                                        { return 1 }
-func (np *testDummyNodeProxy) ClusterID() uint64                                     { return 1 }
+func (np *testDummyNodeProxy) ReplicaID() uint64                                     { return 1 }
+func (np *testDummyNodeProxy) ShardID() uint64                                       { return 1 }
 func (np *testDummyNodeProxy) ShouldStop() <-chan struct{}                           { return nil }
 
 func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *testing.T) {
 	fs := vfs.GetTestFS()
 	n := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.InMemStateMachine{}, nil),
 		nil, config, &testDummyNodeProxy{}, fs)
@@ -1735,7 +1735,7 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 func TestNotReadyTakingSnapshotConcurrentNodeIsNotSkipped(t *testing.T) {
 	fs := vfs.GetTestFS()
 	n := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
-	config := config.Config{ClusterID: 1, NodeID: 1}
+	config := config.Config{ShardID: 1, ReplicaID: 1}
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil),
 		nil, config, &testDummyNodeProxy{}, fs)

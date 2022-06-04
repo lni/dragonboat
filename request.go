@@ -1002,10 +1002,10 @@ func (p *pendingReadIndex) gc(now uint64) {
 	}
 }
 
-func getRng(clusterID uint64, nodeID uint64, shard uint64) *keyGenerator {
+func getRng(shardID uint64, replicaID uint64, shard uint64) *keyGenerator {
 	pid := os.Getpid()
 	nano := time.Now().UnixNano()
-	seedStr := fmt.Sprintf("%d-%d-%d-%d-%d", pid, nano, clusterID, nodeID, shard)
+	seedStr := fmt.Sprintf("%d-%d-%d-%d-%d", pid, nano, shardID, replicaID, shard)
 	m := sha512.New()
 	fileutil.MustWrite(m, []byte(seedStr))
 	sum := m.Sum(nil)
@@ -1023,7 +1023,7 @@ func newPendingProposal(cfg config.Config,
 	}
 	for i := uint64(0); i < ps; i++ {
 		p.shards[i] = newPendingProposalShard(cfg, notifyCommit, pool, proposals)
-		p.keyg[i] = getRng(cfg.ClusterID, cfg.NodeID, i)
+		p.keyg[i] = getRng(cfg.ShardID, cfg.ReplicaID, i)
 	}
 	return p
 }
@@ -1124,7 +1124,7 @@ func (p *proposalShard) propose(session *client.Session,
 	added, stopped := p.proposals.add(entry)
 	if stopped {
 		plog.Warningf("%s dropped proposal, cluster stopped",
-			dn(p.cfg.ClusterID, p.cfg.NodeID))
+			dn(p.cfg.ShardID, p.cfg.ReplicaID))
 		p.mu.Lock()
 		delete(p.pending, entry.Key)
 		p.mu.Unlock()
@@ -1135,7 +1135,7 @@ func (p *proposalShard) propose(session *client.Session,
 		delete(p.pending, entry.Key)
 		p.mu.Unlock()
 		plog.Debugf("%s dropped proposal, overloaded",
-			dn(p.cfg.ClusterID, p.cfg.NodeID))
+			dn(p.cfg.ShardID, p.cfg.ReplicaID))
 		return nil, ErrSystemBusy
 	}
 	return req, nil

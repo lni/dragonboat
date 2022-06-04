@@ -82,7 +82,7 @@ func CanUpgradeToV310(nhConfig config.NodeHostConfig) (result bool, err error) {
 		return false, err
 	}
 	for _, ni := range niList {
-		ss, err := ldb.GetSnapshot(ni.ClusterID, ni.NodeID)
+		ss, err := ldb.GetSnapshot(ni.ShardID, ni.ReplicaID)
 		if err != nil {
 			return false, err
 		}

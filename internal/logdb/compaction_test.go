@@ -33,14 +33,14 @@ func TestCompactionTaskCanBeCreated(t *testing.T) {
 func TestCompactionTaskCanBeAdded(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
 	if p.len() != 1 {
 		t.Errorf("len unexpectedly reported %d", p.len())
 	}
 	if len(p.pendings) != 1 {
 		t.Errorf("p.pending len is not 1")
 	}
-	v, ok := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}]
+	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
 	if !ok {
 		t.Errorf("not added")
 	}
@@ -52,12 +52,12 @@ func TestCompactionTaskCanBeAdded(t *testing.T) {
 func TestCompactionTaskCanBeUpdated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 10})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 10})
 	if len(p.pendings) != 1 {
 		t.Errorf("p.pending len is not 1")
 	}
-	v, ok := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}]
+	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
 	if !ok {
 		t.Errorf("not added")
 	}
@@ -69,10 +69,10 @@ func TestCompactionTaskCanBeUpdated(t *testing.T) {
 func TestCompactionDoneChanIsRetained(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
-	done := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}].done
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 10})
-	v, ok := p.pendings[raftio.NodeInfo{ClusterID: 1, NodeID: 2}]
+	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
+	done := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}].done
+	p.addTask(task{shardID: 1, replicaID: 2, index: 10})
+	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
 	if !ok {
 		t.Errorf("not added")
 	}
@@ -84,7 +84,7 @@ func TestCompactionDoneChanIsRetained(t *testing.T) {
 func TestCompactionTaskGetReturnTheExpectedValue(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	tt := task{clusterID: 1, nodeID: 2, index: 3}
+	tt := task{shardID: 1, replicaID: 2, index: 3}
 	p.addTask(tt)
 	if p.len() != 1 {
 		t.Errorf("len unexpectedly reported %d", p.len())
@@ -105,8 +105,8 @@ func TestCompactionTaskGetReturnTheExpectedValue(t *testing.T) {
 func TestCompactionTaskGetReturnAllExpectedValues(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
-	p.addTask(task{clusterID: 2, nodeID: 2, index: 10})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
+	p.addTask(task{shardID: 2, replicaID: 2, index: 10})
 	if p.len() != 2 {
 		t.Errorf("len unexpectedly reported %d", p.len())
 	}
@@ -138,6 +138,6 @@ func TestMovingCompactionIndexBackWillCausePanic(t *testing.T) {
 		}
 	}()
 	p := newCompactions()
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 3})
-	p.addTask(task{clusterID: 1, nodeID: 2, index: 2})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
+	p.addTask(task{shardID: 1, replicaID: 2, index: 2})
 }

@@ -46,7 +46,7 @@ func benchmarkWrite(b *testing.B, sz int) {
 	defer db.close()
 
 	u := pb.Update{
-		ClusterID: 100,
+		ShardID: 100,
 		EntriesToSave: []pb.Entry{
 			{Cmd: make([]byte, sz)},
 		},

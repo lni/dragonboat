@@ -43,8 +43,8 @@ func TestRemoveEntries(t *testing.T) {
 		buf := make([]byte, 1024)
 		for i := uint64(1); i < uint64(100); i++ {
 			u := pb.Update{
-				ClusterID:     2,
-				NodeID:        3,
+				ShardID:       2,
+				ReplicaID:     3,
 				State:         pb.State{Commit: i},
 				EntriesToSave: []pb.Entry{{Index: i, Term: 1}},
 			}
@@ -108,8 +108,8 @@ func TestRemovedEntriesMultiplexedLogSetup(t *testing.T) {
 	for i := uint64(0); i < 16; i++ {
 		updates := []pb.Update{
 			{
-				ClusterID: 1,
-				NodeID:    1,
+				ShardID:   1,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(100), Term: 10},
 				State:     pb.State{Commit: i * uint64(100), Term: 10},
 				EntriesToSave: []pb.Entry{
@@ -118,8 +118,8 @@ func TestRemovedEntriesMultiplexedLogSetup(t *testing.T) {
 				},
 			},
 			{
-				ClusterID: 17,
-				NodeID:    1,
+				ShardID:   17,
+				ReplicaID: 1,
 				Snapshot:  pb.Snapshot{Index: i * uint64(200), Term: 20},
 				State:     pb.State{Commit: i * uint64(200), Term: 20},
 				EntriesToSave: []pb.Entry{
@@ -161,8 +161,8 @@ func TestRemoveAll(t *testing.T) {
 	}
 	tf := func(t *testing.T, db *db) {
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 100,
 				Term:   5,
@@ -220,8 +220,8 @@ func TestInstallSnapshot(t *testing.T) {
 	}
 	tf := func(t *testing.T, db *db) {
 		u := pb.Update{
-			ClusterID: 2,
-			NodeID:    3,
+			ShardID:   2,
+			ReplicaID: 3,
 			State: pb.State{
 				Commit: 100,
 				Term:   5,
