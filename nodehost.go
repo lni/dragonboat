@@ -1902,18 +1902,18 @@ func (nh *NodeHost) sendMessage(msg pb.Message) {
 	} else {
 		witness := msg.Snapshot.Witness
 		plog.Debugf("%s is sending snapshot to %s, witness %t, index %d, size %d",
-			dn(msg.ClusterId, msg.From), dn(msg.ClusterId, msg.To),
+			dn(msg.ShardID, msg.From), dn(msg.ShardID, msg.To),
 			witness, msg.Snapshot.Index, msg.Snapshot.FileSize)
-		if n, ok := nh.getCluster(msg.ClusterId); ok {
+		if n, ok := nh.getCluster(msg.ShardID); ok {
 			if witness || !n.OnDiskStateMachine() {
 				nh.transport.SendSnapshot(msg)
 			} else {
-				n.pushStreamSnapshotRequest(msg.ClusterId, msg.To)
+				n.pushStreamSnapshotRequest(msg.ShardID, msg.To)
 			}
 		}
 		nh.events.sys.Publish(server.SystemEvent{
 			Type:      server.SendSnapshotStarted,
-			ShardID:   msg.ClusterId,
+			ShardID:   msg.ShardID,
 			ReplicaID: msg.To,
 			From:      msg.From,
 		})
@@ -2108,10 +2108,10 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 		if req.To == 0 {
 			plog.Panicf("to field not set, %s", req.Type)
 		}
-		if n, ok := nh.getCluster(req.ClusterId); ok {
+		if n, ok := nh.getCluster(req.ShardID); ok {
 			if n.replicaID != req.To {
 				plog.Warningf("ignored a %s message sent to %s but received by %s",
-					req.Type, dn(req.ClusterId, req.To), dn(req.ClusterId, n.replicaID))
+					req.Type, dn(req.ShardID, req.To), dn(req.ShardID, n.replicaID))
 				continue
 			}
 			if req.Type == pb.InstallSnapshot {
@@ -2119,7 +2119,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 				snapshotCount++
 			} else if req.Type == pb.SnapshotReceived {
 				plog.Debugf("SnapshotReceived received, cluster id %d, node id %d",
-					req.ClusterId, req.From)
+					req.ShardID, req.From)
 				n.mq.AddDelayed(pb.Message{
 					Type: pb.SnapshotStatus,
 					From: req.From,
@@ -2174,10 +2174,10 @@ func (h *messageHandler) HandleUnreachable(shardID uint64, replicaID uint64) {
 func (h *messageHandler) HandleSnapshot(shardID uint64,
 	replicaID uint64, from uint64) {
 	m := pb.Message{
-		To:        from,
-		From:      replicaID,
-		ClusterId: shardID,
-		Type:      pb.SnapshotReceived,
+		To:      from,
+		From:    replicaID,
+		ShardID: shardID,
+		Type:    pb.SnapshotReceived,
 	}
 	h.nh.sendMessage(m)
 	plog.Debugf("%s sent SnapshotReceived to %d", dn(shardID, replicaID), from)

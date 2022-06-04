@@ -207,7 +207,7 @@ func (r *db) importSnapshot(ss pb.Snapshot, replicaID uint64) error {
 	if ss.Type == pb.UnknownStateMachine {
 		panic("Unknown state machine type")
 	}
-	snapshots, err := r.listSnapshots(ss.ClusterId, replicaID, math.MaxUint64)
+	snapshots, err := r.listSnapshots(ss.ShardID, replicaID, math.MaxUint64)
 	if err != nil {
 		return err
 	}
@@ -226,17 +226,17 @@ func (r *db) importSnapshot(ss pb.Snapshot, replicaID uint64) error {
 		Term:   ss.Term,
 		Commit: ss.Index,
 	}
-	r.saveRemoveNodeData(wb, selectedss, ss.ClusterId, replicaID)
-	r.saveBootstrap(wb, ss.ClusterId, replicaID, bsrec)
-	r.saveStateAllocs(wb, ss.ClusterId, replicaID, state)
+	r.saveRemoveNodeData(wb, selectedss, ss.ShardID, replicaID)
+	r.saveBootstrap(wb, ss.ShardID, replicaID, bsrec)
+	r.saveStateAllocs(wb, ss.ShardID, replicaID, state)
 	if err := r.saveSnapshot(wb, pb.Update{
-		ShardID:   ss.ClusterId,
+		ShardID:   ss.ShardID,
 		ReplicaID: replicaID,
 		Snapshot:  ss,
 	}); err != nil {
 		return err
 	}
-	r.saveMaxIndex(wb, ss.ClusterId, replicaID, ss.Index, nil)
+	r.saveMaxIndex(wb, ss.ShardID, replicaID, ss.Index, nil)
 	return r.kvs.CommitWriteBatch(wb)
 }
 

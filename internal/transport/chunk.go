@@ -45,7 +45,7 @@ var (
 var firstError = utils.FirstError
 
 func chunkKey(c pb.Chunk) string {
-	return fmt.Sprintf("%d:%d:%d", c.ClusterId, c.NodeId, c.Index)
+	return fmt.Sprintf("%d:%d:%d", c.ShardID, c.ReplicaID, c.Index)
 }
 
 type tracked struct {
@@ -302,7 +302,7 @@ func (c *Chunk) addLocked(chunk pb.Chunk) bool {
 		plog.Debugf("%s received from %d, term %d",
 			c.ssid(chunk), chunk.From, chunk.Term)
 		c.onReceive(snapshotMessage)
-		c.confirm(chunk.ClusterId, chunk.NodeId, chunk.From)
+		c.confirm(chunk.ShardID, chunk.ReplicaID, chunk.From)
 	}
 	return true
 }
@@ -350,7 +350,7 @@ func (c *Chunk) save(chunk pb.Chunk) (err error) {
 }
 
 func (c *Chunk) getEnv(chunk pb.Chunk) server.SSEnv {
-	return server.NewSSEnv(c.dir, chunk.ClusterId, chunk.NodeId,
+	return server.NewSSEnv(c.dir, chunk.ShardID, chunk.ReplicaID,
 		chunk.Index, chunk.From, server.ReceivingMode, c.fs)
 }
 
@@ -383,8 +383,8 @@ func (c *Chunk) toMessage(chunk pb.Chunk,
 	m := pb.Message{}
 	m.Type = pb.InstallSnapshot
 	m.From = chunk.From
-	m.To = chunk.NodeId
-	m.ClusterId = chunk.ClusterId
+	m.To = chunk.ReplicaID
+	m.ShardID = chunk.ShardID
 	s := pb.Snapshot{}
 	s.Index = chunk.Index
 	s.Term = chunk.Term
@@ -408,7 +408,7 @@ func (c *Chunk) toMessage(chunk pb.Chunk,
 }
 
 func (c *Chunk) ssid(chunk pb.Chunk) string {
-	return logutil.DescribeSS(chunk.ClusterId, chunk.NodeId, chunk.Index)
+	return logutil.DescribeSS(chunk.ShardID, chunk.ReplicaID, chunk.Index)
 }
 
 func panicNow(err error) {

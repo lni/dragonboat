@@ -470,14 +470,14 @@ func benchmarkTransport(b *testing.B, sz int) {
 	}
 	for i := 0; i < 128; i++ {
 		m := pb.Message{
-			Type:      pb.Replicate,
-			To:        2,
-			From:      1,
-			ClusterId: 1,
-			Term:      100,
-			LogTerm:   100,
-			LogIndex:  123456789,
-			Commit:    123456789,
+			Type:     pb.Replicate,
+			To:       2,
+			From:     1,
+			ShardID:  1,
+			Term:     100,
+			LogTerm:  100,
+			LogIndex: 123456789,
+			Commit:   123456789,
 		}
 		for j := 0; j < 64; j++ {
 			m.Entries = append(m.Entries, e)

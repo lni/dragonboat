@@ -1397,10 +1397,10 @@ func TestImportSnapshot(t *testing.T) {
 		}
 		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
 		ssimport := pb.Snapshot{
-			Type:      pb.OnDiskStateMachine,
-			ClusterId: shardID,
-			Index:     110,
-			Term:      2,
+			Type:    pb.OnDiskStateMachine,
+			ShardID: shardID,
+			Index:   110,
+			Term:    2,
 		}
 		require.NoError(t, db.ImportSnapshot(ssimport, replicaID))
 		snapshot, err := db.GetSnapshot(shardID, replicaID)

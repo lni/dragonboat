@@ -9,8 +9,8 @@ import (
 )
 
 type Chunk struct {
-	ClusterId      uint64
-	NodeId         uint64
+	ShardID        uint64
+	ReplicaID      uint64
 	From           uint64
 	ChunkId        uint64
 	ChunkSize      uint64
@@ -48,10 +48,10 @@ func (m *Chunk) MarshalTo(dAtA []byte) (int, error) {
 	_ = l
 	dAtA[i] = 0x8
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.ClusterId))
+	i = encodeVarintRaft(dAtA, i, uint64(m.ShardID))
 	dAtA[i] = 0x10
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.NodeId))
+	i = encodeVarintRaft(dAtA, i, uint64(m.ReplicaID))
 	dAtA[i] = 0x18
 	i++
 	i = encodeVarintRaft(dAtA, i, uint64(m.From))
@@ -151,8 +151,8 @@ func (m *Chunk) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovRaft(uint64(m.ClusterId))
-	n += 1 + sovRaft(uint64(m.NodeId))
+	n += 1 + sovRaft(uint64(m.ShardID))
+	n += 1 + sovRaft(uint64(m.ReplicaID))
 	n += 1 + sovRaft(uint64(m.From))
 	n += 1 + sovRaft(uint64(m.ChunkId))
 	n += 1 + sovRaft(uint64(m.ChunkSize))
@@ -213,7 +213,7 @@ func (m *Chunk) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
 			}
-			m.ClusterId = 0
+			m.ShardID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowRaft
@@ -223,7 +223,7 @@ func (m *Chunk) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ClusterId |= uint64(b&0x7F) << shift
+				m.ShardID |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -232,7 +232,7 @@ func (m *Chunk) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field NodeId", wireType)
 			}
-			m.NodeId = 0
+			m.ReplicaID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowRaft
@@ -242,7 +242,7 @@ func (m *Chunk) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.NodeId |= uint64(b&0x7F) << shift
+				m.ReplicaID |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

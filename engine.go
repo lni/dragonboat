@@ -180,12 +180,12 @@ func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
 func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 	var notified bitmap
 	for _, req := range mb.Requests {
-		idx := wr.partitioner.GetPartitionID(req.ClusterId)
+		idx := wr.partitioner.GetPartitionID(req.ShardID)
 		readyMap := wr.maps[idx]
-		readyMap.setClusterReady(req.ClusterId)
+		readyMap.setClusterReady(req.ShardID)
 	}
 	for _, req := range mb.Requests {
-		idx := wr.partitioner.GetPartitionID(req.ClusterId)
+		idx := wr.partitioner.GetPartitionID(req.ShardID)
 		if !notified.contains(idx) {
 			notified.add(idx)
 			wr.notify(idx)

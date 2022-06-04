@@ -242,9 +242,9 @@ func TestInstallSnapshot(t *testing.T) {
 			require.NoError(t, err)
 		}
 		ss := pb.Snapshot{
-			ClusterId: 2,
-			Index:     50,
-			Term:      3,
+			ShardID: 2,
+			Index:   50,
+			Term:    3,
 		}
 		require.NoError(t, db.importSnapshot(2, 3, ss))
 		for i := uint64(1); i <= uint64(100); i++ {

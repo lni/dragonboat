@@ -347,7 +347,7 @@ func (p *Peer) getUpdate(moreToApply bool,
 		ud.LeaderUpdate = *p.raft.leaderUpdate
 	}
 	for idx := range ud.Messages {
-		ud.Messages[idx].ClusterId = p.raft.shardID
+		ud.Messages[idx].ShardID = p.raft.shardID
 	}
 	if moreToApply {
 		toApply, err := p.entryLog().entriesToApply()

@@ -53,8 +53,8 @@ var (
 // SendSnapshot asynchronously sends raft snapshot message to its target.
 func (t *Transport) SendSnapshot(m pb.Message) bool {
 	if !t.sendSnapshot(m) {
-		plog.Errorf("failed to send snapshot to %s", dn(m.ClusterId, m.To))
-		t.sendSnapshotNotification(m.ClusterId, m.To, true)
+		plog.Errorf("failed to send snapshot to %s", dn(m.ShardID, m.To))
+		t.sendSnapshotNotification(m.ShardID, m.To, true)
 		return false
 	}
 	return true
@@ -105,7 +105,7 @@ func (t *Transport) sendSnapshot(m pb.Message) bool {
 
 func (t *Transport) doSendSnapshot(m pb.Message) bool {
 	toReplicaID := m.To
-	shardID := m.ClusterId
+	shardID := m.ShardID
 	if m.Type != pb.InstallSnapshot {
 		panic("not a snapshot message")
 	}
@@ -218,8 +218,8 @@ func splitBySnapshotFile(msg pb.Message,
 		}
 		c := pb.Chunk{
 			BinVer:         raftio.TransportBinVersion,
-			ClusterId:      msg.ClusterId,
-			NodeId:         msg.To,
+			ShardID:        msg.ShardID,
+			ReplicaID:      msg.To,
 			From:           msg.From,
 			FileChunkId:    i,
 			FileChunkCount: chunkCount,
@@ -267,8 +267,8 @@ func getWitnessChunk(m pb.Message, fs vfs.IFS) ([]pb.Chunk, error) {
 	results := make([]pb.Chunk, 0)
 	results = append(results, pb.Chunk{
 		BinVer:         raftio.TransportBinVersion,
-		ClusterId:      m.ClusterId,
-		NodeId:         m.To,
+		ShardID:        m.ShardID,
+		ReplicaID:      m.To,
 		From:           m.From,
 		FileChunkId:    0,
 		FileChunkCount: 1,

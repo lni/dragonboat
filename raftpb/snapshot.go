@@ -22,7 +22,7 @@ type Snapshot struct {
 	Files       []*SnapshotFile
 	Checksum    []byte
 	Dummy       bool
-	ClusterId   uint64
+	ShardID     uint64
 	Type        StateMachineType
 	Imported    bool
 	OnDiskIndex uint64
@@ -123,7 +123,7 @@ func (m *Snapshot) MarshalTo(dAtA []byte) (int, error) {
 	i++
 	dAtA[i] = 0x50
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.ClusterId))
+	i = encodeVarintRaft(dAtA, i, uint64(m.ShardID))
 	dAtA[i] = 0x58
 	i++
 	i = encodeVarintRaft(dAtA, i, uint64(m.Type))
@@ -173,7 +173,7 @@ func (m *Snapshot) Size() (n int) {
 		n += 1 + l + sovRaft(uint64(l))
 	}
 	n += 2
-	n += 1 + sovRaft(uint64(m.ClusterId))
+	n += 1 + sovRaft(uint64(m.ShardID))
 	n += 1 + sovRaft(uint64(m.Type))
 	n += 2
 	n += 1 + sovRaft(uint64(m.OnDiskIndex))
@@ -424,7 +424,7 @@ func (m *Snapshot) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
 			}
-			m.ClusterId = 0
+			m.ShardID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowRaft
@@ -434,7 +434,7 @@ func (m *Snapshot) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ClusterId |= uint64(b&0x7F) << shift
+				m.ShardID |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

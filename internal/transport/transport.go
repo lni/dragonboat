@@ -318,7 +318,7 @@ func (t *Transport) handleRequest(req pb.MessageBatch) {
 	if len(addr) > 0 {
 		for _, r := range req.Requests {
 			if r.From != 0 {
-				t.resolver.Add(r.ClusterId, r.From, addr)
+				t.resolver.Add(r.ShardID, r.From, addr)
 			}
 		}
 	}
@@ -356,7 +356,7 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 		panic("snapshot message must be sent via its own channel.")
 	}
 	toReplicaID := req.To
-	shardID := req.ClusterId
+	shardID := req.ShardID
 	from := req.From
 	addr, key, err := t.resolver.Resolve(shardID, toReplicaID)
 	if err != nil {
@@ -462,7 +462,7 @@ func (t *Transport) processMessages(remoteHost string,
 			return nil
 		case req := <-sq.ch:
 			n := raftio.NodeInfo{
-				ShardID:   req.ClusterId,
+				ShardID:   req.ShardID,
 				ReplicaID: req.From,
 			}
 			affected[n] = struct{}{}

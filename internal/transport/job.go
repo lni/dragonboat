@@ -138,7 +138,7 @@ func (j *job) AddChunk(chunk pb.Chunk) (bool, bool) {
 	if !chunk.IsPoisonChunk() {
 		plog.Debugf("%s is sending chunk %d to %s",
 			logutil.ReplicaID(chunk.From), chunk.ChunkId,
-			dn(chunk.ClusterId, chunk.NodeId))
+			dn(chunk.ShardID, chunk.ReplicaID))
 	} else {
 		plog.Debugf("sending a poison chunk to %s", dn(j.shardID, j.replicaID))
 	}
@@ -186,12 +186,12 @@ func (j *job) streamSnapshot() error {
 			}
 			if err := j.sendChunk(chunk, j.conn); err != nil {
 				plog.Errorf("streaming snapshot chunk to %s failed, %v",
-					dn(chunk.ClusterId, chunk.NodeId), err)
+					dn(chunk.ShardID, chunk.ReplicaID), err)
 				return err
 			}
 			if chunk.ChunkCount == pb.LastChunkCount {
 				plog.Debugf("node %d just sent all chunks to %s",
-					chunk.From, dn(chunk.ClusterId, chunk.NodeId))
+					chunk.From, dn(chunk.ShardID, chunk.ReplicaID))
 				close(j.completed)
 				return nil
 			}
@@ -251,7 +251,7 @@ func (j *job) sendChunk(c pb.Chunk,
 	if f := j.preSend.Load(); f != nil {
 		updated, shouldSend := f.(StreamChunkSendFunc)(c)
 		if !shouldSend {
-			plog.Debugf("chunk to %s skipped", dn(c.ClusterId, c.NodeId))
+			plog.Debugf("chunk to %s skipped", dn(c.ShardID, c.ReplicaID))
 			return errChunkSendSkipped
 		}
 		return conn.SendChunk(updated)

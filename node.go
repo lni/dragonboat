@@ -993,10 +993,10 @@ func (n *node) sendEnterQuiesceMessages() {
 	for replicaID := range n.sm.GetMembership().Addresses {
 		if replicaID != n.replicaID {
 			msg := pb.Message{
-				Type:      pb.Quiesce,
-				From:      n.replicaID,
-				To:        replicaID,
-				ClusterId: n.shardID,
+				Type:    pb.Quiesce,
+				From:    n.replicaID,
+				To:      replicaID,
+				ShardID: n.shardID,
 			}
 			n.sendRaftMessage(msg)
 		}
@@ -1006,7 +1006,7 @@ func (n *node) sendEnterQuiesceMessages() {
 func (n *node) sendMessages(msgs []pb.Message) {
 	for _, msg := range msgs {
 		if !isFreeOrderMessage(msg) {
-			msg.ClusterId = n.shardID
+			msg.ShardID = n.shardID
 			n.sendRaftMessage(msg)
 		}
 	}
@@ -1015,7 +1015,7 @@ func (n *node) sendMessages(msgs []pb.Message) {
 func (n *node) sendReplicateMessages(ud pb.Update) {
 	for _, msg := range ud.Messages {
 		if isFreeOrderMessage(msg) {
-			msg.ClusterId = n.shardID
+			msg.ShardID = n.shardID
 			n.sendRaftMessage(msg)
 		}
 	}

@@ -133,7 +133,7 @@ func (s *snapshotter) Save(savable rsm.ISavable,
 		return pb.Snapshot{}, env, err
 	}
 	return pb.Snapshot{
-		ClusterId:   s.shardID,
+		ShardID:     s.shardID,
 		Filepath:    env.GetFilepath(),
 		Membership:  meta.Membership,
 		Index:       meta.Index,

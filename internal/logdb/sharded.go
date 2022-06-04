@@ -278,7 +278,7 @@ func (s *ShardedDB) RemoveNodeData(shardID uint64, replicaID uint64) error {
 // ImportSnapshot imports the snapshot record and other metadata records to the
 // system.
 func (s *ShardedDB) ImportSnapshot(ss pb.Snapshot, replicaID uint64) error {
-	p := s.partitioner.GetPartitionID(ss.ClusterId)
+	p := s.partitioner.GetPartitionID(ss.ShardID)
 	return errors.WithStack(s.shards[p].importSnapshot(ss, replicaID))
 }
 

@@ -5326,7 +5326,7 @@ func TestInstallSnapshotMessageIsNeverDropped(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			nh.partitioned = 1
 			handler := newNodeHostMessageHandler(nh)
-			msg := pb.Message{Type: pb.InstallSnapshot, ClusterId: 1, To: 1}
+			msg := pb.Message{Type: pb.InstallSnapshot, ShardID: 1, To: 1}
 			batch := pb.MessageBatch{Requests: []pb.Message{msg}}
 			s, m := handler.HandleMessageBatch(batch)
 			if s != 1 {
@@ -5346,9 +5346,9 @@ func TestMessageToUnknownNodeIsIgnored(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			handler := newNodeHostMessageHandler(nh)
-			msg1 := pb.Message{Type: pb.Ping, ClusterId: 1, To: 1}
-			msg2 := pb.Message{Type: pb.Pong, ClusterId: 1, To: 1}
-			msg3 := pb.Message{Type: pb.Pong, ClusterId: 1, To: 2}
+			msg1 := pb.Message{Type: pb.Ping, ShardID: 1, To: 1}
+			msg2 := pb.Message{Type: pb.Pong, ShardID: 1, To: 1}
+			msg3 := pb.Message{Type: pb.Pong, ShardID: 1, To: 2}
 			batch := pb.MessageBatch{Requests: []pb.Message{msg1, msg2, msg3}}
 			s, m := handler.HandleMessageBatch(batch)
 			if s != 0 {
@@ -5604,7 +5604,7 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	node := &node{shardID: 1, replicaID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	mb := pb.MessageBatch{
-		Requests: []pb.Message{{To: 1, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
+		Requests: []pb.Message{{To: 1, From: 2, ShardID: 1, Type: pb.SnapshotReceived}},
 	}
 	sc, mc := h.HandleMessageBatch(mb)
 	if sc != 0 || mc != 1 {
@@ -5638,7 +5638,7 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	node := &node{shardID: 1, replicaID: 1, mq: mq}
 	h.nh.mu.clusters.Store(uint64(1), node)
 	mb := pb.MessageBatch{
-		Requests: []pb.Message{{To: 3, From: 2, ClusterId: 1, Type: pb.SnapshotReceived}},
+		Requests: []pb.Message{{To: 3, From: 2, ShardID: 1, Type: pb.SnapshotReceived}},
 	}
 	sc, mc := h.HandleMessageBatch(mb)
 	if sc != 0 || mc != 0 {

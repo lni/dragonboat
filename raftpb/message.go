@@ -4,19 +4,19 @@
 package raftpb
 
 type Message struct {
-	Type      MessageType
-	To        uint64
-	From      uint64
-	ClusterId uint64
-	Term      uint64
-	LogTerm   uint64
-	LogIndex  uint64
-	Commit    uint64
-	Reject    bool
-	Hint      uint64
-	Entries   []Entry
-	Snapshot  Snapshot
-	HintHigh  uint64
+	Type     MessageType
+	To       uint64
+	From     uint64
+	ShardID  uint64
+	Term     uint64
+	LogTerm  uint64
+	LogIndex uint64
+	Commit   uint64
+	Reject   bool
+	Hint     uint64
+	Entries  []Entry
+	Snapshot Snapshot
+	HintHigh uint64
 }
 
 func (m *Message) Marshal() (dAtA []byte, err error) {
@@ -45,7 +45,7 @@ func (m *Message) MarshalTo(dAtA []byte) (int, error) {
 	i = encodeVarintRaft(dAtA, i, uint64(m.From))
 	dAtA[i] = 0x20
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.ClusterId))
+	i = encodeVarintRaft(dAtA, i, uint64(m.ShardID))
 	dAtA[i] = 0x28
 	i++
 	i = encodeVarintRaft(dAtA, i, uint64(m.Term))
@@ -104,7 +104,7 @@ func (m *Message) Size() (n int) {
 	n += 1 + sovRaft(uint64(m.Type))
 	n += 1 + sovRaft(uint64(m.To))
 	n += 1 + sovRaft(uint64(m.From))
-	n += 1 + sovRaft(uint64(m.ClusterId))
+	n += 1 + sovRaft(uint64(m.ShardID))
 	n += 1 + sovRaft(uint64(m.Term))
 	n += 1 + sovRaft(uint64(m.LogTerm))
 	n += 1 + sovRaft(uint64(m.LogIndex))

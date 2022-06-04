@@ -188,7 +188,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return err
 	}
 	ssDir := env.GetSnapshotDir(nhConfig.DeploymentID,
-		oldss.ClusterId, replicaID)
+		oldss.ShardID, replicaID)
 	exist, err := fileutil.Exist(ssDir, fs)
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		}
 	} else {
 		if err := env.CreateSnapshotDir(nhConfig.DeploymentID,
-			oldss.ClusterId, replicaID); err != nil {
+			oldss.ShardID, replicaID); err != nil {
 			return err
 		}
 	}
@@ -207,7 +207,7 @@ func ImportSnapshot(nhConfig config.NodeHostConfig,
 		return env.GetSnapshotDir(nhConfig.DeploymentID, cid, nid)
 	}
 	ssEnv := server.NewSSEnv(getSnapshotDir,
-		oldss.ClusterId, replicaID, oldss.Index, replicaID, server.SnapshotMode, fs)
+		oldss.ShardID, replicaID, oldss.Index, replicaID, server.SnapshotMode, fs)
 	if err := ssEnv.CreateTempDir(); err != nil {
 		return err
 	}
@@ -380,10 +380,10 @@ func getProcessedSnapshotRecord(dstDir string,
 			Addresses:      make(map[uint64]string),
 			Witnesses:      make(map[uint64]string),
 		},
-		Files:     old.Files,
-		Type:      old.Type,
-		ClusterId: old.ClusterId,
-		Imported:  true,
+		Files:    old.Files,
+		Type:     old.Type,
+		ShardID:  old.ShardID,
+		Imported: true,
 	}
 	for nid := range old.Membership.Addresses {
 		_, ok := members[nid]

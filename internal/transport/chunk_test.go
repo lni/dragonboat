@@ -35,8 +35,8 @@ func getTestChunk() []pb.Chunk {
 		c := pb.Chunk{
 			DeploymentId:   settings.UnmanagedDeploymentID,
 			BinVer:         raftio.TransportBinVersion,
-			ClusterId:      100,
-			NodeId:         2,
+			ShardID:        100,
+			ReplicaID:      2,
 			From:           12,
 			FileChunkId:    chunkID,
 			FileChunkCount: 10,
@@ -101,7 +101,7 @@ func runChunkTest(t *testing.T,
 	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunk()
-	snapDir := chunks.dir(ts[0].ClusterId, ts[0].NodeId)
+	snapDir := chunks.dir(ts[0].ShardID, ts[0].ReplicaID)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -121,8 +121,8 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 		c := inputs[0]
 		for i := uint64(0); i < maxConcurrentSlot; i++ {
 			v++
-			c.ClusterId = v
-			snapDir := chunks.dir(v, c.NodeId)
+			c.ShardID = v
+			snapDir := chunks.dir(v, c.ReplicaID)
 			if err := chunks.fs.MkdirAll(snapDir, 0755); err != nil {
 				t.Fatalf("%v", err)
 			}
@@ -133,7 +133,7 @@ func TestMaxSlotIsEnforced(t *testing.T) {
 		count := len(chunks.tracked)
 		for i := uint64(0); i < maxConcurrentSlot; i++ {
 			v++
-			c.ClusterId = v
+			c.ShardID = v
 			if chunks.addLocked(c) {
 				t.Errorf("not rejected")
 			}
@@ -502,11 +502,11 @@ func testSnapshotWithExternalFilesAreHandledByChunk(t *testing.T,
 			Files:    []*pb.SnapshotFile{sf1, sf2},
 		}
 		msg := pb.Message{
-			Type:      pb.InstallSnapshot,
-			To:        2,
-			From:      1,
-			ClusterId: 100,
-			Snapshot:  ss,
+			Type:     pb.InstallSnapshot,
+			To:       2,
+			From:     1,
+			ShardID:  100,
+			Snapshot: ss,
 		}
 		inputs, err := splitSnapshotMessage(msg, chunks.fs)
 		if err != nil {
@@ -555,11 +555,11 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 			Witness:  true,
 		}
 		msg := pb.Message{
-			Type:      pb.InstallSnapshot,
-			To:        2,
-			From:      1,
-			ClusterId: 100,
-			Snapshot:  ss,
+			Type:     pb.InstallSnapshot,
+			To:       2,
+			From:     1,
+			ShardID:  100,
+			Snapshot: ss,
 		}
 		inputs, err := splitSnapshotMessage(msg, chunks.fs)
 		if err != nil {
@@ -570,7 +570,7 @@ func TestWitnessSnapshotCanBeHandled(t *testing.T) {
 		}
 		chunk := inputs[0]
 		if chunk.BinVer != raftio.TransportBinVersion || !chunk.Witness ||
-			chunk.ClusterId != 100 || chunk.From != 1 || chunk.NodeId != 2 {
+			chunk.ShardID != 100 || chunk.From != 1 || chunk.ReplicaID != 2 {
 			t.Errorf("unexpected chunk %+v", chunk)
 		}
 		for _, c := range inputs {
@@ -600,11 +600,11 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 		Term:     200,
 	}
 	msg := pb.Message{
-		Type:      pb.InstallSnapshot,
-		To:        2,
-		From:      1,
-		ClusterId: 100,
-		Snapshot:  ss,
+		Type:     pb.InstallSnapshot,
+		To:       2,
+		From:     1,
+		ShardID:  100,
+		Snapshot: ss,
 	}
 	chunks, err := splitSnapshotMessage(msg, fs)
 	if err != nil {
@@ -617,10 +617,10 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 		if c.BinVer != raftio.TransportBinVersion {
 			t.Errorf("bin ver not set")
 		}
-		if c.ClusterId != msg.ClusterId {
+		if c.ShardID != msg.ShardID {
 			t.Errorf("unexpected cluster id")
 		}
-		if c.NodeId != msg.To {
+		if c.ReplicaID != msg.To {
 			t.Errorf("unexpected node id")
 		}
 		if c.From != msg.From {
@@ -685,11 +685,11 @@ func TestSnapshotRecordWithTwoExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 		Files:    []*pb.SnapshotFile{sf1, sf2},
 	}
 	msg := pb.Message{
-		Type:      pb.InstallSnapshot,
-		To:        2,
-		From:      1,
-		ClusterId: 100,
-		Snapshot:  ss,
+		Type:     pb.InstallSnapshot,
+		To:       2,
+		From:     1,
+		ShardID:  100,
+		Snapshot: ss,
 	}
 	chunks, err := splitSnapshotMessage(msg, fs)
 	if err != nil {
@@ -754,8 +754,8 @@ func TestGetMessageFromChunk(t *testing.T) {
 		}
 		files := []*pb.SnapshotFile{sf1, sf2}
 		chunk := pb.Chunk{
-			ClusterId:    123,
-			NodeId:       3,
+			ShardID:      123,
+			ReplicaID:    3,
 			From:         2,
 			ChunkId:      0,
 			Index:        200,
@@ -778,7 +778,7 @@ func TestGetMessageFromChunk(t *testing.T) {
 		if req.Type != pb.InstallSnapshot {
 			t.Errorf("not a snapshot message")
 		}
-		if req.From != chunk.From || req.To != chunk.NodeId || req.ClusterId != chunk.ClusterId {
+		if req.From != chunk.From || req.To != chunk.ReplicaID || req.ShardID != chunk.ShardID {
 			t.Errorf("invalid req fields")
 		}
 		ss := req.Snapshot

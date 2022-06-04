@@ -325,17 +325,17 @@ func TestEntryBatchSizeUpperLimit(t *testing.T) {
 func getMaxSizedMsg() Message {
 	max64 := uint64(math.MaxUint64)
 	msg := Message{
-		Type:      NoOP,
-		To:        max64,
-		From:      max64,
-		ClusterId: max64,
-		Term:      max64,
-		LogTerm:   max64,
-		LogIndex:  max64,
-		Commit:    max64,
-		Reject:    true,
-		Hint:      max64,
-		HintHigh:  max64,
+		Type:     NoOP,
+		To:       max64,
+		From:     max64,
+		ShardID:  max64,
+		Term:     max64,
+		LogTerm:  max64,
+		LogIndex: max64,
+		Commit:   max64,
+		Reject:   true,
+		Hint:     max64,
+		HintHigh: max64,
 	}
 	e1 := Entry{
 		Term:        max64,

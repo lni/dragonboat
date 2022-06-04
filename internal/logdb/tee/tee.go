@@ -304,7 +304,7 @@ func (t *LogDB) ImportSnapshot(ss pb.Snapshot, replicaID uint64) error {
 	defer t.mu.Unlock()
 	oe := t.odb.ImportSnapshot(ss, replicaID)
 	ne := t.ndb.ImportSnapshot(ss, replicaID)
-	assertSameError(ss.ClusterId, replicaID, oe, ne)
+	assertSameError(ss.ShardID, replicaID, oe, ne)
 	return oe
 }
 

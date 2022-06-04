@@ -444,14 +444,14 @@ func (l *LogDB) ImportSnapshot(snapshot pb.Snapshot, replicaID uint64) error {
 		Type: snapshot.Type,
 	}
 	if err := saveBootstrap(l.fs,
-		l.bsDirname, l.bsDir, snapshot.ClusterId, replicaID, bs); err != nil {
+		l.bsDirname, l.bsDir, snapshot.ShardID, replicaID, bs); err != nil {
 		return err
 	}
-	db, err := l.getDB(snapshot.ClusterId, replicaID)
+	db, err := l.getDB(snapshot.ShardID, replicaID)
 	if err != nil {
 		return err
 	}
-	if err := db.importSnapshot(snapshot.ClusterId, replicaID, snapshot); err != nil {
+	if err := db.importSnapshot(snapshot.ShardID, replicaID, snapshot); err != nil {
 		return err
 	}
 	return db.sync()

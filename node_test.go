@@ -120,7 +120,7 @@ func (r *testRouter) shouldDrop(msg pb.Message) bool {
 }
 
 func (r *testRouter) send(msg pb.Message) {
-	if msg.ClusterId != r.shardID {
+	if msg.ShardID != r.shardID {
 		panic("cluster id does not match")
 	}
 	if r.shouldDrop(msg) {
@@ -359,7 +359,7 @@ func singleStepNodes(nodes []*node, smList []*rsm.StateMachine,
 	for _, node := range nodes {
 		tick := node.pendingReadIndexes.getTick() + 1
 		tickMsg := pb.Message{Type: pb.LocalTick, To: node.replicaID, Hint: tick}
-		tickMsg.ClusterId = testShardID
+		tickMsg.ShardID = testShardID
 		r.send(tickMsg)
 	}
 	step(nodes)
@@ -372,10 +372,10 @@ func stepNodes(nodes []*node, smList []*rsm.StateMachine,
 		for _, node := range nodes {
 			tick := node.pendingReadIndexes.getTick() + 1
 			tickMsg := pb.Message{
-				Type:      pb.LocalTick,
-				To:        node.replicaID,
-				ClusterId: testShardID,
-				Hint:      tick,
+				Type:    pb.LocalTick,
+				To:      node.replicaID,
+				ShardID: testShardID,
+				Hint:    tick,
 			}
 			r.send(tickMsg)
 		}

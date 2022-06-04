@@ -198,7 +198,7 @@ func (h *testMessageHandler) HandleMessageBatch(reqs raftpb.MessageBatch) (uint6
 	ss := uint64(0)
 	msg := uint64(0)
 	for _, req := range reqs.Requests {
-		epk := raftio.GetNodeInfo(req.ClusterId, req.To)
+		epk := raftio.GetNodeInfo(req.ShardID, req.To)
 		v, ok := h.requestCount[epk]
 		if ok {
 			h.requestCount[epk] = v + 1
@@ -385,9 +385,9 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	nodes.Add(100, 2, serverAddress)
 	for i := 0; i < 20; i++ {
 		msg := raftpb.Message{
-			Type:      raftpb.Heartbeat,
-			To:        2,
-			ClusterId: 100,
+			Type:    raftpb.Heartbeat,
+			To:      2,
+			ShardID: 100,
 		}
 		done := trans.Send(msg)
 		if !done {
@@ -413,9 +413,9 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	plog.Infof("sending a test msg with payload sz %d", sz)
 	payload := make([]byte, sz)
 	m := raftpb.Message{
-		Type:      raftpb.Replicate,
-		To:        2,
-		ClusterId: 100,
+		Type:    raftpb.Replicate,
+		To:      2,
+		ShardID: 100,
 		Entries: []raftpb.Entry{
 			{
 				Cmd: payload,
@@ -484,10 +484,10 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 	nodes.Add(100, 2, serverAddress)
 	for i := 0; i < 128; i++ {
 		msg := raftpb.Message{
-			Type:      raftpb.Replicate,
-			To:        2,
-			ClusterId: 100,
-			Entries:   []raftpb.Entry{{Cmd: make([]byte, 1024)}},
+			Type:    raftpb.Replicate,
+			To:      2,
+			ShardID: 100,
+			Entries: []raftpb.Entry{{Cmd: make([]byte, 1024)}},
 		}
 		done := trans.Send(msg)
 		if !done {
@@ -534,9 +534,9 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	trans.SetPreSendBatchHook(f)
 	for i := 0; i < 100; i++ {
 		msg := raftpb.Message{
-			Type:      raftpb.Heartbeat,
-			To:        2,
-			ClusterId: 100,
+			Type:    raftpb.Heartbeat,
+			To:      2,
+			ShardID: 100,
 		}
 		// silently drop
 		done := trans.Send(msg)
@@ -605,10 +605,10 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	defer stopper.Stop()
 	nodes.Add(100, 2, "nosuchhost:39001")
 	msg := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        2,
-		From:      1,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      2,
+		From:    1,
+		ShardID: 100,
 	}
 	done := trans.Send(msg)
 	if !done {
@@ -633,10 +633,10 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 
 func getTestSnapshotMessage(to uint64) raftpb.Message {
 	m := raftpb.Message{
-		Type:      raftpb.InstallSnapshot,
-		From:      12,
-		To:        to,
-		ClusterId: 100,
+		Type:    raftpb.InstallSnapshot,
+		From:    12,
+		To:      to,
+		ShardID: 100,
 		Snapshot: raftpb.Snapshot{
 			Membership: raftpb.Membership{
 				ConfigChangeId: 178,
@@ -1046,7 +1046,7 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunk()
-	snapDir := chunks.dir(ts[0].ClusterId, ts[0].NodeId)
+	snapDir := chunks.dir(ts[0].ShardID, ts[0].ReplicaID)
 	if err := fs.MkdirAll(snapDir, 0755); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -1137,9 +1137,9 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        2,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      2,
+		ShardID: 100,
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
@@ -1175,9 +1175,9 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        2,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      2,
+		ShardID: 100,
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
@@ -1214,9 +1214,9 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        2,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      2,
+		ShardID: 100,
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
@@ -1265,14 +1265,14 @@ func TestCircuitBreakerForResolveNotShared(t *testing.T) {
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        2,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      2,
+		ShardID: 100,
 	}
 	msgUnknownNode := raftpb.Message{
-		Type:      raftpb.Heartbeat,
-		To:        3,
-		ClusterId: 100,
+		Type:    raftpb.Heartbeat,
+		To:      3,
+		ShardID: 100,
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
@@ -1403,10 +1403,10 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	nodes.Add(100, 2, serverAddress)
 	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
 	msg := raftpb.Message{
-		ClusterId: 100,
-		To:        2,
-		Type:      raftpb.Replicate,
-		Entries:   []raftpb.Entry{e},
+		ShardID: 100,
+		To:      2,
+		Type:    raftpb.Replicate,
+		Entries: []raftpb.Entry{e},
 	}
 	req.SetBlocked(true)
 	for i := 0; i < 1000; i++ {
@@ -1435,10 +1435,10 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 	nodes.Add(100, 2, serverAddress)
 	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
 	msg := raftpb.Message{
-		ClusterId: 100,
-		To:        2,
-		Type:      raftpb.Replicate,
-		Entries:   []raftpb.Entry{e},
+		ShardID: 100,
+		To:      2,
+		Type:    raftpb.Replicate,
+		Entries: []raftpb.Entry{e},
 	}
 	_, key, err := nodes.Resolve(100, 2)
 	if err != nil {
