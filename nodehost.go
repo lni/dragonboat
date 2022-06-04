@@ -105,8 +105,8 @@ var (
 var (
 	// ErrClosed is returned when a request is made on closed NodeHost instance.
 	ErrClosed = errors.New("dragonboat: closed")
-	// ErrNodeRemoved indictes that the requested node has been removed.
-	ErrNodeRemoved = errors.New("node removed")
+	// ErrReplicaRemoved indictes that the requested node has been removed.
+	ErrReplicaRemoved = errors.New("node removed")
 	// ErrShardNotFound indicates that the specified cluster is not found.
 	ErrShardNotFound = errors.New("cluster not found")
 	// ErrShardAlreadyExist indicates that the specified cluster already exist.
@@ -450,7 +450,7 @@ func (nh *NodeHost) RaftAddress() string {
 // ID is assigned to each NodeHost on its initial creation and it can be used
 // to uniquely identify the NodeHost instance for its entire life cycle. When
 // the system is running in the AddressByNodeHost mode, it is used as the target
-// value when calling the StartShard, RequestAddNode, RequestAddNonVoting,
+// value when calling the StartReplica, RequestAddReplica, RequestAddNonVoting,
 // RequestAddWitness methods.
 func (nh *NodeHost) ID() string {
 	return nh.id.String()
@@ -462,7 +462,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 	return nh.registry, nh.nhConfig.AddressByNodeHostID
 }
 
-// StartShard adds the specified Raft cluster node to the NodeHost and starts
+// StartReplica adds the specified Raft replica node to the NodeHost and starts
 // the node to make it ready for accepting incoming requests. The node to be
 // started is backed by a regular state machine that implements the
 // sm.IStateMachine interface.
@@ -495,7 +495,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 //  - restarting an crashed or stopped node, set join to false and leave the
 //    initialMembers map to be empty. This applies to both initial member nodes
 //    and those joined later.
-func (nh *NodeHost) StartShard(initialMembers map[uint64]Target,
+func (nh *NodeHost) StartReplica(initialMembers map[uint64]Target,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
 	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -505,9 +505,9 @@ func (nh *NodeHost) StartShard(initialMembers map[uint64]Target,
 	return nh.startShard(initialMembers, join, cf, cfg, pb.RegularStateMachine)
 }
 
-// StartConcurrentShard is similar to the StartShard method but it is used
+// StartConcurrentReplica is similar to the StartReplica method but it is used
 // to start a Raft node backed by a concurrent state machine.
-func (nh *NodeHost) StartConcurrentShard(initialMembers map[uint64]Target,
+func (nh *NodeHost) StartConcurrentReplica(initialMembers map[uint64]Target,
 	join bool, create sm.CreateConcurrentStateMachineFunc, cfg config.Config) error {
 	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -518,9 +518,9 @@ func (nh *NodeHost) StartConcurrentShard(initialMembers map[uint64]Target,
 		join, cf, cfg, pb.ConcurrentStateMachine)
 }
 
-// StartOnDiskShard is similar to the StartShard method but it is used to
+// StartOnDiskReplica is similar to the StartReplica method but it is used to
 // start a Raft node backed by an IOnDiskStateMachine.
-func (nh *NodeHost) StartOnDiskShard(initialMembers map[uint64]Target,
+func (nh *NodeHost) StartOnDiskReplica(initialMembers map[uint64]Target,
 	join bool, create sm.CreateOnDiskStateMachineFunc, cfg config.Config) error {
 	cf := func(shardID uint64, replicaID uint64,
 		done <-chan struct{}) rsm.IManagedStateMachine {
@@ -531,7 +531,8 @@ func (nh *NodeHost) StartOnDiskShard(initialMembers map[uint64]Target,
 		join, cf, cfg, pb.OnDiskStateMachine)
 }
 
-// StopShard stops the Raft node associated with the specified Raft cluster.
+// StopShard stops the local Raft replica associated with the specified Raft
+// shard.
 //
 // Note that this is not the membership change operation required to remove the
 // node from the Raft cluster.
@@ -542,11 +543,11 @@ func (nh *NodeHost) StopShard(shardID uint64) error {
 	return nh.stopNode(shardID, 0, false)
 }
 
-// StopNode stops the specified Raft node.
+// StopReplica stops the specified Raft replica.
 //
 // Note that this is not the membership change operation required to remove the
 // node from the Raft cluster.
-func (nh *NodeHost) StopNode(shardID uint64, replicaID uint64) error {
+func (nh *NodeHost) StopReplica(shardID uint64, replicaID uint64) error {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return ErrClosed
 	}
@@ -1008,17 +1009,17 @@ func (nh *NodeHost) RequestCompaction(shardID uint64,
 	return n.requestCompaction()
 }
 
-// SyncRequestDeleteNode is the synchronous variant of the RequestDeleteNode
-// method. See RequestDeleteNode for more details.
+// SyncRequestDeleteReplica is the synchronous variant of the RequestDeleteReplica
+// method. See RequestDeleteReplica for more details.
 //
 // The input context object must have its deadline set.
-func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
+func (nh *NodeHost) SyncRequestDeleteReplica(ctx context.Context,
 	shardID uint64, replicaID uint64, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestDeleteNode(shardID, replicaID, configChangeIndex, timeout)
+	rs, err := nh.RequestDeleteReplica(shardID, replicaID, configChangeIndex, timeout)
 	if err != nil {
 		return err
 	}
@@ -1026,18 +1027,18 @@ func (nh *NodeHost) SyncRequestDeleteNode(ctx context.Context,
 	return err
 }
 
-// SyncRequestAddNode is the synchronous variant of the RequestAddNode method.
-// See RequestAddNode for more details.
+// SyncRequestAddReplica is the synchronous variant of the RequestAddReplica method.
+// See RequestAddReplica for more details.
 //
 // The input context object must have its deadline set.
-func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
+func (nh *NodeHost) SyncRequestAddReplica(ctx context.Context,
 	shardID uint64, replicaID uint64,
 	target string, configChangeIndex uint64) error {
 	timeout, err := getTimeoutFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	rs, err := nh.RequestAddNode(shardID,
+	rs, err := nh.RequestAddReplica(shardID,
 		replicaID, target, configChangeIndex, timeout)
 	if err != nil {
 		return err
@@ -1086,7 +1087,7 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 	return err
 }
 
-// RequestDeleteNode is a Raft cluster membership change method for requesting
+// RequestDeleteReplica is a Raft cluster membership change method for requesting
 // the specified node to be removed from the specified Raft cluster. It starts
 // an asynchronous request to remove the node from the Raft cluster membership
 // list. Application can wait on the ResultC() channel of the returned
@@ -1106,7 +1107,7 @@ func (nh *NodeHost) SyncRequestAddWitness(ctx context.Context,
 // SyncGetShardMembership method. The requested delete node operation will be
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetShardMembership method.
-func (nh *NodeHost) RequestDeleteNode(shardID uint64,
+func (nh *NodeHost) RequestDeleteReplica(shardID uint64,
 	replicaID uint64,
 	configChangeIndex uint64, timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -1121,7 +1122,7 @@ func (nh *NodeHost) RequestDeleteNode(shardID uint64,
 	return n.requestDeleteNodeWithOrderID(replicaID, configChangeIndex, tt)
 }
 
-// RequestAddNode is a Raft cluster membership change method for requesting the
+// RequestAddReplica is a Raft cluster membership change method for requesting the
 // specified node to be added to the specified Raft cluster. It starts an
 // asynchronous request to add the node to the Raft cluster membership list.
 // Application can wait on the ResultC() channel of the returned RequestState
@@ -1129,7 +1130,7 @@ func (nh *NodeHost) RequestDeleteNode(shardID uint64,
 //
 // If there is already an nonVoting with the same replicaID in the cluster, it will
 // be promoted to a regular node with voting power. The target parameter of the
-// RequestAddNode call is ignored when promoting an nonVoting to a regular node.
+// RequestAddReplica call is ignored when promoting an nonVoting to a regular node.
 //
 // After the node is successfully added to the Raft cluster, it is application's
 // responsibility to call StartShard on the target NodeHost instance to
@@ -1149,7 +1150,7 @@ func (nh *NodeHost) RequestDeleteNode(shardID uint64,
 // SyncGetShardMembership method. The requested add node operation will be
 // rejected if other membership change has been applied since that earlier call
 // to the SyncGetShardMembership method.
-func (nh *NodeHost) RequestAddNode(shardID uint64,
+func (nh *NodeHost) RequestAddReplica(shardID uint64,
 	replicaID uint64, target Target, configChangeIndex uint64,
 	timeout time.Duration) (*RequestState, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
@@ -1172,14 +1173,14 @@ func (nh *NodeHost) RequestAddNode(shardID uint64,
 // Such nonVoting is able to receive replicated states from the leader node, but
 // it is neither allowed to vote for leader, nor considered as a part of the
 // quorum when replicating state. An nonVoting can be promoted to a regular node
-// with voting power by making a RequestAddNode call using its shardID and
+// with voting power by making a RequestAddReplica call using its shardID and
 // replicaID values. An nonVoting can be removed from the cluster by calling
-// RequestDeleteNode with its shardID and replicaID values.
+// RequestDeleteReplica with its shardID and replicaID values.
 //
 // Application should later call StartShard with config.Config.IsNonVoting
 // set to true on the right NodeHost to actually start the nonVoting instance.
 //
-// See the godoc of the RequestAddNode method for the details of the target and
+// See the godoc of the RequestAddReplica method for the details of the target and
 // configChangeIndex parameters.
 func (nh *NodeHost) RequestAddNonVoting(shardID uint64,
 	replicaID uint64, target Target, configChangeIndex uint64,
@@ -1209,7 +1210,7 @@ func (nh *NodeHost) RequestAddNonVoting(shardID uint64,
 // Application should later call StartShard with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
-// See the godoc of the RequestAddNode method for the details of the target and
+// See the godoc of the RequestAddReplica method for the details of the target and
 // configChangeIndex parameters.
 func (nh *NodeHost) RequestAddWitness(shardID uint64,
 	replicaID uint64, target Target, configChangeIndex uint64,
@@ -1556,7 +1557,7 @@ func (nh *NodeHost) startShard(initialMembers map[uint64]Target,
 	did := nh.nhConfig.GetDeploymentID()
 	if err := nh.env.CreateSnapshotDir(did, shardID, replicaID); err != nil {
 		if errors.Is(err, server.ErrDirMarkedAsDeleted) {
-			return ErrNodeRemoved
+			return ErrReplicaRemoved
 		}
 		panicNow(err)
 	}

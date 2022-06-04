@@ -509,16 +509,16 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 		}
 	}
 	if to.createSM != nil {
-		if err := nh.StartShard(peers, to.join, to.createSM, *cfg); err != nil {
+		if err := nh.StartReplica(peers, to.join, to.createSM, *cfg); err != nil {
 			t.Fatalf("start cluster failed: %v", err)
 		}
 	} else if to.createConcurrentSM != nil {
-		if err := nh.StartConcurrentShard(peers,
+		if err := nh.StartConcurrentReplica(peers,
 			to.join, to.createConcurrentSM, *cfg); err != nil {
 			t.Fatalf("start concurrent cluster failed: %v", err)
 		}
 	} else if to.createOnDiskSM != nil {
-		if err := nh.StartOnDiskShard(peers,
+		if err := nh.StartOnDiskReplica(peers,
 			to.join, to.createOnDiskSM, *cfg); err != nil {
 			t.Fatalf("start on disk cluster fail: %v", err)
 		}
@@ -767,13 +767,13 @@ func TestAddressValidatorCanBeSet(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			pto := lpto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
-			err := nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12345", 0)
+			err := nh.SyncRequestAddReplica(ctx, 1, 100, "localhost:12345", 0)
 			cancel()
 			if err != ErrInvalidAddress {
 				t.Fatalf("failed to return ErrInvalidAddress, %v", err)
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), pto)
-			err = nh.SyncRequestAddNode(ctx, 1, 100, "localhost:12346", 0)
+			err = nh.SyncRequestAddReplica(ctx, 1, 100, "localhost:12346", 0)
 			cancel()
 			if err != nil {
 				t.Fatalf("failed to add node, %v", err)
@@ -892,11 +892,11 @@ func testAddressByNodeHostID(t *testing.T,
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
 	}
-	if err := nh1.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh1.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	rc.ReplicaID = 2
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	waitForLeaderToBeElected(t, nh1, 1)
@@ -987,16 +987,16 @@ func TestNodeHostRegistry(t *testing.T) {
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
 	}
-	if err := nh1.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh1.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	rc.ShardID = 2
 	peers[1] = testNodeHostID2
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	rc.ShardID = 3
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	waitForLeaderToBeElected(t, nh1, 1)
@@ -1019,7 +1019,7 @@ func TestNodeHostRegistry(t *testing.T) {
 		t.Fatalf("registry failed to report the expected num of clusters")
 	}
 	rc.ShardID = 100
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	waitForLeaderToBeElected(t, nh2, 100)
@@ -1114,11 +1114,11 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		HeartbeatRTT:    1,
 		SnapshotEntries: 0,
 	}
-	if err := nh1.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh1.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	rc.ReplicaID = 2
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	waitForLeaderToBeElected(t, nh1, 1)
@@ -1153,7 +1153,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	if nh2.ID() != nh2NodeHostID {
 		t.Fatalf("NodeHostID changed, got %s, want %s", nh2.ID(), nh2NodeHostID)
 	}
-	if err := nh2.StartShard(peers, false, createSM, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
 		t.Fatalf("failed to start node %v", err)
 	}
 	waitForLeaderToBeElected(t, nh2, 1)
@@ -1320,11 +1320,11 @@ func createConcurrentTestNodeHost(addr string,
 		}
 	}
 	rc.ShardID = 1 + nhc.Expert.Engine.ApplyShards
-	if err := nh.StartConcurrentShard(peers, false, newConcurrentSM, rc); err != nil {
+	if err := nh.StartConcurrentReplica(peers, false, newConcurrentSM, rc); err != nil {
 		return nil, err
 	}
 	rc.ShardID = 1
-	if err := nh.StartShard(peers, false, newSM, rc); err != nil {
+	if err := nh.StartReplica(peers, false, newSM, rc); err != nil {
 		return nil, err
 	}
 	return nh, nil
@@ -1462,11 +1462,11 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 		return sm2
 	}
 	rc.ReplicaID = 1
-	if err := nh1.StartShard(peers, false, newRSM1, rc); err != nil {
+	if err := nh1.StartReplica(peers, false, newRSM1, rc); err != nil {
 		return nil, nil, nil, nil, err
 	}
 	rc.ReplicaID = 2
-	if err := nh2.StartShard(peers, false, newRSM2, rc); err != nil {
+	if err := nh2.StartReplica(peers, false, newRSM2, rc); err != nil {
 		return nil, nil, nil, nil, err
 	}
 	var leaderNh *NodeHost
@@ -1544,7 +1544,7 @@ func TestJoinedShardCanBeRestartedOrJoinedAgain(t *testing.T) {
 				t.Fatalf("failed to stop the cluster: %v", err)
 			}
 			for i := 0; i < 1000; i++ {
-				err := nh.StartShard(peers, true, newPST, *cfg)
+				err := nh.StartReplica(peers, true, newPST, *cfg)
 				if err == nil {
 					return
 				}
@@ -1729,7 +1729,7 @@ func TestInvalidAddressIsRejected(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			err := nh.SyncRequestAddNode(ctx, 1, 100, "a1", 0)
+			err := nh.SyncRequestAddReplica(ctx, 1, 100, "a1", 0)
 			if err != ErrInvalidAddress {
 				t.Errorf("failed to return ErrInvalidAddress, %v", err)
 			}
@@ -1774,11 +1774,11 @@ func TestInvalidContextDeadlineIsReported(t *testing.T) {
 			if err != ErrTimeoutTooSmall {
 				t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 			}
-			err = nh.SyncRequestDeleteNode(ctx, 1, 1, 0)
+			err = nh.SyncRequestDeleteReplica(ctx, 1, 1, 0)
 			if err != ErrTimeoutTooSmall {
 				t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 			}
-			err = nh.SyncRequestAddNode(ctx, 1, 100, "a1.com:12345", 0)
+			err = nh.SyncRequestAddReplica(ctx, 1, 100, "a1.com:12345", 0)
 			if err != ErrTimeoutTooSmall {
 				t.Errorf("failed to return ErrTimeoutTooSmall, %v", err)
 			}
@@ -1809,11 +1809,11 @@ func TestErrShardNotFoundCanBeReturned(t *testing.T) {
 			if err != ErrShardNotFound {
 				t.Errorf("failed to return ErrShardNotFound, %v", err)
 			}
-			_, err = nh.RequestDeleteNode(1234, 10, 0, pto)
+			_, err = nh.RequestDeleteReplica(1234, 10, 0, pto)
 			if err != ErrShardNotFound {
 				t.Errorf("failed to return ErrShardNotFound, %v", err)
 			}
-			_, err = nh.RequestAddNode(1234, 10, "a1", 0, pto)
+			_, err = nh.RequestAddReplica(1234, 10, "a1", 0, pto)
 			if err != ErrShardNotFound {
 				t.Errorf("failed to return ErrShardNotFound, %v", err)
 			}
@@ -1855,7 +1855,7 @@ func TestGetShardMembership(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			_, err := nh.GetShardMembership(ctx, 1)
+			_, err := nh.SyncGetShardMembership(ctx, 1)
 			if err != nil {
 				t.Fatalf("failed to get cluster membership")
 			}
@@ -2150,7 +2150,7 @@ func TestOrderedMembershipChange(t *testing.T) {
 				if err != nil {
 					t.Fatalf("get membership failed, %v", err)
 				}
-				if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID+1); err == nil {
+				if err := nh.SyncRequestAddReplica(ctx, 1, 2, "localhost:25000", m.ConfigChangeID+1); err == nil {
 					t.Fatalf("unexpectedly completed")
 				}
 			}
@@ -2161,7 +2161,7 @@ func TestOrderedMembershipChange(t *testing.T) {
 				if err != nil {
 					t.Fatalf("get membership failed, %v", err)
 				}
-				if err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", m.ConfigChangeID); err != nil {
+				if err := nh.SyncRequestAddReplica(ctx, 1, 2, "localhost:25000", m.ConfigChangeID); err != nil {
 					t.Fatalf("failed to add node %v", err)
 				}
 			}
@@ -2170,7 +2170,7 @@ func TestOrderedMembershipChange(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestSyncRequestDeleteNode(t *testing.T) {
+func TestSyncRequestDeleteReplica(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
@@ -2178,7 +2178,7 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 			pto := lpto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			err := nh.SyncRequestDeleteNode(ctx, 1, 2, 0)
+			err := nh.SyncRequestDeleteReplica(ctx, 1, 2, 0)
 			if err != nil {
 				t.Errorf("failed to delete node %v", err)
 			}
@@ -2196,7 +2196,7 @@ func TestSyncRequestDeleteNode(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestSyncRequestAddNode(t *testing.T) {
+func TestSyncRequestAddReplica(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
@@ -2204,7 +2204,7 @@ func TestSyncRequestAddNode(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			err := nh.SyncRequestAddNode(ctx, 1, 2, "localhost:25000", 0)
+			err := nh.SyncRequestAddReplica(ctx, 1, 2, "localhost:25000", 0)
 			if err != nil {
 				t.Errorf("failed to add node %v", err)
 			}
@@ -2230,13 +2230,13 @@ func TestSyncRequestAddNonVoting(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestNodeHostAddNode(t *testing.T) {
+func TestNodeHostAddReplica(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			pto := pto(nh)
-			rs, err := nh.RequestAddNode(1, 2, "localhost:25000", 0, pto)
+			rs, err := nh.RequestAddReplica(1, 2, "localhost:25000", 0, pto)
 			if err != nil {
 				t.Errorf("failed to add node %v", err)
 			}
@@ -2351,7 +2351,7 @@ func TestNodeHostAddNonVotingRemoveNode(t *testing.T) {
 				t.Errorf("node 2 not added")
 			}
 			// remove it
-			rs, err = nh.RequestDeleteNode(1, 2, 0, pto)
+			rs, err = nh.RequestDeleteReplica(1, 2, 0, pto)
 			if err != nil {
 				t.Errorf("failed to remove node %v", err)
 			}
@@ -2577,7 +2577,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return sm1
 		}
-		if err := nh1.StartOnDiskShard(peers, false, newSM, rc); err != nil {
+		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
@@ -2609,7 +2609,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			t.Fatalf("failed to take 3 snapshots")
 		}
 		pto := pto(nh1)
-		rs, err := nh1.RequestAddNode(1, 2, nodeHostTestAddr2, 0, pto)
+		rs, err := nh1.RequestAddReplica(1, 2, nodeHostTestAddr2, 0, pto)
 		if err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
@@ -2632,7 +2632,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			return sm2
 		}
 		sm1.ClearAborted()
-		if err := nh2.StartOnDiskShard(nil, true, newSM2, rc); err != nil {
+		if err := nh2.StartOnDiskReplica(nil, true, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		ssIndex := uint64(0)
@@ -3232,7 +3232,7 @@ func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 		}
 		peers := make(map[uint64]string)
 		peers[1] = nodeHostTestAddr1
-		if err := nh1.StartOnDiskShard(peers, false, newSM, rc); err != nil {
+		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
 			t.Errorf("failed to start nonVoting %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
@@ -3255,7 +3255,7 @@ func TestIsNonVotingIsReturnedWhenNodeIsNonVoting(t *testing.T) {
 			t.Fatalf("failed to add nonVoting %v", err)
 		}
 		<-rs.ResultC()
-		if err := nh2.StartOnDiskShard(nil, true, newSM2, rc); err != nil {
+		if err := nh2.StartOnDiskReplica(nil, true, newSM2, rc); err != nil {
 			t.Errorf("failed to start nonVoting %v", err)
 		}
 		for i := 0; i < 10000; i++ {
@@ -3516,7 +3516,7 @@ func TestClientCanBeNotifiedOnCommittedConfigChange(t *testing.T) {
 		},
 		tf: func(nh *NodeHost) {
 			pto := pto(nh)
-			rs, err := nh.RequestAddNode(1, 2, "localhost:3456", 0, pto)
+			rs, err := nh.RequestAddReplica(1, 2, "localhost:3456", 0, pto)
 			if err != nil {
 				t.Fatalf("failed to request add node")
 			}
@@ -3656,7 +3656,7 @@ func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
 			newPST := func(shardID uint64, replicaID uint64) sm.IStateMachine {
 				return &PST{}
 			}
-			if err := nh.StartShard(peers, false, newPST, *rc); err != ErrNodeRemoved {
+			if err := nh.StartReplica(peers, false, newPST, *rc); err != ErrReplicaRemoved {
 				t.Errorf("start cluster failed %v", err)
 			}
 		},
@@ -4058,7 +4058,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewSimDiskSM(0)
 		}
-		if err := nh.StartOnDiskShard(peers, false, newSM, rc); err != nil {
+		if err := nh.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh, 1)
@@ -4121,7 +4121,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			t.Fatalf("invalid applied value %d", applied)
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), pto)
-		if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
+		if err := nh.SyncRequestAddReplica(ctx, 1, 2, "noidea:8080", 0); err != nil {
 			t.Fatalf("failed to add node %v", err)
 		}
 		nh.Close()
@@ -4151,7 +4151,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			rnewSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 				return tests.NewSimDiskSM(applied)
 			}
-			if err := rnh.StartOnDiskShard(nil, false, rnewSM, rc); err != nil {
+			if err := rnh.StartOnDiskReplica(nil, false, rnewSM, rc); err != nil {
 				t.Fatalf("failed to start cluster %v", err)
 			}
 			waitForLeaderToBeElected(t, rnh, 1)
@@ -4235,7 +4235,7 @@ func TestShardWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewFakeDiskSM(0)
 		}
-		if err := nh1.StartOnDiskShard(peers, false, newSM, rc); err != nil {
+		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
@@ -4322,11 +4322,11 @@ func TestShardWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			rnh1.Close()
 			rnh2.Close()
 		}()
-		if err := rnh1.StartOnDiskShard(nil, false, newSM, rc); err != nil {
+		if err := rnh1.StartOnDiskReplica(nil, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		rc.ReplicaID = 10
-		if err := rnh2.StartOnDiskShard(nil, false, newSM2, rc); err != nil {
+		if err := rnh2.StartOnDiskReplica(nil, false, newSM2, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, rnh1, 1)
@@ -4819,7 +4819,7 @@ func TestLeaderInfoIsReported(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
+			if err := nh.SyncRequestAddReplica(ctx, 1, 2, "noidea:8080", 0); err != nil {
 				t.Fatalf("failed to add node %v", err)
 			}
 			for i := 0; i < 500; i++ {
@@ -4847,7 +4847,7 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 			pto := lpto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			defer cancel()
-			if err := nh.SyncRequestAddNode(ctx, 1, 2, "noidea:8080", 0); err != nil {
+			if err := nh.SyncRequestAddReplica(ctx, 1, 2, "noidea:8080", 0); err != nil {
 				t.Fatalf("failed to add node %v", err)
 			}
 			for i := 0; i < 1000; i++ {
@@ -4878,7 +4878,7 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 				nctx, ncancel := context.WithTimeout(context.Background(), unlimited)
 				defer ncancel()
 				for i := 0; i < 10; i++ {
-					if err := nh.SyncRequestAddNode(nctx, 1, 3, "noidea:8080", 0); err != ErrShardNotReady {
+					if err := nh.SyncRequestAddReplica(nctx, 1, 3, "noidea:8080", 0); err != ErrShardNotReady {
 						t.Errorf("failed to get ErrShardNotReady, got %v", err)
 					}
 				}
@@ -4929,7 +4929,7 @@ func TestRaftEventsAreReported(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
-			if err := nh.SyncRequestAddNode(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
+			if err := nh.SyncRequestAddReplica(ctx, 1, 2, "127.0.0.1:8080", 0); err != nil {
 				t.Fatalf("add node failed %v", err)
 			}
 			cancel()
@@ -5113,7 +5113,7 @@ func testWitnessIO(t *testing.T,
 		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return tests.NewSimDiskSM(0)
 		}
-		if err := nh1.StartOnDiskShard(peers, false, newSM, rc); err != nil {
+		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
@@ -5148,7 +5148,7 @@ func testWitnessIO(t *testing.T,
 		newWitness := func(uint64, uint64) sm.IOnDiskStateMachine {
 			return witness
 		}
-		if err := nh2.StartOnDiskShard(nil, true, newWitness, rc2); err != nil {
+		if err := nh2.StartOnDiskReplica(nil, true, newWitness, rc2); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		waitForLeaderToBeElected(t, nh2, 1)
@@ -5214,10 +5214,10 @@ func TestWitnessCanNotInitiateIORequest(t *testing.T) {
 		if _, err := nh2.ReadIndex(1, pto); err != ErrInvalidOperation {
 			t.Fatalf("sync read not rejected on witness")
 		}
-		if _, err := nh2.RequestAddNode(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
+		if _, err := nh2.RequestAddReplica(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("add node not rejected on witness")
 		}
-		if _, err := nh2.RequestDeleteNode(1, 3, 0, pto); err != ErrInvalidOperation {
+		if _, err := nh2.RequestDeleteReplica(1, 3, 0, pto); err != ErrInvalidOperation {
 			t.Fatalf("delete node not rejected on witness")
 		}
 		if _, err := nh2.RequestAddNonVoting(1, 3, "a3.com:12345", 0, pto); err != ErrInvalidOperation {
@@ -5400,19 +5400,19 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 		defaultTestNode: true,
 		at: func(nh *NodeHost) {
 			plog.Infof("hello")
-			if err := nh.StartShard(nil, false, nil, config.Config{}); err != ErrClosed {
+			if err := nh.StartReplica(nil, false, nil, config.Config{}); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.StartConcurrentShard(nil, false, nil, config.Config{}); err != ErrClosed {
+			if err := nh.StartConcurrentReplica(nil, false, nil, config.Config{}); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.StartOnDiskShard(nil, false, nil, config.Config{}); err != ErrClosed {
+			if err := nh.StartOnDiskReplica(nil, false, nil, config.Config{}); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if err := nh.StopShard(1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.StopNode(1, 1); err != ErrClosed {
+			if err := nh.StopReplica(1, 1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
@@ -5453,10 +5453,10 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			if _, err := nh.RequestCompaction(1, 1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.SyncRequestDeleteNode(ctx, 1, 1, 0); err != ErrClosed {
+			if err := nh.SyncRequestDeleteReplica(ctx, 1, 1, 0); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if err := nh.SyncRequestAddNode(ctx, 1, 1, "", 0); err != ErrClosed {
+			if err := nh.SyncRequestAddReplica(ctx, 1, 1, "", 0); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if err := nh.SyncRequestAddNonVoting(ctx, 1, 1, "", 0); err != ErrClosed {
@@ -5465,10 +5465,10 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			if err := nh.SyncRequestAddWitness(ctx, 1, 1, "", 0); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if _, err := nh.RequestDeleteNode(1, 1, 0, time.Second); err != ErrClosed {
+			if _, err := nh.RequestDeleteReplica(1, 1, 0, time.Second); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if _, err := nh.RequestAddNode(1, 1, "", 0, time.Second); err != ErrClosed {
+			if _, err := nh.RequestAddReplica(1, 1, "", 0, time.Second); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.RequestAddNonVoting(1, 1, "", 0, time.Second); err != ErrClosed {
@@ -5509,10 +5509,7 @@ func TestContextDeadlineIsChecked(t *testing.T) {
 			if _, err := nh.SyncGetShardMembership(ctx, 1); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
-			if _, err := nh.GetNewSession(ctx, 1); err != ErrDeadlineNotSet {
-				t.Errorf("ctx deadline not checked")
-			}
-			if err := nh.CloseSession(ctx, nil); err != ErrDeadlineNotSet {
+			if err := nh.SyncCloseSession(ctx, nil); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
 			if _, err := nh.SyncGetSession(ctx, 1); err != ErrDeadlineNotSet {
@@ -5524,10 +5521,10 @@ func TestContextDeadlineIsChecked(t *testing.T) {
 			if _, err := nh.SyncRequestSnapshot(ctx, 1, DefaultSnapshotOption); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
-			if err := nh.SyncRequestDeleteNode(ctx, 1, 1, 0); err != ErrDeadlineNotSet {
+			if err := nh.SyncRequestDeleteReplica(ctx, 1, 1, 0); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
-			if err := nh.SyncRequestAddNode(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
+			if err := nh.SyncRequestAddReplica(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
 				t.Errorf("ctx deadline not checked")
 			}
 			if err := nh.SyncRequestAddNonVoting(ctx, 1, 2, "", 0); err != ErrDeadlineNotSet {
@@ -5659,7 +5656,7 @@ func TestProposeOnClosedNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get node, %v", err)
 			}
-			if err := nh.StopNode(1, 1); err != nil {
+			if err := nh.StopReplica(1, 1); err != nil {
 				t.Fatalf("failed to stop node, %v", err)
 			}
 			cs := nh.GetNoOPSession(1)
@@ -5682,7 +5679,7 @@ func TestReadIndexOnClosedNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get node, %v", err)
 			}
-			if err := nh.StopNode(1, 1); err != nil {
+			if err := nh.StopReplica(1, 1); err != nil {
 				t.Fatalf("failed to stop node, %v", err)
 			}
 			if _, err := u.ReadIndex(time.Second); err == nil {
@@ -5808,7 +5805,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 	}
 	for i := uint64(1); i <= uint64(96); i++ {
 		rc.ShardID = i
-		if err := nh1.StartShard(peers, false, newRSM, rc); err != nil {
+		if err := nh1.StartReplica(peers, false, newRSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 		cs := nh1.GetNoOPSession(i)
@@ -5831,7 +5828,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 	for i := uint64(1); i <= uint64(96); i++ {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			err := nh1.SyncRequestAddNode(ctx, i, 2, nodeHostTestAddr2, 0)
+			err := nh1.SyncRequestAddReplica(ctx, i, 2, nodeHostTestAddr2, 0)
 			cancel()
 			if err != nil {
 				if err == ErrTimeout || err == ErrShardNotReady {
@@ -5863,7 +5860,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 		rc.ShardID = i
 		rc.ReplicaID = 2
 		peers := make(map[uint64]string)
-		if err := nh2.StartShard(peers, true, newRSM, rc); err != nil {
+		if err := nh2.StartReplica(peers, true, newRSM, rc); err != nil {
 			t.Fatalf("failed to start cluster %v", err)
 		}
 	}
