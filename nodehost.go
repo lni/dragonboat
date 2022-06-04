@@ -34,7 +34,7 @@ membership change requests to add or remove nodes from selected Raft cluster.
 
 User applications can leverage the power of the Raft protocol by implementing
 the IStateMachine or IOnDiskStateMachine component, as defined in
-github.com/lni/dragonboat/v3/statemachine. Known as user state machines, each
+github.com/lni/dragonboat/v4/statemachine. Known as user state machines, each
 IStateMachine or IOnDiskStateMachine instance is in charge of updating, querying
 and snapshotting application data with minimum exposure to the Raft protocol
 itself.
@@ -53,7 +53,7 @@ its deadline, it faces the risk of having the same proposal committed and
 applied twice into the user state machine. Dragonboat prevents this by
 implementing the client session concept described in Diego Ongaro's PhD thesis.
 */
-package dragonboat // github.com/lni/dragonboat/v3
+package dragonboat // github.com/lni/dragonboat/v4
 
 import (
 	"context"
@@ -68,21 +68,21 @@ import (
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/syncutil"
 
-	"github.com/lni/dragonboat/v3/client"
-	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/id"
-	"github.com/lni/dragonboat/v3/internal/invariants"
-	"github.com/lni/dragonboat/v3/internal/logdb"
-	"github.com/lni/dragonboat/v3/internal/registry"
-	"github.com/lni/dragonboat/v3/internal/rsm"
-	"github.com/lni/dragonboat/v3/internal/server"
-	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/transport"
-	"github.com/lni/dragonboat/v3/internal/utils"
-	"github.com/lni/dragonboat/v3/internal/vfs"
-	"github.com/lni/dragonboat/v3/raftio"
-	pb "github.com/lni/dragonboat/v3/raftpb"
-	sm "github.com/lni/dragonboat/v3/statemachine"
+	"github.com/lni/dragonboat/v4/client"
+	"github.com/lni/dragonboat/v4/config"
+	"github.com/lni/dragonboat/v4/internal/id"
+	"github.com/lni/dragonboat/v4/internal/invariants"
+	"github.com/lni/dragonboat/v4/internal/logdb"
+	"github.com/lni/dragonboat/v4/internal/registry"
+	"github.com/lni/dragonboat/v4/internal/rsm"
+	"github.com/lni/dragonboat/v4/internal/server"
+	"github.com/lni/dragonboat/v4/internal/settings"
+	"github.com/lni/dragonboat/v4/internal/transport"
+	"github.com/lni/dragonboat/v4/internal/utils"
+	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/lni/dragonboat/v4/raftio"
+	pb "github.com/lni/dragonboat/v4/raftpb"
+	sm "github.com/lni/dragonboat/v4/statemachine"
 )
 
 const (

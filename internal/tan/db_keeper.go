@@ -19,8 +19,8 @@ import (
 
 	"github.com/cockroachdb/errors/oserror"
 
-	"github.com/lni/dragonboat/v3/internal/fileutil"
-	"github.com/lni/dragonboat/v3/raftio"
+	"github.com/lni/dragonboat/v4/internal/fileutil"
+	"github.com/lni/dragonboat/v4/raftio"
 	"github.com/lni/vfs"
 )
 

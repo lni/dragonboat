@@ -18,7 +18,7 @@ RocksDB support was removed in the v3.4 release.
 
 You can extend Dragonboat to use your preferred storage solution to store Raft logs -
 
-* implement the ILogDB interface defined in the github.com/lni/dragonboat/v3/raftio package
+* implement the ILogDB interface defined in the github.com/lni/dragonboat/v4/raftio package
 * pass a factory function that creates such a custom Log DB instance to the LogDBFactory field of your NodeHostConfig.Expert instance
 
 ## Tan

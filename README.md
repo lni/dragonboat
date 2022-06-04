@@ -73,7 +73,7 @@ __Master is our unstable branch for development. Please use the latest released 
 
 Go 1.14 or above with [Go module](https://github.com/golang/go/wiki/Modules) support is required.
 
-To use Dragonboat, make sure to import the package __github.com/lni/dragonboat/v3__. Also add "github.com/lni/dragonboat/v3 v3.3.0" to the __require__ section of your project's go.mod file.
+To use Dragonboat, make sure to import the package __github.com/lni/dragonboat/v4__. Also add "github.com/lni/dragonboat/v4 v3.3.0" to the __require__ section of your project's go.mod file.
 
 By default, [Pebble](https://github.com/cockroachdb/pebble) is used for storing Raft Logs in Dragonboat. RocksDB and other storage engines are also supported, more info [here](docs/storage.md).
 

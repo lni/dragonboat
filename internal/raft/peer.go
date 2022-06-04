@@ -42,9 +42,9 @@ package raft
 import (
 	"sort"
 
-	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/server"
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/config"
+	"github.com/lni/dragonboat/v4/internal/server"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
 // PeerAddress is the basic info for a peer in the Raft cluster.

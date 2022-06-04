@@ -22,10 +22,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/lni/dragonboat/v3/internal/fileutil"
-	"github.com/lni/dragonboat/v3/internal/settings"
-	"github.com/lni/dragonboat/v3/internal/vfs"
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/internal/fileutil"
+	"github.com/lni/dragonboat/v4/internal/settings"
+	"github.com/lni/dragonboat/v4/internal/vfs"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
 // SSVersion is the snapshot version value type.

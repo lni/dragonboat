@@ -15,8 +15,8 @@
 package logdb
 
 import (
-	"github.com/lni/dragonboat/v3/internal/logdb/kv"
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/internal/logdb/kv"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
 // context is an IContext implementation suppose to be owned and used

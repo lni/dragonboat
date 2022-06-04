@@ -17,8 +17,8 @@ package dragonboat
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/v3/raftio"
-	"github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/raftio"
+	"github.com/lni/dragonboat/v4/raftpb"
 )
 
 func TestEntryQueueCanBeCreated(t *testing.T) {

@@ -27,9 +27,9 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/lni/goutils/syncutil"
 
-	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/utils"
-	"github.com/lni/dragonboat/v3/logger"
+	"github.com/lni/dragonboat/v4/config"
+	"github.com/lni/dragonboat/v4/internal/utils"
+	"github.com/lni/dragonboat/v4/logger"
 )
 
 var firstError = utils.FirstError

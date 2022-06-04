@@ -18,7 +18,7 @@ import (
 	"os"
 	"path/filepath"
 
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
 // Files is a collection of external files specified by the SaveSnapshot

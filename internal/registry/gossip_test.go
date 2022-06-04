@@ -21,8 +21,8 @@ import (
 	"github.com/lni/goutils/leaktest"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lni/dragonboat/v3/config"
-	"github.com/lni/dragonboat/v3/internal/id"
+	"github.com/lni/dragonboat/v4/config"
+	"github.com/lni/dragonboat/v4/internal/id"
 )
 
 const (

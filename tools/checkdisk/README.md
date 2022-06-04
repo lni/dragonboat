@@ -8,7 +8,7 @@ This program creats 48 Raft groups each with only one node. It then uses 10,000 
 
 To build the program - 
 ```
-go build github.com/lni/dragonboat/v3/tools/checkdisk
+go build github.com/lni/dragonboat/v4/tools/checkdisk
 ```
 
 An executable file named checkdisk will be generated in the current directory. Copy it to the disk you want to check and run the executable. It takes roughly 1 minute to complete. 

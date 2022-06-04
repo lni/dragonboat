@@ -17,9 +17,9 @@ package tan
 import (
 	"testing"
 
-	"github.com/lni/dragonboat/v3/internal/vfs"
-	"github.com/lni/dragonboat/v3/logger"
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/lni/dragonboat/v4/logger"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
 var benchmarkTestDirname = "tan_benchmark_dir"

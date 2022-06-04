@@ -20,6 +20,6 @@ jobs:
         git clone https://github.com/lni/drummer
         sudo apt-get install librocksdb-dev
         cd drummer
-        go get github.com/lni/dragonboat/v3@master
+        go get github.com/lni/dragonboat/v4@master
         make test
         make $TARGET

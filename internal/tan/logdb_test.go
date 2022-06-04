@@ -22,8 +22,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/lni/dragonboat/v3/config"
-	pb "github.com/lni/dragonboat/v3/raftpb"
+	"github.com/lni/dragonboat/v4/config"
+	pb "github.com/lni/dragonboat/v4/raftpb"
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/vfs"
 	"github.com/stretchr/testify/require"

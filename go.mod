@@ -1,4 +1,4 @@
-module github.com/lni/dragonboat/v3
+module github.com/lni/dragonboat/v4
 
 require (
 	github.com/VictoriaMetrics/metrics v1.18.1

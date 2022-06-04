@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/lni/dragonboat/v3/internal/vfs"
+	"github.com/lni/dragonboat/v4/internal/vfs"
 )
 
 func TestTempDir(t *testing.T) {
