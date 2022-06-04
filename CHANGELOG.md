@@ -22,6 +22,7 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 
 - Raft observer node has been renamed as non-voting node.
 - RocksDB support has been removed as Pebble provides bidirectional compatible with RocksDB. 
+- ClusterID/NodeID has been renamed as ShardID/ReplicaID.
 
 ## v3.3 (2021-01-20)
 
