@@ -79,7 +79,7 @@ func (s *dummyStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return query, nil
 }
 
-func (s *dummyStateMachine) Update(data []byte) (sm.Result, error) {
+func (s *dummyStateMachine) Update(e sm.Entry) (sm.Result, error) {
 	return sm.Result{Value: 1}, nil
 }
 
@@ -199,13 +199,13 @@ func main() {
 	nhList := make([]*dragonboat.NodeHost, 0)
 	for i := uint64(1); i <= uint64(*clustercount); i++ {
 		rc.ShardID = i
-		if err := nh.StartShard(nodes, false, newDummyStateMachine, rc); err != nil {
+		if err := nh.StartReplica(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
 		}
 		if *twonh {
 			rc2 := rc
 			rc2.ReplicaID = 2
-			if err := nh2.StartShard(nodes, false, newDummyStateMachine, rc2); err != nil {
+			if err := nh2.StartReplica(nodes, false, newDummyStateMachine, rc2); err != nil {
 				panic(err)
 			}
 		}
