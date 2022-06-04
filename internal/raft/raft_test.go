@@ -1330,7 +1330,7 @@ func TestSetRandomizedElectionTimeout(t *testing.T) {
 	}
 }
 
-func TestMultiNodeClusterCampaign(t *testing.T) {
+func TestMultiNodeShardCampaign(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeFollower(10, 2)
 	ne(r.campaign(), t)
@@ -1350,7 +1350,7 @@ func TestMultiNodeClusterCampaign(t *testing.T) {
 	}
 }
 
-func TestSingleNodeClusterCampaign(t *testing.T) {
+func TestSingleNodeShardCampaign(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	ne(r.campaign(), t)
 	if len(r.msgs) != 0 {
@@ -2953,7 +2953,7 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	}
 }
 
-func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
+func TestLeaderReadIndexOnSingleNodeShard(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	ne(r.becomeLeader(), t)
@@ -2979,7 +2979,7 @@ func TestLeaderReadIndexOnSingleNodeCluster(t *testing.T) {
 	}
 }
 
-func TestLeaderIgnoreReadIndexWhenClusterCommittedIsUnknown(t *testing.T) {
+func TestLeaderIgnoreReadIndexWhenShardCommittedIsUnknown(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
 	ne(r.becomeLeader(), t)

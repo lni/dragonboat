@@ -20,9 +20,9 @@ type NodeHostRegistry struct {
 	view  *view
 }
 
-// NumOfClusters returns the number of clusters known to the current NodeHost
+// NumOfShards returns the number of clusters known to the current NodeHost
 // instance.
-func (r *NodeHostRegistry) NumOfClusters() int {
+func (r *NodeHostRegistry) NumOfShards() int {
 	return r.view.clusterCount()
 }
 
@@ -36,15 +36,15 @@ func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
 	return m.Data, true
 }
 
-// GetClusterInfo returns the cluster info for the specified cluster if it is
+// GetShardInfo returns the cluster info for the specified cluster if it is
 // available in the gossip view.
-func (r *NodeHostRegistry) GetClusterInfo(shardID uint64) (ClusterView, bool) {
+func (r *NodeHostRegistry) GetShardInfo(shardID uint64) (ShardView, bool) {
 	r.view.mu.Lock()
 	defer r.view.mu.Unlock()
 
 	ci, ok := r.view.mu.clusters[shardID]
 	if !ok {
-		return ClusterView{}, false
+		return ShardView{}, false
 	}
 	result := ci
 	result.Nodes = make(map[uint64]string)

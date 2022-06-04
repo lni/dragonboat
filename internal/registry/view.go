@@ -31,9 +31,9 @@ var (
 	binaryEnc = binary.BigEndian
 )
 
-// ClusterInfo is a record for representing the state of a Raft cluster based
+// ShardInfo is a record for representing the state of a Raft cluster based
 // on the knowledge of the local NodeHost instance.
-type ClusterInfo struct {
+type ShardInfo struct {
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
 	// ShardID is the cluster ID of the Raft cluster node.
@@ -63,8 +63,8 @@ type ClusterInfo struct {
 	Pending bool
 }
 
-// ClusterView is the view of a cluster from gossip's point of view.
-type ClusterView struct {
+// ShardView is the view of a cluster from gossip's point of view.
+type ShardView struct {
 	ShardID           uint64
 	Nodes             map[uint64]string
 	ConfigChangeIndex uint64
@@ -72,10 +72,10 @@ type ClusterView struct {
 	Term              uint64
 }
 
-func toClusterViewList(input []ClusterInfo) []ClusterView {
-	result := make([]ClusterView, 0)
+func toShardViewList(input []ShardInfo) []ShardView {
+	result := make([]ShardView, 0)
 	for _, ci := range input {
-		cv := ClusterView{
+		cv := ShardView{
 			ShardID:           ci.ShardID,
 			Nodes:             ci.Nodes,
 			ConfigChangeIndex: ci.ConfigChangeIndex,
@@ -89,15 +89,15 @@ func toClusterViewList(input []ClusterInfo) []ClusterView {
 
 type sharedInfo struct {
 	DeploymentID uint64
-	ClusterInfo  []ClusterView
+	ShardInfo    []ShardView
 }
 
 type view struct {
 	deploymentID uint64
-	// shardID -> ClusterView
+	// shardID -> ShardView
 	mu struct {
 		sync.Mutex
-		clusters map[uint64]ClusterView
+		clusters map[uint64]ShardView
 	}
 }
 
@@ -105,7 +105,7 @@ func newView(deploymentID uint64) *view {
 	v := &view{
 		deploymentID: deploymentID,
 	}
-	v.mu.clusters = make(map[uint64]ClusterView)
+	v.mu.clusters = make(map[uint64]ShardView)
 	return v
 }
 
@@ -115,7 +115,7 @@ func (v *view) clusterCount() int {
 	return len(v.mu.clusters)
 }
 
-func mergeClusterInfo(current ClusterView, update ClusterView) ClusterView {
+func mergeShardInfo(current ShardView, update ShardView) ShardView {
 	if current.ConfigChangeIndex < update.ConfigChangeIndex {
 		current.Nodes = update.Nodes
 		current.ConfigChangeIndex = update.ConfigChangeIndex
@@ -131,21 +131,21 @@ func mergeClusterInfo(current ClusterView, update ClusterView) ClusterView {
 	return current
 }
 
-func (v *view) update(updates []ClusterView) {
+func (v *view) update(updates []ShardView) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
 	for _, u := range updates {
 		current, ok := v.mu.clusters[u.ShardID]
 		if !ok {
-			current = ClusterView{ShardID: u.ShardID}
+			current = ShardView{ShardID: u.ShardID}
 		}
-		v.mu.clusters[u.ShardID] = mergeClusterInfo(current, u)
+		v.mu.clusters[u.ShardID] = mergeShardInfo(current, u)
 	}
 }
 
-func (v *view) toShuffledList() []ClusterView {
-	ci := make([]ClusterView, 0)
+func (v *view) toShuffledList() []ShardView {
+	ci := make([]ShardView, 0)
 	func() {
 		v.mu.Lock()
 		defer v.mu.Unlock()
@@ -158,13 +158,13 @@ func (v *view) toShuffledList() []ClusterView {
 	return ci
 }
 
-func getCompressedData(deploymentID uint64, l []ClusterView, n int) []byte {
+func getCompressedData(deploymentID uint64, l []ShardView, n int) []byte {
 	if n == 0 {
 		return nil
 	}
 	si := sharedInfo{
 		DeploymentID: deploymentID,
-		ClusterInfo:  l[:n],
+		ShardInfo:    l[:n],
 	}
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -234,5 +234,5 @@ func (v *view) updateFrom(data []byte) {
 	if si.DeploymentID != v.deploymentID {
 		return
 	}
-	v.update(si.ClusterInfo)
+	v.update(si.ShardInfo)
 }

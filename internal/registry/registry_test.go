@@ -66,12 +66,12 @@ func TestPeerCanBeRemoved(t *testing.T) {
 	}
 }
 
-func TestRemoveCluster(t *testing.T) {
+func TestRemoveShard(t *testing.T) {
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	nodes.Add(100, 3, "a2:3")
 	nodes.Add(200, 2, "a3:2")
-	nodes.RemoveCluster(100)
+	nodes.RemoveShard(100)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
 		t.Errorf("cluster not removed")

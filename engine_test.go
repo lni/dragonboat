@@ -69,13 +69,13 @@ func TestPartitionerWorksAsExpected(t *testing.T) {
 	}
 }
 
-func TestAllClustersReady(t *testing.T) {
+func TestAllShardsReady(t *testing.T) {
 	wr := newWorkReady(4)
 	nodes := make([]*node, 0)
 	for i := uint64(0); i < uint64(4); i++ {
 		nodes = append(nodes, &node{shardID: i})
 	}
-	wr.allClustersReady(nodes)
+	wr.allShardsReady(nodes)
 	for i := uint64(0); i < uint64(4); i++ {
 		ch := wr.channels[i]
 		select {
@@ -84,7 +84,7 @@ func TestAllClustersReady(t *testing.T) {
 			t.Errorf("channel not ready")
 		}
 		rc := wr.maps[i]
-		m := rc.getReadyClusters()
+		m := rc.getReadyShards()
 		if len(m) != 1 {
 			t.Errorf("unexpected map size")
 		}
@@ -94,7 +94,7 @@ func TestAllClustersReady(t *testing.T) {
 	}
 	nodes = nodes[:0]
 	nodes = append(nodes, []*node{{shardID: 0}, {shardID: 2}, {shardID: 3}}...)
-	wr.allClustersReady(nodes)
+	wr.allShardsReady(nodes)
 	ch := wr.channels[1]
 	select {
 	case <-ch:
@@ -102,7 +102,7 @@ func TestAllClustersReady(t *testing.T) {
 	default:
 	}
 	rc := wr.maps[1]
-	m := rc.getReadyClusters()
+	m := rc.getReadyShards()
 	if len(m) != 0 {
 		t.Errorf("cluster map unexpected set")
 	}

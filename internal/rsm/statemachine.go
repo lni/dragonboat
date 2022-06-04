@@ -500,7 +500,7 @@ func (s *StateMachine) lookup(query interface{}) (interface{}, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.aborted {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	return s.sm.Lookup(query)
 }
@@ -521,7 +521,7 @@ func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.aborted {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	return s.sm.NALookup(query)
 }

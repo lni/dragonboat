@@ -199,13 +199,13 @@ func main() {
 	nhList := make([]*dragonboat.NodeHost, 0)
 	for i := uint64(1); i <= uint64(*clustercount); i++ {
 		rc.ShardID = i
-		if err := nh.StartCluster(nodes, false, newDummyStateMachine, rc); err != nil {
+		if err := nh.StartShard(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
 		}
 		if *twonh {
 			rc2 := rc
 			rc2.ReplicaID = 2
-			if err := nh2.StartCluster(nodes, false, newDummyStateMachine, rc2); err != nil {
+			if err := nh2.StartShard(nodes, false, newDummyStateMachine, rc2); err != nil {
 				panic(err)
 			}
 		}

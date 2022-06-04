@@ -99,7 +99,7 @@ func TestGossipRegistry(t *testing.T) {
 		t.Errorf("unexpected addr %s", addr)
 	}
 	// remove cluster
-	r.RemoveCluster(123)
+	r.RemoveShard(123)
 	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
 		t.Fatalf("failed to get addr, %v", err)
 	}

@@ -211,7 +211,7 @@ func (m *Chunk) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardId", wireType)
 			}
 			m.ShardID = 0
 			for shift := uint(0); ; shift += 7 {

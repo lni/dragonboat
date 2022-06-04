@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	// ErrClusterClosed indicates that the cluster has been closed
-	ErrClusterClosed = errors.New("raft cluster already closed")
+	// ErrShardClosed indicates that the cluster has been closed
+	ErrShardClosed = errors.New("raft cluster already closed")
 )
 
 // IStreamable is the interface for types that can be snapshot streamed.
@@ -211,7 +211,7 @@ func (ds *NativeSM) Lookup(query interface{}) (interface{}, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 	if ds.destroyed {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	return ds.sm.Lookup(query)
 }
@@ -226,7 +226,7 @@ func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 	if ds.destroyed {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	return ds.sm.NALookup(query)
 }

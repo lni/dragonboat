@@ -66,22 +66,22 @@ var (
 	// Raft config change operation, ErrSystemBusy means there is already such a
 	// request waiting to be processed.
 	ErrSystemBusy = errors.New("system is too busy try again later")
-	// ErrClusterClosed indicates that the requested cluster is being shut down.
-	ErrClusterClosed = errors.New("raft cluster already closed")
-	// ErrClusterNotInitialized indicates that the requested operation can not be
+	// ErrShardClosed indicates that the requested cluster is being shut down.
+	ErrShardClosed = errors.New("raft cluster already closed")
+	// ErrShardNotInitialized indicates that the requested operation can not be
 	// completed as the involved raft cluster has not been initialized yet.
-	ErrClusterNotInitialized = errors.New("raft cluster not initialized yet")
+	ErrShardNotInitialized = errors.New("raft cluster not initialized yet")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
 	// ErrCanceled indicates that the request has been canceled.
 	ErrCanceled = errors.New("request canceled")
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
-	// ErrClusterNotReady indicates that the request has been dropped as the
+	// ErrShardNotReady indicates that the request has been dropped as the
 	// specified raft cluster is not ready to handle the request. Unknown leader
 	// is the most common cause of this Error, trying to use a cluster not fully
-	// initialized is another major cause of ErrClusterNotReady.
-	ErrClusterNotReady = errors.New("request dropped as the cluster is not ready")
+	// initialized is another major cause of ErrShardNotReady.
+	ErrShardNotReady = errors.New("request dropped as the cluster is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
 )
@@ -110,9 +110,9 @@ var (
 // input, potentially on a more suitable NodeHost instance.
 func IsTempError(err error) bool {
 	return errors.Is(err, ErrSystemBusy) ||
-		errors.Is(err, ErrClusterClosed) ||
-		errors.Is(err, ErrClusterNotInitialized) ||
-		errors.Is(err, ErrClusterNotReady) ||
+		errors.Is(err, ErrShardClosed) ||
+		errors.Is(err, ErrShardNotInitialized) ||
+		errors.Is(err, ErrShardNotReady) ||
 		errors.Is(err, ErrTimeout) ||
 		errors.Is(err, ErrClosed)
 }
@@ -641,7 +641,7 @@ func (p *pendingSnapshot) request(st rsm.SSReqType,
 		return nil, ErrSystemBusy
 	}
 	if p.snapshotC == nil {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	ssreq := rsm.SSRequest{
 		Type:               st,
@@ -745,7 +745,7 @@ func (p *pendingConfigChange) request(cc pb.ConfigChange,
 		return nil, ErrSystemBusy
 	}
 	if p.confChangeC == nil {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	data := pb.MustMarshal(&cc)
 	ccreq := configChangeRequest{
@@ -868,7 +868,7 @@ func (p *pendingReadIndex) read(timeoutTick uint64) (*RequestState, error) {
 
 	ok, closed := p.requests.add(req)
 	if closed {
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	if !ok {
 		return nil, ErrSystemBusy
@@ -1128,7 +1128,7 @@ func (p *proposalShard) propose(session *client.Session,
 		p.mu.Lock()
 		delete(p.pending, entry.Key)
 		p.mu.Unlock()
-		return nil, ErrClusterClosed
+		return nil, ErrShardClosed
 	}
 	if !added {
 		p.mu.Lock()

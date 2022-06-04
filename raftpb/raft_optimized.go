@@ -744,7 +744,7 @@ func (m *Message) Unmarshal(dAtA []byte) error {
 			}
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardId", wireType)
 			}
 			m.ShardID = 0
 			for shift := uint(0); ; shift += 7 {

@@ -588,11 +588,11 @@ func applyConfigChangeEntry(sm *StateMachine,
 	sm.taskQ.Add(commit)
 }
 
-func TestLookupNotAllowedOnClosedCluster(t *testing.T) {
+func TestLookupNotAllowedOnClosedShard(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
 		sm.aborted = true
 		v, err := sm.Lookup(make([]byte, 10))
-		if err != ErrClusterClosed {
+		if err != ErrShardClosed {
 			t.Errorf("unexpected err value %v", err)
 		}
 		if v != nil {

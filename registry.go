@@ -17,7 +17,7 @@ package dragonboat
 // NodeHostRegistry provides APIs for querying data shared between NodeHost
 // instances via gossip.
 type INodeHostRegistry interface {
-	NumOfClusters() int
+	NumOfShards() int
 	GetMeta(nhID string) ([]byte, bool)
-	GetClusterInfo(shardID uint64) (ClusterView, bool)
+	GetShardInfo(shardID uint64) (ShardView, bool)
 }

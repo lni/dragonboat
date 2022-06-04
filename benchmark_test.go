@@ -260,12 +260,12 @@ func BenchmarkWorkerReady(b *testing.B) {
 	})
 }
 
-func BenchmarkReadyCluster(b *testing.B) {
+func BenchmarkReadyShard(b *testing.B) {
 	b.ReportAllocs()
-	rc := newReadyCluster()
+	rc := newReadyShard()
 	b.RunParallel(func(pbt *testing.PB) {
 		for pbt.Next() {
-			rc.setClusterReady(1)
+			rc.setShardReady(1)
 		}
 	})
 }

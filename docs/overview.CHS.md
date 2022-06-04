@@ -29,7 +29,7 @@ This document is an overview of the dragonboat library, it is in Chinese. The En
 ## 术语 ##
 
 Raft组：Raft协议控制下的一个独立的具有多个副本的实体，组内各个副本提供上一节中描述的一致性保证。一个应用可以使用管理一个或者多个Raft组。每个Raft组由一个系统内全局唯一的用户设定的64位整形数ShardID来指代。
-集群Cluster：Raft组的别称。
+集群Shard：Raft组的别称。
 节点Node：Raft组中的一个成员副本。每个节点由一个Raft组内唯一的用户设定的64位整形数ReplicaID来指代。
 初始成员节点Initial Member：一个Raft组在最初出现的时候所设定的原始成员。
 Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有一个Leader节点，只有当Leader节点确定时才能对该Raft组进行读写。
@@ -57,7 +57,7 @@ Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有
 
 ## 节点启动 ##
 
-使用一个节点前首先需要启动该节点，使得其被NodeHost装载并管理。NodeHost的StartCluster, StartConcurrentCluster与StartOnDiskCluster方法用于启动相应节点。
+使用一个节点前首先需要启动该节点，使得其被NodeHost装载并管理。NodeHost的StartShard, StartConcurrentShard与StartOnDiskShard方法用于启动相应节点。
 
 当一个Raft cluster的各初始成员首次启动时，用户需要提供该Raft cluster的所有初始成员信息(initial members)，且各副本必须以完全相同的初始成员信息启动。该初始成员信息用于确保各副本从一个一致的成员列表开始演进后续用户要求的成员变更。当一个副本并非该Raft cluster的初始成员，而是后续通过成员变更（如SyncRequestAddNode）所新增的节点，其第一次启动时无需提供初始成员信息，只需要将join参数设置为true。
 
@@ -65,9 +65,9 @@ Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有
 
 ## 节点停止 ##
 
-用户可以通过NodeHost的StopCluster方法来停止所指定的Raft cluster在该NodeHost管理下的副本。停止后的节点不再响应读写请求，但可以通过上述节点启动方式再次重新启动。
+用户可以通过NodeHost的StopShard方法来停止所指定的Raft cluster在该NodeHost管理下的副本。停止后的节点不再响应读写请求，但可以通过上述节点启动方式再次重新启动。
 
-在一个副本被StopCluster要求停止后，如果它正在执行快照的创建或恢复，该节点可能不会立刻停止而需等待至快照的创建或恢复完成。为避免这种长期等待，由用户实现的快照创建与恢复方法提供了一个<-chan struct{}的参数，当节点被要求停止后，该<-chan struct{}会被关闭，用户的快照创建与恢复方法可据此选择是否放弃当前的快照创建与恢复，从而快速响应节点停止的请求。
+在一个副本被StopShard要求停止后，如果它正在执行快照的创建或恢复，该节点可能不会立刻停止而需等待至快照的创建或恢复完成。为避免这种长期等待，由用户实现的快照创建与恢复方法提供了一个<-chan struct{}的参数，当节点被要求停止后，该<-chan struct{}会被关闭，用户的快照创建与恢复方法可据此选择是否放弃当前的快照创建与恢复，从而快速响应节点停止的请求。
 
 ## 写操作 ##
 
@@ -118,7 +118,7 @@ NodeHost同时提供名为StaleRead的函数，如它的方法名称所表述的
 
 通过成员变更将某节点删除以后，可使用NodeHost的RemoveData方法删除该节点的所有数据以释放磁盘空间。该操作需谨慎，对尚未通过成员变更删除的节点使用RemoveData清理数据将不可修复的损坏该Raft组。
 
-绝大多数情况下，用户应用只在一个线程内逐一的执行成员变更操作，此时成员变更操作是幂等的。如无法满足这一条件，所有的成员变更请求前（含重试）可通过GetClusterMembership方法首先获得Raft组当前的Membership成员记录，用户软件根据当前成员情况做出成员变更决定后，在调用成员变更的API时提供上一步所返回的Membership记录的ConfigChangeID值，从而确保多线程并发执行成员变更的幂等。
+绝大多数情况下，用户应用只在一个线程内逐一的执行成员变更操作，此时成员变更操作是幂等的。如无法满足这一条件，所有的成员变更请求前（含重试）可通过GetShardMembership方法首先获得Raft组当前的Membership成员记录，用户软件根据当前成员情况做出成员变更决定后，在调用成员变更的API时提供上一步所返回的Membership记录的ConfigChangeID值，从而确保多线程并发执行成员变更的幂等。
 
 ## 快照Snapshot ##
 
@@ -165,6 +165,6 @@ Gossip服务本身是一个全分布的网络服务，用户仅需要通过NodeH
 
 Dragonboat通过NodeHost提供下列其它常用功能：
 
-* Non-Voting节点。观察者节点不参与Leader的选举，不参与一个提议是否可以被采纳，它仅仅用来接受并执行Raft组各个已采纳的提议。观察者节点的状态机与普通节点一样，正常情况下将具备完整且相同的状态机状态，它可以被用来做为一个额外的只读节点，供用户读取有一致性保证的状态机状态。观察者节点的另一大作用是允许一个新加入的节点以观察者身份加入Raft组，在其逐渐获取所有状态机状态后再提升其为正常节点。在观察者节点所在的NodeHost上发起一次SyncRead或者一次GetClusterMembership，如果成功返回则表示ReadIndex协议被完整执行了一轮，这表示观察者节点已经拥有基本所有Log Entry，具备了将其升级为正常节点的条件。
+* Non-Voting节点。观察者节点不参与Leader的选举，不参与一个提议是否可以被采纳，它仅仅用来接受并执行Raft组各个已采纳的提议。观察者节点的状态机与普通节点一样，正常情况下将具备完整且相同的状态机状态，它可以被用来做为一个额外的只读节点，供用户读取有一致性保证的状态机状态。观察者节点的另一大作用是允许一个新加入的节点以观察者身份加入Raft组，在其逐渐获取所有状态机状态后再提升其为正常节点。在观察者节点所在的NodeHost上发起一次SyncRead或者一次GetShardMembership，如果成功返回则表示ReadIndex协议被完整执行了一轮，这表示观察者节点已经拥有基本所有Log Entry，具备了将其升级为正常节点的条件。
 * Leader迁移。正常情况下，Leader以选举方式由用户程序透明的方式选举产生。用户可以使用NodeHost提供的RequestLeaderTransfer方法尝试将Leader迁移至指定节点。
-* NodeHost同时提供GetNodeHostInfo与GetClusterMembership方法供查询当前各NodeHost管理下的各Raft组信息。
+* NodeHost同时提供GetNodeHostInfo与GetShardMembership方法供查询当前各NodeHost管理下的各Raft组信息。

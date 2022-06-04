@@ -188,7 +188,7 @@ type Config struct {
 	// Witness support is currently experimental.
 	IsWitness bool
 	// Quiesce specifies whether to let the Raft cluster enter quiesce mode when
-	// there is no cluster activity. Clusters in quiesce mode do not exchange
+	// there is no cluster activity. Shards in quiesce mode do not exchange
 	// heartbeat messages to minimize bandwidth consumption.
 	//
 	// Quiesce support is currently experimental.
@@ -295,7 +295,7 @@ type NodeHostConfig struct {
 	// AddressByNodeHostID indicates that NodeHost instances should be addressed
 	// by their NodeHostID values. This feature is usually used when only dynamic
 	// addresses are available. When enabled, NodeHostID values should be used
-	// as the target parameter when calling NodeHost's StartCluster,
+	// as the target parameter when calling NodeHost's StartShard,
 	// RequestAddNode, RequestAddNonVoting and RequestAddWitness methods.
 	//
 	// Enabling AddressByNodeHostID also enables the internal gossip service,
@@ -414,7 +414,7 @@ type NodeHostConfig struct {
 	// When starting Raft nodes or requesting new nodes to be added, use the above
 	// mentioned NodeHostID values as the target parameters (which are of the
 	// Target type). Let's say we want to start a Raft Node as a part of a three
-	// replicas Raft cluster, the initialMembers parameter of the StartCluster
+	// replicas Raft cluster, the initialMembers parameter of the StartShard
 	// method can be set to
 	//
 	// initialMembers := map[uint64]Target {

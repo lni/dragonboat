@@ -44,7 +44,7 @@ type INodeRegistry interface {
 	Close() error
 	Add(shardID uint64, replicaID uint64, url string)
 	Remove(shardID uint64, replicaID uint64)
-	RemoveCluster(shardID uint64)
+	RemoveShard(shardID uint64)
 	Resolve(shardID uint64, replicaID uint64) (string, string, error)
 }
 
@@ -98,8 +98,8 @@ func (n *Registry) Remove(shardID uint64, replicaID uint64) {
 	n.addr.Delete(raftio.GetNodeInfo(shardID, replicaID))
 }
 
-// RemoveCluster removes all nodes info associated with the specified cluster
-func (n *Registry) RemoveCluster(shardID uint64) {
+// RemoveShard removes all nodes info associated with the specified cluster
+func (n *Registry) RemoveShard(shardID uint64) {
 	var toRemove []raftio.NodeInfo
 	n.addr.Range(func(k, v interface{}) bool {
 		ni := k.(raftio.NodeInfo)

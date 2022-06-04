@@ -1795,23 +1795,23 @@ func TestUninitializedNodeNotAllowedToMakeRequests(t *testing.T) {
 	if n.initialized() {
 		t.Fatalf("already initialized")
 	}
-	if _, err := n.propose(nil, nil, 1); err != ErrClusterNotReady {
+	if _, err := n.propose(nil, nil, 1); err != ErrShardNotReady {
 		t.Fatalf("making proposal not rejected")
 	}
-	if _, err := n.proposeSession(nil, 1); err != ErrClusterNotReady {
+	if _, err := n.proposeSession(nil, 1); err != ErrShardNotReady {
 		t.Fatalf("propose session not rejected")
 	}
-	if _, err := n.read(1); err != ErrClusterNotReady {
+	if _, err := n.read(1); err != ErrShardNotReady {
 		t.Fatalf("read not rejected")
 	}
-	if err := n.requestLeaderTransfer(1); err != ErrClusterNotReady {
+	if err := n.requestLeaderTransfer(1); err != ErrShardNotReady {
 		t.Fatalf("leader transfer request not rejected")
 	}
-	if _, err := n.requestSnapshot(SnapshotOption{}, 1); err != ErrClusterNotReady {
+	if _, err := n.requestSnapshot(SnapshotOption{}, 1); err != ErrShardNotReady {
 		t.Fatalf("snapshot request not rejected")
 	}
 	if _, err := n.requestConfigChange(pb.ConfigChangeType(0),
-		1, "localhost:1", 1, 1); err != ErrClusterNotReady {
+		1, "localhost:1", 1, 1); err != ErrShardNotReady {
 		t.Fatalf("config change request not rejected")
 	}
 }

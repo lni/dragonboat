@@ -35,7 +35,7 @@ import (
 var firstError = utils.FirstError
 var plog = logger.GetLogger("registry")
 
-type getClusterInfo func() []ClusterInfo
+type getShardInfo func() []ShardInfo
 
 type meta struct {
 	RaftAddress string
@@ -100,7 +100,7 @@ type GossipRegistry struct {
 }
 
 // NewGossipRegistry creates a new GossipRegistry instance.
-func NewGossipRegistry(nhid string, f getClusterInfo,
+func NewGossipRegistry(nhid string, f getShardInfo,
 	nhConfig config.NodeHostConfig, streamConnections uint64,
 	v config.TargetValidator) (*GossipRegistry, error) {
 	gossip, err := newGossipManager(nhid, f, nhConfig)
@@ -145,9 +145,9 @@ func (n *GossipRegistry) Remove(shardID uint64, replicaID uint64) {
 	n.nodes.Remove(shardID, replicaID)
 }
 
-// RemoveCluster removes the specified node from the registry.
-func (n *GossipRegistry) RemoveCluster(shardID uint64) {
-	n.nodes.RemoveCluster(shardID)
+// RemoveShard removes the specified node from the registry.
+func (n *GossipRegistry) RemoveShard(shardID uint64) {
+	n.nodes.RemoveShard(shardID)
 }
 
 // Resolve returns the current RaftAddress and connection key of the specified
@@ -206,9 +206,9 @@ func (d *eventDelegate) start() {
 }
 
 type delegate struct {
-	getClusterInfo getClusterInfo
-	meta           meta
-	view           *view
+	getShardInfo getShardInfo
+	meta         meta
+	view         *view
 }
 
 func (d *delegate) NodeMeta(limit int) []byte {
@@ -224,8 +224,8 @@ func (d *delegate) NotifyMsg(buf []byte) {
 }
 
 func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
-	if d.getClusterInfo != nil {
-		d.view.update(toClusterViewList(d.getClusterInfo()))
+	if d.getShardInfo != nil {
+		d.view.update(toShardViewList(d.getShardInfo()))
 	}
 	data := d.view.getGossipData(limit - overhead)
 	if data == nil {
@@ -245,8 +245,8 @@ func (d *delegate) MergeRemoteState(buf []byte, join bool) {
 }
 
 func (d *delegate) LocalState(join bool) []byte {
-	if d.getClusterInfo != nil {
-		d.view.update(toClusterViewList(d.getClusterInfo()))
+	if d.getShardInfo != nil {
+		d.view.update(toShardViewList(d.getShardInfo()))
 	}
 	return d.view.getFullSyncData()
 }
@@ -273,7 +273,7 @@ type gossipManager struct {
 	stopper  *syncutil.Stopper
 }
 
-func newGossipManager(nhid string, f getClusterInfo,
+func newGossipManager(nhid string, f getShardInfo,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
 	stopper := syncutil.NewStopper()
 	store := &metaStore{}
@@ -312,9 +312,9 @@ func newGossipManager(nhid string, f getClusterInfo,
 		Data:        nhConfig.Gossip.Meta,
 	}
 	cfg.Delegate = &delegate{
-		meta:           meta,
-		getClusterInfo: f,
-		view:           view,
+		meta:         meta,
+		getShardInfo: f,
+		view:         view,
 	}
 	cfg.Events = ed
 

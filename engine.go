@@ -68,8 +68,8 @@ const (
 
 type nodeLoader interface {
 	describe() string
-	getClusterSetIndex() uint64
-	forEachCluster(f func(uint64, *node) bool) uint64
+	getShardSetIndex() uint64
+	forEachShard(f func(uint64, *node) bool) uint64
 }
 
 type nodeType struct {
@@ -127,7 +127,7 @@ func (l *loadedNodes) updateFromLoadedSSNodes(from from,
 
 type workReady struct {
 	partitioner server.IPartitioner
-	maps        []*readyCluster
+	maps        []*readyShard
 	channels    []chan struct{}
 	count       uint64
 }
@@ -136,12 +136,12 @@ func newWorkReady(count uint64) *workReady {
 	wr := &workReady{
 		partitioner: server.NewFixedPartitioner(count),
 		count:       count,
-		maps:        make([]*readyCluster, count),
+		maps:        make([]*readyShard, count),
 		channels:    make([]chan struct{}, count),
 	}
 	for i := uint64(0); i < count; i++ {
 		wr.channels[i] = make(chan struct{}, 1)
-		wr.maps[i] = newReadyCluster()
+		wr.maps[i] = newReadyShard()
 	}
 	return wr
 }
@@ -163,7 +163,7 @@ func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
 		if len(ud.CommittedEntries) > 0 {
 			idx := wr.partitioner.GetPartitionID(ud.ShardID)
 			readyMap := wr.maps[idx]
-			readyMap.setClusterReady(ud.ShardID)
+			readyMap.setShardReady(ud.ShardID)
 		}
 	}
 	for _, ud := range updates {
@@ -182,7 +182,7 @@ func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 	for _, req := range mb.Requests {
 		idx := wr.partitioner.GetPartitionID(req.ShardID)
 		readyMap := wr.maps[idx]
-		readyMap.setClusterReady(req.ShardID)
+		readyMap.setShardReady(req.ShardID)
 	}
 	for _, req := range mb.Requests {
 		idx := wr.partitioner.GetPartitionID(req.ShardID)
@@ -193,12 +193,12 @@ func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
 	}
 }
 
-func (wr *workReady) allClustersReady(nodes []*node) {
+func (wr *workReady) allShardsReady(nodes []*node) {
 	var notified bitmap
 	for _, n := range nodes {
 		idx := wr.partitioner.GetPartitionID(n.shardID)
 		readyMap := wr.maps[idx]
-		readyMap.setClusterReady(n.shardID)
+		readyMap.setShardReady(n.shardID)
 	}
 	for _, n := range nodes {
 		idx := wr.partitioner.GetPartitionID(n.shardID)
@@ -212,7 +212,7 @@ func (wr *workReady) allClustersReady(nodes []*node) {
 func (wr *workReady) clusterReady(shardID uint64) {
 	idx := wr.partitioner.GetPartitionID(shardID)
 	readyMap := wr.maps[idx]
-	readyMap.setClusterReady(shardID)
+	readyMap.setShardReady(shardID)
 	wr.notify(idx)
 }
 
@@ -222,7 +222,7 @@ func (wr *workReady) waitCh(workerID uint64) chan struct{} {
 
 func (wr *workReady) getReadyMap(workerID uint64) map[uint64]struct{} {
 	readyMap := wr.maps[workerID-1]
-	return readyMap.getReadyClusters()
+	return readyMap.getReadyShards()
 }
 
 type job struct {
@@ -482,10 +482,10 @@ func (p *workerPool) updateLoadedBusyNodes() {
 }
 
 func (p *workerPool) loadNodes() {
-	if p.nh.getClusterSetIndex() != p.cci {
+	if p.nh.getShardSetIndex() != p.cci {
 		newNodes := make(map[uint64]*node)
 		loaded := make([]*node, 0)
-		p.cci = p.nh.forEachCluster(func(cid uint64, n *node) bool {
+		p.cci = p.nh.forEachShard(func(cid uint64, n *node) bool {
 			if on, ok := p.nodes[cid]; ok {
 				if on.instanceID != n.instanceID {
 					plog.Panicf("%s from two incarnations found", n.id())
@@ -1267,12 +1267,12 @@ func (e *engine) loadBucketNodes(workerID uint64,
 	csi uint64, nodes map[uint64]*node, partitioner server.IPartitioner,
 	from from) (map[uint64]*node, []*node, uint64) {
 	bucket := workerID - 1
-	newCSI := e.nh.getClusterSetIndex()
+	newCSI := e.nh.getShardSetIndex()
 	var offloaded []*node
 	if newCSI != csi {
 		newNodes := make(map[uint64]*node)
 		loaded := make([]*node, 0)
-		newCSI = e.nh.forEachCluster(func(cid uint64, v *node) bool {
+		newCSI = e.nh.forEachShard(func(cid uint64, v *node) bool {
 			if n, ok := nodes[cid]; ok {
 				if n.instanceID != v.instanceID {
 					plog.Panicf("%s from two incarnations found", n.id())
@@ -1424,7 +1424,7 @@ func (e *engine) setStepReadyByMessageBatch(mb pb.MessageBatch) {
 }
 
 func (e *engine) setAllStepReady(nodes []*node) {
-	e.stepWorkReady.allClustersReady(nodes)
+	e.stepWorkReady.allShardsReady(nodes)
 }
 
 func (e *engine) setStepReady(shardID uint64) {

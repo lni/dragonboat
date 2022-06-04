@@ -218,14 +218,14 @@ func TestEntryQueueAllowAddedEntriesToBeReturned(t *testing.T) {
 	}
 }
 
-func TestClusterCanBeSetAsReady(t *testing.T) {
-	rc := newReadyCluster()
+func TestShardCanBeSetAsReady(t *testing.T) {
+	rc := newReadyShard()
 	if len(rc.ready) != 0 {
 		t.Errorf("ready map not empty")
 	}
-	rc.setClusterReady(1)
-	rc.setClusterReady(2)
-	rc.setClusterReady(2)
+	rc.setShardReady(1)
+	rc.setShardReady(2)
+	rc.setShardReady(2)
 	if len(rc.ready) != 2 {
 		t.Errorf("ready map sz %d, want 2", len(rc.ready))
 	}
@@ -239,30 +239,30 @@ func TestClusterCanBeSetAsReady(t *testing.T) {
 	}
 }
 
-func TestReadyClusterCanBeReturnedAndCleared(t *testing.T) {
-	rc := newReadyCluster()
+func TestReadyShardCanBeReturnedAndCleared(t *testing.T) {
+	rc := newReadyShard()
 	if len(rc.ready) != 0 {
 		t.Errorf("ready map not empty")
 	}
-	rc.setClusterReady(1)
-	rc.setClusterReady(2)
-	rc.setClusterReady(2)
+	rc.setShardReady(1)
+	rc.setShardReady(2)
+	rc.setShardReady(2)
 	if len(rc.ready) != 2 {
 		t.Errorf("ready map sz %d, want 2", len(rc.ready))
 	}
-	r := rc.getReadyClusters()
+	r := rc.getReadyShards()
 	if len(r) != 2 {
 		t.Errorf("ready map sz %d, want 2", len(r))
 	}
 	if len(rc.ready) != 0 {
 		t.Errorf("cluster ready map not cleared")
 	}
-	r = rc.getReadyClusters()
+	r = rc.getReadyShards()
 	if len(r) != 0 {
 		t.Errorf("cluster ready map not cleared")
 	}
-	rc.setClusterReady(4)
-	r = rc.getReadyClusters()
+	rc.setShardReady(4)
+	r = rc.getReadyShards()
 	if len(r) != 1 {
 		t.Errorf("cluster ready not set")
 	}

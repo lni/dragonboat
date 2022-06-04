@@ -45,8 +45,8 @@ func GetTestFS() config.IFS {
 	return vfs.GetTestFS()
 }
 
-// Clusters returns a list of raft nodes managed by the nodehost instance.
-func (nh *NodeHost) Clusters() []*node {
+// Shards returns a list of raft nodes managed by the nodehost instance.
+func (nh *NodeHost) Shards() []*node {
 	result := make([]*node, 0)
 	nh.mu.RLock()
 	nh.mu.clusters.Range(func(k, v interface{}) bool {

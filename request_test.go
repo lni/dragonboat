@@ -42,12 +42,12 @@ func TestIsTempError(t *testing.T) {
 		{ErrTimeoutTooSmall, false},
 		{ErrPayloadTooBig, false},
 		{ErrSystemBusy, true},
-		{ErrClusterClosed, true},
-		{ErrClusterNotInitialized, true},
+		{ErrShardClosed, true},
+		{ErrShardNotInitialized, true},
 		{ErrTimeout, true},
 		{ErrCanceled, false},
 		{ErrRejected, false},
-		{ErrClusterNotReady, true},
+		{ErrShardNotReady, true},
 		{ErrInvalidTarget, false},
 		{ErrBadKey, false},
 		{ErrPendingLeaderTransferExist, true},
@@ -514,7 +514,7 @@ func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ps.close()
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != ErrClusterClosed {
+	if err != ErrShardClosed {
 		t.Errorf("not report as closed")
 	}
 	if ss != nil {
@@ -614,8 +614,8 @@ func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
 func TestCanNotMakeRequestOnClosedPendingConfigChange(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	pcc.close()
-	if _, err := pcc.request(pb.ConfigChange{}, 100); err != ErrClusterClosed {
-		t.Errorf("failed to return ErrClusterClosed, %v", err)
+	if _, err := pcc.request(pb.ConfigChange{}, 100); err != ErrShardClosed {
+		t.Errorf("failed to return ErrShardClosed, %v", err)
 	}
 }
 
@@ -914,7 +914,7 @@ func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	pp.close()
 	_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != ErrClusterClosed {
+	if err != ErrShardClosed {
 		t.Errorf("unexpected err %v", err)
 	}
 }
@@ -1194,8 +1194,8 @@ func TestPendingReadIndexCanBeCreatedAndClosed(t *testing.T) {
 func TestCanNotMakeRequestOnClosedPendingReadIndex(t *testing.T) {
 	pp, _ := getPendingReadIndex()
 	pp.close()
-	if _, err := pp.read(100); err != ErrClusterClosed {
-		t.Errorf("failed to return ErrClusterClosed %v", err)
+	if _, err := pp.read(100); err != ErrShardClosed {
+		t.Errorf("failed to return ErrShardClosed %v", err)
 	}
 }
 

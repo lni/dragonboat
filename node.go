@@ -279,7 +279,7 @@ func (n *node) applyConfigChange(cc pb.ConfigChange) error {
 	case pb.RemoveNode:
 		if cc.ReplicaID == n.replicaID {
 			plog.Infof("%s applied ConfChange Remove for itself", n.id())
-			n.nodeRegistry.RemoveCluster(n.shardID)
+			n.nodeRegistry.RemoveShard(n.shardID)
 			n.requestRemoval()
 		} else {
 			n.nodeRegistry.Remove(n.shardID, cc.ReplicaID)
@@ -349,7 +349,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 	}
 	for nid := range snapshot.Membership.Removed {
 		if nid == n.replicaID {
-			n.nodeRegistry.RemoveCluster(n.shardID)
+			n.nodeRegistry.RemoveShard(n.shardID)
 			n.requestRemoval()
 		}
 	}
@@ -421,7 +421,7 @@ func (n *node) OnDiskStateMachine() bool {
 func (n *node) proposeSession(session *client.Session,
 	timeout uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -442,7 +442,7 @@ func (n *node) payloadTooBig(sz int) bool {
 func (n *node) propose(session *client.Session,
 	cmd []byte, timeout uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -458,7 +458,7 @@ func (n *node) propose(session *client.Session,
 
 func (n *node) read(timeout uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -472,7 +472,7 @@ func (n *node) read(timeout uint64) (*RequestState, error) {
 
 func (n *node) requestLeaderTransfer(replicaID uint64) error {
 	if !n.initialized() {
-		return ErrClusterNotReady
+		return ErrShardNotReady
 	}
 	if n.isWitness() {
 		return ErrInvalidOperation
@@ -483,7 +483,7 @@ func (n *node) requestLeaderTransfer(replicaID uint64) error {
 func (n *node) requestSnapshot(opt SnapshotOption,
 	timeout uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -516,7 +516,7 @@ func (n *node) requestSnapshot(opt SnapshotOption,
 func (n *node) queryRaftLog(firstIndex uint64,
 	lastIndex uint64, maxSize uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -532,7 +532,7 @@ func (n *node) requestConfigChange(cct pb.ConfigChangeType,
 	replicaID uint64, target string, orderID uint64,
 	timeout uint64) (*RequestState, error) {
 	if !n.initialized() {
-		return nil, ErrClusterNotReady
+		return nil, ErrShardNotReady
 	}
 	if n.isWitness() {
 		return nil, ErrInvalidOperation
@@ -1585,7 +1585,7 @@ func (n *node) notifyConfigChange() {
 	}
 	_, isNonVoting := m.NonVotings[n.replicaID]
 	_, isWitness := m.Witnesses[n.replicaID]
-	ci := &ClusterInfo{
+	ci := &ShardInfo{
 		ShardID:           n.shardID,
 		ReplicaID:         n.replicaID,
 		IsNonVoting:       isNonVoting,
@@ -1601,17 +1601,17 @@ func (n *node) notifyConfigChange() {
 	})
 }
 
-func (n *node) getClusterInfo() ClusterInfo {
+func (n *node) getShardInfo() ShardInfo {
 	v := n.clusterInfo.Load()
 	if v == nil {
-		return ClusterInfo{
+		return ShardInfo{
 			ShardID:          n.shardID,
 			ReplicaID:        n.replicaID,
 			Pending:          true,
 			StateMachineType: sm.Type(n.sm.Type()),
 		}
 	}
-	ci := v.(*ClusterInfo)
+	ci := v.(*ShardInfo)
 
 	leaderID := uint64(0)
 	term := uint64(0)
@@ -1622,7 +1622,7 @@ func (n *node) getClusterInfo() ClusterInfo {
 		term = leaderInfo.term
 	}
 
-	return ClusterInfo{
+	return ShardInfo{
 		ShardID:           ci.ShardID,
 		ReplicaID:         ci.ReplicaID,
 		LeaderID:          leaderID,

@@ -328,7 +328,7 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 		t.Errorf("index/term not copied")
 	}
 	if newss.Dummy != ss.Dummy || newss.ShardID != ss.ShardID || newss.Type != ss.Type {
-		t.Errorf("dummy/ClusterId/Type fields not copied")
+		t.Errorf("dummy/ShardId/Type fields not copied")
 	}
 	if fs.PathDir(newss.Filepath) != finalDir {
 		t.Errorf("filepath not processed %s", newss.Filepath)

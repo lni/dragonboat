@@ -684,7 +684,7 @@ func testSourceAddressWillBeAddedToNodeRegistry(t *testing.T, mutualTLS bool, fs
 		Type:      raftpb.Heartbeat,
 		To:        2,
 		From:      200,
-		ClusterId: 100,
+		ShardID:   100,
 	}
 	done := trans.Send(msg)
 	if !done {
