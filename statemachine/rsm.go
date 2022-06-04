@@ -158,7 +158,7 @@ type IStateMachine interface {
 	// Update returns a Result value used to indicate the outcome of the update
 	// operation. An error is returned when there is unrecoverable error, such
 	// error will cause the program to panic.
-	Update([]byte) (Result, error)
+	Update(Entry) (Result, error)
 	// Lookup queries the state of the IStateMachine instance. The input
 	// interface{} specifies what to query, it is up to the IStateMachine
 	// implementation to interpret such input interface{}. The returned

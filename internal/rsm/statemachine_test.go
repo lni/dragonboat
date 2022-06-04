@@ -2622,7 +2622,7 @@ func expectedError(err error) bool {
 
 type errorUpdateSM struct{}
 
-func (e *errorUpdateSM) Update(data []byte) (sm.Result, error) {
+func (e *errorUpdateSM) Update(i sm.Entry) (sm.Result, error) {
 	return sm.Result{}, errReturnedError
 }
 func (e *errorUpdateSM) Lookup(q interface{}) (interface{}, error) { return nil, nil }

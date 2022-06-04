@@ -76,7 +76,7 @@ func (i *InMemStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 		panic("len(entries) != 1")
 	}
 	var err error
-	entries[0].Result, err = i.sm.Update(entries[0].Cmd)
+	entries[0].Result, err = i.sm.Update(entries[0])
 	return entries, errors.WithStack(err)
 }
 

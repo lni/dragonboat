@@ -142,7 +142,7 @@ func (s *KVTest) Lookup(key interface{}) (interface{}, error) {
 }
 
 // Update updates the object using the specified committed raft entry.
-func (s *KVTest) Update(data []byte) (sm.Result, error) {
+func (s *KVTest) Update(e sm.Entry) (sm.Result, error) {
 	s.Count++
 	if s.aborted {
 		panic("update() called after abort set to true")
@@ -152,13 +152,13 @@ func (s *KVTest) Update(data []byte) (sm.Result, error) {
 	}
 	generateRandomDelay()
 	dataKv := s.pbkvPool.Get().(*kvpb.PBKV)
-	err := dataKv.Unmarshal(data)
+	err := dataKv.Unmarshal(e.Cmd)
 	if err != nil {
 		panic(err)
 	}
 	s.updateStore(dataKv.GetKey(), dataKv.GetVal())
 	s.pbkvPool.Put(dataKv)
-	return sm.Result{Value: uint64(len(data))}, nil
+	return sm.Result{Value: uint64(len(e.Cmd))}, nil
 }
 
 func (s *KVTest) saveExternalFile(fileCollection sm.ISnapshotFileCollection) {
@@ -318,7 +318,7 @@ type VerboseSnapshotSM struct {
 }
 
 // Update ...
-func (v *VerboseSnapshotSM) Update(data []byte) (sm.Result, error) {
+func (v *VerboseSnapshotSM) Update(e sm.Entry) (sm.Result, error) {
 	return sm.Result{}, nil
 }
 

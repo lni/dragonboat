@@ -30,7 +30,7 @@ type TestUpdate struct {
 }
 
 // Update updates the state machine.
-func (c *TestUpdate) Update(data []byte) (sm.Result, error) {
+func (c *TestUpdate) Update(e sm.Entry) (sm.Result, error) {
 	atomic.StoreUint32(&c.val, 1)
 	for i := 0; i < 5; i++ {
 		time.Sleep(1 * time.Millisecond)
@@ -134,7 +134,7 @@ type TestSnapshot struct {
 }
 
 // Update updates the state machine.
-func (c *TestSnapshot) Update(data []byte) (sm.Result, error) {
+func (c *TestSnapshot) Update(e sm.Entry) (sm.Result, error) {
 	return sm.Result{Value: uint64(atomic.LoadUint32(&c.val))}, nil
 }
 

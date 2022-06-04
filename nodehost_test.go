@@ -377,7 +377,7 @@ type TimeoutStateMachine struct {
 	closed        bool
 }
 
-func (t *TimeoutStateMachine) Update(date []byte) (sm.Result, error) {
+func (t *TimeoutStateMachine) Update(e sm.Entry) (sm.Result, error) {
 	if t.updateDelay > 0 {
 		time.Sleep(time.Duration(t.updateDelay) * time.Millisecond)
 	}
@@ -1229,8 +1229,8 @@ func (n *PST) Lookup(key interface{}) (interface{}, error) {
 }
 
 // Update updates the object.
-func (n *PST) Update(data []byte) (sm.Result, error) {
-	return sm.Result{Value: uint64(len(data))}, nil
+func (n *PST) Update(e sm.Entry) (sm.Result, error) {
+	return sm.Result{Value: uint64(len(e.Cmd))}, nil
 }
 
 // SaveSnapshot saves the state of the object to the provided io.Writer object.
@@ -5729,7 +5729,7 @@ func TestBootstrapInfoIsValidated(t *testing.T) {
 
 type stressRSM struct{}
 
-func (s *stressRSM) Update([]byte) (sm.Result, error) {
+func (s *stressRSM) Update(sm.Entry) (sm.Result, error) {
 	plog.Infof("updated")
 	return sm.Result{}, nil
 }
