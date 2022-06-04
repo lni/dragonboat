@@ -87,9 +87,9 @@ import (
 
 const (
 	// DragonboatMajor is the major version number
-	DragonboatMajor = 3
+	DragonboatMajor = 4
 	// DragonboatMinor is the minor version number
-	DragonboatMinor = 4
+	DragonboatMinor = 0
 	// DragonboatPatch is the patch version number
 	DragonboatPatch = 0
 	// DEVVersion is a boolean flag indicating whether this is a dev version
@@ -433,14 +433,6 @@ func (nh *NodeHost) Close() {
 	}
 }
 
-// Stop closes and releases all resources owned by the NodeHost instance
-// including Raft nodes managed by the NodeHost.
-//
-// Deprecated: Use Close instead
-func (nh *NodeHost) Stop() {
-	nh.Close()
-}
-
 // NodeHostConfig returns the NodeHostConfig instance used for configuring this
 // NodeHost instance.
 func (nh *NodeHost) NodeHostConfig() config.NodeHostConfig {
@@ -681,16 +673,6 @@ func (nh *NodeHost) SyncGetShardMembership(ctx context.Context,
 	return v.(*Membership), nil
 }
 
-// GetShardMembership returns the membership information from the specified
-// Raft cluster.
-//
-// Deprecated: Use NodeHost.SyncGetShardMembership instead.
-// NodeHost.GetShardMembership will be removed in v4.0.
-func (nh *NodeHost) GetShardMembership(ctx context.Context,
-	shardID uint64) (*Membership, error) {
-	return nh.SyncGetShardMembership(ctx, shardID)
-}
-
 // GetLeaderID returns the leader node ID of the specified Raft cluster based
 // on local node's knowledge. The returned boolean value indicates whether the
 // leader information is available.
@@ -723,26 +705,6 @@ func (nh *NodeHost) GetLeaderID(shardID uint64) (uint64, bool, error) {
 // based user state machines.
 func (nh *NodeHost) GetNoOPSession(shardID uint64) *client.Session {
 	return client.NewNoOPSession(shardID, nh.env.GetRandomSource())
-}
-
-// GetNewSession starts a synchronous proposal to create, register and return
-// a new client session object for the specified Raft cluster.
-//
-// Deprecated: Use NodeHost.SyncGetSession instead. NodeHost.GetNewSession will
-// be removed in v4.0.
-func (nh *NodeHost) GetNewSession(ctx context.Context,
-	shardID uint64) (*client.Session, error) {
-	return nh.SyncGetSession(ctx, shardID)
-}
-
-// CloseSession closes the specified client session by unregistering it from the
-// system.
-//
-// Deprecated: Use NodeHost.SyncCloseSession instead. NodeHost.CloseSession will
-// be removed in v4.0.
-func (nh *NodeHost) CloseSession(ctx context.Context,
-	session *client.Session) error {
-	return nh.SyncCloseSession(ctx, session)
 }
 
 // SyncGetSession starts a synchronous proposal to create, register and return
@@ -1084,16 +1046,6 @@ func (nh *NodeHost) SyncRequestAddNode(ctx context.Context,
 	return err
 }
 
-// SyncRequestAddObserver is the synchronous variant of the RequestAddObserver.
-//
-// Deprecated: use SyncRequestAddNonVoting instead.
-func (nh *NodeHost) SyncRequestAddObserver(ctx context.Context,
-	shardID uint64, replicaID uint64,
-	target string, configChangeIndex uint64) error {
-	return nh.SyncRequestAddNonVoting(ctx,
-		shardID, replicaID, target, configChangeIndex)
-}
-
 // SyncRequestAddNonVoting is the synchronous variant of the RequestAddNonVoting
 // method. See RequestAddNonVoting for more details.
 //
@@ -1210,17 +1162,6 @@ func (nh *NodeHost) RequestAddNode(shardID uint64,
 	defer nh.engine.setStepReady(shardID)
 	return n.requestAddNodeWithOrderID(replicaID,
 		target, configChangeIndex, nh.getTimeoutTick(timeout))
-}
-
-// RequestAddObserver is a Raft cluster membership change method for requesting
-// the specified node to be added to the specified Raft cluster as an observer.
-//
-// Deprecated: use RequestAddNonVoting instead.
-func (nh *NodeHost) RequestAddObserver(shardID uint64,
-	replicaID uint64, target Target, configChangeIndex uint64,
-	timeout time.Duration) (*RequestState, error) {
-	return nh.RequestAddNonVoting(shardID,
-		replicaID, target, configChangeIndex, timeout)
 }
 
 // RequestAddNonVoting is a Raft cluster membership change method for requesting

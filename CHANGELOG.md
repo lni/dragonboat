@@ -1,6 +1,6 @@
-## v3.4 (TBD)
+## v4.0 (TBD)
 
-Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended to upgrade.
+Dragonboat v4.0 is a major release with new features, improvements and API changes.
 
 ### New features
 
@@ -23,6 +23,7 @@ Dragonboat v3.4 comes with many improvements. All v3.3.x users are recommended t
 - Raft observer node has been renamed as non-voting node.
 - RocksDB support has been removed as Pebble provides bidirectional compatible with RocksDB. 
 - ClusterID/NodeID has been renamed as ShardID/ReplicaID.
+- Deprecated v3.x features and APIs have been removed. 
 
 ## v3.3 (2021-01-20)
 
