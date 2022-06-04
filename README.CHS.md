@@ -8,6 +8,7 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
+* 2022-06-03 Dragonboat v4.0 版本正在开发中，master分支已经是v4的API，具体变化请见[CHANGELOG](CHANGELOG.md)。
 * 2021-01-20 Dragonboat v3.3 已发布，请查看[CHANGELOG](CHANGELOG.md)获知所有更新情况。
 
 ## 关于 ##
@@ -73,7 +74,15 @@ __Master是用于开发的非稳定branch。生产环境请使用已发布版本
 
 首先请确保Go 1.14或者更新的版本已被安装以获得[Go module](https://github.com/golang/go/wiki/Modules)支持。
 
-请在Go程序中import __github.com/lni/dragonboat/v4__这个包，同时把"github.com/lni/dragonboat/v4 v3.3.0"添加到您的Go应用的go.mod文件的__require__部分。
+使用下列命令将Dragonboat v3稳定版加入您的项目：
+
+```
+go get github.com/lni/dragonboat/v3@latest
+```
+或者使用下列命令将开发中的Dragonboat v4版加入您的项目：
+```
+go get github.com/lni/dragonboat/v4@master
+```
 
 [Pebble](https://github.com/cockroachdb/pebble)是默认的用于存储Raft Log的存储引擎。RocksDB与自定义存储引擎的使用方法可参考[这里](docs/storage.CHS.md)。
 
