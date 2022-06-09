@@ -135,6 +135,8 @@ var (
 	ErrDirNotExist = errors.New("specified dir does not exist")
 	// ErrLogDBNotCreatedOrClosed indicates that the logdb is not created yet or closed already.
 	ErrLogDBNotCreatedOrClosed = errors.New("logdb is not created yet or closed already")
+	// ErrInvalidRange indicates that the specified log range is invalid.
+	ErrInvalidRange = errors.New("invalid log range")
 )
 
 // ShardInfo is a record for representing the state of a Raft cluster based
@@ -1427,6 +1429,9 @@ func (nh *NodeHost) queryRaftLog(shardID uint64,
 	v, ok := nh.getShard(shardID)
 	if !ok {
 		return nil, ErrShardNotFound
+	}
+	if lastIndex <= firstIndex {
+		return nil, ErrInvalidRange
 	}
 	req, err := v.queryRaftLog(firstIndex, lastIndex, maxSize)
 	nh.engine.setStepReady(shardID)

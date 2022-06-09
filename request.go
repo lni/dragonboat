@@ -86,25 +86,6 @@ var (
 	ErrInvalidTarget = errors.New("invalid target node ID")
 )
 
-var (
-	// ErrBadKey indicates that the key is bad, retry the request is recommended.
-	//
-	// Deprecated: ErrBadKey is no longer used.
-	ErrBadKey = errors.New("bad key try again later")
-	// ErrPendingLeaderTransferExist has been depredicated, use ErrSystemBusy.
-	//
-	// Deprecated: ErrPendingLeaderTransferExist is deprecated.
-	ErrPendingLeaderTransferExist = ErrSystemBusy
-	// ErrPendingConfigChangeExist has been deprecicated, use ErrSystemBusy.
-	//
-	// Deprecated: ErrPendingConfigChangeExist is deprecated.
-	ErrPendingConfigChangeExist = ErrSystemBusy
-	// ErrPendingSnapshotRequestExist has been deprecated, use ErrSystemBusy.
-	//
-	// Deprecated: ErrPendingSnapshotRequestExist is deprecated.
-	ErrPendingSnapshotRequestExist = ErrSystemBusy
-)
-
 // IsTempError returns a boolean value indicating whether the specified error
 // is a temporary error that worth to be retried later with the exact same
 // input, potentially on a more suitable NodeHost instance.

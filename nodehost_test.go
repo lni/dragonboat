@@ -3125,6 +3125,9 @@ func TestRaftLogQuery(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				makeTestProposal(nh, 10)
 			}
+			_, err := nh.QueryRaftLog(1, 2, 1, math.MaxUint64)
+			assert.Equal(t, ErrInvalidRange, err)
+
 			rs, err := nh.QueryRaftLog(1, 1, 11, math.MaxUint64)
 			assert.NoError(t, err)
 			ticker := time.NewTicker(2 * time.Second)
@@ -5487,6 +5490,9 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.GetNodeUser(1); err != ErrClosed {
+				t.Errorf("failed to return ErrClosed")
+			}
+			if _, err := nh.QueryRaftLog(1, 1, 2, 100); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 		},

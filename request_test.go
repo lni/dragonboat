@@ -49,10 +49,7 @@ func TestIsTempError(t *testing.T) {
 		{ErrRejected, false},
 		{ErrShardNotReady, true},
 		{ErrInvalidTarget, false},
-		{ErrBadKey, false},
-		{ErrPendingLeaderTransferExist, true},
-		{ErrPendingConfigChangeExist, true},
-		{ErrPendingSnapshotRequestExist, true},
+		{ErrInvalidRange, false},
 	}
 	for idx, tt := range tests {
 		if tmp := IsTempError(tt.err); tmp != tt.temp {
