@@ -215,7 +215,7 @@ func (s *ShardedDB) SaveSnapshots(updates []pb.Update) error {
 }
 
 // GetSnapshot returns the most recent snapshot associated with the specified
-// cluster.
+// shard.
 func (s *ShardedDB) GetSnapshot(shardID uint64,
 	replicaID uint64) (pb.Snapshot, error) {
 	p := s.partitioner.GetPartitionID(shardID)

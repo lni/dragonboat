@@ -506,7 +506,7 @@ func TestLeaderCycle(t *testing.T) {
 	testLeaderCycle(t)
 }
 
-// testLeaderCycle verifies that each node in a cluster can campaign
+// testLeaderCycle verifies that each node in a shard can campaign
 // and be elected in turn. This ensures that elections (including
 // pre-vote) work when not starting from a clean slate (as they do in
 // TestLeaderElection)
@@ -1249,10 +1249,10 @@ func TestStepIgnoreOldTermMsg(t *testing.T) {
 }
 
 // TestHandleMTReplicate ensures:
-// 1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
-// 2. If an existing entry conflicts with a new one (same index but different terms),
-//    delete the existing entry and all that follow it; append any new entries not already in the log.
-// 3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
+//  1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
+//  2. If an existing entry conflicts with a new one (same index but different terms),
+//     delete the existing entry and all that follow it; append any new entries not already in the log.
+//  3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
 func TestHandleMTReplicate(t *testing.T) {
 	tests := []struct {
 		m       pb.Message
@@ -2584,7 +2584,7 @@ func TestRemoveNode(t *testing.T) {
 		t.Errorf("nodes = %v, want %v", g, w)
 	}
 
-	// remove all nodes from cluster
+	// remove all nodes from shard
 	ne(r.removeNode(1), t)
 	w = []uint64{}
 	if g := r.nodesSorted(); !reflect.DeepEqual(g, w) {
@@ -2667,7 +2667,7 @@ func testCampaignWhileLeader(t *testing.T) {
 // TestCommitAfterRemoveNode verifies that pending commands can become
 // committed when a config change reduces the quorum requirements.
 func TestCommitAfterRemoveNode(t *testing.T) {
-	// Create a cluster with two nodes.
+	// Create a shard with two nodes.
 	s := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, s)
 	r.becomeCandidate()

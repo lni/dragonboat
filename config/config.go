@@ -63,7 +63,7 @@ const (
 
 // Config is used to configure Raft nodes.
 type Config struct {
-	// ReplicaID is a non-zero value used to identify a node within a Raft cluster.
+	// ReplicaID is a non-zero value used to identify a node within a Raft shard.
 	ReplicaID uint64
 	// ShardID is the unique value used to identify a Raft group that contains
 	// multiple replicas.
@@ -172,7 +172,7 @@ type Config struct {
 	DisableAutoCompactions bool
 	// IsNonVoting indicates whether this is a non-voting Raft node. Described as
 	// non-voting members in the section 4.2.1 of Diego Ongaro's thesis, they are
-	// used to allow a new node to join the cluster and catch up with other
+	// used to allow a new node to join the shard and catch up with other
 	// existing ndoes without impacting the availability. Extra non-voting nodes
 	// can also be introduced to serve read-only requests.
 	IsNonVoting bool
@@ -187,8 +187,8 @@ type Config struct {
 	//
 	// Witness support is currently experimental.
 	IsWitness bool
-	// Quiesce specifies whether to let the Raft cluster enter quiesce mode when
-	// there is no cluster activity. Shards in quiesce mode do not exchange
+	// Quiesce specifies whether to let the Raft shard enter quiesce mode when
+	// there is no shard activity. Shards in quiesce mode do not exchange
 	// heartbeat messages to minimize bandwidth consumption.
 	//
 	// Quiesce support is currently experimental.
@@ -369,11 +369,11 @@ type NodeHostConfig struct {
 	// is unlimited.
 	MaxReceiveQueueSize uint64
 	// MaxSnapshotSendBytesPerSecond defines how much snapshot data can be sent
-	// every second for all Raft clusters managed by the NodeHost instance.
+	// every second for all Raft shards managed by the NodeHost instance.
 	// The default value 0 means there is no limit set for snapshot streaming.
 	MaxSnapshotSendBytesPerSecond uint64
 	// MaxSnapshotRecvBytesPerSecond defines how much snapshot data can be
-	// received each second for all Raft clusters managed by the NodeHost instance.
+	// received each second for all Raft shards managed by the NodeHost instance.
 	// The default value 0 means there is no limit for receiving snapshot data.
 	MaxSnapshotRecvBytesPerSecond uint64
 	// NotifyCommit specifies whether clients should be notified when their
@@ -414,7 +414,7 @@ type NodeHostConfig struct {
 	// When starting Raft nodes or requesting new nodes to be added, use the above
 	// mentioned NodeHostID values as the target parameters (which are of the
 	// Target type). Let's say we want to start a Raft Node as a part of a three
-	// replicas Raft cluster, the initialMembers parameter of the StartShard
+	// replicas Raft shard, the initialMembers parameter of the StartShard
 	// method can be set to
 	//
 	// initialMembers := map[uint64]Target {
@@ -423,9 +423,9 @@ type NodeHostConfig struct {
 	//   3: "nhid-zzzzz",
 	// }
 	//
-	// This indicates that node 1 of the cluster will be running on the NodeHost
+	// This indicates that node 1 of the shard will be running on the NodeHost
 	// instance identified by the NodeHostID value "nhid-xxxxx", node 2 of the
-	// same cluster will be running on the NodeHost instance identified by the
+	// same shard will be running on the NodeHost instance identified by the
 	// NodeHostID value of "nhid-yyyyy" and so on.
 	//
 	// The internal gossip service exchanges NodeHost details, including their

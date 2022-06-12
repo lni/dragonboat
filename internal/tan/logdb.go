@@ -108,7 +108,7 @@ func CreateTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 }
 
 // CreateLogMultiplexedTan creates and returns a tan instance that uses
-// multiplexed log files. A multiplexed log allow multiple raft clusters to
+// multiplexed log files. A multiplexed log allow multiple raft shards to
 // share the same underlying physical log file, this is required when you
 // want to run thousands of raft nodes on the same server without having
 // thousands action log files.

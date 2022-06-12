@@ -618,7 +618,7 @@ func TestSnapshotRecordWithoutExternalFilesCanBeSplitIntoChunk(t *testing.T) {
 			t.Errorf("bin ver not set")
 		}
 		if c.ShardID != msg.ShardID {
-			t.Errorf("unexpected cluster id")
+			t.Errorf("unexpected shard id")
 		}
 		if c.ReplicaID != msg.To {
 			t.Errorf("unexpected node id")

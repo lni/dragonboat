@@ -157,7 +157,7 @@ func (wr *workReady) notify(idx uint64) {
 	}
 }
 
-func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
+func (wr *workReady) shardReadyByUpdates(updates []pb.Update) {
 	var notified bitmap
 	for _, ud := range updates {
 		if len(ud.CommittedEntries) > 0 {
@@ -177,7 +177,7 @@ func (wr *workReady) clusterReadyByUpdates(updates []pb.Update) {
 	}
 }
 
-func (wr *workReady) clusterReadyByMessageBatch(mb pb.MessageBatch) {
+func (wr *workReady) shardReadyByMessageBatch(mb pb.MessageBatch) {
 	var notified bitmap
 	for _, req := range mb.Requests {
 		idx := wr.partitioner.GetPartitionID(req.ShardID)
@@ -209,7 +209,7 @@ func (wr *workReady) allShardsReady(nodes []*node) {
 	}
 }
 
-func (wr *workReady) clusterReady(shardID uint64) {
+func (wr *workReady) shardReady(shardID uint64) {
 	idx := wr.partitioner.GetPartitionID(shardID)
 	readyMap := wr.maps[idx]
 	readyMap.setShardReady(shardID)
@@ -421,9 +421,9 @@ func (p *workerPool) workerPoolMain() {
 			p.unloadNodes()
 			return
 		} else if chosen == 1 {
-			clusters := p.saveReady.getReadyMap(1)
+			shards := p.saveReady.getReadyMap(1)
 			p.loadNodes()
-			for cid := range clusters {
+			for cid := range shards {
 				if j, ok := p.getSaveJob(cid); ok {
 					plog.Debugf("%s saveRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
@@ -431,9 +431,9 @@ func (p *workerPool) workerPoolMain() {
 				}
 			}
 		} else if chosen == 2 {
-			clusters := p.recoverReady.getReadyMap(1)
+			shards := p.recoverReady.getReadyMap(1)
 			p.loadNodes()
-			for cid := range clusters {
+			for cid := range shards {
 				if j, ok := p.getRecoverJob(cid); ok {
 					plog.Debugf("%s recoverRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
@@ -441,9 +441,9 @@ func (p *workerPool) workerPoolMain() {
 				}
 			}
 		} else if chosen == 3 {
-			clusters := p.streamReady.getReadyMap(1)
+			shards := p.streamReady.getReadyMap(1)
 			p.loadNodes()
-			for cid := range clusters {
+			for cid := range shards {
 				if j, ok := p.getStreamJob(cid); ok {
 					plog.Debugf("%s streamRequested for %d", p.nh.describe(), cid)
 					p.pending = append(p.pending, j)
@@ -917,7 +917,7 @@ func (p *closeWorkerPool) completed(workerID uint64) {
 		plog.Panicf("close worker %d is not in busy state", workerID)
 	}
 	if _, ok := p.processing[shardID]; !ok {
-		plog.Panicf("cluster %d is not being processed", shardID)
+		plog.Panicf("shard %d is not being processed", shardID)
 	}
 	delete(p.processing, shardID)
 	delete(p.busy, workerID)
@@ -1420,7 +1420,7 @@ func (e *engine) setCloseReady(n *node) {
 }
 
 func (e *engine) setStepReadyByMessageBatch(mb pb.MessageBatch) {
-	e.stepWorkReady.clusterReadyByMessageBatch(mb)
+	e.stepWorkReady.shardReadyByMessageBatch(mb)
 }
 
 func (e *engine) setAllStepReady(nodes []*node) {
@@ -1428,42 +1428,42 @@ func (e *engine) setAllStepReady(nodes []*node) {
 }
 
 func (e *engine) setStepReady(shardID uint64) {
-	e.stepWorkReady.clusterReady(shardID)
+	e.stepWorkReady.shardReady(shardID)
 }
 
 func (e *engine) setCommitReadyByUpdates(updates []pb.Update) {
-	e.commitWorkReady.clusterReadyByUpdates(updates)
+	e.commitWorkReady.shardReadyByUpdates(updates)
 }
 
 func (e *engine) setCommitReady(shardID uint64) {
-	e.commitWorkReady.clusterReady(shardID)
+	e.commitWorkReady.shardReady(shardID)
 }
 
 func (e *engine) setApplyReadyByUpdates(updates []pb.Update) {
-	e.applyWorkReady.clusterReadyByUpdates(updates)
+	e.applyWorkReady.shardReadyByUpdates(updates)
 }
 
 func (e *engine) setApplyReady(shardID uint64) {
-	e.applyWorkReady.clusterReady(shardID)
+	e.applyWorkReady.shardReady(shardID)
 }
 
 func (e *engine) setStreamReady(shardID uint64) {
-	e.wp.streamReady.clusterReady(shardID)
+	e.wp.streamReady.shardReady(shardID)
 }
 
 func (e *engine) setSaveReady(shardID uint64) {
-	e.wp.saveReady.clusterReady(shardID)
+	e.wp.saveReady.shardReady(shardID)
 }
 
 func (e *engine) setRecoverReady(shardID uint64) {
-	e.wp.recoverReady.clusterReady(shardID)
+	e.wp.recoverReady.shardReady(shardID)
 }
 
 func (e *engine) setCCIReady(shardID uint64) {
-	e.stepCCIReady.clusterReady(shardID)
-	e.commitCCIReady.clusterReady(shardID)
-	e.applyCCIReady.clusterReady(shardID)
-	e.wp.cciReady.clusterReady(shardID)
+	e.stepCCIReady.shardReady(shardID)
+	e.commitCCIReady.shardReady(shardID)
+	e.applyCCIReady.shardReady(shardID)
+	e.wp.cciReady.shardReady(shardID)
 }
 
 func (e *engine) offloadNodeMap(nodes map[uint64]*node) {

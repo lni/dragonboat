@@ -20,10 +20,10 @@ type NodeHostRegistry struct {
 	view  *view
 }
 
-// NumOfShards returns the number of clusters known to the current NodeHost
+// NumOfShards returns the number of shards known to the current NodeHost
 // instance.
 func (r *NodeHostRegistry) NumOfShards() int {
-	return r.view.clusterCount()
+	return r.view.shardCount()
 }
 
 // GetMeta returns gossip metadata associated with the specified NodeHost
@@ -36,13 +36,13 @@ func (r *NodeHostRegistry) GetMeta(nhID string) ([]byte, bool) {
 	return m.Data, true
 }
 
-// GetShardInfo returns the cluster info for the specified cluster if it is
+// GetShardInfo returns the shard info for the specified shard if it is
 // available in the gossip view.
 func (r *NodeHostRegistry) GetShardInfo(shardID uint64) (ShardView, bool) {
 	r.view.mu.Lock()
 	defer r.view.mu.Unlock()
 
-	ci, ok := r.view.mu.clusters[shardID]
+	ci, ok := r.view.mu.shards[shardID]
 	if !ok {
 		return ShardView{}, false
 	}

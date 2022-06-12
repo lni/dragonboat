@@ -71,7 +71,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 		},
 	}
 	v.update(update)
-	c, ok := v.mu.clusters[1340]
+	c, ok := v.mu.shards[1340]
 	assert.True(t, ok)
 	assert.Equal(t, uint64(126200), c.ConfigChangeIndex)
 	assert.Equal(t, 3, len(c.Nodes))
@@ -87,7 +87,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 		},
 	}
 	v.update(update)
-	c, ok = v.mu.clusters[1340]
+	c, ok = v.mu.shards[1340]
 	assert.True(t, ok)
 	assert.Equal(t, uint64(226200), c.ConfigChangeIndex)
 	assert.Equal(t, 2, len(c.Nodes))
@@ -101,7 +101,7 @@ func TestDeploymentIDIsChecked(t *testing.T) {
 
 	v2 := newView(321)
 	v2.updateFrom(data)
-	assert.Equal(t, 0, len(v2.mu.clusters))
+	assert.Equal(t, 0, len(v2.mu.shards))
 }
 
 func TestGetGossipData(t *testing.T) {
@@ -121,7 +121,7 @@ func TestUpdateMembershipView(t *testing.T) {
 	}
 	cv.Nodes[1] = "t1"
 	cv.Nodes[2] = "t2"
-	v.mu.clusters[123] = cv
+	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:           123,
@@ -134,7 +134,7 @@ func TestUpdateMembershipView(t *testing.T) {
 	updates := []ShardView{ncv}
 	v.update(updates)
 
-	result, ok := v.mu.clusters[123]
+	result, ok := v.mu.shards[123]
 	assert.True(t, ok)
 	assert.Equal(t, ncv, result)
 }
@@ -148,7 +148,7 @@ func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 	}
 	cv.Nodes[1] = "t1"
 	cv.Nodes[2] = "t2"
-	v.mu.clusters[123] = cv
+	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:           123,
@@ -161,7 +161,7 @@ func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 	updates := []ShardView{ncv}
 	v.update(updates)
 
-	result, ok := v.mu.clusters[123]
+	result, ok := v.mu.shards[123]
 	assert.True(t, ok)
 	assert.Equal(t, cv, result)
 }
@@ -173,7 +173,7 @@ func TestUpdateLeadershipView(t *testing.T) {
 		LeaderID: 10,
 		Term:     20,
 	}
-	v.mu.clusters[123] = cv
+	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:  123,
@@ -183,7 +183,7 @@ func TestUpdateLeadershipView(t *testing.T) {
 	updates := []ShardView{ncv}
 	v.update(updates)
 
-	result, ok := v.mu.clusters[123]
+	result, ok := v.mu.shards[123]
 	assert.True(t, ok)
 	assert.Equal(t, ncv, result)
 }
@@ -193,7 +193,7 @@ func TestInitialLeaderInfoCanBeRecorded(t *testing.T) {
 	cv := ShardView{
 		ShardID: 123,
 	}
-	v.mu.clusters[123] = cv
+	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:  123,
@@ -203,7 +203,7 @@ func TestInitialLeaderInfoCanBeRecorded(t *testing.T) {
 	updates := []ShardView{ncv}
 	v.update(updates)
 
-	result, ok := v.mu.clusters[123]
+	result, ok := v.mu.shards[123]
 	assert.True(t, ok)
 	assert.Equal(t, ncv, result)
 }
@@ -215,7 +215,7 @@ func TestUnknownLeaderIsIgnored(t *testing.T) {
 		LeaderID: 10,
 		Term:     20,
 	}
-	v.mu.clusters[123] = cv
+	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:  123,
@@ -225,7 +225,7 @@ func TestUnknownLeaderIsIgnored(t *testing.T) {
 	updates := []ShardView{ncv}
 	v.update(updates)
 
-	result, ok := v.mu.clusters[123]
+	result, ok := v.mu.shards[123]
 	assert.True(t, ok)
 	assert.Equal(t, cv, result)
 }

@@ -66,7 +66,7 @@ var Hard = getHardSettings()
 
 type hard struct {
 	// LRUMaxSessionCount is the max number of client sessions that can be
-	// concurrently held and managed by each raft cluster.
+	// concurrently held and managed by each raft shard.
 	LRUMaxSessionCount uint64
 	// LogDBEntryBatchSize is the max size of each entry batch.
 	LogDBEntryBatchSize uint64

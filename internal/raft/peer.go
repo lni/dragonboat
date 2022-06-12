@@ -47,7 +47,7 @@ import (
 	pb "github.com/lni/dragonboat/v4/raftpb"
 )
 
-// PeerAddress is the basic info for a peer in the Raft cluster.
+// PeerAddress is the basic info for a peer in the Raft shard.
 type PeerAddress struct {
 	Address   string
 	ReplicaID uint64

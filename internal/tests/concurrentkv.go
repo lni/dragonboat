@@ -61,7 +61,7 @@ func NewConcurrentKVTest(shardID uint64, replicaID uint64) sm.IConcurrentStateMa
 		ReplicaID: replicaID,
 	}
 	kvdata := &kvdata{junk: make([]byte, 3*1024)}
-	// write some junk data consistent across the cluster
+	// write some junk data consistent across the shard
 	for i := 0; i < len(kvdata.junk); i++ {
 		kvdata.junk[i] = 2
 	}

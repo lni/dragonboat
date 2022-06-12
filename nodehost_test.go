@@ -510,17 +510,17 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 	}
 	if to.createSM != nil {
 		if err := nh.StartReplica(peers, to.join, to.createSM, *cfg); err != nil {
-			t.Fatalf("start cluster failed: %v", err)
+			t.Fatalf("start shard failed: %v", err)
 		}
 	} else if to.createConcurrentSM != nil {
 		if err := nh.StartConcurrentReplica(peers,
 			to.join, to.createConcurrentSM, *cfg); err != nil {
-			t.Fatalf("start concurrent cluster failed: %v", err)
+			t.Fatalf("start concurrent shard failed: %v", err)
 		}
 	} else if to.createOnDiskSM != nil {
 		if err := nh.StartOnDiskReplica(peers,
 			to.join, to.createOnDiskSM, *cfg); err != nil {
-			t.Fatalf("start on disk cluster fail: %v", err)
+			t.Fatalf("start on disk shard fail: %v", err)
 		}
 	} else {
 		t.Fatalf("?!?")
@@ -1016,7 +1016,7 @@ func TestNodeHostRegistry(t *testing.T) {
 		}
 	}
 	if !good {
-		t.Fatalf("registry failed to report the expected num of clusters")
+		t.Fatalf("registry failed to report the expected num of shards")
 	}
 	rc.ShardID = 100
 	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
@@ -1040,7 +1040,7 @@ func TestNodeHostRegistry(t *testing.T) {
 			return
 		}
 	}
-	t.Fatalf("failed to report the expected num of clusters")
+	t.Fatalf("failed to report the expected num of shards")
 }
 
 func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
@@ -1541,7 +1541,7 @@ func TestJoinedShardCanBeRestartedOrJoinedAgain(t *testing.T) {
 			peers := make(map[uint64]string)
 			newPST := func(uint64, uint64) sm.IStateMachine { return &PST{} }
 			if err := nh.StopShard(1); err != nil {
-				t.Fatalf("failed to stop the cluster: %v", err)
+				t.Fatalf("failed to stop the shard: %v", err)
 			}
 			for i := 0; i < 1000; i++ {
 				err := nh.StartReplica(peers, true, newPST, *cfg)
@@ -1552,7 +1552,7 @@ func TestJoinedShardCanBeRestartedOrJoinedAgain(t *testing.T) {
 					time.Sleep(5 * time.Millisecond)
 					continue
 				} else {
-					t.Fatalf("failed to join the cluster again, %v", err)
+					t.Fatalf("failed to join the shard again, %v", err)
 				}
 			}
 		},
@@ -1857,7 +1857,7 @@ func TestGetShardMembership(t *testing.T) {
 			defer cancel()
 			_, err := nh.SyncGetShardMembership(ctx, 1)
 			if err != nil {
-				t.Fatalf("failed to get cluster membership")
+				t.Fatalf("failed to get shard membership")
 			}
 		},
 	}
@@ -2074,7 +2074,7 @@ func TestNodeHostSyncIOAPIs(t *testing.T) {
 				t.Errorf("failed to get result")
 			}
 			if err := nh.StopShard(1); err != nil {
-				t.Errorf("failed to stop cluster 2 %v", err)
+				t.Errorf("failed to stop shard 2 %v", err)
 			}
 			listener, ok := nh.events.sys.ul.(*testSysEventListener)
 			if !ok {
@@ -2338,7 +2338,7 @@ func TestNodeHostAddNonVotingRemoveNode(t *testing.T) {
 			defer cancel()
 			membership, err := nh.SyncGetShardMembership(ctx, 1)
 			if err != nil {
-				t.Fatalf("failed to get cluster membership %v", err)
+				t.Fatalf("failed to get shard membership %v", err)
 			}
 			if len(membership.Nodes) != 1 || len(membership.Removed) != 0 {
 				t.Errorf("unexpected nodes/removed len")
@@ -2363,7 +2363,7 @@ func TestNodeHostAddNonVotingRemoveNode(t *testing.T) {
 			defer cancel()
 			membership, err = nh.SyncGetShardMembership(ctx, 1)
 			if err != nil {
-				t.Fatalf("failed to get cluster membership %v", err)
+				t.Fatalf("failed to get shard membership %v", err)
 			}
 			if len(membership.Nodes) != 1 || len(membership.Removed) != 1 {
 				t.Errorf("unexpected nodes/removed len")
@@ -2578,7 +2578,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 			return sm1
 		}
 		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
 		logdb := nh1.mu.logdb
@@ -2633,7 +2633,7 @@ func TestOnDiskSMCanStreamSnapshot(t *testing.T) {
 		}
 		sm1.ClearAborted()
 		if err := nh2.StartOnDiskReplica(nil, true, newSM2, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		ssIndex := uint64(0)
 		logdb = nh2.mu.logdb
@@ -3599,7 +3599,7 @@ func TestSyncRemoveData(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			if err := nh.StopShard(1); err != nil {
-				t.Fatalf("failed to remove cluster %v", err)
+				t.Fatalf("failed to remove shard %v", err)
 			}
 			pto := lpto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
@@ -3640,7 +3640,7 @@ func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			if err := nh.StopShard(1); err != nil {
-				t.Fatalf("failed to remove cluster %v", err)
+				t.Fatalf("failed to remove shard %v", err)
 			}
 			for {
 				if err := nh.RemoveData(1, 1); err != nil {
@@ -3660,7 +3660,7 @@ func TestRestartingAnNodeWithRemovedDataWillBeRejected(t *testing.T) {
 				return &PST{}
 			}
 			if err := nh.StartReplica(peers, false, newPST, *rc); err != ErrReplicaRemoved {
-				t.Errorf("start cluster failed %v", err)
+				t.Errorf("start shard failed %v", err)
 			}
 		},
 	}
@@ -3690,7 +3690,7 @@ func TestRemoveNodeDataRemovesAllNodeData(t *testing.T) {
 				t.Errorf("failed to complete the requested snapshot")
 			}
 			if err := nh.StopShard(1); err != nil {
-				t.Fatalf("failed to stop cluster %v", err)
+				t.Fatalf("failed to stop shard %v", err)
 			}
 			logdb := nh.mu.logdb
 			snapshot, err := logdb.GetSnapshot(1, 1)
@@ -4062,7 +4062,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 			return tests.NewSimDiskSM(0)
 		}
 		if err := nh.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, nh, 1)
 		makeProposals := func(nn *NodeHost) {
@@ -4155,7 +4155,7 @@ func testImportedSnapshotIsAlwaysRestored(t *testing.T,
 				return tests.NewSimDiskSM(applied)
 			}
 			if err := rnh.StartOnDiskReplica(nil, false, rnewSM, rc); err != nil {
-				t.Fatalf("failed to start cluster %v", err)
+				t.Fatalf("failed to start shard %v", err)
 			}
 			waitForLeaderToBeElected(t, rnh, 1)
 			ctx, cancel = context.WithTimeout(context.Background(), pto)
@@ -4239,7 +4239,7 @@ func TestShardWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			return tests.NewFakeDiskSM(0)
 		}
 		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
 		defer func() {
@@ -4267,7 +4267,7 @@ func TestShardWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 				}
 			}
 			if !done {
-				t.Fatalf("failed to make proposal on restored cluster")
+				t.Fatalf("failed to make proposal on restored shard")
 			}
 		}
 		mkproposal(nh1)
@@ -4326,11 +4326,11 @@ func TestShardWithoutQuorumCanBeRestoreByImportingSnapshot(t *testing.T) {
 			rnh2.Close()
 		}()
 		if err := rnh1.StartOnDiskReplica(nil, false, newSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		rc.ReplicaID = 10
 		if err := rnh2.StartOnDiskReplica(nil, false, newSM2, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, rnh1, 1)
 		mkproposal(rnh1)
@@ -4807,7 +4807,7 @@ func TestLeaderInfoIsReported(t *testing.T) {
 					t.Errorf("unexpected len: %d", len(nhi.ShardInfoList))
 				}
 				if nhi.ShardInfoList[0].ShardID != 1 {
-					t.Fatalf("unexpected cluster id")
+					t.Fatalf("unexpected shard id")
 				}
 				if nhi.ShardInfoList[0].LeaderID != 1 {
 					time.Sleep(20 * time.Millisecond)
@@ -5117,7 +5117,7 @@ func testWitnessIO(t *testing.T,
 			return tests.NewSimDiskSM(0)
 		}
 		if err := nh1.StartOnDiskReplica(peers, false, newSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, nh1, 1)
 		for i := 0; i < 8; i++ {
@@ -5152,7 +5152,7 @@ func testWitnessIO(t *testing.T,
 			return witness
 		}
 		if err := nh2.StartOnDiskReplica(nil, true, newWitness, rc2); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		waitForLeaderToBeElected(t, nh2, 1)
 		witnessTestFunc(nh1, nh2, witness)
@@ -5372,7 +5372,7 @@ func TestNodeCanBeUnloadedOnceClosed(t *testing.T) {
 		tf: func(nh *NodeHost) {
 			countNodes := func(nh *NodeHost) uint64 {
 				count := uint64(0)
-				nh.mu.clusters.Range(func(key, value interface{}) bool {
+				nh.mu.shards.Range(func(key, value interface{}) bool {
 					count++
 					return true
 				})
@@ -5577,7 +5577,7 @@ func TestHandleSnapshotStatus(t *testing.T) {
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
 	node := &node{shardID: 1, replicaID: 1, mq: mq}
-	h.nh.mu.clusters.Store(uint64(1), node)
+	h.nh.mu.shards.Store(uint64(1), node)
 	h.HandleSnapshotStatus(1, 2, true)
 	for i := uint64(0); i <= streamPushDelayTick; i++ {
 		node.mq.Tick()
@@ -5605,7 +5605,7 @@ func TestSnapshotReceivedMessageCanBeConverted(t *testing.T) {
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
 	node := &node{shardID: 1, replicaID: 1, mq: mq}
-	h.nh.mu.clusters.Store(uint64(1), node)
+	h.nh.mu.shards.Store(uint64(1), node)
 	mb := pb.MessageBatch{
 		Requests: []pb.Message{{To: 1, From: 2, ShardID: 1, Type: pb.SnapshotReceived}},
 	}
@@ -5639,7 +5639,7 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	h := messageHandler{nh: nh}
 	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
 	node := &node{shardID: 1, replicaID: 1, mq: mq}
-	h.nh.mu.clusters.Store(uint64(1), node)
+	h.nh.mu.shards.Store(uint64(1), node)
 	mb := pb.MessageBatch{
 		Requests: []pb.Message{{To: 3, From: 2, ShardID: 1, Type: pb.SnapshotReceived}},
 	}
@@ -5812,7 +5812,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 	for i := uint64(1); i <= uint64(96); i++ {
 		rc.ShardID = i
 		if err := nh1.StartReplica(peers, false, newRSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 		cs := nh1.GetNoOPSession(i)
 		total := 20
@@ -5867,7 +5867,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 		rc.ReplicaID = 2
 		peers := make(map[uint64]string)
 		if err := nh2.StartReplica(peers, true, newRSM, rc); err != nil {
-			t.Fatalf("failed to start cluster %v", err)
+			t.Fatalf("failed to start shard %v", err)
 		}
 	}
 	for i := uint64(1); i <= uint64(96); i++ {
@@ -5881,7 +5881,7 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 				if err == ErrTimeout || err == ErrShardNotReady {
 					total--
 					if total == 0 {
-						t.Fatalf("failed to make proposal on cluster %d", i)
+						t.Fatalf("failed to make proposal on shard %d", i)
 					}
 					time.Sleep(100 * time.Millisecond)
 					continue

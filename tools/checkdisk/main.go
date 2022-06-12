@@ -44,7 +44,7 @@ const (
 	raftAddress2       = "localhost:26001"
 )
 
-var clustercount = flag.Int("num-of-clusters", 48, "number of raft clusters")
+var shardcount = flag.Int("num-of-shards", 48, "number of raft shards")
 var read = flag.Bool("enable-read", false, "enable read")
 var readonly = flag.Bool("read-only", false, "read only")
 var batched = flag.Bool("batched-logdb", false, "use batched logdb")
@@ -197,7 +197,7 @@ func main() {
 		nodes[2] = raftAddress2
 	}
 	nhList := make([]*dragonboat.NodeHost, 0)
-	for i := uint64(1); i <= uint64(*clustercount); i++ {
+	for i := uint64(1); i <= uint64(*shardcount); i++ {
 		rc.ShardID = i
 		if err := nh.StartReplica(nodes, false, newDummyStateMachine, rc); err != nil {
 			panic(err)
@@ -210,7 +210,7 @@ func main() {
 			}
 		}
 	}
-	for i := uint64(1); i <= uint64(*clustercount); i++ {
+	for i := uint64(1); i <= uint64(*shardcount); i++ {
 		for j := 0; j < 10000; j++ {
 			leaderID, ok, err := nh.GetLeaderID(i)
 			if err != nil {
@@ -237,10 +237,10 @@ func main() {
 			}
 		}
 	}
-	if len(nhList) != *clustercount {
+	if len(nhList) != *shardcount {
 		panic(fmt.Sprintf("nhList len unexpected, %d", len(nhList)))
 	}
-	fmt.Printf("clusters are ready, will run for %d seconds\n", *seconds)
+	fmt.Printf("shards are ready, will run for %d seconds\n", *seconds)
 	if *cpupprof {
 		f, err := os.Create("cpu.pprof")
 		if err != nil {
@@ -272,7 +272,7 @@ func main() {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			workerID := i
 			stopper.RunWorker(func() {
-				shardID := (workerID % uint64(*clustercount)) + 1
+				shardID := (workerID % uint64(*shardcount)) + 1
 				nh := nhList[shardID-1]
 				cs := nh.GetNoOPSession(shardID)
 				cmd := make([]byte, 16)
@@ -303,7 +303,7 @@ func main() {
 		for i := uint64(0); i < uint64(*clientcount); i++ {
 			workerID := i
 			stopper.RunWorker(func() {
-				shardID := (workerID % uint64(*clustercount)) + 1
+				shardID := (workerID % uint64(*shardcount)) + 1
 				nh := nhList[shardID-1]
 				for {
 					for j := 0; j < 32; j++ {

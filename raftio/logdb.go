@@ -50,10 +50,10 @@ type RaftState struct {
 	EntryCount uint64
 }
 
-// GetNodeInfo returns a NodeInfo instance with the specified cluster ID
-// and node ID.
-func GetNodeInfo(cid uint64, nid uint64) NodeInfo {
-	return NodeInfo{ShardID: cid, ReplicaID: nid}
+// GetNodeInfo returns a NodeInfo instance with the specified shard ID
+// and replica ID.
+func GetNodeInfo(shardID uint64, replicaID uint64) NodeInfo {
+	return NodeInfo{ShardID: shardID, ReplicaID: replicaID}
 }
 
 // ILogDB is the interface implemented by the log DB for persistently store
@@ -100,7 +100,7 @@ type ILogDB interface {
 	// SaveSnapshots saves all snapshot metadata found in the pb.Update list.
 	SaveSnapshots([]pb.Update) error
 	// GetSnapshot returns the most recent snapshot associated with the specified
-	// cluster.
+	// shard.
 	GetSnapshot(shardID uint64, replicaID uint64) (pb.Snapshot, error)
 	// RemoveNodeData removes all data associated with the specified node.
 	RemoveNodeData(shardID uint64, replicaID uint64) error

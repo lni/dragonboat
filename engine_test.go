@@ -89,7 +89,7 @@ func TestAllShardsReady(t *testing.T) {
 			t.Errorf("unexpected map size")
 		}
 		if _, ok := m[i]; !ok {
-			t.Errorf("cluster not set")
+			t.Errorf("shard not set")
 		}
 	}
 	nodes = nodes[:0]
@@ -104,7 +104,7 @@ func TestAllShardsReady(t *testing.T) {
 	rc := wr.maps[1]
 	m := rc.getReadyShards()
 	if len(m) != 0 {
-		t.Errorf("cluster map unexpected set")
+		t.Errorf("shard map unexpected set")
 	}
 }
 
@@ -121,7 +121,7 @@ func TestWorkCanBeSetAsReady(t *testing.T) {
 		t.Errorf("ready signaled")
 	default:
 	}
-	wr.clusterReady(0)
+	wr.shardReady(0)
 	select {
 	case <-wr.waitCh(1):
 	case <-wr.waitCh(2):
@@ -133,7 +133,7 @@ func TestWorkCanBeSetAsReady(t *testing.T) {
 	default:
 		t.Errorf("ready not signaled")
 	}
-	wr.clusterReady(9)
+	wr.shardReady(9)
 	select {
 	case <-wr.waitCh(1):
 		t.Errorf("ready signaled")
@@ -149,9 +149,9 @@ func TestWorkCanBeSetAsReady(t *testing.T) {
 
 func TestReturnedReadyMapContainsReadyShardID(t *testing.T) {
 	wr := newWorkReady(4)
-	wr.clusterReady(0)
-	wr.clusterReady(4)
-	wr.clusterReady(129)
+	wr.shardReady(0)
+	wr.shardReady(4)
+	wr.shardReady(129)
 	ready := wr.getReadyMap(1)
 	if len(ready) != 2 {
 		t.Errorf("unexpected ready map size, sz: %d", len(ready))
@@ -159,7 +159,7 @@ func TestReturnedReadyMapContainsReadyShardID(t *testing.T) {
 	_, ok := ready[0]
 	_, ok2 := ready[4]
 	if !ok || !ok2 {
-		t.Errorf("missing cluster id")
+		t.Errorf("missing shard id")
 	}
 	ready = wr.getReadyMap(2)
 	if len(ready) != 1 {
@@ -167,7 +167,7 @@ func TestReturnedReadyMapContainsReadyShardID(t *testing.T) {
 	}
 	_, ok = ready[129]
 	if !ok {
-		t.Errorf("missing cluster id")
+		t.Errorf("missing shard id")
 	}
 	ready = wr.getReadyMap(3)
 	if len(ready) != 0 {

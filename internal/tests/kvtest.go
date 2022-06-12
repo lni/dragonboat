@@ -105,7 +105,7 @@ func NewKVTest(shardID uint64, replicaID uint64) sm.IStateMachine {
 	}
 	v := os.Getenv("EXTERNALFILETEST")
 	s.externalFileTest = len(v) > 0
-	// write some junk data consistent across the cluster
+	// write some junk data consistent across the shard
 	for i := 0; i < len(s.Junk); i++ {
 		s.Junk[i] = 2
 	}

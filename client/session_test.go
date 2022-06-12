@@ -26,7 +26,7 @@ func TestNoOPSessionHasExpectedSeriesID(t *testing.T) {
 		t.Errorf("series id unexpected")
 	}
 	if cs.ShardID != 120 {
-		t.Errorf("cluster id unexpected")
+		t.Errorf("shard id unexpected")
 	}
 }
 

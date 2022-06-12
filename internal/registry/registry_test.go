@@ -74,7 +74,7 @@ func TestRemoveShard(t *testing.T) {
 	nodes.RemoveShard(100)
 	_, _, err := nodes.Resolve(100, 2)
 	if err == nil {
-		t.Errorf("cluster not removed")
+		t.Errorf("shard not removed")
 	}
 	_, _, err = nodes.Resolve(200, 2)
 	if err != nil {

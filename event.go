@@ -60,7 +60,7 @@ func newRaftEventListener(shardID uint64, replicaID uint64,
 		queue:     queue,
 	}
 	if useMetrics {
-		label := fmt.Sprintf(`{clusterid="%d",nodeid="%d"}`, shardID, replicaID)
+		label := fmt.Sprintf(`{shardid="%d",replicaid="%d"}`, shardID, replicaID)
 		name := fmt.Sprintf(`dragonboat_raftnode_campaign_launched_total%s`, label)
 		el.campaignLaunched = metrics.GetOrCreateCounter(name)
 		name = fmt.Sprintf(`dragonboat_raftnode_campaign_skipped_total%s`, label)

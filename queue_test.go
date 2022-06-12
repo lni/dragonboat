@@ -231,11 +231,11 @@ func TestShardCanBeSetAsReady(t *testing.T) {
 	}
 	_, ok := rc.ready[1]
 	if !ok {
-		t.Errorf("cluster 1 not set as ready")
+		t.Errorf("shard 1 not set as ready")
 	}
 	_, ok = rc.ready[2]
 	if !ok {
-		t.Errorf("cluster 2 not set as ready")
+		t.Errorf("shard 2 not set as ready")
 	}
 }
 
@@ -255,16 +255,16 @@ func TestReadyShardCanBeReturnedAndCleared(t *testing.T) {
 		t.Errorf("ready map sz %d, want 2", len(r))
 	}
 	if len(rc.ready) != 0 {
-		t.Errorf("cluster ready map not cleared")
+		t.Errorf("shard ready map not cleared")
 	}
 	r = rc.getReadyShards()
 	if len(r) != 0 {
-		t.Errorf("cluster ready map not cleared")
+		t.Errorf("shard ready map not cleared")
 	}
 	rc.setShardReady(4)
 	r = rc.getReadyShards()
 	if len(r) != 1 {
-		t.Errorf("cluster ready not set")
+		t.Errorf("shard ready not set")
 	}
 }
 

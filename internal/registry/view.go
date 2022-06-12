@@ -31,14 +31,14 @@ var (
 	binaryEnc = binary.BigEndian
 )
 
-// ShardInfo is a record for representing the state of a Raft cluster based
+// ShardInfo is a record for representing the state of a Raft shard based
 // on the knowledge of the local NodeHost instance.
 type ShardInfo struct {
 	// Nodes is a map of member node IDs to their Raft addresses.
 	Nodes map[uint64]string
-	// ShardID is the cluster ID of the Raft cluster node.
+	// ShardID is the shard ID of the Raft shard node.
 	ShardID uint64
-	// ReplicaID is the node ID of the Raft cluster node.
+	// ReplicaID is the replica ID of the Raft node.
 	ReplicaID uint64
 	// ConfigChangeIndex is the current config change index of the Raft node.
 	// ConfigChangeIndex is Raft Log index of the last applied membership
@@ -49,7 +49,7 @@ type ShardInfo struct {
 	// IsLeader indicates whether this is a leader node.
 	// Deprecated: Use LeaderID and Term instead.
 	IsLeader bool
-	// LeaderID is the node ID of the current leader
+	// LeaderID is the replica ID of the current leader
 	LeaderID uint64
 	// Term is the term of the current leader
 	Term uint64
@@ -57,13 +57,13 @@ type ShardInfo struct {
 	IsNonVoting bool
 	// IsWitness indicates whether this is a witness node without actual log.
 	IsWitness bool
-	// Pending is a boolean flag indicating whether details of the cluster node
+	// Pending is a boolean flag indicating whether details of the shard node
 	// is not available. The Pending flag is set to true usually because the node
 	// has not had anything applied yet.
 	Pending bool
 }
 
-// ShardView is the view of a cluster from gossip's point of view.
+// ShardView is the view of a shard from gossip's point of view.
 type ShardView struct {
 	ShardID           uint64
 	Nodes             map[uint64]string
@@ -97,7 +97,7 @@ type view struct {
 	// shardID -> ShardView
 	mu struct {
 		sync.Mutex
-		clusters map[uint64]ShardView
+		shards map[uint64]ShardView
 	}
 }
 
@@ -105,14 +105,14 @@ func newView(deploymentID uint64) *view {
 	v := &view{
 		deploymentID: deploymentID,
 	}
-	v.mu.clusters = make(map[uint64]ShardView)
+	v.mu.shards = make(map[uint64]ShardView)
 	return v
 }
 
-func (v *view) clusterCount() int {
+func (v *view) shardCount() int {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return len(v.mu.clusters)
+	return len(v.mu.shards)
 }
 
 func mergeShardInfo(current ShardView, update ShardView) ShardView {
@@ -136,11 +136,11 @@ func (v *view) update(updates []ShardView) {
 	defer v.mu.Unlock()
 
 	for _, u := range updates {
-		current, ok := v.mu.clusters[u.ShardID]
+		current, ok := v.mu.shards[u.ShardID]
 		if !ok {
 			current = ShardView{ShardID: u.ShardID}
 		}
-		v.mu.clusters[u.ShardID] = mergeShardInfo(current, u)
+		v.mu.shards[u.ShardID] = mergeShardInfo(current, u)
 	}
 }
 
@@ -149,7 +149,7 @@ func (v *view) toShuffledList() []ShardView {
 	func() {
 		v.mu.Lock()
 		defer v.mu.Unlock()
-		for _, v := range v.mu.clusters {
+		for _, v := range v.mu.shards {
 			ci = append(ci, v)
 		}
 	}()

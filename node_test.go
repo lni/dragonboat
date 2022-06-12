@@ -121,7 +121,7 @@ func (r *testRouter) shouldDrop(msg pb.Message) bool {
 
 func (r *testRouter) send(msg pb.Message) {
 	if msg.ShardID != r.shardID {
-		panic("cluster id does not match")
+		panic("shard id does not match")
 	}
 	if r.shouldDrop(msg) {
 		return
@@ -134,7 +134,7 @@ func (r *testRouter) send(msg pb.Message) {
 func (r *testRouter) getQ(shardID uint64,
 	replicaID uint64) *server.MessageQueue {
 	if shardID != r.shardID {
-		panic("cluster id does not match")
+		panic("shard id does not match")
 	}
 	q, ok := r.qm[replicaID]
 	if !ok {

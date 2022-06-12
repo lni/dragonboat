@@ -1334,7 +1334,6 @@ func (r *raft) setWitness(replicaID uint64, match uint64, next uint64) {
 	}
 }
 
-//
 // helper methods required for the membership change implementation
 //
 // p33-35 of the raft thesis describes a simple membership change protocol which
@@ -1352,18 +1351,17 @@ func (r *raft) setWitness(replicaID uint64, match uint64, next uint64) {
 // avoid the situation that two pending membership change entries are committed
 // in one go with the same quorum while they actually require different quorums.
 // consider the following situation -
-// for a 3 nodes cluster with existing members X, Y and Z, let's say we first
+// for a 3 nodes shard with existing members X, Y and Z, let's say we first
 // propose a membership change to add a new node A, before A gets committed and
 // applied, say we propose another membership change to add a new node B. When
 // B gets committed, A will be committed as well, both will be using the 3 node
 // membership quorum meaning both entries concerning A and B will become
-// committed when any two of the X, Y, Z cluster have them replicated. this thus
+// committed when any two of the X, Y, Z shard have them replicated. this thus
 // violates the safety requirement as B will require 3 out of the 4 nodes (X,
 // Y, Z, A) to have it replicated before it can be committed.
 // we use the following pendingConfigChange flag to help tracking whether there
 // is already a pending membership change entry in the log waiting to be
 // executed.
-//
 func (r *raft) setPendingConfigChange() {
 	r.pendingConfigChange = true
 }
@@ -1631,7 +1629,7 @@ func (r *raft) canGrantVote(m pb.Message) bool {
 func (r *raft) handleNodeElection(m pb.Message) error {
 	if !r.isLeader() {
 		// there can be multiple pending membership change entries committed but not
-		// applied on this node. say with a cluster of X, Y and Z, there are two
+		// applied on this node. say with a shard of X, Y and Z, there are two
 		// such entries for adding node A and B are committed but not applied
 		// available on X. If X is allowed to start a new election, it can become the
 		// leader with a vote from any one of the node Y or Z. Further proposals made
@@ -1850,7 +1848,7 @@ func (r *raft) handleLeaderReadIndex(m pb.Message) error {
 		plog.Errorf("%s dropped ReadIndex, witness node %d", r.describe(), m.From)
 	} else if !r.isSingleNodeQuorum() {
 		if !r.hasCommittedEntryAtCurrentTerm() {
-			// leader doesn't know the commit value of the cluster
+			// leader doesn't know the commit value of the shard
 			// see raft thesis section 6.4, this is the first step of the ReadIndex
 			// protocol.
 			plog.Warningf("%s dropped ReadIndex, not ready", r.describe())

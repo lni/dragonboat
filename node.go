@@ -75,7 +75,7 @@ type leaderInfo struct {
 }
 
 type node struct {
-	clusterInfo           atomic.Value
+	shardInfo             atomic.Value
 	leaderInfo            atomic.Value
 	nodeRegistry          registry.INodeRegistry
 	logdb                 raftio.ILogDB
@@ -1593,7 +1593,7 @@ func (n *node) notifyConfigChange() {
 		ConfigChangeIndex: m.ConfigChangeId,
 		Nodes:             m.Addresses,
 	}
-	n.clusterInfo.Store(ci)
+	n.shardInfo.Store(ci)
 	n.sysEvents.Publish(server.SystemEvent{
 		Type:      server.MembershipChanged,
 		ShardID:   n.shardID,
@@ -1602,7 +1602,7 @@ func (n *node) notifyConfigChange() {
 }
 
 func (n *node) getShardInfo() ShardInfo {
-	v := n.clusterInfo.Load()
+	v := n.shardInfo.Load()
 	if v == nil {
 		return ShardInfo{
 			ShardID:          n.shardID,

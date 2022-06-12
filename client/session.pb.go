@@ -385,11 +385,11 @@ func (m *Session) IsNoOPSession() bool {
 	return m.SeriesID == NoOPSeriesID
 }
 
-// ShardIDMustMatch asserts that the input cluster id matches the cluster id
+// ShardIDMustMatch asserts that the input shard id matches the shard id
 // of the client session.
 func (m *Session) ShardIDMustMatch(shardID uint64) {
 	if m.ShardID != shardID {
-		panic("cluster id do not match")
+		panic("shard id do not match")
 	}
 }
 

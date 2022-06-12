@@ -55,7 +55,7 @@ func (s *Sink) Close() error {
 	return nil
 }
 
-// ShardID returns the cluster ID of the source node.
+// ShardID returns the shard ID of the source node.
 func (s *Sink) ShardID() uint64 {
 	return s.j.shardID
 }

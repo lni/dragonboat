@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	// ErrShardClosed indicates that the cluster has been closed
-	ErrShardClosed = errors.New("raft cluster already closed")
+	// ErrShardClosed indicates that the shard has been closed
+	ErrShardClosed = errors.New("raft shard already closed")
 )
 
 // IStreamable is the interface for types that can be snapshot streamed.

@@ -45,7 +45,7 @@ func (r *readIndex) addRequest(index uint64,
 	if _, ok := r.pending[ctx]; ok {
 		return
 	}
-	// index is the committed value of the cluster, it should never move
+	// index is the committed value of the shard, it should never move
 	// backward, check it here
 	if len(r.queue) > 0 {
 		p, ok := r.pending[r.peepCtx()]

@@ -49,7 +49,7 @@ func GetTestFS() config.IFS {
 func (nh *NodeHost) Shards() []*node {
 	result := make([]*node, 0)
 	nh.mu.RLock()
-	nh.mu.clusters.Range(func(k, v interface{}) bool {
+	nh.mu.shards.Range(func(k, v interface{}) bool {
 		result = append(result, v.(*node))
 		return true
 	})

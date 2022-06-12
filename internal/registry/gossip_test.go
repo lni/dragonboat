@@ -98,7 +98,7 @@ func TestGossipRegistry(t *testing.T) {
 	if addr != nhConfig.RaftAddress {
 		t.Errorf("unexpected addr %s", addr)
 	}
-	// remove cluster
+	// remove shard
 	r.RemoveShard(123)
 	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
 		t.Fatalf("failed to get addr, %v", err)

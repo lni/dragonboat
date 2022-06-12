@@ -149,7 +149,7 @@ func TestCandidateStartNewElection(t *testing.T) {
 // over election timeout, it begins an election to choose a new leader. It
 // increments its current term and transitions to candidate state. It then
 // votes for itself and issues RequestVote RPCs in parallel to each of the
-// other servers in the cluster.
+// other servers in the shard.
 // Reference: section 5.2
 // Also if a candidate fails to obtain a majority, it will time out and
 // start a new election by incrementing its term and initiating another
@@ -749,7 +749,7 @@ func TestLeaderSyncFollowerLog(t *testing.T) {
 		}
 		follower := newTestRaft(2, []uint64{1, 2, 3}, 10, 1, followerStorage)
 		follower.loadState(pb.State{Term: term - 1})
-		// It is necessary to have a three-node cluster.
+		// It is necessary to have a three-node shard.
 		// The second may have more up-to-date log than the first one, so the
 		// first node needs the vote from the third node to become the leader.
 		n := newNetwork(lead, follower, nopStepper)

@@ -11,7 +11,7 @@
 ## Monkey Testing ##
 ### Setup ###
 * 5 NodeNosts and 3 Drummer servers per process
-* hundreds of Raft clusters per process
+* hundreds of Raft shards per process
 * randomly kill and restart NodeHosts and Drummer servers, each NodeHost usually stay online for a few minutes
 * randomly delete all data owned by a certain NodeHost to emulate permanent disk failure
 * randomly drop and re-order messages exchanged between NodeHosts
@@ -19,18 +19,18 @@
 * for selected instances, snapshotting and log compaction happen all the time in the background
 * committed entries are applied with random delays
 * snapshots are captured and applied with random delays
-* a list of background workers keep writing to/reading from random Raft clusters with stale read checks
+* a list of background workers keep writing to/reading from random Raft shards with stale read checks
 * client activity history files are verified by linearizability checkers such as Jepsen's Knossos
 * run hundreds of above described processes concurrently on each test server, 30 minutes each iteration, many iterations every night
 * run concurrently on many servers every night
 
 ### Checks ###
 * no linearizability violation
-* no cluster is permanently stuck
+* no shard is permanently stuck
 * state machines must be in sync
-* cluster membership must be consistent
+* shard membership must be consistent
 * raft log saved in LogDB must be consistent
-* no zombie cluster node
+* no zombie shard node
 
 ### Results ###
 Some history files in Jepsen's [Knossos](https://github.com/jepsen-io/knossos) edn format have been made publicly [available](https://github.com/lni/knossos-data).
@@ -44,7 +44,7 @@ Some history files in Jepsen's [Knossos](https://github.com/jepsen-io/knossos) e
 * Ubuntu 16.04 with Spectre and Meltdown patches, ext4 file-system
 
 ## Benchmark method ##
-* 48 Raft clusters on three NodeHost instances across three servers
+* 48 Raft shards on three NodeHost instances across three servers
 * Each Raft node is backed by a in-memory Key-Value data store as RSM
 * Mostly update operations in the Key-Value store
 * All I/O requests are launched from local processes

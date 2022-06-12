@@ -41,10 +41,10 @@ type IReusableKey interface {
 	// with the specified entry index.
 	SetEntryKey(shardID uint64, replicaID uint64, index uint64)
 	// SetStateKey sets the key to be an persistent state key suitable
-	// for the specified Raft cluster node.
+	// for the specified Raft shard node.
 	SetStateKey(shardID uint64, replicaID uint64)
 	// SetMaxIndexKey sets the key to be the max possible index key for the
-	// specified Raft cluster node.
+	// specified Raft shard node.
 	SetMaxIndexKey(shardID uint64, replicaID uint64)
 	// Key returns the underlying byte slice of the key.
 	Key() []byte

@@ -50,7 +50,7 @@ func (l *gossipLogWriter) Write(p []byte) (int, error) {
 }
 
 // newGossipLogWrapper prepare log wrapper for gossip.
-// Inspirited by https://github.com/docker/docker-ce/blob/master/components/engine/libnetwork/networkdb/cluster.go#L30
+// Inspirited by https://github.com/docker/docker-ce/blob/master/components/engine/libnetwork/networkdb/shard.go#L30
 func newGossipLogWrapper() *log.Logger {
 	return log.New(&gossipLogWriter{
 		logger: logger.GetLogger("gossip"),

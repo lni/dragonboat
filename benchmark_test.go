@@ -255,7 +255,7 @@ func BenchmarkWorkerReady(b *testing.B) {
 	rc := newWorkReady(1)
 	b.RunParallel(func(pbt *testing.PB) {
 		for pbt.Next() {
-			rc.clusterReady(1)
+			rc.shardReady(1)
 		}
 	})
 }

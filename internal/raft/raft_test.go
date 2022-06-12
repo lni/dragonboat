@@ -238,7 +238,7 @@ func TestRaftHelperMethods(t *testing.T) {
 	v := ReplicaID(100)
 	v2 := ShardID(100)
 	if v != "n00100" || v2 != "c00100" {
-		t.Errorf("unexpected node id / cluster id value")
+		t.Errorf("unexpected node id / shard id value")
 	}
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)

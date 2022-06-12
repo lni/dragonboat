@@ -66,11 +66,11 @@ var (
 	// Raft config change operation, ErrSystemBusy means there is already such a
 	// request waiting to be processed.
 	ErrSystemBusy = errors.New("system is too busy try again later")
-	// ErrShardClosed indicates that the requested cluster is being shut down.
-	ErrShardClosed = errors.New("raft cluster already closed")
+	// ErrShardClosed indicates that the requested shard is being shut down.
+	ErrShardClosed = errors.New("raft shard already closed")
 	// ErrShardNotInitialized indicates that the requested operation can not be
-	// completed as the involved raft cluster has not been initialized yet.
-	ErrShardNotInitialized = errors.New("raft cluster not initialized yet")
+	// completed as the involved raft shard has not been initialized yet.
+	ErrShardNotInitialized = errors.New("raft shard not initialized yet")
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = errors.New("timeout")
 	// ErrCanceled indicates that the request has been canceled.
@@ -78,10 +78,10 @@ var (
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
 	// ErrShardNotReady indicates that the request has been dropped as the
-	// specified raft cluster is not ready to handle the request. Unknown leader
-	// is the most common cause of this Error, trying to use a cluster not fully
+	// specified raft shard is not ready to handle the request. Unknown leader
+	// is the most common cause of this Error, trying to use a shard not fully
 	// initialized is another major cause of ErrShardNotReady.
-	ErrShardNotReady = errors.New("request dropped as the cluster is not ready")
+	ErrShardNotReady = errors.New("request dropped as the shard is not ready")
 	// ErrInvalidTarget indicates that the specified node id invalid.
 	ErrInvalidTarget = errors.New("invalid target node ID")
 )
@@ -141,14 +141,14 @@ func (rr *RequestResult) Committed() bool {
 
 // Completed returns a boolean value indicating whether the request completed
 // successfully. For proposals, it means the proposal has been committed by the
-// Raft cluster and applied on the local node. For ReadIndex operation, it means
-// the cluster is now ready for a local read.
+// Raft shard and applied on the local node. For ReadIndex operation, it means
+// the shard is now ready for a local read.
 func (rr *RequestResult) Completed() bool {
 	return rr.code == requestCompleted
 }
 
 // Terminated returns a boolean value indicating the request terminated due to
-// the requested Raft cluster is being shut down.
+// the requested Raft shard is being shut down.
 func (rr *RequestResult) Terminated() bool {
 	return rr.code == requestTerminated
 }
@@ -1104,7 +1104,7 @@ func (p *proposalShard) propose(session *client.Session,
 
 	added, stopped := p.proposals.add(entry)
 	if stopped {
-		plog.Warningf("%s dropped proposal, cluster stopped",
+		plog.Warningf("%s dropped proposal, shard stopped",
 			dn(p.cfg.ShardID, p.cfg.ReplicaID))
 		p.mu.Lock()
 		delete(p.pending, entry.Key)

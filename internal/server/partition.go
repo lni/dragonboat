@@ -18,7 +18,7 @@ var (
 	defaultShardIDMod uint64 = 512
 )
 
-// IPartitioner is the interface for partitioning clusters.
+// IPartitioner is the interface for partitioning shards.
 type IPartitioner interface {
 	GetPartitionID(shardID uint64) uint64
 }
@@ -34,7 +34,7 @@ func NewFixedPartitioner(capacity uint64) *FixedPartitioner {
 	return &FixedPartitioner{capacity: capacity}
 }
 
-// GetPartitionID returns the partition ID for the specified raft cluster.
+// GetPartitionID returns the partition ID for the specified raft shard.
 func (p *FixedPartitioner) GetPartitionID(shardID uint64) uint64 {
 	return shardID % p.capacity
 }
@@ -55,7 +55,7 @@ func NewDoubleFixedPartitioner(capacity uint64,
 	}
 }
 
-// GetPartitionID returns the partition ID for the specified raft cluster.
+// GetPartitionID returns the partition ID for the specified raft shard.
 func (p *DoubleFixedPartitioner) GetPartitionID(shardID uint64) uint64 {
 	return (shardID % p.workerCount) % p.capacity
 }

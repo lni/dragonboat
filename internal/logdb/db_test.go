@@ -157,7 +157,7 @@ func TestBootstrapInfoCanBeSavedAndChecked(t *testing.T) {
 			t.Errorf("failed to get node info list")
 		}
 		if ni[0].ShardID != 1 || ni[0].ReplicaID != 2 {
-			t.Errorf("unexpected cluster id/node id, %v", ni[0])
+			t.Errorf("unexpected shard id/node id, %v", ni[0])
 		}
 		if err := db.SaveBootstrapInfo(2, 3, bs); err != nil {
 			t.Errorf("failed to save bootstrap info %v", err)
@@ -691,7 +691,7 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 		if rs.EntryCount != 2 {
 			t.Errorf("ents sz %d, want 2", rs.EntryCount)
 		}
-		// save the same data but with different cluster id
+		// save the same data but with different shard id
 		ud.ReplicaID = 4
 		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)
@@ -759,7 +759,7 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 		if len(ents) != 3 {
 			t.Errorf("ents sz %d, want 3", len(ents))
 		}
-		// save the same data again but under a different cluster id
+		// save the same data again but under a different shard id
 		ud.ReplicaID = 4
 		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)

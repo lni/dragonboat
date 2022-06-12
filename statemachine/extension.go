@@ -29,7 +29,7 @@ var (
 type IHash interface {
 	// GetHash returns a uint64 value used to represent the current state of the
 	// state machine. The hash should be generated in a deterministic manner
-	// which means nodes from the same Raft cluster are suppose to return the
+	// which means nodes from the same Raft shard are suppose to return the
 	// same hash result when they have the same Raft Log entries applied.
 	//
 	// GetHash is a read-only operation.
