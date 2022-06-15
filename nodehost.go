@@ -469,7 +469,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 // started is backed by a regular state machine that implements the
 // sm.IStateMachine interface.
 //
-// The input parameter initialMembers is a map of node ID to node target for all
+// The input parameter initialMembers is a map of replica ID to replica target for all
 // Raft shard's initial member nodes. By default, the target is the
 // RaftAddress value of the NodeHost where the node will be running. When running
 // in the AddressByNodeHostID mode, target should be set to the NodeHostID value
@@ -675,19 +675,19 @@ func (nh *NodeHost) SyncGetShardMembership(ctx context.Context,
 	return v.(*Membership), nil
 }
 
-// GetLeaderID returns the leader node ID of the specified Raft shard based
+// GetLeaderID returns the leader replica ID of the specified Raft shard based
 // on local node's knowledge. The returned boolean value indicates whether the
 // leader information is available.
-func (nh *NodeHost) GetLeaderID(shardID uint64) (uint64, bool, error) {
+func (nh *NodeHost) GetLeaderID(shardID uint64) (uint64, uint64, bool, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
-		return 0, false, ErrClosed
+		return 0, 0, false, ErrClosed
 	}
 	v, ok := nh.getShard(shardID)
 	if !ok {
-		return 0, false, ErrShardNotFound
+		return 0, 0, false, ErrShardNotFound
 	}
-	leaderID, valid := v.getLeaderID()
-	return leaderID, valid, nil
+	leaderID, term, valid := v.getLeaderID()
+	return leaderID, term, valid, nil
 }
 
 // GetNoOPSession returns a NO-OP client session ready to be used for making

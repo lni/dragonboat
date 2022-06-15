@@ -569,13 +569,13 @@ func (n *node) requestAddWitnessWithOrderID(replicaID uint64,
 	return n.requestConfigChange(pb.AddWitness, replicaID, target, order, timeout)
 }
 
-func (n *node) getLeaderID() (uint64, bool) {
+func (n *node) getLeaderID() (uint64, uint64, bool) {
 	lv := n.leaderInfo.Load()
 	if lv == nil {
-		return 0, false
+		return 0, 0, false
 	}
 	leaderInfo := lv.(*leaderInfo)
-	return leaderInfo.leaderID, leaderInfo.leaderID != raft.NoLeader
+	return leaderInfo.leaderID, leaderInfo.term, leaderInfo.leaderID != raft.NoLeader
 }
 
 func (n *node) destroy() error {

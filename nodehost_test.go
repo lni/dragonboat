@@ -1473,7 +1473,7 @@ func createRateLimitedTwoTestNodeHosts(addr1 string, addr2 string,
 	var followerNh *NodeHost
 
 	for i := 0; i < 200; i++ {
-		leaderID, ready, err := nh1.GetLeaderID(1)
+		leaderID, _, ready, err := nh1.GetLeaderID(1)
 		if err == nil && ready {
 			if leaderID == 1 {
 				leaderNh = nh1
@@ -1523,8 +1523,11 @@ func rateLimitedTwoNodeHostTest(t *testing.T,
 
 func waitForLeaderToBeElected(t *testing.T, nh *NodeHost, shardID uint64) {
 	for i := 0; i < 200; i++ {
-		_, ready, err := nh.GetLeaderID(shardID)
+		_, term, ready, err := nh.GetLeaderID(shardID)
 		if err == nil && ready {
+			if term == 0 {
+				panic("term is 0")
+			}
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -1797,7 +1800,7 @@ func TestErrShardNotFoundCanBeReturned(t *testing.T) {
 		defaultTestNode: true,
 		tf: func(nh *NodeHost) {
 			pto := lpto(nh)
-			_, _, err := nh.GetLeaderID(1234)
+			_, _, _, err := nh.GetLeaderID(1234)
 			if err != ErrShardNotFound {
 				t.Errorf("failed to return ErrShardNotFound, %v", err)
 			}
@@ -4854,7 +4857,7 @@ func TestDroppedRequestsAreReported(t *testing.T) {
 				t.Fatalf("failed to add node %v", err)
 			}
 			for i := 0; i < 1000; i++ {
-				_, ok, err := nh.GetLeaderID(1)
+				_, _, ok, err := nh.GetLeaderID(1)
 				if err != nil {
 					t.Fatalf("failed to get leader id %v", err)
 				}
@@ -5429,7 +5432,7 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 			if _, err := nh.SyncGetShardMembership(ctx, 1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
-			if _, _, err := nh.GetLeaderID(1); err != ErrClosed {
+			if _, _, _, err := nh.GetLeaderID(1); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.Propose(nil, nil, time.Second); err != ErrClosed {

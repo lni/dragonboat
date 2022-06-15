@@ -651,7 +651,7 @@ func TestLeaderIDCanBeQueried(t *testing.T) {
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
-		v, ok := n.getLeaderID()
+		v, _, ok := n.getLeaderID()
 		if !ok {
 			t.Errorf("failed to get leader id")
 		}
