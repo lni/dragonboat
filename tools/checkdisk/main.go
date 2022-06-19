@@ -212,7 +212,7 @@ func main() {
 	}
 	for i := uint64(1); i <= uint64(*shardcount); i++ {
 		for j := 0; j < 10000; j++ {
-			leaderID, ok, err := nh.GetLeaderID(i)
+			leaderID, _, ok, err := nh.GetLeaderID(i)
 			if err != nil {
 				panic(err)
 			}
