@@ -334,8 +334,10 @@ func newGossipManager(nhid string, f getShardInfo,
 		store:    store,
 		stopper:  stopper,
 	}
-	g.join(seed)
+	// eventDelegate must be started first, otherwise join() could be blocked
+	// on a large cluster
 	g.ed.start()
+	g.join(seed)
 	g.stopper.RunWorker(func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
