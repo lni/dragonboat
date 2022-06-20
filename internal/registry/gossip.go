@@ -166,21 +166,39 @@ func (n *GossipRegistry) Resolve(shardID uint64,
 }
 
 type eventDelegate struct {
-	memberlist.ChannelEventDelegate
-	ch      chan memberlist.NodeEvent
+	ed      *sliceEventDelegate
 	stopper *syncutil.Stopper
 	store   *metaStore
 }
 
 func newEventDelegate(s *syncutil.Stopper, store *metaStore) *eventDelegate {
-	ch := make(chan memberlist.NodeEvent, 10)
 	ed := &eventDelegate{
-		stopper:              s,
-		ch:                   ch,
-		store:                store,
-		ChannelEventDelegate: memberlist.ChannelEventDelegate{Ch: ch},
+		stopper: s,
+		store:   store,
+		ed:      newSliceEventDelegate(),
 	}
 	return ed
+}
+
+func (d *eventDelegate) handle() {
+	//for {
+	events := d.ed.get()
+	if len(events) == 0 {
+		return
+	}
+	for _, e := range events {
+		if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
+			var m meta
+			if m.unmarshal(e.Node.Meta) {
+				d.store.put(e.Node.Name, m)
+			}
+		} else if e.Event == memberlist.NodeLeave {
+			d.store.delete(e.Node.Name)
+		} else {
+			panic("unknown event type")
+		}
+	}
+	//}
 }
 
 func (d *eventDelegate) start() {
@@ -189,17 +207,8 @@ func (d *eventDelegate) start() {
 			select {
 			case <-d.stopper.ShouldStop():
 				return
-			case e := <-d.ch:
-				if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
-					var m meta
-					if m.unmarshal(e.Node.Meta) {
-						d.store.put(e.Node.Name, m)
-					}
-				} else if e.Event == memberlist.NodeLeave {
-					d.store.delete(e.Node.Name)
-				} else {
-					panic("unknown event type")
-				}
+			case <-d.ed.ch:
+				d.handle()
 			}
 		}
 	})
@@ -264,20 +273,21 @@ func parseAddress(addr string) (string, int, error) {
 }
 
 type gossipManager struct {
-	nhConfig config.NodeHostConfig
-	cfg      *memberlist.Config
-	list     *memberlist.Memberlist
-	ed       *eventDelegate
-	view     *view
-	store    *metaStore
-	stopper  *syncutil.Stopper
+	nhConfig     config.NodeHostConfig
+	cfg          *memberlist.Config
+	list         *memberlist.Memberlist
+	ed           *eventDelegate
+	view         *view
+	store        *metaStore
+	stopper      *syncutil.Stopper
+	eventStopper *syncutil.Stopper
 }
 
 func newGossipManager(nhid string, f getShardInfo,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
-	stopper := syncutil.NewStopper()
+	eventStopper := syncutil.NewStopper()
 	store := &metaStore{}
-	ed := newEventDelegate(stopper, store)
+	ed := newEventDelegate(eventStopper, store)
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Logger = newGossipLogWrapper()
 	cfg.Name = nhid
@@ -316,7 +326,7 @@ func newGossipManager(nhid string, f getShardInfo,
 		getShardInfo: f,
 		view:         view,
 	}
-	cfg.Events = ed
+	cfg.Events = ed.ed
 
 	list, err := memberlist.Create(cfg)
 	if err != nil {
@@ -326,13 +336,14 @@ func newGossipManager(nhid string, f getShardInfo,
 	seed := make([]string, 0, len(nhConfig.Gossip.Seed))
 	seed = append(seed, nhConfig.Gossip.Seed...)
 	g := &gossipManager{
-		nhConfig: nhConfig,
-		cfg:      cfg,
-		list:     list,
-		ed:       ed,
-		view:     view,
-		store:    store,
-		stopper:  stopper,
+		nhConfig:     nhConfig,
+		cfg:          cfg,
+		list:         list,
+		ed:           ed,
+		view:         view,
+		store:        store,
+		stopper:      syncutil.NewStopper(),
+		eventStopper: eventStopper,
 	}
 	// eventDelegate must be started first, otherwise join() could be blocked
 	// on a large cluster
@@ -366,15 +377,14 @@ func (g *gossipManager) join(seed []string) {
 
 func (g *gossipManager) Close() error {
 	g.stopper.Stop()
-	var err error
-	var cerr error
-	if err = g.list.Leave(2 * time.Second); err != nil {
-		err = errors.Wrapf(err, "leave memberlist failed")
+	if err := g.list.Leave(time.Second); err != nil {
+		plog.Errorf("memberlist leave failed: %v", err)
 	}
-	if cerr = g.list.Shutdown(); cerr != nil {
-		cerr = errors.Wrapf(cerr, "shutdown memberlist failed")
+	if err := g.list.Shutdown(); err != nil {
+		return errors.Wrapf(err, "shutdown memberlist failed")
 	}
-	return firstError(err, cerr)
+	g.eventStopper.Stop()
+	return nil
 }
 
 func (g *gossipManager) GetNodeHostRegistry() *NodeHostRegistry {
