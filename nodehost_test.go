@@ -800,14 +800,18 @@ func TestGossip(t *testing.T) {
 }
 
 func TestMediumSizedClusterGossip(t *testing.T) {
+	if os.Getenv("LONG_TEST") == "" {
+		t.Skip("Skipping long test")
+	}
 	defer leaktest.AfterTest(t)()
-	for i := 0; i < 48; i++ {
+	for i := 0; i < 16; i++ {
 		fs := vfs.GetTestFS()
 		dir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("nh%d", i))
 		cfg := config.NodeHostConfig{
-			NodeHostDir:    dir,
-			RTTMillisecond: getRTTMillisecond(fs, dir),
-			RaftAddress:    fmt.Sprintf("127.0.0.1:%d", 25000+i*10),
+			NodeHostDir:         dir,
+			RTTMillisecond:      getRTTMillisecond(fs, dir),
+			RaftAddress:         fmt.Sprintf("127.0.0.1:%d", 25000+i*10),
+			AddressByNodeHostID: true,
 			Expert: config.ExpertConfig{
 				FS:                      fs,
 				TestGossipProbeInterval: 50 * time.Millisecond,
