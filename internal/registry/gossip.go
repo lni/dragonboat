@@ -181,7 +181,6 @@ func newEventDelegate(s *syncutil.Stopper, store *metaStore) *eventDelegate {
 }
 
 func (d *eventDelegate) handle() {
-	//for {
 	events := d.ed.get()
 	if len(events) == 0 {
 		return
@@ -198,7 +197,6 @@ func (d *eventDelegate) handle() {
 			panic("unknown event type")
 		}
 	}
-	//}
 }
 
 func (d *eventDelegate) start() {

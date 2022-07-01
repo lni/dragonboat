@@ -56,7 +56,7 @@ func (e *sliceEventDelegate) put(typ memberlist.NodeEventType, n *memberlist.Nod
 	node := *n
 	node.Meta = make([]byte, len(n.Meta))
 	copy(node.Meta, n.Meta)
-	e.notify()
+	defer e.notify()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.mu.events = append(e.mu.events, memberlist.NodeEvent{typ, &node})
