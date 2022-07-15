@@ -178,6 +178,8 @@ func (l *sysEventListener) handle(e server.SystemEvent) {
 		l.ul.NodeReady(getNodeInfo(e))
 	case server.NodeUnloaded:
 		l.ul.NodeUnloaded(getNodeInfo(e))
+	case server.NodeDeleted:
+		l.ul.NodeDeleted(getNodeInfo(e))
 	case server.MembershipChanged:
 		l.ul.MembershipChanged(getNodeInfo(e))
 	case server.ConnectionEstablished:
