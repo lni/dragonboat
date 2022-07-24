@@ -8,7 +8,6 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.3.1
-	github.com/juju/ratelimit v1.0.2-0.20191002062651-f60b32039441
 	github.com/kr/pretty v0.3.0
 	github.com/lni/goutils v1.3.1-0.20220604063047-388d67b4dbc4
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376

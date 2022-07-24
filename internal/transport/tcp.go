@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/juju/ratelimit"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/syncutil"
 
@@ -260,16 +259,8 @@ type connection struct {
 	lw   io.Writer
 }
 
-func newConnection(conn net.Conn,
-	rb *ratelimit.Bucket, wb *ratelimit.Bucket) net.Conn {
-	c := &connection{conn: conn}
-	if rb != nil {
-		c.lr = ratelimit.Reader(conn, rb)
-	}
-	if wb != nil {
-		c.lw = ratelimit.Writer(conn, wb)
-	}
-	return c
+func newConnection(conn net.Conn) net.Conn {
+	return &connection{conn: conn}
 }
 
 func (c *connection) Close() error {
@@ -277,16 +268,10 @@ func (c *connection) Close() error {
 }
 
 func (c *connection) Read(b []byte) (int, error) {
-	if c.lr != nil {
-		return c.lr.Read(b)
-	}
 	return c.conn.Read(b)
 }
 
 func (c *connection) Write(b []byte) (int, error) {
-	if c.lw != nil {
-		return c.lw.Write(b)
-	}
 	return c.conn.Write(b)
 }
 
@@ -322,10 +307,9 @@ type TCPConnection struct {
 var _ raftio.IConnection = (*TCPConnection)(nil)
 
 // NewTCPConnection creates and returns a new TCPConnection instance.
-func NewTCPConnection(conn net.Conn,
-	rb *ratelimit.Bucket, wb *ratelimit.Bucket, encrypted bool) *TCPConnection {
+func NewTCPConnection(conn net.Conn, encrypted bool) *TCPConnection {
 	return &TCPConnection{
-		conn:      newConnection(conn, rb, wb),
+		conn:      newConnection(conn),
 		header:    make([]byte, requestHeaderSize),
 		payload:   make([]byte, perConnBufSize),
 		encrypted: encrypted,
@@ -365,10 +349,9 @@ var _ raftio.ISnapshotConnection = (*TCPSnapshotConnection)(nil)
 
 // NewTCPSnapshotConnection creates and returns a new snapshot connection.
 func NewTCPSnapshotConnection(conn net.Conn,
-	rb *ratelimit.Bucket, wb *ratelimit.Bucket,
 	encrypted bool) *TCPSnapshotConnection {
 	return &TCPSnapshotConnection{
-		conn:      newConnection(conn, rb, wb),
+		conn:      newConnection(conn),
 		header:    make([]byte, requestHeaderSize),
 		encrypted: encrypted,
 	}
@@ -399,12 +382,10 @@ func (c *TCPSnapshotConnection) SendChunk(chunk pb.Chunk) error {
 // TCP is a TCP based transport module for exchanging raft messages and
 // snapshots between NodeHost instances.
 type TCP struct {
-	readBucket     *ratelimit.Bucket
 	stopper        *syncutil.Stopper
 	connStopper    *syncutil.Stopper
 	requestHandler raftio.MessageHandler
 	chunkHandler   raftio.ChunkHandler
-	writeBucket    *ratelimit.Bucket
 	nhConfig       config.NodeHostConfig
 	encrypted      bool
 }
@@ -415,7 +396,7 @@ var _ raftio.ITransport = (*TCP)(nil)
 func NewTCPTransport(nhConfig config.NodeHostConfig,
 	requestHandler raftio.MessageHandler,
 	chunkHandler raftio.ChunkHandler) raftio.ITransport {
-	t := &TCP{
+	return &TCP{
 		nhConfig:       nhConfig,
 		stopper:        syncutil.NewStopper(),
 		connStopper:    syncutil.NewStopper(),
@@ -423,15 +404,6 @@ func NewTCPTransport(nhConfig config.NodeHostConfig,
 		chunkHandler:   chunkHandler,
 		encrypted:      nhConfig.MutualTLS,
 	}
-	rate := nhConfig.MaxSnapshotSendBytesPerSecond
-	if rate > 0 {
-		t.writeBucket = ratelimit.NewBucketWithRate(float64(rate), int64(rate)*2)
-	}
-	rate = nhConfig.MaxSnapshotRecvBytesPerSecond
-	if rate > 0 {
-		t.readBucket = ratelimit.NewBucketWithRate(float64(rate), int64(rate)*2)
-	}
-	return t
 }
 
 // Start starts the TCP transport module.
@@ -499,7 +471,7 @@ func (t *TCP) GetConnection(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPConnection(conn, nil, nil, t.encrypted), nil
+	return NewTCPConnection(conn, t.encrypted), nil
 }
 
 // GetSnapshotConnection returns a new raftio.IConnection for sending raft
@@ -510,8 +482,7 @@ func (t *TCP) GetSnapshotConnection(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPSnapshotConnection(conn,
-		t.readBucket, t.writeBucket, t.encrypted), nil
+	return NewTCPSnapshotConnection(conn, t.encrypted), nil
 }
 
 // Name returns a human readable name of the TCP transport module.

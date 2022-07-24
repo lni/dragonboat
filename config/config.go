@@ -368,14 +368,6 @@ type NodeHostConfig struct {
 	// dropped to restrict memory usage. When set to 0, it means the queue size
 	// is unlimited.
 	MaxReceiveQueueSize uint64
-	// MaxSnapshotSendBytesPerSecond defines how much snapshot data can be sent
-	// every second for all Raft shards managed by the NodeHost instance.
-	// The default value 0 means there is no limit set for snapshot streaming.
-	MaxSnapshotSendBytesPerSecond uint64
-	// MaxSnapshotRecvBytesPerSecond defines how much snapshot data can be
-	// received each second for all Raft shards managed by the NodeHost instance.
-	// The default value 0 means there is no limit for receiving snapshot data.
-	MaxSnapshotRecvBytesPerSecond uint64
 	// NotifyCommit specifies whether clients should be notified when their
 	// regular proposals and config change requests are committed. By default,
 	// commits are not notified, clients are only notified when their proposals
