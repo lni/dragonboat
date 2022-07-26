@@ -366,10 +366,8 @@ func newGossipManager(nhid string, f getShardInfo,
 }
 
 func (g *gossipManager) join(seed []string) {
-	if count, err := g.list.Join(seed); err != nil {
+	if _, err := g.list.Join(seed); err != nil {
 		plog.Errorf("failed to join the gossip group, %v", err)
-	} else {
-		plog.Infof("connected to %d gossip nodes", count)
 	}
 }
 
