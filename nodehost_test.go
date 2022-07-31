@@ -251,6 +251,8 @@ func (t *testSysEventListener) getNodeUnloaded() []raftio.NodeInfo {
 	return copyNodeInfo(t.nodeUnloaded)
 }
 
+func (t *testSysEventListener) NodeDeleted(info raftio.NodeInfo) {}
+
 func (t *testSysEventListener) MembershipChanged(info raftio.NodeInfo) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -2223,7 +2225,7 @@ func TestSyncRequestDeleteReplica(t *testing.T) {
 			waitNodeInfoEvent(t, listener.getMembershipChanged, 2)
 			ni := listener.getMembershipChanged()[1]
 			if ni.ShardID != 1 || ni.ReplicaID != 1 {
-				t.Fatalf("incorrect node ready info")
+				t.Fatalf("incorrect membership changed info")
 			}
 		},
 	}

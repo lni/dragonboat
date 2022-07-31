@@ -281,6 +281,7 @@ func (n *node) applyConfigChange(cc pb.ConfigChange) error {
 			plog.Infof("%s applied ConfChange Remove for itself", n.id())
 			n.nodeRegistry.RemoveShard(n.shardID)
 			n.requestRemoval()
+			n.notifySelfRemove()
 		} else {
 			n.nodeRegistry.Remove(n.shardID, cc.ReplicaID)
 		}
@@ -351,6 +352,7 @@ func (n *node) RestoreRemotes(snapshot pb.Snapshot) error {
 		if nid == n.replicaID {
 			n.nodeRegistry.RemoveShard(n.shardID)
 			n.requestRemoval()
+			n.notifySelfRemove()
 		}
 	}
 	plog.Debugf("%s is restoring remotes", n.id())
@@ -1576,6 +1578,14 @@ func (n *node) tick(tick uint64) error {
 	n.pendingReadIndexes.tick(tick)
 	n.pendingConfigChange.tick(tick)
 	return nil
+}
+
+func (n *node) notifySelfRemove() {
+	n.sysEvents.Publish(server.SystemEvent{
+		Type:      server.NodeDeleted,
+		ShardID:   n.shardID,
+		ReplicaID: n.replicaID,
+	})
 }
 
 func (n *node) notifyConfigChange() {

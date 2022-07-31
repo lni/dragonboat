@@ -59,6 +59,7 @@ type ConnectionInfo struct {
 type ISystemEventListener interface {
 	NodeHostShuttingDown()
 	NodeUnloaded(info NodeInfo)
+	NodeDeleted(info NodeInfo)
 	NodeReady(info NodeInfo)
 	MembershipChanged(info NodeInfo)
 	ConnectionEstablished(info ConnectionInfo)
