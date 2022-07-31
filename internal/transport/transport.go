@@ -360,8 +360,6 @@ func (t *Transport) send(req pb.Message) (bool, failedSend) {
 	from := req.From
 	addr, key, err := t.resolver.Resolve(shardID, toReplicaID)
 	if err != nil {
-		plog.Warningf("%s do not have the address for %s, dropping a message",
-			t.sourceID, dn(shardID, toReplicaID))
 		return false, unknownTarget
 	}
 	// fail fast
