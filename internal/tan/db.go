@@ -276,6 +276,7 @@ func (d *db) getEntries(shardID uint64, replicaID uint64,
 		maxSize = math.MaxUint64
 	}
 	expected := low
+	done := false
 	for _, ie := range ies {
 		queryIndex := ie
 		f := func(u pb.Update, _ int64) bool {
@@ -294,6 +295,7 @@ func (d *db) getEntries(shardID uint64, replicaID uint64,
 					}
 					entries = append(entries, e)
 					if size > maxSize {
+						done = true
 						return false
 					}
 				} else {
@@ -304,6 +306,9 @@ func (d *db) getEntries(shardID uint64, replicaID uint64,
 		}
 		if err := d.readLog(ie, f); err != nil {
 			return nil, 0, err
+		}
+		if done {
+			return entries, size, nil
 		}
 	}
 	return entries, size, nil

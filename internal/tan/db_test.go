@@ -665,3 +665,31 @@ func TestRebuildLog(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, fi.Size()*19/20, fi2.Size())
 }
+
+func TestGetEntriesWithMaxSize(t *testing.T) {
+	fs := vfs.NewMem()
+	opts := &Options{
+		MaxManifestFileSize: MaxManifestFileSize,
+		MaxLogFileSize:      1024,
+		FS:                  fs,
+	}
+	tf := func(t *testing.T, db *db) {
+		cmd := make([]byte, 128)
+		buf := make([]byte, 1024)
+		for i := 0; i < 128; i++ {
+			u := pb.Update{
+				ShardID:   2,
+				ReplicaID: 3,
+				EntriesToSave: []pb.Entry{
+					{Index: 1 + uint64(i), Term: 5, Cmd: cmd},
+				},
+			}
+			_, err := db.write(u, buf)
+			require.NoError(t, err)
+		}
+		entries, _, err := db.getEntries(2, 3, nil, 0, 1, 128, 128)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(entries))
+	}
+	runTanTest(t, opts, tf, fs)
+}
