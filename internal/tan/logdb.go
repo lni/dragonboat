@@ -122,6 +122,9 @@ func createTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 	if cfg.Expert.FS == nil {
 		panic("fs not set")
 	}
+	if cfg.Expert.LogDB.IsEmpty() {
+		panic("logdb config is empty")
+	}
 	dirname := cfg.Expert.FS.PathJoin(dirs[0], defaultDBName)
 	ldb := &LogDB{
 		dirname:    dirname,
@@ -130,9 +133,8 @@ func createTan(cfg config.NodeHostConfig, cb config.LogDBCallback,
 		wgs:        make([]*sync.WaitGroup, defaultShards),
 		collection: newCollection(dirname, cfg.Expert.FS, singleNodeLog),
 	}
-
 	for i := 0; i < len(ldb.buffers); i++ {
-		ldb.buffers[i] = make([]byte, defaultBufferSize)
+		ldb.buffers[i] = make([]byte, cfg.Expert.LogDB.KVWriteBufferSize)
 	}
 	for i := 0; i < len(ldb.wgs); i++ {
 		ldb.wgs[i] = new(sync.WaitGroup)

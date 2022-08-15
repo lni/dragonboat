@@ -101,6 +101,7 @@ func TestRemovedEntriesMultiplexedLogSetup(t *testing.T) {
 	cfg := config.NodeHostConfig{
 		Expert: config.ExpertConfig{FS: vfs.NewMem()},
 	}
+	cfg.Prepare()
 	dirs := []string{"db-dir"}
 	ldb, err := CreateLogMultiplexedTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)

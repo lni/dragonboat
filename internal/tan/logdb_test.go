@@ -45,6 +45,7 @@ func TestFileLock(t *testing.T) {
 			FS: vfs.Default,
 		},
 	}
+	cfg.Prepare()
 	if !child {
 		ldb, err := CreateTan(cfg, nil, []string{dbdir}, nil)
 		require.NoError(t, err)
@@ -74,6 +75,7 @@ func TestListNodeInfo(t *testing.T) {
 			FS: vfs.Default,
 		},
 	}
+	cfg.Prepare()
 	ldb, err := CreateTan(cfg, nil, []string{"db-dir"}, nil)
 	require.NoError(t, err)
 	defer func() {
@@ -99,6 +101,7 @@ func TestLogDBCanBeCreated(t *testing.T) {
 	cfg := config.NodeHostConfig{
 		Expert: config.ExpertConfig{FS: vfs.NewMem()},
 	}
+	cfg.Prepare()
 	dirs := []string{"db-dir"}
 	ldb, err := CreateTan(cfg, nil, dirs, []string{})
 	require.Equal(t, tanLogDBName, ldb.Name())
@@ -111,6 +114,7 @@ func TestSaveSnapshots(t *testing.T) {
 	cfg := config.NodeHostConfig{
 		Expert: config.ExpertConfig{FS: vfs.NewMem()},
 	}
+	cfg.Prepare()
 	dirs := []string{"db-dir"}
 	ldb, err := CreateTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)
@@ -141,6 +145,7 @@ func TestSaveRaftState(t *testing.T) {
 	cfg := config.NodeHostConfig{
 		Expert: config.ExpertConfig{FS: vfs.NewMem()},
 	}
+	cfg.Prepare()
 	dirs := []string{"db-dir"}
 	ldb, err := CreateTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)
@@ -192,6 +197,7 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 	cfg := config.NodeHostConfig{
 		Expert: config.ExpertConfig{FS: vfs.NewMem()},
 	}
+	cfg.Prepare()
 	dirs := []string{"db-dir"}
 	ldb, err := CreateLogMultiplexedTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)
