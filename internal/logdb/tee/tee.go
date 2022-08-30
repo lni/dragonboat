@@ -237,7 +237,7 @@ func (t *LogDB) ReadRaftState(shardID uint64,
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	os, oe := t.odb.ReadRaftState(shardID, replicaID, lastIndex)
-	ns, ne := t.odb.ReadRaftState(shardID, replicaID, lastIndex)
+	ns, ne := t.ndb.ReadRaftState(shardID, replicaID, lastIndex)
 	assertSameError(shardID, replicaID, oe, ne)
 	if oe != nil {
 		return raftio.RaftState{}, oe
