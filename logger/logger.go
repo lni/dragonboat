@@ -56,6 +56,9 @@ type ILogger interface {
 }
 
 // SetLoggerFactory sets the factory function used to create ILogger instances.
+// This method will panic if called multiple times to prevent nil dereferences,
+// multiple logging formats, and other potential issues. Ensure this is called
+// only once on startup.
 func SetLoggerFactory(f Factory) {
 	_loggers.mu.Lock()
 	defer _loggers.mu.Unlock()
