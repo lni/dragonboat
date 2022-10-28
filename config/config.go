@@ -924,7 +924,7 @@ type ExpertConfig struct {
 	// transport module to be used by dragonbaot. When not set, the built-in TCP
 	// transport module is used.
 	TransportFactory TransportFactory
-	// Engine is the cponfiguration for the execution engine.
+	// Engine is the configuration for the execution engine.
 	Engine EngineConfig
 	// LogDB contains configuration options for the LogDB storage engine. LogDB
 	// is used for storing Raft Logs and metadata. This optional option is used
@@ -933,13 +933,13 @@ type ExpertConfig struct {
 	LogDB LogDBConfig
 	// FS is the filesystem instance used in tests.
 	FS IFS
-	// TestGossipProbeInterval define the probe interval used by the gossip
+	// TestGossipProbeInterval defines the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration
 }
 
 // GossipConfig contains configurations for the gossip service. Gossip service
-// is a fully distributed networked service for exchanging knowledges on
+// is a fully distributed networked service for exchanging knowledge on
 // NodeHost instances. When enabled by the NodeHostConfig.AddressByNodeHostID
 // field, it is employed to manage NodeHostID to RaftAddress mappings of known
 // NodeHost instances.

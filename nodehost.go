@@ -151,7 +151,7 @@ type ShardView = registry.ShardView
 type GossipInfo struct {
 	// AdvertiseAddress is the advertise address used by the gossip service.
 	AdvertiseAddress string
-	// NumOfLiveNodeHosts is the number of current live NodeHost instances known
+	// NumOfKnownNodeHosts is the number of current live NodeHost instances known
 	// to the gossip service. Note that the gossip service always knowns the
 	// local NodeHost instance itself. When the NumOfKnownNodeHosts value is 1,
 	// it means the gossip service doesn't know any other NodeHost instance that
@@ -638,7 +638,7 @@ type Membership struct {
 	// NonVotings is a map of ReplicaID values to NodeHost Raft addresses for all
 	// nonVotings in the Raft shard.
 	NonVotings map[uint64]string
-	// Witnesses is a map of ReplicaID values to NodeHost Raft addrsses for all
+	// Witnesses is a map of ReplicaID values to NodeHost Raft addresses for all
 	// witnesses in the Raft shard.
 	Witnesses map[uint64]string
 	// Removed is a set of ReplicaID values that have been removed from the Raft

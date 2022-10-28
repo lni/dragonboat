@@ -145,7 +145,7 @@ func (n *GossipRegistry) Remove(shardID uint64, replicaID uint64) {
 	n.nodes.Remove(shardID, replicaID)
 }
 
-// RemoveShard removes the specified node from the registry.
+// RemoveShard removes the specified shard from the registry.
 func (n *GossipRegistry) RemoveShard(shardID uint64) {
 	n.nodes.RemoveShard(shardID)
 }
