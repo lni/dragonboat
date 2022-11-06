@@ -295,8 +295,8 @@ type NodeHostConfig struct {
 	// AddressByNodeHostID indicates that NodeHost instances should be addressed
 	// by their NodeHostID values. This feature is usually used when only dynamic
 	// addresses are available. When enabled, NodeHostID values should be used
-	// as the target parameter when calling NodeHost's StartShard,
-	// RequestAddNode, RequestAddNonVoting and RequestAddWitness methods.
+	// as the target parameter when calling NodeHost's StartReplica,
+	// RequestAddReplica, RequestAddNonVoting and RequestAddWitness methods.
 	//
 	// Enabling AddressByNodeHostID also enables the internal gossip service,
 	// NodeHostConfig.Gossip must be configured to control the behaviors of the
@@ -406,7 +406,7 @@ type NodeHostConfig struct {
 	// When starting Raft nodes or requesting new nodes to be added, use the above
 	// mentioned NodeHostID values as the target parameters (which are of the
 	// Target type). Let's say we want to start a Raft Node as a part of a three
-	// replicas Raft shard, the initialMembers parameter of the StartShard
+	// replica Raft shard, the initialMembers parameter of the StartReplica
 	// method can be set to
 	//
 	// initialMembers := map[uint64]Target {
