@@ -57,9 +57,9 @@ Leader：Raft协议中定义的扮演Leader角色的节点。每个Raft组应有
 
 ## 节点启动 ##
 
-使用一个节点前首先需要启动该节点，使得其被NodeHost装载并管理。NodeHost的StartShard, StartConcurrentShard与StartOnDiskShard方法用于启动相应节点。
+使用一个节点前首先需要启动该节点，使得其被NodeHost装载并管理。NodeHost的StartReplica, StartConcurrentReplica与StartOnDiskReplica方法用于启动相应节点。
 
-当一个Raft shard的各初始成员首次启动时，用户需要提供该Raft shard的所有初始成员信息(initial members)，且各副本必须以完全相同的初始成员信息启动。该初始成员信息用于确保各副本从一个一致的成员列表开始演进后续用户要求的成员变更。当一个副本并非该Raft shard的初始成员，而是后续通过成员变更（如SyncRequestAddNode）所新增的节点，其第一次启动时无需提供初始成员信息，只需要将join参数设置为true。
+当一个Raft shard的各初始成员首次启动时，用户需要提供该Raft shard的所有初始成员信息(initial members)，且各副本必须以完全相同的初始成员信息启动。该初始成员信息用于确保各副本从一个一致的成员列表开始演进后续用户要求的成员变更。当一个副本并非该Raft shard的初始成员，而是后续通过成员变更（如SyncRequestAddReplica）所新增的节点，其第一次启动时无需提供初始成员信息，只需要将join参数设置为true。
 
 当一个节点重启时，不论该节点是一个初始节点还是后续通过成员变更添加的节点，均无需再次提供初始成员信息，也不再需要设置join参数为true。
 
@@ -107,7 +107,7 @@ NodeHost同时提供名为StaleRead的函数，如它的方法名称所表述的
 
 ## 成员变更 ##
 
-对于一个Raft组，成员变更可以改变其组成员节点Node的组成，比如可以增加一个新节点或者删除一个已经失效的节点。成员变更对于用户状态机透明，无需用户在状态机内做任何处理，用户只需要通过调用NodeHost的RequestAddNode与RequestRemoveNode方法来增删节点完成成员变更。
+对于一个Raft组，成员变更可以改变其组成员节点Node的组成，比如可以增加一个新节点或者删除一个已经失效的节点。成员变更对于用户状态机透明，无需用户在状态机内做任何处理，用户只需要通过调用NodeHost的RequestAddReplica与RequestDeleteReplica方法来增删节点完成成员变更。
 
 成员变更的注意事项如下：
 * 成员变更的操作本身也是通过Raft协议的一种提议，与普通的用户提议一样，被采纳的成员变更操作会被持久保存并复制到各副本节点。
