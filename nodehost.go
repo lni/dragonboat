@@ -1947,6 +1947,8 @@ func getRequestState(ctx context.Context, rs *RequestState) (sm.Result, error) {
 			return sm.Result{}, ErrShardClosed
 		} else if r.Dropped() {
 			return sm.Result{}, ErrShardNotReady
+		} else if r.Aborted() {
+			return sm.Result{}, ErrAborted
 		}
 		plog.Panicf("unknown v code %v", r)
 	case <-ctx.Done():

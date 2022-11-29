@@ -47,6 +47,7 @@ func TestIsTempError(t *testing.T) {
 		{ErrTimeout, true},
 		{ErrCanceled, false},
 		{ErrRejected, false},
+		{ErrAborted, true},
 		{ErrShardNotReady, true},
 		{ErrInvalidTarget, false},
 		{ErrInvalidRange, false},

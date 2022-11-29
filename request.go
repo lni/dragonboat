@@ -77,6 +77,9 @@ var (
 	ErrCanceled = errors.New("request canceled")
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
+	// ErrAborted indicates that the request has been aborted, usually by user
+	// defined behaviours.
+	ErrAborted = errors.New("request aborted")
 	// ErrShardNotReady indicates that the request has been dropped as the
 	// specified raft shard is not ready to handle the request. Unknown leader
 	// is the most common cause of this Error, trying to use a shard not fully
@@ -95,7 +98,8 @@ func IsTempError(err error) bool {
 		errors.Is(err, ErrShardNotInitialized) ||
 		errors.Is(err, ErrShardNotReady) ||
 		errors.Is(err, ErrTimeout) ||
-		errors.Is(err, ErrClosed)
+		errors.Is(err, ErrClosed) ||
+		errors.Is(err, ErrAborted)
 }
 
 // LogRange defines the range [FirstIndex, lastIndex) of the raft log.
