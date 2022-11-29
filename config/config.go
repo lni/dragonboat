@@ -295,8 +295,8 @@ type NodeHostConfig struct {
 	// AddressByNodeHostID indicates that NodeHost instances should be addressed
 	// by their NodeHostID values. This feature is usually used when only dynamic
 	// addresses are available. When enabled, NodeHostID values should be used
-	// as the target parameter when calling NodeHost's StartShard,
-	// RequestAddNode, RequestAddNonVoting and RequestAddWitness methods.
+	// as the target parameter when calling NodeHost's StartReplica,
+	// RequestAddReplica, RequestAddNonVoting and RequestAddWitness methods.
 	//
 	// Enabling AddressByNodeHostID also enables the internal gossip service,
 	// NodeHostConfig.Gossip must be configured to control the behaviors of the
@@ -406,7 +406,7 @@ type NodeHostConfig struct {
 	// When starting Raft nodes or requesting new nodes to be added, use the above
 	// mentioned NodeHostID values as the target parameters (which are of the
 	// Target type). Let's say we want to start a Raft Node as a part of a three
-	// replicas Raft shard, the initialMembers parameter of the StartShard
+	// replica Raft shard, the initialMembers parameter of the StartReplica
 	// method can be set to
 	//
 	// initialMembers := map[uint64]Target {
@@ -924,7 +924,7 @@ type ExpertConfig struct {
 	// transport module to be used by dragonbaot. When not set, the built-in TCP
 	// transport module is used.
 	TransportFactory TransportFactory
-	// Engine is the cponfiguration for the execution engine.
+	// Engine is the configuration for the execution engine.
 	Engine EngineConfig
 	// LogDB contains configuration options for the LogDB storage engine. LogDB
 	// is used for storing Raft Logs and metadata. This optional option is used
@@ -933,13 +933,13 @@ type ExpertConfig struct {
 	LogDB LogDBConfig
 	// FS is the filesystem instance used in tests.
 	FS IFS
-	// TestGossipProbeInterval define the probe interval used by the gossip
+	// TestGossipProbeInterval defines the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration
 }
 
 // GossipConfig contains configurations for the gossip service. Gossip service
-// is a fully distributed networked service for exchanging knowledges on
+// is a fully distributed networked service for exchanging knowledge on
 // NodeHost instances. When enabled by the NodeHostConfig.AddressByNodeHostID
 // field, it is employed to manage NodeHostID to RaftAddress mappings of known
 // NodeHost instances.

@@ -115,7 +115,7 @@ var (
 	// and thus prevented the requested operation to be completed.
 	ErrShardNotStopped = errors.New("shard not stopped")
 	// ErrInvalidShardSettings indicates that shard settings specified for
-	// the StartShard method are invalid.
+	// the StartReplica method are invalid.
 	ErrInvalidShardSettings = errors.New("shard settings are invalid")
 	// ErrShardNotBootstrapped indicates that the specified shard has not
 	// been boostrapped yet. When starting this node, depending on whether this
@@ -151,7 +151,7 @@ type ShardView = registry.ShardView
 type GossipInfo struct {
 	// AdvertiseAddress is the advertise address used by the gossip service.
 	AdvertiseAddress string
-	// NumOfLiveNodeHosts is the number of current live NodeHost instances known
+	// NumOfKnownNodeHosts is the number of current live NodeHost instances known
 	// to the gossip service. Note that the gossip service always knowns the
 	// local NodeHost instance itself. When the NumOfKnownNodeHosts value is 1,
 	// it means the gossip service doesn't know any other NodeHost instance that
@@ -638,7 +638,7 @@ type Membership struct {
 	// NonVotings is a map of ReplicaID values to NodeHost Raft addresses for all
 	// nonVotings in the Raft shard.
 	NonVotings map[uint64]string
-	// Witnesses is a map of ReplicaID values to NodeHost Raft addrsses for all
+	// Witnesses is a map of ReplicaID values to NodeHost Raft addresses for all
 	// witnesses in the Raft shard.
 	Witnesses map[uint64]string
 	// Removed is a set of ReplicaID values that have been removed from the Raft
@@ -1134,7 +1134,7 @@ func (nh *NodeHost) RequestDeleteReplica(shardID uint64,
 // RequestAddReplica call is ignored when promoting an nonVoting to a regular node.
 //
 // After the node is successfully added to the Raft shard, it is application's
-// responsibility to call StartShard on the target NodeHost instance to
+// responsibility to call StartReplica on the target NodeHost instance to
 // actually start the Raft shard node.
 //
 // Requesting a removed node back to the Raft shard will always be rejected.
@@ -1178,7 +1178,7 @@ func (nh *NodeHost) RequestAddReplica(shardID uint64,
 // replicaID values. An nonVoting can be removed from the shard by calling
 // RequestDeleteReplica with its shardID and replicaID values.
 //
-// Application should later call StartShard with config.Config.IsNonVoting
+// Application should later call StartReplica with config.Config.IsNonVoting
 // set to true on the right NodeHost to actually start the nonVoting instance.
 //
 // See the godoc of the RequestAddReplica method for the details of the target and
@@ -1208,7 +1208,7 @@ func (nh *NodeHost) RequestAddNonVoting(shardID uint64,
 // Section 11.7.2 of Diego Ongaro's thesis contains more info on such witness
 // role.
 //
-// Application should later call StartShard with config.Config.IsWitness
+// Application should later call StartReplica with config.Config.IsWitness
 // set to true on the right NodeHost to actually start the witness node.
 //
 // See the godoc of the RequestAddReplica method for the details of the target and
