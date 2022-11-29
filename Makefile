@@ -206,12 +206,12 @@ tools-checkdisk:
 ###############################################################################
 .PHONY: install-static-check-tools
 install-static-check-tools:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.45.2
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.50.1
 
 CHECKED_PKGS=$(shell go list ./...)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
 EXTRA_LINTERS=-E misspell -E rowserrcheck -E depguard -E unconvert \
-	-E prealloc -E gofmt -E stylecheck
+	-E prealloc -E stylecheck
 .PHONY: static-check
 static-check:
 	@for p in $(CHECKED_DIRS); do \

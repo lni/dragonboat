@@ -28,11 +28,9 @@ import (
 	"github.com/lni/goutils/syncutil"
 
 	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/utils"
 	"github.com/lni/dragonboat/v4/logger"
 )
 
-var firstError = utils.FirstError
 var plog = logger.GetLogger("registry")
 
 type getShardInfo func() []ShardInfo

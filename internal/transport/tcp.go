@@ -255,8 +255,6 @@ func readMagicNumber(conn net.Conn, magicNum []byte) error {
 
 type connection struct {
 	conn net.Conn
-	lr   io.Reader
-	lw   io.Writer
 }
 
 func newConnection(conn net.Conn) net.Conn {

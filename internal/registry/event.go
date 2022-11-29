@@ -59,7 +59,11 @@ func (e *sliceEventDelegate) put(typ memberlist.NodeEventType, n *memberlist.Nod
 	defer e.notify()
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.mu.events = append(e.mu.events, memberlist.NodeEvent{typ, &node})
+	event := memberlist.NodeEvent{
+		Event: typ,
+		Node:  &node,
+	}
+	e.mu.events = append(e.mu.events, event)
 }
 
 func (e *sliceEventDelegate) NotifyJoin(n *memberlist.Node) {
