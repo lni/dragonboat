@@ -206,7 +206,7 @@ tools-checkdisk:
 ###############################################################################
 .PHONY: install-static-check-tools
 install-static-check-tools:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.50.1
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
 
 CHECKED_PKGS=$(shell go list ./...)
 CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .

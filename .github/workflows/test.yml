@@ -95,5 +95,5 @@ jobs:
        uses: actions/checkout@v3
      - name: Static check
        run:
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $GOROOT/bin v1.50.1
+        make install-static-check-tools
         make static-check
