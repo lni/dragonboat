@@ -478,14 +478,14 @@ func (nh *NodeHost) Stop() {
 // cluster.
 //
 // As a summary, when -
-//  - starting a brand new Raft cluster, set join to false and specify all initial
-//    member node details in the initialMembers map.
-//  - joining a new node to an existing Raft cluster, set join to true and leave
-//    the initialMembers map empty. This requires the joining node to have already
-//    been added as a member node of the Raft cluster.
-//  - restarting an crashed or stopped node, set join to false and leave the
-//    initialMembers map to be empty. This applies to both initial member nodes
-//    and those joined later.
+//   - starting a brand new Raft cluster, set join to false and specify all initial
+//     member node details in the initialMembers map.
+//   - joining a new node to an existing Raft cluster, set join to true and leave
+//     the initialMembers map empty. This requires the joining node to have already
+//     been added as a member node of the Raft cluster.
+//   - restarting an crashed or stopped node, set join to false and leave the
+//     initialMembers map to be empty. This applies to both initial member nodes
+//     and those joined later.
 func (nh *NodeHost) StartCluster(initialMembers map[uint64]Target,
 	join bool, create sm.CreateStateMachineFunc, cfg config.Config) error {
 	cf := func(clusterID uint64, nodeID uint64,
@@ -1520,17 +1520,17 @@ func (nh *NodeHost) getClusterSetIndex() uint64 {
 
 // there are three major reasons to bootstrap the cluster
 //
-// 1. when possible, we check whether user incorrectly specified parameters
-//    for the startCluster method, e.g. call startCluster with join=true first,
-//    then restart the NodeHost instance and call startCluster again with
-//    join=false and len(nodes) > 0
-// 2. when restarting a node which is a part of the initial cluster members,
-//    for user convenience, we allow the caller not to provide the details of
-//    initial members. when the initial cluster member info is required, however
-//    we still need to get the initial member info from somewhere. bootstrap is
-//    the procedure that records such info.
-// 3. the bootstrap record is used as a marker record in our default LogDB
-//    implementation to indicate that a certain node exists here
+//  1. when possible, we check whether user incorrectly specified parameters
+//     for the startCluster method, e.g. call startCluster with join=true first,
+//     then restart the NodeHost instance and call startCluster again with
+//     join=false and len(nodes) > 0
+//  2. when restarting a node which is a part of the initial cluster members,
+//     for user convenience, we allow the caller not to provide the details of
+//     initial members. when the initial cluster member info is required, however
+//     we still need to get the initial member info from somewhere. bootstrap is
+//     the procedure that records such info.
+//  3. the bootstrap record is used as a marker record in our default LogDB
+//     implementation to indicate that a certain node exists here
 func (nh *NodeHost) bootstrapCluster(initialMembers map[uint64]Target,
 	join bool, cfg config.Config,
 	smType pb.StateMachineType) (map[uint64]string, bool, error) {
@@ -1999,6 +1999,8 @@ func getRequestState(ctx context.Context, rs *RequestState) (sm.Result, error) {
 			return sm.Result{}, ErrClusterClosed
 		} else if r.Dropped() {
 			return sm.Result{}, ErrClusterNotReady
+		} else if r.Aborted() {
+			return sm.Result{}, ErrAborted
 		}
 		plog.Panicf("unknown v code %v", r)
 	case <-ctx.Done():

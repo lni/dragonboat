@@ -45,6 +45,7 @@ func TestIsTempError(t *testing.T) {
 		{ErrTimeout, true},
 		{ErrCanceled, false},
 		{ErrRejected, false},
+		{ErrAborted, true},
 		{ErrClusterNotReady, true},
 		{ErrInvalidTarget, false},
 		{ErrInvalidNodeHostID, false},

@@ -75,6 +75,9 @@ var (
 	ErrCanceled = errors.New("request canceled")
 	// ErrRejected indicates that the request has been rejected.
 	ErrRejected = errors.New("request rejected")
+	// ErrAborted indicates that the request has been aborted, usually by user
+	// defined behaviours.
+	ErrAborted = errors.New("request aborted")
 	// ErrClusterNotReady indicates that the request has been dropped as the
 	// specified raft cluster is not ready to handle the request. Unknown leader
 	// is the most common cause of this error, trying to use a cluster not fully
@@ -115,7 +118,8 @@ func IsTempError(err error) bool {
 		err == ErrClusterNotInitialized ||
 		err == ErrClusterNotReady ||
 		err == ErrTimeout ||
-		err == ErrClosed
+		err == ErrClosed ||
+		err == ErrAborted
 }
 
 // RequestResultCode is the result code returned to the client to indicate the

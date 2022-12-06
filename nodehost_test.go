@@ -1537,6 +1537,56 @@ func TestRecoverFromSnapshotCanBeStopped(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
+func TestGetRequestState(t *testing.T) {
+	tests := []struct {
+		code RequestResultCode
+		err  error
+	}{
+		{requestCompleted, nil},
+		{requestRejected, ErrRejected},
+		{requestTimeout, ErrTimeout},
+		{requestTerminated, ErrClusterClosed},
+		{requestDropped, ErrClusterNotReady},
+		{requestAborted, ErrAborted},
+	}
+
+	for _, tt := range tests {
+		rs := &RequestState{
+			CompletedC: make(chan RequestResult, 1),
+		}
+		result := RequestResult{code: tt.code}
+		rs.notify(result)
+		if _, err := getRequestState(context.TODO(), rs); !errors.Is(err, tt.err) {
+			t.Errorf("expect error %v, got %v", tt.err, err)
+		}
+	}
+}
+
+func TestGetRequestStateTimeoutAndCancel(t *testing.T) {
+	func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer cancel()
+		time.Sleep(2 * time.Millisecond)
+		rs := &RequestState{
+			CompletedC: make(chan RequestResult, 1),
+		}
+		if _, err := getRequestState(ctx, rs); !errors.Is(err, ErrTimeout) {
+			t.Errorf("got %v", err)
+		}
+	}()
+
+	func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+		cancel()
+		rs := &RequestState{
+			CompletedC: make(chan RequestResult, 1),
+		}
+		if _, err := getRequestState(ctx, rs); !errors.Is(err, ErrCanceled) {
+			t.Errorf("got %v", err)
+		}
+	}()
+}
+
 func TestNodeHostIDIsStatic(t *testing.T) {
 	fs := vfs.GetTestFS()
 	id := ""
