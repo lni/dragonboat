@@ -56,7 +56,7 @@ type IConnection interface {
 	Close()
 	// SendMessageBatch sends the specified message batch to the target. It is
 	// recommended to deliver the message batch to the target in order to enjoy
-	// best possible performance, but out of order delivery is allowed at the
+	// the best possible performance, but out of order delivery is allowed at the
 	// cost of reduced performance.
 	SendMessageBatch(batch pb.MessageBatch) error
 }
