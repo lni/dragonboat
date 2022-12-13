@@ -97,7 +97,7 @@ type Config struct {
 	// HeartbeatRTT should be set to 2.
 	HeartbeatRTT uint64
 	// SnapshotEntries defines how often the state machine should be snapshotted
-	// automcatically. It is defined in terms of the number of applied Raft log
+	// automatically. It is defined in terms of the number of applied Raft log
 	// entries. SnapshotEntries can be set to 0 to disable such automatic
 	// snapshotting.
 	//

@@ -1562,7 +1562,7 @@ func (r *raft) onMessageTermNotMatched(m pb.Message) bool {
 					// not to reset the electionTick value to avoid the risk of having the
 					// local node not being to campaign at all. if the local node generates
 					// the tick much slower than other nodes (e.g. bad config, hardware
-					// clock issue, bad scheduling, overloaded etc), it may lose the chance
+					// clock issue, bad scheduling, overloaded etc.), it may lose the chance
 					// to ever start a campaign unless we keep its electionTick value here.
 					r.becomeFollowerKE(m.Term, leaderID)
 				} else {
@@ -2422,7 +2422,7 @@ func (r *raft) initializeHandlerMap() {
 }
 
 func (r *raft) checkHandlerMap() {
-	// following states/types are not suppose to have handler filled in
+	// following states/types are not supposed to have handler filled in
 	checks := []struct {
 		stateType State
 		msgType   pb.MessageType
