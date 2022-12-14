@@ -14,7 +14,7 @@
 
 package dragonboat
 
-// NodeHostRegistry provides APIs for querying data shared between NodeHost
+// INodeHostRegistry provides APIs for querying data shared between NodeHost
 // instances via gossip.
 type INodeHostRegistry interface {
 	NumOfShards() int

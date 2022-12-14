@@ -32,14 +32,14 @@ var (
 	ErrUnknownTarget = errors.New("target address unknown")
 )
 
-// IResolver converts the (shard id, node id( tuple to network address.
+// IResolver converts the (shard id, node id) tuple to network address.
 type IResolver interface {
 	Resolve(uint64, uint64) (string, string, error)
 	Add(uint64, uint64, string)
 }
 
 // INodeRegistry is the local registry interface used to keep all known
-// nodes in the system..
+// nodes in the system.
 type INodeRegistry interface {
 	Close() error
 	Add(shardID uint64, replicaID uint64, url string)
