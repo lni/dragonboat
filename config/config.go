@@ -266,14 +266,14 @@ type NodeHostConfig struct {
 	WALDir string
 	// NodeHostDir is where everything else is stored.
 	NodeHostDir string
-	// RTTMillisecond defines the average Rround Trip Time (RTT) in milliseconds
+	// RTTMillisecond defines the average Round Trip Time (RTT) in milliseconds
 	// between two NodeHost instances. Such a RTT interval is internally used as
 	// a logical clock tick, Raft heartbeat and election intervals are both
-	// defined in term of how many such logical clock ticks (RTT intervals).
+	// defined in terms of how many such logical clock ticks (RTT intervals).
 	// Note that RTTMillisecond is the combined delays between two NodeHost
 	// instances including all delays caused by network transmission, delays
 	// caused by NodeHost queuing and processing. As an example, when fully
-	// loaded, the average Rround Trip Time between two of our NodeHost instances
+	// loaded, the average Round Trip Time between two of our NodeHost instances
 	// used for benchmarking purposes is up to 500 microseconds when the ping time
 	// between them is 100 microseconds. Set RTTMillisecond to 1 when it is less
 	// than 1 million in your environment.
@@ -459,7 +459,7 @@ type NodeHostConfig struct {
 	Gossip GossipConfig
 	// Expert contains options for expert users who are familiar with the internals
 	// of Dragonboat. Users are recommended not to use this field unless
-	// absoloutely necessary. It is important to note that any change to this field
+	// absolutely necessary. It is important to note that any change to this field
 	// may cause an existing instance unable to restart, it may also cause negative
 	// performance impacts.
 	Expert ExpertConfig

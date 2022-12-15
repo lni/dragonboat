@@ -329,7 +329,7 @@ func (r *RequestState) AppliedC() chan RequestResult {
 // users. When NotifyCommit is not enabled, the behaviour of the returned
 // channel is the same as the one returned by the AppliedC() method. When
 // NotifyCommit is enabled, up to two RequestResult values can be received from
-// the returned channel. For example, for a successfully proposal that is
+// the returned channel. For example, for a successful proposal that is
 // eventually committed and applied, the returned chan RequestResult will return
 // a RequestResult value to indicate the proposal is committed first, it will be
 // followed by another RequestResult value indicating the proposal has been

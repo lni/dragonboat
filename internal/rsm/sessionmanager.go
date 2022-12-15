@@ -21,7 +21,7 @@ import (
 )
 
 // SessionManager is the wrapper struct that implements client session related
-// functionalites used in the IManagedStateMachine interface.
+// functionalities used in the IManagedStateMachine interface.
 type SessionManager struct {
 	lru *lrusession
 }

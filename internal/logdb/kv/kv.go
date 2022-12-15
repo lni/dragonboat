@@ -70,7 +70,7 @@ type IKVStore interface {
 	CommitWriteBatch(wb IWriteBatch) error
 	// BulkRemoveEntries removes entries specified by the range [firstKey,
 	// lastKey). BulkRemoveEntries is called in the main execution thread of raft,
-	// it is suppose to immediately return without significant delay.
+	// it is supposed to immediately return without significant delay.
 	// BulkRemoveEntries is usually implemented in KV store's range delete feature.
 	BulkRemoveEntries(firstKey []byte, lastKey []byte) error
 	// CompactEntries reclaims the underlying disk space used for storing entries

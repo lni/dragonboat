@@ -30,7 +30,7 @@ import (
 // record. This idea is based on the observations that:
 //  * consecutive entries are usually saved together
 //  * consecutive entries are usually read and consumed together
-//  * it is quite CPU expensive to individually insert entries to the the
+//  * it is quite CPU expensive to individually insert entries to the
 //    underlying memtables used by the Key-Value stores.
 //
 // Maintaining and reusing some kind of insert hint to avoid repeatedly locating
