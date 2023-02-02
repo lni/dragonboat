@@ -871,6 +871,9 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 // As an optional feature of the state machine, NAReadLocalNode returns
 // statemachine.ErrNotImplemented if the underlying state machine does not
 // implement the statemachine.IExtended interface.
+//
+// Similar to ReadLocalNode, NAReadLocalNode is only allowed to be called after
+// receiving a RequestCompleted notification from the ReadIndex method.
 func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
 	query []byte) ([]byte, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
