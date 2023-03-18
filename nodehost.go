@@ -493,7 +493,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 //   - joining a new node to an existing Raft shard, set join to true and leave
 //     the initialMembers map empty. This requires the joining node to have already
 //     been added as a member node of the Raft shard.
-//   - restarting an crashed or stopped node, set join to false and leave the
+//   - restarting a crashed or stopped node, set join to false and leave the
 //     initialMembers map to be empty. This applies to both initial member nodes
 //     and those joined later.
 func (nh *NodeHost) StartReplica(initialMembers map[uint64]Target,
@@ -556,7 +556,7 @@ func (nh *NodeHost) StopReplica(shardID uint64, replicaID uint64) error {
 }
 
 // SyncPropose makes a synchronous proposal on the Raft shard specified by
-// the input client session object. The specified context parameter must has
+// the input client session object. The specified context parameter must have
 // the timeout value set.
 //
 // SyncPropose returns the result returned by IStateMachine or
@@ -592,7 +592,7 @@ func (nh *NodeHost) SyncPropose(ctx context.Context,
 }
 
 // SyncRead performs a synchronous linearizable read on the specified Raft
-// shard. The specified context parameter must has the timeout value set. The
+// shard. The specified context parameter must have the timeout value set. The
 // query interface{} specifies what to query, it will be passed to the Lookup
 // method of the IStateMachine or IOnDiskStateMachine after the system
 // determines that it is safe to perform the local read. It returns the query
@@ -646,9 +646,9 @@ type Membership struct {
 	Removed map[uint64]struct{}
 }
 
-// SyncGetShardMembership is a rsynchronous method that queries the membership
+// SyncGetShardMembership is a synchronous method that queries the membership
 // information from the specified Raft shard. The specified context parameter
-// must has the timeout value set.
+// must have the timeout value set.
 func (nh *NodeHost) SyncGetShardMembership(ctx context.Context,
 	shardID uint64) (*Membership, error) {
 	v, err := nh.linearizableRead(ctx, shardID,
@@ -711,7 +711,7 @@ func (nh *NodeHost) GetNoOPSession(shardID uint64) *client.Session {
 
 // SyncGetSession starts a synchronous proposal to create, register and return
 // a new client session object for the specified Raft shard. The specified
-// context parameter must has the timeout value set.
+// context parameter must have the timeout value set.
 //
 // A client session object is used to ensure that a retried proposal, e.g.
 // proposal retried after timeout, will not be applied more than once into the
@@ -747,7 +747,7 @@ func (nh *NodeHost) SyncGetSession(ctx context.Context,
 
 // SyncCloseSession closes the specified client session by unregistering it
 // from the system in a synchronous manner. The specified context parameter
-// must has the timeout value set.
+// must have the timeout value set.
 //
 // Closed client session should not be used in future proposals.
 func (nh *NodeHost) SyncCloseSession(ctx context.Context,
@@ -919,7 +919,7 @@ func (nh *NodeHost) StaleRead(shardID uint64,
 // SyncRequestSnapshot is the synchronous variant of the RequestSnapshot
 // method. See RequestSnapshot for more details.
 //
-// The input context object must has deadline set.
+// The input context object must have deadline set.
 //
 // SyncRequestSnapshot returns the index of the created snapshot or the error
 // encountered.
