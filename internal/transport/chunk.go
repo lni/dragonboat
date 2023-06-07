@@ -15,7 +15,6 @@
 package transport
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/lni/goutils/logutil"
 
+	"github.com/cockroachdb/errors"
 	"github.com/lni/dragonboat/v3/internal/fileutil"
 	"github.com/lni/dragonboat/v3/internal/rsm"
 	"github.com/lni/dragonboat/v3/internal/server"
