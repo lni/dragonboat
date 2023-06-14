@@ -18,6 +18,8 @@ import (
 	"encoding/binary"
 	"math"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/lni/dragonboat/v3/config"
 	"github.com/lni/dragonboat/v3/internal/logdb/kv"
 	"github.com/lni/dragonboat/v3/internal/settings"
@@ -109,10 +111,8 @@ func (r *db) binaryFormat() uint32 {
 	return r.entries.binaryFormat()
 }
 
-func (r *db) close() {
-	if err := r.kvs.Close(); err != nil {
-		panic(err)
-	}
+func (r *db) close() error {
+	return r.kvs.Close()
 }
 
 func (r *db) getWriteBatch(ctx IContext) kv.IWriteBatch {
@@ -493,8 +493,13 @@ func (r *db) iterateEntries(ents []pb.Entry,
 		return ents, size, nil
 	}
 	if err != nil {
-		panic(err)
+		err = errors.Wrapf(err,
+			"%s failed to get max index", dn(clusterID, nodeID))
+		return nil, 0, err
 	}
-	return r.entries.iterate(ents, maxIndex, size,
+	entries, sz, err := r.entries.iterate(ents, maxIndex, size,
 		clusterID, nodeID, low, high, maxSize)
+	err = errors.Wrapf(err, "%s failed to iterate entries, %d, %d, %d, %d",
+		dn(clusterID, nodeID), low, high, maxSize, maxIndex)
+	return entries, sz, err
 }

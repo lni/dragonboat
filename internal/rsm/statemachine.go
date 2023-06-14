@@ -229,8 +229,8 @@ func (s *StateMachine) TaskChanBusy() bool {
 }
 
 // Close closes the state machine.
-func (s *StateMachine) Close() {
-	s.sm.Close()
+func (s *StateMachine) Close() error {
+	return s.sm.Close()
 }
 
 // DestroyedC return a chan struct{} used to indicate whether the SM has been
