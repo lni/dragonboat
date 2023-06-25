@@ -509,27 +509,6 @@ func (s *StateMachine) concurrentLookup(query interface{}) (interface{}, error) 
 	return s.sm.ConcurrentLookup(query)
 }
 
-// NALookup queries the local state machine.
-func (s *StateMachine) NALookup(query []byte) ([]byte, error) {
-	if s.Concurrent() {
-		return s.naConcurrentLookup(query)
-	}
-	return s.nalookup(query)
-}
-
-func (s *StateMachine) nalookup(query []byte) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.aborted {
-		return nil, ErrShardClosed
-	}
-	return s.sm.NALookup(query)
-}
-
-func (s *StateMachine) naConcurrentLookup(query []byte) ([]byte, error) {
-	return s.sm.NAConcurrentLookup(query)
-}
-
 // GetMembership returns the membership info maintained by the state machine.
 func (s *StateMachine) GetMembership() pb.Membership {
 	s.mu.RLock()

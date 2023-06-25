@@ -35,17 +35,3 @@ type IHash interface {
 	// GetHash is a read-only operation.
 	GetHash() (uint64, error)
 }
-
-// IExtended is an optional interface to be implemented by a user state machine
-// type, most of its member methods are for performance optimization purposes.
-type IExtended interface {
-	// NALookup is similar to user state machine's Lookup method, it tries to
-	// minimize extra heap allocation by taking a byte slice as the input and the
-	// returned query result is also provided as a byte slice. The input byte
-	// slice specifies what to query, it is up to the implementation to interpret
-	// the input byte slice.
-	//
-	// Lookup method is a read-only method, it should never change state machine's
-	// state.
-	NALookup([]byte) ([]byte, error)
-}

@@ -30,7 +30,6 @@ type IStateMachine interface {
 	Open(<-chan struct{}) (uint64, error)
 	Update(entries []sm.Entry) ([]sm.Entry, error)
 	Lookup(query interface{}) (interface{}, error)
-	NALookup(query []byte) ([]byte, error)
 	Sync() error
 	Prepare() (interface{}, error)
 	Save(interface{},
@@ -48,7 +47,6 @@ type IStateMachine interface {
 type InMemStateMachine struct {
 	sm sm.IStateMachine
 	h  sm.IHash
-	na sm.IExtended
 }
 
 var _ IStateMachine = (*InMemStateMachine)(nil)
@@ -58,9 +56,6 @@ func NewInMemStateMachine(s sm.IStateMachine) *InMemStateMachine {
 	i := &InMemStateMachine{sm: s}
 	if h, ok := s.(sm.IHash); ok {
 		i.h = h
-	}
-	if na, ok := s.(sm.IExtended); ok {
-		i.na = na
 	}
 	return i
 }
@@ -83,14 +78,6 @@ func (i *InMemStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 // Lookup queries the state machine.
 func (i *InMemStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return i.sm.Lookup(query)
-}
-
-// NALookup queries the state machine.
-func (i *InMemStateMachine) NALookup(query []byte) ([]byte, error) {
-	if i.na == nil {
-		return nil, sm.ErrNotImplemented
-	}
-	return i.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
@@ -155,7 +142,6 @@ func (i *InMemStateMachine) Type() pb.StateMachineType {
 type ConcurrentStateMachine struct {
 	sm sm.IConcurrentStateMachine
 	h  sm.IHash
-	na sm.IExtended
 }
 
 // NewConcurrentStateMachine creates a new ConcurrentStateMachine instance.
@@ -163,9 +149,6 @@ func NewConcurrentStateMachine(s sm.IConcurrentStateMachine) *ConcurrentStateMac
 	v := &ConcurrentStateMachine{sm: s}
 	if h, ok := s.(sm.IHash); ok {
 		v.h = h
-	}
-	if na, ok := s.(sm.IExtended); ok {
-		v.na = na
 	}
 	return v
 }
@@ -184,14 +167,6 @@ func (s *ConcurrentStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) 
 // Lookup queries the state machine.
 func (s *ConcurrentStateMachine) Lookup(query interface{}) (interface{}, error) {
 	return s.sm.Lookup(query)
-}
-
-// NALookup queries the state machine.
-func (s *ConcurrentStateMachine) NALookup(query []byte) ([]byte, error) {
-	if s.na == nil {
-		return nil, sm.ErrNotImplemented
-	}
-	return s.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.
@@ -258,7 +233,6 @@ type ITestFS interface {
 type OnDiskStateMachine struct {
 	sm     sm.IOnDiskStateMachine
 	h      sm.IHash
-	na     sm.IExtended
 	opened bool
 }
 
@@ -267,9 +241,6 @@ func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
 	r := &OnDiskStateMachine{sm: s}
 	if h, ok := s.(sm.IHash); ok {
 		r.h = h
-	}
-	if na, ok := s.(sm.IExtended); ok {
-		r.na = na
 	}
 	return r
 }
@@ -303,12 +274,6 @@ func (s *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 func (s *OnDiskStateMachine) Lookup(query interface{}) (interface{}, error) {
 	s.ensureOpened()
 	return s.sm.Lookup(query)
-}
-
-// NALookup queries the state machine.
-func (s *OnDiskStateMachine) NALookup(query []byte) ([]byte, error) {
-	s.ensureOpened()
-	return s.na.NALookup(query)
 }
 
 // Sync synchronizes all in-core state with that on disk.

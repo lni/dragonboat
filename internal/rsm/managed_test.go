@@ -103,7 +103,4 @@ func TestLookupWillFailOnClosedStateMachine(t *testing.T) {
 	if _, err := sm.Lookup(nil); err != ErrShardClosed {
 		t.Errorf("failed to return ErrShardClosed")
 	}
-	if _, err := sm.NALookup(nil); err != ErrShardClosed {
-		t.Errorf("failed to return ErrShardClosed")
-	}
 }

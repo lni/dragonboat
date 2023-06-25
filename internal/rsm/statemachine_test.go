@@ -15,7 +15,6 @@
 package rsm
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math/rand"
@@ -2417,25 +2416,6 @@ func TestSyncedIndex(t *testing.T) {
 		}
 	}()
 	sm.setSyncedIndex(99)
-}
-
-func TestNALookup(t *testing.T) {
-	msm := &testManagedStateMachine{}
-	sm := &StateMachine{
-		sm: msm,
-	}
-	input := make([]byte, 128)
-	rand.Read(input)
-	result, err := sm.NALookup(input)
-	if err != nil {
-		t.Errorf("NALookup failed %v", err)
-	}
-	if !bytes.Equal(input, result) {
-		t.Errorf("result changed")
-	}
-	if !msm.nalookup {
-		t.Errorf("NALookup not called")
-	}
 }
 
 func TestIsDummySnapshot(t *testing.T) {
