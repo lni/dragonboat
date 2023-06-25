@@ -863,17 +863,12 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
-var staleReadCalled uint32
-
 // StaleRead queries the specified Raft node directly without any
 // linearizability guarantee.
 func (nh *NodeHost) StaleRead(shardID uint64,
 	query interface{}) (interface{}, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
-	}
-	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
-		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
 	n, ok := nh.getShard(shardID)
 	if !ok {
