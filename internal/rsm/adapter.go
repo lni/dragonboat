@@ -36,7 +36,6 @@ type IStateMachine interface {
 		io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error
 	Recover(io.Reader, []sm.SnapshotFile, <-chan struct{}) error
 	Close() error
-	GetHash() (uint64, error)
 	Concurrent() bool
 	OnDisk() bool
 	Type() pb.StateMachineType
@@ -46,7 +45,6 @@ type IStateMachine interface {
 // access from multiple goroutines.
 type InMemStateMachine struct {
 	sm sm.IStateMachine
-	h  sm.IHash
 }
 
 var _ IStateMachine = (*InMemStateMachine)(nil)
@@ -54,9 +52,6 @@ var _ IStateMachine = (*InMemStateMachine)(nil)
 // NewInMemStateMachine creates a new InMemStateMachine instance.
 func NewInMemStateMachine(s sm.IStateMachine) *InMemStateMachine {
 	i := &InMemStateMachine{sm: s}
-	if h, ok := s.(sm.IHash); ok {
-		i.h = h
-	}
 	return i
 }
 
@@ -110,16 +105,6 @@ func (i *InMemStateMachine) Close() error {
 	return errors.WithStack(i.sm.Close())
 }
 
-// GetHash returns the uint64 hash value representing the state of a state
-// machine.
-func (i *InMemStateMachine) GetHash() (uint64, error) {
-	if i.h == nil {
-		return 0, sm.ErrNotImplemented
-	}
-	h, err := i.h.GetHash()
-	return h, errors.WithStack(err)
-}
-
 // Concurrent returns a boolean flag indicating whether the state machine is
 // capable of taking concurrent snapshot.
 func (i *InMemStateMachine) Concurrent() bool {
@@ -141,15 +126,11 @@ func (i *InMemStateMachine) Type() pb.StateMachineType {
 // snapshots.
 type ConcurrentStateMachine struct {
 	sm sm.IConcurrentStateMachine
-	h  sm.IHash
 }
 
 // NewConcurrentStateMachine creates a new ConcurrentStateMachine instance.
 func NewConcurrentStateMachine(s sm.IConcurrentStateMachine) *ConcurrentStateMachine {
 	v := &ConcurrentStateMachine{sm: s}
-	if h, ok := s.(sm.IHash); ok {
-		v.h = h
-	}
 	return v
 }
 
@@ -197,16 +178,6 @@ func (s *ConcurrentStateMachine) Close() error {
 	return errors.WithStack(s.sm.Close())
 }
 
-// GetHash returns the uint64 hash value representing the state of a state
-// machine.
-func (s *ConcurrentStateMachine) GetHash() (uint64, error) {
-	if s.h == nil {
-		return 0, sm.ErrNotImplemented
-	}
-	h, err := s.h.GetHash()
-	return h, errors.WithStack(err)
-}
-
 // Concurrent returns a boolean flag indicating whether the state machine is
 // capable of taking concurrent snapshot.
 func (s *ConcurrentStateMachine) Concurrent() bool {
@@ -232,16 +203,12 @@ type ITestFS interface {
 // OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
 	sm     sm.IOnDiskStateMachine
-	h      sm.IHash
 	opened bool
 }
 
 // NewOnDiskStateMachine creates and returns an on disk state machine.
 func NewOnDiskStateMachine(s sm.IOnDiskStateMachine) *OnDiskStateMachine {
 	r := &OnDiskStateMachine{sm: s}
-	if h, ok := s.(sm.IHash); ok {
-		r.h = h
-	}
 	return r
 }
 
@@ -306,17 +273,6 @@ func (s *OnDiskStateMachine) Recover(r io.Reader,
 // Close closes the state machine.
 func (s *OnDiskStateMachine) Close() error {
 	return errors.WithStack(s.sm.Close())
-}
-
-// GetHash returns the uint64 hash value representing the state of a state
-// machine.
-func (s *OnDiskStateMachine) GetHash() (uint64, error) {
-	s.ensureOpened()
-	if s.h == nil {
-		return 0, sm.ErrNotImplemented
-	}
-	h, err := s.h.GetHash()
-	return h, errors.WithStack(err)
 }
 
 // Concurrent returns a boolean flag indicating whether the state machine is

@@ -1377,7 +1377,6 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.lastApplied.index = 3
 		sm.index = 3
-		hash1, _ := sm.GetHash()
 		ss, _, err := sm.Save(SSRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
@@ -1403,11 +1402,6 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		}
 		if ss2.Index != index {
 			t.Errorf("last applied %d, want %d", ss2.Index, index)
-		}
-		hash2, _ := sm2.GetHash()
-		if hash1 != hash2 {
-			t.Errorf("bad hash %d, want %d, sz %d",
-				hash2, hash1, len(store2.(*tests.KVTest).KVStore))
 		}
 		// see whether members info are recovered
 		if len(sm2.members.members.Addresses) != 2 {

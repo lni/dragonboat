@@ -553,13 +553,6 @@ func (s *StateMachine) Sync() error {
 	return s.sync()
 }
 
-// GetHash returns the state machine hash.
-func (s *StateMachine) GetHash() (uint64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.sm.GetHash()
-}
-
 // GetSessionHash returns the session hash.
 func (s *StateMachine) GetSessionHash() uint64 {
 	s.mu.RLock()

@@ -61,7 +61,6 @@ type IManagedStateMachine interface {
 	Lookup(interface{}) (interface{}, error)
 	ConcurrentLookup(interface{}) (interface{}, error)
 	Sync() error
-	GetHash() (uint64, error)
 	Prepare() (interface{}, error)
 	Save(SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 	Recover(io.Reader, []sm.SnapshotFile) error
@@ -222,11 +221,6 @@ func (ds *NativeSM) ConcurrentLookup(query interface{}) (interface{}, error) {
 // Sync synchronizes state machine's in-core state with that on disk.
 func (ds *NativeSM) Sync() error {
 	return ds.sm.Sync()
-}
-
-// GetHash returns an integer value representing the state of the data store.
-func (ds *NativeSM) GetHash() (uint64, error) {
-	return ds.sm.GetHash()
 }
 
 // Prepare makes preparation for concurrently taking snapshot.
