@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -419,7 +418,7 @@ func TestBasicRecover(t *testing.T) {
 
 	// Recover from that checksum mismatch.
 	r.recover()
-	currentOffset, err := underlyingReader.Seek(0, os.SEEK_CUR)
+	currentOffset, err := underlyingReader.Seek(0, io.SeekCurrent)
 	if err != nil {
 		t.Fatalf("current offset: %v", err)
 	}
