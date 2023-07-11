@@ -863,41 +863,12 @@ func (nh *NodeHost) ReadLocalNode(rs *RequestState,
 	return data, err
 }
 
-// NAReadLocalNode is a no extra heap allocation variant of ReadLocalNode, it
-// uses byte slice as its input and output data to avoid extra heap allocations
-// caused by using interface{}. Users are recommended to use the ReadLocalNode
-// method unless performance is the top priority.
-//
-// As an optional feature of the state machine, NAReadLocalNode returns
-// statemachine.ErrNotImplemented if the underlying state machine does not
-// implement the statemachine.IExtended interface.
-//
-// Similar to ReadLocalNode, NAReadLocalNode is only allowed to be called after
-// receiving a RequestCompleted notification from the ReadIndex method.
-func (nh *NodeHost) NAReadLocalNode(rs *RequestState,
-	query []byte) ([]byte, error) {
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return nil, ErrClosed
-	}
-	rs.mustBeReadyForLocalRead()
-	data, err := rs.node.sm.NALookup(query)
-	if errors.Is(err, rsm.ErrShardClosed) {
-		return nil, ErrShardClosed
-	}
-	return data, err
-}
-
-var staleReadCalled uint32
-
 // StaleRead queries the specified Raft node directly without any
 // linearizability guarantee.
 func (nh *NodeHost) StaleRead(shardID uint64,
 	query interface{}) (interface{}, error) {
 	if atomic.LoadInt32(&nh.closed) != 0 {
 		return nil, ErrClosed
-	}
-	if atomic.CompareAndSwapUint32(&staleReadCalled, 0, 1) {
-		plog.Warningf("StaleRead called, linearizability not guaranteed for stale read")
 	}
 	n, ok := nh.getShard(shardID)
 	if !ok {

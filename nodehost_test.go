@@ -2113,29 +2113,6 @@ func TestNodeHostReadIndex(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
-func TestNALookupCanReturnErrNotImplemented(t *testing.T) {
-	fs := vfs.GetTestFS()
-	to := &testOption{
-		defaultTestNode: true,
-		tf: func(nh *NodeHost) {
-			pto := lpto(nh)
-			rs, err := nh.ReadIndex(1, pto)
-			if err != nil {
-				t.Errorf("failed to read index %v", err)
-			}
-			v := <-rs.ResultC()
-			if !v.Completed() {
-				t.Errorf("failed to complete read index")
-			}
-			_, err = nh.NAReadLocalNode(rs, make([]byte, 128))
-			if err != sm.ErrNotImplemented {
-				t.Errorf("failed to return sm.ErrNotImplemented, got %v", err)
-			}
-		},
-	}
-	runNodeHostTest(t, to, fs)
-}
-
 func TestNodeHostSyncIOAPIs(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
@@ -5525,9 +5502,6 @@ func TestUsingClosedNodeHostIsNotAllowed(t *testing.T) {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.ReadLocalNode(nil, nil); err != ErrClosed {
-				t.Errorf("failed to return ErrClosed")
-			}
-			if _, err := nh.NAReadLocalNode(nil, nil); err != ErrClosed {
 				t.Errorf("failed to return ErrClosed")
 			}
 			if _, err := nh.StaleRead(1, nil); err != ErrClosed {

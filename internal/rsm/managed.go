@@ -60,10 +60,7 @@ type IManagedStateMachine interface {
 	BatchedUpdate([]sm.Entry) ([]sm.Entry, error)
 	Lookup(interface{}) (interface{}, error)
 	ConcurrentLookup(interface{}) (interface{}, error)
-	NALookup([]byte) ([]byte, error)
-	NAConcurrentLookup([]byte) ([]byte, error)
 	Sync() error
-	GetHash() (uint64, error)
 	Prepare() (interface{}, error)
 	Save(SSMeta, io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error)
 	Recover(io.Reader, []sm.SnapshotFile) error
@@ -221,29 +218,9 @@ func (ds *NativeSM) ConcurrentLookup(query interface{}) (interface{}, error) {
 	return ds.sm.Lookup(query)
 }
 
-// NALookup queries the data store.
-func (ds *NativeSM) NALookup(query []byte) ([]byte, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
-	if ds.destroyed {
-		return nil, ErrShardClosed
-	}
-	return ds.sm.NALookup(query)
-}
-
-// NAConcurrentLookup queries the data store without obtaining the NativeSM.mu.
-func (ds *NativeSM) NAConcurrentLookup(query []byte) ([]byte, error) {
-	return ds.sm.NALookup(query)
-}
-
 // Sync synchronizes state machine's in-core state with that on disk.
 func (ds *NativeSM) Sync() error {
 	return ds.sm.Sync()
-}
-
-// GetHash returns an integer value representing the state of the data store.
-func (ds *NativeSM) GetHash() (uint64, error) {
-	return ds.sm.GetHash()
 }
 
 // Prepare makes preparation for concurrently taking snapshot.

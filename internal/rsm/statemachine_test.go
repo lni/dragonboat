@@ -15,7 +15,6 @@
 package rsm
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math/rand"
@@ -1378,7 +1377,6 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.lastApplied.index = 3
 		sm.index = 3
-		hash1, _ := sm.GetHash()
 		ss, _, err := sm.Save(SSRequest{})
 		if err != nil {
 			t.Fatalf("failed to make snapshot %v", err)
@@ -1404,11 +1402,6 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		}
 		if ss2.Index != index {
 			t.Errorf("last applied %d, want %d", ss2.Index, index)
-		}
-		hash2, _ := sm2.GetHash()
-		if hash1 != hash2 {
-			t.Errorf("bad hash %d, want %d, sz %d",
-				hash2, hash1, len(store2.(*tests.KVTest).KVStore))
 		}
 		// see whether members info are recovered
 		if len(sm2.members.members.Addresses) != 2 {
@@ -2417,25 +2410,6 @@ func TestSyncedIndex(t *testing.T) {
 		}
 	}()
 	sm.setSyncedIndex(99)
-}
-
-func TestNALookup(t *testing.T) {
-	msm := &testManagedStateMachine{}
-	sm := &StateMachine{
-		sm: msm,
-	}
-	input := make([]byte, 128)
-	rand.Read(input)
-	result, err := sm.NALookup(input)
-	if err != nil {
-		t.Errorf("NALookup failed %v", err)
-	}
-	if !bytes.Equal(input, result) {
-		t.Errorf("result changed")
-	}
-	if !msm.nalookup {
-		t.Errorf("NALookup not called")
-	}
 }
 
 func TestIsDummySnapshot(t *testing.T) {
