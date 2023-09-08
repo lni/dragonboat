@@ -193,6 +193,9 @@ type Config struct {
 	//
 	// Quiesce support is currently experimental.
 	Quiesce bool
+	// WaitReady specifies whether to wait for the node to transition
+	// from recovering to ready state before returning from StartReplica.
+	WaitReady bool
 }
 
 // Validate validates the Config instance and return an error when any member

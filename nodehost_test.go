@@ -2555,6 +2555,63 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 	runNodeHostTest(t, to, fs)
 }
 
+func TestStartReplicaWaitForReadiness(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	atomic.StoreUint32(&fakeDiskSM.SlowOpen, 1)
+	to := &testOption{
+		defaultTestNode: false,
+		noElection:      true,
+		tf: func(nh *NodeHost) {
+			cfg := getTestConfig()
+			cfg.WaitReady = true
+
+			go func() {
+				defer atomic.StoreUint32(&fakeDiskSM.SlowOpen, 0)
+				var n *node
+				var ok bool
+
+				for i := 0; i < 10; i++ {
+					n, ok = nh.getShard(cfg.ShardID)
+					if ok {
+						break
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
+				if !ok {
+					t.Errorf("failed to get the node")
+				}
+				if n.initialized() {
+					t.Errorf("node unexpectedly initialized")
+				}
+				if _, err := nh.StaleRead(1, nil); err != ErrShardNotInitialized {
+					t.Errorf("expected to return ErrShardNotInitialized")
+				}
+			}()
+
+			initialMembers := map[uint64]Target{
+				1: nh.RaftAddress(),
+			}
+
+			err := nh.StartOnDiskReplica(initialMembers, false, func(shardID uint64, replicaID uint64) sm.IOnDiskStateMachine {
+				return fakeDiskSM
+			}, *cfg)
+			if err != nil {
+				t.Fatalf("failed to StartOnDiskReplica: %v", err)
+			}
+
+			v, err := nh.StaleRead(1, nil)
+			if err != nil {
+				t.Fatalf("stale read failed %v", err)
+			}
+			if len(v.([]byte)) != 8 {
+				t.Fatalf("unexpected result %v", v)
+			}
+		},
+	}
+	runNodeHostTest(t, to, fs)
+}
+
 func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
