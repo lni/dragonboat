@@ -340,10 +340,11 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 10)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Fatalf("nil ss returned")
+		return
 	}
 	if ps.pending == nil {
 		t.Errorf("pending not set")
@@ -386,10 +387,11 @@ func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Fatalf("nil ss returned")
+		return
 	}
 	ss, err = ps.request(rsm.UserRequested, "", false, 0, 0, 100)
 	if err != ErrSystemBusy {
@@ -408,7 +410,7 @@ func TestPendingSnapshotCanBeGCed(t *testing.T) {
 		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
 	}
 	if ps.pending == nil {
 		t.Errorf("pending not set")
@@ -440,10 +442,11 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Fatalf("nil ss returned")
+		return
 	}
 	ps.apply(ss.key, false, false, 123)
 	select {
@@ -464,10 +467,11 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
 	}
 	if ss == nil {
 		t.Fatalf("nil ss returned")
+		return
 	}
 	ps.apply(ss.key, true, false, 123)
 	select {
@@ -488,10 +492,12 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
 	if err != nil {
-		t.Errorf("failed to request snapshot")
+		t.Fatalf("failed to request snapshot")
+		return
 	}
 	if ss == nil {
-		t.Errorf("nil ss returned")
+		t.Fatalf("nil ss returned")
+		return
 	}
 	if ps.pending == nil {
 		t.Fatalf("pending not set")
