@@ -81,13 +81,13 @@ type SnapshotFile struct {
 // IStateMachine instance recovers from the saved snapshot.
 type ISnapshotFileCollection interface {
 	// AddFile adds an external file to the snapshot being currently generated.
-	// The file must has been finalized meaning its content will not change in
+	// The file must have been finalized meaning its content will not change in
 	// the future. It is your application's responsibility to make sure that the
-	// file being added can be accessible from the current process and it is
+	// file being added is accessible from the current process and it is
 	// possible to create a hard link to it from the NodeHostDir directory
 	// specified in NodeHost's NodeHostConfig. The file to be added is identified
 	// by the specified fileID. The metadata byte slice is the metadata of the
-	// file being added, it can be the checksum of the file, file type, file name,
+	// file being added. It can be the checksum of the file, file type, file name,
 	// other file hierarchy information, or a serialized combination of such
 	// metadata.
 	AddFile(fileID uint64, path string, metadata []byte)
