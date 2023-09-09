@@ -473,15 +473,23 @@ func (t *TCP) Start() error {
 				panic(err)
 			}
 			var once sync.Once
+			connCloseCh := make(chan struct{})
 			closeFn := func() {
 				once.Do(func() {
+					select {
+						case connCloseCh <- struct{}{}:
+						default:
+					}
 					if err := conn.Close(); err != nil {
 						plog.Errorf("failed to close the connection %v", err)
 					}
 				})
 			}
 			t.connStopper.RunWorker(func() {
-				<-t.stopper.ShouldStop()
+				select {
+				case <-t.stopper.ShouldStop():
+				case <-connCloseCh:
+				}
 				closeFn()
 			})
 			t.connStopper.RunWorker(func() {
