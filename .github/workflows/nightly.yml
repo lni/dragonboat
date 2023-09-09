@@ -4,7 +4,7 @@ on:
 name: Nightly
 jobs:
   monkey-test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         target: [race-monkey-test, race-ondisk-monkey-test, memfs-monkey-test, memfs-ondisk-monkey-test]

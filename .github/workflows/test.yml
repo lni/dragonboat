@@ -2,7 +2,7 @@ on: [push, pull_request]
 name: Test
 jobs:
   unit-test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -17,7 +17,7 @@ jobs:
        make actions-test
        bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
   race-unit-test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -28,7 +28,7 @@ jobs:
     - name: Test
       run: RACE=1 make test
   memfs-unit-test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -39,7 +39,7 @@ jobs:
     - name: Test
       run: MEMFS_TEST=1 make test
   go1-18-unit-test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -61,7 +61,7 @@ jobs:
     - name: Test
       run: make test
   build-tools:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -72,7 +72,7 @@ jobs:
     - name: Build
       run: make tools
   build-examples:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
@@ -85,7 +85,7 @@ jobs:
        GOPROXY=direct go get github.com/lni/dragonboat/v4@master
        make
   static-check:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps: 
      - name: Install Go
        uses: actions/setup-go@v3
