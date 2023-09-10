@@ -1534,79 +1534,98 @@ func (nh *NodeHost) startShard(initialMembers map[uint64]Target,
 			return ErrInvalidTarget
 		}
 	}
-	nh.mu.Lock()
-	defer nh.mu.Unlock()
-	if atomic.LoadInt32(&nh.closed) != 0 {
-		return ErrClosed
+
+	doStart := func() (*node, error) {
+		nh.mu.Lock()
+		defer nh.mu.Unlock()
+
+		if atomic.LoadInt32(&nh.closed) != 0 {
+			return nil, ErrClosed
+		}
+		if _, ok := nh.mu.shards.Load(shardID); ok {
+			return nil, ErrShardAlreadyExist
+		}
+		if nh.engine.nodeLoaded(shardID, replicaID) {
+			// node is still loaded in the execution engine, e.g. processing snapshot
+			return nil, ErrShardAlreadyExist
+		}
+		if join && len(initialMembers) > 0 {
+			return nil, ErrInvalidShardSettings
+		}
+		peers, im, err := nh.bootstrapShard(initialMembers, join, cfg, smType)
+		if errors.Is(err, ErrInvalidShardSettings) {
+			return nil, err
+		}
+		if err != nil {
+			panicNow(err)
+		}
+		for k, v := range peers {
+			if k != replicaID {
+				nh.nodes.Add(shardID, k, v)
+			}
+		}
+		did := nh.nhConfig.GetDeploymentID()
+		if err := nh.env.CreateSnapshotDir(did, shardID, replicaID); err != nil {
+			if errors.Is(err, server.ErrDirMarkedAsDeleted) {
+				return nil, ErrReplicaRemoved
+			}
+			panicNow(err)
+		}
+		getSnapshotDir := func(cid uint64, nid uint64) string {
+			return nh.env.GetSnapshotDir(did, cid, nid)
+		}
+		logReader := logdb.NewLogReader(shardID, replicaID, nh.mu.logdb)
+		ss := newSnapshotter(shardID, replicaID,
+			getSnapshotDir, nh.mu.logdb, logReader, nh.fs)
+		logReader.SetCompactor(ss)
+		if err := ss.processOrphans(); err != nil {
+			panicNow(err)
+		}
+		p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
+			nh.nhConfig.Expert.LogDB.Shards)
+		shard := p.GetPartitionID(shardID)
+		rn, err := newNode(peers,
+			im,
+			cfg,
+			nh.nhConfig,
+			createStateMachine,
+			ss,
+			logReader,
+			nh.engine,
+			nh.events.leaderInfoQ,
+			nh.transport.GetStreamSink,
+			nh.msgHandler.HandleSnapshotStatus,
+			nh.sendMessage,
+			nh.nodes,
+			nh.requestPools[replicaID%requestPoolShards],
+			nh.mu.logdb,
+			nh.getLogDBMetrics(shard),
+			nh.events.sys)
+		if err != nil {
+			panicNow(err)
+		}
+		rn.loaded()
+		nh.mu.shards.Store(shardID, rn)
+		nh.mu.cci++
+		nh.cciUpdated()
+		nh.engine.setCCIReady(shardID)
+		nh.engine.setApplyReady(shardID)
+
+		return rn, nil
 	}
-	if _, ok := nh.mu.shards.Load(shardID); ok {
-		return ErrShardAlreadyExist
-	}
-	if nh.engine.nodeLoaded(shardID, replicaID) {
-		// node is still loaded in the execution engine, e.g. processing snapshot
-		return ErrShardAlreadyExist
-	}
-	if join && len(initialMembers) > 0 {
-		return ErrInvalidShardSettings
-	}
-	peers, im, err := nh.bootstrapShard(initialMembers, join, cfg, smType)
-	if errors.Is(err, ErrInvalidShardSettings) {
+
+	rn, err := doStart()
+	if err != nil {
 		return err
 	}
-	if err != nil {
-		panicNow(err)
-	}
-	for k, v := range peers {
-		if k != replicaID {
-			nh.nodes.Add(shardID, k, v)
+
+	if cfg.WaitReady {
+		select {
+		case <-rn.initializedC:
+		case <-rn.stopC:
 		}
 	}
-	did := nh.nhConfig.GetDeploymentID()
-	if err := nh.env.CreateSnapshotDir(did, shardID, replicaID); err != nil {
-		if errors.Is(err, server.ErrDirMarkedAsDeleted) {
-			return ErrReplicaRemoved
-		}
-		panicNow(err)
-	}
-	getSnapshotDir := func(cid uint64, nid uint64) string {
-		return nh.env.GetSnapshotDir(did, cid, nid)
-	}
-	logReader := logdb.NewLogReader(shardID, replicaID, nh.mu.logdb)
-	ss := newSnapshotter(shardID, replicaID,
-		getSnapshotDir, nh.mu.logdb, logReader, nh.fs)
-	logReader.SetCompactor(ss)
-	if err := ss.processOrphans(); err != nil {
-		panicNow(err)
-	}
-	p := server.NewDoubleFixedPartitioner(nh.nhConfig.Expert.Engine.ExecShards,
-		nh.nhConfig.Expert.LogDB.Shards)
-	shard := p.GetPartitionID(shardID)
-	rn, err := newNode(peers,
-		im,
-		cfg,
-		nh.nhConfig,
-		createStateMachine,
-		ss,
-		logReader,
-		nh.engine,
-		nh.events.leaderInfoQ,
-		nh.transport.GetStreamSink,
-		nh.msgHandler.HandleSnapshotStatus,
-		nh.sendMessage,
-		nh.nodes,
-		nh.requestPools[replicaID%requestPoolShards],
-		nh.mu.logdb,
-		nh.getLogDBMetrics(shard),
-		nh.events.sys)
-	if err != nil {
-		panicNow(err)
-	}
-	rn.loaded()
-	nh.mu.shards.Store(shardID, rn)
-	nh.mu.cci++
-	nh.cciUpdated()
-	nh.engine.setCCIReady(shardID)
-	nh.engine.setApplyReady(shardID)
+
 	return nil
 }
 
