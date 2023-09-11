@@ -51,11 +51,10 @@ func TestSnapshotTaskCanNotBeSetTwice(t *testing.T) {
 func TestCanGetSnapshotTask(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	sr := snapshotTask{}
-	rec, ok := sr.getTask()
-	if ok {
+	if _, ok := sr.getTask(); ok {
 		t.Errorf("unexpected record")
 	}
-	rec = rsm.Task{}
+	rec := rsm.Task{}
 	sr.setTask(rec)
 	r, ok := sr.getTask()
 	if !ok {

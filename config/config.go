@@ -118,8 +118,8 @@ type Config struct {
 	// SyncRequestSnapshot methods to manually request snapshots.
 	SnapshotEntries uint64
 	// CompactionOverhead defines the number of most recent entries to keep after
-	// each Raft log compaction. Raft log compaction is performance automatically
-	// every time when a snapshot is created.
+	// each Raft log compaction. Raft log compaction is performed automatically
+	// every time a snapshot is created.
 	//
 	// For example, when a snapshot is created at let's say index 10,000, then all
 	// Raft log entries with index <= 10,000 can be removed from that node as they
@@ -128,8 +128,8 @@ type Config struct {
 	// have to be sent to the follower if the follower requires any Raft log entry
 	// at index <= 10,000. When CompactionOverhead is set to say 500, Dragonboat
 	// then compacts the Raft log up to index 9,500 and keeps Raft log entries
-	// between index (9,500, 1,0000]. As a result, the node can still replicate
-	// Raft log entries between index (9,500, 1,0000] to other peers and only fall
+	// between index (9,500, 10,000]. As a result, the node can still replicate
+	// Raft log entries between index (9,500, 10,000] to other peers and only fall
 	// back to stream the full snapshot if any Raft log entry with index <= 9,500
 	// is required to be replicated.
 	CompactionOverhead uint64
