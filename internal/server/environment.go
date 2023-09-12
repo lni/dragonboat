@@ -408,7 +408,7 @@ func (env *Env) check(cfg config.NodeHostConfig,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !cfg.AddressByNodeHostID && !se(s.Address, cfg.RaftAddress) {
+		if !(cfg.AddressByNodeHostID || cfg.Expert.NodeRegistryFactory != nil) && !se(s.Address, cfg.RaftAddress) {
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {

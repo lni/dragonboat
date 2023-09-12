@@ -45,6 +45,7 @@ import (
 	"github.com/lni/dragonboat/v4/internal/id"
 	"github.com/lni/dragonboat/v4/internal/invariants"
 	"github.com/lni/dragonboat/v4/internal/logdb"
+	"github.com/lni/dragonboat/v4/internal/registry"
 	"github.com/lni/dragonboat/v4/internal/rsm"
 	"github.com/lni/dragonboat/v4/internal/server"
 	"github.com/lni/dragonboat/v4/internal/settings"
@@ -1178,6 +1179,145 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	testProposal()
 	nh2.Close()
 	nhc2.RaftAddress = nodeHostTestAddr3
+	nh2, err = NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to restart nh2, %v", err)
+	}
+	defer nh2.Close()
+	if nh2.ID() != nh2NodeHostID {
+		t.Fatalf("NodeHostID changed, got %s, want %s", nh2.ID(), nh2NodeHostID)
+	}
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh2, 1)
+	testProposal()
+}
+
+type testRegistry struct {
+	*registry.Registry
+	// map of nhid -> host:port
+	nodeAddrs map[string]string
+}
+
+func (tr *testRegistry) Resolve(shardID uint64, replicaID uint64) (string, string, error) {
+	nhid, ck, err := tr.Registry.Resolve(shardID, replicaID)
+	if err != nil {
+		return "", "", err
+	}
+	return tr.nodeAddrs[nhid], ck, nil
+}
+
+type testRegistryFactory struct {
+	// map of nhid -> host:port
+	nodeAddrs map[string]string
+}
+
+func (trf *testRegistryFactory) Create(nhid string, streamConnections uint64, v config.TargetValidator) (raftio.INodeRegistry, error) {
+	return &testRegistry{
+		registry.NewNodeRegistry(streamConnections, v),
+		trf.nodeAddrs,
+	}, nil
+}
+
+func TestExternalNodeRegistryFunction(t *testing.T) {
+	fs := vfs.GetTestFS()
+	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
+	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
+	os.RemoveAll(singleNodeHostTestDir)
+	defer os.RemoveAll(singleNodeHostTestDir)
+	addr1 := nodeHostTestAddr1
+	addr2 := nodeHostTestAddr2
+	nhc1 := config.NodeHostConfig{
+		NodeHostDir:    datadir1,
+		RTTMillisecond: getRTTMillisecond(fs, datadir1),
+		RaftAddress:    addr1,
+		Expert: config.ExpertConfig{
+			FS: fs,
+		},
+	}
+	nhc2 := config.NodeHostConfig{
+		NodeHostDir:    datadir2,
+		RTTMillisecond: getRTTMillisecond(fs, datadir2),
+		RaftAddress:    addr2,
+		Expert: config.ExpertConfig{
+			FS: fs,
+		},
+	}
+	nhid1, err := id.NewUUID(testNodeHostID1)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc1.NodeHostID = nhid1.String()
+	nhid2, err := id.NewUUID(testNodeHostID2)
+	if err != nil {
+		t.Fatalf("failed to parse nhid")
+	}
+	nhc2.NodeHostID = nhid2.String()
+	testRegistryFactory := &testRegistryFactory{
+		nodeAddrs: map[string]string{
+			nhc1.NodeHostID: nodeHostTestAddr1,
+			nhc2.NodeHostID: nodeHostTestAddr2,
+		},
+	}
+	nhc1.Expert.NodeRegistryFactory = testRegistryFactory
+	nhc2.Expert.NodeRegistryFactory = testRegistryFactory
+
+	nh1, err := NewNodeHost(nhc1)
+	if err != nil {
+		t.Fatalf("failed to create nh, %v", err)
+	}
+	defer nh1.Close()
+	nh2, err := NewNodeHost(nhc2)
+	if err != nil {
+		t.Fatalf("failed to create nh2, %v", err)
+	}
+	nh2NodeHostID := nh2.ID()
+	peers := make(map[uint64]string)
+	peers[1] = testNodeHostID1
+	peers[2] = testNodeHostID2
+	createSM := func(uint64, uint64) sm.IStateMachine {
+		return &PST{}
+	}
+	rc := config.Config{
+		ShardID:         1,
+		ReplicaID:       1,
+		ElectionRTT:     3,
+		HeartbeatRTT:    1,
+		SnapshotEntries: 0,
+	}
+	if err := nh1.StartReplica(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	rc.ReplicaID = 2
+	if err := nh2.StartReplica(peers, false, createSM, rc); err != nil {
+		t.Fatalf("failed to start node %v", err)
+	}
+	waitForLeaderToBeElected(t, nh1, 1)
+	waitForLeaderToBeElected(t, nh2, 1)
+	pto := lpto(nh1)
+	session := nh1.GetNoOPSession(1)
+	testProposal := func() {
+		done := false
+		for i := 0; i < 100; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			_, err := nh1.SyncPropose(ctx, session, make([]byte, 0))
+			cancel()
+			if err != nil {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			done = true
+			break
+		}
+		if !done {
+			t.Fatalf("failed to make proposal")
+		}
+	}
+	testProposal()
+	nh2.Close()
+	nhc2.RaftAddress = nodeHostTestAddr3
+	testRegistryFactory.nodeAddrs[nh2NodeHostID] = nodeHostTestAddr3
 	nh2, err = NewNodeHost(nhc2)
 	if err != nil {
 		t.Fatalf("failed to restart nh2, %v", err)
