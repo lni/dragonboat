@@ -1747,6 +1747,11 @@ func (nh *NodeHost) createNodeRegistry() error {
 	// TODO:
 	// more tests here required
 	if nh.nhConfig.AddressByNodeHostID {
+		// AddressByNodeHostID should not be set if a Expert.NodeRegistryFactory
+		// is also set.
+		if nh.nhConfig.Expert.NodeRegistryFactory != nil {
+			return errors.New("AddressByNodeHostID and Expert.NodeRegistryFactory should not both be set")
+		}
 		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
 		r, err := registry.NewGossipRegistry(nh.ID(), nh.getShardInfo,
 			nh.nhConfig, streamConnections, validator)
@@ -1754,6 +1759,13 @@ func (nh *NodeHost) createNodeRegistry() error {
 			return err
 		}
 		nh.registry = r.GetNodeHostRegistry()
+		nh.nodes = r
+	} else if nh.nhConfig.Expert.NodeRegistryFactory != nil {
+		plog.Infof("Expert.NodeRegistryFactory was set: using custom registry")
+		r, err := nh.nhConfig.Expert.NodeRegistryFactory.Create(nh.ID(), streamConnections, validator)
+		if err != nil {
+			return err
+		}
 		nh.nodes = r
 	} else {
 		plog.Infof("using regular node registry")
