@@ -279,7 +279,7 @@ type NodeHost struct {
 		sys         *sysEventListener
 	}
 	registry     INodeHostRegistry
-	nodes        registry.INodeRegistry
+	nodes        raftio.INodeRegistry
 	fs           vfs.IFS
 	transport    transport.ITransport
 	id           *id.UUID

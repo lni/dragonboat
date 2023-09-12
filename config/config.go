@@ -487,6 +487,11 @@ type LogDBFactory interface {
 	Name() string
 }
 
+// NodeRegistryFactory is the interface used for providing a custom node registry.
+type NodeRegistryFactory interface {
+	Create(nhid string, streamConnections uint64, v TargetValidator) (raftio.INodeRegistry, error)
+}
+
 // TransportFactory is the interface used for creating custom transport modules.
 type TransportFactory interface {
 	// Create creates a transport module.
@@ -725,7 +730,7 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 // GetTargetValidator returns a TargetValidator based on the specified
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
-	if c.AddressByNodeHostID {
+	if c.AddressByNodeHostID || c.Expert.NodeRegistryFactory != nil {
 		return id.IsNodeHostID
 	} else if c.Expert.TransportFactory != nil {
 		return c.Expert.TransportFactory.Validate
@@ -939,6 +944,9 @@ type ExpertConfig struct {
 	// TestGossipProbeInterval defines the probe interval used by the gossip
 	// service in tests.
 	TestGossipProbeInterval time.Duration
+	// NodeRegistryFactory defines a custom node registry function that can be used
+	// instead of a static registry or the built in memberlist gossip mechanism.
+	NodeRegistryFactory NodeRegistryFactory
 }
 
 // GossipConfig contains configurations for the gossip service. Gossip service
