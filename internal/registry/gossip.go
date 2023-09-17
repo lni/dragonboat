@@ -35,6 +35,9 @@ var plog = logger.GetLogger("registry")
 
 type getShardInfo func() []ShardInfo
 
+// meta is the metadata of the node. The actual payload is specified by the user
+// by setting the Config.GossipConfig.Meta field. meta contains node information
+// that will not change during the life of a particular NodeHost process.
 type meta struct {
 	RaftAddress string
 	Data        []byte
@@ -70,6 +73,7 @@ func (m *meta) unmarshal(data []byte) bool {
 	return true
 }
 
+// metaStore is a node name to node Meta concurrent map.
 type metaStore struct {
 	nodes sync.Map
 }
@@ -163,58 +167,14 @@ func (n *GossipRegistry) Resolve(shardID uint64,
 	return "", "", ErrUnknownTarget
 }
 
-type eventDelegate struct {
-	ed      *sliceEventDelegate
-	stopper *syncutil.Stopper
-	store   *metaStore
-}
-
-func newEventDelegate(s *syncutil.Stopper, store *metaStore) *eventDelegate {
-	ed := &eventDelegate{
-		stopper: s,
-		store:   store,
-		ed:      newSliceEventDelegate(),
-	}
-	return ed
-}
-
-func (d *eventDelegate) handle() {
-	events := d.ed.get()
-	if len(events) == 0 {
-		return
-	}
-	for _, e := range events {
-		if e.Event == memberlist.NodeJoin || e.Event == memberlist.NodeUpdate {
-			var m meta
-			if m.unmarshal(e.Node.Meta) {
-				d.store.put(e.Node.Name, m)
-			}
-		} else if e.Event == memberlist.NodeLeave {
-			d.store.delete(e.Node.Name)
-		} else {
-			panic("unknown event type")
-		}
-	}
-}
-
-func (d *eventDelegate) start() {
-	d.stopper.RunWorker(func() {
-		for {
-			select {
-			case <-d.stopper.ShouldStop():
-				return
-			case <-d.ed.ch:
-				d.handle()
-			}
-		}
-	})
-}
-
+// delegate is used to hook into memberlist's gossip layer.
 type delegate struct {
 	getShardInfo getShardInfo
 	meta         meta
 	view         *view
 }
+
+var _ memberlist.Delegate = (*delegate)(nil)
 
 func (d *delegate) NodeMeta(limit int) []byte {
 	m := d.meta.marshal()
@@ -269,21 +229,17 @@ func parseAddress(addr string) (string, int, error) {
 }
 
 type gossipManager struct {
-	nhConfig     config.NodeHostConfig
-	cfg          *memberlist.Config
-	list         *memberlist.Memberlist
-	ed           *eventDelegate
-	view         *view
-	store        *metaStore
-	stopper      *syncutil.Stopper
-	eventStopper *syncutil.Stopper
+	nhConfig config.NodeHostConfig
+	cfg      *memberlist.Config
+	list     *memberlist.Memberlist
+	view     *view
+	store    *metaStore
+	stopper  *syncutil.Stopper
 }
 
 func newGossipManager(nhid string, f getShardInfo,
 	nhConfig config.NodeHostConfig) (*gossipManager, error) {
-	eventStopper := syncutil.NewStopper()
 	store := &metaStore{}
-	ed := newEventDelegate(eventStopper, store)
 	cfg := memberlist.DefaultWANConfig()
 	cfg.Logger = newGossipLogWrapper()
 	cfg.Name = nhid
@@ -322,7 +278,8 @@ func newGossipManager(nhid string, f getShardInfo,
 		getShardInfo: f,
 		view:         view,
 	}
-	cfg.Events = ed.ed
+	// set memberlist's event delegate
+	cfg.Events = newSliceEventDelegate(store)
 
 	list, err := memberlist.Create(cfg)
 	if err != nil {
@@ -332,18 +289,15 @@ func newGossipManager(nhid string, f getShardInfo,
 	seed := make([]string, 0, len(nhConfig.Gossip.Seed))
 	seed = append(seed, nhConfig.Gossip.Seed...)
 	g := &gossipManager{
-		nhConfig:     nhConfig,
-		cfg:          cfg,
-		list:         list,
-		ed:           ed,
-		view:         view,
-		store:        store,
-		stopper:      syncutil.NewStopper(),
-		eventStopper: eventStopper,
+		nhConfig: nhConfig,
+		cfg:      cfg,
+		list:     list,
+		view:     view,
+		store:    store,
+		stopper:  syncutil.NewStopper(),
 	}
 	// eventDelegate must be started first, otherwise join() could be blocked
 	// on a large cluster
-	g.ed.start()
 	g.join(seed)
 	g.stopper.RunWorker(func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
@@ -377,7 +331,6 @@ func (g *gossipManager) Close() error {
 	if err := g.list.Shutdown(); err != nil {
 		return errors.Wrapf(err, "shutdown memberlist failed")
 	}
-	g.eventStopper.Stop()
 	return nil
 }
 
@@ -392,7 +345,7 @@ func (g *gossipManager) GetRaftAddress(nhid string) (string, bool) {
 	if g.cfg.Name == nhid {
 		return g.nhConfig.RaftAddress, true
 	}
-	if v, ok := g.ed.store.get(nhid); ok {
+	if v, ok := g.store.get(nhid); ok {
 		return v.RaftAddress, true
 	}
 	return "", false

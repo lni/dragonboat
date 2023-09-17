@@ -26,7 +26,7 @@ func getTestShardView() []ShardView {
 	cv1 := ShardView{
 		ShardID:           100,
 		ConfigChangeIndex: 200,
-		Nodes: map[uint64]string{
+		Replicas: map[uint64]string{
 			200: "address1",
 			300: "address2",
 			400: "address3",
@@ -35,7 +35,7 @@ func getTestShardView() []ShardView {
 	cv2 := ShardView{
 		ShardID:           1340,
 		ConfigChangeIndex: 126200,
-		Nodes: map[uint64]string{
+		Replicas: map[uint64]string{
 			1200: "myaddress1",
 			4300: "theiraddress2",
 			6400: "heraddress3",
@@ -64,7 +64,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 		{
 			ShardID:           1340,
 			ConfigChangeIndex: 300,
-			Nodes: map[uint64]string{
+			Replicas: map[uint64]string{
 				1200: "myaddress1",
 				4300: "theiraddress2",
 			},
@@ -74,13 +74,13 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 	c, ok := v.mu.shards[1340]
 	assert.True(t, ok)
 	assert.Equal(t, uint64(126200), c.ConfigChangeIndex)
-	assert.Equal(t, 3, len(c.Nodes))
+	assert.Equal(t, 3, len(c.Replicas))
 
 	update = []ShardView{
 		{
 			ShardID:           1340,
 			ConfigChangeIndex: 226200,
-			Nodes: map[uint64]string{
+			Replicas: map[uint64]string{
 				1200: "myaddress1",
 				4300: "theiraddress2",
 			},
@@ -90,7 +90,7 @@ func TestConfigChangeIndexIsChecked(t *testing.T) {
 	c, ok = v.mu.shards[1340]
 	assert.True(t, ok)
 	assert.Equal(t, uint64(226200), c.ConfigChangeIndex)
-	assert.Equal(t, 2, len(c.Nodes))
+	assert.Equal(t, 2, len(c.Replicas))
 }
 
 func TestDeploymentIDIsChecked(t *testing.T) {
@@ -117,20 +117,20 @@ func TestUpdateMembershipView(t *testing.T) {
 	cv := ShardView{
 		ShardID:           123,
 		ConfigChangeIndex: 100,
-		Nodes:             make(map[uint64]string),
+		Replicas:          make(map[uint64]string),
 	}
-	cv.Nodes[1] = "t1"
-	cv.Nodes[2] = "t2"
+	cv.Replicas[1] = "t1"
+	cv.Replicas[2] = "t2"
 	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:           123,
 		ConfigChangeIndex: 200,
-		Nodes:             make(map[uint64]string),
+		Replicas:          make(map[uint64]string),
 	}
-	ncv.Nodes[1] = "t1"
-	ncv.Nodes[2] = "t2"
-	ncv.Nodes[3] = "t3"
+	ncv.Replicas[1] = "t1"
+	ncv.Replicas[2] = "t2"
+	ncv.Replicas[3] = "t3"
 	updates := []ShardView{ncv}
 	v.update(updates)
 
@@ -144,20 +144,20 @@ func TestOutOfDateMembershipInfoIsIgnored(t *testing.T) {
 	cv := ShardView{
 		ShardID:           123,
 		ConfigChangeIndex: 100,
-		Nodes:             make(map[uint64]string),
+		Replicas:          make(map[uint64]string),
 	}
-	cv.Nodes[1] = "t1"
-	cv.Nodes[2] = "t2"
+	cv.Replicas[1] = "t1"
+	cv.Replicas[2] = "t2"
 	v.mu.shards[123] = cv
 
 	ncv := ShardView{
 		ShardID:           123,
 		ConfigChangeIndex: 10,
-		Nodes:             make(map[uint64]string),
+		Replicas:          make(map[uint64]string),
 	}
-	ncv.Nodes[1] = "t1"
-	ncv.Nodes[2] = "t2"
-	ncv.Nodes[3] = "t3"
+	ncv.Replicas[1] = "t1"
+	ncv.Replicas[2] = "t2"
+	ncv.Replicas[3] = "t3"
 	updates := []ShardView{ncv}
 	v.update(updates)
 

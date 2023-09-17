@@ -47,9 +47,9 @@ func (r *NodeHostRegistry) GetShardInfo(shardID uint64) (ShardView, bool) {
 		return ShardView{}, false
 	}
 	result := ci
-	result.Nodes = make(map[uint64]string)
-	for shardID, target := range ci.Nodes {
-		result.Nodes[shardID] = target
+	result.Replicas = make(map[uint64]string)
+	for shardID, target := range ci.Replicas {
+		result.Replicas[shardID] = target
 	}
 	return result, true
 }

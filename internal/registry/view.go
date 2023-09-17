@@ -34,11 +34,11 @@ var (
 // ShardInfo is a record for representing the state of a Raft shard based
 // on the knowledge of the local NodeHost instance.
 type ShardInfo struct {
-	// Nodes is a map of member node IDs to their Raft addresses.
-	Nodes map[uint64]string
-	// ShardID is the shard ID of the Raft shard node.
+	// Replicas is a map of member replica IDs to their Raft addresses.
+	Replicas map[uint64]string
+	// ShardID is the shard ID of the Raft shard.
 	ShardID uint64
-	// ReplicaID is the replica ID of the Raft node.
+	// ReplicaID is the replica ID of the Raft replica.
 	ReplicaID uint64
 	// ConfigChangeIndex is the current config change index of the Raft node.
 	// ConfigChangeIndex is Raft Log index of the last applied membership
@@ -63,10 +63,11 @@ type ShardInfo struct {
 	Pending bool
 }
 
-// ShardView is the view of a shard from gossip's point of view.
+// ShardView is the view of a shard from gossip's point of view at a certain
+// point in time.
 type ShardView struct {
 	ShardID           uint64
-	Nodes             map[uint64]string
+	Replicas          map[uint64]string
 	ConfigChangeIndex uint64
 	LeaderID          uint64
 	Term              uint64
@@ -77,7 +78,7 @@ func toShardViewList(input []ShardInfo) []ShardView {
 	for _, ci := range input {
 		cv := ShardView{
 			ShardID:           ci.ShardID,
-			Nodes:             ci.Nodes,
+			Replicas:          ci.Replicas,
 			ConfigChangeIndex: ci.ConfigChangeIndex,
 			LeaderID:          ci.LeaderID,
 			Term:              ci.Term,
@@ -87,11 +88,13 @@ func toShardViewList(input []ShardInfo) []ShardView {
 	return result
 }
 
-type sharedInfo struct {
+type exchanged struct {
 	DeploymentID uint64
 	ShardInfo    []ShardView
 }
 
+// view contains dynamic information on shards, it can change after an
+// election or a raft configuration change.
 type view struct {
 	deploymentID uint64
 	// shardID -> ShardView
@@ -115,9 +118,9 @@ func (v *view) shardCount() int {
 	return len(v.mu.shards)
 }
 
-func mergeShardInfo(current ShardView, update ShardView) ShardView {
+func mergeShardView(current ShardView, update ShardView) ShardView {
 	if current.ConfigChangeIndex < update.ConfigChangeIndex {
-		current.Nodes = update.Nodes
+		current.Replicas = update.Replicas
 		current.ConfigChangeIndex = update.ConfigChangeIndex
 	}
 	// we only keep which replica is the last known leader
@@ -140,7 +143,7 @@ func (v *view) update(updates []ShardView) {
 		if !ok {
 			current = ShardView{ShardID: u.ShardID}
 		}
-		v.mu.shards[u.ShardID] = mergeShardInfo(current, u)
+		v.mu.shards[u.ShardID] = mergeShardView(current, u)
 	}
 }
 
@@ -162,13 +165,13 @@ func getCompressedData(deploymentID uint64, l []ShardView, n int) []byte {
 	if n == 0 {
 		return nil
 	}
-	si := sharedInfo{
+	exchanged := exchanged{
 		DeploymentID: deploymentID,
 		ShardInfo:    l[:n],
 	}
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(si); err != nil {
+	if err := enc.Encode(exchanged); err != nil {
 		panic(err)
 	}
 	data := buf.Bytes()
@@ -227,12 +230,12 @@ func (v *view) updateFrom(data []byte) {
 	dst = dst[:n]
 	buf := bytes.NewBuffer(dst)
 	dec := gob.NewDecoder(buf)
-	si := sharedInfo{}
-	if err := dec.Decode(&si); err != nil {
+	exchanged := exchanged{}
+	if err := dec.Decode(&exchanged); err != nil {
 		return
 	}
-	if si.DeploymentID != v.deploymentID {
+	if exchanged.DeploymentID != v.deploymentID {
 		return
 	}
-	v.update(si.ShardInfo)
+	v.update(exchanged.ShardInfo)
 }

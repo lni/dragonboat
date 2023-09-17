@@ -15,55 +15,35 @@
 package registry
 
 import (
-	"sync"
-
 	"github.com/hashicorp/memberlist"
 )
 
+// sliceEventDelegate is used to hook into memberlist to get notification
+// about nodes joining and leaving.
 type sliceEventDelegate struct {
-	ch chan struct{}
-
-	mu struct {
-		sync.Mutex
-		events []memberlist.NodeEvent
-	}
+	store *metaStore
 }
 
 var _ memberlist.EventDelegate = (*sliceEventDelegate)(nil)
 
-func newSliceEventDelegate() *sliceEventDelegate {
+func newSliceEventDelegate(store *metaStore) *sliceEventDelegate {
 	return &sliceEventDelegate{
-		ch: make(chan struct{}, 1),
+		store: store,
 	}
 }
 
-func (e *sliceEventDelegate) notify() {
-	select {
-	case e.ch <- struct{}{}:
-	default:
+func (e *sliceEventDelegate) put(eventType memberlist.NodeEventType,
+	n *memberlist.Node) {
+	if eventType == memberlist.NodeJoin || eventType == memberlist.NodeUpdate {
+		var m meta
+		if m.unmarshal(n.Meta) {
+			e.store.put(n.Name, m)
+		}
+	} else if eventType == memberlist.NodeLeave {
+		e.store.delete(n.Name)
+	} else {
+		panic("unknown event type")
 	}
-}
-
-func (e *sliceEventDelegate) get() []memberlist.NodeEvent {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	events := e.mu.events
-	e.mu.events = make([]memberlist.NodeEvent, 0)
-	return events
-}
-
-func (e *sliceEventDelegate) put(typ memberlist.NodeEventType, n *memberlist.Node) {
-	node := *n
-	node.Meta = make([]byte, len(n.Meta))
-	copy(node.Meta, n.Meta)
-	defer e.notify()
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	event := memberlist.NodeEvent{
-		Event: typ,
-		Node:  &node,
-	}
-	e.mu.events = append(e.mu.events, event)
 }
 
 func (e *sliceEventDelegate) NotifyJoin(n *memberlist.Node) {

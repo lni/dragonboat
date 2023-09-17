@@ -1600,7 +1600,7 @@ func (n *node) notifyConfigChange() {
 		IsNonVoting:       isNonVoting,
 		IsWitness:         isWitness,
 		ConfigChangeIndex: m.ConfigChangeId,
-		Nodes:             m.Addresses,
+		Replicas:          m.Addresses,
 	}
 	n.shardInfo.Store(ci)
 	n.sysEvents.Publish(server.SystemEvent{
@@ -1620,7 +1620,7 @@ func (n *node) getShardInfo() ShardInfo {
 			StateMachineType: sm.Type(n.sm.Type()),
 		}
 	}
-	ci := v.(*ShardInfo)
+	info := v.(*ShardInfo)
 
 	leaderID := uint64(0)
 	term := uint64(0)
@@ -1632,13 +1632,13 @@ func (n *node) getShardInfo() ShardInfo {
 	}
 
 	return ShardInfo{
-		ShardID:           ci.ShardID,
-		ReplicaID:         ci.ReplicaID,
+		ShardID:           info.ShardID,
+		ReplicaID:         info.ReplicaID,
 		LeaderID:          leaderID,
 		Term:              term,
-		IsNonVoting:       ci.IsNonVoting,
-		ConfigChangeIndex: ci.ConfigChangeIndex,
-		Nodes:             ci.Nodes,
+		IsNonVoting:       info.IsNonVoting,
+		ConfigChangeIndex: info.ConfigChangeIndex,
+		Replicas:          info.Replicas,
 		StateMachineType:  sm.Type(n.sm.Type()),
 	}
 }
