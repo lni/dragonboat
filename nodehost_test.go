@@ -811,9 +811,9 @@ func TestMediumSizedClusterGossip(t *testing.T) {
 		fs := vfs.GetTestFS()
 		dir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("nh%d", i))
 		cfg := config.NodeHostConfig{
-			NodeHostDir:         dir,
-			RTTMillisecond:      getRTTMillisecond(fs, dir),
-			RaftAddress:         fmt.Sprintf("127.0.0.1:%d", 25000+i*10),
+			NodeHostDir:                dir,
+			RTTMillisecond:             getRTTMillisecond(fs, dir),
+			RaftAddress:                fmt.Sprintf("127.0.0.1:%d", 25000+i*10),
 			DefaultNodeRegistryEnabled: true,
 			Expert: config.ExpertConfig{
 				FS:                      fs,
@@ -853,9 +853,9 @@ func testDefaultNodeRegistryEnabled(t *testing.T,
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
-		NodeHostDir:         datadir1,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
-		RaftAddress:         addr1,
+		NodeHostDir:                datadir1,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir1),
+		RaftAddress:                addr1,
 		DefaultNodeRegistryEnabled: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -870,9 +870,9 @@ func testDefaultNodeRegistryEnabled(t *testing.T,
 		}
 	}
 	nhc2 := config.NodeHostConfig{
-		NodeHostDir:         datadir2,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
-		RaftAddress:         addr2,
+		NodeHostDir:                datadir2,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir2),
+		RaftAddress:                addr2,
 		DefaultNodeRegistryEnabled: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -958,9 +958,9 @@ func TestNodeHostRegistry(t *testing.T) {
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
-		NodeHostDir:         datadir1,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
-		RaftAddress:         addr1,
+		NodeHostDir:                datadir1,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir1),
+		RaftAddress:                addr1,
 		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -973,9 +973,9 @@ func TestNodeHostRegistry(t *testing.T) {
 		Seed:             []string{"127.0.0.1:25002"},
 	}
 	nhc2 := config.NodeHostConfig{
-		NodeHostDir:         datadir2,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
-		RaftAddress:         addr2,
+		NodeHostDir:                datadir2,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir2),
+		RaftAddress:                addr2,
 		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -1086,9 +1086,9 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
-		NodeHostDir:         datadir1,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
-		RaftAddress:         addr1,
+		NodeHostDir:                datadir1,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir1),
+		RaftAddress:                addr1,
 		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -1096,9 +1096,9 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		},
 	}
 	nhc2 := config.NodeHostConfig{
-		NodeHostDir:         datadir2,
-		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
-		RaftAddress:         addr2,
+		NodeHostDir:                datadir2,
+		RTTMillisecond:             getRTTMillisecond(fs, datadir2),
+		RaftAddress:                addr2,
 		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
@@ -1196,6 +1196,8 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 
 type testRegistry struct {
 	*registry.Registry
+
+	mu *sync.Mutex // PROTECTS(nodeAddrs)
 	// map of nhid -> host:port
 	nodeAddrs map[string]string
 }
@@ -1205,17 +1207,27 @@ func (tr *testRegistry) Resolve(shardID uint64, replicaID uint64) (string, strin
 	if err != nil {
 		return "", "", err
 	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	return tr.nodeAddrs[nhid], ck, nil
 }
 
 type testRegistryFactory struct {
+	mu sync.Mutex // PROTECTS(nodeAddrs)
 	// map of nhid -> host:port
 	nodeAddrs map[string]string
+}
+
+func (trf *testRegistryFactory) Set(nhid, addr string) {
+	trf.mu.Lock()
+	defer trf.mu.Unlock()
+	trf.nodeAddrs[nhid] = addr
 }
 
 func (trf *testRegistryFactory) Create(nhid string, streamConnections uint64, v config.TargetValidator) (raftio.INodeRegistry, error) {
 	return &testRegistry{
 		registry.NewNodeRegistry(streamConnections, v),
+		&trf.mu,
 		trf.nodeAddrs,
 	}, nil
 }
@@ -1317,7 +1329,7 @@ func TestExternalNodeRegistryFunction(t *testing.T) {
 	testProposal()
 	nh2.Close()
 	nhc2.RaftAddress = nodeHostTestAddr3
-	testRegistryFactory.nodeAddrs[nh2NodeHostID] = nodeHostTestAddr3
+	testRegistryFactory.Set(nh2NodeHostID, nodeHostTestAddr3)
 	nh2, err = NewNodeHost(nhc2)
 	if err != nil {
 		t.Fatalf("failed to restart nh2, %v", err)
