@@ -459,7 +459,13 @@ type NodeHostConfig struct {
 	// points the local gossip service will try to talk to. The Seed field doesn't
 	// need to include all gossip end points, a few well connected nodes in the
 	// gossip network is enough.
+	//
+	// Alternatively, if you wish to use a custom registry but manage it yourself,
+	// the Expert.NodeRegistryFactory field can be set to provide a registry that
+	// implements the raftio.INodeRegistry interface. A registry is simply a common
+	// channel shared between all nodes that allows them to identify each other.
 	Gossip GossipConfig
+
 	// Expert contains options for expert users who are familiar with the internals
 	// of Dragonboat. Users are recommended not to use this field unless
 	// absolutely necessary. It is important to note that any change to this field
@@ -488,6 +494,8 @@ type LogDBFactory interface {
 }
 
 // NodeRegistryFactory is the interface used for providing a custom node registry.
+// For a short example of how to implement a custom node registry, please see
+// TestExternalNodeRegistryFunction in nodehost_test.go.
 type NodeRegistryFactory interface {
 	Create(nhid string, streamConnections uint64, v TargetValidator) (raftio.INodeRegistry, error)
 }
@@ -679,6 +687,11 @@ func (c *NodeHostConfig) Prepare() error {
 	return nil
 }
 
+// NodeRegistryEnabled returns a bool indicating if any node registry is enabled.
+func (c *NodeHostConfig) NodeRegistryEnabled() bool {
+	return c.AddressByNodeHostID || c.Expert.NodeRegistryFactory != nil
+}
+
 // GetListenAddress returns the actual address the transport module is going to
 // listen on.
 func (c *NodeHostConfig) GetListenAddress() string {
@@ -730,7 +743,7 @@ func (c *NodeHostConfig) GetDeploymentID() uint64 {
 // GetTargetValidator returns a TargetValidator based on the specified
 // NodeHostConfig instance.
 func (c *NodeHostConfig) GetTargetValidator() TargetValidator {
-	if c.AddressByNodeHostID || c.Expert.NodeRegistryFactory != nil {
+	if c.NodeRegistryEnabled() {
 		return id.IsNodeHostID
 	} else if c.Expert.TransportFactory != nil {
 		return c.Expert.TransportFactory.Validate
