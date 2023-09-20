@@ -505,7 +505,7 @@ func createSingleTestNode(t *testing.T, to *testOption, nh *NodeHost) {
 	}
 	peers := make(map[uint64]string)
 	if !to.join {
-		if !nh.nhConfig.AddressByNodeHostID {
+		if !nh.nhConfig.DefaultNodeRegistryEnabled {
 			peers[cfg.ShardID] = nh.RaftAddress()
 		} else {
 			peers[cfg.ShardID] = nh.ID()
@@ -799,7 +799,7 @@ func (tm *chanTransportFactory) Validate(addr string) bool {
 }
 
 func TestGossip(t *testing.T) {
-	testAddressByNodeHostID(t, true, nil)
+	testDefaultNodeRegistryEnabled(t, true, nil)
 }
 
 func TestMediumSizedClusterGossip(t *testing.T) {
@@ -814,7 +814,7 @@ func TestMediumSizedClusterGossip(t *testing.T) {
 			NodeHostDir:         dir,
 			RTTMillisecond:      getRTTMillisecond(fs, dir),
 			RaftAddress:         fmt.Sprintf("127.0.0.1:%d", 25000+i*10),
-			AddressByNodeHostID: true,
+			DefaultNodeRegistryEnabled: true,
 			Expert: config.ExpertConfig{
 				FS:                      fs,
 				TestGossipProbeInterval: 50 * time.Millisecond,
@@ -835,15 +835,15 @@ func TestMediumSizedClusterGossip(t *testing.T) {
 
 func TestCustomTransportCanUseNodeHostID(t *testing.T) {
 	factory := &chanTransportFactory{}
-	testAddressByNodeHostID(t, true, factory)
+	testDefaultNodeRegistryEnabled(t, true, factory)
 }
 
 func TestCustomTransportCanGoWithoutNodeHostID(t *testing.T) {
 	factory := &chanTransportFactory{}
-	testAddressByNodeHostID(t, false, factory)
+	testDefaultNodeRegistryEnabled(t, false, factory)
 }
 
-func testAddressByNodeHostID(t *testing.T,
+func testDefaultNodeRegistryEnabled(t *testing.T,
 	addressByNodeHostID bool, factory config.TransportFactory) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
@@ -856,7 +856,7 @@ func testAddressByNodeHostID(t *testing.T,
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		AddressByNodeHostID: addressByNodeHostID,
+		DefaultNodeRegistryEnabled: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -873,7 +873,7 @@ func testAddressByNodeHostID(t *testing.T,
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		AddressByNodeHostID: addressByNodeHostID,
+		DefaultNodeRegistryEnabled: addressByNodeHostID,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -961,7 +961,7 @@ func TestNodeHostRegistry(t *testing.T) {
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		AddressByNodeHostID: true,
+		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -976,7 +976,7 @@ func TestNodeHostRegistry(t *testing.T) {
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		AddressByNodeHostID: true,
+		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -1089,7 +1089,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		NodeHostDir:         datadir1,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir1),
 		RaftAddress:         addr1,
-		AddressByNodeHostID: true,
+		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -1099,7 +1099,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 		NodeHostDir:         datadir2,
 		RTTMillisecond:      getRTTMillisecond(fs, datadir2),
 		RaftAddress:         addr2,
-		AddressByNodeHostID: true,
+		DefaultNodeRegistryEnabled: true,
 		Expert: config.ExpertConfig{
 			FS:                      fs,
 			TestGossipProbeInterval: 50 * time.Millisecond,
@@ -5049,7 +5049,7 @@ func TestGossipInfoIsReported(t *testing.T) {
 	to := &testOption{
 		noElection: true,
 		updateNodeHostConfig: func(c *config.NodeHostConfig) *config.NodeHostConfig {
-			c.AddressByNodeHostID = true
+			c.DefaultNodeRegistryEnabled = true
 			c.Gossip = config.GossipConfig{
 				BindAddress:      "localhost:23001",
 				AdvertiseAddress: advertiseAddress,

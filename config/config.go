@@ -259,7 +259,7 @@ type NodeHostConfig struct {
 	// NodeHostID specifies what NodeHostID to use. By default, when NodeHostID
 	// is empty, a random UUID will be generated and recorded by the system.
 	// Specifying a concrete NodeHostID here will cause the specified NodeHostID
-	// value to be used. NodeHostID is only used when AddressByNodeHostID is
+	// value to be used. NodeHostID is only used when DefaultNodeRegistryEnabled is
 	// set to true.
 	NodeHostID string
 	// WALDir is the directory used for storing the WAL of Raft entries. It is
@@ -292,25 +292,25 @@ type NodeHostConfig struct {
 	// to all resolved IPv4 addresses.
 	//
 	// By default, the RaftAddress value is not allowed to change between NodeHost
-	// restarts. AddressByNodeHostID should be set to true when the RaftAddress
+	// restarts. DefaultNodeRegistryEnabled should be set to true when the RaftAddress
 	// value might change after restart.
 	RaftAddress string
-	// AddressByNodeHostID indicates that NodeHost instances should be addressed
+	// DefaultNodeRegistryEnabled indicates that NodeHost instances should be addressed
 	// by their NodeHostID values. This feature is usually used when only dynamic
 	// addresses are available. When enabled, NodeHostID values should be used
 	// as the target parameter when calling NodeHost's StartReplica,
 	// RequestAddReplica, RequestAddNonVoting and RequestAddWitness methods.
 	//
-	// Enabling AddressByNodeHostID also enables the internal gossip service,
+	// Enabling DefaultNodeRegistryEnabled also enables the internal gossip service,
 	// NodeHostConfig.Gossip must be configured to control the behaviors of the
 	// gossip service.
 	//
-	// Note that once enabled, the AddressByNodeHostID setting can not be later
+	// Note that once enabled, the DefaultNodeRegistryEnabled setting can not be later
 	// disabled after restarts.
 	//
 	// Please see the godocs of the NodeHostConfig.Gossip field for a detailed
-	// example on how AddressByNodeHostID and gossip works.
-	AddressByNodeHostID bool
+	// example on how DefaultNodeRegistryEnabled and gossip works.
+	DefaultNodeRegistryEnabled bool
 	// ListenAddress is an optional field in the hostname:port or IP:port address
 	// form used by the transport module to listen on for Raft message and
 	// snapshots. When the ListenAddress field is not set, The transport module
@@ -377,7 +377,7 @@ type NodeHostConfig struct {
 	// are both committed and applied.
 	NotifyCommit bool
 	// Gossip contains configurations for the gossip service. When the
-	// AddressByNodeHostID field is set to true, each NodeHost instance will use
+	// DefaultNodeRegistryEnabled field is set to true, each NodeHost instance will use
 	// an internal gossip service to exchange knowledges of known NodeHost
 	// instances including their RaftAddress and NodeHostID values. This Gossip
 	// field contains configurations that controls how the gossip service works.
@@ -395,7 +395,7 @@ type NodeHostConfig struct {
 	// 10.0.0.200:24000
 	// 10.0.0.300:24000
 	//
-	// To use these machines, first enable the NodeHostConfig.AddressByNodeHostID
+	// To use these machines, first enable the NodeHostConfig.DefaultNodeRegistryEnabled
 	// field and start the NodeHost instances. The NodeHostID value of each
 	// NodeHost instance can be obtained by calling NodeHost.ID(). Let's say they
 	// are
@@ -577,7 +577,7 @@ func (c *NodeHostConfig) Validate() error {
 	if c.LogDBFactory != nil && c.Expert.LogDBFactory != nil {
 		return errors.New("both LogDBFactory and Expert.LogDBFactory specified")
 	}
-	if c.AddressByNodeHostID && c.Gossip.IsEmpty() {
+	if c.DefaultNodeRegistryEnabled && c.Gossip.IsEmpty() {
 		return errors.New("gossip service not configured")
 	}
 	validate := c.GetRaftAddressValidator()
@@ -689,7 +689,7 @@ func (c *NodeHostConfig) Prepare() error {
 
 // NodeRegistryEnabled returns a bool indicating if any node registry is enabled.
 func (c *NodeHostConfig) NodeRegistryEnabled() bool {
-	return c.AddressByNodeHostID || c.Expert.NodeRegistryFactory != nil
+	return c.DefaultNodeRegistryEnabled || c.Expert.NodeRegistryFactory != nil
 }
 
 // GetListenAddress returns the actual address the transport module is going to
@@ -964,7 +964,7 @@ type ExpertConfig struct {
 
 // GossipConfig contains configurations for the gossip service. Gossip service
 // is a fully distributed networked service for exchanging knowledge on
-// NodeHost instances. When enabled by the NodeHostConfig.AddressByNodeHostID
+// NodeHost instances. When enabled by the NodeHostConfig.DefaultNodeRegistryEnabled
 // field, it is employed to manage NodeHostID to RaftAddress mappings of known
 // NodeHost instances.
 type GossipConfig struct {

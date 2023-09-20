@@ -137,7 +137,7 @@ func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
 	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err == nil {
 		t.Fatalf("changed raft address not detected")
 	}
-	cfg.AddressByNodeHostID = true
+	cfg.DefaultNodeRegistryEnabled = true
 	status.AddressByNodeHostId = true
 	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
 	if err != nil {
@@ -169,7 +169,7 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		Expert:              config.GetDefaultExpertConfig(),
 		DeploymentID:        testDeploymentID,
 		RaftAddress:         testAddress,
-		AddressByNodeHostID: addressByNodeHostID,
+		DefaultNodeRegistryEnabled: addressByNodeHostID,
 	}
 
 	status := raftpb.RaftDataStatus{
@@ -231,11 +231,11 @@ func TestCanDetectMismatchedHardHash(t *testing.T) {
 		testLogDBName, true, false, ErrHardSettingsChanged, fs)
 }
 
-func TestCanDetectMismatchedAddressByNodeHostID(t *testing.T) {
+func TestCanDetectMismatchedDefaultNodeRegistryEnabled(t *testing.T) {
 	fs := vfs.GetTestFS()
 	testNodeHostDirectoryDetectsMismatches(t,
 		testAddress, "", raftio.LogDBBinVersion,
-		testLogDBName, false, true, ErrAddressByNodeHostIDChanged, fs)
+		testLogDBName, false, true, ErrDefaultNodeRegistryEnabledChanged, fs)
 }
 
 func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {

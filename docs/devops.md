@@ -11,5 +11,5 @@ This document describes the DevOps requirements for operating Dragonboat based a
 * When the quorum nodes are gone, you will not be able to resolve it without losing data. The github.com/lni/dragonboat/tools package provides the ImportSnapshot method to import a previously exported snapshot to repair such failed Raft shard.
 * By default, the RaftAddress value can not be changed between restarts, otherwise the system will panic with an error message.
 * When you can't provide a static IP for your nodes, e.g. when IP is dynamically assigned on node restart, you may want to configure a static DNS name for that node and update it on each restart. 
-* When it is not possible to do so, you can choose to set the AddressByNodeHostID field to enable the gossip feature which is designed to handle dynamic RaftAddress. Check godocs for more details on the gossip feature. 
+* When it is not possible to do so, you can choose to set the DefaultNodeRegistryEnabled field to enable the gossip feature which is designed to handle dynamic RaftAddress. Check godocs for more details on the gossip feature. 
 * Always test your system to ensure that it has high availability by design, disaster recovery should always be a part of the CI.

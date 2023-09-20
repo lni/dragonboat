@@ -191,7 +191,7 @@ func TestLogDBFactoryAndExpertLogDBFactoryCanNotBeSetTogether(t *testing.T) {
 	}
 }
 
-func TestGossipMustBeConfiguredWhenAddressByNodeHostID(t *testing.T) {
+func TestGossipMustBeConfiguredWhenDefaultNodeRegistryEnabled(t *testing.T) {
 	c := NodeHostConfig{
 		RaftAddress:    "localhost:9010",
 		RTTMillisecond: 100,
@@ -200,7 +200,7 @@ func TestGossipMustBeConfiguredWhenAddressByNodeHostID(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatalf("invalid config")
 	}
-	c.AddressByNodeHostID = true
+	c.DefaultNodeRegistryEnabled = true
 	if err := c.Validate(); err == nil {
 		t.Fatalf("unexpectedly considreed as valid config")
 	}
