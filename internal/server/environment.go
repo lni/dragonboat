@@ -49,9 +49,9 @@ var (
 	// ErrDeploymentIDChanged is the error used to indicate that the deployment
 	// ID changed.
 	ErrDeploymentIDChanged = errors.New("deployment ID changed")
-	// ErrAddressByNodeHostIDChanged is the error used to indicate that the
-	// AddressByNodeHostID setting has changed.
-	ErrAddressByNodeHostIDChanged = errors.New("AddressByNodeHostID changed")
+	// ErrDefaultNodeRegistryEnabledChanged is the error used to indicate that the
+	// DefaultNodeRegistryEnabled setting has changed.
+	ErrDefaultNodeRegistryEnabledChanged = errors.New("DefaultNodeRegistryEnabled changed")
 	// ErrLogDBType is the error used to indicate that the LogDB type changed.
 	ErrLogDBType = errors.New("logdb type changed")
 	// ErrNotOwner indicates that the data directory belong to another NodeHost
@@ -408,7 +408,7 @@ func (env *Env) check(cfg config.NodeHostConfig,
 		return ErrLogDBType
 	}
 	if !dbto {
-		if !cfg.AddressByNodeHostID && !se(s.Address, cfg.RaftAddress) {
+		if !cfg.NodeRegistryEnabled() && !se(s.Address, cfg.RaftAddress) {
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {
@@ -417,8 +417,8 @@ func (env *Env) check(cfg config.NodeHostConfig,
 		if s.DeploymentId != 0 && s.DeploymentId != cfg.GetDeploymentID() {
 			return ErrDeploymentIDChanged
 		}
-		if s.AddressByNodeHostId != cfg.AddressByNodeHostID {
-			return ErrAddressByNodeHostIDChanged
+		if s.AddressByNodeHostId != cfg.DefaultNodeRegistryEnabled {
+			return ErrDefaultNodeRegistryEnabledChanged
 		}
 		if s.BinVer != binVer {
 			if s.BinVer == raftio.LogDBBinVersion &&
@@ -459,7 +459,7 @@ func (env *Env) createFlagFile(cfg config.NodeHostConfig,
 		LogdbShardCount:     cfg.Expert.LogDB.Shards,
 		MaxSessionCount:     settings.Hard.LRUMaxSessionCount,
 		EntryBatchSize:      settings.Hard.LogDBEntryBatchSize,
-		AddressByNodeHostId: cfg.AddressByNodeHostID,
+		AddressByNodeHostId: cfg.DefaultNodeRegistryEnabled,
 	}
 	return fileutil.CreateFlagFile(dir, flagFilename, &s, env.fs)
 }

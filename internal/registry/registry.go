@@ -38,17 +38,7 @@ type IResolver interface {
 	Add(uint64, uint64, string)
 }
 
-// INodeRegistry is the local registry interface used to keep all known
-// nodes in the system.
-type INodeRegistry interface {
-	Close() error
-	Add(shardID uint64, replicaID uint64, url string)
-	Remove(shardID uint64, replicaID uint64)
-	RemoveShard(shardID uint64)
-	Resolve(shardID uint64, replicaID uint64) (string, string, error)
-}
-
-var _ INodeRegistry = (*Registry)(nil)
+var _ raftio.INodeRegistry = (*Registry)(nil)
 var _ IResolver = (*Registry)(nil)
 
 // Registry is used to manage all known node addresses in the multi raft system.

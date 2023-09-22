@@ -204,7 +204,7 @@ func NewTransport(nhConfig config.NodeHostConfig,
 	dir server.SnapshotDirFunc, sysEvents ITransportEvent,
 	fs vfs.IFS) (*Transport, error) {
 	sourceID := nhConfig.RaftAddress
-	if nhConfig.AddressByNodeHostID {
+	if nhConfig.NodeRegistryEnabled() {
 		sourceID = env.NodeHostID()
 	}
 	t := &Transport{

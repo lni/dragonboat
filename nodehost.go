@@ -256,9 +256,9 @@ type ReadonlyLogReader interface {
 var DefaultSnapshotOption SnapshotOption
 
 // Target is the type used to specify where a node is running. Target is remote
-// NodeHost's RaftAddress value when NodeHostConfig.AddressByNodeHostID is not
+// NodeHost's RaftAddress value when NodeHostConfig.DefaultNodeRegistryEnabled is not
 // set. Target will use NodeHost's ID value when
-// NodeHostConfig.AddressByNodeHostID is set.
+// NodeHostConfig.DefaultNodeRegistryEnabled is set.
 type Target = string
 
 // NodeHost manages Raft shards and enables them to share resources such as
@@ -279,7 +279,7 @@ type NodeHost struct {
 		sys         *sysEventListener
 	}
 	registry     INodeHostRegistry
-	nodes        registry.INodeRegistry
+	nodes        raftio.INodeRegistry
 	fs           vfs.IFS
 	transport    transport.ITransport
 	id           *id.UUID
@@ -461,7 +461,7 @@ func (nh *NodeHost) ID() string {
 // GetNodeHostRegistry returns the NodeHostRegistry instance that can be used
 // to query NodeHost details shared between NodeHost instances by gossip.
 func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
-	return nh.registry, nh.nhConfig.AddressByNodeHostID
+	return nh.registry, nh.nhConfig.DefaultNodeRegistryEnabled
 }
 
 // StartReplica adds the specified Raft replica node to the NodeHost and starts
@@ -472,7 +472,7 @@ func (nh *NodeHost) GetNodeHostRegistry() (INodeHostRegistry, bool) {
 // The input parameter initialMembers is a map of replica ID to replica target for all
 // Raft shard's initial member nodes. By default, the target is the
 // RaftAddress value of the NodeHost where the node will be running. When running
-// in the AddressByNodeHostID mode, target should be set to the NodeHostID value
+// in the DefaultNodeRegistryEnabled mode, target should be set to the NodeHostID value
 // of the NodeHost where the node will be running. See the godoc of NodeHost's ID
 // method for the full definition of NodeHostID. For the same Raft shard, the
 // same initialMembers map should be specified when starting its initial member
@@ -1145,7 +1145,7 @@ func (nh *NodeHost) RequestDeleteReplica(shardID uint64,
 // By default, the target parameter is the RaftAddress of the NodeHost instance
 // where the new Raft node will be running. Note that fixed IP or static DNS
 // name should be used in RaftAddress in such default mode. When running in the
-// AddressByNodeHostID mode, target should be set to NodeHost's ID value which
+// DefaultNodeRegistryEnabled mode, target should be set to NodeHost's ID value which
 // can be obtained by calling the ID() method.
 //
 // When the Raft shard is created with the OrderedConfigChange config flag
@@ -1746,14 +1746,26 @@ func (nh *NodeHost) createNodeRegistry() error {
 	validator := nh.nhConfig.GetTargetValidator()
 	// TODO:
 	// more tests here required
-	if nh.nhConfig.AddressByNodeHostID {
-		plog.Infof("AddressByNodeHostID: true, use gossip based node registry")
+	if nh.nhConfig.DefaultNodeRegistryEnabled {
+		// DefaultNodeRegistryEnabled should not be set if a Expert.NodeRegistryFactory
+		// is also set.
+		if nh.nhConfig.Expert.NodeRegistryFactory != nil {
+			return errors.New("DefaultNodeRegistryEnabled and Expert.NodeRegistryFactory should not both be set")
+		}
+		plog.Infof("DefaultNodeRegistryEnabled: true, use gossip based node registry")
 		r, err := registry.NewGossipRegistry(nh.ID(), nh.getShardInfo,
 			nh.nhConfig, streamConnections, validator)
 		if err != nil {
 			return err
 		}
 		nh.registry = r.GetNodeHostRegistry()
+		nh.nodes = r
+	} else if nh.nhConfig.Expert.NodeRegistryFactory != nil {
+		plog.Infof("Expert.NodeRegistryFactory was set: using custom registry")
+		r, err := nh.nhConfig.Expert.NodeRegistryFactory.Create(nh.ID(), streamConnections, validator)
+		if err != nil {
+			return err
+		}
 		nh.nodes = r
 	} else {
 		plog.Infof("using regular node registry")

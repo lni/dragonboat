@@ -11,5 +11,5 @@
 * 在极端情况下，当多数节点同时永久故障并无法修复时，Raft组将不可用。此时须使用github.com/lni/dragonboat/tools包提供的ImportSnapshot工具修复受损的Raft组。这需要用户日常定期使用NodeHost的ExportSnapshot方法导出并备份快照供此灾备用途。
 * 在默认方式下，NodeHost每次重启后其RaftAddress不能变化，否则将报错。
 * 如无法直接满足上述RaftAddress不变的要求，比如IP地址会在每次机器重启后因随机分配而变更，可考虑是否可以使用DNS Name并配合适当配置管理，来达到RaftAddress始终不变的要求。
-* 如依旧无法按照上述方法满足RaftAddress不变的需求，可通过设置AddressByNodeHostID项来开启gossip功能，它被设计用来处理动态的RaftAddress的场景，具体请参阅文档。
+* 如依旧无法按照上述方法满足RaftAddress不变的需求，可通过设置DefaultNodeRegistryEnabled项来开启gossip功能，它被设计用来处理动态的RaftAddress的场景，具体请参阅文档。
 * 用户应该自行测试系统是否具备高可用性，并测试在不同数量规模与组合的节点失效情况下用户系统是否可以正确处理并保持Raft组的高可用。各类灾备维护应该是日常CI的一部分。

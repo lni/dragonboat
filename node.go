@@ -26,7 +26,6 @@ import (
 	"github.com/lni/dragonboat/v4/internal/fileutil"
 	"github.com/lni/dragonboat/v4/internal/logdb"
 	"github.com/lni/dragonboat/v4/internal/raft"
-	"github.com/lni/dragonboat/v4/internal/registry"
 	"github.com/lni/dragonboat/v4/internal/rsm"
 	"github.com/lni/dragonboat/v4/internal/server"
 	"github.com/lni/dragonboat/v4/internal/settings"
@@ -77,7 +76,7 @@ type leaderInfo struct {
 type node struct {
 	shardInfo             atomic.Value
 	leaderInfo            atomic.Value
-	nodeRegistry          registry.INodeRegistry
+	nodeRegistry          raftio.INodeRegistry
 	logdb                 raftio.ILogDB
 	pipeline              pipeline
 	getStreamSink         func(uint64, uint64) *transport.Sink
@@ -146,7 +145,7 @@ func newNode(peers map[uint64]string,
 	getStreamSink func(uint64, uint64) *transport.Sink,
 	handleSnapshotStatus func(uint64, uint64, bool),
 	sendMessage func(pb.Message),
-	nodeRegistry registry.INodeRegistry,
+	nodeRegistry raftio.INodeRegistry,
 	pool *sync.Pool,
 	ldb raftio.ILogDB,
 	metrics *logDBMetrics,
