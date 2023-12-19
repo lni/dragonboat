@@ -22,7 +22,6 @@
 package tan
 
 import (
-	"os"
 	"syscall"
 
 	"github.com/lni/vfs"
@@ -30,7 +29,10 @@ import (
 )
 
 func prealloc(f vfs.File, size int64) error {
-	osf, ok := f.(*os.File)
+	type fd interface {
+		Fd() uintptr
+	}
+	osf, ok := f.(fd)
 	if !ok {
 		return nil
 	}
