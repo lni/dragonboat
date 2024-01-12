@@ -28,6 +28,7 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -615,7 +616,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 			}
 			t.Fatalf("unexpected error %v", err)
 		}
-		//time.Sleep(100 * time.Millisecond)
+		// time.Sleep(100 * time.Millisecond)
 		if err := nh.SyncCloseSession(ctx, cs); err != nil {
 			if err == ErrTimeout {
 				cancel()
@@ -5601,7 +5602,7 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 			}
 			select {
 			case e := <-nh.engine.ec:
-				if e != vfs.ErrInjected && e.Error() != vfs.ErrInjected.Error() {
+				if e != vfs.ErrInjected && !strings.Contains(e.Error(), vfs.ErrInjected.Error()) {
 					t.Fatalf("failed to return the expected error, %v", e)
 				}
 			default:
