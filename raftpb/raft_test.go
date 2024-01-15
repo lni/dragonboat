@@ -15,8 +15,8 @@
 package raftpb
 
 import (
+	"crypto/rand"
 	"math"
-	"math/rand"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -443,7 +443,7 @@ func TestMetadataEntry(t *testing.T) {
 
 func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 	cmd := make([]byte, 1024)
-	rand.Read(cmd)
+	_, _ = rand.Read(cmd)
 	e := Entry{
 		Type:        MetadataEntry,
 		Index:       200,
