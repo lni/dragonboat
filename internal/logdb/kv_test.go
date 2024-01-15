@@ -16,9 +16,9 @@ package logdb
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"strings"
 	"testing"
 
@@ -351,7 +351,7 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			key := newKey(entryKeySize, nil)
 			key.SetEntryKey(100, 1, i)
 			data := make([]byte, 64)
-			rand.Read(data)
+			_, _ = rand.Read(data)
 			wb.Put(key.Key(), data)
 		}
 		if err := kvs.CommitWriteBatch(wb); err != nil {

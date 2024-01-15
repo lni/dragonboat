@@ -217,11 +217,11 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		kv:      kv,
 		stopper: syncutil.NewStopper(),
 	}
-	opts.EventListener = pebble.EventListener{
+	opts.AddEventListener(pebble.EventListener{
 		WALCreated:    event.onWALCreated,
 		FlushEnd:      event.onFlushEnd,
 		CompactionEnd: event.onCompactionEnd,
-	}
+	})
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {
 			return nil, err

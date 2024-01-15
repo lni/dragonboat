@@ -15,7 +15,8 @@
 package dragonboat
 
 import (
-	"math/rand"
+	"crypto/rand"
+	mrand "math/rand"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -69,7 +70,7 @@ func benchmarkEncodedPayload(b *testing.B, ct dio.CompressionType, sz uint64) {
 	b.ReportAllocs()
 	b.SetBytes(int64(sz))
 	input := make([]byte, sz)
-	rand.Read(input)
+	_, _ = rand.Read(input)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rsm.GetEncoded(ct, input, nil)
@@ -177,7 +178,7 @@ func BenchmarkPendingProposalNextKey(b *testing.B) {
 	cfg := config.Config{ShardID: 1, ReplicaID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	b.RunParallel(func(pb *testing.PB) {
-		clientID := rand.Uint64()
+		clientID := mrand.Uint64()
 		for pb.Next() {
 			pp.nextKey(clientID)
 		}
@@ -641,7 +642,7 @@ func BenchmarkChunkWriter(b *testing.B) {
 	cw := rsm.NewChunkWriter(sink, meta)
 	sz := int64(1024 * 256)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	b.ReportAllocs()
 	b.SetBytes(sz)
 	b.ResetTimer()
@@ -659,7 +660,7 @@ func BenchmarkSnappyCompressedChunkWriter(b *testing.B) {
 	w := snappy.NewBufferedWriter(cw)
 	sz := int64(1024 * 256)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	b.ReportAllocs()
 	b.SetBytes(sz)
 	b.ResetTimer()
