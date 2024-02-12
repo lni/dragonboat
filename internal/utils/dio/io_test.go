@@ -16,7 +16,7 @@ package dio
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 )
 
@@ -72,7 +72,7 @@ func TestSnappyBlockCompression(t *testing.T) {
 			t.Fatalf("failed to get encoded len")
 		}
 		dst := make([]byte, sz)
-		rand.Read(src)
+		_, _ = rand.Read(src)
 		n := CompressSnappyBlock(src, dst)
 		decompressed := make([]byte, i*1024)
 		if err := DecompressSnappyBlock(dst[:n], decompressed); err != nil {
@@ -104,14 +104,14 @@ func TestCompressorDecompressor(t *testing.T) {
 		src := make([]byte, 10*i*1024)
 		dst := make([]byte, 0)
 		data := make([]byte, 0)
-		rand.Read(src)
+		_, _ = rand.Read(src)
 		buf := &tb{buf: bytes.NewBuffer(data)}
 		c := NewCompressor(Snappy, buf)
 		n, err := c.Write(src)
 		if n != len(src) || err != nil {
 			t.Fatalf("failed to write all data")
 		}
-		c.Close()
+		_ = c.Close()
 		d := NewDecompressor(Snappy, buf)
 		for {
 			r := make([]byte, 1024)

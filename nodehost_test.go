@@ -17,17 +17,19 @@ package dragonboat
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	mrand "math/rand"
 	"os"
 	"os/exec"
 	"reflect"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -104,7 +106,7 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 		panic(err)
 	}
 	defer func() {
-		f.Close()
+		_ = f.Close()
 	}()
 	data := make([]byte, 512)
 	total := uint64(0)
@@ -615,7 +617,7 @@ func createProposalsToTriggerSnapshot(t *testing.T,
 			}
 			t.Fatalf("unexpected error %v", err)
 		}
-		//time.Sleep(100 * time.Millisecond)
+		// time.Sleep(100 * time.Millisecond)
 		if err := nh.SyncCloseSession(ctx, cs); err != nil {
 			if err == ErrTimeout {
 				cancel()
@@ -848,7 +850,7 @@ func testDefaultNodeRegistryEnabled(t *testing.T,
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
+	_ = os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
@@ -953,7 +955,7 @@ func TestNodeHostRegistry(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
+	_ = os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
@@ -1081,7 +1083,7 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
+	_ = os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
@@ -1236,7 +1238,7 @@ func TestExternalNodeRegistryFunction(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
+	_ = os.RemoveAll(singleNodeHostTestDir)
 	defer os.RemoveAll(singleNodeHostTestDir)
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
@@ -2833,7 +2835,7 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 				t.Errorf("unexpected snapshot version, got %d, want %d",
 					h.Version, rsm.DefaultVersion)
 			}
-			reader.Close()
+			_ = reader.Close()
 			shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
 			if err != nil {
 				t.Fatalf("failed to check shrunk %v", err)
@@ -3395,7 +3397,7 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			cmd := make([]byte, 1518)
-			rand.Read(cmd)
+			_, _ = rand.Read(cmd)
 			result, err := nh.SyncPropose(ctx, session, cmd)
 			cancel()
 			if err != nil {
@@ -4684,7 +4686,7 @@ type dataCorruptionSink struct {
 
 func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.enabled && len(chunk.Data) > 0 {
-		idx := rand.Uint64() % uint64(len(chunk.Data))
+		idx := mrand.Uint64() % uint64(len(chunk.Data))
 		chunk.Data[idx] = chunk.Data[idx] + 1
 	}
 	s.receiver.Add(chunk)
@@ -4737,7 +4739,7 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T,
 	}()
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.ChunkSize)
-		rand.Read(data)
+		_, _ = rand.Read(data)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
@@ -4785,7 +4787,7 @@ func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.ChunkSize)
-		rand.Read(data)
+		_, _ = rand.Read(data)
 		payload = append(payload, data...)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
@@ -5601,7 +5603,7 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 			}
 			select {
 			case e := <-nh.engine.ec:
-				if e != vfs.ErrInjected && e.Error() != vfs.ErrInjected.Error() {
+				if e != vfs.ErrInjected && !strings.Contains(e.Error(), vfs.ErrInjected.Error()) {
 					t.Fatalf("failed to return the expected error, %v", e)
 				}
 			default:

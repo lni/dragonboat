@@ -16,9 +16,9 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/cockroachdb/errors"
@@ -2053,8 +2053,8 @@ func TestIsShrunkSnapshot(t *testing.T) {
 			}
 			sessionData := make([]byte, testSessionSize)
 			storeData := make([]byte, testPayloadSize)
-			rand.Read(sessionData)
-			rand.Read(storeData)
+			_, _ = rand.Read(sessionData)
+			_, _ = rand.Read(storeData)
 			n, err := w.Write(sessionData)
 			if err != nil || n != len(sessionData) {
 				t.Fatalf("failed to write the session data")
@@ -2425,7 +2425,7 @@ func TestNALookup(t *testing.T) {
 		sm: msm,
 	}
 	input := make([]byte, 128)
-	rand.Read(input)
+	_, _ = rand.Read(input)
 	result, err := sm.NALookup(input)
 	if err != nil {
 		t.Errorf("NALookup failed %v", err)

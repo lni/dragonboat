@@ -15,7 +15,7 @@
 package dragonboat
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -984,7 +984,7 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 		Value: 1234,
 		Data:  make([]byte, 128),
 	}
-	rand.Read(result.Data)
+	_, _ = rand.Read(result.Data)
 	pp.applied(rs.clientID, rs.seriesID, rs.key, result, false)
 	select {
 	case v := <-rs.ResultC():

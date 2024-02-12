@@ -16,9 +16,9 @@ package tools
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/config"
@@ -154,7 +154,7 @@ func createTestDataFile(path string, sz uint64, fs vfs.IFS) error {
 		return err
 	}
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	_, err = f.Write(data)
 	if err != nil {
 		return err
@@ -239,7 +239,7 @@ func TestCopySnapshotFile(t *testing.T) {
 		t.Fatalf("failed to create test file %v", err)
 	}
 	data := make([]byte, 125)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	_, err = f.Write(data)
 	if err != nil {
 		t.Fatalf("failed to write test data %v", err)
