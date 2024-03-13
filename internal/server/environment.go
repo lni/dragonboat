@@ -412,7 +412,7 @@ func (env *Env) check(cfg config.NodeHostConfig,
 			return ErrNotOwner
 		}
 		if len(s.Hostname) > 0 && !se(s.Hostname, env.hostname) {
-			return ErrHostnameChanged
+			return fmt.Errorf("%s: previous hostname: %q, current hostname: %q", ErrHostnameChanged, s.Hostname, env.hostname)
 		}
 		if s.DeploymentId != 0 && s.DeploymentId != cfg.GetDeploymentID() {
 			return ErrDeploymentIDChanged
