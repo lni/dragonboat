@@ -1395,7 +1395,10 @@ func (r *raft) getPendingConfigChangeCount() int {
 //
 
 func (r *raft) handleHeartbeatMessage(m pb.Message) error {
-	r.log.commitTo(m.Commit)
+	if m.Commit <= r.log.lastIndex() {
+		r.log.commitTo(m.Commit)
+	}
+
 	r.send(pb.Message{
 		To:       m.From,
 		Type:     pb.HeartbeatResp,
