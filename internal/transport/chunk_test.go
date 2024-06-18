@@ -15,7 +15,7 @@
 package transport
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"testing"
 
@@ -49,7 +49,7 @@ func getTestChunk() []pb.Chunk {
 			FileSize:       10 * rsm.HeaderSize,
 		}
 		data := make([]byte, rsm.HeaderSize)
-		rand.Read(data)
+		_, _ = rand.Read(data)
 		c.Data = data
 		result = append(result, c)
 	}

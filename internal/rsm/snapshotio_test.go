@@ -16,9 +16,9 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/vfs"
@@ -63,8 +63,8 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		}
 		sessionData := make([]byte, testSessionSize)
 		storeData := make([]byte, testPayloadSize)
-		rand.Read(sessionData)
-		rand.Read(storeData)
+		_, _ = rand.Read(sessionData)
+		_, _ = rand.Read(storeData)
 		n, err := w.Write(sessionData)
 		if err != nil || n != len(sessionData) {
 			t.Fatalf("failed to write the session data")
@@ -108,8 +108,8 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	}
 	sessionData := make([]byte, ssz)
 	storeData := make([]byte, psz)
-	rand.Read(sessionData)
-	rand.Read(storeData)
+	_, _ = rand.Read(sessionData)
+	_, _ = rand.Read(storeData)
 	n, err := w.Write(sessionData)
 	if err != nil || n != len(sessionData) {
 		t.Fatalf("failed to write the session data")
@@ -171,7 +171,7 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 			t.Fatalf("%v", err)
 		}
 		defer r.Close()
-		rand.Read(header.PayloadChecksum)
+		_, _ = rand.Read(header.PayloadChecksum)
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
 		n, err := io.ReadFull(r, s)
@@ -377,7 +377,7 @@ func TestShrinkSnapshot(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, 1024*1024+i*256)
-		rand.Read(data)
+		_, _ = rand.Read(data)
 		if _, err := writer.Write(data); err != nil {
 			t.Fatalf("write failed %v", err)
 		}
@@ -441,7 +441,7 @@ func TestReplaceSnapshotFile(t *testing.T) {
 			t.Fatalf("failed to ")
 		}
 		data := make([]byte, sz)
-		rand.Read(data)
+		_, _ = rand.Read(data)
 		if _, err := f1.Write(data); err != nil {
 			t.Fatalf("failed to write data %v", err)
 		}
@@ -488,7 +488,7 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 			t.Fatalf("failed to create reader %v", err)
 		}
 		defer func() {
-			reader.Close()
+			_ = reader.Close()
 		}()
 		crc, err := GetV2PayloadChecksum(testSnapshotFilename, fs)
 		if err != nil {
