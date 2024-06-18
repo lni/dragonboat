@@ -165,7 +165,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		}
 	})
 	blockSize := int(config.KVBlockSize)
-	writeBufferSize := int(config.KVWriteBufferSize)
+	writeBufferSize := uint64(config.KVWriteBufferSize)
 	maxWriteBufferNumber := int(config.KVMaxWriteBufferNumber)
 	l0FileNumCompactionTrigger := int(config.KVLevel0FileNumCompactionTrigger)
 	l0StopWritesTrigger := int(config.KVLevel0StopWritesTrigger)
@@ -277,7 +277,10 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 // IterateValue ...
 func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) (err error) {
-	iter := r.db.NewIter(r.ro)
+	iter, err := r.db.NewIter(r.ro)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		err = firstError(err, iter.Close())
 	}()
