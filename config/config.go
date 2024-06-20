@@ -79,11 +79,12 @@ type Config struct {
 	// RTT is defined by NodeHostConfig.RTTMillisecond. The Raft paper suggests it
 	// to be a magnitude greater than HeartbeatRTT, which is the interval between
 	// two heartbeats. In Raft, the actual interval between elections is
-	// randomized to be between ElectionRTT and 2 * ElectionRTT.
+	// randomized to be between ElectionRTT and 2 * ElectionRTT. The value of ElectionRTT
+	// must be at least 2 * NodeHostConfig.RTTMillisecond.
 	//
-	// As an example, assuming NodeHostConfig.RTTMillisecond is 100 millisecond,
+	// As an example, assuming the NodeHostConfig.RTTMillisecond is 100 milliseconds,
 	// to set the election interval to be 1 second, then ElectionRTT should be set
-	// to 10.
+	// to 1000.
 	//
 	// When CheckQuorum is enabled, ElectionRTT also defines the interval for
 	// checking leader quorum.
@@ -211,10 +212,10 @@ func (c *Config) Validate() error {
 		return errors.New("ElectionRTT must be > 0")
 	}
 	if c.ElectionRTT <= 2*c.HeartbeatRTT {
-		return errors.New("invalid election rtt")
+		return errors.New("invalid ElectionRTT, value must be at least 2*HeartbeatRTT")
 	}
 	if c.ElectionRTT < 10*c.HeartbeatRTT {
-		plog.Warningf("ElectionRTT is not a magnitude larger than HeartbeatRTT")
+		plog.Warningf("ElectionRTT is recommended to be at least 10*HeartbeatRTT")
 	}
 	if c.MaxInMemLogSize > 0 &&
 		c.MaxInMemLogSize < settings.EntryNonCmdFieldsSize+1 {
