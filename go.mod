@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.3.1
 	github.com/kr/pretty v0.3.0
-	github.com/lni/goutils v1.4.0
+	github.com/lni/goutils v1.4.1-0.20240622050311-4ae0238b22d0
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376
 	github.com/pierrec/lz4/v4 v4.1.14
 	github.com/stretchr/testify v1.7.0
