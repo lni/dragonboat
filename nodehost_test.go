@@ -5601,7 +5601,7 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 			}
 			select {
 			case e := <-nh.engine.ec:
-				if e != vfs.ErrInjected && e.Error() != vfs.ErrInjected.Error() {
+				if errors.Is(e, vfs.ErrInjected) {
 					t.Fatalf("failed to return the expected error, %v", e)
 				}
 			default:

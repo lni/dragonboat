@@ -452,11 +452,9 @@ func copyFile(src string, dst string, fs vfs.IFS) (err error) {
 		err = firstError(err, out.Close())
 	}()
 	if runtime.GOOS != "windows" {
-		of, ok := out.(*os.File)
-		if ok {
-			if err := of.Chmod(fi.Mode()); err != nil {
-				return err
-			}
+		of := os.NewFile(out.Fd(), dst)
+		if err := of.Chmod(fi.Mode()); err != nil {
+			return err
 		}
 	}
 	if _, err = io.Copy(out, in); err != nil {
