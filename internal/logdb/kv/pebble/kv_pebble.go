@@ -19,6 +19,7 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -35,6 +36,17 @@ import (
 var (
 	plog = logger.GetLogger("pebblekv")
 )
+
+var _ pebble.Logger = (*plogAdapter)(nil)
+
+type plogAdapter struct {
+	logger.ILogger
+}
+
+func (p *plogAdapter) Fatalf(format string, args ...interface{}) {
+	p.Errorf(format, args...)
+	os.Exit(1)
+}
 
 const (
 	maxLogFileSize = 1024 * 1024 * 128
@@ -200,7 +212,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		L0CompactionFileThreshold:   l0FileNumCompactionTrigger,
 		L0StopWritesThreshold:       l0StopWritesTrigger,
 		Cache:                       cache,
-		Logger:                      PebbleLogger,
+		Logger:                      &plogAdapter{plog},
 	}
 	if fs != vfs.DefaultFS {
 		opts.FS = vfs.NewPebbleFS(fs)
