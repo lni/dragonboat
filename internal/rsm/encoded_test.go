@@ -16,7 +16,7 @@ package rsm
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/utils/dio"
@@ -76,7 +76,7 @@ func TestGetV0EncodedPayload(t *testing.T) {
 			src = nil
 		} else {
 			src = make([]byte, tt.src)
-			rand.Read(src)
+			_, _ = rand.Read(src)
 		}
 		var dst []byte
 		if tt.dst == 0 {

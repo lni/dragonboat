@@ -180,7 +180,7 @@ func (d *db) createNewLog() error {
 	if err != nil {
 		return err
 	}
-	if err := prealloc(logFile, d.opts.MaxLogFileSize+indexBlockSize); err != nil {
+	if err := logFile.Preallocate(0, d.opts.MaxLogFileSize+indexBlockSize); err != nil {
 		return err
 	}
 	if err := d.dataDir.Sync(); err != nil {

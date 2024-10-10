@@ -17,9 +17,9 @@ package transport
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"strconv"
 	"sync"
@@ -116,7 +116,7 @@ func (g *testSnapshotDir) generateSnapshotExternalFile(shardID uint64,
 	}
 	fp := g.fs.PathJoin(snapDir, filename)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	f, err := g.fs.Create(fp)
 	if err != nil {
 		panic(err)
@@ -128,7 +128,7 @@ func (g *testSnapshotDir) generateSnapshotExternalFile(shardID uint64,
 	if err != nil {
 		panic(err)
 	}
-	f.Close()
+	_ = f.Close()
 }
 
 func (g *testSnapshotDir) generateSnapshotFile(shardID uint64,
@@ -139,7 +139,7 @@ func (g *testSnapshotDir) generateSnapshotFile(shardID uint64,
 	}
 	fp := g.fs.PathJoin(snapDir, filename)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	writer, err := rsm.NewSnapshotWriter(fp, raftpb.NoCompression, fs)
 	if err != nil {
 		panic(err)

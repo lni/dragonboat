@@ -194,7 +194,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,
-		MemTableSize:                writeBufferSize,
+		MemTableSize:                uint64(writeBufferSize),
 		MemTableStopWritesThreshold: maxWriteBufferNumber,
 		LBaseMaxBytes:               maxBytesForLevelBase,
 		L0CompactionFileThreshold:   l0FileNumCompactionTrigger,
@@ -217,11 +217,11 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		kv:      kv,
 		stopper: syncutil.NewStopper(),
 	}
-	opts.EventListener = pebble.EventListener{
+	opts.AddEventListener(pebble.EventListener{
 		WALCreated:    event.onWALCreated,
 		FlushEnd:      event.onFlushEnd,
 		CompactionEnd: event.onCompactionEnd,
-	}
+	})
 	if len(walDir) > 0 {
 		if err := fileutil.MkdirAll(walDir, fs); err != nil {
 			return nil, err
@@ -277,7 +277,7 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 // IterateValue ...
 func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) (err error) {
-	iter := r.db.NewIter(r.ro)
+	iter, err := r.db.NewIter(r.ro)
 	defer func() {
 		err = firstError(err, iter.Close())
 	}()

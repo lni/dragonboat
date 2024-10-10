@@ -18,17 +18,12 @@ import (
 	"io"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/fileutil"
 	pb "github.com/lni/dragonboat/v4/raftpb"
 	sm "github.com/lni/dragonboat/v4/statemachine"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func TestCountedWriteCanReportTotalWritten(t *testing.T) {
 	cw := countedWriter{

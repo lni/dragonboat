@@ -7,7 +7,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Test
@@ -22,7 +22,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Test
@@ -33,29 +33,18 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Test
       run: MEMFS_TEST=1 make test
-  go1-18-unit-test:
-    runs-on: ubuntu-22.04
-    steps:
-    - name: Install Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.18.x
-    - name: Checkout code
-      uses: actions/checkout@v3
-    - name: Test
-      run: make test
   macos-unit-test:
     runs-on: macos-latest
     steps:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Test
@@ -66,7 +55,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Build
@@ -77,7 +66,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Build
       run: |
        git clone https://github.com/lni/dragonboat-example
@@ -86,11 +75,11 @@ jobs:
        make
   static-check:
     runs-on: ubuntu-22.04
-    steps: 
+    steps:
      - name: Install Go
        uses: actions/setup-go@v3
        with:
-         go-version: 1.19.x
+         go-version: 1.20.x
      - name: Checkout code
        uses: actions/checkout@v3
      - name: Static check
