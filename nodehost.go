@@ -338,8 +338,11 @@ func NewNodeHost(nhConfig config.NodeHostConfig) (*NodeHost, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			nh.Close()
-			if r, ok := r.(error); ok {
-				panicNow(r)
+			switch err := r.(type) {
+			case error:
+				panicNow(err)
+			case string:
+				panicNow(errors.New(err))
 			}
 		}
 	}()
