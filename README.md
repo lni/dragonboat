@@ -8,6 +8,7 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## News ##
+* 2025-07-17 Added a LLM generated wiki [here](https://deepwiki.com/lni/dragonboat).
 * 2022-06-03 We are working towards a v4.0 release which will come with API changes. See [CHANGELOG](CHANGELOG.md) for details. 
 * 2021-01-20 Dragonboat v3.3 has been released, please check [CHANGELOG](CHANGELOG.md) for all changes.
 
@@ -91,6 +92,8 @@ By default, [Pebble](https://github.com/cockroachdb/pebble) is used for storing 
 You can also follow our [examples](https://github.com/lni/dragonboat-example) on how to use Dragonboat. 
 
 ## Documents ##
+[DeepWiki](https://deepwiki.com/lni/dragonboat) is a LLM generated wiki helping to dive deep into the codebase.
+
 [FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
 
 ## Examples ##

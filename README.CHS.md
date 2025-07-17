@@ -8,6 +8,7 @@
 [![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## 项目新闻 ##
+* 2025-07-17 加入了一个[DeepWiki链接](https://deepwiki.com/lni/dragonboat)
 * 2022-06-03 Dragonboat v4.0 版本正在开发中，master分支已经是v4的API，具体变化请见[CHANGELOG](CHANGELOG.md)。
 * 2021-01-20 Dragonboat v3.3 已发布，请查看[CHANGELOG](CHANGELOG.md)获知所有更新情况。
 
@@ -90,7 +91,7 @@ go get github.com/lni/dragonboat/v4@master
 
 ## 文档与资料 ##
 
-首先建议您阅读项目的[综述文档](docs/overview.CHS.md)与[运维注意事项](docs/devops.CHS.md)。
+首先建议您阅读项目的[综述文档](docs/overview.CHS.md)与[运维注意事项](docs/devops.CHS.md)。[DeepWiki](https://deepwiki.com/lni/dragonboat)是一个第三方LLM生成的wiki，能帮助深入了解本项目实现，并回答很多技术问题。
 
 欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)，[CHANGELOG](CHANGELOG.md)和在线[讨论组](https://gitter.im/lni/dragonboat)。
 
