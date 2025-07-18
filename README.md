@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/lni/dragonboat)](https://goreportcard.com/report/github.com/lni/dragonboat)
 [![codecov](https://codecov.io/gh/lni/dragonboat/branch/master/graph/badge.svg)](https://codecov.io/gh/lni/dragonboat)
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat/v3)
-[![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Ask LLM about dragonboat](https://deepwiki.com/badge.svg)](https://deepwiki.com/lni/dragonboat)
 
 ## News ##
 * 2025-07-17 Added a LLM generated wiki [here](https://deepwiki.com/lni/dragonboat).
@@ -94,7 +94,7 @@ You can also follow our [examples](https://github.com/lni/dragonboat-example) on
 ## Documents ##
 [DeepWiki](https://deepwiki.com/lni/dragonboat) is a LLM generated wiki helping to dive deep into the codebase.
 
-[FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md), [CHANGELOG](CHANGELOG.md) and [online chat](https://gitter.im/lni/dragonboat) are available.
+[FAQ](https://github.com/lni/dragonboat/wiki/FAQ), [docs](https://godoc.org/github.com/lni/dragonboat), step-by-step [examples](https://github.com/lni/dragonboat-example), [DevOps doc](docs/devops.md) and [CHANGELOG](CHANGELOG.md).
 
 ## Examples ##
 Dragonboat examples are [here](https://github.com/lni/dragonboat-example).

@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/lni/dragonboat)](https://goreportcard.com/report/github.com/lni/dragonboat)
 [![codecov](https://codecov.io/gh/lni/dragonboat/branch/master/graph/badge.svg)](https://codecov.io/gh/lni/dragonboat)
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg)](https://godoc.org/github.com/lni/dragonboat)
-[![Join the chat at https://gitter.im/lni/dragonboat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lni/dragonboat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Ask LLM about dragonboat](https://deepwiki.com/badge.svg)](https://deepwiki.com/lni/dragonboat)
 
 ## 项目新闻 ##
 * 2025-07-17 加入了一个[DeepWiki链接](https://deepwiki.com/lni/dragonboat)
@@ -93,7 +93,7 @@ go get github.com/lni/dragonboat/v4@master
 
 首先建议您阅读项目的[综述文档](docs/overview.CHS.md)与[运维注意事项](docs/devops.CHS.md)。[DeepWiki](https://deepwiki.com/lni/dragonboat)是一个第三方LLM生成的wiki，能帮助深入了解本项目实现，并回答很多技术问题。
 
-欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)，[CHANGELOG](CHANGELOG.md)和在线[讨论组](https://gitter.im/lni/dragonboat)。
+欢迎阅读[godoc文档](https://godoc.org/github.com/lni/dragonboat)，[中文例程](https://github.com/lni/dragonboat-example)，[常见问题](https://github.com/lni/dragonboat/wiki/FAQ)和[CHANGELOG](CHANGELOG.md)。
 
 ## 中文例程 ##
 中文例程在[这里](https://github.com/lni/dragonboat-example)。
