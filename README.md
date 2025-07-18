@@ -67,7 +67,7 @@ As visualized below, Stop-the-World pauses caused by Go1.11's GC are sub-millise
 ![stw](./docs/stw.png)
 
 ## Requirements ##
-* x86_64/Linux, x86_64/MacOS or ARM64/Linux, Go 1.15 or 1.14
+* x86_64/Linux, x86_64/MacOS or ARM64/Linux, Go 1.23 or above.
 
 ## Getting Started ##
 __Master is our unstable branch for development, it is current working towards the v4.0 release. Please use the latest released versions for any production purposes.__ For Dragonboat v3.3.x, please follow the instructions in v3.3.x's [README.md](https://github.com/lni/dragonboat/blob/release-3.3/README.md). 

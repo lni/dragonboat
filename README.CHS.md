@@ -68,7 +68,7 @@ Dragonboat是目前Github网站上最快的开源多组Raft实现。
 ![stw](./docs/stw.png)
 
 ## 系统需求 ##
-* x86_64/Linux, x86_64/MacOS或ARM64/Linux, Go 1.15或1.14
+* x86_64/Linux, x86_64/MacOS或ARM64/Linux, Go 1.23或更新版本
 
 ## 开始使用 ##
 __Master是用于开发的非稳定branch。生产环境请使用已发布版本__。如您使用v3.3.x版本，请参考v3.3.x版本的[README.CHS.md](https://github.com/lni/dragonboat/blob/release-3.3/README.CHS.md)。
