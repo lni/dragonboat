@@ -17,9 +17,9 @@ package transport
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"strconv"
 	"sync"
@@ -100,7 +100,11 @@ func (g *testSnapshotDir) getSnapshotFileMD5(shardID uint64,
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	h := md5.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return nil, err
@@ -116,7 +120,9 @@ func (g *testSnapshotDir) generateSnapshotExternalFile(shardID uint64,
 	}
 	fp := g.fs.PathJoin(snapDir, filename)
 	data := make([]byte, sz)
-	rand.Read(data)
+	if _, err := rand.Read(data); err != nil {
+		panic(err)
+	}
 	f, err := g.fs.Create(fp)
 	if err != nil {
 		panic(err)
@@ -128,7 +134,9 @@ func (g *testSnapshotDir) generateSnapshotExternalFile(shardID uint64,
 	if err != nil {
 		panic(err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
 }
 
 func (g *testSnapshotDir) generateSnapshotFile(shardID uint64,
@@ -139,7 +147,9 @@ func (g *testSnapshotDir) generateSnapshotFile(shardID uint64,
 	}
 	fp := g.fs.PathJoin(snapDir, filename)
 	data := make([]byte, sz)
-	rand.Read(data)
+	if _, err := rand.Read(data); err != nil {
+		panic(err)
+	}
 	writer, err := rsm.NewSnapshotWriter(fp, raftpb.NoCompression, fs)
 	if err != nil {
 		panic(err)
@@ -614,10 +624,7 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	if !done {
 		t.Errorf("not suppose to fail")
 	}
-	for {
-		if trans.queueSize() == 0 {
-			break
-		}
+	for trans.queueSize() != 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 	time.Sleep(20 * time.Millisecond)
@@ -773,11 +780,12 @@ func waitForSnapshotCountUpdate(handler *testMessageHandler, maxWait uint64) {
 }
 
 func getTestSnapshotFileSize(sz uint64) uint64 {
-	if rsm.DefaultVersion == rsm.V1 {
+	switch rsm.DefaultVersion {
+	case rsm.V1:
 		return sz + rsm.HeaderSize
-	} else if rsm.DefaultVersion == rsm.V2 {
+	case rsm.V2:
 		return rsm.GetV2PayloadSize(sz) + rsm.HeaderSize
-	} else {
+	default:
 		panic("unknown snapshot version")
 	}
 }

@@ -16,11 +16,13 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"hash/crc32"
 	"io"
-	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTooShortBlockAreRejected(t *testing.T) {
@@ -35,7 +37,8 @@ func TestTooShortBlockAreRejected(t *testing.T) {
 func TestRandomBlocksAreRejected(t *testing.T) {
 	for i := 1; i < 128; i++ {
 		v := make([]byte, i*128)
-		rand.Read(v)
+		_, err := rand.Read(v)
+		require.NoError(t, err)
 		if validateBlock(v, getDefaultChecksum()) {
 			t.Fatalf("not rejected")
 		}
@@ -44,7 +47,8 @@ func TestRandomBlocksAreRejected(t *testing.T) {
 
 func TestCorruptedBlockIsRejected(t *testing.T) {
 	v := make([]byte, 1023)
-	rand.Read(v)
+	_, err := rand.Read(v)
+	require.NoError(t, err)
 	h := GetDefaultChecksum()
 	if _, err := h.Write(v); err != nil {
 		t.Fatalf("failed to update hash")
@@ -62,9 +66,10 @@ func TestCorruptedBlockIsRejected(t *testing.T) {
 func TestWellFormedBlocksAreAccepted(t *testing.T) {
 	for i := 1; i < 128; i++ {
 		v := make([]byte, i*128)
-		rand.Read(v)
+		_, err := rand.Read(v)
+		require.NoError(t, err)
 		h := getDefaultChecksum()
-		_, err := h.Write(v)
+		_, err = h.Write(v)
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
 		}
@@ -87,10 +92,11 @@ func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 	}
 	for idx, sz := range szs {
 		v := make([]byte, sz)
-		rand.Read(v)
+		_, err := rand.Read(v)
+		require.NoError(t, err)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
 		w := newV2Writer(buf, defaultChecksumType)
-		_, err := w.Write(v)
+		_, err = w.Write(v)
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
 		}
@@ -137,10 +143,11 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 	}
 	for idx, sz := range szs {
 		v := make([]byte, sz)
-		rand.Read(v)
+		_, err := rand.Read(v)
+		require.NoError(t, err)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
 		w := newV2Writer(buf, defaultChecksumType)
-		_, err := w.Write(v)
+		_, err = w.Write(v)
 		if err != nil {
 			t.Fatalf("failed to write %v", err)
 		}
@@ -268,7 +275,7 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 			t.Errorf("write failed %v", err)
 		}
 
-		writer.Close()
+		require.NoError(t, writer.Close())
 		result := written[:len(written)-16]
 		meta := written[len(written)-16:]
 		total := binary.LittleEndian.Uint64(meta[:8])
@@ -333,7 +340,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			if err != nil {
 				t.Errorf("write failed %v", err)
 			}
-			writer.Close()
+			require.NoError(t, writer.Close())
 			written := buf.Bytes()
 			expSz := getChecksumedBlockSize(sz, blockSize) + 16
 			if expSz != uint64(len(written)) {
@@ -394,7 +401,7 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 	if err != nil {
 		t.Errorf("write failed %v", err)
 	}
-	writer.Close()
+	require.NoError(t, writer.Close())
 	written := append([]byte{}, buf.Bytes()...)
 	for idx := 0; idx < len(written)-16; idx++ {
 		func() {

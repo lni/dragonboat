@@ -21,6 +21,7 @@ import (
 
 	pb "github.com/lni/dragonboat/v4/raftpb"
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/stretchr/testify/require"
 )
 
 type testSink struct {
@@ -74,22 +75,23 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 		t.Errorf("chunks count %d, want 13", len(cw.sink.(*testSink).chunks))
 	}
 	for idx, chunk := range cw.sink.(*testSink).chunks {
-		if idx == 0 {
+		switch idx {
+		case 0:
 			sz := binary.LittleEndian.Uint64(chunk.Data)
 			headerData := chunk.Data[8 : 8+sz]
 			var header pb.SnapshotHeader
 			if err := header.Unmarshal(headerData); err != nil {
 				t.Fatalf("failed to unmarshal %v", err)
 			}
-		} else if idx == 11 {
+		case 11:
 			if chunk.ChunkCount != pb.LastChunkCount {
 				t.Errorf("last chunk not marked, %d", idx)
 			}
 			if chunk.FileChunkCount != pb.LastChunkCount {
 				t.Errorf("last chunk not marked, %d", idx)
 			}
-		} else if idx == 12 {
-		} else {
+		case 12:
+		default:
 			if chunk.ChunkCount != 0 {
 				t.Errorf("unexpectedly marked as last chunk, %d", idx)
 			}
@@ -158,7 +160,7 @@ func TestCloseChunk(t *testing.T) {
 	meta := getTestSSMeta()
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
-	cw.Close()
+	require.NoError(t, cw.Close())
 	chunk := sink.chunks[len(sink.chunks)-1]
 	if chunk.ChunkCount != pb.LastChunkCount-1 {
 		t.Errorf("chunk count %d, want %d",
@@ -171,9 +173,10 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	cw.failed = true
-	cw.Close()
+	require.NoError(t, cw.Close())
 	for idx, chunk := range cw.sink.(*testSink).chunks {
-		if idx == 0 {
+		switch idx {
+		case 0:
 			sz := binary.LittleEndian.Uint64(chunk.Data)
 			headerdata := chunk.Data[8 : 8+sz]
 			crc := chunk.Data[8+sz : 12+sz]
@@ -195,11 +198,11 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 			if !bytes.Equal(h.Sum(nil), crc) {
 				t.Fatalf("not a valid header")
 			}
-		} else if idx == 1 {
+		case 1:
 			if chunk.ChunkCount != pb.PoisonChunkCount {
 				t.Fatalf("unexpected chunk count")
 			}
-		} else {
+		default:
 			t.Fatalf("unexpected chunk received")
 		}
 	}

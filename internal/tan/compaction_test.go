@@ -105,7 +105,9 @@ func TestRemovedEntriesMultiplexedLogSetup(t *testing.T) {
 	dirs := []string{"db-dir"}
 	ldb, err := CreateLogMultiplexedTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	for i := uint64(0); i < 16; i++ {
 		updates := []pb.Update{
 			{

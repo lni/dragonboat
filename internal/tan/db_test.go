@@ -51,8 +51,7 @@ func runTanTest(t *testing.T, opts *Options, tf func(t *testing.T, d *db), fs vf
 	db, err := open(dirname, dirname, opts)
 	require.NoError(t, err)
 	defer func() {
-		plog.Infof("going to close")
-		db.close()
+		require.NoError(t, db.close())
 	}()
 	tf(t, db)
 }
@@ -467,7 +466,9 @@ func TestDBConcurrentAccess(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(dirname, 0700))
 	db, err := open(dirname, dirname, opts)
 	require.NoError(t, err)
-	defer db.close()
+	defer func() {
+		require.NoError(t, db.close())
+	}()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

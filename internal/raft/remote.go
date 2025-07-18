@@ -157,22 +157,25 @@ func (r *remote) tryUpdate(index uint64) bool {
 }
 
 func (r *remote) progress(lastIndex uint64) {
-	if r.state == remoteReplicate {
+	switch r.state {
+	case remoteReplicate:
 		r.next = lastIndex + 1
-	} else if r.state == remoteRetry {
+	case remoteRetry:
 		r.retryToWait()
-	} else {
+	default:
 		panic("unexpected remote state")
 	}
 }
 
 func (r *remote) respondedTo() {
-	if r.state == remoteRetry {
+	switch r.state {
+	case remoteRetry:
 		r.becomeReplicate()
-	} else if r.state == remoteSnapshot {
+	case remoteSnapshot:
 		if r.match >= r.snapshotIndex {
 			r.becomeRetry()
 		}
+	default:
 	}
 }
 

@@ -69,7 +69,7 @@ func newLRUSession(size uint64) *lrusession {
 		size:     size,
 		sessions: cache.NewOrderedCache(cache.Config{Policy: cache.CacheLRU}),
 	}
-	rec.sessions.Config.ShouldEvict = func(n int, k, v interface{}) bool {
+	rec.sessions.ShouldEvict = func(n int, k, v interface{}) bool {
 		if uint64(n) > rec.size {
 			clientID := k.(*RaftClientID)
 			plog.Warningf("session with client id %d evicted, overloaded", *clientID)
@@ -77,7 +77,7 @@ func newLRUSession(size uint64) *lrusession {
 		}
 		return false
 	}
-	rec.sessions.Config.OnEvicted = func(k, v, e interface{}) {}
+	rec.sessions.OnEvicted = func(k, v, e interface{}) {}
 	return rec
 }
 

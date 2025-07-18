@@ -15,7 +15,7 @@
 package transport
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"testing"
 
@@ -49,7 +49,9 @@ func getTestChunk() []pb.Chunk {
 			FileSize:       10 * rsm.HeaderSize,
 		}
 		data := make([]byte, rsm.HeaderSize)
-		rand.Read(data)
+		if _, err := rand.Read(data); err != nil {
+			panic(err)
+		}
 		c.Data = data
 		result = append(result, c)
 	}
@@ -437,7 +439,11 @@ func checkTestSnapshotFile(chunks *Chunk,
 		plog.Errorf("no final fp file %s", finalFp)
 		return false
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	fi, _ := f.Stat()
 	if uint64(fi.Size()) != size {
 		plog.Errorf("size doesn't match %d, %d, %s", fi.Size(), size, finalFp)

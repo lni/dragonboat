@@ -860,7 +860,9 @@ func TestIndexSaveLoad(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(dirname, 0755))
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
-	defer dir.Close()
+	defer func() {
+		require.NoError(t, dir.Close())
+	}()
 	i1entries := i1.currEntries
 	i2entries := i2.currEntries
 	require.NoError(t, nodeStates.save(dirname, dir, fileNum(1), fs))
@@ -895,7 +897,9 @@ func TestIndexLoadIsAppendOnly(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(dirname, 0700))
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
-	defer dir.Close()
+	defer func() {
+		require.NoError(t, dir.Close())
+	}()
 	require.NoError(t, nodeStates.save(dirname, dir, fileNum(5), fs))
 	loaded := newNodeStates()
 	require.NoError(t, loaded.load(dirname, fileNum(5), fs))

@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/internal/vfs"
 )
@@ -79,7 +80,7 @@ func TestPrepareFiles(t *testing.T) {
 	if n != 16 || err != nil {
 		t.Fatalf("failed to write file %v", err)
 	}
-	f1.Close()
+	require.NoError(t, f1.Close())
 	f2, err := fs.Create(fs.PathJoin(rdbTestDirectory, "test2.data"))
 	if err != nil {
 		t.Fatalf("failed to create the file, %v", err)
@@ -88,7 +89,7 @@ func TestPrepareFiles(t *testing.T) {
 	if n != 32 || err != nil {
 		t.Fatalf("failed to write file %v", err)
 	}
-	f2.Close()
+	require.NoError(t, f2.Close())
 	fc := NewFileCollection()
 	fc.AddFile(1, fs.PathJoin(rdbTestDirectory, "test1.data"), make([]byte, 8))
 	fc.AddFile(2, fs.PathJoin(rdbTestDirectory, "test2.data"), make([]byte, 2))

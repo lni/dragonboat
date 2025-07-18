@@ -60,8 +60,16 @@ func diffu(a, b string) string {
 		return ""
 	}
 	aname, bname := mustTemp("base", a), mustTemp("other", b)
-	defer os.Remove(aname)
-	defer os.Remove(bname)
+	defer func() {
+		if err := os.Remove(aname); err != nil {
+			panic(err)
+		}
+	}()
+	defer func() {
+		if err := os.Remove(bname); err != nil {
+			panic(err)
+		}
+	}()
 	cmd := exec.Command("diff", "-u", aname, bname)
 	buf, err := cmd.CombinedOutput()
 	if err != nil {
@@ -83,7 +91,9 @@ func mustTemp(pre, body string) string {
 	if err != nil {
 		panic(err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
 	return f.Name()
 }
 
@@ -487,7 +497,7 @@ func testLeaderElection(t *testing.T) {
 
 	for i, tt := range tests {
 		tt.send(pb.Message{From: 1, To: 1, Type: pb.Election})
-		sm := tt.network.peers[1].(*raft)
+		sm := tt.peers[1].(*raft)
 		var expState State
 		var expTerm uint64
 		expState = tt.state
@@ -704,7 +714,7 @@ func TestLogReplication(t *testing.T) {
 			tt.send(m)
 		}
 
-		for j, x := range tt.network.peers {
+		for j, x := range tt.peers {
 			sm := x.(*raft)
 
 			if sm.log.committed != tt.wcommitted {
@@ -712,7 +722,7 @@ func TestLogReplication(t *testing.T) {
 			}
 
 			ents := []pb.Entry{}
-			for _, e := range nextEnts(sm, tt.network.storage[j]) {
+			for _, e := range nextEnts(sm, tt.storage[j]) {
 				if e.Cmd != nil {
 					ents = append(ents, e)
 				}
@@ -1099,7 +1109,7 @@ func TestProposal(t *testing.T) {
 				t.Logf("#%d: empty log", i)
 			}
 		}
-		sm := tt.network.peers[1].(*raft)
+		sm := tt.peers[1].(*raft)
 		if g := sm.term; g != 1 {
 			t.Errorf("#%d: term = %d, want %d", j, g, 1)
 		}

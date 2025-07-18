@@ -17,12 +17,13 @@ package dragonboat
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"os"
 	"os/exec"
 	"reflect"
@@ -38,6 +39,7 @@ import (
 	"github.com/lni/goutils/random"
 	"github.com/lni/goutils/syncutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
 	"github.com/lni/dragonboat/v4/config"
@@ -104,7 +106,9 @@ func calcRTTMillisecond(fs vfs.IFS, dir string) uint64 {
 		panic(err)
 	}
 	defer func() {
-		f.Close()
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
 	}()
 	data := make([]byte, 512)
 	total := uint64(0)
@@ -848,8 +852,10 @@ func testDefaultNodeRegistryEnabled(t *testing.T,
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	defer func() {
+		require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	}()
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
@@ -953,8 +959,10 @@ func TestNodeHostRegistry(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	defer func() {
+		require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	}()
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
@@ -1081,8 +1089,10 @@ func TestGossipCanHandleDynamicRaftAddress(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	defer func() {
+		require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	}()
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
@@ -1236,8 +1246,10 @@ func TestExternalNodeRegistryFunction(t *testing.T) {
 	fs := vfs.GetTestFS()
 	datadir1 := fs.PathJoin(singleNodeHostTestDir, "nh1")
 	datadir2 := fs.PathJoin(singleNodeHostTestDir, "nh2")
-	os.RemoveAll(singleNodeHostTestDir)
-	defer os.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	defer func() {
+		require.NoError(t, os.RemoveAll(singleNodeHostTestDir))
+	}()
 	addr1 := nodeHostTestAddr1
 	addr2 := nodeHostTestAddr2
 	nhc1 := config.NodeHostConfig{
@@ -1787,7 +1799,6 @@ func TestCompactionCanBeRequested(t *testing.T) {
 				}
 				select {
 				case <-op.ResultC():
-					break
 				case <-ctx.Done():
 					t.Fatalf("failed to complete the compaction")
 				}
@@ -2833,7 +2844,7 @@ func testOnDiskStateMachineCanTakeDummySnapshot(t *testing.T, compressed bool) {
 				t.Errorf("unexpected snapshot version, got %d, want %d",
 					h.Version, rsm.DefaultVersion)
 			}
-			reader.Close()
+			require.NoError(t, reader.Close())
 			shrunk, err := rsm.IsShrunkSnapshotFile(ss.Filepath, fs)
 			if err != nil {
 				t.Fatalf("failed to check shrunk %v", err)
@@ -3395,7 +3406,8 @@ func TestUpdateResultIsReturnedToCaller(t *testing.T) {
 			pto := pto(nh)
 			ctx, cancel := context.WithTimeout(context.Background(), pto)
 			cmd := make([]byte, 1518)
-			rand.Read(cmd)
+			_, err := rand.Read(cmd)
+			require.NoError(t, err)
 			result, err := nh.SyncPropose(ctx, session, cmd)
 			cancel()
 			if err != nil {
@@ -3795,7 +3807,9 @@ func TestSnapshotCanBeRequested(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to new snapshot reader %v", err)
 			}
-			defer reader.Close()
+			defer func() {
+				require.NoError(t, reader.Close())
+			}()
 			if rsm.SSVersion(header.Version) != rsm.V2 {
 				t.Errorf("unexpected snapshot version")
 			}
@@ -4684,7 +4698,7 @@ type dataCorruptionSink struct {
 
 func (s *dataCorruptionSink) Receive(chunk pb.Chunk) (bool, bool) {
 	if s.enabled && len(chunk.Data) > 0 {
-		idx := rand.Uint64() % uint64(len(chunk.Data))
+		idx := mathrand.Uint64() % uint64(len(chunk.Data))
 		chunk.Data[idx] = chunk.Data[idx] + 1
 	}
 	s.receiver.Add(chunk)
@@ -4737,7 +4751,8 @@ func testCorruptedChunkWriterOutputCanBeHandledByChunk(t *testing.T,
 	}()
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.ChunkSize)
-		rand.Read(data)
+		_, err := rand.Read(data)
+		require.NoError(t, err)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
 		}
@@ -4785,7 +4800,8 @@ func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	payload = append(payload, rsm.GetEmptyLRUSession()...)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, rsm.ChunkSize)
-		rand.Read(data)
+		_, err := rand.Read(data)
+		require.NoError(t, err)
 		payload = append(payload, data...)
 		if _, err := cw.Write(data); err != nil {
 			t.Fatalf("failed to write the data %v", err)
@@ -4806,7 +4822,9 @@ func TestChunkWriterOutputCanBeHandledByChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get a snapshot reader %v", err)
 	}
-	defer reader.Close()
+	defer func() {
+		require.NoError(t, reader.Close())
+	}()
 	got := make([]byte, 0)
 	buf := make([]byte, 1024*256)
 	for {

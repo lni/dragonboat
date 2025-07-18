@@ -24,6 +24,7 @@ import (
 	"github.com/lni/dragonboat/v4/raftio"
 	pb "github.com/lni/dragonboat/v4/raftpb"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 )
 
 // most tests below are ported from etcd rafts
@@ -94,7 +95,7 @@ func testLogReaderEntries(t *testing.T, fs vfs.IFS) {
 		if !reflect.DeepEqual(entries, tt.wentries) {
 			t.Errorf("#%d: entries = %v, want %v", i, entries, tt.wentries)
 		}
-		s.logdb.Close()
+		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
 }
@@ -137,7 +138,7 @@ func testLogReaderTerm(t *testing.T, fs vfs.IFS) {
 				t.Errorf("#%d: term = %d, want %d", i, term, tt.wterm)
 			}
 		}()
-		s.logdb.Close()
+		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
 }
@@ -162,7 +163,7 @@ func testLogReaderLastIndex(t *testing.T, fs vfs.IFS) {
 	if last != 6 {
 		t.Errorf("last = %d, want %d", last, 5)
 	}
-	s.logdb.Close()
+	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
 
@@ -194,7 +195,7 @@ func testLogReaderFirstIndex(t *testing.T, fs vfs.IFS) {
 	if li != 5 {
 		t.Errorf("last index = %d, want 5", li)
 	}
-	s.logdb.Close()
+	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
 
@@ -284,7 +285,7 @@ func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 				t.Errorf("term %d, want %d", term, e.Term)
 			}
 		}
-		s.logdb.Close()
+		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
 }
@@ -321,7 +322,7 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 	if err != raft.ErrSnapshotOutOfDate {
 		t.Errorf("#%d: err = %v, want %v", i, err, raft.ErrSnapshotOutOfDate)
 	}
-	s.logdb.Close()
+	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
 
@@ -350,7 +351,7 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 		if s.snapshot.Index != tt.wsnap.Index {
 			t.Errorf("#%d: snap = %+v, want %+v", i, s.snapshot, tt.wsnap)
 		}
-		s.logdb.Close()
+		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
 }
@@ -379,7 +380,7 @@ func TestLogReaderSetRange(t *testing.T) {
 		if s.length != tt.expLength {
 			t.Errorf("%d, length %d, want %d", idx, s.length, tt.expLength)
 		}
-		s.logdb.Close()
+		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
 }
@@ -394,7 +395,9 @@ func TestLogReaderGetSnapshot(t *testing.T) {
 	ss := pb.Snapshot{Index: 4, Term: 4, Membership: *cs}
 	s := getTestLogReader(ents, fs)
 	defer deleteTestDB(fs)
-	defer s.logdb.Close()
+	defer func() {
+		require.NoError(t, s.logdb.Close())
+	}()
 	if err := s.ApplySnapshot(ss); err != nil {
 		t.Errorf("create snapshot failed %v", err)
 	}
@@ -414,7 +417,9 @@ func TestLogReaderInitialState(t *testing.T) {
 	ss := pb.Snapshot{Index: 4, Term: 4, Membership: *cs}
 	s := getTestLogReader(ents, fs)
 	defer deleteTestDB(fs)
-	defer s.logdb.Close()
+	defer func() {
+		require.NoError(t, s.logdb.Close())
+	}()
 	if err := s.ApplySnapshot(ss); err != nil {
 		t.Errorf("create snapshot failed %v", err)
 	}

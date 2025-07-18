@@ -25,6 +25,7 @@ import (
 	"github.com/lni/dragonboat/v4/internal/raft"
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 func removeTestLogdbDir(fs vfs.IFS) {
@@ -69,7 +70,9 @@ func TestRLLTFindConflict(t *testing.T) {
 	}
 	stable := getTestLogReaderWithoutCache(previousEnts)
 	defer removeTestLogdbDir(vfs.GetTestFS())
-	defer stable.logdb.(*ShardedDB).Close()
+	defer func() {
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
+	}()
 	for i, tt := range tests {
 		raftLog := raft.NewLog(stable)
 		gconflict, err := raftLog.GetConflictIndex(tt.ents)
@@ -86,7 +89,9 @@ func TestRLLTIsUpToDate(t *testing.T) {
 	previousEnts := []pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}
 	stable := getTestLogReaderWithoutCache(previousEnts)
 	defer removeTestLogdbDir(vfs.GetTestFS())
-	defer stable.logdb.(*ShardedDB).Close()
+	defer func() {
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
+	}()
 	raftLog := raft.NewLog(stable)
 	tests := []struct {
 		lastIndex uint64
@@ -175,19 +180,21 @@ func TestRLLTAppend(t *testing.T) {
 		if goff := raftLog.UnstableOffset(); goff != tt.wunstable {
 			t.Errorf("#%d: unstable = %d, want %d", i, goff, tt.wunstable)
 		}
-		stable.logdb.(*ShardedDB).Close()
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
 
 // TestLogMaybeAppend ensures:
 // If the given (index, term) matches with the existing log:
-// 	1. If an existing entry conflicts with a new one (same index
-// 	but different terms), delete the existing entry and all that
-// 	follow it
-// 	2.Append any new entries not already in the log
+//  1. If an existing entry conflicts with a new one (same index
+//     but different terms), delete the existing entry and all that
+//     follow it
+//     2.Append any new entries not already in the log
+//
 // If the given (index, term) does not match with the existing log:
-// 	return false
+//
+//	return false
 func TestRLLTLogMaybeAppend(t *testing.T) {
 	previousEnts := []pb.Entry{{Index: 1, Term: 1}, {Index: 2, Term: 2}, {Index: 3, Term: 3}}
 	lastindex := uint64(3)
@@ -308,7 +315,7 @@ func TestRLLTLogMaybeAppend(t *testing.T) {
 				}
 			}
 		}()
-		stable.logdb.(*ShardedDB).Close()
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -424,7 +431,7 @@ func TestRLLTHasNextEnts(t *testing.T) {
 			t.Errorf("#%d: hasNext = %v, want %v", i, hasNext, tt.hasNext)
 		}
 
-		stable.logdb.(*ShardedDB).Close()
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -469,12 +476,12 @@ func TestRLLTNextEnts(t *testing.T) {
 			t.Errorf("#%d: nents = %+v, want %+v", i, nents, tt.wents)
 		}
 
-		stable.logdb.(*ShardedDB).Close()
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
 
-//TestCompaction ensures that the number of log entries is correct after compactions.
+// TestCompaction ensures that the number of log entries is correct after compactions.
 func TestRLLTCompaction(t *testing.T) {
 	tests := []struct {
 		lastIndex uint64
@@ -524,7 +531,7 @@ func TestRLLTCompaction(t *testing.T) {
 				}
 			}
 		}()
-		stable.logdb.(*ShardedDB).Close()
+		require.NoError(t, stable.logdb.(*ShardedDB).Close())
 		removeTestLogdbDir(vfs.GetTestFS())
 	}
 }
@@ -554,7 +561,7 @@ func TestRLLTLogRestore(t *testing.T) {
 		t.Errorf("term = %d, want %d", mustTerm(raftLog.Term(index)), term)
 	}
 
-	stable.logdb.(*ShardedDB).Close()
+	require.NoError(t, stable.logdb.(*ShardedDB).Close())
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -644,7 +651,7 @@ func TestRLLTIsOutOfBounds(t *testing.T) {
 		}()
 	}
 
-	stable.logdb.(*ShardedDB).Close()
+	require.NoError(t, stable.logdb.(*ShardedDB).Close())
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -682,7 +689,7 @@ func TestRLLTTerm(t *testing.T) {
 		}
 	}
 
-	stable.logdb.(*ShardedDB).Close()
+	require.NoError(t, stable.logdb.(*ShardedDB).Close())
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 
@@ -772,7 +779,7 @@ func TestRLLTSlice(t *testing.T) {
 		}()
 	}
 
-	stable.logdb.(*ShardedDB).Close()
+	require.NoError(t, stable.logdb.(*ShardedDB).Close())
 	removeTestLogdbDir(vfs.GetTestFS())
 }
 

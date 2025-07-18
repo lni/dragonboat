@@ -80,16 +80,17 @@ type Compressor struct {
 
 // NewCompressor returns a Compressor instance.
 func NewCompressor(ct CompressionType, wc io.WriteCloser) io.WriteCloser {
-	if ct == NoCompression {
+	switch ct {
+	case NoCompression:
 		return wc
-	} else if ct == Snappy {
+	case Snappy:
 		c := &Compressor{
 			uw: wc,
 			wc: snappy.NewBufferedWriter(wc),
 			ct: ct,
 		}
 		return c
-	} else {
+	default:
 		panic("unknown compression type")
 	}
 }
@@ -123,16 +124,17 @@ type Decompressor struct {
 
 // NewDecompressor return a decompressor instance.
 func NewDecompressor(ct CompressionType, r io.ReadCloser) io.ReadCloser {
-	if ct == NoCompression {
+	switch ct {
+	case NoCompression:
 		return r
-	} else if ct == Snappy {
+	case Snappy:
 		d := &Decompressor{
 			ur: r,
 			rc: snappy.NewReader(r),
 			ct: ct,
 		}
 		return d
-	} else {
+	default:
 		panic("unknown compression type")
 	}
 }
@@ -144,11 +146,12 @@ func (dc *Decompressor) Read(data []byte) (int, error) {
 
 // Close closes the decompressor.
 func (dc *Decompressor) Close() error {
-	if dc.ct == NoCompression {
+	switch dc.ct {
+	case NoCompression:
 		panic("not suppose to reach here")
-	} else if dc.ct == Snappy {
+	case Snappy:
 		return dc.ur.Close()
-	} else {
+	default:
 		panic("unknown compression type")
 	}
 }

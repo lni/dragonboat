@@ -16,11 +16,12 @@ package rsm
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/utils/dio"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 func mustGetPayload(e pb.Entry) []byte {
@@ -76,7 +77,8 @@ func TestGetV0EncodedPayload(t *testing.T) {
 			src = nil
 		} else {
 			src = make([]byte, tt.src)
-			rand.Read(src)
+			_, err := rand.Read(src)
+			require.NoError(t, err)
 		}
 		var dst []byte
 		if tt.dst == 0 {

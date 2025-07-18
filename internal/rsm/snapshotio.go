@@ -80,12 +80,14 @@ func mustGetChecksum(t pb.ChecksumType) hash.Hash {
 }
 
 func getVersionedWriter(w io.Writer, v SSVersion) (IVWriter, bool) {
-	if v == V1 {
+	switch v {
+	case V1:
 		return newV1Wrtier(w), true
-	} else if v == V2 {
+	case V2:
 		return newV2Writer(w, defaultChecksumType), true
+	default:
+		return nil, false
 	}
-	return nil, false
 }
 
 func mustGetVersionedWriter(w io.Writer, v SSVersion) IVWriter {
@@ -98,12 +100,14 @@ func mustGetVersionedWriter(w io.Writer, v SSVersion) IVWriter {
 
 func getVersionedReader(r io.Reader,
 	v SSVersion, t pb.ChecksumType) (IVReader, bool) {
-	if v == V1 {
+	switch v {
+	case V1:
 		return newV1Reader(r), true
-	} else if v == V2 {
+	case V2:
 		return newV2Reader(r, t), true
+	default:
+		return nil, false
 	}
-	return nil, false
 }
 
 func mustGetVersionedReader(r io.Reader,
@@ -117,16 +121,18 @@ func mustGetVersionedReader(r io.Reader,
 
 func getVersionedValidator(header pb.SnapshotHeader) (IVValidator, bool) {
 	v := (SSVersion)(header.Version)
-	if v == V1 {
+	switch v {
+	case V1:
 		return newV1Validator(header), true
-	} else if v == V2 {
+	case V2:
 		h, ok := getChecksum(header.ChecksumType)
 		if !ok {
 			return nil, false
 		}
 		return newV2Validator(h), true
+	default:
+		return nil, false
 	}
-	return nil, false
 }
 
 // GetWitnessSnapshot returns the content of a witness snapshot.

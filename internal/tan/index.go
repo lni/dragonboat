@@ -185,10 +185,10 @@ func (i *index) query(low uint64, high uint64) ([]indexEntry, bool) {
 	startIdx := sort.Search(len(i.entries), func(pos int) bool {
 		return low <= i.entries[pos].end
 	})
-	if !(startIdx < len(i.entries)) {
+	if startIdx >= len(i.entries) {
 		return []indexEntry{}, false
 	}
-	if !(low >= i.entries[startIdx].start) {
+	if low < i.entries[startIdx].start {
 		return []indexEntry{}, false
 	}
 

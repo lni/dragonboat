@@ -15,7 +15,8 @@
 package dragonboat
 
 import (
-	"math/rand"
+	"crypto/rand"
+	mathrand "math/rand"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/lni/goutils/random"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
 	"github.com/lni/dragonboat/v4/config"
@@ -69,7 +71,8 @@ func benchmarkEncodedPayload(b *testing.B, ct dio.CompressionType, sz uint64) {
 	b.ReportAllocs()
 	b.SetBytes(int64(sz))
 	input := make([]byte, sz)
-	rand.Read(input)
+	_, err := rand.Read(input)
+	require.NoError(b, err)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rsm.GetEncoded(ct, input, nil)
@@ -177,7 +180,7 @@ func BenchmarkPendingProposalNextKey(b *testing.B) {
 	cfg := config.Config{ShardID: 1, ReplicaID: 1}
 	pp := newPendingProposal(cfg, false, p, q)
 	b.RunParallel(func(pb *testing.PB) {
-		clientID := rand.Uint64()
+		clientID := mathrand.Uint64()
 		for pb.Next() {
 			pp.nextKey(clientID)
 		}
@@ -275,8 +278,12 @@ func BenchmarkFSyncLatency(b *testing.B) {
 	l := logger.GetLogger("logdb")
 	l.SetLevel(logger.WARNING)
 	db := getNewTestDB("db", "lldb", vfs.DefaultFS)
-	defer os.RemoveAll(rdbTestDirectory)
-	defer db.Close()
+	defer func() {
+		require.NoError(b, os.RemoveAll(rdbTestDirectory))
+	}()
+	defer func() {
+		require.NoError(b, db.Close())
+	}()
 	e := pb.Entry{
 		Index:       12843560,
 		Term:        123,
@@ -306,8 +313,12 @@ func benchmarkSaveRaftState(b *testing.B, sz int) {
 	l := logger.GetLogger("logdb")
 	l.SetLevel(logger.WARNING)
 	db := getNewTestDB("db", "lldb", vfs.DefaultFS)
-	defer os.RemoveAll(rdbTestDirectory)
-	defer db.Close()
+	defer func() {
+		require.NoError(b, os.RemoveAll(rdbTestDirectory))
+	}()
+	defer func() {
+		require.NoError(b, db.Close())
+	}()
 	shardID := uint32(1)
 	b.StartTimer()
 	b.RunParallel(func(pbt *testing.PB) {
@@ -641,7 +652,8 @@ func BenchmarkChunkWriter(b *testing.B) {
 	cw := rsm.NewChunkWriter(sink, meta)
 	sz := int64(1024 * 256)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, err := rand.Read(data)
+	require.NoError(b, err)
 	b.ReportAllocs()
 	b.SetBytes(sz)
 	b.ResetTimer()
@@ -659,7 +671,8 @@ func BenchmarkSnappyCompressedChunkWriter(b *testing.B) {
 	w := snappy.NewBufferedWriter(cw)
 	sz := int64(1024 * 256)
 	data := make([]byte, sz)
-	rand.Read(data)
+	_, err := rand.Read(data)
+	require.NoError(b, err)
 	b.ReportAllocs()
 	b.SetBytes(sz)
 	b.ResetTimer()

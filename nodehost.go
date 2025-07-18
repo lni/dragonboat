@@ -2096,10 +2096,11 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					req.Type, dn(req.ShardID, req.To), dn(req.ShardID, n.replicaID))
 				continue
 			}
-			if req.Type == pb.InstallSnapshot {
+			switch req.Type {
+			case pb.InstallSnapshot:
 				n.mq.MustAdd(req)
 				snapshotCount++
-			} else if req.Type == pb.SnapshotReceived {
+			case pb.SnapshotReceived:
 				plog.Debugf("SnapshotReceived received, shard id %d, replica id %d",
 					req.ShardID, req.From)
 				n.mq.AddDelayed(pb.Message{
@@ -2107,7 +2108,7 @@ func (h *messageHandler) HandleMessageBatch(msg pb.MessageBatch) (uint64, uint64
 					From: req.From,
 				}, streamConfirmedDelayTick)
 				msgCount++
-			} else {
+			default:
 				if added, stopped := n.mq.Add(req); !added || stopped {
 					plog.Warningf("dropped an incoming message")
 				} else {

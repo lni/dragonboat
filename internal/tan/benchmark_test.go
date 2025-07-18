@@ -20,6 +20,7 @@ import (
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	"github.com/lni/dragonboat/v4/logger"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 var benchmarkTestDirname = "tan_benchmark_dir"
@@ -43,7 +44,9 @@ func benchmarkWrite(b *testing.B, sz int) {
 	if err != nil {
 		b.Fatalf("failed to open db %v", err)
 	}
-	defer db.close()
+	defer func() {
+		require.NoError(b, db.close())
+	}()
 
 	u := pb.Update{
 		ShardID: 100,

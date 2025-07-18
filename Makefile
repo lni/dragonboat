@@ -204,19 +204,15 @@ tools-checkdisk:
 ###############################################################################
 # static checks
 ###############################################################################
+GOLANGCI_LINT_VERSION=v2.1.6
 .PHONY: install-static-check-tools
 install-static-check-tools:
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.2
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-CHECKED_PKGS=$(shell go list ./...)
-CHECKED_DIRS=$(subst $(PKGNAME), ,$(subst $(PKGNAME)/, ,$(CHECKED_PKGS))) .
-EXTRA_LINTERS=-E misspell -E rowserrcheck -E unconvert \
-	-E prealloc -E stylecheck
+EXTRA_LINTERS=-E misspell -E rowserrcheck -E unconvert -E prealloc
 .PHONY: static-check
 static-check:
-	@for p in $(CHECKED_DIRS); do \
-		golangci-lint run $(EXTRA_LINTERS) $$p; \
-	done;
+	golangci-lint run --timeout 3m $(EXTRA_LINTERS)
 
 extra-static-check: override EXTRA_LINTERS :=-E dupl
 extra-static-check: static-check

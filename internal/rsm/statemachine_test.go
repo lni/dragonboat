@@ -16,13 +16,14 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
 	"github.com/lni/dragonboat/v4/config"
@@ -112,13 +113,14 @@ func (p *testNodeProxy) RestoreRemotes(s pb.Snapshot) error {
 func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, rejected bool) error {
 	if !rejected {
 		p.applyConfChange = true
-		if cc.Type == pb.AddNode {
+		switch cc.Type {
+		case pb.AddNode:
 			p.addPeer = true
 			p.addPeerCount++
-		} else if cc.Type == pb.AddNonVoting {
+		case pb.AddNonVoting:
 			p.addNonVoting = true
 			p.addNonVotingCount++
-		} else if cc.Type == pb.RemoveNode {
+		case pb.RemoveNode:
 			p.removePeer = true
 		}
 	}
@@ -975,11 +977,12 @@ func testAddExistingMemberWithSameReplicaIDIsRejected(t *testing.T,
 	tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
 		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		if tt == pb.AddNode {
+		switch tt {
+		case pb.AddNode:
 			sm.members.members.Addresses[5] = "localhost:1010"
-		} else if tt == pb.AddNonVoting {
+		case pb.AddNonVoting:
 			sm.members.members.NonVotings[5] = "localhost:1010"
-		} else {
+		default:
 			panic("unknown tt")
 		}
 		applyConfigChangeEntry(sm,
@@ -2053,8 +2056,10 @@ func TestIsShrunkSnapshot(t *testing.T) {
 			}
 			sessionData := make([]byte, testSessionSize)
 			storeData := make([]byte, testPayloadSize)
-			rand.Read(sessionData)
-			rand.Read(storeData)
+			_, err = rand.Read(sessionData)
+			require.NoError(t, err)
+			_, err = rand.Read(storeData)
+			require.NoError(t, err)
 			n, err := w.Write(sessionData)
 			if err != nil || n != len(sessionData) {
 				t.Fatalf("failed to write the session data")
@@ -2425,7 +2430,8 @@ func TestNALookup(t *testing.T) {
 		sm: msm,
 	}
 	input := make([]byte, 128)
-	rand.Read(input)
+	_, err := rand.Read(input)
+	require.NoError(t, err)
 	result, err := sm.NALookup(input)
 	if err != nil {
 		t.Errorf("NALookup failed %v", err)

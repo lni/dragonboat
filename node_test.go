@@ -26,6 +26,7 @@ import (
 
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
 	"github.com/lni/dragonboat/v4/config"
@@ -434,7 +435,9 @@ func TestNodeCanBeCreatedAndStarted(t *testing.T) {
 		t.Errorf("len(smList)=%d, want 3", len(smList))
 	}
 	defer stopNodes(nodes)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	stepNodesUntilThereIsLeader(nodes, smList, router)
 }
 
@@ -541,7 +544,9 @@ func runRaftNodeTest(t *testing.T, quiesce bool, ordered bool,
 		t.Fatalf("failed to get 3 nodes")
 	}
 	defer stopNodes(nodes)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	tf(t, nodes, smList, router, ldb)
 }
 
@@ -952,7 +957,9 @@ func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
 	}
 	stepNodesUntilThereIsLeader(nodes, smList, router)
 	defer stopNodes(nodes)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	// need to step more than quiesce.threshold() as the startup
 	// config change messages are going to be recorded as activities
 	for i := uint64(0); i <= nodes[0].qs.threshold()*2; i++ {
@@ -1497,11 +1504,13 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	for _, node := range nodes {
 		node.close()
 	}
-	ldb.Close()
+	require.NoError(t, ldb.Close())
 	// restart
 	nodes, smList, router, ldb = getTestRaftNodes(3, false, fs)
 	defer stopNodes(nodes)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	if len(nodes) != 3 {
 		t.Fatalf("failed to get 3 nodes")
 	}

@@ -15,14 +15,15 @@
 package raftpb
 
 import (
+	"crypto/rand"
 	"math"
-	"math/rand"
 	"reflect"
 	"testing"
 	"unsafe"
 
 	"github.com/lni/dragonboat/v4/client"
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStateMachineTypeHaveExpectedValues(t *testing.T) {
@@ -441,9 +442,21 @@ func TestMetadataEntry(t *testing.T) {
 	}
 }
 
+func isDifferentInstance(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return true // empty slices can't alias each other
+	}
+
+	aPtr := unsafe.Pointer(&a[0])
+	bPtr := unsafe.Pointer(&b[0])
+
+	return aPtr != bPtr
+}
+
 func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 	cmd := make([]byte, 1024)
-	rand.Read(cmd)
+	_, err := rand.Read(cmd)
+	require.NoError(t, err)
 	e := Entry{
 		Type:        MetadataEntry,
 		Index:       200,
@@ -464,12 +477,7 @@ func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 	if !reflect.DeepEqual(&e, &e2) {
 		t.Fatalf("entry changed")
 	}
-	sh1 := (*reflect.SliceHeader)(unsafe.Pointer(&e.Cmd))
-	sh2 := (*reflect.SliceHeader)(unsafe.Pointer(&e2.Cmd))
-	if !(sh2.Data+uintptr(sh2.Len) <= sh1.Data ||
-		sh2.Data >= sh1.Data+uintptr(sh1.Len)) {
-		t.Fatalf("overlapping slice")
-	}
+	require.True(t, isDifferentInstance(e.Cmd, e2.Cmd))
 }
 
 func TestRaftDataStatusCanBeMarshaled(t *testing.T) {

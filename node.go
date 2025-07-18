@@ -688,7 +688,7 @@ func (n *node) replayLog(shardID uint64, replicaID uint64) (bool, error) {
 		n.logReader.SetState(rs.State)
 	}
 	n.logReader.SetRange(rs.FirstIndex, rs.EntryCount)
-	return !(ss.Index > 0 || rs.EntryCount > 0 || hasRaftState), nil
+	return ss.Index <= 0 && rs.EntryCount <= 0 && !hasRaftState, nil
 }
 
 func (n *node) saveSnapshotRequired(applied uint64) bool {

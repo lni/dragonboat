@@ -122,8 +122,8 @@ func NewNativeSM(config config.Config, ism IStateMachine,
 		ue:     make([]sm.Entry, 1),
 	}
 	s.OffloadedStatus.DestroyedC = make(chan struct{})
-	s.OffloadedStatus.shardID = config.ShardID
-	s.OffloadedStatus.replicaID = config.ReplicaID
+	s.shardID = config.ShardID
+	s.replicaID = config.ReplicaID
 	return s
 }
 

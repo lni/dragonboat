@@ -32,11 +32,12 @@ import (
 )
 
 func compressionType(ct pb.CompressionType) dio.CompressionType {
-	if ct == pb.NoCompression {
+	switch ct {
+	case pb.NoCompression:
 		return dio.NoCompression
-	} else if ct == pb.Snappy {
+	case pb.Snappy:
 		return dio.Snappy
-	} else {
+	default:
 		plog.Panicf("unknown compression type: %d", ct)
 	}
 	panic("will never reach here")

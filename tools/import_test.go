@@ -16,15 +16,16 @@ package tools
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/server"
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -154,7 +155,9 @@ func createTestDataFile(path string, sz uint64, fs vfs.IFS) error {
 		return err
 	}
 	data := make([]byte, sz)
-	rand.Read(data)
+	if _, err := rand.Read(data); err != nil {
+		panic(err)
+	}
 	_, err = f.Write(data)
 	if err != nil {
 		return err
@@ -239,7 +242,8 @@ func TestCopySnapshotFile(t *testing.T) {
 		t.Fatalf("failed to create test file %v", err)
 	}
 	data := make([]byte, 125)
-	rand.Read(data)
+	_, err = rand.Read(data)
+	require.NoError(t, err)
 	_, err = f.Write(data)
 	if err != nil {
 		t.Fatalf("failed to write test data %v", err)
@@ -255,7 +259,9 @@ func TestCopySnapshotFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open %v", err)
 	}
-	defer dstf.Close()
+	defer func() {
+		require.NoError(t, dstf.Close())
+	}()
 	if _, err := io.Copy(buf, dstf); err != nil {
 		t.Fatalf("%v", err)
 	}

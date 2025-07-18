@@ -15,13 +15,14 @@
 package dragonboat
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
 	"github.com/lni/dragonboat/v4/config"
@@ -984,7 +985,8 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 		Value: 1234,
 		Data:  make([]byte, 128),
 	}
-	rand.Read(result.Data)
+	_, err = rand.Read(result.Data)
+	require.NoError(t, err)
 	pp.applied(rs.clientID, rs.seriesID, rs.key, result, false)
 	select {
 	case v := <-rs.ResultC():

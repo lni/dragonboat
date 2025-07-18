@@ -248,7 +248,6 @@ func (ct *ChanTransport) serveConn(cc chanConn) {
 			return
 		case <-cc.senderClosed:
 			done = true
-			break
 		}
 	}
 	for {

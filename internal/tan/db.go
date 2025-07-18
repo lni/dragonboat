@@ -165,7 +165,7 @@ func (d *db) updateIndex(update pb.Update, pos int64, logNum fileNum) {
 		}
 		// regular state
 		if !pb.IsEmptyState(update.State) {
-			ei.start = update.State.Commit
+			ei.start = update.Commit
 			ei.end = stateFlag
 			index.state = ei
 		}

@@ -528,11 +528,12 @@ func (p *workerPool) completed(workerID uint64) {
 	}
 	if sc, ok := p.streaming[n.shardID]; ok {
 		plog.Debugf("%s completed streamRequested", n.id())
-		if sc == 0 {
+		switch sc {
+		case 0:
 			plog.Panicf("node completed streaming when not streaming")
-		} else if sc == 1 {
+		case 1:
 			delete(p.streaming, n.shardID)
-		} else {
+		default:
 			p.streaming[n.shardID] = sc - 1
 		}
 		count++

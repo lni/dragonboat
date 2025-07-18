@@ -34,14 +34,17 @@ func newSliceEventDelegate(store *metaStore) *sliceEventDelegate {
 
 func (e *sliceEventDelegate) put(eventType memberlist.NodeEventType,
 	n *memberlist.Node) {
-	if eventType == memberlist.NodeJoin || eventType == memberlist.NodeUpdate {
+	switch eventType {
+	case memberlist.NodeJoin:
+		fallthrough
+	case memberlist.NodeUpdate:
 		var m meta
 		if m.unmarshal(n.Meta) {
 			e.store.put(n.Name, m)
 		}
-	} else if eventType == memberlist.NodeLeave {
+	case memberlist.NodeLeave:
 		e.store.delete(n.Name)
-	} else {
+	default:
 		panic("unknown event type")
 	}
 }

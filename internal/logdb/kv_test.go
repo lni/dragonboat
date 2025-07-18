@@ -16,14 +16,15 @@ package logdb
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"strings"
 	"testing"
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/logdb/kv"
@@ -344,14 +345,17 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
-		defer kvs.Close()
+		defer func() {
+			require.NoError(t, kvs.Close())
+		}()
 		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		for i := uint64(1); i <= maxIndex; i++ {
 			key := newKey(entryKeySize, nil)
 			key.SetEntryKey(100, 1, i)
 			data := make([]byte, 64)
-			rand.Read(data)
+			_, err := rand.Read(data)
+			require.NoError(t, err)
 			wb.Put(key.Key(), data)
 		}
 		if err := kvs.CommitWriteBatch(wb); err != nil {
@@ -369,7 +373,9 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open kv store %v", err)
 	}
-	defer kvs.Close()
+	defer func() {
+		require.NoError(t, kvs.Close())
+	}()
 	if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
 		t.Fatalf("remove entry failed %v", err)
 	}
@@ -422,13 +428,19 @@ func cutDataFile(fp string, fs vfs.IFS) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return false, err
+	}
 	data := buf.Bytes()
 	f, err = fs.Create(fp)
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	_, err = f.Write(data[:len(data)-1])
 	if err != nil {
 		return false, err
@@ -444,7 +456,11 @@ func modifyDataFile(fp string, fs vfs.IFS) (bool, error) {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				panic(err)
+			}
+		}()
 		located := false
 		data := make([]byte, 4)
 		for {
@@ -487,7 +503,9 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 		if err != nil {
 			t.Fatalf("failed to open kv store %v", err)
 		}
-		defer kvs.Close()
+		defer func() {
+			require.NoError(t, kvs.Close())
+		}()
 		if cut && !wal {
 			t.Fatalf("cut && !wal")
 		}
@@ -544,7 +562,9 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	}
 	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
 	if err == nil {
-		defer kvs.Close()
+		defer func() {
+			require.NoError(t, kvs.Close())
+		}()
 	}
 	if !cut {
 		if wal && err == nil {

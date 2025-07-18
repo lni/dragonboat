@@ -16,13 +16,14 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -46,7 +47,9 @@ func TestSnapshotWriterCanBeCreated(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	defer w.Close()
+	defer func() {
+		require.NoError(t, w.Close())
+	}()
 }
 
 func TestSaveHeaderSavesTheHeader(t *testing.T) {
@@ -63,8 +66,10 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		}
 		sessionData := make([]byte, testSessionSize)
 		storeData := make([]byte, testPayloadSize)
-		rand.Read(sessionData)
-		rand.Read(storeData)
+		_, err = rand.Read(sessionData)
+		require.NoError(t, err)
+		_, err = rand.Read(storeData)
+		require.NoError(t, err)
 		n, err := w.Write(sessionData)
 		if err != nil || n != len(sessionData) {
 			t.Fatalf("failed to write the session data")
@@ -81,7 +86,9 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer r.Close()
+		defer func() {
+			require.NoError(t, r.Close())
+		}()
 		if SSVersion(header.Version) != DefaultVersion {
 			t.Errorf("invalid version %d, want %d", header.Version, DefaultVersion)
 		}
@@ -108,8 +115,10 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	}
 	sessionData := make([]byte, ssz)
 	storeData := make([]byte, psz)
-	rand.Read(sessionData)
-	rand.Read(storeData)
+	_, err = rand.Read(sessionData)
+	require.NoError(t, err)
+	_, err = rand.Read(storeData)
+	require.NoError(t, err)
 	n, err := w.Write(sessionData)
 	if err != nil || n != len(sessionData) {
 		t.Fatalf("failed to write the session data")
@@ -131,7 +140,9 @@ func corruptSnapshotPayload(t *testing.T, fs vfs.IFS) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer f.Close()
+		defer func() {
+			require.NoError(t, f.Close())
+		}()
 		s := (testSessionSize + testPayloadSize) / 2
 		data := make([]byte, 1)
 		if _, err := f.ReadAt(data, int64(HeaderSize+s)); err != nil {
@@ -170,8 +181,11 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer r.Close()
-		rand.Read(header.PayloadChecksum)
+		defer func() {
+			require.NoError(t, r.Close())
+		}()
+		_, err = rand.Read(header.PayloadChecksum)
+		require.NoError(t, err)
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
 		n, err := io.ReadFull(r, s)
@@ -206,7 +220,9 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) 
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		defer r.Close()
+		defer func() {
+			require.NoError(t, r.Close())
+		}()
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
 		n, err := io.ReadFull(r, s)
@@ -239,7 +255,11 @@ func readTestSnapshot(fn string, sz uint64, fs vfs.IFS) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	data := make([]byte, sz)
 	n, err := file.Read(data)
 	if err != nil {
@@ -377,7 +397,8 @@ func TestShrinkSnapshot(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		data := make([]byte, 1024*1024+i*256)
-		rand.Read(data)
+		_, err := rand.Read(data)
+		require.NoError(t, err)
 		if _, err := writer.Write(data); err != nil {
 			t.Fatalf("write failed %v", err)
 		}
@@ -441,7 +462,8 @@ func TestReplaceSnapshotFile(t *testing.T) {
 			t.Fatalf("failed to ")
 		}
 		data := make([]byte, sz)
-		rand.Read(data)
+		_, err = rand.Read(data)
+		require.NoError(t, err)
 		if _, err := f1.Write(data); err != nil {
 			t.Fatalf("failed to write data %v", err)
 		}
@@ -488,7 +510,7 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 			t.Fatalf("failed to create reader %v", err)
 		}
 		defer func() {
-			reader.Close()
+			require.NoError(t, reader.Close())
 		}()
 		crc, err := GetV2PayloadChecksum(testSnapshotFilename, fs)
 		if err != nil {
@@ -524,7 +546,9 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get reader %v", err)
 	}
-	defer reader.Close()
+	defer func() {
+		require.NoError(t, reader.Close())
+	}()
 	if header.Version != 1 {
 		t.Fatalf("not a version 1 snapshot file")
 	}

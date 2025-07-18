@@ -22,6 +22,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/fileutil"
@@ -85,7 +86,9 @@ func runSnapshotterTest(t *testing.T,
 	ldb := getNewTestDB(dir, lldir, fs)
 	s := getTestSnapshotter(ldb, fs)
 	defer deleteTestRDB(fs)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	fn(t, ldb, s)
 }
 
@@ -141,7 +144,7 @@ func TestSnapshotCanBeFinalized(t *testing.T) {
 		if _, err := f.Write(make([]byte, 12)); err != nil {
 			t.Fatalf("write failed %v", err)
 		}
-		f.Close()
+		require.NoError(t, f.Close())
 		if err = s.Commit(ss, rsm.SSRequest{}); err != nil {
 			t.Errorf("finalize snapshot failed %v", err)
 		}
@@ -491,7 +494,7 @@ func TestSnapshotterCompact(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to create the file, %v", err)
 			}
-			f.Close()
+			require.NoError(t, f.Close())
 		}
 		if err := snapshotter.Compact(2); err != nil {
 			t.Errorf("failed to remove unused snapshots, %v", err)

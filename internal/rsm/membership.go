@@ -297,19 +297,20 @@ func (m *membership) handleConfigChange(cc pb.ConfigChange, index uint64) bool {
 	if accepted {
 		// current entry index, it will be recorded as the conf change id of the members
 		m.apply(cc, index)
-		if cc.Type == pb.AddNode {
+		switch cc.Type {
+		case pb.AddNode:
 			plog.Infof("%s applied ADD ccid %d (%d), %s (%s)",
 				m.id(), ccid, index, nid(cc.ReplicaID), cc.Address)
-		} else if cc.Type == pb.RemoveNode {
+		case pb.RemoveNode:
 			plog.Infof("%s applied REMOVE ccid %d (%d), %s",
 				m.id(), ccid, index, nid(cc.ReplicaID))
-		} else if cc.Type == pb.AddNonVoting {
+		case pb.AddNonVoting:
 			plog.Infof("%s applied ADD OBSERVER ccid %d (%d), %s (%s)",
 				m.id(), ccid, index, nid(cc.ReplicaID), cc.Address)
-		} else if cc.Type == pb.AddWitness {
+		case pb.AddWitness:
 			plog.Infof("%s applied ADD WITNESS ccid %d (%d), %s (%s)",
 				m.id(), ccid, index, nid(cc.ReplicaID), cc.Address)
-		} else {
+		default:
 			plog.Panicf("unknown cc.Type value %d", cc.Type)
 		}
 	} else {

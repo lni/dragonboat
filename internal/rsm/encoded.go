@@ -53,9 +53,12 @@ func GetMaxBlockSize(ct config.CompressionType) uint64 {
 // GetPayload returns the payload of the entry ready to be applied into the
 // state machine.
 func GetPayload(e pb.Entry) ([]byte, error) {
-	if e.Type == pb.ApplicationEntry || e.Type == pb.ConfigChangeEntry {
+	switch e.Type {
+	case pb.ApplicationEntry:
+		fallthrough
+	case pb.ConfigChangeEntry:
 		return e.Cmd, nil
-	} else if e.Type == pb.EncodedEntry {
+	case pb.EncodedEntry:
 		return getDecodedPayload(e.Cmd, nil)
 	}
 	panic("unknown entry type")
@@ -78,7 +81,8 @@ func GetEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
 
 // get v0 encoded payload
 func getEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
-	if ct == dio.NoCompression {
+	switch ct {
+	case dio.NoCompression:
 		// output is 1 byte header, len(cmd) bytes of payload
 		if len(dst) < len(cmd)+1 {
 			dst = make([]byte, len(cmd)+1)
@@ -86,7 +90,7 @@ func getEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
 		dst[0] = getEncodedHeader(EEV0, EENoCompression, false)
 		copy(dst[1:], cmd)
 		return dst[:len(cmd)+1]
-	} else if ct == dio.Snappy {
+	case dio.Snappy:
 		maxSize, ok := dio.MaxEncodedLen(dio.Snappy, uint64(len(cmd)))
 		if !ok {
 			panic("invalid payload length")
@@ -101,8 +105,9 @@ func getEncoded(ct dio.CompressionType, cmd []byte, dst []byte) []byte {
 		result := make([]byte, dstLen+1)
 		copy(result, dst[:dstLen+1])
 		return result
+	default:
+		panic("unknown compression type")
 	}
-	panic("unknown compression type")
 }
 
 func getEncodedHeader(version uint8, cf uint8, session bool) uint8 {
@@ -131,9 +136,10 @@ func getDecodedPayload(cmd []byte, buf []byte) ([]byte, error) {
 		if hasSession {
 			plog.Panicf("v0 cmd has session info")
 		}
-		if ct == EENoCompression {
+		switch ct {
+		case EENoCompression:
 			return getV0NoCompressPayload(cmd), nil
-		} else if ct == EESnappy {
+		case EESnappy:
 			sz, offset := getV0PayloadUncompressedSize(cmd)
 			if sz == 0 {
 				plog.Panicf("empty uncompressed size found")
@@ -152,7 +158,7 @@ func getDecodedPayload(cmd []byte, buf []byte) ([]byte, error) {
 				return nil, err
 			}
 			return result, nil
-		} else {
+		default:
 			plog.Panicf("unknown compression type %d", ct)
 		}
 	}

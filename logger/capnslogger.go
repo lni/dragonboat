@@ -38,17 +38,18 @@ var _ ILogger = (*capnsLog)(nil)
 
 func (c *capnsLog) SetLevel(level LogLevel) {
 	var cl capnslog.LogLevel
-	if level == CRITICAL {
+	switch level {
+	case CRITICAL:
 		cl = capnslog.CRITICAL
-	} else if level == ERROR {
+	case ERROR:
 		cl = capnslog.ERROR
-	} else if level == WARNING {
+	case WARNING:
 		cl = capnslog.WARNING
-	} else if level == INFO {
+	case INFO:
 		cl = capnslog.INFO
-	} else if level == DEBUG {
+	case DEBUG:
 		cl = capnslog.DEBUG
-	} else {
+	default:
 		panic("unexpected level")
 	}
 	c.logger.SetLevel(cl)

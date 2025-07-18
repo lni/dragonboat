@@ -50,7 +50,7 @@ func TestFileLock(t *testing.T) {
 		ldb, err := CreateTan(cfg, nil, []string{dbdir}, nil)
 		require.NoError(t, err)
 		defer func() {
-			ldb.Close()
+			require.NoError(t, ldb.Close())
 			require.NoError(t, ldb.fs.RemoveAll(dbdir))
 		}()
 		out, err := spawn(os.Args[0])
@@ -61,9 +61,9 @@ func TestFileLock(t *testing.T) {
 	} else {
 		ldb, err := CreateTan(cfg, nil, []string{dbdir}, nil)
 		if err == nil {
-			ldb.Close()
+			require.NoError(t, ldb.Close())
 		} else {
-			t.Fatalf(msg)
+			panic(msg)
 		}
 	}
 }
@@ -79,7 +79,7 @@ func TestListNodeInfo(t *testing.T) {
 	ldb, err := CreateTan(cfg, nil, []string{"db-dir"}, nil)
 	require.NoError(t, err)
 	defer func() {
-		ldb.Close()
+		require.NoError(t, ldb.Close())
 		require.NoError(t, ldb.fs.RemoveAll("db-dir"))
 	}()
 	rec := pb.Bootstrap{}
@@ -201,7 +201,9 @@ func TestConcurrentSaveRaftState(t *testing.T) {
 	dirs := []string{"db-dir"}
 	ldb, err := CreateLogMultiplexedTan(cfg, nil, dirs, []string{})
 	require.NoError(t, err)
-	defer ldb.Close()
+	defer func() {
+		require.NoError(t, ldb.Close())
+	}()
 	for i := uint64(0); i < 16; i++ {
 		updates := []pb.Update{
 			{

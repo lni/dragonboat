@@ -103,7 +103,9 @@ func runLogDBTestAs(t *testing.T,
 	}
 	db := getNewTestDB(dir, lldir, batched, fs)
 	defer deleteTestDB(fs)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 	tf(t, db)
 }
 
@@ -1098,7 +1100,9 @@ func TestRemoveEntriesTo(t *testing.T) {
 		if err != nil || failed {
 			t.Fatalf("self check failed")
 		}
-		defer db.Close()
+		defer func() {
+			require.NoError(t, db.Close())
+		}()
 		for i := uint64(0); i < maxIndex; i++ {
 			e := pb.Entry{
 				Term:  1,

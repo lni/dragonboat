@@ -769,7 +769,9 @@ func TestLastRecordOffset(t *testing.T) {
 func TestNoLastRecordOffset(t *testing.T) {
 	buf := new(bytes.Buffer)
 	w := newWriter(buf)
-	defer w.close()
+	defer func() {
+		require.NoError(t, w.close())
+	}()
 
 	if _, err := w.lastRecordOffset(); err != ErrNoLastRecord {
 		t.Fatalf("Expected ErrNoLastRecord, got: %v", err)

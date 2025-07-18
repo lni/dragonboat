@@ -36,14 +36,16 @@ func TestVersionSetCanBeCreated(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(dirname, 0700))
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
-	defer dir.Close()
+	defer func() {
+		require.NoError(t, dir.Close())
+	}()
 	require.NoError(t, vs.create(dirname, opt, dir, &mu))
 	require.NoError(t, vs.close())
 	// manifest file is accessible from the fs
 	manifestFn := makeFilename(fs, dirname, fileTypeManifest, vs.manifestFileNum)
 	f, err := fs.Open(manifestFn)
 	require.NoError(t, err)
-	f.Close()
+	require.NoError(t, f.Close())
 }
 
 func TestVersionSetCanBeApplied(t *testing.T) {
@@ -53,14 +55,18 @@ func TestVersionSetCanBeApplied(t *testing.T) {
 
 func testVersionSetCanBeApplied(t *testing.T, fs vfs.FS) {
 	var vs versionSet
-	defer vs.close()
+	defer func() {
+		require.NoError(t, vs.close())
+	}()
 	var mu sync.Mutex
 	dirname := "db-dir"
 	opt := &Options{MaxManifestFileSize: MaxManifestFileSize, FS: fs}
 	require.NoError(t, fs.MkdirAll(dirname, 0700))
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
-	defer dir.Close()
+	defer func() {
+		require.NoError(t, dir.Close())
+	}()
 	require.NoError(t, vs.create(dirname, opt, dir, &mu))
 
 	var ve1 versionEdit
@@ -124,7 +130,9 @@ func TestSwitchManifestFile(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(dirname, 0700))
 	dir, err := fs.OpenDir(dirname)
 	require.NoError(t, err)
-	defer dir.Close()
+	defer func() {
+		require.NoError(t, dir.Close())
+	}()
 	require.NoError(t, vs.create(dirname, opt, dir, &mu))
 	require.Equal(t, fileNum(1), vs.manifestFileNum)
 
@@ -153,7 +161,9 @@ func TestLoadManifest(t *testing.T) {
 	defer vfs.ReportLeakedFD(fs, t)
 	testVersionSetCanBeApplied(t, fs)
 	var vs versionSet
-	defer vs.close()
+	defer func() {
+		require.NoError(t, vs.close())
+	}()
 	var mu sync.Mutex
 	dirname := "db-dir"
 	opt := &Options{MaxManifestFileSize: MaxManifestFileSize, FS: fs}

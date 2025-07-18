@@ -16,13 +16,14 @@ package rsm
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"math/rand"
 	"reflect"
 	"testing"
 
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/stretchr/testify/require"
 )
 
 func TestResponseCanBeAdded(t *testing.T) {
@@ -131,7 +132,8 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
 			cmd := make([]byte, 1234)
-			rand.Read(cmd)
+			_, err := rand.Read(cmd)
+			require.NoError(t, err)
 			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx], Data: cmd})
 		}
 		snapshot := &bytes.Buffer{}

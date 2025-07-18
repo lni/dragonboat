@@ -131,13 +131,14 @@ func (s *Session) recoverFromSnapshot(reader io.Reader, v SSVersion) error {
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return err
 	}
-	if v == V1 {
+	switch v {
+	case V1:
 		s.recoverFromV1Snapshot(data)
-	} else if v == V2 {
+	case V2:
 		if err := json.Unmarshal(data, s); err != nil {
 			panic(err)
 		}
-	} else {
+	default:
 		plog.Panicf("unknown version number %d", v)
 	}
 	return nil

@@ -251,10 +251,10 @@ func (d *db) removeAllLocked(shardID uint64, replicaID uint64, newLog bool) erro
 // when compacting entries, a compaction update is written to the log to record
 // the op.
 func isCompactionUpdate(update pb.Update) (uint64, bool) {
-	isCompaction := update.State.Term == compactionFlag
+	isCompaction := update.Term == compactionFlag
 	if len(update.EntriesToSave) == 0 && pb.IsEmptySnapshot(update.Snapshot) &&
 		isCompaction {
-		return update.State.Commit, true
+		return update.Commit, true
 	}
 	return 0, false
 }
