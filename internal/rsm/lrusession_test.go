@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRecCanBeEvicted(t *testing.T) {
@@ -31,33 +33,22 @@ func TestRecCanBeEvicted(t *testing.T) {
 	}
 	// client id 1 used here
 	r, ok := m.getSession(RaftClientID(0))
-	if !ok {
-		t.Errorf("session object not returned")
-	} else {
-		if r.ClientID != RaftClientID(0) {
-			t.Errorf("client id %d, want 0", r.ClientID)
-		}
-	}
+	require.True(t, ok, "session object not returned")
+	assert.Equal(t, RaftClientID(0), r.ClientID, "client id mismatch")
 	// client id 1 is the LRU target to be evicted
 	i := RaftClientID(3)
 	s := &Session{ClientID: i}
 	m.addSession(i, *s)
 	_, ok = m.getSession(RaftClientID(1))
-	if ok {
-		t.Errorf("didn't evict the first session object")
-	}
+	assert.False(t, ok, "didn't evict the first session object")
 	// client id 2 is the LRU target to be evicted
 	i = RaftClientID(4)
 	s = &Session{ClientID: i}
 	m.addSession(i, *s)
 	_, ok = m.getSession(RaftClientID(2))
-	if ok {
-		t.Errorf("didn't evict the first session object")
-	}
+	assert.False(t, ok, "didn't evict the first session object")
 	_, ok = m.getSession(RaftClientID(0))
-	if !ok {
-		t.Errorf("client session with id 0 is expected to stay")
-	}
+	assert.True(t, ok, "client session with id 0 is expected to stay")
 }
 
 func TestSessionIsMutable(t *testing.T) {
@@ -68,27 +59,13 @@ func TestSessionIsMutable(t *testing.T) {
 	}
 	// client id 1 used here
 	r, ok := m.getSession(RaftClientID(0))
-	if !ok {
-		t.Errorf("session object not returned")
-	} else {
-		if r.ClientID != RaftClientID(0) {
-			t.Errorf("client id %d, want 0", r.ClientID)
-		} else {
-			r.History[RaftSeriesID(100)] = sm.Result{Value: 200}
-		}
-	}
+	require.True(t, ok, "session object not returned")
+	assert.Equal(t, RaftClientID(0), r.ClientID, "client id mismatch")
+	r.History[RaftSeriesID(100)] = sm.Result{Value: 200}
 	r, ok = m.getSession(RaftClientID(0))
-	if !ok {
-		t.Errorf("session object not returned")
-	} else {
-		if r.ClientID != RaftClientID(0) {
-			t.Errorf("client id %d, want 0", r.ClientID)
-		} else {
-			if len(r.History) != 1 {
-				t.Errorf("sz %d, want 1", len(r.History))
-			}
-		}
-	}
+	require.True(t, ok, "session object not returned")
+	assert.Equal(t, RaftClientID(0), r.ClientID, "client id mismatch")
+	assert.Equal(t, 1, len(r.History), "history size mismatch")
 }
 
 func TestOrderedDoIsLRUOrdered(t *testing.T) {
@@ -107,13 +84,8 @@ func TestOrderedDoIsLRUOrdered(t *testing.T) {
 			idList = append(idList, *key)
 		})
 
-		if len(idList) != 100 {
-			t.Errorf("sz %d, want 100", len(idList))
-		}
-
-		if idList[99] != RaftClientID(idx) {
-			t.Errorf("last element %d, want %d", idList[99], idx)
-		}
+		assert.Equal(t, 100, len(idList), "size mismatch")
+		assert.Equal(t, RaftClientID(idx), idList[99], "last element mismatch")
 	}
 }
 
@@ -137,27 +109,21 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 		oldList = append(oldList, *key)
 	})
 	snapshot := &bytes.Buffer{}
-	if err := m.save(snapshot); err != nil {
-		t.Fatalf("save failed %v", err)
-	}
+	err := m.save(snapshot)
+	require.NoError(t, err, "save failed")
 	data := snapshot.Bytes()
 	toRecover := bytes.NewBuffer(data)
 	newLRUSession := newLRUSession(5)
-	if err := newLRUSession.load(toRecover, V2); err != nil {
-		t.Fatalf("load failed %v", err)
-	}
+	err = newLRUSession.load(toRecover, V2)
+	require.NoError(t, err, "load failed")
 	newList := make([]RaftClientID, 0)
 	newLRUSession.sessions.OrderedDo(func(k, v interface{}) {
 		key := k.(*RaftClientID)
 		newList = append(newList, *key)
 	})
-	if len(oldList) != len(newList) {
-		t.Errorf("size mismatch")
-	}
+	assert.Equal(t, len(oldList), len(newList), "size mismatch")
 	for idx := range oldList {
-		if oldList[idx] != newList[idx] {
-			t.Errorf("order is different")
-		}
+		assert.Equal(t, oldList[idx], newList[idx], "order is different")
 	}
 	for i := 0; i < 1000; i++ {
 		if i%2 == 0 {
@@ -182,13 +148,9 @@ func TestLRUSessionCanBeSavedAndRestoredWithLRUOrderPreserved(t *testing.T) {
 		key := k.(*RaftClientID)
 		newList = append(newList, *key)
 	})
-	if len(oldList) != len(newList) {
-		t.Errorf("size mismatch")
-	}
+	assert.Equal(t, len(oldList), len(newList), "size mismatch")
 	for idx := range oldList {
-		if oldList[idx] != newList[idx] {
-			t.Errorf("order is different")
-		}
+		assert.Equal(t, oldList[idx], newList[idx], "order is different")
 	}
 }
 
@@ -207,59 +169,41 @@ func TestLRUSessionCanBeSavedAndRestored(t *testing.T) {
 		m.addSession(i, *s)
 	}
 	snapshot := &bytes.Buffer{}
-	if err := m.save(snapshot); err != nil {
-		t.Fatalf("save failed %v", err)
-	}
+	err := m.save(snapshot)
+	require.NoError(t, err, "save failed")
 	data := snapshot.Bytes()
 	toRecover := bytes.NewBuffer(data)
 	// set to a different size value
 	newLRUSession := newLRUSession(5)
-	if err := newLRUSession.load(toRecover, V2); err != nil {
-		t.Fatalf("load failed %v", err)
-	}
+	err = newLRUSession.load(toRecover, V2)
+	require.NoError(t, err, "load failed")
 	oldHash := m.getHash()
 	newHash := newLRUSession.getHash()
-	if oldHash != newHash {
-		t.Errorf("hash mismatch, old hash %d, new hash %d",
-			oldHash, newHash)
-	}
-	if m.sessions.Len() != newLRUSession.sessions.Len() {
-		t.Errorf("Len %d, want %d", newLRUSession.sessions.Len(), m.sessions.Len())
-	}
-	if m.size != newLRUSession.size {
-		t.Errorf("size %d, want %d", newLRUSession.size, m.size)
-	}
+	assert.Equal(t, oldHash, newHash, "hash mismatch")
+	assert.Equal(t, m.sessions.Len(), newLRUSession.sessions.Len(),
+		"Len mismatch")
+	assert.Equal(t, m.size, newLRUSession.size, "size mismatch")
 	testSession := newSession(9)
 	testKey := RaftClientID(1)
-	if !newLRUSession.sessions.ShouldEvict(4, &testKey, testSession) {
-		t.Errorf("should evict function not adjusted")
-	}
-	if newLRUSession.sessions.ShouldEvict(3, &testKey, testSession) {
-		t.Errorf("should evict function not adjusted")
-	}
+	assert.True(t, newLRUSession.sessions.ShouldEvict(4, &testKey, testSession),
+		"should evict function not adjusted")
+	assert.False(t, newLRUSession.sessions.ShouldEvict(3, &testKey, testSession),
+		"should evict function not adjusted")
 	for i := RaftClientID(0); i < 3; i++ {
 		s1, ok1 := m.getSession(i)
 		s2, ok2 := newLRUSession.getSession(i)
-		if ok1 != ok2 {
-			t.Errorf("ok1 != ok2")
-		}
-		if !reflect.DeepEqual(s1, s2) {
-			t.Errorf("got %v, want %v", s2, s1)
-		}
+		assert.Equal(t, ok1, ok2, "ok mismatch")
+		assert.True(t, reflect.DeepEqual(s1, s2), "session mismatch")
 	}
 }
 
 func TestGetEmptyLRUSession(t *testing.T) {
 	s := newLRUSession(LRUMaxSessionCount)
 	buf := bytes.NewBuffer(make([]byte, 0))
-	if err := s.save(buf); err != nil {
-		t.Fatalf("failed to save %v", err)
-	}
+	err := s.save(buf)
+	require.NoError(t, err, "failed to save")
 	data := buf.Bytes()
-	if uint64(len(data)) != EmptyClientSessionLength {
-		t.Fatalf("unexpected length %d", len(data))
-	}
-	if !bytes.Equal(data, GetEmptyLRUSession()) {
-		t.Errorf("unexpected data")
-	}
+	assert.Equal(t, EmptyClientSessionLength, uint64(len(data)),
+		"unexpected length")
+	assert.True(t, bytes.Equal(data, GetEmptyLRUSession()), "unexpected data")
 }

@@ -110,7 +110,8 @@ func (p *testNodeProxy) RestoreRemotes(s pb.Snapshot) error {
 	return nil
 }
 
-func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange, key uint64, rejected bool) error {
+func (p *testNodeProxy) ApplyConfigChange(cc pb.ConfigChange,
+	key uint64, rejected bool) error {
 	if !rejected {
 		p.applyConfChange = true
 		switch cc.Type {
@@ -234,7 +235,8 @@ func (s *testSnapshotter) Save(savable ISavable,
 		}
 	}()
 	session := meta.Session.Bytes()
-	if _, err := savable.Save(SSMeta{}, cw, session, nil); err != nil {
+	if _, err := savable.Save(SSMeta{},
+		cw, session, nil); err != nil {
 		return pb.Snapshot{}, env, err
 	}
 	ss = pb.Snapshot{
@@ -274,7 +276,8 @@ func (s *testSnapshotter) Load(ss pb.Snapshot,
 	return nil
 }
 
-func runSMTest(t *testing.T, tf func(t *testing.T, sm *StateMachine), fs vfs.IFS) {
+func runSMTest(t *testing.T,
+	tf func(t *testing.T, sm *StateMachine), fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	store := tests.NewKVTest(1, 1)
 	config := config.Config{ShardID: 1, ReplicaID: 1}
@@ -307,9 +310,7 @@ func runSMTest2(t *testing.T,
 
 func TestDefaultTaskIsNotSnapshotTask(t *testing.T) {
 	task := Task{}
-	if task.IsSnapshotTask() {
-		t.Errorf("default task is a snapshot task")
-	}
+	require.False(t, task.IsSnapshotTask())
 }
 
 func TestUpdatesCanBeBatched(t *testing.T) {
@@ -319,7 +320,8 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ShardID: 1, ReplicaID: 1}
-	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config,
+		NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -347,18 +349,13 @@ func TestUpdatesCanBeBatched(t *testing.T) {
 	sm.lastApplied.index = 234
 	sm.index = 234
 	sm.taskQ.Add(commit)
-	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, err := sm.Handle(batch, nil); err != nil {
-		t.Fatalf("handle failed %v", err)
-	}
-	if sm.GetLastApplied() != 237 {
-		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
-	}
+	_, err := sm.Handle(batch, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint64(237), sm.GetLastApplied())
 	count := store.UpdateCount
-	if count != 3 {
-		t.Fatalf("not batched as expected, batched update count %d, want 3", count)
-	}
+	require.Equal(t, 3, count,
+		"not batched as expected, batched update count %d, want 3", count)
 	reportLeakedFD(fs, t)
 }
 
@@ -367,7 +364,8 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ShardID: 1, ReplicaID: 1}
-	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config,
+		NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	sm := NewStateMachine(ds, nil, config, nodeProxy, fs)
 	e1 := pb.Entry{
@@ -391,17 +389,12 @@ func TestMetadataEntryCanBeHandled(t *testing.T) {
 	sm.lastApplied.index = 234
 	sm.index = 234
 	sm.taskQ.Add(commit)
-	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, err := sm.Handle(batch, nil); err != nil {
-		t.Fatalf("handle failed %v", err)
-	}
-	if sm.GetLastApplied() != 237 {
-		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
-	}
-	if store.UpdateCount != 0 {
-		t.Fatalf("Update() not suppose to be called")
-	}
+	_, err := sm.Handle(batch, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint64(237), sm.GetLastApplied())
+	require.Equal(t, 0, store.UpdateCount,
+		"Update() not suppose to be called")
 	reportLeakedFD(fs, t)
 }
 
@@ -412,7 +405,8 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 	defer removeTestDir(fs)
 	store := tests.NewConcurrentKVTest(1, 1)
 	config := config.Config{ShardID: 1, ReplicaID: 1}
-	ds := NewNativeSM(config, NewConcurrentStateMachine(store), make(chan struct{}))
+	ds := NewNativeSM(config,
+		NewConcurrentStateMachine(store), make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	tsm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -440,23 +434,13 @@ func testHandleBatchedSnappyEncodedEntry(t *testing.T,
 	tsm.index = 235
 	entries := []pb.Entry{e1, e2}
 	batch := make([]sm.Entry, 0, 8)
-	if err := tsm.handleBatch(entries, batch); err != nil {
-		t.Fatalf("handle failed %v", err)
-	}
+	require.NoError(t, tsm.handleBatch(entries, batch))
 	v, err := store.Lookup([]byte("test-key"))
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if string(v.([]byte)) != "test-value" {
-		t.Errorf("v: %s, want test-value", v)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "test-value", string(v.([]byte)))
 	v, err = store.Lookup([]byte("test-key-2"))
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if string(v.([]byte)) != "test-value-2" {
-		t.Errorf("v: %s, want test-value-2", v)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "test-value-2", string(v.([]byte)))
 	reportLeakedFD(fs, t)
 }
 
@@ -493,6 +477,7 @@ func TestHandleAllocationCount(t *testing.T) {
 			Entries: entries,
 		}
 		sm.taskQ.Add(commit)
+		// not using testify here to avoid any allocation by such 3rd party lib
 		if _, err := sm.Handle(batch, nil); err != nil {
 			t.Fatalf("handle failed %v", err)
 		}
@@ -500,9 +485,7 @@ func TestHandleAllocationCount(t *testing.T) {
 			t.Errorf("last applied %d, want %d", sm.GetLastApplied(), idx)
 		}
 	})
-	if ac != 0 {
-		t.Fatalf("ac %f, want 0", ac)
-	}
+	require.Equal(t, float64(0), ac)
 }
 
 func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
@@ -512,7 +495,8 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	defer removeTestDir(fs)
 	store := &tests.ConcurrentUpdate{}
 	config := config.Config{ShardID: 1, ReplicaID: 1}
-	ds := NewNativeSM(config, &ConcurrentStateMachine{sm: store}, make(chan struct{}))
+	ds := NewNativeSM(config,
+		&ConcurrentStateMachine{sm: store}, make(chan struct{}))
 	nodeProxy := newTestNodeProxy()
 	snapshotter := newTestSnapshotter(fs)
 	sm := NewStateMachine(ds, snapshotter, config, nodeProxy, fs)
@@ -540,22 +524,16 @@ func TestUpdatesNotBatchedWhenNotAllNoOPUpdates(t *testing.T) {
 	sm.lastApplied.index = 234
 	sm.index = 234
 	sm.taskQ.Add(commit)
-	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, err := sm.Handle(batch, nil); err != nil {
-		t.Fatalf("handle failed %v", err)
-	}
-	if sm.GetLastApplied() != 237 {
-		t.Errorf("last applied %d, want 237", sm.GetLastApplied())
-	}
+	_, err := sm.Handle(batch, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint64(237), sm.GetLastApplied())
 	reportLeakedFD(fs, t)
 }
 
 func TestStateMachineCanBeCreated(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		if sm.TaskChanBusy() {
-			t.Errorf("commitChan busy")
-		}
+		require.False(t, sm.TaskChanBusy())
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -594,12 +572,8 @@ func TestLookupNotAllowedOnClosedShard(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
 		sm.aborted = true
 		v, err := sm.Lookup(make([]byte, 10))
-		if err != ErrShardClosed {
-			t.Errorf("unexpected err value %v", err)
-		}
-		if v != nil {
-			t.Errorf("unexpected result")
-		}
+		require.Equal(t, ErrShardClosed, err)
+		require.Nil(t, v)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -627,13 +601,11 @@ func TestGetMembership(t *testing.T) {
 			ConfigChangeId: 12345,
 		}
 		m := sm.GetMembership()
-		if m.ConfigChangeId != 12345 {
-			t.Errorf("unexpected cid value")
-		}
-		if len(m.Addresses) != 2 || len(m.NonVotings) != 2 ||
-			len(m.Removed) != 3 || len(m.Witnesses) != 1 {
-			t.Errorf("len changed")
-		}
+		require.Equal(t, uint64(12345), m.ConfigChangeId)
+		require.Len(t, m.Addresses, 2)
+		require.Len(t, m.NonVotings, 2)
+		require.Len(t, m.Removed, 3)
+		require.Len(t, m.Witnesses, 1)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -659,14 +631,11 @@ func TestGetMembershipNodes(t *testing.T) {
 		}
 		m := sm.GetMembership()
 		n := m.Addresses
-		if len(n) != 2 {
-			t.Errorf("unexpected len")
-		}
+		require.Len(t, n, 2)
 		_, ok1 := n[100]
 		_, ok2 := n[234]
-		if !ok1 || !ok2 {
-			t.Errorf("unexpected node id")
-		}
+		require.True(t, ok1)
+		require.True(t, ok2)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -684,9 +653,7 @@ func TestGetMembershipHash(t *testing.T) {
 		h1 := sm.GetMembershipHash()
 		sm.members.members.Addresses[200] = "a200"
 		h2 := sm.GetMembershipHash()
-		if h1 == h2 {
-			t.Errorf("hash doesn't change after membership change")
-		}
+		require.NotEqual(t, h1, h2)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -694,14 +661,10 @@ func TestGetMembershipHash(t *testing.T) {
 
 func TestGetSSMetaPanicWhenThereIsNoMember(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("didn't panic")
-			}
-		}()
-		if _, err := sm.getSSMeta(nil, SSRequest{}); err != nil {
-			t.Fatalf("get snapshot meta failed %v", err)
-		}
+		require.Panics(t, func() {
+			_, err := sm.getSSMeta(nil, SSRequest{})
+			require.NoError(t, err)
+		})
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -722,23 +685,14 @@ func TestGetSSMeta(t *testing.T) {
 		sm.term = 101
 		sm.lastApplied.term = 101
 		meta, err := sm.getSSMeta(make([]byte, 123), SSRequest{})
-		if err != nil {
-			t.Fatalf("get snapshot meta failed %v", err)
-		}
-		if meta.Index != 100 || meta.Term != 101 {
-			t.Errorf("index/term not recorded")
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(100), meta.Index)
+		require.Equal(t, uint64(101), meta.Term)
 		v := meta.Ctx.([]byte)
-		if len(v) != 123 {
-			t.Errorf("ctx not recorded")
-		}
-		if len(meta.Membership.Addresses) != 2 {
-			t.Errorf("membership not saved %d, want 2", len(meta.Membership.Addresses))
-		}
+		require.Len(t, v, 123)
+		require.Len(t, meta.Membership.Addresses, 2)
 		v = meta.Session.Bytes()
-		if len(v) == 0 {
-			t.Errorf("sessions not saved")
-		}
+		require.NotEmpty(t, v)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest(t, tf, fs)
@@ -746,28 +700,18 @@ func TestGetSSMeta(t *testing.T) {
 
 func TestHandleConfChangeAddNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		applyConfigChangeEntry(sm, 1, pb.AddNode, 4, "localhost:1010", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.accept {
-			t.Errorf("accept not called")
-		}
-		if !nodeProxy.addPeer {
-			t.Errorf("add peer not called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.True(t, nodeProxy.accept)
+		require.True(t, nodeProxy.addPeer)
 		v, ok := sm.members.members.Addresses[4]
-		if !ok {
-			t.Errorf("members not updated")
-		}
-		if v != "localhost:1010" {
-			t.Errorf("address recorded %s, want localhost:1010", v)
-		}
+		require.True(t, ok)
+		require.Equal(t, "localhost:1010", v)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -775,32 +719,22 @@ func TestHandleConfChangeAddNode(t *testing.T) {
 
 func TestAddNodeAsNonVotingWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		applyConfigChangeEntry(sm,
-			1,
-			pb.AddNode,
-			4,
-			"localhost:1010",
-			123)
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
+		applyConfigChangeEntry(sm, 1, pb.AddNode, 4, "localhost:1010", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("Handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
 		applyConfigChangeEntry(sm,
 			123,
 			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			124)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if !nodeProxy.reject {
-			t.Errorf("invalid cc not rejected")
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.True(t, nodeProxy.reject)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -808,30 +742,21 @@ func TestAddNodeAsNonVotingWillBeRejected(t *testing.T) {
 
 func TestNonVotingCanBeAdded(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		applyConfigChangeEntry(sm,
 			1,
 			pb.AddNonVoting,
 			4,
 			"localhost:1010",
 			123)
-
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.accept {
-			t.Errorf("accept not called")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
-		if !nodeProxy.addNonVoting {
-			t.Errorf("add nonVoting not called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.True(t, nodeProxy.accept)
+		require.False(t, nodeProxy.addPeer)
+		require.True(t, nodeProxy.addNonVoting)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -839,52 +764,23 @@ func TestNonVotingCanBeAdded(t *testing.T) {
 
 func TestNonVotingPromotion(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		applyConfigChangeEntry(sm,
-			1,
-			pb.AddNonVoting,
-			4,
-			"localhost:1010",
-			123)
-
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
+		applyConfigChangeEntry(sm, 1, pb.AddNonVoting, 4, "localhost:1010", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.accept {
-			t.Errorf("accept not called")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
-		if !nodeProxy.addNonVoting {
-			t.Errorf("add nonVoting not called")
-		}
-		applyConfigChangeEntry(sm,
-			123,
-			pb.AddNode,
-			4,
-			"localhost:1010",
-			124)
-
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 124 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.addPeer {
-			t.Errorf("add peer not called")
-		}
-		if len(sm.members.members.Addresses) != 1 {
-			t.Errorf("node count != 1")
-		}
-		if len(sm.members.members.NonVotings) != 0 {
-			t.Errorf("nonVoting count != 0")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.True(t, nodeProxy.accept)
+		require.False(t, nodeProxy.addPeer)
+		require.True(t, nodeProxy.addNonVoting)
+		applyConfigChangeEntry(sm, 123, pb.AddNode, 4, "localhost:1010", 124)
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(124), sm.GetLastApplied())
+		require.True(t, nodeProxy.addPeer)
+		require.Len(t, sm.members.members.Addresses, 1)
+		require.Empty(t, sm.members.members.NonVotings)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -892,77 +788,41 @@ func TestNonVotingPromotion(t *testing.T) {
 
 func TestInvalidNonVotingPromotionIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
-		applyConfigChangeEntry(sm,
-			1,
-			pb.AddNonVoting,
-			4,
-			"localhost:1010",
-			123)
-
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
+		applyConfigChangeEntry(sm, 1, pb.AddNonVoting, 4, "localhost:1010", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.accept {
-			t.Errorf("accept not called")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
-		if !nodeProxy.addNonVoting {
-			t.Errorf("add nonVoting not called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.True(t, nodeProxy.accept)
+		require.False(t, nodeProxy.addPeer)
+		require.True(t, nodeProxy.addNonVoting)
 		nodeProxy.accept = false
-		applyConfigChangeEntry(sm,
-			123,
-			pb.AddNode,
-			4,
-			"localhost:1011",
-			124)
-
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		applyConfigChangeEntry(sm, 123, pb.AddNode, 4, "localhost:1011", 124)
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
 		_, ok := sm.members.members.Addresses[4]
-		if ok {
-			t.Errorf("expectedly promoted nonVoting")
-		}
-		if nodeProxy.accept {
-			t.Errorf("unexpectedly accepted the promotion")
-		}
+		require.False(t, ok)
+		require.False(t, nodeProxy.accept)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
 }
 
-func testAddExistingMemberIsRejected(t *testing.T, tt pb.ConfigChangeType, fs vfs.IFS) {
+func testAddExistingMemberIsRejected(t *testing.T,
+	tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[5] = "localhost:1010"
-		applyConfigChangeEntry(sm,
-			1,
-			tt,
-			4,
-			"localhost:1010",
-			123)
-
+		applyConfigChangeEntry(sm, 1, tt, 4, "localhost:1010", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if nodeProxy.accept {
-			t.Errorf("accept unexpectedly called")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.False(t, nodeProxy.accept)
+		require.False(t, nodeProxy.addPeer)
 	}
 	runSMTest2(t, tf, fs)
 }
@@ -976,35 +836,23 @@ func TestAddExistingMemberIsRejected(t *testing.T) {
 func testAddExistingMemberWithSameReplicaIDIsRejected(t *testing.T,
 	tt pb.ConfigChangeType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		switch tt {
 		case pb.AddNode:
 			sm.members.members.Addresses[5] = "localhost:1010"
 		case pb.AddNonVoting:
 			sm.members.members.NonVotings[5] = "localhost:1010"
 		default:
-			panic("unknown tt")
+			require.Fail(t, "unknown tt")
 		}
-		applyConfigChangeEntry(sm,
-			1,
-			tt,
-			5,
-			"localhost:1011",
-			123)
-
+		applyConfigChangeEntry(sm, 1, tt, 5, "localhost:1011", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if nodeProxy.accept {
-			t.Errorf("accept unexpectedly called")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.False(t, nodeProxy.accept)
+		require.False(t, nodeProxy.addPeer)
 	}
 	runSMTest2(t, tf, fs)
 }
@@ -1017,41 +865,23 @@ func TestAddExistingMemberWithSameReplicaIDIsRejected(t *testing.T) {
 
 func TestHandleConfChangeRemoveNode(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1010"
 		sm.members.members.Addresses[2] = "localhost:1011"
-		applyConfigChangeEntry(sm,
-			1,
-			pb.RemoveNode,
-			1,
-			"",
-			123)
-
+		applyConfigChangeEntry(sm, 1, pb.RemoveNode, 1, "", 123)
 		_, ok := sm.members.members.Addresses[1]
-		if !ok {
-			t.Errorf("node 1 not in members")
-		}
+		require.True(t, ok)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if !nodeProxy.accept {
-			t.Errorf("accept not called")
-		}
-		if !nodeProxy.removePeer {
-			t.Errorf("remove peer not called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.True(t, nodeProxy.accept)
+		require.True(t, nodeProxy.removePeer)
 		_, ok = sm.members.members.Addresses[1]
-		if ok {
-			t.Errorf("failed to remove node 1 from members")
-		}
+		require.False(t, ok)
 		_, ok = sm.members.members.Removed[1]
-		if !ok {
-			t.Errorf("removed node not recorded as removed")
-		}
+		require.True(t, ok)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1059,30 +889,17 @@ func TestHandleConfChangeRemoveNode(t *testing.T) {
 
 func TestOrderedConfChangeIsAccepted(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.ConfigChangeId = 6
-		applyConfigChangeEntry(sm,
-			6,
-			pb.RemoveNode,
-			1,
-			"",
-			123)
+		applyConfigChangeEntry(sm, 6, pb.RemoveNode, 1, "", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if nodeProxy.reject {
-			t.Errorf("rejected")
-		}
-		if !nodeProxy.accept {
-			t.Errorf("not accepted")
-		}
-		if !nodeProxy.removePeer {
-			t.Errorf("remove peer not called")
-		}
-		if sm.members.members.ConfigChangeId != 123 {
-			t.Errorf("conf change id not updated, %d", sm.members.members.ConfigChangeId)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.False(t, nodeProxy.reject)
+		require.True(t, nodeProxy.accept)
+		require.True(t, nodeProxy.removePeer)
+		require.Equal(t, uint64(123), sm.members.members.ConfigChangeId)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1090,39 +907,22 @@ func TestOrderedConfChangeIsAccepted(t *testing.T) {
 
 func TestRemoveOnlyNodeIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1010"
-		applyConfigChangeEntry(sm,
-			1,
-			pb.RemoveNode,
-			1,
-			"",
-			123)
+		applyConfigChangeEntry(sm, 1, pb.RemoveNode, 1, "", 123)
 		_, ok := sm.members.members.Addresses[1]
-		if !ok {
-			t.Errorf("node 1 not in members")
-		}
+		require.True(t, ok)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 123 {
-			t.Errorf("last applied %d, want 123", sm.GetLastApplied())
-		}
-		if nodeProxy.accept {
-			t.Errorf("unexpected accepted")
-		}
-		if nodeProxy.removePeer {
-			t.Errorf("remove peer unexpected called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), sm.GetLastApplied())
+		require.False(t, nodeProxy.accept)
+		require.False(t, nodeProxy.removePeer)
 		_, ok = sm.members.members.Addresses[1]
-		if !ok {
-			t.Errorf("unexpectedly removed node 1 from members")
-		}
+		require.True(t, ok)
 		_, ok = sm.members.members.Removed[1]
-		if ok {
-			t.Errorf("removed node 1 as removed")
-		}
+		require.False(t, ok)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1130,28 +930,17 @@ func TestRemoveOnlyNodeIsRejected(t *testing.T) {
 
 func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.ConfigChangeId = 6
 		sm.members.members.Addresses[100] = "test.nodehost"
-		applyConfigChangeEntry(sm,
-			7,
-			pb.AddNode,
-			2,
-			"test.nodehost",
-			123)
+		applyConfigChangeEntry(sm, 7, pb.AddNode, 2, "test.nodehost", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if !nodeProxy.reject {
-			t.Errorf("not rejected")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
-		if sm.members.members.ConfigChangeId == 123 {
-			t.Errorf("conf change unexpected updated, %d", sm.members.members.ConfigChangeId)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.True(t, nodeProxy.reject)
+		require.False(t, nodeProxy.addPeer)
+		require.NotEqual(t, uint64(123), sm.members.members.ConfigChangeId)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1159,25 +948,16 @@ func TestAddingNodeOnTheSameNodeHostWillBeRejected(t *testing.T) {
 
 func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.ConfigChangeId = 6
 		sm.members.members.Removed[2] = true
-		applyConfigChangeEntry(sm,
-			7,
-			pb.AddNode,
-			2,
-			"a1",
-			123)
+		applyConfigChangeEntry(sm, 7, pb.AddNode, 2, "a1", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if !nodeProxy.reject {
-			t.Errorf("not rejected")
-		}
-		if nodeProxy.addPeer {
-			t.Errorf("add peer unexpectedly called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.True(t, nodeProxy.reject)
+		require.False(t, nodeProxy.addPeer)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1185,25 +965,16 @@ func TestAddingRemovedNodeWillBeRejected(t *testing.T) {
 
 func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.ordered = true
 		sm.members.members.ConfigChangeId = 6
-		applyConfigChangeEntry(sm,
-			1,
-			pb.RemoveNode,
-			1,
-			"",
-			123)
+		applyConfigChangeEntry(sm, 1, pb.RemoveNode, 1, "", 123)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if !nodeProxy.reject {
-			t.Errorf("not rejected")
-		}
-		if nodeProxy.removePeer {
-			t.Errorf("remove peer unexpectedly called")
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.True(t, nodeProxy.reject)
+		require.False(t, nodeProxy.removePeer)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1211,7 +982,8 @@ func TestOutOfOrderConfChangeIsRejected(t *testing.T) {
 
 func TestHandleSyncTask(t *testing.T) {
 	tf := func(t *testing.T, tsm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		task1 := Task{
 			PeriodicSync: true,
 		}
@@ -1221,12 +993,9 @@ func TestHandleSyncTask(t *testing.T) {
 		tsm.lastApplied.index = 100
 		tsm.taskQ.Add(task1)
 		tsm.taskQ.Add(task2)
-		if _, err := tsm.Handle(make([]Task, 0), make([]sm.Entry, 0)); err != nil {
-			t.Fatalf("%v", err)
-		}
-		if tsm.lastApplied.index != 100 {
-			t.Errorf("index unexpected moved")
-		}
+		_, err := tsm.Handle(make([]Task, 0), make([]sm.Entry, 0))
+		require.NoError(t, err)
+		require.Equal(t, uint64(100), tsm.lastApplied.index)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1234,7 +1003,8 @@ func TestHandleSyncTask(t *testing.T) {
 
 func TestHandleEmptyEvent(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		e := pb.Entry{
 			Type:  pb.ApplicationEntry,
 			Index: 234,
@@ -1247,12 +1017,9 @@ func TestHandleEmptyEvent(t *testing.T) {
 		sm.index = 233
 		sm.taskQ.Add(commit)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 234 {
-			t.Errorf("last applied %d, want 234", sm.GetLastApplied())
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(234), sm.GetLastApplied())
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1278,9 +1045,11 @@ func genTestKVData(k, d string) []byte {
 	return data
 }
 
-func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType, fs vfs.IFS) {
+func testHandleSnappyEncodedEntry(t *testing.T,
+	ct dio.CompressionType, fs vfs.IFS) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		data := getTestKVData()
 		encoded := GetEncoded(ct, data, make([]byte, 512))
 		e1 := pb.Entry{
@@ -1297,21 +1066,13 @@ func testHandleSnappyEncodedEntry(t *testing.T, ct dio.CompressionType, fs vfs.I
 		sm.lastApplied.index = 235
 		sm.index = 235
 		sm.taskQ.Add(commit)
-		// two commits to handle
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 236 {
-			t.Errorf("last applied %d, want 236", sm.GetLastApplied())
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(236), sm.GetLastApplied())
 		v, ok := store.(*tests.KVTest).KVStore["test-key"]
-		if !ok {
-			t.Errorf("value not set")
-		}
-		if v != "test-value" {
-			t.Errorf("v: %s, want test-value", v)
-		}
+		require.True(t, ok)
+		require.Equal(t, "test-value", v)
 	}
 	runSMTest2(t, tf, fs)
 }
@@ -1324,7 +1085,8 @@ func TestHandleSnappyEncodedEntry(t *testing.T) {
 
 func TestHandleUpate(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		data := getTestKVData()
 		e1 := pb.Entry{
 			ClientID: 123,
@@ -1345,28 +1107,16 @@ func TestHandleUpate(t *testing.T) {
 		sm.lastApplied.index = 234
 		sm.index = 234
 		sm.taskQ.Add(commit)
-		// two commits to handle
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 236 {
-			t.Errorf("last applied %d, want 236", sm.GetLastApplied())
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(236), sm.GetLastApplied())
 		v, ok := store.(*tests.KVTest).KVStore["test-key"]
-		if !ok {
-			t.Errorf("value not set")
-		}
-		if v != "test-value" {
-			t.Errorf("v: %s, want test-value", v)
-		}
+		require.True(t, ok)
+		require.Equal(t, "test-value", v)
 		result, err := sm.Lookup([]byte("test-key"))
-		if err != nil {
-			t.Errorf("lookup failed")
-		}
-		if string(result.([]byte)) != "test-value" {
-			t.Errorf("result %s, want test-value", string(result.([]byte)))
-		}
+		require.NoError(t, err)
+		require.Equal(t, "test-value", string(result.([]byte)))
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1375,17 +1125,17 @@ func TestHandleUpate(t *testing.T) {
 func TestSnapshotCanBeApplied(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1234"
 		store.(*tests.KVTest).KVStore["test-key1"] = "test-value1"
 		store.(*tests.KVTest).KVStore["test-key2"] = "test-value2"
 		sm.lastApplied.index = 3
 		sm.index = 3
-		hash1, _ := sm.GetHash()
+		hash1, err := sm.GetHash()
+		require.NoError(t, err)
 		ss, _, err := sm.Save(SSRequest{})
-		if err != nil {
-			t.Fatalf("failed to make snapshot %v", err)
-		}
+		require.NoError(t, err)
 		index := ss.Index
 		commit := Task{
 			Index: index,
@@ -1398,61 +1148,41 @@ func TestSnapshotCanBeApplied(t *testing.T) {
 		snapshotter2 := newTestSnapshotter(fs)
 		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
-		if len(sm2.members.members.Addresses) != 0 {
-			t.Errorf("unexpected member length")
-		}
+		require.Empty(t, sm2.members.members.Addresses)
 		ss2, err := sm2.Recover(commit)
-		if err != nil {
-			t.Errorf("apply snapshot failed %v", err)
-		}
-		if ss2.Index != index {
-			t.Errorf("last applied %d, want %d", ss2.Index, index)
-		}
-		hash2, _ := sm2.GetHash()
-		if hash1 != hash2 {
-			t.Errorf("bad hash %d, want %d, sz %d",
-				hash2, hash1, len(store2.(*tests.KVTest).KVStore))
-		}
-		// see whether members info are recovered
-		if len(sm2.members.members.Addresses) != 2 {
-			t.Errorf("failed to restore members")
-		}
+		require.NoError(t, err)
+		require.Equal(t, index, ss2.Index)
+		hash2, err := sm2.GetHash()
+		require.NoError(t, err)
+		require.Equal(t, hash1, hash2)
+		require.Len(t, sm2.members.members.Addresses, 2)
 		v1, ok1 := sm2.members.members.Addresses[1]
 		v2, ok2 := sm2.members.members.Addresses[2]
-		if !ok1 || !ok2 {
-			t.Errorf("failed to save member info")
-		}
-		if v1 != "localhost:1" || v2 != "localhost:2" {
-			t.Errorf("unexpected address")
-		}
-		if nodeProxy2.addPeerCount != 2 {
-			t.Errorf("failed to pass on address to node proxy")
-		}
+		require.True(t, ok1)
+		require.True(t, ok2)
+		require.Equal(t, "localhost:1", v1)
+		require.Equal(t, "localhost:2", v2)
+		require.Equal(t, uint64(2), nodeProxy2.addPeerCount)
 	}
 	runSMTest2(t, tf, fs)
 }
 
 func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
 		ss, _, err := sm.Save(SSRequest{})
-		if err != nil {
-			t.Errorf("failed to make snapshot %v", err)
-		}
+		require.NoError(t, err)
 		cs := ss.Membership
-		if len(cs.Addresses) != 2 {
-			t.Errorf("cs addresses len %d, want 2", len(cs.Addresses))
-		}
+		require.Len(t, cs.Addresses, 2)
 		v1, ok1 := cs.Addresses[1]
 		v2, ok2 := cs.Addresses[2]
-		if !ok1 || !ok2 {
-			t.Errorf("failed to save member info")
-		}
-		if v1 != "localhost:1" || v2 != "localhost:2" {
-			t.Errorf("unexpected address")
-		}
+		require.True(t, ok1)
+		require.True(t, ok2)
+		require.Equal(t, "localhost:1", v1)
+		require.Equal(t, "localhost:2", v2)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1460,30 +1190,22 @@ func TestMembersAreSavedWhenMakingSnapshot(t *testing.T) {
 
 func TestSnapshotTwiceIsHandled(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1"
 		sm.members.members.Addresses[2] = "localhost:2"
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 1, 0, data)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		_, _, err := sm.Save(SSRequest{})
-		if err != nil {
-			t.Errorf("failed to make snapshot %v", err)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
 		_, _, err = sm.Save(SSRequest{})
-		if err != raft.ErrSnapshotOutOfDate {
-			t.Errorf("snapshot twice completed, %v", err)
-		}
+		require.NoError(t, err)
+		_, _, err = sm.Save(SSRequest{})
+		require.Equal(t, raft.ErrSnapshotOutOfDate, err)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1541,41 +1263,26 @@ func applyTestEntry(sm *StateMachine,
 
 func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		clientID := uint64(12345)
 		applySessionRegisterEntry(sm, clientID, 789)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != 789 {
-			t.Errorf("last applied %d, want 789", sm.GetLastApplied())
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(789), sm.GetLastApplied())
 		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(clientID))
-		if !ok {
-			t.Errorf("session not found")
-		}
-		if nodeProxy.smResult.Value != clientID {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult.Value, clientID)
-		}
+		require.True(t, ok)
+		require.Equal(t, clientID, nodeProxy.smResult.Value)
 		index := uint64(790)
 		applySessionUnregisterEntry(sm, 12345, index)
-
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), index)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, index, sm.GetLastApplied())
 		_, ok = sessionManager.getSession(RaftClientID(clientID))
-		if ok {
-			t.Errorf("session not removed")
-		}
-		if nodeProxy.smResult.Value != clientID {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, clientID)
-		}
+		require.False(t, ok)
+		require.Equal(t, clientID, nodeProxy.smResult.Value)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1583,45 +1290,28 @@ func TestSessionCanBeCreatedAndRemoved(t *testing.T) {
 
 func TestDuplicatedSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		e := applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
 		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
-		if !ok {
-			t.Errorf("session not found")
-		}
-		if nodeProxy.smResult.Value != e.ClientID {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult.Value, e.ClientID)
-		}
+		require.True(t, ok)
+		require.Equal(t, e.ClientID, nodeProxy.smResult.Value)
 		e.Index = 790
 		commit := Task{
 			Entries: []pb.Entry{e},
 		}
 		sm.taskQ.Add(commit)
-		if nodeProxy.rejected {
-			t.Errorf("rejected flag set too early")
-		}
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		if nodeProxy.smResult.Value != 0 {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, 0)
-		}
-		if !nodeProxy.rejected {
-			t.Errorf("reject flag not set")
-		}
+		require.False(t, nodeProxy.rejected)
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.Equal(t, uint64(0), nodeProxy.smResult.Value)
+		require.True(t, nodeProxy.rejected)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1629,29 +1319,20 @@ func TestDuplicatedSessionWillBeReported(t *testing.T) {
 
 func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.lastApplied.index = 789
 		sm.index = 789
 		e := applySessionUnregisterEntry(sm, 12345, 790)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
 		sessionManager := sm.sessions.lru
 		_, ok := sessionManager.getSession(RaftClientID(e.ClientID))
-		if ok {
-			t.Errorf("session not suppose to be there")
-		}
-		if nodeProxy.smResult.Value != 0 {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, 0)
-		}
-		if !nodeProxy.rejected {
-			t.Errorf("reject flag not set")
-		}
+		require.False(t, ok)
+		require.Equal(t, uint64(0), nodeProxy.smResult.Value)
+		require.True(t, nodeProxy.rejected)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1659,30 +1340,19 @@ func TestRemovingUnregisteredSessionWillBeReported(t *testing.T) {
 
 func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
 		sm.lastApplied.index = 789
 		sm.index = 789
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		// handleUpdateEvent suppose to return a (result, ignored, rejected) tuple of
-		// (0, false, true)
-		if nodeProxy.ignored {
-			t.Errorf("ignored %t, want false", nodeProxy.ignored)
-		}
-		if nodeProxy.smResult.Value != 0 {
-			t.Errorf("smResult %d, want 0", nodeProxy.smResult)
-		}
-		if !nodeProxy.rejected {
-			t.Errorf("rejected %t, want true", nodeProxy.rejected)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.False(t, nodeProxy.ignored)
+		require.Equal(t, uint64(0), nodeProxy.smResult.Value)
+		require.True(t, nodeProxy.rejected)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1690,50 +1360,31 @@ func TestUpdateFromUnregisteredClientWillBeReported(t *testing.T) {
 
 func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
-		// check normal update is accepted and handled
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
 		plog.Infof("Handle returned")
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		if !nodeProxy.applyUpdateInvoked {
-			t.Errorf("update not invoked")
-		}
-		if nodeProxy.smResult.Value != uint64(len(data)) {
-			t.Errorf("smResult %d, want %d", nodeProxy.smResult, len(data))
-		}
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.True(t, nodeProxy.applyUpdateInvoked)
+		require.Equal(t, uint64(len(data)), nodeProxy.smResult.Value)
 		nodeProxy.applyUpdateInvoked = false
 		storeCount := store.(*tests.KVTest).Count
 		v := store.(*tests.KVTest).KVStore["test-key"]
-		if v != "test-value" {
-			t.Errorf("store not set")
-		}
+		require.Equal(t, "test-value", v)
 		e = applyTestEntry(sm, 12345, 1, 791, 0, data)
 		plog.Infof("going to handle the second commit rec")
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		if !nodeProxy.applyUpdateInvoked {
-			t.Errorf("update not invoked")
-		}
-		if storeCount != store.(*tests.KVTest).Count {
-			t.Errorf("store update invoked twice, not expected")
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.True(t, nodeProxy.applyUpdateInvoked)
+		require.Equal(t, storeCount, store.(*tests.KVTest).Count)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1741,49 +1392,31 @@ func TestDuplicatedUpdateWillNotBeAppliedTwice(t *testing.T) {
 
 func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, 1, 790, 0, data)
-		// check normal update is accepted and handleped
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
 		storeCount := store.(*tests.KVTest).Count
-		// update the respondedto value
 		e = applyTestEntry(sm, 12345, 1, 791, 1, data)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
 		sessionManager := sm.sessions.lru
 		session, _ := sessionManager.getSession(RaftClientID(12345))
-		if session.RespondedUpTo != RaftSeriesID(1) {
-			t.Errorf("responded to %d, want 1", session.RespondedUpTo)
-		}
+		require.Equal(t, RaftSeriesID(1), session.RespondedUpTo)
 		nodeProxy.applyUpdateInvoked = false
-		// submit the same stuff again with a different index value
 		e = applyTestEntry(sm, 12345, 1, 792, 1, data)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		if nodeProxy.applyUpdateInvoked {
-			t.Errorf("update invoked, unexpected")
-		}
-		if storeCount != store.(*tests.KVTest).Count {
-			t.Errorf("store update invoked twice, not expected")
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.False(t, nodeProxy.applyUpdateInvoked)
+		require.Equal(t, storeCount, store.(*tests.KVTest).Count)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1791,36 +1424,23 @@ func TestRespondedUpdateWillNotBeAppliedTwice(t *testing.T) {
 
 func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		applySessionRegisterEntry(sm, 12345, 789)
 		batch := make([]Task, 0, 8)
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
+		_, err := sm.Handle(batch, nil)
+		require.NoError(t, err)
 		data := getTestKVData()
 		e := applyTestEntry(sm, 12345, client.NoOPSeriesID, 790, 0, data)
-		// check normal update is accepted and handleped
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
 		storeCount := store.(*tests.KVTest).Count
-		// different index as the same entry is proposed again
 		e = applyTestEntry(sm, 12345, client.NoOPSeriesID, 791, 0, data)
-		// check normal update is accepted and handleped
-		if _, err := sm.Handle(batch, nil); err != nil {
-			t.Fatalf("handle failed %v", err)
-		}
-		if sm.GetLastApplied() != e.Index {
-			t.Errorf("last applied %d, want %d",
-				sm.GetLastApplied(), e.Index)
-		}
-		if storeCount == store.(*tests.KVTest).Count {
-			t.Errorf("entry not applied")
-		}
+		_, err = sm.Handle(batch, nil)
+		require.NoError(t, err)
+		require.Equal(t, e.Index, sm.GetLastApplied())
+		require.NotEqual(t, storeCount, store.(*tests.KVTest).Count)
 	}
 	fs := vfs.GetTestFS()
 	runSMTest2(t, tf, fs)
@@ -1828,9 +1448,7 @@ func TestNoOPSessionAllowEntryToBeAppliedTwice(t *testing.T) {
 
 func TestNoOPEntryIsNotBatched(t *testing.T) {
 	updates, _ := getEntryTypes([]pb.Entry{{}})
-	if updates {
-		t.Errorf("NoOP entry is considered as regular update entry")
-	}
+	require.False(t, updates)
 }
 
 func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
@@ -1839,9 +1457,7 @@ func TestRegularSessionedEntryIsNotBatched(t *testing.T) {
 		SeriesID: client.NoOPSeriesID + 1,
 	}
 	_, allNoOP := getEntryTypes([]pb.Entry{{}, e})
-	if allNoOP {
-		t.Errorf("regular sessioned entry not detected")
-	}
+	require.False(t, allNoOP)
 }
 
 func TestNonUpdateEntryIsNotBatched(t *testing.T) {
@@ -1851,15 +1467,11 @@ func TestNonUpdateEntryIsNotBatched(t *testing.T) {
 	unSessionEntry := pb.Entry{SeriesID: client.SeriesIDForUnregister}
 	entries := []pb.Entry{cce, notSessionManaged, newSessionEntry, unSessionEntry}
 	for _, e := range entries {
-		if e.IsUpdateEntry() {
-			t.Errorf("incorrectly considered as update entry")
-		}
+		require.False(t, e.IsUpdateEntry())
 	}
 	for _, e := range entries {
 		updates, _ := getEntryTypes([]pb.Entry{e})
-		if updates {
-			t.Errorf("incorrectly considered as update entry")
-		}
+		require.False(t, updates)
 	}
 }
 
@@ -1877,12 +1489,11 @@ func TestEntryAppliedInDiskSM(t *testing.T) {
 		{false, 100, 100, false},
 		{false, 100, 200, false},
 	}
-	for idx, tt := range tests {
-		sm := StateMachine{onDiskSM: tt.onDiskSM, onDiskInitIndex: tt.onDiskInitIndex}
+	for _, tt := range tests {
+		sm := StateMachine{onDiskSM: tt.onDiskSM,
+			onDiskInitIndex: tt.onDiskInitIndex}
 		result := sm.entryInInitDiskSM(tt.index)
-		if result != tt.result {
-			t.Errorf("%d failed", idx)
-		}
+		require.Equal(t, tt.result, result)
 	}
 }
 
@@ -1919,7 +1530,7 @@ func TestRecoverSMRequired2(t *testing.T) {
 	}
 	ssIndex := uint64(200)
 	node := newTestNodeProxy()
-	for idx, tt := range tests {
+	for _, tt := range tests {
 		sm := &StateMachine{
 			onDiskSM: true,
 			node:     node,
@@ -1933,17 +1544,14 @@ func TestRecoverSMRequired2(t *testing.T) {
 			Index:       ssIndex,
 			OnDiskIndex: tt.ssOnDiskIndex,
 		}
-		func() {
-			defer func() {
-				r := recover()
-				if tt.shouldPanic && r == nil {
-					t.Fatalf("%d, did not panic", idx)
-				} else if !tt.shouldPanic && r != nil {
-					t.Fatalf("%d, should not panic", idx)
-				}
-			}()
+		f := func() {
 			sm.checkPartialSnapshotApplyOnDiskSM(ss, tt.init)
-		}()
+		}
+		if tt.shouldPanic {
+			require.Panics(t, f)
+		} else {
+			require.NotPanics(t, f)
+		}
 	}
 }
 
@@ -1985,7 +1593,7 @@ func TestRecoverSMRequired(t *testing.T) {
 		{true, true, false, 100, 200, false},
 	}
 	ssIndex := uint64(200)
-	for idx, tt := range tests {
+	for _, tt := range tests {
 		sm := &StateMachine{
 			onDiskSM:        true,
 			onDiskInitIndex: tt.onDiskInitIndex,
@@ -1997,19 +1605,14 @@ func TestRecoverSMRequired(t *testing.T) {
 			Witness:     tt.witness,
 			Dummy:       tt.dummy,
 		}
-		func() {
-			defer func() {
-				if tt.dummy || tt.witness {
-					if r := recover(); r == nil {
-						t.Fatalf("%d, not panic", idx)
-					}
-				}
-
-			}()
-			if res := sm.recoverRequired(ss, tt.init); res != tt.required {
-				t.Errorf("%d, result %t, want %t", idx, res, tt.required)
-			}
-		}()
+		f := func() {
+			require.Equal(t, tt.required, sm.recoverRequired(ss, tt.init))
+		}
+		if tt.dummy || tt.witness {
+			require.Panics(t, f)
+		} else {
+			require.NotPanics(t, f)
+		}
 	}
 }
 
@@ -2026,20 +1629,14 @@ func TestIsShrunkSnapshot(t *testing.T) {
 		{true, true, true},
 	}
 	ssIndex := uint64(200)
-	for idx, tt := range tests {
+	for _, tt := range tests {
 		fs := vfs.GetTestFS()
 		defer func() {
-			if err := fs.RemoveAll(testSnapshotterDir); err != nil {
-				t.Fatalf("%v", err)
-			}
+			require.NoError(t, fs.RemoveAll(testSnapshotterDir))
 		}()
 		func() {
-			if err := fs.RemoveAll(testSnapshotterDir); err != nil {
-				t.Fatalf("%v", err)
-			}
-			if err := fs.MkdirAll(testSnapshotterDir, 0755); err != nil {
-				t.Fatalf("mkdir failed %v", err)
-			}
+			require.NoError(t, fs.RemoveAll(testSnapshotterDir))
+			require.NoError(t, fs.MkdirAll(testSnapshotterDir, 0755))
 			snapshotter := newTestSnapshotter(fs)
 			sm := &StateMachine{
 				snapshotter: snapshotter,
@@ -2051,9 +1648,7 @@ func TestIsShrunkSnapshot(t *testing.T) {
 				fp = fp + ".tmp"
 			}
 			w, err := NewSnapshotWriter(fp, pb.NoCompression, fs)
-			if err != nil {
-				t.Fatalf("failed to create snapshot writer %v", err)
-			}
+			require.NoError(t, err)
 			sessionData := make([]byte, testSessionSize)
 			storeData := make([]byte, testPayloadSize)
 			_, err = rand.Read(sessionData)
@@ -2061,38 +1656,28 @@ func TestIsShrunkSnapshot(t *testing.T) {
 			_, err = rand.Read(storeData)
 			require.NoError(t, err)
 			n, err := w.Write(sessionData)
-			if err != nil || n != len(sessionData) {
-				t.Fatalf("failed to write the session data")
-			}
+			require.NoError(t, err)
+			require.Equal(t, len(sessionData), n)
 			m, err := w.Write(storeData)
-			if err != nil || m != len(storeData) {
-				t.Fatalf("failed to write the store data")
-			}
-			if err := w.Close(); err != nil {
-				t.Fatalf("%v", err)
-			}
+			require.NoError(t, err)
+			require.Equal(t, len(storeData), m)
+			require.NoError(t, w.Close())
 			if tt.shrunk {
-				if err := ShrinkSnapshot(fp,
-					snapshotter.getFilePath(ssIndex), fs); err != nil {
-					t.Fatalf("failed to shrink %v", err)
-				}
+				err := ShrinkSnapshot(fp, snapshotter.getFilePath(ssIndex), fs)
+				require.NoError(t, err)
 			}
 			ss := pb.Snapshot{
 				Index: ssIndex,
 			}
-			defer func() {
-				if !tt.init && tt.shrunk {
-					if r := recover(); r == nil {
-						t.Fatalf("not panic")
-					}
-				}
-			}()
-			res, err := sm.isShrunkSnapshot(ss, tt.init)
-			if err != nil {
-				t.Fatalf("isShrunkSnapshot failed %v", err)
+			f := func() {
+				res, err := sm.isShrunkSnapshot(ss, tt.init)
+				require.NoError(t, err)
+				require.Equal(t, tt.isShrunk, res)
 			}
-			if res != tt.isShrunk {
-				t.Errorf("%d, result %t, want %t", idx, res, tt.isShrunk)
+			if !tt.init && tt.shrunk {
+				require.Panics(t, f)
+			} else {
+				require.NotPanics(t, f)
 			}
 		}()
 		reportLeakedFD(fs, t)
@@ -2113,15 +1698,13 @@ func TestReadyToStreamSnapshot(t *testing.T) {
 		{false, 200, 100, true},
 		{false, 100, 200, true},
 	}
-	for idx, tt := range tests {
+	for _, tt := range tests {
 		sm := &StateMachine{
 			onDiskSM:        tt.onDisk,
 			onDiskInitIndex: tt.onDiskInitIndex,
 		}
 		sm.lastApplied.index = tt.index
-		if result := sm.ReadyToStream(); result != tt.ready {
-			t.Errorf("%d, result %t, want %t", idx, result, tt.ready)
-		}
+		require.Equal(t, tt.ready, sm.ReadyToStream())
 	}
 }
 
@@ -2138,9 +1721,7 @@ func TestAlreadyAppliedInOnDiskSMEntryTreatedAsNoOP(t *testing.T) {
 		Index:    91,
 		Term:     6,
 	}
-	if err := sm.handleEntry(ent, false); err != nil {
-		t.Fatalf("handle entry failed %v", err)
-	}
+	require.NoError(t, sm.handleEntry(ent, false))
 }
 
 type testManagedStateMachine struct {
@@ -2159,17 +1740,22 @@ func (t *testManagedStateMachine) Open() (uint64, error) { return 10, nil }
 func (t *testManagedStateMachine) Update(sm.Entry) (sm.Result, error) {
 	return sm.Result{}, nil
 }
-func (t *testManagedStateMachine) Lookup(interface{}) (interface{}, error) { return nil, nil }
+func (t *testManagedStateMachine) Lookup(interface{}) (interface{}, error) {
+	return nil, nil
+}
 func (t *testManagedStateMachine) NALookup(input []byte) ([]byte, error) {
 	t.nalookup = true
 	return input, nil
 }
-func (t *testManagedStateMachine) ConcurrentLookup(interface{}) (interface{}, error) { return nil, nil }
-func (t *testManagedStateMachine) NAConcurrentLookup(input []byte) ([]byte, error) {
+func (t *testManagedStateMachine) ConcurrentLookup(interface{}) (interface{},
+	error) {
+	return nil, nil
+}
+func (t *testManagedStateMachine) NAConcurrentLookup(input []byte) ([]byte,
+	error) {
 	t.nalookup = true
 	return input, nil
 }
-
 func (t *testManagedStateMachine) Sync() error {
 	t.synced = true
 	return nil
@@ -2183,18 +1769,26 @@ func (t *testManagedStateMachine) Save(SSMeta,
 	io.Writer, []byte, sm.ISnapshotFileCollection) (bool, error) {
 	return false, nil
 }
-func (t *testManagedStateMachine) Recover(io.Reader, []sm.SnapshotFile) error {
+func (t *testManagedStateMachine) Recover(io.Reader,
+	[]sm.SnapshotFile) error {
 	return nil
 }
-func (t *testManagedStateMachine) Stream(interface{}, io.Writer) error { return nil }
-func (t *testManagedStateMachine) Offloaded() bool                     { return false }
-func (t *testManagedStateMachine) Loaded()                             {}
-func (t *testManagedStateMachine) Close() error                        { return nil }
-func (t *testManagedStateMachine) DestroyedC() <-chan struct{}         { return nil }
-func (t *testManagedStateMachine) Concurrent() bool                    { return t.concurrent }
-func (t *testManagedStateMachine) OnDisk() bool                        { return t.onDisk }
-func (t *testManagedStateMachine) Type() pb.StateMachineType           { return t.smType }
-func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry, error) {
+func (t *testManagedStateMachine) Stream(interface{}, io.Writer) error {
+	return nil
+}
+func (t *testManagedStateMachine) Offloaded() bool             { return false }
+func (t *testManagedStateMachine) Loaded()                     {}
+func (t *testManagedStateMachine) Close() error                { return nil }
+func (t *testManagedStateMachine) DestroyedC() <-chan struct{} { return nil }
+func (t *testManagedStateMachine) Concurrent() bool {
+	return t.concurrent
+}
+func (t *testManagedStateMachine) OnDisk() bool { return t.onDisk }
+func (t *testManagedStateMachine) Type() pb.StateMachineType {
+	return t.smType
+}
+func (t *testManagedStateMachine) BatchedUpdate(ents []sm.Entry) ([]sm.Entry,
+	error) {
 	if !t.corruptIndex {
 		t.first = ents[0].Index
 		t.last = ents[len(ents)-1].Index
@@ -2215,15 +1809,9 @@ func TestOnDiskStateMachineCanBeOpened(t *testing.T) {
 		node:     np,
 	}
 	index, err := sm.OpenOnDiskStateMachine()
-	if err != nil {
-		t.Errorf("open sm failed %v", err)
-	}
-	if index != 10 {
-		t.Errorf("unexpectedly index %d", index)
-	}
-	if sm.onDiskInitIndex != 10 {
-		t.Errorf("disk sm index not recorded")
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), index)
+	require.Equal(t, uint64(10), sm.onDiskInitIndex)
 }
 
 func TestSaveConcurrentSnapshot(t *testing.T) {
@@ -2246,15 +1834,9 @@ func TestSaveConcurrentSnapshot(t *testing.T) {
 	sm.lastApplied.term = 5
 	sm.members.members.Addresses[1] = "a1"
 	ss, _, err := sm.concurrentSave(SSRequest{})
-	if err != nil {
-		t.Fatalf("concurrent snapshot failed %v", err)
-	}
-	if ss.Index != 100 {
-		t.Errorf("unexpected index")
-	}
-	if !msm.synced {
-		t.Errorf("not synced")
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(100), ss.Index)
+	require.True(t, msm.synced)
 	reportLeakedFD(fs, t)
 }
 
@@ -2277,18 +1859,10 @@ func TestStreamSnapshot(t *testing.T) {
 	ts := &testSink{
 		chunks: make([]pb.Chunk, 0),
 	}
-	if err := sm.Stream(ts); err != nil {
-		t.Errorf("stream snapshot failed %v", err)
-	}
-	if len(ts.chunks) != 3 {
-		t.Fatalf("unexpected chunk count")
-	}
-	if !ts.chunks[1].IsLastChunk() {
-		t.Errorf("failed to get tail chunk")
-	}
-	if !ts.chunks[2].IsPoisonChunk() {
-		t.Errorf("failed to get the poison chunk")
-	}
+	require.NoError(t, sm.Stream(ts))
+	require.Len(t, ts.chunks, 3)
+	require.True(t, ts.chunks[1].IsLastChunk())
+	require.True(t, ts.chunks[2].IsPoisonChunk())
 	reportLeakedFD(fs, t)
 }
 
@@ -2324,24 +1898,12 @@ func TestHandleBatchedEntriesForOnDiskSM(t *testing.T) {
 		}
 		sm.lastApplied.index = tt.index
 		sm.lastApplied.term = 100
-		if err := sm.handleBatch(input, ents); err != nil {
-			t.Fatalf("handle batched entries failed %v", err)
-		}
-		if msm.first != tt.firstApplied {
-			t.Errorf("%d, unexpected first value, %d, %d", idx, msm.first, tt.firstApplied)
-		}
-		if msm.last != tt.lastApplied {
-			t.Errorf("%d, unexpected last value, %d, %d", idx, msm.last, tt.lastApplied)
-		}
-		if np.firstIndex != tt.firstApplied {
-			t.Errorf("unexpected first applied index: %d, want %d", np.firstIndex, tt.firstApplied)
-		}
-		if np.index != tt.lastApplied {
-			t.Errorf("%d, unexpected first value, %d, %d", idx, np.index, tt.lastApplied)
-		}
-		if sm.GetLastApplied() != tt.index {
-			t.Errorf("%d, last applied index moved", idx)
-		}
+		require.NoError(t, sm.handleBatch(input, ents))
+		require.Equal(t, tt.firstApplied, msm.first, "idx %d", idx)
+		require.Equal(t, tt.lastApplied, msm.last, "idx %d", idx)
+		require.Equal(t, tt.firstApplied, np.firstIndex)
+		require.Equal(t, tt.lastApplied, np.index, "idx %d", idx)
+		require.Equal(t, tt.index, sm.GetLastApplied(), "idx %d", idx)
 	}
 }
 
@@ -2361,14 +1923,9 @@ func TestCorruptedIndexValueWillBeDetected(t *testing.T) {
 	for i := uint64(1); i <= 10; i++ {
 		input = append(input, pb.Entry{Index: i, Term: 100})
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("failed to trigger panic")
-		}
-	}()
-	if err := sm.handleBatch(input, ents); err != nil {
-		t.Fatalf("handle batched entries failed %v", err)
-	}
+	require.Panics(t, func() {
+		_ = sm.handleBatch(input, ents)
+	})
 }
 
 func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
@@ -2384,44 +1941,25 @@ func TestNodeReadyIsSetWhenAnythingFromTaskQIsProcessed(t *testing.T) {
 		node:            np,
 	}
 	rec, err := sm.Handle(batch, ents)
-	if rec.IsSnapshotTask() {
-		t.Errorf("why snapshot?")
-	}
-	if err != nil {
-		t.Fatalf("handle failed")
-	}
-	if np.nodeReady != 0 {
-		t.Errorf("nodeReady unexpectedly updated")
-	}
+	require.False(t, rec.IsSnapshotTask())
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), np.nodeReady)
 	sm.taskQ.Add(Task{})
 	rec, err = sm.Handle(batch, ents)
-	if rec.IsSnapshotTask() {
-		t.Errorf("why snapshot?")
-	}
-	if err != nil {
-		t.Fatalf("handle failed")
-	}
-	if np.nodeReady != 1 {
-		t.Errorf("unexpected nodeReady count %d", np.nodeReady)
-	}
+	require.False(t, rec.IsSnapshotTask())
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), np.nodeReady)
 }
 
 func TestSyncedIndex(t *testing.T) {
 	sm := &StateMachine{}
 	sm.setSyncedIndex(100)
-	if sm.GetSyncedIndex() != 100 {
-		t.Errorf("failed to get synced index")
-	}
+	require.Equal(t, uint64(100), sm.GetSyncedIndex())
 	sm.setSyncedIndex(100)
-	if sm.GetSyncedIndex() != 100 {
-		t.Errorf("failed to get synced index")
-	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("failed to trigger panic")
-		}
-	}()
-	sm.setSyncedIndex(99)
+	require.Equal(t, uint64(100), sm.GetSyncedIndex())
+	require.Panics(t, func() {
+		sm.setSyncedIndex(99)
+	})
 }
 
 func TestNALookup(t *testing.T) {
@@ -2433,15 +1971,9 @@ func TestNALookup(t *testing.T) {
 	_, err := rand.Read(input)
 	require.NoError(t, err)
 	result, err := sm.NALookup(input)
-	if err != nil {
-		t.Errorf("NALookup failed %v", err)
-	}
-	if !bytes.Equal(input, result) {
-		t.Errorf("result changed")
-	}
-	if !msm.nalookup {
-		t.Errorf("NALookup not called")
-	}
+	require.NoError(t, err)
+	require.True(t, bytes.Equal(input, result))
+	require.True(t, msm.nalookup)
 }
 
 func TestIsDummySnapshot(t *testing.T) {
@@ -2467,23 +1999,16 @@ func TestIsDummySnapshot(t *testing.T) {
 		if tt.streaming {
 			r.Type = Streaming
 		}
-		if s.isDummySnapshot(r) != tt.dummy {
-			t.Errorf("%d, is dummy test failed", idx)
-		}
+		require.Equal(t, tt.dummy, s.isDummySnapshot(r), "idx %d", idx)
 	}
 }
 
 func TestWitnessNodePanicWhenSavingSnapshot(t *testing.T) {
 	sm := &StateMachine{isWitness: true}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("failed to trigger panic")
-		}
-	}()
-	_, _, err := sm.Save(SSRequest{})
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.Panics(t, func() {
+		_, _, err := sm.Save(SSRequest{})
+		require.NoError(t, err)
+	})
 }
 
 func TestSetLastApplied(t *testing.T) {
@@ -2505,23 +2030,16 @@ func TestSetLastApplied(t *testing.T) {
 		sm := StateMachine{}
 		sm.lastApplied.index = tt.index
 		sm.lastApplied.term = tt.term
-		func() {
-			defer func() {
-				if r := recover(); r == nil {
-					if tt.crash {
-						t.Fatalf("%d, failed to trigger panic", idx)
-					}
-				}
-			}()
+		f := func() {
 			sm.setLastApplied(tt.entries)
-			if tt.crash {
-				t.Fatalf("%d, failed to trigger panic", idx)
-			}
-			if sm.lastApplied.index != tt.entries[len(tt.entries)-1].Index ||
-				sm.lastApplied.term != tt.entries[len(tt.entries)-1].Term {
-				t.Errorf("%d, unexpected index/term", idx)
-			}
-		}()
+			require.Equal(t, tt.entries[len(tt.entries)-1].Index, sm.lastApplied.index)
+			require.Equal(t, tt.entries[len(tt.entries)-1].Term, sm.lastApplied.term)
+		}
+		if tt.crash {
+			require.Panics(t, f, "idx %d", idx)
+		} else {
+			require.NotPanics(t, f, "idx %d", idx)
+		}
 	}
 }
 
@@ -2547,17 +2065,14 @@ func TestSavingDummySnapshot(t *testing.T) {
 			onDiskSM: tt.smType == pb.OnDiskStateMachine,
 		}
 		var rt SSReqType
-		if tt.export && tt.streaming {
-			panic("bad test input")
-		}
+		require.False(t, tt.export && tt.streaming)
 		if tt.export {
 			rt = Exported
 		} else if tt.streaming {
 			rt = Streaming
 		}
-		if r := sm.savingDummySnapshot(SSRequest{Type: rt}); r != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, r, tt.result)
-		}
+		r := sm.savingDummySnapshot(SSRequest{Type: rt})
+		require.Equal(t, tt.result, r, "idx %d", idx)
 	}
 }
 
@@ -2598,25 +2113,16 @@ func TestPrepareIsNotCalledWhenSavingDummySnapshot(t *testing.T) {
 			sessions: NewSessionManager(),
 		}
 		var rt SSReqType
-		if tt.export && tt.streaming {
-			panic("bad test input")
-		}
+		require.False(t, tt.export && tt.streaming)
 		if tt.export {
 			rt = Exported
 		} else if tt.streaming {
 			rt = Streaming
 		}
 		meta, err := sm.prepare(SSRequest{Type: rt})
-		if err != nil {
-			t.Errorf("prepare failed, %v", err)
-		}
-		if meta.Index != 100 {
-			t.Errorf("failed to get the snapshot metadata")
-		}
-		if msm.prepareInvoked != tt.prepareInvoked {
-			t.Errorf("%d, prepareInvoked got %t, want %t",
-				idx, msm.prepareInvoked, tt.prepareInvoked)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(100), meta.Index)
+		require.Equal(t, tt.prepareInvoked, msm.prepareInvoked, "idx %d", idx)
 	}
 }
 
@@ -2631,7 +2137,9 @@ type errorUpdateSM struct{}
 func (e *errorUpdateSM) Update(i sm.Entry) (sm.Result, error) {
 	return sm.Result{}, errReturnedError
 }
-func (e *errorUpdateSM) Lookup(q interface{}) (interface{}, error) { return nil, nil }
+func (e *errorUpdateSM) Lookup(q interface{}) (interface{}, error) {
+	return nil, nil
+}
 func (e *errorUpdateSM) SaveSnapshot(io.Writer,
 	sm.ISnapshotFileCollection, <-chan struct{}) error {
 	return errReturnedError
@@ -2667,17 +2175,19 @@ func TestUpdateErrorIsReturned(t *testing.T) {
 	sm.index = 234
 	sm.taskQ.Add(commit)
 	batch := make([]Task, 0, 8)
-	if _, err := sm.Handle(batch, nil); !expectedError(err) {
-		t.Fatalf("failed to return the expected error, %v", err)
-	}
+	_, err := sm.Handle(batch, nil)
+	require.True(t, expectedError(err))
 }
 
 type errorNodeProxy struct{}
 
-func (e *errorNodeProxy) StepReady()                                        {}
-func (e *errorNodeProxy) RestoreRemotes(pb.Snapshot) error                  { return errReturnedError }
+func (e *errorNodeProxy) StepReady() {}
+func (e *errorNodeProxy) RestoreRemotes(pb.Snapshot) error {
+	return errReturnedError
+}
 func (e *errorNodeProxy) ApplyUpdate(pb.Entry, sm.Result, bool, bool, bool) {}
-func (e *errorNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64, bool) error {
+func (e *errorNodeProxy) ApplyConfigChange(pb.ConfigChange, uint64,
+	bool) error {
 	return errReturnedError
 }
 func (e *errorNodeProxy) ReplicaID() uint64           { return 1 }
@@ -2703,9 +2213,7 @@ func TestConfigChangeErrorIsReturned(t *testing.T) {
 		Address:        "localhost:1222",
 	}
 	data, err := cc.Marshal()
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	e := pb.Entry{
 		Cmd:   data,
 		Type:  pb.ConfigChangeEntry,
@@ -2718,11 +2226,9 @@ func TestConfigChangeErrorIsReturned(t *testing.T) {
 	sm.lastApplied.index = 234
 	sm.index = 234
 	sm.taskQ.Add(commit)
-	// two commits to handle
 	batch := make([]Task, 0, 8)
-	if _, err := sm.Handle(batch, nil); !expectedError(err) {
-		t.Fatalf("failed to return the expected error, %v", err)
-	}
+	_, err = sm.Handle(batch, nil)
+	require.True(t, expectedError(err))
 }
 
 func TestSaveErrorIsReturned(t *testing.T) {
@@ -2740,22 +2246,20 @@ func TestSaveErrorIsReturned(t *testing.T) {
 	sm.members.members.Addresses[1] = "localhost:1234"
 	sm.lastApplied.index = 234
 	sm.index = 234
-	if _, _, err := sm.Save(SSRequest{}); !expectedError(err) {
-		t.Fatalf("failed to return expected error %v", err)
-	}
+	_, _, err := sm.Save(SSRequest{})
+	require.True(t, expectedError(err))
 }
 
 func TestRecoverErrorIsReturned(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1234"
 		sm.lastApplied.index = 3
 		sm.index = 3
 		ss, _, err := sm.Save(SSRequest{})
-		if err != nil {
-			t.Fatalf("failed to make snapshot %v", err)
-		}
+		require.NoError(t, err)
 		index := ss.Index
 		commit := Task{
 			Index: index,
@@ -2767,9 +2271,8 @@ func TestRecoverErrorIsReturned(t *testing.T) {
 		snapshotter2 := newTestSnapshotter(fs)
 		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
-		if _, err := sm2.Recover(commit); !expectedError(err) {
-			t.Fatalf("failed to return expected error %v", err)
-		}
+		_, err = sm2.Recover(commit)
+		require.True(t, expectedError(err))
 	}
 	runSMTest2(t, tf, fs)
 }
@@ -2777,14 +2280,13 @@ func TestRecoverErrorIsReturned(t *testing.T) {
 func TestRestoreRemoteErrorIsReturned(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, sm *StateMachine, ds IManagedStateMachine,
-		nodeProxy *testNodeProxy, snapshotter *testSnapshotter, store sm.IStateMachine) {
+		nodeProxy *testNodeProxy, snapshotter *testSnapshotter,
+		store sm.IStateMachine) {
 		sm.members.members.Addresses[1] = "localhost:1234"
 		sm.lastApplied.index = 3
 		sm.index = 3
 		ss, _, err := sm.Save(SSRequest{})
-		if err != nil {
-			t.Fatalf("failed to make snapshot %v", err)
-		}
+		require.NoError(t, err)
 		index := ss.Index
 		commit := Task{
 			Index: index,
@@ -2797,9 +2299,8 @@ func TestRestoreRemoteErrorIsReturned(t *testing.T) {
 		snapshotter2 := newTestSnapshotter(fs)
 		snapshotter2.index = commit.Index
 		sm2 := NewStateMachine(ds2, snapshotter2, config, nodeProxy2, fs)
-		if _, err := sm2.Recover(commit); !expectedError(err) {
-			t.Fatalf("failed to return expected error %v", err)
-		}
+		_, err = sm2.Recover(commit)
+		require.True(t, expectedError(err))
 	}
 	runSMTest2(t, tf, fs)
 }

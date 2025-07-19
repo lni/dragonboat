@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/tests"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOnDiskSMCanBeOpened(t *testing.T) {
@@ -26,12 +27,8 @@ func TestOnDiskSMCanBeOpened(t *testing.T) {
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
 	idx, err := od.Open(nil)
-	if err != nil {
-		t.Fatalf("failed to open %v", err)
-	}
-	if idx != applied {
-		t.Errorf("unexpected idx %d", idx)
-	}
+	require.NoError(t, err, "failed to open")
+	require.Equal(t, applied, idx, "unexpected idx")
 }
 
 func TestOnDiskSMCanNotBeOpenedMoreThanOnce(t *testing.T) {
@@ -39,20 +36,13 @@ func TestOnDiskSMCanNotBeOpenedMoreThanOnce(t *testing.T) {
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
 	idx, err := od.Open(nil)
-	if err != nil {
-		t.Fatalf("failed to open %v", err)
-	}
-	if idx != applied {
-		t.Errorf("unexpected idx %d", idx)
-	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("no panic")
-		}
-	}()
-	if _, err := od.Open(nil); err != nil {
-		t.Fatalf("open failed %v", err)
-	}
+	require.NoError(t, err, "failed to open")
+	require.Equal(t, applied, idx, "unexpected idx")
+
+	require.Panics(t, func() {
+		_, err := od.Open(nil)
+		require.NoError(t, err, "open failed")
+	}, "expected panic when opening twice")
 }
 
 func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
@@ -60,13 +50,9 @@ func TestLookupCanBeCalledOnceOnDiskSMIsOpened(t *testing.T) {
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
 	_, err := od.Open(nil)
-	if err != nil {
-		t.Fatalf("failed to open %v", err)
-	}
+	require.NoError(t, err, "failed to open")
 	_, err = od.Lookup(nil)
-	if err != nil {
-		t.Errorf("lookup failed %v", err)
-	}
+	require.NoError(t, err, "lookup failed")
 }
 
 func TestRecoverFromSnapshotCanComplete(t *testing.T) {
@@ -74,13 +60,10 @@ func TestRecoverFromSnapshotCanComplete(t *testing.T) {
 	fd := tests.NewFakeDiskSM(applied)
 	od := NewOnDiskStateMachine(fd)
 	_, err := od.Open(nil)
-	if err != nil {
-		t.Fatalf("failed to open %v", err)
-	}
+	require.NoError(t, err, "failed to open")
 	buf := make([]byte, 16)
 	reader := bytes.NewBuffer(buf)
 	stopc := make(chan struct{})
-	if err := od.Recover(reader, nil, stopc); err != nil {
-		t.Errorf("recover from snapshot failed %v", err)
-	}
+	err = od.Recover(reader, nil, stopc)
+	require.NoError(t, err, "recover from snapshot failed")
 }

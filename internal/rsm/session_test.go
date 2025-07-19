@@ -42,18 +42,16 @@ func TestResponseCanBeAdded(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
+			s.addResponse(tt.seriesNumList[idx],
+				sm.Result{Value: tt.valueList[idx]})
 		}
-		if len(s.History) != tt.size {
-			t.Errorf("i %d, size %d, want %d", i, len(s.History), tt.size)
-		}
+		require.Equal(t, tt.size, len(s.History),
+			"i %d, size mismatch", i)
 		v, ok := s.getResponse(tt.testSeriesNum)
-		if v.Value != tt.expectedValue {
-			t.Errorf("i %d, v %d, want %d", i, v, tt.expectedValue)
-		}
-		if ok != tt.expectedResult {
-			t.Errorf("i %d, v %t, want %t", i, ok, tt.expectedResult)
-		}
+		require.Equal(t, tt.expectedValue, v.Value,
+			"i %d, value mismatch", i)
+		require.Equal(t, tt.expectedResult, ok,
+			"i %d, result mismatch", i)
 	}
 }
 
@@ -76,16 +74,15 @@ func TestCachedResponseDataCanBeCleared(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
+			s.addResponse(tt.seriesNumList[idx],
+				sm.Result{Value: tt.valueList[idx]})
 		}
 		s.clearTo(tt.clearTo)
-		if len(s.History) != tt.sizeAfterClear {
-			t.Errorf("i %d, size %d, want %d", i, len(s.History), tt.sizeAfterClear)
-		}
+		require.Equal(t, tt.sizeAfterClear, len(s.History),
+			"i %d, size after clear mismatch", i)
 		_, ok := s.getResponse(tt.testSeriesNum)
-		if ok != tt.expectedResult {
-			t.Errorf("i %d, resp %t, want %t", i, ok, tt.expectedResult)
-		}
+		require.Equal(t, tt.expectedResult, ok,
+			"i %d, response result mismatch", i)
 	}
 }
 
@@ -108,14 +105,14 @@ func TestWhetherResponsedCanBeReturned(t *testing.T) {
 	for i, tt := range tests {
 		s := newSession(0)
 		for idx := range tt.seriesNumList {
-			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx]})
+			s.addResponse(tt.seriesNumList[idx],
+				sm.Result{Value: tt.valueList[idx]})
 		}
 
 		s.clearTo(tt.clearTo)
 		ok := s.hasResponded(tt.testID)
-		if ok != tt.expectedResult {
-			t.Errorf("i %d, resp %t, want %t", i, ok, tt.expectedResult)
-		}
+		require.Equal(t, tt.expectedResult, ok,
+			"i %d, response check mismatch", i)
 	}
 }
 
@@ -134,22 +131,19 @@ func TestSessionCanBeSavedAndRestored(t *testing.T) {
 			cmd := make([]byte, 1234)
 			_, err := rand.Read(cmd)
 			require.NoError(t, err)
-			s.addResponse(tt.seriesNumList[idx], sm.Result{Value: tt.valueList[idx], Data: cmd})
+			s.addResponse(tt.seriesNumList[idx],
+				sm.Result{Value: tt.valueList[idx], Data: cmd})
 		}
 		snapshot := &bytes.Buffer{}
-		if err := s.save(snapshot); err != nil {
-			t.Fatalf("save failed %v", err)
-		}
+		err := s.save(snapshot)
+		require.NoError(t, err, "save failed")
 		data := snapshot.Bytes()
 		toRecover := bytes.NewBuffer(data)
 		newS := &Session{}
-		err := newS.recoverFromSnapshot(toRecover, V2)
-		if err != nil {
-			t.Fatalf("failed to create session from snapshot, %v", err)
-		}
-		if !reflect.DeepEqual(newS, s) {
-			t.Errorf("i %d, got %v, want %v", i, newS, s)
-		}
+		err = newS.recoverFromSnapshot(toRecover, V2)
+		require.NoError(t, err, "failed to create session from snapshot")
+		require.True(t, reflect.DeepEqual(newS, s),
+			"i %d, session mismatch", i)
 	}
 }
 
@@ -163,37 +157,29 @@ func TestSessionCanBeRestoredFromV1Snapshot(t *testing.T) {
 	session.History[5678] = 458
 	ss := &bytes.Buffer{}
 	data, err := json.Marshal(session)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	sz := len(data)
 	lenbuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(lenbuf, uint64(sz))
 	_, err = ss.Write(lenbuf)
-	if err != nil {
-		t.Errorf("failed to write %v", err)
-	}
+	require.NoError(t, err, "failed to write length buffer")
 	_, err = ss.Write(data)
-	if err != nil {
-		t.Errorf("failed to write %v", err)
-	}
+	require.NoError(t, err, "failed to write data")
 	newS := &Session{}
 	data = ss.Bytes()
 	toRecover := bytes.NewBuffer(data)
-	if err := newS.recoverFromSnapshot(toRecover, V1); err != nil {
-		t.Errorf("recover from ss %v", err)
-	}
-	if newS.ClientID != session.ClientID || newS.RespondedUpTo != session.RespondedUpTo {
-		t.Errorf("field changed")
-	}
+	err = newS.recoverFromSnapshot(toRecover, V1)
+	require.NoError(t, err, "recover from snapshot failed")
+	require.Equal(t, session.ClientID, newS.ClientID,
+		"ClientID field changed")
+	require.Equal(t, session.RespondedUpTo, newS.RespondedUpTo,
+		"RespondedUpTo field changed")
 	v1, ok := newS.History[1234]
-	if !ok || v1.Value != 324 {
-		t.Errorf("unexpected v1")
-	}
+	require.True(t, ok, "v1 not found")
+	require.Equal(t, uint64(324), v1.Value, "unexpected v1 value")
 	v2, ok := newS.History[5678]
-	if !ok || v2.Value != 458 {
-		t.Errorf("unexpected v2")
-	}
+	require.True(t, ok, "v2 not found")
+	require.Equal(t, uint64(458), v2.Value, "unexpected v2 value")
 }
 
 func TestUnknownVersionCausePanicWhenRecoverSessionFromSnapshot(t *testing.T) {
@@ -204,29 +190,19 @@ func TestUnknownVersionCausePanicWhenRecoverSessionFromSnapshot(t *testing.T) {
 	}
 	ss := &bytes.Buffer{}
 	data, err := json.Marshal(session)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	sz := len(data)
 	lenbuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(lenbuf, uint64(sz))
 	_, err = ss.Write(lenbuf)
-	if err != nil {
-		t.Errorf("failed to write %v", err)
-	}
+	require.NoError(t, err, "failed to write length buffer")
 	_, err = ss.Write(data)
-	if err != nil {
-		t.Errorf("failed to write %v", err)
-	}
+	require.NoError(t, err, "failed to write data")
 	newS := &Session{}
 	data = ss.Bytes()
 	toRecover := bytes.NewBuffer(data)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("panic not triggered")
-		}
-	}()
-	if err := newS.recoverFromSnapshot(toRecover, SSVersion(3)); err != nil {
-		t.Errorf("recover from ss %v", err)
-	}
+	require.Panics(t, func() {
+		err := newS.recoverFromSnapshot(toRecover, SSVersion(3))
+		require.NoError(t, err, "recover from snapshot failed")
+	}, "panic should be triggered for unknown version")
 }

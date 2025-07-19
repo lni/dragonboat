@@ -15,7 +15,6 @@
 package rsm
 
 import (
-	"bytes"
 	"crypto/rand"
 	"testing"
 
@@ -40,15 +39,9 @@ func TestGetEntryPayload(t *testing.T) {
 		Type: pb.EncodedEntry,
 		Cmd:  GetEncoded(dio.Snappy, e3payload, make([]byte, 512)),
 	}
-	if !bytes.Equal(e1.Cmd, mustGetPayload(e1)) {
-		t.Errorf("e1 payload changed")
-	}
-	if !bytes.Equal(e2.Cmd, mustGetPayload(e2)) {
-		t.Errorf("e2 payload changed")
-	}
-	if !bytes.Equal(e3payload, mustGetPayload(e3)) {
-		t.Errorf("e3 payload changed")
-	}
+	require.Equal(t, e1.Cmd, mustGetPayload(e1), "e1 payload changed")
+	require.Equal(t, e2.Cmd, mustGetPayload(e2), "e2 payload changed")
+	require.Equal(t, e3payload, mustGetPayload(e3), "e3 payload changed")
 }
 
 func TestGetV0EncodedPayload(t *testing.T) {
@@ -88,24 +81,16 @@ func TestGetV0EncodedPayload(t *testing.T) {
 		}
 		result := GetEncoded(tt.ct, src, dst)
 		ver, ct, hasSession := parseEncodedHeader(result)
-		if ver != EEV0 {
-			t.Errorf("invalid version number %d", ver)
+		require.Equal(t, EEV0, ver, "invalid version number %d", ver)
+		require.False(t, hasSession, "unexpectedly has session flag set")
+		if tt.ct == dio.NoCompression {
+			require.Equal(t, EENoCompression, ct, "unexpected ct")
 		}
-		if hasSession {
-			t.Errorf("unexpectedly has session flag set")
-		}
-		if tt.ct == dio.NoCompression && ct != EENoCompression {
-			t.Errorf("unexpected ct")
-		}
-		if tt.ct == dio.Snappy && ct != EESnappy {
-			t.Errorf("invalid ct")
+		if tt.ct == dio.Snappy {
+			require.Equal(t, EESnappy, ct, "invalid ct")
 		}
 		decoded, err := getDecodedPayload(result, nil)
-		if err != nil {
-			t.Fatalf("failed to get decoded payload %v", err)
-		}
-		if !bytes.Equal(decoded, src) {
-			t.Errorf("%d, content changed", idx)
-		}
+		require.NoError(t, err, "failed to get decoded payload %v", err)
+		require.Equal(t, src, decoded, "%d, content changed", idx)
 	}
 }

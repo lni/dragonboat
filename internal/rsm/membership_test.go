@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAddressEqual(t *testing.T) {
@@ -37,9 +39,7 @@ func TestAddressEqual(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		result := addressEqual(tt.addr1, tt.addr2)
-		if result != tt.equal {
-			t.Errorf("%d, got %t, want %t", idx, result, tt.equal)
-		}
+		assert.Equal(t, tt.equal, result, "test case %d", idx)
 	}
 }
 
@@ -57,33 +57,27 @@ func TestDeepCopyMembership(t *testing.T) {
 	m.Removed[1] = true
 	m.NonVotings[1] = "addr1"
 	m.Witnesses[1] = "addr1"
-	if copied.ConfigChangeId != 101 ||
-		len(copied.Addresses) != 0 ||
-		len(copied.Removed) != 0 ||
-		len(copied.NonVotings) != 0 {
-		t.Fatalf("copied membership changed")
-	}
+	assert.Equal(t, uint64(101), copied.ConfigChangeId)
+	assert.Empty(t, copied.Addresses)
+	assert.Empty(t, copied.Removed)
+	assert.Empty(t, copied.NonVotings)
+	assert.Empty(t, copied.Witnesses)
+
 	copied2 := deepCopyMembership(m)
-	if copied2.ConfigChangeId != 102 ||
-		len(copied2.Addresses) != 1 ||
-		len(copied2.Removed) != 1 ||
-		len(copied2.NonVotings) != 1 ||
-		len(copied2.Witnesses) != 1 {
-		t.Fatalf("unexpected copied membership data")
-	}
+	assert.Equal(t, uint64(102), copied2.ConfigChangeId)
+	assert.Len(t, copied2.Addresses, 1)
+	assert.Len(t, copied2.Removed, 1)
+	assert.Len(t, copied2.NonVotings, 1)
+	assert.Len(t, copied2.Witnesses, 1)
 }
 
 func TestMembershipCanBeCreated(t *testing.T) {
 	m := newMembership(1, 2, true)
-	if !m.ordered {
-		t.Errorf("not ordered")
-	}
-	if len(m.members.Addresses) != 0 ||
-		len(m.members.NonVotings) != 0 ||
-		len(m.members.Removed) != 0 ||
-		len(m.members.Witnesses) != 0 {
-		t.Errorf("unexpected data")
-	}
+	assert.True(t, m.ordered)
+	assert.Empty(t, m.members.Addresses)
+	assert.Empty(t, m.members.NonVotings)
+	assert.Empty(t, m.members.Removed)
+	assert.Empty(t, m.members.Witnesses)
 }
 
 func TestMembershipCanBeSet(t *testing.T) {
@@ -100,33 +94,27 @@ func TestMembershipCanBeSet(t *testing.T) {
 	m.Witnesses[4] = "addr3"
 	o := newMembership(1, 2, true)
 	o.set(m)
-	if len(o.members.Addresses) != 1 ||
-		len(o.members.NonVotings) != 1 ||
-		len(o.members.Removed) != 1 ||
-		len(o.members.Witnesses) != 1 ||
-		o.members.ConfigChangeId != 101 {
-		t.Errorf("membership not set")
-	}
+	assert.Len(t, o.members.Addresses, 1)
+	assert.Len(t, o.members.NonVotings, 1)
+	assert.Len(t, o.members.Removed, 1)
+	assert.Len(t, o.members.Witnesses, 1)
+	assert.Equal(t, uint64(101), o.members.ConfigChangeId)
+
 	m.ConfigChangeId = 200
 	m.Addresses[5] = "addr4"
-	if o.members.ConfigChangeId != 101 || len(o.members.Addresses) != 1 {
-		t.Fatalf("membership changed")
-	}
+	assert.Equal(t, uint64(101), o.members.ConfigChangeId)
+	assert.Len(t, o.members.Addresses, 1)
 }
 
 func TestMembershipIsEmpty(t *testing.T) {
 	o := newMembership(1, 2, true)
-	if !o.isEmpty() {
-		t.Errorf("not marked as empty")
-	}
+	assert.True(t, o.isEmpty())
+
 	o.members.NonVotings[1] = "addr1"
-	if !o.isEmpty() {
-		t.Errorf("not marked as empty")
-	}
+	assert.True(t, o.isEmpty())
+
 	o.members.Addresses[1] = "addr2"
-	if o.isEmpty() {
-		t.Errorf("still marked as empty")
-	}
+	assert.False(t, o.isEmpty())
 }
 
 func TestIsDeletingOnlyNode(t *testing.T) {
@@ -140,20 +128,14 @@ func TestIsDeletingOnlyNode(t *testing.T) {
 		Type:      pb.AddNode,
 		ReplicaID: 1,
 	}
-	if !o.isDeleteOnlyNode(cc) {
-		t.Errorf("not considered as deleting only node")
-	}
-	if o.isDeleteOnlyNode(cc2) {
-		t.Errorf("not even a delete node op")
-	}
+	assert.True(t, o.isDeleteOnlyNode(cc))
+	assert.False(t, o.isDeleteOnlyNode(cc2))
+
 	o.members.NonVotings[2] = "a2"
-	if !o.isDeleteOnlyNode(cc) {
-		t.Errorf("not considered as deleting only node")
-	}
+	assert.True(t, o.isDeleteOnlyNode(cc))
+
 	o.members.Addresses[3] = "a3"
-	if o.isDeleteOnlyNode(cc) {
-		t.Errorf("still considered as deleting only node")
-	}
+	assert.False(t, o.isDeleteOnlyNode(cc))
 }
 
 func TestIsAddingRemovedNode(t *testing.T) {
@@ -161,35 +143,27 @@ func TestIsAddingRemovedNode(t *testing.T) {
 	cc := pb.ConfigChange{}
 	cc.Type = pb.AddNode
 	cc.ReplicaID = 1
-	if o.isAddRemovedNode(cc) {
-		t.Errorf("incorrect result")
-	}
+	assert.False(t, o.isAddRemovedNode(cc))
+
 	cc.Type = pb.AddNonVoting
-	if o.isAddRemovedNode(cc) {
-		t.Errorf("incorrect result")
-	}
+	assert.False(t, o.isAddRemovedNode(cc))
+
 	cc.Type = pb.RemoveNode
-	if o.isAddRemovedNode(cc) {
-		t.Errorf("incorrect result")
-	}
+	assert.False(t, o.isAddRemovedNode(cc))
+
 	cc.Type = pb.AddWitness
-	if o.isAddRemovedNode(cc) {
-		t.Errorf("incorrect result")
-	}
+	assert.False(t, o.isAddRemovedNode(cc))
+
 	o.members.Removed[1] = true
 	cc.Type = pb.AddNode
-	if !o.isAddRemovedNode(cc) {
-		t.Errorf("not rejected")
-	}
+	assert.True(t, o.isAddRemovedNode(cc))
+
 	cc.Type = pb.AddWitness
-	if !o.isAddRemovedNode(cc) {
-		t.Errorf("not rejected")
-	}
+	assert.True(t, o.isAddRemovedNode(cc))
+
 	cc.Type = pb.AddNonVoting
 	cc.ReplicaID = 2
-	if o.isAddRemovedNode(cc) {
-		t.Errorf("incorrectly rejected")
-	}
+	assert.False(t, o.isAddRemovedNode(cc))
 }
 
 func TestIsAddingNodeAsNonVoting(t *testing.T) {
@@ -220,9 +194,7 @@ func TestIsAddingNodeAsNonVoting(t *testing.T) {
 			o.members.Addresses[v] = "addr"
 		}
 		result := o.isAddNodeAsNonVoting(cc)
-		if result != tt.result {
-			t.Errorf("%d failed", idx)
-		}
+		assert.Equal(t, tt.result, result, "test case %d", idx)
 	}
 }
 
@@ -250,9 +222,8 @@ func TestIsConfChangeUpToDate(t *testing.T) {
 			Initialize:     tt.initialize,
 			ConfigChangeId: tt.iccid,
 		}
-		if result := o.isUpToDate(cc); result != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
-		}
+		result := o.isUpToDate(cc)
+		assert.Equal(t, tt.result, result, "test case %d", idx)
 	}
 }
 
@@ -265,23 +236,40 @@ func TestIsAddingExistingMember(t *testing.T) {
 		replicaID  uint64
 		result     bool
 	}{
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, true},
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
-		{pb.AddNode, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, false},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 1, false},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 1, true},
-		{pb.AddWitness, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
-		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a1", 3, true},
-		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 4, true},
-		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a3", 3, false},
-		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a4", 2, true},
-		{pb.AddNonVoting, map[uint64]string{1: "a1"}, map[uint64]string{2: "a2"}, "a2", 2, true},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a3", 1, true},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a1", 1, true},
+		{pb.AddNode, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 2, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a3", 1, false},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a1", 1, true},
+		{pb.AddWitness, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 2, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a1", 3, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 4, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a3", 3, false},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a4", 2, true},
+		{pb.AddNonVoting, map[uint64]string{1: "a1"},
+			map[uint64]string{2: "a2"}, "a2", 2, true},
 	}
 	for idx, tt := range tests {
 		o := newMembership(1, 2, true)
@@ -296,9 +284,8 @@ func TestIsAddingExistingMember(t *testing.T) {
 			Address:   tt.addr,
 			ReplicaID: tt.replicaID,
 		}
-		if result := o.isAddExistingMember(cc); result != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
-		}
+		result := o.isAddExistingMember(cc)
+		assert.Equal(t, tt.result, result, "test case %d", idx)
 	}
 }
 
@@ -330,9 +317,8 @@ func TestIsPromotingNonVoting(t *testing.T) {
 			Address:   tt.addr,
 			ReplicaID: tt.replicaID,
 		}
-		if result := o.isPromoteNonVoting(cc); result != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
-		}
+		result := o.isPromoteNonVoting(cc)
+		assert.Equal(t, tt.result, result, "test case %d", idx)
 	}
 }
 
@@ -364,9 +350,8 @@ func TestIsInvalidNonVotingPromotion(t *testing.T) {
 			Address:   tt.addr,
 			ReplicaID: tt.replicaID,
 		}
-		if result := o.isInvalidNonVotingPromotion(cc); result != tt.result {
-			t.Errorf("%d, got %t, want %t", idx, result, tt.result)
-		}
+		result := o.isInvalidNonVotingPromotion(cc)
+		assert.Equal(t, tt.result, result, "test case %d", idx)
 	}
 }
 
@@ -378,13 +363,11 @@ func TestApplyAddNode(t *testing.T) {
 		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
-	if o.members.ConfigChangeId != 1000 {
-		t.Errorf("ccid not updated")
-	}
+	assert.Equal(t, uint64(1000), o.members.ConfigChangeId)
 	v, ok := o.members.Addresses[100]
-	if !ok || v != "a1" || len(o.members.Addresses) != 1 {
-		t.Errorf("node not added")
-	}
+	assert.True(t, ok)
+	assert.Equal(t, "a1", v)
+	assert.Len(t, o.members.Addresses, 1)
 }
 
 func TestAddNodeCanPromoteNonVotingToNode(t *testing.T) {
@@ -397,13 +380,11 @@ func TestAddNodeCanPromoteNonVotingToNode(t *testing.T) {
 	}
 	o.apply(cc, 1000)
 	v, ok := o.members.Addresses[100]
-	if !ok || v != "a2" || len(o.members.Addresses) != 1 {
-		t.Errorf("node not added")
-	}
+	assert.True(t, ok)
+	assert.Equal(t, "a2", v)
+	assert.Len(t, o.members.Addresses, 1)
 	_, ok = o.members.NonVotings[100]
-	if ok {
-		t.Errorf("promoted nonVoting not removed")
-	}
+	assert.False(t, ok)
 }
 
 func TestApplyAddNonVoting(t *testing.T) {
@@ -414,13 +395,11 @@ func TestApplyAddNonVoting(t *testing.T) {
 		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
-	if o.members.ConfigChangeId != 1000 {
-		t.Errorf("ccid not updated")
-	}
+	assert.Equal(t, uint64(1000), o.members.ConfigChangeId)
 	v, ok := o.members.NonVotings[100]
-	if !ok || v != "a1" || len(o.members.NonVotings) != 1 {
-		t.Errorf("node not added")
-	}
+	assert.True(t, ok)
+	assert.Equal(t, "a1", v)
+	assert.Len(t, o.members.NonVotings, 1)
 }
 
 func TestAddingExistingNodeAsNonVotingIsNotAllowed(t *testing.T) {
@@ -431,17 +410,10 @@ func TestAddingExistingNodeAsNonVotingIsNotAllowed(t *testing.T) {
 		Address:   "a1",
 		ReplicaID: 100,
 	}
-	if o.handleConfigChange(cc, 0) {
-		t.Errorf("ading existing node as nonVoting is not rejected")
-	}
+	assert.False(t, o.handleConfigChange(cc, 0))
 }
 
 func TestAddingExistingNodeAsNonVotingWillPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("not panic")
-		}
-	}()
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
@@ -449,15 +421,12 @@ func TestAddingExistingNodeAsNonVotingWillPanic(t *testing.T) {
 		Address:   "a1",
 		ReplicaID: 100,
 	}
-	o.apply(cc, 1000)
+	require.Panics(t, func() {
+		o.apply(cc, 1000)
+	})
 }
 
 func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("not panic")
-		}
-	}()
 	o := newMembership(1, 2, true)
 	o.members.Addresses[100] = "a1"
 	cc := pb.ConfigChange{
@@ -465,15 +434,12 @@ func TestAddingExistingNodeAsWitnessWillPanic(t *testing.T) {
 		Address:   "a1",
 		ReplicaID: 100,
 	}
-	o.apply(cc, 1000)
+	require.Panics(t, func() {
+		o.apply(cc, 1000)
+	})
 }
 
 func TestAddingExistingNonVotingAsWitnessWillPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("not panic")
-		}
-	}()
 	o := newMembership(1, 2, true)
 	o.members.NonVotings[100] = "a1"
 	cc := pb.ConfigChange{
@@ -481,7 +447,9 @@ func TestAddingExistingNonVotingAsWitnessWillPanic(t *testing.T) {
 		Address:   "a1",
 		ReplicaID: 100,
 	}
-	o.apply(cc, 1000)
+	require.Panics(t, func() {
+		o.apply(cc, 1000)
+	})
 }
 
 func TestApplyRemoveNode(t *testing.T) {
@@ -494,13 +462,9 @@ func TestApplyRemoveNode(t *testing.T) {
 		ReplicaID: 100,
 	}
 	o.apply(cc, 1000)
-	if len(o.members.Addresses) != 0 ||
-		len(o.members.NonVotings) != 0 ||
-		len(o.members.Witnesses) != 0 {
-		t.Errorf("node not removed")
-	}
+	assert.Empty(t, o.members.Addresses)
+	assert.Empty(t, o.members.NonVotings)
+	assert.Empty(t, o.members.Witnesses)
 	_, ok := o.members.Removed[100]
-	if !ok {
-		t.Errorf("not recorded as removed")
-	}
+	assert.True(t, ok)
 }

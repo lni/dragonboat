@@ -39,9 +39,7 @@ func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 func TestSnapshotWriterCanBeCreated(t *testing.T) {
 	fs := vfs.GetTestFS()
 	w, err := NewSnapshotWriter(testSnapshotFilename, pb.NoCompression, fs)
-	if err != nil {
-		t.Fatalf("failed to create snapshot writer %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(testSnapshotFilename); err != nil {
 			t.Fatalf("%v", err)
@@ -61,9 +59,7 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 	}()
 	func() {
 		w, err := NewSnapshotWriter(testSnapshotFilename, pb.NoCompression, fs)
-		if err != nil {
-			t.Fatalf("failed to create snapshot writer %v", err)
-		}
+		require.NoError(t, err)
 		sessionData := make([]byte, testSessionSize)
 		storeData := make([]byte, testPayloadSize)
 		_, err = rand.Read(sessionData)
@@ -71,35 +67,22 @@ func TestSaveHeaderSavesTheHeader(t *testing.T) {
 		_, err = rand.Read(storeData)
 		require.NoError(t, err)
 		n, err := w.Write(sessionData)
-		if err != nil || n != len(sessionData) {
-			t.Fatalf("failed to write the session data")
-		}
+		require.NoError(t, err)
+		require.Equal(t, len(sessionData), n)
 		m, err := w.Write(storeData)
-		if err != nil || m != len(storeData) {
-			t.Fatalf("failed to write the store data")
-		}
+		require.NoError(t, err)
+		require.Equal(t, len(storeData), m)
 		err = w.Close()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		r, header, err := NewSnapshotReader(testSnapshotFilename, fs)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, r.Close())
 		}()
-		if SSVersion(header.Version) != DefaultVersion {
-			t.Errorf("invalid version %d, want %d", header.Version, DefaultVersion)
-		}
-		if header.ChecksumType != DefaultChecksumType {
-			t.Errorf("unexpected checksum type %d, want %d",
-				header.ChecksumType, DefaultChecksumType)
-		}
+		require.Equal(t, DefaultVersion, SSVersion(header.Version))
+		require.Equal(t, DefaultChecksumType, header.ChecksumType)
 		storeChecksum := w.vw.GetPayloadSum()
-		if !bytes.Equal(header.PayloadChecksum, storeChecksum) {
-			t.Errorf("data store checksum mismatch")
-		}
+		require.True(t, bytes.Equal(header.PayloadChecksum, storeChecksum))
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -109,10 +92,9 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	if err := fs.RemoveAll(testSnapshotFilename); err != nil {
 		t.Fatalf("%v", err)
 	}
-	w, err := newVersionedSnapshotWriter(testSnapshotFilename, v, pb.NoCompression, fs)
-	if err != nil {
-		t.Fatalf("failed to create snapshot writer %v", err)
-	}
+	w, err := newVersionedSnapshotWriter(testSnapshotFilename, v,
+		pb.NoCompression, fs)
+	require.NoError(t, err)
 	sessionData := make([]byte, ssz)
 	storeData := make([]byte, psz)
 	_, err = rand.Read(sessionData)
@@ -120,13 +102,11 @@ func makeTestSnapshotFile(t *testing.T, ssz uint64,
 	_, err = rand.Read(storeData)
 	require.NoError(t, err)
 	n, err := w.Write(sessionData)
-	if err != nil || n != len(sessionData) {
-		t.Fatalf("failed to write the session data")
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(sessionData), n)
 	m, err := w.Write(storeData)
-	if err != nil || m != len(storeData) {
-		t.Fatalf("failed to write the store data")
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(storeData), m)
 	if err := w.Close(); err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -137,21 +117,17 @@ func corruptSnapshotPayload(t *testing.T, fs vfs.IFS) {
 	tmpFp := "testsnapshot.writing"
 	func() {
 		f, err := fs.ReuseForWrite(testSnapshotFilename, tmpFp)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, f.Close())
 		}()
 		s := (testSessionSize + testPayloadSize) / 2
 		data := make([]byte, 1)
-		if _, err := f.ReadAt(data, int64(HeaderSize+s)); err != nil {
-			t.Fatalf("%v", err)
-		}
+		_, err = f.ReadAt(data, int64(HeaderSize+s))
+		require.NoError(t, err)
 		data[0] = data[0] + 1
-		if _, err := f.WriteAt(data, int64(HeaderSize+s)); err != nil {
-			t.Fatalf("%v", err)
-		}
+		_, err = f.WriteAt(data, int64(HeaderSize+s))
+		require.NoError(t, err)
 	}()
 	if err := fs.Rename(tmpFp, testSnapshotFilename); err != nil {
 		t.Fatalf("%v", err)
@@ -172,32 +148,24 @@ func testCorruptedPayloadWillBeDetected(t *testing.T, v SSVersion, fs vfs.IFS) {
 	func() {
 		createTestSnapshotFile(t, v, fs)
 		corruptSnapshotPayload(t, fs)
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("validation error not reported")
-			}
-		}()
-		r, header, err := NewSnapshotReader(testSnapshotFilename, fs)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		defer func() {
-			require.NoError(t, r.Close())
-		}()
-		_, err = rand.Read(header.PayloadChecksum)
-		require.NoError(t, err)
-		s := make([]byte, testSessionSize)
-		p := make([]byte, testPayloadSize)
-		n, err := io.ReadFull(r, s)
-		if uint64(n) != testSessionSize || err != nil {
-			t.Fatalf("failed to get session data %d, %d, %v",
-				uint64(n), testSessionSize, err)
-		}
-		n, err = io.ReadFull(r, p)
-		if uint64(n) != testPayloadSize || err != nil {
-			t.Fatalf("failed to get payload data")
-		}
-		r.validatePayload()
+		require.Panics(t, func() {
+			r, header, err := NewSnapshotReader(testSnapshotFilename, fs)
+			require.NoError(t, err)
+			defer func() {
+				require.NoError(t, r.Close())
+			}()
+			_, err = rand.Read(header.PayloadChecksum)
+			require.NoError(t, err)
+			s := make([]byte, testSessionSize)
+			p := make([]byte, testPayloadSize)
+			n, err := io.ReadFull(r, s)
+			require.NoError(t, err)
+			require.Equal(t, testSessionSize, uint64(n))
+			n, err = io.ReadFull(r, p)
+			require.NoError(t, err)
+			require.Equal(t, testPayloadSize, uint64(n))
+			r.validatePayload()
+		})
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -217,29 +185,23 @@ func testNormalSnapshotCanPassValidation(t *testing.T, v SSVersion, fs vfs.IFS) 
 	func() {
 		_, sessionData, storeData := createTestSnapshotFile(t, v, fs)
 		r, _, err := NewSnapshotReader(testSnapshotFilename, fs)
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, r.Close())
 		}()
 		s := make([]byte, testSessionSize)
 		p := make([]byte, testPayloadSize)
 		n, err := io.ReadFull(r, s)
-		if uint64(n) != testSessionSize || err != nil {
-			t.Fatalf("failed to get session data")
-		}
+		require.NoError(t, err)
+		require.Equal(t, testSessionSize, uint64(n))
 		n, err = io.ReadFull(r, p)
-		if uint64(n) != testPayloadSize || err != nil {
-			t.Fatalf("failed to get payload data")
-		}
-		r.validatePayload()
-		if !bytes.Equal(sessionData, s) {
-			t.Errorf("session data changed")
-		}
-		if !bytes.Equal(storeData, p) {
-			t.Errorf("store data changed")
-		}
+		require.NoError(t, err)
+		require.Equal(t, testPayloadSize, uint64(n))
+		require.NotPanics(t, func() {
+			r.validatePayload()
+		})
+		require.True(t, bytes.Equal(sessionData, s))
+		require.True(t, bytes.Equal(storeData, p))
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -276,28 +238,16 @@ func testSingleBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 		}
 	}()
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024, fs)
-	if err != nil {
-		t.Fatalf("failed to get snapshot data %v", err)
-	}
+	require.NoError(t, err)
 	v := NewSnapshotValidator()
-	if !v.AddChunk(data, 0) {
-		t.Fatalf("failed to add chunk")
-	}
-	if !v.Validate() {
-		t.Fatalf("validation failed")
-	}
-	if v.AddChunk(data, 0) {
-		t.Fatalf("adding the first chunk again didn't fail")
-	}
+	require.True(t, v.AddChunk(data, 0))
+	require.True(t, v.Validate())
+	require.False(t, v.AddChunk(data, 0))
 	// intentionally corrupt the data
 	data[len(data)-1] = data[len(data)-1] + 1
 	v = NewSnapshotValidator()
-	if !v.AddChunk(data, 0) {
-		t.Fatalf("failed to add chunk")
-	}
-	if v.Validate() {
-		t.Fatalf("validation failed to picked up corrupted data")
-	}
+	require.True(t, v.AddChunk(data, 0))
+	require.False(t, v.Validate())
 	reportLeakedFD(fs, t)
 }
 
@@ -315,32 +265,18 @@ func testMultiBlockSnapshotValidation(t *testing.T, sv SSVersion, fs vfs.IFS) {
 		}
 	}()
 	data, err := readTestSnapshot(testSnapshotFilename, 1024*1024*10, fs)
-	if err != nil {
-		t.Fatalf("failed to get snapshot data %v", err)
-	}
+	require.NoError(t, err)
 	v := NewSnapshotValidator()
 	c1 := data[:1024*1024]
 	c2 := data[1024*1024:]
-	if !v.AddChunk(c1, 0) {
-		t.Fatalf("failed to add chunk")
-	}
-	if !v.AddChunk(c2, 1) {
-		t.Fatalf("failed to add chunk")
-	}
-	if !v.Validate() {
-		t.Fatalf("validation failed")
-	}
+	require.True(t, v.AddChunk(c1, 0))
+	require.True(t, v.AddChunk(c2, 1))
+	require.True(t, v.Validate())
 	v = NewSnapshotValidator()
 	c2[len(c2)-1] = c2[len(c2)-1] + 1
-	if !v.AddChunk(c1, 0) {
-		t.Fatalf("failed to add chunk")
-	}
-	if !v.AddChunk(c2, 1) {
-		t.Fatalf("failed to add chunk")
-	}
-	if v.Validate() {
-		t.Fatalf("validation failed to pick up the corrupted snapshot")
-	}
+	require.True(t, v.AddChunk(c1, 0))
+	require.True(t, v.AddChunk(c2, 1))
+	require.False(t, v.Validate())
 	reportLeakedFD(fs, t)
 }
 
@@ -364,15 +300,17 @@ func TestMustInSameDir(t *testing.T) {
 		{"/d1/d2/f1.data", "/d2/f2.data", false},
 		{"/d1/d2/f1.data", "d2/f2.data", false},
 	}
-	for idx, tt := range tests {
+	for _, tt := range tests {
 		func() {
-			defer func() {
-				r := recover()
-				if !tt.sameDir && r == nil {
-					t.Errorf("%d, failed to detect not same dir", idx)
-				}
-			}()
-			mustInSameDir(tt.path1, tt.path2, fs)
+			if tt.sameDir {
+				require.NotPanics(t, func() {
+					mustInSameDir(tt.path1, tt.path2, fs)
+				})
+			} else {
+				require.Panics(t, func() {
+					mustInSameDir(tt.path1, tt.path2, fs)
+				})
+			}
 		}()
 	}
 }
@@ -382,9 +320,7 @@ func TestShrinkSnapshot(t *testing.T) {
 	snapshotFilename := "test_snapshot_safe_to_delete.data"
 	shrunkFilename := "test_snapshot_safe_to_delete.shrunk"
 	writer, err := NewSnapshotWriter(snapshotFilename, pb.NoCompression, fs)
-	if err != nil {
-		t.Fatalf("failed to get writer %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(snapshotFilename); err != nil {
 			t.Fatalf("%v", err)
@@ -392,63 +328,40 @@ func TestShrinkSnapshot(t *testing.T) {
 	}()
 	sz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(sz, uint64(0))
-	if _, err := writer.Write(sz); err != nil {
-		t.Fatalf("failed to write session size %v", err)
-	}
+	_, err = writer.Write(sz)
+	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, 1024*1024+i*256)
 		_, err := rand.Read(data)
 		require.NoError(t, err)
-		if _, err := writer.Write(data); err != nil {
-			t.Fatalf("write failed %v", err)
-		}
+		_, err = writer.Write(data)
+		require.NoError(t, err)
 	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close failed %v", err)
-	}
+	err = writer.Close()
+	require.NoError(t, err)
 	shrunk, err := IsShrunkSnapshotFile(snapshotFilename, fs)
-	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
-	}
-	if shrunk {
-		t.Errorf("incorrectly reported as shrunk")
-	}
-	if err := ShrinkSnapshot(snapshotFilename, shrunkFilename, fs); err != nil {
-		t.Errorf("failed to shrink snapshot %v", err)
-	}
+	require.NoError(t, err)
+	require.False(t, shrunk)
+	err = ShrinkSnapshot(snapshotFilename, shrunkFilename, fs)
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(shrunkFilename); err != nil {
 			t.Fatalf("%v", err)
 		}
 	}()
 	shrunk, err = IsShrunkSnapshotFile(snapshotFilename, fs)
-	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
-	}
-	if shrunk {
-		t.Errorf("incorrectly reported as shrunk")
-	}
+	require.NoError(t, err)
+	require.False(t, shrunk)
 	shrunk, err = IsShrunkSnapshotFile(shrunkFilename, fs)
-	if err != nil {
-		t.Fatalf("failed to check whether snapshot file is shrunk %v", err)
-	}
-	if !shrunk {
-		t.Errorf("not shrunk")
-	}
+	require.NoError(t, err)
+	require.True(t, shrunk)
 	fi, err := fs.Stat(shrunkFilename)
-	if err != nil {
-		t.Fatalf("failed to get file stat")
-	}
-	if fi.Size() != 1060 {
-		t.Errorf("not shrunk according to file size")
-	}
+	require.NoError(t, err)
+	require.Equal(t, int64(1060), fi.Size())
 	reader, _, err := NewSnapshotReader(shrunkFilename, fs)
-	if err != nil {
-		t.Fatalf("failed to create snapshot reader %v", err)
-	}
-	if err := reader.Close(); err != nil {
-		t.Fatalf("failed to close the reader %v", err)
-	}
+	require.NoError(t, err)
+	err = reader.Close()
+	require.NoError(t, err)
 	reportLeakedFD(fs, t)
 }
 
@@ -458,18 +371,14 @@ func TestReplaceSnapshotFile(t *testing.T) {
 	f2name := "test_snapshot_safe_to_delete.data2"
 	createFile := func(fn string, sz uint64) {
 		f1, err := fs.Create(fn)
-		if err != nil {
-			t.Fatalf("failed to ")
-		}
+		require.NoError(t, err)
 		data := make([]byte, sz)
 		_, err = rand.Read(data)
 		require.NoError(t, err)
-		if _, err := f1.Write(data); err != nil {
-			t.Fatalf("failed to write data %v", err)
-		}
-		if err := f1.Close(); err != nil {
-			t.Fatalf("failed to close %v", err)
-		}
+		_, err = f1.Write(data)
+		require.NoError(t, err)
+		err = f1.Close()
+		require.NoError(t, err)
 	}
 	createFile(f1name, 1024)
 	createFile(f2name, 2048)
@@ -481,20 +390,13 @@ func TestReplaceSnapshotFile(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 	}()
-	if err := ReplaceSnapshot(f2name, f1name, fs); err != nil {
-		t.Fatalf("failed to replace file %v", err)
-	}
-	_, err := fs.Stat(f2name)
-	if err == nil {
-		t.Errorf("f2 still exist")
-	}
+	err := ReplaceSnapshot(f2name, f1name, fs)
+	require.NoError(t, err)
+	_, err = fs.Stat(f2name)
+	require.Error(t, err)
 	fi, err := fs.Stat(f1name)
-	if err != nil {
-		t.Errorf("failed to get file info %v", err)
-	}
-	if fi.Size() != 2048 {
-		t.Errorf("file not replaced")
-	}
+	require.NoError(t, err)
+	require.Equal(t, int64(2048), fi.Size())
 }
 
 func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
@@ -506,19 +408,13 @@ func testV2PayloadChecksumCanBeRead(t *testing.T, sz uint64, fs vfs.IFS) {
 	func() {
 		makeTestSnapshotFile(t, 0, sz, V2, fs)
 		reader, header, err := NewSnapshotReader(testSnapshotFilename, fs)
-		if err != nil {
-			t.Fatalf("failed to create reader %v", err)
-		}
+		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, reader.Close())
 		}()
 		crc, err := GetV2PayloadChecksum(testSnapshotFilename, fs)
-		if err != nil {
-			t.Fatalf("failed to get v2 payload checksum %v", err)
-		}
-		if !bytes.Equal(crc, header.PayloadChecksum) {
-			t.Fatalf("crc changed")
-		}
+		require.NoError(t, err)
+		require.True(t, bytes.Equal(crc, header.PayloadChecksum))
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -543,79 +439,55 @@ func TestV1SnapshotCanBeLoaded(t *testing.T) {
 	}
 	fp := fs.PathJoin("testdata", "v1snapshot.gbsnap")
 	reader, header, err := NewSnapshotReader(fp, fs)
-	if err != nil {
-		t.Fatalf("failed to get reader %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, reader.Close())
 	}()
-	if header.Version != 1 {
-		t.Fatalf("not a version 1 snapshot file")
-	}
+	require.Equal(t, uint64(1), header.Version)
 	v := (SSVersion)(header.Version)
 	sm := NewSessionManager()
-	if err := sm.LoadSessions(reader, v); err != nil {
-		t.Fatalf("failed to load sessions %v", err)
-	}
+	err = sm.LoadSessions(reader, v)
+	require.NoError(t, err)
 	sessions := sm.lru
 	s1, ok := sessions.getSession(15771809973567514624)
-	if !ok {
-		t.Fatalf("failed to get session")
-	}
+	require.True(t, ok)
 	s2, ok := sessions.getSession(6760681031265190231)
-	if !ok {
-		t.Fatalf("failed to get session")
-	}
-	if s1.ClientID != 15771809973567514624 || s1.RespondedUpTo != 4 {
-		t.Errorf("invalid content")
-	}
-	if s2.ClientID != 6760681031265190231 || s2.RespondedUpTo != 2 {
-		t.Errorf("invalid content")
-	}
+	require.True(t, ok)
+	require.Equal(t, RaftClientID(15771809973567514624), s1.ClientID)
+	require.Equal(t, RaftSeriesID(4), s1.RespondedUpTo)
+	require.Equal(t, RaftClientID(6760681031265190231), s2.ClientID)
+	require.Equal(t, RaftSeriesID(2), s2.RespondedUpTo)
 	r1, ok := s1.History[5]
-	if !ok || r1.Value != 128 || len(s1.History) != 1 {
-		t.Errorf("unexpected history")
-	}
+	require.True(t, ok)
+	require.Equal(t, uint64(128), r1.Value)
+	require.Equal(t, 1, len(s1.History))
 	r2, ok := s2.History[3]
-	if !ok || r2.Value != 128 || len(s2.History) != 1 {
-		t.Errorf("unexpected history")
-	}
+	require.True(t, ok)
+	require.Equal(t, uint64(128), r2.Value)
+	require.Equal(t, 1, len(s2.History))
 	data := make([]byte, 11)
-	if _, err := io.ReadFull(reader, data); err != nil {
-		t.Fatalf("failed to get snapshot content")
-	}
-	if string(data) != "random-data" {
-		t.Errorf("unexpected content")
-	}
+	_, err = io.ReadFull(reader, data)
+	require.NoError(t, err)
+	require.Equal(t, "random-data", string(data))
 }
 
 func TestValidateHeader(t *testing.T) {
 	data := []byte{1, 2, 3, 4}
-	if !validateHeader(data, fourZeroBytes) {
-		t.Errorf("not skipped")
-	}
+	require.True(t, validateHeader(data, fourZeroBytes))
 	h := newCRC32Hash()
-	if _, err := h.Write(data); err != nil {
-		t.Fatalf("write failed %v", err)
-	}
+	_, err := h.Write(data)
+	require.NoError(t, err)
 	crc := h.Sum(nil)
-	if !validateHeader(data, crc) {
-		t.Errorf("expected to report valid")
-	}
+	require.True(t, validateHeader(data, crc))
 	crc[0] = crc[0] + 1
-	if validateHeader(data, crc) {
-		t.Errorf("corrupted header data not reported")
-	}
+	require.False(t, validateHeader(data, crc))
 }
 
 func TestGetWitnessSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if d, err := GetWitnessSnapshot(fs); err != nil {
-		t.Fatalf("failed to get witness snapshot, %v", err)
-	} else {
-		data := GetEmptyLRUSession()
-		if uint64(len(d)) != HeaderSize+uint64(len(data))+20 {
-			t.Errorf("unexpected length, %d, data len %d", len(d), len(data))
-		}
-	}
+	d, err := GetWitnessSnapshot(fs)
+	require.NoError(t, err)
+	data := GetEmptyLRUSession()
+	expectedLen := HeaderSize + uint64(len(data)) + 20
+	require.Equal(t, expectedLen, uint64(len(d)))
 }

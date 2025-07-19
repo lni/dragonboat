@@ -28,9 +28,7 @@ import (
 func TestTooShortBlockAreRejected(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		v := make([]byte, i)
-		if validateBlock(v, getDefaultChecksum()) {
-			t.Fatalf("not rejected")
-		}
+		require.False(t, validateBlock(v, getDefaultChecksum()))
 	}
 }
 
@@ -39,9 +37,7 @@ func TestRandomBlocksAreRejected(t *testing.T) {
 		v := make([]byte, i*128)
 		_, err := rand.Read(v)
 		require.NoError(t, err)
-		if validateBlock(v, getDefaultChecksum()) {
-			t.Fatalf("not rejected")
-		}
+		require.False(t, validateBlock(v, getDefaultChecksum()))
 	}
 }
 
@@ -50,17 +46,12 @@ func TestCorruptedBlockIsRejected(t *testing.T) {
 	_, err := rand.Read(v)
 	require.NoError(t, err)
 	h := GetDefaultChecksum()
-	if _, err := h.Write(v); err != nil {
-		t.Fatalf("failed to update hash")
-	}
+	_, err = h.Write(v)
+	require.NoError(t, err)
 	v = append(v, h.Sum(nil)...)
-	if !validateBlock(v, h) {
-		t.Fatalf("validation failed")
-	}
+	require.True(t, validateBlock(v, h))
 	v[0] = v[0] + 1
-	if validateBlock(v, h) {
-		t.Fatalf("validation didn't failed")
-	}
+	require.False(t, validateBlock(v, h))
 }
 
 func TestWellFormedBlocksAreAccepted(t *testing.T) {
@@ -70,13 +61,9 @@ func TestWellFormedBlocksAreAccepted(t *testing.T) {
 		require.NoError(t, err)
 		h := getDefaultChecksum()
 		_, err = h.Write(v)
-		if err != nil {
-			t.Fatalf("failed to write %v", err)
-		}
+		require.NoError(t, err)
 		v = append(v, h.Sum(nil)...)
-		if !validateBlock(v, h) {
-			t.Fatalf("incorrectly rejected")
-		}
+		require.True(t, validateBlock(v, h))
 	}
 }
 
@@ -90,42 +77,29 @@ func TestWellFormedDataCanPassV2Validator(t *testing.T) {
 		blockSize*6 - 1,
 		blockSize*6 + 1,
 	}
-	for idx, sz := range szs {
+	for _, sz := range szs {
 		v := make([]byte, sz)
 		_, err := rand.Read(v)
 		require.NoError(t, err)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
 		w := newV2Writer(buf, defaultChecksumType)
 		_, err = w.Write(v)
-		if err != nil {
-			t.Fatalf("failed to write %v", err)
-		}
-		if err := w.Close(); err != nil {
-			t.Fatalf("failed to flush %v", err)
-		}
+		require.NoError(t, err)
+		err = w.Close()
+		require.NoError(t, err)
 		header := make([]byte, HeaderSize)
 		data := append(header, buf.Bytes()...)
 		validator := newV2Validator(getDefaultChecksum())
-		if !validator.AddChunk(data, 0) {
-			t.Errorf("%d, add chunk failed", idx)
-		}
-		if !validator.Validate() {
-			t.Errorf("%d, validation failed", idx)
-		}
+		require.True(t, validator.AddChunk(data, 0))
+		require.True(t, validator.Validate())
 		if sz > HeaderSize {
 			s := sz / 2
 			fh := data[:s]
 			lh := data[s:]
 			validator := newV2Validator(getDefaultChecksum())
-			if !validator.AddChunk(fh, 0) {
-				t.Errorf("%d, add fh chunk failed", idx)
-			}
-			if !validator.AddChunk(lh, 1) {
-				t.Errorf("%d, add lh chunk failed", idx)
-			}
-			if !validator.Validate() {
-				t.Errorf("%d, parts validation failed", idx)
-			}
+			require.True(t, validator.AddChunk(fh, 0))
+			require.True(t, validator.AddChunk(lh, 1))
+			require.True(t, validator.Validate())
 		}
 	}
 }
@@ -141,19 +115,16 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 		blockSize*3 - 1,
 		blockSize*3 + 1,
 	}
-	for idx, sz := range szs {
+	for _, sz := range szs {
 		v := make([]byte, sz)
 		_, err := rand.Read(v)
 		require.NoError(t, err)
 		buf := bytes.NewBuffer(make([]byte, 0, 1024))
 		w := newV2Writer(buf, defaultChecksumType)
 		_, err = w.Write(v)
-		if err != nil {
-			t.Fatalf("failed to write %v", err)
-		}
-		if err := w.Close(); err != nil {
-			t.Fatalf("failed to flush %v", err)
-		}
+		require.NoError(t, err)
+		err = w.Close()
+		require.NoError(t, err)
 		payload := buf.Bytes()
 		payload = corruptFn(payload)
 		header := make([]byte, HeaderSize)
@@ -165,9 +136,8 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 			}
 			return validator.Validate()
 		}
-		if result := vf(data); result != ok {
-			t.Errorf("%d, validation failed", idx)
-		}
+		result := vf(data)
+		require.Equal(t, ok, result)
 		if sz > HeaderSize {
 			szz := sz
 			vf := func(data []byte) bool {
@@ -183,9 +153,8 @@ func testCorruptedDataCanBeDetectedByValidator(t *testing.T,
 				}
 				return validator.Validate()
 			}
-			if result := vf(data); result != ok {
-				t.Errorf("%d, half-half validation failed", idx)
-			}
+			result := vf(data)
+			require.Equal(t, ok, result)
 		}
 	}
 }
@@ -238,26 +207,21 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 		blockSize*128 + 4,
 		blockSize*128 - 4,
 	}
-	for idx, sz := range testSz {
+	for _, sz := range testSz {
 		lastBlock := false
 		written := make([]byte, 0)
 		onBlock := func(data []byte, crc []byte) error {
 			if lastBlock {
-				if len(crc) == 0 {
-					t.Fatalf("empty crc value")
-				}
+				require.NotEmpty(t, crc)
 			}
 			if len(crc) == 0 {
 				lastBlock = true
 			}
 			if len(crc) != 0 {
 				h := crc32.NewIEEE()
-				if _, err := h.Write(data); err != nil {
-					t.Fatalf("failed to write %v", err)
-				}
-				if !bytes.Equal(h.Sum(nil), crc) {
-					t.Errorf("unexpected CRC value")
-				}
+				_, err := h.Write(data)
+				require.NoError(t, err)
+				require.Equal(t, h.Sum(nil), crc)
 			}
 			written = append(written, data...)
 			return nil
@@ -268,12 +232,8 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 			input[i] = byte((sz + uint64(i)) % 256)
 		}
 		n, err := writer.Write(input)
-		if uint64(n) != sz {
-			t.Errorf("failed to write all data")
-		}
-		if err != nil {
-			t.Errorf("write failed %v", err)
-		}
+		require.Equal(t, uint64(n), sz)
+		require.NoError(t, err)
 
 		require.NoError(t, writer.Close())
 		result := written[:len(written)-16]
@@ -281,15 +241,9 @@ func TestBlockWriterCanWriteData(t *testing.T) {
 		total := binary.LittleEndian.Uint64(meta[:8])
 		magic := meta[8:]
 		expSz := getChecksumedBlockSize(sz, blockSize)
-		if total != expSz {
-			t.Errorf("%d, total %d, size %d", idx, total, sz)
-		}
-		if !bytes.Equal(magic, writerMagicNumber) {
-			t.Errorf("magic number changed")
-		}
-		if !bytes.Equal(input, result) {
-			t.Errorf("%d, input changed, %+v, %+v", idx, input, result)
-		}
+		require.Equal(t, expSz, total)
+		require.Equal(t, writerMagicNumber, magic)
+		require.Equal(t, input, result)
 	}
 }
 
@@ -308,7 +262,7 @@ func TestBlockReaderCanReadData(t *testing.T) {
 		blockSize*128 + 4,
 		blockSize*128 - 4,
 	}
-	for idx, sz := range testSz {
+	for _, sz := range testSz {
 		readBufSz := []uint64{3, 1,
 			blockSize - 1, blockSize, blockSize + 1,
 			blockSize * 3, blockSize*3 - 1, blockSize*3 + 1,
@@ -318,12 +272,8 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			onBlock := func(data []byte, crc []byte) error {
 				toWrite := append(data, crc...)
 				n, err := buf.Write(toWrite)
-				if n != len(toWrite) {
-					t.Fatalf("failed to write all data")
-				}
-				if err != nil {
-					t.Fatalf("failed to write %v", err)
-				}
+				require.Equal(t, len(toWrite), n)
+				require.NoError(t, err)
 				return nil
 			}
 			writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
@@ -334,18 +284,12 @@ func TestBlockReaderCanReadData(t *testing.T) {
 				v++
 			}
 			n, err := writer.Write(input)
-			if uint64(n) != sz {
-				t.Errorf("failed to write all data")
-			}
-			if err != nil {
-				t.Errorf("write failed %v", err)
-			}
+			require.Equal(t, uint64(n), sz)
+			require.NoError(t, err)
 			require.NoError(t, writer.Close())
 			written := buf.Bytes()
 			expSz := getChecksumedBlockSize(sz, blockSize) + 16
-			if expSz != uint64(len(written)) {
-				t.Errorf("exp %d, written %d", expSz, len(written))
-			}
+			require.Equal(t, expSz, uint64(len(written)))
 
 			allRead := make([]byte, 0)
 			if bufSz == 0 {
@@ -357,17 +301,14 @@ func TestBlockReaderCanReadData(t *testing.T) {
 			for {
 				n, err = reader.Read(curRead)
 				if err != nil && err != io.EOF {
-					t.Fatalf("failed to read %v", err)
+					require.NoError(t, err)
 				}
 				allRead = append(allRead, curRead[:n]...)
 				if err == io.EOF {
 					break
 				}
 			}
-			if !bytes.Equal(allRead, input) {
-				t.Errorf("%d, %d, %d, returned data changed, input sz %d, returned sz %d",
-					idx, sz, bufSz, len(input), len(allRead))
-			}
+			require.Equal(t, input, allRead)
 		}
 	}
 }
@@ -379,12 +320,8 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 	onBlock := func(data []byte, crc []byte) error {
 		toWrite := append(data, crc...)
 		n, err := buf.Write(toWrite)
-		if n != len(toWrite) {
-			t.Fatalf("failed to write all data")
-		}
-		if err != nil {
-			t.Fatalf("failed to write %v", err)
-		}
+		require.Equal(t, len(toWrite), n)
+		require.NoError(t, err)
 		return nil
 	}
 	writer := newBlockWriter(blockSize, onBlock, defaultChecksumType)
@@ -395,34 +332,28 @@ func TestBlockReaderPanicOnCorruptedBlock(t *testing.T) {
 		v++
 	}
 	n, err := writer.Write(input)
-	if uint64(n) != sz {
-		t.Errorf("failed to write all data")
-	}
-	if err != nil {
-		t.Errorf("write failed %v", err)
-	}
+	require.Equal(t, uint64(n), sz)
+	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 	written := append([]byte{}, buf.Bytes()...)
 	for idx := 0; idx < len(written)-16; idx++ {
 		func() {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Fatalf("panic not trigger")
-				}
-			}()
 			curRead := make([]byte, 4)
 			written[idx] = written[idx] + 1
-			lr := io.LimitReader(bytes.NewBuffer(written), int64(len(written)-16))
+			lr := io.LimitReader(bytes.NewBuffer(written),
+				int64(len(written)-16))
 			reader := newBlockReader(lr, blockSize, defaultChecksumType)
-			for {
-				n, err = reader.Read(curRead)
-				if err != nil && err != io.EOF {
-					t.Fatalf("failed to read %v", err)
+			require.Panics(t, func() {
+				for {
+					n, err = reader.Read(curRead)
+					if err != nil && err != io.EOF {
+						require.NoError(t, err)
+					}
+					if err == io.EOF {
+						break
+					}
 				}
-				if err == io.EOF {
-					break
-				}
-			}
+			})
 		}()
 	}
 }

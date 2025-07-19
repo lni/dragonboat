@@ -36,13 +36,9 @@ func TestCountedWriteCanReportTotalWritten(t *testing.T) {
 		v := make([]byte, sz)
 		total += sz
 		_, err := cw.Write(v)
-		if err != nil {
-			t.Fatalf("write failed %v", err)
-		}
+		require.NoError(t, err)
 	}
-	if total != cw.total {
-		t.Errorf("total %d, want %d", cw.total, total)
-	}
+	require.Equal(t, total, cw.total)
 }
 
 type dummySM struct{}
@@ -57,37 +53,35 @@ func (d *dummySM) Save(interface{},
 	io.Writer, sm.ISnapshotFileCollection, <-chan struct{}) error {
 	return nil
 }
-func (d *dummySM) Recover(io.Reader, []sm.SnapshotFile, <-chan struct{}) error { return nil }
-func (d *dummySM) Close() error                                                { return nil }
-func (d *dummySM) GetHash() (uint64, error)                                    { return 0, nil }
-func (d *dummySM) Concurrent() bool                                            { return false }
-func (d *dummySM) OnDisk() bool                                                { return false }
-func (d *dummySM) Type() pb.StateMachineType                                   { return pb.OnDiskStateMachine }
+func (d *dummySM) Recover(io.Reader, []sm.SnapshotFile, <-chan struct{}) error {
+	return nil
+}
+func (d *dummySM) Close() error             { return nil }
+func (d *dummySM) GetHash() (uint64, error) { return 0, nil }
+func (d *dummySM) Concurrent() bool         { return false }
+func (d *dummySM) OnDisk() bool             { return false }
+func (d *dummySM) Type() pb.StateMachineType {
+	return pb.OnDiskStateMachine
+}
 
 func TestDestroyedFlagIsSetWhenDestroyed(t *testing.T) {
 	sm := NewNativeSM(config.Config{}, &dummySM{}, nil)
 	sm.Loaded()
 	sm.Offloaded()
-	if sm.loadedCount != 0 {
-		t.Errorf("loadedCount is not 0")
-	}
-	if sm.destroyed {
-		t.Errorf("destroyed flag unexpectedly set")
-	}
+	require.Equal(t, uint64(0), sm.loadedCount)
+	require.False(t, sm.destroyed)
 	select {
 	case <-sm.DestroyedC():
-		t.Errorf("destroyedC unexpected closed")
+		require.Fail(t, "destroyedC unexpected closed")
 	default:
 	}
 
 	require.NoError(t, sm.Close())
-	if !sm.destroyed {
-		t.Errorf("destroyed flag not set")
-	}
+	require.True(t, sm.destroyed)
 	select {
 	case <-sm.DestroyedC():
 	default:
-		t.Errorf("destroyed ch not closed")
+		require.Fail(t, "destroyed ch not closed")
 	}
 }
 
@@ -96,10 +90,8 @@ func TestLookupWillFailOnClosedStateMachine(t *testing.T) {
 	sm.Loaded()
 	sm.Offloaded()
 	require.NoError(t, sm.Close())
-	if _, err := sm.Lookup(nil); err != ErrShardClosed {
-		t.Errorf("failed to return ErrShardClosed")
-	}
-	if _, err := sm.NALookup(nil); err != ErrShardClosed {
-		t.Errorf("failed to return ErrShardClosed")
-	}
+	_, err := sm.Lookup(nil)
+	require.Equal(t, ErrShardClosed, err)
+	_, err = sm.NALookup(nil)
+	require.Equal(t, ErrShardClosed, err)
 }

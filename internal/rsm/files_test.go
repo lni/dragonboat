@@ -32,30 +32,24 @@ func TestFileCanBeAddedToFileCollection(t *testing.T) {
 	fc := NewFileCollection()
 	fc.AddFile(1, "test.data", make([]byte, 12))
 	fc.AddFile(2, "test.data2", make([]byte, 16))
-	if len(fc.files) != 2 || len(fc.idmap) != 2 {
-		t.Errorf("file count is %d, want 2", len(fc.files))
-	}
-	if fc.files[0].Filepath != "test.data" ||
-		fc.files[0].FileId != 1 || len(fc.files[0].Metadata) != 12 {
-		t.Errorf("not the expected first file record")
-	}
-	if fc.files[1].Filepath != "test.data2" ||
-		fc.files[1].FileId != 2 || len(fc.files[1].Metadata) != 16 {
-		t.Errorf("not the expected first file record")
-	}
+	require.Equal(t, 2, len(fc.files))
+	require.Equal(t, 2, len(fc.idmap))
+	require.Equal(t, "test.data", fc.files[0].Filepath)
+	require.Equal(t, uint64(1), fc.files[0].FileId)
+	require.Equal(t, 12, len(fc.files[0].Metadata))
+	require.Equal(t, "test.data2", fc.files[1].Filepath)
+	require.Equal(t, uint64(2), fc.files[1].FileId)
+	require.Equal(t, 16, len(fc.files[1].Metadata))
 }
 
 func TestFileWithDuplicatedIDCanNotBeAdded(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("AddFile didn't panic")
-		}
-	}()
 	fc := NewFileCollection()
 	fc.AddFile(1, "test.data", make([]byte, 12))
 	fc.AddFile(2, "test.data", make([]byte, 12))
-	fc.AddFile(1, "test.data2", make([]byte, 16))
+	require.Panics(t, func() {
+		fc.AddFile(1, "test.data2", make([]byte, 16))
+	})
 }
 
 func TestPrepareFiles(t *testing.T) {
@@ -64,65 +58,45 @@ func TestPrepareFiles(t *testing.T) {
 		t.Skip("this test only support the default fs")
 	}
 	defer leaktest.AfterTest(t)()
-	if err := fs.MkdirAll(rdbTestDirectory, 0755); err != nil {
-		t.Errorf("failed to make dir %v", err)
-	}
+	err := fs.MkdirAll(rdbTestDirectory, 0755)
+	require.NoError(t, err)
 	defer func() {
-		if err := fs.RemoveAll(rdbTestDirectory); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := fs.RemoveAll(rdbTestDirectory)
+		require.NoError(t, err)
 	}()
 	f1, err := fs.Create(fs.PathJoin(rdbTestDirectory, "test1.data"))
-	if err != nil {
-		t.Fatalf("failed to create the file, %v", err)
-	}
+	require.NoError(t, err)
 	n, err := f1.Write(make([]byte, 16))
-	if n != 16 || err != nil {
-		t.Fatalf("failed to write file %v", err)
-	}
+	require.Equal(t, 16, n)
+	require.NoError(t, err)
 	require.NoError(t, f1.Close())
 	f2, err := fs.Create(fs.PathJoin(rdbTestDirectory, "test2.data"))
-	if err != nil {
-		t.Fatalf("failed to create the file, %v", err)
-	}
+	require.NoError(t, err)
 	n, err = f2.Write(make([]byte, 32))
-	if n != 32 || err != nil {
-		t.Fatalf("failed to write file %v", err)
-	}
+	require.Equal(t, 32, n)
+	require.NoError(t, err)
 	require.NoError(t, f2.Close())
 	fc := NewFileCollection()
-	fc.AddFile(1, fs.PathJoin(rdbTestDirectory, "test1.data"), make([]byte, 8))
-	fc.AddFile(2, fs.PathJoin(rdbTestDirectory, "test2.data"), make([]byte, 2))
-	if fc.Size() != 2 {
-		t.Errorf("unexpected collection size")
-	}
+	fc.AddFile(1, fs.PathJoin(rdbTestDirectory, "test1.data"),
+		make([]byte, 8))
+	fc.AddFile(2, fs.PathJoin(rdbTestDirectory, "test2.data"),
+		make([]byte, 2))
+	require.Equal(t, uint64(2), fc.Size())
 	rf := fc.GetFileAt(0)
-	if rf.Filepath != fs.PathJoin(rdbTestDirectory, "test1.data") {
-		t.Errorf("unexpected path, got %s, want %s",
-			rf.Filepath, fs.PathJoin(rdbTestDirectory, "test1.data"))
-	}
+	expectedPath := fs.PathJoin(rdbTestDirectory, "test1.data")
+	require.Equal(t, expectedPath, rf.Filepath)
 	files, err := fc.PrepareFiles(rdbTestDirectory, rdbTestDirectory)
-	if err != nil {
-		t.Fatalf("prepareFiles failed %v", err)
-	}
-	if files[0].FileId != 1 || files[0].Filename() != "external-file-1" || files[0].FileSize != 16 {
-		t.Errorf("unexpected returned file record %v", files[0])
-	}
-	if files[1].FileId != 2 || files[1].Filename() != "external-file-2" || files[1].FileSize != 32 {
-		t.Errorf("unexpected returned file record %v", files[1])
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), files[0].FileId)
+	require.Equal(t, "external-file-1", files[0].Filename())
+	require.Equal(t, uint64(16), files[0].FileSize)
+	require.Equal(t, uint64(2), files[1].FileId)
+	require.Equal(t, "external-file-2", files[1].Filename())
+	require.Equal(t, uint64(32), files[1].FileSize)
 	fi1, err := fs.Stat(fs.PathJoin(rdbTestDirectory, "external-file-1"))
-	if err != nil {
-		t.Errorf("failed to get stat, %v", err)
-	}
-	if fi1.Size() != 16 {
-		t.Errorf("unexpected size")
-	}
+	require.NoError(t, err)
+	require.Equal(t, int64(16), fi1.Size())
 	fi2, err := fs.Stat(fs.PathJoin(rdbTestDirectory, "external-file-2"))
-	if err != nil {
-		t.Errorf("failed to get stat, %v", err)
-	}
-	if fi2.Size() != 32 {
-		t.Errorf("unexpected size")
-	}
+	require.NoError(t, err)
+	require.Equal(t, int64(32), fi2.Size())
 }

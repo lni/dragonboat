@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/lni/goutils/cache"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	sm "github.com/lni/dragonboat/v4/statemachine"
 )
@@ -27,30 +29,18 @@ func TestRegisteriAndUnregisterClient(t *testing.T) {
 	sm := NewSessionManager()
 	h1 := sm.GetSessionHash()
 	_, ok := sm.ClientRegistered(123)
-	if ok {
-		t.Errorf("already has client with client id 123")
-	}
+	assert.False(t, ok, "already has client with client id 123")
 	sm.RegisterClientID(123)
 	_, ok = sm.ClientRegistered(123)
-	if !ok {
-		t.Errorf("client not registered")
-	}
+	assert.True(t, ok, "client not registered")
 	h2 := sm.GetSessionHash()
 	v := sm.UnregisterClientID(123)
-	if v.Value != 123 {
-		t.Errorf("failed to unregister client")
-	}
+	assert.Equal(t, uint64(123), v.Value, "failed to unregister client")
 	_, ok = sm.ClientRegistered(123)
-	if ok {
-		t.Errorf("still has client with client id 123")
-	}
+	assert.False(t, ok, "still has client with client id 123")
 	h3 := sm.GetSessionHash()
-	if h1 == h2 {
-		t.Errorf("hash does not change")
-	}
-	if h1 != h3 {
-		t.Errorf("hash unexpectedly changed")
-	}
+	assert.NotEqual(t, h1, h2, "hash does not change")
+	assert.Equal(t, h1, h3, "hash unexpectedly changed")
 }
 
 func TestSessionSaveOrderWithEviction(t *testing.T) {
@@ -62,49 +52,38 @@ func TestSessionSaveOrderWithEviction(t *testing.T) {
 	}
 	// touch the oldest session to make it the most recently accessed
 	s, ok := sm1.ClientRegistered(uint64(0))
-	if !ok {
-		t.Fatalf("failed to get client session")
-	}
+	require.True(t, ok, "failed to get client session")
 	sm1.AddResponse(s, 1, sm.Result{Value: 123456})
 	ss := &bytes.Buffer{}
-	if err := sm1.SaveSessions(ss); err != nil {
-		t.Fatalf("failed to save snapshot %v", err)
-	}
+	err := sm1.SaveSessions(ss)
+	require.NoError(t, err, "failed to save snapshot")
 	rs := bytes.NewBuffer(ss.Bytes())
-	if err := sm2.LoadSessions(rs, V2); err != nil {
-		t.Fatalf("failed to restore snapshot %v", err)
-	}
+	err = sm2.LoadSessions(rs, V2)
+	require.NoError(t, err, "failed to restore snapshot")
 	// client with the same client id (1 and 2 here) expected to be evicted
 	sm1.RegisterClientID(sm1.lru.size)
 	sm2.RegisterClientID(sm1.lru.size)
 	sm1.RegisterClientID(sm1.lru.size + 1)
 	sm2.RegisterClientID(sm1.lru.size + 1)
 	s1 := &bytes.Buffer{}
-	if err := sm1.SaveSessions(s1); err != nil {
-		t.Fatalf("failed to save snapshot %v", err)
-	}
+	err = sm1.SaveSessions(s1)
+	require.NoError(t, err, "failed to save snapshot")
 	s2 := &bytes.Buffer{}
-	if err := sm2.SaveSessions(s2); err != nil {
-		t.Fatalf("failed to save snapshot %v", err)
-	}
-	if !bytes.Equal(s1.Bytes(), s2.Bytes()) {
-		t.Fatalf("different snapshot")
-	}
+	err = sm2.SaveSessions(s2)
+	require.NoError(t, err, "failed to save snapshot")
+	assert.Equal(t, s1.Bytes(), s2.Bytes(), "different snapshot")
 	check := func(c *cache.OrderedCache) {
 		keys := make(map[uint64]struct{})
 		c.OrderedDo(func(k, v interface{}) {
 			clientID := k.(*RaftClientID)
 			keys[uint64(*clientID)] = struct{}{}
 		})
-		if _, ok := keys[0]; !ok {
-			t.Errorf("client 0 not in the session list")
-		}
-		if _, ok := keys[1]; ok {
-			t.Errorf("client 1 unexpectedly still in the session list")
-		}
-		if _, ok := keys[2]; ok {
-			t.Errorf("client 2 unexpectedly still in the session list")
-		}
+		_, ok := keys[0]
+		assert.True(t, ok, "client 0 not in the session list")
+		_, ok = keys[1]
+		assert.False(t, ok, "client 1 unexpectedly still in the session list")
+		_, ok = keys[2]
+		assert.False(t, ok, "client 2 unexpectedly still in the session list")
 	}
 	check(sm1.lru.sessions)
 	check(sm2.lru.sessions)

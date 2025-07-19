@@ -64,37 +64,32 @@ func TestChunkWriterCanBeWritten(t *testing.T) {
 	cw := NewChunkWriter(&testSink{}, meta)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, ChunkSize)
-		if _, err := cw.Write(data); err != nil {
-			t.Fatalf("failed to write the data %v", err)
-		}
+		_, err := cw.Write(data)
+		require.NoError(t, err, "failed to write the data")
 	}
-	if err := cw.Close(); err != nil {
-		t.Fatalf("failed to flush %v", err)
-	}
-	if len(cw.sink.(*testSink).chunks) != 13 {
-		t.Errorf("chunks count %d, want 13", len(cw.sink.(*testSink).chunks))
-	}
-	for idx, chunk := range cw.sink.(*testSink).chunks {
+	err := cw.Close()
+	require.NoError(t, err, "failed to flush")
+
+	chunks := cw.sink.(*testSink).chunks
+	require.Equal(t, 13, len(chunks), "chunks count mismatch")
+
+	for idx, chunk := range chunks {
 		switch idx {
 		case 0:
 			sz := binary.LittleEndian.Uint64(chunk.Data)
 			headerData := chunk.Data[8 : 8+sz]
 			var header pb.SnapshotHeader
-			if err := header.Unmarshal(headerData); err != nil {
-				t.Fatalf("failed to unmarshal %v", err)
-			}
+			err := header.Unmarshal(headerData)
+			require.NoError(t, err, "failed to unmarshal")
 		case 11:
-			if chunk.ChunkCount != pb.LastChunkCount {
-				t.Errorf("last chunk not marked, %d", idx)
-			}
-			if chunk.FileChunkCount != pb.LastChunkCount {
-				t.Errorf("last chunk not marked, %d", idx)
-			}
+			require.Equal(t, pb.LastChunkCount, chunk.ChunkCount,
+				"last chunk not marked, %d", idx)
+			require.Equal(t, pb.LastChunkCount, chunk.FileChunkCount,
+				"last chunk not marked, %d", idx)
 		case 12:
 		default:
-			if chunk.ChunkCount != 0 {
-				t.Errorf("unexpectedly marked as last chunk, %d", idx)
-			}
+			require.Equal(t, uint64(0), chunk.ChunkCount,
+				"unexpectedly marked as last chunk, %d", idx)
 		}
 	}
 }
@@ -105,19 +100,14 @@ func TestChunkWriterCanFailWrite(t *testing.T) {
 	cw := NewChunkWriter(sink, meta)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, ChunkSize)
-		if _, err := cw.Write(data); err != nil {
-			t.Fatalf("failed to write the data %v", err)
-		}
+		_, err := cw.Write(data)
+		require.NoError(t, err, "failed to write the data")
 	}
 	sink.sendFailed = true
 	data := make([]byte, ChunkSize)
 	_, err := cw.Write(data)
-	if err == nil {
-		t.Fatalf("writer didn't fail")
-	}
-	if err != sm.ErrSnapshotStreaming {
-		t.Fatalf("unexpected err %v", err)
-	}
+	require.Error(t, err, "writer didn't fail")
+	require.Equal(t, sm.ErrSnapshotStreaming, err, "unexpected err")
 }
 
 func TestChunkWriterCanBeStopped(t *testing.T) {
@@ -126,19 +116,14 @@ func TestChunkWriterCanBeStopped(t *testing.T) {
 	cw := NewChunkWriter(sink, meta)
 	for i := 0; i < 10; i++ {
 		data := make([]byte, ChunkSize)
-		if _, err := cw.Write(data); err != nil {
-			t.Fatalf("failed to write the data %v", err)
-		}
+		_, err := cw.Write(data)
+		require.NoError(t, err, "failed to write the data")
 	}
 	sink.stopped = true
 	data := make([]byte, ChunkSize)
 	_, err := cw.Write(data)
-	if err == nil {
-		t.Fatalf("writer didn't fail")
-	}
-	if err != sm.ErrSnapshotStopped {
-		t.Fatalf("unexpected err %v", err)
-	}
+	require.Error(t, err, "writer didn't fail")
+	require.Equal(t, sm.ErrSnapshotStopped, err, "unexpected err")
 }
 
 func TestGetTailChunk(t *testing.T) {
@@ -146,14 +131,10 @@ func TestGetTailChunk(t *testing.T) {
 	sink := &testSink{}
 	cw := NewChunkWriter(sink, meta)
 	chunk := cw.getTailChunk()
-	if chunk.ChunkCount != pb.LastChunkCount {
-		t.Errorf("chunk count %d, want %d",
-			chunk.ChunkCount, pb.LastChunkCount)
-	}
-	if chunk.FileChunkCount != pb.LastChunkCount {
-		t.Errorf("file chunk count %d, want %d",
-			chunk.FileChunkCount, pb.LastChunkCount)
-	}
+	require.Equal(t, pb.LastChunkCount, chunk.ChunkCount,
+		"chunk count mismatch")
+	require.Equal(t, pb.LastChunkCount, chunk.FileChunkCount,
+		"file chunk count mismatch")
 }
 
 func TestCloseChunk(t *testing.T) {
@@ -162,10 +143,8 @@ func TestCloseChunk(t *testing.T) {
 	cw := NewChunkWriter(sink, meta)
 	require.NoError(t, cw.Close())
 	chunk := sink.chunks[len(sink.chunks)-1]
-	if chunk.ChunkCount != pb.LastChunkCount-1 {
-		t.Errorf("chunk count %d, want %d",
-			chunk.ChunkCount, pb.LastChunkCount-1)
-	}
+	require.Equal(t, pb.LastChunkCount-1, chunk.ChunkCount,
+		"chunk count mismatch")
 }
 
 func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
@@ -174,36 +153,34 @@ func TestFailedChunkWriterWillNotSendTheTailChunk(t *testing.T) {
 	cw := NewChunkWriter(sink, meta)
 	cw.failed = true
 	require.NoError(t, cw.Close())
-	for idx, chunk := range cw.sink.(*testSink).chunks {
+
+	chunks := cw.sink.(*testSink).chunks
+	for idx, chunk := range chunks {
 		switch idx {
 		case 0:
 			sz := binary.LittleEndian.Uint64(chunk.Data)
 			headerdata := chunk.Data[8 : 8+sz]
 			crc := chunk.Data[8+sz : 12+sz]
 			var header pb.SnapshotHeader
-			if err := header.Unmarshal(headerdata); err != nil {
-				t.Fatalf("%v", err)
-			}
-			if uint64(len(chunk.Data)) != HeaderSize+tailSize {
-				t.Errorf("unexpected data size")
-			}
+			err := header.Unmarshal(headerdata)
+			require.NoError(t, err)
+
+			expectedSize := HeaderSize + tailSize
+			require.Equal(t, uint64(len(chunk.Data)), expectedSize,
+				"unexpected data size")
+
 			checksum := header.HeaderChecksum
-			if checksum != nil {
-				t.Errorf("not expected to set the checksum field")
-			}
+			require.Nil(t, checksum, "not expected to set the checksum field")
+
 			h := newCRC32Hash()
-			if _, err := h.Write(headerdata); err != nil {
-				panic(err)
-			}
-			if !bytes.Equal(h.Sum(nil), crc) {
-				t.Fatalf("not a valid header")
-			}
+			_, err = h.Write(headerdata)
+			require.NoError(t, err)
+			require.True(t, bytes.Equal(h.Sum(nil), crc), "not a valid header")
 		case 1:
-			if chunk.ChunkCount != pb.PoisonChunkCount {
-				t.Fatalf("unexpected chunk count")
-			}
+			require.Equal(t, pb.PoisonChunkCount, chunk.ChunkCount,
+				"unexpected chunk count")
 		default:
-			t.Fatalf("unexpected chunk received")
+			require.Fail(t, "unexpected chunk received")
 		}
 	}
 }
