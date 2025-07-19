@@ -22,6 +22,8 @@ import (
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	"github.com/lni/dragonboat/v4/raftio"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetBatchIDRange(t *testing.T) {
@@ -42,12 +44,10 @@ func TestGetBatchIDRange(t *testing.T) {
 
 	for idx, tt := range tests {
 		low, high := getBatchIDRange(tt.low, tt.high)
-		if low != tt.batchLow {
-			t.Errorf("%d, low %d, want %d", idx, low, tt.batchLow)
-		}
-		if high != tt.batchHigh {
-			t.Errorf("%d, high %d, want %d", idx, high, tt.batchHigh)
-		}
+		assert.Equal(t, tt.batchLow, low,
+			"%d, low %d, want %d", idx, low, tt.batchLow)
+		assert.Equal(t, tt.batchHigh, high,
+			"%d, high %d, want %d", idx, high, tt.batchHigh)
 	}
 }
 
@@ -68,13 +68,9 @@ func TestEntryBatchFieldsNotCompactedWhenIndexHasGap(t *testing.T) {
 	}
 	eb1 := fn()
 	eb2 := fn()
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("initial value not equal")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "initial value not equal")
 	eb1 = compactBatchFields(eb1)
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("unexpectedly compacted")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "unexpectedly compacted")
 }
 
 func TestEntryBatchFieldsNotCompactedWhenMultipleTerms(t *testing.T) {
@@ -95,13 +91,9 @@ func TestEntryBatchFieldsNotCompactedWhenMultipleTerms(t *testing.T) {
 	}
 	eb1 := fn()
 	eb2 := fn()
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("initial value not equal")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "initial value not equal")
 	eb1 = compactBatchFields(eb1)
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("unexpectedly compacted")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "unexpectedly compacted")
 }
 
 func TestEntryBatchFieldsCanBeCompacted(t *testing.T) {
@@ -118,31 +110,23 @@ func TestEntryBatchFieldsCanBeCompacted(t *testing.T) {
 	}
 	eb1 := fn()
 	eb2 := fn()
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("input not equal")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "input not equal")
 	eb1 = compactBatchFields(eb1)
-	if reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("eb not changed")
-	}
-	if eb1.Size() >= eb2.Size() {
-		t.Errorf("size didn't reduce")
-	}
+	assert.False(t, reflect.DeepEqual(&eb1, &eb2), "eb not changed")
+	assert.Less(t, eb1.Size(), eb2.Size(), "size didn't reduce")
 	for i := 0; i < len(eb1.Entries); i++ {
 		if i == 0 {
-			if eb1.Entries[i].Index == 0 || eb1.Entries[i].Term == 0 {
-				t.Errorf("first index/term is 0, %+v", eb1.Entries)
-			}
+			assert.NotZero(t, eb1.Entries[i].Index, "first index is 0, %+v",
+				eb1.Entries)
+			assert.NotZero(t, eb1.Entries[i].Term, "first term is 0, %+v",
+				eb1.Entries)
 		} else {
-			if eb1.Entries[i].Index != 0 || eb1.Entries[i].Term != 0 {
-				t.Errorf("first index/term is not 0")
-			}
+			assert.Zero(t, eb1.Entries[i].Index, "first index/term is not 0")
+			assert.Zero(t, eb1.Entries[i].Term, "first index/term is not 0")
 		}
 	}
 	eb1 = restoreBatchFields(eb1)
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("not restored")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "not restored")
 }
 
 func TestNotCompactedEntryBatchIsNotRestored(t *testing.T) {
@@ -159,74 +143,53 @@ func TestNotCompactedEntryBatchIsNotRestored(t *testing.T) {
 	}
 	eb1 := fn()
 	eb2 := fn()
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("input not equal")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "input not equal")
 	eb1 = restoreBatchFields(eb1)
-	if !reflect.DeepEqual(&eb1, &eb2) {
-		t.Errorf("not restored")
-	}
+	assert.True(t, reflect.DeepEqual(&eb1, &eb2), "not restored")
 }
 
 func TestCompactBatchFieldsPanicWhenBatchIsTooSmall(t *testing.T) {
-	f := func(eb pb.EntryBatch) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("panic not triggered")
-			}
-		}()
-		compactBatchFields(eb)
-	}
-	f(pb.EntryBatch{})
-	f(pb.EntryBatch{Entries: []pb.Entry{{}}})
+	require.Panics(t, func() {
+		compactBatchFields(pb.EntryBatch{})
+	})
+	require.Panics(t, func() {
+		compactBatchFields(pb.EntryBatch{Entries: []pb.Entry{{}}})
+	})
 }
 
 func TestRestoreBatchFieldsPanicWhenBatchIsTooSmall(t *testing.T) {
-	f := func(eb pb.EntryBatch) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("panic not triggered")
-			}
-		}()
-		restoreBatchFields(eb)
-	}
-	f(pb.EntryBatch{})
-	f(pb.EntryBatch{Entries: []pb.Entry{{}}})
+	require.Panics(t, func() {
+		restoreBatchFields(pb.EntryBatch{})
+	})
+	require.Panics(t, func() {
+		restoreBatchFields(pb.EntryBatch{Entries: []pb.Entry{{}}})
+	})
 }
 
 func TestMergeFirstBatchPanicWhenInputBatchIsEmpty(t *testing.T) {
 	empty := pb.EntryBatch{}
 	nonEmpty := pb.EntryBatch{Entries: []pb.Entry{{Index: 1, Term: 1}}}
-	f := func(eb pb.EntryBatch, lb pb.EntryBatch) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("panic not triggered")
-			}
-		}()
-		getMergedFirstBatch(eb, lb)
-	}
-	f(empty, nonEmpty)
-	f(nonEmpty, empty)
+	require.Panics(t, func() {
+		getMergedFirstBatch(empty, nonEmpty)
+	})
+	require.Panics(t, func() {
+		getMergedFirstBatch(nonEmpty, empty)
+	})
 }
 
 func TestMergeFirstBatchPanicWhenIncomingBatchIsNotMoreRecent(t *testing.T) {
 	eb := pb.EntryBatch{Entries: []pb.Entry{{Index: batchSize, Term: 1}}}
 	lb := pb.EntryBatch{Entries: []pb.Entry{{Index: 2 * batchSize, Term: 1}}}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("panic not triggered")
-		}
-	}()
-	getMergedFirstBatch(eb, lb)
+	require.Panics(t, func() {
+		getMergedFirstBatch(eb, lb)
+	})
 }
 
 func TestIncomingBatchIsTheMergedBatchWhenMoreRecentThanLastBatch(t *testing.T) {
 	eb := pb.EntryBatch{Entries: []pb.Entry{{Index: 2 * batchSize, Term: 1}}}
 	lb := pb.EntryBatch{Entries: []pb.Entry{{Index: batchSize, Term: 1}}}
 	result := getMergedFirstBatch(eb, lb)
-	if !reflect.DeepEqual(&result, &eb) {
-		t.Errorf("unexpected result")
-	}
+	assert.True(t, reflect.DeepEqual(&result, &eb), "unexpected result")
 }
 
 func TestGetMergedFirstBatch(t *testing.T) {
@@ -269,17 +232,15 @@ func TestGetMergedFirstBatch(t *testing.T) {
 			lb.Entries = append(lb.Entries, entry)
 		}
 		result := getMergedFirstBatch(eb, lb)
-		if result.Entries[0].Index != tt.mfirst {
-			t.Errorf("%d, first index %d, want %d", idx, result.Entries[0].Index, tt.mfirst)
-		}
-		if result.Entries[len(result.Entries)-1].Index != tt.mlast {
-			t.Errorf("%d, last index %d, want %d", idx, result.Entries[len(result.Entries)-1].Index, tt.mlast)
-		}
+		assert.Equal(t, tt.mfirst, result.Entries[0].Index,
+			"%d, first index %d, want %d", idx, result.Entries[0].Index,
+			tt.mfirst)
+		assert.Equal(t, tt.mlast, result.Entries[len(result.Entries)-1].Index,
+			"%d, last index %d, want %d", idx,
+			result.Entries[len(result.Entries)-1].Index, tt.mlast)
 		for i := 0; i < len(result.Entries); i++ {
 			if result.Entries[i].Index >= tt.newindex {
-				if result.Entries[i].Term != 2 {
-					t.Errorf("unexpected term")
-				}
+				assert.Equal(t, uint64(2), result.Entries[i].Term, "unexpected term")
 			}
 		}
 	}
@@ -300,9 +261,7 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		assert.NoError(t, err, "failed to save recs")
 		nextIndex := 1 + batchSize
 		e2 := pb.Entry{
 			Term:  1,
@@ -315,26 +274,18 @@ func TestEntryBatchWillNotBeMergedToPreviousBatch(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID, replicaID)
-		if err != nil {
-			t.Errorf("failed to get max index")
-		}
-		if maxIndex != nextIndex {
-			t.Errorf("unexpected max index")
-		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 1)
-		if !ok {
-			t.Errorf("failed to get the eb")
-		}
-		if len(eb.Entries) != 1 {
-			t.Fatalf("unexpected len %d, want 1", len(eb.Entries))
-		}
-		if eb.Entries[0].Index != nextIndex {
-			t.Errorf("unexpected index %d, want 10", eb.Entries[0].Index)
-		}
+		assert.NoError(t, err, "failed to save recs")
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID,
+			replicaID)
+		assert.NoError(t, err, "failed to get max index")
+		assert.Equal(t, nextIndex, maxIndex, "unexpected max index")
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).
+			getBatchFromDB(shardID, replicaID, 1)
+		assert.True(t, ok, "failed to get the eb")
+		assert.Equal(t, 1, len(eb.Entries), "unexpected len %d, want 1",
+			len(eb.Entries))
+		assert.Equal(t, nextIndex, eb.Entries[0].Index,
+			"unexpected index %d, want 10", eb.Entries[0].Index)
 	}
 	fs := vfs.GetTestFS()
 	runBatchedLogDBTest(t, tf, fs)
@@ -354,9 +305,7 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		assert.NoError(t, err, "failed to save recs")
 		ud = pb.Update{
 			EntriesToSave: make([]pb.Entry, 0),
 			ShardID:       shardID,
@@ -367,36 +316,24 @@ func TestEntryBatchMergedNotLastBatch(t *testing.T) {
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
-		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID, replicaID)
-		if err != nil {
-			t.Errorf("failed to get max index")
-		}
-		if maxIndex != batchSize+2 {
-			t.Errorf("unexpected max index")
-		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 0)
-		if !ok {
-			t.Errorf("failed to get the eb")
-		}
-		if uint64(len(eb.Entries)) != batchSize-1 {
-			t.Fatalf("unexpected len %d, want %d", len(eb.Entries), batchSize-1)
-		}
+		assert.NoError(t, err, "failed to save recs")
+		maxIndex, err := db.(*ShardedDB).shards[0].getMaxIndex(shardID,
+			replicaID)
+		assert.NoError(t, err, "failed to get max index")
+		assert.Equal(t, batchSize+2, maxIndex, "unexpected max index")
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).
+			getBatchFromDB(shardID, replicaID, 0)
+		assert.True(t, ok, "failed to get the eb")
+		assert.Equal(t, batchSize-1, uint64(len(eb.Entries)),
+			"unexpected len %d, want %d", len(eb.Entries), batchSize-1)
 		for i := uint64(0); i < batchSize-1; i++ {
 			e := eb.Entries[i]
-			if e.Index != i+1 {
-				t.Errorf("unexpected index %d, want %d", e.Index, i+1)
-			}
+			assert.Equal(t, i+1, e.Index, "unexpected index %d, want %d",
+				e.Index, i+1)
 			if e.Index < batchSize-4 {
-				if e.Term != uint64(1) {
-					t.Errorf("unexpected term %d", e.Term)
-				}
+				assert.Equal(t, uint64(1), e.Term, "unexpected term %d", e.Term)
 			} else {
-				if e.Term != uint64(2) {
-					t.Errorf("unexpected term %d", e.Term)
-				}
+				assert.Equal(t, uint64(2), e.Term, "unexpected term %d", e.Term)
 			}
 		}
 	}
@@ -419,9 +356,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		assert.NoError(t, err, "failed to save recs")
 		e2 := pb.Entry{
 			Term:  1,
 			Index: 2,
@@ -433,9 +368,7 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		assert.NoError(t, err, "failed to save recs")
 		ud = pb.Update{
 			EntriesToSave: make([]pb.Entry, 0),
 			ShardID:       shardID,
@@ -449,21 +382,15 @@ func TestSaveEntriesAcrossMultipleBatches(t *testing.T) {
 			ud.EntriesToSave = append(ud.EntriesToSave, e)
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		assert.NoError(t, err, "failed to save recs")
 		ents, _, err := db.IterateEntries([]pb.Entry{}, 0,
 			shardID, replicaID, 1, batchSize+2, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if uint64(len(ents)) != batchSize+1 {
-			t.Errorf("ents sz %d, want %d", len(ents), batchSize+1)
-		}
-		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).getBatchFromDB(shardID, replicaID, 1)
-		if !ok {
-			t.Errorf("failed to get first batch")
-		}
+		assert.NoError(t, err, "iterate entries failed %v", err)
+		assert.Equal(t, batchSize+1, uint64(len(ents)),
+			"ents sz %d, want %d", len(ents), batchSize+1)
+		eb, ok := db.(*ShardedDB).shards[0].entries.(*batchedEntries).
+			getBatchFromDB(shardID, replicaID, 1)
+		assert.True(t, ok, "failed to get first batch")
 		for _, e := range eb.Entries {
 			plog.Infof("idx %d", e.Index)
 		}

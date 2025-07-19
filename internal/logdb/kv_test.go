@@ -37,37 +37,31 @@ func TestKVCanBeCreatedAndClosed(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
 	cfg := config.GetDefaultLogDBConfig()
-	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
-	if err != nil {
-		t.Fatalf("failed to open kv store %v", err)
-	}
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+		RDBTestDirectory, fs)
+	require.NoError(t, err, "failed to open kv store")
 	defer deleteTestDB(fs)
-	if err := kvs.Close(); err != nil {
-		t.Errorf("failed to close kv store %v", err)
-	}
+	require.NoError(t, kvs.Close(), "failed to close kv store")
 }
 
-func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore), fs vfs.IFS) {
+func runKVTest(t *testing.T, tf func(t *testing.T, kvs kv.IKVStore),
+	fs vfs.IFS) {
 	defer leaktest.AfterTest(t)()
 	defer deleteTestDB(fs)
 	cfg := config.GetDefaultLogDBConfig()
-	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
-	if err != nil {
-		t.Fatalf("failed to open kv store %v", err)
-	}
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+		RDBTestDirectory, fs)
+	require.NoError(t, err, "failed to open kv store")
 	defer func() {
-		if err := kvs.Close(); err != nil {
-			t.Fatalf("failed to close kvs %v", err)
-		}
+		require.NoError(t, kvs.Close(), "failed to close kvs")
 	}()
 	tf(t, kvs)
 }
 
 func TestKVGetAndSet(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
-			t.Errorf("failed to save the value")
-		}
+		err := kvs.SaveValue([]byte("test-key"), []byte("test-value"))
+		require.NoError(t, err, "failed to save the value")
 		found := false
 		opcalled := false
 		op := func(val []byte) error {
@@ -77,15 +71,10 @@ func TestKVGetAndSet(t *testing.T) {
 			}
 			return nil
 		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
-		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if !found {
-			t.Errorf("failed to get value")
-		}
+		err = kvs.GetValue([]byte("test-key"), op)
+		require.NoError(t, err, "get value failed")
+		require.True(t, opcalled, "op func not called")
+		require.True(t, found, "failed to get value")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -93,12 +82,10 @@ func TestKVGetAndSet(t *testing.T) {
 
 func TestKVValueCanBeDeleted(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
-		if err := kvs.SaveValue([]byte("test-key"), []byte("test-value")); err != nil {
-			t.Errorf("failed to save the value")
-		}
-		if err := kvs.DeleteValue([]byte("test-key")); err != nil {
-			t.Errorf("failed to delete")
-		}
+		err := kvs.SaveValue([]byte("test-key"), []byte("test-value"))
+		require.NoError(t, err, "failed to save the value")
+		err = kvs.DeleteValue([]byte("test-key"))
+		require.NoError(t, err, "failed to delete")
 		found := false
 		opcalled := false
 		op := func(val []byte) error {
@@ -108,15 +95,10 @@ func TestKVValueCanBeDeleted(t *testing.T) {
 			}
 			return nil
 		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
-		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if found {
-			t.Errorf("failed to delete result")
-		}
+		err = kvs.GetValue([]byte("test-key"), op)
+		require.NoError(t, err, "get value failed")
+		require.True(t, opcalled, "op func not called")
+		require.False(t, found, "failed to delete result")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -127,12 +109,9 @@ func TestKVWriteBatch(t *testing.T) {
 		wb := kvs.GetWriteBatch()
 		defer wb.Destroy()
 		wb.Put([]byte("test-key"), []byte("test-value"))
-		if wb.Count() != 1 {
-			t.Errorf("incorrect count")
-		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Errorf("failed to commit the write batch")
-		}
+		require.Equal(t, 1, wb.Count(), "incorrect count")
+		err := kvs.CommitWriteBatch(wb)
+		require.NoError(t, err, "failed to commit the write batch")
 		found := false
 		opcalled := false
 		op := func(val []byte) error {
@@ -142,15 +121,10 @@ func TestKVWriteBatch(t *testing.T) {
 			}
 			return nil
 		}
-		if err := kvs.GetValue([]byte("test-key"), op); err != nil {
-			t.Errorf("get value failed")
-		}
-		if !opcalled {
-			t.Errorf("op func not called")
-		}
-		if !found {
-			t.Errorf("failed to get the result")
-		}
+		err = kvs.GetValue([]byte("test-key"), op)
+		require.NoError(t, err, "get value failed")
+		require.True(t, opcalled, "op func not called")
+		require.True(t, found, "failed to get the result")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -162,21 +136,17 @@ func testKVIterateValue(t *testing.T,
 		for i := 0; i < 10; i++ {
 			key := fmt.Sprintf("key%d", i)
 			val := fmt.Sprintf("val%d", i)
-			if err := kvs.SaveValue([]byte(key), []byte(val)); err != nil {
-				t.Errorf("failed to save the value")
-			}
+			err := kvs.SaveValue([]byte(key), []byte(val))
+			require.NoError(t, err, "failed to save the value")
 		}
 		opcalled := uint64(0)
 		op := func(k []byte, v []byte) (bool, error) {
 			opcalled++
 			return true, nil
 		}
-		if err := kvs.IterateValue(fk, lk, inc, op); err != nil {
-			t.Fatalf("iterate value failed %v", err)
-		}
-		if opcalled != count {
-			t.Errorf("op called %d times, want %d", opcalled, count)
-		}
+		err := kvs.IterateValue(fk, lk, inc, op)
+		require.NoError(t, err, "iterate value failed")
+		require.Equal(t, count, opcalled, "op called wrong number of times")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -192,22 +162,16 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 		wb := kvs.GetWriteBatch()
 		wb.Put([]byte("key-1"), []byte("val-1"))
 		wb.Put([]byte("key-2"), []byte("val-2"))
-		if wb.Count() != 2 {
-			t.Errorf("unexpected count %d, want 2", wb.Count())
-		}
+		require.Equal(t, 2, wb.Count(), "unexpected count")
 		wb.Clear()
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Fatalf("failed to commit write batch")
-		}
-		if err := kvs.GetValue([]byte("key-1"),
+		err := kvs.CommitWriteBatch(wb)
+		require.NoError(t, err, "failed to commit write batch")
+		err = kvs.GetValue([]byte("key-1"),
 			func(data []byte) error {
-				if len(data) != 0 {
-					t.Fatalf("unexpected value")
-				}
+				require.Empty(t, data, "unexpected value")
 				return nil
-			}); err != nil {
-			t.Fatalf("get value failed %v", err)
-		}
+			})
+		require.NoError(t, err, "get value failed")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -216,67 +180,37 @@ func TestWriteBatchCanBeCleared(t *testing.T) {
 func TestHasEntryRecord(t *testing.T) {
 	tf := func(t *testing.T, kvs kv.IKVStore) {
 		has, err := hasEntryRecord(kvs, true)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.False(t, has, "unexpected result")
 		has, err = hasEntryRecord(kvs, false)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.False(t, has, "unexpected result")
 		eb := pb.EntryBatch{}
 		data, err := eb.Marshal()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		k := newKey(entryKeySize, nil)
 		k.SetEntryBatchKey(1, 1, 1)
-		if err := kvs.SaveValue(k.Key(), data); err != nil {
-			t.Fatalf("failed to save entry batch")
-		}
+		err = kvs.SaveValue(k.Key(), data)
+		require.NoError(t, err, "failed to save entry batch")
 		has, err = hasEntryRecord(kvs, true)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if !has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.True(t, has, "unexpected result")
 		has, err = hasEntryRecord(kvs, false)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.False(t, has, "unexpected result")
 		ent := pb.Entry{}
 		data, err = ent.Marshal()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err)
 		k = newKey(entryKeySize, nil)
 		k.SetEntryKey(1, 1, 1)
-		if err := kvs.SaveValue(k.Key(), data); err != nil {
-			t.Fatalf("failed to save entry batch")
-		}
+		err = kvs.SaveValue(k.Key(), data)
+		require.NoError(t, err, "failed to save entry batch")
 		has, err = hasEntryRecord(kvs, true)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if !has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.True(t, has, "unexpected result")
 		has, err = hasEntryRecord(kvs, false)
-		if err != nil {
-			t.Fatalf("hasEntryRecord failed %v", err)
-		}
-		if !has {
-			t.Errorf("unexpected result")
-		}
+		require.NoError(t, err, "hasEntryRecord failed")
+		require.True(t, has, "unexpected result")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -292,9 +226,8 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 			data := make([]byte, 16)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Fatalf("failed to commit wb %v", err)
-		}
+		err := kvs.CommitWriteBatch(wb)
+		require.NoError(t, err, "failed to commit wb")
 		fk := newKey(entryKeySize, nil)
 		lk := newKey(entryKeySize, nil)
 		fk.SetEntryKey(100, 1, 1)
@@ -304,27 +237,19 @@ func TestEntriesCanBeRemovedFromKVStore(t *testing.T) {
 			count++
 			return true, nil
 		}
-		if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
-			t.Fatalf("iterate value failed %v", err)
-		}
-		if count != 100 {
-			t.Fatalf("failed to get all key value pairs, count %d", count)
-		}
+		err = kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+		require.NoError(t, err, "iterate value failed")
+		require.Equal(t, 100, count, "failed to get all key value pairs")
 		lk.SetEntryKey(100, 1, 21)
-		if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
-			t.Fatalf("remove entry failed %v", err)
-		}
-		if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
-			t.Fatalf("compaction failed %v", err)
-		}
+		err = kvs.BulkRemoveEntries(fk.Key(), lk.Key())
+		require.NoError(t, err, "remove entry failed")
+		err = kvs.CompactEntries(fk.Key(), lk.Key())
+		require.NoError(t, err, "compaction failed")
 		count = 0
 		lk.SetEntryKey(100, 1, 100)
-		if err := kvs.IterateValue(fk.Key(), lk.Key(), true, op); err != nil {
-			t.Fatalf("iterate value failed %v", err)
-		}
-		if count != 80 {
-			t.Fatalf("failed to get all key value pairs, count %d", count)
-		}
+		err = kvs.IterateValue(fk.Key(), lk.Key(), true, op)
+		require.NoError(t, err, "iterate value failed")
+		require.Equal(t, 80, count, "failed to get all key value pairs")
 	}
 	fs := vfs.GetTestFS()
 	runKVTest(t, tf, fs)
@@ -341,10 +266,9 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 	lk.SetEntryKey(100, 1, maxIndex+1)
 	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
-		if err != nil {
-			t.Fatalf("failed to open kv store %v", err)
-		}
+		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+			RDBTestDirectory, fs)
+		require.NoError(t, err, "failed to open kv store")
 		defer func() {
 			require.NoError(t, kvs.Close())
 		}()
@@ -354,41 +278,29 @@ func TestCompactionReleaseStorageSpace(t *testing.T) {
 			key := newKey(entryKeySize, nil)
 			key.SetEntryKey(100, 1, i)
 			data := make([]byte, 64)
-			_, err := rand.Read(data)
+			_, err = rand.Read(data)
 			require.NoError(t, err)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Fatalf("failed to commit wb %v", err)
-		}
+		err = kvs.CommitWriteBatch(wb)
+		require.NoError(t, err, "failed to commit wb")
 	}()
 	sz, err := getDirSize(RDBTestDirectory, true, fs)
-	if err != nil {
-		t.Fatalf("failed to get sz %v", err)
-	}
-	if sz < 1024*1024*8 {
-		t.Errorf("unexpected size %d", sz)
-	}
-	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
-	if err != nil {
-		t.Fatalf("failed to open kv store %v", err)
-	}
+	require.NoError(t, err, "failed to get sz")
+	require.GreaterOrEqual(t, sz, int64(1024*1024*8), "unexpected size")
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+		RDBTestDirectory, fs)
+	require.NoError(t, err, "failed to open kv store")
 	defer func() {
 		require.NoError(t, kvs.Close())
 	}()
-	if err := kvs.BulkRemoveEntries(fk.Key(), lk.Key()); err != nil {
-		t.Fatalf("remove entry failed %v", err)
-	}
-	if err := kvs.CompactEntries(fk.Key(), lk.Key()); err != nil {
-		t.Fatalf("compaction failed %v", err)
-	}
+	err = kvs.BulkRemoveEntries(fk.Key(), lk.Key())
+	require.NoError(t, err, "remove entry failed")
+	err = kvs.CompactEntries(fk.Key(), lk.Key())
+	require.NoError(t, err, "compaction failed")
 	sz, err = getDirSize(RDBTestDirectory, false, fs)
-	if err != nil {
-		t.Fatalf("failed to get sz %v", err)
-	}
-	if sz > 1024*1024 {
-		t.Errorf("unexpected size %d", sz)
-	}
+	require.NoError(t, err, "failed to get sz")
+	require.LessOrEqual(t, sz, int64(1024*1024), "unexpected size")
 }
 
 var flagContent = "YYYY"
@@ -406,7 +318,8 @@ func getDataFilePathList(dir string, wal bool, fs vfs.IFS) ([]string, error) {
 			return nil, err
 		}
 		if !wal {
-			if strings.HasSuffix(v.Name(), ".ldb") || strings.HasSuffix(v.Name(), ".sst") {
+			if strings.HasSuffix(v.Name(), ".ldb") ||
+				strings.HasSuffix(v.Name(), ".sst") {
 				result = append(result, fs.PathJoin(dir, v.Name()))
 			}
 		} else {
@@ -499,15 +412,14 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	defer deleteTestDB(fs)
 	cfg := config.GetDefaultLogDBConfig()
 	func() {
-		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
-		if err != nil {
-			t.Fatalf("failed to open kv store %v", err)
-		}
+		kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+			RDBTestDirectory, fs)
+		require.NoError(t, err, "failed to open kv store")
 		defer func() {
 			require.NoError(t, kvs.Close())
 		}()
 		if cut && !wal {
-			t.Fatalf("cut && !wal")
+			require.Fail(t, "cut && !wal")
 		}
 		if wal && kvs.Name() != "rocksdb" {
 			t.Skip("test skipped, WAL hardware corruption is not handled")
@@ -527,19 +439,15 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 			key.SetEntryKey(100, 1, i)
 			wb.Put(key.Key(), data)
 		}
-		if err := kvs.CommitWriteBatch(wb); err != nil {
-			t.Fatalf("failed to commit wb %v", err)
-		}
+		err = kvs.CommitWriteBatch(wb)
+		require.NoError(t, err, "failed to commit wb")
 		if !wal {
-			if err := kvs.FullCompaction(); err != nil {
-				t.Fatalf("full compaction failed %v", err)
-			}
+			err := kvs.FullCompaction()
+			require.NoError(t, err, "full compaction failed")
 		}
 	}()
 	files, err := getDataFilePathList(RDBTestDirectory, wal, fs)
-	if err != nil {
-		t.Fatalf("failed to get data files %v", err)
-	}
+	require.NoError(t, err, "failed to get data files")
 	corrupted := false
 	for _, fp := range files {
 		var done bool
@@ -549,18 +457,15 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 		} else {
 			done, err = modifyDataFile(fp, fs)
 		}
-		if err != nil {
-			t.Fatalf("failed to modify data file %v", err)
-		}
+		require.NoError(t, err, "failed to modify data file")
 		if done {
 			corrupted = true
 			break
 		}
 	}
-	if !corrupted {
-		t.Fatalf("failed to corrupt data files")
-	}
-	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory, RDBTestDirectory, fs)
+	require.True(t, corrupted, "failed to corrupt data files")
+	kvs, err := newDefaultKVStore(cfg, nil, RDBTestDirectory,
+		RDBTestDirectory, fs)
 	if err == nil {
 		defer func() {
 			require.NoError(t, kvs.Close())
@@ -568,14 +473,12 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	}
 	if !cut {
 		if wal && err == nil {
-			t.Fatalf("corrupted WAL not reported")
+			require.Fail(t, "corrupted WAL not reported")
 		} else {
 			return
 		}
 	}
-	if err != nil {
-		t.Fatalf("failed to open kv store %v", err)
-	}
+	require.NoError(t, err, "failed to open kv store")
 	fk := newKey(entryKeySize, nil)
 	lk := newKey(entryKeySize, nil)
 	fk.SetEntryKey(100, 1, 1)
@@ -587,16 +490,10 @@ func testDiskCorruptionIsHandled(t *testing.T, wal bool, cut bool, fs vfs.IFS) {
 	}
 	err = kvs.IterateValue(fk.Key(), lk.Key(), true, op)
 	if !cut {
-		if err == nil {
-			t.Fatalf("no checksum error returned")
-		}
+		require.Error(t, err, "no checksum error returned")
 	} else {
-		if err != nil {
-			t.Fatalf("failed to iterate the db: %v", err)
-		}
-		if count != 0 {
-			t.Fatalf("unexpected count: %d", count)
-		}
+		require.NoError(t, err, "failed to iterate the db")
+		require.Equal(t, 0, count, "unexpected count")
 	}
 }
 

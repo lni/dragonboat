@@ -20,33 +20,25 @@ import (
 
 	"github.com/lni/dragonboat/v4/raftio"
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCompactionTaskCanBeCreated(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
-	if p.len() != 0 {
-		t.Errorf("size is not 0")
-	}
+	assert.Equal(t, 0, p.len(), "size is not 0")
 }
 
 func TestCompactionTaskCanBeAdded(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	p := newCompactions()
 	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
-	if p.len() != 1 {
-		t.Errorf("len unexpectedly reported %d", p.len())
-	}
-	if len(p.pendings) != 1 {
-		t.Errorf("p.pending len is not 1")
-	}
+	assert.Equal(t, 1, p.len(), "len unexpectedly reported %d", p.len())
+	assert.Equal(t, 1, len(p.pendings), "p.pending len is not 1")
 	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
-	if !ok {
-		t.Errorf("not added")
-	}
-	if v.index != 3 {
-		t.Errorf("unexpected index %d", v)
-	}
+	assert.True(t, ok, "not added")
+	assert.Equal(t, uint64(3), v.index, "unexpected index %d", v)
 }
 
 func TestCompactionTaskCanBeUpdated(t *testing.T) {
@@ -54,16 +46,10 @@ func TestCompactionTaskCanBeUpdated(t *testing.T) {
 	p := newCompactions()
 	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
 	p.addTask(task{shardID: 1, replicaID: 2, index: 10})
-	if len(p.pendings) != 1 {
-		t.Errorf("p.pending len is not 1")
-	}
+	assert.Equal(t, 1, len(p.pendings), "p.pending len is not 1")
 	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
-	if !ok {
-		t.Errorf("not added")
-	}
-	if v.index != 10 {
-		t.Errorf("unexpected index %d", v)
-	}
+	assert.True(t, ok, "not added")
+	assert.Equal(t, uint64(10), v.index, "unexpected index %d", v)
 }
 
 func TestCompactionDoneChanIsRetained(t *testing.T) {
@@ -73,12 +59,8 @@ func TestCompactionDoneChanIsRetained(t *testing.T) {
 	done := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}].done
 	p.addTask(task{shardID: 1, replicaID: 2, index: 10})
 	v, ok := p.pendings[raftio.NodeInfo{ShardID: 1, ReplicaID: 2}]
-	if !ok {
-		t.Errorf("not added")
-	}
-	if v.done != done {
-		t.Errorf("chan not retained")
-	}
+	assert.True(t, ok, "not added")
+	assert.Equal(t, done, v.done, "chan not retained")
 }
 
 func TestCompactionTaskGetReturnTheExpectedValue(t *testing.T) {
@@ -86,20 +68,12 @@ func TestCompactionTaskGetReturnTheExpectedValue(t *testing.T) {
 	p := newCompactions()
 	tt := task{shardID: 1, replicaID: 2, index: 3}
 	p.addTask(tt)
-	if p.len() != 1 {
-		t.Errorf("len unexpectedly reported %d", p.len())
-	}
+	assert.Equal(t, 1, p.len(), "len unexpectedly reported %d", p.len())
 	task, ok := p.getTask()
-	if !ok {
-		t.Errorf("ok flag unexpected")
-	}
-	if task.done == nil {
-		t.Fatalf("task.done == nil")
-	}
+	assert.True(t, ok, "ok flag unexpected")
+	require.NotNil(t, task.done, "task.done == nil")
 	task.done = nil
-	if !reflect.DeepEqual(&tt, &task) {
-		t.Errorf("%v vs %v", tt, task)
-	}
+	assert.True(t, reflect.DeepEqual(&tt, &task), "%v vs %v", tt, task)
 }
 
 func TestCompactionTaskGetReturnAllExpectedValues(t *testing.T) {
@@ -107,37 +81,22 @@ func TestCompactionTaskGetReturnAllExpectedValues(t *testing.T) {
 	p := newCompactions()
 	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
 	p.addTask(task{shardID: 2, replicaID: 2, index: 10})
-	if p.len() != 2 {
-		t.Errorf("len unexpectedly reported %d", p.len())
-	}
+	assert.Equal(t, 2, p.len(), "len unexpectedly reported %d", p.len())
 	task1, ok := p.getTask()
-	if !ok {
-		t.Errorf("ok flag unexpected")
-	}
+	assert.True(t, ok, "ok flag unexpected")
 	task2, ok := p.getTask()
-	if !ok {
-		t.Errorf("ok flag unexpected")
-	}
-	if task1.index != 3 && task1.index != 10 {
-		t.Errorf("unexpected task obj")
-	}
-	if task2.index != 3 && task2.index != 10 {
-		t.Errorf("unexpected task obj")
-	}
+	assert.True(t, ok, "ok flag unexpected")
+	assert.True(t, task1.index == 3 || task1.index == 10, "unexpected task obj")
+	assert.True(t, task2.index == 3 || task2.index == 10, "unexpected task obj")
 	_, ok = p.getTask()
-	if ok {
-		t.Errorf("unexpected ok flag value")
-	}
+	assert.False(t, ok, "unexpected ok flag value")
 }
 
 func TestMovingCompactionIndexBackWillCausePanic(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("not panic")
-		}
-	}()
 	p := newCompactions()
 	p.addTask(task{shardID: 1, replicaID: 2, index: 3})
-	p.addTask(task{shardID: 1, replicaID: 2, index: 2})
+	require.Panics(t, func() {
+		p.addTask(task{shardID: 1, replicaID: 2, index: 2})
+	})
 }

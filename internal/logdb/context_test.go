@@ -16,6 +16,8 @@ package logdb
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type kvpair struct {
@@ -60,12 +62,9 @@ func (wb *testWriteBatch) Count() int {
 
 func TestRDBContextCanBeCreated(t *testing.T) {
 	ctx := newContext(128, 128)
-	if ctx.key == nil || len(ctx.val) != 128 {
-		t.Errorf("unexpected key/value")
-	}
-	if ctx.wb != nil {
-		t.Errorf("wb not nil")
-	}
+	require.NotNil(t, ctx.key, "key should not be nil")
+	require.Equal(t, 128, len(ctx.val), "val should have length 128")
+	require.Nil(t, ctx.wb, "wb should be nil")
 }
 
 func TestRDBContextCaBeDestroyed(t *testing.T) {
@@ -77,23 +76,15 @@ func TestRDBContextCaBeReset(t *testing.T) {
 	ctx := newContext(128, 128)
 	ctx.SetWriteBatch(newtestWriteBatch())
 	ctx.wb.Put([]byte("key"), []byte("val"))
-	if ctx.wb.Count() != 1 {
-		t.Errorf("unexpected count")
-	}
+	require.Equal(t, 1, ctx.wb.Count(), "unexpected count")
 	ctx.Reset()
-	if ctx.wb.Count() != 0 {
-		t.Errorf("wb not cleared")
-	}
+	require.Equal(t, 0, ctx.wb.Count(), "wb not cleared")
 }
 
 func TestGetValueBuffer(t *testing.T) {
 	ctx := newContext(128, 128)
 	buf := ctx.GetValueBuffer(100)
-	if cap(buf) != 128 {
-		t.Errorf("didn't return the default buffer")
-	}
+	require.Equal(t, 128, cap(buf), "didn't return the default buffer")
 	buf = ctx.GetValueBuffer(1024)
-	if cap(buf) != 1024 {
-		t.Errorf("didn't return a new buffer")
-	}
+	require.Equal(t, 1024, cap(buf), "didn't return a new buffer")
 }

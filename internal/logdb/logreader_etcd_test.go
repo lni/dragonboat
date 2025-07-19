@@ -64,7 +64,10 @@ func TestLogReaderEntries(t *testing.T) {
 }
 
 func testLogReaderEntries(t *testing.T, fs vfs.IFS) {
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4},
+		{Index: 5, Term: 5}, {Index: 6, Term: 6},
+	}
 	tests := []struct {
 		lo, hi, maxsize uint64
 		werr            error
@@ -73,28 +76,35 @@ func testLogReaderEntries(t *testing.T, fs vfs.IFS) {
 		{2, 6, math.MaxUint64, raft.ErrCompacted, nil},
 		{3, 4, math.MaxUint64, raft.ErrCompacted, nil},
 		{4, 5, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}}},
-		{4, 6, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-		{4, 7, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
+		{4, 6, math.MaxUint64, nil, []pb.Entry{
+			{Index: 4, Term: 4}, {Index: 5, Term: 5},
+		}},
+		{4, 7, math.MaxUint64, nil, []pb.Entry{
+			{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6},
+		}},
 		// even if maxsize is zero, the first entry should be returned
 		{4, 7, 0, nil, []pb.Entry{{Index: 4, Term: 4}}},
 		// limit to 2
-		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit()),
+			nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
 		// limit to 2
-		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() + ents[3].SizeUpperLimit()/2), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() + ents[3].SizeUpperLimit() - 1), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() +
+			ents[3].SizeUpperLimit()/2), nil,
+			[]pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() +
+			ents[3].SizeUpperLimit() - 1), nil,
+			[]pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
 		// all
-		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() + ents[3].SizeUpperLimit()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
+		{4, 7, uint64(ents[1].SizeUpperLimit() + ents[2].SizeUpperLimit() +
+			ents[3].SizeUpperLimit()), nil,
+			[]pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
 	}
 
 	for i, tt := range tests {
 		s := getTestLogReader(ents, fs)
 		entries, err := s.Entries(tt.lo, tt.hi, tt.maxsize)
-		if err != tt.werr {
-			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-		}
-		if !reflect.DeepEqual(entries, tt.wentries) {
-			t.Errorf("#%d: entries = %v, want %v", i, entries, tt.wentries)
-		}
+		require.Equal(t, tt.werr, err, "#%d: err mismatch", i)
+		require.Equal(t, tt.wentries, entries, "#%d: entries mismatch", i)
 		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
@@ -107,7 +117,9 @@ func TestLogReaderTerm(t *testing.T) {
 }
 
 func testLogReaderTerm(t *testing.T, fs vfs.IFS) {
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	tests := []struct {
 		i      uint64
 		werr   error
@@ -122,22 +134,18 @@ func testLogReaderTerm(t *testing.T, fs vfs.IFS) {
 	}
 	for i, tt := range tests {
 		s := getTestLogReader(ents, fs)
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					if !tt.wpanic {
-						t.Errorf("%d: panic = %v, want %v", i, true, tt.wpanic)
-					}
-				}
-			}()
-			term, err := s.Term(tt.i)
-			if err != tt.werr {
-				t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-			}
-			if term != tt.wterm {
-				t.Errorf("#%d: term = %d, want %d", i, term, tt.wterm)
-			}
-		}()
+		if tt.wpanic {
+			require.Panics(t, func() {
+				_, err := s.Term(tt.i)
+				require.NoError(t, err)
+			}, "#%d: expected panic", i)
+		} else {
+			require.NotPanics(t, func() {
+				term, err := s.Term(tt.i)
+				require.Equal(t, tt.werr, err, "#%d: err mismatch", i)
+				require.Equal(t, tt.wterm, term, "#%d: term mismatch", i)
+			}, "#%d: unexpected panic", i)
+		}
 		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
@@ -150,19 +158,15 @@ func TestLogReaderLastIndex(t *testing.T) {
 }
 
 func testLogReaderLastIndex(t *testing.T, fs vfs.IFS) {
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	s := getTestLogReader(ents, fs)
 	_, last := s.GetRange()
-	if last != 5 {
-		t.Errorf("term = %d, want %d", last, 5)
-	}
-	if err := s.Append([]pb.Entry{{Index: 6, Term: 5}}); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.Equal(t, uint64(5), last, "last index mismatch")
+	require.NoError(t, s.Append([]pb.Entry{{Index: 6, Term: 5}}))
 	_, last = s.GetRange()
-	if last != 6 {
-		t.Errorf("last = %d, want %d", last, 5)
-	}
+	require.Equal(t, uint64(6), last, "last index after append mismatch")
 	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
@@ -174,27 +178,19 @@ func TestLogReaderFirstIndex(t *testing.T) {
 }
 
 func testLogReaderFirstIndex(t *testing.T, fs vfs.IFS) {
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	s := getTestLogReader(ents, fs)
 	first, _ := s.GetRange()
-	if first != 4 {
-		t.Errorf("first = %d, want %d", first, 4)
-	}
+	require.Equal(t, uint64(4), first, "first index mismatch")
 	_, li := s.GetRange()
-	if li != 5 {
-		t.Errorf("last index = %d, want 5", li)
-	}
-	if err := s.Compact(4); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.Equal(t, uint64(5), li, "last index mismatch")
+	require.NoError(t, s.Compact(4))
 	first, _ = s.GetRange()
-	if first != 5 {
-		t.Errorf("first = %d, want %d", first, 5)
-	}
+	require.Equal(t, uint64(5), first, "first index after compact mismatch")
 	_, li = s.GetRange()
-	if li != 5 {
-		t.Errorf("last index = %d, want 5", li)
-	}
+	require.Equal(t, uint64(5), li, "last index after compact mismatch")
 	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
@@ -206,30 +202,48 @@ func TestLogReaderAppend(t *testing.T) {
 }
 
 func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	tests := []struct {
 		entries  []pb.Entry
 		werr     error
 		wentries []pb.Entry
 	}{
 		{
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+			},
 			nil,
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+			},
 		},
 		{
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6},
+			},
 			nil,
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6},
+			},
 		},
 		{
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 4},
+				{Index: 5, Term: 5}, {Index: 6, Term: 5},
+			},
 			nil,
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 4},
+				{Index: 5, Term: 5}, {Index: 6, Term: 5},
+			},
 		},
 		// truncate incoming entries, truncate the existing entries and append
 		{
-			[]pb.Entry{{Index: 2, Term: 3}, {Index: 3, Term: 3}, {Index: 4, Term: 5}},
+			[]pb.Entry{
+				{Index: 2, Term: 3}, {Index: 3, Term: 3}, {Index: 4, Term: 5},
+			},
 			nil,
 			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 5}},
 		},
@@ -243,33 +257,28 @@ func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 		{
 			[]pb.Entry{{Index: 6, Term: 5}},
 			nil,
-			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+			[]pb.Entry{
+				{Index: 3, Term: 3}, {Index: 4, Term: 4},
+				{Index: 5, Term: 5}, {Index: 6, Term: 5},
+			},
 		},
 	}
 	for i, tt := range tests {
 		s := getTestLogReader(ents, fs)
-		if err := s.Append(tt.entries); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, s.Append(tt.entries))
 		// put tt.entries to logdb
 		ud := pb.Update{
 			EntriesToSave: tt.entries,
 			ShardID:       LogReaderTestShardID,
 			ReplicaID:     LogReaderTestReplicaID,
 		}
-		if err := s.logdb.SaveRaftState([]pb.Update{ud}, 1); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, s.logdb.SaveRaftState([]pb.Update{ud}, 1))
 		bfi := tt.wentries[0].Index - 1
 		_, err := s.Term(bfi)
-		if err == nil {
-			t.Errorf("suppose to fail")
-		}
+		require.Error(t, err, "expected error for index %d", bfi)
 		ali := tt.wentries[len(tt.wentries)-1].Index + 1
 		_, err = s.Term(ali)
-		if err == nil {
-			t.Errorf("suppose to fail, but it didn't fail, i %d", i)
-		}
+		require.Error(t, err, "expected error for index %d", ali)
 		for ii, e := range tt.wentries {
 			if e.Index == 6 {
 				plog.Infof("going to check term for index 6")
@@ -278,12 +287,8 @@ func testLogReaderAppend(t *testing.T, fs vfs.IFS) {
 			if e.Index == 6 {
 				plog.Infof("Term returned")
 			}
-			if err != nil {
-				t.Errorf("idx %d, ii %d Term() failed", i, ii)
-			}
-			if term != e.Term {
-				t.Errorf("term %d, want %d", term, e.Term)
-			}
+			require.NoError(t, err, "idx %d, ii %d Term() failed", i, ii)
+			require.Equal(t, e.Term, term, "term mismatch for index %d", e.Index)
 		}
 		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
@@ -306,22 +311,16 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 	i := 0
 	tt := tests[i]
 	err := s.ApplySnapshot(tt)
-	if err != nil {
-		t.Errorf("#%d: err = %v, want %v", i, err, nil)
-	}
-	if fi, _ := s.GetRange(); fi != 5 {
-		t.Errorf("first index %d, want 5", fi)
-	}
-	if _, li := s.GetRange(); li != 4 {
-		t.Errorf("last index %d, want 4", li)
-	}
+	require.NoError(t, err, "#%d: unexpected error", i)
+	fi, _ := s.GetRange()
+	require.Equal(t, uint64(5), fi, "first index mismatch")
+	_, li := s.GetRange()
+	require.Equal(t, uint64(4), li, "last index mismatch")
 	//Apply Snapshot fails due to ErrSnapOutOfDate
 	i = 1
 	tt = tests[i]
 	err = s.ApplySnapshot(tt)
-	if err != raft.ErrSnapshotOutOfDate {
-		t.Errorf("#%d: err = %v, want %v", i, err, raft.ErrSnapshotOutOfDate)
-	}
+	require.Equal(t, raft.ErrSnapshotOutOfDate, err, "#%d: error mismatch", i)
 	require.NoError(t, s.logdb.Close())
 	deleteTestDB(fs)
 }
@@ -329,7 +328,9 @@ func TestLogReaderApplySnapshot(t *testing.T) {
 func TestLogReaderCreateSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	cs := &pb.Membership{
 		Addresses: map[uint64]string{1: "", 2: "", 3: ""},
 	}
@@ -345,12 +346,9 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 	for i, tt := range tests {
 		s := getTestLogReader(ents, fs)
 		err := s.CreateSnapshot(tt.wsnap)
-		if err != tt.werr {
-			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-		}
-		if s.snapshot.Index != tt.wsnap.Index {
-			t.Errorf("#%d: snap = %+v, want %+v", i, s.snapshot, tt.wsnap)
-		}
+		require.Equal(t, tt.werr, err, "#%d: error mismatch", i)
+		require.Equal(t, tt.wsnap.Index, s.snapshot.Index,
+			"#%d: snapshot index mismatch", i)
 		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
@@ -359,7 +357,9 @@ func TestLogReaderCreateSnapshot(t *testing.T) {
 func TestLogReaderSetRange(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	tests := []struct {
 		firstIndex     uint64
 		length         uint64
@@ -374,12 +374,10 @@ func TestLogReaderSetRange(t *testing.T) {
 	for idx, tt := range tests {
 		s := getTestLogReader(ents, fs)
 		s.SetRange(tt.firstIndex, tt.length)
-		if s.markerIndex != tt.expMarkerIndex {
-			t.Errorf("%d, marker index %d, want %d", idx, s.markerIndex, tt.expMarkerIndex)
-		}
-		if s.length != tt.expLength {
-			t.Errorf("%d, length %d, want %d", idx, s.length, tt.expLength)
-		}
+		require.Equal(t, tt.expMarkerIndex, s.markerIndex,
+			"%d: marker index mismatch", idx)
+		require.Equal(t, tt.expLength, s.length,
+			"%d: length mismatch", idx)
 		require.NoError(t, s.logdb.Close())
 		deleteTestDB(fs)
 	}
@@ -388,7 +386,9 @@ func TestLogReaderSetRange(t *testing.T) {
 func TestLogReaderGetSnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	cs := &pb.Membership{
 		Addresses: map[uint64]string{1: "", 2: "", 3: ""},
 	}
@@ -398,19 +398,17 @@ func TestLogReaderGetSnapshot(t *testing.T) {
 	defer func() {
 		require.NoError(t, s.logdb.Close())
 	}()
-	if err := s.ApplySnapshot(ss); err != nil {
-		t.Errorf("create snapshot failed %v", err)
-	}
+	require.NoError(t, s.ApplySnapshot(ss), "create snapshot failed")
 	rs := s.Snapshot()
-	if rs.Index != ss.Index {
-		t.Errorf("unexpected snapshot rec")
-	}
+	require.Equal(t, ss.Index, rs.Index, "unexpected snapshot record")
 }
 
 func TestLogReaderInitialState(t *testing.T) {
 	fs := vfs.GetTestFS()
 	defer leaktest.AfterTest(t)()
-	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	ents := []pb.Entry{
+		{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5},
+	}
 	cs := &pb.Membership{
 		Addresses: map[uint64]string{1: "", 2: "", 3: ""},
 	}
@@ -420,9 +418,7 @@ func TestLogReaderInitialState(t *testing.T) {
 	defer func() {
 		require.NoError(t, s.logdb.Close())
 	}()
-	if err := s.ApplySnapshot(ss); err != nil {
-		t.Errorf("create snapshot failed %v", err)
-	}
+	require.NoError(t, s.ApplySnapshot(ss), "create snapshot failed")
 	ps := pb.State{
 		Term:   2,
 		Vote:   3,
@@ -430,7 +426,6 @@ func TestLogReaderInitialState(t *testing.T) {
 	}
 	s.SetState(ps)
 	rps, ms := s.NodeState()
-	if !reflect.DeepEqual(&ms, cs) || !reflect.DeepEqual(&rps, &ps) {
-		t.Errorf("initial state unexpected")
-	}
+	require.True(t, reflect.DeepEqual(&ms, cs), "membership mismatch")
+	require.True(t, reflect.DeepEqual(&rps, &ps), "state mismatch")
 }

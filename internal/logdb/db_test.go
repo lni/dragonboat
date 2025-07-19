@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/leaktest"
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +36,8 @@ const (
 	RDBTestDirectory = "db_test_dir_safe_to_delete"
 )
 
-func getDirSize(path string, includeLogSize bool, fs vfs.IFS) (int64, error) {
+func getDirSize(path string,
+	includeLogSize bool, fs vfs.IFS) (int64, error) {
 	var size int64
 	results, err := fs.List(path)
 	if err != nil {
@@ -58,7 +58,8 @@ func getDirSize(path string, includeLogSize bool, fs vfs.IFS) (int64, error) {
 	return size, err
 }
 
-func getNewTestDB(dir string, lldir string, batched bool, fs vfs.IFS) raftio.ILogDB {
+func getNewTestDB(dir string,
+	lldir string, batched bool, fs vfs.IFS) raftio.ILogDB {
 	d := fs.PathJoin(RDBTestDirectory, dir)
 	lld := fs.PathJoin(RDBTestDirectory, lldir)
 	if err := fileutil.MkdirAll(d, fs); err != nil {
@@ -95,12 +96,8 @@ func runLogDBTestAs(t *testing.T,
 	lldir := "wal-db-dir"
 	d := fs.PathJoin(RDBTestDirectory, dir)
 	lld := fs.PathJoin(RDBTestDirectory, lldir)
-	if err := fs.RemoveAll(d); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.RemoveAll(lld); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(d))
+	require.NoError(t, fs.RemoveAll(lld))
 	db := getNewTestDB(dir, lldir, batched, fs)
 	defer deleteTestDB(fs)
 	defer func() {
@@ -109,21 +106,22 @@ func runLogDBTestAs(t *testing.T,
 	tf(t, db)
 }
 
-func runLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
+func runLogDBTest(t *testing.T,
+	tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
 	runLogDBTestAs(t, false, tf, fs)
 	runLogDBTestAs(t, true, tf, fs)
 }
 
-func runBatchedLogDBTest(t *testing.T, tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
+func runBatchedLogDBTest(t *testing.T,
+	tf func(t *testing.T, db raftio.ILogDB), fs vfs.IFS) {
 	runLogDBTestAs(t, true, tf, fs)
 }
 
 func TestRDBReturnErrNoBootstrapInfoWhenNoBootstrap(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		if _, err := db.GetBootstrapInfo(1, 2); !errors.Is(err, raftio.ErrNoBootstrapInfo) {
-			t.Errorf("unexpected error %v", err)
-		}
+		_, err := db.GetBootstrapInfo(1, 2)
+		require.ErrorIs(t, err, raftio.ErrNoBootstrapInfo)
 	}
 	runLogDBTest(t, tf, fs)
 }
@@ -138,42 +136,21 @@ func TestBootstrapInfoCanBeSavedAndChecked(t *testing.T) {
 			Join:      false,
 			Addresses: nodes,
 		}
-		if err := db.SaveBootstrapInfo(1, 2, bs); err != nil {
-			t.Errorf("failed to save bootstrap info %v", err)
-		}
+		require.NoError(t, db.SaveBootstrapInfo(1, 2, bs))
 		bootstrap, err := db.GetBootstrapInfo(1, 2)
-		if err != nil {
-			t.Errorf("failed to get bootstrap info %v", err)
-		}
-		if bootstrap.Join {
-			t.Errorf("unexpected join value")
-		}
-		if len(bootstrap.Addresses) != 3 {
-			t.Errorf("unexpected addresses len")
-		}
+		require.NoError(t, err)
+		require.False(t, bootstrap.Join)
+		require.Len(t, bootstrap.Addresses, 3)
 		ni, err := db.ListNodeInfo()
-		if err != nil {
-			t.Errorf("failed to list node info %v", err)
-		}
-		if len(ni) != 1 {
-			t.Errorf("failed to get node info list")
-		}
-		if ni[0].ShardID != 1 || ni[0].ReplicaID != 2 {
-			t.Errorf("unexpected shard id/node id, %v", ni[0])
-		}
-		if err := db.SaveBootstrapInfo(2, 3, bs); err != nil {
-			t.Errorf("failed to save bootstrap info %v", err)
-		}
-		if err := db.SaveBootstrapInfo(3, 4, bs); err != nil {
-			t.Errorf("failed to save bootstrap info %v", err)
-		}
+		require.NoError(t, err)
+		require.Len(t, ni, 1)
+		require.Equal(t, uint64(1), ni[0].ShardID)
+		require.Equal(t, uint64(2), ni[0].ReplicaID)
+		require.NoError(t, db.SaveBootstrapInfo(2, 3, bs))
+		require.NoError(t, db.SaveBootstrapInfo(3, 4, bs))
 		ni, err = db.ListNodeInfo()
-		if err != nil {
-			t.Errorf("failed to list node info %v", err)
-		}
-		if len(ni) != 3 {
-			t.Errorf("failed to get node info list")
-		}
+		require.NoError(t, err)
+		require.Len(t, ni, 3)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -187,33 +164,21 @@ func TestSnapshotHasMaxIndexSet(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud1}, 1)
-		if err != nil {
-			t.Fatalf("failed to save raft state %v", err)
-		}
+		require.NoError(t, err)
 		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 4)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 4 {
-			t.Errorf("max index %d, want 4", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(4), maxIndex)
 		ud2 := pb.Update{
 			ShardID:   3,
 			ReplicaID: 4,
 			Snapshot:  pb.Snapshot{Index: 3},
 		}
 		err = db.SaveRaftState([]pb.Update{ud2}, 1)
-		if err != nil {
-			t.Fatalf("failed to save raft state %v", err)
-		}
+		require.NoError(t, err)
 		maxIndex, err = p[3].getMaxIndex(3, 4)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 3 {
-			t.Errorf("max index %d, want 3", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(3), maxIndex)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -227,16 +192,11 @@ func TestSaveSnapshotTogetherWithUnexpectedEntriesWillPanic(t *testing.T) {
 			ReplicaID:     4,
 			Snapshot:      pb.Snapshot{Index: 5},
 		}
-		err := db.SaveRaftState([]pb.Update{ud1}, 1)
-		if err != nil {
-			t.Fatalf("failed to save raft state %v", err)
-		}
+		require.Panics(t, func() {
+			err := db.SaveRaftState([]pb.Update{ud1}, 1)
+			require.NoError(t, err)
+		})
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("panic not triggered")
-		}
-	}()
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
@@ -293,9 +253,7 @@ func TestSnapshotsSavedInSaveRaftState(t *testing.T) {
 		}
 		uds := []pb.Update{ud1, ud2}
 		err := db.SaveRaftState(uds, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		v, err := db.GetSnapshot(3, 4)
 		require.NoError(t, err)
 		require.Equal(t, snapshot1.Index, v.Index)
@@ -332,16 +290,11 @@ func TestSnapshotOnlyNodeIsHandledByReadRaftState(t *testing.T) {
 			ReplicaID: 4,
 			Snapshot:  ss,
 		}
-		if err := db.SaveRaftState([]pb.Update{ud}, 1); err != nil {
-			t.Fatalf("failed to save single de rec")
-		}
+		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
 		rs, err := db.ReadRaftState(3, 4, ss.Index)
-		if err != nil {
-			t.Fatalf("read raft state failed %v", err)
-		}
-		if rs.EntryCount != 0 || rs.FirstIndex != ss.Index {
-			t.Errorf("unexpected rs %+v", rs)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), rs.EntryCount)
+		require.Equal(t, ss.Index, rs.FirstIndex)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -358,12 +311,9 @@ func TestReadRaftStateReturnsNoSavedLogErrorWhenStateIsNeverSaved(t *testing.T) 
 			ReplicaID: 4,
 			Snapshot:  ss,
 		}
-		if err := db.SaveRaftState([]pb.Update{ud}, 1); err != nil {
-			t.Fatalf("failed to save single de rec")
-		}
-		if _, err := db.ReadRaftState(3, 4, ss.Index); !errors.Is(err, raftio.ErrNoSavedLog) {
-			t.Fatalf("failed to return expected error %v", err)
-		}
+		require.NoError(t, db.SaveRaftState([]pb.Update{ud}, 1))
+		_, err := db.ReadRaftState(3, 4, ss.Index)
+		require.ErrorIs(t, err, raftio.ErrNoSavedLog)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -395,9 +345,7 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
 			State:         hs,
@@ -405,20 +353,11 @@ func TestMaxIndexRuleIsEnforced(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err := db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("failed to read")
-		}
-		if rs.EntryCount != 1 {
-			t.Errorf("entry sz %d, want 1", rs.EntryCount)
-			return
-		}
-		if rs.FirstIndex != 3 {
-			t.Errorf("entry index %d, want 3", rs.FirstIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), rs.EntryCount)
+		require.Equal(t, uint64(3), rs.FirstIndex)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -448,28 +387,17 @@ func TestSavedEntrieseAreOrderedByTheKey(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err := db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("failed to read")
-		}
-		if rs.EntryCount != 1024 {
-			t.Errorf("entries size %d, want %d", rs.EntryCount, 1024)
-		}
-		re, _, err := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 1, math.MaxUint64, math.MaxUint64)
-		if err != nil {
-			t.Errorf("IterateEntries failed %v", err)
-		}
-		if len(re) != 1024 {
-			t.Errorf("didn't return all entries")
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(1024), rs.EntryCount)
+		re, _, err := db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 1, math.MaxUint64, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, re, 1024)
 		lastIndex := re[0].Index
 		for _, e := range re[1:] {
-			if e.Index != lastIndex+1 {
-				t.Errorf("index not sequential")
-			}
+			require.Equal(t, lastIndex+1, e.Index)
 			lastIndex = e.Index
 		}
 	}
@@ -502,24 +430,14 @@ func testSaveRaftState(t *testing.T, db raftio.ILogDB) {
 		ud.EntriesToSave = append(ud.EntriesToSave, e)
 	}
 	err := db.SaveRaftState([]pb.Update{ud}, 1)
-	if err != nil {
-		t.Errorf("failed to save single de rec")
-	}
+	require.NoError(t, err)
 	rs, err := db.ReadRaftState(3, 4, 0)
-	if err != nil {
-		t.Errorf("failed to read")
-	}
-	if reflect.DeepEqual(rs.State, raftio.RaftState{}) {
-		t.Errorf("failed to get hs")
-	}
-	if rs.State.Term != 2 ||
-		rs.State.Vote != 3 ||
-		rs.State.Commit != 100 {
-		t.Errorf("bad hs returned value")
-	}
-	if rs.EntryCount != 10 {
-		t.Errorf("didn't return all entries")
-	}
+	require.NoError(t, err)
+	require.False(t, reflect.DeepEqual(rs.State, raftio.RaftState{}))
+	require.Equal(t, uint64(2), rs.State.Term)
+	require.Equal(t, uint64(3), rs.State.Vote)
+	require.Equal(t, uint64(100), rs.State.Commit)
+	require.Equal(t, uint64(10), rs.EntryCount)
 }
 
 func TestSaveRaftState(t *testing.T) {
@@ -544,18 +462,12 @@ func TestStateIsUpdated(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err := db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("read raft state failed %v", err)
-		}
-		if rs.State.Term != hs.Term ||
-			rs.State.Vote != hs.Vote ||
-			rs.State.Commit != hs.Commit {
-			t.Errorf("unexpected persistent state value %v", rs)
-		}
+		require.NoError(t, err)
+		require.Equal(t, hs.Term, rs.State.Term)
+		require.Equal(t, hs.Vote, rs.State.Vote)
+		require.Equal(t, hs.Commit, rs.State.Commit)
 		hs2 := pb.State{
 			Term:   3,
 			Vote:   3,
@@ -568,18 +480,12 @@ func TestStateIsUpdated(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud2}, 1)
-		if err != nil {
-			t.Errorf("save raft state failed %v", err)
-		}
+		require.NoError(t, err)
 		rs, err = db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("read raft state failed %v", err)
-		}
-		if rs.State.Term != hs2.Term ||
-			rs.State.Vote != hs2.Vote ||
-			rs.State.Commit != hs2.Commit {
-			t.Errorf("unexpected persistent state value %v", rs)
-		}
+		require.NoError(t, err)
+		require.Equal(t, hs2.Term, rs.State.Term)
+		require.Equal(t, hs2.Vote, rs.State.Vote)
+		require.Equal(t, hs2.Commit, rs.State.Commit)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -605,17 +511,11 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		p := db.(*ShardedDB).shards
 		maxIndex, err := p[3].getMaxIndex(3, 4)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 10 {
-			t.Errorf("max index %d, want 10", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(10), maxIndex)
 		e1 = pb.Entry{
 			Term:  1,
 			Index: 11,
@@ -629,16 +529,10 @@ func TestMaxIndexIsUpdated(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		maxIndex, err = p[3].getMaxIndex(3, 4)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		if maxIndex != 11 {
-			t.Errorf("max index %d, want 11", maxIndex)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(11), maxIndex)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -670,43 +564,25 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err := db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("failed to get the entries %v", err)
-		}
-		if rs.EntryCount != 2 {
-			t.Errorf("ents sz %d, want 2", rs.EntryCount)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), rs.EntryCount)
 		// save the same data but with different node id
 		ud.ReplicaID = 5
 		err = db.SaveRaftState([]pb.Update{ud}, 2)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err = db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("failed to get the entries %v", err)
-		}
-		if rs.EntryCount != 2 {
-			t.Errorf("ents sz %d, want 2", rs.EntryCount)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), rs.EntryCount)
 		// save the same data but with different shard id
 		ud.ReplicaID = 4
 		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		require.NoError(t, err)
 		rs, err = db.ReadRaftState(3, 4, 0)
-		if err != nil {
-			t.Errorf("failed to get the entries %v", err)
-		}
-		if rs.EntryCount != 2 {
-			t.Errorf("ents sz %d, want 2", rs.EntryCount)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), rs.EntryCount)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -714,10 +590,9 @@ func TestReadAllEntriesOnlyReturnEntriesFromTheSpecifiedNode(t *testing.T) {
 
 func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		ents, _, _ := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 0 {
-			t.Errorf("ents sz %d, want 0", len(ents))
-		}
+		ents, _, err := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Empty(t, ents)
 		hs := pb.State{
 			Term:   2,
 			Vote:   3,
@@ -747,31 +622,25 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 			ShardID:       3,
 			ReplicaID:     4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
+		require.NoError(t, err)
 		// save the same data again but under a different node id
 		ud.ReplicaID = 5
 		err = db.SaveRaftState([]pb.Update{ud}, 2)
-		if err != nil {
-			t.Errorf("failed to save updated de rec")
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 3 {
-			t.Errorf("ents sz %d, want 3", len(ents))
-		}
+		require.NoError(t, err)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 3)
 		// save the same data again but under a different shard id
 		ud.ReplicaID = 4
 		ud.ShardID = 4
 		err = db.SaveRaftState([]pb.Update{ud}, 3)
-		if err != nil {
-			t.Errorf("failed to save updated de rec")
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 3 {
-			t.Errorf("ents sz %d, want 3", len(ents))
-		}
+		require.NoError(t, err)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 3)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -779,10 +648,9 @@ func TestIterateEntriesOnlyReturnCurrentNodeEntries(t *testing.T) {
 
 func TestIterateEntries(t *testing.T) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
-		ents, _, _ := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 0 {
-			t.Errorf("ents sz %d, want 0", len(ents))
-		}
+		ents, _, err := db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Empty(t, ents)
 		hs := pb.State{
 			Term:   2,
 			Vote:   3,
@@ -812,33 +680,28 @@ func TestIterateEntries(t *testing.T) {
 			ShardID:       3,
 			ReplicaID:     4,
 		}
-		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 11, math.MaxUint64)
-		if len(ents) != 1 {
-			t.Errorf("ents sz %d, want 3", len(ents))
-		}
-		if ents[0].Index != 10 {
-			t.Errorf("unexpected index %d", ents[0].Index)
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 3 {
-			t.Errorf("ents sz %d, want 3", len(ents))
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, 0)
-		if len(ents) != 1 {
-			t.Errorf("ents sz %d, want 1", len(ents))
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 12, math.MaxUint64)
-		if len(ents) != 2 {
-			t.Errorf("ents sz %d, want 2", len(ents))
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, uint64(e1.Size()-1))
-		if len(ents) != 1 {
-			t.Errorf("ents sz %d, want 1", len(ents))
-		}
+		err = db.SaveRaftState([]pb.Update{ud}, 1)
+		require.NoError(t, err)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 11, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 1)
+		require.Equal(t, uint64(10), ents[0].Index)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 3)
+		ents, _, err = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, 0)
+		require.NoError(t, err)
+		require.Len(t, ents, 1)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 12, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 2)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 13, uint64(e1.Size()-1))
+		require.NoError(t, err)
+		require.Len(t, ents, 1)
 		// write an entry with index 11
 		ud = pb.Update{
 			EntriesToSave: []pb.Entry{e2},
@@ -847,17 +710,13 @@ func TestIterateEntries(t *testing.T) {
 			ReplicaID:     4,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save single de rec")
-		}
-		ents, _, _ = db.IterateEntries([]pb.Entry{}, 0, 3, 4, 10, 13, math.MaxUint64)
-		if len(ents) != 2 {
-			t.Errorf("ents sz %d, want 2", len(ents))
-		}
+		require.NoError(t, err)
+		ents, _, err = db.IterateEntries([]pb.Entry{},
+			0, 3, 4, 10, 13, math.MaxUint64)
+		require.NoError(t, err)
+		require.Len(t, ents, 2)
 		for _, ent := range ents {
-			if ent.Index == 12 {
-				t.Errorf("index 12 found")
-			}
+			require.NotEqual(t, uint64(12), ent.Index)
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -924,13 +783,9 @@ func TestOldSnapshotIsIgnored(t *testing.T) {
 }
 
 func TestParseNodeInfoKeyPanicOnUnexpectedKeySize(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Errorf("panic not triggered")
-	}()
-	parseNodeInfoKey(make([]byte, 21))
+	require.Panics(t, func() {
+		parseNodeInfoKey(make([]byte, 21))
+	})
 }
 
 func TestSaveEntriesWithIndexGap(t *testing.T) {
@@ -953,9 +808,7 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		require.NoError(t, err)
 		e1 = pb.Entry{
 			Term:  1,
 			Index: 4,
@@ -972,45 +825,30 @@ func TestSaveEntriesWithIndexGap(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Errorf("failed to save recs")
-		}
+		require.NoError(t, err)
 		ents, _, err := db.IterateEntries([]pb.Entry{}, 0,
 			shardID, replicaID, 1, 6, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if uint64(len(ents)) != 2 {
-			t.Errorf("ents sz %d, want 2", len(ents))
-		}
-		if ents[0].Index != 1 || ents[1].Index != 2 {
-			t.Errorf("unexpected index")
-		}
+		require.NoError(t, err)
+		require.Len(t, ents, 2)
+		require.Equal(t, uint64(1), ents[0].Index)
+		require.Equal(t, uint64(2), ents[1].Index)
 		ents, _, err = db.IterateEntries([]pb.Entry{}, 0,
 			shardID, replicaID, 3, 6, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if uint64(len(ents)) != 0 {
-			t.Errorf("ents sz %d, want 0", len(ents))
-		}
+		require.NoError(t, err)
+		require.Empty(t, ents)
 		ents, _, err = db.IterateEntries([]pb.Entry{}, 0,
 			shardID, replicaID, 4, 6, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if uint64(len(ents)) != 2 {
-			t.Errorf("ents sz %d, want 2", len(ents))
-		}
-		if ents[0].Index != 4 || ents[1].Index != 5 {
-			t.Errorf("unexpected index")
-		}
+		require.NoError(t, err)
+		require.Len(t, ents, 2)
+		require.Equal(t, uint64(4), ents[0].Index)
+		require.Equal(t, uint64(5), ents[1].Index)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
 }
 
-func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) {
+func testAllWantedEntriesAreAccessible(t *testing.T,
+	first uint64, last uint64) {
 	tf := func(t *testing.T, db raftio.ILogDB) {
 		shardID := uint64(0)
 		replicaID := uint64(4)
@@ -1030,35 +868,19 @@ func testAllWantedEntriesAreAccessible(t *testing.T, first uint64, last uint64) 
 			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
+		require.NoError(t, err)
 		results, _, err := db.IterateEntries(nil,
 			0, shardID, replicaID, first, last+1, math.MaxUint64)
-		if err != nil {
-			t.Errorf("failed to get entries %v", err)
-		}
-		if uint64(len(results)) != last-first+1 {
-			t.Errorf("got %d entries, want %d", len(results), last-first+1)
-		}
-		if results[len(results)-1].Index != last {
-			t.Errorf("last index %d, want %d", results[len(results)-1].Index, last)
-		}
-		if results[0].Index != first {
-			t.Errorf("first index %d, want %d", results[0].Index, first)
-		}
+		require.NoError(t, err)
+		require.Equal(t, last-first+1, uint64(len(results)))
+		require.Equal(t, last, results[len(results)-1].Index)
+		require.Equal(t, first, results[0].Index)
 		rs, err := db.ReadRaftState(shardID, replicaID, first-1)
-		if err != nil {
-			t.Fatalf("failed to get entry range %v", err)
-		}
+		require.NoError(t, err)
 		firstIndex := rs.FirstIndex
 		length := rs.EntryCount
-		if firstIndex != first {
-			t.Errorf("first index %d, want %d", firstIndex, first)
-		}
-		if length != last-first+1 {
-			t.Errorf("length %d, want %d", length, last-first+1)
-		}
+		require.Equal(t, first, firstIndex)
+		require.Equal(t, last-first+1, length)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -1071,16 +893,10 @@ func TestRemoveEntriesTo(t *testing.T) {
 	lldir := "wal-db-dir"
 	d := fs.PathJoin(RDBTestDirectory, dir)
 	lld := fs.PathJoin(RDBTestDirectory, lldir)
-	if err := fs.RemoveAll(d); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.RemoveAll(lld); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(d))
+	require.NoError(t, fs.RemoveAll(lld))
 	defer func() {
-		if err := fs.RemoveAll(RDBTestDirectory); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(RDBTestDirectory))
 	}()
 	shardID := uint64(0)
 	replicaID := uint64(4)
@@ -1090,16 +906,13 @@ func TestRemoveEntriesTo(t *testing.T) {
 	func() {
 		db := getNewTestDB(dir, lldir, false, fs)
 		sdb, ok := db.(*ShardedDB)
-		if !ok {
-			t.Fatalf("failed to get sdb")
-		}
+		require.True(t, ok)
 		name := sdb.Name()
 		plog.Infof("name: %s", name)
 		skipSizeCheck = strings.Contains(name, "leveldb")
 		failed, err := sdb.SelfCheckFailed()
-		if err != nil || failed {
-			t.Fatalf("self check failed")
-		}
+		require.False(t, failed)
+		require.NoError(t, err)
 		defer func() {
 			require.NoError(t, db.Close())
 		}()
@@ -1119,16 +932,10 @@ func TestRemoveEntriesTo(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err = db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
-		if err := db.RemoveEntriesTo(shardID, replicaID, maxIndex); err != nil {
-			t.Fatalf("failed to remove entries, %v", err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, db.RemoveEntriesTo(shardID, replicaID, maxIndex))
 		done, err := db.CompactEntriesTo(shardID, replicaID, maxIndex)
-		if err != nil {
-			t.Fatalf("failed to compact entries to, %v", err)
-		}
+		require.NoError(t, err)
 		for i := 0; i < 1000; i++ {
 			count := atomic.LoadUint64(&(sdb.completedCompactions))
 			if count == 0 {
@@ -1138,35 +945,27 @@ func TestRemoveEntriesTo(t *testing.T) {
 				break
 			}
 			if i == 999 {
-				t.Fatalf("failed to trigger compaction")
+				require.Fail(t, "failed to trigger compaction")
 			}
 		}
 		select {
 		case <-done:
 		default:
-			t.Fatalf("done chan not closed")
+			require.Fail(t, "done chan not closed")
 		}
 		results, _, err := db.IterateEntries(nil,
 			0, shardID, replicaID, 1, 100, math.MaxUint64)
-		if err != nil {
-			t.Errorf("iterate entries failed %v", err)
-		}
-		if len(results) > 0 {
-			t.Errorf("entries not deleted, %d", len(results))
-		}
+		require.NoError(t, err)
+		require.Empty(t, results)
 	}()
 	// leveldb has the leftover ldb file
 	// https://github.com/google/leveldb/issues/573
 	// https://github.com/google/leveldb/issues/593
 	if !skipSizeCheck {
 		sz, err := getDirSize(RDBTestDirectory, false, fs)
-		if err != nil {
-			t.Fatalf("failed to get sz %v", err)
-		}
+		require.NoError(t, err)
 		plog.Infof("sz: %d", sz)
-		if sz > 1024*1024 {
-			t.Errorf("unexpected size, %d", sz)
-		}
+		require.LessOrEqual(t, sz, int64(1024*1024))
 	}
 }
 
@@ -1240,29 +1039,18 @@ func TestReadRaftStateWithSnapshot(t *testing.T) {
 				ReplicaID:     replicaID,
 			}
 			err := db.SaveRaftState([]pb.Update{ud}, 1)
-			if err != nil {
-				t.Fatalf("failed to save recs")
-			}
+			require.NoError(t, err)
 			state, err := db.ReadRaftState(shardID, replicaID, ss.Index)
-			if err != nil {
-				t.Fatalf("failed to read raft state %v", err)
-			}
-			if state.FirstIndex != ss.Index {
-				t.Errorf("first index %d, want %d", state.FirstIndex, 1)
-			}
-			if state.EntryCount != entryCount {
-				t.Errorf("length %d, want %d", state.EntryCount, entryCount)
-			}
+			require.NoError(t, err)
+			require.Equal(t, ss.Index, state.FirstIndex)
+			require.Equal(t, entryCount, state.EntryCount)
 			logReader := NewLogReader(shardID, replicaID, db)
 			logReader.SetCompactor(testCompactor)
-			if err := logReader.ApplySnapshot(ss); err != nil {
-				t.Fatalf("apply snapshot failed")
-			}
+			require.NoError(t, logReader.ApplySnapshot(ss))
 			logReader.SetRange(state.FirstIndex, state.EntryCount)
 			fi, li := logReader.GetRange()
-			if fi != firstIndex || li != lastIndex {
-				t.Errorf("unexpected range %d:%d", fi, li)
-			}
+			require.Equal(t, firstIndex, fi)
+			require.Equal(t, lastIndex, li)
 		}
 		fs := vfs.GetTestFS()
 		runLogDBTest(t, tf, fs)
@@ -1294,19 +1082,11 @@ func TestReadRaftStateWithEntriesOnly(t *testing.T) {
 			ReplicaID:     replicaID,
 		}
 		err := db.SaveRaftState([]pb.Update{ud}, 1)
-		if err != nil {
-			t.Fatalf("failed to save recs")
-		}
+		require.NoError(t, err)
 		state, err := db.ReadRaftState(shardID, replicaID, 1)
-		if err != nil {
-			t.Fatalf("failed to read raft state %v", err)
-		}
-		if state.FirstIndex != 1 {
-			t.Errorf("first index %d, want %d", state.FirstIndex, 1)
-		}
-		if state.EntryCount != batchSize*3+1 {
-			t.Errorf("length %d, want %d", state.EntryCount, batchSize*3+1)
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), state.FirstIndex)
+		require.Equal(t, batchSize*3+1, state.EntryCount)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)
@@ -1350,19 +1130,20 @@ func TestRemoveNodeData(t *testing.T) {
 		require.Equal(t, batchSize*3+1, state.EntryCount)
 		require.NoError(t, db.RemoveNodeData(shardID, replicaID))
 		_, err = db.ReadRaftState(shardID, replicaID, 1)
-		require.True(t, errors.Is(err, raftio.ErrNoSavedLog))
+		require.ErrorIs(t, err, raftio.ErrNoSavedLog)
 
 		snapshot, err := db.GetSnapshot(shardID, replicaID)
 		require.NoError(t, err)
 		require.True(t, pb.IsEmptySnapshot(snapshot))
 
 		_, err = db.GetBootstrapInfo(shardID, replicaID)
-		require.True(t, errors.Is(err, raftio.ErrNoBootstrapInfo))
+		require.ErrorIs(t, err, raftio.ErrNoBootstrapInfo)
 
-		ents, sz, err := db.IterateEntries(nil, 0, shardID, replicaID, 0,
+		iteratedEnts, sz, err := db.IterateEntries(nil, 0, shardID, replicaID, 0,
 			math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
-		require.True(t, len(ents) == 0 && sz == 0)
+		require.Empty(t, iteratedEnts)
+		require.Zero(t, sz)
 	}
 	fs := vfs.GetTestFS()
 	runLogDBTest(t, tf, fs)

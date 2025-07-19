@@ -34,67 +34,54 @@ func TestTrySaveSnapshot(t *testing.T) {
 
 func TestCachedNodeInfoCanBeSet(t *testing.T) {
 	c := newCache()
-	if len(c.nodeInfo) != 0 {
-		t.Errorf("unexpected map len")
-	}
+	require.Equal(t, 0, len(c.nodeInfo), "unexpected map len")
+
 	toSet := c.setNodeInfo(100, 2)
-	if !toSet {
-		t.Errorf("unexpected return value %t", toSet)
-	}
+	require.True(t, toSet, "unexpected return value %t", toSet)
+
 	toSet = c.setNodeInfo(100, 2)
-	if toSet {
-		t.Errorf("unexpected return value %t", toSet)
-	}
-	if len(c.nodeInfo) != 1 {
-		t.Errorf("unexpected map len")
-	}
+	require.False(t, toSet, "unexpected return value %t", toSet)
+
+	require.Equal(t, 1, len(c.nodeInfo), "unexpected map len")
+
 	ni := raftio.NodeInfo{
 		ShardID:   100,
 		ReplicaID: 2,
 	}
 	_, ok := c.nodeInfo[ni]
-	if !ok {
-		t.Errorf("node info not set")
-	}
+	require.True(t, ok, "node info not set")
 }
 
 func TestCachedStateCanBeSet(t *testing.T) {
 	c := newCache()
-	if len(c.ps) != 0 {
-		t.Errorf("unexpected savedState len %d", len(c.ps))
-	}
+	require.Equal(t, 0, len(c.ps), "unexpected savedState len %d", len(c.ps))
+
 	st := pb.State{
 		Term:   1,
 		Vote:   2,
 		Commit: 3,
 	}
+
 	toSet := c.setState(100, 2, st)
-	if !toSet {
-		t.Errorf("unexpected return value")
-	}
+	require.True(t, toSet, "unexpected return value")
+
 	toSet = c.setState(100, 2, st)
-	if toSet {
-		t.Errorf("unexpected return value")
-	}
+	require.False(t, toSet, "unexpected return value")
+
 	st.Term = 3
 	toSet = c.setState(100, 2, st)
-	if !toSet {
-		t.Errorf("unexpected return value")
-	}
-	if len(c.ps) != 1 {
-		t.Errorf("unexpected savedState len %d", len(c.ps))
-	}
+	require.True(t, toSet, "unexpected return value")
+
+	require.Equal(t, 1, len(c.ps), "unexpected savedState len %d", len(c.ps))
+
 	ni := raftio.NodeInfo{
 		ShardID:   100,
 		ReplicaID: 2,
 	}
 	v, ok := c.ps[ni]
-	if !ok {
-		t.Errorf("unexpected savedState map value")
-	}
-	if !reflect.DeepEqual(&v, &st) {
-		t.Errorf("unexpected persistent state values")
-	}
+	require.True(t, ok, "unexpected savedState map value")
+	require.True(t, reflect.DeepEqual(&v, &st),
+		"unexpected persistent state values")
 }
 
 func TestLastEntryBatchCanBeSetAndGet(t *testing.T) {
@@ -103,15 +90,12 @@ func TestLastEntryBatchCanBeSetAndGet(t *testing.T) {
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: i})
 	}
+
 	c.setLastBatch(10, 2, eb)
 	lb := pb.EntryBatch{}
 	reb, ok := c.getLastBatch(10, 2, lb)
-	if !ok {
-		t.Errorf("last batch not returned")
-	}
-	if len(reb.Entries) != 15 {
-		t.Errorf("unexpected entry length")
-	}
+	require.True(t, ok, "last batch not returned")
+	require.Equal(t, 15, len(reb.Entries), "unexpected entry length")
 }
 
 func TestLastEntryBatchCanBeUpdated(t *testing.T) {
@@ -120,10 +104,12 @@ func TestLastEntryBatchCanBeUpdated(t *testing.T) {
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: i})
 	}
+
 	eb2 := pb.EntryBatch{Entries: make([]pb.Entry, 0)}
 	for i := uint64(100); i < uint64(116); i++ {
 		eb2.Entries = append(eb2.Entries, pb.Entry{Index: i, Term: i})
 	}
+
 	c.setLastBatch(10, 2, eb)
 	c.setLastBatch(10, 2, eb2)
 }
@@ -134,19 +120,19 @@ func TestChangeReturnedLastBatchWillNotAffectTheCache(t *testing.T) {
 	for i := uint64(1); i < uint64(16); i++ {
 		eb.Entries = append(eb.Entries, pb.Entry{Index: i, Term: 1})
 	}
+
 	c.setLastBatch(10, 2, eb)
 	v, _ := c.getLastBatch(10, 2, pb.EntryBatch{})
-	if len(v.Entries) != 15 {
-		t.Errorf("unexpected entry count")
-	}
+	require.Equal(t, 15, len(v.Entries), "unexpected entry count")
+
 	for i := uint64(0); i < uint64(15); i++ {
 		v.Entries[i].Term = 2
 	}
+
 	v2, _ := c.getLastBatch(10, 2, pb.EntryBatch{})
 	for i := uint64(0); i < uint64(15); i++ {
-		if v2.Entries[i].Term == 2 {
-			t.Errorf("cache content changed")
-		}
+		require.NotEqual(t, uint64(2), v2.Entries[i].Term,
+			"cache content changed")
 	}
 }
 
@@ -154,10 +140,6 @@ func TestMaxIndexCanBeSetAndGet(t *testing.T) {
 	c := newCache()
 	c.setMaxIndex(10, 10, 100)
 	v, ok := c.getMaxIndex(10, 10)
-	if !ok {
-		t.Fatalf("failed to get max index")
-	}
-	if v != 100 {
-		t.Errorf("unexpected max index, got %d, want 100", v)
-	}
+	require.True(t, ok, "failed to get max index")
+	require.Equal(t, uint64(100), v, "unexpected max index, got %d, want 100", v)
 }

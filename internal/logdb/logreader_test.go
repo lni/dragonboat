@@ -15,17 +15,15 @@
 package logdb
 
 import (
-	"reflect"
 	"testing"
 
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLogReaderNewLogReader(t *testing.T) {
 	lr := NewLogReader(1, 1, nil)
-	if lr.length != 1 {
-		t.Errorf("unexpected length")
-	}
+	require.Equal(t, uint64(1), lr.length)
 }
 
 func TestInitialState(t *testing.T) {
@@ -47,14 +45,11 @@ func TestInitialState(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	if err := lr.CreateSnapshot(ss); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := lr.CreateSnapshot(ss)
+	require.NoError(t, err)
 	rps, m := lr.NodeState()
-	if !reflect.DeepEqual(&ss.Membership, &m) ||
-		!reflect.DeepEqual(&rps, &ps) {
-		t.Errorf("unexpected state")
-	}
+	require.Equal(t, &ss.Membership, &m)
+	require.Equal(t, &rps, &ps)
 }
 
 func TestApplySnapshotUpdateMarkerIndexTerm(t *testing.T) {
@@ -70,23 +65,14 @@ func TestApplySnapshotUpdateMarkerIndexTerm(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	if err := lr.ApplySnapshot(ss); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if lr.markerIndex != 123 || lr.markerTerm != 124 {
-		t.Errorf("unexpected marker index/term, %d/%d",
-			lr.markerIndex, lr.markerTerm)
-	}
-	if lr.length != 1 {
-		t.Errorf("unexpected length %d", lr.length)
-	}
-	if ss.Index != lr.snapshot.Index {
-		t.Errorf("snapshot not updated")
-	}
+	err := lr.ApplySnapshot(ss)
+	require.NoError(t, err)
+	require.Equal(t, uint64(123), lr.markerIndex)
+	require.Equal(t, uint64(124), lr.markerTerm)
+	require.Equal(t, uint64(1), lr.length)
+	require.Equal(t, ss.Index, lr.snapshot.Index)
 	rs := lr.Snapshot()
-	if ss.Index != rs.Index {
-		t.Errorf("snapshot not updated")
-	}
+	require.Equal(t, ss.Index, rs.Index)
 }
 
 func TestLogReaderIndexRange(t *testing.T) {
@@ -102,22 +88,16 @@ func TestLogReaderIndexRange(t *testing.T) {
 	}
 	ss.Membership.Addresses[123] = "address123"
 	ss.Membership.Addresses[234] = "address234"
-	if err := lr.ApplySnapshot(ss); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := lr.ApplySnapshot(ss)
+	require.NoError(t, err)
 	first := lr.firstIndex()
-	if first != 124 {
-		t.Errorf("unexpected first index %d", first)
-	}
+	require.Equal(t, uint64(124), first)
 	last := lr.lastIndex()
-	if last != 123 {
-		t.Errorf("unexpected last index %d", last)
-	}
+	require.Equal(t, uint64(123), last)
 	// last < first here, see internal/raft/log.go for details
 	fi, li := lr.GetRange()
-	if fi != first || li != last {
-		t.Errorf("unexpected index")
-	}
+	require.Equal(t, first, fi)
+	require.Equal(t, last, li)
 }
 
 func TestSetRange(t *testing.T) {
@@ -139,22 +119,17 @@ func TestSetRange(t *testing.T) {
 			length:      tt.length,
 		}
 		lr.SetRange(tt.index, tt.idxLength)
-		if lr.length != tt.expLength {
-			t.Errorf("%d, unexpected length %d, want %d", idx, lr.length, tt.expLength)
-		}
+		require.Equal(t, tt.expLength, lr.length,
+			"test case %d: unexpected length", idx)
 	}
 }
 
 func TestSetRangePanicWhenThereIsIndexHole(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Errorf("panic not triggered")
-	}()
 	lr := LogReader{
 		markerIndex: 10,
 		length:      10,
 	}
-	lr.SetRange(100, 100)
+	require.Panics(t, func() {
+		lr.SetRange(100, 100)
+	})
 }
