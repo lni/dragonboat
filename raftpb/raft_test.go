@@ -27,38 +27,30 @@ import (
 )
 
 func TestStateMachineTypeHaveExpectedValues(t *testing.T) {
-	if sm.Type(UnknownStateMachine) != 0 ||
-		sm.Type(RegularStateMachine) != sm.RegularStateMachine ||
-		sm.Type(ConcurrentStateMachine) != sm.ConcurrentStateMachine ||
-		sm.Type(OnDiskStateMachine) != sm.OnDiskStateMachine {
-		t.Errorf("unexpected sm type value")
-	}
+	require.Equal(t, sm.Type(0), sm.Type(UnknownStateMachine))
+	require.Equal(t, sm.Type(sm.RegularStateMachine),
+		sm.Type(RegularStateMachine))
+	require.Equal(t, sm.Type(sm.ConcurrentStateMachine),
+		sm.Type(ConcurrentStateMachine))
+	require.Equal(t, sm.Type(sm.OnDiskStateMachine),
+		sm.Type(OnDiskStateMachine))
 }
 
 func TestBootstrapValidateHandlesJoiningNode(t *testing.T) {
 	bootstrap := Bootstrap{Join: true}
-	if !bootstrap.Validate(nil, true, UnknownStateMachine) {
-		t.Errorf("incorrect result")
-	}
-	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
-		t.Errorf("incorrect result")
-	}
+	require.True(t, bootstrap.Validate(nil, true, UnknownStateMachine))
+	require.True(t, bootstrap.Validate(nil, false, UnknownStateMachine))
+
 	bootstrap = Bootstrap{Join: false, Addresses: make(map[uint64]string)}
 	bootstrap.Addresses[100] = "address1"
-	if bootstrap.Validate(nil, true, UnknownStateMachine) {
-		t.Errorf("incorrect result not reported")
-	}
+	require.False(t, bootstrap.Validate(nil, true, UnknownStateMachine))
 }
 
 func TestCorruptedBootstrapValueIsChecked(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Errorf("didn't panic")
-	}()
 	bootstrap := Bootstrap{Join: false, Addresses: make(map[uint64]string)}
-	bootstrap.Validate(nil, true, UnknownStateMachine)
+	require.Panics(t, func() {
+		bootstrap.Validate(nil, true, UnknownStateMachine)
+	})
 }
 
 func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
@@ -66,26 +58,20 @@ func TestInconsistentInitialMembersAreCheckedAndReported(t *testing.T) {
 	bootstrap.Addresses[100] = "address1"
 	bootstrap.Addresses[200] = "address2"
 	bootstrap.Addresses[300] = "address3"
-	if !bootstrap.Validate(nil, false, UnknownStateMachine) {
-		t.Errorf("unexpected validation result")
-	}
+	require.True(t, bootstrap.Validate(nil, false, UnknownStateMachine))
+
 	nodes1 := make(map[uint64]string)
-	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
-		t.Errorf("restarting node should be allowed")
-	}
+	require.True(t, bootstrap.Validate(nodes1, false, UnknownStateMachine))
+
 	nodes1[100] = "address1"
-	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
-		t.Errorf("inconsistent members not reported")
-	}
+	require.False(t, bootstrap.Validate(nodes1, false, UnknownStateMachine))
+
 	nodes1[200] = "address2"
 	nodes1[300] = "address3"
-	if !bootstrap.Validate(nodes1, false, UnknownStateMachine) {
-		t.Errorf("correct members incorrected flagged")
-	}
+	require.True(t, bootstrap.Validate(nodes1, false, UnknownStateMachine))
+
 	nodes1[300] = "address4"
-	if bootstrap.Validate(nodes1, false, UnknownStateMachine) {
-		t.Errorf("inconsistent members not reported")
-	}
+	require.False(t, bootstrap.Validate(nodes1, false, UnknownStateMachine))
 }
 
 func TestInconsistentStateMachineTypeIsDetected(t *testing.T) {
@@ -112,39 +98,29 @@ func TestInconsistentStateMachineTypeIsDetected(t *testing.T) {
 		addr := make(map[uint64]string)
 		addr[100] = "addr1"
 		bs := Bootstrap{Type: tt.bt, Addresses: addr}
-		if bs.Validate(nil, false, tt.ct) != tt.result {
-			t.Errorf("%d, validation failed", idx)
-		}
+		require.Equal(t, tt.result, bs.Validate(nil, false, tt.ct),
+			"test case %d failed", idx)
 	}
 }
 
 func TestIsConfigChange(t *testing.T) {
 	e1 := Entry{Type: ConfigChangeEntry}
 	e2 := Entry{Type: ApplicationEntry}
-	if !e1.IsConfigChange() {
-		t.Errorf("expected to be a conf change entry")
-	}
-	if e2.IsConfigChange() {
-		t.Errorf("not suppose to be a conf change entry")
-	}
+	require.True(t, e1.IsConfigChange())
+	require.False(t, e2.IsConfigChange())
+
 	e3 := Entry{}
-	if e3.IsConfigChange() {
-		t.Errorf("default entry not suppose to be a config change entry")
-	}
+	require.False(t, e3.IsConfigChange())
 }
 
 func TestNoOPEntryIsNotUpdateEntry(t *testing.T) {
 	e := &Entry{}
-	if e.IsUpdateEntry() {
-		t.Errorf("noop entry is update entry")
-	}
+	require.False(t, e.IsUpdateEntry())
 }
 
 func TestNoOPEntryIsNotSessionManaged(t *testing.T) {
 	e := &Entry{}
-	if e.IsSessionManaged() {
-		t.Errorf("noop entry is session managed")
-	}
+	require.False(t, e.IsSessionManaged())
 }
 
 func TestIsEmpty(t *testing.T) {
@@ -154,10 +130,9 @@ func TestIsEmpty(t *testing.T) {
 		{Cmd: make([]byte, 1)},
 	}
 	for idx, ent := range entries {
-		if ent.IsEmpty() {
-			t.Errorf("entry %d not expected to be empty", idx)
-		}
+		require.False(t, ent.IsEmpty(), "entry %d should not be empty", idx)
 	}
+
 	entries = []Entry{
 		{
 			Type:     ApplicationEntry,
@@ -166,9 +141,7 @@ func TestIsEmpty(t *testing.T) {
 		{},
 	}
 	for idx, ent := range entries {
-		if !ent.IsEmpty() {
-			t.Errorf("entry idx %d is not empty", idx)
-		}
+		require.True(t, ent.IsEmpty(), "entry idx %d should be empty", idx)
 	}
 }
 
@@ -179,31 +152,24 @@ func TestIsSessionManaged(t *testing.T) {
 		ClientID: client.NotSessionManagedClientID,
 	}
 	e3 := Entry{ClientID: 12345}
-	if e1.IsSessionManaged() || e2.IsSessionManaged() {
-		t.Errorf("not suppose to be session managed")
-	}
-	if !e3.IsSessionManaged() {
-		t.Errorf("not session managed")
-	}
+
+	require.False(t, e1.IsSessionManaged())
+	require.False(t, e2.IsSessionManaged())
+	require.True(t, e3.IsSessionManaged())
+
 	e4 := Entry{}
-	if e4.IsSessionManaged() {
-		t.Errorf("not suppose to be session managed")
-	}
+	require.False(t, e4.IsSessionManaged())
 }
 
 func TestIsNoOPSession(t *testing.T) {
 	e1 := Entry{SeriesID: client.NoOPSeriesID}
-	if !e1.IsNoOPSession() {
-		t.Errorf("not considered as noop session")
-	}
+	require.True(t, e1.IsNoOPSession())
+
 	e2 := Entry{SeriesID: client.NoOPSeriesID + 1}
-	if e2.IsNoOPSession() {
-		t.Errorf("still considered as noop session")
-	}
+	require.False(t, e2.IsNoOPSession())
+
 	e3 := Entry{}
-	if !e3.IsNoOPSession() {
-		t.Errorf("not a noop session")
-	}
+	require.True(t, e3.IsNoOPSession())
 }
 
 func TestIsNewSessionRequest(t *testing.T) {
@@ -215,18 +181,16 @@ func TestIsNewSessionRequest(t *testing.T) {
 		{},
 	}
 	for idx, ent := range entries {
-		if ent.IsNewSessionRequest() {
-			t.Errorf("%d is not suppose to be a IsNewSessionRequest %+v", idx, ent)
-		}
+		require.False(t, ent.IsNewSessionRequest(),
+			"%d is not supposed to be a IsNewSessionRequest %+v", idx, ent)
 	}
+
 	ent := Entry{
 		Type:     ApplicationEntry,
 		ClientID: 123456,
 		SeriesID: client.SeriesIDForRegister,
 	}
-	if !ent.IsNewSessionRequest() {
-		t.Errorf("not a new session request")
-	}
+	require.True(t, ent.IsNewSessionRequest())
 }
 
 func TestIsEndOfSessionRequest(t *testing.T) {
@@ -238,18 +202,16 @@ func TestIsEndOfSessionRequest(t *testing.T) {
 		{},
 	}
 	for idx, ent := range entries {
-		if ent.IsEndOfSessionRequest() {
-			t.Errorf("%d is not suppose to be a IsEndOfSessionRequest %+v", idx, ent)
-		}
+		require.False(t, ent.IsEndOfSessionRequest(),
+			"%d is not supposed to be a IsEndOfSessionRequest %+v", idx, ent)
 	}
+
 	ent := Entry{
 		Type:     ApplicationEntry,
 		ClientID: 123456,
 		SeriesID: client.SeriesIDForUnregister,
 	}
-	if !ent.IsEndOfSessionRequest() {
-		t.Errorf("not a new session request")
-	}
+	require.True(t, ent.IsEndOfSessionRequest())
 }
 
 func TestEntrySizeUpperLimit(t *testing.T) {
@@ -264,21 +226,16 @@ func TestEntrySizeUpperLimit(t *testing.T) {
 		RespondedTo: max64,
 		Cmd:         make([]byte, 1024),
 	}
-	if e1.SizeUpperLimit() < e1.Size() {
-		t.Errorf("size upper limit < size")
-	}
+	require.GreaterOrEqual(t, e1.SizeUpperLimit(), e1.Size())
+
 	e1.Cmd = nil
-	if e1.SizeUpperLimit() < e1.Size() {
-		t.Errorf("size upper limit < size")
-	}
+	require.GreaterOrEqual(t, e1.SizeUpperLimit(), e1.Size())
+
 	e2 := Entry{}
-	if e2.SizeUpperLimit() < e2.Size() {
-		t.Errorf("size upper limit < size")
-	}
+	require.GreaterOrEqual(t, e2.SizeUpperLimit(), e2.Size())
+
 	e2.Cmd = make([]byte, 1024)
-	if e2.SizeUpperLimit() < e2.Size() {
-		t.Errorf("size upper limit < size")
-	}
+	require.GreaterOrEqual(t, e2.SizeUpperLimit(), e2.Size())
 }
 
 func TestEntryBatchSizeUpperLimit(t *testing.T) {
@@ -296,31 +253,26 @@ func TestEntryBatchSizeUpperLimit(t *testing.T) {
 	eb := EntryBatch{
 		Entries: make([]Entry, 0),
 	}
-	if eb.Size() > eb.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, eb.Size(), eb.SizeUpperLimit())
+
 	for i := 0; i < 1024; i++ {
 		eb.Entries = append(eb.Entries, e1)
 	}
-	if eb.Size() > eb.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, eb.Size(), eb.SizeUpperLimit())
+
 	e1.Cmd = nil
 	eb.Entries = make([]Entry, 0)
 	for i := 0; i < 1024; i++ {
 		eb.Entries = append(eb.Entries, e1)
 	}
-	if eb.Size() > eb.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, eb.Size(), eb.SizeUpperLimit())
+
 	e2 := Entry{}
 	eb.Entries = make([]Entry, 0)
 	for i := 0; i < 1024; i++ {
 		eb.Entries = append(eb.Entries, e2)
 	}
-	if eb.Size() > eb.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, eb.Size(), eb.SizeUpperLimit())
 }
 
 func getMaxSizedMsg() Message {
@@ -360,13 +312,10 @@ func getMaxSizedMsg() Message {
 
 func TestMessageSizeUpperLimit(t *testing.T) {
 	msg := getMaxSizedMsg()
-	if msg.Size() > msg.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, msg.Size(), msg.SizeUpperLimit())
+
 	msg2 := Message{}
-	if msg2.Size() > msg2.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, msg2.Size(), msg2.SizeUpperLimit())
 }
 
 func TestMessageBatchSizeUpperLimit(t *testing.T) {
@@ -381,19 +330,15 @@ func TestMessageBatchSizeUpperLimit(t *testing.T) {
 	for i := 0; i < 1024; i++ {
 		mb.Requests = append(mb.Requests, msg)
 	}
-	if mb.Size() > mb.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, mb.Size(), mb.SizeUpperLimit())
+
 	mb2 := MessageBatch{}
-	if mb2.Size() > mb2.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, mb2.Size(), mb2.SizeUpperLimit())
+
 	mb2.DeploymentId = max64
 	mb2.BinVer = max32
 	mb2.SourceAddress = "longaddressisherexxxxxxxxxxxxxxxxxxxxxxxxxx"
-	if mb2.Size() > mb2.SizeUpperLimit() {
-		t.Errorf("size > size upper limit")
-	}
+	require.LessOrEqual(t, mb2.Size(), mb2.SizeUpperLimit())
 }
 
 func TestGetEntrySliceInMemSize(t *testing.T) {
@@ -413,9 +358,7 @@ func TestGetEntrySliceInMemSize(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		result := GetEntrySliceInMemSize(tt.ents)
-		if result != tt.size {
-			t.Errorf("%d, result %d, want %d", idx, result, tt.size)
-		}
+		require.Equal(t, tt.size, result, "test case %d", idx)
 	}
 }
 
@@ -425,21 +368,11 @@ func TestMetadataEntry(t *testing.T) {
 		Index: 200,
 		Term:  5,
 	}
-	if !me.IsEmpty() {
-		t.Errorf("IsEmpty returned false")
-	}
-	if me.IsSessionManaged() {
-		t.Errorf("IsSessionManaged returned true")
-	}
-	if !me.IsNoOPSession() {
-		t.Errorf("IsNoOPSession returned false")
-	}
-	if me.IsNewSessionRequest() || me.IsEndOfSessionRequest() {
-		t.Errorf("not suppose to be session related")
-	}
-	if me.IsUpdateEntry() {
-		t.Errorf("IsUpdateEntry returned true")
-	}
+	require.True(t, me.IsEmpty())
+	require.False(t, me.IsSessionManaged())
+	require.True(t, me.IsNoOPSession())
+	require.False(t, me.IsNewSessionRequest() || me.IsEndOfSessionRequest())
+	require.False(t, me.IsUpdateEntry())
 }
 
 func isDifferentInstance(a, b []byte) bool {
@@ -467,16 +400,13 @@ func TestEntryCanBeMarshalledAndUnmarshalled(t *testing.T) {
 		Cmd:         cmd,
 	}
 	m, err := e.Marshal()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err)
+
 	e2 := Entry{}
-	if err := e2.Unmarshal(m); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if !reflect.DeepEqual(&e, &e2) {
-		t.Fatalf("entry changed")
-	}
+	err = e2.Unmarshal(m)
+	require.NoError(t, err)
+
+	require.True(t, reflect.DeepEqual(&e, &e2))
 	require.True(t, isDifferentInstance(e.Cmd, e2.Cmd))
 }
 
@@ -493,16 +423,13 @@ func TestRaftDataStatusCanBeMarshaled(t *testing.T) {
 	}
 	check := func(v *RaftDataStatus) {
 		data, err := v.Marshal()
-		if err != nil {
-			t.Fatalf("failed to marshal %v", err)
-		}
+		require.NoError(t, err)
+
 		r2 := &RaftDataStatus{}
-		if err := r2.Unmarshal(data); err != nil {
-			t.Fatalf("failed to unmarshal %v", err)
-		}
-		if !reflect.DeepEqual(v, r2) {
-			t.Fatalf("data changed, %+v\n%+v", *v, *r2)
-		}
+		err = r2.Unmarshal(data)
+		require.NoError(t, err)
+
+		require.True(t, reflect.DeepEqual(v, r2))
 	}
 	check(r)
 	r.AddressByNodeHostId = false
@@ -543,8 +470,6 @@ func TestMessageCanDrop(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		m := Message{Type: tt.t}
-		if m.CanDrop() != tt.canDrop {
-			t.Errorf("%d, can drop %t, want %t", idx, m.CanDrop(), tt.canDrop)
-		}
+		require.Equal(t, tt.canDrop, m.CanDrop(), "test case %d", idx)
 	}
 }

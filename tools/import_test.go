@@ -36,93 +36,66 @@ var (
 func TestCheckImportSettings(t *testing.T) {
 	members := make(map[uint64]string)
 	err := checkImportSettings(config.NodeHostConfig{}, members, 1)
-	if err != ErrInvalidMembers {
-		t.Errorf("invalid members not reported")
-	}
+	require.Equal(t, ErrInvalidMembers, err, "invalid members not reported")
+
 	members[1] = "a1"
-	err = checkImportSettings(config.NodeHostConfig{RaftAddress: "a2"}, members, 1)
-	if err != ErrInvalidMembers {
-		t.Errorf("invalid member address not reported")
-	}
-	err = checkImportSettings(config.NodeHostConfig{RaftAddress: "a1"}, members, 1)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
+	err = checkImportSettings(config.NodeHostConfig{RaftAddress: "a2"},
+		members, 1)
+	require.Equal(t, ErrInvalidMembers, err, "invalid member address not reported")
+
+	err = checkImportSettings(config.NodeHostConfig{RaftAddress: "a1"},
+		members, 1)
+	require.NoError(t, err)
 }
 
 func TestGetSnapshotFilenames(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(testDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(testDataDir))
+	require.NoError(t, fs.MkdirAll(testDataDir, 0755))
+
 	defer func() {
-		if err := fs.RemoveAll(testDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDataDir))
 	}()
+
 	for i := 0; i < 16; i++ {
 		fn := fmt.Sprintf("%d.%s", i, server.SnapshotFileSuffix)
 		dst := fs.PathJoin(testDataDir, fn)
 		f, err := fs.Create(dst)
-		if err != nil {
-			t.Fatalf("failed to create file %v", err)
-		}
-		if err := f.Close(); err != nil {
-			t.Fatalf("failed to close file %v", err)
-		}
+		require.NoError(t, err, "failed to create file")
+		require.NoError(t, f.Close(), "failed to close file")
 	}
+
 	fns, err := getSnapshotFilenames(testDataDir, fs)
-	if err != nil {
-		t.Fatalf("failed to get filenames %v", err)
-	}
-	if len(fns) != 16 {
-		t.Errorf("failed to return all filenames")
-	}
+	require.NoError(t, err, "failed to get filenames")
+	require.Equal(t, 16, len(fns), "failed to return all filenames")
+
 	fps, err := getSnapshotFiles(testDataDir, fs)
-	if err != nil {
-		t.Fatalf("failed to get filenames %v", err)
-	}
-	if len(fps) != 16 {
-		t.Errorf("failed to return all filenames")
-	}
+	require.NoError(t, err, "failed to get filenames")
+	require.Equal(t, 16, len(fps), "failed to return all filenames")
+
 	_, err = getSnapshotFilepath(testDataDir, fs)
-	if err != ErrIncompleteSnapshot {
-		t.Errorf("failed to report ErrIncompleteSnapshot, got %v", err)
-	}
+	require.Equal(t, ErrIncompleteSnapshot, err,
+		"failed to report ErrIncompleteSnapshot")
 }
 
 func TestSnapshotFilepath(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(testDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(testDataDir))
+	require.NoError(t, fs.MkdirAll(testDataDir, 0755))
+
 	defer func() {
-		if err := fs.RemoveAll(testDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDataDir))
 	}()
+
 	fn := fmt.Sprintf("testdata.%s", server.SnapshotFileSuffix)
 	dst := fs.PathJoin(testDataDir, fn)
 	f, err := fs.Create(dst)
-	if err != nil {
-		t.Fatalf("failed to create file %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("failed to close file %v", err)
-	}
+	require.NoError(t, err, "failed to create file")
+	require.NoError(t, f.Close(), "failed to close file")
+
 	fp, err := getSnapshotFilepath(testDataDir, fs)
-	if err != nil {
-		t.Errorf("failed to get snapshot file path %v", err)
-	}
-	if fp != fs.PathJoin(testDataDir, fn) {
-		t.Errorf("unexpected fp %s", fp)
-	}
+	require.NoError(t, err, "failed to get snapshot file path")
+	require.Equal(t, fs.PathJoin(testDataDir, fn), fp, "unexpected fp")
 }
 
 func TestCheckMembers(t *testing.T) {
@@ -143,8 +116,10 @@ func TestCheckMembers(t *testing.T) {
 	}
 	for idx, tt := range tests {
 		err := checkMembers(membership, tt.members)
-		if err != nil && tt.ok {
-			t.Errorf("%d, failed", idx)
+		if tt.ok {
+			require.NoError(t, err, "test case %d failed", idx)
+		} else {
+			require.Error(t, err, "test case %d should have failed", idx)
 		}
 	}
 }
@@ -167,126 +142,90 @@ func createTestDataFile(path string, sz uint64, fs vfs.IFS) error {
 
 func TestCopySnapshot(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(testDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.RemoveAll(testDstDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDstDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(testDataDir))
+	require.NoError(t, fs.RemoveAll(testDstDataDir))
+	require.NoError(t, fs.MkdirAll(testDataDir, 0755))
+	require.NoError(t, fs.MkdirAll(testDstDataDir, 0755))
+
 	defer func() {
-		if err := fs.RemoveAll(testDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDataDir))
 	}()
 	defer func() {
-		if err := fs.RemoveAll(testDstDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDstDataDir))
 	}()
+
 	src := fs.PathJoin(testDataDir, "test.gbsnap")
-	if err := createTestDataFile(src, 1024, fs); err != nil {
-		t.Fatalf("failed to create test file %v", err)
-	}
+	require.NoError(t, createTestDataFile(src, 1024, fs),
+		"failed to create test file")
+
 	extsrc := fs.PathJoin(testDataDir, "external-1")
-	if err := createTestDataFile(extsrc, 2048, fs); err != nil {
-		t.Fatalf("failed to create external test file %v", err)
-	}
+	require.NoError(t, createTestDataFile(extsrc, 2048, fs),
+		"failed to create external test file")
+
 	ss := pb.Snapshot{
 		Filepath: src,
 		Files:    []*pb.SnapshotFile{{Filepath: extsrc}},
 	}
-	if err := copySnapshot(ss, testDataDir, testDstDataDir, fs); err != nil {
-		t.Fatalf("failed to copy snapshot files %v", err)
-	}
+	require.NoError(t, copySnapshot(ss, testDataDir, testDstDataDir, fs),
+		"failed to copy snapshot files")
+
 	exp := fs.PathJoin(testDstDataDir, "test.gbsnap")
 	fi, err := fs.Stat(exp)
-	if err != nil {
-		t.Fatalf("failed to get file stat %v", err)
-	}
-	if fi.Size() != 1024 {
-		t.Errorf("failed to copy the file")
-	}
+	require.NoError(t, err, "failed to get file stat")
+	require.Equal(t, int64(1024), fi.Size(), "failed to copy the file")
+
 	exp = fs.PathJoin(testDstDataDir, "external-1")
 	fi, err = fs.Stat(exp)
-	if err != nil {
-		t.Fatalf("failed to get file stat %v", err)
-	}
-	if fi.Size() != 2048 {
-		t.Errorf("failed to copy the file")
-	}
+	require.NoError(t, err, "failed to get file stat")
+	require.Equal(t, int64(2048), fi.Size(), "failed to copy the file")
 }
 
 func TestCopySnapshotFile(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(testDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(testDataDir))
+	require.NoError(t, fs.MkdirAll(testDataDir, 0755))
+
 	defer func() {
-		if err := fs.RemoveAll(testDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDataDir))
 	}()
+
 	src := fs.PathJoin(testDataDir, "test.data")
 	dst := fs.PathJoin(testDataDir, "test.data.copied")
 	f, err := fs.Create(src)
-	if err != nil {
-		t.Fatalf("failed to create test file %v", err)
-	}
+	require.NoError(t, err, "failed to create test file")
+
 	data := make([]byte, 125)
 	_, err = rand.Read(data)
 	require.NoError(t, err)
 	_, err = f.Write(data)
-	if err != nil {
-		t.Fatalf("failed to write test data %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("failed to close file %v", err)
-	}
-	if err := copyFile(src, dst, fs); err != nil {
-		t.Fatalf("failed to copy file %v", err)
-	}
+	require.NoError(t, err, "failed to write test data")
+	require.NoError(t, f.Close(), "failed to close file")
+
+	require.NoError(t, copyFile(src, dst, fs), "failed to copy file")
+
 	buf := &bytes.Buffer{}
 	dstf, err := fs.Open(dst)
-	if err != nil {
-		t.Fatalf("failed to open %v", err)
-	}
+	require.NoError(t, err, "failed to open")
 	defer func() {
 		require.NoError(t, dstf.Close())
 	}()
-	if _, err := io.Copy(buf, dstf); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if !bytes.Equal(buf.Bytes(), data) {
-		t.Fatalf("content changed")
-	}
+
+	_, err = io.Copy(buf, dstf)
+	require.NoError(t, err)
+	require.True(t, bytes.Equal(buf.Bytes(), data), "content changed")
 }
 
 func TestMissingMetadataFileIsReported(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(testDataDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(testDataDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, fs.RemoveAll(testDataDir))
+	require.NoError(t, fs.MkdirAll(testDataDir, 0755))
+
 	defer func() {
-		if err := fs.RemoveAll(testDataDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, fs.RemoveAll(testDataDir))
 	}()
+
 	_, err := getSnapshotRecord(testDataDir, "test.data", fs)
-	if err == nil {
-		t.Fatalf("failed to report error")
-	}
+	require.Error(t, err, "failed to report error")
 }
 
 func TestGetProcessedSnapshotRecord(t *testing.T) {
@@ -311,6 +250,7 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 	ss.Membership.Addresses[2] = "a2"
 	ss.Membership.Removed[3] = true
 	ss.Membership.NonVotings[4] = "a4"
+
 	f1 := &pb.SnapshotFile{
 		Filepath: "/original_dir/external-1",
 		FileSize: 1,
@@ -325,50 +265,48 @@ func TestGetProcessedSnapshotRecord(t *testing.T) {
 	}
 	ss.Files = append(ss.Files, f1)
 	ss.Files = append(ss.Files, f2)
+
 	members := make(map[uint64]string)
 	members[1] = "a1"
 	members[5] = "a5"
 	finalDir := "final_data"
+
 	newss := getProcessedSnapshotRecord(finalDir, ss, members, fs)
-	if newss.Index != ss.Index || newss.Term != ss.Term {
-		t.Errorf("index/term not copied")
-	}
-	if newss.Dummy != ss.Dummy || newss.ShardID != ss.ShardID || newss.Type != ss.Type {
-		t.Errorf("dummy/ShardId/Type fields not copied")
-	}
-	if fs.PathDir(newss.Filepath) != finalDir {
-		t.Errorf("filepath not processed %s", newss.Filepath)
-	}
+	require.Equal(t, ss.Index, newss.Index, "index/term not copied")
+	require.Equal(t, ss.Term, newss.Term, "index/term not copied")
+	require.Equal(t, ss.Dummy, newss.Dummy, "dummy/ShardId/Type fields not copied")
+	require.Equal(t, ss.ShardID, newss.ShardID, "dummy/ShardId/Type fields not copied")
+	require.Equal(t, ss.Type, newss.Type, "dummy/ShardId/Type fields not copied")
+	require.Equal(t, finalDir, fs.PathDir(newss.Filepath),
+		"filepath not processed")
+
 	for _, file := range newss.Files {
-		if fs.PathDir(file.Filepath) != finalDir {
-			t.Errorf("filepath in files not processed %s", file.Filepath)
-		}
+		require.Equal(t, finalDir, fs.PathDir(file.Filepath),
+			"filepath in files not processed")
 	}
+
 	v, ok := newss.Membership.Addresses[1]
-	if !ok || v != "a1" {
-		t.Errorf("node 1 not in new ss")
-	}
+	require.True(t, ok, "node 1 not in new ss")
+	require.Equal(t, "a1", v, "node 1 not in new ss")
+
 	_, ok = newss.Membership.Addresses[2]
-	if ok {
-		t.Errorf("node 2 not removed from new ss")
-	}
+	require.False(t, ok, "node 2 not removed from new ss")
+
 	v, ok = newss.Membership.Addresses[5]
-	if !ok || v != "a5" {
-		t.Errorf("node 5 not in new ss")
-	}
-	if len(newss.Membership.Addresses) != 2 {
-		t.Errorf("unexpected member count")
-	}
-	if len(newss.Membership.NonVotings) != 0 {
-		t.Errorf("NonVotings not empty")
-	}
-	if len(newss.Membership.Removed) != 3 {
-		t.Errorf("unexpected removed count")
-	}
+	require.True(t, ok, "node 5 not in new ss")
+	require.Equal(t, "a5", v, "node 5 not in new ss")
+
+	require.Equal(t, 2, len(newss.Membership.Addresses),
+		"unexpected member count")
+	require.Equal(t, 0, len(newss.Membership.NonVotings),
+		"NonVotings not empty")
+	require.Equal(t, 3, len(newss.Membership.Removed),
+		"unexpected removed count")
+
 	_, ok1 := newss.Membership.Removed[2]
 	_, ok2 := newss.Membership.Removed[3]
 	_, ok3 := newss.Membership.Removed[4]
-	if !ok1 || !ok2 || !ok3 {
-		t.Errorf("unexpected removed content")
-	}
+	require.True(t, ok1, "unexpected removed content")
+	require.True(t, ok2, "unexpected removed content")
+	require.True(t, ok3, "unexpected removed content")
 }

@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v4/raftio"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExampleNodeHostConfig() {
@@ -39,15 +41,13 @@ func ExampleNodeHostConfig() {
 }
 
 func checkValidAddress(t *testing.T, addr string) {
-	if !IsValidAddress(addr) {
-		t.Errorf("valid addr %s considreed as invalid", addr)
-	}
+	assert.True(t, IsValidAddress(addr),
+		"valid addr %s considreed as invalid", addr)
 }
 
 func checkInvalidAddress(t *testing.T, addr string) {
-	if IsValidAddress(addr) {
-		t.Errorf("invalid addr %s considered as valid", addr)
-	}
+	assert.False(t, IsValidAddress(addr),
+		"invalid addr %s considered as valid", addr)
 }
 
 func TestListenAddress(t *testing.T) {
@@ -55,15 +55,13 @@ func TestListenAddress(t *testing.T) {
 		ListenAddress: "listen.address:12345",
 		RaftAddress:   "raft.address:23456",
 	}
-	if nhc.GetListenAddress() != nhc.ListenAddress {
-		t.Errorf("unexpected listen address %s, want %s",
-			nhc.GetListenAddress(), nhc.ListenAddress)
-	}
+	assert.Equal(t, nhc.ListenAddress, nhc.GetListenAddress(),
+		"unexpected listen address %s, want %s",
+		nhc.GetListenAddress(), nhc.ListenAddress)
 	nhc.ListenAddress = ""
-	if nhc.GetListenAddress() != nhc.RaftAddress {
-		t.Errorf("unexpected listen address %s, want %s",
-			nhc.GetListenAddress(), nhc.RaftAddress)
-	}
+	assert.Equal(t, nhc.RaftAddress, nhc.GetListenAddress(),
+		"unexpected listen address %s, want %s",
+		nhc.GetListenAddress(), nhc.RaftAddress)
 }
 
 func TestIsValidAddress(t *testing.T) {
@@ -109,50 +107,39 @@ func TestIsValidAddress(t *testing.T) {
 
 func TestWitnessNodeCanNotBeNonVoting(t *testing.T) {
 	cfg := Config{IsWitness: true, IsNonVoting: true}
-	if err := cfg.Validate(); err == nil {
-		t.Fatalf("witness node can not be an observer")
-	}
+	err := cfg.Validate()
+	require.Error(t, err, "witness node can not be an observer")
 }
 
 func TestWitnessCanNotTakeSnapshot(t *testing.T) {
 	cfg := Config{IsWitness: true, SnapshotEntries: 100}
-	if err := cfg.Validate(); err == nil {
-		t.Fatalf("witness node can not take snapshot")
-	}
+	err := cfg.Validate()
+	require.Error(t, err, "witness node can not take snapshot")
 }
 
 func TestLogDBConfigIsEmpty(t *testing.T) {
 	cfg := LogDBConfig{}
-	if !cfg.IsEmpty() {
-		t.Fatalf("not empty")
-	}
+	assert.True(t, cfg.IsEmpty(), "not empty")
 	cfg.KVMaxBackgroundCompactions = 1
-	if cfg.IsEmpty() {
-		t.Fatalf("still empty")
-	}
+	assert.False(t, cfg.IsEmpty(), "still empty")
 }
 
 func TestLogDBConfigMemSize(t *testing.T) {
 	c := GetDefaultLogDBConfig()
-	if c.MemorySizeMB() != 8192 {
-		t.Errorf("unexpected default memory size")
-	}
+	assert.Equal(t, uint64(8192), c.MemorySizeMB(),
+		"unexpected default memory size")
 	c1 := GetTinyMemLogDBConfig()
-	if c1.MemorySizeMB() != 256 {
-		t.Errorf("size %d, want 256", c1.MemorySizeMB())
-	}
+	assert.Equal(t, uint64(256), c1.MemorySizeMB(),
+		"size %d, want 256", c1.MemorySizeMB())
 	c2 := GetSmallMemLogDBConfig()
-	if c2.MemorySizeMB() != 1024 {
-		t.Errorf("size %d, want 1024", c2.MemorySizeMB())
-	}
+	assert.Equal(t, uint64(1024), c2.MemorySizeMB(),
+		"size %d, want 1024", c2.MemorySizeMB())
 	c3 := GetMediumMemLogDBConfig()
-	if c3.MemorySizeMB() != 4096 {
-		t.Errorf("size %d, want 4096", c3.MemorySizeMB())
-	}
+	assert.Equal(t, uint64(4096), c3.MemorySizeMB(),
+		"size %d, want 4096", c3.MemorySizeMB())
 	c4 := GetLargeMemLogDBConfig()
-	if c4.MemorySizeMB() != 8192 {
-		t.Errorf("size %d, want 8192", c4.MemorySizeMB())
-	}
+	assert.Equal(t, uint64(8192), c4.MemorySizeMB(),
+		"size %d, want 8192", c4.MemorySizeMB())
 }
 
 func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
@@ -163,13 +150,11 @@ func TestTransportFactoryAndModuleCanNotBeSetTogether(t *testing.T) {
 		NodeHostDir:    "/data",
 		RaftRPCFactory: m.Create,
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatalf("cfg not valid")
-	}
+	err := c.Validate()
+	require.NoError(t, err, "cfg not valid")
 	c.Expert.TransportFactory = m
-	if err := c.Validate(); err == nil {
-		t.Fatalf("cfg not considered as invalid")
-	}
+	err = c.Validate()
+	require.Error(t, err, "cfg not considered as invalid")
 }
 
 func TestLogDBFactoryAndExpertLogDBFactoryCanNotBeSetTogether(t *testing.T) {
@@ -183,13 +168,11 @@ func TestLogDBFactoryAndExpertLogDBFactoryCanNotBeSetTogether(t *testing.T) {
 		NodeHostDir:    "/data",
 		LogDBFactory:   LogDBFactoryFunc(f),
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatalf("cfg not valid")
-	}
+	err := c.Validate()
+	require.NoError(t, err, "cfg not valid")
 	c.Expert.LogDBFactory = &defaultLogDB{}
-	if err := c.Validate(); err == nil {
-		t.Fatalf("cfg not considered as invalid")
-	}
+	err = c.Validate()
+	require.Error(t, err, "cfg not considered as invalid")
 }
 
 func TestGossipMustBeConfiguredWhenDefaultNodeRegistryEnabled(t *testing.T) {
@@ -198,27 +181,22 @@ func TestGossipMustBeConfiguredWhenDefaultNodeRegistryEnabled(t *testing.T) {
 		RTTMillisecond: 100,
 		NodeHostDir:    "/data",
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatalf("invalid config")
-	}
+	err := c.Validate()
+	require.NoError(t, err, "invalid config")
 	c.DefaultNodeRegistryEnabled = true
-	if err := c.Validate(); err == nil {
-		t.Fatalf("unexpectedly considreed as valid config")
-	}
+	err = c.Validate()
+	require.Error(t, err, "unexpectedly considreed as valid config")
 	c.Gossip = GossipConfig{
 		BindAddress: "localhost:12345",
 		Seed:        []string{"localhost:23456"},
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatalf("invalid config")
-	}
+	err = c.Validate()
+	require.NoError(t, err, "invalid config")
 }
 
 func TestGossipConfigIsEmtpy(t *testing.T) {
 	gc := &GossipConfig{}
-	if !gc.IsEmpty() {
-		t.Errorf("not empty")
-	}
+	assert.True(t, gc.IsEmpty(), "not empty")
 	tests := []struct {
 		bindAddr      string
 		advertiseAddr string
@@ -236,9 +214,8 @@ func TestGossipConfigIsEmtpy(t *testing.T) {
 			AdvertiseAddress: tt.advertiseAddr,
 			Seed:             tt.seed,
 		}
-		if gc.IsEmpty() != tt.empty {
-			t.Errorf("%d, got %t, want %t", idx, gc.IsEmpty(), tt.empty)
-		}
+		assert.Equal(t, tt.empty, gc.IsEmpty(),
+			"%d, got %t, want %t", idx, gc.IsEmpty(), tt.empty)
 	}
 }
 
@@ -283,19 +260,19 @@ func TestGossipConfigValidate(t *testing.T) {
 			Seed:             tt.seed,
 		}
 		err := gc.Validate()
-		if (err != nil && tt.valid) || (err == nil && !tt.valid) {
-			t.Errorf("%d, err: %v, valid: %t", idx, err, tt.valid)
+		if tt.valid {
+			assert.NoError(t, err, "%d, err: %v, valid: %t", idx, err, tt.valid)
+		} else {
+			assert.Error(t, err, "%d, err: %v, valid: %t", idx, err, tt.valid)
 		}
 	}
 }
 
 func TestDefaultEngineConfig(t *testing.T) {
 	nhc := &NodeHostConfig{}
-	if err := nhc.Prepare(); err != nil {
-		t.Errorf("prepare failed, %v", err)
-	}
+	err := nhc.Prepare()
+	require.NoError(t, err, "prepare failed, %v", err)
 	ec := GetDefaultEngineConfig()
-	if !reflect.DeepEqual(&nhc.Expert.Engine, &ec) {
-		t.Errorf("default engine configure not set")
-	}
+	assert.True(t, reflect.DeepEqual(&nhc.Expert.Engine, &ec),
+		"default engine configure not set")
 }
