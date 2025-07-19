@@ -21,6 +21,8 @@ package tan
 import (
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestVersionUnref(t *testing.T) {
@@ -30,7 +32,5 @@ func TestVersionUnref(t *testing.T) {
 	v.ref()
 	list.pushBack(v)
 	v.unref()
-	if !list.empty() {
-		t.Fatalf("expected version list to be empty")
-	}
+	require.True(t, list.empty(), "expected version list to be empty")
 }
