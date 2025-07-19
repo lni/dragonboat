@@ -16,18 +16,18 @@ package dragonboat
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBitmapAdd(t *testing.T) {
 	var b bitmap
 	for i := uint64(0); i < 64; i++ {
-		if b.contains(i) {
-			t.Errorf("unexpectedly contains value %d", i)
-		}
+		require.False(t, b.contains(i),
+			"unexpectedly contains value %d", i)
 		b.add(i)
-		if !b.contains(i) {
-			t.Errorf("failed to add value %d", i)
-		}
+		require.True(t, b.contains(i),
+			"failed to add value %d", i)
 	}
 }
 
@@ -35,25 +35,16 @@ func TestBitmapContains(t *testing.T) {
 	var b bitmap
 	b.add(1)
 	b.add(3)
-	if !b.contains(1) {
-		t.Errorf("contains 1 failed")
-	}
-	if !b.contains(3) {
-		t.Errorf("contains 3 failed")
-	}
-	if b.contains(2) {
-		t.Errorf("contains 2 failed")
-	}
+	require.True(t, b.contains(1), "contains 1 failed")
+	require.True(t, b.contains(3), "contains 3 failed")
+	require.False(t, b.contains(2), "contains 2 failed")
 }
 
 func TestWorkReadyCanBeCreated(t *testing.T) {
 	wr := newWorkReady(4)
-	if len(wr.maps) != 4 || len(wr.channels) != 4 {
-		t.Errorf("unexpected ready list len")
-	}
-	if wr.count != 4 {
-		t.Errorf("unexpected count value")
-	}
+	require.Equal(t, 4, len(wr.maps), "unexpected ready list len")
+	require.Equal(t, 4, len(wr.channels), "unexpected ready list len")
+	require.Equal(t, uint64(4), wr.count, "unexpected count value")
 }
 
 func TestPartitionerWorksAsExpected(t *testing.T) {
@@ -64,9 +55,7 @@ func TestPartitionerWorksAsExpected(t *testing.T) {
 		idx := p.GetPartitionID(i)
 		vals[idx] = struct{}{}
 	}
-	if len(vals) != 4 {
-		t.Errorf("unexpected partitioner outcome")
-	}
+	require.Equal(t, 4, len(vals), "unexpected partitioner outcome")
 }
 
 func TestAllShardsReady(t *testing.T) {
@@ -81,69 +70,65 @@ func TestAllShardsReady(t *testing.T) {
 		select {
 		case <-ch:
 		default:
-			t.Errorf("channel not ready")
+			require.Fail(t, "channel not ready")
 		}
 		rc := wr.maps[i]
 		m := rc.getReadyShards()
-		if len(m) != 1 {
-			t.Errorf("unexpected map size")
-		}
-		if _, ok := m[i]; !ok {
-			t.Errorf("shard not set")
-		}
+		require.Equal(t, 1, len(m), "unexpected map size")
+		_, ok := m[i]
+		require.True(t, ok, "shard not set")
 	}
 	nodes = nodes[:0]
-	nodes = append(nodes, []*node{{shardID: 0}, {shardID: 2}, {shardID: 3}}...)
+	nodes = append(nodes, []*node{{shardID: 0}, {shardID: 2},
+		{shardID: 3}}...)
 	wr.allShardsReady(nodes)
 	ch := wr.channels[1]
 	select {
 	case <-ch:
-		t.Errorf("channel unexpectedly set as ready")
+		require.Fail(t, "channel unexpectedly set as ready")
 	default:
 	}
 	rc := wr.maps[1]
 	m := rc.getReadyShards()
-	if len(m) != 0 {
-		t.Errorf("shard map unexpected set")
-	}
+	require.Equal(t, 0, len(m), "shard map unexpected set")
 }
 
 func TestWorkCanBeSetAsReady(t *testing.T) {
 	wr := newWorkReady(4)
 	select {
 	case <-wr.waitCh(1):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(2):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(3):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(4):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	default:
 	}
 	wr.shardReady(0)
 	select {
 	case <-wr.waitCh(1):
 	case <-wr.waitCh(2):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(3):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(4):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	default:
-		t.Errorf("ready not signaled")
+		require.Fail(t, "ready not signaled")
 	}
 	wr.shardReady(9)
 	select {
 	case <-wr.waitCh(1):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(2):
 	case <-wr.waitCh(3):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	case <-wr.waitCh(4):
-		t.Errorf("ready signaled")
+		require.Fail(t, "ready signaled")
 	default:
-		t.Errorf("ready not signaled")
+		require.Fail(t, "ready not signaled")
 	}
 }
 
@@ -153,53 +138,36 @@ func TestReturnedReadyMapContainsReadyShardID(t *testing.T) {
 	wr.shardReady(4)
 	wr.shardReady(129)
 	ready := wr.getReadyMap(1)
-	if len(ready) != 2 {
-		t.Errorf("unexpected ready map size, sz: %d", len(ready))
-	}
+	require.Equal(t, 2, len(ready),
+		"unexpected ready map size, sz: %d", len(ready))
 	_, ok := ready[0]
 	_, ok2 := ready[4]
-	if !ok || !ok2 {
-		t.Errorf("missing shard id")
-	}
+	require.True(t, ok && ok2, "missing shard id")
 	ready = wr.getReadyMap(2)
-	if len(ready) != 1 {
-		t.Errorf("unexpected ready map size")
-	}
+	require.Equal(t, 1, len(ready), "unexpected ready map size")
 	_, ok = ready[129]
-	if !ok {
-		t.Errorf("missing shard id")
-	}
+	require.True(t, ok, "missing shard id")
 	ready = wr.getReadyMap(3)
-	if len(ready) != 0 {
-		t.Errorf("unexpected ready map size")
-	}
+	require.Equal(t, 0, len(ready), "unexpected ready map size")
 }
 
 func TestLoadedNodes(t *testing.T) {
 	lns := newLoadedNodes()
-	if lns.get(2, 3) != nil {
-		t.Errorf("unexpectedly returned true")
-	}
+	require.Nil(t, lns.get(2, 3), "unexpectedly returned true")
 	nodes := make(map[uint64]*node)
 	n := &node{}
 	n.replicaID = 3
 	nodes[2] = n
 	lns.update(1, fromStepWorker, nodes)
-	if lns.get(2, 3) == nil {
-		t.Errorf("unexpectedly returned false")
-	}
+	require.NotNil(t, lns.get(2, 3), "unexpectedly returned false")
 	n.replicaID = 4
 	lns.update(1, fromStepWorker, nodes)
-	if lns.get(2, 3) != nil {
-		t.Errorf("unexpectedly returned true")
-	}
+	require.Nil(t, lns.get(2, 3), "unexpectedly returned true")
 	nodes = make(map[uint64]*node)
 	nodes[5] = n
 	n.replicaID = 3
 	lns.update(1, fromStepWorker, nodes)
-	if lns.get(2, 3) != nil {
-		t.Errorf("unexpectedly returned true")
-	}
+	require.Nil(t, lns.get(2, 3), "unexpectedly returned true")
 }
 
 func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
@@ -209,49 +177,11 @@ func TestBusyMapKeyIsIgnoredWhenUpdatingLoadedNodes(t *testing.T) {
 	l := newLoadedNodes()
 	l.updateFromBusySSNodes(m)
 	nm := l.nodes[nodeType{workerID: 0, from: fromWorker}]
-	if len(nm) != 2 {
-		t.Errorf("unexpected map len")
-	}
-	if n, ok := nm[100]; !ok || n.shardID != 100 {
-		t.Errorf("failed to locate the node")
-	}
-	if n, ok := nm[200]; !ok || n.shardID != 200 {
-		t.Errorf("failed to locate the node")
-	}
+	require.Equal(t, 2, len(nm), "unexpected map len")
+	n, ok := nm[100]
+	require.True(t, ok, "failed to locate the node")
+	require.Equal(t, uint64(100), n.shardID, "failed to locate the node")
+	n, ok = nm[200]
+	require.True(t, ok, "failed to locate the node")
+	require.Equal(t, uint64(200), n.shardID, "failed to locate the node")
 }
-
-/*
-func TestWPRemoveFromPending(t *testing.T) {
-	tests := []struct {
-		length uint64
-		idx    uint64
-	}{
-		{1, 0},
-		{5, 0},
-		{5, 1},
-		{5, 4},
-	}
-	for idx, tt := range tests {
-		w := &workerPool{}
-		for i := uint64(0); i < tt.length; i++ {
-			cid := uint64(1)
-			if i == tt.idx {
-				cid = uint64(0)
-			}
-			r := tsn{task: rsm.Task{ShardID: cid}}
-			w.pending = append(w.pending, r)
-		}
-		if uint64(len(w.pending)) != tt.length {
-			t.Errorf("unexpected length")
-		}
-		w.removeFromPending(int(tt.idx))
-		if uint64(len(w.pending)) != tt.length-1 {
-			t.Errorf("unexpected length")
-		}
-		for _, p := range w.pending {
-			if p.task.ShardID == 0 {
-				t.Errorf("%d, pending not removed, %+v", idx, w.pending)
-			}
-		}
-	}
-}*/

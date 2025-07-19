@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/lni/goutils/leaktest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/internal/rsm"
 	pb "github.com/lni/dragonboat/v4/raftpb"
@@ -29,9 +31,7 @@ func TestSnapshotTaskCanBeSet(t *testing.T) {
 	sr := snapshotTask{}
 	rec := rsm.Task{}
 	sr.setTask(rec)
-	if !sr.hasTask {
-		t.Errorf("rec not set")
-	}
+	assert.True(t, sr.hasTask, "rec not set")
 }
 
 func TestSnapshotTaskCanNotBeSetTwice(t *testing.T) {
@@ -51,22 +51,17 @@ func TestSnapshotTaskCanNotBeSetTwice(t *testing.T) {
 func TestCanGetSnapshotTask(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	sr := snapshotTask{}
-	if _, ok := sr.getTask(); ok {
-		t.Errorf("unexpected record")
-	}
+	_, ok := sr.getTask()
+	assert.False(t, ok, "unexpected record")
+
 	rec := rsm.Task{}
 	sr.setTask(rec)
 	r, ok := sr.getTask()
-	if !ok {
-		t.Errorf("no record to get")
-	}
-	if !reflect.DeepEqual(&rec, &r) {
-		t.Errorf("unexpected rec")
-	}
+	assert.True(t, ok, "no record to get")
+	assert.True(t, reflect.DeepEqual(&rec, &r), "unexpected rec")
+
 	rec, ok = sr.getTask()
-	if ok {
-		t.Errorf("record is still available")
-	}
+	assert.False(t, ok, "record is still available")
 }
 
 func TestStreamTaskCanBeSet(t *testing.T) {
@@ -75,9 +70,11 @@ func TestStreamTaskCanBeSet(t *testing.T) {
 	rec := rsm.Task{}
 	fn := func() pb.IChunkSink { return nil }
 	sr.setStreamTask(rec, fn)
-	if !sr.hasTask || !reflect.DeepEqual(&(sr.t), &rec) || sr.getSinkFn == nil {
-		t.Errorf("failed to set stream task")
-	}
+
+	assert.True(t, sr.hasTask, "hasTask should be true")
+	assert.True(t, reflect.DeepEqual(&(sr.t), &rec),
+		"task should be set correctly")
+	assert.NotNil(t, sr.getSinkFn, "getSinkFn should not be nil")
 }
 
 func TestStreamTaskCanNotBeSetTwice(t *testing.T) {
@@ -86,10 +83,7 @@ func TestStreamTaskCanNotBeSetTwice(t *testing.T) {
 	rec := rsm.Task{}
 	fn := func() pb.IChunkSink { return nil }
 	sr.setStreamTask(rec, fn)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("failed to trigger panic")
-		}
-	}()
-	sr.setStreamTask(rec, fn)
+	require.Panics(t, func() {
+		sr.setStreamTask(rec, fn)
+	})
 }

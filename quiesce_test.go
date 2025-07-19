@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/assert"
 )
 
 func getTestQuiesce() quiesceState {
@@ -43,9 +44,8 @@ func TestIncreaseTickCanEnterQuiesce(t *testing.T) {
 		for k := uint64(0); k < tt.tick; k++ {
 			q.tick()
 		}
-		if q.quiesced() != tt.quiesced {
-			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), tt.quiesced)
-		}
+		assert.Equal(t, tt.quiesced, q.quiesced(),
+			"test case %d", i)
 	}
 }
 
@@ -67,9 +67,8 @@ func TestQuiesceCanBeDisabled(t *testing.T) {
 		for k := uint64(0); k < tt.tick; k++ {
 			q.tick()
 		}
-		if q.quiesced() != tt.quiesced {
-			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), tt.quiesced)
-		}
+		assert.Equal(t, tt.quiesced, q.quiesced(),
+			"test case %d", i)
 	}
 }
 
@@ -89,16 +88,13 @@ func TestExitFromQuiesceWhenActivityIsRecorded(t *testing.T) {
 		for k := uint64(0); k < q.threshold()+1; k++ {
 			q.tick()
 		}
-		if !q.quiesced() {
-			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), true)
-		}
+		assert.True(t, q.quiesced(),
+			"test case %d: should be quiesced", i)
 		q.record(tt)
-		if q.quiesced() {
-			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), false)
-		}
-		if q.idleSince != q.currentTick {
-			t.Errorf("i %d, q.idleSince %d, want %d", i, q.idleSince, q.currentTick)
-		}
+		assert.False(t, q.quiesced(),
+			"test case %d: should not be quiesced", i)
+		assert.Equal(t, q.currentTick, q.idleSince,
+			"test case %d: idleSince should equal currentTick", i)
 	}
 }
 
@@ -119,9 +115,8 @@ func TestMsgHeartbeatWillNotStopEnteringQuiesce(t *testing.T) {
 			q.tick()
 			q.record(pb.Heartbeat)
 		}
-		if q.quiesced() != tt.quiesced {
-			t.Errorf("i %d, got %t, want %t", i, q.quiesced(), tt.quiesced)
-		}
+		assert.Equal(t, tt.quiesced, q.quiesced(),
+			"test case %d", i)
 	}
 }
 
@@ -130,22 +125,14 @@ func TestWillNotExitFromQuiesceForDelayedMsgHeartbeatMsg(t *testing.T) {
 	for k := uint64(0); k < q.threshold()+1; k++ {
 		q.tick()
 	}
-	if !q.quiesced() {
-		t.Errorf("got %t, want %t", q.quiesced(), true)
-	}
-	if !q.newToQuiesce() {
-		t.Errorf("got %t, want %t", q.newToQuiesce(), true)
-	}
+	assert.True(t, q.quiesced(), "should be quiesced")
+	assert.True(t, q.newToQuiesce(), "should be new to quiesce")
 	for q.newToQuiesce() {
 		q.record(pb.Heartbeat)
-		if !q.quiesced() {
-			t.Errorf("got %t, want true", q.quiesced())
-		}
+		assert.True(t, q.quiesced(), "should remain quiesced")
 		q.tick()
 	}
 	// no longer considered as recently entered quiesce
 	q.record(pb.Heartbeat)
-	if q.quiesced() {
-		t.Errorf("got %t, want false", q.quiesced())
-	}
+	assert.False(t, q.quiesced(), "should not be quiesced")
 }

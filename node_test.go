@@ -26,6 +26,7 @@ import (
 
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/random"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/client"
@@ -64,22 +65,18 @@ func getMemberNodes(r *rsm.StateMachine) []uint64 {
 func mustComplete(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Fatalf("got %v, want %v", v.code, requestCompleted)
-		}
+		require.True(t, v.Completed(), "got %v, want %v", v.code, requestCompleted)
 	default:
-		t.Fatalf("failed to complete the proposal")
+		require.Fail(t, "failed to complete the proposal")
 	}
 }
 
 func mustReject(rs *RequestState, t *testing.T) {
 	select {
 	case v := <-rs.ResultC():
-		if !v.Rejected() {
-			t.Errorf("got %v, want %d", v, requestRejected)
-		}
+		assert.True(t, v.Rejected(), "got %v, want %d", v, requestRejected)
 	default:
-		t.Errorf("failed to complete the add node request")
+		assert.Fail(t, "failed to complete the add node request")
 	}
 }
 
@@ -89,7 +86,7 @@ func mustHasLeaderNode(nodes []*node, t *testing.T) *node {
 			return node
 		}
 	}
-	t.Fatalf("no leader")
+	require.Fail(t, "no leader")
 	return nil
 }
 
@@ -428,12 +425,8 @@ func TestNodeCanBeCreatedAndStarted(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer cleanupTestDir(fs)
 	nodes, smList, router, ldb := getTestRaftNodes(3, false, fs)
-	if len(nodes) != 3 {
-		t.Errorf("len(nodes)=%d, want 3", len(nodes))
-	}
-	if len(smList) != 3 {
-		t.Errorf("len(smList)=%d, want 3", len(smList))
-	}
+	assert.Len(t, nodes, 3)
+	assert.Len(t, smList, 3)
 	defer stopNodes(nodes)
 	defer func() {
 		require.NoError(t, ldb.Close())
@@ -504,22 +497,17 @@ func makeCheckedTestProposal(t *testing.T, session *client.Session,
 	n := mustHasLeaderNode(nodes, t)
 	tick := uint64(50)
 	rs, err := n.propose(session, data, tick)
-	if err != nil {
-		t.Fatalf("failed to make proposal")
-	}
+	require.NoError(t, err, "failed to make proposal")
+
 	stepNodes(nodes, smList, router, tick)
 	select {
 	case v := <-rs.ResultC():
-		if v.code != expectedCode {
-			t.Errorf("got %v, want %d", v, expectedCode)
-		}
+		assert.Equal(t, expectedCode, v.code)
 		if checkResult {
-			if v.GetResult().Value != expectedResult {
-				t.Errorf("result %d, want %d", v.GetResult(), expectedResult)
-			}
+			assert.Equal(t, expectedResult, v.GetResult().Value)
 		}
 	default:
-		t.Errorf("failed to complete the proposal")
+		assert.Fail(t, "failed to complete the proposal")
 	}
 }
 
@@ -534,15 +522,12 @@ func runRaftNodeTest(t *testing.T, quiesce bool, ordered bool,
 			(nodes[idx]).qs.enabled = true
 		}
 		for _, node := range nodes {
-			if node.qs.quiesced() {
-				t.Errorf("node quiesced on startup")
-			}
+			assert.False(t, node.qs.quiesced(), "node quiesced on startup")
 		}
 	}
 	stepNodesUntilThereIsLeader(nodes, smList, router)
-	if len(nodes) != 3 {
-		t.Fatalf("failed to get 3 nodes")
-	}
+	require.Len(t, nodes, 3, "failed to get 3 nodes")
+
 	defer stopNodes(nodes)
 	defer func() {
 		require.NoError(t, ldb.Close())
@@ -559,41 +544,24 @@ func TestLastAppliedValueCanBeReturned(t *testing.T) {
 		for i := uint64(5); i <= 100; i++ {
 			sm.SetLastApplied(i)
 			hasEvent, err := n.handleEvents()
-			if err != nil {
-				t.Fatalf("unexpected error %v", err)
-			}
-			if !hasEvent {
-				t.Errorf("handle events reported no event")
-			}
+			require.NoError(t, err, "unexpected error %v", err)
+			assert.True(t, hasEvent, "handle events reported no event")
+
 			ud, ok, err := n.getUpdate()
-			if err != nil {
-				t.Fatalf("unexpected error %v", err)
-			}
-			if !ok {
-				t.Errorf("no update")
-			} else {
-				if ud.LastApplied != i {
-					t.Errorf("last applied value not returned, got %d want %d",
-						ud.LastApplied, i)
-				}
+			require.NoError(t, err, "unexpected error %v", err)
+			if assert.True(t, ok, "no update") {
+				assert.Equal(t, i, ud.LastApplied, "last applied value not returned")
 			}
 			ud.UpdateCommit.LastApplied = 0
 			n.p.Commit(ud)
 		}
 		hasEvents, err := n.handleEvents()
-		if err != nil {
-			t.Fatalf("unexpected error %v", err)
-		}
-		if hasEvents {
-			t.Errorf("unexpected event")
-		}
+		require.NoError(t, err, "unexpected error %v", err)
+		assert.False(t, hasEvents, "unexpected event")
+
 		ud, ok, err := n.getUpdate()
-		if err != nil {
-			t.Fatalf("unexpected error %v", err)
-		}
-		if ok {
-			t.Errorf("unexpected update, %+v", ud)
-		}
+		require.NoError(t, err, "unexpected error %v", err)
+		assert.False(t, ok, "unexpected update, %+v", ud)
 	}
 	runRaftNodeTest(t, false, false, tf, fs)
 }
@@ -602,20 +570,16 @@ func TestLastAppliedValueIsAlwaysOneWayIncreasing(t *testing.T) {
 	fs := vfs.GetTestFS()
 	tf := func(t *testing.T, nodes []*node,
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("not panic")
-			}
-		}()
-		n := nodes[0]
-		sm := smList[0]
-		sm.SetLastApplied(1)
-		if _, err := n.handleEvents(); err != nil {
-			t.Fatalf("unexpected error %v", err)
-		}
-		if _, _, err := n.getUpdate(); err != nil {
-			t.Fatalf("unexpected error %v", err)
-		}
+		require.Panics(t, func() {
+			n := nodes[0]
+			sm := smList[0]
+			// this will panic because last applied is already > 1 after test setup
+			sm.SetLastApplied(1)
+			_, err := n.handleEvents()
+			require.NoError(t, err)
+			_, _, err = n.getUpdate()
+			require.NoError(t, err)
+		})
 	}
 	runRaftNodeTest(t, false, false, tf, fs)
 }
@@ -633,18 +597,13 @@ func TestProposalCanBeMadeWithMessageDrops(t *testing.T) {
 				break
 			}
 		}
-		if session == nil {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.NotNil(t, session, "failed to get session")
 		for i := 0; i < 20; i++ {
 			maxLastApplied := getMaxLastApplied(smList)
 			makeCheckedTestProposal(t, session, []byte("test-data"), 4000,
 				nodes, smList, router, requestCompleted, false, 0)
 			session.ProposalCompleted()
-			if getMaxLastApplied(smList) != maxLastApplied+1 {
-				t.Errorf("didn't move the last applied value in smList")
-			}
+			assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
 		}
 		closeProposalTestClient(n, nodes, smList, router, session)
 	}
@@ -657,12 +616,9 @@ func TestLeaderIDCanBeQueried(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		v, _, ok := n.getLeaderID()
-		if !ok {
-			t.Errorf("failed to get leader id")
-		}
-		if v < 1 || v > 3 {
-			t.Errorf("unexpected leader id %d", v)
-		}
+		assert.True(t, ok, "failed to get leader id")
+		assert.GreaterOrEqual(t, v, uint64(1), "unexpected leader id %d", v)
+		assert.LessOrEqual(t, v, uint64(3), "unexpected leader id %d", v)
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -674,21 +630,19 @@ func TestMembershipCanBeLocallyRead(t *testing.T) {
 		n := nodes[0]
 		m := n.sm.GetMembership()
 		v := m.Addresses
-		if len(v) != 3 {
-			t.Errorf("unexpected member count %d", len(v))
-		}
+		assert.Len(t, v, 3, "unexpected member count")
+
 		addr1, ok := v[1]
-		if !ok || addr1 != "peer:12346" {
-			t.Errorf("unexpected membership data %v", v)
-		}
+		assert.True(t, ok)
+		assert.Equal(t, "peer:12346", addr1)
+
 		addr2, ok := v[2]
-		if !ok || addr2 != "peer:12347" {
-			t.Errorf("unexpected membership data %v", v)
-		}
+		assert.True(t, ok)
+		assert.Equal(t, "peer:12347", addr2)
+
 		addr3, ok := v[3]
-		if !ok || addr3 != "peer:12348" {
-			t.Errorf("unexpected membership data %v", v)
-		}
+		assert.True(t, ok)
+		assert.Equal(t, "peer:12348", addr3)
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -700,9 +654,7 @@ func TestConfigChangeOnWitnessWillBeRejected(t *testing.T) {
 		n := nodes[0]
 		n.config.IsWitness = true
 		_, err := n.requestConfigChange(pb.AddNode, 100, "noidea:9090", 0, 10)
-		if err != ErrInvalidOperation {
-			t.Errorf("config change not rejected")
-		}
+		assert.Equal(t, ErrInvalidOperation, err, "config change not rejected")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -714,9 +666,7 @@ func TestReadOnWitnessWillBeRejected(t *testing.T) {
 		n := nodes[0]
 		n.config.IsWitness = true
 		_, err := n.read(10)
-		if err != ErrInvalidOperation {
-			t.Errorf("read not rejected")
-		}
+		assert.Equal(t, ErrInvalidOperation, err, "read not rejected")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -729,9 +679,7 @@ func TestMakingProposalOnWitnessNodeWillBeRejected(t *testing.T) {
 		n.config.IsWitness = true
 		cs := client.NewNoOPSession(n.shardID, random.NewLockedRand())
 		_, err := n.propose(cs, make([]byte, 1), 10)
-		if err != ErrInvalidOperation {
-			t.Errorf("making proposal not rejected")
-		}
+		assert.Equal(t, ErrInvalidOperation, err, "making proposal not rejected")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -743,9 +691,7 @@ func TestProposingSessionOnWitnessNodeWillBeRejected(t *testing.T) {
 		n := nodes[0]
 		n.config.IsWitness = true
 		_, err := n.proposeSession(nil, 10)
-		if err != ErrInvalidOperation {
-			t.Errorf("proposing session not rejected")
-		}
+		assert.Equal(t, ErrInvalidOperation, err, "proposing session not rejected")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -757,9 +703,7 @@ func TestRequestingSnapshotOnWitnessWillBeRejected(t *testing.T) {
 		n := nodes[0]
 		n.config.IsWitness = true
 		_, err := n.requestSnapshot(SnapshotOption{}, 10)
-		if err != ErrInvalidOperation {
-			t.Errorf("requesting snapshot not rejected")
-		}
+		assert.Equal(t, ErrInvalidOperation, err, "requesting snapshot not rejected")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -770,18 +714,14 @@ func TestProposalWithClientSessionCanBeMade(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		data := []byte("test-data")
 		maxLastApplied := getMaxLastApplied(smList)
 		makeCheckedTestProposal(t, session, data, 4000,
 			nodes, smList, router, requestCompleted, true, uint64(len(data)))
 
-		if getMaxLastApplied(smList) != maxLastApplied+1 {
-			t.Errorf("didn't move the last applied value in smList")
-		}
+		assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
 		closeProposalTestClient(n, nodes, smList, router, session)
 	}
 	fs := vfs.GetTestFS()
@@ -793,18 +733,14 @@ func TestProposalWithNotRegisteredClientWillBeRejected(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		session.ClientID = 123456789
 		data := []byte("test-data")
 		maxLastApplied := getMaxLastApplied(smList)
 		makeCheckedTestProposal(t, session, data, 2000,
 			nodes, smList, router, requestRejected, true, 0)
-		if getMaxLastApplied(smList) != maxLastApplied+1 {
-			t.Errorf("didn't move the last applied value in smList")
-		}
+		assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -815,24 +751,19 @@ func TestDuplicatedProposalReturnsTheSameResult(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		data := []byte("test-data")
 		maxLastApplied := getMaxLastApplied(smList)
 		makeCheckedTestProposal(t, session, data, 2000,
 			nodes, smList, router, requestCompleted, true, uint64(len(data)))
-		if getMaxLastApplied(smList) != maxLastApplied+1 {
-			t.Errorf("didn't move the last applied value in smList")
-		}
+		assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
+
 		data = []byte("test-data-2")
 		maxLastApplied = getMaxLastApplied(smList)
 		makeCheckedTestProposal(t, session, data, 2000,
 			nodes, smList, router, requestCompleted, true, uint64(len(data)-2))
-		if getMaxLastApplied(smList) != maxLastApplied+1 {
-			t.Errorf("didn't move the last applied value in smList")
-		}
+		assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
 		closeProposalTestClient(n, nodes, smList, router, session)
 	}
 	fs := vfs.GetTestFS()
@@ -844,20 +775,16 @@ func TestReproposeRespondedDataWillTimeout(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		data := []byte("test-data")
 		maxLastApplied := getMaxLastApplied(smList)
 		_, err := n.propose(session, data, 10)
-		if err != nil {
-			t.Fatalf("failed to make proposal")
-		}
+		require.NoError(t, err, "failed to make proposal")
+
 		stepNodes(nodes, smList, router, 10)
-		if getMaxLastApplied(smList) != maxLastApplied+1 {
-			t.Errorf("didn't move the last applied value in smList")
-		}
+		assert.Equal(t, maxLastApplied+1, getMaxLastApplied(smList), "didn't move the last applied value in smList")
+
 		respondedSeriesID := session.SeriesID
 		session.ProposalCompleted()
 		for i := 0; i < 3; i++ {
@@ -873,11 +800,9 @@ func TestReproposeRespondedDataWillTimeout(t *testing.T) {
 		stepNodes(nodes, smList, router, 10)
 		select {
 		case v := <-rs.ResultC():
-			if !v.Timeout() {
-				t.Errorf("didn't timeout, v: %d", v.code)
-			}
+			assert.True(t, v.Timeout(), "didn't timeout, v: %d", v.code)
 		default:
-			t.Errorf("failed to complete the proposal")
+			assert.Fail(t, "failed to complete the proposal")
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -891,29 +816,24 @@ func TestProposalsWithIllFormedSessionAreChecked(t *testing.T) {
 		s1 := client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForRegister
 		_, err := n.propose(s1, nil, 10)
-		if err != ErrInvalidSession {
-			t.Errorf("not rejected")
-		}
+		assert.Equal(t, ErrInvalidSession, err)
+
 		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = client.SeriesIDForUnregister
 		_, err = n.propose(s1, nil, 10)
-		if err != ErrInvalidSession {
-			t.Errorf("not rejected")
-		}
+		assert.Equal(t, ErrInvalidSession, err)
+
 		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 100
 		s1.ShardID = 123456
 		_, err = n.propose(s1, nil, 10)
-		if err != ErrInvalidSession {
-			t.Errorf("not rejected")
-		}
+		assert.Equal(t, ErrInvalidSession, err)
+
 		s1 = client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 1
 		s1.ClientID = 0
 		_, err = n.propose(s1, nil, 10)
-		if err != ErrInvalidSession {
-			t.Errorf("not rejected")
-		}
+		assert.Equal(t, ErrInvalidSession, err)
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -926,16 +846,10 @@ func TestProposalsWithCorruptedSessionWillPanic(t *testing.T) {
 		s1 := client.NewSession(n.shardID, random.NewLockedRand())
 		s1.SeriesID = 100
 		s1.RespondedTo = 200
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Errorf("panic not triggered")
-			}
-		}()
-		_, err := n.propose(s1, nil, 10)
-		if err != nil {
-			t.Fatalf("failed to make proposal %v", err)
-		}
+		require.Panics(t, func() {
+			_, err := n.propose(s1, nil, 10)
+			require.NoError(t, err, "failed to make proposal %v", err)
+		})
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -947,13 +861,10 @@ func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
 	// quiesce is disabled by default
 	defer cleanupTestDir(fs)
 	nodes, smList, router, ldb := getTestRaftNodes(3, false, fs)
-	if len(nodes) != 3 {
-		t.Fatalf("failed to get 3 nodes")
-	}
+	require.Len(t, nodes, 3, "failed to get 3 nodes")
+
 	for _, node := range nodes {
-		if node.qs.quiesced() {
-			t.Errorf("node quiesced on startup")
-		}
+		assert.False(t, node.qs.quiesced(), "node quiesced on startup")
 	}
 	stepNodesUntilThereIsLeader(nodes, smList, router)
 	defer stopNodes(nodes)
@@ -966,9 +877,7 @@ func TestRaftNodeQuiesceCanBeDisabled(t *testing.T) {
 		singleStepNodes(nodes, smList, router)
 	}
 	for _, node := range nodes {
-		if node.qs.quiesced() {
-			t.Errorf("node is quiesced when quiesce is not enabled")
-		}
+		assert.False(t, node.qs.quiesced(), "node is quiesced when quiesce is not enabled")
 	}
 }
 
@@ -981,18 +890,14 @@ func TestNodesCanEnterQuiesce(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.qs.quiesced() {
-				t.Errorf("node failed to enter quiesced")
-			}
+			assert.True(t, node.qs.quiesced(), "node failed to enter quiesced")
 		}
 		// step more, nodes should stay in quiesce state.
 		for i := uint64(0); i <= nodes[0].qs.threshold()*3; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.qs.quiesced() {
-				t.Errorf("node failed to enter quiesced")
-			}
+			assert.True(t, node.qs.quiesced(), "node failed to enter quiesced")
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -1008,9 +913,7 @@ func TestNodesCanExitQuiesceByMakingProposal(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.qs.quiesced() {
-				t.Errorf("node failed to enter quiesced")
-			}
+			assert.True(t, node.qs.quiesced(), "node failed to enter quiesced")
 		}
 		n := nodes[0]
 		done := false
@@ -1021,16 +924,12 @@ func TestNodesCanExitQuiesceByMakingProposal(t *testing.T) {
 				break
 			}
 		}
-		if !done {
-			t.Errorf("failed to get proposal client -- didn't exit from quiesce?")
-		}
+		assert.True(t, done, "failed to get proposal client -- didn't exit from quiesce?")
 		for i := uint64(0); i <= 3; i++ {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if node.qs.quiesced() {
-				t.Errorf("node failed to exit from quiesced")
-			}
+			assert.False(t, node.qs.quiesced(), "node failed to exit from quiesced")
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -1046,15 +945,12 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.qs.quiesced() {
-				t.Errorf("node failed to enter quiesced")
-			}
+			assert.True(t, node.qs.quiesced(), "node failed to enter quiesced")
 		}
 		n := nodes[0]
 		rs, err := n.read(10)
-		if err != nil {
-			t.Errorf("failed to read")
-		}
+		require.NoError(t, err, "failed to read")
+
 		var done bool
 		for i := uint64(0); i <= 5; i++ {
 			singleStepNodes(nodes, smList, router)
@@ -1068,9 +964,7 @@ func TestNodesCanExitQuiesceByReadIndex(t *testing.T) {
 			}
 		}
 		for _, node := range nodes {
-			if node.qs.quiesced() {
-				t.Errorf("node failed to exit from quiesced")
-			}
+			assert.False(t, node.qs.quiesced(), "node failed to exit from quiesced")
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -1086,17 +980,14 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if !node.qs.quiesced() {
-				t.Errorf("node failed to enter quiesced")
-			}
+			assert.True(t, node.qs.quiesced(), "node failed to enter quiesced")
 		}
 		n := nodes[0]
 		done := false
 		for i := 0; i < 5; i++ {
 			rs, err := n.requestAddNodeWithOrderID(24680, "localhost:12345", 0, 10)
-			if err != nil {
-				t.Errorf("request to add node failed, %v", err)
-			}
+			require.NoError(t, err, "request to add node failed, %v", err)
+
 			hasResp := false
 			for i := uint64(0); i < 25; i++ {
 				singleStepNodes(nodes, smList, router)
@@ -1110,8 +1001,7 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 					continue
 				}
 			}
-			if !hasResp {
-				t.Errorf("config change timeout not fired")
+			if !assert.True(t, hasResp, "config change timeout not fired") {
 				return
 			}
 			if done {
@@ -1122,9 +1012,7 @@ func TestNodesCanExitQuiesceByConfigChange(t *testing.T) {
 			singleStepNodes(nodes, smList, router)
 		}
 		for _, node := range nodes {
-			if node.qs.quiesced() {
-				t.Errorf("node failed to exit from quiesced")
-			}
+			assert.False(t, node.qs.quiesced(), "node failed to exit from quiesced")
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -1136,24 +1024,18 @@ func TestLinearizableReadCanBeMade(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		rs, err := n.propose(session, []byte("test-data"), 10)
-		if err != nil {
-			t.Fatalf("failed to make proposal")
-		}
+		require.NoError(t, err, "failed to make proposal")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		closeProposalTestClient(n, nodes, smList, router, session)
+
 		rs, err = n.read(10)
-		if err != nil {
-			t.Fatalf("")
-		}
-		if rs.node == nil {
-			t.Fatalf("rs.node not set")
-		}
+		require.NoError(t, err)
+		require.NotNil(t, rs.node, "rs.node not set")
+
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 	}
@@ -1167,15 +1049,12 @@ func testNodeCanBeAdded(t *testing.T, fs vfs.IFS) {
 		router.dropRate = 3
 		n := mustHasLeaderNode(nodes, t)
 		rs, err := n.requestAddNodeWithOrderID(4, "a4:4", 0, 10)
-		if err != nil {
-			t.Fatalf("request to delete node failed")
-		}
+		require.NoError(t, err, "request to delete node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		for _, node := range nodes {
-			if !sliceEqual([]uint64{1, 2, 3, 4}, getMemberNodes(node.sm)) {
-				t.Errorf("failed to delete the node, %v", getMemberNodes(node.sm))
-			}
+			assert.True(t, sliceEqual([]uint64{1, 2, 3, 4}, getMemberNodes(node.sm)),
+				"failed to delete the node, %v", getMemberNodes(node.sm))
 		}
 	}
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -1194,20 +1073,12 @@ func TestNodeCanBeDeleted(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		rs, err := n.requestDeleteNodeWithOrderID(2, 0, 10)
-		if err != nil {
-			t.Fatalf("request to delete node failed")
-		}
+		require.NoError(t, err, "request to delete node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
-		if nodes[0].stopped() {
-			t.Errorf("node id 1 is not suppose to be in stopped state")
-		}
-		if !nodes[1].stopped() {
-			t.Errorf("node is not stopped")
-		}
-		if nodes[2].stopped() {
-			t.Errorf("node id 3 is not suppose to be in stopped state")
-		}
+		assert.False(t, nodes[0].stopped(), "node id 1 is not suppose to be in stopped state")
+		assert.True(t, nodes[1].stopped(), "node is not stopped")
+		assert.False(t, nodes[2].stopped(), "node id 3 is not suppose to be in stopped state")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -1233,48 +1104,35 @@ func TestNodeCanBeAdded2(t *testing.T) {
 		fs := vfs.GetTestFS()
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		for i := 0; i < 5; i++ {
 			rs, err := n.propose(session, []byte("test-data"), 10)
-			if err != nil {
-				t.Fatalf("")
-			}
+			require.NoError(t, err)
 			stepNodes(nodes, smList, router, 10)
 			mustComplete(rs, t)
 			session.ProposalCompleted()
 		}
 		closeProposalTestClient(n, nodes, smList, router, session)
+
 		rs, err := n.requestAddNodeWithOrderID(4, "a4:4", 0, 10)
-		if err != nil {
-			t.Fatalf("request to add node failed")
-		}
+		require.NoError(t, err, "request to add node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		for _, node := range nodes {
-			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
-			}
-			if !sliceEqual([]uint64{1, 2, 3, 4}, getMemberNodes(node.sm)) {
-				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
-			}
+			assert.False(t, node.stopped(), "node %d is stopped, this is unexpected", node.replicaID)
+			assert.True(t, sliceEqual([]uint64{1, 2, 3, 4}, getMemberNodes(node.sm)), "node members not expected: %v", getMemberNodes(node.sm))
 		}
 		// now bring the node 5 online
 		newNodes, newSMList, newRouter, _ := doGetTestRaftNodes(4, 1, true, ldb, fs)
-		if len(newNodes) != 1 {
-			t.Fatalf("failed to get 1 nodes")
-		}
+		require.Len(t, newNodes, 1, "failed to get 1 nodes")
+
 		router.addQ(4, newRouter.qm[4])
 		nodes = append(nodes, newNodes[0])
 		smList = append(smList, newSMList[0])
 		nodes[3].sendRaftMessage = router.send
 		stepNodes(nodes, smList, router, 100)
-		if smList[0].GetLastApplied() != newSMList[0].GetLastApplied() {
-			t.Errorf("last applied: %d, want %d",
-				newSMList[0].GetLastApplied(), smList[0].GetLastApplied())
-		}
+		assert.Equal(t, smList[0].GetLastApplied(), newSMList[0].GetLastApplied(), "last applied not equal")
 	}
 	fs := vfs.GetTestFS()
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -1286,34 +1144,23 @@ func TestNodeCanBeAddedWhenOrderIsEnforced(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		rs, err := n.requestAddNodeWithOrderID(5, "a5:5", 0, 10)
-		if err != nil {
-			t.Fatalf("request to add node failed")
-		}
+		require.NoError(t, err, "request to add node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustReject(rs, t)
 		for _, node := range nodes {
-			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
-			}
-			if !sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)) {
-				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
-			}
+			assert.False(t, node.stopped(), "node %d is stopped, this is unexpected", node.replicaID)
+			assert.True(t, sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)), "node members not expected: %v", getMemberNodes(node.sm))
 		}
+
 		m := n.sm.GetMembership()
 		ccid := m.ConfigChangeId
 		rs, err = n.requestAddNodeWithOrderID(5, "a5:5", ccid, 10)
-		if err != nil {
-			t.Fatalf("request to add node failed")
-		}
+		require.NoError(t, err, "request to add node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		for _, node := range nodes {
-			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
-			}
-			if !sliceEqual([]uint64{1, 2, 3, 5}, getMemberNodes(node.sm)) {
-				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
-			}
+			assert.False(t, node.stopped(), "node %d is stopped, this is unexpected", node.replicaID)
+			assert.True(t, sliceEqual([]uint64{1, 2, 3, 5}, getMemberNodes(node.sm)), "node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
 	runRaftNodeTest(t, false, true, tf, fs)
@@ -1325,34 +1172,24 @@ func TestNodeCanBeDeletedWhenOrderIsEnforced(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		rs, err := n.requestDeleteNodeWithOrderID(2, 0, 10)
-		if err != nil {
-			t.Fatalf("request to delete node failed")
-		}
+		require.NoError(t, err, "request to delete node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustReject(rs, t)
 		for _, node := range nodes {
-			if node.stopped() {
-				t.Errorf("node %d is stopped, this is unexpected", node.replicaID)
-			}
-			if !sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)) {
-				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
-			}
+			assert.False(t, node.stopped(), "node %d is stopped, this is unexpected", node.replicaID)
+			assert.True(t, sliceEqual([]uint64{1, 2, 3}, getMemberNodes(node.sm)), "node members not expected: %v", getMemberNodes(node.sm))
 		}
 		m := n.sm.GetMembership()
 		ccid := m.ConfigChangeId
 		rs, err = n.requestDeleteNodeWithOrderID(2, ccid, 10)
-		if err != nil {
-			t.Fatalf("request to add node failed")
-		}
+		require.NoError(t, err, "request to add node failed")
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		for _, node := range nodes {
 			if node.replicaID == 2 {
 				continue
 			}
-			if !sliceEqual([]uint64{1, 3}, getMemberNodes(node.sm)) {
-				t.Errorf("node members not expected: %v", getMemberNodes(node.sm))
-			}
+			assert.True(t, sliceEqual([]uint64{1, 3}, getMemberNodes(node.sm)), "node members not expected: %v", getMemberNodes(node.sm))
 		}
 	}
 	runRaftNodeTest(t, false, true, tf, fs)
@@ -1385,37 +1222,27 @@ func TestSnapshotCanBeMade(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		maxLastApplied := getMaxLastApplied(smList)
 		proposalCount := 50
 		for i := 0; i < proposalCount; i++ {
 			data := fmt.Sprintf("test-data-%d", i)
 			rs, err := n.propose(session, []byte(data), 10)
-			if err != nil {
-				t.Fatalf("failed to make proposal")
-			}
+			require.NoError(t, err, "failed to make proposal")
 			stepNodes(nodes, smList, router, 10)
 			mustComplete(rs, t)
 			session.ProposalCompleted()
 		}
-		if getMaxLastApplied(smList) != maxLastApplied+uint64(proposalCount) {
-			t.Errorf("not all %d proposals applied", proposalCount)
-		}
+		assert.Equal(t, maxLastApplied+uint64(proposalCount), getMaxLastApplied(smList), "not all %d proposals applied", proposalCount)
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
 			sd := fmt.Sprintf(snapDir, testShardID, node.replicaID)
 			dir := fs.PathJoin(raftTestTopDir, sd)
 			count, err := getSnapshotFileCount(dir, fs)
-			if err != nil {
-				t.Fatalf("failed to get snapshot count")
-			}
-			if count == 0 {
-				t.Errorf("no snapshot image")
-			}
+			require.NoError(t, err, "failed to get snapshot count")
+			assert.NotZero(t, count, "no snapshot image")
 		}
 	}
 	runRaftNodeTest(t, false, false, tf, fs)
@@ -1426,34 +1253,24 @@ func TestSnapshotCanBeMadeTwice(t *testing.T) {
 		smList []*rsm.StateMachine, router *testRouter, ldb raftio.ILogDB) {
 		n := nodes[0]
 		session, ok := getProposalTestClient(n, nodes, smList, router)
-		if !ok {
-			t.Errorf("failed to get session")
-			return
-		}
+		require.True(t, ok, "failed to get session")
+
 		maxLastApplied := getMaxLastApplied(smList)
 		proposalCount := 50
 		for i := 0; i < proposalCount; i++ {
 			data := fmt.Sprintf("test-data-%d", i)
 			rs, err := n.propose(session, []byte(data), 10)
-			if err != nil {
-				t.Fatalf("failed to make proposal")
-			}
+			require.NoError(t, err, "failed to make proposal")
 			stepNodes(nodes, smList, router, 10)
 			mustComplete(rs, t)
 			session.ProposalCompleted()
 		}
-		if getMaxLastApplied(smList) != maxLastApplied+uint64(proposalCount) {
-			t.Errorf("not all %d proposals applied", proposalCount)
-		}
+		assert.Equal(t, maxLastApplied+uint64(proposalCount), getMaxLastApplied(smList), "not all %d proposals applied", proposalCount)
 		closeProposalTestClient(n, nodes, smList, router, session)
 		// check we do have snapshots saved on disk
 		for _, node := range nodes {
-			if err := node.save(rsm.Task{}); err != nil {
-				t.Fatalf("%v", err)
-			}
-			if err := node.save(rsm.Task{}); err != nil {
-				t.Fatalf("%v", err)
-			}
+			require.NoError(t, node.save(rsm.Task{}))
+			require.NoError(t, node.save(rsm.Task{}))
 		}
 	}
 	fs := vfs.GetTestFS()
@@ -1465,40 +1282,29 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer cleanupTestDir(fs)
 	nodes, smList, router, ldb := getTestRaftNodes(3, false, fs)
-	if len(nodes) != 3 {
-		t.Fatalf("failed to get 3 nodes")
-	}
+	require.Len(t, nodes, 3, "failed to get 3 nodes")
+
 	stepNodesUntilThereIsLeader(nodes, smList, router)
 	n := mustHasLeaderNode(nodes, t)
 	session, ok := getProposalTestClient(n, nodes, smList, router)
-	if !ok {
-		t.Errorf("failed to get session")
-		return
-	}
+	require.True(t, ok, "failed to get session")
+
 	maxLastApplied := getMaxLastApplied(smList)
 	for i := 0; i < 25; i++ {
 		rs, err := n.propose(session, []byte("test-data"), 10)
-		if err != nil {
-			t.Fatalf("")
-		}
+		require.NoError(t, err)
 		stepNodes(nodes, smList, router, 10)
 		mustComplete(rs, t)
 		session.ProposalCompleted()
 	}
-	if getMaxLastApplied(smList) != maxLastApplied+25 {
-		t.Errorf("not all %d proposals applied", 25)
-	}
+	assert.Equal(t, maxLastApplied+25, getMaxLastApplied(smList), "not all 25 proposals applied")
 	closeProposalTestClient(n, nodes, smList, router, session)
 	for _, node := range nodes {
 		sd := fmt.Sprintf(snapDir, testShardID, node.replicaID)
 		dir := fs.PathJoin(raftTestTopDir, sd)
 		count, err := getSnapshotFileCount(dir, fs)
-		if err != nil {
-			t.Fatalf("failed to get snapshot count")
-		}
-		if count == 0 {
-			t.Fatalf("no snapshot available, count: %d", count)
-		}
+		require.NoError(t, err, "failed to get snapshot count")
+		require.NotZero(t, count, "no snapshot available, count: %d", count)
 	}
 	// stop the whole thing
 	for _, node := range nodes {
@@ -1511,41 +1317,33 @@ func TestNodesCanBeRestarted(t *testing.T) {
 	defer func() {
 		require.NoError(t, ldb.Close())
 	}()
-	if len(nodes) != 3 {
-		t.Fatalf("failed to get 3 nodes")
-	}
+	require.Len(t, nodes, 3, "failed to get 3 nodes")
 	stepNodesUntilThereIsLeader(nodes, smList, router)
 	stepNodes(nodes, smList, router, 100)
-	if getMaxLastApplied(smList) < maxLastApplied+5 {
-		t.Errorf("not recovered from snapshot, got %d, marker %d",
-			getMaxLastApplied(smList), maxLastApplied+5)
-	}
+	assert.GreaterOrEqual(t, getMaxLastApplied(smList), maxLastApplied+5,
+		"not recovered from snapshot, got %d, marker %d", getMaxLastApplied(smList), maxLastApplied+5)
 }
 
 func TestGetTimeoutMillisecondFromContext(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	_, err := getTimeoutFromContext(context.Background())
-	if err != ErrDeadlineNotSet {
-		t.Errorf("err %v, want ErrDeadlineNotSet", err)
-	}
+	assert.Equal(t, ErrDeadlineNotSet, err)
+
 	d := time.Now()
 	time.Sleep(100 * time.Millisecond)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
 	_, err = getTimeoutFromContext(ctx)
-	if err != ErrInvalidDeadline {
-		t.Errorf("err %v, want ErrInvalidDeadline", err)
-	}
+	assert.Equal(t, ErrInvalidDeadline, err)
+
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	v, err := getTimeoutFromContext(ctx)
-	if err != nil {
-		t.Errorf("err %v, want nil", err)
-	}
+	require.NoError(t, err)
+
 	timeout := v.Milliseconds()
-	if timeout <= 4500 || timeout > 5000 {
-		t.Errorf("v %d, want [4500,5000]", timeout)
-	}
+	assert.Greater(t, timeout, int64(4500), "v %d, want (4500,5000]", timeout)
+	assert.LessOrEqual(t, timeout, int64(5000), "v %d, want (4500,5000]", timeout)
 }
 
 func TestPayloadTooBig(t *testing.T) {
@@ -1568,13 +1366,9 @@ func TestPayloadTooBig(t *testing.T) {
 			ElectionRTT:     10,
 			MaxInMemLogSize: tt.maxInMemLogSize,
 		}
-		if err := cfg.Validate(); err != nil {
-			t.Fatalf("invalid cfg %v", err)
-		}
+		require.NoError(t, cfg.Validate(), "invalid cfg for test %d", idx)
 		n := node{config: cfg}
-		if n.payloadTooBig(int(tt.payloadSize)) != tt.tooBig {
-			t.Errorf("%d, unexpected too big result %t", idx, tt.tooBig)
-		}
+		assert.Equal(t, tt.tooBig, n.payloadTooBig(int(tt.payloadSize)), "test index %d", idx)
 	}
 }
 
@@ -1594,38 +1388,27 @@ func (d *dummyPipeline) setRecoverReady(shardID uint64) {}
 
 func TestProcessUninitilizedNode(t *testing.T) {
 	n := &node{ss: snapshotState{}, pipeline: &dummyPipeline{}}
-	if !n.processUninitializedNodeStatus() {
-		t.Errorf("failed to returned the recover request")
-	}
-	if !n.ss.recovering() {
-		t.Errorf("not in recovering mode")
-	}
+	assert.True(t, n.processUninitializedNodeStatus(), "failed to return the recover request")
+	assert.True(t, n.ss.recovering(), "not in recovering mode")
+
 	req, ok := n.ss.getRecoverReq()
-	if !ok {
-		t.Fatalf("failed to set recover req")
-	}
-	if !req.Initial || !req.Recover {
-		t.Errorf("unexpected req")
-	}
+	require.True(t, ok, "failed to set recover req")
+	assert.True(t, req.Initial)
+	assert.True(t, req.Recover)
+
 	n2 := &node{ss: snapshotState{}, initializedC: make(chan struct{})}
 	n2.setInitialized()
-	if n2.processUninitializedNodeStatus() {
-		t.Errorf("unexpected recover from snapshot request")
-	}
+	assert.False(t, n2.processUninitializedNodeStatus(), "unexpected recover from snapshot request")
 }
 
 func TestProcessRecoveringNodeCanBeSkipped(t *testing.T) {
 	n := &node{ss: snapshotState{}}
-	if n.processRecoverStatus() {
-		t.Errorf("processRecoveringNode not skipped")
-	}
+	assert.False(t, n.processRecoverStatus(), "processRecoveringNode not skipped")
 }
 
 func TestProcessTakingSnapshotNodeCanBeSkipped(t *testing.T) {
 	n := &node{ss: snapshotState{}}
-	if n.processSaveStatus() {
-		t.Errorf("processTakingSnapshotNode not skipped")
-	}
+	assert.False(t, n.processSaveStatus(), "processTakingSnapshotNode not skipped")
 }
 
 func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
@@ -1636,26 +1419,16 @@ func TestRecoveringFromSnapshotNodeCanComplete(t *testing.T) {
 	}
 	n.ss.setRecovering()
 	n.ss.notifySnapshotStatus(false, true, false, true, 100)
-	if n.processRecoverStatus() {
-		t.Errorf("node unexpectedly skipped")
-	}
-	if n.ss.recovering() {
-		t.Errorf("still recovering")
-	}
-	if !n.initialized() {
-		t.Errorf("not marked as initialized")
-	}
-	if n.ss.snapshotIndex != 100 {
-		t.Errorf("unexpected snapshot index %d, want 100", n.ss.snapshotIndex)
-	}
+	assert.False(t, n.processRecoverStatus(), "node unexpectedly skipped")
+	assert.False(t, n.ss.recovering(), "still recovering")
+	assert.True(t, n.initialized(), "not marked as initialized")
+	assert.Equal(t, uint64(100), n.ss.snapshotIndex, "unexpected snapshot index")
 }
 
 func TestNotReadyRecoveringFromSnapshotNode(t *testing.T) {
 	n := &node{ss: snapshotState{}, sysEvents: newSysEventListener(nil, nil)}
 	n.ss.setRecovering()
-	if !n.processRecoverStatus() {
-		t.Errorf("not skipped")
-	}
+	assert.True(t, n.processRecoverStatus(), "not skipped")
 }
 
 func TestTakingSnapshotNodeCanComplete(t *testing.T) {
@@ -1663,24 +1436,17 @@ func TestTakingSnapshotNodeCanComplete(t *testing.T) {
 	n.ss.setSaving()
 	n.ss.notifySnapshotStatus(true, false, false, false, 0)
 	n.setInitialized()
-	if n.processSaveStatus() {
-		t.Errorf("node unexpectedly skipped")
-	}
-	if n.ss.saving() {
-		t.Errorf("still taking snapshot")
-	}
+	assert.False(t, n.processSaveStatus(), "node unexpectedly skipped")
+	assert.False(t, n.ss.saving(), "still taking snapshot")
 }
 
 func TestTakingSnapshotOnUninitializedNodeWillPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("panic not triggered")
-		}
-	}()
-	n := &node{ss: snapshotState{}}
-	n.ss.setSaving()
-	n.ss.notifySnapshotStatus(true, false, false, false, 0)
-	n.processSaveStatus()
+	require.Panics(t, func() {
+		n := &node{ss: snapshotState{}}
+		n.ss.setSaving()
+		n.ss.notifySnapshotStatus(true, false, false, false, 0)
+		n.processSaveStatus()
+	})
 }
 
 func TestGetCompactionIndex(t *testing.T) {
@@ -1700,18 +1466,19 @@ func TestGetCompactionIndex(t *testing.T) {
 		OverrideCompaction: true,
 		CompactionIndex:    300,
 	}
-	if v, _ := n.getCompactionIndex(req1, 200); v != 77 {
-		t.Errorf("snapshot overhead override not applied")
-	}
-	if v, _ := n.getCompactionIndex(req2, 500); v != 266 {
-		t.Errorf("snapshot overhead override unexpectedly applied")
-	}
-	if v, _ := n.getCompactionIndex(req3, 500); v != 300 {
-		t.Errorf("snapshot index not correctly set")
-	}
-	if v, ok := n.getCompactionIndex(req3, 299); v != 0 || ok {
-		t.Errorf("snapshot index unexpectedly set")
-	}
+
+	v1, _ := n.getCompactionIndex(req1, 200)
+	assert.Equal(t, uint64(77), v1, "snapshot overhead override not applied")
+
+	v2, _ := n.getCompactionIndex(req2, 500)
+	assert.Equal(t, uint64(266), v2, "snapshot overhead override unexpectedly applied")
+
+	v3, _ := n.getCompactionIndex(req3, 500)
+	assert.Equal(t, uint64(300), v3, "snapshot index not correctly set")
+
+	v4, ok := n.getCompactionIndex(req3, 299)
+	assert.False(t, ok)
+	assert.Zero(t, v4, "snapshot index unexpectedly set")
 }
 
 type testDummyNodeProxy struct{}
@@ -1731,14 +1498,11 @@ func TestNotReadyTakingSnapshotNodeIsSkippedWhenConcurrencyIsNotSupported(t *tes
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.InMemStateMachine{}, nil),
 		nil, config, &testDummyNodeProxy{}, fs)
-	if n.concurrentSnapshot() {
-		t.Errorf("concurrency not suppose to be supported")
-	}
+
+	assert.False(t, n.concurrentSnapshot(), "concurrency not suppose to be supported")
 	n.ss.setSaving()
 	n.setInitialized()
-	if !n.processSaveStatus() {
-		t.Fatalf("node not skipped")
-	}
+	require.True(t, n.processSaveStatus(), "node not skipped")
 }
 
 func TestNotReadyTakingSnapshotConcurrentNodeIsNotSkipped(t *testing.T) {
@@ -1748,25 +1512,18 @@ func TestNotReadyTakingSnapshotConcurrentNodeIsNotSkipped(t *testing.T) {
 	n.sm = rsm.NewStateMachine(
 		rsm.NewNativeSM(config, &rsm.ConcurrentStateMachine{}, nil),
 		nil, config, &testDummyNodeProxy{}, fs)
-	if !n.concurrentSnapshot() {
-		t.Errorf("concurrency not supported")
-	}
+
+	assert.True(t, n.concurrentSnapshot(), "concurrency not supported")
 	n.ss.setSaving()
 	n.setInitialized()
-	if n.processSaveStatus() {
-		t.Fatalf("node unexpectedly skipped")
-	}
+	assert.False(t, n.processSaveStatus(), "node unexpectedly skipped")
 }
 
 func TestIsWitnessNode(t *testing.T) {
 	n1 := node{config: config.Config{}}
-	if n1.isWitness() {
-		t.Errorf("not expect to be witness")
-	}
+	assert.False(t, n1.isWitness(), "not expect to be witness")
 	n2 := node{config: config.Config{IsWitness: true}}
-	if !n2.isWitness() {
-		t.Errorf("not reported as witness")
-	}
+	assert.True(t, n2.isWitness(), "not reported as witness")
 }
 
 func TestSaveSnapshotAborted(t *testing.T) {
@@ -1781,48 +1538,40 @@ func TestSaveSnapshotAborted(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		if saveAborted(tt.err) != tt.aborted {
-			t.Errorf("%d, saveSnapshotAborted failed", idx)
-		}
+		assert.Equal(t, tt.aborted, saveAborted(tt.err), "test index %d", idx)
 	}
 }
 
 func TestLogDBMetrics(t *testing.T) {
 	l := logDBMetrics{}
 	l.update(true)
-	if !l.isBusy() {
-		t.Errorf("unexpected value")
-	}
+	assert.True(t, l.isBusy())
 	l.update(false)
-	if l.isBusy() {
-		t.Errorf("unexpected value")
-	}
+	assert.False(t, l.isBusy())
 }
 
 func TestUninitializedNodeNotAllowedToMakeRequests(t *testing.T) {
 	n := node{}
-	if n.initialized() {
-		t.Fatalf("already initialized")
-	}
-	if _, err := n.propose(nil, nil, 1); err != ErrShardNotReady {
-		t.Fatalf("making proposal not rejected")
-	}
-	if _, err := n.proposeSession(nil, 1); err != ErrShardNotReady {
-		t.Fatalf("propose session not rejected")
-	}
-	if _, err := n.read(1); err != ErrShardNotReady {
-		t.Fatalf("read not rejected")
-	}
-	if err := n.requestLeaderTransfer(1); err != ErrShardNotReady {
-		t.Fatalf("leader transfer request not rejected")
-	}
-	if _, err := n.requestSnapshot(SnapshotOption{}, 1); err != ErrShardNotReady {
-		t.Fatalf("snapshot request not rejected")
-	}
-	if _, err := n.requestConfigChange(pb.ConfigChangeType(0),
-		1, "localhost:1", 1, 1); err != ErrShardNotReady {
-		t.Fatalf("config change request not rejected")
-	}
+	require.False(t, n.initialized())
+
+	_, err := n.propose(nil, nil, 1)
+	assert.Equal(t, ErrShardNotReady, err)
+
+	_, err = n.proposeSession(nil, 1)
+	assert.Equal(t, ErrShardNotReady, err)
+
+	_, err = n.read(1)
+	assert.Equal(t, ErrShardNotReady, err)
+
+	err = n.requestLeaderTransfer(1)
+	assert.Equal(t, ErrShardNotReady, err)
+
+	_, err = n.requestSnapshot(SnapshotOption{}, 1)
+	assert.Equal(t, ErrShardNotReady, err)
+
+	_, err = n.requestConfigChange(pb.ConfigChangeType(0),
+		1, "localhost:1", 1, 1)
+	assert.Equal(t, ErrShardNotReady, err)
 }
 
 func TestEntriesToApply(t *testing.T) {
@@ -1834,7 +1583,7 @@ func TestEntriesToApply(t *testing.T) {
 		resultLength uint64
 	}{
 		{1, 5, true, 0, 0},
-		{1, 10, false, 0, 0},
+		{1, 10, true, 0, 0},
 		{1, 11, false, 11, 1},
 		{1, 20, false, 11, 10},
 		{10, 6, false, 11, 5},
@@ -1842,27 +1591,27 @@ func TestEntriesToApply(t *testing.T) {
 		{12, 5, true, 0, 0},
 	}
 	for idx, tt := range tests {
-		func() {
-			defer func() {
-				if r := recover(); r == nil && tt.crash {
-					t.Fatalf("%d, didn't panic", idx)
+		t.Run(fmt.Sprintf("test-%d", idx), func(t *testing.T) {
+			testFunc := func() {
+				inputs := make([]pb.Entry, 0)
+				for i := tt.inputIndex; i < tt.inputIndex+tt.inputLength; i++ {
+					inputs = append(inputs, pb.Entry{Index: i})
 				}
-			}()
-			inputs := make([]pb.Entry, 0)
-			for i := tt.inputIndex; i < tt.inputIndex+tt.inputLength; i++ {
-				inputs = append(inputs, pb.Entry{Index: i})
-			}
-			n := &node{pushedIndex: 10}
-			results := pb.EntriesToApply(inputs, n.pushedIndex, true)
-			if uint64(len(results)) != tt.resultLength {
-				t.Errorf("%d, result len %d, want %d", idx, len(results), tt.resultLength)
-			}
-			if len(results) > 0 {
-				if results[0].Index != tt.resultIndex {
-					t.Errorf("%d, first result index %d, want %d",
-						idx, results[0].Index, tt.resultIndex)
+				n := &node{pushedIndex: 10}
+				results := pb.EntriesToApply(inputs, n.pushedIndex, true)
+
+				assert.Len(t, results, int(tt.resultLength))
+				if len(results) > 0 {
+					assert.Equal(t, tt.resultIndex, results[0].Index)
 				}
 			}
-		}()
+
+			if tt.crash {
+				require.Panics(t, testFunc)
+			} else {
+				require.NotPanics(t, testFunc)
+			}
+		})
 	}
 }
+

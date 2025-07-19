@@ -16,7 +16,6 @@ package dragonboat
 
 import (
 	"crypto/rand"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -54,51 +53,35 @@ func TestIsTempError(t *testing.T) {
 		{ErrInvalidRange, false},
 	}
 	for idx, tt := range tests {
-		if tmp := IsTempError(tt.err); tmp != tt.temp {
-			t.Errorf("%d, IsTempError failed", idx)
-		}
+		assert.Equal(t, tt.temp, IsTempError(tt.err), "test %d", idx)
 	}
 }
 
 func TestRequestCodeName(t *testing.T) {
 	code := requestTimeout
-	if code.String() != "RequestTimeout" {
-		t.Errorf("unexpected request code name")
-	}
+	assert.Equal(t, "RequestTimeout", code.String())
 }
 
 func TestRequestStateCommitted(t *testing.T) {
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("no panic")
-			}
-		}()
+	require.Panics(t, func() {
 		rs := &RequestState{}
 		rs.committed()
-	}()
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("no panic")
-			}
-		}()
+	})
+
+	require.Panics(t, func() {
 		rs := &RequestState{notifyCommit: true}
 		rs.committed()
-	}()
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("no panic")
-			}
-		}()
+	})
+
+	require.Panics(t, func() {
 		rs := &RequestState{
 			notifyCommit: true,
 			committedC:   make(chan RequestResult, 1),
 		}
 		rs.committed()
 		rs.committed()
-	}()
+	})
+
 	rs := &RequestState{
 		notifyCommit: true,
 		committedC:   make(chan RequestResult, 1),
@@ -106,37 +89,30 @@ func TestRequestStateCommitted(t *testing.T) {
 	rs.committed()
 	select {
 	case cc := <-rs.committedC:
-		if cc.code != requestCommitted {
-			t.Errorf("not requestedCommitted")
-		}
+		assert.Equal(t, requestCommitted, cc.code)
 	default:
-		t.Errorf("nothing in the committedC")
+		assert.Fail(t, "nothing in the committedC")
 	}
 }
 
 func TestRequestStateReuse(t *testing.T) {
 	rs := &RequestState{}
 	rs.reuse(false)
-	if rs.CompletedC == nil || cap(rs.CompletedC) != 1 {
-		t.Errorf("completedC not ready")
-	}
-	if rs.committedC != nil {
-		t.Errorf("committedC unexpectedly created")
-	}
+	require.NotNil(t, rs.CompletedC)
+	assert.Equal(t, 1, cap(rs.CompletedC))
+	assert.Nil(t, rs.committedC)
+
 	rs = &RequestState{}
 	rs.reuse(true)
-	if rs.committedC == nil || cap(rs.committedC) != 1 {
-		t.Errorf("committedC not ready")
-	}
+	require.NotNil(t, rs.committedC)
+	assert.Equal(t, 1, cap(rs.committedC))
 }
 
 func TestResultCReturnsCompleteCWhenNotifyCommitNotSet(t *testing.T) {
 	rs := &RequestState{
 		CompletedC: make(chan RequestResult),
 	}
-	if rs.ResultC() != rs.CompletedC {
-		t.Errorf("chan not equal")
-	}
+	assert.Equal(t, rs.CompletedC, rs.ResultC())
 }
 
 func TestResultCPanicWhenCommittedCIsNil(t *testing.T) {
@@ -144,12 +120,7 @@ func TestResultCPanicWhenCommittedCIsNil(t *testing.T) {
 		CompletedC:   make(chan RequestResult),
 		notifyCommit: true,
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("no panic")
-		}
-	}()
-	rs.ResultC()
+	require.Panics(t, func() { rs.ResultC() })
 }
 
 func TestResultCCanReceiveRequestResults(t *testing.T) {
@@ -204,23 +175,16 @@ func TestResultCCanReceiveRequestResults(t *testing.T) {
 			if tt.hasCommittedCResult {
 				select {
 				case cc := <-ch:
-					if cc.code != requestCommitted {
-						t.Errorf("%d, not the expected committed result", idx)
-					}
+					assert.Equal(t, requestCommitted, cc.code, "idx %d", idx)
 				case <-rs.testErr:
 					crashed = true
 					cc := <-ch
-					if cc.code != requestCommitted {
-						t.Errorf("%d, not the expected committed result", idx)
-					}
+					assert.Equal(t, requestCommitted, cc.code, "idx %d", idx)
 				}
 			}
 			select {
 			case cc := <-ch:
-				if cc.code != tt.completedCCode {
-					t.Errorf("%d, unexpected completedC value, got %s, want %s",
-						idx, cc.code, tt.completedCCode)
-				}
+				assert.Equal(t, tt.completedCCode, cc.code, "idx %d", idx)
 				if rs.testErr != nil {
 					<-rs.testErr
 					crashed = true
@@ -228,73 +192,61 @@ func TestResultCCanReceiveRequestResults(t *testing.T) {
 			case <-rs.testErr:
 				crashed = true
 			}
-			if tt.crash && !crashed {
-				t.Errorf("%d, didn't crash", idx)
+			if tt.crash {
+				assert.True(t, crashed, "idx %d", idx)
 			}
-			if ch != rs.ResultC() {
-				t.Errorf("%d, ch changed", idx)
-			}
+			assert.Equal(t, ch, rs.ResultC(), "idx %d", idx)
 		}()
 	}
 }
 
 func TestPendingLeaderTransferCanBeCreated(t *testing.T) {
 	p := newPendingLeaderTransfer()
-	if len(p.leaderTransferC) != 0 || p.leaderTransferC == nil {
-		t.Errorf("leaderTransferC not ready")
-	}
+	require.NotNil(t, p.leaderTransferC)
+	assert.Empty(t, p.leaderTransferC)
 }
 
 func TestLeaderTransferCanBeRequested(t *testing.T) {
 	p := newPendingLeaderTransfer()
-	if err := p.request(1); err != nil {
-		t.Errorf("failed to request leadership transfer %v", err)
-	}
-	if len(p.leaderTransferC) != 1 {
-		t.Errorf("leader transfer not requested")
-	}
+	err := p.request(1)
+	assert.NoError(t, err, "failed to request leadership transfer")
+	assert.Len(t, p.leaderTransferC, 1)
 }
 
 func TestInvalidLeaderTransferIsNotAllowed(t *testing.T) {
 	p := newPendingLeaderTransfer()
-	if err := p.request(0); err != ErrInvalidTarget {
-		t.Errorf("failed to reject invalid target node id")
-	}
-	if err := p.request(1); err != nil {
-		t.Errorf("failed to request %v", err)
-	}
-	if err := p.request(2); err != ErrSystemBusy {
-		t.Errorf("failed to reject")
-	}
+	err := p.request(0)
+	assert.Equal(t, ErrInvalidTarget, err)
+
+	err = p.request(1)
+	assert.NoError(t, err)
+
+	err = p.request(2)
+	assert.Equal(t, ErrSystemBusy, err)
 }
 
 func TestCanGetExitingLeaderTransferRequest(t *testing.T) {
 	p := newPendingLeaderTransfer()
 	_, ok := p.get()
-	if ok {
-		t.Errorf("unexpectedly returned request")
-	}
-	if err := p.request(1); err != nil {
-		t.Errorf("failed to request leadership transfer %v", err)
-	}
+	assert.False(t, ok)
+
+	err := p.request(1)
+	assert.NoError(t, err, "failed to request leadership transfer")
+
 	v, ok := p.get()
-	if !ok || v != 1 {
-		t.Errorf("failed to get request")
-	}
+	assert.True(t, ok)
+	assert.Equal(t, uint64(1), v)
+
 	v, ok = p.get()
-	if ok || v != 0 {
-		t.Errorf("unexpectedly returned request")
-	}
+	assert.False(t, ok)
+	assert.Equal(t, uint64(0), v)
 }
 
 func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	fn := func(rs *RequestState) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatalf("failed to trigger panic")
-			}
-		}()
-		rs.mustBeReadyForLocalRead()
+		require.Panics(t, func() {
+			rs.mustBeReadyForLocalRead()
+		})
 	}
 	r1 := &RequestState{}
 	r2 := &RequestState{node: &node{}}
@@ -306,33 +258,28 @@ func TestRequestStatePanicWhenNotReadyForRead(t *testing.T) {
 	r4 := &RequestState{node: &node{initializedC: make(chan struct{})}}
 	r4.node.setInitialized()
 	r4.readyToRead.set()
-	r4.mustBeReadyForLocalRead()
+	require.NotPanics(t, func() {
+		r4.mustBeReadyForLocalRead()
+	})
 }
 
 func TestPendingSnapshotCanBeCreatedAndClosed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
-	if len(ps.snapshotC) != 0 {
-		t.Errorf("snapshotC not empty")
-	}
-	if ps.pending != nil {
-		t.Errorf("pending not nil")
-	}
+	assert.Empty(t, ps.snapshotC)
+	assert.Nil(t, ps.pending)
+
 	pending := &RequestState{
 		CompletedC: make(chan RequestResult, 1),
 	}
 	ps.pending = pending
 	ps.close()
-	if ps.pending != nil {
-		t.Errorf("pending not cleared")
-	}
+	assert.Nil(t, ps.pending)
 	select {
 	case v := <-pending.ResultC():
-		if !v.Terminated() {
-			t.Errorf("unexpected code")
-		}
+		assert.True(t, v.Terminated())
 	default:
-		t.Errorf("close() didn't set pending to terminated")
+		assert.Fail(t, "close() didn't set pending to terminated")
 	}
 }
 
@@ -340,101 +287,69 @@ func TestPendingSnapshotCanBeRequested(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 10)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-		return
-	}
-	if ps.pending == nil {
-		t.Errorf("pending not set")
-	}
-	if ss.deadline <= ps.getTick() {
-		t.Errorf("deadline not set")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+
+	assert.NotNil(t, ps.pending)
+	assert.True(t, ss.deadline > ps.getTick())
 	select {
 	case <-snapshotC:
 	default:
-		t.Errorf("requested snapshot is not pushed")
+		assert.Fail(t, "requested snapshot is not pushed")
 	}
 }
 
 func TestPendingSnapshotCanReturnBusy(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
-	if _, err := ps.request(rsm.UserRequested, "", false, 0, 0, 10); err != nil {
-		t.Errorf("failed to request snapshot")
-	}
-	if _, err := ps.request(rsm.UserRequested, "", false, 0, 0, 10); err != ErrSystemBusy {
-		t.Errorf("failed to return ErrSystemBusy")
-	}
+	_, err := ps.request(rsm.UserRequested, "", false, 0, 0, 10)
+	assert.NoError(t, err)
+	_, err = ps.request(rsm.UserRequested, "", false, 0, 0, 10)
+	assert.Equal(t, ErrSystemBusy, err)
 }
 
 func TestTooSmallSnapshotTimeoutIsRejected(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 0)
-	if err != ErrTimeoutTooSmall {
-		t.Errorf("request not rejected")
-	}
-	if ss != nil {
-		t.Errorf("returned ss is not nil")
-	}
+	assert.Equal(t, ErrTimeoutTooSmall, err)
+	assert.Nil(t, ss)
 }
 
 func TestMultiplePendingSnapshotIsNotAllowed(t *testing.T) {
 	snapshotC := make(chan<- rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+
 	ss, err = ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != ErrSystemBusy {
-		t.Errorf("request not rejected")
-	}
-	if ss != nil {
-		t.Errorf("returned ss is not nil")
-	}
+	assert.Equal(t, ErrSystemBusy, err)
+	assert.Nil(t, ss)
 }
 
 func TestPendingSnapshotCanBeGCed(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 20)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-	}
-	if ps.pending == nil {
-		t.Errorf("pending not set")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+	assert.NotNil(t, ps.pending)
+
 	for i := uint64(1); i < 22; i++ {
 		ps.tick(i)
 		ps.gc()
-		if ps.pending == nil {
-			t.Errorf("pending cleared")
-		}
+		assert.NotNil(t, ps.pending)
 	}
+
 	ps.tick(uint64(22))
 	ps.gc()
-	if ps.pending != nil {
-		t.Errorf("pending is not cleared")
-	}
+	assert.Nil(t, ps.pending)
 	select {
 	case v := <-ss.ResultC():
-		if !v.Timeout() {
-			t.Errorf("not timeout")
-		}
+		assert.True(t, v.Timeout())
 	default:
-		t.Errorf("not notify as timed out")
+		assert.Fail(t, "not notify as timed out")
 	}
 }
 
@@ -442,24 +357,16 @@ func TestPendingSnapshotCanBeApplied(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+
 	ps.apply(ss.key, false, false, 123)
 	select {
 	case v := <-ss.ResultC():
-		if v.SnapshotIndex() != 123 {
-			t.Errorf("index value not returned")
-		}
-		if !v.Completed() {
-			t.Errorf("not completed")
-		}
+		assert.Equal(t, uint64(123), v.SnapshotIndex())
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("ss is not applied")
+		assert.Fail(t, "ss is not applied")
 	}
 }
 
@@ -467,24 +374,16 @@ func TestPendingSnapshotCanBeIgnored(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+
 	ps.apply(ss.key, true, false, 123)
 	select {
 	case v := <-ss.ResultC():
-		if v.SnapshotIndex() != 0 {
-			t.Errorf("index value incorrectly set")
-		}
-		if !v.Rejected() {
-			t.Errorf("not rejected")
-		}
+		assert.Equal(t, uint64(0), v.SnapshotIndex())
+		assert.True(t, v.Rejected())
 	default:
-		t.Errorf("ss is not applied")
+		assert.Fail(t, "ss is not applied")
 	}
 }
 
@@ -492,24 +391,15 @@ func TestPendingSnapshotIsIdentifiedByTheKey(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != nil {
-		t.Fatalf("failed to request snapshot")
-		return
-	}
-	if ss == nil {
-		t.Fatalf("nil ss returned")
-		return
-	}
-	if ps.pending == nil {
-		t.Fatalf("pending not set")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+	require.NotNil(t, ps.pending)
+
 	ps.apply(ss.key+1, false, false, 123)
-	if ps.pending == nil {
-		t.Errorf("pending unexpectedly cleared")
-	}
+	assert.NotNil(t, ps.pending)
 	select {
 	case <-ss.ResultC():
-		t.Fatalf("unexpectedly notified")
+		assert.Fail(t, "unexpectedly notified")
 	default:
 	}
 }
@@ -519,28 +409,22 @@ func TestSnapshotCanNotBeRequestedAfterClose(t *testing.T) {
 	ps := newPendingSnapshot(snapshotC)
 	ps.close()
 	ss, err := ps.request(rsm.UserRequested, "", false, 0, 0, 100)
-	if err != ErrShardClosed {
-		t.Errorf("not report as closed")
-	}
-	if ss != nil {
-		t.Errorf("snapshot state returned")
-	}
+	assert.Equal(t, ErrShardClosed, err)
+	assert.Nil(t, ss)
 }
 
 func TestCompactionOverheadDetailsIsRecorded(t *testing.T) {
 	snapshotC := make(chan rsm.SSRequest, 1)
 	ps := newPendingSnapshot(snapshotC)
 	_, err := ps.request(rsm.UserRequested, "", true, 123, 0, 100)
-	if err != nil {
-		t.Errorf("failed to request snapshot")
-	}
+	assert.NoError(t, err)
+
 	select {
 	case req := <-snapshotC:
-		if !req.OverrideCompaction || req.CompactionOverhead != 123 {
-			t.Errorf("compaction details not recorded")
-		}
+		assert.True(t, req.OverrideCompaction)
+		assert.Equal(t, uint64(123), req.CompactionOverhead)
 	default:
-		t.Errorf("snapshot request not available")
+		assert.Fail(t, "snapshot request not available")
 	}
 }
 
@@ -564,22 +448,16 @@ func TestRequestStateRelease(t *testing.T) {
 	rs.readyToRelease.set()
 	exp := RequestState{pool: rs.pool}
 	rs.Release()
-	if !reflect.DeepEqual(&exp, &rs) {
-		t.Errorf("unexpected state, got %+v, want %+v", rs, exp)
-	}
+	assert.Equal(t, exp, rs)
 }
 
 func TestRequestStateSetToReadyToReleaseOnceNotified(t *testing.T) {
 	rs := RequestState{
 		CompletedC: make(chan RequestResult, 1),
 	}
-	if rs.readyToRelease.ready() {
-		t.Errorf("already ready?")
-	}
+	assert.False(t, rs.readyToRelease.ready())
 	rs.notify(RequestResult{})
-	if !rs.readyToRelease.ready() {
-		t.Errorf("failed to set ready to release to ready")
-	}
+	assert.True(t, rs.readyToRelease.ready())
 }
 
 func TestReleasingNotReadyRequestStateWillBeIgnored(t *testing.T) {
@@ -592,81 +470,65 @@ func TestReleasingNotReadyRequestStateWillBeIgnored(t *testing.T) {
 		node:        &node{},
 		pool:        &sync.Pool{},
 	}
+	rsBefore := rs
 	rs.Release()
-	if rs.key != 100 || rs.deadline != 500 {
-		t.Fatalf("unexpectedly released")
-	}
+	assert.Equal(t, rsBefore, rs)
 }
 
 func TestPendingConfigChangeCanBeCreatedAndClosed(t *testing.T) {
 	pcc, c := getPendingConfigChange(false)
 	select {
 	case <-c:
-		t.Errorf("unexpected content in confChangeC")
+		assert.Fail(t, "unexpected content in confChangeC")
 	default:
 	}
+
 	pcc.close()
 	select {
 	case _, ok := <-c:
-		if ok {
-			t.Errorf("suppose to be closed")
-		}
+		assert.False(t, ok, "channel should be closed")
 	default:
-		t.Errorf("missing closed signal")
+		assert.Fail(t, "missing closed signal")
 	}
 }
 
 func TestCanNotMakeRequestOnClosedPendingConfigChange(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	pcc.close()
-	if _, err := pcc.request(pb.ConfigChange{}, 100); err != ErrShardClosed {
-		t.Errorf("failed to return ErrShardClosed, %v", err)
-	}
+	_, err := pcc.request(pb.ConfigChange{}, 100)
+	assert.Equal(t, ErrShardClosed, err)
 }
 
 func TestConfigChangeCanBeRequested(t *testing.T) {
 	pcc, c := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
-	if rs == nil {
-		t.Errorf("returned rs is nil")
-	}
-	if pcc.pending == nil {
-		t.Errorf("request not internally recorded")
-	}
-	if len(c) != 1 {
-		t.Errorf("len(c) = %d, want 1", len(c))
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, rs)
+	assert.NotNil(t, pcc.pending)
+	assert.Len(t, c, 1)
+
 	_, err = pcc.request(cc, 100)
-	if err == nil {
-		t.Errorf("not expect to be success")
-	}
-	if err != ErrSystemBusy {
-		t.Errorf("expected ErrSystemBusy, %v", err)
-	}
+	assert.Error(t, err)
+	assert.Equal(t, ErrSystemBusy, err)
+
 	pcc.close()
 	select {
 	case v := <-rs.ResultC():
-		if !v.Terminated() {
-			t.Errorf("returned %v, want %d", v, requestTerminated)
-		}
+		assert.True(t, v.Terminated())
 	default:
-		t.Errorf("expect to return something")
+		assert.Fail(t, "expect to return something")
 	}
 }
 
 func TestPendingConfigChangeCanReturnBusy(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
-	if _, err := pcc.request(cc, 100); err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
-	if _, err := pcc.request(cc, 100); err != ErrSystemBusy {
-		t.Errorf("failed to return busy: %v", err)
-	}
+	_, err := pcc.request(cc, 100)
+	assert.NoError(t, err)
+
+	_, err = pcc.request(cc, 100)
+	assert.Equal(t, ErrSystemBusy, err)
 }
 
 func TestConfigChangeCanExpire(t *testing.T) {
@@ -674,31 +536,28 @@ func TestConfigChangeCanExpire(t *testing.T) {
 	var cc pb.ConfigChange
 	tickCount := uint64(100)
 	rs, err := pcc.request(cc, tickCount)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
+
 	for i := uint64(0); i < tickCount; i++ {
 		pcc.tick(i)
 		pcc.gc()
 	}
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to has anything at this stage")
+		assert.Fail(t, "not suppose to has anything at this stage")
 	default:
 	}
+
 	for i := uint64(0); i < defaultGCTick+1; i++ {
 		pcc.tick(i + tickCount)
 		pcc.gc()
 	}
 	select {
 	case v, ok := <-rs.ResultC():
-		if ok {
-			if !v.Timeout() {
-				t.Errorf("v: %v, expect %d", v, requestTimeout)
-			}
-		}
+		assert.True(t, ok)
+		assert.True(t, v.Timeout())
 	default:
-		t.Errorf("expect to be expired")
+		assert.Fail(t, "expect to be expired")
 	}
 }
 
@@ -706,14 +565,12 @@ func TestCommittedConfigChangeRequestCanBeNotified(t *testing.T) {
 	pcc, _ := getPendingConfigChange(true)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
 	pcc.committed(rs.key)
 	select {
 	case <-rs.committedC:
 	default:
-		t.Fatalf("committedC not signalled")
+		assert.Fail(t, "committedC not signalled")
 	}
 }
 
@@ -721,98 +578,86 @@ func TestCompletedConfigChangeRequestCanBeNotified(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything yet")
+		assert.Fail(t, "not suppose to return anything yet")
 	default:
 	}
+
 	pcc.apply(rs.key, false)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("returned %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("suppose to return something")
+		assert.Fail(t, "suppose to return something")
 	}
-	if pcc.pending != nil {
-		t.Errorf("pending rec not cleared")
-	}
+	assert.Nil(t, pcc.pending)
 }
 
 func TestConfigChangeRequestCanNotBeNotifiedWithDifferentKey(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything yet")
+		assert.Fail(t, "not suppose to return anything yet")
 	default:
 	}
+
 	pcc.apply(rs.key+1, false)
 	select {
 	case <-rs.ResultC():
-		t.Errorf("unexpectedly notified")
+		assert.Fail(t, "unexpectedly notified")
 	default:
 	}
-	if pcc.pending == nil {
-		t.Errorf("pending rec unexpectedly cleared")
-	}
+	assert.NotNil(t, pcc.pending)
 }
 
 func TestConfigChangeCanBeDropped(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything yet")
+		assert.Fail(t, "not suppose to return anything yet")
 	default:
 	}
+
 	pcc.dropped(rs.key)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Dropped() {
-			t.Errorf("Dropped() is false")
-		}
+		assert.True(t, v.Dropped())
 	default:
-		t.Errorf("not dropped")
+		assert.Fail(t, "not dropped")
 	}
-	if pcc.pending != nil {
-		t.Errorf("pending rec not cleared")
-	}
+	assert.Nil(t, pcc.pending)
 }
 
 func TestConfigChangeWithDifferentKeyWillNotBeDropped(t *testing.T) {
 	pcc, _ := getPendingConfigChange(false)
 	var cc pb.ConfigChange
 	rs, err := pcc.request(cc, 100)
-	if err != nil {
-		t.Errorf("RequestConfigChange failed: %v", err)
-	}
+	assert.NoError(t, err)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything yet")
+		assert.Fail(t, "not suppose to return anything yet")
 	default:
 	}
+
 	pcc.dropped(rs.key + 1)
 	select {
 	case <-rs.ResultC():
-		t.Errorf("CompletedC unexpectedly set")
+		assert.Fail(t, "CompletedC unexpectedly set")
 	default:
 	}
-	if pcc.pending == nil {
-		t.Errorf("pending rec unexpectedly cleared")
-	}
+	assert.NotNil(t, pcc.pending)
 }
 
 //
@@ -841,13 +686,9 @@ func getBlankTestSession() *client.Session {
 
 func TestPendingProposalCanBeCreatedAndClosed(t *testing.T) {
 	pp, c := getPendingProposal(false)
-	if len(c.get(false)) > 0 {
-		t.Errorf("unexpected item in entry queue")
-	}
+	assert.Empty(t, c.get(false))
 	pp.close()
-	if !c.stopped {
-		t.Errorf("entry queue not closed")
-	}
+	assert.True(t, c.stopped)
 }
 
 func countPendingProposal(p pendingProposal) int {
@@ -858,60 +699,27 @@ func countPendingProposal(p pendingProposal) int {
 	return total
 }
 
-// TODO:
-// the test below uses at least 8GBs RAM, move it to a more suitable place
-// and re-enable it
-
-/*
-func TestLargeProposalCanBeProposed(t *testing.T) {
-	pp, _ := getPendingProposal()
-	data := make([]byte, 8*1024*1024*1024)
-	_, err := pp.propose(getBlankTestSession(), data, nil, time.Second)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
-	pp, _ = getPendingProposal()
-	for idx := range pp.shards {
-		pp.shards[idx].cfg = config.Config{EntryCompressionType: config.Snappy}
-	}
-	data = make([]byte, 6*(0xffffffff-32)/7)
-	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
-	data = make([]byte, 6*(0xffffffff-32)/7+1)
-	_, err = pp.propose(getBlankTestSession(), data, nil, time.Second)
-	if err != ErrPayloadTooBig {
-		t.Errorf("failed to return the expected error, %v", err)
-	}
-}*/
-
 func TestProposalCanBeProposed(t *testing.T) {
 	pp, c := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
-	if countPendingProposal(pp) != 1 {
-		t.Errorf("len(pending)=%d, want 1", countPendingProposal(pp))
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 1, countPendingProposal(pp))
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to have anything completed")
+		assert.Fail(t, "not suppose to have anything completed")
 	default:
 	}
+
 	q := c.get(false)
-	if len(q) != 1 {
-		t.Errorf("len(c)=%d, want 1", len(q))
-	}
+	assert.Len(t, q, 1)
 	pp.close()
+
 	select {
 	case v := <-rs.ResultC():
-		if !v.Terminated() {
-			t.Errorf("get %v, want %d", v, requestTerminated)
-		}
+		assert.True(t, v.Terminated())
 	default:
-		t.Errorf("suppose to return terminated")
+		assert.Fail(t, "suppose to return terminated")
 	}
 }
 
@@ -919,68 +727,55 @@ func TestProposeOnClosedPendingProposalReturnError(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	pp.close()
 	_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != ErrShardClosed {
-		t.Errorf("unexpected err %v", err)
-	}
+	assert.Equal(t, ErrShardClosed, err)
 }
 
 func TestProposalCanBeCompleted(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
 	pp.applied(rs.clientID, rs.seriesID, rs.key+1, sm.Result{}, false)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("unexpected applied proposal with invalid client ID")
+		assert.Fail(t, "unexpected applied proposal with invalid client ID")
 	default:
 	}
-	if countPendingProposal(pp) == 0 {
-		t.Errorf("pending is empty")
-	}
+	assert.NotZero(t, countPendingProposal(pp))
+
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("get %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("expect to get complete signal")
+		assert.Fail(t, "expect to get complete signal")
 	}
-	if countPendingProposal(pp) != 0 {
-		t.Errorf("pending is not empty")
-	}
+	assert.Zero(t, countPendingProposal(pp))
 }
 
 func TestProposalCanBeDropped(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	pp.dropped(rs.clientID, rs.seriesID, rs.key)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Dropped() {
-			t.Errorf("not dropped")
-		}
+		assert.True(t, v.Dropped())
 	default:
-		t.Errorf("not notified")
+		assert.Fail(t, "not notified")
 	}
+
 	for _, shard := range pp.shards {
-		if len(shard.pending) > 0 {
-			t.Errorf("pending request not cleared")
-		}
+		assert.Empty(t, shard.pending)
 	}
 }
 
 func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	result := sm.Result{
 		Value: 1234,
 		Data:  make([]byte, 128),
@@ -988,147 +783,122 @@ func TestProposalResultCanBeObtainedByCaller(t *testing.T) {
 	_, err = rand.Read(result.Data)
 	require.NoError(t, err)
 	pp.applied(rs.clientID, rs.seriesID, rs.key, result, false)
+
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("get %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 		r := v.GetResult()
-		if !reflect.DeepEqual(&r, &result) {
-			t.Errorf("result changed")
-		}
+		assert.Equal(t, result, r)
 	default:
-		t.Errorf("expect to get complete signal")
+		assert.Fail(t, "expect to get complete signal")
 	}
 }
 
 func TestClientIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	pp.applied(rs.clientID+1, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case <-rs.ResultC():
-		t.Errorf("unexpected applied proposal with invalid client ID")
+		assert.Fail(t, "unexpected applied proposal with invalid client ID")
 	default:
 	}
-	if countPendingProposal(pp) == 0 {
-		t.Errorf("pending is empty")
-	}
+	assert.NotZero(t, countPendingProposal(pp))
+
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("get %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("expect to get complete signal")
+		assert.Fail(t, "expect to get complete signal")
 	}
-	if countPendingProposal(pp) != 0 {
-		t.Errorf("pending is not empty")
-	}
+	assert.Zero(t, countPendingProposal(pp))
 }
 
 func TestSeriesIDIsCheckedWhenApplyingProposal(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	pp.applied(rs.clientID, rs.seriesID+1, rs.key, sm.Result{}, false)
 	select {
 	case <-rs.ResultC():
-		t.Errorf("unexpected applied proposal with invalid client ID")
+		assert.Fail(t, "unexpected applied proposal with invalid client ID")
 	default:
 	}
-	if countPendingProposal(pp) == 0 {
-		t.Errorf("pending is empty")
-	}
+	assert.NotZero(t, countPendingProposal(pp))
+
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("get %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("expect to get complete signal")
+		assert.Fail(t, "expect to get complete signal")
 	}
-	if countPendingProposal(pp) != 0 {
-		t.Errorf("pending is not empty")
-	}
+	assert.Zero(t, countPendingProposal(pp))
 }
 
 func TestProposalCanBeCommitted(t *testing.T) {
 	pp, _ := getPendingProposal(true)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	pp.committed(rs.clientID, rs.seriesID, rs.key)
 	select {
 	case <-rs.committedC:
 	default:
-		t.Errorf("not committed")
+		assert.Fail(t, "not committed")
 	}
-	if countPendingProposal(pp) == 0 {
-		t.Errorf("pending is empty")
-	}
+	assert.NotZero(t, countPendingProposal(pp))
+
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{}, false)
 	select {
 	case v := <-rs.AppliedC():
-		if !v.Completed() {
-			t.Errorf("get %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("expect to get complete signal")
+		assert.Fail(t, "expect to get complete signal")
 	}
-	if countPendingProposal(pp) != 0 {
-		t.Errorf("pending is not empty")
-	}
+	assert.Zero(t, countPendingProposal(pp))
 }
 
 func TestProposalCanBeExpired(t *testing.T) {
 	pp, _ := getPendingProposal(false)
 	tickCount := uint64(100)
 	rs, err := pp.propose(getBlankTestSession(), []byte("test data"), tickCount)
-	if err != nil {
-		t.Errorf("failed to make proposal, %v", err)
-	}
+	require.NoError(t, err)
+
 	for i := uint64(0); i < tickCount; i++ {
 		pp.tick(i)
 		pp.gc()
 	}
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything")
+		assert.Fail(t, "not suppose to return anything")
 	default:
 	}
+
 	for i := uint64(0); i < defaultGCTick+1; i++ {
 		pp.tick(i + tickCount)
 		pp.gc()
 	}
 	select {
 	case v := <-rs.ResultC():
-		if !v.Timeout() {
-			t.Errorf("got %v, want %d", v, requestTimeout)
-		}
+		assert.True(t, v.Timeout())
 	default:
+		assert.Fail(t, "result channel is empty")
 	}
-	if countPendingProposal(pp) != 0 {
-		t.Errorf("pending/keys is not empty")
-	}
+	assert.Zero(t, countPendingProposal(pp))
 }
 
 func TestProposalErrorsAreReported(t *testing.T) {
 	pp, c := getPendingProposal(false)
 	for i := 0; i < 5; i++ {
 		_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-		if err != nil {
-			t.Errorf("propose failed")
-		}
+		assert.NoError(t, err)
 	}
+
 	var cq []pb.Entry
 	if c.leftInWrite {
 		cq = c.left
@@ -1136,18 +906,16 @@ func TestProposalErrorsAreReported(t *testing.T) {
 		cq = c.right
 	}
 	sz := len(cq)
+
 	_, err := pp.propose(getBlankTestSession(), []byte("test data"), 100)
-	if err != ErrSystemBusy {
-		t.Errorf("suppose to return ErrSystemBusy")
-	}
+	assert.Equal(t, ErrSystemBusy, err)
+
 	if c.leftInWrite {
 		cq = c.left
 	} else {
 		cq = c.right
 	}
-	if len(cq) != sz {
-		t.Errorf("len(c)=%d, want %d", len(cq), sz)
-	}
+	assert.Len(t, cq, sz)
 }
 
 func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
@@ -1160,16 +928,18 @@ func TestClosePendingProposalIgnoresStepEngineActivities(t *testing.T) {
 	rs, _ := pp.propose(session, nil, 100)
 	select {
 	case <-rs.ResultC():
-		t.Fatalf("completedC is already signalled")
+		require.FailNow(t, "completedC is already signalled")
 	default:
 	}
+
 	for i := uint64(0); i < pp.ps; i++ {
 		pp.shards[i].stopped = true
 	}
 	pp.applied(rs.clientID, rs.seriesID, rs.key, sm.Result{Value: 1}, false)
+
 	select {
 	case <-rs.ResultC():
-		t.Fatalf("completedC unexpectedly signaled")
+		require.FailNow(t, "completedC unexpectedly signaled")
 	default:
 	}
 }
@@ -1188,57 +958,45 @@ func getPendingReadIndex() (pendingReadIndex, *readIndexQueue) {
 
 func TestPendingReadIndexCanBeCreatedAndClosed(t *testing.T) {
 	pp, c := getPendingReadIndex()
-	if len(c.get()) > 0 {
-		t.Errorf("unexpected content")
-	}
+	assert.Empty(t, c.get())
 	pp.close()
-	if !c.stopped {
-		t.Errorf("not closed")
-	}
+	assert.True(t, c.stopped)
 }
 
 func TestCanNotMakeRequestOnClosedPendingReadIndex(t *testing.T) {
 	pp, _ := getPendingReadIndex()
 	pp.close()
-	if _, err := pp.read(100); err != ErrShardClosed {
-		t.Errorf("failed to return ErrShardClosed %v", err)
-	}
+	_, err := pp.read(100)
+	assert.Equal(t, ErrShardClosed, err)
 }
 
 func TestPendingReadIndexCanRead(t *testing.T) {
 	pp, c := getPendingReadIndex()
 	rs, err := pp.read(100)
-	if err != nil {
-		t.Errorf("failed to do read")
-	}
+	require.NoError(t, err)
+
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not suppose to return anything")
+		assert.Fail(t, "not suppose to return anything")
 	default:
 	}
+
 	var q []*RequestState
 	if c.leftInWrite {
 		q = c.left[:c.idx]
 	} else {
 		q = c.right[:c.idx]
 	}
-	if len(q) != 1 {
-		t.Errorf("read request not sent")
-	}
-	if pp.requests.pendingSize() != 1 {
-		t.Errorf("req not recorded in temp")
-	}
-	if len(pp.batches) != 0 {
-		t.Errorf("pending is expected to be empty")
-	}
+	assert.Len(t, q, 1)
+	assert.Equal(t, uint64(1), pp.requests.pendingSize())
+	assert.Empty(t, pp.batches)
+
 	pp.close()
 	select {
 	case v := <-rs.ResultC():
-		if !v.Terminated() {
-			t.Errorf("got %v, want %d", v, requestTerminated)
-		}
+		assert.True(t, v.Terminated())
 	default:
-		t.Errorf("not expected to be signaled")
+		assert.Fail(t, "not expected to be signaled")
 	}
 }
 
@@ -1246,11 +1004,10 @@ func TestPendingReadIndexCanReturnBusy(t *testing.T) {
 	pri, _ := getPendingReadIndex()
 	for i := 0; i < 6; i++ {
 		_, err := pri.read(100)
-		if i != 5 && err != nil {
-			t.Errorf("failed to do read")
-		}
-		if i == 5 && err != ErrSystemBusy {
-			t.Errorf("failed to return ErrSystemBusy")
+		if i < 5 {
+			assert.NoError(t, err)
+		} else {
+			assert.Equal(t, ErrSystemBusy, err)
 		}
 	}
 }
@@ -1258,9 +1015,8 @@ func TestPendingReadIndexCanReturnBusy(t *testing.T) {
 func TestPendingReadIndexCanComplete(t *testing.T) {
 	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
-	if err != nil {
-		t.Errorf("failed to do read")
-	}
+	require.NoError(t, err)
+
 	s := pp.nextCtx()
 	pp.add(s, []*RequestState{rs})
 	readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
@@ -1268,79 +1024,64 @@ func TestPendingReadIndexCanComplete(t *testing.T) {
 	pp.applied(499)
 	select {
 	case <-rs.ResultC():
-		t.Errorf("not expected to be signaled")
+		assert.Fail(t, "not expected to be signaled")
 	default:
 	}
-	if rs.readyToRead.ready() {
-		t.Errorf("ready is already set")
-	}
+	assert.False(t, rs.readyToRead.ready())
+
 	pp.applied(500)
-	if !rs.readyToRead.ready() {
-		t.Errorf("ready not set")
-	}
+	assert.True(t, rs.readyToRead.ready())
 	select {
 	case v := <-rs.ResultC():
-		if !v.Completed() {
-			t.Errorf("got %v, want %d", v, requestCompleted)
-		}
+		assert.True(t, v.Completed())
 	default:
-		t.Errorf("expect to complete")
+		assert.Fail(t, "expect to complete")
 	}
-	if len(pp.batches) != 0 {
-		t.Errorf("leaking records")
-	}
+	assert.Empty(t, pp.batches)
 }
 
 func TestPendingReadIndexCanBeDropped(t *testing.T) {
 	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
-	if err != nil {
-		t.Errorf("failed to do read")
-	}
+	require.NoError(t, err)
+
 	s := pp.nextCtx()
 	pp.add(s, []*RequestState{rs})
 	pp.dropped(s)
 	select {
 	case v := <-rs.ResultC():
-		if !v.Dropped() {
-			t.Errorf("got %v, want %d", v, requestDropped)
-		}
+		assert.True(t, v.Dropped())
 	default:
-		t.Errorf("expect to complete")
+		assert.Fail(t, "expect to complete")
 	}
-	if len(pp.batches) > 0 {
-		t.Errorf("not cleared")
-	}
+	assert.Empty(t, pp.batches)
 }
 
 func testPendingReadIndexCanExpire(t *testing.T, addReady bool) {
 	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(100)
-	if err != nil {
-		t.Errorf("failed to do read")
-	}
+	require.NoError(t, err)
+
 	s := pp.nextCtx()
 	pp.add(s, []*RequestState{rs})
 	if addReady {
 		readState := pb.ReadyToRead{Index: 500, SystemCtx: s}
 		pp.addReady([]pb.ReadyToRead{readState})
 	}
+
 	tickToWait := 100 + defaultGCTick + 1
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick(i)
 		pp.applied(499)
 	}
+
 	select {
 	case v := <-rs.ResultC():
-		if !v.Timeout() {
-			t.Errorf("got %v, want %d", v, requestTimeout)
-		}
+		assert.True(t, v.Timeout())
 	default:
-		t.Errorf("expect to complete")
+		assert.Fail(t, "expect to complete")
 	}
-	if len(pp.batches) != 0 {
-		t.Errorf("leaking records")
-	}
+	assert.Empty(t, pp.batches)
 }
 
 func TestPendingReadIndexCanExpire(t *testing.T) {
@@ -1354,22 +1095,18 @@ func TestPendingReadIndexCanExpireWithoutCallingAddReady(t *testing.T) {
 func TestNonEmptyReadBatchIsNeverExpired(t *testing.T) {
 	pp, _ := getPendingReadIndex()
 	rs, err := pp.read(10000)
-	if err != nil {
-		t.Errorf("failed to do read")
-	}
+	require.NoError(t, err)
+
 	s := pp.nextCtx()
 	pp.add(s, []*RequestState{rs})
-	if len(pp.batches) != 1 {
-		t.Fatalf("unexpected batch count")
-	}
+	require.Len(t, pp.batches, 1)
+
 	tickToWait := defaultGCTick * 10
 	for i := uint64(0); i < tickToWait; i++ {
 		pp.tick(i)
 		pp.applied(499)
 	}
-	if len(pp.batches) == 0 {
-		t.Fatalf("unexpectedly removed batch")
-	}
+	assert.Len(t, pp.batches, 1)
 }
 
 func TestProposalAllocationCount(t *testing.T) {
@@ -1390,9 +1127,7 @@ func TestProposalAllocationCount(t *testing.T) {
 	ac := testing.AllocsPerRun(10000, func() {
 		v := atomic.AddUint32(&total, 1)
 		rs, err := pp.propose(session, data, 100)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
+		require.NoError(t, err)
 		if v%128 == 0 {
 			atomic.StoreUint32(&total, 0)
 			q.get(false)
@@ -1401,9 +1136,7 @@ func TestProposalAllocationCount(t *testing.T) {
 		rs.readyToRelease.set()
 		rs.Release()
 	})
-	if ac > 1 {
-		t.Fatalf("ac %f, want <=1", ac)
-	}
+	assert.LessOrEqual(t, ac, float64(1))
 }
 
 func TestReadIndexAllocationCount(t *testing.T) {
@@ -1420,9 +1153,7 @@ func TestReadIndexAllocationCount(t *testing.T) {
 	ac := testing.AllocsPerRun(10000, func() {
 		v := atomic.AddUint32(&total, 1)
 		rs, err := pri.read(100)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
+		require.NoError(t, err)
 		if v%128 == 0 {
 			atomic.StoreUint32(&total, 0)
 			q.get()
@@ -1430,9 +1161,7 @@ func TestReadIndexAllocationCount(t *testing.T) {
 		rs.readyToRelease.set()
 		rs.Release()
 	})
-	if ac != 0 {
-		t.Fatalf("ac %f, want 0", ac)
-	}
+	assert.Equal(t, float64(0), ac)
 }
 
 func TestPendingRaftLogQueryCanBeCreated(t *testing.T) {
@@ -1443,15 +1172,15 @@ func TestPendingRaftLogQueryCanBeCreated(t *testing.T) {
 func TestPendingRaftLogQueryCanBeClosed(t *testing.T) {
 	p := newPendingRaftLogQuery()
 	rs, err := p.add(100, 200, 300)
-	assert.NoError(t, err)
-	assert.NotNil(t, p.mu.pending)
+	require.NoError(t, err)
+	require.NotNil(t, p.mu.pending)
 	p.close()
 	assert.Nil(t, p.mu.pending)
 	select {
 	case v := <-rs.CompletedC:
 		assert.True(t, v.Terminated())
 	default:
-		t.Fatalf("not terminated")
+		assert.Fail(t, "not terminated")
 	}
 }
 
@@ -1460,11 +1189,14 @@ func TestPendingRaftLogQueryCanAddRequest(t *testing.T) {
 	rs, err := p.add(100, 200, 300)
 	assert.NotNil(t, rs)
 	assert.NoError(t, err)
+
 	rs, err = p.add(200, 200, 300)
 	assert.Equal(t, ErrSystemBusy, err)
 	assert.Nil(t, rs)
+
 	assert.NotNil(t, p.mu.pending)
-	assert.Equal(t, LogRange{FirstIndex: 100, LastIndex: 200}, p.mu.pending.logRange)
+	expectedRange := LogRange{FirstIndex: 100, LastIndex: 200}
+	assert.Equal(t, expectedRange, p.mu.pending.logRange)
 	assert.Equal(t, uint64(300), p.mu.pending.maxSize)
 	assert.NotNil(t, p.mu.pending.CompletedC)
 }
@@ -1472,30 +1204,32 @@ func TestPendingRaftLogQueryCanAddRequest(t *testing.T) {
 func TestPendingRaftLogQueryGet(t *testing.T) {
 	p := newPendingRaftLogQuery()
 	assert.Nil(t, p.get())
+
 	rs, err := p.add(100, 200, 300)
-	assert.NoError(t, err)
-	assert.NotNil(t, p.mu.pending)
+	require.NoError(t, err)
+	require.NotNil(t, p.mu.pending)
+
 	result := p.get()
 	assert.Equal(t, rs, result)
-	assert.Equal(t, LogRange{FirstIndex: 100, LastIndex: 200}, result.logRange)
+	expectedRange := LogRange{FirstIndex: 100, LastIndex: 200}
+	assert.Equal(t, expectedRange, result.logRange)
 	assert.Equal(t, uint64(300), result.maxSize)
 	assert.NotNil(t, result.CompletedC)
 }
 
-func TestPendingRaftLogQueryGetWhenReturnedIsCalledWithoutPendingRequest(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("failed to panic")
-		}
-	}()
-	p := newPendingRaftLogQuery()
-	p.returned(false, LogRange{}, nil)
+func TestPendingRaftLogQueryGetWhenReturnedIsCalledWithoutPendingRequest(
+	t *testing.T,
+) {
+	require.Panics(t, func() {
+		p := newPendingRaftLogQuery()
+		p.returned(false, LogRange{}, nil)
+	})
 }
 
 func TestPendingRaftLogQueryCanReturnOutOfRangeError(t *testing.T) {
 	p := newPendingRaftLogQuery()
 	rs, err := p.add(100, 200, 300)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	lr := LogRange{FirstIndex: 150, LastIndex: 200}
 	p.returned(true, lr, nil)
 	select {
@@ -1504,14 +1238,14 @@ func TestPendingRaftLogQueryCanReturnOutOfRangeError(t *testing.T) {
 		_, rrl := v.RaftLogs()
 		assert.Equal(t, lr, rrl)
 	default:
-		t.Fatalf("no result available")
+		assert.Fail(t, "no result available")
 	}
 }
 
 func TestPendingRaftLogQueryCanReturnResults(t *testing.T) {
 	p := newPendingRaftLogQuery()
 	rs, err := p.add(100, 200, 300)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	entries := []pb.Entry{{Index: 1}, {Index: 2}}
 	lr := LogRange{FirstIndex: 100, LastIndex: 180}
 	p.returned(false, lr, entries)
@@ -1522,6 +1256,6 @@ func TestPendingRaftLogQueryCanReturnResults(t *testing.T) {
 		assert.Equal(t, lr, rrl)
 		assert.Equal(t, entries, rentries)
 	default:
-		t.Fatalf("no result available")
+		assert.Fail(t, "no result available")
 	}
 }
