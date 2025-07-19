@@ -33,58 +33,41 @@ func (wc) Close() error { return nil }
 func TestCountedWriterCountsWrittenBytes(t *testing.T) {
 	w := NewCountedWriter(&wc{})
 	n, err := w.Write(make([]byte, 128))
-	if n != 128 || err != nil {
-		t.Errorf("write failed")
-	}
+	require.Equal(t, 128, n)
+	require.NoError(t, err)
 	n, err = w.Write(make([]byte, 1))
-	if n != 1 || err != nil {
-		t.Errorf("write failed")
-	}
-	if err := w.Close(); err != nil {
-		t.Errorf("close failed, %v", err)
-	}
-	if w.BytesWritten() != 129 {
-		t.Errorf("failed to report count")
-	}
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	require.Equal(t, uint64(129), w.BytesWritten())
 }
 
 func TestCountedWriteMustBeClosedFirst(t *testing.T) {
 	w := NewCountedWriter(&wc{})
 	n, err := w.Write(make([]byte, 128))
-	if n != 128 || err != nil {
-		t.Errorf("write failed")
-	}
+	require.Equal(t, 128, n)
+	require.NoError(t, err)
 	n, err = w.Write(make([]byte, 1))
-	if n != 1 || err != nil {
-		t.Errorf("write failed")
-	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("no panic")
-		}
-	}()
-	_ = w.BytesWritten()
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	require.Panics(t, func() {
+		_ = w.BytesWritten()
+	})
 }
 
 func TestSnappyBlockCompression(t *testing.T) {
 	for i := 1; i <= 512; i++ {
 		src := make([]byte, i*1024)
 		sz, ok := MaxEncodedLen(Snappy, uint64(i*1024))
-		if !ok {
-			t.Fatalf("failed to get encoded len")
-		}
+		require.True(t, ok, "failed to get encoded len")
 		dst := make([]byte, sz)
 		_, err := rand.Read(src)
 		require.NoError(t, err)
 		n := CompressSnappyBlock(src, dst)
 		decompressed := make([]byte, i*1024)
-		if err := DecompressSnappyBlock(dst[:n], decompressed); err != nil {
-			t.Fatalf("snappy compression failed, %v", err)
-		} else {
-			if !bytes.Equal(src, decompressed) {
-				t.Fatalf("content changed")
-			}
-		}
+		err = DecompressSnappyBlock(dst[:n], decompressed)
+		require.NoError(t, err, "snappy compression failed")
+		require.Equal(t, src, decompressed, "content changed")
 	}
 }
 
@@ -112,24 +95,19 @@ func TestCompressorDecompressor(t *testing.T) {
 		buf := &tb{buf: bytes.NewBuffer(data)}
 		c := NewCompressor(Snappy, buf)
 		n, err := c.Write(src)
-		if n != len(src) || err != nil {
-			t.Fatalf("failed to write all data")
-		}
+		require.Equal(t, len(src), n, "failed to write all data")
+		require.NoError(t, err)
 		require.NoError(t, c.Close())
 		d := NewDecompressor(Snappy, buf)
 		for {
 			r := make([]byte, 1024)
 			_, err = d.Read(r)
-			if err != nil {
-				t.Fatalf("failed to read %v", err)
-			}
+			require.NoError(t, err, "failed to read")
 			dst = append(dst, r...)
 			if len(dst) == len(src) {
 				break
 			}
 		}
-		if !bytes.Equal(src, dst) {
-			t.Fatalf("content changed")
-		}
+		require.Equal(t, src, dst, "content changed")
 	}
 }

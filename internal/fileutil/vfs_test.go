@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVFSSync(t *testing.T) {
@@ -25,19 +26,15 @@ func TestVFSSync(t *testing.T) {
 	if fs == vfs.DefaultFS {
 		t.Skip("not using memfs, skipped")
 	}
-	if err := MkdirAll("/dragonboat-test-data/data", fs); err != nil {
-		t.Fatalf("failed to mkdir %v", err)
-	}
+	err := MkdirAll("/dragonboat-test-data/data", fs)
+	require.NoError(t, err, "failed to mkdir")
+
 	ffs, ok := fs.(*vfs.MemFS)
-	if !ok {
-		t.Fatalf("not a memfs")
-	}
+	require.True(t, ok, "not a memfs")
+
 	ffs.ResetToSyncedState()
-	ok, err := DirExist("/dragonboat-test-data", fs)
-	if err != nil {
-		t.Fatalf("failed to check exist %v", err)
-	}
-	if !ok {
-		t.Fatalf("test dir disappeared")
-	}
+
+	ok, err = DirExist("/dragonboat-test-data", fs)
+	require.NoError(t, err, "failed to check exist")
+	require.True(t, ok, "test dir disappeared")
 }

@@ -16,10 +16,10 @@ package server
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/cockroachdb/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/fileutil"
@@ -57,17 +57,16 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 	func() {
 		c := getTestNodeHostConfig()
 		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("panic not expected")
-			}
+			require.NotPanics(t, func() {
+				if r := recover(); r != nil {
+					t.Fatalf("panic not expected")
+				}
+			})
 		}()
 		env, err := NewEnv(c, fs)
-		if err != nil {
-			t.Fatalf("failed to new environment %v", err)
-		}
-		if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
-			t.Fatalf("%v", err)
-		}
+		require.NoError(t, err, "failed to new environment")
+		_, _, err = env.CreateNodeHostDir(testDeploymentID)
+		require.NoError(t, err)
 		dir, _ := env.getDataDirs()
 		testName := "test-name"
 		cfg := config.NodeHostConfig{
@@ -86,13 +85,10 @@ func TestCheckNodeHostDirWorksWhenEverythingMatches(t *testing.T) {
 			DeploymentId: testDeploymentID,
 		}
 		err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
-		if err != nil {
-			t.Errorf("failed to create flag file %v", err)
-		}
-		if err := env.CheckNodeHostDir(cfg,
-			raftio.LogDBBinVersion, testName); err != nil {
-			t.Fatalf("check node host dir failed %v", err)
-		}
+		require.NoError(t, err, "failed to create flag file")
+		err = env.CheckNodeHostDir(cfg,
+			raftio.LogDBBinVersion, testName)
+		require.NoError(t, err, "check node host dir failed")
 	}()
 	reportLeakedFD(fs, t)
 }
@@ -109,12 +105,9 @@ func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
 	testLogDBName := "test-name"
 	hostname := ""
 	env, err := NewEnv(c, fs)
-	if err != nil {
-		t.Fatalf("failed to new environment %v", err)
-	}
-	if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err, "failed to new environment")
+	_, _, err = env.CreateNodeHostDir(testDeploymentID)
+	require.NoError(t, err)
 	dir, _ := env.getDataDirs()
 	cfg := config.NodeHostConfig{
 		Expert:       config.GetDefaultExpertConfig(),
@@ -131,26 +124,21 @@ func TestRaftAddressIsAllowedToChangeWhenRequested(t *testing.T) {
 		Hostname:  hostname,
 	}
 	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
-	if err != nil {
-		t.Errorf("failed to create flag file %v", err)
-	}
-	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err == nil {
-		t.Fatalf("changed raft address not detected")
-	}
+	require.NoError(t, err, "failed to create flag file")
+	err = env.CheckNodeHostDir(cfg, binVer, testLogDBName)
+	require.Error(t, err, "changed raft address not detected")
 	cfg.DefaultNodeRegistryEnabled = true
 	status.AddressByNodeHostId = true
 	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
-	if err != nil {
-		t.Errorf("failed to create flag file %v", err)
-	}
-	if err := env.CheckNodeHostDir(cfg, binVer, testLogDBName); err != nil {
-		t.Fatalf("changed raft address not allowed, %v", err)
-	}
+	require.NoError(t, err, "failed to create flag file")
+	err = env.CheckNodeHostDir(cfg, binVer, testLogDBName)
+	require.NoError(t, err, "changed raft address not allowed")
 }
 
 func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 	addr string, hostname string, binVer uint32, name string,
-	hardHashMismatch bool, addressByNodeHostID bool, expErr error, fs vfs.IFS) {
+	hardHashMismatch bool, addressByNodeHostID bool, expErr error,
+	fs vfs.IFS) {
 	c := getTestNodeHostConfig()
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
@@ -158,17 +146,14 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		}
 	}()
 	env, err := NewEnv(c, fs)
-	if err != nil {
-		t.Fatalf("failed to new environment %v", err)
-	}
-	if _, _, err := env.CreateNodeHostDir(testDeploymentID); err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err, "failed to new environment")
+	_, _, err = env.CreateNodeHostDir(testDeploymentID)
+	require.NoError(t, err)
 	dir, _ := env.getDataDirs()
 	cfg := config.NodeHostConfig{
-		Expert:              config.GetDefaultExpertConfig(),
-		DeploymentID:        testDeploymentID,
-		RaftAddress:         testAddress,
+		Expert:                     config.GetDefaultExpertConfig(),
+		DeploymentID:               testDeploymentID,
+		RaftAddress:                testAddress,
 		DefaultNodeRegistryEnabled: addressByNodeHostID,
 	}
 
@@ -186,13 +171,9 @@ func testNodeHostDirectoryDetectsMismatches(t *testing.T,
 		status.HardHash = 1
 	}
 	err = fileutil.CreateFlagFile(dir, flagFilename, &status, fs)
-	if err != nil {
-		t.Errorf("failed to create flag file %v", err)
-	}
+	require.NoError(t, err, "failed to create flag file")
 	err = env.CheckNodeHostDir(cfg, testBinVer, testLogDBName)
-	if err != expErr {
-		t.Errorf("expect err %v, got %v", expErr, err)
-	}
+	assert.Equal(t, expErr, err, "expect err %v, got %v", expErr, err)
 	reportLeakedFD(fs, t)
 }
 
@@ -247,29 +228,22 @@ func TestLockFileCanBeLockedAndUnlocked(t *testing.T) {
 		}
 	}()
 	env, err := NewEnv(c, fs)
-	if err != nil {
-		t.Fatalf("failed to new environment %v", err)
-	}
-	if _, _, err := env.CreateNodeHostDir(c.DeploymentID); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := env.LockNodeHostDir(); err != nil {
-		t.Fatalf("failed to lock the directory %v", err)
-	}
-	if err := env.Close(); err != nil {
-		t.Fatalf("failed to stop env %v", err)
-	}
+	require.NoError(t, err, "failed to new environment")
+	_, _, err = env.CreateNodeHostDir(c.DeploymentID)
+	require.NoError(t, err)
+	err = env.LockNodeHostDir()
+	require.NoError(t, err, "failed to lock the directory")
+	err = env.Close()
+	require.NoError(t, err, "failed to stop env")
 	reportLeakedFD(fs, t)
 }
 
 func TestNodeHostIDCanBeGenerated(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := fs.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, err)
+	err = fs.MkdirAll(singleNodeHostTestDir, 0755)
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -277,26 +251,18 @@ func TestNodeHostIDCanBeGenerated(t *testing.T) {
 	}()
 	c := getTestNodeHostConfig()
 	env, err := NewEnv(c, fs)
-	if err != nil {
-		t.Fatalf("failed to create env %v", err)
-	}
+	require.NoError(t, err, "failed to create env")
 	v, err := env.PrepareNodeHostID("")
-	if err != nil {
-		t.Fatalf("failed to prepare nodehost id %v", err)
-	}
-	if len(v.String()) == 0 {
-		t.Fatalf("failed to generate UUID")
-	}
+	require.NoError(t, err, "failed to prepare nodehost id")
+	require.NotEmpty(t, v.String(), "failed to generate UUID")
 }
 
 func TestPrepareNodeHostIDWillReportNodeHostIDChange(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := fs.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, err)
+	err = fs.MkdirAll(singleNodeHostTestDir, 0755)
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -304,37 +270,26 @@ func TestPrepareNodeHostIDWillReportNodeHostIDChange(t *testing.T) {
 	}()
 	c := getTestNodeHostConfig()
 	env, err := NewEnv(c, fs)
-	if err != nil {
-		t.Fatalf("failed to create env %v", err)
-	}
+	require.NoError(t, err, "failed to create env")
 	v, err := env.PrepareNodeHostID("")
-	if err != nil {
-		t.Fatalf("failed to prepare nodehost id %v", err)
-	}
+	require.NoError(t, err, "failed to prepare nodehost id")
 	// using the same uuid is okay
 	v2, err := env.PrepareNodeHostID(v.String())
-	if err != nil {
-		t.Fatalf("failed to prepare nodehost id %v", err)
-	}
-	if v2.String() != v.String() {
-		t.Fatalf("returned UUID is unexpected")
-	}
+	require.NoError(t, err, "failed to prepare nodehost id")
+	assert.Equal(t, v.String(), v2.String(), "returned UUID is unexpected")
 	// change it is not allowed
 	v3 := id.New()
 	_, err = env.PrepareNodeHostID(v3.String())
-	if !errors.Is(err, ErrNodeHostIDChanged) {
-		t.Fatalf("failed to report ErrNodeHostIDChanged")
-	}
+	require.ErrorIs(t, err, ErrNodeHostIDChanged,
+		"failed to report ErrNodeHostIDChanged")
 }
 
 func TestRemoveSavedSnapshots(t *testing.T) {
 	fs := vfs.GetTestFS()
-	if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
-		t.Fatalf("%v", err)
-	}
-	if err := fs.MkdirAll(singleNodeHostTestDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := fs.RemoveAll(singleNodeHostTestDir)
+	require.NoError(t, err)
+	err = fs.MkdirAll(singleNodeHostTestDir, 0755)
+	require.NoError(t, err)
 	defer func() {
 		if err := fs.RemoveAll(singleNodeHostTestDir); err != nil {
 			t.Fatalf("%v", err)
@@ -342,34 +297,24 @@ func TestRemoveSavedSnapshots(t *testing.T) {
 	}()
 	for i := 0; i < 16; i++ {
 		ssdir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("snapshot-%X", i))
-		if err := fs.MkdirAll(ssdir, 0755); err != nil {
-			t.Fatalf("failed to mkdir %v", err)
-		}
+		err := fs.MkdirAll(ssdir, 0755)
+		require.NoError(t, err, "failed to mkdir")
 	}
 	for i := 1; i <= 2; i++ {
 		ssdir := fs.PathJoin(singleNodeHostTestDir, fmt.Sprintf("mydata-%X", i))
-		if err := fs.MkdirAll(ssdir, 0755); err != nil {
-			t.Fatalf("failed to mkdir %v", err)
-		}
+		err := fs.MkdirAll(ssdir, 0755)
+		require.NoError(t, err, "failed to mkdir")
 	}
-	if err := removeSavedSnapshots(singleNodeHostTestDir, fs); err != nil {
-		t.Fatalf("failed to remove saved snapshots %v", err)
-	}
+	err = removeSavedSnapshots(singleNodeHostTestDir, fs)
+	require.NoError(t, err, "failed to remove saved snapshots")
 	files, err := fs.List(singleNodeHostTestDir)
-	if err != nil {
-		t.Fatalf("failed to read dir %v", err)
-	}
+	require.NoError(t, err, "failed to read dir")
 	for _, fn := range files {
 		fi, err := fs.Stat(fs.PathJoin(singleNodeHostTestDir, fn))
-		if err != nil {
-			t.Fatalf("failed to get stat %v", err)
-		}
-		if !fi.IsDir() {
-			t.Errorf("found unexpected file %v", fi)
-		}
-		if fi.Name() != "mydata-1" && fi.Name() != "mydata-2" {
-			t.Errorf("unexpected dir found %s", fi.Name())
-		}
+		require.NoError(t, err, "failed to get stat")
+		assert.True(t, fi.IsDir(), "found unexpected file %v", fi)
+		assert.Contains(t, []string{"mydata-1", "mydata-2"}, fi.Name(),
+			"unexpected dir found %s", fi.Name())
 	}
 	reportLeakedFD(fs, t)
 }
@@ -382,24 +327,16 @@ func TestWALDirCanBeSet(t *testing.T) {
 	}
 	fs := vfs.GetTestFS()
 	c, err := NewEnv(nhConfig, fs)
-	if err != nil {
-		t.Fatalf("failed to get environment %v", err)
-	}
+	require.NoError(t, err, "failed to get environment")
 	defer func() {
 		if err := c.Close(); err != nil {
 			t.Fatalf("failed to stop the env %v", err)
 		}
 	}()
 	dir, lldir := c.GetLogDBDirs(12345)
-	if dir == lldir {
-		t.Errorf("wal dir not considered")
-	}
-	if !strings.Contains(lldir, walDir) {
-		t.Errorf("wal dir not used, %s", lldir)
-	}
-	if strings.Contains(dir, walDir) {
-		t.Errorf("wal dir appeared in node host dir, %s", dir)
-	}
+	assert.NotEqual(t, dir, lldir, "wal dir not considered")
+	assert.Contains(t, lldir, walDir, "wal dir not used, %s", lldir)
+	assert.NotContains(t, dir, walDir, "wal dir appeared in node host dir, %s", dir)
 }
 
 func TestCompatibleLogDBType(t *testing.T) {
@@ -422,8 +359,9 @@ func TestCompatibleLogDBType(t *testing.T) {
 		{"tee", "inmem", false},
 	}
 	for idx, tt := range tests {
-		if r := compatibleLogDBType(tt.saved, tt.name); r != tt.compatible {
-			t.Errorf("%d, compatibleLogDBType failed, want %t, got %t", idx, tt.compatible, r)
-		}
+		r := compatibleLogDBType(tt.saved, tt.name)
+		assert.Equal(t, tt.compatible, r,
+			"%d, compatibleLogDBType failed, want %t, got %t",
+			idx, tt.compatible, r)
 	}
 }

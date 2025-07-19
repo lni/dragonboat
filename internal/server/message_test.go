@@ -24,69 +24,50 @@ import (
 
 func TestMessageQueueCanBeCreated(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
-	if len(q.left) != 8 || len(q.right) != 8 {
-		t.Errorf("unexpected size")
-	}
+	require.Equal(t, 8, len(q.left))
+	require.Equal(t, 8, len(q.right))
 }
 
 func TestMessageCanBeAddedAndGet(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 8; i++ {
 		added, stopped := q.Add(pb.Message{})
-		if !added || stopped {
-			t.Errorf("failed to add")
-		}
+		require.True(t, added)
+		require.False(t, stopped)
 	}
 	add, stopped := q.Add(pb.Message{})
 	add2, stopped2 := q.Add(pb.Message{})
-	if add || add2 {
-		t.Errorf("failed to drop message")
-	}
-	if stopped || stopped2 {
-		t.Errorf("unexpectedly stopped")
-	}
-	if q.idx != 8 {
-		t.Errorf("unexpected idx %d", q.idx)
-	}
+	require.False(t, add)
+	require.False(t, add2)
+	require.False(t, stopped)
+	require.False(t, stopped2)
+	require.Equal(t, uint64(8), q.idx)
 	lr := q.leftInWrite
 	q.Get()
-	if q.idx != 0 {
-		t.Errorf("unexpected idx %d", q.idx)
-	}
-	if lr == q.leftInWrite {
-		t.Errorf("lr flag not updated")
-	}
+	require.Equal(t, uint64(0), q.idx)
+	require.NotEqual(t, lr, q.leftInWrite)
 	add, stopped = q.Add(pb.Message{})
 	add2, stopped2 = q.Add(pb.Message{})
-	if !add || !add2 {
-		t.Errorf("failed to add message")
-	}
-	if stopped || stopped2 {
-		t.Errorf("unexpectedly stopped")
-	}
+	require.True(t, add)
+	require.True(t, add2)
+	require.False(t, stopped)
+	require.False(t, stopped2)
 }
 
 func TestNonSnapshotMsgByCallingMustAddWillPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Errorf("didn't panic")
-	}()
 	q := NewMessageQueue(8, false, 0, 0)
-	q.MustAdd(pb.Message{})
+	require.Panics(t, func() {
+		q.MustAdd(pb.Message{})
+	})
 }
 
 func TestSnapshotCanAlwaysBeAdded(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 1024; i++ {
 		n := len(q.nodrop)
-		if !q.MustAdd(pb.Message{Type: pb.InstallSnapshot}) {
-			t.Errorf("failed to add snapshot")
-		}
-		if len(q.nodrop) != n+1 {
-			t.Errorf("unexpected count")
-		}
+		added := q.MustAdd(pb.Message{Type: pb.InstallSnapshot})
+		require.True(t, added)
+		require.Equal(t, n+1, len(q.nodrop))
 	}
 }
 
@@ -94,54 +75,40 @@ func TestUnreachableMsgCanAlwaysBeAdded(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
 	for i := 0; i < 1024; i++ {
 		n := len(q.nodrop)
-		if !q.MustAdd(pb.Message{Type: pb.Unreachable}) {
-			t.Errorf("failed to add snapshot")
-		}
-		if len(q.nodrop) != n+1 {
-			t.Errorf("unexpected count")
-		}
+		added := q.MustAdd(pb.Message{Type: pb.Unreachable})
+		require.True(t, added)
+		require.Equal(t, n+1, len(q.nodrop))
 	}
 }
 
 func TestAddedSnapshotWillBeReturned(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
-	if !q.MustAdd(pb.Message{Type: pb.InstallSnapshot}) {
-		t.Errorf("failed to add snapshot")
-	}
+	added := q.MustAdd(pb.Message{Type: pb.InstallSnapshot})
+	require.True(t, added)
 	for i := 0; i < 4; i++ {
 		added, stopped := q.Add(pb.Message{})
-		if !added || stopped {
-			t.Errorf("failed to add")
-		}
+		require.True(t, added)
+		require.False(t, stopped)
 	}
-	if !q.MustAdd(pb.Message{Type: pb.InstallSnapshot}) {
-		t.Errorf("failed to add snapshot")
-	}
+	added = q.MustAdd(pb.Message{Type: pb.InstallSnapshot})
+	require.True(t, added)
 	for i := 0; i < 4; i++ {
 		added, stopped := q.Add(pb.Message{})
-		if !added || stopped {
-			t.Errorf("failed to add")
-		}
+		require.True(t, added)
+		require.False(t, stopped)
 	}
-	if !q.MustAdd(pb.Message{Type: pb.InstallSnapshot}) {
-		t.Errorf("failed to add snapshot")
-	}
+	added = q.MustAdd(pb.Message{Type: pb.InstallSnapshot})
+	require.True(t, added)
 	msgs := q.Get()
-	if len(msgs) != 11 {
-		t.Errorf("failed to return all messages")
-	}
+	require.Equal(t, 11, len(msgs))
 	count := 0
 	for _, msg := range msgs {
 		if msg.Type == pb.InstallSnapshot {
 			count++
 		}
 	}
-	if count != 3 {
-		t.Errorf("failed to get all snapshot messages")
-	}
-	if len(q.nodrop) != 0 {
-		t.Errorf("snapshot list not empty")
-	}
+	require.Equal(t, 3, count)
+	require.Equal(t, 0, len(q.nodrop))
 }
 
 func TestMessageQueueCanBeStopped(t *testing.T) {
@@ -149,24 +116,18 @@ func TestMessageQueueCanBeStopped(t *testing.T) {
 	q.Close()
 	for i := 0; i < 4; i++ {
 		added, stopped := q.Add(pb.Message{})
-		if added || !stopped {
-			t.Errorf("unexpectedly added msg")
-		}
+		require.False(t, added)
+		require.True(t, stopped)
 	}
-	if q.MustAdd(pb.Message{Type: pb.InstallSnapshot}) {
-		t.Errorf("unexpectedly added snapshot")
-	}
+	added := q.MustAdd(pb.Message{Type: pb.InstallSnapshot})
+	require.False(t, added)
 }
 
 func TestRateLimiterCanBeEnabledInMessageQueue(t *testing.T) {
 	q := NewMessageQueue(8, false, 0, 0)
-	if q.rl.Enabled() {
-		t.Errorf("rl unexpectedly enabled")
-	}
+	require.False(t, q.rl.Enabled())
 	q = NewMessageQueue(8, false, 0, 1024)
-	if !q.rl.Enabled() {
-		t.Errorf("rl not enabled")
-	}
+	require.True(t, q.rl.Enabled())
 }
 
 func TestSingleMessageCanAlwaysBeAdded(t *testing.T) {
@@ -177,15 +138,9 @@ func TestSingleMessageCanAlwaysBeAdded(t *testing.T) {
 		Entries: []pb.Entry{e},
 	}
 	added, stopped := q.Add(m)
-	if !added {
-		t.Errorf("not added")
-	}
-	if stopped {
-		t.Errorf("stopped")
-	}
-	if !q.rl.RateLimited() {
-		t.Errorf("not rate limited")
-	}
+	require.True(t, added)
+	require.False(t, stopped)
+	require.True(t, q.rl.RateLimited())
 }
 
 func TestAddMessageIsRateLimited(t *testing.T) {
@@ -205,16 +160,14 @@ func TestAddMessageIsRateLimited(t *testing.T) {
 			sz := q.rl.Get()
 			added, stopped := q.Add(m)
 			if added {
-				if q.rl.Get() != sz+pb.GetEntrySliceInMemSize([]pb.Entry{e}) {
-					t.Errorf("failed to update rate limit")
-				}
+				expected := sz + pb.GetEntrySliceInMemSize([]pb.Entry{e})
+				require.Equal(t, expected, q.rl.Get())
 			}
-			if !added || stopped {
-				t.Errorf("failed to add")
-			}
+			require.True(t, added)
+			require.False(t, stopped)
 		}
 	}
-	t.Fatalf("failed to observe any rate limited message")
+	require.Fail(t, "failed to observe any rate limited message")
 }
 
 func TestGetWillResetTheRateLimiterSize(t *testing.T) {
@@ -226,17 +179,11 @@ func TestGetWillResetTheRateLimiterSize(t *testing.T) {
 			Entries: []pb.Entry{e},
 		}
 		added, stopped := q.Add(m)
-		if !added && stopped {
-			t.Fatalf("failed to add message")
-		}
+		require.True(t, added || stopped)
 	}
-	if q.rl.Get() == 0 {
-		t.Errorf("rate limiter size is 0")
-	}
+	require.NotEqual(t, 0, q.rl.Get())
 	q.Get()
-	if q.rl.Get() != 0 {
-		t.Fatalf("failed to reset the rate limiter")
-	}
+	require.Equal(t, uint64(0), q.rl.Get())
 }
 
 func TestGetDelayed(t *testing.T) {

@@ -19,67 +19,44 @@ import (
 	"testing"
 
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSimDiskSMCanBeOpened(t *testing.T) {
 	sm := NewSimDiskSM(102)
 	v, err := sm.Open(nil)
-	if err != nil {
-		t.Fatalf("open failed %v", err)
-	}
-	if v != 102 {
-		t.Fatalf("unexpected return value %d, want 102", v)
-	}
+	require.NoError(t, err, "open failed")
+	require.Equal(t, uint64(102), v, "unexpected return value")
 }
 
 func TestSimDiskSMCanBeUpdatedAndQueried(t *testing.T) {
 	m := NewSimDiskSM(1)
 	ents := []sm.Entry{{Index: 2}, {Index: 3}, {Index: 4}}
 	_, _ = m.Update(ents)
-	if m.applied != 4 {
-		t.Errorf("sm not updated")
-	}
+	require.Equal(t, uint64(4), m.applied, "sm not updated")
 	v, err := m.Lookup(nil)
-	if err != nil {
-		t.Errorf("lookup failed %v", err)
-	}
-	if v.(uint64) != 4 {
-		t.Errorf("unexpected result %d, want 4", v.(uint64))
-	}
+	require.NoError(t, err, "lookup failed")
+	require.Equal(t, uint64(4), v.(uint64), "unexpected result")
 }
 
 func TestSimDiskSnapshotWorks(t *testing.T) {
 	m := NewSimDiskSM(1)
 	ents := []sm.Entry{{Index: 2}, {Index: 3}, {Index: 4}}
 	_, _ = m.Update(ents)
-	if m.applied != 4 {
-		t.Errorf("sm not updated")
-	}
+	require.Equal(t, uint64(4), m.applied, "sm not updated")
 	ctx, err := m.PrepareSnapshot()
-	if err != nil {
-		t.Fatalf("prepare snapshot failed %v", err)
-	}
+	require.NoError(t, err, "prepare snapshot failed")
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	if err := m.SaveSnapshot(ctx, buf, nil); err != nil {
-		t.Fatalf("save snapshot failed %v", err)
-	}
+	err = m.SaveSnapshot(ctx, buf, nil)
+	require.NoError(t, err, "save snapshot failed")
 	reader := bytes.NewBuffer(buf.Bytes())
 	m2 := NewSimDiskSM(100)
 	v, err := m2.Lookup(nil)
-	if err != nil {
-		t.Errorf("lookup failed %v", err)
-	}
-	if v.(uint64) != 100 {
-		t.Errorf("unexpected result %d, want 100", v.(uint64))
-	}
-	if err := m2.RecoverFromSnapshot(reader, nil); err != nil {
-		t.Fatalf("recover from snapshot failed %v", err)
-	}
+	require.NoError(t, err, "lookup failed")
+	require.Equal(t, uint64(100), v.(uint64), "unexpected result")
+	err = m2.RecoverFromSnapshot(reader, nil)
+	require.NoError(t, err, "recover from snapshot failed")
 	v, err = m2.Lookup(nil)
-	if err != nil {
-		t.Errorf("lookup failed %v", err)
-	}
-	if v.(uint64) != 4 {
-		t.Errorf("unexpected result %d, want 4", v.(uint64))
-	}
+	require.NoError(t, err, "lookup failed")
+	require.Equal(t, uint64(4), v.(uint64), "unexpected result")
 }

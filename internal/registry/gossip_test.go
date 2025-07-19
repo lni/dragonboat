@@ -20,6 +20,7 @@ import (
 
 	"github.com/lni/goutils/leaktest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/id"
@@ -65,44 +66,29 @@ func TestGossipRegistry(t *testing.T) {
 		},
 	}
 	r, err := NewGossipRegistry(nhid, nil, nhConfig, 1, id.IsNodeHostID)
-	if err != nil {
-		t.Fatalf("failed to create the registry, %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
-		if err := r.Close(); err != nil {
-			t.Fatalf("failed to close registry %v", err)
-		}
+		err := r.Close()
+		require.NoError(t, err)
 	}()
-	if r.NumMembers() != 1 {
-		t.Errorf("num member result unexpected")
-	}
+	require.Equal(t, 1, r.NumMembers())
 	r.Add(123, 456, nhid)
 	addr, _, err := r.Resolve(123, 456)
-	if err != nil {
-		t.Fatalf("failed to get addr, %v", err)
-	}
-	if addr != nhConfig.RaftAddress {
-		t.Errorf("unexpected addr %s", addr)
-	}
+	require.NoError(t, err)
+	require.Equal(t, nhConfig.RaftAddress, addr)
 	// remove node
 	r.Remove(123, 456)
-	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
-		t.Errorf("removed failed, %v", err)
-	}
+	_, _, err = r.Resolve(123, 456)
+	require.Equal(t, ErrUnknownTarget, err)
 	// add back
 	r.Add(123, 456, nhid)
 	addr, _, err = r.Resolve(123, 456)
-	if err != nil {
-		t.Fatalf("failed to get addr, %v", err)
-	}
-	if addr != nhConfig.RaftAddress {
-		t.Errorf("unexpected addr %s", addr)
-	}
+	require.NoError(t, err)
+	require.Equal(t, nhConfig.RaftAddress, addr)
 	// remove shard
 	r.RemoveShard(123)
-	if _, _, err = r.Resolve(123, 456); err != ErrUnknownTarget {
-		t.Fatalf("failed to get addr, %v", err)
-	}
+	_, _, err = r.Resolve(123, 456)
+	require.Equal(t, ErrUnknownTarget, err)
 }
 
 func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
@@ -117,27 +103,16 @@ func TestGossipManagerCanBeCreatedAndStopped(t *testing.T) {
 		},
 	}
 	m, err := newGossipManager(nhid, nil, nhConfig)
-	if err != nil {
-		t.Fatalf("gossip manager failed to start, %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
-		if err := m.Close(); err != nil {
-			t.Fatalf("failed to close the gossip manager %v", err)
-		}
+		err := m.Close()
+		require.NoError(t, err)
 	}()
-	if m.numMembers() != 1 {
-		t.Errorf("unexpected num members")
-	}
-	if m.advertiseAddress() != "127.0.0.1:26001" {
-		t.Errorf("unexpected advertise address, %s", m.advertiseAddress())
-	}
+	require.Equal(t, 1, m.numMembers())
+	require.Equal(t, "127.0.0.1:26001", m.advertiseAddress())
 	addr, ok := m.GetRaftAddress(nhid)
-	if !ok {
-		t.Errorf("failed to get raft address")
-	}
-	if addr != nhConfig.RaftAddress {
-		t.Errorf("unexpected raft address, %s, want %s", addr, nhConfig.RaftAddress)
-	}
+	require.True(t, ok)
+	require.Equal(t, nhConfig.RaftAddress, addr)
 }
 
 func TestGossipManagerCanGossip(t *testing.T) {
@@ -167,22 +142,16 @@ func TestGossipManagerCanGossip(t *testing.T) {
 		},
 	}
 	m1, err := newGossipManager(nhid1, nil, nhConfig1)
-	if err != nil {
-		t.Fatalf("gossip manager failed to start, %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
-		if err := m1.Close(); err != nil {
-			t.Fatalf("failed to close gossip manager %v", err)
-		}
+		err := m1.Close()
+		require.NoError(t, err)
 	}()
 	m2, err := newGossipManager(nhid2, nil, nhConfig2)
-	if err != nil {
-		t.Fatalf("gossip manager failed to start, %v", err)
-	}
+	require.NoError(t, err)
 	defer func() {
-		if err := m2.Close(); err != nil {
-			t.Fatalf("failed to close gossip manager %v", err)
-		}
+		err := m2.Close()
+		require.NoError(t, err)
 	}()
 	retry := 0
 	for retry < 1000 {
@@ -201,5 +170,5 @@ func TestGossipManagerCanGossip(t *testing.T) {
 		}
 		return
 	}
-	t.Fatalf("failed to complete all queries")
+	require.Fail(t, "failed to complete all queries")
 }

@@ -17,13 +17,13 @@ package id
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsNodeHostID(t *testing.T) {
 	v := New()
-	assert.True(t, IsNodeHostID(v.String()))
-	assert.False(t, IsNodeHostID("this is not a uuid"))
+	require.True(t, IsNodeHostID(v.String()))
+	require.False(t, IsNodeHostID("this is not a uuid"))
 }
 
 func TestNew(t *testing.T) {
@@ -32,30 +32,30 @@ func TestNew(t *testing.T) {
 		u := New()
 		values[u.String()] = struct{}{}
 	}
-	assert.Equal(t, 1000, len(values))
+	require.Equal(t, 1000, len(values))
 }
 
 func TestNewUUID(t *testing.T) {
 	u := New()
 	v, err := NewUUID(u.String())
-	assert.NoError(t, err)
-	assert.Equal(t, u.String(), v.String())
+	require.NoError(t, err)
+	require.Equal(t, u.String(), v.String())
 }
 
 func TestMarshalUnMarshal(t *testing.T) {
 	v := New()
 	data, err := v.Marshal()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	v2 := New()
-	assert.NoError(t, v2.Unmarshal(data))
-	assert.Equal(t, v.String(), v2.String())
+	require.NoError(t, v2.Unmarshal(data))
+	require.Equal(t, v.String(), v2.String())
 
 	v3 := New()
 	data, err = v3.Marshal()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	data2 := make([]byte, len(data))
 	l, err := v3.MarshalTo(data2)
-	assert.NoError(t, err)
-	assert.Equal(t, len(data), l)
-	assert.Equal(t, data, data2)
+	require.NoError(t, err)
+	require.Equal(t, len(data), l)
+	require.Equal(t, data, data2)
 }

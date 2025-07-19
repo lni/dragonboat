@@ -15,11 +15,12 @@
 package server
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/lni/dragonboat/v4/internal/vfs"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func reportLeakedFD(fs vfs.IFS, t *testing.T) {
@@ -28,13 +29,9 @@ func reportLeakedFD(fs vfs.IFS, t *testing.T) {
 
 func TestGetSnapshotDirName(t *testing.T) {
 	v := GetSnapshotDirName(1)
-	if v != "snapshot-0000000000000001" {
-		t.Errorf("unexpected value, %s", v)
-	}
+	assert.Equal(t, "snapshot-0000000000000001", v)
 	v = GetSnapshotDirName(255)
-	if v != "snapshot-00000000000000FF" {
-		t.Errorf("unexpected value, %s", v)
-	}
+	assert.Equal(t, "snapshot-00000000000000FF", v)
 }
 
 func TestMustBeChild(t *testing.T) {
@@ -50,25 +47,20 @@ func TestMustBeChild(t *testing.T) {
 		{"/home/test", "/home/test/data", true},
 		{"/home/test", "", false},
 	}
-	for idx, tt := range tests {
-		ok := true
-		ttok := tt.ok
-		ttidx := idx
+	for _, tt := range tests {
 		parent := tt.parent
 		child := tt.child
+		expectedOk := tt.ok
 
-		f := func() {
-			defer func() {
-				if r := recover(); r != nil {
-					ok = false
-				}
-				if ok != ttok {
-					t.Errorf("idx %d, expected ok value %t", ttidx, ttok)
-				}
-			}()
-			mustBeChild(parent, child)
+		if expectedOk {
+			assert.NotPanics(t, func() {
+				mustBeChild(parent, child)
+			})
+		} else {
+			require.Panics(t, func() {
+				mustBeChild(parent, child)
+			})
 		}
-		f()
 	}
 }
 
@@ -79,14 +71,10 @@ func TestTempSuffix(t *testing.T) {
 	fs := vfs.GetTestFS()
 	env := NewSSEnv(f, 1, 1, 1, 2, SnapshotMode, fs)
 	dir := env.GetTempDir()
-	if !strings.Contains(dir, ".generating") {
-		t.Errorf("unexpected suffix")
-	}
+	assert.Contains(t, dir, ".generating")
 	env = NewSSEnv(f, 1, 1, 1, 2, ReceivingMode, fs)
 	dir = env.GetTempDir()
-	if !strings.Contains(dir, ".receiving") {
-		t.Errorf("unexpected suffix: %s", dir)
-	}
+	assert.Contains(t, dir, ".receiving")
 	reportLeakedFD(fs, t)
 }
 
@@ -97,9 +85,7 @@ func TestFinalSnapshotDirDoesNotContainTempSuffix(t *testing.T) {
 	fs := vfs.GetTestFS()
 	env := NewSSEnv(f, 1, 1, 1, 2, SnapshotMode, fs)
 	dir := env.GetFinalDir()
-	if strings.Contains(dir, ".generating") {
-		t.Errorf("unexpected suffix")
-	}
+	assert.NotContains(t, dir, ".generating")
 }
 
 func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
@@ -111,17 +97,21 @@ func TestRootDirIsTheParentOfTempFinalDirs(t *testing.T) {
 	tmpDir := env.GetTempDir()
 	finalDir := env.GetFinalDir()
 	rootDir := env.GetRootDir()
-	mustBeChild(rootDir, tmpDir)
-	mustBeChild(rootDir, finalDir)
+	assert.NotPanics(t, func() {
+		mustBeChild(rootDir, tmpDir)
+	})
+	assert.NotPanics(t, func() {
+		mustBeChild(rootDir, finalDir)
+	})
 	reportLeakedFD(fs, t)
 }
 
-func runEnvTest(t *testing.T, f func(t *testing.T, env SSEnv), fs vfs.IFS) {
+func runEnvTest(t *testing.T, f func(t *testing.T, env SSEnv),
+	fs vfs.IFS) {
 	rd := "server-pkg-test-data-safe-to-delete"
 	defer func() {
-		if err := fs.RemoveAll(rd); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := fs.RemoveAll(rd)
+		require.NoError(t, err)
 	}()
 	func() {
 		ff := func(cid uint64, nid uint64) string {
@@ -129,9 +119,8 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env SSEnv), fs vfs.IFS) {
 		}
 		env := NewSSEnv(ff, 1, 1, 1, 2, SnapshotMode, fs)
 		tmpDir := env.GetTempDir()
-		if err := fs.MkdirAll(tmpDir, 0755); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := fs.MkdirAll(tmpDir, 0755)
+		require.NoError(t, err)
 		f(t, env)
 	}()
 	reportLeakedFD(fs, t)
@@ -139,9 +128,8 @@ func runEnvTest(t *testing.T, f func(t *testing.T, env SSEnv), fs vfs.IFS) {
 
 func TestRenameTempDirToFinalDir(t *testing.T) {
 	tf := func(t *testing.T, env SSEnv) {
-		if err := env.renameToFinalDir(); err != nil {
-			t.Errorf("failed to rename dir, %v", err)
-		}
+		err := env.renameToFinalDir()
+		require.NoError(t, err)
 	}
 	fs := vfs.GetTestFS()
 	runEnvTest(t, tf, fs)
@@ -149,19 +137,11 @@ func TestRenameTempDirToFinalDir(t *testing.T) {
 
 func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 	tf := func(t *testing.T, env SSEnv) {
-		if env.finalDirExists() {
-			t.Errorf("final dir already exist")
-		}
+		assert.False(t, env.finalDirExists())
 		err := env.renameToFinalDir()
-		if err != nil {
-			t.Errorf("rename tmp dir to final dir failed %v", err)
-		}
-		if !env.finalDirExists() {
-			t.Errorf("final dir does not exist")
-		}
-		if env.HasFlagFile() {
-			t.Errorf("flag file not suppose to be there")
-		}
+		require.NoError(t, err)
+		assert.True(t, env.finalDirExists())
+		assert.False(t, env.HasFlagFile())
 	}
 	fs := vfs.GetTestFS()
 	runEnvTest(t, tf, fs)
@@ -169,23 +149,14 @@ func TestRenameTempDirToFinalDirCanComplete(t *testing.T) {
 
 func TestFlagFileExists(t *testing.T) {
 	tf := func(t *testing.T, env SSEnv) {
-		if env.finalDirExists() {
-			t.Errorf("final dir already exist")
-		}
+		assert.False(t, env.finalDirExists())
 		msg := &pb.Message{}
-		if err := env.createFlagFile(msg); err != nil {
-			t.Errorf("failed to create flag file")
-		}
-		err := env.renameToFinalDir()
-		if err != nil {
-			t.Errorf("rename tmp dir to final dir failed %v", err)
-		}
-		if !env.finalDirExists() {
-			t.Errorf("final dir does not exist")
-		}
-		if !env.HasFlagFile() {
-			t.Errorf("flag file not suppose to be there")
-		}
+		err := env.createFlagFile(msg)
+		require.NoError(t, err)
+		err = env.renameToFinalDir()
+		require.NoError(t, err)
+		assert.True(t, env.finalDirExists())
+		assert.True(t, env.HasFlagFile())
 	}
 	fs := vfs.GetTestFS()
 	runEnvTest(t, tf, fs)
@@ -194,15 +165,10 @@ func TestFlagFileExists(t *testing.T) {
 func TestFinalizeSnapshotCanComplete(t *testing.T) {
 	tf := func(t *testing.T, env SSEnv) {
 		m := &pb.Message{}
-		if err := env.FinalizeSnapshot(m); err != nil {
-			t.Errorf("failed to finalize snapshot %v", err)
-		}
-		if !env.HasFlagFile() {
-			t.Errorf("no flag file")
-		}
-		if !env.finalDirExists() {
-			t.Errorf("no final dir")
-		}
+		err := env.FinalizeSnapshot(m)
+		require.NoError(t, err)
+		assert.True(t, env.HasFlagFile())
+		assert.True(t, env.finalDirExists())
 	}
 	fs := vfs.GetTestFS()
 	runEnvTest(t, tf, fs)
@@ -211,16 +177,12 @@ func TestFinalizeSnapshotCanComplete(t *testing.T) {
 func TestFinalizeSnapshotReturnOutOfDateWhenFinalDirExist(t *testing.T) {
 	tf := func(t *testing.T, env SSEnv) {
 		finalDir := env.GetFinalDir()
-		if err := env.fs.MkdirAll(finalDir, 0755); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := env.fs.MkdirAll(finalDir, 0755)
+		require.NoError(t, err)
 		m := &pb.Message{}
-		if err := env.FinalizeSnapshot(m); err != ErrSnapshotOutOfDate {
-			t.Errorf("didn't return ErrSnapshotOutOfDate %v", err)
-		}
-		if env.HasFlagFile() {
-			t.Errorf("flag file exist")
-		}
+		err = env.FinalizeSnapshot(m)
+		assert.Equal(t, ErrSnapshotOutOfDate, err)
+		assert.False(t, env.HasFlagFile())
 	}
 	fs := vfs.GetTestFS()
 	runEnvTest(t, tf, fs)

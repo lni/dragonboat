@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/lni/goutils/stringutil"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/internal/settings"
 )
@@ -25,45 +26,30 @@ import (
 func TestPeerCanBeAdded(t *testing.T) {
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	_, _, err := nodes.Resolve(100, 2)
-	if err == nil {
-		t.Fatalf("error not reported")
-	}
+	require.Error(t, err, "error not reported")
 	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
-	if err != nil {
-		t.Errorf("failed to resolve address")
-	}
-	if url != "a2:2" {
-		t.Errorf("got %s, want %s", url, "a2:2")
-	}
+	require.NoError(t, err, "failed to resolve address")
+	require.Equal(t, "a2:2", url, "got %s, want %s", url, "a2:2")
 }
 
 func TestPeerAddressCanNotBeUpdated(t *testing.T) {
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("didn't panic when updating addr")
-		}
-	}()
 	nodes.Add(100, 2, "a2:2")
-	nodes.Add(100, 2, "a2:3")
+	require.Panics(t, func() {
+		nodes.Add(100, 2, "a2:3")
+	}, "didn't panic when updating addr")
 }
 
 func TestPeerCanBeRemoved(t *testing.T) {
 	nodes := NewNodeRegistry(settings.Soft.StreamConnections, nil)
 	nodes.Add(100, 2, "a2:2")
 	url, _, err := nodes.Resolve(100, 2)
-	if err != nil {
-		t.Errorf("failed to resolve address")
-	}
-	if url != "a2:2" {
-		t.Errorf("got %s, want %s", url, "a2:2")
-	}
+	require.NoError(t, err, "failed to resolve address")
+	require.Equal(t, "a2:2", url, "got %s, want %s", url, "a2:2")
 	nodes.Remove(100, 2)
 	_, _, err = nodes.Resolve(100, 2)
-	if err == nil {
-		t.Fatalf("error not reported")
-	}
+	require.Error(t, err, "error not reported")
 }
 
 func TestRemoveShard(t *testing.T) {
@@ -73,27 +59,17 @@ func TestRemoveShard(t *testing.T) {
 	nodes.Add(200, 2, "a3:2")
 	nodes.RemoveShard(100)
 	_, _, err := nodes.Resolve(100, 2)
-	if err == nil {
-		t.Errorf("shard not removed")
-	}
+	require.Error(t, err, "shard not removed")
 	_, _, err = nodes.Resolve(200, 2)
-	if err != nil {
-		t.Errorf("failed to get node")
-	}
+	require.NoError(t, err, "failed to get node")
 }
 
 func testInvalidAddressWillPanic(t *testing.T, addr string) {
-	po := false
-	nodes := NewNodeRegistry(settings.Soft.StreamConnections, stringutil.IsValidAddress)
-	defer func() {
-		if r := recover(); r != nil {
-			po = true
-		}
-		if !po {
-			t.Errorf("failed to panic on invalid address")
-		}
-	}()
-	nodes.Add(100, 2, addr)
+	nodes := NewNodeRegistry(settings.Soft.StreamConnections,
+		stringutil.IsValidAddress)
+	require.Panics(t, func() {
+		nodes.Add(100, 2, addr)
+	}, "failed to panic on invalid address")
 }
 
 func TestInvalidAddressWillPanic(t *testing.T) {
