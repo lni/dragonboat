@@ -4320,7 +4320,7 @@ func TestNodeHostFileLock(t *testing.T) {
 			defer nh.Close()
 			out, err := spawn(os.Args[0])
 			require.Error(t, err, "file lock didn't prevent start, %s", out)
-			require.Contains(t, string(out), "returned ErrLockDirectory",
+			require.Contains(t, string(out), "failed to lock data directory",
 				"unexpected output: %s", out)
 		} else {
 			nhc.RaftAddress = nodeHostTestAddr2
