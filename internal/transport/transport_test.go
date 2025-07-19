@@ -30,6 +30,8 @@ import (
 	"github.com/lni/goutils/leaktest"
 	"github.com/lni/goutils/netutil"
 	"github.com/lni/goutils/syncutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/registry"
@@ -382,14 +384,12 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -400,9 +400,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 			ShardID: 100,
 		}
 		done := trans.Send(msg)
-		if !done {
-			t.Errorf("failed to send message")
-		}
+		assert.True(t, done, "failed to send message")
 	}
 	done := false
 	for i := 0; i < 200; i++ {
@@ -416,9 +414,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 			plog.Infof("count: %d, want 20, will wait for 100ms", count)
 		}
 	}
-	if !done {
-		t.Errorf("failed to get all 20 sent messages")
-	}
+	assert.True(t, done, "failed to get all 20 sent messages")
 	// test to ensure a single big message can be sent/received.
 	plog.Infof("sending a test msg with payload sz %d", sz)
 	payload := make([]byte, sz)
@@ -434,9 +430,7 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 	}
 	plog.Infof("msg ready to be sent")
 	ok := trans.Send(m)
-	if !ok {
-		t.Errorf("failed to send the large msg")
-	}
+	assert.True(t, ok, "failed to send the large msg")
 	received := false
 	for i := 0; i < 400; i++ {
 		time.Sleep(100 * time.Millisecond)
@@ -445,9 +439,8 @@ func testMessageCanBeSent(t *testing.T, mutualTLS bool, sz uint64, fs vfs.IFS) {
 			break
 		}
 	}
-	if !received {
-		t.Errorf("got %d, want %d", handler.getRequestCount(100, 2), 21)
-	}
+	assert.True(t, received, "got %d, want %d",
+		handler.getRequestCount(100, 2), 21)
 }
 
 func TestMessageCanBeSent(t *testing.T) {
@@ -481,14 +474,12 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -500,9 +491,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 			Entries: []raftpb.Entry{{Cmd: make([]byte, 1024)}},
 		}
 		done := trans.Send(msg)
-		if !done {
-			t.Errorf("failed to send message")
-		}
+		assert.True(t, done, "failed to send message")
 	}
 	done := false
 	for i := 0; i < 400; i++ {
@@ -512,9 +501,7 @@ func testMessageCanBeSentWithLargeLatency(t *testing.T, mutualTLS bool, fs vfs.I
 			break
 		}
 	}
-	if !done {
-		t.Errorf("failed to send/receive all messages")
-	}
+	assert.True(t, done, "failed to send/receive all messages")
 }
 
 // latency need to be simulated by configuring your environment
@@ -530,14 +517,12 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -550,14 +535,11 @@ func testMessageBatchWithNotMatchedDBVAreDropped(t *testing.T,
 		}
 		// silently drop
 		done := trans.Send(msg)
-		if !done {
-			t.Errorf("failed to send message")
-		}
+		assert.True(t, done, "failed to send message")
 	}
 	time.Sleep(100 * time.Millisecond)
-	if handler.getRequestCount(100, 2) != 0 {
-		t.Errorf("got %d, want %d", handler.getRequestCount(100, 2), 0)
-	}
+	assert.Equal(t, uint64(0), handler.getRequestCount(100, 2),
+		"got %d, want %d", handler.getRequestCount(100, 2), 0)
 }
 
 func TestMessageBatchWithNotMatchedDeploymentIDAreDropped(t *testing.T) {
@@ -586,9 +568,7 @@ func TestCircuitBreaker(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	breaker := netutil.NewBreaker()
 	breaker.Fail()
-	if breaker.Ready() {
-		t.Errorf("breaker is still ready?")
-	}
+	assert.False(t, breaker.Ready(), "breaker is still ready?")
 }
 
 func (t *Transport) queueSize() int {
@@ -603,14 +583,12 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, _ := newTestTransport(handler, false, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, "nosuchhost:39001")
@@ -621,21 +599,15 @@ func TestCircuitBreakerKicksInOnConnectivityIssue(t *testing.T) {
 		ShardID: 100,
 	}
 	done := trans.Send(msg)
-	if !done {
-		t.Errorf("not suppose to fail")
-	}
+	assert.True(t, done, "not suppose to fail")
 	for trans.queueSize() != 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 	time.Sleep(20 * time.Millisecond)
 	breaker := trans.GetCircuitBreaker("nosuchhost:39001")
-	if breaker.Ready() {
-		t.Errorf("breaker is still ready?")
-	}
+	assert.False(t, breaker.Ready(), "breaker is still ready?")
 	time.Sleep(time.Second)
-	if !breaker.Ready() {
-		t.Errorf("breaker is not ready after wait")
-	}
+	assert.True(t, breaker.Ready(), "breaker is not ready after wait")
 }
 
 func getTestSnapshotMessage(to uint64) raftpb.Message {
@@ -799,20 +771,17 @@ func testSnapshotCanBeSent(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := fs.RemoveAll(snapshotDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := fs.RemoveAll(snapshotDir)
+		require.NoError(t, err)
 	}()
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer tt.cleanup()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -825,50 +794,37 @@ func testSnapshotCanBeSent(t *testing.T,
 	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	snapDir := chunks.dir(100, 2)
-	if err := fs.MkdirAll(snapDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := fs.MkdirAll(snapDir, 0755)
+	require.NoError(t, err)
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	plog.Infof("send snapshot will be called")
 	done := trans.SendSnapshot(m)
 	plog.Infof("send snapshot returned")
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	assert.True(t, done, "failed to send the snapshot")
 	plog.Infof("waiting for snapshot status update")
 	waitForFirstSnapshotStatusUpdate(handler, maxWait)
 	plog.Infof("waiting for snapshot count update")
 	waitForSnapshotCountUpdate(handler, maxWait)
 	plog.Infof("snapshot count updated")
-	if handler.getSnapshotCount(100, 2) != 1 {
-		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
-	}
-	if handler.getFailedSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want 0", handler.getFailedSnapshotCount(100, 2))
-	}
-	if handler.getSnapshotSuccessCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
-	}
-	if handler.getReceivedSnapshotFromCount(100, 12) != 1 {
-		t.Errorf("got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
-	}
-	if handler.getReceivedSnapshotCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
-	}
+	assert.Equal(t, uint64(1), handler.getSnapshotCount(100, 2),
+		"got %d, want %d", handler.getSnapshotCount(100, 2), 1)
+	assert.Equal(t, uint64(0), handler.getFailedSnapshotCount(100, 2),
+		"got %d, want 0", handler.getFailedSnapshotCount(100, 2))
+	assert.Equal(t, uint64(1), handler.getSnapshotSuccessCount(100, 2),
+		"got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
+	assert.Equal(t, uint64(1), handler.getReceivedSnapshotFromCount(100, 12),
+		"got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
+	assert.Equal(t, uint64(1), handler.getReceivedSnapshotCount(100, 2),
+		"got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
 	md5Original, err := tt.getSnapshotFileMD5(100,
 		2, testSnapshotIndex, "testsnapshot.gbsnap")
-	if err != nil {
-		t.Errorf("err %v, want nil", err)
-	}
+	assert.NoError(t, err, "err %v, want nil", err)
 	md5Received, err := tt.getSnapshotFileMD5(100,
 		12, testSnapshotIndex, "testsnapshot.gbsnap")
-	if err != nil {
-		t.Errorf("err %v, want nil", err)
-	}
-	if !bytes.Equal(md5Original, md5Received) {
-		t.Errorf("snapshot content changed during transmission")
-	}
+	assert.NoError(t, err, "err %v, want nil", err)
+	assert.True(t, bytes.Equal(md5Original, md5Received),
+		"snapshot content changed during transmission")
 }
 
 func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
@@ -876,15 +832,13 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer tt.cleanup()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
@@ -896,21 +850,16 @@ func testSnapshotWithNotMatchedDBVWillBeDropped(t *testing.T,
 	// send the snapshot file
 	trans.SetPreStreamChunkSendHook(f)
 	done := trans.SendSnapshot(m)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	assert.True(t, done, "failed to send the snapshot")
 	waitForFirstSnapshotStatusUpdate(handler, 1000)
 	waitForSnapshotCountUpdate(handler, 1000)
-	if handler.getSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
-	}
+	assert.Equal(t, uint64(0), handler.getSnapshotCount(100, 2),
+		"got %d, want %d", handler.getSnapshotCount(100, 2), 0)
 	// such snapshot dropped on the sending side should be reported.
-	if handler.getFailedSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want 0", handler.getFailedSnapshotCount(100, 2))
-	}
-	if handler.getSnapshotSuccessCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
-	}
+	assert.Equal(t, uint64(0), handler.getFailedSnapshotCount(100, 2),
+		"got %d, want 0", handler.getFailedSnapshotCount(100, 2))
+	assert.Equal(t, uint64(1), handler.getSnapshotSuccessCount(100, 2),
+		"got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
 }
 
 func TestSnapshotWithNotMatchedDeploymentIDWillBeDropped(t *testing.T) {
@@ -940,30 +889,25 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, false, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer tt.cleanup()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	nodes.Add(100, 2, serverAddress)
 	conns := make([]*Sink, 0)
 	for i := uint64(0); i < maxConnectionCount; i++ {
 		sink := trans.GetStreamSink(100, 2)
-		if sink == nil {
-			t.Errorf("failed to get sink")
-		}
+		assert.NotNil(t, sink, "failed to get sink")
 		conns = append(conns, sink)
 	}
 	for i := uint64(0); i < maxConnectionCount; i++ {
-		if sink := trans.GetStreamSink(100, 2); sink != nil {
-			t.Errorf("connection is not limited")
-		}
+		sink := trans.GetStreamSink(100, 2)
+		assert.Nil(t, sink, "connection is not limited")
 	}
 	for _, v := range conns {
 		close(v.j.ch)
@@ -979,9 +923,8 @@ func TestMaxSnapshotConnectionIsLimited(t *testing.T) {
 	breaker.Reset()
 	plog.Infof("circuit breaker for %s is now ready", serverAddress)
 	for i := uint64(0); i < maxConnectionCount; i++ {
-		if sink := trans.GetStreamSink(100, 2); sink == nil {
-			t.Fatalf("failed to get sink again %d", i)
-		}
+		sink := trans.GetStreamSink(100, 2)
+		assert.NotNil(t, sink, "failed to get sink again %d", i)
 	}
 }
 
@@ -991,15 +934,13 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer tt.cleanup()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	// invalid address
@@ -1011,16 +952,12 @@ func testFailedConnectionReportsSnapshotFailure(t *testing.T,
 	m.Snapshot.Filepath = fs.PathJoin(dir, "testsnapshot.gbsnap")
 	// send the snapshot file
 	done := trans.SendSnapshot(m)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	assert.True(t, done, "failed to send the snapshot")
 	waitForTotalSnapshotStatusUpdateCount(handler, 6000, 1)
-	if handler.getSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 0)
-	}
-	if handler.getFailedSnapshotCount(100, 2) == 0 {
-		t.Errorf("got %d, want > 0", handler.getFailedSnapshotCount(100, 2))
-	}
+	assert.Equal(t, uint64(0), handler.getSnapshotCount(100, 2),
+		"got %d, want %d", handler.getSnapshotCount(100, 2), 0)
+	assert.Greater(t, handler.getFailedSnapshotCount(100, 2), uint64(0),
+		"got %d, want > 0", handler.getFailedSnapshotCount(100, 2))
 }
 
 func TestFailedConnectionReportsSnapshotFailure(t *testing.T) {
@@ -1035,29 +972,25 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	handler := newTestMessageHandler()
 	trans, nodes, stopper, tt := newTestTransport(handler, mutualTLS, fs)
 	defer func() {
-		if err := fs.RemoveAll(snapshotDir); err != nil {
-			t.Fatalf("%v", err)
-		}
+		err := fs.RemoveAll(snapshotDir)
+		require.NoError(t, err)
 	}()
 	defer func() {
-		if err := trans.env.Close(); err != nil {
-			t.Fatalf("failed to stop the env %v", err)
-		}
+		err := trans.env.Close()
+		require.NoError(t, err, "failed to stop the env")
 	}()
 	defer tt.cleanup()
 	defer func() {
-		if err := trans.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := trans.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	defer stopper.Stop()
 	chunks := NewChunk(trans.handleRequest,
 		trans.snapshotReceived, trans.dir, trans.nhConfig.GetDeploymentID(), fs)
 	ts := getTestChunk()
 	snapDir := chunks.dir(ts[0].ShardID, ts[0].ReplicaID)
-	if err := fs.MkdirAll(snapDir, 0755); err != nil {
-		t.Fatalf("%v", err)
-	}
+	err := fs.MkdirAll(snapDir, 0755)
+	require.NoError(t, err)
 	nodes.Add(100, 2, serverAddress)
 	tt.generateSnapshotFile(100, 12, testSnapshotIndex, "testsnapshot.gbsnap", sz, fs)
 	tt.generateSnapshotExternalFile(100, 12, testSnapshotIndex, "external1.data", sz)
@@ -1079,39 +1012,27 @@ func testSnapshotWithExternalFilesCanBeSend(t *testing.T,
 	m.Snapshot.Files = []*raftpb.SnapshotFile{f1, f2}
 	// send the snapshot file
 	done := trans.SendSnapshot(m)
-	if !done {
-		t.Errorf("failed to send the snapshot")
-	}
+	assert.True(t, done, "failed to send the snapshot")
 	waitForFirstSnapshotStatusUpdate(handler, maxWait)
 	waitForSnapshotCountUpdate(handler, maxWait)
-	if handler.getSnapshotCount(100, 2) != 1 {
-		t.Errorf("got %d, want %d", handler.getSnapshotCount(100, 2), 1)
-	}
-	if handler.getFailedSnapshotCount(100, 2) != 0 {
-		t.Errorf("got %d, want 0", handler.getFailedSnapshotCount(100, 2))
-	}
-	if handler.getSnapshotSuccessCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
-	}
-	if handler.getReceivedSnapshotFromCount(100, 12) != 1 {
-		t.Errorf("got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
-	}
-	if handler.getReceivedSnapshotCount(100, 2) != 1 {
-		t.Errorf("got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
-	}
+	assert.Equal(t, uint64(1), handler.getSnapshotCount(100, 2),
+		"got %d, want %d", handler.getSnapshotCount(100, 2), 1)
+	assert.Equal(t, uint64(0), handler.getFailedSnapshotCount(100, 2),
+		"got %d, want 0", handler.getFailedSnapshotCount(100, 2))
+	assert.Equal(t, uint64(1), handler.getSnapshotSuccessCount(100, 2),
+		"got %d, want 1", handler.getSnapshotSuccessCount(100, 2))
+	assert.Equal(t, uint64(1), handler.getReceivedSnapshotFromCount(100, 12),
+		"got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
+	assert.Equal(t, uint64(1), handler.getReceivedSnapshotCount(100, 2),
+		"got %d, want 1", handler.getReceivedSnapshotFromCount(100, 12))
 	filenames := []string{"testsnapshot.gbsnap", "external1.data", "external2.data"}
 	for _, fn := range filenames {
 		md5Original, err := tt.getSnapshotFileMD5(100, 2, testSnapshotIndex, fn)
-		if err != nil {
-			t.Errorf("err %v, want nil", err)
-		}
+		assert.NoError(t, err, "err %v, want nil", err)
 		md5Received, err := tt.getSnapshotFileMD5(100, 12, testSnapshotIndex, fn)
-		if err != nil {
-			t.Errorf("err %v, want nil", err)
-		}
-		if !bytes.Equal(md5Original, md5Received) {
-			t.Errorf("snapshot content changed during transmission")
-		}
+		assert.NoError(t, err, "err %v, want nil", err)
+		assert.True(t, bytes.Equal(md5Original, md5Received),
+			"snapshot content changed during transmission")
 	}
 }
 
@@ -1128,9 +1049,8 @@ func TestNoOPTransportCanBeCreated(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, _, _, _, _ := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 }
 
@@ -1139,9 +1059,8 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, noopTransport, req, connReq := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
@@ -1152,24 +1071,18 @@ func TestInitialMessageCanBeSent(t *testing.T) {
 	connReq.SetToFail(false)
 	req.SetToFail(false)
 	ok := tt.Send(msg)
-	if !ok {
-		t.Errorf("send failed")
-	}
+	assert.True(t, ok, "send failed")
 	for i := 0; i < 1000; i++ {
 		if atomic.LoadUint64(&noopTransport.connected) != 0 {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if tt.queueSize() != 1 {
-		t.Errorf("queue len %d, want 1", tt.queueSize())
-	}
-	if len(tt.mu.breakers) != 1 {
-		t.Errorf("breakers len %d, want 1", len(tt.mu.breakers))
-	}
-	if noopTransport.connected != 1 {
-		t.Errorf("connected %d, want 1", noopTransport.connected)
-	}
+	assert.Equal(t, 1, tt.queueSize(), "queue len %d, want 1", tt.queueSize())
+	assert.Equal(t, 1, len(tt.mu.breakers), "breakers len %d, want 1",
+		len(tt.mu.breakers))
+	assert.Equal(t, uint64(1), noopTransport.connected, "connected %d, want 1",
+		noopTransport.connected)
 }
 
 func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
@@ -1177,9 +1090,8 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, _, req, connReq := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
@@ -1190,9 +1102,7 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 	connReq.SetToFail(false)
 	req.SetToFail(false)
 	ok := tt.Send(msg)
-	if !ok {
-		t.Errorf("send failed")
-	}
+	assert.True(t, ok, "send failed")
 	req.SetToFail(true)
 	// requested the noop trans to fail the send batch operation, given the first
 	// batch is in the chan, we don't know whether the first batch is going to
@@ -1206,9 +1116,7 @@ func TestFailedConnectionIsRemovedFromTransport(t *testing.T) {
 			break
 		}
 	}
-	if tt.queueSize() != 0 {
-		t.Errorf("queue len %d, want 0", tt.queueSize())
-	}
+	assert.Equal(t, 0, tt.queueSize(), "queue len %d, want 0", tt.queueSize())
 }
 
 func TestCircuitBreakerCauseFailFast(t *testing.T) {
@@ -1229,9 +1137,7 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	connReq.SetToFail(false)
 	req.SetToFail(false)
 	ok := tt.Send(msg)
-	if !ok {
-		t.Errorf("send failed")
-	}
+	assert.True(t, ok, "send failed")
 	req.SetToFail(true)
 	// see comments in TestFailedConnectionIsRemovedFromTransport for why
 	// the returned value of the below Send() is not checked
@@ -1246,20 +1152,14 @@ func TestCircuitBreakerCauseFailFast(t *testing.T) {
 	req.SetToFail(false)
 	for i := 0; i < 20; i++ {
 		ok = tt.Send(msg)
-		if ok {
-			t.Errorf("send unexpectedly returned ok")
-		}
+		assert.False(t, ok, "send unexpectedly returned ok")
 		time.Sleep(time.Millisecond)
 	}
-	if tt.queueSize() != 0 {
-		t.Errorf("queue len %d, want 0", tt.queueSize())
-	}
-	if atomic.LoadUint64(&noopTransport.connected) != 1 {
-		t.Errorf("connected %d, want 1", noopTransport.connected)
-	}
-	if atomic.LoadUint64(&noopTransport.tryConnect) != 1 {
-		t.Errorf("connected %d, want 1", noopTransport.tryConnect)
-	}
+	assert.Equal(t, 0, tt.queueSize(), "queue len %d, want 0", tt.queueSize())
+	assert.Equal(t, uint64(1), atomic.LoadUint64(&noopTransport.connected),
+		"connected %d, want 1", noopTransport.connected)
+	assert.Equal(t, uint64(1), atomic.LoadUint64(&noopTransport.tryConnect),
+		"connected %d, want 1", noopTransport.tryConnect)
 }
 
 func TestCircuitBreakerForResolveNotShared(t *testing.T) {
@@ -1267,9 +1167,8 @@ func TestCircuitBreakerForResolveNotShared(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, noopTransport, req, connReq := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	msg := raftpb.Message{
@@ -1284,27 +1183,22 @@ func TestCircuitBreakerForResolveNotShared(t *testing.T) {
 	}
 	connReq.SetToFail(false)
 	req.SetToFail(false)
-	if ok := tt.Send(msg); !ok {
-		t.Errorf("send failed")
-	}
+	ok := tt.Send(msg)
+	assert.True(t, ok, "send failed")
 	for i := 0; i < 20; i++ {
-		if ok := tt.Send(msgUnknownNode); ok {
-			t.Errorf("send unexpectedly returned ok")
-		}
+		ok := tt.Send(msgUnknownNode)
+		assert.False(t, ok, "send unexpectedly returned ok")
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		if ok := tt.Send(msg); !ok {
-			t.Errorf("send failed for known host")
-		}
+		ok := tt.Send(msg)
+		assert.True(t, ok, "send failed for known host")
 		time.Sleep(time.Millisecond)
 	}
-	if atomic.LoadUint64(&noopTransport.connected) != 1 {
-		t.Errorf("connected %d, want 1", noopTransport.connected)
-	}
-	if atomic.LoadUint64(&noopTransport.tryConnect) != 1 {
-		t.Errorf("connected %d, want 1", noopTransport.tryConnect)
-	}
+	assert.Equal(t, uint64(1), atomic.LoadUint64(&noopTransport.connected),
+		"connected %d, want 1", noopTransport.connected)
+	assert.Equal(t, uint64(1), atomic.LoadUint64(&noopTransport.tryConnect),
+		"connected %d, want 1", noopTransport.tryConnect)
 }
 
 // unknown target
@@ -1313,21 +1207,16 @@ func TestStreamToUnknownTargetWillHaveSnapshotStatusUpdated(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, _, _, _ := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	sink := tt.GetStreamSink(100, 3)
-	if sink != nil {
-		t.Errorf("unexpectedly returned a sink")
-	}
-	if handler.getFailedSnapshotCount(100, 3) != 1 {
-		t.Errorf("snapshot failed count %d", handler.snapshotFailedCount)
-	}
-	if handler.getSnapshotSuccessCount(100, 3) != 0 {
-		t.Errorf("snapshot succeed count %d", handler.snapshotSuccessCount)
-	}
+	assert.Nil(t, sink, "unexpectedly returned a sink")
+	assert.Equal(t, uint64(1), handler.getFailedSnapshotCount(100, 3),
+		"snapshot failed count %d", handler.snapshotFailedCount)
+	assert.Equal(t, uint64(0), handler.getSnapshotSuccessCount(100, 3),
+		"snapshot succeed count %d", handler.snapshotSuccessCount)
 }
 
 // failed to connect
@@ -1336,9 +1225,8 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, _, req, connReq := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	connReq.SetToFail(true)
@@ -1353,9 +1241,7 @@ func TestFailedStreamConnectionWillHaveSnapshotStatusUpdated(t *testing.T) {
 		failedSnapshotReported = true
 		break
 	}
-	if !failedSnapshotReported {
-		t.Fatalf("failed snapshot not reported")
-	}
+	assert.True(t, failedSnapshotReported, "failed snapshot not reported")
 }
 
 // failed to connect due to too many connections
@@ -1364,22 +1250,17 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, _, _, _ := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	for i := uint64(0); i < maxConnectionCount; i++ {
 		sink := tt.GetStreamSink(100, 2)
-		if sink == nil {
-			t.Errorf("failed to connect")
-		}
+		assert.NotNil(t, sink, "failed to connect")
 	}
 	for i := uint64(0); i < 2*maxConnectionCount; i++ {
 		sink := tt.GetStreamSink(100, 2)
-		if sink != nil {
-			t.Errorf("stream connection not limited")
-		}
+		assert.Nil(t, sink, "stream connection not limited")
 	}
 	failedSnapshotReported := false
 	for i := 0; i < 10000; i++ {
@@ -1391,9 +1272,7 @@ func TestFailedStreamingDueToTooManyConnectionsHaveStatusUpdated(t *testing.T) {
 		failedSnapshotReported = true
 		break
 	}
-	if !failedSnapshotReported {
-		t.Fatalf("failed snapshot not reported")
-	}
+	assert.True(t, failedSnapshotReported, "failed snapshot not reported")
 }
 
 func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
@@ -1403,9 +1282,8 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	defer func() {
 		req.SetBlocked(false)
 		defer func() {
-			if err := tt.Close(); err != nil {
-				t.Fatalf("failed to close the transport module %v", err)
-			}
+			err := tt.Close()
+			require.NoError(t, err, "failed to close the transport module")
 		}()
 	}()
 	nodes.Add(100, 2, serverAddress)
@@ -1420,9 +1298,7 @@ func TestInMemoryEntrySizeCanBeLimitedWhenSendingMessages(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		sent, reason := tt.send(msg)
 		if !sent {
-			if reason != rateLimited {
-				t.Errorf("not due to rate limit")
-			}
+			assert.Equal(t, rateLimited, reason, "not due to rate limit")
 			break
 		}
 		if i == 999 {
@@ -1436,9 +1312,8 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 	handler := newTestMessageHandler()
 	tt, nodes, _, _, _ := newNOOPTestTransport(handler, fs)
 	defer func() {
-		if err := tt.Close(); err != nil {
-			t.Fatalf("failed to close the transport module %v", err)
-		}
+		err := tt.Close()
+		require.NoError(t, err, "failed to close the transport module")
 	}()
 	nodes.Add(100, 2, serverAddress)
 	e := raftpb.Entry{Cmd: make([]byte, 1024*1024*10)}
@@ -1449,24 +1324,17 @@ func TestInMemoryEntrySizeCanDropToZero(t *testing.T) {
 		Entries: []raftpb.Entry{e},
 	}
 	_, key, err := nodes.Resolve(100, 2)
-	if err != nil {
-		t.Fatalf("failed to resolve the addr")
-	}
-	if !tt.Send(msg) {
-		t.Errorf("first send failed")
-	}
+	require.NoError(t, err, "failed to resolve the addr")
+	sent := tt.Send(msg)
+	assert.True(t, sent, "first send failed")
 	sq, ok := tt.mu.queues[key]
-	if !ok {
-		t.Fatalf("failed to get sq")
-	}
+	assert.True(t, ok, "failed to get sq")
 	for len(sq.ch) != 0 {
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
 		sent := tt.Send(msg)
-		if !sent {
-			t.Errorf("failed to send2")
-		}
+		assert.True(t, sent, "failed to send2")
 	}
 	for len(sq.ch) != 0 {
 		time.Sleep(time.Millisecond)

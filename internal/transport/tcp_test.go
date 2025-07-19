@@ -18,6 +18,8 @@ import (
 	"encoding/binary"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRequstHeaderCanBeEncodedAndDecoded(t *testing.T) {
@@ -28,16 +30,10 @@ func TestRequstHeaderCanBeEncodedAndDecoded(t *testing.T) {
 	}
 	buf := make([]byte, requestHeaderSize)
 	result := r.encode(buf)
-	if len(result) != requestHeaderSize {
-		t.Fatalf("unexpected size")
-	}
+	require.Equal(t, requestHeaderSize, len(result), "unexpected size")
 	rr := requestHeader{}
-	if !rr.decode(result) {
-		t.Fatalf("decode failed")
-	}
-	if !reflect.DeepEqual(&r, &rr) {
-		t.Errorf("request header changed")
-	}
+	require.True(t, rr.decode(result), "decode failed")
+	require.True(t, reflect.DeepEqual(&r, &rr), "request header changed")
 }
 
 func TestRequestHeaderCRCIsChecked(t *testing.T) {
@@ -48,26 +44,16 @@ func TestRequestHeaderCRCIsChecked(t *testing.T) {
 	}
 	buf := make([]byte, requestHeaderSize)
 	result := r.encode(buf)
-	if len(result) != requestHeaderSize {
-		t.Fatalf("unexpected size")
-	}
+	require.Equal(t, requestHeaderSize, len(result), "unexpected size")
 	rr := requestHeader{}
-	if !rr.decode(result) {
-		t.Fatalf("decode failed")
-	}
+	require.True(t, rr.decode(result), "decode failed")
 	crc := binary.BigEndian.Uint32(result[10:])
 	binary.BigEndian.PutUint32(result[10:], crc+1)
-	if rr.decode(result) {
-		t.Fatalf("crc error not reported")
-	}
+	require.False(t, rr.decode(result), "crc error not reported")
 	binary.BigEndian.PutUint32(result[10:], crc)
-	if !rr.decode(result) {
-		t.Fatalf("decode failed")
-	}
+	require.True(t, rr.decode(result), "decode failed")
 	binary.BigEndian.PutUint64(result[2:], 0)
-	if rr.decode(result) {
-		t.Fatalf("crc error not reported")
-	}
+	require.False(t, rr.decode(result), "crc error not reported")
 }
 
 func TestInvalidMethodNameIsReported(t *testing.T) {
@@ -78,11 +64,7 @@ func TestInvalidMethodNameIsReported(t *testing.T) {
 	}
 	buf := make([]byte, requestHeaderSize)
 	result := r.encode(buf)
-	if len(result) != requestHeaderSize {
-		t.Fatalf("unexpected size")
-	}
+	require.Equal(t, requestHeaderSize, len(result), "unexpected size")
 	rr := requestHeader{}
-	if rr.decode(result) {
-		t.Fatalf("decode did not report invalid method name")
-	}
+	require.False(t, rr.decode(result), "decode did not report invalid method name")
 }

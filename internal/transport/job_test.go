@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/lni/goutils/syncutil"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/internal/vfs"
@@ -30,9 +31,7 @@ func TestSnapshotJobCanBeCreatedInSavedMode(t *testing.T) {
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
 	c := newJob(context.Background(), 1, 1, 1, false, 201, transport, nil, fs)
-	if cap(c.ch) != 201 {
-		t.Errorf("unexpected chan length %d, want 201", cap(c.ch))
-	}
+	require.Equal(t, 201, cap(c.ch), "unexpected chan length")
 }
 
 func TestSnapshotJobCanBeCreatedInStreamingMode(t *testing.T) {
@@ -40,9 +39,7 @@ func TestSnapshotJobCanBeCreatedInStreamingMode(t *testing.T) {
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
 	c := newJob(context.Background(), 1, 1, 1, true, 201, transport, nil, fs)
-	if cap(c.ch) != streamingChanLength {
-		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
-	}
+	require.Equal(t, streamingChanLength, cap(c.ch), "unexpected chan length")
 }
 
 func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
@@ -54,18 +51,13 @@ func TestSendSavedSnapshotPutsAllChunksInCh(t *testing.T) {
 		},
 	}
 	chunks, err := splitSnapshotMessage(m, fs)
-	if err != nil {
-		t.Fatalf("failed to get chunks %v", err)
-	}
+	require.NoError(t, err, "failed to get chunks")
 	transport := NewNOOPTransport(config.NodeHostConfig{}, nil, nil)
-	c := newJob(context.Background(), 1, 1, 1, false, len(chunks), transport, nil, fs)
-	if cap(c.ch) != len(chunks) {
-		t.Errorf("unexpected chan length %d", cap(c.ch))
-	}
+	c := newJob(context.Background(), 1, 1, 1, false, len(chunks),
+		transport, nil, fs)
+	require.Equal(t, len(chunks), cap(c.ch), "unexpected chan length")
 	c.addSnapshot(chunks)
-	if len(c.ch) != len(chunks) {
-		t.Errorf("not all chunks pushed to ch")
-	}
+	require.Equal(t, len(chunks), len(c.ch), "not all chunks pushed to ch")
 }
 
 func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
@@ -73,40 +65,29 @@ func TestKeepSendingChunksUsingFailedJobWillNotBlock(t *testing.T) {
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
 	c := newJob(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
-	if cap(c.ch) != streamingChanLength {
-		t.Errorf("unexpected chan length %d, want %d", cap(c.ch), streamingChanLength)
-	}
-	if err := c.connect("a1"); err != nil {
-		t.Fatalf("connect failed %v", err)
-	}
+	require.Equal(t, streamingChanLength, cap(c.ch), "unexpected chan length")
+	err := c.connect("a1")
+	require.NoError(t, err, "connect failed")
 	stopper := syncutil.NewStopper()
 	var perr error
 	stopper.RunWorker(func() {
 		perr = c.process()
 	})
 	noopConn, ok := c.conn.(*NOOPSnapshotConnection)
-	if !ok {
-		t.Fatalf("failed to get noopConn")
-	}
+	require.True(t, ok, "failed to get noopConn")
 	noopConn.req.SetToFail(true)
 	sent, stopped := c.AddChunk(pb.Chunk{})
-	if !sent {
-		t.Fatalf("failed to send")
-	}
-	if stopped {
-		t.Errorf("unexpectedly stopped")
-	}
+	require.True(t, sent, "failed to send")
+	require.False(t, stopped, "unexpectedly stopped")
 	stopper.Stop()
-	if perr == nil {
-		t.Fatalf("error didn't return from process()")
-	}
+	require.NotNil(t, perr, "error didn't return from process()")
 	for i := 0; i < streamingChanLength*10; i++ {
 		c.AddChunk(pb.Chunk{})
 	}
 	select {
 	case <-c.failed:
 	default:
-		t.Fatalf("failed chan not closed")
+		require.Fail(t, "failed chan not closed")
 	}
 	c.close()
 }
@@ -116,9 +97,8 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
 	cfg := config.NodeHostConfig{}
 	transport := NewNOOPTransport(cfg, nil, nil)
 	c := newJob(context.Background(), 1, 1, 1, true, 0, transport, nil, fs)
-	if err := c.connect("a1"); err != nil {
-		t.Fatalf("connect failed %v", err)
-	}
+	err := c.connect("a1")
+	require.NoError(t, err, "connect failed")
 	stopper := syncutil.NewStopper()
 	var perr error
 	stopper.RunWorker(func() {
@@ -128,16 +108,10 @@ func testSpecialChunkCanStopTheProcessLoop(t *testing.T,
 		ChunkCount: tt,
 	}
 	sent, stopped := c.AddChunk(poison)
-	if !sent {
-		t.Fatalf("failed to send")
-	}
-	if stopped {
-		t.Errorf("unexpectedly stopped")
-	}
+	require.True(t, sent, "failed to send")
+	require.False(t, stopped, "unexpectedly stopped")
 	stopper.Stop()
-	if perr != experr {
-		t.Errorf("unexpected error val %v", perr)
-	}
+	require.Equal(t, experr, perr, "unexpected error val")
 }
 
 func TestPoisonChunkCanStopTheProcessLoop(t *testing.T) {
