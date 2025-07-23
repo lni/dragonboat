@@ -66,7 +66,7 @@ func testUpdateTermFromMessage(t *testing.T, state State) {
 		r.becomeCandidate()
 	case leader:
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 	}
 
 	ne(r.Handle(pb.Message{Type: pb.Replicate, Term: 2}), t)
@@ -118,9 +118,9 @@ func TestLeaderBcastBeat(t *testing.T) {
 	hi := 1
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, hi, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	for i := 0; i < 10; i++ {
-		ne(r.appendEntries([]pb.Entry{{Index: uint64(i) + 1}}), t)
+		r.appendEntries([]pb.Entry{{Index: uint64(i) + 1}})
 	}
 
 	for i := 0; i < hi; i++ {
@@ -412,7 +412,7 @@ func TestLeaderCommitEntry(t *testing.T) {
 	s := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, s)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	commitNoopEntry(r, s)
 	li := r.log.lastIndex()
 	ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("some data")}}}), t)
@@ -470,7 +470,7 @@ func TestLeaderAcknowledgeCommit(t *testing.T) {
 		s := NewTestLogDB()
 		r := newTestRaft(1, idsBySize(tt.size), 10, 1, s)
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 		commitNoopEntry(r, s)
 		li := r.log.lastIndex()
 		ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("some data")}}}), t)
@@ -507,7 +507,7 @@ func TestLeaderCommitPrecedingEntries(t *testing.T) {
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, storage)
 		r.loadState(pb.State{Term: 2})
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 		ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{Cmd: []byte("some data")}}}), t)
 
 		for _, m := range r.readMessages() {
@@ -885,7 +885,7 @@ func TestLeaderOnlyCommitsLogFromCurrentTerm(t *testing.T) {
 		r.loadState(pb.State{Term: 2})
 		// become leader at term 3
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 		r.readMessages()
 		// propose a entry to current term
 		ne(r.Handle(pb.Message{From: 1, To: 1, Type: pb.Propose, Entries: []pb.Entry{{}}}), t)
@@ -901,7 +901,7 @@ func TestLeaderStartReplication(t *testing.T) {
 	s := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, s)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	commitNoopEntry(r, s)
 	li := r.log.lastIndex()
 

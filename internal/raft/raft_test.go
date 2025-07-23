@@ -15,12 +15,13 @@
 package raft
 
 import (
-	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/settings"
 	"math"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/lni/dragonboat/v4/config"
+	"github.com/lni/dragonboat/v4/internal/settings"
 
 	"github.com/stretchr/testify/assert"
 
@@ -138,11 +139,9 @@ func TestNilLogdbWillPanic(t *testing.T) {
 func TestTryCommitResetsMatchArray(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	ne(p.becomeLeader(), t)
+	p.becomeLeader()
 	p.matched = nil
-	if _, err := p.tryCommit(); err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
+	p.tryCommit()
 	if len(p.matched) != 3 {
 		t.Errorf("tryCommit didn't resize the match array")
 	}
@@ -340,7 +339,7 @@ func TestBecomeCandidatePanicWhenNodeIsLeader(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ready = true
 	r.becomeCandidate()
 }
@@ -359,7 +358,7 @@ func TestBecomeLeaderPanicWhenNodeIsFollower(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	r.becomeFollower(2, 3)
 	ready = true
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 }
 
 func TestBecomeCandidateDragonboat(t *testing.T) {
@@ -843,7 +842,7 @@ func TestNonVotingCanBeRemoved(t *testing.T) {
 	if len(p1.nonVotings) != 2 {
 		t.Errorf("unexpected nonvoting count")
 	}
-	ne(p1.removeNode(2), t)
+	p1.removeNode(2)
 	if len(p1.nonVotings) != 1 {
 		t.Errorf("nonvoting not removed")
 	}
@@ -1230,7 +1229,7 @@ func TestWitnessCanBeRemoved(t *testing.T) {
 	if len(p1.witnesses) != 1 {
 		t.Errorf("unexpected witness count")
 	}
-	ne(p1.removeNode(2), t)
+	p1.removeNode(2)
 	if len(p1.witnesses) != 0 {
 		t.Errorf("witness not removed")
 	}
@@ -1256,7 +1255,7 @@ func TestFollowerTick(t *testing.T) {
 func TestLeaderTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	for i := 0; i < 10; i++ {
 		ne(r.tick(), t)
 	}
@@ -1289,7 +1288,7 @@ func TestTimeForElection(t *testing.T) {
 func TestLeaderChecksQuorumEveryElectionTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.checkQuorum = true
 	for i := 0; i < 5; i++ {
 		ne(r.tick(), t)
@@ -1302,7 +1301,7 @@ func TestLeaderChecksQuorumEveryElectionTick(t *testing.T) {
 func TestQuiescedTick(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	for i := 0; i < 200; i++ {
 		r.quiescedTick()
 	}
@@ -1561,7 +1560,7 @@ func TestMakeInstallSnapshotMessage(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, st)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ss := pb.Snapshot{Index: 100, Term: 2}
 	if err := st.ApplySnapshot(ss); err != nil {
 		t.Errorf("apply snapshot failed %v", err)
@@ -1580,13 +1579,13 @@ func TestMakeReplicateMessage(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, st)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	noop := pb.Entry{}
 	ents := []pb.Entry{
 		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	sz := noop.SizeUpperLimit() + ents[0].SizeUpperLimit() + ents[1].SizeUpperLimit() + 1
 	msg, err := r.makeReplicateMessage(2, 1, uint64(sz))
 	if err != nil {
@@ -1614,7 +1613,7 @@ func TestMakeReplicateMessage(t *testing.T) {
 func TestBroadcastReplicateMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.broadcastReplicateMessage()
 	count := 0
 	for _, msg := range r.msgs {
@@ -1630,7 +1629,7 @@ func TestBroadcastReplicateMessage(t *testing.T) {
 func TestBroadcastHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.broadcastHeartbeatMessage()
 	count := 0
 	for _, msg := range r.msgs {
@@ -1650,7 +1649,7 @@ func TestBroadcastHeartbeatMessageWithHint(t *testing.T) {
 	}
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.broadcastHeartbeatMessageWithHint(ctx)
 	count := 0
 	for _, msg := range r.msgs {
@@ -1680,7 +1679,7 @@ func TestSendTimeoutNowMessage(t *testing.T) {
 func TestSendHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	hint := pb.SystemCtx{Low: 100, High: 200}
 	match := uint64(100)
 	r.remotes[2].match = match
@@ -1726,12 +1725,12 @@ func TestAppendEntries(t *testing.T) {
 	st := NewTestLogDB()
 	r := newTestRaft(1, []uint64{1}, 5, 1, st)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Index: 2, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Index: 3, Term: 1, Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	if r.log.committed != 3 {
 		t.Errorf("unexpected committed value %d", r.log.committed)
 	}
@@ -1744,12 +1743,12 @@ func TestAppendEntries(t *testing.T) {
 func TestResetRemotes(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	r.remotes[1].next = 100
 	r.remotes[1].match = 50
 	r.remotes[2].next = 200
@@ -1862,12 +1861,12 @@ func TestDeleteRemote(t *testing.T) {
 func TestCampaignSendExpectedMessages(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	r.becomeFollower(r.term+1, NoLeader)
 	ne(r.campaign(), t)
 	msgs := r.msgs
@@ -1975,13 +1974,13 @@ func TestPendingConfigChangeFlag(t *testing.T) {
 func TestGetPendingConfigChangeCount(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	for i := 0; i < 5; i++ {
 		ents := []pb.Entry{
 			{Type: pb.ApplicationEntry, Cmd: make([]byte, maxEntriesToApplySize)},
 			{Type: pb.ConfigChangeEntry},
 		}
-		ne(r.appendEntries(ents), t)
+		r.appendEntries(ents)
 	}
 	count := r.getPendingConfigChangeCount()
 	if count != 5 {
@@ -2021,14 +2020,14 @@ func TestIsRequestLeaderMessage(t *testing.T) {
 func TestAddNodeDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ConfigChangeEntry},
 	}
 	r.setPendingConfigChange()
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	if !r.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not set")
 	}
@@ -2047,7 +2046,7 @@ func TestAddNodeDragonboat(t *testing.T) {
 func TestRemoveNodeDragonboat(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.setPendingConfigChange()
-	ne(r.removeNode(2), t)
+	r.removeNode(2)
 	if r.hasPendingConfigChange() {
 		t.Errorf("pending config change flag not cleared")
 	}
@@ -2060,15 +2059,12 @@ func TestHasCommittedEntryAtCurrentTerm(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	if r.hasCommittedEntryAtCurrentTerm() {
 		t.Errorf("unexpected hasCommittedEntryAtCurrentTerm result")
 	}
 	r.remotes[2].tryUpdate(r.log.lastIndex())
-	ok, err := r.tryCommit()
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
+	ok := r.tryCommit()
 	if !ok {
 		t.Errorf("failed to commit")
 	}
@@ -2080,14 +2076,14 @@ func TestHasCommittedEntryAtCurrentTerm(t *testing.T) {
 func TestHandleLeaderCheckQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ne(r.handleLeaderCheckQuorum(pb.Message{}), t)
 	if r.state != follower {
 		t.Errorf("node didn't step down")
 	}
 	r = newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.remotes[1].setActive()
 	r.remotes[2].setActive()
 	ne(r.handleLeaderCheckQuorum(pb.Message{}), t)
@@ -2116,12 +2112,12 @@ func TestReadyToReadList(t *testing.T) {
 func TestRestoreSnapshotIgnoreDelayedSnapshot(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	ss := pb.Snapshot{Index: 3, Term: 1}
 	ok, err := r.restore(ss)
 	if err != nil {
@@ -2135,12 +2131,12 @@ func TestRestoreSnapshotIgnoreDelayedSnapshot(t *testing.T) {
 func TestSnapshotCommitEntries(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	if r.log.committed != 0 {
 		t.Errorf("unexpected commit, %d", r.log.committed)
 	}
@@ -2160,12 +2156,12 @@ func TestSnapshotCommitEntries(t *testing.T) {
 func TestSnapshotCanBeRestored(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	ss := pb.Snapshot{Index: 4, Term: 1}
 	ok, err := r.restore(ss)
 	if err != nil {
@@ -2189,12 +2185,12 @@ func TestSnapshotCanBeRestored(t *testing.T) {
 func TestRestoreRemote(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, 16)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	ss := pb.Snapshot{}
 	ss.Membership.Addresses = make(map[uint64]string)
 	ss.Membership.Addresses[1] = ""
@@ -2648,7 +2644,7 @@ func TestHandleFollowerLeaderTransfer(t *testing.T) {
 func TestLeaderIgnoreElection(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.Election,
 	}
@@ -2735,11 +2731,11 @@ func TestLeaderStepDownAfterRemoved(t *testing.T) {
 	if r.state != leader {
 		t.Errorf("not a leader")
 	}
-	ne(r.removeNode(2), t)
+	r.removeNode(2)
 	if r.state != leader {
 		t.Errorf("no longer a leader, %s", r.state)
 	}
-	ne(r.removeNode(1), t)
+	r.removeNode(1)
 	if r.state != follower {
 		t.Errorf("not a follower, %s", r.state)
 	}
@@ -2784,7 +2780,7 @@ func TestLeaderStepDownAfterRemovedBySnapshot(t *testing.T) {
 func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.LeaderHeartbeat,
 	}
@@ -2803,7 +2799,7 @@ func TestHandleLeaderHeartbeatMessage(t *testing.T) {
 func TestLeaderStepDownWithoutQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.CheckQuorum,
 	}
@@ -2816,7 +2812,7 @@ func TestLeaderStepDownWithoutQuorum(t *testing.T) {
 func TestLeaderIgnoreCheckQuorumWhenHasQuorum(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.CheckQuorum,
 	}
@@ -2832,7 +2828,7 @@ func TestLeaderIgnoreCheckQuorumWhenHasQuorum(t *testing.T) {
 func TestHandleLeaderUnreachable(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.Unreachable,
 	}
@@ -2850,7 +2846,7 @@ func TestHandleLeaderUnreachable(t *testing.T) {
 func TestSnapshotStatusMessageIgnoredWhenNotInSnapshotState(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.SnapshotStatus,
 	}
@@ -2868,7 +2864,7 @@ func TestSnapshotStatusMessageIgnoredWhenNotInSnapshotState(t *testing.T) {
 func TestHandleLeaderSnapshotStatus(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.SnapshotStatus,
 	}
@@ -2902,7 +2898,7 @@ func TestHandleLeaderTransfer(t *testing.T) {
 	for idx, tt := range tests {
 		r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 		msg := pb.Message{
 			Type: pb.LeaderTransfer,
 			Hint: tt.target,
@@ -2936,7 +2932,7 @@ func TestHandleLeaderTransfer(t *testing.T) {
 func TestHandleLeaderHeartbeatResp(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type: pb.HeartbeatResp,
 		From: 2,
@@ -2956,7 +2952,7 @@ func TestHandleLeaderHeartbeatResp(t *testing.T) {
 func TestLeaderReadIndexOnSingleNodeShard(t *testing.T) {
 	r := newTestRaft(1, []uint64{1}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type:     pb.ReadIndex,
 		Hint:     101,
@@ -2982,7 +2978,7 @@ func TestLeaderReadIndexOnSingleNodeShard(t *testing.T) {
 func TestLeaderIgnoreReadIndexWhenShardCommittedIsUnknown(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	msg := pb.Message{
 		Type:     pb.ReadIndex,
 		Hint:     101,
@@ -3007,15 +3003,12 @@ func TestHandleLeaderReadIndex(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	if r.hasCommittedEntryAtCurrentTerm() {
 		t.Errorf("unexpected hasCommittedEntryAtCurrentTerm result")
 	}
 	r.remotes[2].tryUpdate(r.log.lastIndex())
-	ok, err := r.tryCommit()
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
+	ok := r.tryCommit()
 	if !ok {
 		t.Errorf("failed to commit")
 	}
@@ -3051,7 +3044,7 @@ func TestWitnessReadIndex(t *testing.T) {
 		t.Errorf("unexpectedly set hasCommittedEntryAtCurrentTerm")
 	}
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 
 	r.addWitness(2)
 
@@ -3073,17 +3066,14 @@ func TestVotingMemberLengthMismatchWillResetMatchArray(t *testing.T) {
 	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeFollower(1, NoLeader)
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	r.remotes[2].tryUpdate(r.log.lastIndex())
 	if len(r.matched) != 3 {
 		t.Errorf("Match array length unexpected %v", len(r.matched))
 	}
 	// Changing the number of total voting members
 	r.witnesses[4] = &remote{}
-	ok, err := r.tryCommit()
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
-	}
+	ok := r.tryCommit()
 	if ok {
 		t.Errorf("Should fail commit")
 	}
@@ -3096,7 +3086,7 @@ func testNodeUpdatesItsRateLimiterHeartbeat(isLeader bool, t *testing.T) {
 	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	if isLeader {
 		r.becomeCandidate()
-		ne(r.becomeLeader(), t)
+		r.becomeLeader()
 	} else {
 		r.becomeFollower(0, 2)
 	}
@@ -3149,11 +3139,11 @@ func TestLeaderRateLimitMessageIsHandledByLeader(t *testing.T) {
 func TestRateLimitMessageIsNeverSentByLeader(t *testing.T) {
 	r := newRateLimitedTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
 	r.becomeCandidate()
-	ne(r.becomeLeader(), t)
+	r.becomeLeader()
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	rl := r.rl
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
@@ -3175,7 +3165,7 @@ func testRateLimitMessageIsSentByNonLeader(leaderID uint64,
 	ents := []pb.Entry{
 		{Type: pb.ApplicationEntry, Cmd: make([]byte, testRateLimit+1)},
 	}
-	ne(r.appendEntries(ents), t)
+	r.appendEntries(ents)
 	rl := r.rl
 	if !rl.RateLimited() {
 		t.Errorf("not rate limited")
@@ -3234,7 +3224,7 @@ func TestFirstQuiescedTickResizesInMemoryEntriesSlice(t *testing.T) {
 func TestDelayedSnapshotAckCanBeSet(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	ne(p.becomeLeader(), t)
+	p.becomeLeader()
 	rp := p.remotes[3]
 	rp.state = remoteSnapshot
 	ne(p.handleLeaderSnapshotStatus(pb.Message{
@@ -3250,7 +3240,7 @@ func TestDelayedSnapshotAckCanBeSet(t *testing.T) {
 func TestCheckDelayedSnapshotAck(t *testing.T) {
 	p := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewTestLogDB())
 	p.becomeCandidate()
-	ne(p.becomeLeader(), t)
+	p.becomeLeader()
 	if p.snapshotting {
 		t.Errorf("unexpected snapshotting flag")
 	}

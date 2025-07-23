@@ -908,7 +908,7 @@ func (r *raft) sortMatchValues() {
 	}
 }
 
-func (r *raft) tryCommit() (bool, error) {
+func (r *raft) tryCommit() bool {
 	r.mustBeLeader()
 	if r.numVotingMembers() != len(r.matched) {
 		r.resetMatchValueArray()
@@ -928,10 +928,20 @@ func (r *raft) tryCommit() (bool, error) {
 	// "Raft never commits log entries from previous terms by counting replicas.
 	// Only log entries from the leader’s current term are committed by counting
 	// replicas"
-	return r.log.tryCommit(q, r.term)
+	ok, err := r.log.tryCommit(q, r.term)
+	if err != nil {
+		// when trying to commit an entry by counting replicate responses,
+		// r.log.tryCommit is not suppose to return any error. its internal call to
+		// r.log.term() will always be able to find the entry in the in-mem log, as
+		// entries are only moved to logdb after they are applied which happens
+		// after being committed.
+		panic(err)
+	}
+
+	return ok
 }
 
-func (r *raft) appendEntries(entries []pb.Entry) error {
+func (r *raft) appendEntries(entries []pb.Entry) {
 	lastIndex := r.log.lastIndex()
 	for i := range entries {
 		entries[i].Term = r.term
@@ -940,11 +950,8 @@ func (r *raft) appendEntries(entries []pb.Entry) error {
 	r.log.append(entries)
 	r.remotes[r.replicaID].tryUpdate(r.log.lastIndex())
 	if r.isSingleNodeQuorum() {
-		if _, err := r.tryCommit(); err != nil {
-			return err
-		}
+		r.tryCommit()
 	}
-	return nil
 }
 
 //
@@ -1028,7 +1035,7 @@ func (r *raft) becomeCandidate() {
 	plog.Warningf("%s became candidate", r.describe())
 }
 
-func (r *raft) becomeLeader() error {
+func (r *raft) becomeLeader() {
 	// need a state transition machine
 	if !r.isLeader() && !r.isCandidate() {
 		plog.Panicf("transitioning to leader state from %v", r.state.String())
@@ -1039,7 +1046,7 @@ func (r *raft) becomeLeader() error {
 	r.preLeaderPromotionHandleConfigChange()
 	plog.Infof("%s became leader", r.describe())
 	// p72 of the raft thesis
-	return r.appendEntries([]pb.Entry{{Type: pb.ApplicationEntry, Cmd: nil}})
+	r.appendEntries([]pb.Entry{{Type: pb.ApplicationEntry, Cmd: nil}})
 }
 
 func (r *raft) reset(term uint64, resetElectionTimeout bool) {
@@ -1179,7 +1186,8 @@ func (r *raft) campaign() error {
 	}
 	r.handleVoteResp(r.replicaID, false, false)
 	if r.isSingleNodeQuorum() {
-		return r.becomeLeader()
+		r.becomeLeader()
+		return nil
 	}
 	var hint uint64
 	if r.isLeaderTransferTarget {
@@ -1271,7 +1279,7 @@ func (r *raft) addWitness(replicaID uint64) {
 	r.setWitness(replicaID, 0, r.log.lastIndex()+1)
 }
 
-func (r *raft) removeNode(replicaID uint64) error {
+func (r *raft) removeNode(replicaID uint64) {
 	r.deleteRemote(replicaID)
 	r.deleteNonVoting(replicaID)
 	r.deleteWitness(replicaID)
@@ -1284,15 +1292,10 @@ func (r *raft) removeNode(replicaID uint64) error {
 		r.abortLeaderTransfer()
 	}
 	if r.isLeader() && r.numVotingMembers() > 0 {
-		ok, err := r.tryCommit()
-		if err != nil {
-			return err
-		}
-		if ok {
+		if ok := r.tryCommit(); ok {
 			r.broadcastReplicateMessage()
 		}
 	}
-	return nil
 }
 
 func (r *raft) deleteRemote(replicaID uint64) {
@@ -1728,9 +1731,7 @@ func (r *raft) handleNodeConfigChange(m pb.Message) error {
 		case pb.AddNode:
 			r.addNode(nodeid)
 		case pb.RemoveNode:
-			if err := r.removeNode(nodeid); err != nil {
-				return err
-			}
+			r.removeNode(nodeid)
 		case pb.AddNonVoting:
 			r.addNonVoting(nodeid)
 		case pb.AddWitness:
@@ -1739,6 +1740,7 @@ func (r *raft) handleNodeConfigChange(m pb.Message) error {
 			panic("unexpected config change type")
 		}
 	}
+
 	return nil
 }
 
@@ -1806,10 +1808,9 @@ func (r *raft) handleLeaderPropose(m pb.Message) error {
 			r.setPendingConfigChange()
 		}
 	}
-	if err := r.appendEntries(m.Entries); err != nil {
-		return err
-	}
+	r.appendEntries(m.Entries)
 	r.broadcastReplicateMessage()
+
 	return nil
 }
 
@@ -1881,11 +1882,7 @@ func (r *raft) handleLeaderReplicateResp(m pb.Message, rp *remote) error {
 		paused := rp.isPaused()
 		if rp.tryUpdate(m.LogIndex) {
 			rp.respondedTo()
-			ok, err := r.tryCommit()
-			if err != nil {
-				return nil
-			}
-			if ok {
+			if ok := r.tryCommit(); ok {
 				r.broadcastReplicateMessage()
 			} else if paused {
 				r.sendReplicateMessage(m.From)
@@ -2245,9 +2242,7 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
 		r.describe(), count, len(r.votes)-count, r.quorum())
 	// 3rd paragraph section 5.2 of the raft paper
 	if count == r.quorum() {
-		if err := r.becomeLeader(); err != nil {
-			return err
-		}
+		r.becomeLeader()
 		// get the NoOP entry committed ASAP
 		r.broadcastReplicateMessage()
 	} else if len(r.votes)-count == r.quorum() {
