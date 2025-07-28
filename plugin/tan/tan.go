@@ -19,4 +19,7 @@ import (
 )
 
 // Factory is the factory variable used to create tan instances.
-var Factory = tan.Factory
+var (
+	Factory = tan.Factory
+	MultiplexedLogFactory = tan.MultiplexedLogFactory
+)
