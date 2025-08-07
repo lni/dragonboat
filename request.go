@@ -255,19 +255,19 @@ func (p *logicalClock) getTick() uint64 {
 }
 
 type ready struct {
-	val uint32
+	val atomic.Bool
 }
 
 func (r *ready) ready() bool {
-	return atomic.LoadUint32(&r.val) == 1
+	return r.val.Load()
 }
 
 func (r *ready) clear() {
-	atomic.StoreUint32(&r.val, 0)
+	r.val.Store(false)
 }
 
 func (r *ready) set() {
-	atomic.StoreUint32(&r.val, 1)
+	r.val.Store(true)
 }
 
 // SysOpState is the object used to provide system maintenance operation result

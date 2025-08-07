@@ -51,7 +51,7 @@ type ConcurrentKVTest struct {
 	ReplicaID        uint64
 	kvdata           unsafe.Pointer
 	externalFileTest bool
-	closed           uint32
+	closed           atomic.Bool
 }
 
 // NewConcurrentKVTest creates and return a new KVTest object.
@@ -201,7 +201,7 @@ func (s *ConcurrentKVTest) RecoverFromSnapshot(r io.Reader,
 
 // Close closes the IStateMachine instance
 func (s *ConcurrentKVTest) Close() error {
-	atomic.StoreUint32(&s.closed, 1)
+	s.closed.Store(true)
 	return nil
 }
 
@@ -231,5 +231,5 @@ func (s *ConcurrentKVTest) GetHash() (uint64, error) {
 }
 
 func (s *ConcurrentKVTest) isClosed() bool {
-	return atomic.LoadUint32(&s.closed) == 1
+	return s.closed.Load()
 }

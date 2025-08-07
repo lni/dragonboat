@@ -67,9 +67,9 @@ type snapshotState struct {
 	reqSnapshotIndex uint64
 	compactLogTo     uint64
 	compactedTo      uint64
-	savingFlag       uint32
-	recoveringFlag   uint32
-	streamingFlag    uint32
+	savingFlag       atomic.Bool
+	recoveringFlag   atomic.Bool
+	streamingFlag    atomic.Bool
 	recoverReady     snapshotTask
 	saveReady        snapshotTask
 	streamReady      snapshotTask
@@ -79,39 +79,39 @@ type snapshotState struct {
 }
 
 func (rs *snapshotState) recovering() bool {
-	return atomic.LoadUint32(&rs.recoveringFlag) == 1
+	return rs.recoveringFlag.Load()
 }
 
 func (rs *snapshotState) setRecovering() {
-	atomic.StoreUint32(&rs.recoveringFlag, 1)
+	rs.recoveringFlag.Store(true)
 }
 
 func (rs *snapshotState) clearRecovering() {
-	atomic.StoreUint32(&rs.recoveringFlag, 0)
+	rs.recoveringFlag.Store(false)
 }
 
 func (rs *snapshotState) streaming() bool {
-	return atomic.LoadUint32(&rs.streamingFlag) == 1
+	return rs.streamingFlag.Load()
 }
 
 func (rs *snapshotState) setStreaming() {
-	atomic.StoreUint32(&rs.streamingFlag, 1)
+	rs.streamingFlag.Store(true)
 }
 
 func (rs *snapshotState) clearStreaming() {
-	atomic.StoreUint32(&rs.streamingFlag, 0)
+	rs.streamingFlag.Store(false)
 }
 
 func (rs *snapshotState) saving() bool {
-	return atomic.LoadUint32(&rs.savingFlag) == 1
+	return rs.savingFlag.Load()
 }
 
 func (rs *snapshotState) setSaving() {
-	atomic.StoreUint32(&rs.savingFlag, 1)
+	rs.savingFlag.Store(true)
 }
 
 func (rs *snapshotState) clearSaving() {
-	atomic.StoreUint32(&rs.savingFlag, 0)
+	rs.savingFlag.Store(false)
 }
 
 func (rs *snapshotState) setIndex(index uint64) {

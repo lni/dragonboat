@@ -29,15 +29,15 @@ type quiesceState struct {
 	idleSince           uint64
 	exitQuiesceTick     uint64
 	enabled             bool
-	newQuiesceStateFlag uint32
+	newQuiesceStateFlag atomic.Bool
 }
 
 func (q *quiesceState) setNewQuiesceStateFlag() {
-	atomic.StoreUint32(&q.newQuiesceStateFlag, 1)
+	q.newQuiesceStateFlag.Store(true)
 }
 
 func (q *quiesceState) newQuiesceState() bool {
-	return atomic.SwapUint32(&q.newQuiesceStateFlag, 0) == 1
+	return q.newQuiesceStateFlag.Swap(false)
 }
 
 func (q *quiesceState) tick() uint64 {

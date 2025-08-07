@@ -2439,7 +2439,7 @@ func TestOnDiskStateMachineDoesNotSupportClientSession(t *testing.T) {
 func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 	fs := vfs.GetTestFS()
 	fakeDiskSM := tests.NewFakeDiskSM(0)
-	atomic.StoreUint32(&fakeDiskSM.SlowOpen, 1)
+	fakeDiskSM.SlowOpen.Store(true)
 	to := &testOption{
 		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
 			return fakeDiskSM
@@ -2451,7 +2451,7 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 			_, err := nh.StaleRead(1, nil)
 			require.ErrorIs(t, err, ErrShardNotInitialized,
 				"expected to return ErrShardNotInitialized")
-			atomic.StoreUint32(&fakeDiskSM.SlowOpen, 0)
+			fakeDiskSM.SlowOpen.Store(false)
 			for !n.initialized() {
 				runtime.Gosched()
 			}
@@ -2467,7 +2467,7 @@ func TestStaleReadOnUninitializedNodeReturnError(t *testing.T) {
 func TestStartReplicaWaitForReadiness(t *testing.T) {
 	fs := vfs.GetTestFS()
 	fakeDiskSM := tests.NewFakeDiskSM(0)
-	atomic.StoreUint32(&fakeDiskSM.SlowOpen, 1)
+	fakeDiskSM.SlowOpen.Store(true)
 	to := &testOption{
 		defaultTestNode: false,
 		noElection:      true,
@@ -2476,7 +2476,7 @@ func TestStartReplicaWaitForReadiness(t *testing.T) {
 			cfg.WaitReady = true
 
 			go func() {
-				defer atomic.StoreUint32(&fakeDiskSM.SlowOpen, 0)
+				defer fakeDiskSM.SlowOpen.Store(false)
 				var n *node
 				var ok bool
 
