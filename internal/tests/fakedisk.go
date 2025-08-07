@@ -26,7 +26,7 @@ import (
 
 // FakeDiskSM is a test state machine.
 type FakeDiskSM struct {
-	SlowOpen       uint32
+	SlowOpen       atomic.Bool
 	initialApplied uint64
 	count          uint64
 	aborted        bool
@@ -40,7 +40,7 @@ func NewFakeDiskSM(initialApplied uint64) *FakeDiskSM {
 
 // Open opens the state machine.
 func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
-	for atomic.LoadUint32(&f.SlowOpen) > 0 {
+	for f.SlowOpen.Load() {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return f.initialApplied, nil

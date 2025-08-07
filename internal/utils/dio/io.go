@@ -38,7 +38,7 @@ const (
 // CountedWriter is a io.WriteCloser wrapper that keeps the total number of bytes
 // written to the underlying writer.
 type CountedWriter struct {
-	closed uint32
+	closed atomic.Bool
 	total  uint64
 	w      io.WriteCloser
 }
@@ -57,14 +57,14 @@ func (cw *CountedWriter) Write(data []byte) (int, error) {
 // Close closes the underlying writer.
 func (cw *CountedWriter) Close() error {
 	defer func() {
-		atomic.StoreUint32(&cw.closed, 1)
+		cw.closed.Store(true)
 	}()
 	return cw.w.Close()
 }
 
 // BytesWritten returns the total number of bytes written.
 func (cw *CountedWriter) BytesWritten() uint64 {
-	if atomic.LoadUint32(&cw.closed) == 0 {
+	if !cw.closed.Load() {
 		panic("calling BytesWritten before close is called")
 	}
 	return cw.total
