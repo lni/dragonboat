@@ -5448,3 +5448,404 @@ func TestSlowTestStressedSnapshotWorker(t *testing.T) {
 		}
 	}
 }
+
+func TestOnDiskSMOpenWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	openErr := fmt.Errorf("open err")
+	fakeDiskSM.OpenErr.Store(&openErr)
+	handled := make(chan struct{})
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				close(handled)
+				require.Equal(t, openErr, err)
+			}
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return fakeDiskSM
+		},
+		tf: func(nh *NodeHost) {
+			select {
+			case <-handled:
+			case <-time.After(time.Second * 10):
+				require.Fail(t, "FailHandler not called")
+			}
+
+			_, ok := nh.getShard(1)
+			require.False(t, ok)
+		},
+		noElection: true,
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func TestOnDiskSMCloseWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	closeErr := fmt.Errorf("close err")
+	fakeDiskSM.CloseErr.Store(&closeErr)
+	handled := make(chan struct{})
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				close(handled)
+				require.Equal(t, closeErr, err)
+			}
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return fakeDiskSM
+		},
+		tf: func(nh *NodeHost) {
+		},
+		at: func(nh *NodeHost) {
+			select {
+			case <-handled:
+			case <-time.After(time.Second * 10):
+				require.Fail(t, "FailHandler not called")
+			}
+		},
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func TestOnDiskSMUpdateWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	updateErr := fmt.Errorf("update fail")
+	handled := make(chan struct{})
+	proposedCount := 0
+
+	var smPointer atomic.Pointer[tests.FakeDiskSM]
+	smPointer.Store(fakeDiskSM)
+
+	var timeout time.Duration
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				require.Equal(t, updateErr, err)
+				close(handled)
+			}
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return smPointer.Load()
+		},
+		tf: func(nh *NodeHost) {
+			timeout = pto(nh)
+
+			for i := 0; i < 9; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), timeout)
+				sess := nh.GetNoOPSession(1)
+				_, err := nh.SyncPropose(ctx, sess, make([]byte, 1))
+				cancel()
+				require.NoError(t, err)
+				proposedCount++
+			}
+
+			fakeDiskSM.UpdateErr.Store(&updateErr)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			sess := nh.GetNoOPSession(1)
+			_, err := nh.SyncPropose(ctx, sess, make([]byte, 1))
+			cancel()
+			proposedCount++ // committed but not applied
+
+			// Update fail, shard closes
+			if !errors.Is(err, ErrShardClosed) && !errors.Is(err, ErrShardNotFound) {
+				require.Fail(t, "SyncPropose: unexpected err: %v", err)
+			}
+
+			select {
+			case <-handled:
+			case <-time.After(time.Second * 5):
+				require.Fail(t, "FailHandler not called")
+			}
+
+			_, ok := nh.getShard(1)
+			require.False(t, ok)
+
+			// "fix" replica and restart
+			fakeDiskSM := tests.NewFakeDiskSM(0)
+			smPointer.Store(fakeDiskSM)
+		},
+		restartNodeHost: true,
+		rf: func(nh *NodeHost) {
+			waitForLeaderToBeElected(t, nh, 1)
+			appliedCount := readFakeDiskSMState(t, nh, 1, timeout)
+			require.EqualValues(t, proposedCount, appliedCount, "replica did not reapply last entry")
+		},
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func TestOnDiskSMPrepareSnapshotWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	prepareSnapshotErr := fmt.Errorf("prepare snapshot fail")
+	fakeDiskSM.PrepareSnapshotErr.Store(&prepareSnapshotErr)
+	handled := make(chan struct{})
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				close(handled)
+				require.Equal(t, prepareSnapshotErr, err)
+			}
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return fakeDiskSM
+		},
+		tf: func(nh *NodeHost) {
+			_, err := requestSnapshot(t, nh, 1, fs)
+
+			if !errors.Is(err, ErrRejected) && !errors.Is(err, ErrShardClosed) {
+				require.Fail(t, "SyncRequestSnapshot unexpected err: %v", err)
+			}
+
+			select {
+			case <-handled:
+			case <-time.After(time.Second * 5):
+				require.Fail(t, "FailHandler not called")
+			}
+
+			_, ok := nh.getShard(1)
+			require.False(t, ok)
+		},
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func TestOnDiskSMSaveSnapshotWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	saveSnapshotErr := fmt.Errorf("save snapshot fail")
+	fakeDiskSM.SaveSnapshotErr.Store(&saveSnapshotErr)
+	handled := make(chan struct{})
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				close(handled)
+				require.Equal(t, saveSnapshotErr, err)
+			}
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return fakeDiskSM
+		},
+		tf: func(nh *NodeHost) {
+			_, err := requestSnapshot(t, nh, 1, fs)
+
+			if !errors.Is(err, ErrShardClosed) {
+				require.Fail(t, "SyncRequestSnapshot unexpected err: %v", err)
+			}
+
+			select {
+			case <-handled:
+			case <-time.After(time.Second * 5):
+				require.Fail(t, "FailHandler not called", err)
+			}
+
+			_, ok := nh.getShard(1)
+			require.False(t, ok)
+		},
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func requestSnapshot(t *testing.T, nh *NodeHost, shardID uint64, fs vfs.IFS) (uint64, error) {
+	sspath := "exported_snapshot_safe_to_delete"
+	err := fs.RemoveAll(sspath)
+	require.NoError(t, err)
+	err = fs.MkdirAll(sspath, 0755)
+	require.NoError(t, err)
+
+	defer func() {
+		err := fs.RemoveAll(sspath)
+		require.NoError(t, err)
+	}()
+
+	opt := SnapshotOption{
+		ExportPath: sspath,
+		Exported:   true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	return nh.SyncRequestSnapshot(ctx, shardID, opt)
+}
+
+func TestOnDiskSMSnapshotSyncWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	fakeDiskSM := tests.NewFakeDiskSM(0)
+	handled := make(chan struct{})
+	syncErr := fmt.Errorf("sync err")
+	snapshotEntries := uint64(10)
+
+	var smPointer atomic.Pointer[tests.FakeDiskSM]
+	smPointer.Store(fakeDiskSM)
+
+	var timeout time.Duration
+
+	to := &testOption{
+		updateConfig: func(c *config.Config) *config.Config {
+			c.FaultHandler = func(err error) {
+				close(handled)
+				require.Equal(t, syncErr, err)
+			}
+			c.SnapshotEntries = snapshotEntries
+			return c
+		},
+		createOnDiskSM: func(uint64, uint64) sm.IOnDiskStateMachine {
+			return smPointer.Load()
+		},
+		tf: func(nh *NodeHost) {
+			timeout = pto(nh)
+			fakeDiskSM.SyncErr.Store(&syncErr)
+
+			session := nh.GetNoOPSession(1)
+
+			for i := 0; i < int(snapshotEntries); i++ {
+				_, err := nh.Propose(session, []byte("test-data"), timeout)
+				if errors.Is(err, ErrShardClosed) || errors.Is(err, ErrShardNotFound) {
+					break
+				}
+				require.NoError(t, err)
+			}
+
+			select {
+			case <-time.After(time.Second * 10):
+				require.Fail(t, "FailHandler not called")
+			case <-handled:
+			}
+
+			_, ok := nh.getShard(1)
+			require.False(t, ok)
+
+			// "fix" replica and restart
+			fakeDiskSM := tests.NewFakeDiskSM(0)
+			smPointer.Store(fakeDiskSM)
+		},
+		restartNodeHost: true,
+		rf: func(nh *NodeHost) {
+			waitForLeaderToBeElected(t, nh, 1)
+			appliedCount := readFakeDiskSMState(t, nh, 1, timeout)
+
+			require.Equal(t, snapshotEntries, appliedCount, "replica did not recover from sync failure")
+		},
+	}
+
+	runNodeHostTest(t, to, fs)
+}
+
+func TestOnDiskSMRecoverWithFailHandler(t *testing.T) {
+	fs := vfs.GetTestFS()
+	tf := func(t *testing.T, nh1 *NodeHost, nh2 *NodeHost) {
+		rc := config.Config{
+			ShardID:            1,
+			ReplicaID:          1,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+		}
+		sm1 := tests.NewFakeDiskSM(0)
+		sm1.SetAborted()
+		peers := make(map[uint64]string)
+		peers[1] = nodeHostTestAddr1
+		newSM := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return sm1
+		}
+		err := nh1.StartOnDiskReplica(peers, false, newSM, rc)
+		require.NoError(t, err)
+		waitForLeaderToBeElected(t, nh1, 1)
+		session := nh1.GetNoOPSession(1)
+		proposalCount := 10
+		pto := pto(nh1)
+		for i := 0; i < proposalCount; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), pto)
+			_, err := nh1.SyncPropose(ctx, session, []byte("test-data"))
+			cancel()
+			require.NoError(t, err)
+		}
+
+		lpto := lpto(nh1)
+		ctx, cancel := context.WithTimeout(context.Background(), lpto)
+		err = nh1.SyncRequestAddReplica(ctx, 1, 2, nodeHostTestAddr2, 0)
+		cancel()
+		require.NoError(t, err)
+		sm1.ClearAborted()
+
+		recoverErr := fmt.Errorf("recover fail")
+		handled := make(chan struct{})
+		r2c := config.Config{
+			ShardID:            1,
+			ReplicaID:          2,
+			ElectionRTT:        3,
+			HeartbeatRTT:       1,
+			CheckQuorum:        true,
+			SnapshotEntries:    5,
+			CompactionOverhead: 2,
+			FaultHandler: func(err error) {
+				close(handled)
+				require.Equal(t, recoverErr, err)
+			},
+		}
+
+		sm2 := tests.NewFakeDiskSM(0)
+		sm2.RecoverErr.Store(&recoverErr)
+		sm2.SetAborted()
+
+		var sm2Pointer atomic.Pointer[tests.FakeDiskSM]
+		sm2Pointer.Store(sm2)
+		newSM2 := func(uint64, uint64) sm.IOnDiskStateMachine {
+			return sm2Pointer.Load()
+		}
+		err = nh2.StartOnDiskReplica(nil, true, newSM2, r2c)
+		require.NoError(t, err)
+		waitForLeaderToBeElected(t, nh2, 1)
+		select {
+		case <-time.After(time.Second * 5):
+			require.Fail(t, "FailHandler not called")
+		case <-handled:
+		}
+
+		_, ok := nh2.getShard(1)
+		require.False(t, ok)
+
+		// "fix" replica and start again
+		reloadedSm := tests.NewFakeDiskSM(uint64(proposalCount - 1))
+		sm2Pointer.Store(reloadedSm)
+		err = nh2.StartOnDiskReplica(nil, true, newSM2, r2c)
+		require.NoError(t, err)
+
+		waitForLeaderToBeElected(t, nh2, 1)
+
+		appliedCount := readFakeDiskSMState(t, nh2, 1, pto)
+		require.EqualValues(t, proposalCount, appliedCount, "recovery is incomplete")
+	}
+	twoFakeDiskNodeHostTest(t, tf, fs)
+}
+
+func readFakeDiskSMState(t *testing.T, nh *NodeHost, shard uint64, timeout time.Duration) uint64 {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	result, err := nh.SyncRead(ctx, shard, nil)
+	cancel()
+
+	require.NoError(t, err)
+
+	count := binary.LittleEndian.Uint64(result.([]byte))
+
+	return count
+}

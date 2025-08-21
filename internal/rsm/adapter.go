@@ -254,6 +254,26 @@ type ITestFS interface {
 	SetTestFS(fs config.IFS)
 }
 
+type UserSmError struct {
+	wrapped error
+}
+
+func (e UserSmError) Error() string {
+	return e.wrapped.Error()
+}
+
+func (e UserSmError) Unwrap() error {
+	return e.wrapped
+}
+
+func UnwrapUserSmError(err error) error {
+	smErr := UserSmError{}
+	if errors.As(err, &smErr) {
+		return smErr.Unwrap()
+	}
+	return nil
+}
+
 // OnDiskStateMachine is the type to represent an on disk state machine.
 type OnDiskStateMachine struct {
 	sm     sm.IOnDiskStateMachine
@@ -289,6 +309,7 @@ func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 	}
 	s.opened = true
 	applied, err := s.sm.Open(stopc)
+	err = s.wrapUserError(err)
 	return applied, errors.WithStack(err)
 }
 
@@ -296,6 +317,7 @@ func (s *OnDiskStateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 func (s *OnDiskStateMachine) Update(entries []sm.Entry) ([]sm.Entry, error) {
 	s.ensureOpened()
 	results, err := s.sm.Update(entries)
+	err = s.wrapUserError(err)
 	return results, errors.WithStack(err)
 }
 
@@ -314,33 +336,42 @@ func (s *OnDiskStateMachine) NALookup(query []byte) ([]byte, error) {
 // Sync synchronizes all in-core state with that on disk.
 func (s *OnDiskStateMachine) Sync() error {
 	s.ensureOpened()
-	return errors.WithStack(s.sm.Sync())
+	err := s.sm.Sync()
+	err = s.wrapUserError(err)
+	return errors.WithStack(err)
 }
 
 // Prepare makes preparations for taking concurrent snapshot.
 func (s *OnDiskStateMachine) Prepare() (interface{}, error) {
 	s.ensureOpened()
 	results, err := s.sm.PrepareSnapshot()
+	err = s.wrapUserError(err)
 	return results, errors.WithStack(err)
 }
 
 // Save saves the snapshot.
 func (s *OnDiskStateMachine) Save(ctx interface{},
-	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) error {
+	w io.Writer, fc sm.ISnapshotFileCollection, stopc <-chan struct{}) (err error) {
 	s.ensureOpened()
-	return errors.WithStack(s.sm.SaveSnapshot(ctx, w, stopc))
+	err = s.sm.SaveSnapshot(ctx, w, stopc)
+	err = s.wrapUserError(err)
+	return errors.WithStack(err)
 }
 
 // Recover recovers the state machine from a snapshot.
 func (s *OnDiskStateMachine) Recover(r io.Reader,
 	fs []sm.SnapshotFile, stopc <-chan struct{}) error {
 	s.ensureOpened()
-	return errors.WithStack(s.sm.RecoverFromSnapshot(r, stopc))
+	err := s.sm.RecoverFromSnapshot(r, stopc)
+	err = s.wrapUserError(err)
+	return errors.WithStack(err)
 }
 
 // Close closes the state machine.
 func (s *OnDiskStateMachine) Close() error {
-	return errors.WithStack(s.sm.Close())
+	err := s.sm.Close()
+	err = s.wrapUserError(err)
+	return errors.WithStack(err)
 }
 
 // GetHash returns the uint64 hash value representing the state of a state
@@ -351,6 +382,7 @@ func (s *OnDiskStateMachine) GetHash() (uint64, error) {
 		return 0, sm.ErrNotImplemented
 	}
 	h, err := s.h.GetHash()
+	err = s.wrapUserError(err)
 	return h, errors.WithStack(err)
 }
 
@@ -375,4 +407,15 @@ func (s *OnDiskStateMachine) ensureOpened() {
 	if !s.opened {
 		panic("not opened")
 	}
+}
+
+func (s *OnDiskStateMachine) wrapUserError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, sm.ErrSnapshotAborted) {
+		return err
+	}
+
+	return UserSmError{wrapped: err}
 }

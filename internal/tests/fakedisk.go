@@ -31,6 +31,14 @@ type FakeDiskSM struct {
 	count          uint64
 	aborted        bool
 	recovered      bool
+
+	OpenErr            atomic.Pointer[error]
+	CloseErr           atomic.Pointer[error]
+	UpdateErr          atomic.Pointer[error]
+	SyncErr            atomic.Pointer[error]
+	PrepareSnapshotErr atomic.Pointer[error]
+	SaveSnapshotErr    atomic.Pointer[error]
+	RecoverErr         atomic.Pointer[error]
 }
 
 // NewFakeDiskSM creates a new fake disk sm for testing purpose.
@@ -42,6 +50,10 @@ func NewFakeDiskSM(initialApplied uint64) *FakeDiskSM {
 func (f *FakeDiskSM) Open(stopc <-chan struct{}) (uint64, error) {
 	for atomic.LoadUint32(&f.SlowOpen) > 0 {
 		time.Sleep(10 * time.Millisecond)
+	}
+	err := f.OpenErr.Load()
+	if err != nil {
+		return 0, *err
 	}
 	return f.initialApplied, nil
 }
@@ -68,6 +80,11 @@ func (f *FakeDiskSM) Recovered() bool {
 
 // Update updates the state machine.
 func (f *FakeDiskSM) Update(ents []sm.Entry) ([]sm.Entry, error) {
+	err := f.UpdateErr.Load()
+	if err != nil {
+		return nil, *err
+	}
+
 	for _, e := range ents {
 		if e.Index <= f.initialApplied {
 			panic("already applied index received again")
@@ -88,18 +105,30 @@ func (f *FakeDiskSM) Lookup(query interface{}) (interface{}, error) {
 
 // PrepareSnapshot prepares snapshotting.
 func (f *FakeDiskSM) PrepareSnapshot() (interface{}, error) {
+	err := f.PrepareSnapshotErr.Load()
+	if err != nil {
+		return nil, *err
+	}
 	pit := &FakeDiskSM{initialApplied: f.initialApplied, count: f.count}
 	return pit, nil
 }
 
 // Sync synchronize all in-core state.
 func (f *FakeDiskSM) Sync() error {
+	err := f.SyncErr.Load()
+	if err != nil {
+		return *err
+	}
 	return nil
 }
 
 // SaveSnapshot saves the state to a snapshot.
 func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 	w io.Writer, stopc <-chan struct{}) error {
+	err := f.SaveSnapshotErr.Load()
+	if err != nil {
+		return *err
+	}
 	if !f.aborted {
 		f.aborted = true
 		return sm.ErrSnapshotAborted
@@ -121,6 +150,10 @@ func (f *FakeDiskSM) SaveSnapshot(ctx interface{},
 // RecoverFromSnapshot recovers the state of the state machine from a snapshot.
 func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 	stopc <-chan struct{}) error {
+	err := f.RecoverErr.Load()
+	if err != nil {
+		return *err
+	}
 	f.recovered = true
 	v := make([]byte, 8)
 	if _, err := io.ReadFull(r, v); err != nil {
@@ -137,6 +170,10 @@ func (f *FakeDiskSM) RecoverFromSnapshot(r io.Reader,
 
 // Close closes the state machine.
 func (f *FakeDiskSM) Close() error {
+	err := f.CloseErr.Load()
+	if err != nil {
+		return *err
+	}
 	return nil
 }
 
