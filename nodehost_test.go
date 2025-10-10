@@ -4964,7 +4964,11 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 				"proposal unexpectedly completed, %v", err)
 			select {
 			case e := <-nh.engine.ec:
-				require.Equal(t, vfs.ErrInjected, e,
+				// PebbleDB v1.1.5 wraps VFS injected errors with string prefix
+				// e.g., "pebble: fatal commit error: injected error"
+				// Check if error message contains "inject" since PebbleDB doesn't preserve error chain
+				errMsg := e.Error()
+				require.Contains(t, errMsg, "inject",
 					"failed to return the expected error, %v", e)
 			default:
 				require.Fail(t, "failed to trigger error")

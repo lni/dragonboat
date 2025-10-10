@@ -70,7 +70,11 @@ func (p *PebbleFS) GetDiskUsage(path string) (pvfs.DiskUsage, error) {
 
 // Create ...
 func (p *PebbleFS) Create(name string) (pvfs.File, error) {
-	return p.fs.Create(name)
+	f, err := p.fs.Create(name)
+	if err != nil {
+		return nil, err
+	}
+	return &pebbleFile{File: f}, nil
 }
 
 // Link ...
@@ -84,15 +88,22 @@ func (p *PebbleFS) Open(name string, opts ...pvfs.OpenOption) (pvfs.File, error)
 	if err != nil {
 		return nil, err
 	}
+
+	pf := &pebbleFile{File: f}
+
 	for _, opt := range opts {
-		opt.Apply(f)
+		opt.Apply(pf)
 	}
-	return f, nil
+	return pf, nil
 }
 
 // OpenDir ...
 func (p *PebbleFS) OpenDir(name string) (pvfs.File, error) {
-	return p.fs.OpenDir(name)
+	f, err := p.fs.OpenDir(name)
+	if err != nil {
+		return nil, err
+	}
+	return &pebbleFile{File: f}, nil
 }
 
 // Remove ...
@@ -112,7 +123,11 @@ func (p *PebbleFS) Rename(oldname, newname string) error {
 
 // ReuseForWrite ...
 func (p *PebbleFS) ReuseForWrite(oldname, newname string) (pvfs.File, error) {
-	return p.fs.ReuseForWrite(oldname, newname)
+	f, err := p.fs.ReuseForWrite(oldname, newname)
+	if err != nil {
+		return nil, err
+	}
+	return &pebbleFile{File: f}, nil
 }
 
 // MkdirAll ...
@@ -175,4 +190,63 @@ func Clean(dir string) string {
 // ReportLeakedFD reports leaked file fds.
 func ReportLeakedFD(fs IFS, t *testing.T) {
 	gvfs.ReportLeakedFD(fs, t)
+}
+
+// Additional VFS methods for PebbleDB v1.1.5 compatibility
+
+// pebbleFile wraps gvfs.File to add Fd() method for PebbleDB compatibility
+type pebbleFile struct {
+	gvfs.File
+}
+
+// Fd returns -1 as lni/vfs doesn't support file descriptors
+// This is acceptable for PebbleDB as Fd() is only used for some optimizations
+func (f *pebbleFile) Fd() uintptr {
+	return ^uintptr(0) // returns -1 (invalid fd)
+}
+
+// OpenReadWrite opens a file for reading and writing
+func (p *PebbleFS) OpenReadWrite(name string, opts ...pvfs.OpenOption) (pvfs.File, error) {
+	// lni/vfs doesn't have OpenReadWrite, so we use Create which opens for read/write
+	f, err := p.fs.Create(name)
+	if err != nil {
+		return nil, err
+	}
+
+	pf := &pebbleFile{File: f}
+
+	for _, opt := range opts {
+		opt.Apply(pf)
+	}
+	return pf, nil
+}
+
+// Preallocate preallocates disk space for the file.
+// This is an optimization hint - lni/vfs doesn't support it, so we no-op.
+// Returning nil is correct: PebbleDB will work without preallocation,
+// just potentially with more fragmentation.
+func (f *pebbleFile) Preallocate(offset, length int64) error {
+	return nil
+}
+
+// Prefetch advises the OS to prefetch a file range into cache.
+// This is an optimization hint - lni/vfs doesn't support it, so we no-op.
+// Returning nil is correct: PebbleDB will work without prefetching,
+// just potentially with slower initial reads.
+func (f *pebbleFile) Prefetch(offset, length int64) error {
+	return nil
+}
+
+// SyncData syncs only the file data (not metadata)
+// We delegate to Sync() which syncs both data and metadata
+func (f *pebbleFile) SyncData() error {
+	return f.Sync()
+}
+
+// SyncTo syncs data up to the given length
+// We delegate to Sync() which syncs the entire file
+func (f *pebbleFile) SyncTo(length int64) (bool, error) {
+	err := f.Sync()
+	// Return false as we sync everything, not just up to length
+	return false, err
 }

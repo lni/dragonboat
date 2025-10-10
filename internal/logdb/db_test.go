@@ -46,6 +46,11 @@ func getDirSize(path string,
 	for _, v := range results {
 		info, err := fs.Stat(fs.PathJoin(path, v))
 		if err != nil {
+			// File may have been deleted/renamed during compaction (normal for LSM-tree)
+			// Skip this file and continue
+			if strings.Contains(err.Error(), "no such file or directory") {
+				continue
+			}
 			return 0, err
 		}
 		if !info.IsDir() {
