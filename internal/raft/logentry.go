@@ -20,6 +20,7 @@ import (
 	"github.com/lni/dragonboat/v4/internal/server"
 	"github.com/lni/dragonboat/v4/internal/settings"
 	pb "github.com/lni/dragonboat/v4/raftpb"
+	toolsConfig "github.com/lni/dragonboat/v4/tools/config"
 )
 
 var (
@@ -267,8 +268,25 @@ func (l *entryLog) entriesToApply() ([]pb.Entry, error) {
 
 func (l *entryLog) getEntriesToApply(limit uint64) ([]pb.Entry, error) {
 	if l.hasEntriesToApply() {
-		ents, err := l.getEntries(l.firstNotAppliedIndex(),
-			l.toApplyIndexLimit(), limit)
+		var ents []pb.Entry
+		var err error
+		start := l.firstNotAppliedIndex()
+		end := l.toApplyIndexLimit()
+		//开启之后获取数据是精准的
+		//开启之后获取数据是精准的
+		if toolsConfig.SnapshotSwitch {
+			if toolsConfig.RNC.SnapshotEndIndex != 0 {
+				if toolsConfig.RNC.SnapshotEndIndex == start {
+					end = toolsConfig.RNC.SnapshotEndIndex + 1
+				} else if toolsConfig.RNC.SnapshotEndIndex > start &&
+					toolsConfig.RNC.SnapshotEndIndex < end {
+					end = toolsConfig.RNC.SnapshotEndIndex + 1
+				}
+			}
+		}
+
+		ents, err = l.getEntries(l.firstNotAppliedIndex(),
+			end, limit)
 		if err != nil {
 			return nil, err
 		}

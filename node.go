@@ -692,20 +692,20 @@ func (n *node) replayLog(shardID uint64, replicaID uint64) (bool, error) {
 }
 
 func (n *node) saveSnapshotRequired(applied uint64) bool {
-	if n.config.SnapshotEntries == 0 {
+	snapshotEntries := n.config.SnapshotEntries
+	if snapshotEntries == 0 {
 		return false
 	}
 	index := n.ss.getIndex()
-	if n.pushedIndex <= n.config.SnapshotEntries+index ||
-		applied <= n.config.SnapshotEntries+index ||
-		applied <= n.config.SnapshotEntries+n.ss.getReqIndex() {
+	if n.pushedIndex < snapshotEntries+index ||
+		//applied <= n.config.SnapshotEntries+index ||
+		n.pushedIndex < snapshotEntries+n.ss.getReqIndex() {
 		return false
 	}
 	if n.isBusySnapshotting() {
 		return false
 	}
-	plog.Debugf("%s requested to create %s", n.id(), n.ssid(applied))
-	n.ss.setReqIndex(applied)
+	n.ss.setReqIndex(n.pushedIndex)
 	return true
 }
 
@@ -1528,6 +1528,7 @@ func (n *node) processRecoverStatus() bool {
 			})
 		}
 		n.ss.clearRecovering()
+		n.sm.SetSnapshotting(false)
 	}
 	return false
 }
@@ -1542,6 +1543,7 @@ func (n *node) processSaveStatus() bool {
 			plog.Panicf("%s taking snapshot when uninitialized", n.id())
 		}
 		n.ss.clearSaving()
+		n.sm.SetSnapshotting(false)
 	}
 	return false
 }
@@ -1555,6 +1557,7 @@ func (n *node) processStreamStatus() bool {
 			return false
 		}
 		n.ss.clearStreaming()
+		n.sm.SetSnapshotting(false)
 	}
 	return false
 }

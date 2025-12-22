@@ -83,6 +83,7 @@ import (
 	"github.com/lni/dragonboat/v4/raftio"
 	pb "github.com/lni/dragonboat/v4/raftpb"
 	sm "github.com/lni/dragonboat/v4/statemachine"
+	toolsConfig "github.com/lni/dragonboat/v4/tools/config"
 )
 
 const (
@@ -2193,4 +2194,42 @@ func panicNow(err error) {
 	}
 	plog.Panicf("%+v", err)
 	panic(err)
+}
+
+// SetSnapshotEntities 动态覆盖 SnapshotEntries 入参
+/**
+*applyIndex 需要补齐为 1000 的整数倍
+*snapshotEntityFlushGap 额外补齐的跨度,必须为 X*1000
+ */
+func (nh *NodeHost) SetSnapshotEntities(shardId uint64, applyIndex uint64, snapshotEntityFlushGap uint64) error {
+	rn, isOk := nh.getShard(shardId)
+	if !isOk {
+		plog.Warningf("shard not found: %d", shardId)
+		return ErrShardNotFound
+	}
+	if applyIndex+snapshotEntityFlushGap < rn.pushedIndex {
+		plog.Warningf("SetNodeConfig,applyIndex+snapshotEntityFlushIndex < rn.pushedIndex ,rn.pushedIndex: %d,applyIndex: %d , snapshotEntityFlushIndex: %d ", rn.pushedIndex, applyIndex, snapshotEntityFlushGap)
+		return errors.New("applyIndex+snapshotEntityFlushGap < rn.pushedIndex")
+	}
+	realGap := applyIndex - rn.ss.getIndex() + snapshotEntityFlushGap
+	rn.config.SnapshotEntries = realGap
+
+	rn.config.SnapshotEndIndex = applyIndex + snapshotEntityFlushGap
+	toolsConfig.SetRNodeConfig(&rn.config)
+	toolsConfig.SetSnapshotSwitch(true)
+	plog.Infof("SetNodeConfig --saveSnapshotRequired, rn.config.SnapshotEntries: %d, snapshotEntityFlushIndex: %d,applyIndex: %d ,rn.appliedIndex: %d ,rn.ss.getIndex(): %d  ", rn.config.SnapshotEntries, snapshotEntityFlushGap, applyIndex, rn.pushedIndex, rn.ss.getIndex())
+
+	return nil
+}
+
+func (nh *NodeHost) SetNodeConfig(shardId uint64, snapshotEntities uint64) error {
+	rn, isOk := nh.getShard(shardId)
+	if !isOk {
+		return ErrShardNotFound
+	}
+	rn.config.SnapshotEntries = snapshotEntities
+	toolsConfig.SetSnapshotSwitch(false)
+	rn.config.SnapshotEndIndex = 0
+	toolsConfig.SetRNodeConfig(&rn.config)
+	return nil
 }

@@ -1221,6 +1221,7 @@ func (e *engine) processApplies(idmap map[uint64]struct{},
 			return err
 		}
 		if task.IsSnapshotTask() {
+			node.sm.SetSnapshotting(true)
 			node.handleSnapshotTask(task)
 		}
 	}

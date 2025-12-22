@@ -191,6 +191,7 @@ type StateMachine struct {
 	onDiskSM        bool
 	aborted         bool
 	isWitness       bool
+	snapshotting    atomic.Bool
 }
 
 var firstError = utils.FirstError
@@ -212,6 +213,14 @@ func NewStateMachine(sm IManagedStateMachine,
 		sct:         cfg.SnapshotCompressionType,
 		fs:          fs,
 	}
+}
+
+func (s *StateMachine) IsSnapshotting() bool {
+	return s.snapshotting.Load()
+}
+
+func (s *StateMachine) SetSnapshotting(snapshot bool) {
+	s.snapshotting.Store(snapshot)
 }
 
 // Type returns the state machine type.
@@ -799,6 +808,7 @@ func (s *StateMachine) concurrentSave(r SSRequest) (pb.Snapshot, SSEnv, error) {
 	if err := func() error {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
+		defer s.SetSnapshotting(false)
 		meta, err = s.prepare(r)
 		return err
 	}(); err != nil {

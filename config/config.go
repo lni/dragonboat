@@ -117,6 +117,8 @@ type Config struct {
 	// field to 0, users can still use NodeHost's RequestSnapshot or
 	// SyncRequestSnapshot methods to manually request snapshots.
 	SnapshotEntries uint64
+	// snapshot start index
+	SnapshotEndIndex uint64
 	// CompactionOverhead defines the number of most recent entries to keep after
 	// each Raft log compaction. Raft log compaction is performed automatically
 	// every time a snapshot is created.
