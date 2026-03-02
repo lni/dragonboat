@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 
 	"github.com/cockroachdb/errors"
 	"github.com/lni/goutils/logutil"
@@ -199,6 +200,7 @@ var dn = logutil.DescribeNode
 type raft struct {
 	handlers                  [numStates][numMessageTypes]handlerFunc
 	events                    server.IRaftEventListener
+	traceLogger               TraceLogger
 	hasNotAppliedConfigChange func() bool
 	votes                     map[uint64]bool
 	handle                    stepFunc
@@ -811,11 +813,26 @@ func (r *raft) sendReplicateMessage(to uint64) {
 		plog.Infof("%s is sending snapshot (%d) to %s, r.Next %d, r.Match %d, %v",
 			r.describe(), index, ReplicaID(to), rp.next, rp.match, err)
 		rp.becomeSnapshot(index)
+		r.send(m)
+		r.emitTrace("SendSnapshot", &TraceMsg{
+			From: strconv.FormatUint(r.replicaID, 10),
+			To:   strconv.FormatUint(to, 10),
+			Term: m.Term, LogIndex: index,
+		})
+		return
 	} else if len(m.Entries) > 0 {
 		lastIndex := m.Entries[len(m.Entries)-1].Index
 		rp.progress(lastIndex)
 	}
 	r.send(m)
+	if m.Type == pb.Replicate {
+		r.emitTrace("SendReplicateEntries", &TraceMsg{
+			From: strconv.FormatUint(r.replicaID, 10),
+			To:   strconv.FormatUint(to, 10),
+			Term: m.Term, LogIndex: m.LogIndex,
+			LogTerm: m.LogTerm, CommitIndex: m.Commit,
+		})
+	}
 }
 
 func (r *raft) broadcastReplicateMessage() {
@@ -841,6 +858,11 @@ func (r *raft) sendHeartbeatMessage(to uint64,
 		Commit:   commit,
 		Hint:     hint.Low,
 		HintHigh: hint.High,
+	})
+	r.emitTrace("SendHeartbeat", &TraceMsg{
+		From: strconv.FormatUint(r.replicaID, 10),
+		To:   strconv.FormatUint(to, 10),
+		Term: r.term, CommitIndex: commit,
 	})
 }
 
@@ -936,6 +958,9 @@ func (r *raft) tryCommit() bool {
 		// entries are only moved to logdb after they are applied which happens
 		// after being committed.
 		panic(err)
+	}
+	if ok {
+		r.emitTrace("AdvanceCommitIndex", nil)
 	}
 
 	return ok
@@ -1033,6 +1058,7 @@ func (r *raft) becomeCandidate() {
 	r.setLeaderID(NoLeader)
 	r.vote = r.replicaID
 	plog.Warningf("%s became candidate", r.describe())
+	r.emitTrace("BecomeCandidate", nil)
 }
 
 func (r *raft) becomeLeader() {
@@ -1047,6 +1073,7 @@ func (r *raft) becomeLeader() {
 	plog.Infof("%s became leader", r.describe())
 	// p72 of the raft thesis
 	r.appendEntries([]pb.Entry{{Type: pb.ApplicationEntry, Cmd: nil}})
+	r.emitTrace("BecomeLeader", nil)
 }
 
 func (r *raft) reset(term uint64, resetElectionTimeout bool) {
@@ -1405,6 +1432,11 @@ func (r *raft) handleHeartbeatMessage(m pb.Message) error {
 		Hint:     m.Hint,
 		HintHigh: m.HintHigh,
 	})
+	r.emitTrace("HandleHeartbeatRequest", &TraceMsg{
+		From: strconv.FormatUint(m.From, 10),
+		To:   strconv.FormatUint(r.replicaID, 10),
+		Term: m.Term,
+	})
 	return nil
 }
 
@@ -1438,6 +1470,11 @@ func (r *raft) handleInstallSnapshotMessage(m pb.Message) error {
 		}
 	}
 	r.send(resp)
+	r.emitTrace("HandleInstallSnapshot", &TraceMsg{
+		From: strconv.FormatUint(m.From, 10),
+		To:   strconv.FormatUint(r.replicaID, 10),
+		Term: m.Term, LogIndex: m.Snapshot.Index,
+	})
 	return nil
 }
 
@@ -1449,6 +1486,12 @@ func (r *raft) handleReplicateMessage(m pb.Message) error {
 	if m.LogIndex < r.log.committed {
 		resp.LogIndex = r.log.committed
 		r.send(resp)
+		r.emitTrace("HandleReplicateRequest", &TraceMsg{
+			From: strconv.FormatUint(m.From, 10),
+			To:   strconv.FormatUint(r.replicaID, 10),
+			Term: m.Term, LogIndex: m.LogIndex,
+			LogTerm: m.LogTerm, Reject: true,
+		})
 		return nil
 	}
 	ok, err := r.log.matchTerm(m.LogIndex, m.LogTerm)
@@ -1480,6 +1523,12 @@ func (r *raft) handleReplicateMessage(m pb.Message) error {
 		}
 	}
 	r.send(resp)
+	r.emitTrace("HandleReplicateRequest", &TraceMsg{
+		From: strconv.FormatUint(m.From, 10),
+		To:   strconv.FormatUint(r.replicaID, 10),
+		Term: m.Term, LogIndex: m.LogIndex,
+		LogTerm: m.LogTerm, Reject: resp.Reject,
+	})
 	return nil
 }
 
@@ -1718,6 +1767,11 @@ func (r *raft) handleNodeRequestVote(m pb.Message) error {
 		resp.Reject = true
 	}
 	r.send(resp)
+	r.emitTrace("HandleRequestVoteRequest", &TraceMsg{
+		From: strconv.FormatUint(m.From, 10),
+		To:   strconv.FormatUint(r.replicaID, 10),
+		Term: m.Term,
+	})
 	return nil
 }
 
@@ -1788,6 +1842,7 @@ func (r *raft) handleLeaderCheckQuorum(m pb.Message) error {
 		plog.Warningf("%s has lost quorum", r.describe())
 		r.becomeFollower(r.term, NoLeader)
 	}
+	r.emitTrace("CheckQuorum", nil)
 	return nil
 }
 
@@ -1809,6 +1864,7 @@ func (r *raft) handleLeaderPropose(m pb.Message) error {
 		}
 	}
 	r.appendEntries(m.Entries)
+	r.emitTrace("ClientRequest", nil)
 	r.broadcastReplicateMessage()
 
 	return nil
@@ -1904,6 +1960,13 @@ func (r *raft) handleLeaderReplicateResp(m pb.Message, rp *remote) error {
 			r.sendReplicateMessage(m.From)
 		}
 	}
+	r.emitTrace("HandleReplicateResponse", &TraceMsg{
+		From:     strconv.FormatUint(m.From, 10),
+		To:       strconv.FormatUint(r.replicaID, 10),
+		Term:     m.Term,
+		LogIndex: m.LogIndex,
+		Reject:   m.Reject,
+	})
 	return nil
 }
 
@@ -1919,6 +1982,11 @@ func (r *raft) handleLeaderHeartbeatResp(m pb.Message, rp *remote) error {
 	if m.Hint != 0 {
 		r.handleReadIndexLeaderConfirmation(m)
 	}
+	r.emitTrace("HandleHeartbeatResponse", &TraceMsg{
+		From: strconv.FormatUint(m.From, 10),
+		To:   strconv.FormatUint(r.replicaID, 10),
+		Term: m.Term,
+	})
 	return nil
 }
 
@@ -1987,6 +2055,12 @@ func (r *raft) handleLeaderSnapshotStatus(m pb.Message, rp *remote) error {
 				r.describe(), ReplicaID(m.From), rp.next)
 		}
 		rp.becomeWait()
+		r.emitTrace("HandleSnapshotStatus", &TraceMsg{
+			From:   strconv.FormatUint(m.From, 10),
+			To:     strconv.FormatUint(r.replicaID, 10),
+			Term:   m.Term,
+			Reject: m.Reject,
+		})
 	} else {
 		rp.setSnapshotAck(m.Hint, m.Reject)
 		r.snapshotting = true
@@ -2238,6 +2312,12 @@ func (r *raft) handleCandidateRequestVoteResp(m pb.Message) error {
 		return nil
 	}
 	count := r.handleVoteResp(m.From, m.Reject, false)
+	r.emitTrace("HandleRequestVoteResponse", &TraceMsg{
+		From:   strconv.FormatUint(m.From, 10),
+		To:     strconv.FormatUint(r.replicaID, 10),
+		Term:   m.Term,
+		Reject: m.Reject,
+	})
 	plog.Warningf("%s received %d votes and %d rejections, quorum is %d",
 		r.describe(), count, len(r.votes)-count, r.quorum())
 	// 3rd paragraph section 5.2 of the raft paper
