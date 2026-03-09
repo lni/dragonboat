@@ -69,6 +69,7 @@ func Launch(config config.Config,
 		dn(config.ShardID, config.ReplicaID), initial, newNode)
 	p := Peer{raft: newRaft(config, logdb)}
 	p.raft.events = events
+	p.raft.traceLogger = getGlobalTraceLogger()
 	p.prevState = p.raft.raftState()
 	if initial && newNode {
 		p.raft.becomeFollower(1, NoLeader)
@@ -91,6 +92,11 @@ func (p *Peer) QuiescedTick() error {
 		Type:   pb.LocalTick,
 		Reject: true,
 	})
+}
+
+// SetTraceLogger sets the trace logger for TLA+ trace validation.
+func (p *Peer) SetTraceLogger(tl TraceLogger) {
+	p.raft.traceLogger = tl
 }
 
 func (p *Peer) QueryRaftLog(firstIndex uint64,

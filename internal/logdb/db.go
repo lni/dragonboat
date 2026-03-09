@@ -191,7 +191,7 @@ func (r *db) saveRaftState(updates []pb.Update, ctx IContext) error {
 				}
 			}
 			if err := r.saveSnapshot(wb, ud); err != nil {
-				return nil
+				return err
 			}
 			r.setMaxIndex(wb, ud, ud.Snapshot.Index, ctx)
 		}
@@ -351,7 +351,7 @@ func (r *db) saveSnapshots(updates []pb.Update) error {
 		if !pb.IsEmptySnapshot(ud.Snapshot) &&
 			r.cs.trySaveSnapshot(ud.ShardID, ud.ReplicaID, ud.Snapshot.Index) {
 			if err := r.saveSnapshot(wb, ud); err != nil {
-				return nil
+				return err
 			}
 			toSave = true
 		}
