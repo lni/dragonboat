@@ -3437,6 +3437,117 @@ func TestHandleLogQueryCanHandleRangeError(t *testing.T) {
 	assert.Equal(t, expected, p.logQueryResult)
 }
 
+// TestSnapshotStatusDoesNotSetActive demonstrates that handleLeaderSnapshotStatus
+// does not call rp.setActive(), unlike handleLeaderReplicateResp and
+// handleLeaderHeartbeatResp. This means a follower that is only communicating
+// via snapshot status messages will not be counted in CheckQuorum, potentially
+// causing the leader to step down even though the follower is responsive.
+//
+// Scenario: 3-node cluster {1, 2, 3}. Node 1 is leader.
+//   - Node 2: in remoteSnapshot state, sends SnapshotStatus (the only communication)
+//   - Node 3: crashed / unreachable (not active)
+//
+// Expected (if setActive were called): leader counts self + node 2 = quorum, stays leader.
+// Actual (bug): leader counts only self = 1 < quorum of 2, steps down.
+func TestSnapshotStatusDoesNotSetActive(t *testing.T) {
+	r := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r.becomeCandidate()
+	r.becomeLeader()
+
+	// Put node 2 into snapshot state
+	rp2 := r.remotes[2]
+	rp2.becomeSnapshot(10)
+
+	// Clear all active flags (simulates a fresh CheckQuorum cycle)
+	for _, rp := range r.remotes {
+		rp.setNotActive()
+	}
+
+	// Node 2 sends a SnapshotStatus message (snapshot transfer succeeded)
+	snapshotStatusMsg := pb.Message{
+		Type: pb.SnapshotStatus,
+		From: 2,
+		To:   1,
+	}
+	ne(r.handleLeaderSnapshotStatus(snapshotStatusMsg, rp2), t)
+
+	// Verify: node 2's active flag should be true if setActive() were called.
+	// BUG: handleLeaderSnapshotStatus does NOT call setActive(), so it remains false.
+	if rp2.isActive() {
+		t.Log("rp2 is active after SnapshotStatus (setActive is present — bug is fixed)")
+	} else {
+		t.Log("rp2 is NOT active after SnapshotStatus (setActive is missing — bug confirmed)")
+	}
+
+	// Now run CheckQuorum.
+	// Leader (node 1) always counts itself. Node 3 is not active.
+	// If node 2 were active: quorum = 2 (self + node 2) >= 2 → leader stays.
+	// If node 2 is not active: quorum = 1 (self only) < 2 → leader steps down.
+	ne(r.handleLeaderCheckQuorum(pb.Message{}), t)
+
+	if r.state == leader {
+		t.Log("Leader survived CheckQuorum — bug is fixed or mitigated")
+	} else {
+		t.Errorf("Leader stepped down during CheckQuorum despite node 2 responding " +
+			"via SnapshotStatus. handleLeaderSnapshotStatus is missing rp.setActive(). " +
+			"Compare with handleLeaderReplicateResp (line 1936) and " +
+			"handleLeaderHeartbeatResp (line 1975) which both call rp.setActive().")
+	}
+}
+
+// TestHeartbeatRespSetsActiveButSnapshotStatusDoesNot is a comparison test showing
+// that the same scenario with HeartbeatResp instead of SnapshotStatus keeps the
+// leader alive, proving the inconsistency.
+func TestHeartbeatRespSetsActiveButSnapshotStatusDoesNot(t *testing.T) {
+	// --- Case 1: HeartbeatResp path (has setActive) ---
+	r1 := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r1.becomeCandidate()
+	r1.becomeLeader()
+	for _, rp := range r1.remotes {
+		rp.setNotActive()
+	}
+	rp2 := r1.remotes[2]
+	heartbeatResp := pb.Message{
+		Type: pb.HeartbeatResp,
+		From: 2,
+		To:   1,
+		Term: r1.term,
+	}
+	ne(r1.handleLeaderHeartbeatResp(heartbeatResp, rp2), t)
+	ne(r1.handleLeaderCheckQuorum(pb.Message{}), t)
+	heartbeatResult := r1.state
+
+	// --- Case 2: SnapshotStatus path (missing setActive) ---
+	r2 := newTestRaft(1, []uint64{1, 2, 3}, 5, 1, NewTestLogDB())
+	r2.becomeCandidate()
+	r2.becomeLeader()
+	for _, rp := range r2.remotes {
+		rp.setNotActive()
+	}
+	rp2s := r2.remotes[2]
+	rp2s.becomeSnapshot(10)
+	snapshotStatus := pb.Message{
+		Type: pb.SnapshotStatus,
+		From: 2,
+		To:   1,
+	}
+	ne(r2.handleLeaderSnapshotStatus(snapshotStatus, rp2s), t)
+	ne(r2.handleLeaderCheckQuorum(pb.Message{}), t)
+	snapshotResult := r2.state
+
+	// HeartbeatResp keeps leader alive, SnapshotStatus does not
+	if heartbeatResult != leader {
+		t.Fatalf("HeartbeatResp case: expected leader, got %s", heartbeatResult)
+	}
+	if snapshotResult == leader {
+		t.Log("Both paths keep leader alive — bug is fixed")
+	} else {
+		t.Errorf("Inconsistency confirmed: HeartbeatResp keeps leader (%s) but "+
+			"SnapshotStatus causes step-down (%s). handleLeaderSnapshotStatus is "+
+			"missing rp.setActive().", heartbeatResult, snapshotResult)
+	}
+}
+
 func TestSetLeaderIDWillSetLeaderInfo(t *testing.T) {
 	r := raft{term: 200}
 	r.setLeaderID(100)
