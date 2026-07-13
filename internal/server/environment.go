@@ -105,6 +105,11 @@ func NewEnv(nhConfig config.NodeHostConfig, fs vfs.IFS) (*Env, error) {
 	return s, nil
 }
 
+// SetHostname sets the hostname to hostname.
+func (env *Env) SetHostname(hostname string) {
+	env.hostname = hostname
+}
+
 // Stop stops the environment.
 func (env *Env) Stop() {
 	for _, fl := range env.flocks {

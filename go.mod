@@ -11,6 +11,7 @@ require (
 	github.com/lni/goutils v1.3.0
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.15.0 // indirect
+	google.golang.org/protobuf v1.23.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 

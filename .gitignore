@@ -17,3 +17,5 @@ coverage.txt
 gitversion.go
 drummer-data
 nodehost-data
+/tools/logdump/logdump
+/logdump
