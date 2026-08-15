@@ -15,8 +15,8 @@
 package transport
 
 import (
-	"github.com/lni/dragonboat/v4/internal/fileutil"
-	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/jeremyhahn/dragonboat/v4/internal/fileutil"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
 )
 
 // chunkFile is the snapshot chunk file being transferred.

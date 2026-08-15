@@ -71,7 +71,7 @@ jobs:
       run: |
        git clone https://github.com/lni/dragonboat-example
        cd dragonboat-example
-       GOPROXY=direct go get github.com/lni/dragonboat/v4@master
+       GOPROXY=direct go get github.com/jeremyhahn/dragonboat/v4@master
        make
   static-check:
     runs-on: ubuntu-22.04

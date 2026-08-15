@@ -19,9 +19,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 
-	"github.com/lni/dragonboat/v4/config"
-	pb "github.com/lni/dragonboat/v4/raftpb"
-	sm "github.com/lni/dragonboat/v4/statemachine"
+	"github.com/jeremyhahn/dragonboat/v4/config"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
+	sm "github.com/jeremyhahn/dragonboat/v4/statemachine"
 )
 
 // IStateMachine is an adapter interface for underlying sm.IStateMachine,

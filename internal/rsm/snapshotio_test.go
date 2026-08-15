@@ -21,8 +21,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lni/dragonboat/v4/internal/vfs"
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 	"github.com/stretchr/testify/require"
 )
 

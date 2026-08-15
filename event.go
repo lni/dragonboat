@@ -21,8 +21,8 @@ import (
 
 	"github.com/VictoriaMetrics/metrics"
 
-	"github.com/lni/dragonboat/v4/internal/server"
-	"github.com/lni/dragonboat/v4/raftio"
+	"github.com/jeremyhahn/dragonboat/v4/internal/server"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
 )
 
 // WriteHealthMetrics writes all health metrics in Prometheus format to the

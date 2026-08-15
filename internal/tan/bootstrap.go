@@ -20,8 +20,8 @@ import (
 
 	"github.com/cockroachdb/errors/oserror"
 
-	"github.com/lni/dragonboat/v4/raftio"
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 	"github.com/lni/vfs"
 )
 

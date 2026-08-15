@@ -15,9 +15,9 @@
 package logdb
 
 import (
-	"github.com/lni/dragonboat/v4/internal/logdb/kv"
-	"github.com/lni/dragonboat/v4/raftio"
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/internal/logdb/kv"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 )
 
 type plainEntries struct {

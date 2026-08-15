@@ -18,8 +18,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/lni/dragonboat/v4/internal/server"
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/internal/server"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 )
 
 func getTestEntryLog() *entryLog {

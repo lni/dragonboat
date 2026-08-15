@@ -21,7 +21,7 @@ package tan
 import (
 	"sort"
 
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 )
 
 // when compacting entries, a compaction update is written to the log to record

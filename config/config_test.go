@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/lni/dragonboat/v4/raftio"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

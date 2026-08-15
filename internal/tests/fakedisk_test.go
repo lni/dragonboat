@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"testing"
 
-	sm "github.com/lni/dragonboat/v4/statemachine"
+	sm "github.com/jeremyhahn/dragonboat/v4/statemachine"
 	"github.com/stretchr/testify/require"
 )
 
