@@ -20,7 +20,7 @@ import (
 	"github.com/lni/goutils/leaktest"
 	"github.com/stretchr/testify/require"
 
-	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
 )
 
 const (

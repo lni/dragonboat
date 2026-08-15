@@ -83,7 +83,7 @@ go get github.com/lni/dragonboat/v3@latest
 Or you can use the following command to start using the development version of the Dragonboat, which is current at v4 for its APIs. 
 
 ```
-go get github.com/lni/dragonboat/v4@master
+go get github.com/jeremyhahn/dragonboat/v4@master
 ```
 
 

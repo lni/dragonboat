@@ -30,11 +30,11 @@ import (
 	"github.com/lni/goutils/logutil"
 	"github.com/lni/goutils/random"
 
-	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/server"
-	"github.com/lni/dragonboat/v4/internal/settings"
-	"github.com/lni/dragonboat/v4/logger"
-	pb "github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/config"
+	"github.com/jeremyhahn/dragonboat/v4/internal/server"
+	"github.com/jeremyhahn/dragonboat/v4/internal/settings"
+	"github.com/jeremyhahn/dragonboat/v4/logger"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
 )
 
 var (

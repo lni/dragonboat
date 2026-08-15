@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lni/dragonboat/v4/internal/tests"
+	"github.com/jeremyhahn/dragonboat/v4/internal/tests"
 	"github.com/stretchr/testify/require"
 )
 

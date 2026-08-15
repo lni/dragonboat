@@ -40,25 +40,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/lni/dragonboat/v4/client"
-	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/fileutil"
-	"github.com/lni/dragonboat/v4/internal/id"
-	"github.com/lni/dragonboat/v4/internal/invariants"
-	"github.com/lni/dragonboat/v4/internal/logdb"
-	"github.com/lni/dragonboat/v4/internal/registry"
-	"github.com/lni/dragonboat/v4/internal/rsm"
-	"github.com/lni/dragonboat/v4/internal/server"
-	"github.com/lni/dragonboat/v4/internal/settings"
-	"github.com/lni/dragonboat/v4/internal/tests"
-	"github.com/lni/dragonboat/v4/internal/transport"
-	"github.com/lni/dragonboat/v4/internal/vfs"
-	chantrans "github.com/lni/dragonboat/v4/plugin/chan"
-	"github.com/lni/dragonboat/v4/raftio"
-	pb "github.com/lni/dragonboat/v4/raftpb"
-	sm "github.com/lni/dragonboat/v4/statemachine"
-	"github.com/lni/dragonboat/v4/tools"
-	"github.com/lni/dragonboat/v4/tools/upgrade310"
+	"github.com/jeremyhahn/dragonboat/v4/client"
+	"github.com/jeremyhahn/dragonboat/v4/config"
+	"github.com/jeremyhahn/dragonboat/v4/internal/fileutil"
+	"github.com/jeremyhahn/dragonboat/v4/internal/id"
+	"github.com/jeremyhahn/dragonboat/v4/internal/invariants"
+	"github.com/jeremyhahn/dragonboat/v4/internal/logdb"
+	"github.com/jeremyhahn/dragonboat/v4/internal/registry"
+	"github.com/jeremyhahn/dragonboat/v4/internal/rsm"
+	"github.com/jeremyhahn/dragonboat/v4/internal/server"
+	"github.com/jeremyhahn/dragonboat/v4/internal/settings"
+	"github.com/jeremyhahn/dragonboat/v4/internal/tests"
+	"github.com/jeremyhahn/dragonboat/v4/internal/transport"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
+	chantrans "github.com/jeremyhahn/dragonboat/v4/plugin/chan"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
+	pb "github.com/jeremyhahn/dragonboat/v4/raftpb"
+	sm "github.com/jeremyhahn/dragonboat/v4/statemachine"
+	"github.com/jeremyhahn/dragonboat/v4/tools"
+	"github.com/jeremyhahn/dragonboat/v4/tools/upgrade310"
 )
 
 const (
@@ -4964,7 +4964,11 @@ func testIOErrorIsHandled(t *testing.T, op vfs.Op) {
 				"proposal unexpectedly completed, %v", err)
 			select {
 			case e := <-nh.engine.ec:
-				require.Equal(t, vfs.ErrInjected, e,
+				// PebbleDB v1.1.5 wraps VFS injected errors with string prefix
+				// e.g., "pebble: fatal commit error: injected error"
+				// Check if error message contains "inject" since PebbleDB doesn't preserve error chain
+				errMsg := e.Error()
+				require.Contains(t, errMsg, "inject",
 					"failed to return the expected error, %v", e)
 			default:
 				require.Fail(t, "failed to trigger error")

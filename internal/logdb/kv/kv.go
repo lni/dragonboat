@@ -15,8 +15,8 @@
 package kv
 
 import (
-	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/vfs"
+	"github.com/jeremyhahn/dragonboat/v4/config"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
 )
 
 const (

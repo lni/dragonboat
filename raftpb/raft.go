@@ -22,10 +22,10 @@ import (
 
 	"github.com/lni/goutils/stringutil"
 
-	"github.com/lni/dragonboat/v4/client"
-	"github.com/lni/dragonboat/v4/internal/settings"
-	"github.com/lni/dragonboat/v4/internal/vfs"
-	"github.com/lni/dragonboat/v4/logger"
+	"github.com/jeremyhahn/dragonboat/v4/client"
+	"github.com/jeremyhahn/dragonboat/v4/internal/settings"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
+	"github.com/jeremyhahn/dragonboat/v4/logger"
 )
 
 var (

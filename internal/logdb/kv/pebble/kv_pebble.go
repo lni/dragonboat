@@ -24,12 +24,12 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/lni/goutils/syncutil"
 
-	"github.com/lni/dragonboat/v4/config"
-	"github.com/lni/dragonboat/v4/internal/fileutil"
-	"github.com/lni/dragonboat/v4/internal/logdb/kv"
-	"github.com/lni/dragonboat/v4/internal/utils"
-	"github.com/lni/dragonboat/v4/internal/vfs"
-	"github.com/lni/dragonboat/v4/logger"
+	"github.com/jeremyhahn/dragonboat/v4/config"
+	"github.com/jeremyhahn/dragonboat/v4/internal/fileutil"
+	"github.com/jeremyhahn/dragonboat/v4/internal/logdb/kv"
+	"github.com/jeremyhahn/dragonboat/v4/internal/utils"
+	"github.com/jeremyhahn/dragonboat/v4/internal/vfs"
+	"github.com/jeremyhahn/dragonboat/v4/logger"
 )
 
 var (
@@ -194,7 +194,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 	opts := &pebble.Options{
 		Levels:                      lopts,
 		MaxManifestFileSize:         maxLogFileSize,
-		MemTableSize:                writeBufferSize,
+		MemTableSize:                uint64(writeBufferSize),
 		MemTableStopWritesThreshold: maxWriteBufferNumber,
 		LBaseMaxBytes:               maxBytesForLevelBase,
 		L0CompactionFileThreshold:   l0FileNumCompactionTrigger,
@@ -217,7 +217,7 @@ func openPebbleDB(config config.LogDBConfig, callback kv.LogDBCallback,
 		kv:      kv,
 		stopper: syncutil.NewStopper(),
 	}
-	opts.EventListener = pebble.EventListener{
+	opts.EventListener = &pebble.EventListener{
 		WALCreated:    event.onWALCreated,
 		FlushEnd:      event.onFlushEnd,
 		CompactionEnd: event.onCompactionEnd,
@@ -277,7 +277,10 @@ func iteratorIsValid(iter *pebble.Iterator) bool {
 // IterateValue ...
 func (r *KV) IterateValue(fk []byte, lk []byte, inc bool,
 	op func(key []byte, data []byte) (bool, error)) (err error) {
-	iter := r.db.NewIter(r.ro)
+	iter, ierr := r.db.NewIter(r.ro)
+	if ierr != nil {
+		return ierr
+	}
 	defer func() {
 		err = firstError(err, iter.Close())
 	}()

@@ -18,8 +18,8 @@
 package raft
 
 import (
-	"github.com/lni/dragonboat/v4/internal/server"
-	"github.com/lni/dragonboat/v4/logger"
+	"github.com/jeremyhahn/dragonboat/v4/internal/server"
+	"github.com/jeremyhahn/dragonboat/v4/logger"
 )
 
 var (

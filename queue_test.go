@@ -19,8 +19,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lni/dragonboat/v4/raftio"
-	"github.com/lni/dragonboat/v4/raftpb"
+	"github.com/jeremyhahn/dragonboat/v4/raftio"
+	"github.com/jeremyhahn/dragonboat/v4/raftpb"
 )
 
 func TestEntryQueueCanBeCreated(t *testing.T) {

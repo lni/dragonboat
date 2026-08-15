@@ -82,7 +82,7 @@ go get github.com/lni/dragonboat/v3@latest
 ```
 或者使用下列命令将开发中的Dragonboat v4版加入您的项目：
 ```
-go get github.com/lni/dragonboat/v4@master
+go get github.com/jeremyhahn/dragonboat/v4@master
 ```
 
 [Pebble](https://github.com/cockroachdb/pebble)是默认的用于存储Raft Log的存储引擎。RocksDB与自定义存储引擎的使用方法可参考[这里](docs/storage.CHS.md)。
