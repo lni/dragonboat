@@ -5229,6 +5229,48 @@ func TestIncorrectlyRoutedMessagesAreIgnored(t *testing.T) {
 	assert.Empty(t, msgs, "received unexpected message")
 }
 
+func TestRemoteConfigChangeEventMessageIsIgnored(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	nh := &NodeHost{stopper: syncutil.NewStopper()}
+	engine := newExecEngine(nh, config.GetDefaultEngineConfig(), false, false, nil, nil)
+	defer func() {
+		require.NoError(t, engine.close())
+	}()
+	nh.engine = engine
+	nh.events.sys = newSysEventListener(nil, nh.stopper.ShouldStop())
+	h := messageHandler{nh: nh}
+	mq := server.NewMessageQueue(1024, false, lazyFreeCycle, 1024)
+	node := &node{shardID: 1, replicaID: 1, mq: mq}
+	h.nh.mu.shards.Store(uint64(1), node)
+
+	ordinary := pb.MessageBatch{
+		Requests: []pb.Message{{To: 1, From: 2, ShardID: 1, Type: pb.Ping}},
+	}
+	sc, mc := h.HandleMessageBatch(ordinary)
+	require.Zero(t, sc, "snapshot count not zero")
+	require.Equal(t, uint64(1), mc, "message count not 1")
+	msgs := node.mq.Get()
+	require.Len(t, msgs, 1, "no msg")
+	require.Equal(t, pb.Ping, msgs[0].Type, "unexpected message type")
+
+	// ConfigChangeEvent is generated locally after a config change is applied.
+	cc := pb.MessageBatch{
+		Requests: []pb.Message{{
+			To:       1,
+			From:     2,
+			ShardID:  1,
+			Type:     pb.ConfigChangeEvent,
+			Hint:     3,
+			HintHigh: uint64(pb.RemoveNode),
+		}},
+	}
+	sc, mc = h.HandleMessageBatch(cc)
+	require.Zero(t, sc, "snapshot count not zero")
+	require.Zero(t, mc, "remote config change event counted as a raft message")
+	msgs = node.mq.Get()
+	require.Empty(t, msgs, "remote config change event reached raft")
+}
+
 func TestProposeOnClosedNode(t *testing.T) {
 	fs := vfs.GetTestFS()
 	to := &testOption{
